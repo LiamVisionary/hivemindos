@@ -763,11 +763,12 @@ async function runVoiceTurn(request: NextRequest) {
       ok: true,
       stage: "transcribe",
       engine: transcriptionEngine,
+      noSpeech: !transcript,
       audioBytes: audio.size,
       audioType: audio.type,
       transcribeMs: Date.now() - startedAt,
     });
-    return NextResponse.json({ ok: true, transcript });
+    return NextResponse.json({ ok: true, transcript, noSpeech: !transcript });
   } catch (error) {
     await appendVoiceTurnTelemetry({
       ok: false,

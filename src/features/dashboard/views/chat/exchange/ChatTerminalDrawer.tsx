@@ -15,6 +15,21 @@ import { ICON_PATHS, Ico } from "./composer-primitives";
 
 const MAX_BUFFER_CHARS = 120_000;
 
+type TerminalEventPayload = {
+  chunk?: string;
+};
+
+type ShellHistoryPayload = {
+  ok?: boolean;
+  lines?: unknown;
+  error?: string;
+};
+
+type ShellActionPayload = {
+  ok?: boolean;
+  error?: string;
+};
+
 function shellSessionIdForMachineKey(machineKey: string) {
   const cleaned = machineKey.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
   return `chat-${cleaned || "machine"}`.slice(0, 128);
@@ -38,6 +53,7 @@ export function ChatTerminalDrawer({ machineName, machineKey, collectorUrl, work
 
   const session = shellSessionIdForMachineKey(machineKey);
   const query = `collectorUrl=${encodeURIComponent(collectorUrl)}&session=${encodeURIComponent(session)}`;
+  const displayedError = error || (!collectorUrl ? "This chat is not routed to a machine with a reachable collector." : "");
 
   const appendChunk = useCallback((chunk: string) => {
     if (!chunk) return;
@@ -48,34 +64,50 @@ export function ChatTerminalDrawer({ machineName, machineKey, collectorUrl, work
   }, []);
 
   useEffect(() => {
-    if (!collectorUrl) {
-      setError("This chat is not routed to a machine with a reachable collector.");
-      return undefined;
-    }
-    setError("");
+    if (!collectorUrl) return undefined;
+    let closed = false;
     const source = new EventSource(`/api/fleet/shell/stream?${query}`);
-    source.onopen = () => setConnected(true);
-    source.onmessage = (event) => {
+    source.addEventListener("terminal", (event) => {
+      if (closed) return;
       try {
-        const payload = JSON.parse(event.data) as { chunk?: string };
+        const payload = JSON.parse((event as MessageEvent).data) as TerminalEventPayload;
         if (payload.chunk) appendChunk(payload.chunk);
       } catch {
-        // A non-JSON frame is a keepalive; ignore it.
+        // A malformed terminal frame cannot be rendered; ignore it.
       }
+    });
+    source.onopen = () => {
+      if (closed) return;
+      setConnected(true);
+      setError("");
+      // Replay prior output so a reopened drawer shows the session's history.
+      void fetch(`/api/fleet/shell?${query}`, { cache: "no-store" })
+        .then(async (response) => {
+          const payload = await response.json() as ShellHistoryPayload;
+          if (!response.ok || payload.ok === false) {
+            throw new Error(payload.error || `Shell history failed (${response.status}).`);
+          }
+          return payload;
+        })
+        .then((payload) => {
+          if (closed) return;
+          if (Array.isArray(payload.lines)) {
+            setBuffer(payload.lines.filter((line): line is string => typeof line === "string").join("\n"));
+          }
+        })
+        .catch((cause) => {
+          if (!closed) setError(cause instanceof Error ? cause.message : "Could not load shell history.");
+        });
     };
     source.onerror = () => {
+      if (closed) return;
       setConnected(false);
       setError("Lost the shell stream. The collector may be offline.");
     };
-    // Replay prior output so a reopened drawer shows the session's history.
-    void fetch(`/api/fleet/shell?${query}`, { cache: "no-store" })
-      .then((response) => response.json())
-      .then((payload: { chunk?: string; history?: string }) => {
-        const history = payload?.history ?? payload?.chunk;
-        if (typeof history === "string") setBuffer(history);
-      })
-      .catch(() => undefined);
-    return () => source.close();
+    return () => {
+      closed = true;
+      source.close();
+    };
   }, [collectorUrl, query, appendChunk]);
 
   useEffect(() => {
@@ -88,11 +120,16 @@ export function ChatTerminalDrawer({ machineName, machineKey, collectorUrl, work
   const send = useCallback(async (action: "command" | "interrupt", extra: Record<string, string> = {}) => {
     if (!collectorUrl) return;
     try {
-      await fetch("/api/fleet/shell", {
+      const response = await fetch("/api/fleet/shell", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ collectorUrl, session, action, ...extra }),
       });
+      const payload = await response.json() as ShellActionPayload;
+      if (!response.ok || payload.ok === false) {
+        throw new Error(payload.error || `The shell command failed (${response.status}).`);
+      }
+      setError("");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The shell command failed.");
     }
@@ -134,7 +171,7 @@ export function ChatTerminalDrawer({ machineName, machineKey, collectorUrl, work
       </div>
 
       <div ref={bufferRef} className="cx-scroll" style={{ flex: 1, overflowY: "auto", padding: "12px 14px", fontFamily: "var(--f-mono)", fontSize: 11.5, lineHeight: 1.5, color: "#e4e6eb" }}>
-        {error ? <div className="cx-termline" style={{ color: "#e58e85" }}>{error}</div> : null}
+        {displayedError ? <div className="cx-termline" style={{ color: "#e58e85" }}>{displayedError}</div> : null}
         {buffer ? <div className="cx-termline">{buffer}</div> : null}
         <div style={{ display: "flex", alignItems: "baseline", marginTop: 2 }}>
           <span style={{ color: "#79b8ff", whiteSpace: "nowrap" }}>{workingDirectory || "~"}</span>

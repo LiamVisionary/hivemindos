@@ -1,218 +1,222 @@
-# HIVE Omnichain Bridge — Readiness Runbook v2 (Base ⇄ Robinhood Chain)
+# HIVE Omnichain Bridge — Launch Runbook v3 (Base ⇄ Robinhood Chain)
 
-Status: **READY TO REVIEW — NOT DEPLOYED.** No mainnet contract deployed, no
-real key used, no mainnet transaction broadcast. Everything below has been
-compile-verified, unit-tested (12/12), and dress-rehearsed end-to-end on local
-forks of BOTH real chains (throwaway keys, local anvil only).
+Status: **READY TO REVIEW — NOT DEPLOYED, and blocked on the go/no-go gates in
+§10.** No mainnet contract deployed, no real key used, no mainnet transaction
+broadcast. Compile-clean, 27 unit+invariant tests green, and the full v3 deploy
+pipeline dress-rehearsed on local forks of both real chains.
 
-Mechanism: ClawBank's exact pattern — a LayerZero v2 OFT with a lock-and-mint
-adapter on Base and a mint/burn twin on Robinhood Chain — **hardened** with
-three additions ClawBank does not have: bidirectional rate limits, a
-hard-capped (≤1%) bridge fee defaulting to 0, and pause with a guardian role.
+Philosophy (v3, after an external audit): not "copy a working bridge and add
+controls" but **prove finality, bound actual value at risk, earn through useful
+liquidity, and distribute only genuine surplus.** Mechanism is still ClawBank's
+topology (one Base lockbox + Robinhood mint/burn OFT); everything around it is
+hardened.
 
 ---
 
-## 1. Verified facts (2026-07-12, all ground-truth, none from marketing)
+## 1. Verified facts (2026-07-12, all ground-truth)
 
-ClawBank's live deployment, read on-chain:
-
-| Thing | Value | How confirmed |
+| Thing | Value | How |
 |---|---|---|
-| ClawBank Robinhood OFT / Base adapter | `0x65b4…EC08` (same addr both chains) | `token()`, `approvalRequired()`, `peers()` reads |
-| Backing (peg) | locked on Base ≥ minted on Robinhood | `balanceOf(adapter)` vs `totalSupply()` |
-| DVN security | required 2-of-2 [LayerZero Labs, Nethermind], 10 confirmations, both directions, both chains, NOT defaults | `getConfig` on both endpoints + metadata identity match |
-| Bridge fee | **none** — ClawBank earns nothing per bridge | fee getters revert on both chains |
-| Owner | single EOA `0x1A92…Cf78A` | `owner()` reads — we do better (multisig) |
+| Base EID / EndpointV2 | 30184 / `0x1a44…728c` | on-chain + LZ metadata |
+| Robinhood EID / EndpointV2 | 30416 / `0x6F47…DD5B` | read from ClawBank's live OFT (`endpoint().eid()`) |
+| DVN stack (both dirs, both chains) | required 2-of-2 LayerZero Labs + Nethermind | `getConfig` on both endpoints |
+| **Robinhood block time** | **0.099s** (measured over 1,000 blocks) | so ClawBank's `confirmations:10` ≈ 1s — too weak; we use directional finality |
+| HIVE token (Base) | `0xA382…45bA3`, DERC20, non-proxy, **fork-proven lossless** transfer/transferFrom | Basescan + anvil fork |
+| ClawBank bridge fee | none (verified) | fee getters revert |
+| ClawBank peg | backed (locked ≥ minted) | live monitor run |
+| Safe contracts on Robinhood (chain 4663) | v1.4.1 factory + singletons deployed | `cast code` |
 
-LayerZero constants (baked into `script/HiveOftAddresses.sol`; an earlier draft
-had WRONG DVN/lib values from a misread API summary — all corrected from live
-chain reads + metadata identity match):
-
-| Chain | Chain ID | EID | EndpointV2 |
-|---|---|---|---|
-| Base | 8453 | 30184 | `0x1a44…728c` |
-| Robinhood | 4663 | 30416 | `0x6F47…DD5B` |
-| Base Sepolia (rehearsal) | 84532 | 40245 | `0x6EDC…f10f` |
-| Robinhood Testnet (rehearsal) | 46630 | 40451 | `0x3aCA…Fe32` |
-
-HIVE token audit (**complete — this gate is cleared**):
-- `0xA382…45bA3`, verified Doppler `DERC20`, NOT a proxy (EIP-1967 slots zero).
-- No fee-on-transfer / rebasing / pause / blacklist. **Fork-proven lossless** on
-  `transfer` AND `approve`+`transferFrom` (exact amount conservation on a Base
-  mainnet fork) — the property the lockbox requires.
-- Owner powers on HIVE itself: `mintInflation()` capped at 2%/yr exists but is
-  **un-armed** (`currentYearStart == 0`); `burn`/`lockPool` owner-gated. None of
-  this affects bridge correctness (home-chain supply changes don't touch the peg).
-- Supply-cap check: OFT encodes amounts as uint64 in 6 shared decimals → max
-  ~18.4T tokens; HIVE's 100B fits with ~180× headroom (verified in OFTCore).
+Full endpoint/DVN/lib addresses live in `script/HiveOftAddresses.sol` with
+inline provenance.
 
 ## 2. What's built (all compiled + tested)
 
+Contracts (`src/oft/`):
+- `HiveBridgeControls.sol` — dual-window rate limits, 25 bps immutable fee cap
+  (default 0, no per-destination overrides), pause + guardian, key-space guard.
+- `HiveOFTAdapter.sol` — Base lockbox; fee surplus tracked in `bridgeFeesAccrued`,
+  withdrawal can never touch principal.
+- `HiveOFT.sol` — Robinhood mint/burn twin; no owner mint.
+
+Scripts (`script/`), split so **configuration and activation are distinct events**:
+- `DeployHiveGovernance.s.sol` — TimelockController (Safe proposer, guardian
+  canceller, open executor, self-administered).
+- `DeployHiveAdapterBase.s.sol` / `DeployHiveOftRobinhood.s.sol` — deploy owned
+  by the timelock (mainnet + testnet).
+- `SetDvnConfigHive.s.sol` — **directional** ULN config (send = local source
+  depth, receive = remote source depth), 2-of-2 DVNs.
+- `ConfigureHiveOftPeers.s.sol` / `ConfigureHiveOftOptions.s.sol` — peers +
+  enforced options, safe to run while CLOSED.
+- `SetHiveRateLimits.s.sol` — **the bridge-opening action** (no default limits).
+- `SetHiveGuardian.s.sol` — set the pause guardian.
+- `VerifyHiveOftDeployment.s.sol` — read-only gate; reverts on any drift.
+- `DeployMockHive.s.sol` / `SmokeSendHive.s.sol` — testnet rehearsal + smoke test.
+
+Tests: `test/HiveOftBridge.t.sol` (25 unit/adversarial) + `test/HiveOftInvariant.t.sol`
+(3 invariants, 64 runs × 40 depth). Coverage includes dual-window enforcement
+(short binds, long binds, long caps cumulative bursts), decay + retry-after-decay,
+adapter inbound drain cap, paused-credit retry, timelock governance flow, forged
+`lzReceive` rejection, unwired-peer rejection, fee cap, fee dust exactness,
+donations-only-add-surplus, and the backing invariant under 2,560 randomized ops.
+
+Off-chain:
+- `bridge/index.html` — fail-closed page (see §7).
+- `scripts/hive-bridge-monitor.mjs` + `scripts/test-hive-bridge-monitor.mjs`
+  (18 hermetic tests) — see §8.
+
+## 3. Directional finality (the audit's key fix)
+
+Confirmations are per SOURCE chain, never shared or copied:
+- `BASE_SOURCE_CONFIRMATIONS = 30` (~60s at Base's ~2s blocks).
+- `ROBINHOOD_SOURCE_CONFIRMATIONS = 1800` (~3min at 0.099s blocks) — a
+  conservative START; the FINAL value must come from observed L1-posting cadence
+  during the testnet gate. Never lowered for UX.
+
+On each chain: the SEND library gets the local chain's depth; the RECEIVE
+library gets the remote chain's depth. Send and matching receive are identical
+by construction. `SetDvnConfigHive.s.sol` and `VerifyHiveOftDeployment.s.sol`
+enforce this; it was applied and read back correctly on the real Base ULN libs
+in the fork rehearsal (send=30, recv=1800).
+
+## 4. Governance (Safe → Timelock → contracts)
+
 ```
-src/oft/HiveBridgeControls.sol   shared rails: rate limits, capped fee, pause
-src/oft/HiveOFTAdapter.sol       Base lockbox (wraps real HIVE)
-src/oft/HiveOFT.sol              Robinhood mint/burn twin (no owner mint)
-script/HiveOftAddresses.sol      verified constants (mainnet + testnet)
-script/DeployHiveAdapterBase.s.sol    step 1 (Base or Base Sepolia)
-script/DeployHiveOftRobinhood.s.sol   step 2 (Robinhood mainnet or testnet)
-script/SetDvnConfigHive.s.sol         step 3 — pin DVNs (mainnet, both sides)
-script/WireHiveOft.s.sol              step 4 — peer + options + OPEN THE VALVE
-test/HiveOftBridge.t.sol         12 tests, all passing
+3-of-5 Safe  --proposer-->  72h TimelockController  --owner+delegate-->  adapter / OFT
 ```
+Fallback: 2-of-3 Safe, hardware-separated signers. Safe requirements, guardian
+powers, and delayed-action list are in the audit plan and encoded in the scripts.
 
-Beyond `contracts/`:
+- **Guardian (hot):** pause only (+ optional timelock canceller). Cannot unpause,
+  configure, raise limits, reset capacity, change fees, or withdraw.
+- **Timelock (delayed):** unpause, peers, delegate, libraries, DVNs/finality,
+  limit increases, capacity resets, fee enable/increase, fee withdrawal, guardian
+  change.
+- **Immediate:** pause.
 
-```
-bridge/index.html                staged public bridge page (add-chain/add-token,
-                                 widget with quoteOFT/quoteSend + LayerZero Scan
-                                 links, live locked-vs-minted stats read by the
-                                 visitor's browser; disabled until CONFIG gets
-                                 the deployed addresses — see bridge/README.md)
-scripts/hive-bridge-monitor.mjs  backing-invariant monitor (dependency-free;
-                                 exit 2 + optional webhook on breach; validated
-                                 live against ClawBank's real bridge)
-```
+**Unpause is deliberately not timelocked (implemented).** A dedicated `unpauser`
+role (set to the governing Safe) may unpause directly, bypassing the 72h delay,
+while every risk-*increasing* action still rides the timelock owner. Rationale:
+unpause only restores already-configured, already-rate-limited operation — it
+cannot move funds, mint, or change limits/DVNs/fees — so routing it through 72h
+would turn a false-alarm pause into a multi-day forced outage for no security
+gain. The Safe's own multisig quorum is the control. `setUnpauser(0)` reverts to
+fully-timelocked owner-only unpause if you ever want that. Set via
+`SetHiveUnpauser.s.sol`; tested in `test_SafeUnpauserBypassesTimelock`.
 
-The controls, and why:
-- **Rate limits (both directions, LayerZero's audited RateLimiter).** Outbound
-  keyed by dstEid; inbound keyed by `srcEid | 0x80000000`. The INBOUND limit is
-  the important one: it caps lockbox-drain / unbacked-mint rate even if the DVN
-  set is compromised — the one failure the OFT standard can't stop. Blocked
-  inbound credits stay verified on the endpoint and re-execute permissionlessly
-  after decay: delayed, never lost. **Contracts deploy CLOSED (limits 0);**
-  the wire script opens the valve explicitly.
-- **Bridge fee, hard-capped at 1% (compile-time constant), default 0.** Launch
-  behavior = stock OFT = ClawBank. Fee revenue is optional and can never exceed
-  1% — "owner rugs via fee" is structurally impossible. Adapter-side fees are
-  tracked in `bridgeFeesAccrued` and withdrawal is capped to it — locked
-  principal is unreachable by construction (test-pinned).
-- **Pause + guardian.** A hot `pauser` bot may pause (incident response at
-  3am); only the owner multisig can unpause/configure/withdraw.
+## 5. Rate limits — bound actual value at risk
 
-Test coverage (12/12 green): round-trip supply conservation, closed-by-default,
-outbound limit enforce + window decay, inbound limit blocking credits, fee
-charge/withdraw on both sides, backing invariant under fees + withdrawal, fee
-cap, fee slippage protection, pause/guardian role separation, owner-only admin,
-supply-moves-only-via-bridge.
+Four buckets per direction pair: outbound {hourly, daily}, inbound {hourly,
+daily}. Deploy CLOSED (all 0). Derive from loss budget, NOT total supply:
+- hourly ≤ 1–2% of locked principal, daily ≤ 5%, plus an absolute dollar cap if
+  that's the real tolerance.
+- Recalc weekly at a conservative price (no on-chain oracle in the bridge path).
+- Increases ride the 72h timelock and require the §6 evidence.
+- The inbound buckets are the load-bearing ones — they cap lockbox drain /
+  unbacked mint even under DVN compromise. Blocked credits stay retryable.
 
-Fork dress rehearsals (local anvil forks of the REAL chains, throwaway key):
-- Base fork: deploy → wire → DVN pin all succeeded; real Base ULN libs
-  **accepted our exact config**; buckets and peer verified in post-state.
-- Robinhood fork: same, and the resulting ULN config decoded **byte-identical
-  to ClawBank's live production config**: `(10, 2, 0, 0, [Nethermind, LZ Labs])`.
+## 6. Bridge fee — earn only when net-positive
 
-## 3. Fee revenue — the honest answer
+Immutable cap **25 bps**; launch **0**; per-destination overrides removed. First
+review after ≥30 days; ≤5 bps per increase; ≥14 days between; ≥7 days public
+notice; every increase behind the timelock. Enable only when
+`extra bridge revenue − lost LP revenue − user spread cost − reputational cost`
+is positive. A bridge fee stacked on a 1% swap fee would add arbitrage friction —
+default is to leave it at 0 and earn via POL/LP instead.
 
-- The LayerZero **messaging fee** (ETH the bridger pays per transfer) goes to
-  DVNs/executor/LayerZero. Not you. Always.
-- **ClawBank earns zero from bridging** (verified: no fee module).
-- **This build can earn**: owner-set bps (≤1%) of bridged amount, withdrawable
-  to the treasury on each side via `withdrawBridgeFees`. Launch recommendation:
-  leave at 0 for adoption; it's a one-tx treasury decision later.
-- The **real launch revenue is LP fees**: whoever seeds the HIVE pool on
-  Robinhood earns the swap fees. That's a treasury action, not a bridge feature.
-- Route any fee withdrawals to an official treasury wallet (same policy as the
-  dedicated Hyperliquid builder wallet), not a personal one.
+## 7. Bridge page — fail closed (`bridge/index.html`)
 
-### Bankr launch economics (verified 2026-07-12)
+Verified in-browser (no console errors, staged state correct): reads backing
+across two RPC providers per chain; on any failed/ disagreeing read it shows
+**“unable to verify — do not bridge”** and disables the button (never assumes
+zero/backed). Delivery status comes from the **LayerZero Scan message API**, not
+a local timeout — a timeout shows “Submitted — delivery not yet verified,” never
+“Delivered.” Requotes immediately before signing; exact (not unlimited)
+approval; dual-window capacity shown; destination-gas warning before you strand
+yourself; source/dest/LZ-Scan links; endorsement disclaimer. Fill
+`CONFIG.adapter`/`CONFIG.oft`/`swapLink` after deploy (see `bridge/README.md`).
 
-- HIVE is a Bankr token: "fair launch on Base", **0.7% swap fee on the launch
-  pool split 95% creator / 5% Doppler protocol**, creator fees land in the
-  Bankr agent wallet automatically (docs.bankr.bot llms-full.txt). The repo's
-  `claim-bankr-hive` honey-ledger rail is the claim path.
-- On-chain corroboration: HIVE's top Base holder is Uniswap v4's PoolManager
-  with **30.4B HIVE (~30% of supply)** — the launch liquidity; HIVE's `owner()`
-  is a contract (Bankr/Doppler infra), not a personal EOA.
-- So "Bankr holds the initial supply" ≈ the supply sits in the locked v4 launch
-  pool, and the creator's accruing fee share sits with Bankr until claimed.
-  **Treasury HIVE for bridging/seeding comes from Bankr-wallet claims (or
-  market buys) — user-staked HIVE in the stake vault is not treasury money.**
-- Robinhood-side contrast: a pool we seed there is plain Uniswap v4 (no Doppler
-  hook) — the fee tier accrues to our LP position directly. ClawBank's RH pool
-  is **1% tier** (verified via GeckoTerminal): $22.1K TVL absorbing ~$235K/day
-  → ~$2.35K/day to its LP at current flow. Do NOT project that onto HIVE
-  blindly — HIVE's Base pool does ~$5.9K/day today; the bet is that the
-  Robinhood audience adds net-new volume (it did for ClawBank, whose RH volume
-  exceeds its Base volume).
-- Bankr has no omnichain/bridge support of its own — this LayerZero bridge is
-  the only path (ClawBank markets itself as the first bankr token omnichain).
+## 8. Monitor — fail closed (`scripts/hive-bridge-monitor.mjs`)
 
-## 4. Decisions still yours before mainnet
+Two RPC providers per chain, every read required, provider disagreement = alert,
+never a silent 0. Checks backing (locked − fees ≥ Σ remote supplies), config
+drift vs a committed baseline (owner/delegate/pauser/peers/libs/fee/paused/
+codehash), pause state, and guardian gas. Exit 0/1/2/3 = healthy/read-failure/
+breach/other-alert; optional webhook + heartbeat. Validated live against
+ClawBank (fail-closed on their stock OFT, as designed) and by 18 hermetic
+scenario tests (`scripts/test-hive-bridge-monitor.mjs`). Schedule on a fleet
+cron; page the guardian to pause on exit 2/3.
 
-1. **The owner multisig** (`HIVE_OFT_OWNER`) — a Safe you control. Non-negotiable.
-2. **Guardian pauser** — which bot/wallet gets `setPauser` (can pause, nothing else).
-3. **Initial rate limits** — defaults in the wire script: 1B HIVE (1% of supply)
-   per direction per 24h window. Override via env if you want tighter/looser.
-4. **Bridge fee at launch** — recommend 0 (matches ClawBank; can enable later ≤1%).
-5. **Liquidity plan** — how much HIVE to bridge and seed into a Robinhood pool.
+## 9. Deploy sequence (phased; simulate-first everywhere)
 
-## 5. Deploy sequence (mainnet)
+- **Phase A — governance:** deploy Safe (or verify), one timelock per chain,
+  proposer/canceller/executor roles, test a harmless queued action.
+- **Phase B — contracts, still CLOSED:** deploy adapter + OFT owned by the
+  timelocks; verify source/bytecode/non-proxy; `SetDvnConfigHive` (directional);
+  `ConfigureHiveOftOptions`; `ConfigureHiveOftPeers`; `SetHiveGuardian`; run
+  `VerifyHiveOftDeployment` (must pass); publish addresses.
+- **Phase C — mainnet canary:** queue tiny limits via timelock → execute →
+  bridge ~1 HIVE round trip → verify backing exactly → pause/unpause drill →
+  observe 48–72h, no public announcement.
+- **Phase D — liquidity canary:** fund treasury quote asset, bridge a small HIVE
+  allocation, initialize the canonical pool at a TWAP-verified price, add the
+  defensive POL position, test swaps, observe 48–72h.
+- **Phase E — public launch:** only after every §10 item; publish page, official
+  pool link, security config, limits, fee policy, dashboard, status channel;
+  fee stays 0; expand only via delayed announced actions.
 
-Simulate-first: every script is a no-op without `--broadcast` + a signer.
+Testnet rehearsal (Base Sepolia 84532 ⇄ Robinhood Testnet 46630) is MANDATORY
+first and runs the same scripts; it exercises the one thing forks cannot — real
+DVN message delivery — and produces the observed finality numbers for §3.
+Blocked only on ~0.1 Sepolia ETH to the throwaway deployer.
 
-```bash
-cd contracts
-export BASE_RPC_URL="https://mainnet.base.org"
-export ROBINHOOD_RPC_URL="https://rpc.mainnet.chain.robinhood.com/"
-export HIVE_OFT_OWNER=0x<your-safe>
+## 10. Go/no-go (mainnet blocked until all checked)
 
-# 1+2. deploy (simulate, then add --account <deployer> --broadcast [--verify on Base])
-forge script script/DeployHiveAdapterBase.s.sol --rpc-url "$BASE_RPC_URL"
-forge script script/DeployHiveOftRobinhood.s.sol --rpc-url "$ROBINHOOD_RPC_URL"
-#   -> export HIVE_ADAPTER=<printed>   HIVE_ROBINHOOD_OFT=<printed>
+- [ ] Independent smart-contract + LayerZero-config review complete.
+- [ ] Expanded fuzz/invariant suite passes (have: 28 tests, 2,560-call invariant).
+- [ ] Live testnet runs 7 stable days; retry-after-limit + adapter-drain proven live.
+- [ ] Directional finality values documented from observed L1 posting.
+- [ ] `VerifyHiveOftDeployment` passes on both chains.
+- [ ] Safe + timelock ceremony done; guardian pause drill < 5 min.
+- [ ] Dual-window limits derived from TVL + loss budget (not supply).
+- [ ] Fee 0, capped 25 bps.
+- [ ] Monitor fails closed with redundant RPCs (have: 18 hermetic tests).
+- [ ] UI never assumes backing/fee/delivery (have: verified staged).
+- [ ] Incident runbook rehearsed (§17 of the audit plan; SEV-0..3).
+- [ ] Canonical pool analysis; treasury + quote-asset funding approved.
+- [ ] **Legal review** covers LP activity, buybacks, and any staker benefit
+      (SEC 33-11412 covers protocol staking, NOT revenue-share-for-locking — the
+      seasonal tier-bucket reward design is SUSPENDED pending counsel).
+- [ ] Contracts deploy closed; canary round trip; 48–72h observation; addresses
+      + disclosures published.
 
-# 3. pin DVNs on BOTH sides (before opening the valve; signer = owner/delegate)
-HIVE_LOCAL_OAPP=$HIVE_ADAPTER       forge script script/SetDvnConfigHive.s.sol --rpc-url "$BASE_RPC_URL"      --account <owner> --broadcast
-HIVE_LOCAL_OAPP=$HIVE_ROBINHOOD_OFT forge script script/SetDvnConfigHive.s.sol --rpc-url "$ROBINHOOD_RPC_URL" --account <owner> --broadcast
+## 11. Long-term economics (standing plan; unchanged from v2)
 
-# 4. wire BOTH sides — sets peer + enforced options + rate limits (OPENS the bridge)
-HIVE_LOCAL_OAPP=$HIVE_ADAPTER       HIVE_REMOTE_OAPP=$HIVE_ROBINHOOD_OFT forge script script/WireHiveOft.s.sol --rpc-url "$BASE_RPC_URL"      --account <owner> --broadcast
-HIVE_LOCAL_OAPP=$HIVE_ROBINHOOD_OFT HIVE_REMOTE_OAPP=$HIVE_ADAPTER       forge script script/WireHiveOft.s.sol --rpc-url "$ROBINHOOD_RPC_URL" --account <owner> --broadcast
+Principle: never rent yield with promises; own the fee-collecting infrastructure
+and pay stakers from real revenue.
+- **Layer 1** — tier vault v1 stays permanently non-custodial; staked principal
+  never traded/lent/bridged/rehypothecated.
+- **Layer 2** — Protocol-Owned Liquidity: treasury owns Base + Robinhood LP
+  positions (funded by Bankr creator fees, the ≤0.25% bridge fee once justified,
+  platform revenue, minor treasury-capital arb desk); LP fees compound into POL.
+- **Layer 3** — stakers earn a fixed PUBLISHED share of net realized revenue,
+  denominated preferentially in platform utility (compute credits), buybacks
+  secondary; never a promised rate; **gated on legal review** (see §10).
+Rejected: rehypothecation, emission APYs, rented TVL, arb-as-headline-yield.
 
-# 5. guardian + smoke test
-#    setPauser(<guardian>) on both; then bridge 1 HIVE Base->RH, confirm mint,
-#    bridge back, confirm release. Only then announce / seed liquidity.
-```
+## 12. Scale reality
 
-Owner is a Safe? Run each script unbroadcast to produce calldata and execute
-from the Safe (or use LayerZero devtools `lz:oapp:wire`).
-
-### Testnet rehearsal (recommended first)
-
-Same scripts, testnet pair (Base Sepolia 84532 ⇄ Robinhood Testnet 46630).
-Deploy a mock ERC-20 on Sepolia and pass it as `HIVE_TESTNET_TOKEN`. Skip
-SetDvnConfig (defaults are fine on testnet). This exercises the one thing local
-forks cannot: real DVN/executor message delivery between live networks.
-
-## 6. Post-deploy verification
-
-- [ ] `peers()` on both sides point at each other; `token()` on the adapter is HIVE.
-- [ ] `getConfig` on both send+receive libs decodes to `(10, 2, 0, 0, [LZ Labs, Nethermind])`.
-- [ ] `getAmountCanBeSent` shows the intended buckets on both sides (outbound key = remote eid; inbound key = `inboundRateLimitKey(remote eid)`).
-- [ ] Smoke test round trip with ~1 HIVE.
-- [ ] **Standing monitor**: schedule `scripts/hive-bridge-monitor.mjs` (env
-      `HIVE_BRIDGE_ADAPTER`/`HIVE_BRIDGE_OFT`, optional
-      `HIVE_BRIDGE_ALERT_WEBHOOK`) on a fleet cron; exit 2 = breach → page the
-      guardian to pause. Validated live against ClawBank's bridge.
-- [ ] **Publish the bridge page**: fill `CONFIG.adapter`/`CONFIG.oft` (and
-      later `swapLink`) in `bridge/index.html`, host the folder statically
-      (e.g. Cloudflare Pages at `bridge.<domain>`).
-
-## 7. Risk summary
-
-- Trust root = owner multisig + DVN set (LZ Labs + Nethermind must both sign a
-  forged message for an attack; the inbound rate limit then caps the damage per
-  window; the guardian pauses; the multisig severs the peer).
-- One lockbox, ever. New chains = new peers on the SAME adapter.
-- 18→6 shared-decimal dust (<1e12 wei HIVE) is truncated per transfer — standard OFT.
-- Enforced lzReceive gas default is 120k (covers credit + rate limit + pause);
-  tune with `HIVE_LZRECEIVE_GAS` after profiling the smoke test.
+Liam holds ~2% of HIVE (~$3.5K liquid, post Bankr-fee claim). Bridge deploy is
+~$5–10 gas; pool seeding is optional/deferred and can come from anyone. Security
+spend (audit, bounty, second monitor) gates RAISING limits, not deploy-closed +
+canary — value-at-risk at canary limits is a few hundred dollars. Everything
+contract-level (dual windows, 25bp cap, timelock, directional finality, script
+split) is cheap now and impossible later, so it all ships pre-deploy.
 
 ## Rollback
 
-Nothing is live. To discard: delete `contracts/src/oft/`, `contracts/test/HiveOftBridge.t.sol`,
-the `contracts/script/*.s.sol` + `HiveOftAddresses.sol`, this runbook; revert the
-`contracts/foundry.toml` remappings; remove the `@layerzerolabs/*` +
-`solidity-bytes-utils` devDependencies. Post-deploy there is no undo of on-chain
-contracts — only pause + peer-severance + migration; hence the multisig, the
-closed-by-default valve, and the smoke-test gates above.
+Nothing is live. To discard: delete `contracts/src/oft/`, `contracts/test/HiveOft*.t.sol`,
+`contracts/script/*.s.sol` + `HiveOftAddresses.sol`, this runbook, `bridge/`,
+`scripts/hive-bridge-monitor.mjs` + its test; revert `contracts/foundry.toml`;
+remove the added devDependencies. Post-deploy there is no undo of on-chain
+contracts — only pause + timelock peer-severance + migration; hence the
+multisig, closed-by-default valve, canary, and legal gates above.

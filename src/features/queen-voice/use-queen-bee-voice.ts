@@ -1237,6 +1237,9 @@ export function useQueenBeeVoice(
         updateTurn,
         dropTurn,
         failTurn,
+        resumeListening: () => {
+          restartTimer = window.setTimeout(startListening, 150);
+        },
         runConverseTurn,
       });
 

@@ -1,15 +1,29 @@
 import * as THREE from "three";
 
-const ALONG = 14;
-const AROUND = 6;
+const DEFAULT_ALONG = 24;
+const DEFAULT_AROUND = 12;
+
+type BrainFiberTubeOptions = {
+  along?: number;
+  around?: number;
+  shell?: number;
+};
 
 const VERTEX = /* glsl */ `
+  attribute float aAlong;
+  attribute float aStrength;
+  uniform float uShell;
   varying vec3 vColor;
   varying vec3 vNormal;
   varying vec3 vView;
+  varying float vTerminal;
+  varying float vStrength;
   void main() {
     vColor = color;
-    vec4 world = modelMatrix * vec4(position, 1.0);
+    vStrength = aStrength;
+    vTerminal = pow(abs(aAlong * 2.0 - 1.0), 1.55);
+    float shellProfile = mix(0.48, 1.0, vTerminal);
+    vec4 world = modelMatrix * vec4(position + normal * uShell * shellProfile, 1.0);
     vNormal = normalize(mat3(modelMatrix) * normal);
     vView = normalize(cameraPosition - world.xyz);
     gl_Position = projectionMatrix * viewMatrix * world;
@@ -19,66 +33,96 @@ const VERTEX = /* glsl */ `
 const FRAGMENT = /* glsl */ `
   uniform float uLight;
   uniform float uOpacity;
+  uniform float uGlowLayer;
   varying vec3 vColor;
   varying vec3 vNormal;
   varying vec3 vView;
+  varying float vTerminal;
+  varying float vStrength;
   void main() {
     float facing = abs(dot(normalize(vNormal), normalize(vView)));
-    float body = pow(facing, 0.7);
-    float rim = pow(1.0 - facing, 2.2);
-    vec3 darkBody = mix(vColor * 0.28, mix(vColor, vec3(0.9, 0.97, 1.0), 0.66), body);
-    darkBody += vColor * rim * 0.32;
-    vec3 lightBody = mix(vColor * 0.7, vColor * 1.18, body);
-    vec3 col = mix(darkBody, lightBody, uLight);
-    float alpha = uOpacity * mix(0.58 + body * 0.42, 0.72 + body * 0.28, uLight);
+    float body = pow(facing, 0.48);
+    float rim = pow(1.0 - facing, 1.35);
+    vec3 emissive = mix(vColor * 0.82, vec3(0.86, 0.95, 1.0), 0.34 + body * 0.3 + vTerminal * 0.16);
+    vec3 lightBody = mix(vColor * 0.76, vColor * 1.12, body);
+    vec3 coreColor = mix(emissive, lightBody, uLight);
+    float coreAlpha = uOpacity * mix(0.68 + body * 0.32, 0.76 + body * 0.24, uLight) * (1.0 + vTerminal * 0.28);
+    vec3 glowColor = mix(vColor, vec3(0.72, 0.9, 1.0), 0.34);
+    float glowAlpha = uOpacity * (0.045 + rim * 0.13) * (0.72 + vTerminal * 0.62) * (1.0 - uLight);
+    vec3 col = mix(coreColor, glowColor, uGlowLayer) * mix(1.0, 1.22, 1.0 - uLight);
+    float alpha = mix(coreAlpha, glowAlpha, uGlowLayer) * vStrength;
     gl_FragColor = vec4(col, alpha);
   }
 `;
 
 export class BrainFiberTubes {
-  readonly mesh: THREE.Mesh;
+  readonly mesh = new THREE.Group();
+  private readonly along: number;
+  private readonly around: number;
   private readonly color: THREE.BufferAttribute;
-  private readonly material: THREE.ShaderMaterial;
+  private readonly coreMaterial: THREE.ShaderMaterial;
+  private readonly geometry: THREE.BufferGeometry;
+  private readonly glowMaterial: THREE.ShaderMaterial;
   private readonly normal: THREE.BufferAttribute;
   private readonly position: THREE.BufferAttribute;
   private readonly side = new THREE.Vector3();
+  private readonly strength: THREE.BufferAttribute;
   private readonly tangent = new THREE.Vector3();
   private readonly binormal = new THREE.Vector3();
   private readonly point = new THREE.Vector3();
   private readonly reference = new THREE.Vector3();
   private readonly surface = new THREE.Vector3();
 
-  constructor(private readonly count: number, light: boolean) {
-    const verticesPerTube = (ALONG + 1) * AROUND;
+  constructor(private readonly count: number, light: boolean, options: BrainFiberTubeOptions = {}) {
+    this.along = options.along ?? DEFAULT_ALONG;
+    this.around = options.around ?? DEFAULT_AROUND;
+    const verticesPerTube = (this.along + 1) * this.around;
     const geometry = new THREE.BufferGeometry();
+    this.geometry = geometry;
     this.position = new THREE.BufferAttribute(new Float32Array(count * verticesPerTube * 3), 3);
     this.normal = new THREE.BufferAttribute(new Float32Array(count * verticesPerTube * 3), 3);
     this.color = new THREE.BufferAttribute(new Float32Array(count * verticesPerTube * 3), 3);
+    this.strength = new THREE.BufferAttribute(new Float32Array(count * verticesPerTube).fill(1), 1);
     this.position.setUsage(THREE.DynamicDrawUsage);
     this.normal.setUsage(THREE.DynamicDrawUsage);
     this.color.setUsage(THREE.DynamicDrawUsage);
+    this.strength.setUsage(THREE.DynamicDrawUsage);
     geometry.setAttribute("position", this.position);
     geometry.setAttribute("normal", this.normal);
     geometry.setAttribute("color", this.color);
-    const indices = new Uint32Array(count * ALONG * AROUND * 6);
+    geometry.setAttribute("aStrength", this.strength);
+    const along = new Float32Array(count * verticesPerTube);
+    for (let tube = 0; tube < count; tube += 1) {
+      const base = tube * verticesPerTube;
+      for (let ring = 0; ring <= this.along; ring += 1) {
+        along.fill(ring / this.along, base + ring * this.around, base + (ring + 1) * this.around);
+      }
+    }
+    geometry.setAttribute("aAlong", new THREE.BufferAttribute(along, 1));
+    const indices = new Uint32Array(count * this.along * this.around * 6);
     let cursor = 0;
     for (let tube = 0; tube < count; tube += 1) {
       const base = tube * verticesPerTube;
-      for (let ring = 0; ring < ALONG; ring += 1) {
-        for (let side = 0; side < AROUND; side += 1) {
-          const nextSide = (side + 1) % AROUND;
-          const a = base + ring * AROUND + side;
-          const b = base + (ring + 1) * AROUND + side;
-          const c = base + (ring + 1) * AROUND + nextSide;
-          const d = base + ring * AROUND + nextSide;
+      for (let ring = 0; ring < this.along; ring += 1) {
+        for (let side = 0; side < this.around; side += 1) {
+          const nextSide = (side + 1) % this.around;
+          const a = base + ring * this.around + side;
+          const b = base + (ring + 1) * this.around + side;
+          const c = base + (ring + 1) * this.around + nextSide;
+          const d = base + ring * this.around + nextSide;
           indices[cursor++] = a; indices[cursor++] = b; indices[cursor++] = d;
           indices[cursor++] = b; indices[cursor++] = c; indices[cursor++] = d;
         }
       }
     }
     geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-    this.material = new THREE.ShaderMaterial({
-      uniforms: { uLight: { value: light ? 1 : 0 }, uOpacity: { value: light ? 0.14 : 0.36 } },
+    this.coreMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        uGlowLayer: { value: 0 },
+        uLight: { value: light ? 1 : 0 },
+        uOpacity: { value: light ? 0.14 : 0.36 },
+        uShell: { value: 0 },
+      },
       vertexShader: VERTEX,
       fragmentShader: FRAGMENT,
       vertexColors: true,
@@ -90,37 +134,65 @@ export class BrainFiberTubes {
       side: THREE.FrontSide,
       blending: light ? THREE.NormalBlending : THREE.AdditiveBlending,
     });
-    this.mesh = new THREE.Mesh(geometry, this.material);
-    this.mesh.frustumCulled = false;
-    this.mesh.renderOrder = 0;
+    this.glowMaterial = this.coreMaterial.clone();
+    this.glowMaterial.uniforms.uGlowLayer.value = 1;
+    this.glowMaterial.uniforms.uShell.value = options.shell ?? 0.95;
+    this.glowMaterial.visible = !light;
+    const glowMesh = new THREE.Mesh(geometry, this.glowMaterial);
+    glowMesh.frustumCulled = false;
+    glowMesh.renderOrder = -1;
+    const coreMesh = new THREE.Mesh(geometry, this.coreMaterial);
+    coreMesh.frustumCulled = false;
+    coreMesh.renderOrder = 0;
+    this.mesh.add(glowMesh, coreMesh);
   }
 
   setTheme(light: boolean) {
-    this.material.uniforms.uLight.value = light ? 1 : 0;
-    this.material.blending = light ? THREE.NormalBlending : THREE.AdditiveBlending;
-    this.material.needsUpdate = true;
+    this.coreMaterial.uniforms.uLight.value = light ? 1 : 0;
+    this.coreMaterial.blending = light ? THREE.NormalBlending : THREE.AdditiveBlending;
+    this.coreMaterial.needsUpdate = true;
+    this.glowMaterial.uniforms.uLight.value = light ? 1 : 0;
+    this.glowMaterial.blending = THREE.AdditiveBlending;
+    this.glowMaterial.needsUpdate = true;
+    this.glowMaterial.visible = !light;
   }
 
   setOpacity(opacity: number) {
-    this.material.uniforms.uOpacity.value = opacity;
+    this.coreMaterial.uniforms.uOpacity.value = opacity;
+    this.glowMaterial.uniforms.uOpacity.value = opacity;
   }
 
   setColors(slot: number, start: THREE.Color, end: THREE.Color) {
-    const base = slot * (ALONG + 1) * AROUND;
-    for (let ring = 0; ring <= ALONG; ring += 1) {
-      const t = ring / ALONG;
+    const base = slot * (this.along + 1) * this.around;
+    for (let ring = 0; ring <= this.along; ring += 1) {
+      const t = ring / this.along;
       const r = start.r + (end.r - start.r) * t;
       const g = start.g + (end.g - start.g) * t;
       const b = start.b + (end.b - start.b) * t;
-      for (let side = 0; side < AROUND; side += 1) this.color.setXYZ(base + ring * AROUND + side, r, g, b);
+      for (let side = 0; side < this.around; side += 1) this.color.setXYZ(base + ring * this.around + side, r, g, b);
     }
   }
 
-  setCurve(slot: number, start: THREE.Vector3, control: THREE.Vector3, end: THREE.Vector3, radius: number) {
+  setStrength(slot: number, strength: number) {
+    const base = slot * (this.along + 1) * this.around;
+    for (let vertex = 0; vertex < (this.along + 1) * this.around; vertex += 1) {
+      this.strength.setX(base + vertex, strength);
+    }
+  }
+
+  setCurve(
+    slot: number,
+    start: THREE.Vector3,
+    control: THREE.Vector3,
+    end: THREE.Vector3,
+    radius: number,
+    startRadius: number,
+    endRadius: number,
+  ) {
     if (slot < 0 || slot >= this.count) return;
-    const base = slot * (ALONG + 1) * AROUND;
-    for (let ring = 0; ring <= ALONG; ring += 1) {
-      const t = ring / ALONG;
+    const base = slot * (this.along + 1) * this.around;
+    for (let ring = 0; ring <= this.along; ring += 1) {
+      const t = ring / this.along;
       const inv = 1 - t;
       this.point.set(
         inv * inv * start.x + 2 * inv * t * control.x + t * t * end.x,
@@ -142,12 +214,27 @@ export class BrainFiberTubes {
         this.side.normalize();
       }
       this.binormal.crossVectors(this.tangent, this.side).normalize();
-      const profile = 0.52 + 0.48 * Math.sin(Math.PI * t);
-      for (let side = 0; side < AROUND; side += 1) {
-        const angle = (side / AROUND) * Math.PI * 2;
+      // Neural processes flare organically where they merge into each soma,
+      // then taper through the inter-cell span instead of reading as wire.
+      const smoothStart = Math.min(1, t / 0.4);
+      const smoothEnd = Math.min(1, (1 - t) / 0.4);
+      const startBlend = 1 - smoothStart * smoothStart * (3 - 2 * smoothStart);
+      const endBlend = 1 - smoothEnd * smoothEnd * (3 - 2 * smoothEnd);
+      const middleRadius = radius * (0.43 + 0.07 * Math.sin(Math.PI * t * 3 + slot * 1.71));
+      const localRadius = middleRadius
+        + (startRadius - middleRadius) * startBlend
+        + (endRadius - middleRadius) * endBlend;
+      for (let side = 0; side < this.around; side += 1) {
+        const angle = (side / this.around) * Math.PI * 2;
         this.surface.copy(this.side).multiplyScalar(Math.cos(angle)).addScaledVector(this.binormal, Math.sin(angle));
-        const at = base + ring * AROUND + side;
-        this.position.setXYZ(at, this.point.x + this.surface.x * radius * profile, this.point.y + this.surface.y * radius * profile, this.point.z + this.surface.z * radius * profile);
+        const membrane = 1 + Math.sin(angle * 2 + slot * 2.37 + t * 8.0) * 0.055;
+        const at = base + ring * this.around + side;
+        this.position.setXYZ(
+          at,
+          this.point.x + this.surface.x * localRadius * membrane,
+          this.point.y + this.surface.y * localRadius * membrane,
+          this.point.z + this.surface.z * localRadius * membrane,
+        );
         this.normal.setXYZ(at, this.surface.x, this.surface.y, this.surface.z);
       }
     }
@@ -160,10 +247,12 @@ export class BrainFiberTubes {
 
   commitColors() {
     this.color.needsUpdate = true;
+    this.strength.needsUpdate = true;
   }
 
   dispose() {
-    this.mesh.geometry.dispose();
-    this.material.dispose();
+    this.geometry.dispose();
+    this.coreMaterial.dispose();
+    this.glowMaterial.dispose();
   }
 }

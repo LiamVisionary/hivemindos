@@ -5,19 +5,15 @@
 // engine): notes are glowing soma junctions, every wiki-link renders as a
 // multi-strand fiber bundle with GPU synaptic pulses, and a faint
 // nearest-neighbor web fills the space between so the whole graph reads as
-// connected neural tissue. Dark theme gets a bloom pass for the volumetric
-// glow; hive-light stays a plain ink-on-parchment render. Colors ride the
+// connected neural tissue. Glow is baked into clipped sprite atlases so the
+// scene can render directly without WKWebView-sensitive post-processing tiles.
+// Hive-light stays a plain ink-on-parchment render. Colors ride the
 // vault panel's --brain-* tokens, reduced motion is honored, and everything
 // is disposed on unmount. Shaders/textures live in ./brain-synapse-gpu.
 
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
-import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
-import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
-import { SMAAPass } from "three/examples/jsm/postprocessing/SMAAPass.js";
-import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
-import { CopyShader } from "three/examples/jsm/shaders/CopyShader.js";
+import { BrainDendriteField } from "./brain-dendrite-field";
 import { BrainFiberTubes } from "./brain-fiber-tubes";
 import {
   BACKDROP_FRAGMENT,
@@ -47,14 +43,18 @@ import {
 export type { SynapseNodeTone };
 
 export type SynapseNodeInput = {
+  activity: number; // 0..1 recent edits + agent access; drives glow only
+  cluster: string; // real folder/tag grouping; drives layout anchor
   id: string;
   label: string;
   meta: string;
-  weight: number; // 0..1 importance; drives radius + glow
+  weight: number; // 0..1 wiki-link centrality; drives radius
   tone: SynapseNodeTone;
 };
 
-export type SynapseLinkInput = { source: string; target: string };
+type SynapseLinkKind = "wiki" | "folder" | "tag";
+
+export type SynapseLinkInput = { kind: SynapseLinkKind; source: string; target: string };
 
 type SynapseCanvasProps = {
   className?: string;
@@ -71,12 +71,9 @@ type SynapseCanvasProps = {
 const WORLD_RADIUS = 150;
 const FIBER_SEGMENTS = 14;
 const LINK_STRANDS = 4;
-const WEB_NEIGHBORS = 5;
-const WEB_STRANDS = 3;
-const AMBIENT_SPARK_THRESHOLD = 0.965;
 const MAX_PULSE_SLOTS = 9000;
-const MAX_LABELS = 28;
-const DUST_COUNT = 1400;
+const MAX_LABELS = 16;
+const DUST_COUNT = 3200;
 const PRE_TICKS = 110;
 // Dark theme is a deep-space indigo field; honey stays the semantic accent.
 const DARK_DUST_TINT = "#b9c8ff";
@@ -84,11 +81,15 @@ const DARK_DUST_TINT = "#b9c8ff";
 // the blue-violet field — never amber/orange, which breaks the palette.
 const DARK_LIT_TINT = "#dff0ff";
 const DARK_PULSE_TINT = "#e9f7ff";
-const DARK_WEB_SPARK_TINT = "#d5fbff";
 const DARK_FOG_TINT = "#061348";
 const DARK_CLEAR_TINT = "#02082d";
 
 type SimNode = {
+  activity: number;
+  anchorX: number;
+  anchorY: number;
+  anchorZ: number;
+  cluster: string;
   drift: number;
   id: string;
   label: string;
@@ -104,13 +105,13 @@ type SimNode = {
   z: number;
 };
 
-// One rendered curve. Real wiki-links become LINK_STRANDS fibers sharing a
-// linkIndex; the ambient nearest-neighbor web uses linkIndex -1.
+// One rendered curve. Wiki-links carry a bright multi-strand bundle; typed
+// folder/tag associations remain quieter and never masquerade as wiki-links.
 type Fiber = {
   bowAmount: number;
   bowSeed: THREE.Vector3;
   endOffset: THREE.Vector3 | null;
-  linkIndex: number;
+  kind: SynapseLinkKind;
   seed: number;
   sourceIndex: number;
   startOffset: THREE.Vector3 | null;
@@ -118,7 +119,7 @@ type Fiber = {
   targetIndex: number;
 };
 
-type RealLink = { sourceIndex: number; targetIndex: number };
+type GraphLink = { kind: SynapseLinkKind; sourceIndex: number; targetIndex: number };
 
 type EngineOptions = {
   labelClassName?: string;
@@ -126,22 +127,29 @@ type EngineOptions = {
   onNodeHover: (id: string | null) => void;
 };
 
-function pairKey(a: number, b: number) {
-  return a < b ? `${a}:${b}` : `${b}:${a}`;
+function clusterAnchor(cluster: string) {
+  const u = hashUnit(cluster, 101) * 2 - 1;
+  const angle = hashUnit(cluster, 103) * Math.PI * 2;
+  const ring = Math.sqrt(Math.max(0.0001, 1 - u * u));
+  const radius = WORLD_RADIUS * 0.66;
+  return {
+    x: Math.cos(angle) * ring * radius,
+    y: u * radius * 0.72,
+    z: Math.sin(angle) * ring * radius * 0.82,
+  };
 }
 
 class SynapseEngine {
   private alpha = 0;
   private animationFrame = 0;
   private backdrop: THREE.Mesh | null = null;
-  private bloomPass: UnrealBloomPass | null = null;
   private camera: THREE.PerspectiveCamera;
   private cameraRadius = WORLD_RADIUS * 3.2;
   private cameraRadiusTarget = WORLD_RADIUS * 2.3;
-  private composer: EffectComposer | null = null;
   private container: HTMLElement;
   private contextIds = new Set<string>();
   private dataSignature = "";
+  private dendrites: BrainDendriteField | null = null;
   private destroyed = false;
   private drag: { id: number; lastX: number; lastY: number; moved: number; startX: number; startY: number } | null = null;
   private dust: THREE.Points | null = null;
@@ -169,14 +177,13 @@ class SynapseEngine {
   private phiTarget = 1.18;
   private pointer = { down: false, inside: false, x: 0, y: 0 };
   private pulsePoints: THREE.Points | null = null;
-  private realLinks: RealLink[] = [];
+  private graphLinks: GraphLink[] = [];
   private reducedMotion = false;
   private reducedMotionQuery: MediaQueryList | null = null;
   private renderer: THREE.WebGLRenderer | null = null;
   private resizeObserver: ResizeObserver | null = null;
   private scene = new THREE.Scene();
   private selectedId: string | null = null;
-  private smaaPass: SMAAPass | null = null;
   private soma: THREE.InstancedMesh | null = null;
   private texAtlas: THREE.CanvasTexture;
   private texDot: THREE.CanvasTexture;
@@ -191,7 +198,6 @@ class SynapseEngine {
   private tmpVecB = new THREE.Vector3();
   private tmpVecC = new THREE.Vector3();
   private tmpVecD = new THREE.Vector3();
-  private webDirty = false;
   private fadeIn = 0;
   private onVisibility = () => {
     // Drop the accumulated hidden-time so the first visible frame doesn't jump.
@@ -209,16 +215,16 @@ class SynapseEngine {
 
     let renderer: THREE.WebGLRenderer | null = null;
     try {
-      // The scene renders into an offscreen composer target, so default-
-      // framebuffer antialiasing cannot affect it. The target itself receives
-      // MSAA below, before bloom thresholds are evaluated.
-      renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false, powerPreference: "high-performance" });
+      // Render directly into the visible antialiased framebuffer. WKWebView
+      // intermittently flashed black tiles when the scene passed through
+      // half-float post-processing targets, even with bloom disabled.
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
     } catch {
       renderer = null;
     }
     this.renderer = renderer;
     if (renderer) {
-      // 1.75 keeps the bloom blur chain cheap on retina without visible loss.
+      // 1.75 keeps the retina framebuffer affordable without visible loss.
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
       renderer.setClearColor(this.clearTint(), 1);
       renderer.domElement.style.display = "block";
@@ -228,21 +234,6 @@ class SynapseEngine {
       // at 0 in hidden-reporting surfaces (preview pane, occluded WKWebView).
       renderer.domElement.style.opacity = "0";
       container.appendChild(renderer.domElement);
-      this.composer = new EffectComposer(renderer);
-      this.composer.addPass(new RenderPass(this.scene, this.camera));
-      // Shader AA is stable across Chromium and WKWebView. Hardware MSAA on
-      // the composer's half-float target produced intermittent black tiles.
-      this.smaaPass = new SMAAPass();
-      this.composer.addPass(this.smaaPass);
-      // Measured on three 0.184: the scene renders into the composer's buffer
-      // ALREADY sRGB-encoded (readPixels: direct render #0c0d11, buffer 0.047),
-      // so the chain must end in a raw copy — an OutputPass would encode a
-      // second time and wash the whole frame gray. Bloom therefore operates in
-      // encoded space, which these strength/radius/threshold values assume.
-      this.bloomPass = new UnrealBloomPass(new THREE.Vector2(640, 360), 0.38, 0.22, 0.72);
-      this.bloomPass.enabled = !this.palette.light;
-      this.composer.addPass(this.bloomPass);
-      this.composer.addPass(new ShaderPass(CopyShader));
     }
 
     this.labelLayer = document.createElement("div");
@@ -314,9 +305,6 @@ class SynapseEngine {
     this.texAtlas.dispose();
     this.texDot.dispose();
     this.labelLayer.remove();
-    this.smaaPass?.dispose();
-    this.bloomPass?.dispose();
-    this.composer?.dispose();
     if (this.renderer) {
       this.renderer.dispose();
       this.renderer.domElement.remove();
@@ -334,7 +322,7 @@ class SynapseEngine {
       seenLinks.add(key);
       return true;
     });
-    const signature = `${inputNodes.map((node) => node.id).join("|")}#${links.map((link) => `${link.source}>${link.target}`).join("|")}`;
+    const signature = `${inputNodes.map((node) => `${node.id}@${node.cluster}`).join("|")}#${links.map((link) => `${link.kind}:${link.source}>${link.target}`).join("|")}`;
     const topologyChanged = signature !== this.dataSignature;
     this.dataSignature = signature;
 
@@ -343,10 +331,16 @@ class SynapseEngine {
     let added = 0;
     this.nodes = inputNodes.map((input) => {
       const existing = previousById.get(input.id);
-      // Keep nodes subordinate to the neural tissue while preserving a clear
-      // importance range for hubs and frequently accessed notes.
-      const radius = 2.2 + clamp(input.weight, 0, 1) * 5.1;
+      // Only structural wiki-link centrality changes physical size. Recent
+      // edits and agent reads are activity, expressed later through glow.
+      const radius = 2.35 + clamp(input.weight, 0, 1) * 5.45;
+      const anchor = clusterAnchor(input.cluster);
       if (existing) {
+        existing.activity = input.activity;
+        existing.anchorX = anchor.x;
+        existing.anchorY = anchor.y;
+        existing.anchorZ = anchor.z;
+        existing.cluster = input.cluster;
         existing.label = input.label;
         existing.meta = input.meta;
         existing.tone = input.tone;
@@ -358,8 +352,13 @@ class SynapseEngine {
       const u = hashUnit(input.id, 3) * 2 - 1;
       const angle = hashUnit(input.id, 7) * Math.PI * 2;
       const ring = Math.sqrt(Math.max(0.0001, 1 - u * u));
-      const spread = WORLD_RADIUS * (0.55 + hashUnit(input.id, 11) * 0.45) * (1 - 0.35 * clamp(input.weight, 0, 1));
+      const spread = (24 + hashUnit(input.id, 11) * 42) * (1 - 0.3 * clamp(input.weight, 0, 1));
       return {
+        activity: input.activity,
+        anchorX: anchor.x,
+        anchorY: anchor.y,
+        anchorZ: anchor.z,
+        cluster: input.cluster,
         id: input.id,
         label: input.label,
         meta: input.meta,
@@ -367,9 +366,9 @@ class SynapseEngine {
         weight: input.weight,
         radius,
         drift: hashUnit(input.id, 19),
-        x: Math.cos(angle) * ring * spread,
-        y: u * spread * 0.72,
-        z: Math.sin(angle) * ring * spread * 0.8,
+        x: anchor.x + Math.cos(angle) * ring * spread,
+        y: anchor.y + u * spread * 0.72,
+        z: anchor.z + Math.sin(angle) * ring * spread * 0.8,
         vx: 0,
         vy: 0,
         vz: 0,
@@ -396,7 +395,8 @@ class SynapseEngine {
       }
     }
 
-    this.realLinks = links.map((link) => ({
+    this.graphLinks = links.map((link) => ({
+      kind: link.kind,
       sourceIndex: this.nodeIndexById.get(link.source) ?? 0,
       targetIndex: this.nodeIndexById.get(link.target) ?? 0,
     }));
@@ -412,8 +412,10 @@ class SynapseEngine {
       this.alpha = 1;
       for (let i = 0; i < PRE_TICKS; i += 1) this.simTick();
       this.fitRadius = this.computeCloudRadius();
-      this.cameraRadiusTarget = clamp(this.fitRadius * 1.72, 132, 520);
-      this.cameraRadius = this.cameraRadiusTarget * 1.24;
+      // Frame the tissue as an immersive macro field rather than a small
+      // diagram floating in space; users can still scroll outward.
+      this.cameraRadiusTarget = clamp(this.fitRadius * 1.46, 120, 480);
+      this.cameraRadius = this.cameraRadiusTarget * 1.12;
       // PRE_TICKS already settles the initial layout. Continuing the force
       // simulation after reveal makes the entire tissue crawl on screen.
       this.alpha = 0;
@@ -422,13 +424,6 @@ class SynapseEngine {
     }
 
     this.fibers = this.buildLinkFibers();
-    if (firstBuild) {
-      this.fibers.push(...this.computeWebFibers());
-      this.webDirty = false;
-    } else {
-      // The web re-grows once the reflowed layout settles (see frame()).
-      this.webDirty = true;
-    }
 
     this.rebuildNodeObjects();
     this.rebuildFiberObjects();
@@ -468,7 +463,6 @@ class SynapseEngine {
     if (this.destroyed) return;
     this.palette = readPalette(this.container);
     this.renderer?.setClearColor(this.clearTint(), 1);
-    if (this.bloomPass) this.bloomPass.enabled = !this.palette.light;
     if (this.backdrop) this.backdrop.visible = !this.palette.light;
     const additive = this.palette.light ? 0 : 1;
     for (const material of this.materials) {
@@ -483,6 +477,7 @@ class SynapseEngine {
       }
     }
     this.fiberTubes?.setTheme(this.palette.light);
+    this.dendrites?.setTheme(this.palette.light);
     this.applyNodeVisuals();
     this.applyFiberVisuals();
   }
@@ -514,7 +509,7 @@ class SynapseEngine {
       toneColorInto(this.palette, node.tone, node.drift, this.tmpColor);
       if (inContext) this.tmpColor.lerp(this.palette.live, 0.5);
       if (selected) this.tmpColor.lerp(this.palette.light ? this.palette.honey : linearizeSRGB(this.tmpColorB.set(DARK_LIT_TINT)), 0.5);
-      let glow = this.toneGlow(node.tone) + node.weight * 0.16;
+      let glow = this.toneGlow(node.tone) + node.activity * 0.22;
       if (inContext) glow = Math.max(glow, 0.55);
       if (neighbor) glow += 0.08;
       if (selected) glow = 0.72;
@@ -528,9 +523,9 @@ class SynapseEngine {
       this.nodeTints[index * 3 + 2] = this.tmpColor.b;
       if (haloTint && haloAlpha) {
         haloTint.setXYZ(index, this.tmpColor.r, this.tmpColor.g, this.tmpColor.b);
-        const base = this.palette.light ? 0.34 : 0.22;
-        // Capped so a selected hub reads as a bright cell, not a bloom blob.
-        haloAlpha.setX(index, Math.min(this.palette.light ? 0.5 : 0.38, base + glow * 0.16) * (dim ? 0.3 : 1));
+        const base = this.palette.light ? 0.4 : 0.42;
+        // Capped so a selected hub reads as a bright cell, not a glow blob.
+        haloAlpha.setX(index, Math.min(this.palette.light ? 0.58 : 0.64, base + glow * 0.28) * (dim ? 0.3 : 1));
       }
     });
     tintAttr.needsUpdate = true;
@@ -541,13 +536,16 @@ class SynapseEngine {
   }
 
   private fiberAlpha(fiber: Fiber) {
-    const strands = fiber.linkIndex < 0
-      ? (this.palette.light ? [0.18, 0.1, 0.06] : [0.34, 0.22, 0.12])
-      : (this.palette.light ? [0.34, 0.2, 0.12, 0.07] : [0.62, 0.42, 0.26, 0.14]);
+    const strands = fiber.kind === "wiki"
+      ? (this.palette.light ? [0.34, 0.2, 0.12, 0.07] : [0.62, 0.42, 0.26, 0.14])
+      : fiber.kind === "folder"
+        ? (this.palette.light ? [0.13, 0.055] : [0.24, 0.09])
+        : (this.palette.light ? [0.1, 0.04] : [0.18, 0.065]);
     return strands[fiber.strand] ?? strands[0];
   }
 
   private applyFiberVisuals() {
+    this.dendrites?.updateColors(this.nodes, this.nodeTints);
     if (!this.fiberLines) return;
     const geo = this.fiberLines.geometry;
     const litAttr = geo.getAttribute("aLit") as THREE.BufferAttribute;
@@ -561,18 +559,17 @@ class SynapseEngine {
     this.fibers.forEach((fiber, fiberIndex) => {
       const source = this.nodes[fiber.sourceIndex];
       const target = this.nodes[fiber.targetIndex];
-      const lit = fiber.linkIndex >= 0 && this.selectedId !== null
+      const lit = fiber.kind === "wiki" && this.selectedId !== null
         && (source.id === this.selectedId || target.id === this.selectedId) ? 1 : 0;
-      // Keep short proximity paths readable. Their old 0.25 floor multiplied
-      // against an already-faint base and effectively erased dense clusters.
       const run = Math.hypot(target.x - source.x, target.y - source.y, target.z - source.z);
-      const lengthScale = fiber.linkIndex < 0 ? clamp(run / 50, 0.82, 1) : clamp(run / 55, 0.62, 1);
+      const lengthScale = clamp(run / 55, fiber.kind === "wiki" ? 0.62 : 0.78, 1);
       const alpha = this.fiberAlpha(fiber) * lengthScale;
       const tubeSlot = this.fiberTubeSlots[fiberIndex];
       if (tubeSlot >= 0 && this.fiberTubes) {
         this.tmpColor.setRGB(this.nodeTints[fiber.sourceIndex * 3], this.nodeTints[fiber.sourceIndex * 3 + 1], this.nodeTints[fiber.sourceIndex * 3 + 2]);
         this.tmpColorB.setRGB(this.nodeTints[fiber.targetIndex * 3], this.nodeTints[fiber.targetIndex * 3 + 1], this.nodeTints[fiber.targetIndex * 3 + 2]);
         this.fiberTubes.setColors(tubeSlot, this.tmpColor, this.tmpColorB);
+        this.fiberTubes.setStrength(tubeSlot, fiber.kind === "wiki" ? 1 : fiber.kind === "folder" ? 0.84 : 0.72);
       }
       for (let v = 0; v < vertsPerFiber; v += 1) {
         const at = fiberIndex * vertsPerFiber + v;
@@ -591,20 +588,14 @@ class SynapseEngine {
       this.fibers.forEach((fiber, fiberIndex) => {
         const assignment = this.fiberPulse[fiberIndex];
         if (!assignment) return;
+        if (fiber.kind !== "wiki") return;
         const source = this.nodes[fiber.sourceIndex];
         const target = this.nodes[fiber.targetIndex];
-        const isLink = fiber.linkIndex >= 0;
-        const lit = isLink && this.selectedId !== null
+        const lit = this.selectedId !== null
           && (source.id === this.selectedId || target.id === this.selectedId) ? 1 : 0;
-        if (isLink) {
-          this.tmpColor.copy(lit
-            ? (this.palette.light ? this.palette.honey : linearizeSRGB(this.tmpColorB.set(DARK_LIT_TINT)))
-            : (this.palette.light ? this.palette.live : linearizeSRGB(this.tmpColorB.set(DARK_PULSE_TINT))));
-        } else if (this.palette.light) {
-          this.tmpColor.copy(this.palette.fg2);
-        } else {
-          linearizeSRGB(this.tmpColor.set(DARK_WEB_SPARK_TINT));
-        }
+        this.tmpColor.copy(lit
+          ? (this.palette.light ? this.palette.honey : linearizeSRGB(this.tmpColorB.set(DARK_LIT_TINT)))
+          : (this.palette.light ? this.palette.live : linearizeSRGB(this.tmpColorB.set(DARK_PULSE_TINT))));
         for (let p = 0; p < assignment.count; p += 1) {
           const slot = assignment.slot + p;
           pulseLit.setX(slot, lit);
@@ -615,7 +606,8 @@ class SynapseEngine {
       pulseTint.needsUpdate = true;
     }
     const dimUnlit = Boolean(this.selectedId);
-    this.fiberTubes?.setOpacity(this.palette.light ? (dimUnlit ? 0.055 : 0.14) : (dimUnlit ? 0.12 : 0.36));
+    this.fiberTubes?.setOpacity(this.palette.light ? (dimUnlit ? 0.085 : 0.2) : (dimUnlit ? 0.28 : 0.72));
+    this.dendrites?.setOpacity(this.palette.light ? (dimUnlit ? 0.065 : 0.14) : (dimUnlit ? 0.24 : 0.64));
     (this.fiberLines.material as THREE.ShaderMaterial).uniforms.uSelDim.value = dimUnlit ? 0.35 : 1;
     if (this.pulsePoints) {
       (this.pulsePoints.material as THREE.ShaderMaterial).uniforms.uSelDim.value = dimUnlit ? 0.35 : 1;
@@ -624,18 +616,19 @@ class SynapseEngine {
 
   private buildLinkFibers(): Fiber[] {
     const fibers: Fiber[] = [];
-    this.realLinks.forEach((link, linkIndex) => {
-      for (let strand = 0; strand < LINK_STRANDS; strand += 1) {
-        const seed = hashUnit(`${link.sourceIndex}>${link.targetIndex}`, 5 + strand * 17);
+    this.graphLinks.forEach((link) => {
+      const strandCount = link.kind === "wiki" ? LINK_STRANDS : 2;
+      for (let strand = 0; strand < strandCount; strand += 1) {
+        const seed = hashUnit(`${link.kind}:${link.sourceIndex}>${link.targetIndex}`, 5 + strand * 17);
         fibers.push({
-          linkIndex,
+          kind: link.kind,
           strand,
           seed,
           sourceIndex: link.sourceIndex,
           targetIndex: link.targetIndex,
           startOffset: null,
           endOffset: null,
-          bowAmount: 5 + seed * 15 + strand * 4,
+          bowAmount: (link.kind === "wiki" ? 5 : 3) + seed * (link.kind === "wiki" ? 15 : 9) + strand * 3,
           bowSeed: new THREE.Vector3(
             hashUnit(`${link.sourceIndex}-${link.targetIndex}`, 41 + strand * 7) - 0.5,
             hashUnit(`${link.sourceIndex}-${link.targetIndex}`, 43 + strand * 7) - 0.5,
@@ -644,53 +637,6 @@ class SynapseEngine {
         });
       }
     });
-    return fibers;
-  }
-
-  // Faint filaments joining every node to its nearest neighbors, so sparse
-  // link data still reads as one connected mesh (the "fascia" of the tissue).
-  private computeWebFibers(): Fiber[] {
-    const count = this.nodes.length;
-    if (count < 3) return [];
-    const linked = new Set(this.realLinks.map((link) => pairKey(link.sourceIndex, link.targetIndex)));
-    const webPairs = new Set<string>();
-    const fibers: Fiber[] = [];
-    for (let i = 0; i < count; i += 1) {
-      const a = this.nodes[i];
-      const nearest: Array<{ dist: number; index: number }> = [];
-      for (let j = 0; j < count; j += 1) {
-        if (i === j) continue;
-        const b = this.nodes[j];
-        const dist = (a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2;
-        if (nearest.length < WEB_NEIGHBORS) {
-          nearest.push({ dist, index: j });
-          nearest.sort((p, q) => p.dist - q.dist);
-        } else if (dist < nearest[nearest.length - 1].dist) {
-          nearest[nearest.length - 1] = { dist, index: j };
-          nearest.sort((p, q) => p.dist - q.dist);
-        }
-      }
-      for (const { index } of nearest) {
-        const key = pairKey(i, index);
-        if (linked.has(key) || webPairs.has(key)) continue;
-        webPairs.add(key);
-        for (let strand = 0; strand < WEB_STRANDS; strand += 1) {
-          const strandKey = `${key}:${strand}`;
-          const seed = hashUnit(strandKey, 59 + strand * 13);
-          fibers.push({
-            linkIndex: -1,
-            strand,
-            seed,
-            sourceIndex: i,
-            targetIndex: index,
-            startOffset: null,
-            endOffset: null,
-            bowAmount: 3 + seed * 10 + strand * 2.5,
-            bowSeed: new THREE.Vector3(hashUnit(strandKey, 61) - 0.5, hashUnit(strandKey, 67) - 0.5, hashUnit(strandKey, 71) - 0.5).normalize(),
-          });
-        }
-      }
-    }
     return fibers;
   }
 
@@ -707,6 +653,11 @@ class SynapseEngine {
   }
 
   private disposeFiberObjects() {
+    if (this.dendrites) {
+      this.scene.remove(this.dendrites.mesh);
+      this.dendrites.dispose();
+      this.dendrites = null;
+    }
     if (this.fiberTubes) {
       this.scene.remove(this.fiberTubes.mesh);
       this.fiberTubes.dispose();
@@ -772,7 +723,7 @@ class SynapseEngine {
       positions[i * 3] = Math.cos(angle) * ring * spread;
       positions[i * 3 + 1] = u * spread * 0.8;
       positions[i * 3 + 2] = Math.sin(angle) * ring * spread;
-      sizes[i] = 0.9 + hashUnit(`dust-${i}`, 13) * 2.6;
+      sizes[i] = 1.1 + hashUnit(`dust-${i}`, 13) * 3.1;
       seeds[i] = hashUnit(`dust-${i}`, 17);
     }
     const geometry = new THREE.BufferGeometry();
@@ -807,7 +758,8 @@ class SynapseEngine {
     const count = this.nodes.length;
     if (!count) return;
 
-    // Soma spheres (instanced, opaque, fresnel-lit junction cores).
+    // Soft emissive somas merge into flared fiber terminals instead of
+    // reading as separately shaded balls.
     const sphereGeometry = new THREE.SphereGeometry(1, 20, 14);
     sphereGeometry.setAttribute("iTint", new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3));
     sphereGeometry.setAttribute("iGlow", new THREE.InstancedBufferAttribute(new Float32Array(count), 1));
@@ -821,14 +773,16 @@ class SynapseEngine {
       uniforms: this.sharedUniforms(),
       vertexShader: SOMA_VERTEX,
       fragmentShader: SOMA_FRAGMENT,
-      blending: THREE.NoBlending,
+      transparent: true,
+      depthWrite: false,
+      blending: this.palette.light ? THREE.NormalBlending : THREE.AdditiveBlending,
     }));
     this.soma = new THREE.InstancedMesh(sphereGeometry, somaMaterial, count);
     this.soma.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.soma.frustumCulled = false;
     this.scene.add(this.soma);
 
-    // Clean soft halos; bloom supplies the volumetric edge without fake arbors.
+    // Clean soft atlas halos provide a volumetric edge without fake arbors.
     const plane = new THREE.PlaneGeometry(2, 2);
     const haloGeometry = new THREE.InstancedBufferGeometry();
     haloGeometry.index = plane.index;
@@ -841,7 +795,7 @@ class SynapseEngine {
     const haloScales = new Float32Array(count);
     const haloSeeds = new Float32Array(count);
     this.nodes.forEach((node, index) => {
-      haloScales[index] = node.radius * 4.8;
+      haloScales[index] = node.radius * 6.5;
       haloSeeds[index] = hashUnit(node.id, 53);
     });
     haloGeometry.setAttribute("iScale", new THREE.InstancedBufferAttribute(haloScales, 1));
@@ -865,6 +819,10 @@ class SynapseEngine {
     this.disposeFiberObjects();
     this.geometryDirty = true;
     const fiberCount = this.fibers.length;
+    if (this.nodes.length) {
+      this.dendrites = new BrainDendriteField(this.nodes, this.palette.light);
+      this.scene.add(this.dendrites.mesh);
+    }
     if (fiberCount) {
       const vertsPerFiber = FIBER_SEGMENTS * 2;
       this.fiberTubeSlots = new Int32Array(fiberCount);
@@ -897,9 +855,7 @@ class SynapseEngine {
       geometry.setAttribute("aAlpha", new THREE.BufferAttribute(new Float32Array(fiberCount * vertsPerFiber), 1));
       const signals = new Float32Array(fiberCount * vertsPerFiber);
       this.fibers.forEach((fiber, fiberIndex) => {
-        const strength = fiber.linkIndex >= 0
-          ? (fiber.strand === 0 ? 1 : 0)
-          : fiber.strand === 0 && fiber.seed > AMBIENT_SPARK_THRESHOLD ? 0.5 : 0;
+        const strength = fiber.kind === "wiki" && fiber.strand === 0 ? 1 : 0;
         signals.fill(strength, fiberIndex * vertsPerFiber, (fiberIndex + 1) * vertsPerFiber);
       });
       geometry.setAttribute("aSignal", new THREE.BufferAttribute(signals, 1));
@@ -926,14 +882,12 @@ class SynapseEngine {
       this.scene.add(this.fiberLines);
     }
 
-    // Electrical packets: six particles form a hot head plus a fading tail.
-    // Real links carry two packets; a deterministic subset of the ambient web
-    // fires one so activity travels across the whole field without visual rain.
+    // Electrical packets travel only across actual wiki-links. Folder/tag
+    // association fibers stay quiet so the visual semantics remain honest.
     let slotCursor = 0;
     this.fiberPulse = this.fibers.map((fiber) => {
       if (slotCursor >= MAX_PULSE_SLOTS) return null;
-      if (fiber.linkIndex >= 0 && fiber.strand !== 0) return null;
-      if (fiber.linkIndex < 0 && (fiber.strand !== 0 || fiber.seed <= AMBIENT_SPARK_THRESHOLD)) return null;
+      if (fiber.kind !== "wiki" || fiber.strand !== 0) return null;
       const count = Math.min(6, MAX_PULSE_SLOTS - slotCursor);
       if (count <= 0) return null;
       const slot = slotCursor;
@@ -964,8 +918,8 @@ class SynapseEngine {
         const tail = p % 6;
         const seed = hashUnit(`spark-${fiberIndex}-${packet}`, 7);
         phases[slot] = seed + packet * 0.47 - tail * 0.014;
-        speeds[slot] = (fiber.linkIndex >= 0 ? 0.16 : 0.095) + hashUnit(`spark-speed-${fiberIndex}-${packet}`, 11) * 0.055;
-        sizes[slot] = (fiber.linkIndex >= 0 ? 26 : 22) * [1, 0.76, 0.56, 0.39, 0.25, 0.14][tail];
+        speeds[slot] = 0.16 + hashUnit(`spark-speed-${fiberIndex}-${packet}`, 11) * 0.055;
+        sizes[slot] = 26 * [1, 0.76, 0.56, 0.39, 0.25, 0.14][tail];
       }
     });
     pulseGeometry.setAttribute("aPhase", new THREE.BufferAttribute(phases, 1));
@@ -1024,15 +978,17 @@ class SynapseEngine {
         b.vx -= fx; b.vy -= fy; b.vz -= fz;
       }
     }
-    for (const link of this.realLinks) {
+    for (const link of this.graphLinks) {
       const a = nodes[link.sourceIndex];
       const b = nodes[link.targetIndex];
       const dx = b.x - a.x;
       const dy = b.y - a.y;
       const dz = b.z - a.z;
       const dist = Math.max(1, Math.sqrt(dx * dx + dy * dy + dz * dz));
-      const rest = 42 + (a.radius + b.radius) * 1.7;
-      const force = ((dist - rest) / dist) * 0.055 * alpha;
+      const wiki = link.kind === "wiki";
+      const rest = (wiki ? 38 : link.kind === "folder" ? 48 : 58) + (a.radius + b.radius) * 1.55;
+      const spring = wiki ? 0.07 : link.kind === "folder" ? 0.026 : 0.018;
+      const force = ((dist - rest) / dist) * spring * alpha;
       const fx = dx * force;
       const fy = dy * force;
       const fz = dz * force;
@@ -1040,9 +996,15 @@ class SynapseEngine {
       b.vx -= fx; b.vy -= fy; b.vz -= fz;
     }
     for (const node of nodes) {
-      node.vx -= node.x * 0.012 * alpha;
-      node.vy -= node.y * 0.016 * alpha;
-      node.vz -= node.z * 0.014 * alpha;
+      // Real folder/tag cluster anchors organize sparse vaults without
+      // inventing spatial-neighbor edges. Wiki springs can still pull related
+      // notes across those semantic regions.
+      node.vx += (node.anchorX - node.x) * 0.009 * alpha;
+      node.vy += (node.anchorY - node.y) * 0.011 * alpha;
+      node.vz += (node.anchorZ - node.z) * 0.01 * alpha;
+      node.vx -= node.x * 0.0035 * alpha;
+      node.vy -= node.y * 0.004 * alpha;
+      node.vz -= node.z * 0.0035 * alpha;
       node.vx *= 0.86;
       node.vy *= 0.86;
       node.vz *= 0.86;
@@ -1232,7 +1194,6 @@ class SynapseEngine {
     const height = this.container.clientHeight;
     if (!width || !height) return;
     this.renderer.setSize(width, height, false);
-    this.composer?.setSize(width, height);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     const drawHeight = this.renderer.getDrawingBufferSize(new THREE.Vector2()).y;
@@ -1274,12 +1235,6 @@ class SynapseEngine {
       this.simTick();
       this.geometryDirty = true;
       this.alpha *= 0.986;
-    } else if (this.webDirty) {
-      // Layout has settled after a filter/search reflow — regrow the web.
-      this.webDirty = false;
-      this.fibers = [...this.buildLinkFibers(), ...this.computeWebFibers()];
-      this.rebuildFiberObjects();
-      this.applyFiberVisuals();
     }
 
     this.theta += (this.thetaTarget - this.theta) * Math.min(1, delta * 7);
@@ -1314,6 +1269,8 @@ class SynapseEngine {
       haloPos.needsUpdate = true;
     }
 
+    if (this.geometryDirty) this.dendrites?.updateGeometry(this.nodes);
+
     if (this.geometryDirty && this.fiberLines) {
       const positionAttr = this.fiberLines.geometry.getAttribute("position") as THREE.BufferAttribute;
       const pulseGeo = this.pulsePoints?.geometry;
@@ -1340,8 +1297,18 @@ class SynapseEngine {
         this.tmpVecC.multiplyScalar(0.5).add(this.tmpVecA).addScaledVector(this.tmpVecD, bow);
         const tubeSlot = this.fiberTubeSlots[fiberIndex];
         if (tubeSlot >= 0) {
-          const radius = fiber.linkIndex >= 0 ? 2 : 1.05 + fiber.seed * 0.55;
-          this.fiberTubes?.setCurve(tubeSlot, this.tmpVecA, this.tmpVecC, this.tmpVecB, radius);
+          const radius = fiber.kind === "wiki" ? 2 : fiber.kind === "folder" ? 1.18 : 0.96;
+          const sourceRadius = clamp(source.radius * 0.64, radius * 1.95, radius * 4.1);
+          const targetRadius = clamp(this.nodes[fiber.targetIndex].radius * 0.64, radius * 1.95, radius * 4.1);
+          this.fiberTubes?.setCurve(
+            tubeSlot,
+            this.tmpVecA,
+            this.tmpVecC,
+            this.tmpVecB,
+            radius,
+            sourceRadius,
+            targetRadius,
+          );
         }
         const pulseAssignment = this.fiberPulse[fiberIndex];
         if (pulseStart && pulseCtrl && pulseEnd && pulseAssignment) {
@@ -1386,11 +1353,7 @@ class SynapseEngine {
       this.updateHover();
       this.updateLabels();
     }
-    // Always render through the composer: the OutputPass owns the linear→sRGB
-    // conversion for scene AND clear color in both themes (bloom toggles off
-    // in hive-light but the color pipeline stays identical).
-    if (this.composer) this.composer.render();
-    else this.renderer.render(this.scene, this.camera);
+    this.renderer.render(this.scene, this.camera);
   };
 }
 

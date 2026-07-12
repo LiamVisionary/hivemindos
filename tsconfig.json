@@ -66,6 +66,7 @@
     "src-tauri/resources",
     "src-tauri/target",
     "vendor",
+    "packaged-skills",
     "workers",
     "promo-videos",
     "remotion",

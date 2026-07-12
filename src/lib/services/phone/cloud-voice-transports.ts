@@ -1,5 +1,6 @@
 import "server-only";
 
+import { elevenLabsTranscriptText } from "@/lib/services/phone/elevenlabs-stt-response";
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
 
 /**
@@ -166,9 +167,7 @@ export async function transcribeElevenLabsAudio(
     const detail = typeof data?.detail === "string" ? data.detail : data?.detail?.message;
     throw new Error(detail || data?.message || `ElevenLabs STT returned HTTP ${response.status}.`);
   }
-  const transcript = typeof data?.text === "string" ? data.text.trim() : "";
-  if (!transcript) throw new Error("ElevenLabs STT returned an empty transcript.");
-  return transcript;
+  return elevenLabsTranscriptText(data);
 }
 
 /** One selectable voice from a cloud TTS provider's catalog. */

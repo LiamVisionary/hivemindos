@@ -296,13 +296,15 @@ write_packaged_auto_install_metadata() {
   local dir="$1"
   local slug="$2"
   local source_path="$3"
+  local packaged_metadata="$source_path/.hivemind-skill-source.json"
+  if [[ -f "$packaged_metadata" ]]; then
+    cp "$packaged_metadata" "$dir/.hivemind-skill-source.json"
+    return 0
+  fi
   local upstream_line=""
   case "$slug" in
     obsidian-markdown|obsidian-bases|json-canvas|defuddle)
       upstream_line='  "upstreamSourceUrl": "https://github.com/kepano/obsidian-skills",'
-      ;;
-    hyperframes)
-      upstream_line='  "upstreamSourceUrl": "https://github.com/heygen-com/hyperframes",'
       ;;
   esac
   cat > "$dir/.hivemind-skill-source.json" <<JSON
@@ -520,7 +522,8 @@ seed_packaged_auto_install_skills() {
     slug="$(basename "$packaged_dir")"
     destination="$skills_folder/$slug"
     if [[ -f "$destination/SKILL.md" ]]; then
-      write_packaged_auto_install_metadata "$destination" "$slug" "$packaged_dir"
+      # Preserve sourceChecksum/user-edit evidence for the checksum-aware sync
+      # that runs after seeding. Rewriting metadata here prevents safe updates.
       continue
     fi
     mkdir -p "$destination"

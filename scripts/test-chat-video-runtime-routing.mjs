@@ -201,6 +201,9 @@ try {
   assert.ok(!hypergenToolNames.includes("generate_video"), "HyperFrames intent must not expose the connected AI video generator");
   assert.match(hypergenContext, /skill:packaged:auto-install:hyperframes/);
   assert.match(hypergenContext, /packaged-skills\/auto-install\/hyperframes\/SKILL\.md/);
+  assert.match(hypergenContext, /packaged-skills\/auto-install\/<slug>\/SKILL\.md/);
+  assert.match(hypergenContext, /without adding unsupported flags/i);
+  assert.match(hypergenContext, /Do not run `npx skills (?:add|update)`/);
   assert.match(hypergen.body, /HyperFrames HTML workflow/);
 
   const uncertain = await runPrompt(uncertainPrompt);
@@ -211,6 +214,7 @@ try {
   assert.equal(uncertainRequests.length, 1);
   assert.equal(uncertainRequests[0].tools, undefined, "classifier failure must fail closed without exposing action tools");
   assert.match(uncertainContext, /semantic video routing was unavailable/i);
+  assert.match(uncertainContext, /Markdown bullet options/i, "the safe fallback must request a dashboard-actionable decision format");
   assert.match(uncertain.body, /cloud AI video, local AI video, or HTML \/ HyperFrames/);
   assert.equal(classifierBodies.length, 5, "each video-shaped turn and HyperFrames follow-up should receive bounded semantic classification");
 } finally {

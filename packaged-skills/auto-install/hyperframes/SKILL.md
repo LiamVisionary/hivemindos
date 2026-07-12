@@ -1,25 +1,34 @@
 ---
 name: hyperframes
-description: Use for a concrete request to create, render, or deliver a video when the user chooses HyperFrames (including the common shorthand or typo "hypergen"), HTML-based video, browser-rendered video, or motion graphics, and use as the HivemindOS method router when a concrete video-creation request leaves the production method open. HyperFrames renders deterministic video from HTML and routes that intent to specialized workflows. Distinguish requests to act from discussion, brainstorming, hypotheticals, capability questions, and statements such as "I'm thinking about generating a video"; those should not trigger generation or a method question. For an actionable but method-ambiguous request, ask whether the user wants cloud AI generation, local AI generation, or HTML / HyperFrames rendering.
+description: Use for a concrete request to create, render, or deliver a video when the user chooses HyperFrames (including the common shorthand or typo hypergen), HTML-based video, browser-rendered video, or motion graphics. Distinguish actionable creation from discussion, brainstorming, hypotheticals, and capability questions; those should not trigger generation or a method question.
 license: Apache-2.0
 ---
+## HivemindOS Integration
+
+- This skill and every HyperFrames router, domain, and workflow skill it references are already bundled as sibling skills under `packaged-skills/auto-install/<slug>/SKILL.md` and the Shared Brain skill shelf.
+- Resolve sibling skills by slug through the active skill shelf. Never invent a nested `packaged-skills/hyperframes/<slug>` path, and never run `npx skills add`, `npx skills update`, or a curl-to-shell installer to obtain a bundled workflow.
+- Treat upstream commands as proposed steps only after the user selects HTML / HyperFrames and the command fits the requested build. Existing HivemindOS permission and side-effect gates remain authoritative.
+- Use an already installed HyperFrames CLI when available. Installing or updating executable third-party code requires explicit approval and pinned provenance; do not silently fetch mutable latest code.
+- Never relay raw authentication command output. Report credential names and set or missing status only; cloud login, publish, upload, and paid-provider actions require the user's explicit request.
+
+## HivemindOS method boundary
+
+Infer the user's speech act before routing. Discussion, brainstorming, hypotheticals, capability questions, and statements such as "I'm thinking about generating a video" remain ordinary conversation. Do not treat the presence of words such as “generate” or “video” as authorization, start generation, or ask for a method on that basis.
+
+For a concrete creation request, respect the selected production method:
+
+- **Cloud AI video generation** uses an explicitly selected connected hosted provider.
+- **Local AI video generation** uses an explicitly selected machine or private-fleet provider.
+- **HTML / HyperFrames rendering** uses these bundled HyperFrames skills.
+
+When a concrete request leaves the method open, ask which of those three the user intends. Upstream wording that calls HyperFrames a default does not override this HivemindOS multi-provider boundary.
+
+## Upstream Method
 # HyperFrames — start here
 
 HyperFrames **renders video from HTML** — a composition is an HTML file whose DOM declares timing with `data-*` attributes, whose animation runtime is seekable, and whose media playback is owned by the framework. The full authoring contract lives in `/hyperframes-core`; read it before writing composition HTML.
 
 Below: a **capability map** (the domain skills, loaded on demand) and the **intent router** (pick a workflow for any "make me a video" request).
-
-## HivemindOS method boundary
-
-HivemindOS supports several distinct ways to make video. First infer whether the user is actually asking you to create one now. Discussion, brainstorming, hypotheticals, capability questions, and expressions of interest are ordinary conversation; answer them naturally without starting work or asking for a production method. Do not treat the presence of words such as “generate” or “video” as authorization.
-
-For a concrete creation request, identify the production method:
-
-- **Cloud AI video generation** — hosted models and services such as Seedance, Higgsfield, Kling, Runway, Veo, or another connected cloud provider.
-- **Local AI video generation** — video models running on the user's machine or private fleet, including ComfyUI-backed workflows.
-- **HTML / HyperFrames rendering** — deterministic motion graphics and edited compositions authored from HTML, CSS, media, and seekable animation.
-
-If a concrete request only says “generate a video,” “make a video,” or otherwise leaves the method open, ask which of these three they intend before selecting a capability or starting work. Consider prior turns and attached media before asking; do not repeat a question the conversation already answered. Use the HyperFrames workflow only after they choose HTML / HyperFrames or explicitly name that method. Do not use HyperFrames as an unspoken fallback for cloud or local AI generation.
 
 ## Capability map — the domain skills
 
@@ -74,26 +83,9 @@ Routing needs to know **what the video is about** — its input and subject. If 
 - **A presentation / pitch deck / interactive deck** (discrete slides, navigation, presenter mode) → `/slideshow` — output is a navigable deck, not a rendered video. An explicit "slideshow" request proceeds directly; an adjacent trigger ("deck / slides / presentation / convert this page") makes `/slideshow` confirm it's a slideshow before authoring, and switch to the appropriate non-slideshow workflow if not.
 - **Length is a guide, not a gate** — intent picks the workflow; go to `/general-video` only when the piece is clearly longer than ~3 min, or is a static / loop / custom format.
 
-## If the matched workflow isn't installed
+## HivemindOS packaged workflow resolution
 
-Once you've picked a workflow, check it's actually available to you. If the matched workflow skill isn't installed, don't fall back to guessing — tell the user to install it first:
-
-- **Just this workflow:** `npx skills add heygen-com/hyperframes --skill <workflow-name>` (e.g. `--skill pr-to-video` — bare name, no leading `/`).
-- **All workflows at once:** `npx skills add heygen-com/hyperframes --all` (core + every workflow, skips the picker).
-
-After they run it, re-read the workflow's skill and continue.
-
-## Keeping skills current
-
-HyperFrames skills are versioned. `npx hyperframes init` checks the installed skills against the latest on GitHub and installs/refreshes the **full** set whenever anything is out of date or missing — so a freshly init'd project always has the complete, latest set (and re-running init on an up-to-date project is a no-op). The check is a quick GitHub round-trip; offline (or rate-limited) it falls back to installing after a short timeout, so init never hard-fails on a network hiccup. The creation workflows scaffold with `init`, so starting a new project always runs this check and pulls our latest skills from GitHub when they're stale. The `--skip-skills` flag is currently neutered (a temporary measure while the skills.sh registry catches up): passing it no longer skips the check, so every `init` checks GitHub. CI/tests opt out via the `HYPERFRAMES_SKIP_SKILLS=1` env var.
-
-If a task is behaving unexpectedly, or before a long build, confirm the installed skills are current:
-
-- **Check:** `npx hyperframes skills check` (add `--json` for a machine-readable verdict; exits non-zero when anything is outdated **or missing**).
-- **Update:** `npx hyperframes skills update` — pulls the full set to the latest, **installing any not yet present** (same as init's install step).
-
-The CLI also surfaces a one-line reminder when a `render` / `lint` / `validate` run detects stale skills.
-
+All workflows in the cheat-sheet are packaged as sibling auto-install skills. Resolve the selected slug from the active skill shelf or `packaged-skills/auto-install/<slug>/SKILL.md`, read it, and continue. Do not ask the user to install or update skills.
 ## Workflow details
 
 ### `/product-launch-video`

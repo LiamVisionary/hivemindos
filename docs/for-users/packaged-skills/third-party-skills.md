@@ -19,7 +19,7 @@ The Obsidian Native Brain Pack is auto-installed because agents need reliable Ob
 | `obsidian-bases` | `kepano/obsidian-skills` | Native `.base` YAML views over vault notes. |
 | `json-canvas` | `kepano/obsidian-skills` | Obsidian `.canvas` maps, boards, and flowcharts. |
 | `defuddle` | `kepano/obsidian-skills` | Clean markdown extraction from web pages when the local Defuddle CLI is installed. |
-| `hyperframes` | `heygen-com/hyperframes` | HTML-native deterministic video router. Agents distinguish requests to create from ordinary discussion. When a concrete request leaves the method open, they ask whether the user wants cloud AI, local AI, or HTML / HyperFrames; the rendering workflow runs only for the explicit HTML branch and fetches specialized HyperFrames workflows on demand. |
+| HyperFrames suite (`hyperframes` + 18 sibling skills) | `heygen-com/hyperframes` | HTML-native video routing and production workflows. Agents distinguish creation from discussion. A concrete request with no method opens the Cloud AI / Local AI / HTML-HyperFrames decision control; only the explicit HTML branch uses HyperFrames. Every referenced workflow is already bundled at one pinned, audited commit, with mutable installer commands disabled and demo-only binary showcase assets excluded. |
 
 HivemindOS does not auto-install the upstream `obsidian-cli` skill because the app already carries HivemindOS-aware Obsidian CLI and vault write policy.
 
@@ -86,6 +86,8 @@ Current optional catalog:
 | `research/hivemindos/wiki-first-research` | HivemindOS-authored optional research skill for the wiki-first project discipline: recall the shared brain first, raw sources before synthesis, an adversarial gate before drafting, versioned never-overwritten drafts, and durable findings distilled back into the shared brain at session close. |
 
 Optional third-party skills are vendored by `scripts/import-packaged-skills.mjs`, which pins each skill to an upstream commit and `sha256` in `skills-lock.json`; run `node scripts/import-packaged-skills.mjs --verify` to detect drift.
+
+The auto-installed HyperFrames suite follows the same provenance lock. Its package records the pinned upstream commit and source-archive hash for every sibling skill; setup preserves that shipped provenance in the Shared Brain instead of replacing it with machine-local metadata.
 
 Optional skills must be self-contained and installable without relying on any single machine's local runtime paths.
 

@@ -11,6 +11,7 @@
 type VoiceTurnResponseLike = {
   ok?: boolean;
   transcript?: string;
+  noSpeech?: boolean;
   error?: string;
 };
 
@@ -25,6 +26,7 @@ export type RecordedTurnDeps = {
   updateTurn: (id: number, text: string) => void;
   dropTurn: (id: number) => void;
   failTurn: (message: string) => void;
+  resumeListening: () => void;
   runConverseTurn: (transcript: string) => Promise<void>;
 };
 
@@ -65,6 +67,12 @@ export async function runRecordedVoiceTurn(
       .json()
       .catch(() => null)) as VoiceTurnResponseLike | null;
     if (deps.isCancelled()) return;
+    if (transcribeResponse.ok && transcribed?.ok && transcribed.noSpeech) {
+      youTurnSettled = true;
+      deps.dropTurn(youTurnId);
+      deps.resumeListening();
+      return;
+    }
     if (
       !transcribeResponse.ok ||
       !transcribed?.ok ||

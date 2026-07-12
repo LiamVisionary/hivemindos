@@ -155,6 +155,18 @@ const packagedHyperframesMetadata = JSON.parse(readFileSync(
   new URL("../packaged-skills/auto-install/hyperframes/.hivemind-skill-source.json", import.meta.url),
   "utf8",
 ));
+const packagedProductLaunch = readFileSync(
+  new URL("../packaged-skills/auto-install/product-launch-video/SKILL.md", import.meta.url),
+  "utf8",
+);
+const packagedWebsiteCapabilities = readFileSync(
+  new URL("../packaged-skills/auto-install/website-to-video/references/capabilities.md", import.meta.url),
+  "utf8",
+);
+const packagedAnimateTextAdapter = readFileSync(
+  new URL("../packaged-skills/auto-install/hyperframes-animation/adapters/animate-text.md", import.meta.url),
+  "utf8",
+);
 const skillsLock = JSON.parse(readFileSync(new URL("../skills-lock.json", import.meta.url), "utf8"));
 assert.match(packagedHyperframes, /HivemindOS method boundary/);
 assert.match(packagedHyperframes, /Cloud AI video generation/);
@@ -162,12 +174,25 @@ assert.match(packagedHyperframes, /Local AI video generation/);
 assert.match(packagedHyperframes, /HTML \/ HyperFrames rendering/);
 assert.match(packagedHyperframes, /I'm thinking about generating a video/);
 assert.match(packagedHyperframes, /Do not treat the presence of words such as “generate” or “video” as authorization/);
+assert.match(packagedHyperframes, /bundled as sibling skills under `packaged-skills\/auto-install\/<slug>\/SKILL\.md`/);
+assert.match(packagedHyperframes, /never run `npx skills add`, `npx skills update`/);
+assert.doesNotMatch(packagedHyperframes, /Just this workflow|All workflows at once|After they run it/, "the bundled router must not tell users to install its own workflows");
+assert.match(packagedProductLaunch, /HivemindOS Integration/);
+assert.match(packagedProductLaunch, /already bundled/);
+assert.doesNotMatch(packagedWebsiteCapabilities, /npx skills add heygen-com\/hyperframes/, "packaged references must not reinstall the bundled suite");
+assert.doesNotMatch(packagedAnimateTextAdapter, /npx skills add pixel-point\/animate-text/, "external skill installation must remain an explicit user decision");
 assert.equal(packagedHyperframesMetadata.provider, "packaged-auto-install");
 assert.equal(packagedHyperframesMetadata.upstreamSourceUrl, "https://github.com/heygen-com/hyperframes");
+assert.equal(packagedHyperframesMetadata.sourceArchiveSha256, "5371981bb828588789bd682c31f374204a0ba85af4d2c2052a7cff2cf011edfc");
 assert.equal(
   skillsLock.skills.hyperframes.packagedPath,
   "packaged-skills/auto-install/hyperframes/SKILL.md",
   "the reproducibility lock should follow the auto-installed package",
+);
+assert.equal(
+  skillsLock.skills["product-launch-video"].packagedPath,
+  "packaged-skills/auto-install/product-launch-video/SKILL.md",
+  "the selected launch workflow must be present without a follow-up install",
 );
 
 console.log("Video routing is agent-decided, HyperFrames is auto-installed, and source-image follow-ups remain reusable.");

@@ -38,7 +38,7 @@ Current auto-install set:
 - `hive-capability-search`, `hive-remote-capability-use`, `hive-skill-fusion`, `hive-workflow-fusion`, and `hive-aeon-fusion` for capability discovery, remote app execution, and reusable hive workflows.
 - `hive-brain-memory` for typed Shared Brain Memory recall, durable writes, and memory evolution with superseded-history preservation.
 - `hive-brain-compiled-wiki` for HivemindOS compiled-brain entity/concept/summary writes, compiled-wiki search, graph-native MCP reads, wiki health, and shared-brain contribution contracts.
-- `hyperframes` for the Apache-2.0 HeyGen HyperFrames HTML-video router. Agents distinguish concrete creation requests from ordinary discussion; when an actionable request leaves the method open, they ask about cloud AI, local AI, or HTML / HyperFrames. The rendering workflow owns only the explicit HTML branch and installs its domain/workflow skills on demand.
+- The Apache-2.0 HeyGen HyperFrames suite: `hyperframes` plus all 18 domain and workflow siblings. Agents distinguish concrete creation requests from ordinary discussion; when an actionable request leaves the method open, they ask about cloud AI, local AI, or HTML / HyperFrames. The HTML branch resolves only bundled sibling skills and never runs an upstream skills installer. The suite is pinned to one audited commit; mutable installer commands are disabled, and only the 40 MB demo-only animation asset bundle is excluded.
 - Obsidian Native Brain Pack: `obsidian-markdown`, `obsidian-bases`, `json-canvas`, and optional `defuddle`, curated from `kepano/obsidian-skills` so agents can write Obsidian-native notes, Bases, Canvas maps, and clean web-source markdown.
 
 ## Catalog Subdivisions

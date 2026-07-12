@@ -43,16 +43,16 @@ contract HiveOFTAdapter is OFTAdapter, HiveBridgeControls {
     function _debitView(
         uint256 _amountLD,
         uint256 _minAmountLD,
-        uint32 _dstEid
+        uint32 /*_dstEid*/
     ) internal view override returns (uint256 amountSentLD, uint256 amountReceivedLD) {
         amountSentLD = _removeDust(_amountLD);
-        amountReceivedLD = _removeDust(amountSentLD - getFee(_dstEid, amountSentLD));
+        amountReceivedLD = _removeDust(amountSentLD - getFee(amountSentLD));
         if (amountReceivedLD < _minAmountLD) revert SlippageExceeded(amountReceivedLD, _minAmountLD);
     }
 
-    /// @dev Outbound: rate-limited + pausable. Locks the full amountSentLD;
-    ///      the remote mints amountReceivedLD; the difference is fee surplus
-    ///      tracked in bridgeFeesAccrued.
+    /// @dev Outbound: dual-window rate-limited + pausable. Locks the full
+    ///      amountSentLD; the remote mints amountReceivedLD; the difference is
+    ///      fee surplus tracked in bridgeFeesAccrued.
     function _debit(
         address _from,
         uint256 _amountLD,
@@ -60,21 +60,22 @@ contract HiveOFTAdapter is OFTAdapter, HiveBridgeControls {
         uint32 _dstEid
     ) internal override whenNotPaused returns (uint256 amountSentLD, uint256 amountReceivedLD) {
         (amountSentLD, amountReceivedLD) = _debitView(_amountLD, _minAmountLD, _dstEid);
-        _outflow(_dstEid, amountSentLD);
+        _consumeOutbound(_dstEid, amountSentLD);
         uint256 fee = amountSentLD - amountReceivedLD;
         if (fee > 0) bridgeFeesAccrued += fee;
         innerToken.safeTransferFrom(_from, address(this), amountSentLD);
     }
 
-    /// @dev Inbound: rate-limited + pausable — THE brake on lockbox drain. A
-    ///      credit exceeding the window reverts; the message stays verified on
-    ///      the endpoint and can be re-executed once capacity decays.
+    /// @dev Inbound: dual-window rate-limited + pausable — THE brake on
+    ///      lockbox drain. A credit exceeding either window reverts; the
+    ///      message stays verified on the endpoint and can be re-executed
+    ///      once capacity decays.
     function _credit(
         address _to,
         uint256 _amountLD,
         uint32 _srcEid
     ) internal override whenNotPaused returns (uint256 amountReceivedLD) {
-        _outflow(inboundRateLimitKey(_srcEid), _amountLD);
+        _consumeInbound(_srcEid, _amountLD);
         return super._credit(_to, _amountLD, _srcEid);
     }
 

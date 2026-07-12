@@ -1,0 +1,28 @@
+{
+  "upstreamName": "talking-head-recut",
+  "upstreamSlug": "talking-head-recut",
+  "hiveSlug": "talking-head-recut",
+  "sourceLabel": "HeyGen HyperFrames",
+  "sourceUrl": "https://github.com/heygen-com/hyperframes/blob/3351fb1a6d7f0202d07db9bf9ad335fd0d1ec344/skills/talking-head-recut/SKILL.md",
+  "repository": "https://github.com/heygen-com/hyperframes",
+  "installCommand": "Bundled with HivemindOS",
+  "importedAt": "2026-07-12T09:00:50.019Z",
+  "refreshedAt": "2026-07-12T09:11:42.002Z",
+  "provider": "packaged-auto-install",
+  "providerLabel": "HivemindOS auto-installed packaged skills",
+  "sourcePath": "packaged-skills/auto-install/talking-head-recut",
+  "packageGroup": "media",
+  "status": "auto-install",
+  "license": "Apache-2.0",
+  "commit": "3351fb1a6d7f0202d07db9bf9ad335fd0d1ec344",
+  "sourceArchiveSha256": "5371981bb828588789bd682c31f374204a0ba85af4d2c2052a7cff2cf011edfc",
+  "upstreamSourceUrl": "https://github.com/heygen-com/hyperframes",
+  "normalized": "hivemindos-augmented-upstream",
+  "description": "Package an existing talking-head / interview / podcast video by layering timed, designed GRAPHIC OVERLAY cards onto the playing video — titles, lower-thirds, data callouts, quotes, side panels, picture-in-picture — synced to the transcript. The source video plays in full; the agent designs and writes each card's HTML in conversation, then renders to MP4 via hyperframes. Use when the user asks for graphic overlays, on-screen graphics / lower-thirds / data callouts / kinetic titles on a video, 'package / dress up my video', 'add overlay cards / graphic cards', or AI-composed graphic packaging of an existing video. NOT for plain subtitles (→ embedded-captions) or building a video from scratch (→ the creation workflows); when unsure overlays-vs-captions, see /hyperframes.",
+  "hivemindAdaptations": [
+    "All nineteen upstream HyperFrames router, domain, and workflow skills are bundled as sibling auto-install skills.",
+    "The 40 MB hyperframes-animation binary showcase asset directory is excluded; authoring rules, adapters, scripts, and HTML examples remain bundled.",
+    "Mutable skills installers and curl-to-shell commands are disabled by HivemindOS policy; agents use the bundled skills and require explicit approval before installing or updating a CLI.",
+    "Raw authentication output is never relayed; HivemindOS reports only provider/key names and set or missing status."
+  ]
+}

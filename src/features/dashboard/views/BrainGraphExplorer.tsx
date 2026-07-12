@@ -6,6 +6,12 @@
 import dynamic from "next/dynamic";
 import { useCallback, useMemo, useState } from "react";
 import { ChatMarkdown } from "@/features/dashboard/ChatMarkdown";
+import {
+  brainNodeActivityWeight,
+  brainNodeClusterKey,
+  brainNodeStructuralWeight,
+  buildBrainSemanticLinks,
+} from "./brain-graph-semantics";
 import styles from "./BrainGraphExplorer.module.css";
 
 const BrainSynapseCanvas = dynamic(() => import("./BrainSynapseCanvas"), { ssr: false });
@@ -231,33 +237,34 @@ export function BrainGraphExplorer(props: any) {
       : node.accessCount
         ? "touched"
         : staleHub ? "stale" : recent ? "recent" : "plain";
-    // Size = how load-bearing the note is: links weigh double, agent reads add
-    // on top, log-scaled so hubs differentiate instead of all saturating.
-    const importance = degree * 2 + (node.accessCount ?? 0);
     return {
+      activity: brainNodeActivityWeight(node, graphNow),
+      cluster: brainNodeClusterKey(node),
       id: node.id,
       label: node.label,
       meta: node.accessCount
         ? `${node.accessCount} read${node.accessCount === 1 ? "" : "s"}`
         : `${degree} link${degree === 1 ? "" : "s"}`,
-      weight: Math.min(1, Math.log2(1 + importance) / 6),
+      weight: brainNodeStructuralWeight(node),
       tone,
     };
   }), [graphNow, visibleBrainNodes]);
-  const synapseLinks = useMemo(() => (
+  const wikiSynapseLinks = useMemo(() => (
     (brainGraph?.links ?? [])
       .filter((link) => visibleIds.has(link.source) && visibleIds.has(link.target))
-      .map((link) => ({ source: link.source, target: link.target }))
+      .map((link) => ({ kind: "wiki", source: link.source, target: link.target }))
   ), [brainGraph, visibleIds]);
+  const semanticLinks = useMemo(() => buildBrainSemanticLinks(visibleBrainNodes, wikiSynapseLinks), [visibleBrainNodes, wikiSynapseLinks]);
+  const canvasLinks = useMemo(() => [...wikiSynapseLinks, ...semanticLinks], [semanticLinks, wikiSynapseLinks]);
   const neighborIds = useMemo(() => {
     if (!selectedBrainNode) return [];
     const ids = new Set<string>();
-    for (const link of synapseLinks) {
+    for (const link of wikiSynapseLinks) {
       if (link.source === selectedBrainNode.id) ids.add(link.target);
       if (link.target === selectedBrainNode.id) ids.add(link.source);
     }
     return [...ids];
-  }, [selectedBrainNode, synapseLinks]);
+  }, [selectedBrainNode, wikiSynapseLinks]);
   const handleNodeClick = useCallback((nodeId) => {
     const node = brainNodesById.get(nodeId);
     if (node) {
@@ -327,7 +334,7 @@ export function BrainGraphExplorer(props: any) {
         className={graphClass("canvasLayer", brainGraphLoading && "canvasDimmed")}
         labelClassName={styles.nodeLabel}
         nodes={synapseNodes}
-        links={synapseLinks}
+        links={canvasLinks}
         selectedId={selectedBrainNode?.id ?? null}
         neighborIds={neighborIds}
         contextIds={brainContextNodeIds}
@@ -357,7 +364,7 @@ export function BrainGraphExplorer(props: any) {
             {brainGraphLoading ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
           </button>
           <span className={graphClass("visibleCount")}>
-            {visibleBrainNodes.length} neurons · {synapseLinks.length} synapses
+            {visibleBrainNodes.length} neurons · {wikiSynapseLinks.length} wiki-links · {semanticLinks.length} associations
           </span>
         </div>
         <div className={graphClass("filters")} aria-label="Graph filters">
@@ -375,11 +382,12 @@ export function BrainGraphExplorer(props: any) {
       </div>
 
       <div className={graphClass("legend")} aria-hidden="true">
-        <span><i className={graphClass("legendSize")} />size = links + reads</span>
+        <span><i className={graphClass("legendSize")} />size = wiki-link degree</span>
+        <span><i className={graphClass("legendAssociation")} />faint fibers = folder/tag associations</span>
         <span><i className={graphClass("legendHoney")} />agent-touched</span>
         <span><i className={graphClass("legendTeal")} />recently changed</span>
         <span><i className={graphClass("legendDanger")} />unresolved link</span>
-        <span><i className={graphClass("legendPulse")} />firing = link traffic</span>
+        <span><i className={graphClass("legendPulse")} />firing = wiki-link traffic</span>
       </div>
       {visibleBrainNodes.length && brainGraphStatus ? (
         <p className={graphClass("statusLine")}>{brainGraphStatus}</p>

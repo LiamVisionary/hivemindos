@@ -50,6 +50,21 @@ type ProcessEventLike = {
   detail?: unknown;
 };
 
+export type ChatPromptUi = {
+  displayText: string;
+  options: Array<{
+    label: string;
+    value: string;
+    permissionMode?: ChatPermissionMode;
+  }>;
+  allowFreeText?: boolean;
+  response?: {
+    label: string;
+    value?: string;
+    respondedAt?: number;
+  };
+};
+
 export function isHiddenChatProcessEvent(event: ProcessEventLike = {}) {
   const label = String(event?.label ?? "").trim();
   const detail = String(event?.detail ?? "").trim();
@@ -195,11 +210,34 @@ function plainPromptOptionText(value: string) {
 
 function promptOptionButtonLabel(value: string) {
   const text = plainPromptOptionText(value);
-  const parentheticalIndex = text.search(/\s+\(/);
-  return parentheticalIndex > 0 ? text.slice(0, parentheticalIndex).trim() : text;
+  const detailIndexes = [text.search(/\s+\(/), text.search(/\s+[—–]\s+/)].filter((index) => index > 0);
+  const detailIndex = detailIndexes.length ? Math.min(...detailIndexes) : -1;
+  return detailIndex > 0 ? text.slice(0, detailIndex).trim() : text;
 }
 
-export function promptUiFromMessage(message: ChatMessageLike, content: string) {
+function markdownDecisionPrompt(lines: string[]): ChatPromptUi | null {
+  const firstOptionIndex = lines.findIndex((line) => /^\s*[-*+]\s+\S/.test(line));
+  if (firstOptionIndex <= 0) return null;
+  const question = lines.slice(0, firstOptionIndex).join("\n").trim();
+  if (!/(?:\b(?:which|what)\b[\s\S]{0,120}\b(?:prefer|choose|select|want)\b|\b(?:choose|select|pick)\b[\s\S]{0,120})[?:]?\s*$/i.test(question)) return null;
+  const options: Array<{ label: string; value: string }> = [];
+  let optionEndIndex = firstOptionIndex;
+  for (; optionEndIndex < lines.length; optionEndIndex += 1) {
+    const line = lines[optionEndIndex] ?? "";
+    const match = line.match(/^\s*[-*+]\s+(.+?)\s*$/);
+    if (!match) break;
+    const value = plainPromptOptionText(match[1] ?? "");
+    if (value) options.push({ label: promptOptionButtonLabel(value), value });
+  }
+  if (options.length < 2 || options.length > 6) return null;
+  const trailingText = lines.slice(optionEndIndex).join("\n").trim();
+  return {
+    displayText: [question, trailingText].filter(Boolean).join("\n\n"),
+    options,
+  };
+}
+
+export function promptUiFromMessage(message: ChatMessageLike, content: string): ChatPromptUi | null {
   const structuredPrompt = message?.agentPrompt;
   const structuredResponse = structuredPrompt?.response && typeof structuredPrompt.response === "object"
     ? structuredPrompt.response as { label?: unknown; value?: unknown; respondedAt?: unknown }
@@ -239,6 +277,8 @@ export function promptUiFromMessage(message: ChatMessageLike, content: string) {
   }
 
   const lines = content.split(/\r?\n/);
+  const markdownDecision = markdownDecisionPrompt(lines);
+  if (markdownDecision) return markdownDecision;
   const optionsIndex = lines.findIndex((line) => /^options?\s*:?\s*$/i.test(line.trim()));
   if (optionsIndex < 0) return null;
   const options: Array<{ label: string; value: string }> = [];

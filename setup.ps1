@@ -743,10 +743,18 @@ function Seed-BundledSharedSkills {
   foreach ($skillFile in $autoInstallSkillFiles) {
     $slug = $skillFile.Directory.Name
     $destination = Join-Path $skillsFolder $slug
-    if (-not (Test-Path (Join-Path $destination "SKILL.md"))) {
-      New-Item -ItemType Directory -Force -Path $destination | Out-Null
-      Copy-Item -Path (Join-Path $skillFile.Directory.FullName "*") -Destination $destination -Recurse -Force
-      $seeded += 1
+    if (Test-Path (Join-Path $destination "SKILL.md")) {
+      # Keep sourceChecksum/user-edit evidence intact for hive-brain-sync,
+      # which safely refreshes managed packages after this seed pass.
+      continue
+    }
+    New-Item -ItemType Directory -Force -Path $destination | Out-Null
+    Copy-Item -Path (Join-Path $skillFile.Directory.FullName "*") -Destination $destination -Recurse -Force
+    $seeded += 1
+    $packagedMetadata = Join-Path $skillFile.Directory.FullName ".hivemind-skill-source.json"
+    if (Test-Path $packagedMetadata) {
+      Copy-Item -Path $packagedMetadata -Destination (Join-Path $destination ".hivemind-skill-source.json") -Force
+      continue
     }
     $metadata = @{
       provider = "packaged-auto-install"
@@ -757,9 +765,6 @@ function Seed-BundledSharedSkills {
     }
     if (@("obsidian-markdown", "obsidian-bases", "json-canvas", "defuddle") -contains $slug) {
       $metadata["upstreamSourceUrl"] = "https://github.com/kepano/obsidian-skills"
-    }
-    if ($slug -eq "hyperframes") {
-      $metadata["upstreamSourceUrl"] = "https://github.com/heygen-com/hyperframes"
     }
     $metadata = $metadata | ConvertTo-Json -Depth 3
     Set-Content -Path (Join-Path $destination ".hivemind-skill-source.json") -Value $metadata

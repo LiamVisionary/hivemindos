@@ -26,7 +26,7 @@ Setup copies auto-install skills into:
 
 Agents should discover them from the shared brain index, not from the repository folder directly.
 
-Auto-install is reserved for foundational workflows that make a fresh HivemindOS install usable for agents immediately. This includes `create-zero-human-company`, which turns a business goal or linked repository into a verified company setup while keeping launch and external actions behind explicit operator intent, and `hyperframes`, which gives agents an HTML-video path after the user chooses it instead of cloud or local AI generation.
+Auto-install is reserved for foundational workflows that make a fresh HivemindOS install usable for agents immediately. This includes `create-zero-human-company`, which turns a business goal or linked repository into a verified company setup while keeping launch and external actions behind explicit operator intent, and the complete HyperFrames suite, which gives agents a ready-to-use HTML-video path after the user chooses it instead of cloud or local AI generation. All router, domain, and production workflow skills ship together, so agents never ask users to fetch a missing HyperFrames workflow.
 
 ## Optional Skills
 

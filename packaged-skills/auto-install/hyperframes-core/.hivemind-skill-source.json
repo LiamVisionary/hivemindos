@@ -1,0 +1,28 @@
+{
+  "upstreamName": "hyperframes-core",
+  "upstreamSlug": "hyperframes-core",
+  "hiveSlug": "hyperframes-core",
+  "sourceLabel": "HeyGen HyperFrames",
+  "sourceUrl": "https://github.com/heygen-com/hyperframes/blob/3351fb1a6d7f0202d07db9bf9ad335fd0d1ec344/skills/hyperframes-core/SKILL.md",
+  "repository": "https://github.com/heygen-com/hyperframes",
+  "installCommand": "Bundled with HivemindOS",
+  "importedAt": "2026-07-12T09:00:50.019Z",
+  "refreshedAt": "2026-07-12T09:11:42.002Z",
+  "provider": "packaged-auto-install",
+  "providerLabel": "HivemindOS auto-installed packaged skills",
+  "sourcePath": "packaged-skills/auto-install/hyperframes-core",
+  "packageGroup": "media",
+  "status": "auto-install",
+  "license": "Apache-2.0",
+  "commit": "3351fb1a6d7f0202d07db9bf9ad335fd0d1ec344",
+  "sourceArchiveSha256": "5371981bb828588789bd682c31f374204a0ba85af4d2c2052a7cff2cf011edfc",
+  "upstreamSourceUrl": "https://github.com/heygen-com/hyperframes",
+  "normalized": "hivemindos-augmented-upstream",
+  "description": "The HyperFrames composition contract — build one renderable project. Use for composition structure, the `data-*` timing attributes, `class='clip'`, tracks, sub-compositions, variables, framework-owned media playback, deterministic-render rules, and validation. Read before writing composition HTML.",
+  "hivemindAdaptations": [
+    "All nineteen upstream HyperFrames router, domain, and workflow skills are bundled as sibling auto-install skills.",
+    "The 40 MB hyperframes-animation binary showcase asset directory is excluded; authoring rules, adapters, scripts, and HTML examples remain bundled.",
+    "Mutable skills installers and curl-to-shell commands are disabled by HivemindOS policy; agents use the bundled skills and require explicit approval before installing or updating a CLI.",
+    "Raw authentication output is never relayed; HivemindOS reports only provider/key names and set or missing status."
+  ]
+}

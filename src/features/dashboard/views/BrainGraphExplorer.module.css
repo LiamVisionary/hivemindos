@@ -234,6 +234,14 @@
   animation: legendPulse 1.8s ease-in-out infinite;
 }
 
+.legendAssociation {
+  width: 13px !important;
+  height: 2px !important;
+  border-radius: 999px !important;
+  background: rgba(135, 188, 255, 0.42);
+  box-shadow: 0 0 5px rgba(135, 188, 255, 0.28);
+}
+
 :global(:root[data-theme="hive-light"]) .legendHoney {
   background: var(--brain-honey, #936811);
   box-shadow: 0 0 7px color-mix(in srgb, var(--brain-honey, #936811) 65%, transparent);
@@ -252,6 +260,11 @@
 :global(:root[data-theme="hive-light"]) .legendPulse {
   background: radial-gradient(circle, var(--brain-live, #1d8e7c) 0%, transparent 72%);
   box-shadow: 0 0 9px color-mix(in srgb, var(--brain-live, #1d8e7c) 80%, transparent);
+}
+
+:global(:root[data-theme="hive-light"]) .legendAssociation {
+  background: color-mix(in srgb, var(--brain-fg-2, #5e574b) 58%, transparent);
+  box-shadow: none;
 }
 
 @keyframes legendPulse {

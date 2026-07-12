@@ -27,6 +27,9 @@ const ignoredDirectories = new Set([
 const ignoredRelativeDirectories = new Set([
   "apps/zimage-mobile-tauri/src-tauri/gen",
   "design-system",
+  // Pinned third-party HyperFrames compiler + measured-font data. These are
+  // provenance-locked package resources, not HivemindOS application modules.
+  "packaged-skills/auto-install/embedded-captions",
   "public/design-system",
   "src-tauri/gen",
   "src-tauri/static",
@@ -39,6 +42,7 @@ const ignoredFiles = new Set([
   "agents-lock.json",
   "package-lock.json",
   "pnpm-lock.yaml",
+  "skills-lock.json",
   "yarn.lock",
 ]);
 

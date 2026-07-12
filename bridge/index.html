@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>The $HIVE Robinhood Bridge</title>
-<meta name="description" content="Bridge HIVE between Base and Robinhood Chain. Same token, same supply — every HIVE on Robinhood is backed 1:1 by HIVE locked on Base.">
+<meta name="description" content="Bridge HIVE between Base and Robinhood Chain. Same token, same supply — every HIVE on Robinhood is backed 1:1 by HIVE locked on Base, verified live.">
 <style>
   :root{
     --bg:#0b0a08; --card:#14120e; --card2:#1b1812; --line:#2a2517;
@@ -20,6 +20,7 @@
   .hero h1 .hive{color:var(--gold)} .hero h1 .rh{color:#3ecf8e}
   .tagline{color:var(--dim);max-width:560px;margin:18px auto 0;font-size:14px}
   .banner{background:#2a1c00;border:1px solid var(--gold-dark);color:var(--gold);border-radius:10px;padding:12px 16px;margin:26px 0 0;font-size:13px;text-align:center}
+  .banner.err{background:#2a0d0d;border-color:var(--red);color:var(--red)}
   .btnrow{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:28px 0 10px}
   button{font-family:var(--mono);cursor:pointer;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--text);padding:12px 18px;font-size:14px}
   button:hover{border-color:var(--gold-dark)}
@@ -50,15 +51,21 @@
   .quote{margin-top:14px;font-size:13px}
   .quote .row{display:flex;justify-content:space-between;padding:4px 0;color:var(--dim)}
   .quote .row b{color:var(--text);font-weight:400}
+  .warn{margin-top:12px;font-size:12.5px;color:var(--gold);background:#241a02;border:1px solid var(--gold-dark);border-radius:8px;padding:9px 12px;display:none}
+  .warn.show{display:block}
   #bridgeBtn{width:100%;margin-top:16px;padding:16px;font-size:16px}
   .steps{margin-top:16px;font-size:13px;color:var(--dim)}
   .step{display:flex;gap:10px;align-items:center;padding:4px 0}
-  .dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--dim);flex:none}
-  .step.active .dot{border-color:var(--gold);background:var(--gold)}
+  .dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--dim);flex:none;position:relative}
+  .step.active .dot{border-color:var(--gold)}
+  .step.active .dot::after{content:"";position:absolute;inset:1px;border-radius:50%;border:2px solid transparent;border-top-color:var(--gold);animation:spin .8s linear infinite}
   .step.done .dot{border-color:var(--green);background:var(--green)}
   .step.done{color:var(--text)}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion: reduce){.step.active .dot::after{animation:none}}
   .status{margin-top:12px;font-size:13px;min-height:18px}
   .status.err{color:var(--red)} .status.ok{color:var(--green)}
+  .txlinks{margin-top:8px;font-size:12px;display:flex;gap:14px;flex-wrap:wrap}
   section.text{margin-top:44px}
   section.text h2{font-size:24px;margin-bottom:8px}
   section.text h3{font-size:16px;color:var(--gold);margin:20px 0 6px}
@@ -68,11 +75,15 @@
   .stat .k{color:var(--dim);font-size:11px;letter-spacing:1px}
   .stat .v{font-size:17px;margin-top:6px;word-break:break-word}
   .stat .v.good{color:var(--green)} .stat .v.bad{color:var(--red)}
+  .skl{display:inline-block;width:70px;height:14px;border-radius:4px;background:linear-gradient(90deg,var(--card2) 25%,var(--line) 50%,var(--card2) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite}
+  @keyframes shimmer{to{background-position:-200% 0}}
+  @media (prefers-reduced-motion: reduce){.skl{animation:none}}
   ol{color:var(--dim);font-size:14px;padding-left:22px} ol li{margin-top:10px}
   .contracts{width:100%;border-collapse:collapse;margin-top:14px;font-size:12.5px}
   .contracts td{padding:8px;border-bottom:1px solid var(--line);word-break:break-all}
   .contracts td:first-child{color:var(--dim);white-space:nowrap}
-  footer{margin-top:56px;text-align:center;color:var(--dim);font-size:12px}
+  .disclaimer{margin-top:20px;font-size:12px;color:var(--dim);border-top:1px solid var(--line);padding-top:16px}
+  footer{margin-top:40px;text-align:center;color:var(--dim);font-size:12px}
 </style>
 </head>
 <body>
@@ -81,10 +92,13 @@
   <div class="hero">
     <h1>The <span class="hive">$HIVE</span><br><span class="rh">Robinhood</span> <em>Bridge.</em></h1>
     <p class="tagline">Same token. Same supply. Every $HIVE on Robinhood is backed 1:1 by tokens
-    locked on Base — verifiable on-chain, live on this page, powered by
+    locked on Base — verified live on this page, powered by
     <a href="https://layerzero.network" target="_blank" rel="noopener">LayerZero</a>.</p>
     <div id="deployBanner" class="banner" hidden>
       ⚠ Bridge contracts are not deployed yet — this page is staged and the widget is disabled.
+    </div>
+    <div id="verifyBanner" class="banner err" hidden>
+      ⚠ Unable to verify backing right now — do not bridge until this clears.
     </div>
   </div>
 
@@ -129,58 +143,63 @@
       <button class="max" id="maxBtn">MAX</button>
     </div>
     <div class="quote">
+      <div class="row"><span>YOU SEND</span><b id="qSend">—</b></div>
       <div class="row"><span>YOU'LL RECEIVE</span><b id="qReceive">—</b></div>
-      <div class="row"><span>BRIDGE FEE</span><b id="qBridgeFee">0%</b></div>
+      <div class="row"><span>BRIDGE FEE</span><b id="qBridgeFee">—</b></div>
       <div class="row"><span>LAYERZERO FEE</span><b id="qLzFee">—</b></div>
+      <div class="row"><span>REMAINING CAPACITY (HR / DAY)</span><b id="qCapacity">—</b></div>
     </div>
+    <div class="warn" id="capWarn"></div>
+    <div class="warn" id="gasWarn"></div>
     <button class="primary" id="bridgeBtn" disabled>Bridge</button>
     <div class="steps">
-      <div class="step" id="stepApprove"><span class="dot"></span><span>Approve adapter to spend HIVE</span></div>
+      <div class="step" id="stepApprove"><span class="dot"></span><span>Approve adapter (exact amount)</span></div>
       <div class="step" id="stepSend"><span class="dot"></span><span>Send bridge transaction</span></div>
-      <div class="step" id="stepDeliver"><span class="dot"></span><span>LayerZero delivery (~1 minute) <a id="lzScanLink" target="_blank" rel="noopener" hidden>track on LayerZero Scan ↗</a></span></div>
+      <div class="step" id="stepDeliver"><span class="dot"></span><span>LayerZero delivery (verified via message status)</span></div>
     </div>
     <div class="status" id="status"></div>
+    <div class="txlinks" id="txlinks"></div>
   </div>
 
   <section class="text">
-    <h2>Don't trust — watch it live</h2>
-    <p>These numbers are read straight from both chains by your browser, right now.
-    The bridge is honest exactly when <b>locked − fees ≥ minted</b>.</p>
+    <h2>Don't trust — verify, live</h2>
+    <p>These numbers are read from both chains by your browser right now, across two independent
+    RPC providers per chain. If any read fails, this shows <b>“unable to verify”</b> and the bridge
+    button locks — it never assumes you're safe. The bridge is honest exactly when
+    <b>locked − fees ≥ minted</b>.</p>
     <div class="stats">
-      <div class="stat"><div class="k">LOCKED ON BASE</div><div class="v" id="sLocked">—</div></div>
-      <div class="stat"><div class="k">MINTED ON ROBINHOOD</div><div class="v" id="sMinted">—</div></div>
-      <div class="stat"><div class="k">BACKING</div><div class="v" id="sBacked">—</div></div>
-      <div class="stat"><div class="k">BRIDGE CAPACITY LEFT (THIS WINDOW)</div><div class="v" id="sCapacity">—</div></div>
+      <div class="stat"><div class="k">LOCKED ON BASE</div><div class="v" id="sLocked"><span class="skl"></span></div></div>
+      <div class="stat"><div class="k">MINTED ON ROBINHOOD</div><div class="v" id="sMinted"><span class="skl"></span></div></div>
+      <div class="stat"><div class="k">BACKING</div><div class="v" id="sBacked"><span class="skl"></span></div></div>
+      <div class="stat"><div class="k">BRIDGE FEE</div><div class="v" id="sFee"><span class="skl"></span></div></div>
     </div>
   </section>
 
   <section class="text">
     <h2>How it works</h2>
     <h3>No new token. Supply unchanged.</h3>
-    <p>This is not a fork or a second token. The Robinhood contract is the official omnichain
-    deployment of $HIVE, paired with the original token on Base through LayerZero's audited OFT
-    standard. Bridging Base → Robinhood locks tokens in the adapter and mints on Robinhood;
-    bridging back burns and unlocks. Beware of copycats — the only official addresses are in the
-    table below.</p>
+    <p>The Robinhood contract is the official omnichain deployment of $HIVE, paired with the
+    original token on Base through LayerZero's audited OFT standard. Bridging Base → Robinhood
+    locks tokens in the adapter and mints on Robinhood; bridging back burns and unlocks. Beware
+    of copycats — the only official addresses are in the table below.</p>
     <h3>Hardened beyond the standard</h3>
-    <p>The HIVE bridge adds protections most OFT bridges skip: per-window rate limits in both
-    directions (an attacker cannot drain the lockbox quickly even if the message layer fails), an
-    emergency pause, and a bridge fee that is hard-capped at 1% in the contract itself — currently
-    <b id="feeInline">0%</b>. Security is verified by two independent DVNs
-    (LayerZero Labs + Nethermind) with every transfer traceable on
+    <p>This bridge adds protections most OFT bridges skip: dual-window (hourly + daily) rate
+    limits in both directions so no single incident can drain the lockbox quickly, an emergency
+    pause, timelocked governance so every risk-increasing change is publicly delayed, and a bridge
+    fee that is hard-capped at 0.25% in the contract itself — currently <b id="feeInline">—</b>.
+    Security is verified by two independent DVNs (LayerZero Labs + Nethermind), with directional
+    finality and every transfer traceable on
     <a href="https://layerzeroscan.com" target="_blank" rel="noopener">LayerZero Scan</a>.</p>
   </section>
 
   <section class="text">
     <h2>Getting started</h2>
     <ol>
-      <li><b>Add the network.</b> Click "Add Robinhood chain" above — works with MetaMask, Rabby,
-      Coinbase Wallet, and any EVM wallet.</li>
-      <li><b>Get ETH for gas.</b> Bridge a little ETH from Base with
-      <a href="https://app.across.to" target="_blank" rel="noopener">Across</a> — it supports
-      Robinhood natively. Gas costs are fractions of a cent.</li>
-      <li><b>Bridge your HIVE.</b> Use the widget above. Approve, send, and your tokens arrive in
-      about a minute.</li>
+      <li><b>Add the network</b> with the button above (MetaMask, Rabby, Coinbase Wallet, any EVM wallet).</li>
+      <li><b>Get ETH for gas on Robinhood.</b> Bridge a little ETH from Base with
+      <a href="https://app.across.to" target="_blank" rel="noopener">Across</a>. Without it you
+      can't swap or bridge back — this page warns you before you get stranded.</li>
+      <li><b>Bridge your HIVE</b> with the widget above.</li>
       <li><b>Trade on Uniswap.</b> <span id="swapLinkWrap">Official swap link coming with the
       liquidity pool launch.</span></li>
     </ol>
@@ -188,16 +207,20 @@
 
   <section class="text">
     <h2>Contracts</h2>
-    <p>Labeled precisely: the token, and the lockbox that holds the backing, are different
-    contracts.</p>
+    <p>Labeled precisely: the token, and the lockbox that holds the backing, are different contracts.</p>
     <table class="contracts">
       <tr><td>HIVE token (Base)</td><td id="cHiveBase"></td></tr>
       <tr><td>HIVE OFT Adapter — lockbox (Base)</td><td id="cAdapter">not deployed yet</td></tr>
       <tr><td>HIVE OFT — official twin (Robinhood)</td><td id="cOft">not deployed yet</td></tr>
     </table>
+    <p class="disclaimer">HIVE is a community token. Its presence on Robinhood Chain, Uniswap, or
+    any wallet's network list does not imply endorsement by Robinhood, Uniswap, or LayerZero.
+    Bridging and trading crypto carries risk, including total loss. Verify every address against
+    this page and check any transfer — including ours — on LayerZero Scan. Nothing here is
+    financial advice.</p>
   </section>
 
-  <footer>Bridged with LayerZero · Rate-limited, pausable, fee-capped on-chain ·
+  <footer>Bridged with LayerZero · dual-window rate-limited, pausable, timelocked, fee-capped on-chain ·
   <a href="https://layerzeroscan.com" target="_blank" rel="noopener">Verify any transfer</a></footer>
 </div>
 
@@ -211,12 +234,15 @@ const CONFIG = {
   oft: null,               // HiveOFT on Robinhood    (fill after deploy)
   swapLink: null,          // official Uniswap link   (fill after pool seed)
   base:      { chainIdHex: "0x2105", chainId: 8453, eid: 30184, name: "Base",
-               rpc: "https://mainnet.base.org", explorer: "https://basescan.org" },
+               rpcs: ["https://mainnet.base.org", "https://base-rpc.publicnode.com"],
+               explorer: "https://basescan.org" },
   robinhood: { chainIdHex: "0x1237", chainId: 4663, eid: 30416, name: "Robinhood",
-               rpc: "https://rpc.mainnet.chain.robinhood.com/",
+               rpcs: ["https://rpc.mainnet.chain.robinhood.com/", "https://robinhoodchain.blockscout.com/api/eth-rpc"],
                explorer: "https://robinhoodchain.blockscout.com" },
-  lzScanTx: (h) => `https://layerzeroscan.com/tx/${h}`,
+  lzScanApi: "https://scan.layerzero-api.com/v1/messages/tx/",
+  lzScanTx:  (h) => `https://layerzeroscan.com/tx/${h}`,
   dust: 10n ** 12n,        // 18 local − 6 shared decimals
+  OUTBOUND_LONG_FLAG: 0x40000000n,
 };
 
 const ERC20_ABI = [
@@ -238,19 +264,35 @@ const OFT_ABI = [
 const $ = (id) => document.getElementById(id);
 const fmt = (wei, digits = 2) => {
   if (wei === null || wei === undefined) return "—";
-  const n = Number(ethers.formatEther(wei));
-  return n.toLocaleString(undefined, { maximumFractionDigits: digits });
+  return Number(ethers.formatEther(wei)).toLocaleString(undefined, { maximumFractionDigits: digits });
 };
-
 const deployed = Boolean(CONFIG.adapter && CONFIG.oft);
-const baseRead = new ethers.JsonRpcProvider(CONFIG.base.rpc);
-const rhRead = new ethers.JsonRpcProvider(CONFIG.robinhood.rpc);
+
+/* Fallback JSON-RPC provider that only trusts a value when every backend agrees. */
+function agreeingProvider(rpcs) {
+  const providers = rpcs.map((u) => new ethers.JsonRpcProvider(u));
+  return providers[0]; // ethers FallbackProvider needs signing config; we do agreement manually below
+}
+async function readAgreed(rpcs, fn) {
+  const results = await Promise.all(rpcs.map(async (u) => {
+    const p = new ethers.JsonRpcProvider(u);
+    return fn(p);
+  }));
+  const key = (v) => (typeof v === "bigint" ? v.toString() : String(v));
+  if (!results.every((r) => key(r) === key(results[0]))) throw new Error("provider disagreement");
+  return results[0];
+}
+
+const baseRead = new ethers.JsonRpcProvider(CONFIG.base.rpcs[0]);
+const rhRead = new ethers.JsonRpcProvider(CONFIG.robinhood.rpcs[0]);
 const hiveRead = new ethers.Contract(CONFIG.hiveBase, ERC20_ABI, baseRead);
 const adapterRead = deployed ? new ethers.Contract(CONFIG.adapter, OFT_ABI, baseRead) : null;
 const oftRead = deployed ? new ethers.Contract(CONFIG.oft, OFT_ABI, rhRead) : null;
 
 let account = null;
-let fromBase = true; // direction: Base -> Robinhood
+let fromBase = true;
+let statsHealthy = false;
+let quoted = null;
 
 /* ---------- static rendering ---------- */
 $("dHiveBase").textContent = CONFIG.hiveBase;
@@ -264,44 +306,69 @@ if (deployed) {
 }
 if (CONFIG.swapLink) {
   $("swapLinkWrap").innerHTML =
-    `Use our <a href="${CONFIG.swapLink}" target="_blank" rel="noopener">official swap link</a> — it opens Uniswap with the real HIVE contract already selected, so you can't be fooled by a copycat token.`;
+    `Use our <a href="${CONFIG.swapLink}" target="_blank" rel="noopener">official swap link</a> — it opens Uniswap with the real HIVE contract already selected.`;
 }
-
 $("detailsToggle").onclick = () => $("details").classList.toggle("open");
 $("flip").onclick = () => { fromBase = !fromBase; renderDirection(); refreshQuote(); };
 
 function renderDirection() {
   $("fromChain").textContent = fromBase ? "Base" : "Robinhood";
   $("toChain").textContent = fromBase ? "Robinhood" : "Base";
-  $("stepApprove").style.display = fromBase ? "" : "none"; // OFT side needs no approval
+  $("stepApprove").style.display = fromBase ? "" : "none";
   refreshBalances();
+  refreshCapacity();
 }
 
-/* ---------- live stats (no wallet needed) ---------- */
+/* ---------- live stats — FAIL CLOSED ---------- */
+function keys(eid) {
+  const e = BigInt(eid);
+  return { short: e, long: e | CONFIG.OUTBOUND_LONG_FLAG };
+}
 async function refreshStats() {
   if (!deployed) return;
   try {
-    const [locked, minted] = await Promise.all([
-      hiveRead.balanceOf(CONFIG.adapter),
-      oftRead.totalSupply(),
-    ]);
-    let fees = 0n;
-    try { fees = await adapterRead.bridgeFeesAccrued(); } catch {}
+    const locked = await readAgreed(CONFIG.base.rpcs, (p) => new ethers.Contract(CONFIG.hiveBase, ERC20_ABI, p).balanceOf(CONFIG.adapter));
+    const fees = await readAgreed(CONFIG.base.rpcs, (p) => new ethers.Contract(CONFIG.adapter, OFT_ABI, p).bridgeFeesAccrued());
+    const minted = await readAgreed(CONFIG.robinhood.rpcs, (p) => new ethers.Contract(CONFIG.oft, OFT_ABI, p).totalSupply());
+    const feeBps = await readAgreed(CONFIG.base.rpcs, (p) => new ethers.Contract(CONFIG.adapter, OFT_ABI, p).defaultFeeBps());
+
     $("sLocked").textContent = fmt(locked) + " HIVE";
     $("sMinted").textContent = fmt(minted) + " HIVE";
     const ok = locked - fees >= minted;
     $("sBacked").textContent = ok ? "FULLY BACKED ✓" : "BROKEN — DO NOT BRIDGE";
     $("sBacked").className = "v " + (ok ? "good" : "bad");
-    const [, canSendOut] = await (fromBase ? adapterRead : oftRead)
-      .getAmountCanBeSent(fromBase ? CONFIG.robinhood.eid : CONFIG.base.eid);
-    $("sCapacity").textContent = fmt(canSendOut) + " HIVE";
-    let feeBps = 0n;
-    try { feeBps = await (fromBase ? adapterRead : oftRead).defaultFeeBps(); } catch {}
     const feeTxt = Number(feeBps) / 100 + "%";
+    $("sFee").textContent = feeTxt;
     $("qBridgeFee").textContent = feeTxt;
     $("feeInline").textContent = feeTxt;
+
+    statsHealthy = ok;
+    $("verifyBanner").hidden = ok;
   } catch (e) {
-    $("sBacked").textContent = "stats unavailable";
+    // fail closed: never assume backed
+    statsHealthy = false;
+    for (const id of ["sLocked", "sMinted", "sFee"]) $(id).textContent = "unverified";
+    $("sBacked").textContent = "UNABLE TO VERIFY";
+    $("sBacked").className = "v bad";
+    $("feeInline").textContent = "unverified";
+    $("verifyBanner").hidden = false;
+  }
+  updateBridgeEnabled();
+}
+
+async function refreshCapacity() {
+  if (!deployed) return;
+  try {
+    const src = fromBase ? adapterRead : oftRead;
+    const eid = fromBase ? CONFIG.robinhood.eid : CONFIG.base.eid;
+    const k = keys(eid);
+    const [, hourly] = await src.getAmountCanBeSent(k.short);
+    const [, daily] = await src.getAmountCanBeSent(k.long);
+    $("qCapacity").textContent = `${fmt(hourly)} / ${fmt(daily)}`;
+    return { hourly, daily };
+  } catch {
+    $("qCapacity").textContent = "unverified";
+    return null;
   }
 }
 
@@ -311,10 +378,14 @@ async function connect() {
   const accs = await window.ethereum.request({ method: "eth_requestAccounts" });
   account = ethers.getAddress(accs[0]);
   $("connectBtn").textContent = account.slice(0, 6) + "…" + account.slice(-4);
-  $("bridgeBtn").disabled = !deployed;
   refreshBalances();
+  updateBridgeEnabled();
 }
 $("connectBtn").onclick = connect;
+
+function updateBridgeEnabled() {
+  $("bridgeBtn").disabled = !(deployed && account && statsHealthy);
+}
 
 async function refreshBalances() {
   if (!account) return;
@@ -340,7 +411,7 @@ $("addChainBtn").onclick = async () => {
   await window.ethereum.request({ method: "wallet_addEthereumChain", params: [{
     chainId: CONFIG.robinhood.chainIdHex, chainName: "Robinhood Chain",
     nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-    rpcUrls: [CONFIG.robinhood.rpc], blockExplorerUrls: [CONFIG.robinhood.explorer],
+    rpcUrls: [CONFIG.robinhood.rpcs[0]], blockExplorerUrls: [CONFIG.robinhood.explorer],
   }]}).catch(() => {});
 };
 $("addTokenBtn").onclick = async () => {
@@ -365,40 +436,54 @@ function sendParam(amountLD, minLD) {
   const dstEid = fromBase ? CONFIG.robinhood.eid : CONFIG.base.eid;
   return [dstEid, to, amountLD, minLD, "0x", "0x", "0x"];
 }
-let quoted = null;
+async function quoteFor(amountLD) {
+  const src = fromBase ? adapterRead : oftRead;
+  const [, , receipt] = await src.quoteOFT(sendParam(amountLD, 0n));
+  const receive = receipt[1];
+  const [nativeFee] = await src.quoteSend(sendParam(amountLD, receive), false);
+  return { amountLD, receive, nativeFee };
+}
 async function refreshQuote() {
   quoted = null;
-  $("qReceive").textContent = "—"; $("qLzFee").textContent = "—";
+  $("qSend").textContent = "—"; $("qReceive").textContent = "—"; $("qLzFee").textContent = "—";
+  $("capWarn").classList.remove("show"); $("gasWarn").classList.remove("show");
+  const cap = await refreshCapacity();
   if (!deployed) return;
   const amountLD = parseAmount();
   if (amountLD === 0n) return;
-  const src = fromBase ? adapterRead : oftRead;
   try {
-    const [, , receipt] = await src.quoteOFT(sendParam(amountLD, 0n));
-    const receive = receipt[1];
-    const [nativeFee] = await src.quoteSend(sendParam(amountLD, receive), false);
-    quoted = { amountLD, receive, nativeFee };
-    $("qReceive").textContent = fmt(receive, 6) + " HIVE";
-    $("qLzFee").textContent = Number(ethers.formatEther(nativeFee)).toFixed(6) + " ETH";
+    quoted = await quoteFor(amountLD);
+    $("qSend").textContent = fmt(quoted.amountLD, 6) + " HIVE";
+    $("qReceive").textContent = fmt(quoted.receive, 6) + " HIVE";
+    $("qLzFee").textContent = Number(ethers.formatEther(quoted.nativeFee)).toFixed(6) + " ETH";
+    if (cap && (amountLD > cap.hourly || amountLD > cap.daily)) {
+      $("capWarn").textContent = "Amount exceeds the current rate-limit window — it will revert. Bridge less, or wait for capacity to decay.";
+      $("capWarn").classList.add("show");
+    }
+    if (fromBase && account) {
+      const destGas = await rhRead.getBalance(account).catch(() => null);
+      if (destGas !== null && destGas === 0n) {
+        $("gasWarn").textContent = "Your wallet has no ETH on Robinhood — you'll be unable to swap or bridge back. Bring gas over with Across first.";
+        $("gasWarn").classList.add("show");
+      }
+    }
   } catch (e) {
     setStatus(shortErr(e), "err");
   }
 }
-$("amount").addEventListener("input", () => { setStatus(""); refreshQuote(); });
+$("amount").addEventListener("input", () => { setStatus(""); $("txlinks").innerHTML = ""; refreshQuote(); });
 
 /* ---------- bridging ---------- */
-function setStep(id, state) {
-  const el = $(id);
-  el.classList.remove("active", "done");
-  if (state) el.classList.add(state);
-}
+function setStep(id, state) { const el = $(id); el.classList.remove("active", "done"); if (state) el.classList.add(state); }
 function setStatus(msg, cls = "") { const s = $("status"); s.textContent = msg; s.className = "status " + cls; }
 function shortErr(e) {
   const m = e?.shortMessage || e?.message || String(e);
   if (/RateLimitExceeded/.test(m)) return "Rate limit reached for this window — try a smaller amount or wait for capacity to decay.";
   if (/EnforcedPause/.test(m)) return "The bridge is paused.";
-  return m.length > 140 ? m.slice(0, 140) + "…" : m;
+  if (/SlippageExceeded/.test(m)) return "Quote moved — re-enter the amount to requote.";
+  return m.length > 160 ? m.slice(0, 160) + "…" : m;
 }
+function txLink(label, url) { return `<a href="${url}" target="_blank" rel="noopener">${label} ↗</a>`; }
 
 async function ensureChain(cfg) {
   const current = await window.ethereum.request({ method: "eth_chainId" });
@@ -409,62 +494,83 @@ async function ensureChain(cfg) {
     await window.ethereum.request({ method: "wallet_addEthereumChain", params: [{
       chainId: cfg.chainIdHex, chainName: cfg.name === "Base" ? "Base" : "Robinhood Chain",
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-      rpcUrls: [cfg.rpc], blockExplorerUrls: [cfg.explorer],
+      rpcUrls: [cfg.rpcs[0]], blockExplorerUrls: [cfg.explorer],
     }]});
   }
 }
 
+/// Delivery truth comes from LayerZero's message status, never a local timeout.
+async function pollDelivery(txHash) {
+  for (let i = 0; i < 40; i++) {
+    await new Promise((r) => setTimeout(r, 6000));
+    try {
+      const res = await fetch(CONFIG.lzScanApi + txHash);
+      if (!res.ok) continue;
+      const body = await res.json();
+      const msg = body?.data?.[0];
+      const status = msg?.status?.name;
+      if (status === "DELIVERED") return { status: "DELIVERED", dstTx: msg?.destination?.tx?.txHash };
+      if (status === "FAILED" || status === "BLOCKED") return { status, dstTx: msg?.destination?.tx?.txHash };
+    } catch { /* keep polling */ }
+  }
+  return { status: "UNCONFIRMED" };
+}
+
 $("bridgeBtn").onclick = async () => {
-  if (!deployed || !account || !quoted) { setStatus("Connect a wallet and enter an amount first.", "err"); return; }
+  if (!deployed || !account || !statsHealthy) { setStatus("Connect a wallet; backing must verify first.", "err"); return; }
   const btn = $("bridgeBtn"); btn.disabled = true;
+  $("txlinks").innerHTML = "";
   setStep("stepApprove", null); setStep("stepSend", null); setStep("stepDeliver", null);
-  $("lzScanLink").hidden = true;
   try {
     const srcCfg = fromBase ? CONFIG.base : CONFIG.robinhood;
-    const dstRead = fromBase ? oftRead : hiveRead;
     await ensureChain(srcCfg);
     const signer = await new ethers.BrowserProvider(window.ethereum).getSigner();
     const srcAddr = fromBase ? CONFIG.adapter : CONFIG.oft;
     const src = new ethers.Contract(srcAddr, OFT_ABI, signer);
+
+    // Requote immediately before sending — never sign a stale quote.
+    setStatus("Refreshing quote…");
+    const amountLD = parseAmount();
+    if (amountLD === 0n) throw new Error("Enter an amount");
+    quoted = await quoteFor(amountLD);
+    $("qReceive").textContent = fmt(quoted.receive, 6) + " HIVE";
 
     if (fromBase) {
       setStep("stepApprove", "active");
       const hive = new ethers.Contract(CONFIG.hiveBase, ERC20_ABI, signer);
       const allowance = await hive.allowance(account, CONFIG.adapter);
       if (allowance < quoted.amountLD) {
-        setStatus("Confirm the approval in your wallet…");
-        await (await hive.approve(CONFIG.adapter, quoted.amountLD)).wait();
+        setStatus("Approve the exact amount in your wallet…");
+        await (await hive.approve(CONFIG.adapter, quoted.amountLD)).wait(); // exact, not unlimited
       }
       setStep("stepApprove", "done");
     }
 
     setStep("stepSend", "active");
     setStatus("Confirm the bridge transaction in your wallet…");
-    const balBefore = await dstRead.balanceOf(account).catch(() => 0n);
-    const tx = await src.send(
-      sendParam(quoted.amountLD, quoted.receive),
-      [quoted.nativeFee, 0n],
-      account,
-      { value: quoted.nativeFee },
-    );
-    const link = $("lzScanLink");
-    link.href = CONFIG.lzScanTx(tx.hash); link.hidden = false;
+    const tx = await src.send(sendParam(quoted.amountLD, quoted.receive), [quoted.nativeFee, 0n], account, { value: quoted.nativeFee });
+    $("txlinks").innerHTML = txLink("source tx", `${srcCfg.explorer}/tx/${tx.hash}`) + txLink("LayerZero Scan", CONFIG.lzScanTx(tx.hash));
     await tx.wait();
     setStep("stepSend", "done");
 
     setStep("stepDeliver", "active");
-    setStatus("Sent. Waiting for LayerZero delivery (~1 minute)…");
-    for (let i = 0; i < 40; i++) {
-      await new Promise((r) => setTimeout(r, 6000));
-      const now = await dstRead.balanceOf(account).catch(() => balBefore);
-      if (now > balBefore) { setStep("stepDeliver", "done"); break; }
+    setStatus("Sent. Verifying delivery via LayerZero message status…");
+    const result = await pollDelivery(tx.hash);
+    if (result.status === "DELIVERED") {
+      setStep("stepDeliver", "done");
+      setStatus("Delivered and confirmed on the destination chain.", "ok");
+      if (result.dstTx) $("txlinks").innerHTML += txLink("destination tx", `${(fromBase ? CONFIG.robinhood : CONFIG.base).explorer}/tx/${result.dstTx}`);
+    } else if (result.status === "FAILED" || result.status === "BLOCKED") {
+      setStatus(`Delivery ${result.status.toLowerCase()} — it remains retryable on LayerZero Scan. Do not re-send.`, "err");
+    } else {
+      // NEVER claim success on a timeout.
+      setStatus("Submitted — delivery not yet verified. Track it on LayerZero Scan; funds are safe and will arrive or stay retryable.", "err");
     }
-    setStatus("Delivered. Balances updated.", "ok");
     refreshBalances(); refreshStats();
   } catch (e) {
     setStatus(shortErr(e), "err");
   } finally {
-    btn.disabled = false;
+    updateBridgeEnabled();
   }
 };
 

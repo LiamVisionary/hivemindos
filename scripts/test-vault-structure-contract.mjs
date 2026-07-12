@@ -357,6 +357,30 @@ assert.ok(existsSync(join(root, "packaged-skills/auto-install/hyperframes/SKILL.
 has("packaged-skills/auto-install/hyperframes/SKILL.md", "Cloud AI video generation");
 has("packaged-skills/auto-install/hyperframes/SKILL.md", "Local AI video generation");
 has("packaged-skills/auto-install/hyperframes/SKILL.md", "HTML / HyperFrames rendering");
+for (const slug of [
+  "embedded-captions",
+  "faceless-explainer",
+  "general-video",
+  "hyperframes-animation",
+  "hyperframes-cli",
+  "hyperframes-core",
+  "hyperframes-creative",
+  "hyperframes-media",
+  "hyperframes-registry",
+  "media-use",
+  "motion-graphics",
+  "music-to-video",
+  "pr-to-video",
+  "product-launch-video",
+  "remotion-to-hyperframes",
+  "slideshow",
+  "talking-head-recut",
+  "website-to-video",
+]) {
+  assert.ok(existsSync(join(root, `packaged-skills/auto-install/${slug}/SKILL.md`)), `missing bundled HyperFrames sibling ${slug}`);
+}
+has("docs/for-users/packaged-skills/third-party-skills.md", "Every referenced workflow is already bundled");
+has("docs/for-users/whole-brain/shared-skills.md", "HyperFrames suite (`hyperframes` + 18 siblings)");
 assert.ok(existsSync(join(root, "packaged-skills/auto-install/hive-pulse/scripts/last30days.py")), "missing bundled Hive Pulse engine");
 assert.ok(existsSync(join(root, "packaged-skills/optional/design/0xdesign/design-lab/SKILL.md")), "missing UI Skills design-lab optional package");
 assert.ok(existsSync(join(root, "packaged-skills/optional/design/nextlevelbuilder/ui-ux-pro-max/SKILL.md")), "missing UI Skills ui-ux-pro-max optional package");

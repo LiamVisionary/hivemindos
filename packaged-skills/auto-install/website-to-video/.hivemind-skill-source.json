@@ -1,0 +1,28 @@
+{
+  "upstreamName": "website-to-video",
+  "upstreamSlug": "website-to-video",
+  "hiveSlug": "website-to-video",
+  "sourceLabel": "HeyGen HyperFrames",
+  "sourceUrl": "https://github.com/heygen-com/hyperframes/blob/3351fb1a6d7f0202d07db9bf9ad335fd0d1ec344/skills/website-to-video/SKILL.md",
+  "repository": "https://github.com/heygen-com/hyperframes",
+  "installCommand": "Bundled with HivemindOS",
+  "importedAt": "2026-07-12T09:00:50.019Z",
+  "refreshedAt": "2026-07-12T09:11:42.002Z",
+  "provider": "packaged-auto-install",
+  "providerLabel": "HivemindOS auto-installed packaged skills",
+  "sourcePath": "packaged-skills/auto-install/website-to-video",
+  "packageGroup": "media",
+  "status": "auto-install",
+  "license": "Apache-2.0",
+  "commit": "3351fb1a6d7f0202d07db9bf9ad335fd0d1ec344",
+  "sourceArchiveSha256": "5371981bb828588789bd682c31f374204a0ba85af4d2c2052a7cff2cf011edfc",
+  "upstreamSourceUrl": "https://github.com/heygen-com/hyperframes",
+  "normalized": "hivemindos-augmented-upstream",
+  "description": "Capture a general website/URL and turn it into a HyperFrames video (site tour, showcase, or social clip from the site's own visuals). Uses headless Chrome screenshots + brand assets. Use when intent is general — portfolio/blog/landing-page showcase or social clip from the site. NOT for: product/SaaS launch or promo (→ /product-launch-video, even from a URL); topic explainer with no site (→ /faceless-explainer); GitHub PR (→ /pr-to-video); adding captions to existing video (→ /embedded-captions); short unnarrated page-highlight motion graphic (→ /motion-graphics). Unclear launch-vs-general-site? Ask one question or start at /hyperframes.",
+  "hivemindAdaptations": [
+    "All nineteen upstream HyperFrames router, domain, and workflow skills are bundled as sibling auto-install skills.",
+    "The 40 MB hyperframes-animation binary showcase asset directory is excluded; authoring rules, adapters, scripts, and HTML examples remain bundled.",
+    "Mutable skills installers and curl-to-shell commands are disabled by HivemindOS policy; agents use the bundled skills and require explicit approval before installing or updating a CLI.",
+    "Raw authentication output is never relayed; HivemindOS reports only provider/key names and set or missing status."
+  ]
+}

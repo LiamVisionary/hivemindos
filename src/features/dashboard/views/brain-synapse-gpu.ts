@@ -31,8 +31,8 @@ export type Palette = {
 
 // The companion engine sets THREE.ColorManagement.enabled = false on the
 // shared three singleton, which silently leaves string-parsed colors in raw
-// sRGB. Every color this map feeds the GPU goes through here so the scene is
-// linear-space either way (the OutputPass encodes back to sRGB at the end).
+// sRGB. Every color this map feeds the GPU goes through here so the direct
+// renderer's output conversion receives consistent linear-space inputs.
 export function linearizeSRGB(color: THREE.Color) {
   if (!THREE.ColorManagement.enabled) color.convertSRGBToLinear();
   return color;
@@ -98,7 +98,7 @@ export function makeNodeGlowAtlas(): THREE.CanvasTexture {
     for (let variant = 0; variant < 4; variant += 1) {
       const cx = (variant % 2) * cell + cell / 2;
       const cy = Math.floor(variant / 2) * cell + cell / 2;
-      // A compact core plus broad bloom bed keeps the node crisp at any zoom.
+      // A compact core plus broad glow bed keeps the node crisp at any zoom.
       const bed = ctx.createRadialGradient(cx, cy, 0, cx, cy, cell * 0.46);
       bed.addColorStop(0, "rgba(255,255,255,0.72)");
       bed.addColorStop(0.16, "rgba(255,255,255,0.28)");
@@ -169,7 +169,6 @@ export const SOMA_VERTEX = /* glsl */ `
 `;
 
 export const SOMA_FRAGMENT = /* glsl */ `
-  uniform vec3 uBg;
   uniform float uTime;
   uniform float uMotion;
   uniform float uAdditive;
@@ -184,20 +183,21 @@ export const SOMA_FRAGMENT = /* glsl */ `
   varying float vDist;
   void main() {
     float facing = max(dot(normalize(vNormal), normalize(vView)), 0.0);
-    // White-hot nucleus in the CENTER of the ball, falling through the tint
-    // to a deep rim — a glowing core, not a rim-lit matte disc. The old
-    // fresnel version was the opposite (bright rim, flat middle) and read as
-    // solid colored circles. Dark theme only (uAdditive doubles as the theme
-    // flag): a white core on parchment would wash hive-light nodes out.
-    float core = pow(facing, 3.0) * uAdditive;
-    vec3 col = vTint * (0.28 + 0.55 * facing) * (0.7 + 0.5 * vGlow);
-    col += mix(vTint, vec3(1.0), 0.85) * core * (0.55 + 0.75 * vGlow);
-    col += vTint * pow(1.0 - facing, 3.0) * 0.18;
-    // Selection focus: recede clearly without blacking out.
-    col = mix(col, uBg, vDim * 0.5);
+    // An emissive, feathered soma rather than an opaque shaded ball. The
+    // nucleus carries the white-hot energy while the translucent membrane
+    // merges into the flared fiber terminals around it.
+    float membrane = pow(facing, 0.48);
+    float nucleus = pow(facing, 6.0);
+    vec3 col = mix(vTint * (0.76 + vGlow * 0.25), vec3(0.94, 0.98, 1.0), nucleus * uAdditive * 0.82);
+    col += vTint * nucleus * vGlow * 0.5;
+    float darkAlpha = (0.2 + membrane * 0.5 + nucleus * 0.44) * (0.88 + vGlow * 0.42);
+    float lightAlpha = 0.42 + membrane * 0.48;
+    float alpha = mix(lightAlpha, darkAlpha, uAdditive);
+    alpha *= 1.0 - vDim * 0.68;
     float fog = smoothstep(uFogNear, uFogFar, vDist);
-    col = mix(col, uBg, fog);
-    gl_FragColor = vec4(col, 1.0);
+    alpha *= 1.0 - fog * 0.82;
+    if (alpha < 0.012) discard;
+    gl_FragColor = vec4(col, alpha);
   }
 `;
 
@@ -248,9 +248,9 @@ export const HALO_FRAGMENT = /* glsl */ `
     float mask = texture2D(uMap, atlasUv).a;
     if (mask < 0.003) discard;
     float a = mask * vAlpha;
-    vec3 additive = vTint * a;
-    vec3 normal = vTint;
-    gl_FragColor = vec4(mix(normal, additive, uAdditive), mix(a, 1.0, uAdditive) * mix(1.0, a, uAdditive));
+    // Materials already select NormalBlending or AdditiveBlending. Supplying
+    // unpremultiplied color avoids multiplying by alpha twice in dark mode.
+    gl_FragColor = vec4(vTint, a);
   }
 `;
 
@@ -372,7 +372,7 @@ export const PULSE_FRAGMENT = /* glsl */ `
     float mask = texture2D(uMap, gl_PointCoord).a;
     if (mask < 0.003) discard;
     float a = mask * vAlpha;
-    gl_FragColor = vec4(mix(vTint, vTint * a, uAdditive), mix(a, 1.0, uAdditive) * mix(1.0, a, uAdditive));
+    gl_FragColor = vec4(vTint, a);
   }
 `;
 
@@ -427,7 +427,7 @@ export const DUST_VERTEX = /* glsl */ `
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
     float fog = smoothstep(uFogNear, uFogFar, -mv.z);
     // Static depth motes keep the field textured without full-screen twinkle.
-    vAlpha = 0.16 * (1.0 - fog) * mix(0.04, 1.0, uAdditive);
+    vAlpha = 0.34 * (1.0 - fog) * mix(0.04, 1.0, uAdditive);
     gl_PointSize = aSize * uScale / max(-mv.z, 1.0);
     gl_Position = projectionMatrix * mv;
   }
@@ -442,6 +442,6 @@ export const DUST_FRAGMENT = /* glsl */ `
     float mask = texture2D(uMap, gl_PointCoord).a;
     if (mask < 0.003) discard;
     float a = mask * vAlpha;
-    gl_FragColor = vec4(mix(uTint, uTint * a, uAdditive), mix(a, 1.0, uAdditive) * mix(1.0, a, uAdditive));
+    gl_FragColor = vec4(uTint, a);
   }
 `;

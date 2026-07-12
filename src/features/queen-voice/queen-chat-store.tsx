@@ -44,6 +44,7 @@ import {
 } from "./queen-chat-routing";
 import {
   createNdjsonEventReader,
+  voiceRouteFailureMessage,
   type ConverseStreamEvent,
 } from "./converse-stream";
 import { dispatchQueenSlashCommand } from "./queen-slash-commands";
@@ -866,10 +867,10 @@ export function QueenChatProvider({
             return runQueenTurn(trimmed, queenId, opts?.screenContext, opts?.suppressWalletIntents === true);
           });
         })
-        .catch(() => {
+        .catch((error) => {
           updateTurn(queenId, {
             text: shouldSpeakReply
-              ? "I couldn't reach the Queen Bee voice route just now."
+              ? voiceRouteFailureMessage(error)
               : "I couldn't reach the Queen just now.",
             live: false,
             pending: false,

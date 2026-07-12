@@ -782,6 +782,7 @@ async function runProviderConversationTurn(
   origin = "",
 ) {
   const providerStartedAt = Date.now();
+  const providerTurnSignal = AbortSignal.timeout(OPENAI_TURN_TIMEOUT_MS);
   // Every provider-direct lane invokes target.model itself, so the injected
   // identity is exact — "which model are you?" gets a real answer per lane.
   const stableSystemAddendum = queenModelTransparencyNote(target.model, target.provider);
@@ -843,7 +844,7 @@ async function runProviderConversationTurn(
         ...params,
       }),
       cache: "no-store",
-      signal: AbortSignal.timeout(OPENAI_TURN_TIMEOUT_MS),
+      signal: providerTurnSignal,
     });
   // Reasoning-era OpenAI models (gpt-5*, o*) reject max_tokens/temperature and
   // burn completion budget on thinking — they get max_completion_tokens plus

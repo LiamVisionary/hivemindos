@@ -69,6 +69,7 @@ const TESTS = [
   "test:chat-runtime-session-prompts",
   "test:chat-semantic-video-intent",
   "test:chat-slash-command-badge",
+  "test:chat-terminal-drawer",
   "test:chat-tool-loop-recovery",
   "test:chat-video-card-lifecycle",
   "test:chat-video-follow-up",

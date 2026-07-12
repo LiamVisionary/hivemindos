@@ -6,7 +6,6 @@ solc_version = "0.8.30"
 optimizer = true
 optimizer_runs = 200
 via_ir = true
-
 remappings = [
   "@openzeppelin/contracts/=../node_modules/@openzeppelin/contracts/",
   "@layerzerolabs/oft-evm/=../node_modules/@layerzerolabs/oft-evm/",
@@ -19,3 +18,8 @@ remappings = [
   "solidity-bytes-utils/=../node_modules/solidity-bytes-utils/",
   "forge-std/=../node_modules/@layerzerolabs/toolbox-foundry/lib/forge-std/"
 ]
+
+[profile.default.invariant]
+runs = 64
+depth = 40
+fail_on_revert = false

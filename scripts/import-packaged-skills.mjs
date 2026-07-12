@@ -32,6 +32,7 @@ import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OPTIONAL_ROOT = join(REPO_ROOT, "packaged-skills", "optional");
+const AUTO_INSTALL_ROOT = join(REPO_ROOT, "packaged-skills", "auto-install");
 const LOCK_PATH = join(REPO_ROOT, "skills-lock.json");
 
 // ---------------------------------------------------------------------------
@@ -41,6 +42,41 @@ const LOCK_PATH = join(REPO_ROOT, "skills-lock.json");
 // ---------------------------------------------------------------------------
 
 const SOURCES = {
+  hyperframes: {
+    category: "media",
+    sourceLabel: "HeyGen HyperFrames",
+    repo: "heygen-com/hyperframes",
+    repoUrl: "https://github.com/heygen-com/hyperframes",
+    license: "Apache-2.0",
+    skillsRoot: "skills",
+    layout: "dir",
+    validated: true,
+    ref: "3351fb1a6d7f0202d07db9bf9ad335fd0d1ec344",
+    expectedCommit: "3351fb1a6d7f0202d07db9bf9ad335fd0d1ec344",
+    sourceArchiveSha256: "5371981bb828588789bd682c31f374204a0ba85af4d2c2052a7cff2cf011edfc",
+    destination: "auto-install",
+    copySkillDirectory: true,
+    licenseFile: "LICENSE",
+    preserveFrontmatter: false,
+    hivemindOsAugmentation: true,
+    integrationPolicy: "hyperframes",
+    resourceExcludes: {
+      // The 40 MB binary showcase bundle is not required by any authoring workflow.
+      // Keep its HTML examples, rules, adapters, and scripts while avoiding fleet-wide
+      // replication of demo-only videos and images.
+      "hyperframes-animation": ["examples/assets"],
+    },
+    descriptionOverrides: {
+      hyperframes: "Use for a concrete request to create, render, or deliver a video when the user chooses HyperFrames (including the common shorthand or typo hypergen), HTML-based video, browser-rendered video, or motion graphics. Distinguish actionable creation from discussion, brainstorming, hypotheticals, and capability questions; those should not trigger generation or a method question.",
+    },
+    hivemindAdaptations: [
+      "All nineteen upstream HyperFrames router, domain, and workflow skills are bundled as sibling auto-install skills.",
+      "The 40 MB hyperframes-animation binary showcase asset directory is excluded; authoring rules, adapters, scripts, and HTML examples remain bundled.",
+      "Mutable skills installers and curl-to-shell commands are disabled by HivemindOS policy; agents use the bundled skills and require explicit approval before installing or updating a CLI.",
+      "Raw authentication output is never relayed; HivemindOS reports only provider/key names and set or missing status.",
+    ],
+  },
+
   n8n: {
     category: "n8n",
     sourceLabel: "forma-norden",
@@ -262,10 +298,21 @@ function gitClone(repoUrl, ref) {
   const dir = execFileSync("mktemp", ["-d", join(tmpdir(), "hive-skill-import-XXXXXX")])
     .toString()
     .trim();
-  execFileSync("git", ["clone", "--depth", "1", ...(ref ? ["--branch", ref] : []), repoUrl, dir], {
-    stdio: ["ignore", "ignore", "inherit"],
-  });
-  const commit = execFileSync("git", ["-C", dir, "rev-parse", "HEAD"]).toString().trim();
+  const gitOptions = {
+    env: { ...process.env, GIT_LFS_SKIP_SMUDGE: "1", GIT_TERMINAL_PROMPT: "0" },
+  };
+  if (/^[a-f0-9]{40}$/i.test(ref ?? "")) {
+    execFileSync("git", ["init", "--quiet", dir], gitOptions);
+    execFileSync("git", ["-C", dir, "remote", "add", "origin", repoUrl], gitOptions);
+    execFileSync("git", ["-C", dir, "fetch", "--quiet", "--depth", "1", "origin", ref], gitOptions);
+    execFileSync("git", ["-C", dir, "checkout", "--quiet", "--detach", "FETCH_HEAD"], gitOptions);
+  } else {
+    execFileSync("git", ["clone", "--depth", "1", ...(ref ? ["--branch", ref] : []), repoUrl, dir], {
+      ...gitOptions,
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+  }
+  const commit = execFileSync("git", ["-C", dir, "rev-parse", "HEAD"], gitOptions).toString().trim();
   return { dir, commit };
 }
 
@@ -351,7 +398,36 @@ async function collectUpstream(source, rootDir) {
   return units;
 }
 
-function hivemindOsPolicy(unit) {
+function hivemindOsPolicy(unit, source) {
+  if (source.integrationPolicy === "hyperframes") {
+    const methodBoundary = unit.slug === "hyperframes" ? [
+      "## HivemindOS method boundary",
+      "",
+      "Infer the user's speech act before routing. Discussion, brainstorming, hypotheticals, capability questions, and statements such as \"I'm thinking about generating a video\" remain ordinary conversation. Do not treat the presence of words such as “generate” or “video” as authorization, start generation, or ask for a method on that basis.",
+      "",
+      "For a concrete creation request, respect the selected production method:",
+      "",
+      "- **Cloud AI video generation** uses an explicitly selected connected hosted provider.",
+      "- **Local AI video generation** uses an explicitly selected machine or private-fleet provider.",
+      "- **HTML / HyperFrames rendering** uses these bundled HyperFrames skills.",
+      "",
+      "When a concrete request leaves the method open, ask which of those three the user intends. Upstream wording that calls HyperFrames a default does not override this HivemindOS multi-provider boundary.",
+      "",
+    ] : [];
+    return [
+      "## HivemindOS Integration",
+      "",
+      "- This skill and every HyperFrames router, domain, and workflow skill it references are already bundled as sibling skills under `packaged-skills/auto-install/<slug>/SKILL.md` and the Shared Brain skill shelf.",
+      "- Resolve sibling skills by slug through the active skill shelf. Never invent a nested `packaged-skills/hyperframes/<slug>` path, and never run `npx skills add`, `npx skills update`, or a curl-to-shell installer to obtain a bundled workflow.",
+      "- Treat upstream commands as proposed steps only after the user selects HTML / HyperFrames and the command fits the requested build. Existing HivemindOS permission and side-effect gates remain authoritative.",
+      "- Use an already installed HyperFrames CLI when available. Installing or updating executable third-party code requires explicit approval and pinned provenance; do not silently fetch mutable latest code.",
+      "- Never relay raw authentication command output. Report credential names and set or missing status only; cloud login, publish, upload, and paid-provider actions require the user's explicit request.",
+      "",
+      ...methodBoundary,
+      "## Upstream Method",
+      "",
+    ].join("\n");
+  }
   const shared = [
     "This optional skill is a method library inside HivemindOS, not a global bootstrap or instruction override.",
     "HivemindOS packaged skills, the active Work Board loop contract, user instructions, and project rules remain authoritative.",
@@ -393,6 +469,22 @@ function hivemindOsPolicy(unit) {
 
 function adaptUpstreamContent(content, unit, source) {
   if (!source.hivemindOsAugmentation) return content;
+  if (source.integrationPolicy === "hyperframes") {
+    let adapted = content.replace(
+      /## If the matched workflow isn't installed[\s\S]*?(?=## Workflow details)/,
+      [
+        "## HivemindOS packaged workflow resolution",
+        "",
+        "All workflows in the cheat-sheet are packaged as sibling auto-install skills. Resolve the selected slug from the active skill shelf or `packaged-skills/auto-install/<slug>/SKILL.md`, read it, and continue. Do not ask the user to install or update skills.",
+        "",
+      ].join("\n"),
+    );
+    adapted = adapted.replace(
+      /curl -fsSL https:\/\/static\.heygen\.ai\/cli\/install\.sh \| bash[^\n]*/g,
+      "# HivemindOS: do not use the mutable curl-to-shell installer; use an approved pinned CLI installation.",
+    );
+    return adapted;
+  }
   let adapted = content.replaceAll("superpowers:", "");
   if (unit.slug === "executing-plans") {
     adapted = adapted.replace(
@@ -424,6 +516,37 @@ function adaptUpstreamContent(content, unit, source) {
     .replace("- Write the validated design (spec) to `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`", "- Write the validated design to the project's established spec location")
     .replace("Spec written and committed to `<path>`.", "Spec written to `<path>` (uncommitted unless separately authorized).")
     .replace(/\n## Visual Companion[\s\S]*$/, "\n");
+}
+
+async function adaptHyperframesPackagedResources(packageDir) {
+  const pending = [packageDir];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (!current) continue;
+    for (const entry of await readdir(current, { withFileTypes: true })) {
+      const path = join(current, entry.name);
+      if (entry.isDirectory()) {
+        pending.push(path);
+        continue;
+      }
+      if (!entry.isFile() || !entry.name.endsWith(".md") || entry.name === "SKILL.md") continue;
+      const original = await readFile(path, "utf8");
+      const adapted = original
+        .replaceAll(
+          "Run `npx skills add heygen-com/hyperframes --all`",
+          "Already bundled with HivemindOS; do not run a skills installer",
+        )
+        .replaceAll(
+          "load it via `npx skills add pixel-point/animate-text` or `/animate-text`",
+          "use it only when the separately installed `/animate-text` skill is already available",
+        )
+        .replaceAll(
+          "npx skills add pixel-point/animate-text",
+          "# HivemindOS: an external animate-text install requires explicit user approval",
+        );
+      if (adapted !== original) await writeFile(path, adapted);
+    }
+  }
 }
 
 // Produce the final vendored SKILL.md (guarantee YAML frontmatter with name + description).
@@ -460,7 +583,7 @@ function normalizeSkill(unit, source) {
     "---",
     "",
   ].join("\n");
-  const augmentation = source.hivemindOsAugmentation ? hivemindOsPolicy(unit) : "";
+  const augmentation = source.hivemindOsAugmentation ? hivemindOsPolicy(unit, source) : "";
   return { name, description, markdown: `${frontmatter}${augmentation}${content.trimEnd()}\n`, synthesized };
 }
 
@@ -489,7 +612,10 @@ async function importSource(id, { ref, dryRun }, lock) {
 
     for (const unit of units) {
       const normalized = normalizeSkill(unit, source);
-      const packageDir = join(OPTIONAL_ROOT, source.category, source.sourceLabel, unit.slug);
+      const autoInstall = source.destination === "auto-install";
+      const packageDir = autoInstall
+        ? join(AUTO_INSTALL_ROOT, unit.slug)
+        : join(OPTIONAL_ROOT, source.category, source.sourceLabel, unit.slug);
       const skillPath = join(packageDir, "SKILL.md");
       const hash = sha256(normalized.markdown);
       const packagedRel = relative(REPO_ROOT, skillPath).replace(/\\/g, "/");
@@ -521,6 +647,9 @@ async function importSource(id, { ref, dryRun }, lock) {
               await rm(excludedPath, { recursive: true, force: true });
             }
           }
+          if (source.integrationPolicy === "hyperframes") {
+            await adaptHyperframesPackagedResources(packageDir);
+          }
         } else {
           await mkdir(packageDir, { recursive: true });
         }
@@ -541,21 +670,24 @@ async function importSource(id, { ref, dryRun }, lock) {
           sourceLabel: source.sourceLabel,
           sourceUrl: sourceFileUrl,
           repository: source.repoUrl,
-          installCommand: `npx skills add ${source.repoUrl} --skill ${unit.slug}`,
+          installCommand: autoInstall ? "Bundled with HivemindOS" : `npx skills add ${source.repoUrl} --skill ${unit.slug}`,
           importedAt,
           refreshedAt: stamp,
-          provider: "packaged-optional",
-          providerLabel: "HivemindOS optional packaged skills",
+          provider: autoInstall ? "packaged-auto-install" : "packaged-optional",
+          providerLabel: autoInstall ? "HivemindOS auto-installed packaged skills" : "HivemindOS optional packaged skills",
           sourcePath: relative(REPO_ROOT, packageDir).replace(/\\/g, "/"),
           packageGroup: source.category,
           ...(unit.upstreamCategory ? { upstreamCategory: unit.upstreamCategory } : {}),
-          status: "optional",
+          status: autoInstall ? "auto-install" : "optional",
           license: source.license,
           commit,
+          ...(source.sourceArchiveSha256 ? { sourceArchiveSha256: source.sourceArchiveSha256 } : {}),
+          ...(source.repoUrl ? { upstreamSourceUrl: source.repoUrl } : {}),
           normalized: source.hivemindOsAugmentation
             ? "hivemindos-augmented-upstream"
             : normalized.synthesized ? "frontmatter-synthesized-by-importer" : "verbatim-frontmatter",
           description: normalized.description,
+          ...(source.hivemindAdaptations ? { hivemindAdaptations: source.hivemindAdaptations } : {}),
         };
         await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
         resourceHashes = await hashPackagedFiles(packageDir);
@@ -577,7 +709,7 @@ async function importSource(id, { ref, dryRun }, lock) {
       );
     }
 
-    console.log(`   ${imported.length} skill(s) at packaged-skills/optional/${source.category}/${source.sourceLabel}/`);
+    console.log(`   ${imported.length} skill(s) at ${source.destination === "auto-install" ? "packaged-skills/auto-install/" : `packaged-skills/optional/${source.category}/${source.sourceLabel}/`}`);
     return imported;
   } finally {
     await rm(dir, { recursive: true, force: true });

@@ -31,6 +31,16 @@ export function voiceTurnBrainMetadata(value: Pick<ConverseStreamEvent, "brainLa
   };
 }
 
+export function voiceRouteFailureMessage(error: unknown) {
+  const name = error instanceof Error ? error.name : "";
+  const detail = error instanceof Error ? error.message.trim() : "";
+  if (name === "TimeoutError" || /timed?\s*out|timeout/i.test(detail)) {
+    return "The Queen Bee voice route timed out before the selected brain finished.";
+  }
+  if (detail) return `The Queen Bee voice route failed: ${detail}`;
+  return "I couldn't reach the Queen Bee voice route just now.";
+}
+
 export type NdjsonEventReader<T> = {
   /** Parsed events since the last take, in arrival order. */
   take(): T[];

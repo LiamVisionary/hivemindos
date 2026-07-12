@@ -5,11 +5,9 @@
   "sourceLabel": "HeyGen HyperFrames",
   "sourceUrl": "https://github.com/heygen-com/hyperframes/blob/3351fb1a6d7f0202d07db9bf9ad335fd0d1ec344/skills/hyperframes/SKILL.md",
   "repository": "https://github.com/heygen-com/hyperframes",
-  "upstreamSourceUrl": "https://github.com/heygen-com/hyperframes",
-  "installCommand": "npx skills add heygen-com/hyperframes --skill hyperframes",
+  "installCommand": "Bundled with HivemindOS",
   "importedAt": "2026-06-28T00:00:00.000Z",
-  "refreshedAt": "2026-06-28T00:00:00.000Z",
-  "promotedAt": "2026-07-12T00:00:00.000Z",
+  "refreshedAt": "2026-07-12T09:11:42.002Z",
   "provider": "packaged-auto-install",
   "providerLabel": "HivemindOS auto-installed packaged skills",
   "sourcePath": "packaged-skills/auto-install/hyperframes",
@@ -17,13 +15,14 @@
   "status": "auto-install",
   "license": "Apache-2.0",
   "commit": "3351fb1a6d7f0202d07db9bf9ad335fd0d1ec344",
-  "normalized": "upstream body with a HivemindOS multi-provider routing preface; folded-scalar description flattened to a single line for the HivemindOS catalog parser",
-  "description": "Use for a concrete request to create, render, or deliver a video when the user chooses HyperFrames (including the common shorthand or typo hypergen), HTML-based video, browser-rendered video, or motion graphics, and use as the HivemindOS method router when a concrete video-creation request leaves the production method open. Distinguish actionable creation from discussion, brainstorming, hypotheticals, and capability questions; those should not trigger generation or a method question.",
+  "sourceArchiveSha256": "5371981bb828588789bd682c31f374204a0ba85af4d2c2052a7cff2cf011edfc",
+  "upstreamSourceUrl": "https://github.com/heygen-com/hyperframes",
+  "normalized": "hivemindos-augmented-upstream",
+  "description": "Use for a concrete request to create, render, or deliver a video when the user chooses HyperFrames (including the common shorthand or typo hypergen), HTML-based video, browser-rendered video, or motion graphics. Distinguish actionable creation from discussion, brainstorming, hypotheticals, and capability questions; those should not trigger generation or a method question.",
   "hivemindAdaptations": [
-    "Auto-installs only the HyperFrames entry/router skill. The domain skills (hyperframes-core, -animation, -cli, -registry, -creative, -media, media-use) and the workflow skills (product-launch-video, website-to-video, faceless-explainer, pr-to-video, embedded-captions, talking-head-recut, motion-graphics, music-to-video, slideshow, general-video, remotion-to-hyperframes) install on demand and are NOT vendored.",
-    "Adds a HivemindOS semantic routing boundary: agents distinguish actionable creation from ordinary video discussion, recognize HyperFrames and the common shorthand/typo hypergen, and ask about cloud AI, local AI, or HTML / HyperFrames only when a concrete creation request leaves the method open; the rendering workflow owns only the HTML / HyperFrames branch.",
-    "Install the full toolchain on demand with `npx hyperframes init` or `npx skills add heygen-com/hyperframes --all`; a single workflow with `npx skills add heygen-com/hyperframes --skill <name>`.",
-    "The Apache-2.0 upstream body is preserved after a short HivemindOS multi-provider routing preface; the upstream folded YAML `description: >` scalar is replaced with a HivemindOS-aware single-line description and `metadata.tags` is dropped so the catalog parser surfaces it.",
-    "No upstream HyperFrames runtime, CLI, registry blocks, package code, or media assets are copied into this repository."
+    "All nineteen upstream HyperFrames router, domain, and workflow skills are bundled as sibling auto-install skills.",
+    "The 40 MB hyperframes-animation binary showcase asset directory is excluded; authoring rules, adapters, scripts, and HTML examples remain bundled.",
+    "Mutable skills installers and curl-to-shell commands are disabled by HivemindOS policy; agents use the bundled skills and require explicit approval before installing or updating a CLI.",
+    "Raw authentication output is never relayed; HivemindOS reports only provider/key names and set or missing status."
   ]
 }

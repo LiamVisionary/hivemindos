@@ -71,7 +71,7 @@ The HivemindOS Hive skills are included by default:
 | `hive-aeon-fusion` | Converts reusable hive workflows into AEON-ready agent duties when appropriate. |
 | `hive-brain-memory` | Teaches agents typed recall, canonical durable-memory heads, operational-event separation, review-gated pattern proposals, and evolution with superseded-history preservation. |
 | `hive-brain-compiled-wiki` | Teaches agents the HivemindOS compiled-brain workflow: entity/concept/summary writes, compiled-wiki search, graph-native MCP reads, wiki health, and human collective shared-brain contribution rules. |
-| `hyperframes` | Routes explicit HTML / HyperFrames video work into deterministic HTML, CSS, media, and seekable-animation workflows. Generic video requests first ask the user to choose cloud AI, local AI, or HTML / HyperFrames. |
+| HyperFrames suite (`hyperframes` + 18 siblings) | Routes explicit HTML / HyperFrames video work into bundled HTML, CSS, media, and seekable-animation workflows. Generic creation requests first present an actionable choice between cloud AI, local AI, and HTML / HyperFrames; ordinary discussion stays conversational. |
 
 The Obsidian Native Brain Pack is also included by default:
 
