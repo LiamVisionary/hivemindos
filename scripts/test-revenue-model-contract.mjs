@@ -20,6 +20,7 @@ const [
   companyService,
   stakingConfig,
   marketplace,
+  paidFeatures,
 ] = await Promise.all([
   read("docs/for-investors/index.md"),
   read("docs/for-investors/ecosystem-plan.md"),
@@ -35,15 +36,28 @@ const [
   read("src/lib/services/company-revenue-share.ts"),
   read("src/lib/config/hive-staking.ts"),
   read("docs/for-investors/paid-features/hive-compute-marketplace.md"),
+  read("docs/for-investors/paid-features/index.md"),
 ]);
 
-assert.match(investor, /one monetization engine/i);
+assert.match(investor, /one product relationship with two compounding revenue engines/i);
+assert.match(investor, /Cloud revenue is the nearer-term recurring base; transaction revenue is the asymmetric upside/i);
 assert.match(investor, /Cloud Pro \| \$39\/month \| Design-partner validation/);
 assert.match(investor, /Cloud Team \| \$299\/month \| Design-partner validation/);
 assert.match(investor, /Enterprise \| \$30,000\/year minimum/);
 assert.match(investor, /Managed Agent Operations Pilot/);
+assert.match(investor, /DEX swaps \| 0\.20% \| Live platform fee/);
+assert.match(investor, /Paid x402 and Veil private-payment execution \| 0\.50% \| Live platform fee/);
+assert.match(investor, /Eligible local Hyperliquid perp fills \| 0\.005% \| Live builder fee/);
+assert.match(investor, /Base Builder Codes.*are attribution infrastructure, not a contractual fee/i);
+assert.match(investor, /Illustrative gross platform-fee sensitivity—not a forecast/i);
+assert.match(investor, /Bankr-mediated swaps, cross-chain actions, token launches, prediction markets, NFTs, and automations/i);
+assert.doesNotMatch(investor, /one monetization engine|trading fees.*after the core managed-service business/i);
 assert.match(sequence, /marketplace liquidity/i);
 assert.match(sequence, /evidence-gated/i);
+assert.match(sequence, /Agent Economy Transaction Expansion/);
+assert.match(sequence, /Base x402 transaction \| Builder Code attribution; rewards are contingent rather than guaranteed/);
+assert.match(paidFeatures, /One Platform, Two Revenue Engines/);
+assert.match(paidFeatures, /Base x402 Builder Code \| Attribution and potential rewards \| Live attribution; rewards not guaranteed/);
 
 for (const document of [investor, sequence, honey, staking]) {
   assert.doesNotMatch(document, /HIVE represents ownership|HIVE is the ownership layer|revenue-backed momentum|seasonal HIVE reward pool|Every `\$1,000,000` in eligible/i);

@@ -5,6 +5,14 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-07-12 17:06:02 +0800 - Investor materials restore transaction fees and Base builder upside to the core revenue thesis
+  - Status: Uncommitted
+  - Areas changed: public investor revenue overview, commercial sequence, paid-capability summary, focused revenue-model contract, and the editable `HivemindOS_Pitch_Deck.pptx`.
+  - Summary: Reframes HivemindOS as one agent-economy platform with two compounding revenue engines: recurring agent operations and fee-bearing agent transactions. Public materials now present the live 0.20% DEX, 0.10% supported-stock, 0.50% x402/Veil, and 0.005% Hyperliquid economics; distinguish Base Builder Code attribution and contingent rewards from a guaranteed fee; show an explicitly illustrative $100M/$1B/$10B GMV sensitivity; and map Bankr, 0x, broader Base activity, and marketplaces as capabilities or monetization opportunities without counting unearned revenue. The pitch deck expands from 14 to 16 slides and makes the transaction layer part of the investment thesis and use-of-funds story.
+  - Verification: The updated revenue-model contract passes, including exact live rates, Base attribution boundaries, the two-engine thesis, and the non-forecast sensitivity label. The final PPTX contains 16 editable slide parts, is 519,651 bytes, has no empty media, and uses authored editable primitives rather than native chart parts. All 16 slides rendered at 1280×720 and were reviewed as a contact sheet; the six adapted slides were also reviewed full-size. Layout QA improved from the 14-slide source baseline of 0 errors / 217 warnings to 0 errors / 146 warnings across the 16-slide final, with the adapted slides at 0 errors and one reviewed cover text-fit warning. `test:robinhood-chain-wallet` passes. Two broader pre-existing documentation contracts remain red without a regression in their HEAD inputs: the MiroShark test expects wording that does not match the checked-in wallet guide, and the UsePod test expects a phrase absent from the checked-in investor overview.
+  - Rollback: Revert this documentation/deck/test commit to restore the previous 14-slide deck and one-engine public narrative. No Worker, payment, database, wallet, or on-chain state changes are made in this follow-up.
+  - Intended commit message: `docs: restore agent-economy transaction revenue thesis`
+
 - 2026-07-12 16:32:35 +0800 - Public revenue copy and the investor deck now tell one focused Hivemind Cloud story
   - Status: Pushed in `a44da9eac`
   - Areas changed: repository README revenue language, public Honey/HIVE diagram labels, and the editable 14-slide `HivemindOS_Pitch_Deck.pptx` investor presentation.

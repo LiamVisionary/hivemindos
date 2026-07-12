@@ -1,6 +1,6 @@
 ---
 title: HivemindOS Commercial Sequence
-description: The gated sequence from free local adoption to Hivemind Cloud subscriptions, usage expansion, enterprise, and later marketplaces.
+description: The gated sequence from free local adoption to recurring cloud operations, agent-economy transaction revenue, enterprise, and later marketplaces.
 ---
 
 # HivemindOS Commercial Sequence
@@ -14,6 +14,7 @@ local adoption
   -> first managed service
   -> recurring cloud subscription
   -> managed usage expansion
+  -> agent transaction expansion
   -> enterprise controls
   -> marketplace liquidity
 ```
@@ -45,15 +46,33 @@ Cloud Pro and Cloud Team monetize the persistent operating layer:
 - shared agents and memory
 - auditability and collaboration
 
-The subscription is the primary recurring revenue engine. Managed infrastructure remains metered because its cost and value scale with agent activity rather than human seats alone.
+The subscription is the primary recurring operations engine. Managed infrastructure remains metered because its cost and value scale with agent activity rather than human seats alone.
 
-## Stage Four: Enterprise Expansion
+## Stage Four: Agent Economy Transaction Expansion
+
+As agents gain budgets and perform more economic work, HivemindOS can earn disclosed revenue from supported trading, payment, and routing actions.
+
+Current official rails include:
+
+| Economic action | Current HivemindOS economics |
+| --- | ---: |
+| DEX swap | 0.20% platform fee |
+| Supported live stock or tokenized-stock execution | 0.10% execution fee |
+| Paid x402 or Veil private-payment execution | 0.50% platform fee |
+| Eligible Hyperliquid perp fill | 0.005% builder fee |
+| Qualifying Base x402 transaction | Builder Code attribution; rewards are contingent rather than guaranteed |
+
+The transaction engine should scale only while execution remains competitive, fees remain visible, and settlement success stays high. Ordinary wallet transfers and externally earned company revenue remain free.
+
+Bankr-mediated swaps, cross-chain actions, token launches, prediction markets, NFTs, and automations are already product capabilities. They become HivemindOS revenue only when a provider-native partner agreement, hosted routing layer, or verifiable settlement path can enforce the economics.
+
+## Stage Five: Enterprise Expansion
 
 Enterprise is the same control plane with stronger deployment, identity, policy, reliability, and support commitments.
 
 It becomes sellable only when the required capability is real. A roadmap item is not an entitlement. Private deployment, SSO, audit export, regional controls, and SLA commitments must each be labeled available, pilot, or planned.
 
-## Stage Five: Marketplaces
+## Stage Six: Marketplaces
 
 An agent, workflow, or compute marketplace launches only after HivemindOS has recurring buyer demand and can provide suppliers with realistic utilization.
 
@@ -75,6 +94,7 @@ Expansion should be evidence-gated:
 | Gate | Evidence required |
 | --- | --- |
 | Self-serve subscription launch | Repeated paid activation and retained managed usage |
+| Transaction-engine expansion | Repeated agent economic activity, competitive execution, visible fees, low failure rates, and positive contribution margin |
 | Team expansion | Multi-user demand for approvals, budgets, and shared history |
 | Enterprise selling | A repeatable enterprise use case plus security and support readiness |
 | Agent/workflow marketplace | Retained buyers seeking reusable supply |
@@ -88,20 +108,26 @@ Expansion should be evidence-gated:
 - 30-day and 90-day paid retention
 - recurring revenue per paid workspace
 - managed usage gross profit
+- fee-bearing agent transaction volume by rail
+- realized net take rate and transaction-fee revenue
+- successful fee settlement and post-action collection rate
+- Base Builder Code-attributed transaction count and rewards actually earned
 - verified successful agent outcomes per paid workspace
 - support and infrastructure cost per workspace
 - contribution margin
 - expansion versus contraction
 
-Token activity, payment volume, total deployed agents, and marketplace GMV are supporting metrics. They do not replace retained customer revenue.
+Gross payment volume, total deployed agents, token activity, and marketplace GMV are supporting metrics. They do not replace net revenue, realized take rate, contribution margin, or retained customers.
 
 ## Strategy Summary
 
-HivemindOS becomes a business when users pay it to operate reliable agent infrastructure. It becomes a platform only after those customers create repeatable demand for third-party supply.
+HivemindOS becomes a business when users pay it to operate reliable agent infrastructure. It can become a much larger platform when those governed agents repeatedly trade, pay, and purchase services through HivemindOS rails. Marketplaces add third-party supply only after that buyer activity is real.
 
 ```text
 product
   -> recurring managed-service revenue
+  -> governed agent transaction volume
+  -> transaction and routing revenue
   -> retained buyer demand
   -> platform liquidity
   -> optional ecosystem utility

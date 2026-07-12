@@ -1,20 +1,20 @@
 ---
-title: Hivemind Cloud Paid Capabilities
-description: Managed HivemindOS capabilities sold through one subscription and usage model.
+title: HivemindOS Paid Capabilities
+description: Managed operations capabilities and agent-economy transaction rails sold through one platform relationship.
 ---
 
-# Hivemind Cloud Paid Capabilities
+# HivemindOS Paid Capabilities
 
 Paid capabilities are the parts HivemindOS operates for a customer. The local-first product remains free; the managed service charges for persistent availability, governance, collaboration, deployment, provider access, and support.
 
-## One Commercial Model
+## One Platform, Two Revenue Engines
 
-Hivemind Cloud has two primary revenue lines:
+HivemindOS has one customer relationship with two primary engines:
 
-1. Workspace subscriptions for the control plane, governance, and collaboration.
-2. Metered usage for infrastructure and provider costs that grow with activity.
+1. **Agent operations:** workspace subscriptions plus metered infrastructure, hosting, models, APIs, and enterprise controls.
+2. **Agent economy:** disclosed trading, payment, routing, and later marketplace economics when governed agents transact.
 
-Individual features below are capabilities and usage meters inside that relationship—not separate businesses.
+Individual features below are capabilities, usage meters, and transaction rails inside that relationship—not separate businesses.
 
 ## Available Managed Capabilities
 
@@ -41,6 +41,18 @@ Individual features below are capabilities and usage meters inside that relation
   </section>
 </div>
 
+## Available Transaction Economics
+
+| Rail | Current economics | Status |
+| --- | ---: | --- |
+| DEX swaps | 0.20% | Live |
+| Supported live stock/tokenized-stock execution | 0.10% | Live |
+| Paid x402 and Veil private-payment execution | 0.50% | Live |
+| Eligible Hyperliquid perp fills | 0.005% | Live builder fee |
+| Base x402 Builder Code | Attribution and potential rewards | Live attribution; rewards not guaranteed |
+
+These rails are documented in the [Trading guide](../../for-users/trading/) and [Wallets, Honey, And x402](../../for-users/features/wallets-honey-and-x402.html). Bankr-mediated trading, cross-chain activity, token launches, prediction markets, NFTs, and automations are available product capabilities but need provider-native or hosted settlement economics before they should be counted as HivemindOS transaction revenue.
+
 ## Validation And Later Expansion
 
 | Capability | Status rule |
@@ -58,6 +70,7 @@ Individual features below are capabilities and usage meters inside that relation
 - Permit BYOK and self-hosting; subscriptions monetize management and governance rather than key lock-in.
 - Quote variable provider and infrastructure costs before commitment where practical.
 - Cap money-movement fees and charge nothing for ordinary wallet transfers.
+- Separate deterministic fee revenue from Base Builder Code attribution, contingent rewards, provider fees, and gross transaction volume.
 - Do not make HIVE a required payment method or put staking into the core pricing ladder.
 - Do not promise features marked design-partner, contact-led, or planned.
 

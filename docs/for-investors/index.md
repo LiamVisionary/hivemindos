@@ -1,22 +1,26 @@
 ---
 title: For Investors
-description: HivemindOS monetizes one managed agent-operations platform through subscriptions and metered usage while the local-first open-source product remains free.
+description: HivemindOS monetizes one agent-economy platform through recurring cloud operations and transaction revenue while the local-first open-source product remains free.
 ---
 
 # For Investors
 
 HivemindOS is a free and open-source control plane for autonomous agent operations.
 
-The commercial product is **Hivemind Cloud**. Customers pay HivemindOS to keep agents available, governed, observable, and deployable when user-owned machines are off or when a team needs shared operating controls.
+HivemindOS has one product relationship with two compounding revenue engines:
+
+1. **Agent operations revenue:** Hivemind Cloud subscriptions, managed execution, hosting, models, APIs, enterprise controls, and implementation.
+2. **Agent economy revenue:** disclosed fees and routing economics when HivemindOS agents trade, pay, call paid APIs, or transact through supported rails.
 
 ```text
 Free local HivemindOS
-  -> Hivemind Cloud subscription
-  -> metered managed usage
-  -> team and enterprise expansion
+  -> agents run through Hivemind Cloud
+     -> subscription + managed usage + enterprise revenue
+  -> agents transact through governed rails
+     -> trading + payment + routing revenue
 ```
 
-This is one monetization engine, not a collection of unrelated fee businesses.
+This is not eight unrelated businesses. It is one agent operating platform monetized when agents are operated and when they conduct economic activity. Cloud revenue is the nearer-term recurring base; transaction revenue is the asymmetric upside if agent commerce becomes a large market.
 
 ## The Free-To-Paid Boundary
 
@@ -61,6 +65,47 @@ The Pro, Team, and Enterprise numbers are launch hypotheses under validation, no
 
 These products are expansion usage inside Hivemind Cloud. They are not separate investor pillars.
 
+## Current Agent Economy Revenue Rails
+
+Selected transaction economics are already live in official HivemindOS policy:
+
+| Rail | Current HivemindOS economics | Revenue status |
+| --- | ---: | --- |
+| DEX swaps | 0.20% | Live platform fee |
+| xStocks, Robinhood Chain Stock Tokens, live Alpaca, and Robinhood Agentic | 0.10% | Live execution fee |
+| Paid x402 and Veil private-payment execution | 0.50% | Live platform fee |
+| Eligible local Hyperliquid perp fills | 0.005% | Live builder fee after wallet approval |
+| Base Builder Code attribution on official Base x402 routes | No guaranteed fee | Live attribution with potential ecosystem rewards, analytics, and discovery upside |
+| Ordinary wallet transfers | 0% | Intentionally free |
+| Revenue recorded from outside HivemindOS | 0% | Intentionally free |
+
+The 0.20%, 0.10%, and 0.50% platform-fee rails currently use a $0.01 minimum and $10 maximum where a fee applies. Fees are disclosed before confirmation and settle only after the main action succeeds. Paper trades, rejected actions, read-only research, and unpaid calls do not create a fee.
+
+[Base Builder Codes](https://docs.base.org/apps/builder-codes/builder-codes) are attribution infrastructure, not a contractual fee. They can make qualifying Base activity measurable and eligible for program rewards as those programs evolve, but rewards should be recognized only when actually earned.
+
+Bankr-mediated swaps, cross-chain actions, token launches, prediction markets, NFTs, and automations expand the product surface today, but they do not yet create a separate HivemindOS platform fee unless a hosted partner, routing, marketplace, or settlement agreement explicitly adds one.
+
+## Why Transaction Revenue Can Become The Largest Engine
+
+Agent operations create recurring revenue per customer. Agent commerce can create revenue on every eligible economic action across every participating agent.
+
+```text
+gross transaction revenue
+= eligible agent transaction volume
+x realized net take rate
++ builder or partner rewards actually earned
+```
+
+Illustrative gross platform-fee sensitivity—not a forecast:
+
+| Eligible annual agent transaction volume | At 10 bps | At 20 bps | At 50 bps |
+| ---: | ---: | ---: | ---: |
+| $100 million | $100,000 | $200,000 | $500,000 |
+| $1 billion | $1 million | $2 million | $5 million |
+| $10 billion | $10 million | $20 million | $50 million |
+
+Actual realized revenue depends on rail mix, caps, minimums, failed or reversed actions, rebates, provider economics, settlement cost, fraud loss, and regulatory constraints. The table demonstrates operating leverage; it does not assume that HivemindOS will reach those volumes.
+
 ## Near-Term Customer Development
 
 Before presenting self-serve pricing as validated, HivemindOS should sell a bounded **Managed Agent Operations Pilot**:
@@ -83,10 +128,11 @@ Operating revenue should be shown as:
 subscription revenue
 + hosted product revenue
 + managed execution gross profit
++ transaction and routing fee revenue
 + implementation revenue
 ```
 
-Provider spend, payment volume, marketplace GMV, creator/provider payouts, and token activity are reported separately. Buyer collections are not automatically company revenue. Principal-versus-agent accounting treatment requires review for each managed-provider and marketplace arrangement.
+Provider spend, eligible transaction volume, gross payment volume, marketplace GMV, creator/provider payouts, and token activity are reported separately. Builder attribution is not revenue until a reward is actually earned. Buyer collections are not automatically company revenue. Principal-versus-agent accounting treatment requires review for each managed-provider and marketplace arrangement.
 
 The operating model should be built from observed cohorts:
 
@@ -98,18 +144,21 @@ x retained subscription revenue
 + usage expansion
 ```
 
-Investor reporting should include paid workspaces, 30/90-day retention, recurring revenue per workspace, usage gross profit, support cost, contribution margin, and expansion versus contraction. Illustrative customer counts without funnel, churn, and cost assumptions are not forecasts.
+Investor reporting should include paid workspaces, 30/90-day retention, recurring revenue per workspace, usage gross profit, support cost, contribution margin, fee-bearing transaction volume, realized take rate, transaction-fee revenue, successful settlement rate, and expansion versus contraction. Illustrative customer counts or transaction volumes without funnel, churn, rail mix, and cost assumptions are not forecasts.
 
-## Deferred Platform Options
+## Scale-Dependent Network Upside
 
-Marketplaces, compute-provider take rates, workflow commissions, payment settlement, x402, trading fees, and HIVE utility may become valuable after the core managed-service business has retained buyer demand.
+Trading, payment, and routing fees are already active on selected rails. Their strategic value grows with the number of governed agents, the economic actions each agent performs, and the share HivemindOS can monetize without degrading execution quality or trust.
 
-They are not required to prove the company today.
+Marketplaces, compute-provider take rates, workflow commissions, provider partnerships, embedded swap economics, and HIVE utility remain additional scale-dependent options. They are not required to prove near-term willingness to pay, but they can deepen the transaction engine after retained demand exists.
+
+[0x documents](https://docs.0x.org/evm/0x-swap-api/guides/monetize-your-app-using-swap) embedded integrator fees and, for suitable commercial plans, trade-surplus economics. HivemindOS currently uses its separate official post-success execution fee on applicable routes; embedded 0x economics remain an additional integration opportunity rather than current revenue.
 
 - Revenue earned outside HivemindOS carries no platform fee.
 - Marketplace fees apply only when HivemindOS supplies measurable distribution, hosting, execution, billing, or protection.
 - Ordinary wallet transfers carry no HivemindOS platform fee.
-- Financial and marketplace take rates remain capped, disclosed, and subordinate to the Hivemind Cloud story.
+- Financial and marketplace take rates remain capped, disclosed, and measured separately from provider fees and gross transaction volume.
+- Base Builder Code rewards, partner rebates, and similar programs are reported as earned revenue rather than assumed take rate.
 
 ## HIVE And Honey Boundary
 
@@ -121,7 +170,7 @@ See [Honey, HIVE, And Treasury](honey-hive-treasury.html) and [HIVE Staking And 
 
 ## One-Sentence Pitch
 
-> HivemindOS is the open-source control plane for autonomous agent operations; local use is free, and teams pay Hivemind Cloud to keep agents running, governed, observable, and deployable across local and cloud infrastructure.
+> HivemindOS is the open-source control plane for the agent economy: teams pay it to operate governed agents, and HivemindOS earns again when those agents transact through supported trading, payment, and routing rails.
 
 ## Read Next
 
