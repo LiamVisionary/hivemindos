@@ -6,7 +6,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 ## Unreleased
 
 - 2026-07-12 23:53 PST+0800 - Crypto Research Crew flow template joins the built-in agent flows
-  - Status: Uncommitted
+  - Status: Pushed
   - Areas changed: Built-in queen-bee flow templates and the hermetic agent-flow suite (`src/lib/services/queen-bee/flow-templates.ts`, `scripts/test-agent-flow.mjs`)
   - Summary: A new built-in `crypto-research-crew` FlowSpec runs a seven-role token research crew on any fleet: Collector, On-chain analyst, Sentiment tracker, and Chart analyst gather evidence through the existing market-data and Nansen capabilities, an Analyst builds the thesis through a user-supplied framework lens (`state.framework`), a Devil's Advocate adversarially attacks the thesis and cross-checks the other stages (score-gated: below 0.6 loops back to the Analyst), and a Queen node synthesizes one markdown report with a five-level verdict, 0-100 score, and re-rating triggers. Inputs are `state.token`, `state.chain`, and `state.framework`. This is the full-product counterpart of the hosted Hive Research crew (research-gateway worker in the private cloud repo plus the /research page on the public site).
   - Verification: `node scripts/test-agent-flow.mjs` passes with a new section covering template resolution, validation, happy-path node order, the low-score loop-back, and framework/output prompt substitution. `pnpm typecheck` passes. Final full `pnpm test` gate: 165/181; all 16 failures are in the shared concurrent tree while `test:agent-flow` remains green (+1 passing suite versus the recorded 164/180 task baseline, unchanged failure count).
