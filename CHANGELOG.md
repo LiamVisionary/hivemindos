@@ -6,10 +6,10 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 ## Unreleased
 
 - 2026-07-13 06:15:34 PST+0800 - All supported HivemindOS revenue streams fund 15% HIVE buybacks
-  - Status: Uncommitted; client and documentation changes only; not deployed.
+  - Status: Pushed in commit `e198b337e`; hosted authority and public ledger are LIVE.
   - Areas changed: wallet platform-fee receipt reporting (`src/lib/services/wallet/platform-fees.ts`), investor policy pages, and the revenue-model contract.
   - Summary: The published treasury policy now allocates 15% of recognized HivemindOS platform revenue to bounded weekly automatic HIVE purchase batches. Recognition excludes pass-through costs, refunds, reversals, gross marketplace volume, and purchased-but-unspent credits. Successful production-chain platform fees notify the hosted authority, which independently verifies settlement before recognizing revenue.
-  - Verification: Focused revenue-model contract and whole-project TypeScript pass. Hosted ledger, producer, chain-verification, and deployment gates are recorded in the private hosted-services changelog; no Worker was deployed in this change.
+  - Verification: Focused revenue-model contract and whole-project TypeScript pass. The private hosted-services source is pushed in `e1ad76b` with launch status in `bb00bd6`; its isolated tests/typechecks/dry-runs pass and production Worker versions are recorded there. Live `/api/buybacks` reports the enabled 15% policy, seven-day maturity, weekly cadence, and zero fabricated events. The dedicated Base treasury holds 10 USDC and 0.002 ETH with confirmed funding receipts. The scoped website contract, TypeScript, and production build pass; `hivemindos.app/buybacks/` shows the platform-wide policy and omits the stale research-only 50% wording.
   - Rollback: Revert the platform-fee receipt notification and restore the prior investor policy wording. Already-settled platform fees remain valid; no wallet transaction, staking principal, or on-chain receipt is altered.
   - Intended commit message: `revenue: apply 15% HIVE buybacks across platform revenue`
 
