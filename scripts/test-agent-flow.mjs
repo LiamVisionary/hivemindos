@@ -150,5 +150,61 @@ const now = () => ++t;
   assert.equal(afterReview.currentNodeId, "publish", "parsed score >= bar routes to publish");
 }
 
+// 7. Crypto Research Crew template: registration, validation, happy path, score-gated loop-back,
+// and prompt rendering of {{state.framework}} / {{output.collector}}.
+{
+  // A temp vault keeps getFlowTemplate hermetic (no saved templates can shadow the built-in).
+  const vaultPath = mkdtempSync(join(tmpdir(), "flow-crypto-crew-test-"));
+  const spec = await templates.getFlowTemplate("crypto-research-crew", { vaultPath });
+  assert.ok(spec, "crypto-research-crew resolves via getFlowTemplate");
+  assert.equal(spec.name, "Crypto Research Crew");
+  assert.deepEqual(validateFlow(spec).filter((e) => !e.includes("no outgoing edge")), [], "template should validate");
+
+  let run = instantiateFlow(spec, {
+    runId: "rc",
+    now: now(),
+    state: { token: "HIVE", chain: "base", framework: "receipts-first: assume unproven until on-chain receipts" },
+  });
+  assert.equal(run.currentNodeId, "collector");
+  const step = (result) => { run = applyNodeResult(spec, run, result, { now: now() }); };
+
+  step({ kind: "task", outcome: "passed", output: "collected-facts" });
+  assert.equal(run.currentNodeId, "onchain");
+  assert.equal(run.state["output.collector"], "collected-facts", "collector output threads into shared state");
+  step({ kind: "task", outcome: "passed", output: "onchain-findings" });
+  assert.equal(run.currentNodeId, "sentiment");
+  step({ kind: "task", outcome: "passed", output: "sentiment-read" });
+  assert.equal(run.currentNodeId, "chart");
+  step({ kind: "task", outcome: "passed", output: "chart-read" });
+  assert.equal(run.currentNodeId, "analyst");
+
+  const analystNode = spec.nodes.find((n) => n.id === "analyst");
+  const rendered = renderNodePrompt(analystNode, run);
+  assert.ok(rendered.includes("receipts-first: assume unproven until on-chain receipts"), "{{state.framework}} substituted");
+  assert.ok(rendered.includes("collected-facts"), "{{output.collector}} substituted");
+  assert.ok(!rendered.includes("{{"), "no unresolved placeholders in the analyst prompt");
+
+  step({ kind: "task", outcome: "passed", output: "thesis-v1" });
+  assert.equal(run.currentNodeId, "devils-advocate");
+
+  // Weak thesis -> loop back to the analyst.
+  step({ kind: "task", outcome: "passed", score: 0.4, output: "attack found holes. score: 0.40" });
+  assert.equal(run.currentNodeId, "analyst", "score < 0.6 loops back to analyst");
+
+  step({ kind: "task", outcome: "passed", output: "thesis-v2" });
+  assert.equal(run.currentNodeId, "devils-advocate");
+  // Thesis survives -> queen synthesis.
+  step({ kind: "task", outcome: "passed", score: 0.8, output: "attack survived. score: 0.80" });
+  assert.equal(run.currentNodeId, "queen", "score >= 0.6 advances to queen");
+
+  step({ kind: "task", outcome: "passed", output: "final report" });
+  assert.equal(run.status, "done");
+  assert.deepEqual(
+    run.history.map((h) => h.nodeId),
+    ["collector", "onchain", "sentiment", "chart", "analyst", "devils-advocate", "analyst", "devils-advocate", "queen"],
+    "crew ran in order with exactly one adversarial loop-back",
+  );
+}
+
 console.log("Agent flow tests passed.");
 process.exit(0);

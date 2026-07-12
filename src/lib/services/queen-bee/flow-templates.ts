@@ -59,7 +59,89 @@ export const RESEARCH_WRITE_CRITIQUE: FlowSpec = {
   ],
 };
 
-export const BUILT_IN_FLOWS: FlowSpec[] = [RESEARCH_DRAFT_PUBLISH, RESEARCH_WRITE_CRITIQUE];
+// A crypto research crew: collect → on-chain → sentiment → chart → thesis → adversarial review
+// (score-gated: a thesis that does not survive loops back to the analyst) → queen synthesis.
+// Seed inputs via start state: state.token, state.chain, state.framework (the research lens).
+export const CRYPTO_RESEARCH_CREW: FlowSpec = {
+  id: "crypto-research-crew",
+  name: "Crypto Research Crew",
+  description: "A crypto research crew: collector, on-chain analyst, sentiment tracker, chart analyst, thesis analyst, devil's advocate (score-gated), and a queen synthesis. Inputs: state.token, state.chain, state.framework.",
+  start: "collector",
+  maxSteps: 18,
+  priority: "high",
+  nodes: [
+    {
+      id: "collector",
+      kind: "task",
+      title: "Collector",
+      workerClass: "research",
+      maxAttempts: 2,
+      prompt: "Collect everything on token {{state.token}} on {{state.chain}}: market data via the trading.market-data capability (invoke_hive_capability) and/or a nansen_intelligence token-brief; the project's website and socials; liquidity, volume, FDV, and token age. Return structured findings.",
+    },
+    {
+      id: "onchain",
+      kind: "task",
+      title: "On-chain analyst",
+      workerClass: "research",
+      prompt: "Analyze on-chain health for {{state.token}} on {{state.chain}}: holders and concentration, LP status, and security flags. Use nansen_intelligence (holders, flow-intelligence, related-wallets) when available; if a rail is unavailable, degrade gracefully and still return findings from what you can reach. Collector findings:\n{{output.collector}}",
+    },
+    {
+      id: "sentiment",
+      kind: "task",
+      title: "Sentiment tracker",
+      workerClass: "research",
+      prompt: "Assess X/social sentiment for {{state.token}}: tone, shill density, organic vs paid signals. If no X rail is available, say so explicitly and pass with what public web research finds. Collector findings:\n{{output.collector}}",
+    },
+    {
+      id: "chart",
+      kind: "task",
+      title: "Chart analyst",
+      workerClass: "research",
+      prompt: "Read price structure for {{state.token}} from OHLCV via market data tools: trend, drawdown from ATH, volume trend, and key levels. Collector findings:\n{{output.collector}}",
+    },
+    {
+      id: "analyst",
+      kind: "task",
+      title: "Analyst",
+      workerClass: "writer",
+      maxAttempts: 2,
+      prompt: "Build the investment thesis for {{state.token}} strictly through this lens:\n{{state.framework}}\n\nUse all prior findings.\nCollector:\n{{output.collector}}\nOn-chain:\n{{output.onchain}}\nSentiment:\n{{output.sentiment}}\nChart:\n{{output.chart}}",
+    },
+    {
+      id: "devils-advocate",
+      kind: "task",
+      title: "Devil's advocate",
+      workerClass: "qa",
+      prompt: "Adversarially attack this thesis:\n{{output.analyst}}\n\nCross-check each stage's claims against the others (collector vs on-chain vs sentiment vs chart) and call out contradictions or fabricated numbers. Apply the framework red flags:\n{{state.framework}}\n\nYou MUST end your output with a final line of exactly \"score: 0.NN\" — your 0-1 confidence that the thesis survives the attack.",
+    },
+    {
+      id: "queen",
+      kind: "task",
+      title: "Queen synthesis",
+      workerClass: "writer",
+      prompt: "Final call on {{state.token}}. Synthesize the thesis and the adversarial review into one clean markdown report with: a verdict (one of strong_avoid|avoid|neutral|speculative_watch|conviction), a 0-100 score, and a \"what would change my mind\" section listing concrete re-rating triggers.\nThesis:\n{{output.analyst}}\nDevil's advocate:\n{{output.devils-advocate}}",
+    },
+  ],
+  edges: [
+    { from: "collector", to: "onchain", when: { on: "success" } },
+    { from: "collector", to: "FAIL", when: { on: "failure" } },
+    { from: "onchain", to: "sentiment", when: { on: "success" } },
+    { from: "onchain", to: "FAIL", when: { on: "failure" } },
+    { from: "sentiment", to: "chart", when: { on: "success" } },
+    { from: "sentiment", to: "FAIL", when: { on: "failure" } },
+    { from: "chart", to: "analyst", when: { on: "success" } },
+    { from: "chart", to: "FAIL", when: { on: "failure" } },
+    { from: "analyst", to: "devils-advocate", when: { on: "success" } },
+    { from: "analyst", to: "FAIL", when: { on: "failure" } },
+    { from: "devils-advocate", to: "analyst", when: { on: "score", lt: 0.6 }, label: "thesis does not survive" },
+    { from: "devils-advocate", to: "queen", when: { on: "score", gte: 0.6 }, label: "thesis survives" },
+    { from: "devils-advocate", to: "FAIL", when: { on: "failure" } },
+    { from: "queen", to: "DONE", when: { on: "success" } },
+    { from: "queen", to: "FAIL", when: { on: "failure" } },
+  ],
+};
+
+export const BUILT_IN_FLOWS: FlowSpec[] = [RESEARCH_DRAFT_PUBLISH, RESEARCH_WRITE_CRITIQUE, CRYPTO_RESEARCH_CREW];
 
 // Build a linear (sequential) flow from an ordered list of steps. Each step's success advances to
 // the next; the last advances to DONE; any failure routes to FAIL. This is CrewAI's sequential
