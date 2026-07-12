@@ -89,7 +89,7 @@ export type DeskActivity = {
 };
 
 export type DeskStockReadiness = {
-  venue: "alpaca" | "xstocks" | "robinhood-chain" | null;
+  venue: "alpaca" | "robinhood-agentic" | "xstocks" | "robinhood-chain" | null;
   liveEnabled: boolean;
   venueReady: boolean;
   paperConfigured: boolean;
@@ -105,6 +105,8 @@ export type DeskStockReadiness = {
   robinhoodTickers: string[];
   robinhoodExecutable: boolean;
   robinhoodReason?: string;
+  robinhoodAgenticConnected: boolean;
+  robinhoodAgenticReason?: string;
 };
 
 export type TradeDeskData = {
@@ -159,7 +161,7 @@ export type TradeDeskData = {
    * — and refreshes the desk. Resolves { ok }; on failure `error` says why
    * (e.g. the Bankr wallet has no ledger record to enable it on).
    */
-  onEnableStockVenue: (input: { venue: "alpaca" | "xstocks" | "robinhood-chain"; paper: boolean }) => Promise<{ ok: boolean; error?: string }>;
+  onEnableStockVenue: (input: { venue: "alpaca" | "robinhood-agentic" | "xstocks" | "robinhood-chain"; paper: boolean }) => Promise<{ ok: boolean; error?: string }>;
   /** Cancel a pending Alpaca order by id (the pending-position cancel button),
    *  then refresh the desk. Resolves { ok }; `error` says why on failure. */
   onCancelStockOrder: (orderId: string) => Promise<{ ok: boolean; error?: string }>;

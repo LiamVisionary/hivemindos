@@ -8,7 +8,7 @@ assert.equal(existsSync(contractPath), true, "the public repo must own the canon
 
 const contract = JSON.parse(await readFile(contractPath, "utf8"));
 assert.equal(contract.protocol, "hivemindos.app-builder/v1");
-assert.equal(contract.version, "1.0.0");
+assert.equal(contract.version, "1.1.0");
 assert.equal(contract.provenance?.donors?.december?.commit, "909b5c23dce9316e88a2755baef56b3ded2845e0");
 assert.equal(contract.templates.nextjs.files["package.json"].includes('"next": "16.2.6"'), true);
 assert.deepEqual(
@@ -26,6 +26,8 @@ assert.deepEqual(
 assert.equal(contract.confirmations.createProject, "CONFIRM_APP_PROJECT_CREATE");
 assert.equal(contract.confirmations.installDependencies, "CONFIRM_APP_DEPENDENCIES");
 assert.equal(contract.confirmations.startRuntime, "CONFIRM_APP_RUNTIME");
+assert.equal(contract.confirmations.deployHostingVersion, "CONFIRM_APP_HOSTING_DEPLOY");
+assert.deepEqual(contract.hostingManifest.fields, ["project_id", "d1", "r2"]);
 assert.doesNotMatch(JSON.stringify(contract), /payTo|HCLOUD_TOKEN|OPENROUTER_API_KEY|docker\.sock/);
 
 const projectTypes = await readFile("src/lib/types/gitlawb.ts", "utf8");

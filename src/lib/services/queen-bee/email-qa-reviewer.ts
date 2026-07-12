@@ -6,11 +6,11 @@
 //
 // Strictly READ-ONLY: one tool-less chat completion over context the caller
 // already has — no fleet tools, no mutation. Mirrors issue-explainer.ts and rides
-// the same OpenAI key (transcriptionApiKey). Deliberately uses a stronger default
+// the canonical OAuth-first OpenAI text adapter. Deliberately uses a stronger default
 // model than the voice/explain path because email QA is a quality-over-cost
 // judgment task; override with OPENAI_EMAIL_QA_MODEL.
-import { openAICompatibleInferenceCacheHints } from "@/lib/services/chat/inference-cache-hints";
-import { transcriptionApiKey } from "@/lib/services/phone/transcription";
+import { optionalEnv } from "@/lib/config/env";
+import { runPreferredOpenAiTextTurn } from "@/lib/services/openai-preferred-chat";
 
 export type EmailQaAiFinding = {
   severity: "high" | "medium" | "low";
@@ -37,7 +37,7 @@ const MAX_BODY_CHARS = 6_000;
 const MAX_CHARTER_CHARS = 1_400;
 
 function reviewModel(): string {
-  return process.env.OPENAI_EMAIL_QA_MODEL || FALLBACK_MODEL;
+  return optionalEnv("OPENAI_EMAIL_QA_MODEL") || FALLBACK_MODEL;
 }
 
 function clamp(value: string, max: number): string {
@@ -89,51 +89,27 @@ function coerceFindings(raw: unknown): EmailQaAiFinding[] {
 }
 
 /** Review one sent email for content/alignment problems. Returns [] on a clean
- *  email. Throws when no OpenAI key is configured or the model call fails, so the
+ *  email. Throws when no OpenAI provider is configured or the model call fails, so the
  *  scanner can record that the AI layer was unavailable rather than fake a pass. */
 export async function reviewOutreachEmail(input: EmailQaReviewInput): Promise<EmailQaAiFinding[]> {
   if (!input.body?.trim()) return [];
-  const apiKey = await transcriptionApiKey();
-  if (!apiKey) throw new Error("No OpenAI key is configured for email QA review.");
   const model = reviewModel();
-  const cacheHints = openAICompatibleInferenceCacheHints({
-    provider: "openai",
+  const result = await runPreferredOpenAiTextTurn({
     model,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: formatContext(input) },
+    ],
     cacheScope: "email-qa-review",
+    timeoutMs: TIMEOUT_MS,
+    maxTokens: 700,
+    temperature: 0.2,
+    jsonMode: true,
+    errorContext: "Email QA model",
   });
-
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "content-type": "application/json", ...cacheHints.headers },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: formatContext(input) },
-      ],
-      ...cacheHints.body,
-      response_format: { type: "json_object" },
-      temperature: 0.2,
-      max_tokens: 700,
-    }),
-    cache: "no-store",
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
-
-  const data = (await response.json().catch(() => null)) as {
-    choices?: Array<{ message?: { content?: string | null } }>;
-    error?: { message?: string } | string;
-  } | null;
-
-  if (!response.ok) {
-    const detail = typeof data?.error === "string" ? data.error : data?.error?.message;
-    throw new Error(detail || `Email QA model returned HTTP ${response.status}.`);
-  }
-  const content = data?.choices?.[0]?.message?.content;
-  if (typeof content !== "string" || !content.trim()) throw new Error("The email QA model returned an empty response.");
 
   try {
-    return coerceFindings(JSON.parse(content));
+    return coerceFindings(JSON.parse(result.text));
   } catch {
     return []; // response_format guarantees JSON; a stray non-JSON reply is treated as "no findings" rather than a hard error.
   }

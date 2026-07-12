@@ -41,9 +41,10 @@ import {
 } from "./outfit-composer";
 import { applySaraFreckledSkin } from "./skin-variant";
 import { resolveCompanionAssetUrl } from "../companion-install";
+import { getQueenVoiceOpen } from "@/lib/native/queen-voice-events";
 import { CompanionAnimationLoader } from "./animation/animation-loader";
 import { BlinkController } from "./blink-controller";
-import { deriveCompanionReaction } from "./companion-reactions";
+import { deriveCompanionReaction, type CompanionReaction } from "./companion-reactions";
 import { ExpressionSystem, VRMChannelBridge } from "./expressions";
 import {
   applyCharacterStyleToObject,
@@ -231,6 +232,9 @@ export class CompanionEngine {
     if (!phonemes.length) return;
     this.lipSync.startLipSync(phonemes);
     this.lipSync.onAudioStart();
+    // Her audio just started: release any reaction held for speech onset so
+    // the face/gesture lands WITH the voice, not seconds ahead of it.
+    this.applyPendingReaction();
   }
 
   private setSpeaking(speaking: boolean) {
@@ -279,10 +283,44 @@ export class CompanionEngine {
       });
   }
 
-  /** Feed a completed Queen reply: expression lean + tone + gesture. */
+  // A reaction waiting for its reply's AUDIO to start. Reply text finalizes
+  // seconds before TTS (converse stream + TTFB), and expression tones move
+  // the mouth (mouthCorners) — applied at text time they read as Sara
+  // "talking" before her voice arrives. ami applies expression/animation tags
+  // as the spoken delivery plays, so we hold the reaction for the reply's
+  // first utterance event (real audio onset).
+  private pendingReaction: CompanionReaction | null = null;
+  private pendingReactionTimer: number | null = null;
+
+  /** Feed a completed Queen reply: expression lean + tone + gesture — applied
+   *  at speech onset when the voice overlay is open, immediately otherwise. */
   reactToReply(text: string) {
     if (!this.expressions) return;
     const reaction = deriveCompanionReaction(text);
+    if (!getQueenVoiceOpen()) {
+      this.applyReaction(reaction);
+      return;
+    }
+    this.pendingReaction = reaction;
+    if (this.pendingReactionTimer !== null) window.clearTimeout(this.pendingReactionTimer);
+    // Fallback so a reply whose audio never starts (TTS outage, muted reply)
+    // still reacts; measured stream-open ~1s, so this only fires on misses.
+    this.pendingReactionTimer = window.setTimeout(() => this.applyPendingReaction(), 4000);
+  }
+
+  private applyPendingReaction() {
+    const reaction = this.pendingReaction;
+    if (!reaction) return;
+    this.pendingReaction = null;
+    if (this.pendingReactionTimer !== null) {
+      window.clearTimeout(this.pendingReactionTimer);
+      this.pendingReactionTimer = null;
+    }
+    this.applyReaction(reaction);
+  }
+
+  private applyReaction(reaction: CompanionReaction) {
+    if (!this.expressions) return;
     this.expressions.setEmotionalStateTarget(reaction.emotion);
     this.expressions.triggerTone(reaction.tone, { intensity: 0.75 });
     this.procedural?.setEmotionFromString(reaction.tone);
@@ -424,6 +462,11 @@ export class CompanionEngine {
     this.unsubscribeSpeaking = null;
     this.unsubscribeUtterance?.();
     this.unsubscribeUtterance = null;
+    this.pendingReaction = null;
+    if (this.pendingReactionTimer !== null) {
+      window.clearTimeout(this.pendingReactionTimer);
+      this.pendingReactionTimer = null;
+    }
     if (this.backstopTimer !== null) {
       window.clearInterval(this.backstopTimer);
       this.backstopTimer = null;

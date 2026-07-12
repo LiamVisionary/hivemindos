@@ -1,6 +1,6 @@
 ---
 title: For Users
-description: HivemindOS product documentation — fleet, agents, brain, work, wallets, trading, integrations, runtimes, and architecture.
+description: HivemindOS product documentation — app building and hosting, fleet, agents, brain, work, wallets, trading, integrations, runtimes, and architecture.
 ---
 
 # For Users
@@ -12,6 +12,11 @@ Everything you need to run HivemindOS as a local-first agent fleet control room.
     <h3>Feature Guide</h3>
     <p>Tour the product surface by domain: Fleet, agents, chat, Zero Human Companies, work, scheduler, brain, env, files, notifications, MiroShark, wallets, token rails, Honey, HIVE, and x402.</p>
     <a href="features/">Open features</a>
+  </section>
+  <section class="docCard">
+    <h3>App Builder And Web Hosting</h3>
+    <p>Build apps through a Replit/Lovable-style experience on your own machine or a managed agent, preview them, share temporary builds, and publish static or dynamic Sites on HivemindOS.</p>
+    <a href="features/app-builder.html">Build and publish an app</a>
   </section>
   <section class="docCard">
     <h3>Zero Human Companies</h3>
@@ -30,7 +35,7 @@ Everything you need to run HivemindOS as a local-first agent fleet control room.
   </section>
   <section class="docCard">
     <h3>Trading</h3>
-    <p>Crypto swaps, stablecoin sends, private transfers, x402, local Hyperliquid spot/perps, Bankr prediction/NFT/token-launch flows, and stock trading via Alpaca, xStocks, or Robinhood Chain Stock Tokens, with governance and agent access.</p>
+    <p>Crypto swaps, stablecoin sends, private transfers, x402, local Hyperliquid spot/perps, Bankr prediction/NFT/token-launch flows, and stock trading via Alpaca, Robinhood Agentic brokerage, xStocks, or Robinhood Chain Stock Tokens, with governance and agent access.</p>
     <a href="trading/">Open trading docs</a>
   </section>
   <section class="docCard">

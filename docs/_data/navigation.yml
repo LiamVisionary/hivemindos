@@ -74,7 +74,7 @@ sections:
             url: /for-users/features/wallets-honey-and-x402.html
           - title: Hive Compute
             url: /for-users/features/hive-compute.html
-          - title: App Builder
+          - title: App Builder And Hosting
             url: /for-users/features/app-builder.html
           - title: HivemindOS Machines
             url: /for-users/features/hivemindos-machines.html
@@ -195,6 +195,8 @@ sections:
         url: /for-investors/hive-staking-and-community-tiers.html
       - title: Paid Features
         url: /for-investors/paid-features/
+      - title: App Builder And Hosting
+        url: /for-investors/paid-features/app-builder-hosting.html
       - title: Hivemind Cloud Agent Calls
         url: /for-investors/paid-features/hivemind-cloud-agent-calls.html
       - title: Hive Compute Marketplace

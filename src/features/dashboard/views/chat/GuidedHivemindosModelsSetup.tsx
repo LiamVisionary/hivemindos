@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bot, Check, ChevronRight, Coins, CreditCard, LoaderCircle, Network, Plus, RefreshCcw, Search, Sparkles, Wallet, X, Zap } from "lucide-react";
+import { Bot, Check, ChevronRight, Coins, CreditCard, LoaderCircle, Network, Plus, RefreshCcw, Search, ShieldCheck, Sparkles, Wallet, X, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { AgentProfile, HivemindosModelsAgentConfig } from "@/lib/types/agent-runtime";
 import { isHiveComputeHostedModelId } from "@/lib/config/hive-compute-marketplace";
@@ -71,6 +71,7 @@ type GatewayModelOption = {
   created?: number;
   promptUsdPerToken?: number;
   completionUsdPerToken?: number;
+  trust?: "confidential-verified";
 };
 
 type PaidModelChipOption = GatewayModelOption & { upstreamModel?: string };
@@ -93,23 +94,37 @@ function gatewayModelPriceUsd(option: GatewayModelOption): number | null {
   return option.promptUsdPerToken + option.completionUsdPerToken;
 }
 
+function isConfidentialVerifiedModel(option: unknown) {
+  return Boolean(option && typeof option === "object" && (option as { trust?: unknown }).trust === "confidential-verified");
+}
+
+function pinConfidentialVerifiedFirst<T>(options: T[]): T[] {
+  return options
+    .map((option, index) => ({ option, index }))
+    .sort((left, right) => (
+      Number(isConfidentialVerifiedModel(right.option)) - Number(isConfidentialVerifiedModel(left.option))
+      || left.index - right.index
+    ))
+    .map(({ option }) => option);
+}
+
 function sortGatewayModels(options: GatewayModelOption[], sort: GatewayModelSort): GatewayModelOption[] {
   const rows = [...options];
   switch (sort) {
     case "top":
-      return rows.sort((left, right) => (
+      return pinConfidentialVerifiedFirst(rows.sort((left, right) => (
         scoreModelStrength(upstreamHivemindosWalletPaidModel(right.id)).score
         - scoreModelStrength(upstreamHivemindosWalletPaidModel(left.id)).score
-      ));
+      )));
     case "new":
-      return rows.sort((left, right) => (right.created ?? 0) - (left.created ?? 0));
+      return pinConfidentialVerifiedFirst(rows.sort((left, right) => (right.created ?? 0) - (left.created ?? 0)));
     case "cheap":
-      return rows.sort((left, right) => (gatewayModelPriceUsd(left) ?? Number.POSITIVE_INFINITY) - (gatewayModelPriceUsd(right) ?? Number.POSITIVE_INFINITY));
+      return pinConfidentialVerifiedFirst(rows.sort((left, right) => (gatewayModelPriceUsd(left) ?? Number.POSITIVE_INFINITY) - (gatewayModelPriceUsd(right) ?? Number.POSITIVE_INFINITY)));
     case "pricey":
-      return rows.sort((left, right) => (gatewayModelPriceUsd(right) ?? -1) - (gatewayModelPriceUsd(left) ?? -1));
+      return pinConfidentialVerifiedFirst(rows.sort((left, right) => (gatewayModelPriceUsd(right) ?? -1) - (gatewayModelPriceUsd(left) ?? -1)));
     case "az":
     default:
-      return rows.sort((left, right) => left.name.localeCompare(right.name));
+      return pinConfidentialVerifiedFirst(rows.sort((left, right) => left.name.localeCompare(right.name)));
   }
 }
 
@@ -601,7 +616,7 @@ export function GuidedHivemindosModelsSetup({
     let ignore = false;
     void fetch("/api/hivemindos/models/models", { cache: "no-store" })
       .then((response) => response.json().catch(() => null))
-      .then((data: { data?: Array<{ id?: string; display_name?: string; metadata?: { subtitle?: string; group?: string; badge?: string; created?: number; promptUsdPerToken?: number; completionUsdPerToken?: number } }> } | null) => {
+      .then((data: { data?: Array<{ id?: string; display_name?: string; metadata?: { subtitle?: string; group?: string; badge?: string; trust?: string; created?: number; promptUsdPerToken?: number; completionUsdPerToken?: number } }> } | null) => {
         if (ignore) return;
         const rows = Array.isArray(data?.data) ? data.data : [];
         const options = rows.flatMap((row): GatewayModelOption[] => {
@@ -613,6 +628,7 @@ export function GuidedHivemindosModelsSetup({
             subtitle: row?.metadata?.subtitle,
             group: row?.metadata?.group,
             badge: row?.metadata?.badge,
+            trust: row?.metadata?.trust === "confidential-verified" ? "confidential-verified" : undefined,
             created: typeof row?.metadata?.created === "number" ? row.metadata.created : undefined,
             promptUsdPerToken: typeof row?.metadata?.promptUsdPerToken === "number" ? row.metadata.promptUsdPerToken : undefined,
             completionUsdPerToken: typeof row?.metadata?.completionUsdPerToken === "number" ? row.metadata.completionUsdPerToken : undefined,
@@ -634,13 +650,14 @@ export function GuidedHivemindosModelsSetup({
   const trimmedModelQuery = modelQuery.trim().toLowerCase();
   const matchesModelQuery = (option: PaidModelChipOption) => (
     !trimmedModelQuery
-    || `${option.name} ${option.subtitle ?? ""} ${option.upstreamModel ?? upstreamHivemindosWalletPaidModel(option.id)}`.toLowerCase().includes(trimmedModelQuery)
+    || `${option.name} ${option.subtitle ?? ""} ${option.trust === "confidential-verified" ? "confidential verified hardware attested" : ""} ${option.upstreamModel ?? upstreamHivemindosWalletPaidModel(option.id)}`.toLowerCase().includes(trimmedModelQuery)
   );
   const matchingRouteModels = staticCatalogModels.filter((option) => isComputeFirstHivemindosModel(option.id)).filter(matchesModelQuery);
   const matchingComputeMarketplaceModels = hiveComputeMarketplaceModels.filter(matchesModelQuery);
   const matchingFallbackStaticModels = staticCatalogModels.filter((option) => !isComputeFirstHivemindosModel(option.id)).filter(matchesModelQuery);
   const matchingGatewayModels = sortGatewayModels(gatewayCustomModels.filter(matchesModelQuery), modelSort);
-  const matchingAllModels = [...matchingRouteModels, ...matchingComputeMarketplaceModels, ...matchingFallbackStaticModels, ...matchingGatewayModels];
+  const matchingAllModels = pinConfidentialVerifiedFirst([...matchingRouteModels, ...matchingComputeMarketplaceModels, ...matchingFallbackStaticModels, ...matchingGatewayModels]);
+  const confidentialModelCount = matchingAllModels.filter(isConfidentialVerifiedModel).length;
   const allModelCount = staticCatalogModels.length + hiveComputeMarketplaceModels.length + gatewayCustomModels.length;
   const allPageCount = Math.max(1, Math.ceil(matchingAllModels.length / GATEWAY_MODELS_PAGE_SIZE));
   const allModelPage = Math.min(modelPage, allPageCount - 1);
@@ -658,9 +675,15 @@ export function GuidedHivemindosModelsSetup({
       <button
         key={option.id} type="button" className={styles.chip}
         data-active={selectedModel === option.id || undefined} data-sale={sale || undefined}
+        data-confidential-verified={option.trust === "confidential-verified" || undefined}
         aria-pressed={selectedModel === option.id} onClick={() => pickModel(option.id, "paid")}
+        title={option.trust === "confidential-verified" ? "Fresh hardware attestation verified by HivemindOS. Generated output is encrypted to the renter." : undefined}
       >
-        <span className={styles.chipName}>{TierIcon ? <TierIcon aria-hidden="true" /> : null}{option.name}{sale && option.badge ? <span className={styles.chipBadge}>{option.badge}</span> : null}</span>
+        <span className={styles.chipName}>
+          {TierIcon ? <TierIcon aria-hidden="true" /> : null}{option.name}
+          {option.trust === "confidential-verified" ? <span className={styles.chipBadge}><ShieldCheck aria-hidden="true" />Confidential verified</span> : null}
+          {sale && option.badge ? <span className={styles.chipBadge}>{option.badge}</span> : null}
+        </span>
         <span className={styles.chipSub}>{subtitle}</span>
         {!fundingConfigured ? <span className={styles.chipNeed} title={needTitle}><Coins aria-hidden="true" /></span> : null}
       </button>
@@ -1130,6 +1153,7 @@ export function GuidedHivemindosModelsSetup({
 
           <div className={styles.subhead}>
             All models{allModelCount ? <span className={styles.subheadTag}>· {allModelCount} available</span> : null}
+            {confidentialModelCount ? <span className={styles.subheadTag}>· {confidentialModelCount} confidential verified</span> : null}
             <span className={styles.subheadSpacer} />
             {gatewayCustomModels.length ? (
               <span className={styles.sortRow} role="group" aria-label="Sort models">

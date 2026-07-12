@@ -499,7 +499,7 @@ export function HivePanel({
               {[a.source.provider, a.source.model].filter(Boolean).join(" · ")}
             </div>
           ) : null}
-          <div style={{ marginTop: 18, padding: "14px 16px", borderRadius: "var(--radius-sm)", background: "var(--panel)", border: "1px solid var(--line)", fontSize: 13.5, color: "var(--fg-2)", lineHeight: 1.6 }}>{a.task}</div>
+          <div className="fr-agent-task" style={{ marginTop: 18, padding: "14px 16px", borderRadius: "var(--radius-sm)", background: "var(--panel)", border: "1px solid var(--line)", fontSize: 13.5, color: "var(--fg-2)", lineHeight: 1.6 }}>{a.task}</div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 16 }}>
             {a.since ? <span style={{ fontSize: 11.5, color: "var(--fg-3)", fontFamily: "var(--f-mono)", border: "1px solid var(--line-2)", borderRadius: 99, padding: "5px 11px" }}>started {a.since} ago</span> : null}
             {a.wallet !== "—" ? <span style={{ fontSize: 11.5, color: "var(--fg-3)", fontFamily: "var(--f-mono)", border: "1px solid var(--line-2)", borderRadius: 99, padding: "5px 11px" }}>{a.wallet}</span> : null}

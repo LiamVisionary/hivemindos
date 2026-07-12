@@ -7873,3 +7873,164 @@
 - Decision: passed
 - Reason: Implementation is complete and intentionally unprovisioned pending an explicit billable Cloudflare deployment decision.
 - Verification: Public App Builder 9/9 behavior tests; focused lint/syntax/docs and diff checks passed; public TypeScript has only unrelated openai-oauth nullable-body diagnostic; size ratchet failures exclude hosting files.
+## 2026-07-12T03:10:23.591464+00:00 - public-search
+
+- Request: React multi-chain wallet picker select chain badge default Base
+- Source: public-github
+- Query: `React multi-chain wallet picker select chain badge default Base`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-07-12T03:10:40.056744+00:00 - local-search
+
+- Request: Fix the Trade route acting wallet name and chain icon, make wallet-modal chain badges selectable, and default grouped wallet selection to Base
+- Source: local-index
+- Query: `Fix the Trade route acting wallet name and chain icon, make wallet-modal chain badges selectable, and default grouped wallet selection to Base`
+- Decision: no-results
+- Reason: No relevant local index hits after threshold filtering.
+## 2026-07-12T03:10:42.978123+00:00 - public-search
+
+- Request: Fix the Trade route acting wallet name and chain icon, make wallet-modal chain badges selectable, and default grouped wallet selection to Base
+- Source: public-github
+- Query: `Fix the Trade route acting wallet name and chain icon, make wallet-modal chain badges selectable, and default grouped wallet selection to Base`
+- Decision: retrieved
+- Reason: Retrieved 5 public candidates from GitHub search.
+
+### Candidates
+- DEEP13-2-5/Wallet (1 stars, TypeScript)
+  - URL: https://github.com/DEEP13-2-5/Wallet
+  - Description: Web3 Wallet Dashboard is a React-based dApp that connects to MetaMask, displays the user's wallet address, ETH balance, and network info. Built with ethers.js and hooks, it includes optional features like DAI token balance, ENS name, dark/l
+- aikonre/token-balance-dashboard (0 stars, JavaScript)
+  - URL: https://github.com/aikonre/token-balance-dashboard
+  - Description: A simple token balance checker built with React. Simulates checking token balances for a given wallet address
+- mohammedazfersheikh/fullstack-web3-token-dashboard (0 stars, JavaScript)
+  - URL: https://github.com/mohammedazfersheikh/fullstack-web3-token-dashboard
+  - Description: A complete end-to-end Web3 application built with React (Vite), Node.js/Express, and Ethers.js that demonstrates real-world decentralized application architecture. This project includes a backend API for blockchain data fetching and a moder
+- prakarsh-spheron/Wallet-Dashboard-Demo (1 stars, MIT License)
+  - URL: https://github.com/prakarsh-spheron/Wallet-Dashboard-Demo
+  - Description: Demo using the token balances react component to create a Wallet Dashboard
+- shubhbatra1991/OpenDeFi-Analytics- (0 stars, MIT License)
+  - URL: https://github.com/shubhbatra1991/OpenDeFi-Analytics-
+  - Description: Building a analytics dashboard where users connect a wallet and see token balances, portfolio value, and recent transactions in real time, using Next.js/React on the frontend and a .NET/Azure API backend.
+## 2026-07-12T03:10:43.044277+00:00 - prebuild-gate
+
+- Request: Fix the Trade route acting wallet name and chain icon, make wallet-modal chain badges selectable, and default grouped wallet selection to Base
+- Source: public-github
+- Query: `Fix the Trade route acting wallet name and chain icon, make wallet-modal chain badges selectable, and default grouped wallet selection to Base`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-07-12T03:10:43.099611+00:00 - shared-brain
+
+- Request: Fix the Trade route acting wallet name and chain icon, make wallet-modal chain badges selectable, and default grouped wallet selection to Base
+- Source: shared-brain
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- HivemindOS Docs/for-users/features/wallets-honey-and-x402.md
+  - Decision: inspected
+  - Reason: confirms the selected source of funds must remain visible
+  - Path: `wallet UX contract`
+- Skills/hivemindos-wallet-rails/SKILL.md
+  - Decision: inspected
+  - Reason: wallet rail safety context only
+  - Path: `no reusable picker implementation`
+## 2026-07-12T03:10:43.155322+00:00 - local-search
+
+- Request: Fix the Trade route acting wallet name and chain icon, make wallet-modal chain badges selectable, and default grouped wallet selection to Base
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/lib/utils/personal-wallet-grouping.ts
+  - Decision: selected
+  - Reason: canonical chain badges, labels, and grouped-account ordering already exist
+  - Path: `chainBadgeSrc, chainKeyForNetwork, buildGroupedPersonalWallets`
+- src/components/wallets-drop-in/WalletPickerCard.tsx
+  - Decision: selected
+  - Reason: existing grouped wallet card is the exact UI surface to extend
+  - Path: `GroupedWalletPickerCard`
+- src/features/dashboard/views/trade/wallet-pickables.ts
+  - Decision: selected
+  - Reason: existing grouped selection resolver is the execution source of truth
+  - Path: `groupedUserPickables and resolvePickableAccount`
+## 2026-07-12T03:10:43.203766+00:00 - public-search
+
+- Request: Fix the Trade route acting wallet name and chain icon, make wallet-modal chain badges selectable, and default grouped wallet selection to Base
+- Source: public-github
+- Decision: rejected
+- Reason: Bounded public GitHub search returned no fit candidates; local HivemindOS components are the pinned, contract-compatible implementation.
+- Selected backbone: local-project:hivemind-os
+- Note: Search: React multi-chain wallet picker select chain badge default Base; 0 candidates.
+## 2026-07-12T03:10:43.259257+00:00 - prebuild-gate
+
+- Request: Fix the Trade route acting wallet name and chain icon, make wallet-modal chain badges selectable, and default grouped wallet selection to Base
+- Source: local-project:hivemind-os
+- Decision: selected
+- Reason: Reuse the existing grouping, badge, and account-resolution modules; only add the missing interactive wiring and regression tests.
+- Selected backbone: local-project:hivemind-os
+## 2026-07-12T03:10:57.215283+00:00 - public-search
+
+- Request: Fix the Trade route acting wallet name and chain icon, make wallet-modal chain badges selectable, and default grouped wallet selection to Base
+- Source: public-github
+- Decision: rejected
+- Reason: The five returned repos are generic wallet balance dashboards and do not implement grouped multi-chain account selection or HivemindOS persisted acting-wallet state.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- DEEP13-2-5/Wallet
+  - Decision: rejected
+  - Reason: generic MetaMask dashboard, wrong state model
+- aikonre/token-balance-dashboard
+  - Decision: rejected
+  - Reason: balance checker only
+- mohammedazfersheikh/fullstack-web3-token-dashboard
+  - Decision: rejected
+  - Reason: generic full-stack dashboard, no grouped account picker
+- prakarsh-spheron/Wallet-Dashboard-Demo
+  - Decision: rejected
+  - Reason: balance display demo only
+- shubhbatra1991/OpenDeFi-Analytics-
+  - Decision: rejected
+  - Reason: analytics dashboard, no relevant picker code
+## 2026-07-12T03:20:58.440400+00:00 - assimilation-manifest
+
+- Request: Fix the Trade route acting wallet name and chain icon, make wallet-modal chain badges selectable, and default grouped wallet selection to Base
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: hivemind-os:src/lib/utils/personal-wallet-grouping.ts => src/lib/utils/personal-wallet-grouping.ts, hivemind-os:src/components/wallets-drop-in/WalletPickerCard.tsx => src/components/wallets-drop-in/WalletPickerCard.tsx, hivemind-os:src/components/trade/TradeView.tsx => src/components/trade/TradeView.tsx, hivemind-os:scripts/test-personal-wallet-grouping.mjs => scripts/test-trade-wallet-selection.mjs
+- Verification: Wrote ASSIMILATION.trade-wallet-selection.json with 4 entries and custom_code_assessment=balanced.
+## 2026-07-12T03:20:58.555231+00:00 - verification
+
+- Request: Fix the Trade route acting wallet name and chain icon, make wallet-modal chain badges selectable, and default grouped wallet selection to Base
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.trade-wallet-selection.json: 4 concrete reuse entries, 3 substantive
+## 2026-07-12T03:20:58.608300+00:00 - implementation
+
+- Request: Fix the Trade route acting wallet name and chain icon, make wallet-modal chain badges selectable, and default grouped wallet selection to Base
+- Source: local-project:hivemind-os
+- Decision: adapted_code
+- Reason: Extended the established grouped wallet, picker card, account resolver, and chain badge modules rather than adding parallel state or icon maps.
+- Selected backbone: local-project:hivemind-os
+## 2026-07-12T03:20:58.653725+00:00 - assimilation-manifest
+
+- Request: Fix the Trade route acting wallet name and chain icon, make wallet-modal chain badges selectable, and default grouped wallet selection to Base
+- Source: local-project:hivemind-os
+- Decision: selected
+- Reason: Manifest verification passed with four concrete adapted code/test mappings.
+- Selected backbone: local-project:hivemind-os
+- Note: ASSIMILATION.trade-wallet-selection.json
+## 2026-07-12T03:20:58.704321+00:00 - verification
+
+- Request: Fix the Trade route acting wallet name and chain icon, make wallet-modal chain badges selectable, and default grouped wallet selection to Base
+- Source: local-project:hivemind-os
+- Decision: selected
+- Reason: Focused regression, grouping regression, ESLint, whole-project TypeScript, diff check, and authenticated live Trade-route checks passed; size gate remains red only on existing generated/legacy/concurrent files.
+- Selected backbone: local-project:hivemind-os
+- Note: Wallet-paid baseline remains one unrelated models-marketplace assertion failure.
+## 2026-07-12T03:20:58.752918+00:00 - final
+
+- Request: Fix the Trade route acting wallet name and chain icon, make wallet-modal chain badges selectable, and default grouped wallet selection to Base
+- Source: local-project:hivemind-os
+- Decision: selected
+- Reason: Local HivemindOS modules were the contract-compatible backbone; no public donor was relevant.
+- Selected backbone: local-project:hivemind-os

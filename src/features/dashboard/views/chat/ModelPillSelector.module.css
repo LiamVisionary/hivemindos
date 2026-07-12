@@ -168,6 +168,25 @@
   padding: 3px 5px;
 }
 
+.modelPillTrust {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 6px;
+  color: var(--live);
+  background: var(--live-soft);
+  border: 1px solid color-mix(in srgb, var(--live) 34%, transparent);
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 560;
+  line-height: 1;
+}
+
+.modelPillTrust svg {
+  width: 11px;
+  height: 11px;
+}
+
 .addModelPill {
   border-color: rgba(148, 163, 184, 0.28);
   border-style: dashed;

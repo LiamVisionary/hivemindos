@@ -24,6 +24,11 @@ import {
   supportedRobinhoodStockTickers,
 } from "@/lib/config/robinhood-chain";
 import { requireAuth } from "@/lib/utils/server-auth";
+import {
+  callRobinhoodAgenticReadTool,
+  cancelRobinhoodAgenticEquityOrder,
+  robinhoodAgenticStatus,
+} from "@/lib/services/trading/robinhood-agentic";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -97,9 +102,10 @@ export async function GET(request: NextRequest) {
     ...ALPACA_PAPER_ENV_NAMES,
     ...ledger.records.flatMap((record) => [record.wallet?.alpacaKeyEnvName, record.wallet?.alpacaSecretEnvName].filter(Boolean) as string[]),
   ]));
-  const [alpacaPresence, robinhoodReadiness] = await Promise.all([
+  const [alpacaPresence, robinhoodReadiness, robinhoodAgentic] = await Promise.all([
     hiveEnvPresence(alpacaKeys),
     checkRobinhoodChainTradingReadiness(),
+    robinhoodAgenticStatus({ reconnect: true, includeAccounts: true }),
   ]);
   const present = (key: string) => Boolean(alpacaPresence.find((item) => item.key === key)?.present);
   const liveConfigured = ALPACA_LIVE_ENV_NAMES.every(present);
@@ -123,6 +129,14 @@ export async function GET(request: NextRequest) {
         supportedTickers: supportedRobinhoodStockTickers(),
         executable: robinhoodReadiness.executable,
         reason: robinhoodReadiness.reason,
+      },
+      robinhoodAgentic: {
+        connected: robinhoodAgentic.connected,
+        selectedAccountId: robinhoodAgentic.selectedAccountId,
+        accounts: robinhoodAgentic.accounts,
+        tools: robinhoodAgentic.tools.map((tool) => tool.name),
+        missingTools: robinhoodAgentic.missingTools,
+        reason: robinhoodAgentic.error || (robinhoodAgentic.connected ? "Robinhood Agentic Trading is connected." : "Connect Robinhood Agentic Trading in Integrations."),
       },
     },
     agents: tradeAgents,
@@ -151,6 +165,10 @@ export async function POST(request: NextRequest) {
 
     // Portfolio is a read of the chosen Alpaca account — no ticker, no governance.
     if (action === "portfolio") {
+      if (policy.tradingVenue === "robinhood-agentic") {
+        const rawPortfolio = await callRobinhoodAgenticReadTool("get_portfolio");
+        return NextResponse.json({ ok: true, portfolio: null, rawPortfolio, paper: false, note: "Robinhood portfolio data is available through the official Agentic Trading MCP." });
+      }
       if (policy.tradingVenue !== "alpaca") {
         return NextResponse.json({ ok: true, portfolio: null, paper, note: "Portfolio view is available for the Alpaca venue. On-chain stock-token positions live in the acting wallet." });
       }
@@ -160,9 +178,13 @@ export async function POST(request: NextRequest) {
 
     // Cancel an open order — no ticker, reversal of a queued spend.
     if (action === "cancel-order") {
-      if (policy.tradingVenue !== "alpaca") return badRequest("Order cancel is only available for the Alpaca venue.");
       const orderId = body.orderId?.trim();
       if (!orderId) return badRequest("An order id is required to cancel.");
+      if (policy.tradingVenue === "robinhood-agentic") {
+        await cancelRobinhoodAgenticEquityOrder(orderId);
+        return NextResponse.json({ ok: true, canceled: orderId, paper: false });
+      }
+      if (policy.tradingVenue !== "alpaca") return badRequest("Order cancel is available for Alpaca and Robinhood Agentic brokerage orders.");
       await cancelAlpacaOrder({ policy, paper, orderId });
       return NextResponse.json({ ok: true, canceled: orderId, paper });
     }
@@ -188,7 +210,7 @@ export async function POST(request: NextRequest) {
       network = stored.info.network;
       secret = stored.secret;
       fromAddress = stored.info.address;
-    } else if (policy.tradingVenue === "alpaca" && paper === false) {
+    } else if ((policy.tradingVenue === "alpaca" && paper === false) || policy.tradingVenue === "robinhood-agentic") {
       const stored = await getWalletSecret(agentId).catch(() => null);
       if (stored) {
         network = stored.info.network;

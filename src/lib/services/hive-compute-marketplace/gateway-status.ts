@@ -32,6 +32,7 @@ export function capacityFromHealth(json: unknown): HiveComputeGatewayStatus["cap
   const busySlots = positiveNumber(record.busySlots, 0);
   const availableSlots = positiveNumber(record.availableSlots, 0);
   const hardwareTeeWorkers = positiveNumber(record.hardwareTeeWorkers, 0);
+  const confidentialWorkers = positiveNumber(record.confidentialWorkers, 0);
   const pendingJobs = positiveNumber(record.pendingJobs, 0);
   const pricingRecord = record.pricing && typeof record.pricing === "object" ? record.pricing as Record<string, unknown> : {};
   const boundsRecord = pricingRecord.providerBounds && typeof pricingRecord.providerBounds === "object"
@@ -62,6 +63,7 @@ export function capacityFromHealth(json: unknown): HiveComputeGatewayStatus["cap
     platformFeeBps: positiveNumber(pricingRecord.platformFeeBps, 2_000),
   } : undefined;
   const liveModels = stringArray(record.liveModels);
+  const confidentialModels = stringArray(record.confidentialModels);
   const keyRelayModels = stringArray(record.keyRelayModels);
   const modelPerformance = modelPerformanceArray(record.modelPerformance);
   const fallbackConfigured = record.fallbackConfigured === true;
@@ -78,6 +80,8 @@ export function capacityFromHealth(json: unknown): HiveComputeGatewayStatus["cap
     liveWorkers,
     ...(totalSlots ? { totalSlots, busySlots, availableSlots } : {}),
     ...(hardwareTeeWorkers ? { hardwareTeeWorkers } : {}),
+    ...(confidentialWorkers ? { confidentialWorkers } : {}),
+    confidentialModels,
     liveModels,
     keyRelayModels,
     modelPerformance,

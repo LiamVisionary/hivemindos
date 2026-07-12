@@ -190,6 +190,13 @@ export function chatThreadTitleProviderFamily(provider: string) {
   return provider;
 }
 
+export function openAiOAuthChatModelIds(discoveredModels: Iterable<string>) {
+  const compatible = [...discoveredModels]
+    .map((model) => model.trim())
+    .filter((model) => /^(?:gpt-5|o\d|codex)/i.test(model));
+  return [...new Set([...compatible, "gpt-5.4"])];
+}
+
 export function chatThreadTitleCloudRouteId(provider: string, model: string, auth: ChatThreadTitleAuthMode) {
   return `${provider}\u001f${model}\u001f${auth}`;
 }

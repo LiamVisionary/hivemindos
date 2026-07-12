@@ -83,7 +83,7 @@ export type TradePrepareParams = {
   prompt?: string;
 };
 
-export type StockVenue = "alpaca" | "xstocks" | "robinhood-chain";
+export type StockVenue = "alpaca" | "robinhood-agentic" | "xstocks" | "robinhood-chain";
 
 export type TradingReadiness = {
   ok: boolean;
@@ -117,6 +117,14 @@ export type TradingReadiness = {
       };
       supportedTickers: string[];
       executable: boolean;
+      reason: string;
+    };
+    robinhoodAgentic?: {
+      connected: boolean;
+      selectedAccountId?: string;
+      accounts: Array<{ id: string; label: string; agentic: boolean }>;
+      tools: string[];
+      missingTools: string[];
       reason: string;
     };
   };

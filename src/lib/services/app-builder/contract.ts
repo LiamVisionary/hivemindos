@@ -19,6 +19,20 @@ export type AppBuilderCapabilityId =
   | "hosting.catalog"
   | "hosting.list"
   | "hosting.get"
+  | "hosting.site.create"
+  | "hosting.versions.list"
+  | "hosting.version.save"
+  | "hosting.deployments.list"
+  | "hosting.version.deploy"
+  | "hosting.version.rollback"
+  | "hosting.access.get"
+  | "hosting.access.set"
+  | "hosting.access.token"
+  | "hosting.bindings.get"
+  | "hosting.bindings.set"
+  | "hosting.environment.get"
+  | "hosting.environment.set"
+  | "hosting.usage"
   | "hosting.publish"
   | "hosting.renew"
   | "hosting.unpublish";
@@ -43,6 +57,13 @@ type AppBuilderContract = {
     stopRuntime: string;
     temporaryDeploy: string;
     publishHosting: string;
+    createHostingSite: string;
+    saveHostingVersion: string;
+    deployHostingVersion: string;
+    rollbackHosting: string;
+    changeHostingAccess: string;
+    changeHostingBindings: string;
+    changeHostingEnvironment: string;
     renewHosting: string;
     unpublishHosting: string;
     writeFile: string;
@@ -59,6 +80,7 @@ type AppBuilderContract = {
     dynamic: { protocol: string; entrypoint: string; clientLimits: { bytes: number } };
   };
   temporaryDeploy: { provider: string; minimumWranglerVersion: string; claimWindowSeconds: number; publicDomain: string };
+  hostingManifest: { path: string; fields: string[]; serverOnly: string[] };
   templates: Record<string, { label: string; files: Record<string, string> }>;
 };
 

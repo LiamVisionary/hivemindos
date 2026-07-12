@@ -227,9 +227,8 @@ export async function planContentStudioRequest(input: ContentStudioBrainRequest)
   const history = normalizedHistory(input.history);
   const rawAttachments = Array.isArray(input.attachments) ? input.attachments.slice(0, 30) : [];
   const images = attachmentImageDataUrls(rawAttachments);
-  // The codex OAuth chat contract is text-only; every other route gets the pixels.
   const codexRoute = route.auth === "oauth" && route.provider === "openai-codex";
-  const imagesDelivered = !codexRoute && images.length > 0;
+  const imagesDelivered = images.length > 0;
   const context = {
     request: prompt,
     prompt_helper: input.promptHelper !== false,
@@ -250,7 +249,27 @@ export async function planContentStudioRequest(input: ContentStudioBrainRequest)
   let imagesShown = imagesDelivered;
   let raw: string;
   if (codexRoute) {
-    raw = await runOpenAiOAuthChatTurn(route.model, messages as Array<{ role: "system" | "user" | "assistant"; content: string }>, { timeoutMs: 120_000 });
+    try {
+      raw = await runOpenAiOAuthChatTurn(
+        route.model,
+        messages as Array<{ role: "system" | "user" | "assistant"; content: string }>,
+        { images, timeoutMs: 120_000 },
+      );
+    } catch (error) {
+      if (!images.length) throw error;
+      const textOnlyContext = {
+        ...context,
+        attachment_images_visible: false,
+        attachment_note: "The selected brain rejected image input on this route, so it cannot see the attached images. Plan from the text and attachment names only; do not pretend to know the images' contents.",
+      };
+      raw = await runOpenAiOAuthChatTurn(
+        route.model,
+        [...messages.slice(0, -1), { role: "user", content: JSON.stringify(textOnlyContext) }] as Array<{ role: "system" | "user" | "assistant"; content: string }>,
+        { timeoutMs: 120_000 },
+      );
+      imagesShown = false;
+      console.warn(`[content-studio] ${route.provider}/${route.model} rejected image input; planned text-only.`, error instanceof Error ? error.message : error);
+    }
   } else if (!images.length) {
     raw = await callOpenAiCompatible(route, messages);
   } else {
@@ -276,10 +295,7 @@ export async function planContentStudioRequest(input: ContentStudioBrainRequest)
   const mode = result.mode === "questions" || result.mode === "confirmation" || result.mode === "brief" ? result.mode : "brief";
   if (input.walkthrough && !input.confirmed && mode === "brief") result.mode = "confirmation";
   if (images.length && !imagesShown) {
-    const reason = codexRoute
-      ? "this ChatGPT OAuth route is text-only"
-      : "it rejected image input on this route";
-    result.message = `Heads up: ${route.model} could not view the attached image${images.length === 1 ? "" : "s"} (${reason}), so this plan is grounded in your text only. Choose a vision-capable brain to plan from the image contents. ${typeof result.message === "string" ? result.message : ""}`.trim();
+    result.message = `Heads up: ${route.model} could not view the attached image${images.length === 1 ? "" : "s"} (it rejected image input on this route), so this plan is grounded in your text only. Choose a vision-capable brain to plan from the image contents. ${typeof result.message === "string" ? result.message : ""}`.trim();
   }
   return {
     ...result,

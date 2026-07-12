@@ -148,7 +148,7 @@ export function WalletPickerCard({ name, wallet, survival, agentUsePod, statusOv
         <span style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
           <span className="fw-pdot" style={{ background: TONE_DOT_COLOR[status.tone] }} aria-hidden="true" />
           <span style={{ minWidth: 0 }}>
-            <span style={{ display: "block", fontSize: 13.5, fontWeight: 600, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</span>
+            <span className={styles.walletName}>{name}</span>
             {tags && tags.length ? null : <span style={{ display: "block", fontSize: 10.5, color: "var(--fg-3)" }}>{networkLabel(wallet.network)}</span>}
           </span>
         </span>
@@ -193,65 +193,71 @@ type GroupedPickerAccount = {
 export type GroupedWalletPickerCardProps = {
   /** Wallet display name (one card per seed). */
   name: string;
-  /** Per-chain accounts; shown as display-only chain tags. */
+  /** Per-chain accounts; each chain tag selects its executable account. */
   accounts: GroupedPickerAccount[];
   statusOverride?: { tone: WalletPickerChipTone; text: string };
   pending?: boolean;
   /** Currently-selected account id (any of this wallet's accounts → selected). */
   selectedAccountId?: string;
-  /** Select this wallet (the chain is chosen later, in the trade action view). */
+  /** Select this wallet's default account (Base when available). */
   onSelect: () => void;
+  /** Select a specific executable chain account. */
+  onSelectAccount: (accountId: string) => void;
 };
 
 /**
  * Grouped user wallet tile: ONE card per seed (matching the Wallets screen),
- * showing the wallet's chains as display-only tags. Selecting the card selects
- * the wallet; the chain for a trade is chosen in the action view (swap/buy/…).
+ * with an explicit account button for every chain. Selecting the card body uses
+ * the caller's Base-first default; selecting a chain uses that exact account.
  */
-export function GroupedWalletPickerCard({ name, accounts, statusOverride, pending, selectedAccountId, onSelect }: GroupedWalletPickerCardProps) {
+export function GroupedWalletPickerCard({ name, accounts, statusOverride, pending, selectedAccountId, onSelect, onSelectAccount }: GroupedWalletPickerCardProps) {
   const total = accounts.reduce((sum, account) => sum + (Number(account.wallet.currentBalanceUsd) || 0), 0);
   const status = statusOverride ?? { tone: "ok" as WalletPickerChipTone, text: "Local wallet" };
   const selected = accounts.some((account) => account.id === selectedAccountId);
   const showLoading = Boolean(pending) && total <= 0;
 
   return (
-    <button
-      type="button"
-      className={`fw-cc ${styles.card}`}
-      data-selected={selected ? "true" : undefined}
-      aria-pressed={selected}
-      aria-label={`Select ${name} wallet`}
-      onClick={onSelect}
-    >
-      <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
-          <span className="fw-pdot" style={{ background: TONE_DOT_COLOR[status.tone] }} aria-hidden="true" />
-          <span style={{ minWidth: 0 }}>
-            <span style={{ display: "block", fontSize: 13.5, fontWeight: 600, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</span>
-            <span style={{ display: "block", fontSize: 10.5, color: "var(--fg-3)" }}>{accounts.length} chains</span>
+    <div className={`fw-cc ${styles.card}`} data-selected={selected ? "true" : undefined}>
+      <button type="button" className={styles.cardMain} aria-pressed={selected} aria-label={`Select ${name} on Base by default`} onClick={onSelect}>
+        <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+            <span className="fw-pdot" style={{ background: TONE_DOT_COLOR[status.tone] }} aria-hidden="true" />
+            <span style={{ minWidth: 0 }}>
+              <span className={styles.walletName}>{name}</span>
+              <span style={{ display: "block", fontSize: 10.5, color: "var(--fg-3)" }}>{accounts.length} chains</span>
+            </span>
           </span>
+          {selected ? <span className={styles.check} aria-hidden="true"><Check width={12} height={12} strokeWidth={3} /></span> : null}
         </span>
-        {selected ? <span className={styles.check} aria-hidden="true"><Check width={12} height={12} strokeWidth={3} /></span> : null}
-      </span>
 
-      <span style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 10 }}>
-        {showLoading
-          ? <span className={`fw-cc-bal ${styles.balanceSkeleton}`} aria-label="Loading balance" />
-          : <span className="fw-cc-bal">{frFmtUsdFull(Math.max(0, total))}</span>}
-        <span className="fw-chip" data-tone={status.tone === "ok" || status.tone === "warn" || status.tone === "danger" ? status.tone : undefined}>{status.text}</span>
-      </span>
+        <span style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 10 }}>
+          {showLoading
+            ? <span className={`fw-cc-bal ${styles.balanceSkeleton}`} aria-label="Loading balance" />
+            : <span className="fw-cc-bal">{frFmtUsdFull(Math.max(0, total))}</span>}
+          <span className="fw-chip" data-tone={status.tone === "ok" || status.tone === "warn" || status.tone === "danger" ? status.tone : undefined}>{status.text}</span>
+        </span>
+      </button>
 
-      <span style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
+      <span className={styles.chainList} aria-label={`Choose ${name} chain`}>
         {accounts.map((account) => {
           const logo = chainBadgeSrc(account.chainKey);
+          const accountSelected = account.id === selectedAccountId;
           return (
-            <span key={account.id} className={styles.chainTag}>
+            <button
+              key={account.id}
+              type="button"
+              className={styles.chainButton}
+              data-selected={accountSelected ? "true" : undefined}
+              aria-pressed={accountSelected}
+              aria-label={`Use ${name} on ${chainShortLabel(account.chainKey, account.networkLabel)}`}
+              onClick={() => onSelectAccount(account.id)}
+            >
               {logo ? <img src={logo} alt="" width={15} height={15} style={{ borderRadius: "50%", display: "block" }} /> : null}
               <span>{chainShortLabel(account.chainKey, account.networkLabel)}</span>
-            </span>
+            </button>
           );
         })}
       </span>
-    </button>
+    </div>
   );
 }

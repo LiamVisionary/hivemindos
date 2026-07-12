@@ -49,8 +49,8 @@ export function groupedUserPickables(
     let accounts: PickableAccount[] = group.accounts.map((account) => ({ ...account, wallet: walletConfigForAccount(account) }));
     if (opts?.accountFilter) accounts = accounts.filter((account) => opts.accountFilter!(account.wallet));
     if (!accounts.length) continue;
-    const defaultAccount = accounts.find((account) => account.id === group.spendId)
-      ?? accounts.find((account) => account.chainKey === "base")
+    const defaultAccount = accounts.find((account) => account.chainKey === "base")
+      ?? accounts.find((account) => account.id === group.spendId)
       ?? accounts[0];
     const totalUsd = accounts.reduce((sum, account) => sum + (Number(account.wallet.currentBalanceUsd) || 0), 0);
     out.push({

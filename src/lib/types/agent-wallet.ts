@@ -4,8 +4,8 @@ export type AgentSurvivalTier = "dead" | "critical" | "low_compute" | "normal" |
 export type AgentSpendCapAsset = "USDC" | "USDG" | "ETH";
 export type AgentAssetSpendCaps = Partial<Record<AgentSpendCapAsset, number>>;
 
-/** Stock-buying rail: real brokerage (Alpaca) or on-chain tokenized equities. */
-export type AgentTradingVenue = "alpaca" | "xstocks" | "robinhood-chain";
+/** Stock-buying rail: regulated brokerage or on-chain tokenized equities. */
+export type AgentTradingVenue = "alpaca" | "robinhood-agentic" | "xstocks" | "robinhood-chain";
 
 export interface AgentWalletConfig {
   agentId: string;

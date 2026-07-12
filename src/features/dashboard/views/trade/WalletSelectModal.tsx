@@ -197,6 +197,7 @@ export function WalletSelectPanel({
                 pending={p.pending}
                 selectedAccountId={selectedId}
                 onSelect={() => setSelectedId(p.id)}
+                onSelectAccount={setSelectedId}
               />
             ) : (
               <WalletPickerCard

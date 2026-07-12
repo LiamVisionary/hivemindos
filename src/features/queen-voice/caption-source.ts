@@ -2,11 +2,9 @@
 
 /**
  * Capability matrix for live voice captions (words painted WHILE the user
- * speaks). Sources in preference order — free/on-device first, the paid
+ * speaks). Sources in preference order — browser-native first, the paid
  * OpenAI realtime caption session only as the fallback:
  *
- * - native-speech: the desktop shell's OS recognizer (macOS
- *   SFSpeechRecognizer). Free, on-device, zero install bloat.
  * - web-speech: the browser's SpeechRecognition (Chrome/Edge browser
  *   contexts; webviews generally lack it). Free, keyless.
  * - openai-realtime: parallel gpt-realtime-whisper session
@@ -22,15 +20,11 @@ import {
   type SttCaptionStream,
 } from "./stt-caption-stream";
 import {
-  isNativeSpeechCaptionAvailable,
-  startNativeSpeechCaptionStream,
-} from "./native-speech-caption";
-import {
   isWebSpeechCaptionAvailable,
   startWebSpeechCaptionStream,
 } from "./web-speech-caption";
 
-export type CaptionSourceId = "native-speech" | "web-speech" | "openai-realtime";
+export type CaptionSourceId = "web-speech" | "openai-realtime";
 
 export type CaptionStreamOptions = {
   /** Pre-roll PCM to replay into a socket-fed source once it arms; sources
@@ -48,12 +42,6 @@ type CaptionSourceDefinition = {
 };
 
 const CAPTION_SOURCE_MATRIX: CaptionSourceDefinition[] = [
-  {
-    id: "native-speech",
-    free: true,
-    isAvailable: isNativeSpeechCaptionAvailable,
-    start: (opts) => startNativeSpeechCaptionStream({ onText: opts.onText }),
-  },
   {
     id: "web-speech",
     free: true,

@@ -227,7 +227,7 @@ export async function resolveXTranscript(input: ResolveXTranscriptInput): Promis
         // Silent/music clip, empty transcript, or a no-ffmpeg box: fall through
         // to the authenticated X API (mp4 variant or the post's own text/thread)
         // instead of hard-failing.
-        warnings.push(`yt-dlp video transcription failed (${error instanceof Error ? error.message : String(error)}); falling back to the X API.`);
+        warnings.push(`Video audio transcription failed (${error instanceof Error ? error.message : String(error)}); retrying with authenticated X media.`);
       }
     }
   } else {
@@ -264,7 +264,7 @@ export async function resolveXTranscript(input: ResolveXTranscriptInput): Promis
         source: "x-api mp4 + whisper",
       }, input.summarize);
     } catch (error) {
-      warnings.push(`Video download via X API failed: ${error instanceof Error ? error.message : String(error)}`);
+      warnings.push(`Authenticated X video transcription failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

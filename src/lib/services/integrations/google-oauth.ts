@@ -12,6 +12,7 @@ const DEFAULT_GOOGLE_OAUTH_SCOPES = [
   "openid",
   "email",
   "https://www.googleapis.com/auth/drive.readonly",
+  "https://www.googleapis.com/auth/presentations",
   "https://www.googleapis.com/auth/gmail.readonly",
   "https://www.googleapis.com/auth/calendar.readonly",
   // GA4 (Admin API accountSummaries.list + Data API runReport) for the company

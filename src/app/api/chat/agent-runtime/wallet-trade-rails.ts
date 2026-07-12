@@ -79,6 +79,7 @@ function buyStockPolicy(wallet: AgentWalletConfig): BuyStockPolicy {
 }
 
 function detectBuyStockVenue(text: string, wallet?: AgentWalletConfig): AgentTradingVenue | null {
+  if (/\b(robinhood\s+(?:agentic|brokerage|mcp)|agentic\s+(?:account|trading))\b/i.test(text)) return "robinhood-agentic";
   if (/\b(robinhood\s+chain|rh\s+chain|robinhood\s+stock\s+tokens?|robinhood\s+tokens?)\b/i.test(text)) return "robinhood-chain";
   if (/\b(xstock|x-stock|tokeni[sz]ed|on-?chain|solana|jupiter)\b/i.test(text)) return "xstocks";
   if (/\b(alpaca|brokerage|paper trad|real (?:stock|share|shares))\b/i.test(text)) return "alpaca";
@@ -120,7 +121,7 @@ function parseBuyStockRequest(text: string, wallet?: AgentWalletConfig): BuyStoc
     ?? text.match(/\b(?:for|worth)\s+\$?(\d+(?:\.\d{1,2})?)\b/i);
 
   const draft: BuyStockDraft = { venue, ticker, side: isSell ? "sell" : "buy" };
-  if (sharesMatch && venue === "alpaca") draft.qty = Number(sharesMatch[1]);
+  if (sharesMatch && (venue === "alpaca" || venue === "robinhood-agentic")) draft.qty = Number(sharesMatch[1]);
   if (amountMatch) draft.notionalUsd = Number(amountMatch[1]);
   if (draft.notionalUsd == null && draft.qty == null) return null;
   return draft;
@@ -131,7 +132,7 @@ function isBuyStockDraftText(text: string) {
 }
 
 function parseBuyStockDraft(text: string): BuyStockDraft | null {
-  const venueMatch = text.match(/Venue\s+`?(alpaca|xstocks|robinhood-chain)`?/i);
+  const venueMatch = text.match(/Venue\s+`?(alpaca|robinhood-agentic|xstocks|robinhood-chain)`?/i);
   if (!venueMatch) return null;
   const venue = venueMatch[1].toLowerCase() as AgentTradingVenue;
   const sideOf = (verb: string): StockTradeSide => (verb.toLowerCase() === "sell" ? "sell" : "buy");
@@ -160,7 +161,7 @@ function findBuyStockDraft(messages: IncomingMessage[]): BuyStockDraft | null {
 function validateBuyStockDraft(wallet: AgentWalletConfig | undefined, draft: BuyStockDraft, executing: boolean): string {
   const side = draft.side ?? "buy";
   if (!wallet) return "No wallet is configured for this agent.";
-  if (!wallet.tradingVenue) return "Stock trading is off. Set a trading venue (alpaca, xstocks, or robinhood-chain) for this agent first.";
+  if (!wallet.tradingVenue) return "Stock trading is off. Set a trading venue (alpaca, robinhood-agentic, xstocks, or robinhood-chain) for this agent first.";
   if (executing && !wallet.enabled) return "Wallet spending is off for this agent. Turn Spend on before trading.";
   const cap = buyStockCapUsd(wallet);
   if (draft.notionalUsd != null) {
@@ -193,7 +194,9 @@ function buyStockDraftMessage(draft: BuyStockDraft, wallet: AgentWalletConfig | 
     ? `\`alpaca\` ${wallet?.alpacaPaper === false ? "(LIVE)" : "(paper)"}`
     : draft.venue === "xstocks"
       ? "`xstocks` (on-chain)"
-      : "`robinhood-chain` (USDG on-chain)";
+      : draft.venue === "robinhood-agentic"
+        ? "`robinhood-agentic` (official brokerage MCP)"
+        : "`robinhood-chain` (USDG on-chain)";
   const sizeLine = draft.qty != null
     ? `${verb} **${draft.qty}** shares of **${draft.ticker}**`
     : `${verb} **${draft.ticker}** for ~$${(draft.notionalUsd ?? 0).toFixed(2)}`;
@@ -215,7 +218,8 @@ function buyStockResultMessage(result: BuyStockResult, executionMs: number) {
   const verb = result.side === "sell" ? "Sell" : "Buy";
   const head = result.venue === "alpaca"
     ? `${result.paper ? "paper" : "LIVE"} brokerage order`
-    : result.venue === "xstocks" ? "on-chain swap" : "Robinhood Chain stock-token action";
+    : result.venue === "robinhood-agentic" ? "Robinhood Agentic brokerage order"
+      : result.venue === "xstocks" ? "on-chain swap" : "Robinhood Chain stock-token action";
   return [
     `**${verb} stock complete** · ${head}`,
     "",
@@ -261,7 +265,7 @@ function buyStockExecutionSse(input: {
           network = stored.info.network;
           secret = stored.secret;
           fromAddress = stored.info.address;
-        } else if (draft.venue === "alpaca" && wallet?.alpacaPaper === false) {
+        } else if ((draft.venue === "alpaca" && wallet?.alpacaPaper === false) || draft.venue === "robinhood-agentic") {
           const stored = await getWalletSecret(input.profile.id).catch(() => null);
           if (stored) {
             network = stored.info.network;

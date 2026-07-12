@@ -22,7 +22,11 @@ import {
 } from "@/lib/services/hivemindos-wallet-paid-models";
 import { readStoredAgentProfilesStrict } from "@/lib/services/agent-profile-store";
 import { readRuntimeResponseText } from "@/lib/services/phone/runtime-voice-turn";
-import { transcriptionApiKey } from "@/lib/services/phone/transcription";
+import {
+  resolveOpenAiApiKeyChatEndpoint,
+  resolvePreferredOpenAiChatRoute,
+} from "@/lib/services/openai-preferred-chat";
+import { runOpenAiOAuthChatTurnDetailed } from "@/lib/services/openai-oauth";
 import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import {
@@ -51,7 +55,7 @@ const QUEEN_CHAT_MODEL_FALLBACK = "gpt-4o-mini";
 
 /** One answering brain the typed lane can call directly. */
 type QueenTypedChatBrain = {
-  kind: "openai-compatible" | "agent-runtime";
+  kind: "openai-compatible" | "openai-oauth" | "agent-runtime";
   url: string;
   /** Bearer key; empty when the brain authenticates via custom headers. */
   key: string;
@@ -118,6 +122,43 @@ async function readQueenBeeAgentProfile(agentId?: string): Promise<AgentProfile 
   );
 }
 
+function isOpenAiApiProvider(provider: string) {
+  return !provider || provider === "openai" || provider === "openai-api";
+}
+
+async function preferredOpenAiTypedBrain(input: {
+  model: string;
+  label: string;
+  configured: boolean;
+}): Promise<QueenTypedChatBrain | null> {
+  const route = await resolvePreferredOpenAiChatRoute(input.model);
+  if (route.auth === "oauth") {
+    return {
+      kind: "openai-oauth",
+      url: "",
+      key: "",
+      model: route.model,
+      providerSlug: "openai-oauth",
+      label: `${route.model} · ChatGPT`,
+      configured: input.configured,
+      streaming: false,
+      timeoutMs: 120_000,
+    };
+  }
+  const endpoint = await resolveOpenAiApiKeyChatEndpoint();
+  return endpoint
+    ? {
+        kind: "openai-compatible",
+        url: endpoint.url,
+        key: endpoint.key,
+        model: route.model,
+        providerSlug: "openai-api",
+        label: input.label,
+        configured: input.configured,
+      }
+    : null;
+}
+
 /**
  * The typed lane's answering brains, in preference order. REGULAR typed chat
  * follows the QUEEN AGENT'S OWN selected provider/model — the Calls-settings
@@ -174,6 +215,13 @@ async function resolveQueenTypedChatBrains(origin: string): Promise<{
         error: error instanceof Error ? error.message : "xAI OAuth is unavailable.",
       };
     }
+  } else if (defaults?.model && isOpenAiApiProvider(provider)) {
+    const brain = await preferredOpenAiTypedBrain({
+      model: defaults.model,
+      label: `${defaults.model} · ${queenBrainProviderLabel(provider)}`,
+      configured: true,
+    });
+    if (brain) brains.push(brain);
   } else if (defaults?.model && isRuntimeHeldQueenProvider(provider)) {
     const agent = await readQueenBeeAgentProfile(defaults.agentId).catch(() => null);
     if (agent) {
@@ -211,6 +259,15 @@ async function resolveQueenTypedChatBrains(origin: string): Promise<{
       limit: 2,
     });
     for (const fallback of fallbacks) {
+      if (isOpenAiApiProvider(fallback.provider)) {
+        const brain = await preferredOpenAiTypedBrain({
+          model: fallback.model,
+          label: fallback.label,
+          configured: false,
+        });
+        if (brain) brains.push(brain);
+        continue;
+      }
       const endpoint = await resolveProviderChatEndpoint(fallback.provider).catch(() => null);
       if (!endpoint) continue;
       brains.push({
@@ -224,21 +281,17 @@ async function resolveQueenTypedChatBrains(origin: string): Promise<{
       });
     }
   }
-  const apiKey = await transcriptionApiKey();
   const builtinModel = process.env.OPENAI_VOICE_CHAT_MODEL || QUEEN_CHAT_MODEL_FALLBACK;
   const duplicate = brains.some(
-    (brain) => brain.model === builtinModel && brain.url.startsWith("https://api.openai.com/"),
+    (brain) => brain.providerSlug === "openai-api" || brain.providerSlug === "openai-oauth",
   );
-  if (apiKey && !duplicate) {
-    brains.push({
-      kind: "openai-compatible",
-      url: "https://api.openai.com/v1/chat/completions",
-      key: apiKey,
+  if (!duplicate) {
+    const brain = await preferredOpenAiTypedBrain({
       model: builtinModel,
-      providerSlug: "openai",
       label: `${builtinModel} · OpenAI`,
       configured: false,
     });
+    if (brain) brains.push(brain);
   }
   return { brains, configuredBrainFailure };
 }
@@ -268,6 +321,43 @@ function runtimeMessagesFor(system: string, incoming: unknown[]) {
         : message.content.length > 0
     ));
   return [{ role: "system", content: system }, ...messages];
+}
+
+function oauthMessageText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return String(content ?? "");
+  return content.map((block) => {
+    if (!block || typeof block !== "object") return "";
+    const record = block as Record<string, unknown>;
+    return typeof record.text === "string"
+      ? record.text
+      : typeof record.content === "string"
+        ? record.content
+        : "";
+  }).filter(Boolean).join("\n\n");
+}
+
+function oauthMessagesFor(system: string, incoming: unknown[], noTools = false) {
+  const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+    { role: "system", content: system },
+  ];
+  for (const message of incoming) {
+    if (!message || typeof message !== "object") continue;
+    const record = message as Record<string, unknown>;
+    const content = oauthMessageText(record.content).trim();
+    if (!content) continue;
+    messages.push({
+      role: record.role === "assistant" ? "assistant" : "user",
+      content,
+    });
+  }
+  if (noTools) {
+    messages.push({
+      role: "system",
+      content: "Tool calling is disabled for this reply. Answer directly in plain language without tool-call syntax.",
+    });
+  }
+  return messages;
 }
 
 function queenSystemText(system: string | QueenTypedSystemPrompt) {
@@ -402,6 +492,44 @@ async function queenChatBlockingRequest(
   options?: { noTools?: boolean; suppressWalletIntents?: boolean },
 ) {
   if (brain.kind === "agent-runtime") return queenChatRuntimeRequest(brain, system, incoming);
+  if (brain.kind === "openai-oauth") {
+    const result = await runOpenAiOAuthChatTurnDetailed(
+      brain.model,
+      oauthMessagesFor(queenSystemText(system), incoming, options?.noTools),
+      {
+        timeoutMs: brain.timeoutMs ?? 120_000,
+        tools: options?.noTools
+          ? undefined
+          : queenChatTools() as Array<Record<string, unknown>>,
+      },
+    );
+    const content = stripLeakedToolCallMarkup(result.text);
+    const toolCalls = result.toolCalls.map((call) => ({
+      id: call.id,
+      name: call.name,
+      arguments: call.arguments,
+    }));
+    return {
+      content,
+      toolCalls,
+      assistant: {
+        role: "assistant",
+        content: content || null,
+        ...(toolCalls.length
+          ? {
+              tool_calls: toolCalls.map((call) => ({
+                id: call.id,
+                type: "function",
+                function: { name: call.name, arguments: call.arguments },
+              })),
+            }
+          : {}),
+      },
+      brainLabel: brain.label,
+      servedModel: brain.model,
+      usage: undefined,
+    };
+  }
   const cacheHints = queenBrainCacheHints(brain);
   const response = await fetch(brain.url, {
     method: "POST",

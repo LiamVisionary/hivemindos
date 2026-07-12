@@ -3,6 +3,9 @@
 import { Fragment, memo, useEffect, useState } from "react";
 import type { ComponentType, Dispatch, ElementType, SetStateAction } from "react";
 import { ThumbsDown, ThumbsUp } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ButtonGroup } from "@/components/ui/button-group";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { JsonRenderSurface, extractJsonRenderPayload } from "@/components/json-render/JsonRenderSurface";
 import { imageGenerationToApplicationGeneration } from "@/features/dashboard/chat-application-generation";
 import { generatedImageCardFromAssistantText } from "@/features/dashboard/chat-generated-media";
@@ -320,8 +323,6 @@ function MessageActions({
   const generating = Boolean(generation && ["generating", "creating"].includes(generation.phase));
   return (
     <div style={{ position: "relative", justifySelf: "end" }}>
-      {/* Prototype (Chat.dc.html 458-466): one rounded segmented pill, hairline
-          divider between segments. `cx-msgaction` supplies the honey hover. */}
       <div className="fr-chat-action-row">
         {onFeedback ? (
           <div className="fr-chat-feedback-actions" aria-label="Rate this response">
@@ -351,31 +352,44 @@ function MessageActions({
             })}
           </div>
         ) : null}
-        <div style={{ display: "inline-flex", overflow: "hidden", border: "1px solid var(--line-2)", borderRadius: 999, marginLeft: 2 }}>
-          <button
-            type="button"
-            className="cx-msgaction"
-            title={copied ? "Copied!" : "Copy message"}
-            aria-label={copied ? "Copied message" : "Copy message"}
-            onClick={onCopy}
-            style={{ display: "grid", placeItems: "center", width: 30, height: 27, border: 0, background: "transparent", color: "var(--fg-3)", cursor: "pointer" }}
-          >
-            {copied && Check ? <Check aria-hidden="true" style={{ color: "var(--live)" }} /> : Copy ? <Copy aria-hidden="true" /> : <Glyph d={ICON.paperclip} s={12} />}
-          </button>
-          {generateKanbanTaskFromChat ? (
-            <button
-              type="button"
-              className="cx-msgaction"
-              title="Send to Kanban"
-              aria-label="Generate Kanban task from this message"
-              disabled={generating}
-              onClick={onToggleKanban}
-              style={{ display: "grid", placeItems: "center", width: 30, height: 27, border: 0, borderLeft: "1px solid var(--line-2)", background: "transparent", color: generation?.phase === "done" ? "var(--live)" : "var(--fg-3)", cursor: generating ? "default" : "pointer" }}
-            >
-              {generating && LoaderCircle ? <LoaderCircle aria-hidden="true" className="cx-spin" /> : KanbanSquare ? <KanbanSquare aria-hidden="true" /> : <Glyph d={ICON.sparkles} s={12} />}
-            </button>
-          ) : null}
-        </div>
+        <TooltipProvider>
+          <ButtonGroup className="fr-chat-segmented-actions">
+            <Tooltip {...(copied ? { open: true } : {})}>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-xs"
+                  className="fr-chat-segmented-button"
+                  aria-label={copied ? "Copied message" : "Copy message"}
+                  data-active={copied ? "true" : undefined}
+                  onClick={onCopy}
+                >
+                  {copied && Check ? <Check aria-hidden="true" /> : Copy ? <Copy aria-hidden="true" /> : <Glyph d={ICON.paperclip} s={12} />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{copied ? "Copied!" : "Copy message"}</TooltipContent>
+            </Tooltip>
+            {generateKanbanTaskFromChat ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-xs"
+                    className="fr-chat-segmented-button"
+                    aria-label="Generate Kanban task from this message"
+                    disabled={generating}
+                    onClick={onToggleKanban}
+                  >
+                    {generating && LoaderCircle ? <LoaderCircle aria-hidden="true" className="fr-chat-spin-icon" /> : KanbanSquare ? <KanbanSquare aria-hidden="true" /> : <Glyph d={ICON.sparkles} s={12} />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Send to Kanban</TooltipContent>
+              </Tooltip>
+            ) : null}
+          </ButtonGroup>
+        </TooltipProvider>
       </div>
       {generateKanbanTaskFromChat && (open || generation) ? (
         <div className="fr-chat-kanban-popover">

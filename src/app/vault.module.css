@@ -1158,9 +1158,15 @@
   .brainMapPanel > [data-work-section-header="true"] > div:last-child { display: none; }
   .brainMapPanel > [data-work-section-header="true"] nav {
     border-color: var(--brain-line-2);
-    background: color-mix(in srgb, var(--brain-panel) 52%, transparent);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    background: color-mix(in srgb, var(--brain-panel) 26%, transparent);
+    backdrop-filter: blur(20px) saturate(1.15);
+    -webkit-backdrop-filter: blur(20px) saturate(1.15);
+  }
+  .brainMapPanel > [data-work-section-header="true"] nav button[aria-selected="true"] {
+    background: color-mix(in srgb, var(--brain-honey) 74%, transparent);
+  }
+  :global(:root[data-theme="hive-light"]) .brainMapPanel > [data-work-section-header="true"] nav {
+    background: rgba(251, 248, 241, 0.3) !important;
   }
   .brainMapPanel .vaultPanelBody { height: 100%; }
 }

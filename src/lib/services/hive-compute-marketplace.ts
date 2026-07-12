@@ -152,8 +152,9 @@ export function hiveComputeModelOptions(status?: HiveComputeMarketplaceStatus): 
   const discovered = status?.gateway.models?.ok && status.gateway.models.ids.length
     ? status.gateway.models.ids.map((id) => hiveComputeModelOptionFromGateway(id, status))
     : HIVE_COMPUTE_MODEL_OPTIONS;
-  if (status?.routing.ready || !status) return discovered;
-  return discovered.map((model) => ({
+  const ordered = [...discovered].sort((left, right) => Number(right.trust === "confidential-verified") - Number(left.trust === "confidential-verified"));
+  if (status?.routing.ready || !status) return ordered;
+  return ordered.map((model) => ({
     ...model,
     disabled: true,
     disabledReason: status.routing.message,
@@ -164,6 +165,7 @@ function hiveComputeModelOptionFromGateway(id: string, status: HiveComputeMarket
   const alias = HIVE_COMPUTE_ALIAS_BY_ID.get(id);
   const liveModels = new Set(status.gateway.capacity?.liveModels ?? []);
   const keyRelayModels = new Set(status.gateway.capacity?.keyRelayModels ?? []);
+  const confidentialModels = new Set(status.gateway.capacity?.confidentialModels ?? []);
   const performance = status.gateway.capacity?.modelPerformance.find((item) => item.model === id);
   const speedLabel = modelPerformanceLabel(performance);
   if (alias) {
@@ -180,12 +182,16 @@ function hiveComputeModelOptionFromGateway(id: string, status: HiveComputeMarket
   }
   const live = liveModels.has(id);
   const relay = keyRelayModels.has(id);
+  const confidentialVerified = confidentialModels.has(id);
   return {
     id,
     name: id,
     group: "Marketplace",
     ...(performance ? { performance } : {}),
-    subtitle: speedLabel || (live ? "Live worker model" : relay ? "Key-relay model" : "Marketplace model"),
+    ...(confidentialVerified ? { trust: "confidential-verified" as const } : {}),
+    subtitle: confidentialVerified
+      ? `Confidential verified${speedLabel ? ` · ${speedLabel}` : " · fresh hardware attestation"}`
+      : speedLabel || (live ? "Live worker model" : relay ? "Key-relay model" : "Marketplace model"),
     badge: performanceBadge(performance) || (live ? "Live" : relay ? "Relay" : "Gateway"),
   };
 }

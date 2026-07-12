@@ -4,6 +4,7 @@ import {
   chatThreadTitleCloudRouteId,
   chatThreadTitleProviderFamily,
   chatThreadTitleRecommendation,
+  openAiOAuthChatModelIds,
   scoreChatThreadTitleModel,
   type ChatThreadTitleAuthMode,
   type ChatThreadTitleCloudRoute,
@@ -102,8 +103,7 @@ export async function discoverChatThreadTitleCloudRoutes(hints: ChatThreadTitleM
     const model = String(hint.model ?? "").trim();
     if (!provider || !model) continue;
     if (provider === "openai-codex" && openAiOAuth.connected) {
-      // The codex OAuth chat transport is text-only (string content contract).
-      addRoute(makeRoute({ provider, providerLabel: "OpenAI", model, auth: "oauth", source: "profile", vision: false }));
+      addRoute(makeRoute({ provider, providerLabel: "OpenAI", model, auth: "oauth", source: "profile", vision: true }));
       continue;
     }
     if (provider === "xai-oauth" && xaiOAuth.usable) {
@@ -122,7 +122,12 @@ export async function discoverChatThreadTitleCloudRoutes(hints: ChatThreadTitleM
   }
 
   if (openAiOAuth.connected) {
-    addRoute(makeRoute({ provider: "openai-codex", providerLabel: "OpenAI", model: "gpt-5.4", auth: "oauth", source: "oauth", vision: false }));
+    const openAiApiModels = providerPresence
+      .find((item) => item.provider === "openai-api")
+      ?.models.map((model) => model.id) ?? [];
+    for (const model of openAiOAuthChatModelIds(openAiApiModels)) {
+      addRoute(makeRoute({ provider: "openai-codex", providerLabel: "OpenAI", model, auth: "oauth", source: "oauth", vision: true }));
+    }
   }
   if (xaiOAuth.usable) {
     addRoute(makeRoute({ provider: "xai-oauth", providerLabel: "Grok (xAI)", model: "grok-4.3", auth: "oauth", source: "oauth" }));

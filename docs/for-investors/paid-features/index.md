@@ -18,6 +18,11 @@ The free product should let someone run HivemindOS, connect their own keys, talk
 
 <div class="docGrid">
   <section class="docCard">
+    <h3>App Builder And Hosting</h3>
+    <p>One-time share previews and renewable static, Pro, and dynamic Sites that can be published from local or managed projects.</p>
+    <a href="app-builder-hosting.html">Open hosting economics</a>
+  </section>
+  <section class="docCard">
     <h3>HivemindOS Cloud Agent Calls</h3>
     <p>Managed LiveKit/SFU voice rooms for mobile-friendly, multi-party, and multi-agent calls.</p>
     <a href="hivemind-cloud-agent-calls.html">Open cloud calls</a>
@@ -66,6 +71,7 @@ Eligible managed services can offer a small HIVE checkout discount, such as 3-5%
 
 | Paid path         | What HivemindOS operates                               |
 | ----------------- | ------------------------------------------------------ |
+| App hosting       | Share links, branded Sites, release history, access controls, isolated dynamic execution, renewals, and retention |
 | Hive Cloud        | Deployment, hosted memory, team workspaces, monitoring |
 | Hive Compute Marketplace | Marketplace inference matching, settlement, receipts, reputation, and payout state |
 | Managed compute   | Agent and swarm runtime capacity                       |

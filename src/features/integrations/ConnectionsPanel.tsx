@@ -512,6 +512,16 @@ function ConnectModal({
             </div>
           ) : null}
 
+          {isGoogle ? (
+            <div className="fm-note" style={{ alignItems: "flex-start" }}>
+              <BIcon name="sparkles" size={15} />
+              <span style={{ lineHeight: 1.6 }}>
+                Enable the <strong>Google Slides API</strong> and <strong>Google Drive API</strong> in the Google Cloud project that owns this OAuth client.
+                If Google was connected before Slides editing was added, reconnect once to grant presentation access.
+              </span>
+            </div>
+          ) : null}
+
           {isAzure ? (
             <details style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "10px 12px" }}>
               <summary style={{ cursor: "pointer", fontSize: 13, fontWeight: 650 }}>Personal Microsoft account</summary>

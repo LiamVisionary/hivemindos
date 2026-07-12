@@ -14,6 +14,8 @@ export {
   codeTracePathAction,
   cryptoCapabilitiesAction,
   deployHivemindosMachineAction,
+  googleSlidesEditAction,
+  googleSlidesReadAction,
   hivemindosMachinesCatalogAction,
   listHiveActions,
   listHivemindMachinesAction,

@@ -447,6 +447,19 @@ X-HivemindOS-Compute-Hardware-TEE-Required: true
 The request fails closed unless an eligible worker has gateway-verified hardware
 attestation. Dev or locally asserted attestation is not hardware privacy.
 
+### Confidential verified models
+
+The HivemindOS model selector places currently available confidential models
+first and marks them **Confidential verified**. The label is not supplied by the
+host. It appears only when the official gateway has accepted fresh hardware
+attestation, verified the expected runtime and model image, bound the enclave
+keys, and confirmed renter-only output encryption. The label disappears when
+the attestation expires or the worker disconnects.
+
+“Confidential verified” is deliberately narrower than “100% confidential.” It
+describes verified execution state and the designed trust boundary; it cannot
+promise that supported hardware has no unknown defect or side channel.
+
 ### Hardware TEE For Hosts
 
 Hosts should only advertise hardware privacy when the worker is actually

@@ -65,6 +65,9 @@ export type AppBuilderProjectReference = {
   managedProjectId?: string;
   hostingSiteId?: string;
   hostingUrl?: string;
+  hostingVersionId?: string;
+  hostingDeploymentId?: string;
+  hostingAccessMode?: "private" | "workspace" | "link" | "public";
 };
 
 export type GitLawbStatus = {

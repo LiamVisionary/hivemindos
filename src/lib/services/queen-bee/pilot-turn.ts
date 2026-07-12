@@ -9,8 +9,8 @@ import {
   readRuntimeResponseText,
   voiceOptimizedAgent,
 } from "@/lib/services/phone/runtime-voice-turn";
-import { openAICompatibleInferenceCacheHints } from "@/lib/services/chat/inference-cache-hints";
-import { transcriptionApiKey } from "@/lib/services/phone/transcription";
+import { optionalEnv } from "@/lib/config/env";
+import { runPreferredOpenAiTextTurn } from "@/lib/services/openai-preferred-chat";
 import { pickConversationAgent } from "@/lib/services/queen-bee/voice-turn";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
@@ -89,41 +89,21 @@ export async function runQueenBeePilotTurn(options: {
 }
 
 async function runOpenAiPilotTurn(system: string, command: string): Promise<string> {
-  const apiKey = await transcriptionApiKey();
-  if (!apiKey) return "";
   try {
-    const model = process.env.OPENAI_VOICE_CHAT_MODEL || OPENAI_PILOT_FALLBACK_MODEL;
-    const cacheHints = openAICompatibleInferenceCacheHints({
-      provider: "openai",
-      model,
+    const result = await runPreferredOpenAiTextTurn({
+      model: optionalEnv("OPENAI_VOICE_CHAT_MODEL") || OPENAI_PILOT_FALLBACK_MODEL,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: command },
+      ],
       cacheScope: "queen-pilot",
+      timeoutMs: OPENAI_TURN_TIMEOUT_MS,
+      maxTokens: 400,
+      temperature: 0.2,
+      jsonMode: true,
+      errorContext: "Queen pilot",
     });
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "content-type": "application/json",
-        ...cacheHints.headers,
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: command },
-        ],
-        ...cacheHints.body,
-        max_tokens: 400,
-        temperature: 0.2,
-        response_format: { type: "json_object" },
-      }),
-      cache: "no-store",
-      signal: AbortSignal.timeout(OPENAI_TURN_TIMEOUT_MS),
-    });
-    const data = (await response.json().catch(() => null)) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    } | null;
-    if (!response.ok) return "";
-    return data?.choices?.[0]?.message?.content?.trim() || "";
+    return result.text;
   } catch {
     return "";
   }

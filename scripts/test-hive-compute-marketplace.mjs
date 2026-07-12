@@ -139,12 +139,13 @@ assert(walletPaidConfig.includes('"hivemindos/fast": "hive-compute/fast"'), "Hiv
 assert(walletPaidConfig.includes('"hivemindos/deep": "hive-compute/deep"'), "HivemindOS Deep must prefer the Hive Compute deep route.");
 assert(walletPaidConfig.includes('badge: "SALE"'), "GPU-first HivemindOS routes must carry SALE badges.");
 assert(walletPaidConfig.includes("preferredHiveComputeModelForHivemindosModel"), "Wallet-paid model config must expose the compute-first route mapping.");
-assert(hivemindosModelsRoute.includes("computeFirstRows") && hivemindosModelsRoute.includes("fallbackRoute"), "HivemindOS model list must return GPU-first routes before hosted fallbacks.");
+assert(hivemindosModelsRoute.includes("confidentialMarketplaceRows") && hivemindosModelsRoute.includes("fallbackRoute"), "HivemindOS model list must return verified confidential capacity before routes that can fall back.");
 assert(hivemindosModelsRoute.includes("readHiveComputeMarketplaceStatus") && hivemindosModelsRoute.includes("hiveComputeHostedModelId(id)"), "HivemindOS model list must include live Hive Compute marketplace models as direct route rows.");
 assert(hivemindosChatRoute.includes("proxyHiveComputeChatCompletion"), "HivemindOS model chat route must try Hive Compute before OpenRouter fallback.");
 assert(hivemindosChatRoute.includes("fetchPreferredHiveComputeCompletion") && hivemindosChatRoute.includes("X-HivemindOS-Model-Route"), "HivemindOS model chat route must expose Hive Compute response billing/routing headers.");
 assert(guidedHivemindosSetup.includes("staticCatalogModels") && guidedHivemindosSetup.includes("matchingAllModels"), "Guided setup must blend SALE routes into the unified All models catalog.");
-assert(guidedHivemindosSetup.includes("...matchingRouteModels, ...matchingComputeMarketplaceModels, ...matchingFallbackStaticModels, ...matchingGatewayModels"), "Guided setup must place live Hive Compute models immediately after the GPU-first routes.");
+assert(guidedHivemindosSetup.includes("pinConfidentialVerifiedFirst") && guidedHivemindosSetup.includes("Confidential verified"), "Guided setup must pin verified confidential models first and display their trust label.");
+assert(modelPillSelector.includes("data-confidential-verified") && modelPillSelector.includes("ShieldCheck"), "Shared model pills must visibly distinguish server-verified confidential models.");
 assert(guidedHivemindosSetup.includes("allModelCount") && guidedHivemindosSetup.includes("sale: computeFirst || computeHosted"), "Guided setup must mark GPU-first and live Hive Compute model chips as SALE routes inside All models.");
 assert(!guidedHivemindosSetup.includes("GPU-first routes") && !guidedHivemindosSetup.includes("Hosted routes"), "Guided setup must not split GPU-first or hosted models into separate sections.");
 assert(docs.includes("not the authority for official") && docs.includes("marketplace value"), "User docs must explain that official marketplace authority is not local.");
@@ -186,6 +187,7 @@ assert(workerModule.includes("emitJobComplete(input, finalText, finalUsage)") &&
 assert(workerModule.includes("teeAttestation") && workerModule.includes("mppPolicyUrl"), "Generated worker must advertise TEE and MPP capability hints.");
 assert(workerModule.includes("positiveInteger(process.env.HIVE_COMPUTE_WORKER_MAX_CONCURRENCY, 1)") && workerModule.includes("maxConcurrency"), "Generated worker must default to one slot and advertise configured max concurrency.");
 assert(service.includes("capacityFromHealth") && gatewayStatus.includes("providerBounds"), "Hive Compute status must parse live marketplace capacity and provider-price bounds.");
+assert(gatewayStatus.includes("confidentialModels") && service.includes('trust: "confidential-verified"'), "Hive Compute status must derive confidential model trust from the hosted gateway.");
 assert(gatewayStatus.includes("totalSlots") && gatewayStatus.includes("availableSlots"), "Hive Compute status must parse marketplace slot capacity.");
 assert(gatewayStatus.includes("modelPerformanceArray") && gatewayStatus.includes("tokensPerSecond") && gatewayStatus.includes("modelPerformanceLabel"), "Hive Compute status must parse and display measured model speed.");
 assert(gatewayStatus.includes('performance.speedTier === "warming") return "Measuring speed"'), "Hive Compute must not show tiny warming samples as numeric tok/s benchmarks.");

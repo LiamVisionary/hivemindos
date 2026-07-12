@@ -16,6 +16,10 @@ import {
   supportedRobinhoodStockTickers,
 } from "@/lib/config/robinhood-chain";
 import { zeroExFetch } from "@/lib/services/trading/zero-ex";
+import {
+  placeRobinhoodAgenticEquityOrder,
+  reviewRobinhoodAgenticEquityOrder,
+} from "@/lib/services/trading/robinhood-agentic";
 import { executeEvmZeroExSwap, type ZeroExSwapQuote } from "@/lib/services/wallet/chain-wallet";
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
 import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
@@ -49,6 +53,10 @@ import type { AgentTradingVenue, AgentWalletConfig } from "@/lib/types/agent-wal
  *                 Chain. Buys/sells swap USDG <-> the canonical ERC-20 contract
  *                 through 0x Swap API RFQ/AMM liquidity and sign with the agent's
  *                 existing local Robinhood Chain EVM wallet.
+ *   - "robinhood-agentic" — long equities in the user's dedicated Robinhood
+ *                 Agentic brokerage account through Robinhood's official MCP.
+ *                 HivemindOS reviews first and keeps placement behind the same
+ *                 confirmation, cap, kill-switch, approval, and ledger path.
  *
  * A buy requires CONFIRM_BUY, a sell CONFIRM_SELL (same shape as x402's PAY_X402).
  * Both flow through the shared spend-governance chokepoint + ledger. A buy spends
@@ -192,7 +200,7 @@ function svmRpc(): string {
 function assertVenue(policy: BuyStockPolicy): AgentTradingVenue {
   if (!policy.enabled) throw new Error("This agent's wallet is not enabled.");
   if (!policy.tradingVenue) {
-    throw new Error("Stock buying is off for this agent. Set a trading venue (alpaca, xstocks, or robinhood-chain) first.");
+    throw new Error("Stock buying is off for this agent. Set a trading venue (alpaca, robinhood-agentic, xstocks, or robinhood-chain) first.");
   }
   return policy.tradingVenue;
 }
@@ -736,6 +744,73 @@ export async function checkRobinhoodChainTradingReadiness(): Promise<{ executabl
   }
 }
 
+// ---- Robinhood Agentic brokerage (official OAuth MCP) ----------------------
+
+function robinhoodAgenticDetail(value: unknown) {
+  if (typeof value === "string") return value.slice(0, 600);
+  try {
+    return JSON.stringify(value).slice(0, 600);
+  } catch {
+    return "Robinhood completed the pre-trade review.";
+  }
+}
+
+async function quoteRobinhoodAgenticTrade(input: Pick<BuyStockInput, "side" | "ticker" | "notionalUsd" | "qty">) {
+  const side = input.side ?? "buy";
+  const review = await reviewRobinhoodAgenticEquityOrder({
+    side,
+    ticker: alpacaSymbol(input.ticker),
+    notionalUsd: input.notionalUsd,
+    qty: input.qty,
+  });
+  return {
+    review,
+    detail: `Robinhood pre-trade review for a market ${side} of ${alpacaSymbol(input.ticker)} for ~$${input.notionalUsd.toFixed(2)}: ${robinhoodAgenticDetail(review)}`,
+  };
+}
+
+async function executeRobinhoodAgenticTrade(input: BuyStockInput): Promise<BuyStockResult> {
+  const side = input.side ?? "buy";
+  const ticker = alpacaSymbol(input.ticker);
+  const feeNetwork = input.network || input.policy.network;
+  const feeQuote = await quoteTradingPlatformFee({ source: "robinhood-agentic", network: feeNetwork, amountUsd: input.notionalUsd });
+  if (feeQuote.enabled) {
+    if (!input.network || !input.secret || !input.fromAddress) {
+      throw new Error("Robinhood Agentic trades need this agent's local wallet so HivemindOS can collect the platform fee.");
+    }
+    await assertTradingPlatformFeeReady({ source: "robinhood-agentic", network: input.network, amountUsd: input.notionalUsd });
+  }
+  const placed = await placeRobinhoodAgenticEquityOrder({
+    side,
+    ticker,
+    notionalUsd: input.notionalUsd,
+    qty: input.qty,
+  });
+  const platformFee = feeQuote.enabled && input.network && input.secret && input.fromAddress
+    ? await collectTradingPlatformFee({
+      agentId: input.agentId,
+      network: input.network,
+      secret: input.secret,
+      fromAddress: input.fromAddress,
+      amountUsd: input.notionalUsd,
+      source: "robinhood-agentic",
+    })
+    : undefined;
+  return {
+    ok: true,
+    side,
+    venue: "robinhood-agentic",
+    ticker,
+    notionalUsd: input.notionalUsd,
+    qty: input.qty,
+    reference: placed.reference,
+    paper: false,
+    platformFee,
+    status: "submitted",
+    detail: `Robinhood Agentic market ${side} submitted after Robinhood review and HivemindOS approval. ${placed.detail}.${platformFeeReceiptDetail(platformFee)}`,
+  };
+}
+
 // ---- Public API -------------------------------------------------------------
 
 export async function executeStockTrade(input: BuyStockInput): Promise<BuyStockResult> {
@@ -800,6 +875,8 @@ export async function executeStockTrade(input: BuyStockInput): Promise<BuyStockR
 
   const result = venue === "alpaca"
     ? await executeAlpaca(input)
+    : venue === "robinhood-agentic"
+      ? await executeRobinhoodAgenticTrade(input)
     : venue === "xstocks"
       ? await executeXStocksSwap(input)
       : await executeRobinhoodChainSwap(input);
@@ -849,6 +926,18 @@ export async function discoverStockTradeQuote(input: Pick<BuyStockInput, "side" 
       notionalUsd,
       platformFee,
       detail: `Market ${side} of ${underlying} for ~$${notionalUsd.toFixed(2)} via Alpaca ${paper ? "paper" : "LIVE"}.${platformFeeDetail(platformFee)}`,
+    };
+  }
+  if (venue === "robinhood-agentic") {
+    const ticker = alpacaSymbol(input.ticker);
+    const quote = await quoteRobinhoodAgenticTrade({ side, ticker, notionalUsd, qty: undefined });
+    const platformFee = await quoteTradingPlatformFee({ source: "robinhood-agentic", network: input.policy.network, amountUsd: notionalUsd });
+    return {
+      venue,
+      ticker,
+      notionalUsd,
+      platformFee,
+      detail: `${quote.detail}${platformFeeDetail(platformFee)}`,
     };
   }
   if (venue === "robinhood-chain") {
@@ -911,6 +1000,7 @@ export function summarizeBuyStockPolicy(wallet: AgentWalletConfig): string {
     `- Stock buying: ${venue ? "on" : "off"}`,
     `- Venue: ${venue || "(none)"}`,
     venue === "alpaca" ? `- Alpaca mode: ${wallet.alpacaPaper === false ? "LIVE brokerage" : "paper (simulated)"}` : "",
+    venue === "robinhood-agentic" ? "- Robinhood mode: dedicated Agentic brokerage account" : "",
     venue === "xstocks" ? `- On-chain network: ${wallet.network}` : "",
     venue === "robinhood-chain" ? `- Robinhood Chain network: ${wallet.network}` : "",
     `- Max per trade: $${maxTradeUsd(wallet).toFixed(2)}`,

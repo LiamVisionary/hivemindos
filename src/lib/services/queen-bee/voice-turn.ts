@@ -14,7 +14,11 @@ import {
   readRuntimeResponseText,
   voiceOptimizedAgent,
 } from "@/lib/services/phone/runtime-voice-turn";
-import { transcriptionApiKey } from "@/lib/services/phone/transcription";
+import {
+  resolveOpenAiApiKeyChatEndpoint,
+  resolvePreferredOpenAiChatRoute,
+  runPreferredOpenAiTextTurn,
+} from "@/lib/services/openai-preferred-chat";
 import {
   submitQueenBeeMessage,
   type QueenBeeFleetMachine,
@@ -725,8 +729,13 @@ async function runOpenAiConversationTurn(
   onTextDelta?: (chunk: string) => void,
   personality?: string | null,
 ) {
+  const route = await resolvePreferredOpenAiChatRoute(voiceFallbackModelName());
   return runProviderConversationTurn(
-    { provider: "openai-api", model: voiceFallbackModelName(), label: "OpenAI" },
+    {
+      provider: route.auth === "oauth" ? "openai-oauth" : "openai-api",
+      model: route.model,
+      label: route.auth === "oauth" ? "ChatGPT" : "OpenAI",
+    },
     transcript,
     history,
     systemPreamble,
@@ -752,10 +761,7 @@ export async function resolveProviderChatEndpoint(
   }
   // Other OAuth-held providers (openai-codex, copilot) remain runtime-owned.
   if (!provider || provider === "openai" || provider === "openai-api") {
-    const apiKey = await transcriptionApiKey();
-    return apiKey
-      ? { url: "https://api.openai.com/v1/chat/completions", key: apiKey }
-      : null;
+    return resolveOpenAiApiKeyChatEndpoint();
   }
   const { providerCatalogEntry } = await import("@/lib/config/provider-catalog");
   const entry = providerCatalogEntry(provider);
@@ -1101,48 +1107,32 @@ function extractDraftConfirmToken(draft: string): string {
 // requests answerable from its own knowledge; anything strictly needing the user's
 // machine/files/wallet it should say it couldn't reach an agent for.
 async function runOpenAiAgentTurn(request: string, systemPreamble?: string): Promise<string> {
-  const apiKey = await transcriptionApiKey();
-  if (!apiKey) throw new Error("No OpenAI key for the agent-turn fallback.");
-  const model = process.env.OPENAI_VOICE_CHAT_MODEL || OPENAI_VOICE_CHAT_FALLBACK_MODEL;
-  const cacheHints = openAICompatibleInferenceCacheHints({
-    provider: "openai-api",
-    model,
-    cacheScope: "queen-agent-turn-fallback",
-  });
+  const requestedModel = process.env.OPENAI_VOICE_CHAT_MODEL || OPENAI_VOICE_CHAT_FALLBACK_MODEL;
+  const route = await resolvePreferredOpenAiChatRoute(requestedModel);
   const stableSystem = [
     "You are Queen Bee's fallback brain. The user's HivemindOS agents are unavailable, so answer the request directly and briefly from your own knowledge. If it strictly needs their computer, files, or wallet, say plainly that you couldn't reach an agent to do it.",
-    queenModelTransparencyNote(model, "OpenAI (fallback lane)"),
+    queenModelTransparencyNote(
+      route.model,
+      route.auth === "oauth" ? "ChatGPT OAuth (fallback lane)" : "OpenAI API (fallback lane)",
+    ),
   ].join("\n\n");
   const volatileSystem = systemPreamble?.trim() || "";
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "content-type": "application/json",
-      ...cacheHints.headers,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        {
-          role: "system",
-          content: [stableSystem, volatileSystem].filter(Boolean).join("\n\n"),
-        },
-        { role: "user", content: request },
-      ],
-      max_tokens: 300,
-      temperature: 0.5,
-      ...cacheHints.body,
-    }),
-    cache: "no-store",
-    signal: AbortSignal.timeout(OPENAI_TURN_TIMEOUT_MS),
+  const result = await runPreferredOpenAiTextTurn({
+    model: route.model,
+    messages: [
+      {
+        role: "system",
+        content: [stableSystem, volatileSystem].filter(Boolean).join("\n\n"),
+      },
+      { role: "user", content: request },
+    ],
+    cacheScope: "queen-agent-turn-fallback",
+    timeoutMs: OPENAI_TURN_TIMEOUT_MS,
+    maxTokens: 300,
+    temperature: 0.5,
+    errorContext: "Queen agent-turn fallback",
   });
-  if (!response.ok) throw new Error(`OpenAI agent-turn fallback HTTP ${response.status}.`);
-  const data = (await response.json().catch(() => null)) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  } | null;
-  const content = data?.choices?.[0]?.message?.content;
-  return typeof content === "string" ? content.trim() : "";
+  return result.text;
 }
 
 /**

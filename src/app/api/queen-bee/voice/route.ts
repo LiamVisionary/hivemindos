@@ -21,6 +21,7 @@ import {
   writeQueenBeeVoice,
 } from "@/lib/services/queen-bee/voice-settings";
 import { providerCatalogEntry } from "@/lib/config/provider-catalog";
+import { openAiOAuthSupportsChatModel } from "@/lib/config/openai-provider-routing";
 import { openAiOAuthConfigured, preferOpenAiApiKey } from "@/lib/services/openai-oauth";
 import { isXaiOAuthProvider } from "@/lib/services/xai-oauth-inference-contract";
 import {
@@ -67,8 +68,12 @@ import {
   mintGeminiLiveToken,
   normalizeGeminiLiveModel,
   synthesizeVoicePreview,
+  transcribeElevenLabsAudio,
 } from "@/lib/services/phone/cloud-voice-transports";
-import { resolveVoiceRuntime } from "@/lib/config/voice-call-providers";
+import {
+  inputTranscriptionForVoiceRuntime,
+  resolveVoiceRuntime,
+} from "@/lib/config/voice-call-providers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -239,7 +244,7 @@ async function resolveVoiceChatBrainPlan(): Promise<VoiceChatBrainPlan> {
     const oauthReady =
       (await openAiOAuthConfigured().catch(() => false)) &&
       !(await preferOpenAiApiKey().catch(() => false));
-    const oauthServable = /^(gpt-5|o\d|codex)/i.test(defaults.model.trim());
+    const oauthServable = openAiOAuthSupportsChatModel(defaults.model);
     const openAiFamily =
       provider === "openai" || provider === "openai-api" || provider === "openai-codex";
     if (oauthReady && oauthServable && openAiFamily) {
@@ -305,6 +310,7 @@ export async function GET() {
     );
     const resolvedCallVoice = calls ? resolveVoiceRuntime(calls.voiceRuntime) : null;
     const cloudTtsSelected = resolvedCallVoice?.kind === "cloud-tts";
+    const inputTranscription = inputTranscriptionForVoiceRuntime(calls?.voiceRuntime);
     // Subtle overlay tag naming which brain answers spoken turns; the label
     // formats are authored by resolveVoiceChatBrainPlan above. Best-effort:
     // a resolver failure costs the tag, never the settings payload.
@@ -346,6 +352,8 @@ export async function GET() {
           ? "pipeline"
           : "realtime",
       pipelineSelected: localTtsSelected || cloudTtsSelected,
+      inputTranscriptionMode: inputTranscription?.mode ?? "realtime",
+      inputTranscriptionProvider: inputTranscription?.providerId ?? "openai",
       brainLabel,
     });
   } catch (error) {
@@ -736,15 +744,25 @@ async function runVoiceTurn(request: NextRequest) {
   const audio = form.get("audio");
   if (!(audio instanceof Blob))
     throw new Error("An audio recording is required.");
+  const calls = await readQueenBeeCallPreferences().catch(() => null);
+  const inputTranscription = inputTranscriptionForVoiceRuntime(calls?.voiceRuntime);
+  const transcriptionEngine = inputTranscription?.providerId ?? "openai";
   try {
     const signal = AbortSignal.any([
       request.signal,
       AbortSignal.timeout(VOICE_TURN_TIMEOUT_MS),
     ]);
-    const transcript = await transcribeAudioWithWhisper(audio, signal);
+    const transcript = inputTranscription?.providerId === "elevenlabs"
+      ? await transcribeElevenLabsAudio(audio, {
+          model: inputTranscription.model,
+          languageCode: calls?.voiceLanguage,
+          signal,
+        })
+      : await transcribeAudioWithWhisper(audio, signal);
     await appendVoiceTurnTelemetry({
       ok: true,
       stage: "transcribe",
+      engine: transcriptionEngine,
       audioBytes: audio.size,
       audioType: audio.type,
       transcribeMs: Date.now() - startedAt,
@@ -754,6 +772,7 @@ async function runVoiceTurn(request: NextRequest) {
     await appendVoiceTurnTelemetry({
       ok: false,
       stage: "transcribe",
+      engine: transcriptionEngine,
       audioBytes: audio.size,
       audioType: audio.type,
       transcribeMs: Date.now() - startedAt,

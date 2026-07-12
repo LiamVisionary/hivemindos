@@ -170,6 +170,24 @@ try {
   });
   assert.equal(memberCapDecision.decision, "block", "company member daily cap blocks excess spend");
   assert.match(memberCapDecision.reason, /company member daily budget/i, "member-cap block explains the governing company-specific limit");
+  await appendSpend({
+    agentId: "shared-agent",
+    kind: "x402",
+    asset: "USDC",
+    amountUsd: 50,
+    status: "executed",
+  });
+  const unrelatedSpendDecision = await evaluateSpend({
+    wallet: { agentId: "shared-agent", approvalRequiredOverUsd: 0 },
+    kind: "api",
+    asset: "USDC",
+    amountUsd: 1,
+  });
+  assert.equal(
+    unrelatedSpendDecision.decision,
+    "allow",
+    "a member's personal or unrelated spend does not consume the company-specific member cap",
+  );
 
   // ── churn guard: hot writes must not rewrite the replicated definitions file ──
   const definitionsBefore = await readFile(definitionsFile, "utf8");

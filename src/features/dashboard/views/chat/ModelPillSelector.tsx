@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, ShieldCheck } from "lucide-react";
 import styles from "./ModelPillSelector.module.css";
 
 export type ModelPillOption = {
@@ -10,6 +10,7 @@ export type ModelPillOption = {
   subtitle?: string;
   group?: string;
   badge?: string;
+  trust?: "confidential-verified";
   disabled?: boolean;
   disabledReason?: string;
 };
@@ -75,8 +76,9 @@ export function ModelPillSelector({
 
   const filteredModels = useMemo(() => {
     const query = modelSearch.trim().toLowerCase();
-    if (!query) return models;
-    return models.filter((model) => `${model.name ?? ""} ${model.id}`.toLowerCase().includes(query));
+    const ordered = [...models].sort((left, right) => Number(right.trust === "confidential-verified") - Number(left.trust === "confidential-verified"));
+    if (!query) return ordered;
+    return ordered.filter((model) => `${model.name ?? ""} ${model.id} ${model.trust === "confidential-verified" ? "confidential verified hardware attested" : ""}`.toLowerCase().includes(query));
   }, [models, modelSearch]);
   const effectiveOptimisticModelId = optimisticSelection
     && models.some((model) => model.id === optimisticSelection.modelId)
@@ -112,13 +114,14 @@ export function ModelPillSelector({
               role="option"
               data-bee="agent-model"
               data-bee-model={model.id}
+              data-confidential-verified={model.trust === "confidential-verified" || undefined}
               key={model.id}
               onPointerDown={() => {
                 if (!model.disabled) markOptimisticModel(model.id);
               }}
               onClick={() => selectModel(model.id)}
               disabled={modelDisabled}
-              title={[pill.detail || model.id, pill.subtitle, model.disabledReason].filter(Boolean).join(" - ")}
+              title={[pill.detail || model.id, pill.subtitle, model.trust === "confidential-verified" ? "Fresh hardware attestation verified by HivemindOS; output is encrypted to the renter" : "", model.disabledReason].filter(Boolean).join(" - ")}
             >
               <span className={styles.modelPillDot} aria-hidden="true" />
               {pill.source ? <span className={styles.modelPillSource}>{pill.source}</span> : null}
@@ -126,6 +129,7 @@ export function ModelPillSelector({
                 <span className={styles.modelPillName}>{pill.name}</span>
                 {pill.subtitle ? <span className={styles.modelPillSubtitle}>{pill.subtitle}</span> : null}
               </span>
+              {model.trust === "confidential-verified" ? <span className={styles.modelPillTrust}><ShieldCheck aria-hidden="true" />Confidential verified</span> : null}
               {model.badge || model.disabledReason ? <span className={styles.modelPillBadge}>{model.disabledReason ? "Credits" : model.badge}</span> : null}
             </button>
           );

@@ -17,6 +17,14 @@ the engineering memory for optimization decisions and performance traps.
 - Note tradeoffs, cache freshness, fallback behavior, and when the optimization should be revisited.
 - If an optimization affects prompt injection or agent context, state what context is preserved and what is skipped, cached, compacted, or deferred.
 
+## 2026-07-12 11:03 +0800 - Spend The Existing Hive Vault GPU Budget On Visible Neural Tissue
+
+- Problem: The committed full-screen Hive Vault renderer was fast enough at the 160-node cap, but the live route still read as small isolated points over a bright cobalt plane. Only two ambient nearest-neighbor fibers per node, short dendrites, 900 depth motes, and a distant fit camera left too little visible tissue when the real vault graph contained only ten wiki-link edges.
+- Change: Ambient webbing now uses three nearest neighbors, dendrites grow longer and fork more often, the depth field uses 1,400 low-cost instanced points, and the camera fits at 1.72× cloud radius instead of 2.05×. The existing 1.75 device-pixel-ratio cap, 160 visible-node cap, instanced soma/halo meshes, shared line buffers, 9,000 pulse-slot ceiling, reduced-motion path, and GPU disposal stay intact. Dark fibers receive more of the available contrast while the shader independently reduces light-theme fiber, pulse, and dust opacity.
+- Tradeoff: The renderer builds more line segments and point instances per topology update, and the denser field increases fragment overdraw. The graph remains bounded by the existing node/pulse caps and the extra work is GPU-batched; do not raise node count, pixel ratio, web neighbors, or pulse slots again without profiling an integrated-GPU Tauri build. If frame time regresses, first drop depth motes toward 900 or web neighbors back to two rather than removing real wiki-link bundles or interaction labels.
+- Files: `src/features/dashboard/views/BrainSynapseCanvas.tsx` and `src/features/dashboard/views/brain-synapse-gpu.ts`.
+- Verification: The existing port-5021 browser route loaded 419 notes / 424 cells with 160 rendered neurons and 10 real synapses, then produced a clean dark-theme frame in a fresh tab with no console warnings/errors. Dark and hive-light screenshots were inspected; the latter uses reduced auxiliary opacity to avoid a muddy parchment field. Scoped ESLint and whole-project TypeScript pass; the renderer remains 1,443 lines.
+
 ## 2026-07-11 20:28 +0800 - Coalesce Collector Skill Inventory Polls
 
 - Problem: The Hermes host has a runaway AEON mirror tree with at least 10,000 `SKILL.md` files. Fleet polling requested `/skills` roughly every 10 seconds, and each request independently walked and summarized the capped tree. The live collector spent about 45% CPU and repeatedly logged the cap warning; its earlier restart reported a 3.2 GB peak.

@@ -71,6 +71,7 @@ const EMPTY_READINESS: DeskStockReadiness = {
   venue: null, liveEnabled: false, venueReady: false, paperConfigured: false, liveConfigured: false,
   paperKeys: [], liveKeys: [], buyingPower: 0, confirmations: { buy: "CONFIRM_BUY", sell: "CONFIRM_SELL" },
   account: null, xstockTickers: [], robinhoodTickers: [], robinhoodExecutable: false,
+  robinhoodAgenticConnected: false,
 };
 
 function swapTokensForWalletNetwork(network: string, isSolanaWallet: boolean): string[] {
@@ -438,6 +439,7 @@ export function TradePanel(props: TradePanelProps) {
       const liveEnabled = tradeAgent?.liveEnabled ?? (walletConfig.alpacaPaper === false);
       const alpaca = readiness?.venues.alpaca;
       const robinhood = readiness?.venues.robinhoodChain;
+      const robinhoodAgentic = readiness?.venues.robinhoodAgentic;
       const paperConfigured = alpaca?.paper.configured ?? false;
       const liveConfigured = alpaca?.live.configured ?? false;
       const venueReady = venue === "alpaca"
@@ -446,6 +448,8 @@ export function TradePanel(props: TradePanelProps) {
           ? true
           : venue === "robinhood-chain"
             ? Boolean(robinhood?.executable) && network === "eip155:4663"
+            : venue === "robinhood-agentic"
+              ? Boolean(robinhoodAgentic?.connected && robinhoodAgentic.selectedAccountId && !robinhoodAgentic.missingTools.length)
             : false;
       const stockReadiness: DeskStockReadiness = {
         venue, liveEnabled, venueReady, paperConfigured, liveConfigured,
@@ -458,6 +462,8 @@ export function TradePanel(props: TradePanelProps) {
         robinhoodTickers: robinhood?.supportedTickers ?? [],
         robinhoodExecutable: Boolean(robinhood?.executable),
         robinhoodReason: robinhood?.reason,
+        robinhoodAgenticConnected: Boolean(robinhoodAgentic?.connected),
+        robinhoodAgenticReason: robinhoodAgentic?.reason,
       };
 
       // First load of an Alpaca wallet: the portfolio above was fetched with the
@@ -530,7 +536,7 @@ export function TradePanel(props: TradePanelProps) {
   // route (which now round-trips the venue). Bankr has no ledger record.
   const updateWallet = props.updateWallet;
   const onEnableStockVenue = useCallback(async (
-    { venue, paper: enablePaper }: { venue: "alpaca" | "xstocks" | "robinhood-chain"; paper: boolean },
+    { venue, paper: enablePaper }: { venue: "alpaca" | "robinhood-agentic" | "xstocks" | "robinhood-chain"; paper: boolean },
   ): Promise<{ ok: boolean; error?: string }> => {
     if (!acting) return { ok: false, error: "Pick a wallet first." };
     const alpacaPaper = venue === "alpaca" ? enablePaper : undefined;

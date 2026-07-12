@@ -62,14 +62,17 @@ export async function GET() {
   });
   const computeFirstRows = staticRows.filter((model) => isComputeFirstHivemindosModel(model.id));
   const remainingStaticRows = staticRows.filter((model) => !isComputeFirstHivemindosModel(model.id));
+  const confidentialMarketplaceRows = computeMarketplaceRows.filter((model) => model.metadata.trust === "confidential-verified");
+  const standardMarketplaceRows = computeMarketplaceRows.filter((model) => model.metadata.trust !== "confidential-verified");
 
   return NextResponse.json({
     object: "list",
     provider: HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER,
     name: HIVEMINDOS_WALLET_PAID_MODELS_NAME,
     data: [
+      ...confidentialMarketplaceRows,
       ...computeFirstRows,
-      ...computeMarketplaceRows,
+      ...standardMarketplaceRows,
       ...remainingStaticRows,
       ...customEntries,
     ],
@@ -82,23 +85,29 @@ async function fetchHiveComputeMarketplaceRows() {
     const aliasIds = new Set(HIVE_COMPUTE_MODEL_OPTIONS.map((model) => model.id));
     const liveModels = new Set(status.gateway.capacity?.liveModels ?? []);
     const relayModels = new Set(status.gateway.capacity?.keyRelayModels ?? []);
+    const confidentialModels = new Set(status.gateway.capacity?.confidentialModels ?? []);
     const ids = new Set([
       ...(status.gateway.models?.ok ? status.gateway.models.ids : []),
       ...liveModels,
       ...relayModels,
     ]);
-    return [...ids].filter((id) => id && !aliasIds.has(id)).sort().map((id) => ({
+    return [...ids].filter((id) => id && !aliasIds.has(id)).sort((left, right) => (
+      Number(confidentialModels.has(right)) - Number(confidentialModels.has(left)) || left.localeCompare(right)
+    )).map((id) => ({
       id: hiveComputeHostedModelId(id),
       object: "model",
       owned_by: "hivemindos",
       display_name: id,
       metadata: {
-        subtitle: liveModels.has(id) ? "Live Hive Compute worker model" : relayModels.has(id) ? "Hive Compute key-relay model" : "Hive Compute marketplace model",
+        subtitle: confidentialModels.has(id)
+          ? "Confidential verified · fresh server-verified hardware attestation"
+          : liveModels.has(id) ? "Live Hive Compute worker model" : relayModels.has(id) ? "Hive Compute key-relay model" : "Hive Compute marketplace model",
         group: "Hive Compute",
         badge: "SALE",
         tier: "paid",
         upstreamModel: id,
         preferredRoute: "hive-compute",
+        trust: confidentialModels.has(id) ? "confidential-verified" as const : undefined,
       },
     }));
   } catch {

@@ -33,7 +33,7 @@ import {
   clamp,
   hashUnit,
   linearizeSRGB,
-  makeDendriteAtlas,
+  makeNodeGlowAtlas,
   makeDotTexture,
   readPalette,
   srgbColor,
@@ -68,22 +68,21 @@ type SynapseCanvasProps = {
 
 const WORLD_RADIUS = 150;
 const FIBER_SEGMENTS = 10;
-const LINK_STRANDS = 3;
+const LINK_STRANDS = 2;
 const WEB_NEIGHBORS = 2;
 const MAX_PULSE_SLOTS = 9000;
-const ZERO_VEC = new THREE.Vector3();
 const MAX_LABELS = 28;
-const DUST_COUNT = 900;
+const DUST_COUNT = 1400;
 const PRE_TICKS = 110;
 // Dark theme is a deep-space indigo field; honey stays the semantic accent.
-const DARK_DUST_TINT = "#aab6ff";
+const DARK_DUST_TINT = "#b9c8ff";
 // Lit/selection tint: electric blue-white so firing paths read as signal in
 // the blue-violet field — never amber/orange, which breaks the palette.
 const DARK_LIT_TINT = "#dff0ff";
 const DARK_PULSE_TINT = "#9fc0ff";
-const DARK_BEAD_TINT = "#8ea2ff";
-const DARK_FOG_TINT = "#0a0e3c";
-const DARK_CLEAR_TINT = "#05071f";
+const DARK_WEB_SPARK_TINT = "#9fb5ff";
+const DARK_FOG_TINT = "#061348";
+const DARK_CLEAR_TINT = "#02082d";
 
 type SimNode = {
   drift: number;
@@ -102,8 +101,7 @@ type SimNode = {
 };
 
 // One rendered curve. Real wiki-links become LINK_STRANDS fibers sharing a
-// linkIndex; the ambient web uses linkIndex -1; procedural dendrites use -2
-// (they ride one node via node-local start/end offsets and never light up).
+// linkIndex; the ambient nearest-neighbor web uses linkIndex -1.
 type Fiber = {
   bowAmount: number;
   bowSeed: THREE.Vector3;
@@ -197,7 +195,7 @@ class SynapseEngine {
     this.container = container;
     this.options = options;
     this.palette = readPalette(container);
-    this.texAtlas = makeDendriteAtlas();
+    this.texAtlas = makeNodeGlowAtlas();
     this.texDot = makeDotTexture();
 
     this.camera = new THREE.PerspectiveCamera(50, 1, 1, 4000);
@@ -227,7 +225,7 @@ class SynapseEngine {
       // so the chain must end in a raw copy — an OutputPass would encode a
       // second time and wash the whole frame gray. Bloom therefore operates in
       // encoded space, which these strength/radius/threshold values assume.
-      this.bloomPass = new UnrealBloomPass(new THREE.Vector2(640, 360), 0.45, 0.3, 0.68);
+      this.bloomPass = new UnrealBloomPass(new THREE.Vector2(640, 360), 0.86, 0.46, 0.36);
       this.bloomPass.enabled = !this.palette.light;
       this.composer.addPass(this.bloomPass);
       this.composer.addPass(new ShaderPass(CopyShader));
@@ -330,8 +328,9 @@ class SynapseEngine {
     let added = 0;
     this.nodes = inputNodes.map((input) => {
       const existing = previousById.get(input.id);
-      // Smaller nuclei — the dendrites and web carry the visual now.
-      const radius = 1.9 + clamp(input.weight, 0, 1) * 5.4;
+      // A readable soma anchors each local dendritic tree. Importance changes
+      // its mass without turning low-weight notes back into pinprick beads.
+      const radius = 3 + clamp(input.weight, 0, 1) * 6.4;
       if (existing) {
         existing.label = input.label;
         existing.meta = input.meta;
@@ -398,14 +397,14 @@ class SynapseEngine {
       this.alpha = 1;
       for (let i = 0; i < PRE_TICKS; i += 1) this.simTick();
       this.fitRadius = this.computeCloudRadius();
-      this.cameraRadiusTarget = clamp(this.fitRadius * 2.05, 150, 560);
-      this.cameraRadius = this.cameraRadiusTarget * 1.35;
+      this.cameraRadiusTarget = clamp(this.fitRadius * 1.72, 132, 520);
+      this.cameraRadius = this.cameraRadiusTarget * 1.24;
       this.alpha = 0.28;
     } else {
       this.alpha = clamp(0.3 + added * 0.04, 0.3, 0.85);
     }
 
-    this.fibers = [...this.buildLinkFibers(), ...this.buildDendriteFibers()];
+    this.fibers = this.buildLinkFibers();
     if (firstBuild) {
       this.fibers.push(...this.computeWebFibers());
       this.webDirty = false;
@@ -510,9 +509,9 @@ class SynapseEngine {
       this.nodeTints[index * 3 + 2] = this.tmpColor.b;
       if (haloTint && haloAlpha) {
         haloTint.setXYZ(index, this.tmpColor.r, this.tmpColor.g, this.tmpColor.b);
-        const base = this.palette.light ? 0.34 : 0.18;
-        // Capped so a selected hub reads as a bright junction, not a blob.
-        haloAlpha.setX(index, Math.min(0.5, base + glow * 0.22) * (dim ? 0.3 : 1));
+        const base = this.palette.light ? 0.34 : 0.34;
+        // Capped so a selected hub reads as a bright cell, not a bloom blob.
+        haloAlpha.setX(index, Math.min(0.58, base + glow * 0.24) * (dim ? 0.3 : 1));
       }
     });
     tintAttr.needsUpdate = true;
@@ -523,9 +522,8 @@ class SynapseEngine {
   }
 
   private fiberAlpha(fiber: Fiber) {
-    if (fiber.linkIndex === -2) return this.palette.light ? 0.15 : 0.26;
-    if (fiber.linkIndex < 0) return this.palette.light ? 0.18 : 0.34;
-    const strands = this.palette.light ? [0.5, 0.3, 0.22] : [0.7, 0.42, 0.3];
+    if (fiber.linkIndex < 0) return this.palette.light ? 0.05 : 0.12;
+    const strands = this.palette.light ? [0.3, 0.12] : [0.64, 0.22];
     return strands[fiber.strand] ?? strands[0];
   }
 
@@ -539,33 +537,29 @@ class SynapseEngine {
     const pulseGeo = this.pulsePoints?.geometry;
     const pulseLit = pulseGeo?.getAttribute("aLit") as THREE.BufferAttribute | undefined;
     const pulseTint = pulseGeo?.getAttribute("aTint") as THREE.BufferAttribute | undefined;
-    const pulseSize = pulseGeo?.getAttribute("aSize") as THREE.BufferAttribute | undefined;
     const vertsPerFiber = FIBER_SEGMENTS * 2;
     this.fibers.forEach((fiber, fiberIndex) => {
       const source = this.nodes[fiber.sourceIndex];
       const target = this.nodes[fiber.targetIndex];
-      const dendrite = fiber.linkIndex === -2;
       const lit = fiber.linkIndex >= 0 && this.selectedId !== null
         && (source.id === this.selectedId || target.id === this.selectedId) ? 1 : 0;
       // Short fibers between packed nodes concentrate additive energy into a
-      // few pixels — scale their alpha by run length so clusters don't white
-      // out. Dendrites are single thin strands, so they skip the scaling.
-      const run = dendrite ? 0 : Math.hypot(target.x - source.x, target.y - source.y, target.z - source.z);
-      const alpha = this.fiberAlpha(fiber) * (dendrite ? 1 : clamp(run / 55, 0.25, 1));
-      const tipFade = dendrite ? 0.6 : 1;
+      // few pixels — scale their alpha by run length so clusters don't white out.
+      const run = Math.hypot(target.x - source.x, target.y - source.y, target.z - source.z);
+      const alpha = this.fiberAlpha(fiber) * clamp(run / 55, 0.25, 1);
       for (let v = 0; v < vertsPerFiber; v += 1) {
         const at = fiberIndex * vertsPerFiber + v;
         litAttr.setX(at, lit);
         alphaAttr.setX(at, alpha);
         colorA.setXYZ(at, this.nodeTints[fiber.sourceIndex * 3], this.nodeTints[fiber.sourceIndex * 3 + 1], this.nodeTints[fiber.sourceIndex * 3 + 2]);
-        colorB.setXYZ(at, this.nodeTints[fiber.targetIndex * 3] * tipFade, this.nodeTints[fiber.targetIndex * 3 + 1] * tipFade, this.nodeTints[fiber.targetIndex * 3 + 2] * tipFade);
+        colorB.setXYZ(at, this.nodeTints[fiber.targetIndex * 3], this.nodeTints[fiber.targetIndex * 3 + 1], this.nodeTints[fiber.targetIndex * 3 + 2]);
       }
     });
     litAttr.needsUpdate = true;
     alphaAttr.needsUpdate = true;
     colorA.needsUpdate = true;
     colorB.needsUpdate = true;
-    if (pulseLit && pulseTint && pulseSize) {
+    if (pulseLit && pulseTint) {
       this.fibers.forEach((fiber, fiberIndex) => {
         const assignment = this.fiberPulse[fiberIndex];
         if (!assignment) return;
@@ -578,26 +572,19 @@ class SynapseEngine {
           this.tmpColor.copy(lit
             ? (this.palette.light ? this.palette.honey : linearizeSRGB(this.tmpColorB.set(DARK_LIT_TINT)))
             : (this.palette.light ? this.palette.live : linearizeSRGB(this.tmpColorB.set(DARK_PULSE_TINT))));
-        } else if (fiber.linkIndex === -2) {
-          // Dendrite vesicles glow in their own neuron's hue, lifted to white.
-          this.tmpColor.setRGB(this.nodeTints[fiber.sourceIndex * 3], this.nodeTints[fiber.sourceIndex * 3 + 1], this.nodeTints[fiber.sourceIndex * 3 + 2]);
-          this.tmpColor.lerp(this.tmpColorB.setRGB(1, 1, 1), 0.25);
         } else if (this.palette.light) {
           this.tmpColor.copy(this.palette.fg2);
         } else {
-          linearizeSRGB(this.tmpColor.set(DARK_BEAD_TINT));
+          linearizeSRGB(this.tmpColor.set(DARK_WEB_SPARK_TINT));
         }
         for (let p = 0; p < assignment.count; p += 1) {
           const slot = assignment.slot + p;
           pulseLit.setX(slot, lit);
           pulseTint.setXYZ(slot, this.tmpColor.r, this.tmpColor.g, this.tmpColor.b);
-          // The second travelling pulse per axon only fires while lit.
-          if (isLink && p === 1) pulseSize.setX(slot, lit ? 16 + hashUnit(`pulse-${fiberIndex}-${p}`, 13) * 10 : 0);
         }
       });
       pulseLit.needsUpdate = true;
       pulseTint.needsUpdate = true;
-      pulseSize.needsUpdate = true;
     }
     const dimUnlit = Boolean(this.selectedId);
     (this.fiberLines.material as THREE.ShaderMaterial).uniforms.uSelDim.value = dimUnlit ? 0.35 : 1;
@@ -672,35 +659,6 @@ class SynapseEngine {
         });
       }
     }
-    return fibers;
-  }
-
-  // Procedural dendrites: every soma sprouts a handful of short, sometimes
-  // forked tendrils so nodes read as neurons instead of plain circles. The
-  // offsets are node-local, so a whole dendrite tree rides its node rigidly.
-  private buildDendriteFibers(): Fiber[] {
-    const fibers: Fiber[] = [];
-    this.nodes.forEach((node, index) => {
-      const count = 4 + Math.floor(hashUnit(node.id, 91) * 4);
-      for (let d = 0; d < count; d += 1) {
-        const key = `${node.id}~den${d}`;
-        const seed = hashUnit(key, 97);
-        const u = hashUnit(key, 101) * 2 - 1;
-        const angle = hashUnit(key, 103) * Math.PI * 2;
-        const ring = Math.sqrt(Math.max(0.0001, 1 - u * u));
-        const length = node.radius * 2.8 + seed * 24;
-        const end = new THREE.Vector3(Math.cos(angle) * ring, u * 0.9, Math.sin(angle) * ring).multiplyScalar(length);
-        const bowSeed = new THREE.Vector3(hashUnit(key, 109) - 0.5, hashUnit(key, 113) - 0.5, hashUnit(key, 127) - 0.5).normalize();
-        fibers.push({ linkIndex: -2, strand: 0, seed, sourceIndex: index, targetIndex: index, bowAmount: 2 + seed * 6, bowSeed, startOffset: null, endOffset: end });
-        if (seed > 0.34) {
-          const forkKey = `${key}f`;
-          const forkSeed = hashUnit(forkKey, 131);
-          const forkDir = new THREE.Vector3(hashUnit(forkKey, 137) - 0.5, hashUnit(forkKey, 139) - 0.5, hashUnit(forkKey, 149) - 0.5).normalize();
-          const forkEnd = end.clone().addScaledVector(forkDir, length * 0.65);
-          fibers.push({ linkIndex: -2, strand: 1, seed: forkSeed, sourceIndex: index, targetIndex: index, bowAmount: 1.5 + forkSeed * 4, bowSeed: bowSeed.clone().negate(), startOffset: end.clone(), endOffset: forkEnd });
-        }
-      }
-    });
     return fibers;
   }
 
@@ -832,8 +790,7 @@ class SynapseEngine {
     this.soma.frustumCulled = false;
     this.scene.add(this.soma);
 
-    // Dendrite halos (instanced billboards over the soma), kept subtle — the
-    // bloom pass supplies the volumetric glow now.
+    // Clean soft halos; bloom supplies the volumetric edge without fake arbors.
     const plane = new THREE.PlaneGeometry(2, 2);
     const haloGeometry = new THREE.InstancedBufferGeometry();
     haloGeometry.index = plane.index;
@@ -846,8 +803,7 @@ class SynapseEngine {
     const haloScales = new Float32Array(count);
     const haloSeeds = new Float32Array(count);
     this.nodes.forEach((node, index) => {
-      // Modest: real dendrites carry the branching now; the atlas just glows.
-      haloScales[index] = node.radius * 4.2;
+      haloScales[index] = node.radius * 4.8;
       haloSeeds[index] = hashUnit(node.id, 53);
     });
     haloGeometry.setAttribute("iScale", new THREE.InstancedBufferAttribute(haloScales, 1));
@@ -892,6 +848,12 @@ class SynapseEngine {
       geometry.setAttribute("aSeed", new THREE.BufferAttribute(seeds, 1));
       geometry.setAttribute("aLit", new THREE.BufferAttribute(new Float32Array(fiberCount * vertsPerFiber), 1));
       geometry.setAttribute("aAlpha", new THREE.BufferAttribute(new Float32Array(fiberCount * vertsPerFiber), 1));
+      const signals = new Float32Array(fiberCount * vertsPerFiber);
+      this.fibers.forEach((fiber, fiberIndex) => {
+        const strength = fiber.linkIndex >= 0 ? 1 : fiber.seed > 0.78 ? 0.58 : 0.16;
+        signals.fill(strength, fiberIndex * vertsPerFiber, (fiberIndex + 1) * vertsPerFiber);
+      });
+      geometry.setAttribute("aSignal", new THREE.BufferAttribute(signals, 1));
       geometry.setAttribute("aColorA", new THREE.BufferAttribute(new Float32Array(fiberCount * vertsPerFiber * 3), 3));
       geometry.setAttribute("aColorB", new THREE.BufferAttribute(new Float32Array(fiberCount * vertsPerFiber * 3), 3));
       const material = this.registerMaterial(new THREE.ShaderMaterial({
@@ -910,22 +872,15 @@ class SynapseEngine {
       this.scene.add(this.fiberLines);
     }
 
-    // Particles: fast synaptic pulses on real links (two per link, riding the
-    // strand-0 curve), slow beads on the ambient web, and static "vesicle"
-    // chain dots studding every drawn fiber — the dotted-filament look.
-    const fiberRun = (fiber: Fiber) => {
-      if (fiber.endOffset) return fiber.endOffset.distanceTo(fiber.startOffset ?? ZERO_VEC);
-      const a = this.nodes[fiber.sourceIndex];
-      const b = this.nodes[fiber.targetIndex];
-      return Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
-    };
+    // Electrical packets: four particles form a hot head plus a fading tail.
+    // Real links carry two packets; a deterministic subset of the ambient web
+    // fires one so activity travels across the whole field without visual rain.
     let slotCursor = 0;
     this.fiberPulse = this.fibers.map((fiber) => {
       if (slotCursor >= MAX_PULSE_SLOTS) return null;
       if (fiber.linkIndex >= 0 && fiber.strand !== 0) return null;
-      const travel = fiber.linkIndex >= 0 ? 2 : fiber.linkIndex === -1 ? 1 : 0;
-      const chain = clamp(Math.floor(fiberRun(fiber) / 9), 1, 6);
-      const count = Math.min(travel + chain, MAX_PULSE_SLOTS - slotCursor);
+      if (fiber.linkIndex < 0 && fiber.seed <= 0.78) return null;
+      const count = Math.min(fiber.linkIndex >= 0 ? 8 : 4, MAX_PULSE_SLOTS - slotCursor);
       if (count <= 0) return null;
       const slot = slotCursor;
       slotCursor += count;
@@ -949,26 +904,14 @@ class SynapseEngine {
     this.fibers.forEach((fiber, fiberIndex) => {
       const assignment = this.fiberPulse[fiberIndex];
       if (!assignment) return;
-      const travel = fiber.linkIndex >= 0 ? 2 : fiber.linkIndex === -1 ? 1 : 0;
       for (let p = 0; p < assignment.count; p += 1) {
         const slot = assignment.slot + p;
-        const seed = hashUnit(`pulse-${fiberIndex}-${p}`, 7);
-        if (p < travel && fiber.linkIndex >= 0) {
-          phases[slot] = seed + p * 0.5;
-          speeds[slot] = 0.08 + hashUnit(`pulse-${fiberIndex}-${p}`, 11) * 0.12;
-          sizes[slot] = p === 0 ? 16 + hashUnit(`pulse-${fiberIndex}-${p}`, 13) * 10 : 0;
-        } else if (p < travel) {
-          phases[slot] = seed;
-          speeds[slot] = 0.014 + hashUnit(`pulse-${fiberIndex}-${p}`, 11) * 0.028;
-          sizes[slot] = 9 + hashUnit(`pulse-${fiberIndex}-${p}`, 13) * 6;
-        } else {
-          // Static vesicle dot pinned along the curve.
-          const chainIndex = p - travel;
-          const chainTotal = assignment.count - travel;
-          phases[slot] = clamp((chainIndex + 0.5) / Math.max(1, chainTotal) + (seed - 0.5) * 0.12, 0.06, 0.94);
-          speeds[slot] = 0;
-          sizes[slot] = 6 + hashUnit(`pulse-${fiberIndex}-${p}`, 13) * 5;
-        }
+        const packet = Math.floor(p / 4);
+        const tail = p % 4;
+        const seed = hashUnit(`spark-${fiberIndex}-${packet}`, 7);
+        phases[slot] = seed + packet * 0.47 - tail * 0.022;
+        speeds[slot] = (fiber.linkIndex >= 0 ? 0.13 : 0.075) + hashUnit(`spark-speed-${fiberIndex}-${packet}`, 11) * 0.055;
+        sizes[slot] = (fiber.linkIndex >= 0 ? 26 : 19) * [1, 0.68, 0.44, 0.26][tail];
       }
     });
     pulseGeometry.setAttribute("aPhase", new THREE.BufferAttribute(phases, 1));
@@ -1222,7 +1165,7 @@ class SynapseEngine {
   };
 
   private onDoubleClick = () => {
-    this.cameraRadiusTarget = clamp(this.fitRadius * 2.05, 150, 560);
+    this.cameraRadiusTarget = clamp(this.fitRadius * 1.72, 132, 520);
     this.thetaTarget = 0.55;
     this.phiTarget = 1.18;
   };
@@ -1285,7 +1228,7 @@ class SynapseEngine {
     } else if (this.webDirty) {
       // Layout has settled after a filter/search reflow — regrow the web.
       this.webDirty = false;
-      this.fibers = [...this.buildLinkFibers(), ...this.buildDendriteFibers(), ...this.computeWebFibers()];
+      this.fibers = [...this.buildLinkFibers(), ...this.computeWebFibers()];
       this.rebuildFiberObjects();
       this.applyFiberVisuals();
     }
@@ -1337,7 +1280,7 @@ class SynapseEngine {
         const source = this.nodes[fiber.sourceIndex];
         this.displayPosition(source, this.tmpVecA);
         if (fiber.endOffset) {
-          // Dendrite: both ends ride the source node rigidly.
+          // Node-local curves remain supported for future focused effects.
           this.tmpVecB.copy(this.tmpVecA).add(fiber.endOffset);
           if (fiber.startOffset) this.tmpVecA.add(fiber.startOffset);
         } else {

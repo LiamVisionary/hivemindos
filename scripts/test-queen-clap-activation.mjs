@@ -361,8 +361,10 @@ check("pipeline hook captures continuously with pre-roll flush", () => {
   assert.match(pipelineHook, /startLocalCaptionStream\(\{/);
   assert.match(pipelineHook, /const captionTranscript = captions\.text\(\)/);
   const captionSource = read("src/features/queen-voice/caption-source.ts");
-  // Preference order is load-bearing: free sources before the paid one.
-  const order = ["native-speech", "web-speech", "openai-realtime"].map((id) =>
+  // Preference order is load-bearing: browser speech before the paid one.
+  // macOS native speech is intentionally excluded by product preference.
+  assert.doesNotMatch(captionSource, /id: "native-speech"/);
+  const order = ["web-speech", "openai-realtime"].map((id) =>
     captionSource.indexOf(`id: "${id}"`),
   );
   assert.ok(order.every((at) => at >= 0), "caption matrix lists all sources");

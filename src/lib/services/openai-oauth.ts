@@ -5,6 +5,10 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
 import { writeSharedHiveEnvValues } from "@/lib/services/hive-env-write";
+import {
+  buildOpenAiOAuthResponsesInput,
+  type OpenAiOAuthChatMessage,
+} from "@/lib/services/openai-oauth-payload";
 
 /**
  * ChatGPT OAuth for HivemindOS: the user's subscription credentials as a
@@ -34,7 +38,8 @@ const OAUTH_TOKEN_URL = "https://auth.openai.com/oauth/token";
 const OAUTH_REDIRECT_PORT = 1455;
 const OAUTH_REDIRECT_URI = `http://localhost:${OAUTH_REDIRECT_PORT}/auth/callback`;
 const OAUTH_SCOPE = "openid profile email offline_access";
-const RESPONSES_URL = "https://chatgpt.com/backend-api/codex/responses";
+export const OPENAI_OAUTH_RESPONSES_BASE_URL = "https://chatgpt.com/backend-api/codex";
+const RESPONSES_URL = `${OPENAI_OAUTH_RESPONSES_BASE_URL}/responses`;
 // Refresh slightly early so a turn never rides an expiring token.
 const TOKEN_EXPIRY_SLACK_MS = 60_000;
 const LOGIN_FLOW_TTL_MS = 10 * 60_000;
@@ -304,7 +309,41 @@ export async function getOpenAiOAuthAccess(): Promise<{ accessToken: string; acc
   return { accessToken, accountId: refreshedAccountId };
 }
 
-type OAuthChatMessage = { role: string; content: string };
+function openAiOAuthRequestUrl(input: RequestInfo | URL): URL {
+  const value =
+    typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+  const url = new URL(value);
+  const baseUrl = new URL(OPENAI_OAUTH_RESPONSES_BASE_URL);
+  const staysWithinBackend =
+    url.origin === baseUrl.origin &&
+    (url.pathname === baseUrl.pathname || url.pathname.startsWith(`${baseUrl.pathname}/`));
+  if (!staysWithinBackend) {
+    throw new Error("Refusing to send ChatGPT OAuth credentials outside the Codex backend.");
+  }
+  return url;
+}
+
+/**
+ * Canonical authenticated transport for every ChatGPT OAuth Responses caller.
+ * It owns token refresh, account routing, headers, and the credential boundary.
+ */
+export async function openAiOAuthFetch(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+): Promise<Response> {
+  openAiOAuthRequestUrl(input);
+  const { accessToken, accountId } = await getOpenAiOAuthAccess();
+  const headers = new Headers(input instanceof Request ? input.headers : undefined);
+  new Headers(init.headers).forEach((value, key) => headers.set(key, value));
+  headers.set("Authorization", `Bearer ${accessToken}`);
+  headers.set("Accept", "text/event-stream");
+  headers.set("OpenAI-Beta", "responses=experimental");
+  headers.set("originator", "codex_cli_rs");
+  headers.set("session_id", randomUUID());
+  if (accountId) headers.set("chatgpt-account-id", accountId);
+  else headers.delete("chatgpt-account-id");
+  return fetch(input, { ...init, headers });
+}
 
 /**
  * Authenticated request to the ChatGPT/Codex Responses backend. Keeping this
@@ -315,17 +354,10 @@ export async function openAiOAuthResponsesRequest(
   body: Record<string, unknown>,
   options: { timeoutMs?: number; errorContext?: string } = {},
 ): Promise<Response> {
-  const { accessToken, accountId } = await getOpenAiOAuthAccess();
-  const response = await fetch(RESPONSES_URL, {
+  const response = await openAiOAuthFetch(RESPONSES_URL, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${accessToken}`,
       "content-type": "application/json",
-      Accept: "text/event-stream",
-      "OpenAI-Beta": "responses=experimental",
-      originator: "codex_cli_rs",
-      session_id: randomUUID(),
-      ...(accountId ? { "chatgpt-account-id": accountId } : {}),
     },
     body: JSON.stringify(body),
     cache: "no-store",
@@ -349,32 +381,42 @@ export async function openAiOAuthResponsesRequest(
   );
 }
 
-/**
- * One conversation turn over the ChatGPT backend Responses API using the
- * user's OAuth credentials. Emits text deltas when a sink is provided and
- * returns the full text — mirroring runProviderConversationTurn's contract.
- */
-export async function runOpenAiOAuthChatTurn(
+export type OpenAiOAuthToolCall = {
+  id: string;
+  name: string;
+  arguments: string;
+};
+
+export type OpenAiOAuthChatTurnResult = {
+  text: string;
+  toolCalls: OpenAiOAuthToolCall[];
+};
+
+function responsesTools(tools: Array<Record<string, unknown>> | undefined) {
+  return (tools ?? []).map((tool) => {
+    const fn = tool.function;
+    if (tool.type !== "function" || !fn || typeof fn !== "object") return tool;
+    return { type: "function", ...(fn as Record<string, unknown>) };
+  });
+}
+
+/** Structured conversation turn for callers that need Responses function calls. */
+export async function runOpenAiOAuthChatTurnDetailed(
   model: string,
-  messages: OAuthChatMessage[],
-  options: { maxOutputTokens?: number; onTextDelta?: (chunk: string) => void; timeoutMs?: number } = {},
-): Promise<string> {
+  messages: OpenAiOAuthChatMessage[],
+  options: {
+    images?: string[];
+    maxOutputTokens?: number;
+    onTextDelta?: (chunk: string) => void;
+    timeoutMs?: number;
+    tools?: Array<Record<string, unknown>>;
+  } = {},
+): Promise<OpenAiOAuthChatTurnResult> {
   const instructions = messages
     .filter((message) => message.role === "system")
     .map((message) => message.content)
     .join("\n");
-  const input = messages
-    .filter((message) => message.role !== "system")
-    .map((message) => ({
-      type: "message",
-      role: message.role,
-      content: [
-        {
-          type: message.role === "assistant" ? "output_text" : "input_text",
-          text: message.content,
-        },
-      ],
-    }));
+  const input = buildOpenAiOAuthResponsesInput(messages, options.images);
   const response = await openAiOAuthResponsesRequest(
     {
       model,
@@ -382,6 +424,9 @@ export async function runOpenAiOAuthChatTurn(
       input,
       stream: true,
       store: false,
+      ...(options.tools?.length
+        ? { tools: responsesTools(options.tools), tool_choice: "auto" }
+        : {}),
       // Voice turns want first tokens fast; the backend accepts the standard
       // Responses reasoning knob for reasoning models and ignores it otherwise.
       // NOTE: the codex backend rejects max_output_tokens ("Unsupported
@@ -390,11 +435,13 @@ export async function runOpenAiOAuthChatTurn(
     },
     { timeoutMs: options.timeoutMs, errorContext: "ChatGPT OAuth chat" },
   );
+  if (!response.body) throw new Error("ChatGPT OAuth chat returned no response stream.");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let text = "";
   let failure = "";
+  const toolCalls: OpenAiOAuthToolCall[] = [];
   const consume = (raw: string) => {
     if (!raw || raw === "[DONE]") return;
     try {
@@ -402,12 +449,29 @@ export async function runOpenAiOAuthChatTurn(
         type?: string;
         delta?: string;
         response?: { error?: { message?: string } };
+        item?: {
+          type?: string;
+          id?: string;
+          call_id?: string;
+          name?: string;
+          arguments?: string;
+        };
       };
       if (event.type === "response.output_text.delta" && typeof event.delta === "string") {
         text += event.delta;
         options.onTextDelta?.(event.delta);
       } else if (event.type === "response.failed") {
         failure = event.response?.error?.message || "The ChatGPT backend reported a failed response.";
+      } else if (
+        event.type === "response.output_item.done" &&
+        event.item?.type === "function_call" &&
+        event.item.name
+      ) {
+        toolCalls.push({
+          id: event.item.call_id || event.item.id || `oauth_tool_${toolCalls.length}`,
+          name: event.item.name,
+          arguments: event.item.arguments || "{}",
+        });
       }
     } catch {
       /* keep-alives and unknown frames are skipped */
@@ -434,5 +498,17 @@ export async function runOpenAiOAuthChatTurn(
     if (done) break;
   }
   if (failure && !text.trim()) throw new Error(failure);
-  return text.trim();
+  return { text: text.trim(), toolCalls };
+}
+
+/**
+ * One text conversation turn over the ChatGPT backend Responses API using the
+ * user's OAuth credentials. Structured callers use the detailed variant above.
+ */
+export async function runOpenAiOAuthChatTurn(
+  model: string,
+  messages: OpenAiOAuthChatMessage[],
+  options: { images?: string[]; maxOutputTokens?: number; onTextDelta?: (chunk: string) => void; timeoutMs?: number } = {},
+): Promise<string> {
+  return (await runOpenAiOAuthChatTurnDetailed(model, messages, options)).text;
 }

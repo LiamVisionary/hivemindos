@@ -9,13 +9,31 @@ import {
   prepareManagedCloudAppArtifact,
 } from "@/lib/services/managed-cloud-agents";
 import {
+  createHostedAppAccessToken,
+  createHostedAppSite,
+  deployHostedAppVersion,
   getAppHostingCatalog,
+  getHostedAppAccess,
+  getHostedAppBindings,
+  getHostedAppEnvironment,
+  getHostedAppUsage,
   getHostedApp,
+  listHostedAppDeployments,
+  listHostedAppVersions,
   listHostedApps,
   publishHostedApp,
   renewHostedApp,
+  rollbackHostedAppVersion,
+  saveHostedAppVersion,
+  setHostedAppAccess,
+  setHostedAppBindings,
+  setHostedAppEnvironment,
   unpublishHostedApp,
+  type HostedAppBindings,
+  type HostedAppDeployment,
   type HostedAppSite,
+  type HostedAppVersion,
+  type SiteAccessMode,
 } from "@/lib/services/app-hosting";
 import { readProjectRegistry, upsertProject } from "@/lib/services/projects/project-registry";
 import {
@@ -26,7 +44,7 @@ import {
 } from "@/lib/services/local-collector-url";
 import { errorJson, okJson, upstreamErrorJson } from "@/lib/utils/api-response";
 import { requireAuth } from "@/lib/utils/server-auth";
-import { runLocalAppBuilderAction, type LocalAppProject } from "../../../../scripts/lib/app-builder.mjs";
+import { readLocalAppSourceCommit, readLocalHostingManifest, runLocalAppBuilderAction, writeLocalHostingManifest, type LocalAppProject } from "../../../../scripts/lib/app-builder.mjs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,6 +66,14 @@ type AppBuilderBody = Record<string, unknown> & {
   planId?: string;
   autoRenew?: boolean;
   runtime?: "static" | "dynamic";
+  releaseId?: string;
+  sourceCommitSha?: string;
+  accessMode?: SiteAccessMode;
+  bindings?: HostedAppBindings;
+  environmentValues?: Record<string, string>;
+  unsetEnvironment?: string[];
+  accessPurpose?: "preview" | "workspace";
+  ttlSeconds?: number;
 };
 
 function clean(value: unknown) {
@@ -167,7 +193,7 @@ async function runManaged(body: AppBuilderBody) {
   throw new Error(`The managed backend does not support ${action || "this operation"} yet.`);
 }
 
-async function registerHostedSite(body: AppBuilderBody, site: HostedAppSite) {
+async function registerHostedSite(body: AppBuilderBody, site: HostedAppSite, version?: HostedAppVersion, deployment?: HostedAppDeployment) {
   const registry = await readProjectRegistry();
   const projectId = clean(body.projectId);
   const project = registry.projects.find((candidate) => (
@@ -182,8 +208,49 @@ async function registerHostedSite(body: AppBuilderBody, site: HostedAppSite) {
       ...project.appBuilder,
       hostingSiteId: site.id,
       hostingUrl: site.url,
+      hostingVersionId: version?.id || project.appBuilder.hostingVersionId,
+      hostingDeploymentId: deployment?.id || project.appBuilder.hostingDeploymentId,
+      hostingAccessMode: site.accessMode,
     },
   });
+}
+
+async function persistLocalHostingManifest(body: AppBuilderBody, siteId: string, bindings: HostedAppBindings = { d1: [], r2: [] }) {
+  if (body.backend === "managed") return;
+  const collectorUrl = clean(body.collectorUrl);
+  if (collectorUrl && !isLocalCollectorUrl(collectorUrl)) return;
+  const directory = await localProjectDirectory(body);
+  if (!directory) return;
+  await writeLocalHostingManifest(directory, { projectId: siteId, bindings });
+}
+
+async function resolveHostingSiteId(body: AppBuilderBody) {
+  const explicit = clean(body.siteId);
+  if (explicit) return explicit;
+  const projectId = clean(body.projectId);
+  const registry = await readProjectRegistry();
+  const registered = registry.projects.find((project) => (
+    project.id === projectId
+    || project.appBuilder?.localProjectId === projectId
+    || project.appBuilder?.managedProjectId === projectId
+  ))?.appBuilder?.hostingSiteId;
+  if (registered) return registered;
+  if (body.backend === "managed") return "";
+  const collectorUrl = clean(body.collectorUrl);
+  if (collectorUrl && !isLocalCollectorUrl(collectorUrl)) return "";
+  const directory = await localProjectDirectory(body);
+  if (!directory) return "";
+  return (await readLocalHostingManifest(directory))?.project_id || "";
+}
+
+async function resolveHostingSourceCommit(body: AppBuilderBody) {
+  const explicit = clean(body.sourceCommitSha);
+  if (explicit) return explicit;
+  if (body.backend === "managed") return undefined;
+  const collectorUrl = clean(body.collectorUrl);
+  if (collectorUrl && !isLocalCollectorUrl(collectorUrl)) return undefined;
+  const directory = await localProjectDirectory(body);
+  return directory ? await readLocalAppSourceCommit(directory) || undefined : undefined;
 }
 
 async function runHosting(body: AppBuilderBody) {
@@ -193,9 +260,124 @@ async function runHosting(body: AppBuilderBody) {
   if (action === "hosting_catalog") return { plans: await getAppHostingCatalog() };
   if (action === "hosting_list") return { sites: await listHostedApps(legacyAccountIds) };
   if (action === "hosting_get") {
-    const siteId = clean(body.siteId);
+    const siteId = await resolveHostingSiteId(body);
     if (!siteId) throw new Error("siteId is required.");
     return { site: await getHostedApp(siteId, legacyAccountIds) };
+  }
+  if (action === "hosting_create") {
+    if (body.confirmation !== APP_BUILDER_CONFIRMATIONS.createHostingSite) {
+      throw new Error(`This app-builder operation requires ${APP_BUILDER_CONFIRMATIONS.createHostingSite}.`);
+    }
+    if (!projectId) throw new Error("projectId is required.");
+    const name = clean(body.name);
+    const slug = clean(body.slug);
+    const planId = clean(body.planId);
+    if (!name || !slug || !planId) throw new Error("name, slug, and planId are required.");
+    const site = await createHostedAppSite({ name, slug, planId, accessMode: body.accessMode, legacyAccountIds });
+    await registerHostedSite(body, site);
+    await persistLocalHostingManifest(body, site.id);
+    return { site };
+  }
+  if (action === "hosting_versions") {
+    const siteId = await resolveHostingSiteId(body);
+    if (!siteId) throw new Error("siteId is required.");
+    return { versions: await listHostedAppVersions(siteId, legacyAccountIds) };
+  }
+  if (action === "hosting_save_version") {
+    if (body.confirmation !== APP_BUILDER_CONFIRMATIONS.saveHostingVersion) {
+      throw new Error(`This app-builder operation requires ${APP_BUILDER_CONFIRMATIONS.saveHostingVersion}.`);
+    }
+    if (!projectId) throw new Error("projectId is required.");
+    const siteId = await resolveHostingSiteId(body);
+    const slug = clean(body.slug);
+    const planId = clean(body.planId);
+    const idempotencyKey = clean(body.idempotencyKey);
+    if (!siteId || !slug || !planId || !idempotencyKey) throw new Error("siteId, slug, planId, and idempotencyKey are required.");
+    const plan = (await getAppHostingCatalog()).find((candidate) => candidate.id === planId);
+    if (!plan) throw new Error("Unsupported app-hosting plan.");
+    if (body.backend === "managed" && plan.runtime === "dynamic") throw new Error("Dynamic Worker artifacts currently save from a local or linked-machine project.");
+    const artifact = body.backend === "managed"
+      ? await prepareManagedCloudAppArtifact(clean(body.managedAgentId), projectId)
+      : (await runLocal({ ...body, action: "artifact_prepare", runtime: plan.runtime }) as { artifact?: Record<string, unknown> }).artifact;
+    if (!artifact) throw new Error("The app-builder did not produce a hosting artifact.");
+    const result = await saveHostedAppVersion({
+      siteId,
+      slug,
+      planId,
+      artifact,
+      idempotencyKey,
+      sourceCommitSha: await resolveHostingSourceCommit(body),
+      bindings: body.bindings,
+      legacyAccountIds,
+    });
+    await registerHostedSite(body, result.site, result.version);
+    await persistLocalHostingManifest(body, result.site.id, body.bindings || { d1: [], r2: [] });
+    return result;
+  }
+  if (action === "hosting_deployments") {
+    const siteId = await resolveHostingSiteId(body);
+    if (!siteId) throw new Error("siteId is required.");
+    return { deployments: await listHostedAppDeployments(siteId, legacyAccountIds) };
+  }
+  if (action === "hosting_deploy_version" || action === "hosting_rollback") {
+    const requiredConfirmation = action === "hosting_rollback"
+      ? APP_BUILDER_CONFIRMATIONS.rollbackHosting
+      : APP_BUILDER_CONFIRMATIONS.deployHostingVersion;
+    if (body.confirmation !== requiredConfirmation) throw new Error(`This app-builder operation requires ${requiredConfirmation}.`);
+    const siteId = await resolveHostingSiteId(body);
+    const releaseId = clean(body.releaseId);
+    const idempotencyKey = clean(body.idempotencyKey);
+    if (!siteId || !releaseId || !idempotencyKey) throw new Error("siteId, releaseId, and idempotencyKey are required.");
+    const input = { siteId, releaseId, planId: clean(body.planId) || undefined, autoRenew: body.autoRenew, accessMode: body.accessMode, idempotencyKey, legacyAccountIds };
+    const result = action === "hosting_rollback" ? await rollbackHostedAppVersion(input) : await deployHostedAppVersion(input);
+    await registerHostedSite(body, result.site, undefined, result.deployment);
+    return result;
+  }
+  if (action === "hosting_access_get") {
+    const siteId = await resolveHostingSiteId(body);
+    if (!siteId) throw new Error("siteId is required.");
+    return { access: await getHostedAppAccess(siteId, legacyAccountIds) };
+  }
+  if (action === "hosting_access_set") {
+    if (body.confirmation !== APP_BUILDER_CONFIRMATIONS.changeHostingAccess) throw new Error(`This app-builder operation requires ${APP_BUILDER_CONFIRMATIONS.changeHostingAccess}.`);
+    const siteId = await resolveHostingSiteId(body);
+    if (!siteId || !body.accessMode) throw new Error("siteId and accessMode are required.");
+    return { access: await setHostedAppAccess({ siteId, mode: body.accessMode, legacyAccountIds }) };
+  }
+  if (action === "hosting_access_token") {
+    if (body.confirmation !== APP_BUILDER_CONFIRMATIONS.changeHostingAccess) throw new Error(`This app-builder operation requires ${APP_BUILDER_CONFIRMATIONS.changeHostingAccess}.`);
+    const siteId = await resolveHostingSiteId(body);
+    if (!siteId) throw new Error("siteId is required.");
+    return { access: await createHostedAppAccessToken({ siteId, purpose: body.accessPurpose, ttlSeconds: body.ttlSeconds, legacyAccountIds }) };
+  }
+  if (action === "hosting_bindings_get") {
+    const siteId = await resolveHostingSiteId(body);
+    if (!siteId) throw new Error("siteId is required.");
+    return { bindings: await getHostedAppBindings(siteId, legacyAccountIds) };
+  }
+  if (action === "hosting_bindings_set") {
+    if (body.confirmation !== APP_BUILDER_CONFIRMATIONS.changeHostingBindings) throw new Error(`This app-builder operation requires ${APP_BUILDER_CONFIRMATIONS.changeHostingBindings}.`);
+    const siteId = await resolveHostingSiteId(body);
+    if (!siteId || !body.bindings) throw new Error("siteId and bindings are required.");
+    const bindings = await setHostedAppBindings({ siteId, bindings: body.bindings, legacyAccountIds });
+    await persistLocalHostingManifest(body, siteId, bindings);
+    return { bindings };
+  }
+  if (action === "hosting_environment_get") {
+    const siteId = await resolveHostingSiteId(body);
+    if (!siteId) throw new Error("siteId is required.");
+    return { environment: await getHostedAppEnvironment(siteId, legacyAccountIds) };
+  }
+  if (action === "hosting_environment_set") {
+    if (body.confirmation !== APP_BUILDER_CONFIRMATIONS.changeHostingEnvironment) throw new Error(`This app-builder operation requires ${APP_BUILDER_CONFIRMATIONS.changeHostingEnvironment}.`);
+    const siteId = await resolveHostingSiteId(body);
+    if (!siteId) throw new Error("siteId is required.");
+    return { environment: await setHostedAppEnvironment({ siteId, values: body.environmentValues, unset: body.unsetEnvironment, legacyAccountIds }) };
+  }
+  if (action === "hosting_usage") {
+    const siteId = await resolveHostingSiteId(body);
+    if (!siteId) throw new Error("siteId is required.");
+    return { usage: await getHostedAppUsage(siteId, legacyAccountIds) };
   }
   if (action === "hosting_publish") {
     if (body.confirmation !== APP_BUILDER_CONFIRMATIONS.publishHosting) {
@@ -220,18 +402,22 @@ async function runHosting(body: AppBuilderBody) {
       slug,
       planId,
       idempotencyKey,
-      siteId: clean(body.siteId) || undefined,
+      siteId: await resolveHostingSiteId(body) || undefined,
       autoRenew: body.autoRenew === true,
+      accessMode: body.accessMode,
+      bindings: body.bindings,
+      sourceCommitSha: await resolveHostingSourceCommit(body),
       legacyAccountIds,
     });
     await registerHostedSite(body, site);
+    await persistLocalHostingManifest(body, site.id, body.bindings || { d1: [], r2: [] });
     return { site };
   }
   if (action === "hosting_renew") {
     if (body.confirmation !== APP_BUILDER_CONFIRMATIONS.renewHosting) {
       throw new Error(`This app-builder operation requires ${APP_BUILDER_CONFIRMATIONS.renewHosting}.`);
     }
-    const siteId = clean(body.siteId);
+    const siteId = await resolveHostingSiteId(body);
     const idempotencyKey = clean(body.idempotencyKey);
     if (!siteId || !idempotencyKey) throw new Error("siteId and idempotencyKey are required.");
     return { site: await renewHostedApp({ siteId, idempotencyKey, legacyAccountIds }) };
@@ -240,7 +426,7 @@ async function runHosting(body: AppBuilderBody) {
     if (body.confirmation !== APP_BUILDER_CONFIRMATIONS.unpublishHosting) {
       throw new Error(`This app-builder operation requires ${APP_BUILDER_CONFIRMATIONS.unpublishHosting}.`);
     }
-    const siteId = clean(body.siteId);
+    const siteId = await resolveHostingSiteId(body);
     if (!siteId) throw new Error("siteId is required.");
     return { site: await unpublishHostedApp({ siteId, legacyAccountIds }) };
   }

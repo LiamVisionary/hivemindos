@@ -9,6 +9,7 @@
    /api/trading/copy-trade and reflects the engine's live status. */
 
 import React from "react";
+import { flushSync } from "react-dom";
 import { Badge, BBtn } from "./primitives";
 import { BIcon } from "./icons";
 import { useVisibilityAwarePolling } from "@/features/dashboard/hooks/use-visibility-aware-polling";
@@ -72,6 +73,10 @@ async function api(body: unknown): Promise<ApiResult> {
 
 type ServiceResult = { ok: boolean; error?: string; service?: DaemonServiceStatus };
 
+function configViewTransitionName(configId: string): string {
+  return `copy-trading-config-${configId.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
+
 async function readCopyTradingService(signal?: AbortSignal): Promise<DaemonServiceStatus | null> {
   const res = await fetch("/api/fleet/apps/installable-services?id=copy-trading-daemon", {
     headers: { accept: "application/json" },
@@ -104,10 +109,22 @@ export function CopyTradingPanel(props: Props) {
   const [daemonBusy, setDaemonBusy] = React.useState(false);
   const [daemonError, setDaemonError] = React.useState("");
   const [error, setError] = React.useState("");
+  const [returningConfigId, setReturningConfigId] = React.useState<string | null>(null);
+  const [isClosingDraft, setIsClosingDraft] = React.useState(false);
 
   const supported = isCopyTradeNetwork(network);
   const canSign = walletKind !== "bankr" && !/watch[\s-]?only/i.test(custody);
   const supportedChains = walletChains.filter((c) => isCopyTradeNetwork(c.network));
+  const prefersReducedMotion = typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const supportsViewTransitions = typeof document !== "undefined" && "startViewTransition" in document && !prefersReducedMotion;
+
+  const swapConfigView = React.useCallback((update: () => void) => {
+    if (!supportsViewTransitions) {
+      update();
+      return;
+    }
+    document.startViewTransition(() => flushSync(update));
+  }, [supportsViewTransitions]);
 
   const refresh = React.useCallback(async (signal?: AbortSignal) => {
     const [res, service] = await Promise.all([
@@ -128,13 +145,43 @@ export function CopyTradingPanel(props: Props) {
     if (!isCopyTradeNetwork(network)) return;
     setError("");
     setShowAdv(false);
+    setReturningConfigId(null);
+    setIsClosingDraft(false);
     setDraft(defaultCopyTradingConfig({ id: "", agentId, walletAddress, network }));
   };
 
   const editConfig = (config: CopyTradingConfig) => {
+    swapConfigView(() => {
+      setError("");
+      setShowAdv(false);
+      setReturningConfigId(null);
+      setIsClosingDraft(false);
+      setDraft({ ...config });
+    });
+  };
+
+  const finishCloseDraft = (configId: string | null) => {
+    setReturningConfigId(configId);
+    setIsClosingDraft(false);
+    setDraft(null);
     setError("");
-    setShowAdv(false);
-    setDraft({ ...config });
+  };
+
+  const closeDraft = () => {
+    const configId = draft?.id || null;
+    if (!configId) {
+      finishCloseDraft(null);
+      return;
+    }
+    if (supportsViewTransitions) {
+      swapConfigView(() => finishCloseDraft(configId));
+      return;
+    }
+    if (prefersReducedMotion) {
+      finishCloseDraft(configId);
+      return;
+    }
+    setIsClosingDraft(true);
   };
 
   const save = async () => {
@@ -144,7 +191,7 @@ export function CopyTradingPanel(props: Props) {
     const res = await api({ action: "upsert", config: { ...draft, agentId, walletAddress, network } });
     setBusy(null);
     if (!res.ok) { setError(res.error || "Could not save."); return; }
-    setDraft(null);
+    closeDraft();
     await refresh();
   };
 
@@ -175,6 +222,28 @@ export function CopyTradingPanel(props: Props) {
   const others = configs.filter((c) => !(c.agentId === agentId && c.network === network));
   const daemonReady = Boolean(snap && (snap.online || daemonService?.installed));
   const waitingForSnapshot = !snap;
+  const draftForm = draft ? (
+    <div
+      className={!supportsViewTransitions && !prefersReducedMotion ? styles.editSwapFallback : undefined}
+      data-closing={isClosingDraft ? "true" : undefined}
+      data-transition-state={supportsViewTransitions ? "shared-element" : prefersReducedMotion ? "reduced-motion" : isClosingDraft ? "closing" : "opening"}
+      style={{ viewTransitionName: configViewTransitionName(draft.id || "new") }}
+      onAnimationEnd={(event) => {
+        if (isClosingDraft && event.currentTarget === event.target) finishCloseDraft(draft.id || null);
+      }}
+    >
+      <ConfigForm
+        draft={draft}
+        setDraft={setDraft}
+        showAdv={showAdv}
+        setShowAdv={setShowAdv}
+        busy={busy === "save"}
+        error={error}
+        onSave={save}
+        onCancel={closeDraft}
+      />
+    </div>
+  ) : null;
 
   return (
     <div className={styles.wrap}>
@@ -215,21 +284,14 @@ export function CopyTradingPanel(props: Props) {
               busy={busy}
               onEdit={editConfig}
               onAct={act}
+              editView={draft?.id ? { configId: draft.id, content: draftForm } : undefined}
+              returningConfigId={!supportsViewTransitions && !prefersReducedMotion ? returningConfigId : null}
               emptyText="No copy configs on this wallet + chain yet."
             />
           </div>
 
           {draft ? (
-            <ConfigForm
-              draft={draft}
-              setDraft={setDraft}
-              showAdv={showAdv}
-              setShowAdv={setShowAdv}
-              busy={busy === "save"}
-              error={error}
-              onSave={save}
-              onCancel={() => { setDraft(null); setError(""); }}
-            />
+            draft.id ? null : draftForm
           ) : (
             <BBtn variant="primary" sm onClick={startNew}>
               <BIcon name="plus" size={14} /> Add copy config
@@ -328,6 +390,8 @@ function ConfigList(props: {
   busy: string | null;
   onEdit?: (c: CopyTradingConfig) => void;
   onAct: (action: "start" | "stop" | "delete", id: string) => void;
+  editView?: { configId: string; content: React.ReactNode };
+  returningConfigId?: string | null;
   foreign?: boolean;
   emptyText: string;
 }) {
@@ -336,19 +400,25 @@ function ConfigList(props: {
   }
   return (
     <div className={styles.cards}>
-      {props.list.map((c) => (
-        <ConfigCard
-          key={c.id}
-          config={c}
-          state={props.states[c.id]}
-          fundable={props.fundable[`${c.walletAddress}:${c.network}`] ?? null}
-          online={props.online}
-          busy={props.busy}
-          onEdit={props.onEdit}
-          onAct={props.onAct}
-          foreign={props.foreign}
-        />
-      ))}
+      {props.list.map((c) => {
+        if (props.editView?.configId === c.id) {
+          return <React.Fragment key={c.id}>{props.editView.content}</React.Fragment>;
+        }
+        return (
+          <ConfigCard
+            key={c.id}
+            config={c}
+            state={props.states[c.id]}
+            fundable={props.fundable[`${c.walletAddress}:${c.network}`] ?? null}
+            online={props.online}
+            busy={props.busy}
+            onEdit={props.onEdit}
+            onAct={props.onAct}
+            foreign={props.foreign}
+            returning={props.returningConfigId === c.id}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -362,6 +432,7 @@ function ConfigCard(props: {
   onEdit?: (c: CopyTradingConfig) => void;
   onAct: (action: "start" | "stop" | "delete", id: string) => void;
   foreign?: boolean;
+  returning?: boolean;
 }) {
   const { config, state, online } = props;
   const [expanded, setExpanded] = React.useState(false);
@@ -380,7 +451,10 @@ function ConfigCard(props: {
   const totalPnl = paper ? paperTotalPnl(paper) : 0;
 
   return (
-    <div className={`${styles.card}${props.foreign ? ` ${styles.foreign}` : ""}`}>
+    <div
+      className={`${styles.card}${props.foreign ? ` ${styles.foreign}` : ""}${props.returning ? ` ${styles.cardReturnFallback}` : ""}`}
+      style={{ viewTransitionName: configViewTransitionName(config.id) }}
+    >
       <div className={styles.cardHead}>
         <span className="ti" style={{ flex: "0 0 auto" }}><BIcon name="copy" size={15} /></span>
         <span className={styles.cardTitle}>

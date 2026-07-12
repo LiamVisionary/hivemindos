@@ -167,7 +167,7 @@ Wallet and token features are explicit rails, not a background permission pool. 
 <div class="docGrid">
   <section class="docCard">
     <h3>Wallets, Tokens, Honey, HIVE, And x402</h3>
-    <p>Agent wallets, crypto rail routing, USDC/USDG sends, MoneyClaw, wallet-paid HivemindOS Models, wallet-vault backups, Honey rewards, Bankr HIVE claims, paid requests, and stock buying via Alpaca, xStocks, or Robinhood Chain Stock Tokens.</p>
+    <p>Agent wallets, crypto rail routing, USDC/USDG sends, MoneyClaw, wallet-paid HivemindOS Models, wallet-vault backups, Honey rewards, Bankr HIVE claims, paid requests, and stock buying via Alpaca, Robinhood Agentic brokerage, xStocks, or Robinhood Chain Stock Tokens.</p>
     <a href="wallets-honey-and-x402.html">Open wallet docs</a>
   </section>
   <section class="docCard">
@@ -181,9 +181,9 @@ Wallet and token features are explicit rails, not a background permission pool. 
     <a href="managed-cloud-agents.html">Open cloud agent docs</a>
   </section>
   <section class="docCard">
-    <h3>App Builder</h3>
-    <p>Replit/Lovable-style app projects built locally or on managed infrastructure, with 60-minute test deploys and optional paid publishing on a stable HivemindOS URL.</p>
-    <a href="app-builder.html">Open App Builder docs</a>
+    <h3>App Builder And Web Hosting</h3>
+    <p>Go from a prompt to a working app on your own machine or a managed agent, preview it locally, share a free 60-minute test build, and publish static or dynamic Sites on a stable HivemindOS URL.</p>
+    <a href="app-builder.html">Build and publish an app</a>
   </section>
   <section class="docCard">
     <h3>HivemindOS Machines</h3>

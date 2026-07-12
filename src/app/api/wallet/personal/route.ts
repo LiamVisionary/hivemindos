@@ -144,7 +144,7 @@ function ledgerWalletWithSignerTruth(wallet: PersonalWalletResponse, vaultByAcco
 
 function agentWalletFromPersonalRecord(record: PersonalWalletRecord): AgentWalletConfig {
   const now = Date.now();
-  const tradingVenue = record.tradingVenue === "alpaca" || record.tradingVenue === "xstocks" || record.tradingVenue === "robinhood-chain" ? record.tradingVenue : undefined;
+  const tradingVenue = record.tradingVenue === "alpaca" || record.tradingVenue === "robinhood-agentic" || record.tradingVenue === "xstocks" || record.tradingVenue === "robinhood-chain" ? record.tradingVenue : undefined;
   return {
     ...createDefaultAgentWallet(record.id),
     // Personal wallets default to spend-off, but a wallet opted into a trading

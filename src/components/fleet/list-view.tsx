@@ -43,6 +43,11 @@ import {
 } from "./fleet-data";
 import { cn } from "@/lib/utils/cn";
 import styles from "./list-view.module.css";
+import {
+  FLEET_AGENT_PAGE_SIZE,
+  fleetAgentsForDisplay,
+  nextFleetAgentLimit,
+} from "./list-view-pagination";
 
 export type FleetListViewMode = "hive" | "graph" | "map" | "list";
 type FilterKey = "all" | "working" | "attention" | "idle";
@@ -262,6 +267,7 @@ export function ListView({
   const activeMode: FleetListViewMode = viewMode ?? "list";
   const [query, setQuery] = React.useState("");
   const [filter, setFilter] = React.useState<FilterKey>("all");
+  const [agentLimitsByMachine, setAgentLimitsByMachine] = React.useState<Record<string, number>>({});
 
   const padHead = "16px 20px";
   const padRow = "13px 20px";
@@ -322,7 +328,10 @@ export function ListView({
         // had agents but every one was filtered out
         if (filter === "attention") return g.attn && g.mMatch;
         return false;
-      });
+      })
+      .sort((left, right) =>
+        Number(isFleetMachineMobile(left.machine)) - Number(isFleetMachineMobile(right.machine)),
+      );
   }, [machines, q, filter, statusOk]);
 
   const noResults = groups.length === 0;
@@ -335,6 +344,20 @@ export function ListView({
     event.stopPropagation();
     fn?.(m, a);
   };
+
+  const showMoreAgents = React.useCallback((machineId: string) => {
+    setAgentLimitsByMachine((current) => ({
+      ...current,
+      [machineId]: nextFleetAgentLimit(current[machineId]),
+    }));
+  }, []);
+
+  const showAllAgents = React.useCallback((machineId: string) => {
+    setAgentLimitsByMachine((current) => ({
+      ...current,
+      [machineId]: Number.POSITIVE_INFINITY,
+    }));
+  }, []);
 
   // ── header pieces ──
   const filterChips: Array<{ key: FilterKey; label: string; count: number; dot?: string }> = [
@@ -688,6 +711,11 @@ export function ListView({
           const connected = machineIsConnected(m);
           const ver = versionInfo(m);
           const up = uptimeText(m);
+          const visibleAgents = fleetAgentsForDisplay(
+            agents,
+            agentLimitsByMachine[m.id] ?? FLEET_AGENT_PAGE_SIZE,
+          );
+          const hasMoreAgents = visibleAgents.length < agents.length;
           // Only surface host meters when the collector actually reported real
           // system metrics — never draw a bar from synthetic fallback numbers.
           const showMeters =
@@ -889,7 +917,7 @@ export function ListView({
               {/* AGENTS */}
               {hasAgents && (
                 <div>
-                  {agents.map((a) => {
+                  {visibleAgents.map((a) => {
                     const isASel = selected === m.id && selectedAgentId === a.id;
                     const meta = stateMeta(a.state);
                     const canChat = fleetAgentCanChat(a);
@@ -1089,6 +1117,58 @@ export function ListView({
                       </div>
                     );
                   })}
+
+                  {hasMoreAgents && (
+                    <div
+                      role="group"
+                      aria-label={`Agent list controls for ${m.name}`}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 14,
+                        padding: "11px 20px",
+                        borderTop: "1px solid var(--lv-line)",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => showMoreAgents(m.id)}
+                        aria-label={`Show ${FLEET_AGENT_PAGE_SIZE} more agents on ${m.name}`}
+                        className={cn(styles.press, styles.paginationButton)}
+                        style={{
+                          padding: "2px 0",
+                          cursor: "pointer",
+                          background: "transparent",
+                          border: 0,
+                          color: "var(--lv-fg-2)",
+                          fontFamily: "var(--lv-body)",
+                          fontSize: 12,
+                          fontWeight: 500,
+                        }}
+                      >
+                        Show more
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => showAllAgents(m.id)}
+                        aria-label={`Show all ${agents.length} agents on ${m.name}`}
+                        className={cn(styles.press, styles.paginationButton)}
+                        style={{
+                          padding: "2px 0",
+                          cursor: "pointer",
+                          background: "transparent",
+                          border: 0,
+                          color: "var(--lv-fg-3)",
+                          fontFamily: "var(--lv-body)",
+                          fontSize: 12,
+                          fontWeight: 500,
+                        }}
+                      >
+                        Show all
+                      </button>
+                    </div>
+                  )}
 
                   <div
                     className={styles.addRow}

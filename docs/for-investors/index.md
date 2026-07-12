@@ -1,6 +1,6 @@
 ---
 title: For Investors
-description: HivemindOS business model — revenue streams, trading and on-chain fees, paid-feature boundaries, Honey and HIVE rewards, staking tiers, treasury, and buybacks.
+description: HivemindOS business model — app hosting, managed services, trading and on-chain fees, paid-feature boundaries, Honey and HIVE rewards, staking tiers, treasury, and buybacks.
 ---
 
 # For Investors
@@ -13,13 +13,14 @@ Revenue comes from optional premium services, trading and on-chain fees, hosted 
 
 | Revenue stream | Current number | What that means |
 | --- | ---: | --- |
-| Wallet sends, swaps, live stocks, tokenized stocks, ordinary public x402, and private payments | **1%**, with a **$0.01 minimum** | A `$100` action produces `$1.00` in revenue. A tiny `$0.25` test action produces the `$0.01` minimum. |
+| Wallet sends, swaps, live Alpaca or Robinhood Agentic orders, tokenized stocks, ordinary public x402, and private payments | **1%**, with a **$0.01 minimum** | A `$100` action produces `$1.00` in revenue. A tiny `$0.25` test action produces the `$0.01` minimum. |
 | MiroShark hosted x402 simulations | **$0.20 gross proxy spread** inside the **$1.20 USDC** user charge | The user pays HivemindOS `$1.20`; the hosted proxy pays MiroShark upstream up to `$1.00`; HivemindOS keeps the expected `$0.20` only after upstream success. No extra 1% local x402 platform fee is added. |
 | Hive Compute marketplace inference | Default **20% platform fee** on token-metered marketplace usage | At the current default provider price, 1M input plus 1M output tokens debits `$0.040`: `$0.032` provider earning and `$0.008` gross HivemindOS platform revenue before infrastructure, payment, support, and payout costs. |
 | Zero Human Company revenue share | **2%**, with a **$0.01 minimum** | A company running in HivemindOS that records `$1,000` in revenue produces `$20.00` in HivemindOS revenue. |
 | Hyperliquid builder fee | **0.005%** of eligible filled notional | A `$10,000` fill produces `$0.50` in revenue. |
 | Hosted HivemindOS agent/model messages | Metered: **upstream provider price × 1.25 (25% markup)**, with a **$0.001 minimum** per message | HivemindOS keeps the markup — about **20% of buyer spend** after upstream cost. `$1,000` of hosted message spend produces about `$200` in HivemindOS revenue. A short message on a cheap model hits the `$0.001` floor. |
 | Managed X API and X MCP calls | Hosted policy retail debit: upstream X API unit cost plus **25% markup**, with a **$0.001 minimum** by default | The current default X MCP tool-call policy debits `$0.00625` from hosted credits for a `$0.005` upstream unit. HivemindOS collects the retail debit and keeps the markup after upstream X/API cost, infrastructure, and payment-processing costs. |
+| App publishing and web hosting | **$1** seven-day share preview; renewable **$5** Hosted Site, **$15** Pro Site, and **$25** Dynamic App plans | Hosting is purchased per Site, independently of whether its source was built locally, on a linked machine, or on a Managed Cloud Agent. Renewable plans debit hosted credits every 30 days when auto-renew is enabled. |
 | Future paid infrastructure | TBD by product | Hive Cloud, managed compute, marketplace fees, and enterprise contracts. |
 
 The app still shows fees before users confirm money movement. The point here is not mystery monetization. It is clear take rate, clear message pricing, and paid infrastructure where HivemindOS actually runs something.
@@ -139,6 +140,11 @@ The seasonal reward rules are simple: there is no pre-season staking requirement
     <a href="./paid-features/">Open paid features</a>
   </section>
   <section class="docCard">
+    <h3>App Builder And Hosting</h3>
+    <p>Local-first app creation feeding one-time share links and renewable static, Pro, and dynamic hosting revenue.</p>
+    <a href="paid-features/app-builder-hosting.html">Open hosting economics</a>
+  </section>
+  <section class="docCard">
     <h3>HivemindOS Cloud Agent Calls</h3>
     <p>Managed LiveKit/SFU rooms for mobile-friendly, multi-party, and multi-agent voice calls.</p>
     <a href="paid-features/hivemind-cloud-agent-calls.html">Open cloud calls</a>
@@ -196,6 +202,16 @@ Hive Cloud covers one-click deployment, managed infrastructure, hosted memory, t
 
 Hive Publish lets users become cloud customers without renting a managed agent. Projects may be built on user-owned hardware, then published as a seven-day share link or renewable static site. Dynamic plans use isolated customer Workers with server-controlled limits. Official plan prices, credit debits, expirations, release activation, and public slug ownership remain in HivemindOS-controlled infrastructure; the open-source client only prepares bounded artifacts and submits confirmed plan identifiers.
 
+That creates four direct hosting revenue streams: short-lived share previews,
+renewable standard Sites, higher-capacity Pro Sites, and renewable Dynamic Apps.
+The free local builder is the acquisition surface; hosting converts a user only
+when they want a stable public URL, controlled sharing, server-side execution,
+or ongoing availability. Because the base cloud platform and included usage are
+shared across many Sites while revenue is collected per Site, ordinary hosting
+utilization can produce high infrastructure gross margins. The detailed model,
+including a 3,000-Site illustration and the usage risks that still require
+metering, is in [App Builder And Hosting](paid-features/app-builder-hosting.html).
+
 Hive Compute routes marketplace inference to live worker capacity and settles usage through the hosted gateway. The current default marketplace policy charges token-metered retail usage, keeps a **20% HivemindOS platform fee**, and records provider earnings for payout.
 
 Managed compute runs agents and swarms on Hivemind infrastructure with usage-based pricing.
@@ -208,7 +224,7 @@ Enterprise covers SSO, teams, compliance, private deployments, and support contr
 
 Managed hosted integrations are also direct revenue. The managed X API and X MCP path lets users sign in with X through HivemindOS-controlled hosted infrastructure, then spend hosted HivemindOS credits on vetted X API or X MCP calls. The hosted gateway owns OAuth token custody, pricing policy, credit balances, and debits. The downloaded app only forwards the server-issued credit token. The current default policy charges retail at upstream X API unit cost plus **25% markup**, with a **$0.001 minimum debit**; the default X MCP tool call is `$0.005` upstream and `$0.00625` retail. Production pricing is served by the hosted pricing policy so it can track X Developer Console rates without making the local app authoritative.
 
-Trading and on-chain activity is also a direct revenue source. Official builds collect a policy-driven **1% platform fee with a $0.01 minimum** on supported local-wallet actions: stablecoin sends, DEX swaps, xStocks trades, Robinhood Chain Stock Token trades, live Alpaca orders, ordinary public x402 payments, and Veil private transfers. HivemindOS-hosted MiroShark proxy runs are the named exception: the **$1.20 USDC** charge already includes the **$0.20** HivemindOS cut, so the local wallet does not add a separate 1% x402 platform-fee transfer. Zero Human Companies running in HivemindOS use a **2% revenue share with a $0.01 minimum** on recorded company revenue. Official builds also collect a **0.005% Hyperliquid builder fee** on eligible local Hyperliquid fills. Paper trades and read-only checks are never charged. Recipient addresses and official wallet-fee policy stay in HivemindOS-managed infrastructure. See [Wallets, Honey, And x402](../for-users/features/wallets-honey-and-x402.html) and the [Trading](../for-users/trading/index.html) docs for the mechanism.
+Trading and on-chain activity is also a direct revenue source. Official builds collect a policy-driven **1% platform fee with a $0.01 minimum** on supported actions: stablecoin sends, DEX swaps, xStocks trades, Robinhood Chain Stock Token trades, live Alpaca orders, Robinhood Agentic brokerage orders, ordinary public x402 payments, and Veil private transfers. A Robinhood Agentic order uses the dedicated brokerage account for execution and the acting HivemindOS wallet for the separate quoted fee. HivemindOS-hosted MiroShark proxy runs are the named exception: the **$1.20 USDC** charge already includes the **$0.20** HivemindOS cut, so the local wallet does not add a separate 1% x402 platform-fee transfer. Zero Human Companies running in HivemindOS use a **2% revenue share with a $0.01 minimum** on recorded company revenue. Official builds also collect a **0.005% Hyperliquid builder fee** on eligible local Hyperliquid fills. Paper trades and read-only checks are never charged. Recipient addresses and official wallet-fee policy stay in HivemindOS-managed infrastructure. See [Wallets, Honey, And x402](../for-users/features/wallets-honey-and-x402.html) and the [Trading](../for-users/trading/index.html) docs for the mechanism.
 
 ## HIVE Staker Discounts
 

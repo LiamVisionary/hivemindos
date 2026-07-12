@@ -199,6 +199,34 @@
 .actions { display: flex; gap: 7px; margin-top: 11px; flex-wrap: wrap; }
 .spacer { flex: 1 1 auto; }
 
+.editSwapFallback {
+  transform-origin: top center;
+  animation: config-editor-enter 180ms cubic-bezier(.2, .8, .2, 1) both;
+}
+.editSwapFallback[data-closing="true"] {
+  pointer-events: none;
+  animation: config-editor-exit 140ms cubic-bezier(.4, 0, 1, 1) both;
+}
+.cardReturnFallback {
+  transform-origin: top center;
+  animation: config-card-return 160ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
+@keyframes config-editor-enter {
+  from { opacity: 0; transform: translateY(-7px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes config-card-return {
+  from { opacity: 0; transform: translateY(6px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes config-editor-exit {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-5px) scale(.99); }
+}
+
 .form { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
 .formGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 11px 12px; }
 .full { grid-column: 1 / -1; }
@@ -224,4 +252,9 @@
   .positionRow,
   .detailEvent { grid-template-columns: 1fr; }
   .num { text-align: left; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editSwapFallback,
+  .cardReturnFallback { animation: none; }
 }

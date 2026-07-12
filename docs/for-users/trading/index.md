@@ -29,7 +29,7 @@ confirmation before anything executes. Nothing moves silently.
   </section>
   <section class="docCard">
     <h3>Stocks</h3>
-    <p>Buy and sell real stocks through Alpaca — in a free practice (paper) account or a live one — or trade tokenized stocks on Solana and Robinhood Chain. Includes a portfolio view.</p>
+    <p>Buy and sell through Alpaca paper/live brokerage or a dedicated Robinhood Agentic account, or trade tokenized stocks on Solana and Robinhood Chain. Includes governed previews and portfolio context.</p>
     <a href="stocks.html">Trade stocks</a>
   </section>
   <section class="docCard">
@@ -61,7 +61,7 @@ confirmation before anything executes. Nothing moves silently.
 | Buy or sell NFTs | Bankr |
 | Launch your own token | Bankr |
 | Set up recurring/limit orders | Bankr automations |
-| Buy & sell stocks | Alpaca (paper or live), tokenized xStocks, or Robinhood Chain Stock Tokens |
+| Buy & sell stocks | Alpaca (paper or live), Robinhood Agentic Trading MCP, tokenized xStocks, or Robinhood Chain Stock Tokens |
 
 ## Two kinds of wallet
 
@@ -91,10 +91,11 @@ confirmation before anything executes. Nothing moves silently.
   Alpaca paper crypto positions and prepare a Hyperliquid replay plan, but the actual
   Hyperliquid orders still spend from the selected wallet after confirmation.
 - Supported local-wallet actions use the current HivemindOS platform fee: **1% with
-  a $0.01 minimum**. A `$100` swap, send, live stock order, xStock or Robinhood
-  Chain Stock Token trade, x402 payment, or private payment produces a `$1.00`
-  platform fee. The fee is shown in the preview and collected as a separate USDC
-  or USDG transaction after the action succeeds, depending on the acting network.
+  a $0.01 minimum**. A `$100` swap, send, live Alpaca or Robinhood Agentic order,
+  xStock or Robinhood Chain Stock Token trade, x402 payment, or private payment
+  produces a `$1.00` platform fee. The fee is shown in the preview and collected as
+  a separate USDC or USDG transaction after the action succeeds, depending on the
+  acting network.
 - **Stock trading** defaults to a free **paper** (practice) account so you can try it
   with no real money; live trading is something you opt into.
 - One thing that doesn't fully work today: a **standalone "bridge X to another chain"**

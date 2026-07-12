@@ -100,7 +100,16 @@ export function isRecoveryPhrasePersonalWallet(wallet: any): boolean {
 
 export function isGenericPersonalWalletName(name: unknown): boolean {
   const normalized = String(name || "").trim().toLowerCase();
-  return normalized === "my wallet"
+  return normalized === "base"
+    || normalized === "base mainnet"
+    || normalized === "base sepolia"
+    || normalized === "robinhood"
+    || normalized === "robinhood chain"
+    || normalized === "robinhood chain testnet"
+    || normalized === "solana"
+    || normalized === "solana mainnet"
+    || normalized === "solana devnet"
+    || normalized === "my wallet"
     || normalized === "my wallet base"
     || normalized === "my wallet solana"
     || normalized === "my base wallet"
@@ -145,7 +154,7 @@ export function recoveryPhraseWalletName(wallet: any, count: number): string {
   const fallback = `My ${personalWalletNetworkLabel(String(wallet?.network || ""))} wallet`;
   const name = String(wallet?.name || fallback).trim();
   return count > 1 && isRecoveryPhrasePersonalWallet(wallet)
-    ? name.replace(/\s+(?:Base|Solana)$/i, "") || "My wallet"
+    ? name.replace(/\s+(?:Base|Robinhood Chain|Solana)$/i, "") || "My wallet"
     : name;
 }
 
@@ -156,10 +165,11 @@ export function personalWalletGroupKey(wallet: any, index: number): string {
 }
 
 export function personalWalletChainRank(wallet: any): number {
-  const network = String(wallet?.network || "").toLowerCase();
-  if (network.includes("eip155")) return 0;
-  if (network.includes("solana")) return 1;
-  return 2;
+  const chainKey = chainKeyForNetwork(String(wallet?.network || ""));
+  if (chainKey === "base") return 0;
+  if (chainKey === "robinhood") return 1;
+  if (chainKey === "solana") return 2;
+  return 3;
 }
 
 /** Group raw personal wallet records into one card per seed (Base + Robinhood Chain + Solana from

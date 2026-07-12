@@ -136,6 +136,41 @@ async function providerKey(provider: CloudTtsProvider): Promise<string> {
   return key;
 }
 
+export async function transcribeElevenLabsAudio(
+  audio: Blob,
+  options: { model?: string; languageCode?: string; signal?: AbortSignal } = {},
+): Promise<string> {
+  if (!audio.size) throw new Error("A non-empty audio recording is required.");
+  const apiKey = await providerKey("elevenlabs");
+  const audioName = typeof (audio as { name?: unknown }).name === "string"
+    ? (audio as { name: string }).name
+    : "utterance.webm";
+  const form = new FormData();
+  form.set("file", audio, audioName);
+  form.set("model_id", options.model?.trim() || "scribe_v2");
+  form.set("language_code", options.languageCode?.trim() || "en");
+  form.set("tag_audio_events", "false");
+  form.set("diarize", "false");
+  const response = await fetch("https://api.elevenlabs.io/v1/speech-to-text", {
+    method: "POST",
+    headers: { "xi-api-key": apiKey },
+    body: form,
+    signal: options.signal,
+  });
+  const data = (await response.json().catch(() => null)) as {
+    text?: unknown;
+    detail?: string | { message?: string };
+    message?: string;
+  } | null;
+  if (!response.ok) {
+    const detail = typeof data?.detail === "string" ? data.detail : data?.detail?.message;
+    throw new Error(detail || data?.message || `ElevenLabs STT returned HTTP ${response.status}.`);
+  }
+  const transcript = typeof data?.text === "string" ? data.text.trim() : "";
+  if (!transcript) throw new Error("ElevenLabs STT returned an empty transcript.");
+  return transcript;
+}
+
 /** One selectable voice from a cloud TTS provider's catalog. */
 export type CloudVoiceListing = {
   id: string;

@@ -17,6 +17,7 @@ export type HiveComputeModelOption = {
   subtitle?: string;
   group?: string;
   badge?: string;
+  trust?: "confidential-verified";
   performance?: HiveComputeModelPerformance;
   disabled?: boolean;
   disabledReason?: string;
@@ -44,6 +45,8 @@ export type HiveComputeGatewayStatus = {
     busySlots?: number;
     availableSlots?: number;
     hardwareTeeWorkers?: number;
+    confidentialWorkers?: number;
+    confidentialModels: string[];
     liveModels: string[];
     keyRelayModels: string[];
     modelPerformance: HiveComputeModelPerformance[];

@@ -2,13 +2,17 @@ import { z } from "zod";
 import { defineHiveAction } from "./define";
 import { SLACK_TOKEN_ENV } from "@/lib/services/integrations/provider-connection-env";
 import { azureResourcesAction } from "./integrations/azure-resources";
+import { googleSlidesEditAction, googleSlidesReadAction } from "./integrations/google-slides";
 import { deployHivemindosMachineAction, hivemindosMachinesCatalogAction } from "./integrations/hivemindos-machines";
 import { managedCloudAgentsAction } from "./managed-cloud-agents";
 import { appBuilderAction } from "./app-builder";
 import { hostedMediaCatalogAction, hostedMediaGenerationAction, hostedMediaReadAction } from "./hosted-media";
+import { robinhoodAgenticReadAction } from "./robinhood-agentic";
 export { deployHivemindosMachineAction, hivemindosMachinesCatalogAction } from "./integrations/hivemindos-machines";
 export { managedCloudAgentsAction } from "./managed-cloud-agents";
 export { appBuilderAction } from "./app-builder";
+export { robinhoodAgenticReadAction } from "./robinhood-agentic";
+export { googleSlidesEditAction, googleSlidesReadAction } from "./integrations/google-slides";
 
 const handoffTargetSchema = {
   target: z.string().describe("Fuzzy machine name, such as ubuntu."),
@@ -690,24 +694,27 @@ export const stockTradeAction = defineHiveAction({
   id: "wallet.stock-trade",
   title: "Stock trade",
   description:
-    "Execute or validate a governed stock, xStocks, or Robinhood Chain stock-token trade after explicit buy/sell confirmation.",
+    "Execute or validate a governed Alpaca, Robinhood Agentic, xStocks, or Robinhood Chain stock-token trade after explicit buy/sell confirmation.",
   schema: z.object({
     agentId: z.string().optional(),
     wallet: z.record(z.string(), z.unknown()).optional(),
     symbol: z.string().optional(),
+    ticker: z.string().optional(),
     side: z.enum(["buy", "sell"]).optional(),
     quantity: z.number().optional(),
+    qty: z.number().optional(),
     amountUsd: z.number().optional(),
     notionalUsd: z.number().optional(),
     venue: z.string().optional(),
     alpacaPaper: z.boolean().optional(),
     confirmation: z.string().optional(),
+    approvalToken: z.string().optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),
   }),
   sideEffects: ["wallet", "payment", "network"],
   risk: "critical",
-  tags: ["wallet", "payment", "stocks", "trade", "execution"],
-  aliases: ["stock_trade", "buy stock", "sell stock", "xstocks trade", "robinhood chain stock token"],
+  tags: ["wallet", "payment", "stocks", "trade", "execution", "robinhood", "agentic", "brokerage", "mcp"],
+  aliases: ["stock_trade", "buy stock", "sell stock", "xstocks trade", "robinhood agentic trade", "robinhood chain stock token"],
   mcp: { expose: true, compact: true, toolName: "stock_trade" },
   confirmation: {
     tokens: ["CONFIRM_BUY", "CONFIRM_SELL"],
@@ -717,9 +724,9 @@ export const stockTradeAction = defineHiveAction({
   },
   contextIndex: {
     summary:
-      "Critical governed stock/xStocks/Robinhood Chain stock-token route.",
+      "Critical governed brokerage/xStocks/Robinhood Chain stock-token route.",
     retrievalText:
-      "Use stock_trade only after prepare/review paths establish venue, paper/live mode, symbol, side, amount, and required side-specific confirmation. CONFIRM_BUY is required for buys and CONFIRM_SELL for sells; server routes remain authoritative. Robinhood Chain stock-token support swaps USDG through 0x on chain ID 4663 and signs with the local Robinhood Chain wallet; if 0x rejects a Stock Token for legal/eligibility restrictions, surface that block and do not route around it.",
+      "Use stock_trade only after prepare/review paths establish venue, paper/live mode, symbol, side, amount, and required side-specific confirmation. CONFIRM_BUY is required for buys and CONFIRM_SELL for sells; server routes remain authoritative. The robinhood-agentic venue uses Robinhood's official OAuth MCP and dedicated Agentic brokerage account: it calls review_equity_order before place_equity_order, while HivemindOS enforces caps, company governance, and its ledger. Robinhood Chain remains a separate self-custody venue that swaps USDG through 0x on chain ID 4663; if 0x rejects a Stock Token for legal/eligibility restrictions, surface that block and do not route around it.",
     route: "/api/trading",
     methods: ["POST"],
   },
@@ -1705,6 +1712,8 @@ export const slackSendMessageAction = defineHiveAction({
 export const HIVE_ACTIONS = [
   appBuilderAction,
   azureResourcesAction,
+  googleSlidesReadAction,
+  googleSlidesEditAction,
   hivemindosMachinesCatalogAction,
   deployHivemindosMachineAction,
   managedCloudAgentsAction,
@@ -1720,6 +1729,7 @@ export const HIVE_ACTIONS = [
   reviewCryptoAction,
   prepareCryptoAction,
   nansenIntelligenceAction,
+  robinhoodAgenticReadAction,
   sendUsdcAction,
   b20IssuerProofAction,
   dexSwapAction,

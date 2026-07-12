@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import {
-  BARGE_IN_TUNING,
   createBargeInDetector,
   requestBargeInRecalibration,
   updateBargeInDetector,
@@ -21,6 +20,29 @@ import {
   startTurnCaptionStream,
 } from "./caption-source";
 import { runRecordedVoiceTurn } from "./recorded-turn";
+import {
+  realtimeTranscriptionFailureMessage,
+  type RealtimeTranscriptionEvent,
+} from "./realtime-transcription-event";
+import {
+  ACK_PLAY_DELAY_MS,
+  BARGE_IN_BACKSTOP_INTERVAL_MS,
+  BARGE_IN_FLUSH_LOOKBACK_MS,
+  BARGE_IN_RAF_STALL_MS,
+  ECHO_CANCELLED_AUDIO,
+  ERROR_RESUME_DELAY_MS,
+  IDLE_BUFFER_CLEAR_MS,
+  IDLE_RECORDER_RESTART_MS,
+  LOCAL_TTS_PREWARM_INTERVAL_MS,
+  POST_PLAYBACK_FLUSH_LOOKBACK_MS,
+  PRE_ROLL_MAX_MS,
+  STT_ARM_TIMEOUT_MS,
+  STT_COMMIT_FALLBACK_MS,
+  STT_PREWARM_MAX_AGE_MS,
+  TURN_PROGRESS_POLL_MS,
+  pickRecorderMimeType,
+  utteranceFileName,
+} from "./voice-pipeline-config";
 import { createSentenceChunker } from "@/lib/services/queen-bee/voice-speech-stream";
 import {
   createNdjsonEventReader,
@@ -68,97 +90,6 @@ type VoiceTurnResponse = {
   brainFallback?: { label?: string; error?: string };
   error?: string;
 };
-type SttEvent = {
-  type?: string;
-  delta?: string;
-  transcript?: string;
-  error?: { message?: string };
-};
-const ECHO_CANCELLED_AUDIO: MediaTrackConstraints = {
-  autoGainControl: true,
-  echoCancellation: true,
-  noiseSuppression: true,
-};
-
-const RECORDER_MIME_CANDIDATES = [
-  "audio/webm;codecs=opus",
-  "audio/webm",
-  "audio/mp4;codecs=mp4a.40.2",
-  "audio/mp4",
-];
-
-// Client-side throttle for fire-and-forget TTS prewarm pings (the server
-// dedupes too; this just avoids pointless requests every turn).
-const LOCAL_TTS_PREWARM_INTERVAL_MS = 45_000;
-// Spoken acknowledgment for slow turns (clip logic in voice-ack-cues.ts):
-// played only when NO speech text has streamed in by the delay — the genuine
-// dead-air case (pre-speech tool calls, delegation routing). Ordinary replies
-// stream their first delta in ~1-2s and cancel it. At 1.4s this fired on
-// EVERY turn (first spoken chunk needs a full sentence + synth TTFB), so she
-// acked messages that weren't even requests.
-const ACK_PLAY_DELAY_MS = 4_500;
-// Live "what she's doing" chips: poll cadence for the turn-progress endpoint
-// while a converse request is in flight.
-const TURN_PROGRESS_POLL_MS = 650;
-// Barge-in (interrupt Queen mid-reply) uses the adaptive echo-floor detector
-// in ./barge-in-detector.ts so her own speaker bleed cannot self-interrupt
-// playback; tuning knobs live there (BARGE_IN_TUNING).
-// Continuous capture: one session-long mic pump fills a short PCM pre-roll
-// ring buffer even while Queen Bee thinks and speaks. When a listening turn
-// arms its STT socket, the frames captured while the socket was still opening
-// — or the words that just interrupted her — are flushed in first, so turn
-// boundaries and barge-ins lose no speech.
-// Covers the STT arming deadline plus the post-playback lookback, so words
-// spoken while a slow mint is still connecting survive to the flush.
-const PRE_ROLL_MAX_MS = 8_000;
-// Flush window behind a barge-in trigger: the sustain the detector required
-// before firing plus a lead for the first syllable's onset.
-const BARGE_IN_FLUSH_LOOKBACK_MS = BARGE_IN_TUNING.sustainMs + 480;
-// The barge-in watcher runs on requestAnimationFrame, which WKWebView can
-// starve for seconds while the page is otherwise idle (the same class of bug
-// the Lottie player works around; see src/components/ui/lottie-player.tsx).
-// Her spoken tail is exactly such an idle stretch, so a low-frequency timer
-// backstop runs the watcher tick when rAF has stalled, keeping barge-in alive.
-const BARGE_IN_BACKSTOP_INTERVAL_MS = 33;
-const BARGE_IN_RAF_STALL_MS = 66;
-// Every ordinary listening turn also flushes pre-roll from BEFORE the
-// speaking→listening flip: speech in her playback tail is too short to
-// trigger barge-in but must still reach STT (see startRealtimeListening).
-const POST_PLAYBACK_FLUSH_LOOKBACK_MS = 800;
-// If the STT completion event never arrives after a commit (server stall,
-// swallowed frame), the turn proceeds with the live transcript instead of
-// hanging in "Transcribing..." forever.
-const STT_COMMIT_FALLBACK_MS = 4_000;
-// A prewarmed STT session older than this at adoption is discarded and
-// re-minted: sockets idling through a long queen reply can be half-dead
-// upstream while readyState still reads OPEN — audio then goes nowhere until
-// the late close event, which read as multi-second transcription delays.
-const STT_PREWARM_MAX_AGE_MS = 20_000;
-// Hard deadline for a listening turn to arm its STT socket — a stalled mint
-// (dev cold compile measured 40s+, or a wedged network) used to strand
-// "listening" with a live waveform while speech went nowhere. On expiry the
-// turn falls back to the recorder path and says so; the stalled mint keeps
-// running and becomes the next turn's prewarm.
-const STT_ARM_TIMEOUT_MS = 6_000;
-// Recorder fallback only: quiet stretches bloat the Whisper upload, so the
-// recording restarts when nothing has been said for a while.
-const IDLE_RECORDER_RESTART_MS = 10_000;
-// Realtime path: flush silently-accumulated server audio while idle.
-const IDLE_BUFFER_CLEAR_MS = 12_000;
-const ERROR_RESUME_DELAY_MS = 3_500;
-
-function pickRecorderMimeType() {
-  if (typeof MediaRecorder === "undefined") return "";
-  return (
-    RECORDER_MIME_CANDIDATES.find((candidate) =>
-      MediaRecorder.isTypeSupported(candidate),
-    ) ?? ""
-  );
-}
-
-function utteranceFileName(mimeType: string) {
-  return mimeType.includes("mp4") ? "utterance.mp4" : "utterance.webm";
-}
 
 /**
  * Hands-free Queen Bee voice loop. Preferred path: microphone PCM streams
@@ -168,14 +99,21 @@ function utteranceFileName(mimeType: string) {
  * Queen Bee turn. Sessions minted without server VAD (env-forced
  * gpt-realtime-whisper, older servers) fall back to a client energy VAD
  * (timer-backstopped against WKWebView rAF starvation) with a manual commit.
- * When realtime STT is unavailable entirely, falls back to MediaRecorder +
- * Whisper.
+ * When realtime STT is unavailable—or the selected voice owns a recorded STT
+ * transport—MediaRecorder sends each utterance through that configured provider.
  */
 export function useQueenBeeVoice(
   active: boolean,
   muted: boolean,
   openingLine = "",
   streamLocalTts = false,
+  // Conversation context provider: returns the SHARED Queen chat history
+  // (typed + voice turns from the whole app) so a spoken turn continues the
+  // same conversation the text pill sees. Without it the session-local
+  // history array is used, which only ever contains this session's voice
+  // turns — typed turns would be invisible to spoken replies.
+  getSharedHistory?: () => { who: "you" | "queen"; text: string }[],
+  preferRecordedInput = false,
 ) {
   const [phase, setPhase] = React.useState<QueenVoicePhase>("starting");
   const [error, setError] = React.useState("");
@@ -211,6 +149,12 @@ export function useQueenBeeVoice(
     streamLocalTtsRef.current = streamLocalTts;
   }, [streamLocalTts]);
 
+  // Read at converse time so the long-lived session effect never goes stale.
+  const getSharedHistoryRef = React.useRef(getSharedHistory);
+  React.useEffect(() => {
+    getSharedHistoryRef.current = getSharedHistory;
+  }, [getSharedHistory]);
+
   React.useEffect(() => {
     if (!active) return undefined;
 
@@ -226,7 +170,7 @@ export function useQueenBeeVoice(
     let recorderChunks: Blob[] = [];
     let sttSocket: WebSocket | null = null;
     const sttPrewarm = createRealtimeSttPrewarmCache();
-    let realtimeUnavailable = false;
+    let realtimeUnavailable = preferRecordedInput;
     // Session-long mic pump state: PCM streams to sttLiveSocket while a
     // listening turn is armed; the pre-roll ring buffer fills the whole time.
     let sttLiveSocket: WebSocket | null = null;
@@ -626,6 +570,18 @@ export function useQueenBeeVoice(
           })
           .catch(() => undefined);
       }, TURN_PROGRESS_POLL_MS);
+      // Prefer the shared chat history (typed turns included) over the
+      // session-local voice array. The current transcript may already be
+      // mirrored into the store as the trailing user turn — drop it so the
+      // model doesn't see the question twice.
+      let turnHistory = history.slice(-8);
+      const sharedHistory = getSharedHistoryRef.current?.();
+      if (sharedHistory && sharedHistory.length) {
+        const merged = sharedHistory.slice();
+        const last = merged[merged.length - 1];
+        if (last?.who === "you" && last.text.trim() === transcript.trim()) merged.pop();
+        turnHistory = merged.slice(-8);
+      }
       try {
         const converseResponse = await fetch("/api/queen-bee/voice", {
           method: "POST",
@@ -634,7 +590,7 @@ export function useQueenBeeVoice(
             action: "converse-stream",
             transcript,
             turnId,
-            history: history.slice(-8),
+            history: turnHistory,
           }),
           cache: "no-store",
           signal: AbortSignal.any([abort.signal, AbortSignal.timeout(75_000)]),
@@ -1018,10 +974,20 @@ export function useQueenBeeVoice(
         `${committedTranscript} ${liveTranscript}`.trim();
 
       const messageHandler = (event: MessageEvent<string>) => {
-        let payload: SttEvent | null = null;
+        let payload: RealtimeTranscriptionEvent | null = null;
         try {
-          payload = JSON.parse(event.data) as SttEvent;
+          payload = JSON.parse(event.data) as RealtimeTranscriptionEvent;
         } catch {
+          return;
+        }
+        const transcriptionFailure = realtimeTranscriptionFailureMessage(payload);
+        if (transcriptionFailure) {
+          window.clearTimeout(commitFallbackTimer);
+          window.clearInterval(serverWatcher);
+          socket.removeEventListener("message", messageHandler);
+          closeSttSocket();
+          if (youTurnId) dropTurn(youTurnId);
+          failTurn(`Voice transcription failed: ${transcriptionFailure}`);
           return;
         }
         if (
@@ -1485,7 +1451,7 @@ export function useQueenBeeVoice(
       micAnalyserRef.current = null;
       if (typeof speechSynthesis !== "undefined") speechSynthesis.cancel();
     };
-  }, [active, openingLine]);
+  }, [active, openingLine, preferRecordedInput]);
 
   React.useEffect(() => {
     // Muting hard-disables the mic track; mutedRef also zeroes the VAD signal.

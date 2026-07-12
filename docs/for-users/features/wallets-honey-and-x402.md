@@ -45,7 +45,7 @@ For the ecosystem-level plan behind Honey, HIVE, premium services, treasury rese
 - Spend hosted HivemindOS credits on managed Nansen research when no `NANSEN_API_KEY` is configured. The official gateway holds the Nansen key server-side, charges the user's hosted credits, records a receipt, and returns a derived brief.
 - Generate images, video, audio, music, speech, lip-sync, edits, and enhancements through hosted HivemindOS credits without configuring a media-provider key. The official gateway quotes the live provider request, adds 25%, reserves credits before generation, and refunds failures or unused reservation.
 - Execute x402 paid requests through policy-aware helpers.
-- Buy stocks from a prompt through Alpaca (a real brokerage, paper by default), on-chain tokenized xStocks (a USDC to xStock swap via Jupiter), or eligible Robinhood Chain Stock Tokens (a USDG swap through 0x on Robinhood Chain).
+- Buy stocks from a prompt through Alpaca (a real brokerage, paper by default), Robinhood Agentic Trading (a dedicated brokerage account connected through Robinhood's official OAuth MCP), on-chain tokenized xStocks (a USDC to xStock swap via Jupiter), or eligible Robinhood Chain Stock Tokens (a USDG swap through 0x on Robinhood Chain).
 - Select and prepare the best available crypto rail for agent intents such as paid API calls, private transfers, Bankr trading, and LLM credit funding.
 - Prepare crosschain swap, bridge, and payment intents through the same router, with Bankr as the active provider path and direct LI.FI/Open Intents adapters reserved as explicit future provider slots.
 - Generate clear-signing reviews that show the action kind, endpoint, recipient, network, amount, cap, confirmation phrase, and blocking risks before execution.
@@ -176,7 +176,7 @@ The downloadable app cannot be the authority for official HivemindOS revenue: us
 
 - `HIVEMINDOS_PLATFORM_FEE_POLICY_URL=https://hivemindos-paid-agent-gateway.hivemindos.workers.dev/api/platform-fees/config`
 
-That hosted policy returns public terms such as fee basis points, minimum fee, supported rails, and recipient addresses. The current official local-wallet platform fee is **1% with a $0.01 minimum**. When a hosted policy has a recipient for the acting wallet network, supported local-wallet actions quote the fee before confirmation, then collect it as a separate stablecoin transfer after the main action succeeds. Today that includes local stablecoin sends, local DEX swaps, xStocks trades, Robinhood Chain Stock Token trades, live Alpaca stock orders, ordinary public x402 payments, Veil private transfers, and Veil private x402 payments. Fees use USDC on Base/Solana and USDG on Robinhood Chain. Paper trades, read-only checks, and x402 calls where no payment is required do not charge a platform fee. HivemindOS-hosted MiroShark proxy runs are also excluded from the separate local platform-fee transfer because their **$1.20 USDC** x402 price already includes the expected **$0.20** HivemindOS cut. The fee transfer, when one applies, is recorded in wallet activity as a platform-fee item so it remains visible to the user.
+That hosted policy returns public terms such as fee basis points, minimum fee, supported rails, and recipient addresses. The current official local-wallet platform fee is **1% with a $0.01 minimum**. When a hosted policy has a recipient for the acting wallet network, supported actions quote the fee before confirmation, then collect it as a separate stablecoin transfer after the main action succeeds. Today that includes local stablecoin sends, local DEX swaps, xStocks trades, Robinhood Chain Stock Token trades, live Alpaca stock orders, Robinhood Agentic brokerage orders, ordinary public x402 payments, Veil private transfers, and Veil private x402 payments. Fees use USDC on Base/Solana and USDG on Robinhood Chain. A Robinhood Agentic order therefore needs an acting HivemindOS wallet on a supported fee network in addition to the connected brokerage account. Paper trades, read-only checks, and x402 calls where no payment is required do not charge a platform fee. HivemindOS-hosted MiroShark proxy runs are also excluded from the separate local platform-fee transfer because their **$1.20 USDC** x402 price already includes the expected **$0.20** HivemindOS cut. The fee transfer, when one applies, is recorded in wallet activity as a platform-fee item so it remains visible to the user.
 
 Zero Human Company revenue-share events are recorded through `/api/company-revenue` and shown in the company Treasury tab. They use the same visible collection rail, but the default company revenue share is **2% with a $0.01 minimum**. Recording revenue alone updates the company revenue ledger; collecting the HivemindOS share requires explicit confirmation and a selected company agent wallet. External revenue that never reports into HivemindOS, a hosted HivemindOS billing service, or a verifiable settlement rail is not automatically charged by the local app.
 
@@ -197,7 +197,7 @@ Self-hosted operators can override the hosted policy for their own install by se
 - `HIVEMINDOS_COMPANY_REVENUE_SHARE_BPS=200` for a 2% Zero Human Company revenue share
 - `HIVEMINDOS_TRADING_PLATFORM_MIN_FEE_USD=0.01` for a minimum fee
 - Optional: `HIVEMINDOS_TRADING_PLATFORM_MAX_FEE_USD=<max-fee>`
-- `HIVEMINDOS_PLATFORM_FEE_RECIPIENT_EVM=<evm-address>` for Base and Robinhood Chain wallet sends, EVM DEX swaps, Robinhood Chain Stock Token swaps, live Alpaca fee collection, public x402, and Veil-backed private payments
+- `HIVEMINDOS_PLATFORM_FEE_RECIPIENT_EVM=<evm-address>` for Base and Robinhood Chain wallet sends, EVM DEX swaps, Robinhood Chain Stock Token swaps, live Alpaca and Robinhood Agentic fee collection, public x402, and Veil-backed private payments
 - `HIVEMINDOS_PLATFORM_FEE_RECIPIENT_SOLANA=<solana-address>` for Solana DEX, xStocks swaps, and Solana x402 payments
 
 Some Trading tab capabilities are not safely fee-able from the local app alone. Bankr actions and MoneyClaw card payments need a hosted/proxy fee path, provider-native partner fee support, or a contract-based settlement layer because the local app does not own a deterministic local-wallet settlement for those rails. Do not present local fee settings as official HivemindOS-wide revenue enforcement: a downloaded app is user-controlled and can be modified. Strong official enforcement must happen in hosted HivemindOS infrastructure or in a verifiable third-party settlement flow that checks recipient, network, amount, resource, and receipt server-side.
@@ -333,12 +333,14 @@ automatically to eligible orders; users do not need to find or paste a builder c
 For the full user-facing guide, including fees, funding, liquidation risk, supported
 markets, and agent behavior, see [Hyperliquid Trading](../trading/hyperliquid.html).
 
-## Stock Trading (Alpaca And xStocks)
+## Stock Trading (Four Venues)
 
-Agents and the Trade tab can buy and sell stocks through one unified trade rail with two venues:
+Agents and the Trade tab can buy and sell stocks through one unified trade rail with four venues:
 
 - `alpaca`: a real, regulated US brokerage. Market orders go through the Alpaca Trading API. It defaults to paper (simulated) trading, and live trading is reachable only when the wallet sets `alpacaPaper` to false. Paper and live are SEPARATE Alpaca accounts with SEPARATE credentials, so they load from different shared-hive env names: paper reads `ALPACA_PAPER_API_KEY_ID` / `ALPACA_PAPER_API_SECRET_KEY` (falling back to the live names for backward compatibility), live reads `ALPACA_API_KEY_ID` / `ALPACA_API_SECRET_KEY`. Values are never stored in project files.
+- `robinhood-agentic`: a dedicated Robinhood Agentic brokerage account connected through Robinhood's official OAuth Trading MCP. HivemindOS can read the authorized account through a bounded allowlist, asks Robinhood to review a long-equity market order, and requires `CONFIRM_BUY` or `CONFIRM_SELL` before placement. Raw mutation tools are not handed directly to agents.
 - `xstocks`: on-chain tokenized equities issued by Backed Finance. A buy swaps USDC into the verified xStock SPL token through Jupiter; a sell sizes the position from the current USDC price and swaps the xStock back into USDC (both legs ExactIn, which routes reliably for thin tokenized-equity pools where exact-out often has no route). Both are signed by the agent's existing local Solana wallet and require a Solana mainnet wallet plus a little SOL for fees and token-2022 account rent.
+- `robinhood-chain`: eligible Stock Tokens traded on Robinhood Chain from the agent's self-custody wallet. Buys swap USDG into the verified token through 0x and sells return the position to USDG; the wallet also needs ETH for gas. This on-chain venue is separate from the Robinhood Agentic brokerage account.
 
 How it works:
 
@@ -347,12 +349,14 @@ How it works:
 - Two entry points: the chat runtime handles natural requests such as `buy $25 of AAPL on xstocks` as a draft, confirm, execute card; the Trade tab calls `POST /api/trading` (`action: 'quote' | 'execute' | 'portfolio'`, `side: 'buy' | 'sell'`). The route resolves the acting agent's wallet server-side and never trusts a client-supplied policy. `GET /api/trading` reports per-mode venue readiness (separate `paper` and `live` Alpaca credential state) and trade-ready agents.
 - A buy requires `CONFIRM_BUY`, a sell requires `CONFIRM_SELL`. Every trade honors a per-trade USD cap (`maxTradeUsd`, falling back to the per-payment cap). A buy passes the full spend-governance chokepoint (company kill switch, rolling daily/monthly budgets, approval escalation); a sell is an inflow, so only the company kill switch binds and it never debits rolling budgets.
 - The Stocks screen has a **Paper-trading toggle** and a **portfolio panel**. The toggle flips the Alpaca account between paper (simulated) and live; paper orders run against `https://paper-api.alpaca.markets` and never buy the real stock. The portfolio panel reads `action: 'portfolio'` (Alpaca `/v2/account` + `/v2/positions`) for the selected mode and shows equity, cash, buying power, and open positions with unrealized P/L. The toggle can only force paper from the client — it can never escalate a paper-only agent to live: the server re-derives the effective mode from the persisted policy, so live is reachable only when the wallet opted in (`alpacaPaper:false`).
-- Venue and mode are configured per agent in the Wallets tab: venue (Off, Alpaca, or xStocks), Alpaca paper vs live, and max per trade.
+- Venue and mode are configured per agent in the Wallets tab: venue (Off, Alpaca, Robinhood Agentic, xStocks, or Robinhood Chain), Alpaca paper vs live, and max per trade.
 
 Safety:
 
 - Alpaca defaults to paper. Live is opt-in per wallet, and the Stocks-screen toggle cannot move a paper-only agent to live.
+- Robinhood Agentic requires an authorized dedicated Agentic account, Robinhood's own pre-trade review, HivemindOS confirmation, and an acting wallet capable of paying the quoted platform fee.
 - xStock trades resolve only verified mints and require a Solana mainnet wallet.
+- Robinhood Chain Stock Token trades resolve only verified contracts and may still be blocked by upstream liquidity, eligibility, or legal restrictions.
 - `trade` activity is recorded in the spend ledger like every other rail.
 
 Tests:

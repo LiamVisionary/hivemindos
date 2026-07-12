@@ -117,4 +117,12 @@ assert.match(fleetFinderSource, /onOpenChange\(false\);\s*inputRef\.current\?\.b
 const fleetHiveCss = readFileSync(new URL("../src/components/fleet-hive/fleet-hive.css", import.meta.url), "utf8");
 assert.match(fleetHiveCss, /\.fr-root \.fr-finder > input:focus-visible \{ outline: none; \}/, "the finder shell, not its inner input rectangle, should own focus styling");
 
+const hivePanelSource = readFileSync(new URL("../src/components/fleet-hive/HivePanel.tsx", import.meta.url), "utf8");
+assert.match(hivePanelSource, /className="fr-agent-task"/, "the selected-agent task should use the wrapping detail-card class");
+assert.match(
+  fleetHiveCss,
+  /\.fr-agent-task\s*\{[^}]*overflow-wrap:\s*anywhere;/s,
+  "long selected-agent task text should wrap inside the Fleet detail panel",
+);
+
 console.log("fleet search ranking, focus filters, global routing, and finder dismissal ok");

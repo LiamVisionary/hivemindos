@@ -62,6 +62,7 @@ export type PlatformFeeSource =
   | "dex-swap"
   | "xstocks"
   | "robinhood-chain"
+  | "robinhood-agentic"
   | "alpaca-live"
   | "bankr-action"
   | "moneyclaw"

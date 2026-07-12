@@ -74,22 +74,20 @@ export function toneColorInto(palette: Palette, tone: SynapseNodeTone, seed: num
     if (tone === "stale") return target.copy(palette.honey).lerp(palette.fg2, 0.55);
     return target.copy(palette.fg2).lerp(palette.fg, 0.55);
   }
-  if (tone === "touched") return linearizeSRGB(target.set("#d178ff"));
-  if (tone === "recent") return linearizeSRGB(target.set("#7fd8ff"));
-  if (tone === "unresolved") return linearizeSRGB(target.set("#ff5aa8"));
-  if (tone === "stale") return linearizeSRGB(target.set("#6f6cae"));
+  if (tone === "touched") return linearizeSRGB(target.set("#dc83ff"));
+  if (tone === "recent") return linearizeSRGB(target.set("#71e2ff"));
+  if (tone === "unresolved") return linearizeSRGB(target.set("#ff67b2"));
+  if (tone === "stale") return linearizeSRGB(target.set("#817dcc"));
   // Blue→violet field with a magenta minority, like real neuro-imagery.
   if ((seed * 13.7) % 1 > 0.86) {
-    return linearizeSRGB(target.setHSL(0.83 + ((seed * 5.1) % 1) * 0.07, 0.68, 0.56));
+    return linearizeSRGB(target.setHSL(0.83 + ((seed * 5.1) % 1) * 0.07, 0.8, 0.61));
   }
-  return linearizeSRGB(target.setHSL(0.55 + ((seed * 7.31) % 1) * 0.2, 0.68, 0.5 + ((seed * 3.3) % 1) * 0.14));
+  return linearizeSRGB(target.setHSL(0.55 + ((seed * 7.31) % 1) * 0.2, 0.8, 0.55 + ((seed * 3.3) % 1) * 0.14));
 }
 
-// White-on-transparent 2x2 atlas of starburst halos — a hot core with long
-// thin radiating spikes plus a soft outer glow, like a firing neuron seen
-// through a lens. Tinted per node in the halo shader so one texture serves
-// every tone and theme.
-export function makeDendriteAtlas(): THREE.CanvasTexture {
+// White-on-transparent 2x2 atlas of clean radial node glows. No procedural
+// membrane lobes or process roots: the graph contains only real note nodes.
+export function makeNodeGlowAtlas(): THREE.CanvasTexture {
   const size = 512;
   const cell = size / 2;
   const canvas = document.createElement("canvas");
@@ -100,39 +98,19 @@ export function makeDendriteAtlas(): THREE.CanvasTexture {
     for (let variant = 0; variant < 4; variant += 1) {
       const cx = (variant % 2) * cell + cell / 2;
       const cy = Math.floor(variant / 2) * cell + cell / 2;
-      // Broad soft glow bed.
+      // A compact core plus broad bloom bed keeps the node crisp at any zoom.
       const bed = ctx.createRadialGradient(cx, cy, 0, cx, cy, cell * 0.46);
-      bed.addColorStop(0, "rgba(255,255,255,0.30)");
-      bed.addColorStop(0.4, "rgba(255,255,255,0.10)");
+      bed.addColorStop(0, "rgba(255,255,255,0.72)");
+      bed.addColorStop(0.16, "rgba(255,255,255,0.28)");
+      bed.addColorStop(0.5, "rgba(255,255,255,0.07)");
       bed.addColorStop(1, "rgba(255,255,255,0)");
       ctx.fillStyle = bed;
       ctx.beginPath();
       ctx.arc(cx, cy, cell * 0.46, 0, Math.PI * 2);
       ctx.fill();
-      // Radiating spikes, a few long primaries and many short secondaries.
-      const spikes = 14 + ((variant * 5) % 7);
-      for (let i = 0; i < spikes; i += 1) {
-        const angle = (i / spikes) * Math.PI * 2 + hashUnit(`t${variant}-${i}`) * 0.5;
-        const primary = i % 3 === 0;
-        const reach = cell * (primary ? 0.34 + hashUnit(`r${variant}-${i}`) * 0.14 : 0.14 + hashUnit(`r${variant}-${i}`) * 0.12);
-        const endX = cx + Math.cos(angle) * reach;
-        const endY = cy + Math.sin(angle) * reach;
-        const grad = ctx.createLinearGradient(cx, cy, endX, endY);
-        grad.addColorStop(0, `rgba(255,255,255,${primary ? 0.85 : 0.5})`);
-        grad.addColorStop(0.5, `rgba(255,255,255,${primary ? 0.3 : 0.16})`);
-        grad.addColorStop(1, "rgba(255,255,255,0)");
-        ctx.strokeStyle = grad;
-        ctx.lineWidth = primary ? 2.4 : 1.4;
-        ctx.lineCap = "round";
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.lineTo(endX, endY);
-        ctx.stroke();
-      }
-      // White-hot center.
       const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, cell * 0.13);
       core.addColorStop(0, "rgba(255,255,255,1)");
-      core.addColorStop(0.35, "rgba(255,255,255,0.75)");
+      core.addColorStop(0.42, "rgba(255,255,255,0.7)");
       core.addColorStop(1, "rgba(255,255,255,0)");
       ctx.fillStyle = core;
       ctx.beginPath();
@@ -282,12 +260,14 @@ export const FIBER_VERTEX = /* glsl */ `
   attribute float aLit;
   attribute float aSeed;
   attribute float aAlpha;
+  attribute float aDendrite;
   attribute vec3 aColorA;
   attribute vec3 aColorB;
   varying float vT;
   varying float vLit;
   varying float vSeed;
   varying float vAlpha;
+  varying float vDendrite;
   varying float vDist;
   varying vec3 vColA;
   varying vec3 vColB;
@@ -296,6 +276,7 @@ export const FIBER_VERTEX = /* glsl */ `
     vLit = aLit;
     vSeed = aSeed;
     vAlpha = aAlpha;
+    vDendrite = aDendrite;
     vColA = aColorA;
     vColB = aColorB;
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
@@ -317,6 +298,7 @@ export const FIBER_FRAGMENT = /* glsl */ `
   varying float vLit;
   varying float vSeed;
   varying float vAlpha;
+  varying float vDendrite;
   varying float vDist;
   varying vec3 vColA;
   varying vec3 vColB;
@@ -325,16 +307,18 @@ export const FIBER_FRAGMENT = /* glsl */ `
     // Dark theme: pull fibers toward pale blue-white — blue-on-blue has no
     // contrast no matter the alpha. (uAdditive doubles as the theme flag;
     // hive-light keeps the ink tint.)
-    col = mix(col, vec3(0.78, 0.85, 1.0), 0.35 * uAdditive);
+    col = mix(col, vec3(0.84, 0.94, 1.0), mix(0.56, 0.36, vDendrite) * uAdditive);
     col = mix(col, uLit, vLit * 0.7);
     float shimmer = 0.85 + 0.15 * sin(vT * 16.0 - uTime * uMotion * (1.0 + vSeed * 1.8) + vSeed * 6.2831);
     // Lit synapses stand out via the honey hue and everything ELSE dimming
     // (uSelDim) — no alpha boost, or bundles converging on a hub white out.
-    float a = vAlpha * 0.9 * shimmer;
+    float a = vAlpha * 1.04 * shimmer;
     a *= mix(uSelDim, 1.0, vLit);
     // Taper near the endpoints: many fibers share the same few pixels where
     // they meet a node, so full-strength ends stack into a blown highlight.
-    a *= 0.35 + 0.65 * smoothstep(0.0, 0.15, vT) * (1.0 - smoothstep(0.85, 1.0, vT));
+    float axonTaper = 0.35 + 0.65 * smoothstep(0.0, 0.15, vT) * (1.0 - smoothstep(0.85, 1.0, vT));
+    float branchTaper = (0.62 + 0.38 * smoothstep(0.0, 0.08, vT)) * (1.0 - smoothstep(0.58, 1.0, vT));
+    a *= mix(axonTaper, branchTaper, vDendrite);
     float fog = smoothstep(uFogNear, uFogFar, vDist);
     col = mix(col, uBg, fog * 0.3);
     a *= 1.0 - fog * 0.55;
@@ -357,6 +341,7 @@ export const PULSE_VERTEX = /* glsl */ `
   uniform float uSelDim;
   uniform float uFogNear;
   uniform float uFogFar;
+  uniform float uAdditive;
   varying vec3 vTint;
   varying float vAlpha;
   void main() {
@@ -366,7 +351,7 @@ export const PULSE_VERTEX = /* glsl */ `
     float ends = smoothstep(0.02, 0.16, t) * (1.0 - smoothstep(0.84, 0.98, t));
     float fog = smoothstep(uFogNear, uFogFar, -mv.z);
     vTint = aTint;
-    vAlpha = ends * mix(uSelDim, 1.0, aLit) * (1.0 - fog * 0.9);
+    vAlpha = ends * mix(uSelDim, 1.0, aLit) * (1.0 - fog * 0.9) * mix(0.18, 1.0, uAdditive);
     gl_PointSize = aSize * (1.0 + aLit * 0.15) * uScale / max(-mv.z, 1.0);
     gl_Position = projectionMatrix * mv;
   }
@@ -405,13 +390,17 @@ export const BACKDROP_FRAGMENT = /* glsl */ `
   void main() {
     vec2 uv = vUv;
     float t = uTime * uMotion;
-    // Base radial gradient: rich indigo center falling to near-black edges.
-    float radial = 1.0 - smoothstep(0.0, 0.85, distance(uv, vec2(0.5, 0.55)));
-    vec3 col = mix(vec3(0.012, 0.016, 0.10), vec3(0.05, 0.07, 0.30), radial);
-    // Drifting nebula blobs.
-    col += vec3(0.05, 0.07, 0.34) * blob(uv, vec2(0.32 + 0.04 * sin(t * 0.021), 0.68 + 0.03 * cos(t * 0.017)), 0.45) * 0.5;
-    col += vec3(0.10, 0.05, 0.30) * blob(uv, vec2(0.74 + 0.05 * cos(t * 0.013), 0.30 + 0.04 * sin(t * 0.019)), 0.4) * 0.45;
-    col += vec3(0.03, 0.10, 0.32) * blob(uv, vec2(0.52 + 0.03 * sin(t * 0.011), 0.12 + 0.03 * cos(t * 0.023)), 0.36) * 0.4;
+    // The reference is an energized cobalt field rather than empty black
+    // space. Keep enough dark floor for contrast, then let the center and
+    // nebula pockets carry visible blue/violet energy behind the tissue.
+    float radial = 1.0 - smoothstep(0.0, 0.82, distance(uv, vec2(0.5, 0.54)));
+    vec3 col = mix(vec3(0.002, 0.004, 0.025), vec3(0.015, 0.035, 0.16), radial);
+    // Slow luminous pockets add depth without flattening the graph.
+    col += vec3(0.015, 0.055, 0.24) * blob(uv, vec2(0.28 + 0.04 * sin(t * 0.021), 0.7 + 0.03 * cos(t * 0.017)), 0.44) * 0.5;
+    col += vec3(0.10, 0.018, 0.20) * blob(uv, vec2(0.76 + 0.05 * cos(t * 0.013), 0.34 + 0.04 * sin(t * 0.019)), 0.38) * 0.42;
+    col += vec3(0.008, 0.09, 0.25) * blob(uv, vec2(0.54 + 0.03 * sin(t * 0.011), 0.12 + 0.03 * cos(t * 0.023)), 0.34) * 0.4;
+    float vignette = smoothstep(0.36, 0.92, distance(uv, vec2(0.5)));
+    col *= 1.0 - vignette * 0.42;
     gl_FragColor = vec4(col, 1.0);
   }
 `;
@@ -435,7 +424,7 @@ export const DUST_VERTEX = /* glsl */ `
     // Twinkle: each mote breathes on its own phase. The dense field is a
     // dark-theme effect; hive-light keeps it faint (uAdditive doubles as the
     // theme flag).
-    vAlpha = (0.13 + 0.11 * sin(uTime * (0.4 + aSeed) * uMotion + aSeed * 20.0)) * (1.0 - fog) * mix(0.4, 1.0, uAdditive);
+    vAlpha = (0.13 + 0.11 * sin(uTime * (0.4 + aSeed) * uMotion + aSeed * 20.0)) * (1.0 - fog) * mix(0.04, 1.0, uAdditive);
     gl_PointSize = aSize * uScale / max(-mv.z, 1.0);
     gl_Position = projectionMatrix * mv;
   }

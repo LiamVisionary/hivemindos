@@ -36,6 +36,7 @@ import {
   preloadQueenVoiceActivationSound,
 } from "./activation-sound";
 import { parseUserSlashCommandDisplay } from "./queen-command-display";
+import { queenVoiceHistoryFromTurns } from "./queen-chat-routing";
 import { useQueenChat, type QueenChatTurn } from "./queen-chat-store";
 import styles from "./queen-voice.module.css";
 
@@ -495,7 +496,11 @@ export function QueenBeeVoiceOverlay({
   // OpenAI Realtime speech-to-speech. Tagged with the nonce it was resolved for
   // so a new open reads `null` until ITS fetch lands, gating every voice hook.
   const [resolvedVoiceMode, setResolvedVoiceMode] = React.useState<
-    { nonce: number; mode: "realtime" | "pipeline" | "gemini-live" } | null
+    {
+      nonce: number;
+      mode: "realtime" | "pipeline" | "gemini-live";
+      inputTranscriptionMode: "realtime" | "recorded";
+    } | null
   >(null);
   const sessionNonceRef = React.useRef(sessionNonce);
   React.useEffect(() => {
@@ -524,7 +529,7 @@ export function QueenBeeVoiceOverlay({
     const nonce = sessionNonce;
     void fetch("/api/queen-bee/voice", { cache: "no-store" })
       .then((response) => (response.ok ? response.json() : null))
-      .then((data: { localTtsSelected?: boolean; pipelineSelected?: boolean; voiceMode?: "realtime" | "pipeline" | "gemini-live"; brainLabel?: string | null } | null) => {
+      .then((data: { localTtsSelected?: boolean; pipelineSelected?: boolean; voiceMode?: "realtime" | "pipeline" | "gemini-live"; inputTranscriptionMode?: "realtime" | "recorded"; brainLabel?: string | null } | null) => {
         if (!cancelled) {
           setBrainLabel(typeof data?.brainLabel === "string" ? data.brainLabel : "");
           setResolvedVoiceMode({
@@ -532,11 +537,12 @@ export function QueenBeeVoiceOverlay({
             // voiceMode carries Gemini Live explicitly; pipelineSelected covers
             // older servers that only knew local/cloud TTS pipeline routing.
             mode: data?.voiceMode ?? ((data?.pipelineSelected ?? data?.localTtsSelected) ? "pipeline" : "realtime"),
+            inputTranscriptionMode: data?.inputTranscriptionMode ?? "realtime",
           });
         }
       })
       .catch(() => {
-        if (!cancelled) setResolvedVoiceMode({ nonce, mode: "realtime" });
+        if (!cancelled) setResolvedVoiceMode({ nonce, mode: "realtime", inputTranscriptionMode: "realtime" });
       });
     return () => {
       cancelled = true;
@@ -545,6 +551,9 @@ export function QueenBeeVoiceOverlay({
   const voiceModeForOpen =
     resolvedVoiceMode?.nonce === sessionNonce ? resolvedVoiceMode.mode : null;
   const voiceSessionOpen = open && voiceSessionArmed;
+  const recordedInputForOpen =
+    resolvedVoiceMode?.nonce === sessionNonce &&
+    resolvedVoiceMode.inputTranscriptionMode === "recorded";
   const realtimeMode =
     voiceModeForOpen === "realtime" && realtimeFailedNonce !== sessionNonce;
   const geminiLiveMode = voiceModeForOpen === "gemini-live";
@@ -632,11 +641,24 @@ export function QueenBeeVoiceOverlay({
     onDriveDashboard ? driveDashboard : undefined,
     screenContext,
   );
+  // Spoken turns converse over the SHARED chat history (typed + voice), so a
+  // voice reply continues whatever was last said in the text pill. Read via a
+  // ref so the callback identity is stable across store updates.
+  const chatTurnsRef = React.useRef(chat.turns);
+  React.useEffect(() => {
+    chatTurnsRef.current = chat.turns;
+  }, [chat.turns]);
+  const getSharedVoiceHistory = React.useCallback(
+    () => queenVoiceHistoryFromTurns(chatTurnsRef.current),
+    [],
+  );
   const pipeline = useQueenBeeVoice(
     voiceSessionOpen && voiceModeForOpen !== null && !realtimeMode && !geminiLiveMode,
     muted,
     QUEEN_VOICE_OPENING_LINE,
     voiceModeForOpen === "pipeline",
+    getSharedVoiceHistory,
+    recordedInputForOpen,
   );
   const voiceState = geminiLiveMode ? geminiLive : realtimeMode ? realtime : pipeline;
   const lastVoiceFailureRef = React.useRef("");

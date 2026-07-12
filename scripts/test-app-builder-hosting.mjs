@@ -106,13 +106,34 @@ test("dynamic hosting artifacts package one reviewed Worker module", async () =>
   assert.equal(artifact.bytes, Buffer.byteLength(code));
 });
 
+test("local hosting manifest stores only the server project id and logical bindings", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hive-hosting-manifest-"));
+  const project = join(root, "project");
+  await appBuilder.createLocalAppProject({
+    directory: project,
+    name: "Hosting manifest",
+    confirmation: appBuilderContract.confirmations.createProject,
+  });
+  const manifest = await appBuilder.writeLocalHostingManifest(project, {
+    projectId: "site_123",
+    bindings: { d1: ["DB"], r2: ["BUCKET"] },
+  });
+  assert.deepEqual(manifest, { project_id: "site_123", d1: ["DB"], r2: ["BUCKET"] });
+  assert.deepEqual(await appBuilder.readLocalHostingManifest(project), manifest);
+  const raw = await readFile(join(project, ".hivemindos", "hosting.json"), "utf8");
+  assert.equal(raw.includes("secret"), false);
+  assert.equal(raw.includes("database_id"), false);
+  assert.equal(raw.includes("bucket_name"), false);
+  assert.equal(await appBuilder.readLocalAppSourceCommit(project), null);
+});
+
 test("the public contract exposes hosting capabilities without authoritative prices", () => {
   assert.equal(appBuilderContract.confirmations.temporaryDeploy, "CONFIRM_CLOUDFLARE_TEMPORARY_DEPLOY");
   assert.equal(appBuilderContract.confirmations.publishHosting, "CONFIRM_APP_HOSTING_PURCHASE");
   assert.equal(appBuilderContract.confirmations.renewHosting, "CONFIRM_APP_HOSTING_PURCHASE");
   assert.equal(appBuilderContract.confirmations.unpublishHosting, "CONFIRM_APP_HOSTING_UNPUBLISH");
   const ids = appBuilderContract.capabilities.map((capability) => capability.id);
-  for (const id of ["artifact.prepare", "deploy.temporary", "hosting.catalog", "hosting.publish", "hosting.renew", "hosting.unpublish"]) {
+  for (const id of ["artifact.prepare", "deploy.temporary", "hosting.catalog", "hosting.usage", "hosting.publish", "hosting.renew", "hosting.unpublish"]) {
     assert.equal(ids.includes(id), true, `missing ${id}`);
   }
   assert.equal(JSON.stringify(appBuilderContract).includes("priceUsd"), false);

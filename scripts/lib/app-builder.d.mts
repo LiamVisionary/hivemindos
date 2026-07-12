@@ -25,10 +25,22 @@ export type StaticHostingArtifact = {
   files: Array<{ path: string; size: number; sha256: string; contentBase64: string }>;
 };
 
+export type LocalHostingManifest = {
+  project_id: string;
+  d1?: string[];
+  r2?: string[];
+};
+
 export const APP_BUILDER_CONFIRMATIONS: Readonly<Record<string, string>>;
 export function loadAppBuilderContract(): Promise<Record<string, unknown>>;
 export function createLocalAppProject(input: Record<string, unknown>): Promise<{ created: boolean; project: LocalAppProject }>;
 export function getLocalAppProject(input: Record<string, unknown>): Promise<LocalAppProject>;
+export function readLocalHostingManifest(directory: string): Promise<LocalHostingManifest | null>;
+export function writeLocalHostingManifest(directory: string, input: {
+  projectId: string;
+  bindings?: { d1?: string[]; r2?: string[] };
+}): Promise<LocalHostingManifest>;
+export function readLocalAppSourceCommit(directory: string): Promise<string | null>;
 export function listLocalAppFiles(input: Record<string, unknown>): Promise<Record<string, unknown>>;
 export function readLocalAppFile(input: Record<string, unknown>): Promise<Record<string, unknown>>;
 export function writeLocalAppFile(input: Record<string, unknown>): Promise<Record<string, unknown>>;

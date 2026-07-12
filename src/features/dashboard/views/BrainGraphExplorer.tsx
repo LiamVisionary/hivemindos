@@ -136,7 +136,7 @@ export function BrainGraphExplorer(props: any) {
   const [brainGraphFilter, setBrainGraphFilter] = useState("all");
   const [brainGraphQuery, setBrainGraphQuery] = useState("");
   const [brainContextNodeIds, setBrainContextNodeIds] = useState<string[]>([]);
-  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const graphNow = Date.parse(brainGraph?.generatedAt ?? "") || 0;
   const brainFilterModes = [
     { id: "all", label: "All" },
@@ -260,7 +260,10 @@ export function BrainGraphExplorer(props: any) {
   }, [selectedBrainNode, synapseLinks]);
   const handleNodeClick = useCallback((nodeId) => {
     const node = brainNodesById.get(nodeId);
-    if (node) void inspectBrainNode(node);
+    if (node) {
+      setInspectorOpen(true);
+      void inspectBrainNode(node);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [brainNodesById]);
   const seedBrainChat = (nodes) => {

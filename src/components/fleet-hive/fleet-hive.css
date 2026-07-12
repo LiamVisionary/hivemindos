@@ -331,6 +331,10 @@
 .fr-meter > i { display: block; height: 100%; border-radius: 99px; background: var(--fg-3); transition: width .5s cubic-bezier(.2, .7, .3, 1); }
 
 /* selected-agent holdings panel */
+.fr-agent-task {
+  overflow-wrap: anywhere;
+}
+
 .fr-holdings {
   margin-top: 22px;
 }

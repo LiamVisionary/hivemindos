@@ -100,11 +100,19 @@ export const HOLOGRAM_DEFAULTS: HologramStyleConfig = {
   bandColor: [0.1176, 0.3647, 0.4431],
   intensity: 0.95,
   rimPower: 1.65,
-  rimIntensity: 1.05,
-  srcExposure: 0.26,
-  litBase: 0.2,
+  // Rim eased 1.05 → 0.7 on request (2026-07-12): the silhouette halo read
+  // too hot against the lifted skin below.
+  rimIntensity: 0.7,
+  // Skin-brightness pass (2026-07-12, two rounds — the first litBase-only
+  // lift still read dark): srcExposure 0.26 → 0.36 pushes skin luma toward
+  // the highlight end of the ramp (the strongest "skin looks dark" knob),
+  // litBase 0.2 → 0.4 lifts the shadow floor (under-hair face, neck), and
+  // gamma 1.25 → 1.1 brightens the mix curve. Freckles/blush now read
+  // through the hologram instead of crushing into the navy base.
+  srcExposure: 0.36,
+  litBase: 0.4,
   litScale: 0.9,
-  lumaGamma: 1.25,
+  lumaGamma: 1.1,
   scanlineDensity: 64,
   scanlineSpeed: 4.05,
   scanlineStrength: 0.16,

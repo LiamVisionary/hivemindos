@@ -110,7 +110,7 @@ const MANUAL_TOOLS = [
   },
   {
     name: "stock_trade",
-    description: "EXECUTE or validate a stock buy or sell from a HivemindOS wallet (governed /api/trading) — Alpaca brokerage, on-chain xStocks, or Robinhood Chain stock-token swaps via USDG/0x; the venue is resolved from the wallet, never client-supplied. Moves REAL funds unless the wallet is Alpaca paper. Requires confirmation \"CONFIRM_BUY\" for buys or \"CONFIRM_SELL\" for sells. Robinhood Stock Tokens may be rejected upstream for legal/eligibility restrictions; surface that block and do not route around it. Get the human's go-ahead before calling.",
+    description: "EXECUTE or validate a stock buy or sell from a HivemindOS wallet (governed /api/trading) — Alpaca brokerage, Robinhood Agentic brokerage through the official OAuth MCP, on-chain xStocks, or Robinhood Chain Stock Token swaps via USDG/0x; the venue is resolved from the wallet, never client-supplied. Moves REAL funds unless the wallet is Alpaca paper. Requires confirmation \"CONFIRM_BUY\" for buys or \"CONFIRM_SELL\" for sells. Get the human's go-ahead before calling.",
     inputSchema: stockTradeSchema(),
     annotations: criticalExecutionAnnotations("stock_trade"),
   },
@@ -1155,6 +1155,14 @@ async function callTool(name, args = {}) {
       stop: APP_BUILDER_CONFIRMATIONS.stopRuntime,
       test_deploy: APP_BUILDER_CONFIRMATIONS.temporaryDeploy,
       hosting_publish: APP_BUILDER_CONFIRMATIONS.publishHosting,
+      hosting_create: APP_BUILDER_CONFIRMATIONS.createHostingSite,
+      hosting_save_version: APP_BUILDER_CONFIRMATIONS.saveHostingVersion,
+      hosting_deploy_version: APP_BUILDER_CONFIRMATIONS.deployHostingVersion,
+      hosting_rollback: APP_BUILDER_CONFIRMATIONS.rollbackHosting,
+      hosting_access_set: APP_BUILDER_CONFIRMATIONS.changeHostingAccess,
+      hosting_access_token: APP_BUILDER_CONFIRMATIONS.changeHostingAccess,
+      hosting_bindings_set: APP_BUILDER_CONFIRMATIONS.changeHostingBindings,
+      hosting_environment_set: APP_BUILDER_CONFIRMATIONS.changeHostingEnvironment,
       hosting_renew: APP_BUILDER_CONFIRMATIONS.renewHosting,
       hosting_unpublish: APP_BUILDER_CONFIRMATIONS.unpublishHosting,
     }[String(args.action || "")];
@@ -1210,6 +1218,11 @@ async function callTool(name, args = {}) {
   if (name === "slack_send_message") {
     if (args.confirmation !== "CONFIRM_SLACK_SEND") throw new Error("slack_send_message requires confirmation CONFIRM_SLACK_SEND.");
     return callDashboard("/api/integrations/slack/send", "POST", { text: args.text, channel: args.channel, confirmation: args.confirmation }); }
+  if (name === "google_slides_read") {
+    return callDashboard("/api/integrations/google/slides", "POST", { mode: "read", ...args }); }
+  if (name === "google_slides_edit") {
+    if (args.confirmation !== "CONFIRM_GOOGLE_SLIDES_EDIT") throw new Error("google_slides_edit requires confirmation CONFIRM_GOOGLE_SLIDES_EDIT.");
+    return callDashboard("/api/integrations/google/slides", "POST", { mode: "edit", ...args }); }
   if (name === "azure_resources") {
     return callDashboard("/api/integrations/azure/resources", "POST", {
       action: args.action || "subscriptions",
@@ -1234,6 +1247,13 @@ async function callTool(name, args = {}) {
   }
   if (name === "nansen_intelligence") {
     return callNansenIntelligence(args);
+  }
+  if (name === "robinhood_agentic_read") {
+    return callDashboard("/api/integrations/robinhood-mcp", "POST", {
+      action: "read",
+      tool: args.tool,
+      arguments: args.arguments,
+    });
   }
   if (name === "review_crypto_action") {
     return callDashboard("/api/crypto/clear-signing", "POST", clearSigningArgs(args));
@@ -1272,9 +1292,9 @@ async function callTool(name, args = {}) {
       action: "execute",
       agentId: args.agentId,
       side: args.side,
-      ticker: args.ticker,
-      notionalUsd: args.notionalUsd,
-      qty: args.qty,
+      ticker: args.ticker || args.symbol,
+      notionalUsd: args.notionalUsd ?? args.amountUsd,
+      qty: args.qty ?? args.quantity,
       confirmation: args.confirmation,
       approvalToken: args.approvalToken,
     });

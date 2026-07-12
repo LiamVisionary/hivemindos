@@ -36,6 +36,21 @@ Managed HivemindOS hosting:
 - Team workspaces.
 - Monitoring.
 
+### App Builder And Hive Publish
+
+The local-first App Builder can turn a prompt into a project on the user's own
+machine, another linked machine, or an existing Managed Cloud Agent. Building
+locally remains part of the open product. Hive Publish monetizes the point where
+the user wants HivemindOS to operate a shareable or continuously available web
+property on their behalf.
+
+The current revenue layers are a seven-day share preview, renewable standard
+and Pro static Sites, and renewable isolated Dynamic Apps. Each Site is billed
+independently, so users can become hosting customers without first renting a
+managed agent. See the [user-facing App Builder guide](../for-users/features/app-builder.html)
+for the product experience and [App Builder And Hosting](paid-features/app-builder-hosting.html)
+for the revenue and unit-economics model.
+
 ### Managed Compute
 
 Run agents and swarms on Hivemind infrastructure.
@@ -125,7 +140,7 @@ x402 covers per-call machine payments. MPP sessions cover sustained machine-spee
 
 HivemindOS earns a usage fee on supported on-chain and trading actions taken from a user's acting wallet:
 
-- A platform fee of **1% with a $0.01 minimum** on local stablecoin sends, DEX swaps, xStocks trades, Robinhood Chain Stock Token trades, live Alpaca stock orders, ordinary public x402 payments, and Veil private transfers and x402 payments. It is quoted before confirmation and collected as a separate USDC or USDG transfer after the action succeeds. HivemindOS-hosted MiroShark proxy runs are excluded because their **$1.20 USDC** retail price already includes the intended **$0.20** HivemindOS cut.
+- A platform fee of **1% with a $0.01 minimum** on local stablecoin sends, DEX swaps, xStocks trades, Robinhood Chain Stock Token trades, live Alpaca stock orders, Robinhood Agentic brokerage orders, ordinary public x402 payments, and Veil private transfers and x402 payments. It is quoted before confirmation and collected as a separate USDC or USDG transfer after the action succeeds; Robinhood Agentic execution uses the dedicated brokerage account while its fee is collected from the acting HivemindOS wallet. HivemindOS-hosted MiroShark proxy runs are excluded because their **$1.20 USDC** retail price already includes the intended **$0.20** HivemindOS cut.
 - A Hyperliquid builder fee of 0.5 bps (0.005%) on eligible filled local Hyperliquid orders, approved separately by the user.
 - A Zero Human Company revenue share of **2% with a $0.01 minimum** on recorded company revenue events, net of refunds and chargebacks when the settlement route knows them. The local app can record the event and collect the share from a selected company agent wallet, while official marketplace or hosted-company revenue should be enforced by HivemindOS-controlled billing infrastructure or a verifiable payment rail.
 

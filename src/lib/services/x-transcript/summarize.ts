@@ -1,7 +1,7 @@
 import "server-only";
 
-import { openAICompatibleInferenceCacheHints } from "@/lib/services/chat/inference-cache-hints";
-import { transcriptionApiKey } from "@/lib/services/phone/transcription";
+import { optionalEnv } from "@/lib/config/env";
+import { runPreferredOpenAiTextTurn } from "@/lib/services/openai-preferred-chat";
 
 // A short, tool-less chat completion over the transcript we already have —
 // same OpenAI key/model the Queen chat overlay and issue-explainer ride, so no
@@ -23,7 +23,7 @@ export type SummarizeInput = {
 };
 
 function summaryModel(): string {
-  return process.env.OPENAI_VOICE_CHAT_MODEL || SUMMARY_FALLBACK_MODEL;
+  return optionalEnv("OPENAI_VOICE_CHAT_MODEL") || SUMMARY_FALLBACK_MODEL;
 }
 
 const SYSTEM_PROMPT =
@@ -35,17 +35,14 @@ const SYSTEM_PROMPT =
 
 /**
  * Generate the agent's short summary + one follow-up question for a transcript.
- * Throws when no key is configured or the model call fails, so the caller can
+ * Throws when no provider is configured or the model call fails, so the caller can
  * fall back to showing the transcript without a fabricated summary.
  */
 export async function summarizeTranscript(input: SummarizeInput): Promise<TranscriptSummary> {
   const transcript = (input.transcript ?? "").trim();
   if (!transcript) throw new Error("A transcript is required to summarize.");
 
-  const apiKey = await transcriptionApiKey();
-  if (!apiKey) throw new Error("No OpenAI key is configured for transcript summaries.");
   const model = summaryModel();
-  const cacheHints = openAICompatibleInferenceCacheHints({ provider: "openai", model, cacheScope: "x-transcript-summary" });
 
   const clipped = transcript.length > MAX_TRANSCRIPT_CHARS
     ? `${transcript.slice(0, MAX_TRANSCRIPT_CHARS)}\n\n[transcript truncated for summary]`
@@ -56,34 +53,20 @@ export async function summarizeTranscript(input: SummarizeInput): Promise<Transc
     input.title ? `Title: ${input.title}` : "",
   ].filter(Boolean).join("\n");
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "content-type": "application/json", ...cacheHints.headers },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: `${header}\n\nTranscript:\n${clipped}` },
-      ],
-      ...cacheHints.body,
-      response_format: { type: "json_object" },
-      temperature: 0.3,
-      max_tokens: 500,
-    }),
-    cache: "no-store",
-    signal: AbortSignal.timeout(SUMMARY_TIMEOUT_MS),
+  const result = await runPreferredOpenAiTextTurn({
+    model,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: `${header}\n\nTranscript:\n${clipped}` },
+    ],
+    cacheScope: "x-transcript-summary",
+    timeoutMs: SUMMARY_TIMEOUT_MS,
+    maxTokens: 500,
+    temperature: 0.3,
+    jsonMode: true,
+    errorContext: "Transcript summary model",
   });
-
-  const data = (await response.json().catch(() => null)) as {
-    choices?: Array<{ message?: { content?: string | null } }>;
-    error?: { message?: string } | string;
-  } | null;
-  if (!response.ok) {
-    const detail = typeof data?.error === "string" ? data.error : data?.error?.message;
-    throw new Error(detail || `Summary model returned HTTP ${response.status}.`);
-  }
-  const content = data?.choices?.[0]?.message?.content;
-  if (typeof content !== "string" || !content.trim()) throw new Error("The summary model returned an empty response.");
+  const content = result.text;
 
   let parsed: unknown = null;
   try {

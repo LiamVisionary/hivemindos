@@ -9,6 +9,7 @@ import {
   ROLLING_MONTH_MS,
   readSpendLedger,
   sumAgentSpendUsdSince,
+  sumCompanyMemberSpendUsdSince,
   sumCompanySpendUsdSince,
 } from "@/lib/services/wallet/spend-ledger";
 import type { SpendKind } from "@/lib/services/wallet/spend-ledger";
@@ -169,11 +170,12 @@ export async function evaluateSpend(input: SpendGovernanceInput): Promise<SpendD
   const companyDailySpent = company ? await sumCompanySpendUsdSince(company.id, now - ROLLING_DAY_MS, ledger) : 0;
   const companyMonthlySpent = company ? await sumCompanySpendUsdSince(company.id, now - ROLLING_MONTH_MS, ledger) : 0;
   const companyTotalSpent = company ? await sumCompanySpendUsdSince(company.id, 0, ledger) : 0;
+  const companyMemberDailySpent = company ? await sumCompanyMemberSpendUsdSince(company.id, wallet.agentId, now - ROLLING_DAY_MS, ledger) : 0;
   const companyDaily = remaining(company?.dailyBudgetUsd, companyDailySpent, amount);
   const companyMonthly = remaining(company?.monthlyBudgetUsd, companyMonthlySpent, amount);
   const companyTotal = remaining(company?.totalBudgetUsd, companyTotalSpent, amount);
   const companyMember = company?.members?.find((member) => member.agentId === wallet.agentId);
-  const companyMemberDaily = remaining(companyMember?.companyCap, agentDailySpent, amount);
+  const companyMemberDaily = remaining(companyMember?.companyCap, companyMemberDailySpent, amount);
 
   const budget: SpendBudgetSnapshot = {
     agentDailyRemainingUsd: agentDaily.remaining,

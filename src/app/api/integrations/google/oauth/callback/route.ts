@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
     await saveGoogleRefreshToken(payload.refresh_token);
     return renderGitHubOAuthPage({
       title: "Google connected",
-      body: "Saved Google access to the shared hive env. Drive, Gmail, and Calendar context is now available to your hive on every machine.",
+      body: "Saved Google access to the shared hive env. Drive, editable Slides, Gmail, and Calendar context is now available to your hive on every machine.",
       returnUrl: RETURN_URL,
       returnLabel: RETURN_LABEL,
     });

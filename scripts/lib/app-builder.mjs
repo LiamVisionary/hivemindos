@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { closeSync, constants, openSync } from "node:fs";
 import {
   lstat,
+  mkdtemp,
   mkdir,
   open,
   readFile,
@@ -12,7 +13,7 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { createServer } from "node:net";
 import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -23,6 +24,7 @@ const moduleDirectory = dirname(fileURLToPath(import.meta.url));
 const contractFile = resolve(moduleDirectory, "../../contracts/app-builder/v1.json");
 const manifestName = ".hivemindos-app.json";
 const runtimeDirectoryName = ".hivemindos";
+const hostingManifestName = "hosting.json";
 const ignoredEntries = new Set([".git", ".next", "node_modules", runtimeDirectoryName, manifestName, ".DS_Store"]);
 const maxReadBytes = 500_000;
 const maxWriteBytes = 750_000;
@@ -127,6 +129,59 @@ async function readManifest(directory) {
   } finally {
     await handle.close();
   }
+}
+
+function hostingManifestPath(directory) {
+  return join(directory, runtimeDirectoryName, hostingManifestName);
+}
+
+export async function readLocalHostingManifest(directoryValue) {
+  const { directory } = await requiredProject(directoryValue);
+  const path = hostingManifestPath(directory);
+  const info = await lstat(path).catch(() => null);
+  if (!info) return null;
+  if (info.isSymbolicLink() || !info.isFile()) throw new Error("Hosting manifest must be a regular file.");
+  const parsed = JSON.parse(await readFile(path, "utf8"));
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Hosting manifest is invalid.");
+  const projectId = String(parsed.project_id || "").trim();
+  const d1 = normalizeHostingBindingNames(parsed.d1);
+  const r2 = normalizeHostingBindingNames(parsed.r2);
+  if (!projectId || projectId.length > 200) throw new Error("Hosting manifest project_id is invalid.");
+  return { project_id: projectId, ...(d1.length ? { d1 } : {}), ...(r2.length ? { r2 } : {}) };
+}
+
+export async function writeLocalHostingManifest(directoryValue, input) {
+  const { directory } = await requiredProject(directoryValue);
+  const projectId = String(input?.projectId || "").trim();
+  if (!projectId || projectId.length > 200) throw new Error("Hosting project id is required.");
+  const d1 = normalizeHostingBindingNames(input?.bindings?.d1);
+  const r2 = normalizeHostingBindingNames(input?.bindings?.r2);
+  const manifest = { project_id: projectId, ...(d1.length ? { d1 } : {}), ...(r2.length ? { r2 } : {}) };
+  await atomicWrite(hostingManifestPath(directory), `${JSON.stringify(manifest, null, 2)}\n`);
+  return manifest;
+}
+
+export async function readLocalAppSourceCommit(directoryValue) {
+  const { directory } = await requiredProject(directoryValue);
+  const result = await execFileAsync("git", ["-C", directory, "rev-parse", "HEAD"], {
+    cwd: directory,
+    env: safeCommandEnvironment(),
+    timeout: 5_000,
+    maxBuffer: 4_096,
+    windowsHide: true,
+  }).catch(() => null);
+  const sha = String(result?.stdout || "").trim();
+  return /^[a-f0-9]{40,64}$/i.test(sha) ? sha.toLowerCase() : null;
+}
+
+function normalizeHostingBindingNames(value) {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 8) throw new Error("Hosting binding names must be an array with at most 8 entries.");
+  const names = value.map((candidate) => String(candidate || "").trim());
+  if (names.some((name) => !/^[A-Z][A-Z0-9_]{0,63}$/.test(name)) || new Set(names).size !== names.length) {
+    throw new Error("Hosting binding names must be unique uppercase identifiers.");
+  }
+  return names;
 }
 
 async function requiredProject(value) {
@@ -533,18 +588,27 @@ function safeCommandEnvironment() {
 export async function deployCloudflareTemporaryApp(input) {
   requireConfirmation(input?.confirmation, APP_BUILDER_CONFIRMATIONS.temporaryDeploy);
   const spec = await cloudflareTemporaryDeploySpec(input?.directory, input?.name, input?.runtime);
-  const result = await execFileAsync(spec.command, spec.args, {
-    cwd: spec.cwd,
-    env: safeCommandEnvironment(),
-    timeout: 600_000,
-    maxBuffer: maxCommandOutputBytes,
-    windowsHide: true,
-  });
-  const output = `${result.stdout || ""}\n${result.stderr || ""}`;
-  const deploymentUrl = output.match(/https:\/\/[a-z0-9.-]+\.workers\.dev(?:\/[^\s]*)?/i)?.[0] || "";
-  const claimUrl = output.match(/https:\/\/dash\.cloudflare\.com\/claim-preview\?claimToken=[^\s]+/i)?.[0] || "";
-  if (!deploymentUrl) throw new Error("Cloudflare temporary deployment completed without a preview URL.");
-  return { deploymentUrl, claimUrl, expiresInSeconds: cachedContract.temporaryDeploy.claimWindowSeconds };
+  const temporaryHome = await mkdtemp(join(tmpdir(), "hivemindos-cloudflare-temporary-"));
+  try {
+    const result = await execFileAsync(spec.command, spec.args, {
+      cwd: spec.cwd,
+      env: {
+        ...safeCommandEnvironment(),
+        HOME: temporaryHome,
+        XDG_CONFIG_HOME: join(temporaryHome, ".config"),
+      },
+      timeout: 600_000,
+      maxBuffer: maxCommandOutputBytes,
+      windowsHide: true,
+    });
+    const output = `${result.stdout || ""}\n${result.stderr || ""}`;
+    const deploymentUrl = output.match(/https:\/\/[a-z0-9.-]+\.workers\.dev(?:\/[^\s]*)?/i)?.[0] || "";
+    const claimUrl = output.match(/https:\/\/dash\.cloudflare\.com\/claim-preview\?claimToken=[^\s]+/i)?.[0] || "";
+    if (!deploymentUrl) throw new Error("Cloudflare temporary deployment completed without a preview URL.");
+    return { deploymentUrl, claimUrl, expiresInSeconds: cachedContract.temporaryDeploy.claimWindowSeconds };
+  } finally {
+    await rm(temporaryHome, { recursive: true, force: true });
+  }
 }
 
 export async function runLocalAppBuilderAction(input) {

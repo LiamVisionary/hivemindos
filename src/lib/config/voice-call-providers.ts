@@ -47,6 +47,11 @@ export type VoiceTransport = {
   voices: VoiceOptionChoice[];
 };
 
+export type VoiceInputTranscriptionTransport = {
+  mode: "recorded";
+  model: string;
+};
+
 export type VoiceProviderOAuth = {
   /** provider-catalog slug used for OAuth-credentialled pipeline brain turns. */
   brainProviderSlug: string;
@@ -75,6 +80,7 @@ export type VoiceProviderCapability = {
   brainSubtitle?: string;
   realtime?: VoiceTransport;
   cloudTts?: VoiceTransport;
+  inputTranscription?: VoiceInputTranscriptionTransport;
 };
 
 const OPENAI_VOICES: VoiceOptionChoice[] = [
@@ -182,6 +188,10 @@ export const CALL_VOICE_PROVIDER_MATRIX: VoiceProviderCapability[] = [
       defaultModel: "eleven_multilingual_v2",
       voices: GATEWAY_DEFAULT_VOICE,
     },
+    inputTranscription: {
+      mode: "recorded",
+      model: "scribe_v2",
+    },
   },
   {
     id: "cartesia",
@@ -247,6 +257,19 @@ export function resolveVoiceRuntime(runtimeId: string | undefined | null): {
   if (hit) return { kind: hit.kind, provider: hit.provider, transport: hit.transport };
   // Unknown/legacy id: treat as an OpenAI realtime hybrid so old profiles keep working.
   return { kind: "realtime-hybrid", provider: voiceProviderById("openai"), transport: voiceProviderById("openai")?.realtime };
+}
+
+export function inputTranscriptionForVoiceRuntime(
+  runtimeId: string | undefined | null,
+): ({ providerId: VoiceProviderId } & VoiceInputTranscriptionTransport) | null {
+  const resolved = resolveVoiceRuntime(runtimeId);
+  const transport = resolved.provider?.inputTranscription;
+  if (!transport || !resolved.provider) return null;
+  return {
+    mode: transport.mode,
+    providerId: resolved.provider.id,
+    model: transport.model,
+  };
 }
 
 export const VOICE_RUNTIME_KIND_LABEL: Record<VoiceRuntimeKind, string> = {

@@ -1,6 +1,6 @@
 {
   "protocol": "hivemindos.app-builder/v1",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "provenance": {
     "donors": {
       "december": {
@@ -18,6 +18,13 @@
     "stopRuntime": "CONFIRM_APP_RUNTIME",
     "temporaryDeploy": "CONFIRM_CLOUDFLARE_TEMPORARY_DEPLOY",
     "publishHosting": "CONFIRM_APP_HOSTING_PURCHASE",
+    "createHostingSite": "CONFIRM_APP_HOSTING_SITE_CREATE",
+    "saveHostingVersion": "CONFIRM_APP_HOSTING_VERSION_SAVE",
+    "deployHostingVersion": "CONFIRM_APP_HOSTING_DEPLOY",
+    "rollbackHosting": "CONFIRM_APP_HOSTING_ROLLBACK",
+    "changeHostingAccess": "CONFIRM_APP_HOSTING_ACCESS",
+    "changeHostingBindings": "CONFIRM_APP_HOSTING_BINDINGS",
+    "changeHostingEnvironment": "CONFIRM_APP_HOSTING_ENVIRONMENT",
     "renewHosting": "CONFIRM_APP_HOSTING_PURCHASE",
     "unpublishHosting": "CONFIRM_APP_HOSTING_UNPUBLISH",
     "writeFile": "CONFIRM_APP_FILE_WRITE",
@@ -42,6 +49,20 @@
     { "id": "hosting.catalog", "sideEffect": "read", "backends": ["local", "managed"] },
     { "id": "hosting.list", "sideEffect": "read", "backends": ["local", "managed"] },
     { "id": "hosting.get", "sideEffect": "read", "backends": ["local", "managed"] },
+    { "id": "hosting.site.create", "sideEffect": "write", "backends": ["local", "managed"] },
+    { "id": "hosting.versions.list", "sideEffect": "read", "backends": ["local", "managed"] },
+    { "id": "hosting.version.save", "sideEffect": "write", "backends": ["local", "managed"] },
+    { "id": "hosting.deployments.list", "sideEffect": "read", "backends": ["local", "managed"] },
+    { "id": "hosting.version.deploy", "sideEffect": "write", "backends": ["local", "managed"] },
+    { "id": "hosting.version.rollback", "sideEffect": "destructive", "backends": ["local", "managed"] },
+    { "id": "hosting.access.get", "sideEffect": "read", "backends": ["local", "managed"] },
+    { "id": "hosting.access.set", "sideEffect": "write", "backends": ["local", "managed"] },
+    { "id": "hosting.access.token", "sideEffect": "write", "backends": ["local", "managed"] },
+    { "id": "hosting.bindings.get", "sideEffect": "read", "backends": ["local", "managed"] },
+    { "id": "hosting.bindings.set", "sideEffect": "write", "backends": ["local", "managed"] },
+    { "id": "hosting.environment.get", "sideEffect": "read", "backends": ["local", "managed"] },
+    { "id": "hosting.environment.set", "sideEffect": "write", "backends": ["local", "managed"] },
+    { "id": "hosting.usage", "sideEffect": "read", "backends": ["local", "managed"] },
     { "id": "hosting.publish", "sideEffect": "write", "backends": ["local", "managed"] },
     { "id": "hosting.renew", "sideEffect": "write", "backends": ["local", "managed"] },
     { "id": "hosting.unpublish", "sideEffect": "destructive", "backends": ["local", "managed"] }
@@ -63,6 +84,11 @@
     "minimumWranglerVersion": "4.102.0",
     "claimWindowSeconds": 3600,
     "publicDomain": "workers.dev"
+  },
+  "hostingManifest": {
+    "path": ".hivemindos/hosting.json",
+    "fields": ["project_id", "d1", "r2"],
+    "serverOnly": ["environmentValues", "resourceIds", "accessTokens", "pricing", "entitlements"]
   },
   "templates": {
     "nextjs": {

@@ -20,6 +20,7 @@ import {
 } from "./integrations-primitives";
 import { ConnectionsPanel } from "./ConnectionsPanel";
 import { XAccountMcpPanel, type ManagedXPanelStatus, type XMcpStatus } from "./XAccountMcpPanel";
+import { RobinhoodMcpPanel } from "./RobinhoodMcpPanel";
 import { XTranscriptPanel } from "./XTranscriptPanel";
 import {
   managedXReturnUrl,
@@ -82,6 +83,7 @@ const TABS: Array<{ id: TabId; label: string }> = [
 ];
 
 const MCP_DEFAULTS: Record<string, McpTransportDefaults & { accent: string; mono: string }> = {
+  "robinhood-trading": { transport: "http", url: "https://agent.robinhood.com/mcp/trading", accent: "#62c78f", mono: "Rh" },
   xapi: { transport: "stdio", command: "node", args: ["scripts/x-mcp-bridge.mjs"], accent: "#f3f0e9", mono: "X" },
   "x-docs": { transport: "http", url: "https://docs.x.com/mcp", accent: "#6f9bd6", mono: "Xd" },
   github: { transport: "stdio", command: "npx", args: ["-y", "@modelcontextprotocol/server-github"], accent: "#c7ccd4", mono: "Gh" },
@@ -269,7 +271,7 @@ function McpManager({
   const connectedIds = new Set(connected.map((server) => server.id));
   const totalTools = connected.reduce((sum, server) => sum + server.tools.length, 0);
   const cleanQuery = query.trim().toLowerCase();
-  const list = catalog.filter((item) => (
+  const list = catalog.filter((item) => item.id !== "robinhood-trading" && (
     (category === "all" || item.categories.includes(category)) &&
     (!cleanQuery || [item.name, item.summary, ...item.categories, ...item.capabilities, ...item.credentialKeys].join(" ").toLowerCase().includes(cleanQuery))
   ));
@@ -510,6 +512,8 @@ function McpManager({
             onRefresh={() => void load()}
             onRefreshManaged={(creditAccountId, slug) => void refreshManagedX(creditAccountId, slug)}
           />
+
+          <RobinhoodMcpPanel />
 
           <div>
             <div className="fm-sec">Connected <span className="ct">{connected.length} server{connected.length === 1 ? "" : "s"} · {totalTools} tools</span></div>

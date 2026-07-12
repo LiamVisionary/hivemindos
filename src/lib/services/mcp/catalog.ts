@@ -14,6 +14,19 @@ export type HiveMcpServerCatalogItem = {
 
 export const HIVE_MCP_SERVER_CATALOG: HiveMcpServerCatalogItem[] = [
   {
+    id: "robinhood-trading",
+    name: "Robinhood Trading MCP",
+    source: "official",
+    repoUrl: "https://robinhood.com/us/en/support/articles/agentic-trading-overview/",
+    summary: "Official Robinhood Agentic Trading connection for brokerage accounts, portfolios, market data, watchlists, scans, long equities, and options. HivemindOS exposes read tools directly and keeps equity order placement behind its governed stock-trade route.",
+    categories: ["trading", "brokerage", "stocks", "options", "market-data", "mcp"],
+    capabilities: ["accounts", "portfolio", "equity-market-data", "watchlists", "scans", "equity-orders", "options"],
+    credentialKeys: [],
+    sideEffects: ["read", "write", "network", "browser", "payments"],
+    installHint: "Connect with Robinhood OAuth from Integrations. HivemindOS stores the resulting MCP session locally in an encrypted vault and reconnects it after restart.",
+    safetyNote: "The MCP can read all authorized Robinhood account details, but trading is limited to the dedicated Agentic account. HivemindOS does not expose raw order-placement tools; orders pass review, wallet/company caps, and explicit confirmation first.",
+  },
+  {
     id: "xapi",
     name: "X API MCP",
     source: "official",

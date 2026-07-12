@@ -5,8 +5,8 @@ import { activeCompanyApprovalPolicies } from "@/lib/services/company-approval-p
 import type { QueenBeePrdTaskDraft } from "@/lib/services/queen-bee/prd-decomposition";
 import { pickConversationAgent } from "@/lib/services/queen-bee/voice-turn";
 import { readRuntimeResponseText, voiceOptimizedAgent } from "@/lib/services/phone/runtime-voice-turn";
-import { openAICompatibleInferenceCacheHints } from "@/lib/services/chat/inference-cache-hints";
-import { transcriptionApiKey } from "@/lib/services/phone/transcription";
+import { optionalEnv } from "@/lib/config/env";
+import { runPreferredOpenAiTextTurn } from "@/lib/services/openai-preferred-chat";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
 /**
@@ -183,32 +183,18 @@ function toDrafts(tasks: PlannedTask[], company: Company): QueenBeePrdTaskDraft[
 }
 
 async function runOpenAiDecompose(system: string, user: string): Promise<string> {
-  const apiKey = await transcriptionApiKey().catch(() => "");
-  if (!apiKey) return "";
   try {
-    const model = process.env.OPENAI_VOICE_CHAT_MODEL || OPENAI_FALLBACK_MODEL;
-    const cacheHints = openAICompatibleInferenceCacheHints({
-      provider: "openai",
-      model,
+    const result = await runPreferredOpenAiTextTurn({
+      model: optionalEnv("OPENAI_VOICE_CHAT_MODEL") || OPENAI_FALLBACK_MODEL,
+      messages: [{ role: "system", content: system }, { role: "user", content: user }],
       cacheScope: "company-goal-planner",
+      timeoutMs: OPENAI_TURN_TIMEOUT_MS,
+      maxTokens: 900,
+      temperature: 0.3,
+      jsonMode: true,
+      errorContext: "Company goal planner",
     });
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "content-type": "application/json", ...cacheHints.headers },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: "system", content: system }, { role: "user", content: user }],
-        ...cacheHints.body,
-        max_tokens: 900,
-        temperature: 0.3,
-        response_format: { type: "json_object" },
-      }),
-      cache: "no-store",
-      signal: AbortSignal.timeout(OPENAI_TURN_TIMEOUT_MS),
-    });
-    if (!response.ok) return "";
-    const data = (await response.json().catch(() => null)) as { choices?: Array<{ message?: { content?: string } }> } | null;
-    return data?.choices?.[0]?.message?.content?.trim() || "";
+    return result.text;
   } catch {
     return "";
   }

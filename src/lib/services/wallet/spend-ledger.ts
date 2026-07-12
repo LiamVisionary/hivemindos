@@ -145,6 +145,17 @@ export async function sumCompanySpendUsdSince(companyId: string, sinceMs: number
   return sumUsd(ledger, (record) => record.companyId === companyId, sinceMs);
 }
 
+export async function sumCompanyMemberSpendUsdSince(
+  companyId: string,
+  agentId: string,
+  sinceMs: number,
+  records?: SpendLedgerRecord[],
+): Promise<number> {
+  if (!companyId || !agentId) return 0;
+  const ledger = records ?? (await readSpendLedger());
+  return sumUsd(ledger, (record) => record.companyId === companyId && record.agentId === agentId, sinceMs);
+}
+
 export async function sumCompanyKindSpendUsdSince(
   companyId: string,
   kind: SpendKind,

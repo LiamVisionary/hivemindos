@@ -136,6 +136,16 @@
 .press:hover {
   filter: brightness(1.08);
 }
+.paginationButton:focus-visible {
+  outline: 2px solid var(--lv-honey);
+  outline-offset: 2px;
+}
+.paginationButton:hover {
+  color: var(--lv-honey) !important;
+  filter: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 
 /* clickable machine header */
 .machineHeader {

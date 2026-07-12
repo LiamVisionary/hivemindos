@@ -5,12 +5,12 @@
 //
 // This is the "on-demand explain" behind the Task Detail alert. It is strictly
 // READ-ONLY: one tool-less chat completion over context the caller already has,
-// no fleet tools, no mutation, no spend. It rides the same OpenAI key/model the
-// Queen chat overlay uses (transcriptionApiKey + OPENAI_VOICE_CHAT_MODEL), so a
+// no fleet tools, no mutation, no spend. It rides the canonical OAuth-first
+// OpenAI text adapter, so a
 // good answer needs no extra configuration. The evidence is already in-context,
 // which is why the model does not need live tools to reach it.
-import { openAICompatibleInferenceCacheHints } from "@/lib/services/chat/inference-cache-hints";
-import { transcriptionApiKey } from "@/lib/services/phone/transcription";
+import { optionalEnv } from "@/lib/config/env";
+import { runPreferredOpenAiTextTurn } from "@/lib/services/openai-preferred-chat";
 import { reasoningTrailPromptRules } from "@/lib/types/reasoning-trail";
 
 export type IssueExplainerReceipt = {
@@ -53,7 +53,7 @@ const MAX_EVIDENCE_ITEMS = 8;
 const MAX_EVIDENCE_CHARS = 400;
 
 function explainModel(): string {
-  return process.env.OPENAI_VOICE_CHAT_MODEL || EXPLAIN_FALLBACK_MODEL;
+  return optionalEnv("OPENAI_VOICE_CHAT_MODEL") || EXPLAIN_FALLBACK_MODEL;
 }
 
 function clamp(value: string, max: number): string {
@@ -128,54 +128,28 @@ function coerceExplanation(raw: unknown): IssueExplanation | null {
 
 /**
  * Generate the plain-language, actionable explanation for a blocked task.
- * Throws when no OpenAI key is configured or the model call fails, so the route
+ * Throws when no OpenAI provider is configured or the model call fails, so the route
  * can surface an honest "couldn't generate an explanation" instead of a fake one.
  */
 export async function explainBlockedIssue(input: IssueExplainerInput): Promise<IssueExplanation> {
   const title = input.taskTitle?.trim();
   if (!title) throw new Error("A task title is required to explain the issue.");
 
-  const apiKey = await transcriptionApiKey();
-  if (!apiKey) throw new Error("No OpenAI key is configured for issue explanations.");
   const model = explainModel();
-  const cacheHints = openAICompatibleInferenceCacheHints({
-    provider: "openai",
+  const result = await runPreferredOpenAiTextTurn({
     model,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: formatContext(input) },
+    ],
     cacheScope: "issue-explainer",
+    timeoutMs: EXPLAIN_TIMEOUT_MS,
+    maxTokens: 800,
+    temperature: 0.3,
+    jsonMode: true,
+    errorContext: "Explanation model",
   });
-
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "content-type": "application/json", ...cacheHints.headers },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: formatContext(input) },
-      ],
-      ...cacheHints.body,
-      response_format: { type: "json_object" },
-      temperature: 0.3,
-      max_tokens: 800,
-    }),
-    cache: "no-store",
-    signal: AbortSignal.timeout(EXPLAIN_TIMEOUT_MS),
-  });
-
-  const data = (await response.json().catch(() => null)) as {
-    choices?: Array<{ message?: { content?: string | null } }>;
-    error?: { message?: string } | string;
-  } | null;
-
-  if (!response.ok) {
-    const detail = typeof data?.error === "string" ? data.error : data?.error?.message;
-    throw new Error(detail || `Explanation model returned HTTP ${response.status}.`);
-  }
-
-  const content = data?.choices?.[0]?.message?.content;
-  if (typeof content !== "string" || !content.trim()) {
-    throw new Error("The explanation model returned an empty response.");
-  }
+  const content = result.text;
 
   let parsed: unknown = null;
   try {

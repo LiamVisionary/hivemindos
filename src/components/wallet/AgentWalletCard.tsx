@@ -895,6 +895,7 @@ export function AgentWalletCard({
               >
                 <option value="">Off</option>
                 <option value="alpaca">Alpaca (real brokerage)</option>
+                <option value="robinhood-agentic">Robinhood Agentic (brokerage MCP)</option>
                 <option value="xstocks">xStocks (on-chain)</option>
                 <option value="robinhood-chain">Robinhood Chain stock tokens</option>
               </select>

@@ -729,7 +729,17 @@ export function QueenChatProvider({
       const text = reply.trim();
       if (!text) return;
       const abort = new AbortController();
-      await playSpokenReply(text, abort.signal, audioContext, false).catch(() => "none");
+      // Same playback ladder as spoken voice turns: streamed pipeline TTS
+      // first — that is the ONLY path that carries the selected cloud/local
+      // pipeline voice (the buffered `speak` action refuses to substitute for
+      // either, by the voice-continuity rule), and it 409-falls-back to the
+      // buffered path for realtime-era configs. Passing `false` here was why
+      // typed replies went silent while the voice overlay was open.
+      const outcome = await playSpokenReply(text, abort.signal, audioContext, true)
+        .catch(() => "none" as const);
+      if (outcome === "none" || outcome === "muted") {
+        console.warn(`[queen-chat] typed reply could not be spoken (${outcome}); shown as text only.`);
+      }
     };
     const turnId = `text-voice-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     const response = await fetch(QUEEN_VOICE_CHAT_API_PATH, {

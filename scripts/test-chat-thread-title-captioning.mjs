@@ -7,6 +7,7 @@ import { join } from "node:path";
 import {
   buildChatThreadTitleContext,
   isSubstantiveChatUserTurn,
+  openAiOAuthChatModelIds,
   parseChatThreadTitleConfig,
   sanitizeChatThreadTitle,
   scoreChatThreadTitleModel,
@@ -43,6 +44,10 @@ assert.equal(sanitizeChatThreadTitle('{"title":"Private Thread Title Models"}'),
 assert.equal(sanitizeChatThreadTitle("Title: Local Captioning Setup."), "Local Captioning Setup");
 assert.ok(scoreChatThreadTitleModel("gpt-5.4-nano") > scoreChatThreadTitleModel("claude-opus-4.1"));
 assert.ok(scoreChatThreadTitleModel("gemini-3.1-flash-lite") > scoreChatThreadTitleModel("gemini-3.1-pro"));
+assert.deepEqual(
+  openAiOAuthChatModelIds(["gpt-5.6-luna", "gpt-5.6-sol", "gpt-image-1", "claude-opus-4.1", "gpt-5.6-luna"]),
+  ["gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.4"],
+);
 
 const defaultConfig = parseChatThreadTitleConfig("not-json");
 assert.equal(defaultConfig.mode, "off");
@@ -124,6 +129,10 @@ assert.match(titleService, /redactSecretText\(context\.firstUserTurn\)/);
 assert.match(titleService, /LOCAL_LM_STUDIO_BASE_URL/);
 assert.match(titleService, /runOpenAiOAuthChatTurn/);
 assert.match(titleService, /resolveXaiOAuthChatEndpoint/);
+
+const titleModelOptions = read("src/lib/services/chat/thread-title-model-options.ts");
+assert.match(titleModelOptions, /openAiOAuthChatModelIds/);
+assert.match(titleModelOptions, /provider === "openai-api"/);
 
 const settings = read("src/features/dashboard/views/chat/exchange/ThreadTitleSettings.tsx");
 assert.match(settings, /LmStudioModelManager/);

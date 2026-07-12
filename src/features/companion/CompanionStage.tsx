@@ -38,6 +38,7 @@ export function CompanionStage({
   const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
   const [errorText, setErrorText] = useState<string | null>(null);
   const reactedTurnRef = useRef<string | null>(null);
+  const reactionPrimedRef = useRef(false);
   // Read at engine construction (the mount effect deliberately has no deps).
   // Synced in an effect declared BEFORE the mount effect so it runs first.
   const outfitKeyRef = useRef(outfitKey);
@@ -108,9 +109,16 @@ export function CompanionStage({
     // Lip sync no longer reads the reply text here — timed phoneme tracks are
     // driven per spoken chunk by queen-voice utterance events at real audio
     // start. This effect only fires the one-shot reaction on completed turns.
+    // The first pass after the engine readies sees HISTORY (the store keeps
+    // the whole conversation): prime on it silently so mounting the tab never
+    // replays a wave/expression for something she said minutes ago. An empty
+    // history primes too, so a fresh conversation's first reply still reacts.
+    const primed = reactionPrimedRef.current;
+    reactionPrimedRef.current = true;
     if (!reply || reply.live) return;
     if (reactedTurnRef.current === reply.id) return;
     reactedTurnRef.current = reply.id;
+    if (!primed) return;
     engineRef.current?.reactToReply(reply.text);
   }, [latestQueenReply, phase]);
 

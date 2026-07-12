@@ -6,6 +6,8 @@
    view, so this fills the route body only. */
 
 import React from "react";
+import Image from "next/image";
+import { chainBadgeSrc, chainKeyForNetwork, chainLabelForNetwork } from "@/lib/utils/personal-wallet-grouping";
 import "./trade-desk.css";
 import { setDisplayCurrency } from "./format";
 import { useTradeDesk } from "./trade-context";
@@ -21,6 +23,8 @@ import { walletKindIcon } from "./icons";
 function DeskHeader() {
   const desk = useTradeDesk();
   const { wallet, hasActingWallet, currency, fxRates, setCurrency, onChangeWallet } = desk;
+  const actingChainIcon = chainBadgeSrc(chainKeyForNetwork(wallet.network));
+  const actingChainLabel = chainLabelForNetwork(wallet.network);
   return (
     <header style={{ padding: "18px 30px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 11, minWidth: 0 }}>
@@ -32,7 +36,11 @@ function DeskHeader() {
         <span className="dk-hdiv" aria-hidden="true" />
         <span style={{ fontSize: 11, color: "var(--fg-3)", fontFamily: "var(--f-mono)", letterSpacing: ".04em", textTransform: "uppercase" }}>Acting wallet</span>
         <button type="button" className="dk-acting" onClick={onChangeWallet}>
-          <span className="av"><BIcon name={walletKindIcon(wallet.kind)} size={17} /></span>
+          <span className="av" title={actingChainLabel || undefined}>
+            {hasActingWallet && actingChainIcon
+              ? <Image src={actingChainIcon} alt="" width={20} height={20} />
+              : <BIcon name={walletKindIcon(wallet.kind)} size={17} />}
+          </span>
           <span className="meta">
             <b>{hasActingWallet ? wallet.name : "Select a wallet"}</b>
             {hasActingWallet ? <small>{wallet.addr} · {wallet.custody}</small> : <small>none yet</small>}

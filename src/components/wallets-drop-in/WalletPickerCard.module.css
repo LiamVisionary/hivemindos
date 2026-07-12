@@ -18,6 +18,14 @@
   color: var(--panel);
 }
 
+.walletName {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
 /* Loading placeholder shown in place of the balance while it is still being
    fetched, so a stale $0 never flashes before the real amount arrives. */
 .balanceSkeleton {
@@ -39,8 +47,29 @@
   .balanceSkeleton { animation: none; }
 }
 
-/* Display-only chain tag inside a grouped user wallet card (the chain itself is
-   chosen later, in the trade action view). */
+/* Grouped cards contain a large default-account target plus exact chain targets.
+   Keeping them as sibling buttons avoids nested interactive controls. */
+.cardMain {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.chainList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
 .chainTag {
   display: inline-flex;
   align-items: center;
@@ -51,4 +80,34 @@
   font-weight: 500;
   letter-spacing: -0.01em;
   line-height: 1;
+}
+
+.chainButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 6px 8px;
+  color: var(--fg-2);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: color 0.16s, background 0.16s, border-color 0.16s;
+}
+
+.chainButton:hover {
+  color: var(--fg);
+  background: var(--panel-2);
+  border-color: var(--line-2);
+}
+
+.chainButton[data-selected="true"] {
+  color: var(--honey);
+  background: var(--honey-soft);
+  border-color: var(--honey-line);
 }

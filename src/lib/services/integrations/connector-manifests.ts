@@ -141,8 +141,8 @@ export const CONNECTOR_MANIFESTS: ConnectorManifest[] = [
   {
     key: "google",
     label: "Google",
-    detail: "Drive, Gmail, and Calendar context.",
-    tags: ["drive", "gmail", "calendar", "oauth"],
+    detail: "Drive, editable Slides, Gmail, and Calendar context.",
+    tags: ["drive", "slides", "presentations", "gmail", "calendar", "oauth", "mcp"],
     auth: {
       mode: "oauth-refresh-token",
       tokenEnvKey: "GOOGLE_OAUTH_REFRESH_TOKEN",
@@ -150,7 +150,19 @@ export const CONNECTOR_MANIFESTS: ConnectorManifest[] = [
       tokenPlaceholder: "",
       oauthClientEnvKeys: [GOOGLE_CLIENT_ID_ENV, GOOGLE_CLIENT_SECRET_ENV],
     },
-    operations: [READ_CONNECTION_OPERATION, READ_API_OPERATION],
+    operations: [
+      READ_CONNECTION_OPERATION,
+      READ_API_OPERATION,
+      {
+        id: "edit-google-slides",
+        label: "Edit Google Slides",
+        description: "Create or edit presentations through the HivemindOS MCP after explicit confirmation.",
+        methods: ["POST"],
+        sideEffects: ["network", "write"],
+        risk: "high",
+        requiredClaims: ["connectors:invoke"],
+      },
+    ],
   },
   {
     key: "google-cloud",
