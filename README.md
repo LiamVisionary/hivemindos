@@ -45,7 +45,7 @@ Clone it, run one setup command, and get a local-first dashboard for the agents 
 - **Create and import schedules** so supported runtimes can keep working in the background.
 - **Run MiroShark simulations** from the same control room.
 - **Give agents controlled Base and Solana wallets** so they can pay for approved tools, APIs, transactions, and actions.
-- **Earn Honey from regular agent usage** and convert it into HIVE, the HivemindOS token, to help fund agent compute.
+- **Record reviewed ecosystem contribution as Honey** without treating it as cash, a revenue claim, or an automatic path to HIVE.
 
 ## Quick Start
 
@@ -208,7 +208,7 @@ Provider credentials belong in shared env keys such as `BANKR_LLM_KEY`, `BANKR_A
 | **Agent chat bridge** | Sends chat to supported runtimes through a local safety and redaction proxy |
 | **MiroShark integration** | Runs and tracks MiroShark simulations from the HivemindOS dashboard |
 | **Agent wallets** | Provisions controlled Base and Solana wallets for agents that need budgets or payment rails |
-| **Honey rewards and HIVE compute** | Lets opt-in users earn Honey from measured agent token usage, exchange it for HIVE, and fund Bankr LLM compute with HIVE-backed credits |
+| **Honey contribution records** | Lets opt-in users record reviewed ecosystem contribution while keeping Honey separate from purchased Cloud credits and optional HIVE payment paths |
 | **Alerts** | Surfaces auth failures, stuck work, runtime issues, and handoff problems in one inbox |
 | **Skill shelf** | Shares skills across Codex, Claude, Hermes, Gemini, OpenClaw, and Aeon |
 | **Local-first storage** | Keeps runtime profiles, vault paths, and local URLs on your machine |

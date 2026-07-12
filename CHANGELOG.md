@@ -5,6 +5,14 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-07-12 16:32:35 +0800 - Public revenue copy and the investor deck now tell one focused Hivemind Cloud story
+  - Status: Uncommitted
+  - Areas changed: repository README revenue language, public Honey/HIVE diagram labels, and the editable 14-slide `HivemindOS_Pitch_Deck.pptx` investor presentation.
+  - Summary: Removes the remaining public claims that ordinary usage automatically converts Honey into HIVE, then replaces the stale five-stream pitch deck with one commercial engine: free local adoption, a Hivemind Cloud subscription, metered managed usage, and enterprise expansion. The new deck makes the free-to-paid boundary explicit, labels Pro/Team/Enterprise pricing as hypotheses, includes the paid design-partner pilot, shows cohort and margin gates instead of invented forecasts, defers marketplaces until retained buyer demand exists, and states that ordinary wallet sends are free while Honey, Cloud credits, and optional HIVE utility remain separate.
+  - Verification: The GitHub Pages investor overview was confirmed live from the latest successful Pages deployment before this follow-up. The replacement PPTX exports as 14 editable slides (509,256 bytes), every slide renders at 1280×720, the contact sheet and all full-size renders were visually inspected, the package contains 14 slide XML parts and no zero-byte media, and presentation layout QA reports 0 errors with only eight reviewed intentional warnings. A repository-wide stale-claim scan is clean outside the intentionally excluded third-party Bankr reference, and focused `git diff --check` passes. The required repository size gate remains red on existing/concurrent oversized benchmark artifacts and code files; none of the three touched product/docs artifacts is listed. The current main-branch CI baseline is likewise already red on the same size ratchet plus unrelated action-registry, wallet-context, provider, and app-builder checks; its revenue-model, company-revenue, staking, Honey, and paid-agent tests are green.
+  - Rollback: Revert the README/diagram/deck commit; Git restores the previous PPTX and the next Pages build restores the previous public copy. No cloud Worker, payment, database, or on-chain state changes in this follow-up.
+  - Intended commit message: `docs: align public revenue copy and pitch deck`
+
 - 2026-07-12 16:13:16 +0800 - Brain motion stays smooth and Chat drafts grow with their content
   - Status: Pushed in `a7b37e95a`
   - Areas changed: Brain graph glass/filter cost, synapse label motion behavior, and the Chat exchange composer textarea.

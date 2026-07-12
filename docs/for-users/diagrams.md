@@ -165,7 +165,7 @@ flowchart LR
   LocalVault --> Backup["Encrypted wallet-vault backup"]
 ```
 
-## Honey HIVE Flow
+## Honey And Optional HIVE Conversion
 
 ```mermaid
 flowchart TD
@@ -178,8 +178,8 @@ flowchart TD
   Honey --> LegacyHive["Legacy ledger HIVE"]
   LegacyHive --> Return["Return to Honey"]
   Honey --> PolicyGate["Authorized conversion policy (closed by default)"]
-  PolicyGate --> BankrClaim["Optional HIVE claim"]
-  BankrClaim --> Treasury["Bankr reward treasury"]
+  PolicyGate --> BankrClaim["Policy-gated HIVE claim (off by default)"]
+  BankrClaim --> Treasury["Authorized conversion treasury"]
   Treasury --> BaseWallet["Operator Base receiving address"]
 ```
 
