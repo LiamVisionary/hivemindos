@@ -6,7 +6,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 ## Unreleased
 
 - 2026-07-12 16:13:16 +0800 - Brain motion stays smooth and Chat drafts grow with their content
-  - Status: Uncommitted
+  - Status: Pushed in `a7b37e95a`
   - Areas changed: Brain graph glass/filter cost, synapse label motion behavior, and the Chat exchange composer textarea.
   - Summary: Brain graph labels and controls avoid expensive backdrop filters, node labels hide while the camera is moving instead of being repositioned every frame, and the Chat composer starts at roughly three lines then grows to three times that height before scrolling.
   - Verification: Whole-project TypeScript, focused zero-warning ESLint, and `git diff --check` pass.
