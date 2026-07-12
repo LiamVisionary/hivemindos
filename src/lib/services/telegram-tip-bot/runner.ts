@@ -510,7 +510,7 @@ export async function startTelegramTipBot(): Promise<TipBotRunnerStatus> {
       { command: "bounties", description: "Show active community bounties" },
       { command: "bounty", description: "Create or inspect a bounty" },
       { command: "boost", description: "Boost a bounty with your HIVE balance" },
-      { command: "submit", description: "Submit work for a bounty" },
+      { command: "submit", description: "Submit bounty or HONEY mission evidence" },
       { command: "honey", description: "Show your contribution HONEY privately" },
       { command: "linkhoney", description: "Connect Telegram to HivemindOS HONEY" },
       { command: "missions", description: "Show open HONEY contribution missions" },

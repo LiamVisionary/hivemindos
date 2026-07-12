@@ -182,6 +182,7 @@
     "test:schedule-replication": "node scripts/test-schedule-replication.mjs",
     "test:hermes-cron-doc": "node scripts/test-hermes-cron-doc.mjs",
     "test:hermes-api-cache-routing": "node scripts/test-hermes-api-cache-routing.mjs",
+    "test:hermes-model-settings": "node scripts/test-hermes-model-settings-bridge.mjs",
     "test:scheduled-runs-machine-key": "node scripts/test-scheduled-runs-machine-key.mjs",
     "test:agent-memory-evolution": "node scripts/benchmark-agent-memory-evolution.mjs",
     "test:agent-memory-upgrade": "node scripts/test-agent-memory-upgrade.mjs",

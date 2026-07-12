@@ -1805,6 +1805,7 @@ pub fn run() {
             deliverables::send_aeon_deliverable,
             desktop_navigation::open_route_window,
             desktop_navigation::set_companion_popover,
+            desktop_navigation::take_pending_research_sync_code,
             speech::speech_recognition_available,
             speech::speech_recognition_start,
             speech::speech_recognition_stop

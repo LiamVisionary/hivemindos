@@ -11,6 +11,11 @@ import {
   type ManagedXReturnPayload,
 } from "@/lib/services/managed-x-return";
 import {
+  RESEARCH_SYNC_CODE_EVENT,
+  stashResearchSyncCode,
+  type ResearchSyncCodePayload,
+} from "@/lib/services/research-sync-code";
+import {
   Badge,
   BBtn,
   BIcon,
@@ -133,6 +138,34 @@ export function IntegrationsView({ embedded = false, defaultTab = "connections" 
       .then(({ listen }) => listen<ManagedXReturnPayload>(MANAGED_X_RETURN_EVENT, (event) => {
         setTab("mcp");
         setManagedXReturn(event.payload ?? {});
+      }))
+      .then((unlisten) => {
+        const safeUnlisten = createSafeTauriUnlisten(unlisten);
+        if (cancelled) {
+          safeUnlisten();
+          return;
+        }
+        cleanup = safeUnlisten;
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, []);
+
+  // Deep-linked hivemindos://research/sync pairing code: surface the
+  // Connections tab so the Hive Research card mounts and claims the parked
+  // code. The stash dedupes against the dashboard-root listener, so the
+  // single-use code is still redeemed exactly once.
+  React.useEffect(() => {
+    if (!isTauriDesktopRuntime()) return undefined;
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) => listen<ResearchSyncCodePayload>(RESEARCH_SYNC_CODE_EVENT, (event) => {
+        setTab("connections");
+        stashResearchSyncCode(event.payload?.code);
       }))
       .then((unlisten) => {
         const safeUnlisten = createSafeTauriUnlisten(unlisten);

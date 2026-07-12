@@ -62,7 +62,7 @@ These rails are documented in the [Trading guide](../../for-users/trading/) and 
 | Agent/workflow marketplace | Defer until recurring buyer demand exists |
 | Compute marketplace expansion | Defer supply growth until providers can receive realistic utilization |
 | Stake-tier member usage pricing | Server-enforced consumption pricing on participating hive products; never a payout |
-| Hive Research HIVE policy | 50% of positive realized paid-analysis margin allocated to weekly HIVE purchase batches when enabled; one Base purchase completed; automatic execution currently disabled |
+| HivemindOS revenue buyback policy | 15% of recognized platform revenue allocated to weekly automatic HIVE purchase batches across supported revenue streams; confirmed purchases remain publicly receipted |
 | Token-linked rewards or enterprise-value distribution | Separate policy requiring funding, accounting, and legal review |
 
 ## Billing Principles

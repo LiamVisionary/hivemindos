@@ -11,6 +11,7 @@ import {
 } from "@/features/dashboard/dashboard-navigation";
 import { dashboardStateValue, loadDashboardStateSnapshot, saveDashboardStateValue, type DashboardStateSnapshot } from "@/lib/services/dashboard-state-client";
 import { listenForDesktopNavigation, openNativeRouteWindow } from "@/lib/native/desktop-navigation";
+import { listenForResearchSyncCodes } from "@/lib/services/research-sync-code";
 
 const NAV_RECENTS_STORAGE_KEY = "hivemindos.dashboardNavigation.recents.v1";
 const RESTORED_ROUTE_STORAGE_KEY = "hivemindos.dashboardNavigation.lastRoute.v1";
@@ -174,6 +175,31 @@ export function useDashboardNavigationController({
     let cancelled = false;
     let cleanup: (() => void) | undefined;
     void listenForDesktopNavigation(navigateDashboardTarget, () => setCommandPaletteOpen(true)).then((unlisten) => {
+      if (cancelled) {
+        unlisten();
+        return;
+      }
+      cleanup = unlisten;
+    });
+
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, [hydrated, navigateDashboardTarget]);
+
+  // Deep-linked hivemindos://research/sync pairing codes. This listener lives
+  // at the dashboard root because the Integrations view unmounts when
+  // inactive — a single-use code emitted mid-navigation would otherwise be
+  // dropped. It parks the code for the Hive Research card and surfaces the
+  // Integrations view (covers cold start, where the native navigate event
+  // fired before this webview existed).
+  useEffect(() => {
+    if (!hydrated) return;
+
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
+    void listenForResearchSyncCodes(() => navigateDashboardTarget({ view: "integrations" })).then((unlisten) => {
       if (cancelled) {
         unlisten();
         return;

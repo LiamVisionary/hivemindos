@@ -88,6 +88,11 @@ import {
 } from "./lib/hermes-api-request-routing.mjs";
 import { discoverLocalOpenAiServers } from "./lib/local-openai-server-discovery.mjs";
 import { createCollectorMessagingChannelBridge } from "./lib/collector-messaging-channels.mjs";
+import {
+  hermesProfileName,
+  readHermesModelSelection,
+  setHermesModelAssignment,
+} from "./lib/hermes-model-settings.mjs";
 import { mapWithConcurrency, processResourceStats } from "./lib/fd-safety.mjs";
 // systemStats also accumulates a short rolling cpu/ram/net history (while /health
 // is actively polled) so the dashboard Telemetry sparklines show a real trend.
@@ -131,6 +136,7 @@ const appDir = resolve(join(fileURLToPath(import.meta.url), "..", ".."));
 const collectorStartedAtMs = Date.now();
 const collectorStartedAt = new Date(collectorStartedAtMs).toISOString();
 const defaultHermesDir = process.env.HERMES_HOME || join(homedir(), ".hermes");
+const hermesAgentProjectDir = join(defaultHermesDir, "hermes-agent");
 const defaultOpenClawDir =
   process.env.OPENCLAW_HOME || join(homedir(), ".openclaw");
 const defaultAeonDir =
@@ -3467,6 +3473,24 @@ async function resolveHermesBin() {
   return "hermes";
 }
 
+async function resolveHermesPython() {
+  const candidates = [
+    process.env.HERMES_PYTHON,
+    process.platform === "win32"
+      ? join(hermesAgentProjectDir, "venv", "Scripts", "python.exe")
+      : join(hermesAgentProjectDir, "venv", "bin", "python"),
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      await access(candidate, constants.X_OK);
+      return candidate;
+    } catch {
+      // try next
+    }
+  }
+  throw new Error("Hermes' Python runtime was not found.");
+}
+
 async function resolveChatWorkingDirectory(input) {
   const candidate = typeof input === "string" ? expandHome(input.trim()) : "";
   if (!candidate) return appDir;
@@ -3509,7 +3533,7 @@ async function hermesIntegrationStatus(agent = {}) {
     sanitizeLocalDataDir(agent.localDataDir) || defaultHermesDir,
   );
   const diagnostics = [];
-  const [version, tools, config] = await Promise.all([
+  const [version, tools, config, modelSelection] = await Promise.all([
     runHermes(["--version"]).catch((error) => {
       diagnostics.push(
         error instanceof Error ? error.message : "Hermes version check failed.",
@@ -3518,6 +3542,21 @@ async function hermesIntegrationStatus(agent = {}) {
     }),
     runHermes(["tools", "list"]).catch(() => ""),
     readFile(join(hermesHome, "config.yaml"), "utf8").catch(() => ""),
+    resolveHermesPython()
+      .then((pythonPath) =>
+        readHermesModelSelection({
+          hermesHome,
+          projectDir: hermesAgentProjectDir,
+          pythonPath,
+          execFileAsync,
+        }),
+      )
+      .catch((error) => {
+        diagnostics.push(
+          `Hermes model inventory unavailable: ${error instanceof Error ? error.message : "model discovery failed."}`,
+        );
+        return undefined;
+      }),
   ]);
   const toolEnabled = (name) =>
     new RegExp(`✓\\s+enabled\\s+${escapeRegExp(name)}\\b`).test(tools);
@@ -3546,8 +3585,17 @@ async function hermesIntegrationStatus(agent = {}) {
       codexRuntime: true,
       kanbanDecompose: true,
       setup: true,
+      modelSelection: true,
     },
+    modelSelection,
     integrations: {
+      modelSelection: {
+        supported: true,
+        enabled: Boolean(modelSelection?.providers?.length),
+        detail: modelSelection?.providers?.length
+          ? `Hermes reported ${modelSelection.providers.length} configured provider${modelSelection.providers.length === 1 ? "" : "s"}.`
+          : "Hermes did not report any configured model providers.",
+      },
       sessionSearch: {
         supported: true,
         enabled: sessionStoreReadable,
@@ -4952,54 +5000,29 @@ async function runOpenClawIntegrationAction(action, input = {}) {
   };
 }
 
-function hermesAgentProfileDir(agent = {}) {
-  const raw = sanitizeLocalDataDir(agent.localDataDir);
-  if (!raw) return "";
-  const dir = expandHome(raw);
-  return dir && dir !== defaultHermesDir ? dir : "";
-}
-
-// Rewrites only the top-level `model:` block of an agent profile's
-// config.yaml. The shared gateway home's config is never touched here — the
-// gateway default model is owned by the gateway, not by HivemindOS.
-async function setHermesProfileModelConfig(profileDir, provider, model) {
-  const configPath = join(profileDir, "config.yaml");
-  const raw = await readFile(configPath, "utf8").catch(() => "");
-  const modelBlock = [
-    "model:",
-    `  default: ${yamlScalar(model)}`,
-    `  provider: ${yamlScalar(provider)}`,
-  ].join("\n");
-  let next;
-  if (/^model:[ \t]*\n/m.test(raw)) {
-    next = raw.replace(
-      /^model:[ \t]*\n(?:[ \t]+[^\n]*\n?)*/m,
-      `${modelBlock}\n`,
-    );
-  } else {
-    next = raw.trim() ? `${modelBlock}\n${raw}` : `${modelBlock}\n`;
-  }
-  await mkdir(profileDir, { recursive: true, mode: 0o700 });
-  await writeFile(configPath, next, { mode: 0o600 });
-}
-
 async function runHermesIntegrationAction(action, input = {}, agent = {}) {
   if (action === "set-model") {
     const provider = String(input.provider || "").trim();
     const model = String(input.model || "").trim();
     if (!provider || !model)
       return { ok: false, error: "Provider and model are required." };
-    const profileDir = hermesAgentProfileDir(agent);
-    if (!profileDir)
-      return {
-        ok: false,
-        error:
-          "This Hermes agent shares the gateway home, and HivemindOS never changes the gateway default model. Create a profile agent to give it its own model.",
-      };
-    await setHermesProfileModelConfig(profileDir, provider, model);
+    const hermesHome = expandHome(
+      sanitizeLocalDataDir(agent.localDataDir) || defaultHermesDir,
+    );
+    await setHermesModelAssignment({
+      hermesHome,
+      projectDir: hermesAgentProjectDir,
+      pythonPath: await resolveHermesPython(),
+      provider,
+      model,
+      execFileAsync,
+    });
+    const profile = hermesProfileName(hermesHome, defaultHermesDir);
     return {
       ok: true,
-      message: `Hermes model set to ${provider}/${model} for this agent profile only. Gateway default unchanged.`,
+      message: profile
+        ? `Hermes model set to ${provider}/${model} for profile ${profile}. New sessions use it.`
+        : `Hermes default model set to ${provider}/${model}. New sessions use it.`,
     };
   }
   if (action === "enable-tool") {

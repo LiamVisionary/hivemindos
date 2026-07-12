@@ -166,13 +166,13 @@ HIVE is optional ecosystem infrastructure. It is not company ownership, a requir
 
 Honey records reviewed ecosystem contribution. Hivemind Cloud credits are separate purchased, spend-only service credits. Honey is not cash and is not automatically convertible to HIVE.
 
-HivemindOS does not claim that one universal split automatically governs every dollar of company revenue. Participating apps may instead publish a server-enforced rule that allocates a defined share of positive realized margin—after direct costs and required reserves—to HIVE purchases and, when enabled, a separately receipted burn. Hive Research is the first declared app policy: 50% of positive realized paid-analysis margin, accumulated into weekly batches when automatic execution is enabled.
+HivemindOS allocates 15% of recognized HivemindOS platform revenue to weekly automatic HIVE purchase batches. Recognized revenue is measured after directly attributable pass-through costs, refunds, and reversals. For marketplaces it includes only the earned HivemindOS platform fee—not gross transaction volume—and purchased credits are recognized only when consumed. The policy is enforced by HivemindOS-controlled infrastructure across supported revenue streams.
 
-The live [Agent Buyback Ledger](https://hivemindos.app/buybacks/) is the source of truth for execution status and completed transactions. It currently preserves one paid production run and treasury-funded HIVE purchase on Base while automatic execution is disabled. A purchase counts as HIVE bought only after confirmation; a burn counts only after its separate burn transaction is confirmed. Neither creates a staking payout, ownership right, or Honey-to-HIVE conversion promise.
+The live [Agent Buyback Ledger](https://hivemindos.app/buybacks/) is the source of truth for execution status and completed transactions. It preserves Hive Research's first paid production run and treasury-funded HIVE purchase on Base as historical evidence. A new purchase counts as HIVE bought only after confirmation; a burn counts only after its separate burn transaction is confirmed. Neither creates a staking payout, ownership right, or Honey-to-HIVE conversion promise.
 
 Tokenomics policies may change, pause, or end in response to legal, regulatory, tax, accounting, security, liquidity, market-integrity, reserve, or operational requirements. Material changes are published prospectively with an effective date, while completed on-chain receipts remain part of the historical record.
 
-See [Honey, HIVE, And Treasury](honey-hive-treasury.html) and [HIVE Staking And Community Tiers](hive-staking-and-community-tiers.html) for the separated policy.
+See [HIVE Token Receipts](hive-token-receipts.html), [Honey, HIVE, And Treasury](honey-hive-treasury.html), and [HIVE Staking And Community Tiers](hive-staking-and-community-tiers.html) for the on-chain evidence and separated policy.
 
 ## One-Sentence Pitch
 

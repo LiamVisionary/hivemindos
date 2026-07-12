@@ -9069,3 +9069,71 @@
 - hivemind-cloud-services selected paths
   - Decision: selected
   - Reason: two medium base64-decode cautions are confined to unrelated attestation/marketplace modules and no findings affect selected HONEY receipt or wallet-link donors
+## 2026-07-12T20:05:54.377266+00:00 - assimilation-manifest
+
+- Request: Build Telegram HONEY missions, evidence submissions, reviewer approvals, identity linking, seasonal leaderboard, and GitHub verification
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-project:src/lib/services/wallet/honey-wallet-link.ts => src/lib/services/wallet/honey-community.ts, local-project:src/lib/services/telegram-tip-bot/commands.ts => src/lib/services/telegram-tip-bot/community-honey-logic.ts, local-project:src/features/dashboard/views/zero-human-companies/primitives.tsx => src/components/wallets-drop-in/HoneyTelegramLinkCard.tsx, hivemind-cloud-services:workers/compute-gateway/src/community-contributions.ts => src/lib/services/telegram-tip-bot/community-honey.ts, local-project:scripts/test-telegram-tip-bot.mjs => scripts/test-telegram-tip-bot.mjs
+- Verification: Wrote ASSIMILATION.telegram-honey-community.json with 5 entries and custom_code_assessment=balanced.
+## 2026-07-12T20:05:54.488844+00:00 - verification
+
+- Request: Build Telegram HONEY missions, evidence submissions, reviewer approvals, identity linking, seasonal leaderboard, and GitHub verification
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.telegram-honey-community.json: 5 concrete reuse entries, 3 substantive
+## 2026-07-12T20:05:54.546965+00:00 - verification
+
+- Request: Build Telegram HONEY missions, evidence submissions, reviewer approvals, identity linking, seasonal leaderboard, and GitHub verification
+- Source: local-project
+- Decision: passed
+- Reason: Assimilation manifest verified with five concrete code/config/test mappings.
+- Verification: python3 /Users/liam/.codex/skills/hive-assimilate/scripts/verify_assimilation_manifest.py ASSIMILATION.telegram-honey-community.json
+## 2026-07-12T20:21:40.501926+00:00 - retrieval
+
+- Request: Hermes agent models must be discoverable and changeable from mobile agent settings over the selected machine's collector/Tailscale route.
+- Source: public-primary
+- Query: `official Hermes configuring models REST API model options set`
+- Decision: selected
+- Reason: Official Hermes documentation confirms GET /api/model/options and POST /api/model/set are the supported programmatic contracts and changes apply to new sessions.
+## 2026-07-12T20:21:40.509978+00:00 - retrieval
+
+- Request: Hermes agent models must be discoverable and changeable from mobile agent settings over the selected machine's collector/Tailscale route.
+- Source: pinned-local-repos
+- Query: `Hermes official model options and assignment APIs`
+- Decision: selected
+- Reason: The installed official NousResearch/hermes-agent checkout exposes one shared inventory substrate and the normalized model assignment used by its REST dashboard.
+## 2026-07-12T20:21:54.565017+00:00 - public-search
+
+- Request: Hermes agent models must be discoverable and changeable from mobile agent settings over the selected machine's collector/Tailscale route.
+- Source: public-primary
+- Query: `official Hermes configuring models REST API model options set`
+- Decision: selected
+- Reason: Official docs confirm model options/set REST contracts and new-session semantics.
+## 2026-07-12T20:21:54.594727+00:00 - local-search
+
+- Request: Hermes agent models must be discoverable and changeable from mobile agent settings over the selected machine's collector/Tailscale route.
+- Source: pinned-local-repos
+- Query: `Hermes official model options and assignment APIs`
+- Decision: selected
+- Reason: Reused installed official Hermes inventory and normalized assignment implementation.
+## 2026-07-12T20:22:39.859714+00:00 - verification
+
+- Request: Hermes agent models must be discoverable and changeable from mobile agent settings over the selected machine's collector/Tailscale route.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.hermes-model-settings.json: 4 concrete reuse entries, 3 substantive
+## 2026-07-12T20:27:38.669840+00:00 - final
+
+- Request: Hermes agent models must be discoverable and changeable from mobile agent settings over the selected machine's collector/Tailscale route.
+- Source: assimilation-manifest
+- Decision: passed
+- Reason: Manifest verified with four concrete entries and three substantive reuse mappings.
+- Assimilated: ASSIMILATION.hermes-model-settings.json
+## 2026-07-12T20:27:38.670377+00:00 - verification
+
+- Request: Hermes agent models must be discoverable and changeable from mobile agent settings over the selected machine's collector/Tailscale route.
+- Source: implementation
+- Decision: passed
+- Reason: Hermes bridge test, real inventory read, isolated config write/readback, syntax, TypeScript, and focused lint passed; full gate retained the concurrent 17-failure baseline.
+- Assimilated: official Hermes inventory and model-set mutation in collector

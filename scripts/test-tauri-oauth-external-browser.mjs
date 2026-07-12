@@ -46,9 +46,14 @@ assert.match(managedXDesktopReturnStore, /RETURN_TTL_MS = 10 \* 60_000/);
 
 const connectionsPanel = readFileSync("src/features/integrations/ConnectionsPanel.tsx", "utf8");
 assert.match(connectionsPanel, /import \{ openExternalUrl \} from "@\/lib\/native\/open-external-url";/);
-assert.match(connectionsPanel, /async function startGoogleOAuth\(\)/);
-assert.match(connectionsPanel, /fetch\(OAUTH_START_URL\.google as string,\s*\{\s*method: "POST"/s);
+assert.match(connectionsPanel, /google: "\/api\/integrations\/google\/oauth\/start"/);
+assert.match(connectionsPanel, /async function startOAuthConnect\(\)/);
+assert.match(connectionsPanel, /fetch\(oauthUrl as string,\s*\{\s*method: "POST"/s);
 assert.match(connectionsPanel, /await openExternalUrl\(data\.authorizationUrl\)/);
+// Google (and the other OAuth-client providers) must route through
+// startOAuthConnect → openExternalUrl, never an in-window navigation.
+assert.match(connectionsPanel, /const usesOAuthClient = isGoogle \|\| isGoogleCloud \|\| isSlack \|\| isAzure/);
+assert.match(connectionsPanel, /usesOAuthClient \? void startOAuthConnect\(\) : window\.location\.assign\(oauthUrl\)/);
 assert.doesNotMatch(connectionsPanel, /window\.location\.assign\(OAUTH_START_URL\.google/);
 
 const googleStartRoute = readFileSync("src/app/api/integrations/google/oauth/start/route.ts", "utf8");

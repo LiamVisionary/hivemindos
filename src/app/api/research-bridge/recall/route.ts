@@ -3,6 +3,7 @@ import {
   RESEARCH_BRIDGE_TOKEN_HEADER,
   buildResearchBridgeRecall,
   researchBridgeCorsHeaders,
+  takeResearchBridgeRecallToken,
   verifyResearchBridgeToken,
   withResearchBridgeCors,
 } from "@/lib/services/research-bridge";
@@ -31,6 +32,11 @@ export async function POST(request: NextRequest) {
     if (!auth.userId) {
       return cors(request, errorJson("A valid research bridge token is required. Copy it from the HivemindOS app.", 401));
     }
+  }
+  // After auth on purpose: a 401 spray can't starve the paired page, and a
+  // stolen-but-valid token still can't bulk-exfiltrate the shared brain.
+  if (!takeResearchBridgeRecallToken()) {
+    return cors(request, errorJson("Brain recall is rate-limited. Try again in a minute.", 429));
   }
   try {
     const body = await request.json().catch(() => null) as { query?: unknown; limit?: unknown } | null;

@@ -73,11 +73,13 @@ Hive Research launches with the following server-enforced analysis prices. Disco
 
 The cost-backed floor may rise when the underlying data or model cost rises; the server will not price a tier below the configured landed-cost floor.
 
-## Hive Research HIVE Policy And Receipt
+## HivemindOS Revenue Buyback Policy And Receipt
 
-Hive Research completed one real paid production analysis and one treasury-funded HIVE purchase on Base. The completed transaction remains public in the [Agent Buyback Ledger](https://hivemindos.app/buybacks/#hive-research).
+HivemindOS allocates 15% of recognized HivemindOS platform revenue to weekly automatic HIVE purchase batches. Recognized revenue excludes directly attributable pass-through costs, refunds, reversals, gross marketplace transaction volume, and purchased credits that have not yet been consumed.
 
-Its declared app policy allocates 50% of positive realized paid-analysis margin after direct costs and reserves to HIVE purchases, accumulated into weekly batches when automatic execution is enabled. Execution is currently disabled. Purchases use the dedicated company treasury rather than a connected user wallet or staked principal. A purchase is not reported as burned unless a separate burn transaction exists.
+Hive Research completed one real paid production analysis and one treasury-funded HIVE purchase on Base under its earlier app-specific policy. The completed transaction remains public in the [Agent Buyback Ledger](https://hivemindos.app/buybacks/#hive-research), while new research revenue follows the 15% platform-wide policy.
+
+Purchases use the dedicated company treasury rather than a connected user wallet or staked principal. A purchase is not reported as burned unless a separate burn transaction exists.
 
 This policy operates independently from staking. Treasury HIVE remains company property until spent or burned; no tier receives a payout, distribution, ownership right, or claim on purchases, burns, revenue, or treasury assets.
 
@@ -107,6 +109,6 @@ Staking may inform reputation and eligibility, but verified work remains the str
 Tier thresholds, member pricing, eligibility, staking benefits, purchase or burn policies, and execution may change, pause, or end for legal, regulatory, tax, accounting, security, liquidity, market-integrity, reserve, or operational reasons. Material changes are published prospectively with an effective date; completed on-chain receipts remain part of the historical record. See [Tokenomics Policy Changes](honey-hive-treasury.html#tokenomics-policy-changes) for the canonical policy.
 
 <nav class="nextNav" aria-label="Monetization reading path">
-  <a href="honey-hive-treasury.html">Back: Honey, HIVE, And Treasury</a>
+  <a href="hive-token-receipts.html">Back: HIVE Token Receipts</a>
   <a href="paid-features/">Next: Paid Features</a>
 </nav>

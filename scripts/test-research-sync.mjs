@@ -23,6 +23,7 @@ const {
   RESEARCH_BRIDGE_TOKEN_HEADER,
   researchBridgeCorsHeaders,
   researchBridgeOrigin,
+  takeResearchBridgeRecallToken,
 } = await import("../src/lib/services/research-bridge.ts");
 
 const root = resolve(import.meta.dirname, "..");
@@ -109,6 +110,23 @@ assert.match(allowedHeaders.get("Access-Control-Allow-Headers") ?? "", /x-hivemi
 const deniedHeaders = researchBridgeCorsHeaders("https://attacker.example");
 assert.equal(deniedHeaders.get("Access-Control-Allow-Origin"), null);
 
+// --- recall rate limit (stolen-token bulk-exfiltration guard) -------------------------
+
+// One shared per-process bucket: 10 recalls/minute. Injected clock; the
+// bucket starts full.
+const t0 = 1_000_000;
+for (let i = 0; i < 10; i += 1) {
+  assert.equal(takeResearchBridgeRecallToken(t0), true, `recall ${i + 1} of 10 must pass`);
+}
+assert.equal(takeResearchBridgeRecallToken(t0), false, "11th recall in the same minute must be limited");
+assert.equal(takeResearchBridgeRecallToken(t0 + 5_999), false, "still limited before a full token refills");
+assert.equal(takeResearchBridgeRecallToken(t0 + 6_001), true, "one token refills after ~6s");
+assert.equal(takeResearchBridgeRecallToken(t0 + 6_001), false, "refill is gradual, not a burst");
+for (let i = 0; i < 10; i += 1) {
+  assert.equal(takeResearchBridgeRecallToken(t0 + 66_001), true, "bucket refills fully after a quiet minute");
+}
+assert.equal(takeResearchBridgeRecallToken(t0 + 66_001), false, "full refill still caps at capacity");
+
 // --- static route/proxy invariants ---------------------------------------------------
 
 const proxySource = await readSource("src/proxy.ts");
@@ -122,6 +140,8 @@ assert.ok(!proxySource.includes('"/api/research-sync"'),
 const recallSource = await readSource("src/app/api/research-bridge/recall/route.ts");
 assert.match(recallSource, /verifyResearchBridgeToken/);
 assert.match(recallSource, /verifyAuth/); // bridge token is an alternative, never a replacement
+assert.match(recallSource, /takeResearchBridgeRecallToken/); // stolen tokens can't bulk-exfiltrate
+assert.match(recallSource, /429/);
 
 const bridgeService = await readSource("src/lib/services/research-bridge.ts");
 assert.match(bridgeService, /redactSecretText/); // outbound excerpts are scrubbed
@@ -140,6 +160,52 @@ assert.match(
 const syncRouteSource = await readSource("src/app/api/research-sync/route.ts");
 assert.match(syncRouteSource, /guard:allow-hive-action-route/);
 assert.ok(!syncRouteSource.includes("syncToken"), "the sync token must never reach a route response");
+
+// --- deep link pairing (hivemindos://research/sync?code=hrsc_...) ---------------------
+
+const {
+  RESEARCH_SYNC_CODE_EVENT,
+  stashResearchSyncCode,
+  subscribeResearchSyncCode,
+} = await import("../src/lib/services/research-sync-code.ts");
+
+assert.equal(RESEARCH_SYNC_CODE_EVENT, "hivemindos:research-sync-code");
+
+// Exactly-once claim semantics: codes are single-use on the gateway, so a
+// parked code is delivered to one subscriber once, and claimed codes are
+// never handed out again (duplicate deep-link deliveries, replays).
+const claimed = [];
+assert.equal(stashResearchSyncCode("not-a-code"), false, "non-hrsc_ strings are rejected");
+assert.equal(stashResearchSyncCode(null), false);
+assert.equal(stashResearchSyncCode(" hrsc_first "), true, "codes are trimmed and parked");
+const unsubscribe = subscribeResearchSyncCode((code) => claimed.push(code));
+assert.deepEqual(claimed, ["hrsc_first"], "subscribing claims the parked code");
+assert.equal(stashResearchSyncCode("hrsc_first"), false, "a claimed code is never redeemed twice");
+assert.equal(stashResearchSyncCode("hrsc_second"), true);
+assert.deepEqual(claimed, ["hrsc_first", "hrsc_second"], "live codes are claimed immediately");
+unsubscribe();
+assert.equal(stashResearchSyncCode("hrsc_third"), true);
+assert.deepEqual(claimed, ["hrsc_first", "hrsc_second"], "no delivery after unsubscribe");
+const unsubscribeLate = subscribeResearchSyncCode((code) => claimed.push(code));
+assert.deepEqual(claimed, ["hrsc_first", "hrsc_second", "hrsc_third"], "re-subscribing claims the parked code");
+unsubscribeLate();
+
+// Static invariants: the native deep-link branch, the cold-start park/take
+// command, and the frontend consumers stay wired together.
+const deepLinkRust = await readSource("src-tauri/src/desktop_navigation.rs");
+assert.match(deepLinkRust, /hivemindos:research-sync-code/);
+assert.match(deepLinkRust, /host == "research" && path == "sync"/);
+assert.match(deepLinkRust, /fn take_pending_research_sync_code/);
+const tauriLib = await readSource("src-tauri/src/lib.rs");
+assert.match(tauriLib, /desktop_navigation::take_pending_research_sync_code/,
+  "the cold-start take command must be registered in the invoke handler");
+const integrationsViewSource = await readSource("src/features/integrations/IntegrationsView.tsx");
+assert.match(integrationsViewSource, /RESEARCH_SYNC_CODE_EVENT/);
+const syncCardSource = await readSource("src/features/integrations/HiveResearchSyncCard.tsx");
+assert.match(syncCardSource, /subscribeResearchSyncCode/);
+const navControllerSource = await readSource("src/features/dashboard/hooks/use-dashboard-navigation-controller.ts");
+assert.match(navControllerSource, /listenForResearchSyncCodes/,
+  "the always-mounted dashboard-root listener must stay registered (the Integrations view unmounts when inactive)");
 
 const instrumentation = await readSource("src/instrumentation.ts");
 assert.match(instrumentation, /\/api\/research-sync/);

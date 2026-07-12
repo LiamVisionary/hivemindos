@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { subscribeResearchSyncCode } from "@/lib/services/research-sync-code";
 import { BBtn, BIcon, NiBadge, ServiceGlyph } from "./integrations-primitives";
 
 // Hive Research brain bridge card (Integrations → Connections).
@@ -65,6 +66,27 @@ export function HiveResearchSyncCard() {
       });
     return () => { active = false; };
   }, []);
+
+  // Deep link (hivemindos://research/sync?code=hrsc_...): the dashboard parks
+  // the one-time code and this card claims it exactly once — the code is
+  // single-use, so a claimed code is never re-submitted and the manual paste
+  // input stays as the fallback. Only stable setters + module functions are
+  // referenced, so the empty dependency list is sound.
+  React.useEffect(() => subscribeResearchSyncCode((deepLinkedCode) => {
+    setBusy("connect");
+    setMessage("");
+    setError("");
+    void syncAction("connect", deepLinkedCode)
+      .then((payload) => {
+        setStatus(payload.sync ?? { connected: true });
+        setCode("");
+        setMessage("Connected from hivemindos.app/research — no need to paste the code. Your research lenses and verdicts now sync into the shared brain.");
+      })
+      .catch((cause: unknown) => {
+        setError(cause instanceof Error ? cause.message : "The sync code from hivemindos.app/research could not be redeemed.");
+      })
+      .finally(() => setBusy(""));
+  }), []);
 
   async function run(action: Exclude<BusyAction, "">, operation: () => Promise<void>) {
     setBusy(action);

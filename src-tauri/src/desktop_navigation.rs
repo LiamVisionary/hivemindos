@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
@@ -19,6 +20,7 @@ const OPEN_POPOUT_EVENT: &str = "hivemindos:open-popout";
 const RERUN_SETUP_EVENT: &str = "hivemindos:rerun-setup";
 const MODELS_CREDITS_RETURN_EVENT: &str = "hivemindos:models-credits-return";
 const MANAGED_X_RETURN_EVENT: &str = "hivemindos:managed-x-return";
+const RESEARCH_SYNC_CODE_EVENT: &str = "hivemindos:research-sync-code";
 const QUEEN_VOICE_EVENT: &str = "hivemindos:queen-bee-voice";
 const QUEEN_SETTINGS_EVENT: &str = "hivemindos:queen-bee-settings";
 
@@ -59,6 +61,23 @@ fn show_main_window(app: &AppHandle) {
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
+}
+
+// Deep-linked hrsc_ research pairing codes are single-use with a 10-minute
+// TTL, so a code that arrives before the dashboard webview is listening (the
+// app was cold-started by the deep link itself) is parked here for the
+// frontend to collect exactly once via take_pending_research_sync_code.
+static PENDING_RESEARCH_SYNC_CODE: Mutex<Option<String>> = Mutex::new(None);
+
+/// One-shot handoff of a deep-linked research sync code: returns the parked
+/// code and clears it, so a later dashboard reload can never re-redeem a
+/// single-use code.
+#[tauri::command]
+pub fn take_pending_research_sync_code() -> Option<String> {
+    PENDING_RESEARCH_SYNC_CODE
+        .lock()
+        .ok()
+        .and_then(|mut pending| pending.take())
 }
 
 pub fn setup_deep_links(app: &App) -> Result<(), String> {
@@ -119,6 +138,21 @@ fn handle_deep_link_urls(app: &AppHandle, urls: Vec<String>) {
                 "error": query_value(&url, "error").unwrap_or_default(),
                 "creditAccountId": query_value(&url, "x_credit_account_id").unwrap_or_default(),
                 "slug": query_value(&url, "x_slug").unwrap_or_default(),
+                "url": url.to_string(),
+            }));
+        } else if host == "research" && path == "sync" {
+            // "Sync memories to app" on hivemindos.app/research. Park the code
+            // for take_pending_research_sync_code (cold start) and emit it for
+            // a running dashboard; the frontend claims each code exactly once
+            // so the single-use hrsc_ code is never redeemed twice.
+            let code = query_value(&url, "code").unwrap_or_default();
+            if let Ok(mut pending) = PENDING_RESEARCH_SYNC_CODE.lock() {
+                *pending = (!code.is_empty()).then(|| code.clone());
+            }
+            show_main_window(app);
+            let _ = app.emit(NAVIGATE_EVENT, serde_json::json!({ "view": "integrations" }));
+            let _ = app.emit(RESEARCH_SYNC_CODE_EVENT, serde_json::json!({
+                "code": code,
                 "url": url.to_string(),
             }));
         }

@@ -126,6 +126,28 @@ export async function verifyResearchBridgeToken(presented: string | null): Promi
   return timingSafeEqual(digest(expected), digest(candidate));
 }
 
+// --- recall rate limit -----------------------------------------------------------
+
+// Per-process token bucket for POST /api/research-bridge/recall. Even a valid
+// stolen bridge token cannot rapidly bulk-exfiltrate the shared brain with
+// arbitrary queries: 10 recalls/minute is far above human research pacing.
+// In-memory on purpose — the app is one local process, and a restart
+// resetting the bucket costs nothing.
+const RECALL_BUCKET_CAPACITY = 10;
+const RECALL_REFILL_PER_MS = RECALL_BUCKET_CAPACITY / 60_000;
+
+const recallBucket = { tokens: RECALL_BUCKET_CAPACITY, refilledAtMs: 0 };
+
+/** Takes one recall token; false = rate-limited. `nowMs` is injectable for tests. */
+export function takeResearchBridgeRecallToken(nowMs = Date.now()): boolean {
+  const elapsedMs = Math.max(0, nowMs - recallBucket.refilledAtMs);
+  recallBucket.tokens = Math.min(RECALL_BUCKET_CAPACITY, recallBucket.tokens + elapsedMs * RECALL_REFILL_PER_MS);
+  recallBucket.refilledAtMs = Math.max(recallBucket.refilledAtMs, nowMs);
+  if (recallBucket.tokens < 1) return false;
+  recallBucket.tokens -= 1;
+  return true;
+}
+
 // --- read-only recall ----------------------------------------------------------
 
 export type ResearchBridgeHit = {

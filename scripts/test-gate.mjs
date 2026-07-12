@@ -177,6 +177,7 @@ const TESTS = [
   "test:schedule-health",
   "test:schedule-replication",
   "test:hermes-api-cache-routing",
+  "test:hermes-model-settings",
   "test:hermes-cron-doc",
   "test:scheduled-runs-machine-key",
   "test:shared-brain-index",

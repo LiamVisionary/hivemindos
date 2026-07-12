@@ -67,6 +67,7 @@
     "allow-send-aeon-deliverable",
     "allow-open-route-window",
     "allow-set-companion-popover",
+    "allow-take-pending-research-sync-code",
     "allow-wallet-secret-export-save",
     "allow-slack-session-capture",
     "allow-speech-recognition-available",

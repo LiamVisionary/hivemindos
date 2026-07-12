@@ -73,13 +73,15 @@ customer collections
 = cash available for an authorized allocation decision
 ```
 
-The operating company does not apply one fictional universal split to every source of company revenue. Direct provider costs, payment costs, refunds, taxes, operating capital, and required reserves are resolved before an app can produce positive realized margin.
+HivemindOS allocates 15% of recognized HivemindOS platform revenue to weekly automatic HIVE purchase batches. The rule is enforced by HivemindOS-controlled infrastructure across supported revenue streams rather than selected by the downloadable app.
 
-A participating app may publish its own server-enforced HIVE policy. The policy must define the margin basis, allocation rate, maturity, batching cadence, minimum and maximum execution amounts, liquidity controls, pause conditions, treasury or burn destination, and public receipts. An app policy does not silently apply to unrelated HivemindOS revenue.
+Recognized platform revenue is narrower than cash collected or transaction volume. Managed model, media, data, and research revenue is measured after directly attributable provider costs and reversals. Marketplace gross merchandise value is not counted as platform revenue; only HivemindOS's earned platform fee is counted. Credit purchases are not counted until the credits are consumed. Refunds and later cost corrections create auditable reversals before unexecuted allocations are purchased.
 
-Hive Research is the first declared policy: 50% of positive realized paid-analysis margin after direct costs and reserves is allocated to HIVE purchases and accumulated into weekly batches when automatic execution is enabled. Its first real paid production analysis funded one confirmed HIVE purchase on Base. Automatic execution is currently disabled, the completed purchase remains in the dedicated treasury, and no burn is counted until a separate burn transaction is confirmed.
+Each recognized event matures for seven days before entering a weekly batch. Minimum and maximum batch controls, liquidity checks, a dedicated company treasury, pause controls, idempotent receipts, and server-held signing credentials limit execution risk. A connected user wallet, staked principal, local environment value, or client-supplied revenue claim cannot choose the amount or recipient.
 
-HivemindOS has adopted revenue-linked HIVE purchases and an auditable buy-and-burn mechanism as the intended tokenomics direction. The [Agent Buyback Ledger](https://hivemindos.app/buybacks/) aggregates only confirmed app receipts and reports whether each app's automation is active. Pending allocations, failed batches, projected capacity, and unconfirmed transactions do not count as HIVE bought or burned. Treasury HIVE and burn activity are not distributed to stakers.
+Hive Research's first real paid production analysis funded one confirmed HIVE purchase on Base under its earlier app-specific policy. That historical receipt remains public while new Hive Research revenue follows the same 15% policy as the other supported revenue streams.
+
+HivemindOS has adopted revenue-linked HIVE purchases and an auditable buy-and-burn mechanism as the intended tokenomics direction. The [Agent Buyback Ledger](https://hivemindos.app/buybacks/) reports recognized revenue allocations, current automation status, and confirmed transactions. Pending allocations, failed batches, projected capacity, and unconfirmed transactions do not count as HIVE bought or burned. A purchase is not counted as a burn without a separate confirmed burn transaction. Treasury HIVE and burn activity are not distributed to stakers.
 
 Product, reliability, support, and customer acquisition take priority while the managed-service business is being validated.
 
@@ -97,15 +99,15 @@ Do say:
 - Cloud credits pay for managed services.
 - HIVE is optional ecosystem infrastructure.
 - Staking tier can set member usage pricing on participating hive products; it lowers a unit price the member pays and never pays anything out.
-- Participating apps publish their own margin basis, HIVE allocation rule, execution status, and confirmed purchase and burn receipts.
-- Hive Research's declared rule is 50% of positive realized paid-analysis margin, with weekly batching when automatic execution is enabled.
+- HivemindOS allocates 15% of recognized platform revenue to weekly automatic HIVE purchase batches.
+- The public ledger publishes each supported revenue source, current execution status, and confirmed purchase and burn receipts.
 - A HIVE purchase and a HIVE burn are separate facts and require separate on-chain receipts.
 - Staking does not automatically produce yield.
 
 Do not say:
 
 - HIVE is ownership of HivemindOS.
-- Every source of company revenue follows the Hive Research allocation policy.
+- Customer collections, gross marketplace volume, or purchased-but-unspent credits are the same as recognized platform revenue.
 - Honey is guaranteed to become HIVE.
 - Stakers receive a fixed share of company revenue.
 - A purchase has been burned when no burn transaction exists.
@@ -113,5 +115,5 @@ Do not say:
 
 <nav class="nextNav" aria-label="Monetization reading path">
   <a href="index.html">Back to investor overview</a>
-  <a href="hive-staking-and-community-tiers.html">Next: HIVE Staking</a>
+  <a href="hive-token-receipts.html">Next: HIVE Token Receipts</a>
 </nav>

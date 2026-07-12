@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-07-12T20:05:54.333225+00:00",
+  "request": "Build Telegram HONEY missions, evidence submissions, reviewer approvals, identity linking, seasonal leaderboard, and GitHub verification",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "local-project",
+      "source_path": "src/lib/services/wallet/honey-wallet-link.ts",
+      "target_path": "src/lib/services/wallet/honey-community.ts",
+      "reuse_type": "adapted_code",
+      "note": "Wallet-verified workspace identity and hosted gateway client pattern"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "src/lib/services/telegram-tip-bot/commands.ts",
+      "target_path": "src/lib/services/telegram-tip-bot/community-honey-logic.ts",
+      "reuse_type": "adapted_code",
+      "note": "Existing bounty command field parsing and collision-free short-id routing"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "src/features/dashboard/views/zero-human-companies/primitives.tsx",
+      "target_path": "src/components/wallets-drop-in/HoneyTelegramLinkCard.tsx",
+      "reuse_type": "style_adapted",
+      "note": "Canonical animated spinner and dashboard pending-state contract"
+    },
+    {
+      "source_repo": "hivemind-cloud-services",
+      "source_path": "workers/compute-gateway/src/community-contributions.ts",
+      "target_path": "src/lib/services/telegram-tip-bot/community-honey.ts",
+      "reuse_type": "adapted_code",
+      "note": "Typed mission identity review and leaderboard HTTP contracts"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "scripts/test-telegram-tip-bot.mjs",
+      "target_path": "scripts/test-telegram-tip-bot.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Existing focused bot contract suite extended for HONEY mission parsing and trust boundaries"
+    }
+  ]
+}

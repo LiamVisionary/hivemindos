@@ -15,6 +15,7 @@ const DEFAULT_COMPANY_REVENUE_FEE_BPS = 0;
 const DEFAULT_MIN_FEE_USD = 0.01;
 const DEFAULT_MAX_FEE_USD = 10;
 const DEFAULT_OFFICIAL_POLICY_URL = "https://hivemindos-paid-agent-gateway.hivemindos.workers.dev/api/platform-fees/config";
+const DEFAULT_OFFICIAL_RECEIPT_URL = "https://hivemindos-paid-agent-gateway.hivemindos.workers.dev/api/platform-fees/receipts";
 const USDC_MICROS = 1_000_000;
 const BPS_DENOMINATOR = 10_000;
 const POLICY_CACHE_MS = 60_000;
@@ -283,6 +284,7 @@ export async function settleReservedTradingPlatformFee(input: {
       status: "executed",
       transactionHash: result.signature,
     }).catch(() => {});
+    await reportPlatformFeeReceipt({ network: quote.network, signature: result.signature, source: quote.source }).catch(() => {});
     return {
       enabled: quote.enabled,
       configured: quote.configured,
@@ -309,6 +311,16 @@ export async function settleReservedTradingPlatformFee(input: {
     }).catch(() => {});
     throw new Error(`Action succeeded, but its pre-authorized platform fee could not settle: ${error instanceof Error ? error.message : "unknown error"}`);
   }
+}
+
+async function reportPlatformFeeReceipt(input: { network: string; signature: string; source: PlatformFeeSource }): Promise<void> {
+  const response = await fetch(DEFAULT_OFFICIAL_RECEIPT_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(input),
+    signal: AbortSignal.timeout(12_000),
+  });
+  if (!response.ok) throw new Error(`Hosted platform-fee receipt verification returned HTTP ${response.status}.`);
 }
 
 export async function assertTradingPlatformFeeReady(input: {
