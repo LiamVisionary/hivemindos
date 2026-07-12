@@ -51,7 +51,10 @@ type HoneyLedgerRuntime = {
   agentHoneyExchanged?: Record<string, number>;
   agentHiveBalances?: Record<string, number>;
   balances?: Array<{ agentId: string; tokensUsed: number; lifetimeHoney: number; availableHoney: number; hiveBalance: number }>;
-  events?: Array<{ id: string; agentId: string; agentName?: string; kind: string; source: string; tokensUsed: number; honeyDelta: number; hiveDelta: number; createdAt: string }>;
+  events?: Array<{ id: string; agentId: string; agentName?: string; kind: string; source: string; category?: string; tokensUsed: number; honeyDelta: number; hiveDelta: number; createdAt: string }>;
+  // Local-model usage tracked privately on this machine; claimable officially
+  // only via verified compute (cloud models) or a TEE-attested runtime.
+  potential?: { honey: number; tokensTracked: number; message: string };
 };
 
 const ESTIMATED_RUNTIME_TOKEN_USD = 0.000002;
@@ -239,6 +242,7 @@ function honeyEventNote(event: NonNullable<HoneyLedgerRuntime["events"]>[number]
   if (event.kind === "exchange") return Number(event.hiveDelta) > 0 ? "Converted Honey to HIVE" : "Returned HIVE to Honey";
   if (event.kind === "managed-credit") return `${normalizeSourceLabel(event.source)} credit`;
   if (event.kind === "managed-spend") return `${normalizeSourceLabel(event.source)} spend`;
+  if (event.kind === "contribution") return `Reviewed ${normalizeSourceLabel(event.category || "community")} contribution`;
   return normalizeSourceLabel(event.kind);
 }
 
@@ -269,6 +273,8 @@ function buildHoneySummary(ledger: HoneyLedgerRuntime | null, byAgent: any[], ho
     redeemed: Math.round((ledger ? Math.abs(out) : fallbackRedeemed) * 1_000_000) / 1_000_000,
     billed: byAgent.reduce((sum, row) => sum + Number(row.billed || 0), 0),
     holders: byAgent.filter((row) => Number(row.honey) > 0).length,
+    potentialHoney: Math.max(0, Number(ledger?.potential?.honey) || 0),
+    potentialMessage: ledger?.potential?.message || "",
   };
 }
 
@@ -280,8 +286,13 @@ async function fetchWalletActivityRecords(): Promise<WalletActivityRecord[]> {
 
 async function fetchHoneyLedger(): Promise<HoneyLedgerRuntime | null> {
   const response = await fetch("/api/honey-ledger", { headers: { accept: "application/json" }, cache: "no-store" }).catch(() => null);
-  const data = await response?.json().catch(() => null) as { ok?: boolean; ledger?: HoneyLedgerRuntime } | null;
-  return response?.ok && data?.ok && data.ledger ? data.ledger : null;
+  const data = await response?.json().catch(() => null) as {
+    ok?: boolean;
+    ledger?: HoneyLedgerRuntime;
+    potential?: HoneyLedgerRuntime["potential"];
+  } | null;
+  if (!response?.ok || !data?.ok || !data.ledger) return null;
+  return data.potential ? { ...data.ledger, potential: data.potential } : data.ledger;
 }
 
 function walletViewForShelf(id: string): string {
@@ -1011,6 +1022,14 @@ function WalletPanelComponent(props: any) {
       const result = await props.returnAllHiveToHoney?.();
       await loadHoneyLedger();
       return result;
+    },
+    onLinkTelegramHoney: async (code: string) => {
+      const response = await fetch("/api/honey-community", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "link-telegram", code }),
+      });
+      return response.json().catch(() => ({ ok: false, error: `Telegram HONEY link failed (${response.status}).` }));
     },
     onRunWalletVaultBackupAction: (action: "refresh" | "restore") => props.runWalletVaultBackupAction?.(action),
     onToggleAgentSpend: (agentId: string, enabled: boolean) => props.updateWallet?.(agentId, { enabled }),

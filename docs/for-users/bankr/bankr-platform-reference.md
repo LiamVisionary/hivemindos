@@ -100,6 +100,19 @@ Every transaction passes through Bankr's security layer, which checks for malici
 | [Claude Plugins](/claude-plugins/overview) | Claude Code users | Low |
 | [Agent API](/agent-api/overview) | Custom integrations | Medium |
 
+## Browse Bankr Skills in HivemindOS
+
+HivemindOS can browse Bankr's live public skill catalogue and install a selected skill directly to the connected Bankr agent.
+
+Open **Brain → Shared Skills → Add skill → Bankr** to:
+
+- search the current Bankr catalogue by skill, provider, or description;
+- open a detail card with the provider, install count, source link, and safety boundary;
+- see which skills are already installed on the connected Bankr account; and
+- install a skill after an explicit confirmation.
+
+Bankr catalogue skills live in the user's Bankr account, so they work from Bankr chat, Telegram, and automations. They are separate from HivemindOS shared-brain skills and do not silently become available to every local runtime. Browsing works without a Bankr credential; installing requires a configured Bankr API, LLM, or management key. Bankr currently allows up to 50 installed skills per wallet.
+
 ## Next Steps
 
 - [Quick Start Guide](/getting-started/quick-start) — Get running in 5 minutes

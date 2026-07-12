@@ -164,7 +164,13 @@ Marketplaces, compute-provider take rates, workflow commissions, provider partne
 
 HIVE is optional ecosystem infrastructure. It is not company ownership, a required payment method, or part of the core pricing ladder.
 
-Honey records reviewed ecosystem contribution. Hivemind Cloud credits are separate purchased, spend-only service credits. Honey is not cash and is not automatically convertible to HIVE. Revenue-funded buybacks, staking returns, and conversion promises are not part of the operating model.
+Honey records reviewed ecosystem contribution. Hivemind Cloud credits are separate purchased, spend-only service credits. Honey is not cash and is not automatically convertible to HIVE.
+
+HivemindOS does not claim that one universal split automatically governs every dollar of company revenue. Participating apps may instead publish a server-enforced rule that allocates a defined share of positive realized margin—after direct costs and required reserves—to HIVE purchases and, when enabled, a separately receipted burn. Hive Research is the first declared app policy: 50% of positive realized paid-analysis margin, accumulated into weekly batches when automatic execution is enabled.
+
+The live [Agent Buyback Ledger](https://hivemindos.app/buybacks/) is the source of truth for execution status and completed transactions. It currently preserves one paid production run and treasury-funded HIVE purchase on Base while automatic execution is disabled. A purchase counts as HIVE bought only after confirmation; a burn counts only after its separate burn transaction is confirmed. Neither creates a staking payout, ownership right, or Honey-to-HIVE conversion promise.
+
+Tokenomics policies may change, pause, or end in response to legal, regulatory, tax, accounting, security, liquidity, market-integrity, reserve, or operational requirements. Material changes are published prospectively with an effective date, while completed on-chain receipts remain part of the historical record.
 
 See [Honey, HIVE, And Treasury](honey-hive-treasury.html) and [HIVE Staking And Community Tiers](hive-staking-and-community-tiers.html) for the separated policy.
 

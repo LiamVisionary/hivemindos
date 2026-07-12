@@ -61,7 +61,9 @@ These rails are documented in the [Trading guide](../../for-users/trading/) and 
 | Enterprise controls | Sell only capabilities that are implemented and supportable |
 | Agent/workflow marketplace | Defer until recurring buyer demand exists |
 | Compute marketplace expansion | Defer supply growth until providers can receive realistic utilization |
-| Token-linked discounts or rewards | Separate policy requiring funding, accounting, and legal review |
+| Stake-tier member usage pricing | Server-enforced consumption pricing on participating hive products; never a payout |
+| Hive Research HIVE policy | 50% of positive realized paid-analysis margin allocated to weekly HIVE purchase batches when enabled; one Base purchase completed; automatic execution currently disabled |
+| Token-linked rewards or enterprise-value distribution | Separate policy requiring funding, accounting, and legal review |
 
 ## Billing Principles
 
@@ -71,7 +73,7 @@ These rails are documented in the [Trading guide](../../for-users/trading/) and 
 - Quote variable provider and infrastructure costs before commitment where practical.
 - Cap money-movement fees and charge nothing for ordinary wallet transfers.
 - Separate deterministic fee revenue from Base Builder Code attribution, contingent rewards, provider fees, and gross transaction volume.
-- Do not make HIVE a required payment method or put staking into the core pricing ladder.
+- Do not make HIVE a required payment method or gate core product access on staking; stake-tier member usage pricing sets usage prices on participating hive products, never access.
 - Do not promise features marked design-partner, contact-led, or planned.
 
 <nav class="nextNav" aria-label="Monetization reading path">

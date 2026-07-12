@@ -8199,3 +8199,873 @@
   - Decision: selected
   - Reason: Implementation complete and verified; no commit, push, deployment, real-vault mutation, or external generation performed
   - Path: `packaged-skills/auto-install/hyperframes; src/lib/services/chat/video-creation-intent.ts; src/app/api/chat/agent-runtime`
+## 2026-07-12T14:36:57.970466+00:00 - shared-brain
+
+- Request: Redesign the HivemindOS Hive Vault brain view to match a dense luminous blue-magenta biological neuron reference while preserving real vault topology and direct-render stability
+- Source: shared-brain
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- Skills/hivemindos-dashboard-ui/SKILL.md
+  - Decision: selected
+  - Reason: defines the dashboard visual workflow and verification contract
+  - Path: `SKILL.md`
+- HivemindOS Docs/for-users/product/design-philosophy.md
+  - Decision: inspected
+  - Reason: supports information-first UI but contains no rendering implementation
+## 2026-07-12T14:39:58.836872+00:00 - local-search
+
+- Request: Redesign the HivemindOS Hive Vault brain view to match a dense luminous blue-magenta biological neuron reference while preserving real vault topology and direct-render stability
+- Source: local-index
+- Query: `Redesign the HivemindOS Hive Vault brain view to match a dense luminous blue-magenta biological neuron reference while preserving real vault topology and direct-render stability`
+- Decision: no-results
+- Reason: No relevant local index hits after threshold filtering.
+## 2026-07-12T14:40:05.520853+00:00 - public-search
+
+- Request: Redesign the HivemindOS Hive Vault brain view to match a dense luminous blue-magenta biological neuron reference while preserving real vault topology and direct-render stability
+- Source: public-github
+- Query: `Redesign the HivemindOS Hive Vault brain view to match a dense luminous blue-magenta biological neuron reference while preserving real vault topology and direct-render stability`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-07-12T14:40:05.611139+00:00 - prebuild-gate
+
+- Request: Redesign the HivemindOS Hive Vault brain view to match a dense luminous blue-magenta biological neuron reference while preserving real vault topology and direct-render stability
+- Source: public-github
+- Query: `Redesign the HivemindOS Hive Vault brain view to match a dense luminous blue-magenta biological neuron reference while preserving real vault topology and direct-render stability`
+- Decision: blocked
+- Reason: Public search returned no usable candidates; broaden queries before implementing.
+- Note: cached 0 public candidates (cached in /Users/liam/Documents/github-assimilator-vault)
+## 2026-07-12T14:40:43.923827+00:00 - prebuild-gate
+
+- Request: Redesign the HivemindOS Hive Vault brain view to match a dense luminous blue-magenta biological neuron reference while preserving real vault topology and direct-render stability
+- Source: hive-assimilate
+- Decision: blocked
+- Reason: No local-index or public candidate met the broad request threshold; decomposing into Three.js neuron and glow-rendering queries
+- Selected backbone: local-project:hivemind-os
+## 2026-07-12T14:40:53.792023+00:00 - public-search
+
+- Request: three.js neuron dendrite particle shader
+- Source: public-github
+- Query: `three.js neuron dendrite particle shader`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-07-12T14:42:26.836932+00:00 - local-search
+
+- Request: Redesign the HivemindOS Hive Vault brain view to match a dense luminous blue-magenta biological neuron reference while preserving real vault topology and direct-render stability
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/views/brain-dendrite-field.ts
+  - Decision: selected
+  - Reason: existing deterministic node-local branch generator can be expanded into biological multi-order arbors
+  - Path: `brain-dendrite-field.ts`
+- src/features/dashboard/views/brain-fiber-tubes.ts
+  - Decision: selected
+  - Reason: existing direct-render quadratic tube mesh preserves flicker-safe renderer and can be restyled into translucent axon bundles
+  - Path: `brain-fiber-tubes.ts`
+- src/components/fleet/orbital-graph.tsx
+  - Decision: selected-donor
+  - Reason: existing radial glow and center-weighted crisp particle implementation remains the stable particle donor
+  - Path: `orbital-graph.tsx`
+- src/features/dashboard/views/brain-graph-semantics.ts
+  - Decision: selected
+  - Reason: existing real wiki-folder-tag topology remains authoritative and unchanged
+  - Path: `brain-graph-semantics.ts`
+## 2026-07-12T14:42:26.893086+00:00 - public-search
+
+- Request: Redesign the HivemindOS Hive Vault brain view to match a dense luminous blue-magenta biological neuron reference while preserving real vault topology and direct-render stability
+- Source: github-public
+- Decision: not-assimilated
+- Reason: Bounded broad and decomposed GitHub searches returned no candidate meeting the reuse threshold; the current project already contains direct-render neural geometry donors
+- Selected backbone: local-project:hivemind-os
+## 2026-07-12T15:16:31.692094+00:00 - assimilation-manifest
+
+- Request: Redesign the HivemindOS Hive Vault brain view to match a dense luminous blue-magenta biological neuron reference while preserving real vault topology and direct-render stability
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local/hivemind-os:src/features/dashboard/views/brain-dendrite-field.ts => src/features/dashboard/views/brain-dendrite-field.ts, local/hivemind-os:src/features/dashboard/views/brain-fiber-tubes.ts => src/features/dashboard/views/brain-fiber-tubes.ts, local/hivemind-os:src/features/dashboard/views/brain-synapse-gpu.ts => src/features/dashboard/views/brain-synapse-gpu.ts, local/hivemind-os:src/components/fleet/orbital-graph.tsx => src/features/dashboard/views/BrainSynapseCanvas.tsx
+- Verification: Wrote ASSIMILATION.brain-neural-reference.json with 4 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-12T15:16:31.869390+00:00 - verification
+
+- Request: Redesign the HivemindOS Hive Vault brain view to match a dense luminous blue-magenta biological neuron reference while preserving real vault topology and direct-render stability
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.brain-neural-reference.json: 4 concrete reuse entries, 3 substantive
+## 2026-07-12T15:17:11.185925+00:00 - verification
+
+- Request: Redesign the HivemindOS Hive Vault brain view to match a dense luminous blue-magenta biological neuron reference while preserving real vault topology and direct-render stability
+- Source: assimilation-manifest
+- Decision: selected
+- Reason: ASSIMILATION.brain-neural-reference.json passed with 4 concrete reuse entries and 3 substantive entries
+- Selected backbone: local-project:hivemind-os
+## 2026-07-12T15:21:52.591999+00:00 - final
+
+- Request: Redesign the HivemindOS Hive Vault brain view to match a dense luminous blue-magenta biological neuron reference while preserving real vault topology and direct-render stability
+- Source: local-project:hivemind-os
+- Decision: selected
+- Reason: Semantic regression, focused ESLint, whole-project TypeScript, diff hygiene, file sizes, browser render, Tauri remount, and six-rotation stability pass
+- Selected backbone: local-project:hivemind-os
+## 2026-07-12T15:28:42.934070+00:00 - correction
+
+- Request: Redesign the HivemindOS Hive Vault brain view to match a dense luminous blue-magenta biological neuron reference while preserving real vault topology and direct-render stability
+- Source: user-screenshot
+- Decision: adapted_code
+- Reason: User screenshot confirms longitudinal tube striations, multiple physical link strands, and overlong primary dendrites read as hair; correcting the existing assimilated tube and dendrite modules
+- Selected backbone: local-project:hivemind-os
+- Note: Follow-up keeps the accepted cyan-magenta palette and replaces hair-like strand treatment with continuous branching membranes
+## 2026-07-12T15:45:45.834747+00:00 - assimilation-manifest
+
+- Request: Redesign the HivemindOS Hive Vault brain view to match a dense luminous blue-magenta biological neuron reference while preserving real vault topology and direct-render stability
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local/hivemind-os:src/features/dashboard/views/brain-dendrite-field.ts => src/features/dashboard/views/brain-dendrite-field.ts, local/hivemind-os:src/features/dashboard/views/brain-fiber-tubes.ts => src/features/dashboard/views/brain-fiber-tubes.ts, local/hivemind-os:src/features/dashboard/views/brain-synapse-gpu.ts => src/features/dashboard/views/brain-synapse-gpu.ts, local/hivemind-os:src/components/fleet/orbital-graph.tsx => src/features/dashboard/views/BrainSynapseCanvas.tsx
+- Verification: Wrote ASSIMILATION.brain-neural-reference.json with 4 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-12T15:45:45.982157+00:00 - verification
+
+- Request: Redesign the HivemindOS Hive Vault brain view to match a dense luminous blue-magenta biological neuron reference while preserving real vault topology and direct-render stability
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.brain-neural-reference.json: 4 concrete reuse entries, 3 substantive
+## 2026-07-12T15:45:46.049360+00:00 - verification
+
+- Request: Redesign the HivemindOS Hive Vault brain view to match a dense luminous blue-magenta biological neuron reference while preserving real vault topology and direct-render stability
+- Source: local-project:hivemind-os
+- Decision: selected
+- Reason: Hair correction passes semantic regression, focused ESLint, whole-project TypeScript, diff hygiene, file sizes, Tauri remount, and six final weighted-branch rotations
+- Selected backbone: local-project:hivemind-os
+## 2026-07-12T15:57:59.633295+00:00 - shared-brain
+
+- Request: Add proximity-responsive multi-node lighting to the HivemindOS Hive Vault brain so moving the pointer creates an animated symphony across any number of nearby nodes
+- Source: shared-brain
+- Decision: not-assimilated
+- Reason: Full-vault recall returned unrelated animation vocabulary and runtime docs; neither contains Brain pointer-lighting implementation
+- Selected backbone: local-project:hivemind-os
+## 2026-07-12T16:00:48.699155+00:00 - local-search
+
+- Request: Add proximity-responsive multi-node lighting to the HivemindOS Hive Vault brain so moving the pointer creates an animated symphony across any number of nearby nodes
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/views/BrainSynapseCanvas.tsx
+  - Decision: selected
+  - Reason: existing pointer coordinates, camera projection, and instanced node attributes provide the full interaction backbone
+  - Path: `BrainSynapseCanvas.tsx`
+- src/features/dashboard/views/brain-synapse-gpu.ts
+  - Decision: selected
+  - Reason: existing time-aware soma and halo shaders can accept a proximity attribute without post-processing
+  - Path: `brain-synapse-gpu.ts`
+- src/components/fleet/orbital-graph.tsx
+  - Decision: selected-donor
+  - Reason: existing absolute-time amplitude modulation demonstrates stable non-reseeding animated glow
+  - Path: `orbital-graph.tsx`
+## 2026-07-12T16:00:48.874360+00:00 - local-search
+
+- Request: Add proximity-responsive multi-node lighting to the HivemindOS Hive Vault brain so moving the pointer creates an animated symphony across any number of nearby nodes
+- Source: local-index
+- Query: `Add proximity-responsive multi-node lighting to the HivemindOS Hive Vault brain so moving the pointer creates an animated symphony across any number of nearby nodes`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+
+### Candidates
+- LiamVisionary/claude-watch
+  - URL: https://github.com/LiamVisionary/claude-watch
+  - Description: LiamVisionary/claude-watch Turn any tutorial or lecture video into structured study notes — scene-aware frames, persistent library, Claude-vision OCR.
+- LiamVisionary/claw-code-mobile
+  - URL: https://github.com/LiamVisionary/claw-code-mobile
+  - Description: LiamVisionary/claw-code-mobile The #1 remote agent UX on the go. Powered by the acclaimed Claw Code harness and the flexibility of any llm. Rust
+## 2026-07-12T16:00:53.134947+00:00 - public-search
+
+- Request: Add proximity-responsive multi-node lighting to the HivemindOS Hive Vault brain so moving the pointer creates an animated symphony across any number of nearby nodes
+- Source: public-github
+- Query: `Add proximity-responsive multi-node lighting to the HivemindOS Hive Vault brain so moving the pointer creates an animated symphony across any number of nearby nodes`
+- Decision: retrieved
+- Reason: Retrieved 2 public candidates from GitHub search.
+
+### Candidates
+- yukubo/sample_word2vec_skipgram (4 stars)
+  - URL: https://github.com/yukubo/sample_word2vec_skipgram
+  - Description: # Copyright 2015 Google Inc. All Rights Reserved. # # Licensed under the Apache License, Version 2.0 (the "License"); # you may not use this file except in compliance with the License. # You may obtain a copy of the License at # # http://ww
+- Mansoor1565/Pig-and-Python (1 stars)
+  - URL: https://github.com/Mansoor1565/Pig-and-Python
+  - Description: Introduction Pig and Python are very widespread systems for executing complex Hadoop map-reduce-based data-flows. It enhances a layer of abstraction on top of Hadoop’s map-reduce mechanisms. That is with the intention of permitting develope
+## 2026-07-12T16:00:53.215988+00:00 - prebuild-gate
+
+- Request: Add proximity-responsive multi-node lighting to the HivemindOS Hive Vault brain so moving the pointer creates an animated symphony across any number of nearby nodes
+- Source: public-github
+- Query: `Add proximity-responsive multi-node lighting to the HivemindOS Hive Vault brain so moving the pointer creates an animated symphony across any number of nearby nodes`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-07-12T16:01:34.953216+00:00 - prebuild-gate
+
+- Request: Add proximity-responsive multi-node lighting to the HivemindOS Hive Vault brain so moving the pointer creates an animated symphony across any number of nearby nodes
+- Source: hive-assimilate
+- Decision: selected
+- Reason: Current HivemindOS Brain renderer is the only compatible audited backbone and already exposes all required projection and shader surfaces
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- LiamVisionary/claude-watch
+  - Decision: rejected
+  - Reason: video-to-study-notes product with no pointer projection or WebGL node lighting implementation
+- LiamVisionary/claw-code-mobile
+  - Decision: rejected
+  - Reason: remote agent UX with no compatible Three.js interaction module
+- yukubo/sample_word2vec_skipgram
+  - Decision: rejected
+  - Reason: false lexical match on nearby nodes; unrelated TensorFlow word2vec sample
+- Mansoor1565/Pig-and-Python
+  - Decision: rejected
+  - Reason: false lexical match; unrelated Hadoop dataflow tutorial
+## 2026-07-12T16:21:07.067682+00:00 - assimilation-manifest
+
+- Request: Add proximity-responsive multi-node lighting to the HivemindOS Hive Vault brain so moving the pointer creates an animated symphony across any number of nearby nodes
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local/hivemind-os:src/features/dashboard/views/BrainSynapseCanvas.tsx => src/features/dashboard/views/BrainSynapseCanvas.tsx, local/hivemind-os:src/features/dashboard/views/brain-synapse-gpu.ts => src/features/dashboard/views/brain-synapse-gpu.ts, local/hivemind-os:src/components/fleet/orbital-graph.tsx => src/features/dashboard/views/brain-pointer-proximity.ts, local/hivemind-os:scripts/test-brain-graph-semantics.mjs => scripts/test-brain-pointer-proximity.mjs
+- Verification: Wrote ASSIMILATION.brain-pointer-symphony.json with 4 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-12T16:21:07.223557+00:00 - verification
+
+- Request: Add proximity-responsive multi-node lighting to the HivemindOS Hive Vault brain so moving the pointer creates an animated symphony across any number of nearby nodes
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.brain-pointer-symphony.json: 4 concrete reuse entries, 3 substantive
+## 2026-07-12T16:21:07.287565+00:00 - verification
+
+- Request: Add proximity-responsive multi-node lighting to the HivemindOS Hive Vault brain so moving the pointer creates an animated symphony across any number of nearby nodes
+- Source: local-project:hivemind-os
+- Decision: selected
+- Reason: Proximity and semantic regressions, focused ESLint, whole-project TypeScript, diff hygiene, file sizes, live multi-node field sampling, and six Tauri rotations pass
+- Selected backbone: local-project:hivemind-os
+## 2026-07-12T16:53:20.816602+00:00 - triage
+
+- Request: Create a skill in HivemindOS packaged skills from the supplied TikTok app ads growth article.
+- Source: user-supplied
+- Decision: selected
+- Reason: Pinned source defines the intended workflow, anecdotes, campaign shape, creative matrix, and decision heuristics.
+- Selected backbone: user-supplied:TikTok app ads growth article
+
+### Candidates
+- user-supplied article
+  - Decision: selected
+  - Reason: authoritative workflow backbone
+  - Path: `conversation`
+## 2026-07-12T16:53:20.866093+00:00 - shared-brain
+
+- Request: Create a skill in HivemindOS packaged skills from the supplied TikTok app ads growth article.
+- Source: hive-brain
+- Query: `TikTok mobile app ads MMP attribution CPA LTV ethical growth loop`
+- Decision: selected-donor
+- Selected backbone: user-supplied:TikTok app ads growth article
+
+### Candidates
+- Skills/apple-ads-revenuecat-growth-loop/SKILL.md
+  - Decision: selected-donor
+  - Reason: unit economics, readiness scoring, attribution evidence, approval gates
+  - Path: `SKILL.md`
+- packaged-skills/optional/media/hivemindos/ai-ugc-production-pipeline/SKILL.md
+  - Decision: selected-donor
+  - Reason: six-creative production and discovery-driven media routing
+  - Path: `SKILL.md`
+- packaged-skills/optional/gtm/hivemindos/organic-reach-gtm/SKILL.md
+  - Decision: selected-donor
+  - Reason: no-fabricated-proof and authentic engagement boundary
+  - Path: `SKILL.md`
+## 2026-07-12T16:53:20.931320+00:00 - local-search
+
+- Request: Create a skill in HivemindOS packaged skills from the supplied TikTok app ads growth article.
+- Source: hive-capability-search
+- Query: `TikTok app ads MMP attribution short-form creative CPA LTV`
+- Decision: selected-donor
+
+### Candidates
+- ai-ugc-production-pipeline
+  - Decision: selected-donor
+  - Reason: top ranked local creative-production capability
+  - Path: `packaged-skills/optional/media/hivemindos/ai-ugc-production-pipeline/SKILL.md`
+- posthog-provisioning-and-query
+  - Decision: inspected
+  - Reason: optional analytics companion but not required by provider-neutral skill
+  - Path: `packaged-skills/optional/gtm/hivemindos/posthog-provisioning-and-query/SKILL.md`
+- content-rewards-viral-app-campaign
+  - Decision: rejected
+  - Reason: organic creator-rewards motion, not paid app acquisition
+  - Path: `packaged-skills/optional/media/hivemindos/content-rewards-viral-app-campaign/SKILL.md`
+## 2026-07-12T16:53:20.980179+00:00 - public-search
+
+- Request: Create a skill in HivemindOS packaged skills from the supplied TikTok app ads growth article.
+- Source: official-docs
+- Query: `TikTok Smart+ App MMP Spark Ads misleading content fake engagement AppsFlyer Advanced SRN`
+- Decision: selected-donor
+- Reason: Official TikTok and AppsFlyer documentation was more authoritative than public GitHub for time-sensitive platform behavior; no public code donor was needed.
+
+### Candidates
+- TikTok Business Help Center
+  - Decision: selected-donor
+  - Reason: current Smart+ placements, learning, MMP, Spark Ads, policy and comment controls
+  - Path: `official web docs`
+- AppsFlyer Help Center
+  - Decision: selected-donor
+  - Reason: current TikTok Advanced SRN transition and measurement context
+  - Path: `official web docs`
+- public GitHub
+  - Decision: not-assimilated
+  - Reason: pinned article and first-party platform docs covered the workflow; repository code would not improve a Markdown operating skill
+## 2026-07-12T16:53:36.557714+00:00 - assimilation-manifest
+
+- Request: Create a skill in HivemindOS packaged skills from the supplied TikTok app ads growth article.
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: shared-brain:Skills/apple-ads-revenuecat-growth-loop/SKILL.md => packaged-skills/optional/gtm/hivemindos/tiktok-app-ads-growth-loop/SKILL.md, LiamVisionary/hivemindos:packaged-skills/optional/media/hivemindos/ai-ugc-production-pipeline/SKILL.md => packaged-skills/optional/gtm/hivemindos/tiktok-app-ads-growth-loop/SKILL.md, LiamVisionary/hivemindos:packaged-skills/optional/gtm/hivemindos/organic-reach-gtm/SKILL.md => packaged-skills/optional/gtm/hivemindos/tiktok-app-ads-growth-loop/SKILL.md
+- Verification: Wrote ASSIMILATION.tiktok-app-ads-growth-loop.json with 3 entries and custom_code_assessment=balanced.
+## 2026-07-12T16:53:36.685696+00:00 - verification
+
+- Request: Create a skill in HivemindOS packaged skills from the supplied TikTok app ads growth article.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.tiktok-app-ads-growth-loop.json: 3 concrete reuse entries, 3 substantive
+## 2026-07-12T16:53:36.738347+00:00 - verification
+
+- Request: Create a skill in HivemindOS packaged skills from the supplied TikTok app ads growth article.
+- Source: assimilation-manifest
+- Decision: selected
+- Verification: ASSIMILATION.tiktok-app-ads-growth-loop.json verified with three substantive adapted workflow mappings
+## 2026-07-12T16:59:08.438743+00:00 - verification
+
+- Request: Create a skill in HivemindOS packaged skills from the supplied TikTok app ads growth article.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.tiktok-app-ads-growth-loop.json: 3 concrete reuse entries, 3 substantive
+## 2026-07-12T16:59:38.904099+00:00 - implementation
+
+- Request: Create a skill in HivemindOS packaged skills from the supplied TikTok app ads growth article.
+- Source: local-project
+- Decision: adapted_code
+- Selected backbone: user-supplied:TikTok app ads growth article
+- Assimilated: Shared readiness, economics, creative-production, authenticity, approval, and provider-discovery workflows into packaged-skills/optional/gtm/hivemindos/tiktok-app-ads-growth-loop/SKILL.md
+
+### Candidates
+- Skills/apple-ads-revenuecat-growth-loop/SKILL.md
+  - Decision: adapted_code
+  - Reason: readiness, economics, attribution and approval gates
+  - Path: `packaged-skills/optional/gtm/hivemindos/tiktok-app-ads-growth-loop/SKILL.md`
+- packaged-skills/optional/media/hivemindos/ai-ugc-production-pipeline/SKILL.md
+  - Decision: adapted_code
+  - Reason: creative matrix and discovery routing
+  - Path: `packaged-skills/optional/gtm/hivemindos/tiktok-app-ads-growth-loop/SKILL.md`
+- packaged-skills/optional/gtm/hivemindos/organic-reach-gtm/SKILL.md
+  - Decision: adapted_code
+  - Reason: authenticity boundary
+  - Path: `packaged-skills/optional/gtm/hivemindos/tiktok-app-ads-growth-loop/SKILL.md`
+## 2026-07-12T16:59:38.961398+00:00 - verification
+
+- Request: Create a skill in HivemindOS packaged skills from the supplied TikTok app ads growth article.
+- Source: skill-runtime
+- Decision: selected
+- Verification: quick_validate passed; metadata parsed; capability search ranked new skill first at 258; read-only GPT-5.4 rehearsal returned 65-line brief with correct attribution, placement and learning gates; diff check clean
+- Note: Broader vault-structure contract remains red on pre-existing docs/index.md OKF brain export assertion; full benchmark viewer skipped for proportionality.
+## 2026-07-12T17:02:55.194136+00:00 - correction
+
+- Request: Add proximity-responsive multi-node lighting to the HivemindOS Hive Vault brain so moving the pointer creates an animated symphony across any number of nearby nodes
+- Source: user-screenshot
+- Decision: adapted_code
+- Reason: User screenshot confirms multiplicative proximity energy is too subtle on low-radius somas; adapt the existing halo shader with an inverse-size absolute expansion and stronger small-node star energy
+- Selected backbone: local-project:hivemind-os
+## 2026-07-12T17:20:21.879098+00:00 - assimilation-manifest
+
+- Request: Add proximity-responsive multi-node lighting to the HivemindOS Hive Vault brain so moving the pointer creates an animated symphony across any number of nearby nodes
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local/hivemind-os:src/features/dashboard/views/BrainSynapseCanvas.tsx => src/features/dashboard/views/BrainSynapseCanvas.tsx, local/hivemind-os:src/features/dashboard/views/brain-synapse-gpu.ts => src/features/dashboard/views/brain-synapse-gpu.ts, local/hivemind-os:src/components/fleet/orbital-graph.tsx => src/features/dashboard/views/brain-pointer-proximity.ts, local/hivemind-os:scripts/test-brain-graph-semantics.mjs => scripts/test-brain-pointer-proximity.mjs
+- Verification: Wrote ASSIMILATION.brain-pointer-symphony.json with 4 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-12T17:20:22.017607+00:00 - verification
+
+- Request: Add proximity-responsive multi-node lighting to the HivemindOS Hive Vault brain so moving the pointer creates an animated symphony across any number of nearby nodes
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.brain-pointer-symphony.json: 4 concrete reuse entries, 3 substantive
+## 2026-07-12T17:20:22.085084+00:00 - verification
+
+- Request: Add proximity-responsive multi-node lighting to the HivemindOS Hive Vault brain so moving the pointer creates an animated symphony across any number of nearby nodes
+- Source: actual Tauri Hive Vault and local gates
+- Decision: selected
+- Reason: Baseline-versus-pointer sampling confirmed small nearby somas become distinct white/cyan starbursts; six rotations remained free of flicker, black tiles, and blank frames; proximity and semantic regressions, focused ESLint, TypeScript, diff hygiene, and file-size checks passed.
+- Note: Verified the inverse-size small-node amplification correction after the user's screenshot showed the earlier multiplicative response was too subtle.
+## 2026-07-12T18:13:35.979011+00:00 - shared-brain
+
+- Request: Add an in-app Bankr skills catalogue with details modal and install actions
+- Source: shared-brain
+- Decision: selected
+- Reason: Bankr platform memory and shared Bankr skill define the two-way skill model and credential handling.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- Skills/bankr/SKILL.md
+  - Decision: selected-donor
+  - Reason: Bankr API and skill semantics
+  - Path: `SKILL.md`
+## 2026-07-12T18:13:36.049149+00:00 - local-search
+
+- Request: Add an in-app Bankr skills catalogue with details modal and install actions
+- Source: current-project
+- Decision: selected
+- Reason: Existing Skill Browser modal, Bankr credential resolver, confirmation helper, API envelope, and card styles cover the app integration surface.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/views/chat/SkillBrowserModal.tsx
+  - Decision: selected
+  - Reason: existing modal and card catalogue surface
+- src/lib/services/bankr-llm.ts
+  - Decision: selected-donor
+  - Reason: canonical Bankr API key resolution
+- src/lib/utils/api-response.ts
+  - Decision: selected-donor
+  - Reason: canonical route envelope
+## 2026-07-12T18:13:36.098240+00:00 - public-search
+
+- Request: Add an in-app Bankr skills catalogue with details modal and install actions
+- Source: public-github+live-bankr
+- Decision: selected-donor
+- Reason: Live Bankr frontend and API expose the authoritative catalogue, installed-skill list, and import payloads; GitHub repository confirms public skill provenance and MIT licensing.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- BankrBot/skills
+  - Decision: selected-donor
+  - Reason: public catalogue source and MIT provenance
+  - Path: `https://github.com/BankrBot/skills`
+- bankr.bot/assets/index-BmvhiWGY.js
+  - Decision: selected-donor
+  - Reason: authoritative current GET /skills/catalog, GET /skills, and POST /skills/import call chain
+- static BANKR_DIRECTORY_SKILLS
+  - Decision: rejected
+  - Reason: 14 hand-written workflows are not the live 119-skill Bankr catalogue
+  - Path: `src/lib/services/skills/skill-os.ts`
+## 2026-07-12T18:13:48.742108+00:00 - correction
+
+- Request: Add an in-app Bankr skills catalogue with details modal and install actions
+- Source: public-github
+- Decision: inspected
+- Reason: Correction: BankrBot/skills currently declares no repository license. This task does not vendor or redistribute its skill bodies; it integrates the public Bankr catalogue API and remote install endpoint only.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- BankrBot/skills
+  - Decision: reference-only
+  - Reason: no declared repository license, so no skill bodies will be copied
+  - Path: `https://github.com/BankrBot/skills`
+## 2026-07-12T18:28:50.383310+00:00 - assimilation-manifest
+
+- Request: Add an in-app Bankr skills catalogue with details modal and install actions
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: bankr.bot:assets/index-BmvhiWGY.js => src/lib/services/bankr-skills.ts, local-project:src/features/dashboard/views/chat/SkillBrowserModal.tsx => src/features/dashboard/views/chat/skill-browser/BankrSkillsCatalog.tsx, local-project:src/lib/services/bankr-llm.ts => src/lib/services/bankr-skills.ts, local-project:src/lib/utils/api-response.ts => src/app/api/bankr/skills/route.ts
+- Verification: Wrote ASSIMILATION.bankr-skill-catalog.json with 4 entries and custom_code_assessment=balanced.
+## 2026-07-12T18:28:53.498627+00:00 - verification
+
+- Request: Add an in-app Bankr skills catalogue with details modal and install actions
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.bankr-skill-catalog.json: 4 concrete reuse entries, 4 substantive
+## 2026-07-12T18:29:04.669332+00:00 - verification
+
+- Request: Add an in-app Bankr skills catalogue with details modal and install actions
+- Source: local verification
+- Decision: verified
+- Reason: Manifest contains four concrete reuse mappings and passes the assimilation verifier.
+- Verification: ASSIMILATION.bankr-skill-catalog.json valid: 4 concrete reuse entries, 4 substantive
+## 2026-07-12T18:33:18.805989+00:00 - shared-brain
+
+- Request: can you build this for HivemindOS? https://github.com/abundantbeing/hermes-browser-extension
+- Source: shared-brain
+- Decision: inspected
+- Reason: Queried prior browser-extension and Hermes integration decisions before implementation
+## 2026-07-12T18:33:55.406695+00:00 - audit
+
+- Request: can you build this for HivemindOS? https://github.com/abundantbeing/hermes-browser-extension
+- Source: user-pinned-github
+- Selected backbone: abundantbeing/hermes-browser-extension
+
+### Candidates
+- abundantbeing/hermes-browser-extension
+  - Decision: selected
+  - Reason: MIT browser side-panel backbone; audit found no high-risk code and four review-only cautions
+  - Path: `extension`
+- assets/readme/*.png and *.gif
+  - Decision: rejected
+  - Reason: large opaque promotional media is unnecessary for HivemindOS implementation
+- extension/lib/dashboard-bridge.mjs
+  - Decision: inspected
+  - Reason: dynamic Function constructor requires focused review before reuse
+## 2026-07-12T18:35:59.546289+00:00 - prebuild-gate
+
+- Request: can you build this for HivemindOS? https://github.com/abundantbeing/hermes-browser-extension
+- Source: current-project
+- Selected backbone: abundantbeing/hermes-browser-extension
+- Note: Baseline: file-size and API-auth gates run before implementation.
+
+### Candidates
+- extension/content.js
+  - Decision: selected-donor
+  - Reason: read-only page and selection extraction
+- extension/lib/browser-context-protocol.mjs
+  - Decision: selected-donor
+  - Reason: privacy guards, redaction, context envelope
+- extension/lib/commands.mjs
+  - Decision: selected-donor
+  - Reason: browser-context quick commands
+- src/app/api/chat/agent-runtime/route.ts
+  - Decision: selected-donor
+  - Reason: existing HivemindOS runtime SSE path
+- src/lib/utils/server-auth.ts
+  - Decision: selected-donor
+  - Reason: existing dashboard device-token authentication
+## 2026-07-12T18:48:30.102365+00:00 - local-search
+
+- Request: can you build this for HivemindOS? https://github.com/abundantbeing/hermes-browser-extension
+- Source: current-project
+- Decision: selected
+- Reason: Traced the existing authenticated SSE chat runtime and stored-agent/profile boundaries before adding the extension adapter.
+- Selected backbone: abundantbeing/hermes-browser-extension
+
+### Candidates
+- src/app/api/chat/agent-runtime/route.ts
+  - Decision: selected-donor
+  - Reason: existing HivemindOS runtime stream reused without a parallel chat implementation
+  - Path: `src/app/api/chat/agent-runtime/route.ts`
+- src/lib/utils/server-auth.ts
+  - Decision: selected-donor
+  - Reason: dashboard device-token verification reused for extension requests
+  - Path: `src/lib/utils/server-auth.ts`
+- src/lib/services/agent-profile-store.ts
+  - Decision: selected-donor
+  - Reason: server-side profile lookup prevents sensitive profile fields leaving the app
+  - Path: `src/lib/services/agent-profile-store.ts`
+## 2026-07-12T18:48:30.174308+00:00 - public-search
+
+- Request: can you build this for HivemindOS? https://github.com/abundantbeing/hermes-browser-extension
+- Source: user-pinned-github
+- Decision: not-assimilated
+- Reason: No additional public search was needed: the user-pinned MIT repository supplied the browser backbone and the current HivemindOS project supplied the missing authenticated runtime transport.
+## 2026-07-12T18:48:30.227407+00:00 - implementation
+
+- Request: can you build this for HivemindOS? https://github.com/abundantbeing/hermes-browser-extension
+- Source: selected-github-code
+- Decision: adapted_code
+- Selected backbone: abundantbeing/hermes-browser-extension
+
+### Candidates
+- abundantbeing/hermes-browser-extension:extension/content.js
+  - Decision: adapted_code
+  - Reason: read-only DOM/selection/meta extraction adapted and reduced for HivemindOS
+  - Path: `browser-extension/content.js`
+- abundantbeing/hermes-browser-extension:extension/lib/browser-context-protocol.mjs
+  - Decision: adapted_code
+  - Reason: restricted destinations, privacy-safe tabs, redaction, and untrusted context boundaries adapted
+  - Path: `browser-extension/lib/context.mjs`
+- abundantbeing/hermes-browser-extension:extension/lib/commands.mjs
+  - Decision: adapted_code
+  - Reason: core quick commands adapted to HivemindOS agents
+  - Path: `browser-extension/lib/commands.mjs`
+- abundantbeing/hermes-browser-extension:manifest.json + extension/background.js
+  - Decision: config_adapted
+  - Reason: MV3 side-panel packaging adapted with HivemindOS branding and transport
+  - Path: `browser-extension/manifest.json`
+- abundantbeing/hermes-browser-extension:tests/browser-context-protocol.test.mjs + tests/commands.test.mjs
+  - Decision: test_adapted
+  - Reason: privacy, leakage, prompt-boundary, and package contracts adapted
+  - Path: `scripts/test-browser-extension.mjs`
+## 2026-07-12T18:48:30.344531+00:00 - assimilation-manifest
+
+- Request: can you build this for HivemindOS? https://github.com/abundantbeing/hermes-browser-extension
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: abundantbeing/hermes-browser-extension:extension/content.js => browser-extension/content.js, abundantbeing/hermes-browser-extension:extension/lib/browser-context-protocol.mjs => browser-extension/lib/context.mjs, abundantbeing/hermes-browser-extension:extension/lib/commands.mjs => browser-extension/lib/commands.mjs, abundantbeing/hermes-browser-extension:manifest.json => browser-extension/manifest.json, abundantbeing/hermes-browser-extension:tests/browser-context-protocol.test.mjs => scripts/test-browser-extension.mjs
+- Verification: Wrote ASSIMILATION.hivemindos-browser-extension.json with 5 entries and custom_code_assessment=balanced.
+## 2026-07-12T18:48:30.473364+00:00 - verification
+
+- Request: can you build this for HivemindOS? https://github.com/abundantbeing/hermes-browser-extension
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.hivemindos-browser-extension.json: 5 concrete reuse entries, 4 substantive
+## 2026-07-12T18:54:55.086655+00:00 - verification
+
+- Request: can you build this for HivemindOS? https://github.com/abundantbeing/hermes-browser-extension
+- Source: current-project
+- Decision: selected
+- Selected backbone: abundantbeing/hermes-browser-extension
+- Verification: Focused browser-extension contract/build, JS syntax, zero-warning ESLint, whole-project TypeScript, dashboard API auth/preflight, manifest verification (5 entries/4 substantive), and diff hygiene pass. Live port-5021 extension-origin OPTIONS=204, authenticated bootstrap=37 safe agents with no sensitive profile fields, and Hermes Ask POST streamed BROWSER_ROUTE_OK to [DONE] while ignoring injected page instructions. Full gate 166/183 with test:browser-extension green; shared-tree failures are unrelated existing/concurrent gates. In-app browser blocked the local extension URL by policy, so unpacked visual interaction remains user-verifiable.
+
+### Candidates
+- browser-extension/dist
+  - Decision: selected
+  - Reason: generated loadable MV3 extension build
+  - Path: `browser-extension/dist`
+- http://127.0.0.1:5021/api/browser-extension
+  - Decision: selected
+  - Reason: live authenticated CORS/bootstrap/stream path verified
+  - Path: `src/app/api/browser-extension/route.ts`
+- in-app browser local extension preview
+  - Decision: not-assimilated
+  - Reason: browser URL policy blocked file extension page; no bypass attempted
+## 2026-07-12T18:54:55.198843+00:00 - verification
+
+- Request: can you build this for HivemindOS? https://github.com/abundantbeing/hermes-browser-extension
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.hivemindos-browser-extension.json: 5 concrete reuse entries, 4 substantive
+## 2026-07-12T19:01:25.360086+00:00 - shared-brain
+
+- Request: In our integrations route can we have an easy way to install this please?
+- Source: shared-brain
+- Decision: inspected
+- Reason: Queried prior HivemindOS integration-installer and browser-extension packaging decisions before implementation.
+## 2026-07-12T19:04:54.439829+00:00 - local-search
+
+- Request: In our integrations route can we have an easy way to install this please?
+- Source: current-project
+- Decision: selected
+- Reason: Found established Integrations card/loading patterns, nativeOrFetch folder reveal, authenticated system-browser launch, and Tauri resource staging.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/integrations/ConnectionsPanel.tsx + integrations-redesign.css
+  - Decision: selected-donor
+  - Reason: existing Integrations card hierarchy and animated status patterns
+- src/features/dashboard/views/chat/ApplicationGenerationCard.tsx
+  - Decision: selected-donor
+  - Reason: existing nativeOrFetch reveal-in-folder flow
+- src/lib/services/system-browsers.ts + /api/system/browsers/open
+  - Decision: selected-donor
+  - Reason: existing installed-browser detection and OS launch boundary
+- scripts/tauri-build.mjs
+  - Decision: selected-donor
+  - Reason: existing packaged-resource staging and fingerprint contract
+- abundantbeing/hermes-browser-extension
+  - Decision: selected
+  - Reason: previously audited MIT extension remains the feature backbone
+## 2026-07-12T19:04:54.521747+00:00 - public-search
+
+- Request: In our integrations route can we have an easy way to install this please?
+- Source: user-pinned-github
+- Decision: not-assimilated
+- Reason: No additional public search was needed: the prior pinned extension and current HivemindOS installer/resource patterns fully cover this follow-up.
+## 2026-07-12T19:14:39.544245+00:00 - implementation
+
+- Request: In our integrations route can we have an easy way to install this please?
+- Source: current-project
+- Decision: adapted_code
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/integrations/ConnectionsPanel.tsx
+  - Decision: style_adapted
+  - Reason: integrations hierarchy and loading language adapted into the guided install card
+  - Path: `src/features/integrations/BrowserExtensionInstallCard.tsx`
+- src/features/dashboard/views/chat/ApplicationGenerationCard.tsx
+  - Decision: adapted_code
+  - Reason: nativeOrFetch reveal-in-folder flow adapted for the prepared extension
+  - Path: `src/features/integrations/BrowserExtensionInstallCard.tsx`
+- src/lib/services/system-browsers.ts
+  - Decision: adapted_code
+  - Reason: installed-browser matrix extended with allowlisted internal extensions pages
+  - Path: `src/lib/services/system-browsers.ts`
+- scripts/tauri-build.mjs
+  - Decision: config_adapted
+  - Reason: existing embedded-resource staging and fingerprint contract extended for the extension
+  - Path: `scripts/tauri-build.mjs`
+- browser-extension/manifest.json
+  - Decision: config_adapted
+  - Reason: loadable package contract drives validated atomic preparation
+  - Path: `src/lib/services/browser-extension-install.ts`
+## 2026-07-12T19:14:39.672170+00:00 - assimilation-manifest
+
+- Request: In our integrations route can we have an easy way to install this please?
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: hivemind-os-local:src/features/integrations/ConnectionsPanel.tsx => src/features/integrations/BrowserExtensionInstallCard.tsx, hivemind-os-local:src/features/dashboard/views/chat/ApplicationGenerationCard.tsx => src/features/integrations/BrowserExtensionInstallCard.tsx, hivemind-os-local:src/lib/services/system-browsers.ts => src/lib/services/system-browsers.ts, hivemind-os-local:scripts/tauri-build.mjs => scripts/tauri-build.mjs, hivemind-os-local:browser-extension/manifest.json => src/lib/services/browser-extension-install.ts
+- Verification: Wrote ASSIMILATION.browser-extension-integrations-install.json with 5 entries and custom_code_assessment=balanced.
+## 2026-07-12T19:14:43.011787+00:00 - verification
+
+- Request: In our integrations route can we have an easy way to install this please?
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.browser-extension-integrations-install.json: 5 concrete reuse entries, 4 substantive
+## 2026-07-12T19:20:34.642284+00:00 - correction
+
+- Request: In our integrations route can we have an easy way to install this please?
+- Source: current-project
+- Decision: adapted_code
+- Reason: Separated installer and OS-launch actions from the extension-origin chat transport so extension device-token authority cannot trigger local preparation or browser launches.
+
+### Candidates
+- src/app/api/browser-extension/route.ts
+  - Decision: not-assimilated
+  - Reason: kept limited to extension-origin agent chat transport
+- src/app/api/integrations/browser-extension/route.ts
+  - Decision: selected
+  - Reason: dashboard-authenticated install status preparation and extensions-page launch boundary
+  - Path: `src/app/api/integrations/browser-extension/route.ts`
+## 2026-07-12T19:20:34.761660+00:00 - verification
+
+- Request: In our integrations route can we have an easy way to install this please?
+- Source: current-project
+- Decision: passed
+- Selected backbone: local-project:hivemind-os
+- Verification: Focused extension/build/install contracts pass, including atomic backup and cross-platform browser detection; focused ESLint, Tauri script syntax, UI typography, assimilation verification, and diff hygiene pass. Whole-project TypeScript passed before a later unrelated research-bridge shared-tree diagnostic. Full gate matches session baseline at 166/183 with test:browser-extension green. Live port-5021 Integrations card detects Chrome and Opera, renders all three steps and the enabled prepare action with zero console warnings. Install action intentionally not clicked; no user install path or external app state changed.
+
+### Candidates
+- http://127.0.0.1:5021/?view=integrations
+  - Decision: selected
+  - Reason: real Connections route rendered the guided installer and detected browser options
+  - Path: `src/features/integrations/BrowserExtensionInstallCard.tsx`
+- Prepare & open browser action
+  - Decision: not-assimilated
+  - Reason: not clicked during development to avoid writing the user install directory or launching Finder/browser apps
+## 2026-07-12T19:21:15.491505+00:00 - verification
+
+- Request: In our integrations route can we have an easy way to install this please?
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.browser-extension-integrations-install.json: 5 concrete reuse entries, 4 substantive
+## 2026-07-12T19:31:29.605787+00:00 - shared-brain
+
+- Request: Build Telegram HONEY missions, evidence submissions, reviewer approvals, identity linking, seasonal leaderboard, and GitHub verification
+- Source: shared-brain
+- Selected backbone: local-project:hivemind-os+local-project:hivemind-cloud-services
+
+### Candidates
+- HivemindOS Docs/for-investors/honey-hive-treasury.md
+  - Decision: selected
+  - Reason: defines HONEY as reviewed bounded contribution and preserves non-transferable fail-closed policy
+- HivemindOS Docs/for-users/architecture/index.md
+  - Decision: selected
+  - Reason: requires privacy-safe metadata and hosted signing authority
+- HivemindOS Docs/for-users/features/wallets-honey-and-x402.md
+  - Decision: selected
+  - Reason: documents existing wallet-link and signed HONEY receipt trust boundary
+## 2026-07-12T19:31:53.476087+00:00 - local-search
+
+- Request: Build Telegram HONEY missions, evidence submissions, reviewer approvals, identity linking, seasonal leaderboard, and GitHub verification
+- Source: local-index
+- Query: `Build Telegram HONEY missions, evidence submissions, reviewer approvals, identity linking, seasonal leaderboard, and GitHub verification`
+- Decision: no-results
+- Reason: No relevant local index hits after threshold filtering.
+## 2026-07-12T19:31:57.549400+00:00 - public-search
+
+- Request: Build Telegram HONEY missions, evidence submissions, reviewer approvals, identity linking, seasonal leaderboard, and GitHub verification
+- Source: public-github
+- Query: `Build Telegram HONEY missions, evidence submissions, reviewer approvals, identity linking, seasonal leaderboard, and GitHub verification`
+- Decision: retrieved
+- Reason: Retrieved 7 public candidates from GitHub search.
+
+### Candidates
+- aymaanmadhia-sudo/Streaming-iostream-_LOC8W2 (1 stars, TypeScript)
+  - URL: https://github.com/aymaanmadhia-sudo/Streaming-iostream-_LOC8W2
+  - Description: Hackathon360 is a smart, role-based hackathon management platform that digitizes registration, project submission, and structured judging. It integrates GitHub verification and AI-assisted evaluation to promote fairness and authenticity. Wi
+- komalgithub677/sololearn (1 stars, TypeScript)
+  - URL: https://github.com/komalgithub677/sololearn
+  - Description: Sololearn-style MERN learning platform with AI-powered quizzes, Aadhaar verification, real-time exam proctoring (face detection, screen recording, tab monitoring), geolocation tracking, device detection, and leaderboard system. If you want 
+- Terms-bench/terms-bench.github.io (0 stars, JavaScript)
+  - URL: https://github.com/Terms-bench/terms-bench.github.io
+  - Description: Official website and leaderboard for TERMS-Bench, a diagnostic benchmark for evaluating strategic negotiation agents under hidden preferences and environment-side verification.
+- danderfer/Comp_Sci_Sem_2 (190 stars, Python)
+  - URL: https://github.com/danderfer/Comp_Sci_Sem_2
+  - Description: According to all known laws of aviation, there is no way that a bee should be able to fly. Its wings are too small to get its fat little body off the ground. The bee, of course, flies anyway. Because bees don’t care what humans think is imp
+- sokcertifiedrobustness/sokcertifiedrobustness.github.io (19 stars, SCSS)
+  - URL: https://github.com/sokcertifiedrobustness/sokcertifiedrobustness.github.io
+  - Description: Keeps track of popular provable training and verification approaches towards robust neural networks, including leaderboards on popular datasets
+- Tarunjit45/github-ranker (1 stars, Python)
+  - URL: https://github.com/Tarunjit45/github-ranker
+  - Description: A real-time, verified leaderboard platform that ranks developers based on their actual GitHub impact.Join the global ranking and see where you stand against the world! 🌐 Live Leaderboard
+- ttxs69/coding-agent-eval (1 stars, Python)
+  - URL: https://github.com/ttxs69/coding-agent-eval
+  - Description: Public, reproducible benchmark of CLI coding agents (Claude Code, Codex, Aider) on SWE-bench Verified. Live leaderboard: https://ttxs69.github.io/coding-agent-eval/
+## 2026-07-12T19:31:57.629092+00:00 - prebuild-gate
+
+- Request: Build Telegram HONEY missions, evidence submissions, reviewer approvals, identity linking, seasonal leaderboard, and GitHub verification
+- Source: public-github
+- Query: `Build Telegram HONEY missions, evidence submissions, reviewer approvals, identity linking, seasonal leaderboard, and GitHub verification`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-07-12T19:32:14.362339+00:00 - public-search
+
+- Request: Cloudflare Worker D1 signed contribution receipts GitHub webhook HMAC idempotency
+- Source: public-github
+- Query: `Cloudflare Worker D1 signed contribution receipts GitHub webhook HMAC idempotency`
+- Decision: retrieved
+- Reason: Retrieved 5 public candidates from GitHub search.
+
+### Candidates
+- credyt/photo-booth (0 stars, HTML)
+  - URL: https://github.com/credyt/photo-booth
+  - Description: Demo app: AI image generation with real-time per-use billing via Credyt. Shows usage events, wallet balance checks before each generation, prepaid credits, and the embedded Billing Portal. Reference implementation for charging per AI infere
+- credyt/coffeeshoptycoon (0 stars, GDScript)
+  - URL: https://github.com/credyt/coffeeshoptycoon
+  - Description: Demo game: coffee shop tycoon with real-time credits billing via the Credyt API. Shows custom credit assets (coins, beans, gems), usage tracking, prepaid wallet flows, and balance enforcement. Reference for in-app economies and game monetiz
+- Amit-0905/GAIT (3 stars, TypeScript, Other)
+  - URL: https://github.com/Amit-0905/GAIT
+  - Description: Gait is an edge-native proof-of-humanity layer. It passively collects behavioral entropy in the browser and validates it via stateless, signed tokens inside a Cloudflare Worker—protecting forms, APIs, and interactive flows from automated ab
+- mbround18/cloudflare-discord-oidc-worker (2 stars, Rust, BSD 3-Clause "New" or "Revised" License)
+  - URL: https://github.com/mbround18/cloudflare-discord-oidc-worker
+  - Description: Discord OAuth2 Cloudflare Worker - This Cloudflare Worker handles Discord OAuth2 login, exchanges tokens, fetches user/guild info, and issues signed JWTs — with RSA keys securely stored in Workers KV.
+- wordware/Cafeteria-POS-Your-Schools-Need-Point-of-Sale-Systems-Wordware-s-LCS-1000-Mayflower-is-best-choice (0 stars)
+  - URL: https://github.com/wordware/Cafeteria-POS-Your-Schools-Need-Point-of-Sale-Systems-Wordware-s-LCS-1000-Mayflower-is-best-choice
+  - Description: “Do you need a POS system for your cafeteria?” This is a question many school administrators have asked recently as they review their technology budgets. The answer to the question is probably “yes,” because school cafeteria POS systems off
+## 2026-07-12T19:34:35.346415+00:00 - public-search
+
+- Request: Build Telegram HONEY missions, evidence submissions, reviewer approvals, identity linking, seasonal leaderboard, and GitHub verification
+- Source: public-github
+- Selected backbone: local-project:hivemind-os+local-project:hivemind-cloud-services
+- Note: Expanded Telegram public search failed inside the assimilation script with argument-list-too-long after candidate collection; no public candidate was stronger than the audited local bounties, signed-receipt, wallet-link, and D1 modules.
+
+### Candidates
+- aymaanmadhia-sudo/Streaming-iostream-_LOC8W2
+  - Decision: rejected
+  - Reason: hackathon platform is directionally adjacent but low-signal and not compatible with the existing Telegram/Cloudflare architecture
+- credyt/photo-booth
+  - Decision: rejected
+  - Reason: billing demo does not provide reviewed contribution receipts, Telegram workflows, or compatible trust boundaries
+- Amit-0905/GAIT
+  - Decision: rejected
+  - Reason: proof-of-humanity worker is unrelated to mission review and official HONEY accounting
+## 2026-07-12T19:35:06.622622+00:00 - local-search
+
+- Request: Build Telegram HONEY missions, evidence submissions, reviewer approvals, identity linking, seasonal leaderboard, and GitHub verification
+- Source: local-projects
+- Selected backbone: local-project:hivemind-os+local-project:hivemind-cloud-services
+
+### Candidates
+- hivemind-os:src/lib/services/telegram-tip-bot/ledger.ts+commands.ts+store.ts
+  - Decision: selected
+  - Reason: existing bounty submissions approvals short IDs and persistence are the Telegram mission backbone
+- hivemind-os:src/lib/services/telegram-tip-bot/moderation-store.ts
+  - Decision: selected-donor
+  - Reason: atomic bounded standalone state persistence for non-financial Telegram records
+- hivemind-cloud-services:workers/honey-ledger/src/index.ts+schema.sql
+  - Decision: selected
+  - Reason: signed HMAC receipts idempotent D1 balance updates and reward-pool caps
+- hivemind-cloud-services:workers/compute-gateway/src/honey-staking.ts+migrations/0011_honey_wallet_links.sql
+  - Decision: selected-donor
+  - Reason: single-use nonce and wallet-proven workspace linking
+- hivemind-cloud-services:workers/research-gateway/src/auth.ts
+  - Decision: selected-donor
+  - Reason: single-use nonce claim semantics and server-side verification
+- hivemind-cloud-services:workers/compute-gateway/src/index.ts
+  - Decision: selected-donor
+  - Reason: trusted gateway signing and ledger service binding
+## 2026-07-12T19:35:30.021022+00:00 - audit
+
+- Request: Build Telegram HONEY missions, evidence submissions, reviewer approvals, identity linking, seasonal leaderboard, and GitHub verification
+- Source: local-projects
+- Selected backbone: local-project:hivemind-os+local-project:hivemind-cloud-services
+
+### Candidates
+- hivemind-os selected paths
+  - Decision: selected
+  - Reason: heuristic audit passed with zero findings
+- hivemind-cloud-services selected paths
+  - Decision: selected
+  - Reason: two medium base64-decode cautions are confined to unrelated attestation/marketplace modules and no findings affect selected HONEY receipt or wallet-link donors

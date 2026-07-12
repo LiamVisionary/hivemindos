@@ -3,10 +3,17 @@
 // Run: node --test scripts/test-telegram-tip-bot.mjs (Node >= 23 strips the
 // TypeScript types from the imported modules natively).
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { formatCompactTokenAmount, formatTokenAmount, parseTokenAmount } from "../src/lib/services/telegram-tip-bot/amounts.ts";
 import { parseCommand, resolveTipRecipient } from "../src/lib/services/telegram-tip-bot/parse.ts";
+import {
+  isHoneyMissionId,
+  isHoneySubmissionId,
+  parseCommunityMissionCreateArgs,
+  telegramPublicLabel,
+} from "../src/lib/services/telegram-tip-bot/community-honey-logic.ts";
 import { CLAW_LIGHT_RICH_THEME, richAccent, richCode, richMuted, richTable } from "../src/lib/services/telegram-tip-bot/rich-formatting.ts";
 import {
   bountyPayoutLeaderboard,
@@ -16,6 +23,25 @@ import {
   recordMemberTagSync,
   resolveMemberTag,
 } from "../src/lib/services/telegram-tip-bot/member-tags.ts";
+import {
+  classifyModerationMessage,
+  extractModerationDomains,
+  moderationActionFor,
+  normalizeModerationText,
+  parseModerationCommand,
+} from "../src/lib/services/telegram-tip-bot/moderation-rules.ts";
+import {
+  addModerationStrike,
+  appendModerationAudit,
+  emptyModerationState,
+  isModerationTrusted,
+  moderationStats,
+  recordModerationJoin,
+  recordModerationMemberMessage,
+  resolveModerationMode,
+  setModerationMode,
+  setModerationTrust,
+} from "../src/lib/services/telegram-tip-bot/moderation-state.ts";
 import {
   applyBountyBoost,
   applyBountyCreate,
@@ -65,6 +91,163 @@ test("parseCommand finds /tip mid-message but anchors other commands", () => {
   assert.deepEqual(parseCommand("reported a bug so @bob /tip 5m", "thebot"), { command: "tip", args: "5m" });
   assert.equal(parseCommand("please check my /balance now", "thebot"), null); // only /tip is lenient
   assert.equal(parseCommand("/tip@otherbot 5", "thebot"), null); // addressed to a different bot
+});
+
+test("community HONEY mission syntax is strict and routes IDs without colliding with HIVE bounties", () => {
+  assert.deepEqual(
+    parseCommunityMissionCreateArgs("create Improve onboarding | reward 12.5 | category docs | evidence github_pr | repo LiamVisionary/hivemindos | due 2026-08-01 | approvals 2 | description Document the full path"),
+    {
+      title: "Improve onboarding",
+      description: "Document the full path",
+      rewardHoney: 12.5,
+      category: "docs",
+      evidenceType: "github_pr",
+      githubRepo: "liamvisionary/hivemindos",
+      dueAt: "2026-08-01",
+      requiredApprovals: 2,
+    },
+  );
+  assert.equal(isHoneyMissionId("hm_a1b2c3d4"), true);
+  assert.equal(isHoneyMissionId("b_a1b2c3d4"), false);
+  assert.equal(isHoneySubmissionId("hs_a1b2c3d4e5"), true);
+  assert.equal(isHoneySubmissionId("wd_a1b2c3d4e5"), false);
+  assert.throws(() => parseCommunityMissionCreateArgs("create Chat more | reward 5 | category chat-volume | evidence note"), /Unsupported/);
+});
+
+test("community HONEY public labels prefer Telegram usernames and sanitize names", () => {
+  assert.equal(telegramPublicLabel({ id: 1, username: "builder" }), "@builder");
+  assert.equal(telegramPublicLabel({ id: 2, first_name: "<Bee>\nTwo" }), "Bee Two");
+});
+
+test("community HONEY wiring keeps identity linking server-side and uses the canonical API envelope", () => {
+  const commands = readFileSync(new URL("../src/lib/services/telegram-tip-bot/commands.ts", import.meta.url), "utf8");
+  const route = readFileSync(new URL("../src/app/api/honey-community/route.ts", import.meta.url), "utf8");
+  const service = readFileSync(new URL("../src/lib/services/wallet/honey-community.ts", import.meta.url), "utf8");
+  assert.match(commands, /An independent admin review is required/);
+  assert.match(commands, /Raw Telegram messages, reactions, and spam do not earn HONEY/);
+  assert.match(route, /okJson\(/);
+  assert.match(route, /errorJson\(/);
+  assert.match(service, /getHoneyWorkspaceId\(\)/);
+  assert.match(service, /\/community\/link/);
+  assert.doesNotMatch(service, /HONEY_COMMUNITY_BOT_TOKEN/);
+});
+
+test("moderation detects the observed Binance article solicitation", () => {
+  const decision = classifyModerationMessage({
+    text: "@PB899 Waiting for your response regarding the Binance article. We’re interested in covering your project by sharing its details on Binance through a published article.",
+    memberMessageCount: 1,
+    newMemberMessageLimit: 3,
+  });
+  assert.deepEqual(decision, {
+    reason: "sales-solicitation",
+    severity: "low",
+    explanation: "unsolicited project coverage, listing, or promotional outreach",
+    routeToSales: true,
+  });
+  assert.equal(moderationActionFor(decision, 0, 3), "redirect-delete");
+  assert.equal(
+    classifyModerationMessage({
+      text: "Did anyone read the Binance article about HIVE today?",
+      memberMessageCount: 20,
+      newMemberMessageLimit: 3,
+    }),
+    null,
+  );
+});
+
+test("moderation detects credential scams before generic links", () => {
+  const decision = classifyModerationMessage({
+    text: "Connect your wallet to claim the migration airdrop: https://wallet-drain.example",
+    memberMessageCount: 1,
+    newMemberMessageLimit: 3,
+  });
+  assert.equal(decision?.reason, "credential-scam");
+  assert.equal(moderationActionFor(decision, 0, 3), "ban-delete");
+});
+
+test("new-member link protection honors allowed domains and blocked subdomains", () => {
+  assert.deepEqual(extractModerationDomains("See https://docs.example.com/a and www.evil.example/x"), [
+    "docs.example.com",
+    "evil.example",
+  ]);
+  assert.equal(
+    classifyModerationMessage({
+      text: "Here are the docs https://docs.example.com/start",
+      memberMessageCount: 1,
+      newMemberMessageLimit: 3,
+      allowedDomains: ["example.com"],
+    }),
+    null,
+  );
+  assert.equal(
+    classifyModerationMessage({
+      text: "Visit https://claim.evil.example",
+      memberMessageCount: 20,
+      newMemberMessageLimit: 3,
+      blockedDomains: ["evil.example"],
+    })?.reason,
+    "blocked-domain",
+  );
+});
+
+test("flood and duplicate decisions escalate predictably", () => {
+  const duplicate = classifyModerationMessage({
+    text: "same repeated message",
+    memberMessageCount: 10,
+    newMemberMessageLimit: 3,
+    duplicate: true,
+  });
+  assert.equal(duplicate?.reason, "duplicate");
+  assert.equal(moderationActionFor(duplicate, 0, 3), "warn-delete");
+  assert.equal(moderationActionFor(duplicate, 1, 3), "mute-delete");
+  assert.equal(moderationActionFor(duplicate, 2, 3), "ban-delete");
+
+  const flood = classifyModerationMessage({
+    text: "too many messages",
+    memberMessageCount: 10,
+    newMemberMessageLimit: 3,
+    flood: true,
+  });
+  assert.equal(moderationActionFor(flood, 0, 3), "mute-delete");
+});
+
+test("moderation text and admin command parsing are stable", () => {
+  assert.equal(normalizeModerationText("HEY @Alice — read https://example.com now!"), "hey <mention> read <url> now");
+  assert.deepEqual(parseModerationCommand("/mute@HiveTipBot 30 repeated spam", "HiveTipBot"), {
+    command: "mute",
+    args: "30 repeated spam",
+  });
+  assert.equal(parseModerationCommand("/ban@OtherBot", "HiveTipBot"), null);
+});
+
+test("moderation state keeps trust, per-chat mode, strikes, and privacy-safe stats", () => {
+  const state = emptyModerationState();
+  recordModerationJoin(state, { chatId: "chat", userId: "9", at: T0 });
+  const member = recordModerationMemberMessage(state, { chatId: "chat", userId: "9", at: T1 });
+  assert.equal(member.messagesSeen, 1);
+  setModerationTrust(state, "chat", "9", true);
+  assert.equal(isModerationTrusted(state, "chat", "9"), true);
+  setModerationTrust(state, "chat", "9", false);
+  setModerationMode(state, "chat", "enforce");
+  assert.equal(resolveModerationMode(state, "chat", "audit"), "enforce");
+  addModerationStrike(state, { chatId: "chat", userId: "9", at: T1, warning: true });
+  appendModerationAudit(state, {
+    id: "audit-1",
+    chatId: "chat",
+    userId: "9",
+    reason: "duplicate",
+    action: "warn-delete",
+    mode: "enforce",
+    createdAt: T1,
+  });
+  assert.deepEqual(moderationStats(state, "chat"), {
+    membersSeen: 1,
+    trustedUsers: 0,
+    strikes: 1,
+    warnings: 1,
+    actions: 1,
+    salesRedirects: 0,
+  });
 });
 
 test("resolveTipRecipient: mention anywhere in the sentence, not just after /tip", () => {

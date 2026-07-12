@@ -79,7 +79,7 @@ export function toneColorInto(palette: Palette, tone: SynapseNodeTone, seed: num
   if (tone === "unresolved") return linearizeSRGB(target.set("#ff67b2"));
   if (tone === "stale") return linearizeSRGB(target.set("#817dcc"));
   // Blue→violet field with a magenta minority, like real neuro-imagery.
-  if ((seed * 13.7) % 1 > 0.86) {
+  if ((seed * 13.7) % 1 > 0.7) {
     return linearizeSRGB(target.setHSL(0.83 + ((seed * 5.1) % 1) * 0.07, 0.8, 0.61));
   }
   return linearizeSRGB(target.setHSL(0.55 + ((seed * 7.31) % 1) * 0.2, 0.8, 0.55 + ((seed * 3.3) % 1) * 0.14));
@@ -146,10 +146,12 @@ export const SOMA_VERTEX = /* glsl */ `
   attribute vec3 iTint;
   attribute float iGlow;
   attribute float iDim;
+  attribute float iProximity;
   attribute float iSeed;
   varying vec3 vTint;
   varying float vGlow;
   varying float vDim;
+  varying float vProximity;
   varying float vSeed;
   varying vec3 vNormal;
   varying vec3 vView;
@@ -158,6 +160,7 @@ export const SOMA_VERTEX = /* glsl */ `
     vTint = iTint;
     vGlow = iGlow;
     vDim = iDim;
+    vProximity = iProximity;
     vSeed = iSeed;
     vec4 world = modelMatrix * instanceMatrix * vec4(position, 1.0);
     vNormal = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
@@ -177,6 +180,7 @@ export const SOMA_FRAGMENT = /* glsl */ `
   varying vec3 vTint;
   varying float vGlow;
   varying float vDim;
+  varying float vProximity;
   varying float vSeed;
   varying vec3 vNormal;
   varying vec3 vView;
@@ -188,11 +192,14 @@ export const SOMA_FRAGMENT = /* glsl */ `
     // merges into the flared fiber terminals around it.
     float membrane = pow(facing, 0.48);
     float nucleus = pow(facing, 6.0);
-    vec3 col = mix(vTint * (0.76 + vGlow * 0.25), vec3(0.94, 0.98, 1.0), nucleus * uAdditive * 0.82);
-    col += vTint * nucleus * vGlow * 0.5;
-    float darkAlpha = (0.2 + membrane * 0.5 + nucleus * 0.44) * (0.88 + vGlow * 0.42);
+    float proximity = vProximity * mix(1.0, 0.86 + 0.14 * sin(uTime * 4.6 + vSeed * 18.0), uMotion);
+    vec3 col = mix(vTint * (0.9 + vGlow * 0.32), vec3(0.9, 0.97, 1.0), nucleus * uAdditive * 0.58);
+    col += vTint * nucleus * vGlow * 0.62;
+    col += mix(vTint, vec3(0.88, 0.96, 1.0), 0.32) * proximity * (0.34 + membrane * 0.46);
+    float darkAlpha = (0.12 + membrane * 0.4 + nucleus * 0.38) * (0.84 + vGlow * 0.4);
     float lightAlpha = 0.42 + membrane * 0.48;
     float alpha = mix(lightAlpha, darkAlpha, uAdditive);
+    alpha *= 1.0 + proximity * 0.72;
     alpha *= 1.0 - vDim * 0.68;
     float fog = smoothstep(uFogNear, uFogFar, vDist);
     alpha *= 1.0 - fog * 0.82;
@@ -207,6 +214,7 @@ export const HALO_VERTEX = /* glsl */ `
   attribute vec3 iTint;
   attribute float iSeed;
   attribute float iAlpha;
+  attribute float iProximity;
   uniform float uTime;
   uniform float uMotion;
   uniform float uFogNear;
@@ -215,14 +223,20 @@ export const HALO_VERTEX = /* glsl */ `
   varying vec3 vTint;
   varying float vSeed;
   varying float vAlpha;
+  varying float vProximity;
   void main() {
     vUv = uv;
     vTint = iTint;
     vSeed = iSeed;
+    float sizeBias = clamp(28.0 / max(iScale, 1.0), 0.5, 1.45);
+    float proximityPulse = mix(1.0, 0.9 + 0.1 * sin(uTime * 4.6 + iSeed * 18.0), uMotion);
+    float energized = iProximity * proximityPulse;
+    vProximity = energized * sizeBias;
     vec4 mv = viewMatrix * modelMatrix * vec4(iPos, 1.0);
-    mv.xy += position.xy * iScale;
+    float proximityGrowth = energized * (8.0 + sizeBias * 10.0);
+    mv.xy += position.xy * (iScale + proximityGrowth);
     float fog = smoothstep(uFogNear, uFogFar, -mv.z);
-    vAlpha = iAlpha * (1.0 - fog * 0.9);
+    vAlpha = iAlpha * (1.0 + vProximity * 1.05) * (1.0 - fog * 0.9);
     gl_Position = projectionMatrix * mv;
   }
 `;
@@ -236,6 +250,7 @@ export const HALO_FRAGMENT = /* glsl */ `
   varying vec3 vTint;
   varying float vSeed;
   varying float vAlpha;
+  varying float vProximity;
   void main() {
     float angle = vSeed * 6.2831 + uTime * uMotion * (0.04 + 0.09 * fract(vSeed * 7.31)) * (step(0.5, vSeed) * 2.0 - 1.0);
     vec2 centered = vUv - 0.5;
@@ -246,11 +261,44 @@ export const HALO_FRAGMENT = /* glsl */ `
     vec2 quadrant = vec2(step(0.5, fract(vSeed * 3.17)), step(0.5, fract(vSeed * 5.53)));
     vec2 atlasUv = clamp(rotated, 0.02, 0.98) * 0.5 + quadrant * 0.5;
     float mask = texture2D(uMap, atlasUv).a;
-    if (mask < 0.003) discard;
-    float a = mask * vAlpha;
+    float radial = length(centered) * 2.0;
+    float rayCount = 7.0 + floor(vSeed * 7.0);
+    float rayAngle = atan(centered.y, centered.x) + angle * 0.3;
+    float rays = pow(abs(cos(rayAngle * rayCount)), 22.0)
+      * (1.0 - smoothstep(0.08, 0.92, radial))
+      * smoothstep(0.025, 0.1, radial);
+    float star = rays * (0.55 + vProximity * 0.75);
+    if (mask + star < 0.003) discard;
+    float a = (mask + star) * vAlpha;
     // Materials already select NormalBlending or AdditiveBlending. Supplying
     // unpremultiplied color avoids multiplying by alpha twice in dark mode.
-    gl_FragColor = vec4(vTint, a);
+    gl_FragColor = vec4(mix(vTint, vec3(0.92, 0.98, 1.0), clamp(vProximity * 0.42, 0.0, 0.72)), a);
+  }
+`;
+
+export const CORE_GLOW_VERTEX = /* glsl */ `
+  uniform float uSize;
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    vec4 mv = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+    mv.xy += position.xy * uSize;
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+
+export const CORE_GLOW_FRAGMENT = /* glsl */ `
+  varying vec2 vUv;
+  void main() {
+    float radius = length(vUv - 0.5) * 2.0;
+    if (radius > 1.0) discard;
+    float outer = 1.0 - smoothstep(0.08, 1.0, radius);
+    float middle = 1.0 - smoothstep(0.02, 0.86, radius);
+    float core = 1.0 - smoothstep(0.0, 0.46, radius);
+    vec3 color = mix(vec3(0.05, 0.2, 0.88), vec3(0.35, 0.16, 0.95), middle);
+    color = mix(color, vec3(0.38, 0.66, 1.0), core);
+    float alpha = outer * 0.045 + middle * 0.07 + core * 0.095;
+    gl_FragColor = vec4(color, alpha);
   }
 `;
 
@@ -426,21 +474,26 @@ export const DUST_VERTEX = /* glsl */ `
     vec3 p = position;
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
     float fog = smoothstep(uFogNear, uFogFar, -mv.z);
-    // Static depth motes keep the field textured without full-screen twinkle.
-    vAlpha = 0.34 * (1.0 - fog) * mix(0.04, 1.0, uAdditive);
-    gl_PointSize = aSize * uScale / max(-mv.z, 1.0);
+    float core = 1.0 - smoothstep(70.0, 230.0, length(position));
+    // Center-dense crisp motes mirror the orbital graph's particle hierarchy.
+    vAlpha = mix(0.12, 0.42, core) * (1.0 - fog) * mix(0.04, 1.0, uAdditive);
+    float pointSize = aSize * (1.0 + core * 0.72) * uScale / max(-mv.z, 1.0);
+    // WebGL point size is perspective-scaled in framebuffer pixels. Clamp it
+    // to the orbital graph's tiny 1–3 CSS-pixel character at retina scale so
+    // close particles never become giant square blocks.
+    gl_PointSize = clamp(pointSize, 1.1, 4.2);
     gl_Position = projectionMatrix * mv;
   }
 `;
 
 export const DUST_FRAGMENT = /* glsl */ `
-  uniform sampler2D uMap;
   uniform vec3 uTint;
   uniform float uAdditive;
   varying float vAlpha;
   void main() {
-    float mask = texture2D(uMap, gl_PointCoord).a;
-    if (mask < 0.003) discard;
+    float radius = length(gl_PointCoord - 0.5);
+    float mask = 1.0 - smoothstep(0.3, 0.5, radius);
+    if (mask < 0.01) discard;
     float a = mask * vAlpha;
     gl_FragColor = vec4(uTint, a);
   }

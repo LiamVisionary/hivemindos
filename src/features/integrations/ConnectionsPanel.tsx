@@ -8,6 +8,8 @@ import { DASHBOARD_TARGET_APPLIED_EVENT, dashboardTargetFromSearch, type Dashboa
 import { openExternalUrl } from "@/lib/native/open-external-url";
 import { IntegrationModalActions } from "./IntegrationModalActions";
 import { AzureMcpSetup } from "./AzureMcpSetup";
+import { BrowserExtensionInstallCard } from "./BrowserExtensionInstallCard";
+import { HiveResearchSyncCard } from "./HiveResearchSyncCard";
 import { BBtn, BIcon, ServiceGlyph } from "./integrations-primitives";
 import { integrationModalTargetFromDashboardTarget, type IntegrationModalActionId, type IntegrationModalTarget } from "./integration-modal-actions";
 import { readJson } from "./integrations-view-helpers";
@@ -159,6 +161,8 @@ export function ConnectionsPanel() {
         </div>
       ) : (
         <div className="ni-stage ni-pad">
+          <BrowserExtensionInstallCard />
+          <HiveResearchSyncCard />
           <div className="ni-atool">
             <div>
               <h2>Apps</h2>

@@ -8,6 +8,7 @@ import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 import type { SkillBrowserAttachmentTarget, SkillBrowserSkill, SkillBrowserView } from "@/features/dashboard/dashboard-types";
 import { BBtn, Badge, BIcon, type BIconName, Toggle } from "./skill-browser/primitives";
 import { Fusion } from "./skill-browser/Fusion";
+import { BankrSkillsCatalog } from "./skill-browser/BankrSkillsCatalog";
 import "./skill-browser/skill-browser.css";
 
 type SkillBrowserModalProps = {
@@ -65,6 +66,7 @@ const SB_RISK_TONE: Record<Risk, "live" | "honey" | "danger"> = {
 
 const SB_TABS: { id: SkillBrowserView; label: string; icon: BIconName }[] = [
   { id: "catalog", label: "Catalog", icon: "sparkles" },
+  { id: "bankr", label: "Bankr", icon: "trade" },
   { id: "installed", label: "Installed", icon: "check" },
   { id: "packs", label: "Packs", icon: "hex" },
   { id: "audit", label: "Audit", icon: "shield" },
@@ -470,6 +472,8 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
   const attachTarget = skillBrowserMode === "attach" ? skillBrowserAttachTarget ?? null : null;
   const attachMode = Boolean(attachTarget);
   const selectionMode = agentMode || attachMode;
+  const visibleTabs = selectionMode ? SB_TABS.filter((tab) => tab.id !== "bankr") : SB_TABS;
+  const bankrView = skillBrowserView === "bankr" && !selectionMode;
   const query = skillBrowserSearch.trim().toLowerCase();
   const browserRecords = React.useMemo(() => {
     const safeSkills = Array.isArray(skillBrowserSkills) ? skillBrowserSkills : [];
@@ -605,10 +609,11 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
           <div style={{ display: "flex", alignItems: "flex-start", gap: 13 }}>
             <span className="fb-tile" style={{ width: 40, height: 40, color: "var(--honey)" }}><BIcon name="sparkles" size={19} /></span>
             <div>
-              <div className="fb-eyebrow">{attachTarget?.eyebrow ?? (agentMode ? "Skills · Agent class" : "Add to shared brain")}</div>
+              <div className="fb-eyebrow">{attachTarget?.eyebrow ?? (agentMode ? "Skills · Agent class" : bankrView ? "Bankr agent" : "Add to shared brain")}</div>
               <h3 id="skill-browser-title">{attachTarget?.title ?? (agentMode ? "Attach skills" : "Skill browser")}</h3>
               <p>{attachTarget?.description ?? (agentMode
                 ? "Choose which shared-brain recipes this agent class may use. Attached skills load into every agent of this class."
+                : bankrView ? "Browse and install Bankr’s public catalogue. These skills live in your Bankr account, separate from the shared brain."
                 : "Browse, import, audit, author, and fuse operational recipes available to every agent in the hive.")}</p>
             </div>
           </div>
@@ -617,13 +622,13 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
 
         <div className="sb-tabbar">
           <div className="fb-seg sub" role="tablist" aria-label="Skill browser sections">
-            {SB_TABS.map((tab) => (
+            {visibleTabs.map((tab) => (
               <button key={tab.id} type="button" role="tab" aria-selected={skillBrowserView === tab.id} data-active={skillBrowserView === tab.id ? "" : undefined} onClick={() => setSkillBrowserView(tab.id)}>
                 <BIcon name={tab.icon} size={13} />{tab.label}
               </button>
             ))}
           </div>
-          {(skillBrowserView === "catalog" || skillBrowserView === "installed") ? (
+          {(skillBrowserView === "catalog" || skillBrowserView === "installed" || skillBrowserView === "bankr") ? (
             <div className="sb-search">
               <span><BIcon name="search" size={14} /></span>
               <input value={skillBrowserSearch} onChange={(event) => setSkillBrowserSearch(event.target.value)} placeholder="Search skills" spellCheck={false} />
@@ -655,6 +660,8 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
                 </div>
               ) : <div className="sb-empty">No skills match "{skillBrowserSearch}".</div>}
             </>
+          ) : skillBrowserView === "bankr" && !selectionMode ? (
+            <BankrSkillsCatalog search={skillBrowserSearch} onStatus={setLocalStatus} />
           ) : skillBrowserView === "installed" ? (
             selectionMode ? (
               <AttachList attached={attached} onToggle={toggleAttach} skills={installedSkills} />
@@ -738,6 +745,7 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
           <span className="sb-status">
             {status ? <><span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--live)", flex: "0 0 auto" }} />{status}</>
               : hermesUpdateRequired ? `Hermes update available: ${hermesUpdateRequiredDetail || "update-gated skills are marked."}`
+                : skillBrowserView === "bankr" ? "Bankr catalogue skills install to your remote Bankr agent."
                 : selectionMode ? `${attached.size} ${attachTarget?.statusLabel ?? "attached"} · ${sharedAttachableSkills.length} available in brain`
                   : `${installedSkills.length} installed · ${importableCount} importable`}
           </span>

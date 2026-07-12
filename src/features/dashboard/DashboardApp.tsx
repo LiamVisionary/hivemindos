@@ -156,6 +156,7 @@ import {
   MachineCell,
   MorePanel,
   ManagedCloudAgentsPanel,
+  MiniAppsPanel,
   PhonePanel,
   SchedulerPanel,
   SchedulerView,
@@ -4738,6 +4739,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       {activeView === "integrations" ? <IntegrationsView embedded /> : null}
       {activeView === "cloud" ? <ManagedCloudAgentsPanel /> : null}
       {activeView === "compute" ? <HiveComputePanel /> : null}
+      {activeView === "mini-apps" ? <MiniAppsPanel /> : null}
       {activeView === "memory" ? (
         <TelemetryView
           machines={fleetViewData.machines}

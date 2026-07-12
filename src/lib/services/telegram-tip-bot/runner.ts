@@ -5,6 +5,7 @@ import { bankrGaslessConfigured, getBankrWalletAddress, sendHiveViaBankr } from 
 import {
   depositCreditedMessage,
   handleTipBotUpdate,
+  notifyAdmins,
   notifyUser,
   withdrawalSentMessage,
   type TipBotConfig,
@@ -22,6 +23,11 @@ import {
   type MemberTagSyncResult,
   type MemberTagTier,
 } from "./member-tags";
+import {
+  handleTipBotModerationUpdate,
+  moderationPermissionWarnings,
+  type TipBotModerationRuntime,
+} from "./moderation";
 import { mutateTipBotState, newLedgerEntryId, readTipBotState } from "./store";
 import { TelegramBotApi } from "./telegram-api";
 import {
@@ -47,6 +53,8 @@ export type TipBotRunnerStatus = {
   memberTagBotUsername?: string;
   treasuryAddress?: string;
   withdrawalProvider?: "treasury" | "bankr";
+  moderation?: "disabled" | "audit" | "enforce";
+  moderationPermissionWarningCount?: number;
   startedAt?: string;
   lastError?: string;
 };
@@ -134,6 +142,12 @@ async function buildConfig(api: TelegramBotApi, botUsername: string): Promise<Ti
   const claimTtlHours = Number(await tipBotEnv("CLAIM_TTL_HOURS"));
   const confirmations = Number(await tipBotEnv("CONFIRMATIONS"));
   const tagSyncMinutes = parsePositiveNumber(await tipBotEnv("MEMBER_TAG_SYNC_INTERVAL_MINUTES"), MEMBER_TAG_SYNC_INTERVAL_MS / 60_000, 24 * 60);
+  const moderationChatIds = parseStringList(await tipBotEnv("MODERATION_CHAT_IDS"));
+  const moderationEnabled = parseEnabled(await tipBotEnv("MODERATION"), false) && moderationChatIds.length > 0;
+  const communityHoneyBotToken = (await tipBotEnv("HONEY_COMMUNITY_BOT_TOKEN"))
+    || (await hiveEnvValue("HONEY_COMMUNITY_BOT_TOKEN"));
+  const communityHoneyApiUrl = (await tipBotEnv("HONEY_COMMUNITY_API_URL"))
+    || "https://hivemindos-compute-gateway.hivemindos.workers.dev";
   return {
     botUsername,
     adminIds,
@@ -156,6 +170,26 @@ async function buildConfig(api: TelegramBotApi, botUsername: string): Promise<Ti
         500,
       ),
     },
+    moderation: {
+      enabled: moderationEnabled,
+      auditOnly: parseEnabled(await tipBotEnv("MODERATION_AUDIT_ONLY"), true),
+      chatIds: new Set(moderationChatIds),
+      salesInboxChatIds: parseStringList(await tipBotEnv("MODERATION_SALES_CHAT_IDS")),
+      trustedUserIds: new Set(parseStringList(await tipBotEnv("MODERATION_TRUSTED_USER_IDS")).filter((id) => /^\d+$/.test(id))),
+      allowedDomains: parseStringList(await tipBotEnv("MODERATION_ALLOWED_DOMAINS")),
+      blockedDomains: parseStringList(await tipBotEnv("MODERATION_BLOCKED_DOMAINS")),
+      newMemberMessageLimit: parsePositiveInteger(await tipBotEnv("MODERATION_NEW_MEMBER_MESSAGE_LIMIT"), 3, 20),
+      floodMaxMessages: parsePositiveInteger(await tipBotEnv("MODERATION_FLOOD_MAX_MESSAGES"), 5, 50),
+      floodWindowMs: parsePositiveNumber(await tipBotEnv("MODERATION_FLOOD_WINDOW_SECONDS"), 10, 600) * 1_000,
+      duplicateWindowMs: parsePositiveNumber(await tipBotEnv("MODERATION_DUPLICATE_WINDOW_MINUTES"), 10, 24 * 60) * 60_000,
+      muteMinutes: parsePositiveInteger(await tipBotEnv("MODERATION_MUTE_MINUTES"), 60, 10_080),
+      banAfterStrikes: parsePositiveInteger(await tipBotEnv("MODERATION_BAN_AFTER_STRIKES"), 3, 20),
+    },
+    communityHoney: {
+      enabled: parseEnabled(await tipBotEnv("HONEY_COMMUNITY"), Boolean(communityHoneyBotToken)),
+      apiUrl: communityHoneyApiUrl.replace(/\/+$/, ""),
+      botToken: communityHoneyBotToken,
+    },
   };
 }
 
@@ -170,16 +204,22 @@ async function buildMemberTagApi(primaryToken: string): Promise<{ api?: Telegram
   return me?.username ? { api, username: me.username } : {};
 }
 
-async function updatesLoop(runner: TipBotRunner, runtime: TipBotRuntime) {
+async function updatesLoop(runner: TipBotRunner, runtime: TipBotRuntime, moderationRuntime: TipBotModerationRuntime) {
   let offset: number | undefined;
   while (!runner.stopRequested) {
     try {
       const updates = await runtime.api.getUpdates(offset, POLL_TIMEOUT_SEC);
       for (const update of updates) {
         offset = update.update_id + 1;
-        await handleTipBotUpdate(runtime, update).catch((error) => {
+        const consumed = await handleTipBotModerationUpdate(moderationRuntime, update).catch((error) => {
           runner.lastError = error instanceof Error ? error.message : String(error);
+          return false;
         });
+        if (!consumed) {
+          await handleTipBotUpdate(runtime, update).catch((error) => {
+            runner.lastError = error instanceof Error ? error.message : String(error);
+          });
+        }
       }
     } catch (error) {
       runner.lastError = error instanceof Error ? error.message : String(error);
@@ -434,6 +474,21 @@ export async function startTelegramTipBot(): Promise<TipBotRunnerStatus> {
   const memberTagApi = await buildMemberTagApi(token);
   const config = await buildConfig(api, me.username);
   const runtime: TipBotRuntime = { api, memberTagApi: memberTagApi.api, config };
+  const moderationRuntime: TipBotModerationRuntime = {
+    api,
+    botUsername: me.username,
+    botUserId: String(me.id),
+    adminIds: config.adminIds,
+    config: config.moderation,
+  };
+  const permissionWarnings = config.moderation.enabled ? await moderationPermissionWarnings(moderationRuntime) : [];
+  if (permissionWarnings.length > 0) {
+    console.warn(`[tip-bot] moderation permission warnings: ${permissionWarnings.join(" | ")}`);
+    await notifyAdmins(
+      runtime,
+      `⚠️ Telegram moderation is configured but ${permissionWarnings.length} required bot permission${permissionWarnings.length === 1 ? " is" : "s are"} missing. Audit/routing still works; deletion, mute, or ban actions need can_delete_messages and can_restrict_members.`,
+    );
+  }
 
   await mutateTipBotState((draft) => {
     draft.settings.botUsername = config.botUsername;
@@ -456,6 +511,15 @@ export async function startTelegramTipBot(): Promise<TipBotRunnerStatus> {
       { command: "bounty", description: "Create or inspect a bounty" },
       { command: "boost", description: "Boost a bounty with your HIVE balance" },
       { command: "submit", description: "Submit work for a bounty" },
+      { command: "honey", description: "Show your contribution HONEY privately" },
+      { command: "linkhoney", description: "Connect Telegram to HivemindOS HONEY" },
+      { command: "missions", description: "Show open HONEY contribution missions" },
+      { command: "mission", description: "Create a HONEY mission (admins)" },
+      { command: "review", description: "Review HONEY submissions (admins)" },
+      { command: "honeyboard", description: "Contribution leaderboard" },
+      { command: "compute", description: "Ways to earn HONEY through useful compute" },
+      { command: "modhelp", description: "Moderator commands (admins only)" },
+      { command: "modstats", description: "Moderation status (admins only)" },
       { command: "help", description: "How this works" },
     ])
     .catch(() => undefined);
@@ -466,12 +530,14 @@ export async function startTelegramTipBot(): Promise<TipBotRunnerStatus> {
     memberTagBotUsername: memberTagApi.username,
     treasuryAddress: config.treasuryAddress,
     withdrawalProvider: config.withdrawalProvider,
+    moderation: config.moderation.enabled ? (config.moderation.auditOnly ? "audit" : "enforce") : "disabled",
+    moderationPermissionWarningCount: permissionWarnings.length,
     startedAt: new Date().toISOString(),
     stopRequested: false,
     stopped: Promise.resolve(),
   };
   runner.stopped = Promise.all([
-    updatesLoop(runner, runtime),
+    updatesLoop(runner, runtime, moderationRuntime),
     depositLoop(runner, runtime),
     withdrawalLoop(runner, runtime),
     claimSweepLoop(runner, runtime),
@@ -501,6 +567,8 @@ export function getTelegramTipBotStatus(): TipBotRunnerStatus {
     memberTagBotUsername: runner.memberTagBotUsername,
     treasuryAddress: runner.treasuryAddress,
     withdrawalProvider: runner.withdrawalProvider,
+    moderation: runner.moderation,
+    moderationPermissionWarningCount: runner.moderationPermissionWarningCount,
     startedAt: runner.startedAt,
     lastError: runner.lastError,
   };

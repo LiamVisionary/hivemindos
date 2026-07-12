@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>HivemindOS Browser</title>
+    <link rel="stylesheet" href="sidepanel.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <img src="assets/icon-48.png" alt="" width="34" height="34">
+          <div>
+            <p class="eyebrow">HIVEMINDOS</p>
+            <h1>Browser Agent</h1>
+          </div>
+        </div>
+        <button id="settings-toggle" class="icon-button" type="button" aria-label="Open connection settings" aria-expanded="false">⚙</button>
+      </header>
+
+      <section id="settings-panel" class="settings-panel" hidden>
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">CONNECTION</p>
+            <h2>HivemindOS gateway</h2>
+          </div>
+          <span id="connection-badge" class="status-badge"><span class="status-dot"></span><span>Not connected</span></span>
+        </div>
+        <label class="field">
+          <span>Dashboard URL</span>
+          <input id="dashboard-url" type="url" value="http://127.0.0.1:5020" spellcheck="false" autocomplete="url">
+        </label>
+        <label class="field">
+          <span>Dashboard unlock token</span>
+          <input id="dashboard-token" type="password" autocomplete="off" placeholder="Paste HIVEMINDOS_DASHBOARD_DEVICE_TOKEN">
+        </label>
+        <p class="field-help">Stored only in this browser profile. It is never included in page context or diagnostics.</p>
+        <div class="settings-actions">
+          <button id="save-settings" class="primary-button" type="button"><span class="button-label">Save &amp; connect</span></button>
+          <button id="cancel-settings" class="secondary-button" type="button">Close</button>
+        </div>
+        <p id="settings-error" class="error-message" role="alert" hidden></p>
+      </section>
+
+      <section class="agent-bar" aria-label="Agent and context controls">
+        <label class="compact-field">
+          <span>Agent</span>
+          <select id="agent-select" aria-label="HivemindOS agent">
+            <option value="">Connect to load agents</option>
+          </select>
+        </label>
+        <label class="compact-field context-field">
+          <span>Context</span>
+          <select id="context-mode" aria-label="Browser context mode">
+            <option value="page">Active page</option>
+            <option value="selection">Selection first</option>
+            <option value="chat">Chat only</option>
+          </select>
+        </label>
+        <label class="compact-field mode-field">
+          <span>Mode</span>
+          <select id="agent-mode" aria-label="Agent action mode">
+            <option value="ask">Ask</option>
+            <option value="act">Act</option>
+          </select>
+        </label>
+      </section>
+
+      <section id="context-receipt" class="context-receipt" aria-live="polite">
+        <span class="context-icon">◎</span>
+        <div>
+          <strong id="context-title">Open a page to share context</strong>
+          <span id="context-detail">Chat only until a readable page is available</span>
+        </div>
+        <button id="refresh-context" class="tiny-button" type="button">Refresh</button>
+      </section>
+
+      <section id="messages" class="messages" aria-label="Conversation" aria-live="polite">
+        <article class="welcome-card">
+          <span class="welcome-mark">✦</span>
+          <h2>Bring the page into the hive</h2>
+          <p>Ask any configured HivemindOS agent about the active page, selected text, or your open tabs. Sensitive destinations are omitted automatically.</p>
+        </article>
+      </section>
+
+      <section id="activity-strip" class="activity-strip" role="status" aria-live="polite" hidden>
+        <span class="spinner" aria-hidden="true"></span>
+        <span id="activity-label">Agent is working</span>
+      </section>
+
+      <footer class="composer-shell">
+        <div id="quick-commands" class="quick-commands" aria-label="Quick commands"></div>
+        <div class="composer">
+          <textarea id="composer-input" rows="1" placeholder="Ask about this page…" aria-label="Message HivemindOS"></textarea>
+          <button id="send-button" class="send-button" type="button" aria-label="Send message">↑</button>
+        </div>
+        <div class="composer-meta">
+          <span>Enter to send · Shift+Enter for a new line</span>
+          <button id="new-session" type="button">New session</button>
+        </div>
+      </footer>
+    </main>
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>

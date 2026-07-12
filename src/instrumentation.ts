@@ -262,6 +262,41 @@ export async function register() {
     }
   })();
 
+  // Auto-start the Hive Research brain-sync driver (pull-syncs the user's
+  // hivemindos.app/research frameworks + verdicts into the shared brain; an
+  // unpaired machine's tick is a single state-file read). Same no-app-imports
+  // constraint: kill switch via env, start via self-POST. Disable with
+  // HIVEMINDOS_RESEARCH_SYNC=0.
+  void (async () => {
+    try {
+      const value = (process.env.HIVEMINDOS_RESEARCH_SYNC || "").trim().toLowerCase();
+      if (value === "0" || value === "false") return; // default ON
+      const port = process.env.PORT?.trim();
+      if (!port) return; // route hooks / manual start cover portless launches
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 5_000));
+        let started = false;
+        for (const host of ["127.0.0.1", "[::1]"]) {
+          started = await fetch(`http://${host}:${port}/api/research-sync`, {
+            method: "POST",
+            headers: { "content-type": "application/json", ...selfApiAuthHeaders() },
+            body: JSON.stringify({ action: "start" }),
+          })
+            .then((response) => response.ok)
+            .catch(() => false);
+          if (started) break;
+        }
+        if (started) {
+          console.log("[research-sync] auto-started");
+          return;
+        }
+      }
+      console.error("[research-sync] autostart gave up after 5 attempts");
+    } catch (error) {
+      console.error("[research-sync] autostart failed:", error instanceof Error ? error.message : error);
+    }
+  })();
+
   if (process.env.NODE_ENV !== "development") return;
   const { registerDevMemoryGuard } = await import("@/lib/services/dev-memory-guard");
   registerDevMemoryGuard();

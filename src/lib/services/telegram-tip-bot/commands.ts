@@ -30,6 +30,7 @@ import {
 } from "./ledger";
 import { parseCommand, resolveTipRecipient, type ParsedCommand } from "./parse";
 import { rememberMemberTagChat } from "./member-tags";
+import type { TipBotModerationConfig } from "./moderation";
 import {
   mutateTipBotState,
   newBountyBoostId,
@@ -42,6 +43,13 @@ import {
 } from "./store";
 import { richAccent, richBold, richCode, richMuted, richTable, type RichTableCell } from "./rich-formatting";
 import { escapeHtml, mentionHtml, type TelegramBotApi, type TgMessage, type TgUpdate, type TgUser } from "./telegram-api";
+import { CommunityHoneyClient, type CommunityHoneyConfig } from "./community-honey";
+import {
+  isHoneyMissionId,
+  isHoneySubmissionId,
+  parseCommunityMissionCreateArgs,
+  telegramPublicLabel,
+} from "./community-honey-logic";
 
 export type TipBotConfig = {
   botUsername: string;
@@ -61,6 +69,8 @@ export type TipBotConfig = {
     syncIntervalMs: number;
     maxActionsPerCycle: number;
   };
+  moderation: TipBotModerationConfig;
+  communityHoney: CommunityHoneyConfig;
 };
 
 export type TipBotRuntime = {
@@ -85,6 +95,10 @@ function fmtCompactValue(config: TipBotConfig, amountRaw: bigint | string): stri
 
 function isAdmin(config: TipBotConfig, from: TgUser): boolean {
   return config.adminIds.has(String(from.id));
+}
+
+function communityHoney(runtime: TipBotRuntime) {
+  return new CommunityHoneyClient(runtime.config.communityHoney);
 }
 
 export async function notifyAdmins(runtime: TipBotRuntime, text: string) {
@@ -115,6 +129,14 @@ function helpText(config: TipBotConfig): string {
     "/bounties — active bounty board",
     "/boost &lt;id&gt; 25 — add your balance to a bounty escrow",
     "/submit &lt;id&gt; &lt;url or note&gt; — submit work",
+    "",
+    "🍯 <b>Contribution HONEY</b> — reviewed work, not message volume.",
+    "/linkhoney — privately connect Telegram to your verified HivemindOS wallet workspace",
+    "/honey — your contribution HONEY",
+    "/missions — open contribution missions",
+    "/submit &lt;hm_id&gt; &lt;evidence&gt; — submit mission evidence",
+    "/honeyboard — current season leaderboard",
+    "/compute — ways to earn through verified compute",
     "",
     "Missing a detail? I'll ask — just reply to my question.",
   ].join("\n");
@@ -341,6 +363,20 @@ export async function handleTipBotUpdate(runtime: TipBotRuntime, update: TgUpdat
         return await handleBoost(runtime, message, parsed.args, reply);
       case "submit":
         return await handleSubmit(runtime, message, parsed.args, reply);
+      case "linkhoney":
+        return await handleLinkHoney(runtime, message, reply);
+      case "honey":
+        return await handleHoneyProfile(runtime, message, reply);
+      case "missions":
+        return await handleCommunityMissions(runtime, message, reply);
+      case "mission":
+        return await handleCommunityMission(runtime, message, parsed.args, reply);
+      case "review":
+        return await handleCommunityReviews(runtime, message, reply);
+      case "honeyboard":
+        return await handleHoneyLeaderboard(runtime, message, reply);
+      case "compute":
+        return await handleHoneyCompute(message, reply);
       case "accept":
         return await handleAccept(runtime, message, parsed.args, reply);
       case "refund":
@@ -823,11 +859,132 @@ async function handleBoost(runtime: TipBotRuntime, message: TgMessage, args: str
   await reply(`🚀 Boosted <code>${bounty.id}</code> by <b>${fmt(runtime.config, parsed.amountRaw)}</b>. Pot: ${fmt(runtime.config, bountyTotalRaw(bounty))}.`);
 }
 
+async function handleLinkHoney(runtime: TipBotRuntime, message: TgMessage, reply: ReplyFn) {
+  const from = message.from as TgUser;
+  const result = await communityHoney(runtime).createLinkCode(String(from.id), telegramPublicLabel(from));
+  const privateText = [
+    "🔗 <b>Connect Telegram to HivemindOS HONEY</b>",
+    "",
+    `One-time code: <code>${escapeHtml(result.code)}</code>`,
+    "Open HivemindOS → Wallets → Honey → Connect Telegram, then enter this code.",
+    "Your HivemindOS workspace must already have a signature-verified wallet. The code expires in 15 minutes and works once.",
+  ].join("\n");
+  if (message.chat.type === "private") {
+    await reply(privateText);
+    return;
+  }
+  const sent = await runtime.api.sendMessage({ chatId: from.id, text: privateText }).catch(() => null);
+  if (!sent) throw new Error("Start a private chat with me first, then run /linkhoney again so I can send the one-time code safely.");
+  await reply("🔐 I sent your one-time HONEY link code privately.");
+}
+
+async function handleHoneyProfile(runtime: TipBotRuntime, message: TgMessage, reply: ReplyFn) {
+  const from = message.from as TgUser;
+  const profile = await communityHoney(runtime).profile(String(from.id));
+  const text = !profile.linked
+    ? "🍯 Telegram is not linked to your HivemindOS HONEY workspace yet. Run <code>/linkhoney</code> to connect it privately."
+    : [
+        `🍯 <b>${escapeHtml(profile.publicLabel || telegramPublicLabel(from))} · contribution HONEY</b>`,
+        `Available from reviewed contributions: <b>${Number(profile.honey?.communityAvailable || 0).toLocaleString()}</b> HONEY`,
+        `Lifetime contributions: ${Number(profile.honey?.communityLifetime || 0).toLocaleString()} HONEY`,
+        `Total available in your workspace: ${Number(profile.honey?.totalAvailable || 0).toLocaleString()} HONEY`,
+        ...(profile.recent?.length
+          ? ["", "Recent:", ...profile.recent.map((award) => `• +${award.honey.toLocaleString()} · ${escapeHtml(award.title)}`)]
+          : []),
+      ].join("\n");
+  if (message.chat.type === "private") {
+    await reply(text);
+    return;
+  }
+  const sent = await runtime.api.sendMessage({ chatId: from.id, text }).catch(() => null);
+  if (!sent) throw new Error("Start a private chat with me first so I can show your HONEY balance privately.");
+  await reply("🍯 I sent your contribution HONEY summary privately.");
+}
+
+async function handleCommunityMissions(runtime: TipBotRuntime, _message: TgMessage, reply: ReplyFn) {
+  const result = await communityHoney(runtime).listMissions();
+  if (!result.missions.length) {
+    await reply(`🍯 No open HONEY missions in season <code>${escapeHtml(result.seasonId)}</code> right now.`);
+    return;
+  }
+  const rows = result.missions.slice(0, 12).map((mission) => [
+    `<code>${escapeHtml(mission.id)}</code> · <b>${escapeHtml(mission.title)}</b>`,
+    `${mission.rewardHoney.toLocaleString()} HONEY · ${escapeHtml(mission.category)} · evidence: ${escapeHtml(mission.evidenceType)}`,
+    mission.githubRepo ? `repo: <code>${escapeHtml(mission.githubRepo)}</code>` : "",
+    mission.dueAt ? `due: ${escapeHtml(shortDate(mission.dueAt))}` : "",
+    `submit: <code>/submit ${escapeHtml(mission.id)} &lt;evidence&gt;</code>`,
+  ].filter(Boolean).join("\n"));
+  await reply([`🍯 <b>Open HONEY missions · ${escapeHtml(result.seasonId)}</b>`, "", ...rows].join("\n\n"));
+}
+
+async function handleCommunityMission(runtime: TipBotRuntime, message: TgMessage, args: string, reply: ReplyFn) {
+  const from = message.from as TgUser;
+  if (!isAdmin(runtime.config, from)) return;
+  if (!/^create\b/i.test(args.trim())) {
+    throw new Error("Usage: /mission create <title> | reward <HONEY> | category <docs> | evidence <url|note|github_pr> | repo <owner/repo> | due <date> | approvals <1|2>");
+  }
+  const mission = (await communityHoney(runtime).createMission(parseCommunityMissionCreateArgs(args))).mission;
+  await reply([
+    `🍯 Created mission <code>${escapeHtml(mission.id)}</code>: <b>${escapeHtml(mission.title)}</b>`,
+    `Reward: ${mission.rewardHoney.toLocaleString()} HONEY · evidence: ${escapeHtml(mission.evidenceType)} · approvals: ${mission.requiredApprovals}`,
+    `Submit with <code>/submit ${escapeHtml(mission.id)} &lt;evidence&gt;</code>`,
+  ].join("\n"));
+}
+
+async function handleCommunityReviews(runtime: TipBotRuntime, message: TgMessage, reply: ReplyFn) {
+  const from = message.from as TgUser;
+  if (!isAdmin(runtime.config, from)) return;
+  const result = await communityHoney(runtime).listReviews();
+  if (!result.submissions.length) {
+    await reply("✅ No HONEY mission submissions are waiting for review.");
+    return;
+  }
+  const rows = result.submissions.slice(0, 20).map((submission) => [
+    `<code>${escapeHtml(submission.id)}</code> · <b>${escapeHtml(submission.missionTitle)}</b> · ${escapeHtml(submission.publicLabel)}`,
+    `${submission.rewardHoney.toLocaleString()} HONEY · approvals ${submission.approvalCount}/${submission.requiredApprovals}${submission.githubVerified ? " · GitHub merged ✅" : ""}`,
+    escapeHtml(submission.evidence),
+    `<code>/approve ${escapeHtml(submission.id)}</code> · <code>/reject ${escapeHtml(submission.id)}</code>`,
+  ].join("\n"));
+  await reply(["🍯 <b>HONEY review queue</b>", "", ...rows].join("\n\n"));
+}
+
+async function handleHoneyLeaderboard(runtime: TipBotRuntime, _message: TgMessage, reply: ReplyFn) {
+  const result = await communityHoney(runtime).leaderboard();
+  if (!result.leaderboard.length) {
+    await reply(`🍯 No reviewed contributions have been awarded in season <code>${escapeHtml(result.seasonId)}</code> yet.`);
+    return;
+  }
+  await reply([
+    `🍯 <b>Contribution leaderboard · ${escapeHtml(result.seasonId)}</b>`,
+    "",
+    ...result.leaderboard.map((row) => `${row.rank}. ${escapeHtml(row.publicLabel)} — <b>${row.honey.toLocaleString()}</b> HONEY · ${row.awards} award${row.awards === 1 ? "" : "s"}`),
+  ].join("\n"));
+}
+
+async function handleHoneyCompute(_message: TgMessage, reply: ReplyFn) {
+  await reply([
+    "⚙️ <b>Earn HONEY through useful compute</b>",
+    "",
+    "HivemindOS records HONEY for verified, policy-accepted agent compute and reviewed community missions.",
+    "Open HivemindOS → Wallets → Honey to enable the ledger, link a wallet, and see eligible activity.",
+    "Raw Telegram messages, reactions, and spam do not earn HONEY.",
+  ].join("\n"));
+}
+
 async function handleSubmit(runtime: TipBotRuntime, message: TgMessage, args: string, reply: ReplyFn) {
   const from = message.from as TgUser;
   const [id, ...rest] = args.split(/\s+/).filter(Boolean);
   const text = rest.join(" ");
-  if (!id || !text) throw new Error("Usage: /submit <bounty-id> <url or note>");
+  if (!id || !text) throw new Error("Usage: /submit <bounty-or-mission-id> <url or note>");
+  if (isHoneyMissionId(id)) {
+    const result = await communityHoney(runtime).submit(String(from.id), id, text);
+    await reply(`📬 Submitted HONEY mission evidence as <code>${escapeHtml(result.submission.id)}</code>. An independent admin review is required before any HONEY is awarded.`);
+    await notifyAdmins(
+      runtime,
+      `🍯 HONEY mission submission <code>${escapeHtml(result.submission.id)}</code> for <code>${escapeHtml(id)}</code> by ${mentionHtml({ id: String(from.id), username: from.username, firstName: from.first_name })}\n${escapeHtml(text)}\nReview with <code>/review</code>.`,
+    );
+    return;
+  }
   const createdAt = new Date().toISOString();
   const bounty = await mutateTipBotState((draft) => {
     ensureUser(draft, { id: from.id, username: from.username, firstName: from.first_name, createdAt });
@@ -967,7 +1124,20 @@ async function handleReviewDecision(
   const from = message.from as TgUser;
   if (!isAdmin(runtime.config, from)) return;
   const id = args.split(/\s+/)[0];
-  if (!id) throw new Error(`Usage: /${command} <withdrawal-id>`);
+  if (!id) throw new Error(`Usage: /${command} <withdrawal-or-submission-id>`);
+  if (isHoneySubmissionId(id)) {
+    const result = await communityHoney(runtime).review(String(from.id), id, command);
+    if (result.status === "approved") {
+      await reply(`✅ Approved HONEY submission <code>${escapeHtml(id)}</code> and awarded <b>${Number(result.honeyAwarded || 0).toLocaleString()} HONEY</b>.`);
+      return;
+    }
+    if (result.status === "rejected") {
+      await reply(`🚫 Rejected HONEY submission <code>${escapeHtml(id)}</code>. No HONEY was awarded.`);
+      return;
+    }
+    await reply(`🗳️ Recorded approval for <code>${escapeHtml(id)}</code> (${result.approvalCount || 0}/${result.requiredApprovals || 1}).`);
+    return;
+  }
   const now = new Date().toISOString();
   const withdrawal = await mutateTipBotState((draft) => {
     if (command === "approve") return { ...approveWithdrawal(draft, id, now) };

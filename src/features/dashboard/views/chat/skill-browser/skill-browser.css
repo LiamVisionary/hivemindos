@@ -171,6 +171,29 @@
 .sb-cardfoot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .sb-tag { font-family: var(--f-mono); font-size: 9.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-4); overflow-wrap: anywhere; }
 
+.sb-bankr-toolbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding-bottom: 2px; }
+.sb-bankr-toolbar > div:first-child { flex: 1 1 360px; min-width: 0; }
+.sb-bankr-toolbar .sb-section { margin-top: 0; }
+.sb-bankr-toolbar p { margin: 6px 0 0; color: var(--fg-3); font-size: 12px; line-height: 1.5; max-width: 72ch; }
+.sb-bankr-toolbar-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; flex-wrap: wrap; }
+.sb-bankr-notice, .sb-bankr-safety { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border: 1px solid var(--honey-line); border-radius: var(--radius-sm); background: var(--honey-soft); color: var(--honey); font-size: 11.5px; line-height: 1.5; }
+.sb-bankr-notice svg, .sb-bankr-safety svg { flex: 0 0 auto; margin-top: 1px; }
+.sb-bankr-card { min-height: 238px; }
+.sb-bankr-card-head, .sb-bankr-detail-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.sb-bankr-card-head .grow, .sb-bankr-detail-head .grow { flex: 1 1 auto; min-width: 0; }
+.sb-bankr-avatar { width: 38px; height: 38px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid var(--line-2); border-radius: 10px; background: var(--panel-hi); color: var(--honey); font-family: var(--f-display); font-size: 15px; font-weight: 600; }
+.sb-bankr-card-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.sb-bankr-detail { max-width: 720px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+.sb-bankr-back { align-self: flex-start; display: inline-flex; align-items: center; gap: 7px; border: 0; background: transparent; color: var(--fg-3); cursor: pointer; font: 500 12px var(--f-body); padding: 3px 0; }
+.sb-bankr-back:hover { color: var(--fg); }
+.sb-bankr-detail-card { display: flex; flex-direction: column; gap: 18px; padding: 20px; border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--panel-2); }
+.sb-bankr-detail-copy { margin: 0; color: var(--fg-2); font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; }
+.sb-bankr-detail-meta { display: flex; gap: 12px; flex-wrap: wrap; color: var(--fg-3); font: 10.5px var(--f-mono); }
+.sb-bankr-detail-meta span { display: inline-flex; align-items: center; gap: 6px; }
+.sb-bankr-detail-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; padding-top: 4px; border-top: 1px solid var(--line); }
+.sb-bankr-empty { min-height: 260px; display: grid; place-items: center; align-content: center; gap: 10px; color: var(--danger); text-align: center; }
+.sb-bankr-empty p { margin: 0; color: var(--fg-3); font-size: 12.5px; }
+
 .sb-section { font-family: var(--f-mono); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; color: var(--fg-4); margin: 8px 0 2px; display: flex; align-items: center; gap: 12px; }
 .sb-section::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 

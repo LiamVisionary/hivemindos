@@ -6,6 +6,9 @@ import { unauthorizedJson, verifyAuth } from "@/lib/utils/server-auth";
 // ignored, which left every /api route without this gate until 2026-07-03.
 const SELF_AUTHENTICATING_API_PREFIXES = [
   "/api/auth/session",
+  // Browser-extension preflights cannot carry dashboard credentials. The route
+  // handles CORS and verifies the dashboard device token on every GET/POST.
+  "/api/browser-extension",
   "/api/runtimes/aeon/brain",
   "/api/runtimes/aeon/hive/miroshark",
   // Authenticates inside the route: dashboard auth OR a path-scoped signed URL
@@ -32,6 +35,14 @@ const SELF_AUTHENTICATING_API_PREFIXES = [
   // the Tauri webview session. This route only records a short-lived local
   // receipt; the authenticated desktop app polls a separate protected route.
   "/api/integrations/x-managed/desktop-return",
+  // Local brain bridge for hivemindos.app/research: the browser page cannot
+  // carry dashboard credentials cross-origin. hello is a harmless presence
+  // probe; recall is READ-ONLY and verifies a dedicated bridge token inside
+  // the route (or falls back to dashboard auth). The token-mint route
+  // (/api/research-bridge/token) is deliberately NOT listed — it stays behind
+  // this gate.
+  "/api/research-bridge/hello",
+  "/api/research-bridge/recall",
 ];
 
 function isSelfAuthenticatingApi(pathname: string) {

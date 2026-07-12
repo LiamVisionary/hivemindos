@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, AppWindow, Bell, Bot, ChevronRight, Cloud, Coins, Cpu, FolderOpen, KeyRound, Kanban, LayoutGrid, List, Landmark, MessageSquare, Mic, Network, PhoneCall, Pin, PinOff, PlugZap, Search, ShieldCheck, Sparkles, TrendingUp, Wallet, Wrench, X } from "lucide-react";
+import { Activity, AppWindow, Bell, Bot, Boxes, ChevronRight, Cloud, Coins, Cpu, FolderOpen, KeyRound, Kanban, LayoutGrid, List, Landmark, MessageSquare, Mic, Network, PhoneCall, Pin, PinOff, PlugZap, Search, ShieldCheck, Sparkles, TrendingUp, Wallet, Wrench, X } from "lucide-react";
 
 import type { DashboardUtilityView } from "@/features/dashboard/dashboard-navigation";
 import { isPinnableView } from "@/features/dashboard/dashboard-navigation";
@@ -38,7 +38,7 @@ type MoreItem = {
 // pinnable view always has a management tile here (add a view -> compile error
 // until it gets one; this is how a previously-unreachable view surfaces).
 const MORE_GROUP_DEFS = [
-  { name: "Build & automate", ids: ["fusion", "aeon", "swarm", "podcast"] },
+  { name: "Build & automate", ids: ["mini-apps", "fusion", "aeon", "swarm", "podcast"] },
   { name: "Money & governance", ids: ["wallet", "trade", "governance", "cloud", "compute", "stake"] },
   { name: "Fleet health", ids: ["maintenance", "memory", "sessions", "tools"] },
   { name: "Connections", ids: ["integrations", "my-apps", "messaging", "phone"] },
@@ -170,6 +170,7 @@ export function MorePanel({
       : {};
 
     return {
+      "mini-apps": { id: "mini-apps", icon: <Boxes aria-hidden="true" />, eyebrow: "Focused hive experiences", title: "HivemindOS Mini Apps", body: "Open purpose-built experiences powered by coordinated agent crews, starting with Hive Research.", keywords: "mini apps hivemindos hosted hive research research crews", dot: "live" },
       fusion: { id: "fusion", icon: <Sparkles aria-hidden="true" />, eyebrow: "Skill builder", title: "Hive Skill Fusion", body: "Create reusable skills from skills, tools, apps, agents, and workflows.", keywords: "fusion skill workflow builder reusable" },
       aeon: { id: "aeon", icon: <Bot aria-hidden="true" />, eyebrow: "Autopilot", title: "Aeon", body: "Manage unattended skills, schedules, workflow runs, and outputs.", keywords: "aeon autopilot unattended runs outputs", dot: "live" },
       swarm: { id: "swarm", icon: <Network aria-hidden="true" />, eyebrow: "Simulations", title: "Simulations", body: "Run MiroShark agent simulations and rehearsals.", keywords: "swarm miroshark simulation rehearsal" },

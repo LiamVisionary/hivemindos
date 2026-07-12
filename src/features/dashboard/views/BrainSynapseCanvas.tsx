@@ -15,9 +15,12 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { BrainDendriteField } from "./brain-dendrite-field";
 import { BrainFiberTubes } from "./brain-fiber-tubes";
+import { approachPointerProximity, pointerProximityRadius, pointerProximityStrength } from "./brain-pointer-proximity";
 import {
   BACKDROP_FRAGMENT,
   BACKDROP_VERTEX,
+  CORE_GLOW_FRAGMENT,
+  CORE_GLOW_VERTEX,
   DUST_FRAGMENT,
   DUST_VERTEX,
   FIBER_FRAGMENT,
@@ -73,7 +76,7 @@ const FIBER_SEGMENTS = 14;
 const LINK_STRANDS = 4;
 const MAX_PULSE_SLOTS = 9000;
 const MAX_LABELS = 16;
-const DUST_COUNT = 3200;
+const DUST_COUNT = 1400;
 const PRE_TICKS = 110;
 // Dark theme is a deep-space indigo field; honey stays the semantic accent.
 const DARK_DUST_TINT = "#b9c8ff";
@@ -148,6 +151,7 @@ class SynapseEngine {
   private cameraRadiusTarget = WORLD_RADIUS * 2.3;
   private container: HTMLElement;
   private contextIds = new Set<string>();
+  private coreGlow: THREE.Mesh | null = null;
   private dataSignature = "";
   private dendrites: BrainDendriteField | null = null;
   private destroyed = false;
@@ -169,6 +173,7 @@ class SynapseEngine {
   private materials: THREE.ShaderMaterial[] = [];
   private neighborIds = new Set<string>();
   private nodeIndexById = new Map<string, number>();
+  private nodeProximity = new Float32Array(0);
   private nodeTints = new Float32Array(0);
   private nodes: SimNode[] = [];
   private options: EngineOptions;
@@ -244,6 +249,7 @@ class SynapseEngine {
     container.appendChild(this.labelLayer);
 
     this.buildBackdrop();
+    this.buildCoreGlow();
     this.buildDust();
 
     this.reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -299,6 +305,11 @@ class SynapseEngine {
       this.scene.remove(this.backdrop);
       this.backdrop.geometry.dispose();
       this.backdrop = null;
+    }
+    if (this.coreGlow) {
+      this.scene.remove(this.coreGlow);
+      this.coreGlow.geometry.dispose();
+      this.coreGlow = null;
     }
     for (const material of this.materials) material.dispose();
     this.materials = [];
@@ -375,6 +386,7 @@ class SynapseEngine {
       };
     });
     this.nodeIndexById = new Map(this.nodes.map((node, index) => [node.id, index]));
+    if (this.nodeProximity.length !== this.nodes.length) this.nodeProximity = new Float32Array(this.nodes.length);
     this.nodeTints = new Float32Array(this.nodes.length * 3);
 
     // Spawn brand-new nodes next to a linked survivor so they grow out of the
@@ -414,7 +426,7 @@ class SynapseEngine {
       this.fitRadius = this.computeCloudRadius();
       // Frame the tissue as an immersive macro field rather than a small
       // diagram floating in space; users can still scroll outward.
-      this.cameraRadiusTarget = clamp(this.fitRadius * 1.46, 120, 480);
+      this.cameraRadiusTarget = clamp(this.fitRadius * 1.18, 108, 430);
       this.cameraRadius = this.cameraRadiusTarget * 1.12;
       // PRE_TICKS already settles the initial layout. Continuing the force
       // simulation after reveal makes the entire tissue crawl on screen.
@@ -464,6 +476,7 @@ class SynapseEngine {
     this.palette = readPalette(this.container);
     this.renderer?.setClearColor(this.clearTint(), 1);
     if (this.backdrop) this.backdrop.visible = !this.palette.light;
+    if (this.coreGlow) this.coreGlow.visible = !this.palette.light;
     const additive = this.palette.light ? 0 : 1;
     for (const material of this.materials) {
       const uniforms = material.uniforms;
@@ -523,9 +536,9 @@ class SynapseEngine {
       this.nodeTints[index * 3 + 2] = this.tmpColor.b;
       if (haloTint && haloAlpha) {
         haloTint.setXYZ(index, this.tmpColor.r, this.tmpColor.g, this.tmpColor.b);
-        const base = this.palette.light ? 0.4 : 0.42;
+        const base = this.palette.light ? 0.4 : 0.46;
         // Capped so a selected hub reads as a bright cell, not a glow blob.
-        haloAlpha.setX(index, Math.min(this.palette.light ? 0.58 : 0.64, base + glow * 0.28) * (dim ? 0.3 : 1));
+        haloAlpha.setX(index, Math.min(this.palette.light ? 0.58 : 0.68, base + glow * 0.28) * (dim ? 0.3 : 1));
       }
     });
     tintAttr.needsUpdate = true;
@@ -606,8 +619,8 @@ class SynapseEngine {
       pulseTint.needsUpdate = true;
     }
     const dimUnlit = Boolean(this.selectedId);
-    this.fiberTubes?.setOpacity(this.palette.light ? (dimUnlit ? 0.085 : 0.2) : (dimUnlit ? 0.28 : 0.72));
-    this.dendrites?.setOpacity(this.palette.light ? (dimUnlit ? 0.065 : 0.14) : (dimUnlit ? 0.24 : 0.64));
+    this.fiberTubes?.setOpacity(this.palette.light ? (dimUnlit ? 0.075 : 0.18) : (dimUnlit ? 0.22 : 0.52));
+    this.dendrites?.setOpacity(this.palette.light ? (dimUnlit ? 0.07 : 0.16) : (dimUnlit ? 0.34 : 0.8));
     (this.fiberLines.material as THREE.ShaderMaterial).uniforms.uSelDim.value = dimUnlit ? 0.35 : 1;
     if (this.pulsePoints) {
       (this.pulsePoints.material as THREE.ShaderMaterial).uniforms.uSelDim.value = dimUnlit ? 0.35 : 1;
@@ -710,6 +723,26 @@ class SynapseEngine {
     this.scene.add(this.backdrop);
   }
 
+  private buildCoreGlow() {
+    const geometry = new THREE.PlaneGeometry(2, 2);
+    const material = this.registerMaterial(new THREE.ShaderMaterial({
+      // A broad tissue glow supports the network without replacing its many
+      // real neuron centers with one synthetic white orb.
+      uniforms: { uSize: { value: 240 } },
+      vertexShader: CORE_GLOW_VERTEX,
+      fragmentShader: CORE_GLOW_FRAGMENT,
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+      blending: THREE.AdditiveBlending,
+    }));
+    this.coreGlow = new THREE.Mesh(geometry, material);
+    this.coreGlow.frustumCulled = false;
+    this.coreGlow.renderOrder = -5;
+    this.coreGlow.visible = !this.palette.light;
+    this.scene.add(this.coreGlow);
+  }
+
   private buildDust() {
     const positions = new Float32Array(DUST_COUNT * 3);
     const sizes = new Float32Array(DUST_COUNT);
@@ -719,11 +752,12 @@ class SynapseEngine {
       const angle = hashUnit(`dust-${i}`, 5) * Math.PI * 2;
       const ring = Math.sqrt(Math.max(0.0001, 1 - u * u));
       // Sparkle field threads through the tissue and out past it.
-      const spread = WORLD_RADIUS * (0.25 + hashUnit(`dust-${i}`, 9) * 1.9);
+      const radial = Math.pow(hashUnit(`dust-${i}`, 9), 0.72);
+      const spread = WORLD_RADIUS * (0.035 + radial * 1.35);
       positions[i * 3] = Math.cos(angle) * ring * spread;
       positions[i * 3 + 1] = u * spread * 0.8;
       positions[i * 3 + 2] = Math.sin(angle) * ring * spread;
-      sizes[i] = 1.1 + hashUnit(`dust-${i}`, 13) * 3.1;
+      sizes[i] = 0.65 + hashUnit(`dust-${i}`, 13) * 1.5;
       seeds[i] = hashUnit(`dust-${i}`, 17);
     }
     const geometry = new THREE.BufferGeometry();
@@ -733,7 +767,6 @@ class SynapseEngine {
     const material = this.registerMaterial(new THREE.ShaderMaterial({
       uniforms: {
         ...this.sharedUniforms(),
-        uMap: { value: this.texDot },
         uTint: { value: this.palette.light ? this.palette.live.clone() : srgbColor(DARK_DUST_TINT) },
       },
       vertexShader: DUST_VERTEX,
@@ -764,6 +797,7 @@ class SynapseEngine {
     sphereGeometry.setAttribute("iTint", new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3));
     sphereGeometry.setAttribute("iGlow", new THREE.InstancedBufferAttribute(new Float32Array(count), 1));
     sphereGeometry.setAttribute("iDim", new THREE.InstancedBufferAttribute(new Float32Array(count), 1));
+    sphereGeometry.setAttribute("iProximity", new THREE.InstancedBufferAttribute(this.nodeProximity, 1));
     const somaSeeds = new Float32Array(count);
     this.nodes.forEach((node, index) => {
       somaSeeds[index] = node.drift;
@@ -795,13 +829,14 @@ class SynapseEngine {
     const haloScales = new Float32Array(count);
     const haloSeeds = new Float32Array(count);
     this.nodes.forEach((node, index) => {
-      haloScales[index] = node.radius * 6.5;
+      haloScales[index] = node.radius * 6.4;
       haloSeeds[index] = hashUnit(node.id, 53);
     });
     haloGeometry.setAttribute("iScale", new THREE.InstancedBufferAttribute(haloScales, 1));
     haloGeometry.setAttribute("iSeed", new THREE.InstancedBufferAttribute(haloSeeds, 1));
     haloGeometry.setAttribute("iTint", new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3));
     haloGeometry.setAttribute("iAlpha", new THREE.InstancedBufferAttribute(new Float32Array(count), 1));
+    haloGeometry.setAttribute("iProximity", new THREE.InstancedBufferAttribute(this.nodeProximity, 1));
     const haloMaterial = this.registerMaterial(new THREE.ShaderMaterial({
       uniforms: { ...this.sharedUniforms(), uMap: { value: this.texAtlas } },
       vertexShader: HALO_VERTEX,
@@ -829,9 +864,10 @@ class SynapseEngine {
       this.fiberTubeSlots.fill(-1);
       let tubeCount = 0;
       this.fibers.forEach((fiber, fiberIndex) => {
-        if (fiber.strand === 0) this.fiberTubeSlots[fiberIndex] = tubeCount++;
+        const carriesTube = fiber.strand === 0;
+        if (carriesTube) this.fiberTubeSlots[fiberIndex] = tubeCount++;
       });
-      this.fiberTubes = new BrainFiberTubes(tubeCount, this.palette.light);
+      this.fiberTubes = new BrainFiberTubes(tubeCount, this.palette.light, { along: 22, around: 9, shell: 0.48 });
       this.scene.add(this.fiberTubes.mesh);
       const positions = new Float32Array(fiberCount * vertsPerFiber * 3);
       const ts = new Float32Array(fiberCount * vertsPerFiber);
@@ -1214,6 +1250,38 @@ class SynapseEngine {
     this.refreshLabelSet();
   }
 
+  private updatePointerLighting(delta: number, cameraMoving: boolean) {
+    if (!this.soma || !this.haloMesh || !this.nodes.length) return;
+    const rect = this.container.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+    if (!width || !height) return;
+    const active = this.pointer.inside && !this.pointer.down && !cameraMoving;
+    const pointerX = this.pointer.x - rect.left;
+    const pointerY = this.pointer.y - rect.top;
+    const radius = pointerProximityRadius(width, height);
+    let changed = false;
+    this.nodes.forEach((node, index) => {
+      let target = 0;
+      if (active) {
+        this.displayPosition(node, this.tmpVecA).project(this.camera);
+        if (this.tmpVecA.z >= -1 && this.tmpVecA.z <= 1) {
+          const x = (this.tmpVecA.x * 0.5 + 0.5) * width;
+          const y = (-this.tmpVecA.y * 0.5 + 0.5) * height;
+          target = pointerProximityStrength(Math.hypot(x - pointerX, y - pointerY), radius);
+        }
+      }
+      const current = this.nodeProximity[index] ?? 0;
+      const eased = this.reducedMotion ? target : approachPointerProximity(current, target, delta);
+      const next = Math.abs(target - eased) < 0.002 ? target : eased;
+      if (next !== current) changed = true;
+      this.nodeProximity[index] = next;
+    });
+    if (!changed) return;
+    (this.soma.geometry.getAttribute("iProximity") as THREE.BufferAttribute).needsUpdate = true;
+    ((this.haloMesh.geometry as THREE.InstancedBufferGeometry).getAttribute("iProximity") as THREE.BufferAttribute).needsUpdate = true;
+  }
+
   private frame = () => {
     if (this.destroyed) return;
     // Genuinely hidden tabs stop getting rAF callbacks from the browser, so no
@@ -1251,7 +1319,7 @@ class SynapseEngine {
     const fogNear = this.cameraRadius * 0.88;
     const fogFar = this.cameraRadius * 3.1;
     for (const material of this.materials) {
-      material.uniforms.uTime.value = this.time;
+      if (material.uniforms.uTime) material.uniforms.uTime.value = this.time;
       if (material.uniforms.uFogNear) material.uniforms.uFogNear.value = fogNear;
       if (material.uniforms.uFogFar) material.uniforms.uFogFar.value = fogFar;
     }
@@ -1260,7 +1328,8 @@ class SynapseEngine {
       const haloPos = (this.haloMesh.geometry as THREE.InstancedBufferGeometry).getAttribute("iPos") as THREE.InstancedBufferAttribute;
       this.nodes.forEach((node, index) => {
         this.displayPosition(node, this.tmpVecA);
-        this.tmpMatrix.makeScale(node.radius, node.radius, node.radius);
+        const somaRadius = node.radius * 0.68;
+        this.tmpMatrix.makeScale(somaRadius, somaRadius, somaRadius);
         this.tmpMatrix.setPosition(this.tmpVecA);
         this.soma!.setMatrixAt(index, this.tmpMatrix);
         haloPos.setXYZ(index, this.tmpVecA.x, this.tmpVecA.y, this.tmpVecA.z);
@@ -1297,9 +1366,9 @@ class SynapseEngine {
         this.tmpVecC.multiplyScalar(0.5).add(this.tmpVecA).addScaledVector(this.tmpVecD, bow);
         const tubeSlot = this.fiberTubeSlots[fiberIndex];
         if (tubeSlot >= 0) {
-          const radius = fiber.kind === "wiki" ? 2 : fiber.kind === "folder" ? 1.18 : 0.96;
-          const sourceRadius = clamp(source.radius * 0.64, radius * 1.95, radius * 4.1);
-          const targetRadius = clamp(this.nodes[fiber.targetIndex].radius * 0.64, radius * 1.95, radius * 4.1);
+          const radius = fiber.kind === "wiki" ? 1.55 : fiber.kind === "folder" ? 0.58 : 0.44;
+          const sourceRadius = clamp(source.radius * 0.24, radius * 1.35, radius * 2.7);
+          const targetRadius = clamp(this.nodes[fiber.targetIndex].radius * 0.24, radius * 1.35, radius * 2.7);
           this.fiberTubes?.setCurve(
             tubeSlot,
             this.tmpVecA,
@@ -1345,6 +1414,7 @@ class SynapseEngine {
     const cameraMoving = Math.abs(this.thetaTarget - this.theta) > 0.00035
       || Math.abs(this.phiTarget - this.phi) > 0.00035
       || Math.abs(this.cameraRadiusTarget - this.cameraRadius) > 0.04;
+    this.updatePointerLighting(delta, cameraMoving);
     if (cameraMoving) {
       this.clearHover();
       this.labelLayer.style.visibility = "hidden";

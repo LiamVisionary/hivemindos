@@ -7,6 +7,7 @@ type BrainFiberTubeOptions = {
   along?: number;
   around?: number;
   shell?: number;
+  terminalGlow?: number;
 };
 
 const VERTEX = /* glsl */ `
@@ -21,8 +22,8 @@ const VERTEX = /* glsl */ `
   void main() {
     vColor = color;
     vStrength = aStrength;
-    vTerminal = pow(abs(aAlong * 2.0 - 1.0), 1.55);
-    float shellProfile = mix(0.48, 1.0, vTerminal);
+    vTerminal = pow(abs(aAlong * 2.0 - 1.0), 1.8);
+    float shellProfile = mix(0.62, 1.0, vTerminal);
     vec4 world = modelMatrix * vec4(position + normal * uShell * shellProfile, 1.0);
     vNormal = normalize(mat3(modelMatrix) * normal);
     vView = normalize(cameraPosition - world.xyz);
@@ -34,6 +35,7 @@ const FRAGMENT = /* glsl */ `
   uniform float uLight;
   uniform float uOpacity;
   uniform float uGlowLayer;
+  uniform float uTerminalGlow;
   varying vec3 vColor;
   varying vec3 vNormal;
   varying vec3 vView;
@@ -41,15 +43,17 @@ const FRAGMENT = /* glsl */ `
   varying float vStrength;
   void main() {
     float facing = abs(dot(normalize(vNormal), normalize(vView)));
-    float body = pow(facing, 0.48);
-    float rim = pow(1.0 - facing, 1.35);
-    vec3 emissive = mix(vColor * 0.82, vec3(0.86, 0.95, 1.0), 0.34 + body * 0.3 + vTerminal * 0.16);
-    vec3 lightBody = mix(vColor * 0.76, vColor * 1.12, body);
+    float body = pow(facing, 0.62);
+    float rim = pow(1.0 - facing, 1.7);
+    float terminalLight = vTerminal * uTerminalGlow;
+    vec3 emissive = mix(vColor * 0.92, vec3(0.72, 0.9, 1.0), 0.1 + body * 0.2 + terminalLight * 0.08);
+    vec3 lightBody = mix(vColor * 0.82, vColor * 1.14, body);
     vec3 coreColor = mix(emissive, lightBody, uLight);
-    float coreAlpha = uOpacity * mix(0.68 + body * 0.32, 0.76 + body * 0.24, uLight) * (1.0 + vTerminal * 0.28);
-    vec3 glowColor = mix(vColor, vec3(0.72, 0.9, 1.0), 0.34);
-    float glowAlpha = uOpacity * (0.045 + rim * 0.13) * (0.72 + vTerminal * 0.62) * (1.0 - uLight);
-    vec3 col = mix(coreColor, glowColor, uGlowLayer) * mix(1.0, 1.22, 1.0 - uLight);
+    float membrane = 0.48 + body * 0.52;
+    float coreAlpha = uOpacity * mix(membrane, 0.72 + body * 0.28, uLight) * (0.86 + terminalLight * 0.3);
+    vec3 glowColor = mix(vColor, vec3(0.45, 0.72, 1.0), 0.18);
+    float glowAlpha = uOpacity * (0.025 + rim * 0.1) * (0.7 + terminalLight * 0.48) * (1.0 - uLight);
+    vec3 col = mix(coreColor, glowColor, uGlowLayer) * mix(1.0, 1.48, 1.0 - uLight);
     float alpha = mix(coreAlpha, glowAlpha, uGlowLayer) * vStrength;
     gl_FragColor = vec4(col, alpha);
   }
@@ -122,6 +126,7 @@ export class BrainFiberTubes {
         uLight: { value: light ? 1 : 0 },
         uOpacity: { value: light ? 0.14 : 0.36 },
         uShell: { value: 0 },
+        uTerminalGlow: { value: options.terminalGlow ?? 0.55 },
       },
       vertexShader: VERTEX,
       fragmentShader: FRAGMENT,
@@ -216,11 +221,11 @@ export class BrainFiberTubes {
       this.binormal.crossVectors(this.tangent, this.side).normalize();
       // Neural processes flare organically where they merge into each soma,
       // then taper through the inter-cell span instead of reading as wire.
-      const smoothStart = Math.min(1, t / 0.4);
-      const smoothEnd = Math.min(1, (1 - t) / 0.4);
+      const smoothStart = Math.min(1, t / 0.24);
+      const smoothEnd = Math.min(1, (1 - t) / 0.24);
       const startBlend = 1 - smoothStart * smoothStart * (3 - 2 * smoothStart);
       const endBlend = 1 - smoothEnd * smoothEnd * (3 - 2 * smoothEnd);
-      const middleRadius = radius * (0.43 + 0.07 * Math.sin(Math.PI * t * 3 + slot * 1.71));
+      const middleRadius = radius * (0.9 + 0.08 * Math.sin(Math.PI * t * 3 + slot * 1.71));
       const localRadius = middleRadius
         + (startRadius - middleRadius) * startBlend
         + (endRadius - middleRadius) * endBlend;

@@ -453,7 +453,7 @@ export type SkillBrowserSkill = {
   audience?: string;
 };
 
-export type SkillBrowserView = "catalog" | "installed" | "packs" | "audit" | "write" | "fusion";
+export type SkillBrowserView = "catalog" | "bankr" | "installed" | "packs" | "audit" | "write" | "fusion";
 
 export type SkillBrowserAttachmentTarget = {
   selectedSlugs: string[];
@@ -1091,7 +1091,7 @@ export type MiroSharkSurfaceView = "x" | "reddit" | "polymarket" | "timeline";
 
 export type MiroSharkWorkspaceMode = "new" | "run";
 
-export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "trade" | "vault" | "integrations" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "messaging" | "chat" | "more" | "env" | "my-apps" | "phone" | "aeon" | "fusion" | "governance" | "cloud" | "compute" | "podcast";
+export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "trade" | "vault" | "integrations" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "messaging" | "chat" | "more" | "env" | "my-apps" | "mini-apps" | "phone" | "aeon" | "fusion" | "governance" | "cloud" | "compute" | "podcast";
 
 export type WorkView = Extract<DashboardView, "kanban" | "scheduler" | "swarm" | "history">;
 

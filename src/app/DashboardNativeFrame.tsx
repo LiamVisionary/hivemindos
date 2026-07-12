@@ -37,6 +37,7 @@ const DASHBOARD_FRAME_ROUTE_LABELS: Record<string, string> = {
   more: "More",
   env: "Env",
   "my-apps": "Apps & Services",
+  "mini-apps": "HivemindOS Mini Apps",
   phone: "Phone",
   aeon: "Aeon",
   fusion: "Hive Fusion",

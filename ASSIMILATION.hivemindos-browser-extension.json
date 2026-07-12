@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-07-12T18:48:30.290269+00:00",
+  "request": "can you build this for HivemindOS? https://github.com/abundantbeing/hermes-browser-extension",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "abundantbeing/hermes-browser-extension",
+      "source_path": "extension/content.js",
+      "target_path": "browser-extension/content.js",
+      "reuse_type": "adapted_code",
+      "note": "read-only page, selection, metadata, and secret-redaction extractor"
+    },
+    {
+      "source_repo": "abundantbeing/hermes-browser-extension",
+      "source_path": "extension/lib/browser-context-protocol.mjs",
+      "target_path": "browser-extension/lib/context.mjs",
+      "reuse_type": "adapted_code",
+      "note": "restricted destinations, privacy-safe tabs, and untrusted context protocol"
+    },
+    {
+      "source_repo": "abundantbeing/hermes-browser-extension",
+      "source_path": "extension/lib/commands.mjs",
+      "target_path": "browser-extension/lib/commands.mjs",
+      "reuse_type": "adapted_code",
+      "note": "browser quick-command prompts"
+    },
+    {
+      "source_repo": "abundantbeing/hermes-browser-extension",
+      "source_path": "manifest.json",
+      "target_path": "browser-extension/manifest.json",
+      "reuse_type": "config_adapted",
+      "note": "Manifest V3 side-panel permissions and packaging"
+    },
+    {
+      "source_repo": "abundantbeing/hermes-browser-extension",
+      "source_path": "tests/browser-context-protocol.test.mjs",
+      "target_path": "scripts/test-browser-extension.mjs",
+      "reuse_type": "test_adapted",
+      "note": "privacy, prompt-boundary, profile-leakage, and build contracts"
+    }
+  ]
+}

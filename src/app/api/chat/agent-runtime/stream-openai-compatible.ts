@@ -7,6 +7,7 @@ import { RUNTIME_STREAM_EVENT_TYPES } from "@/lib/services/runtime-stream-events
 import { summarizeUsePodResponseHeaders } from "@/lib/services/usepod";
 import { interpretVeniceError, isVeniceProfile, summarizeVeniceResponseHeaders } from "@/lib/services/venice";
 import { isBankrAdaptiveModel, isBankrLlmProfile, resolveAdaptiveBankrLlmModels } from "@/lib/services/bankr-llm";
+import { resolveVerifiedComputeRoute } from "@/lib/services/wallet/verified-compute";
 import {
   bankrActionToolDefinition,
   BANKR_ACTION_TOOL_NAME,
@@ -495,6 +496,7 @@ export async function streamOpenAICompatibleRuntime(
       return false;
     }
   };
+  let verifiedComputeActive = false;
   for (const routeAttempt of routeAttempts) {
     const candidateModel = routeAttempt.model;
     model = candidateModel;
@@ -506,7 +508,19 @@ export async function streamOpenAICompatibleRuntime(
       chatPath: routeAttempt.chatPath,
       token: routeAttempt.token ?? runtimeProfile.token,
     };
-    const candidateUrl = buildOpenAICompatibleUrl(candidateProfile);
+    // Opt-in verified compute: BYOK cloud attempts reroute through the compute
+    // gateway so the usage earns official Honey (the gateway mints server-side;
+    // recordChatHoney below is skipped to avoid a duplicate local record).
+    // Local runtimes never match and always go direct.
+    const verifiedComputeRoute = await resolveVerifiedComputeRoute({
+      provider: candidateProfile.provider,
+      token: candidateProfile.token,
+      gatewayUrl: candidateProfile.gatewayUrl,
+      agentId: candidateProfile.id,
+      agentName: candidateProfile.name,
+    }).catch(() => null);
+    verifiedComputeActive = Boolean(verifiedComputeRoute);
+    const candidateUrl = verifiedComputeRoute?.url ?? buildOpenAICompatibleUrl(candidateProfile);
     attemptedModels.push(`${routeAttempt.provider}/${candidateModel}`);
     const modelMessages = modelMessagesFor(candidateProfile, candidateModel);
     const cacheHints = openAICompatibleInferenceCacheHints({
@@ -523,6 +537,7 @@ export async function streamOpenAICompatibleRuntime(
       ...providerHeaders,
       ...cacheHints.headers,
       ...(routeAttempt.headers ?? {}),
+      ...(verifiedComputeRoute?.headers ?? {}),
     };
     if (semanticVideoIntentCandidate(intentText) && !semanticVideoClassified) {
       semanticVideoClassified = true;
@@ -837,7 +852,7 @@ export async function streamOpenAICompatibleRuntime(
         ? { content: "", thinking: "" }
         : routeChannelMarkupText(outputCheck.text);
       const chunk = routed.content;
-      const event = outputCheck.verdict === "block" ? null : await recordChatHoney(profile, userText, chunk, honeyLedgerEnabled);
+      const event = outputCheck.verdict === "block" ? null : await recordChatHoney(profile, userText, chunk, honeyLedgerEnabled && !verifiedComputeActive);
       if (outputCheck.verdict === "block") {
         await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible response blocked", outputCheck.reason ?? "Response blocked by security policy").catch(() => undefined);
         await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
@@ -869,7 +884,7 @@ export async function streamOpenAICompatibleRuntime(
       ? { content: "", thinking: "" }
       : routeChannelMarkupText(outputCheck.text || (contentHasLeakedToolCallMarker(rawChunk) ? "" : JSON.stringify(json)));
     const chunk = routed.content;
-    const event = outputCheck.verdict === "block" ? null : await recordChatHoney(profile, userText, chunk, honeyLedgerEnabled);
+    const event = outputCheck.verdict === "block" ? null : await recordChatHoney(profile, userText, chunk, honeyLedgerEnabled && !verifiedComputeActive);
     if (outputCheck.verdict === "block") {
       await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible response blocked", outputCheck.reason ?? "Response blocked by security policy").catch(() => undefined);
       await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
@@ -1454,7 +1469,7 @@ export async function streamOpenAICompatibleRuntime(
             queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Adaptive quality flag", `${reliabilityKey}: ${quality.reason}`));
           }
         }
-        const event = await recordChatHoney(profile, userText, fullText, honeyLedgerEnabled);
+        const event = await recordChatHoney(profile, userText, fullText, honeyLedgerEnabled && !verifiedComputeActive);
         if (event) controller.enqueue(encoder.encode(ssePayload({ honey: event })));
         if (responseBilling) {
           const billing = responseBilling;

@@ -345,6 +345,7 @@ export function viewIcon(view: DashboardView) {
   if (view === "more") return <Layers3 aria-hidden="true" />;
   if (view === "env") return <KeyRound aria-hidden="true" />;
   if (view === "my-apps") return <AppWindow aria-hidden="true" />;
+  if (view === "mini-apps") return <Layers3 aria-hidden="true" />;
   if (view === "phone") return <PhoneCall aria-hidden="true" />;
   if (view === "aeon") return <Bot aria-hidden="true" />;
   if (view === "fusion") return <Sparkles aria-hidden="true" />;

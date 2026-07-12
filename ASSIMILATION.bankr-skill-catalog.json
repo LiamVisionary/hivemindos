@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-07-12T18:28:50.315652+00:00",
+  "request": "Add an in-app Bankr skills catalogue with details modal and install actions",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "bankr.bot",
+      "source_path": "assets/index-BmvhiWGY.js",
+      "target_path": "src/lib/services/bankr-skills.ts",
+      "reuse_type": "adapted_code",
+      "note": "Live catalogue, installed-list, and import request contracts"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "src/features/dashboard/views/chat/SkillBrowserModal.tsx",
+      "target_path": "src/features/dashboard/views/chat/skill-browser/BankrSkillsCatalog.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Existing skill modal, card, search, and confirmation interaction patterns"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "src/lib/services/bankr-llm.ts",
+      "target_path": "src/lib/services/bankr-skills.ts",
+      "reuse_type": "adapted_code",
+      "note": "Canonical Bankr credential resolution"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "src/lib/utils/api-response.ts",
+      "target_path": "src/app/api/bankr/skills/route.ts",
+      "reuse_type": "adapted_code",
+      "note": "Canonical API response envelopes"
+    }
+  ]
+}

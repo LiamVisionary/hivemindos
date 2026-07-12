@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-07-12T19:14:39.595975+00:00",
+  "request": "In our integrations route can we have an easy way to install this please?",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "hivemind-os-local",
+      "source_path": "src/features/integrations/ConnectionsPanel.tsx",
+      "target_path": "src/features/integrations/BrowserExtensionInstallCard.tsx",
+      "reuse_type": "style_adapted",
+      "note": "Connections hierarchy and animated loading treatment"
+    },
+    {
+      "source_repo": "hivemind-os-local",
+      "source_path": "src/features/dashboard/views/chat/ApplicationGenerationCard.tsx",
+      "target_path": "src/features/integrations/BrowserExtensionInstallCard.tsx",
+      "reuse_type": "adapted_code",
+      "note": "nativeOrFetch reveal-in-folder action"
+    },
+    {
+      "source_repo": "hivemind-os-local",
+      "source_path": "src/lib/services/system-browsers.ts",
+      "target_path": "src/lib/services/system-browsers.ts",
+      "reuse_type": "adapted_code",
+      "note": "detected-browser launch matrix extended for allowlisted extension pages"
+    },
+    {
+      "source_repo": "hivemind-os-local",
+      "source_path": "scripts/tauri-build.mjs",
+      "target_path": "scripts/tauri-build.mjs",
+      "reuse_type": "config_adapted",
+      "note": "embedded resource staging and fingerprint contract"
+    },
+    {
+      "source_repo": "hivemind-os-local",
+      "source_path": "browser-extension/manifest.json",
+      "target_path": "src/lib/services/browser-extension-install.ts",
+      "reuse_type": "config_adapted",
+      "note": "validated loadable package contract and stable managed destination"
+    }
+  ]
+}

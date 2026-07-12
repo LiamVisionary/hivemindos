@@ -64,6 +64,34 @@ for (const document of [investor, sequence, honey, staking]) {
 }
 assert.match(honey, /Honey is not automatically convertible to HIVE/);
 assert.match(staking, /not a yield farm/i);
+
+// Stake-tiered member usage pricing is consumption pricing. App-specific HIVE
+// policies remain separate from staking, and the public ledger distinguishes
+// confirmed purchases, separate burn receipts, and current execution status.
+assert.match(staking, /## Member Usage Pricing/);
+assert.match(staking, /consumption pricing, not value distribution/);
+assert.match(staking, /Staking does not grant treasury control, company voting rights, admin access, guaranteed listing placement, or a financial return\./);
+assert.match(honey, /Staking tier can set member usage pricing/);
+assert.match(paidFeatures, /member usage pricing/i);
+assert.match(staking, /Hive Research HIVE Policy And Receipt/);
+assert.match(staking, /No stake \| \$0\.99 \| Standard price/);
+assert.match(staking, /Visionary \| \$0\.39 cost-backed floor \| 61%/);
+assert.match(staking, /50% of positive realized paid-analysis margin/i);
+assert.match(staking, /Execution is currently disabled/i);
+assert.match(honey, /50% of positive realized paid-analysis margin/i);
+assert.match(honey, /Automatic execution is currently disabled/i);
+assert.match(honey, /no burn is counted until a separate burn transaction is confirmed/i);
+assert.match(honey, /Treasury HIVE and burn activity are not distributed to stakers/i);
+assert.match(honey, /## Tokenomics Policy Changes/);
+assert.match(honey, /not an immutable promise/i);
+assert.match(honey, /Completed on-chain actions and historical receipts remain part of the public record/i);
+assert.match(staking, /Material changes are published prospectively with an effective date/i);
+assert.match(investor, /Tokenomics policies may change, pause, or end/i);
+assert.match(paidFeatures, /Hive Research HIVE policy/);
+assert.match(investor, /does not claim that one universal split automatically governs every dollar/i);
+assert.match(investor, /Agent Buyback Ledger/);
+assert.match(staking, /\| Tier \| Price per analysis \| Discount \|/);
+assert.doesNotMatch(honey, /discount/i);
 assert.doesNotMatch(stakingConfig, /rewardWeight|rewardBoostLabel|seasonal rewards/i);
 await assert.rejects(access(new URL("src/app/api/hive/stake/rewards/route.ts", root)));
 await assert.rejects(access(new URL("src/lib/services/hive-staking-rewards.ts", root)));

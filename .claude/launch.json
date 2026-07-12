@@ -209,6 +209,20 @@
       "port": 4100
     },
     {
+      "name": "hivemindos-website-static-export",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "4141",
+        "--bind",
+        "127.0.0.1",
+        "--directory",
+        "/Users/liam/Documents/code/projects/hivemindos-website/out"
+      ],
+      "port": 4141
+    },
+    {
       "name": "hivemindos-verify-5046-throwaway-auth",
       "runtimeExecutable": "/usr/bin/env",
       "runtimeArgs": [

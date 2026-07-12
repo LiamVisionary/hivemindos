@@ -2009,6 +2009,7 @@ export function useDashboardDerivedState(props: any) {
           activeView === "env" ||
           activeView === "integrations" ||
           activeView === "my-apps" ||
+          activeView === "mini-apps" ||
           activeView === "phone" ||
           activeView === "aeon" ||
           activeView === "fusion" ||
@@ -2048,6 +2049,7 @@ export function useDashboardDerivedState(props: any) {
         label: "Apps & Services",
         title: "What runs and what agents can call",
       },
+      "mini-apps": { label: "HivemindOS Mini Apps", title: "Focused tools powered by the hive" },
       phone: { label: "Phone", title: "What your phone calls about" },
       aeon: { label: "Aeon", title: "What runs unattended" },
       fusion: { label: "Hive Fusion", title: "What the hive can create" },

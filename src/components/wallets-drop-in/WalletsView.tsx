@@ -12,6 +12,7 @@ import { ClawBankStatusCard } from "./ClawBankStatusCard";
 import { CreateImportWalletModal } from "./CreateImportWalletModal";
 import { WalletRewardsActions, type WalletRewardsActionsSlice } from "./WalletRewardsActions";
 import { WalletSecretExportSheet } from "./WalletSecretExportSheet";
+import { HoneyTelegramLinkCard, type HoneyTelegramLinkAction } from "./HoneyTelegramLinkCard";
 
 type WalletSendResult = {
   ok?: boolean;
@@ -61,6 +62,7 @@ export type WalletDropInActions = WalletRewardsActionsSlice & {
   onImportWallet?: (input: WalletModalActionInput) => Promise<unknown>;
   onOpenRailDocs?: (rail: { baseUrl?: string }) => unknown;
   onToggleHoneyLedger?: (enabled: boolean) => unknown;
+  onLinkTelegramHoney?: HoneyTelegramLinkAction;
   onMessageHive?: (text: string) => unknown;
 };
 const {
@@ -2005,9 +2007,16 @@ function HoneyPanel({ actions }: { actions?: WalletDropInActions }) {
           <WStat value={"-" + s.redeemed.toLocaleString()} label="redeemed + converted" />
           <WStat value={fmtTokens(s.billed)} label="tokens billed" />
           <WStat value={s.holders} label="earning agents" />
+          {(s.potentialHoney ?? 0) > 0 ? <WStat value={(s.potentialHoney ?? 0).toLocaleString()} label="potential · local models" tone="var(--fg-2)" /> : null}
         </div>
+        {(s.potentialHoney ?? 0) > 0 && s.potentialMessage ? (
+          <p style={{ fontSize: 12, color: "var(--fg-3)", lineHeight: 1.55, margin: 0, maxWidth: 620 }}>
+            {s.potentialMessage}
+          </p>
+        ) : null}
       </div>
       <WalletRewardsActions actions={actions} />
+      <HoneyTelegramLinkCard onLink={actions?.onLinkTelegramHoney} />
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.55fr) minmax(280px,1fr)", gap: 16, alignItems: "start" }}>
         <div className="fb-card" style={{ overflow: "hidden", opacity: on ? 1 : 0.5 }}>
           <div style={{ padding: "15px 18px 12px", borderBottom: "1px solid var(--line)", fontSize: 12.5, fontWeight: 500 }}>Recent ledger</div>

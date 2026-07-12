@@ -137,7 +137,17 @@ export type WalletHoneyEvent = { id: string; agent: string; kind: string; note: 
 
 export type WalletHoneyAgentRow = { id: string; name: string; runtime: string; honey: number; billed: number; state: string };
 
-export type WalletHoneySummary = { balance: number; earned: number; redeemed: number; billed: number; holders: number };
+export type WalletHoneySummary = {
+  balance: number;
+  earned: number;
+  redeemed: number;
+  billed: number;
+  holders: number;
+  // Local-model usage recorded privately on this machine (not claimable):
+  // becomes official Honey only through verified compute or a TEE-attested runtime.
+  potentialHoney?: number;
+  potentialMessage?: string;
+};
 
 export type WalletBankrToken = { symbol: string; name?: string; amount?: number; usd?: number };
 

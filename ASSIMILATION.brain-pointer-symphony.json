@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-07-12T17:20:21.831491+00:00",
+  "request": "Add proximity-responsive multi-node lighting to the HivemindOS Hive Vault brain so moving the pointer creates an animated symphony across any number of nearby nodes",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "local/hivemind-os",
+      "source_path": "src/features/dashboard/views/BrainSynapseCanvas.tsx",
+      "target_path": "src/features/dashboard/views/BrainSynapseCanvas.tsx",
+      "reuse_type": "adapted_code",
+      "note": "extended existing pointer projection and instanced-node update path into an uncapped screen-space field"
+    },
+    {
+      "source_repo": "local/hivemind-os",
+      "source_path": "src/features/dashboard/views/brain-synapse-gpu.ts",
+      "target_path": "src/features/dashboard/views/brain-synapse-gpu.ts",
+      "reuse_type": "adapted_code",
+      "note": "extended existing soma and halo shaders with inverse-size per-instance proximity energy so small notes ignite clearly"
+    },
+    {
+      "source_repo": "local/hivemind-os",
+      "source_path": "src/components/fleet/orbital-graph.tsx",
+      "target_path": "src/features/dashboard/views/brain-pointer-proximity.ts",
+      "reuse_type": "translated_code",
+      "note": "translated stable absolute-time glow modulation into frame-rate-independent pointer attack and release"
+    },
+    {
+      "source_repo": "local/hivemind-os",
+      "source_path": "scripts/test-brain-graph-semantics.mjs",
+      "target_path": "scripts/test-brain-pointer-proximity.mjs",
+      "reuse_type": "test_adapted",
+      "note": "reused the focused deterministic Node regression pattern for proximity invariants"
+    }
+  ]
+}

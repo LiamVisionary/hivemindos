@@ -5,13 +5,15 @@ import { dirname, join } from "node:path";
 
 import type { HoneyTreasuryConfig } from "@/lib/types/agent-wallet";
 import { calculateHoneyForTokens, createDefaultHoneyTreasuryConfig } from "@/lib/utils/agent-wallet";
+import { applyHoneyMultiplier } from "@/lib/config/hive-staking";
 import { honeyComputeGatewayUrl, honeyLedgerUrl, isHoneyEconomyEnabled } from "@/lib/services/wallet/honey-economy-config";
+import { getLocalHoneyMultiplierBpsCached } from "@/lib/services/wallet/honey-staking-multiplier";
 
 export type HoneyLedgerEvent = {
   id: string;
   agentId: string;
   agentName?: string;
-  kind: "usage" | "exchange" | "managed-credit" | "managed-spend";
+  kind: "usage" | "exchange" | "managed-credit" | "managed-spend" | "contribution";
   source:
     | "chat"
     | "kanban-chat"
@@ -24,10 +26,15 @@ export type HoneyLedgerEvent = {
     | "managed-agent-stripe"
     | "managed-agent-x402"
     | "managed-agent-bankr"
-    | "managed-agent-wallet";
+    | "managed-agent-wallet"
+    | "community";
+  category?: string;
   tokensUsed: number;
   honeyDelta: number;
   hiveDelta: number;
+  // Stake-tier reward multiplier applied at mint (basis points, 10000 = 1.00x).
+  // Absent on pre-multiplier events and non-usage kinds.
+  multiplierBps?: number;
   createdAt: string;
 };
 
@@ -95,14 +102,48 @@ export async function readHoneyLedger(): Promise<HoneyLedger> {
     if (remoteLedger) return remoteLedger;
   }
 
-  const fallback = createDefaultLedger();
+  return readLocalHoneyLedgerFile();
+}
+
+// The private on-machine ledger, regardless of the official-economy flag. Used
+// for the potential-Honey summary once the official (hosted) ledger is live.
+export async function readLocalHoneyLedgerFile(): Promise<HoneyLedger> {
   try {
     const raw = await readFile(LEDGER_PATH, "utf8");
     const parsed = JSON.parse(raw) as Partial<HoneyLedger>;
     return normalizeLedger(parsed);
   } catch {
-    return fallback;
+    return createDefaultLedger();
   }
+}
+
+export type PotentialHoneySummary = {
+  honey: number;
+  tokensTracked: number;
+  message: string;
+};
+
+// Shown wherever potential Honey is displayed. Local usage is private by
+// design (never reported), so it can only become OFFICIAL Honey through a
+// verifiable path.
+export const POTENTIAL_HONEY_CLAIM_MESSAGE =
+  "Potential Honey is tracked privately on this machine for local-model usage. Earn official Honey for the same work by routing cloud models through verified compute, or by running a TEE-attested runtime.";
+
+// What the local ledger has recorded that never reached the official ledger.
+// Informational only: potential Honey is not claimable, transferable, or
+// importable — the official ledger mints exclusively from verified usage.
+export async function localPotentialHoneySummary(): Promise<PotentialHoneySummary> {
+  const ledger = await readLocalHoneyLedgerFile();
+  const tokensTracked = Object.values(ledger.agentTokenUsage).reduce((total, tokens) => total + Math.max(0, Number(tokens) || 0), 0);
+  const honey = Object.values(ledger.agentTokenUsage).reduce(
+    (total, tokens) => total + calculateHoneyForTokens(Math.max(0, Number(tokens) || 0), ledger.honeyPerThousandTokens),
+    0,
+  );
+  return {
+    honey: Math.round(honey * 1_000_000) / 1_000_000,
+    tokensTracked,
+    message: POTENTIAL_HONEY_CLAIM_MESSAGE,
+  };
 }
 
 export async function recordHoneyUsage(input: {
@@ -154,7 +195,10 @@ export async function recordHoneyUsage(input: {
     }
   }
 
-  const targetHoneyDelta = calculateHoneyForTokens(tokensUsed, ledger.honeyPerThousandTokens);
+  // Local mint honors the same stake-tier multiplier semantics as the official
+  // gateway path: cap-limited tokens stay absolute, Honey per token scales.
+  const multiplierBps = getLocalHoneyMultiplierBpsCached();
+  const targetHoneyDelta = applyHoneyMultiplier(calculateHoneyForTokens(tokensUsed, ledger.honeyPerThousandTokens), multiplierBps);
   const remainingPool = Math.max(0, ledger.rewardPoolHive - ledger.rewardPoolEmittedHive);
   const honeyDelta = Math.min(targetHoneyDelta, remainingPool);
   const event: HoneyLedgerEvent = {
@@ -166,6 +210,7 @@ export async function recordHoneyUsage(input: {
     tokensUsed,
     honeyDelta,
     hiveDelta: 0,
+    multiplierBps,
     createdAt: new Date().toISOString(),
   };
 
@@ -220,7 +265,8 @@ export async function recordObservedHoneyUsage(input: {
   }
 
   if (ledger.events.some((event) => event.id === input.eventId)) return { ledger, event: null };
-  const targetHoneyDelta = calculateHoneyForTokens(tokensUsed, ledger.honeyPerThousandTokens);
+  const multiplierBps = getLocalHoneyMultiplierBpsCached();
+  const targetHoneyDelta = applyHoneyMultiplier(calculateHoneyForTokens(tokensUsed, ledger.honeyPerThousandTokens), multiplierBps);
   const remainingPool = Math.max(0, ledger.rewardPoolHive - ledger.rewardPoolEmittedHive);
   const honeyDelta = Math.min(targetHoneyDelta, remainingPool);
   const event: HoneyLedgerEvent = {
@@ -232,6 +278,7 @@ export async function recordObservedHoneyUsage(input: {
     tokensUsed,
     honeyDelta,
     hiveDelta: 0,
+    multiplierBps,
     createdAt: input.timestamp ?? new Date().toISOString(),
   };
 

@@ -25,16 +25,21 @@ export type TgMessageEntity = {
 
 export type TgMessage = {
   message_id: number;
+  date?: number;
   from?: TgUser;
   chat: TgChat;
   text?: string;
+  caption?: string;
   entities?: TgMessageEntity[];
+  caption_entities?: TgMessageEntity[];
   reply_to_message?: TgMessage;
 };
 
 export type TgUpdate = {
   update_id: number;
   message?: TgMessage;
+  edited_message?: TgMessage;
+  chat_member?: TgChatMemberUpdated;
 };
 
 export type TgInlineKeyboardButton = { text: string; url: string };
@@ -43,6 +48,34 @@ export type TgChatMember = {
   status: "creator" | "administrator" | "member" | "restricted" | "left" | "kicked";
   user: TgUser;
   tag?: string;
+  can_delete_messages?: boolean;
+  can_restrict_members?: boolean;
+  can_invite_users?: boolean;
+};
+
+export type TgChatMemberUpdated = {
+  chat: TgChat;
+  from: TgUser;
+  date: number;
+  old_chat_member: TgChatMember;
+  new_chat_member: TgChatMember;
+};
+
+export type TgChatPermissions = {
+  can_send_messages: boolean;
+  can_send_audios: boolean;
+  can_send_documents: boolean;
+  can_send_photos: boolean;
+  can_send_videos: boolean;
+  can_send_video_notes: boolean;
+  can_send_voice_notes: boolean;
+  can_send_polls: boolean;
+  can_send_other_messages: boolean;
+  can_add_web_page_previews: boolean;
+  can_change_info: boolean;
+  can_invite_users: boolean;
+  can_pin_messages: boolean;
+  can_manage_topics: boolean;
 };
 
 export class TelegramApiError extends Error {
@@ -88,7 +121,7 @@ export class TelegramBotApi {
   getUpdates(offset: number | undefined, timeoutSec = 25): Promise<TgUpdate[]> {
     return this.call<TgUpdate[]>(
       "getUpdates",
-      { offset, timeout: timeoutSec, allowed_updates: ["message"] },
+      { offset, timeout: timeoutSec, allowed_updates: ["message", "edited_message", "chat_member"] },
       (timeoutSec + 15) * 1000,
     );
   }
@@ -205,6 +238,59 @@ export class TelegramBotApi {
 
   getChatMember(params: { chatId: number | string; userId: number | string }): Promise<TgChatMember> {
     return this.call<TgChatMember>("getChatMember", { chat_id: params.chatId, user_id: params.userId });
+  }
+
+  deleteMessage(params: { chatId: number | string; messageId: number }): Promise<boolean> {
+    return this.call<boolean>("deleteMessage", { chat_id: params.chatId, message_id: params.messageId });
+  }
+
+  copyMessage(params: {
+    chatId: number | string;
+    fromChatId: number | string;
+    messageId: number;
+  }): Promise<{ message_id: number }> {
+    return this.call<{ message_id: number }>("copyMessage", {
+      chat_id: params.chatId,
+      from_chat_id: params.fromChatId,
+      message_id: params.messageId,
+    });
+  }
+
+  restrictChatMember(params: {
+    chatId: number | string;
+    userId: number | string;
+    permissions: TgChatPermissions;
+    untilDate?: number;
+  }): Promise<boolean> {
+    return this.call<boolean>("restrictChatMember", {
+      chat_id: params.chatId,
+      user_id: params.userId,
+      permissions: params.permissions,
+      use_independent_chat_permissions: true,
+      until_date: params.untilDate,
+    });
+  }
+
+  banChatMember(params: {
+    chatId: number | string;
+    userId: number | string;
+    untilDate?: number;
+    revokeMessages?: boolean;
+  }): Promise<boolean> {
+    return this.call<boolean>("banChatMember", {
+      chat_id: params.chatId,
+      user_id: params.userId,
+      until_date: params.untilDate,
+      revoke_messages: params.revokeMessages ?? true,
+    });
+  }
+
+  unbanChatMember(params: { chatId: number | string; userId: number | string; onlyIfBanned?: boolean }): Promise<boolean> {
+    return this.call<boolean>("unbanChatMember", {
+      chat_id: params.chatId,
+      user_id: params.userId,
+      only_if_banned: params.onlyIfBanned ?? true,
+    });
   }
 
   setChatMemberTag(params: { chatId: number | string; userId: number | string; tag: string }): Promise<boolean> {

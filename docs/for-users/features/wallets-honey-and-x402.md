@@ -64,6 +64,14 @@ The ledger keeps contribution and purchased service value separate:
 
 Customer-facing billing shows ordinary dollar-denominated managed usage. This prevents a funding/cash-out loop and avoids presenting service credit as a token reward.
 
+### Earn Honey From Telegram Contributions
+
+Communities can publish bounded missions in Telegram for documentation, code, testing, support, tutorials, research, moderation, and similar useful work. Each mission states its Honey amount and required evidence. A contributor submits evidence, and an independent community reviewer must approve it before Honey is recorded. GitHub pull-request missions also wait for confirmation that the pull request merged.
+
+To connect an account, first link and verify a wallet in HivemindOS. Then send `/linkhoney` to the community bot and enter its private one-time code in Wallets → Honey. `/missions` lists available work, `/honey` shows a private contribution summary, and `/honeyboard` shows the current seasonal leaderboard.
+
+Telegram messages, reactions, invites, and raw activity do not earn Honey. Honey remains a non-transferable contribution record; it is separate from HIVE tips, bounty escrow, and purchased Hivemind Cloud credits.
+
 Hosted model messages are **metered**: each successful message is charged the **upstream provider price × 1.25 (a 25% markup)**, with a **$0.001 minimum per message**. A short message on a cheap model hits the `$0.001` floor; a longer message on a premium model costs proportionally more.
 
 | Hosted model message | Charge |

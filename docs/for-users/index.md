@@ -59,6 +59,11 @@ Everything you need to run HivemindOS as a local-first agent fleet control room.
     <a href="integrations/">Open integrations</a>
   </section>
   <section class="docCard">
+    <h3>Browser Extension</h3>
+    <p>Ask configured HivemindOS agents about the active page, selected text, and open tabs from a privacy-guarded Chromium side panel.</p>
+    <a href="browser-extension.html">Install the browser extension</a>
+  </section>
+  <section class="docCard">
     <h3>Packaged Skills</h3>
     <p>HivemindOS Hive skills, third-party packaged skills, auto-install policy, and optional skill boundaries.</p>
     <a href="packaged-skills/">Open packaged skills</a>

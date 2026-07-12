@@ -52,6 +52,7 @@ child.stderr.on("data", (chunk) => {
 try {
   await waitForServer(baseUrl);
   await assertSensitiveRoutesRejectAnonymous(baseUrl);
+  await assertBrowserExtensionPreflight(baseUrl);
   await assertPaidSellerRoutesReachPaymentAuth(baseUrl);
   const cookie = await openSession(baseUrl);
   await assertWalletApprovalFlow(baseUrl, cookie);
@@ -66,6 +67,9 @@ async function assertSensitiveRoutesRejectAnonymous(url) {
     // so it fails if the proxy file ever stops loading (root middleware.ts
     // was silently ignored under the src/ layout until 2026-07-03).
     { path: "/api/notifications?limit=1", init: { method: "GET" } },
+    // Proxy bypasses this route for credential-less CORS preflight, so its own
+    // explicit auth check must still reject an anonymous data request.
+    { path: "/api/browser-extension", init: { method: "GET" } },
     { path: "/api/env", init: { method: "GET" } },
     { path: "/api/env", init: jsonPost({ sourceId: "shared", key: "TEST_SECRET", value: "nope" }) },
     { path: "/api/wallet/create", init: jsonPost({ agentId: "queen-bee" }) },
@@ -80,6 +84,22 @@ async function assertSensitiveRoutesRejectAnonymous(url) {
     const response = await fetch(`${url}${probe.path}`, probe.init);
     assert.equal(response.status, 401, `${probe.init.method} ${probe.path} should require dashboard auth`);
   }
+}
+
+async function assertBrowserExtensionPreflight(url) {
+  const origin = `chrome-extension://${"a".repeat(32)}`;
+  const response = await fetch(`${url}/api/browser-extension`, {
+    method: "OPTIONS",
+    headers: {
+      Origin: origin,
+      "Access-Control-Request-Method": "POST",
+      "Access-Control-Request-Headers": "authorization,content-type",
+    },
+  });
+  assert.equal(response.status, 204);
+  assert.equal(response.headers.get("access-control-allow-origin"), origin);
+  assert.match(response.headers.get("access-control-allow-methods") ?? "", /POST/);
+  assert.match(response.headers.get("access-control-allow-headers") ?? "", /Authorization/);
 }
 
 // External buyers authenticate by PAYING (x402 402-challenge handshake or

@@ -78,7 +78,7 @@ export function DashboardHeader(props: DashboardHeaderProps) {
     .filter((item): item is (typeof navItems)[number] => Boolean(item));
   const isActiveRoute = (id: DashboardView) => id === activeView
     || (id === "kanban" && isWorkView(activeView))
-    || (id === "more" && (activeView === "maintenance" || activeView === "sessions" || activeView === "tools" || activeView === "memory" || activeView === "files" || activeView === "notifications" || activeView === "env" || activeView === "integrations" || activeView === "my-apps" || activeView === "phone" || activeView === "aeon" || activeView === "fusion" || activeView === "governance"));
+    || (id === "more" && (activeView === "maintenance" || activeView === "sessions" || activeView === "tools" || activeView === "memory" || activeView === "files" || activeView === "notifications" || activeView === "env" || activeView === "integrations" || activeView === "my-apps" || activeView === "mini-apps" || activeView === "phone" || activeView === "aeon" || activeView === "fusion" || activeView === "governance"));
   const activeNavLabel = navItems.find((item) => item.id === activeView)?.label
     ?? primaryNavItems.find((item) => isActiveRoute(item.id))?.label
     ?? activeHeader.title;

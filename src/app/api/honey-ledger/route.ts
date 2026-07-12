@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { booleanEnv } from "@/lib/config/env";
 import { observeHoneyUsage } from "@/lib/services/wallet/honey-usage-observer";
-import { claimHoneyToBankrHive, exchangeHoneyForHive, readHoneyLedger, returnHiveToHoney } from "@/lib/services/wallet/honey-ledger";
+import { claimHoneyToBankrHive, exchangeHoneyForHive, localPotentialHoneySummary, readHoneyLedger, returnHiveToHoney } from "@/lib/services/wallet/honey-ledger";
+import { honeyWalletLinkStatus, linkHoneyWallet } from "@/lib/services/wallet/honey-wallet-link";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,12 +60,33 @@ async function observeCachedUsage() {
 }
 
 export async function GET() {
-  const ledger = await readCachedLedger();
-  return NextResponse.json({ ok: true, ledger });
+  const [ledger, potential] = await Promise.all([
+    readCachedLedger(),
+    // Local-model usage tracked privately on this machine; claimable officially
+    // only through verified compute or a TEE-attested runtime.
+    localPotentialHoneySummary().catch(() => null),
+  ]);
+  return NextResponse.json({ ok: true, ledger, ...(potential ? { potential } : {}) });
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json().catch(() => ({})) as { action?: string; agentId?: string; recipientAddress?: string };
+  const body = await request.json().catch(() => ({})) as { action?: string; agentId?: string; recipientAddress?: string; address?: string };
+  // Stake-tier multiplier wallet link: the gateway verifies the wallet
+  // signature server-side; locally this records the link for the local ledger.
+  if (body.action === "link-wallet") {
+    try {
+      const result = await linkHoneyWallet(body.address ?? "");
+      return NextResponse.json({ ok: true, ...result });
+    } catch (error) {
+      return NextResponse.json({
+        ok: false,
+        error: error instanceof Error ? error.message : "Honey wallet link failed.",
+      }, { status: 400 });
+    }
+  }
+  if (body.action === "wallet-link-status") {
+    return NextResponse.json({ ok: true, ...(await honeyWalletLinkStatus()) });
+  }
   if (["exchange", "claim-bankr-hive"].includes(body.action || "") && !booleanEnv("HIVEMINDOS_HONEY_HIVE_CONVERSION_ENABLED")) {
     return NextResponse.json({
       ok: false,

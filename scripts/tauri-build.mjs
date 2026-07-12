@@ -177,6 +177,7 @@ function resolveBuildHeapMb(requestedHeapMb, memoryLimitMb) {
 }
 
 const embeddedFingerprintInputs = [
+  "browser-extension",
   "components.json",
   "next.config.ts",
   "package.json",
@@ -194,6 +195,7 @@ const skippedFingerprintDirs = new Set([
   ".next-tauri",
   ".next-tauri-build",
   ".next-tauri-static-build",
+  "browser-extension/dist",
   "node_modules",
   "out",
   "src-tauri/target",
@@ -427,6 +429,7 @@ function packagedEmbeddedResourcesAreReusable(fingerprint) {
 
   if (
     !existsSync(join(serverResourceDir, "server.js")) ||
+    !existsSync(join(serverResourceDir, "public", "browser-extension", "manifest.json")) ||
     !existsSync(join(nodeResourceDir, nodeBinaryName))
   ) {
     return false;
@@ -1244,6 +1247,21 @@ function copyEmbeddedRuntimeScripts() {
   }
 }
 
+function stageBrowserExtensionResources() {
+  run(process.execPath, ["scripts/build-browser-extension.mjs"]);
+  const source = join(projectRoot, "browser-extension", "dist");
+  for (const requiredFile of ["manifest.json", "background.js", "content.js", "sidepanel.html"]) {
+    if (!existsSync(join(source, requiredFile))) {
+      throw new Error(`Browser extension build is missing ${requiredFile}.`);
+    }
+  }
+  const destination = join(serverResourceDir, "public", "browser-extension");
+  rmSync(destination, { force: true, recursive: true });
+  mkdirSync(dirname(destination), { recursive: true });
+  cpSync(source, destination, { recursive: true, dereference: true });
+  console.log("[embedded] staged the HivemindOS browser extension");
+}
+
 function copyEmbeddedNextResources(fingerprint) {
   rmSync(serverResourceDir, { force: true, recursive: true });
   rmSync(nodeResourceDir, { force: true, recursive: true });
@@ -1261,6 +1279,7 @@ function copyEmbeddedNextResources(fingerprint) {
   if (existsSync(publicDir)) {
     cpSync(publicDir, join(serverResourceDir, "public"), { recursive: true });
   }
+  stageBrowserExtensionResources();
 
   scrubPackagedResources();
   materializeResourceSymlinks(serverResourceDir);
