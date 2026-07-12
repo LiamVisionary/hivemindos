@@ -12,7 +12,7 @@
  * `sendMessage` reads out of the form's FormData.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { CHAT_PERMISSION_MODE_OPTIONS, normalizeChatPermissionMode } from "@/lib/types/chat-permissions";
 import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
@@ -134,6 +134,11 @@ export type ExchangeComposerProps = {
 
 const EFFORT_LEVELS = CHAT_REASONING_EFFORT_OPTIONS;
 
+// The message field rests at ~3 lines and auto-grows to fit longer drafts, up
+// to 3x that height, before it starts scrolling internally.
+const COMPOSER_MIN_HEIGHT = 91;
+const COMPOSER_MAX_HEIGHT = COMPOSER_MIN_HEIGHT * 3;
+
 export function ExchangeComposer(props: ExchangeComposerProps) {
   const {
     value, onChange, placeholder, busy, canSend, onSubmit,
@@ -159,6 +164,38 @@ export function ExchangeComposer(props: ExchangeComposerProps) {
   });
   const effortTrackRef = useRef<HTMLDivElement | null>(null);
   const effortDraggingRef = useRef(false);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Auto-grow the message field to fit its content, capped at COMPOSER_MAX_HEIGHT
+  // (3x the resting height), then scroll. Reset to "auto" first so the field
+  // also shrinks back as the draft is deleted.
+  const autosizeTextarea = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const contentHeight = el.scrollHeight;
+    el.style.height = `${Math.min(Math.max(contentHeight, COMPOSER_MIN_HEIGHT), COMPOSER_MAX_HEIGHT)}px`;
+    el.style.overflowY = contentHeight > COMPOSER_MAX_HEIGHT ? "auto" : "hidden";
+  }, []);
+
+  useEffect(() => { autosizeTextarea(); }, [value, autosizeTextarea]);
+
+  // Re-fit when the field's width changes (details pane toggles, window resize)
+  // so a long draft isn't clipped between keystrokes. Guarded on width so our
+  // own height writes don't feed back into the observer.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    let lastWidth = el.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (el.clientWidth !== lastWidth) {
+        lastWidth = el.clientWidth;
+        autosizeTextarea();
+      }
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [autosizeTextarea]);
 
   // One outside-pointer listener for every popover in the composer.
   useEffect(() => {
@@ -298,13 +335,14 @@ export function ExchangeComposer(props: ExchangeComposerProps) {
       ) : null}
 
       <textarea
+        ref={textareaRef}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         aria-label="Message composer"
         spellCheck
-        style={{ flex: 1, minHeight: 66, maxHeight: 170, border: 0, outline: 0, background: "transparent", color: "var(--fg)", fontFamily: "var(--f-body)", fontSize: 14, lineHeight: 1.6, resize: "none", padding: "16px 18px 8px" }}
+        style={{ minHeight: COMPOSER_MIN_HEIGHT, maxHeight: COMPOSER_MAX_HEIGHT, border: 0, outline: 0, background: "transparent", color: "var(--fg)", fontFamily: "var(--f-body)", fontSize: 14, lineHeight: 1.6, resize: "none", padding: "16px 18px 8px" }}
       />
 
       <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "2px 12px 11px" }}>

@@ -75,8 +75,6 @@
   border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
   border-radius: 999px;
   background: color-mix(in srgb, var(--brain-panel, #14161c) 28%, transparent);
-  backdrop-filter: blur(20px) saturate(1.15);
-  -webkit-backdrop-filter: blur(20px) saturate(1.15);
   padding: 0 13px;
 }
 
@@ -111,8 +109,6 @@
   border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
   border-radius: 999px;
   background: color-mix(in srgb, var(--brain-panel, #14161c) 26%, transparent);
-  backdrop-filter: blur(20px) saturate(1.15);
-  -webkit-backdrop-filter: blur(20px) saturate(1.15);
   color: var(--brain-fg-3, #76726a);
   cursor: pointer;
   transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease;
@@ -160,8 +156,6 @@
   border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
   border-radius: 999px;
   background: color-mix(in srgb, var(--brain-panel, #14161c) 24%, transparent);
-  backdrop-filter: blur(20px) saturate(1.15);
-  -webkit-backdrop-filter: blur(20px) saturate(1.15);
   color: var(--brain-fg-3, #76726a);
   cursor: pointer;
   font-size: 11.5px;
@@ -321,8 +315,6 @@
   border-right: 0;
   border-radius: 14px 0 0 14px;
   background: color-mix(in srgb, var(--brain-panel, #14161c) 38%, transparent);
-  backdrop-filter: blur(28px) saturate(1.3);
-  -webkit-backdrop-filter: blur(28px) saturate(1.3);
   box-shadow: 0 18px 54px rgba(0, 0, 0, 0.38);
   padding: 13px 14px 15px;
   scrollbar-gutter: stable;
@@ -398,8 +390,6 @@
   border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
   border-radius: 999px;
   background: color-mix(in srgb, var(--brain-panel, #14161c) 28%, transparent);
-  backdrop-filter: blur(20px) saturate(1.15);
-  -webkit-backdrop-filter: blur(20px) saturate(1.15);
   color: var(--brain-fg-2, #a7a39a);
   cursor: pointer;
   font-size: 12px;
@@ -428,7 +418,6 @@
   border-radius: 8px;
   text-align: center;
   pointer-events: none;
-  will-change: transform, opacity;
 }
 
 .nodeLabel strong {
@@ -458,8 +447,6 @@
 .nodeLabel[data-state="selected"] {
   border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
   background: color-mix(in srgb, var(--brain-bg, #0c0d11) 34%, transparent);
-  backdrop-filter: blur(14px) saturate(1.2);
-  -webkit-backdrop-filter: blur(14px) saturate(1.2);
   padding: 5px 9px;
 }
 

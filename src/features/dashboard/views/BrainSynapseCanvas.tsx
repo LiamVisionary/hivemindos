@@ -1134,7 +1134,7 @@ class SynapseEngine {
         / Math.max(this.tmpVecB.copy(this.camera.position).distanceTo(this.tmpVecA.set(node.x, node.y, node.z)), 1);
       label.root.style.display = "block";
       label.root.style.opacity = opacity.toFixed(3);
-      label.root.style.transform = `translate3d(${x.toFixed(1)}px, ${(y + offset + 6).toFixed(1)}px, 0) translateX(-50%)`;
+      label.root.style.transform = `translate(${x.toFixed(1)}px, ${(y + offset + 6).toFixed(1)}px) translateX(-50%)`;
     });
   }
 
@@ -1378,9 +1378,14 @@ class SynapseEngine {
     const cameraMoving = Math.abs(this.thetaTarget - this.theta) > 0.00035
       || Math.abs(this.phiTarget - this.phi) > 0.00035
       || Math.abs(this.cameraRadiusTarget - this.cameraRadius) > 0.04;
-    if (cameraMoving) this.clearHover();
-    else this.updateHover();
-    this.updateLabels();
+    if (cameraMoving) {
+      this.clearHover();
+      this.labelLayer.style.visibility = "hidden";
+    } else {
+      this.labelLayer.style.visibility = "visible";
+      this.updateHover();
+      this.updateLabels();
+    }
     // Always render through the composer: the OutputPass owns the linear→sRGB
     // conversion for scene AND clear color in both themes (bloom toggles off
     // in hive-light but the color pipeline stays identical).

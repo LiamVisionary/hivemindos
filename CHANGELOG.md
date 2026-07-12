@@ -5,6 +5,14 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-07-12 16:13:16 +0800 - Brain motion stays smooth and Chat drafts grow with their content
+  - Status: Uncommitted
+  - Areas changed: Brain graph glass/filter cost, synapse label motion behavior, and the Chat exchange composer textarea.
+  - Summary: Brain graph labels and controls avoid expensive backdrop filters, node labels hide while the camera is moving instead of being repositioned every frame, and the Chat composer starts at roughly three lines then grows to three times that height before scrolling.
+  - Verification: Whole-project TypeScript, focused zero-warning ESLint, and `git diff --check` pass.
+  - Rollback: Restore the removed Brain backdrop filters and per-frame label transforms, then remove the textarea auto-height effect and constants.
+  - Intended commit message: `ui: smooth brain motion and auto-grow chat drafts`
+
 - 2026-07-12 15:45:40 +0800 - Hivemind Cloud becomes the single focused revenue engine
   - Status: Pushed in `45f3216a5`; private services pushed in `b1ec90b` and the five affected Cloudflare Workers redeployed.
   - Areas changed: investor and user monetization documentation; server-authored Cloud plan catalog and dashboard presentation; managed-credit terminology; source-specific wallet/trading fee policy; external company-revenue recording; Honey/HIVE conversion gates; HIVE staking; focused commercial-contract tests; and the private hosted control-plane, paid-agent gateway, compute gateway, and Honey ledger in the sibling `hivemind-cloud-services` checkout.
