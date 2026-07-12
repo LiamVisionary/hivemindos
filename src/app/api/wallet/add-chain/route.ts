@@ -6,7 +6,7 @@ import { writeWalletRecord } from "@/lib/services/obsidian/wallet-ledger";
 import { refreshWalletVaultBackup } from "@/lib/services/wallet/wallet-vault-backup";
 import { createDefaultAgentWallet } from "@/lib/utils/agent-wallet";
 import { errorJson, okJson } from "@/lib/utils/api-response";
-import { RECOVERY_PHRASE_PERSONAL_WALLET_SUFFIX, chainLabelForNetwork } from "@/lib/utils/personal-wallet-grouping";
+import { RECOVERY_PHRASE_PERSONAL_WALLET_SUFFIX, chainLabelForNetwork, recoveryPhraseAccountIndexFromWalletId } from "@/lib/utils/personal-wallet-grouping";
 import { requireAuth } from "@/lib/utils/server-auth";
 
 export const runtime = "nodejs";
@@ -59,7 +59,11 @@ export async function POST(request: NextRequest) {
       ?? sources.find((candidate) => candidate.info.network.startsWith("eip155:") === targetIsEvm)
       ?? sources[0];
 
-    const derived = deriveWalletForAdditionalChain(network, { network: source.info.network, secret: source.secret });
+    const derived = deriveWalletForAdditionalChain(network, {
+      network: source.info.network,
+      secret: source.secret,
+      accountIndex: recoveryPhraseAccountIndexFromWalletId(root),
+    });
     const walletName = body.name?.trim() || source.info.name || "My wallet";
     const newAgentId = `${root}:${derived.network.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "")}`;
     const info = await storeWalletSecret({

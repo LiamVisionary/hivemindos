@@ -285,6 +285,9 @@ export function useQueenBeeRealtime(
   const onFailedRef = React.useRef(onFailed);
   const onDriveDashboardRef = React.useRef(onDriveDashboard);
   const screenContextRef = React.useRef(screenContext);
+  // Set by the live session effect; lets the overlay's camera loop push webcam
+  // frames into the running realtime conversation as silent image context.
+  const sendVideoFrameRef = React.useRef<((base64Jpeg: string) => void) | null>(null);
 
   React.useEffect(() => {
     onFailedRef.current = onFailed;
@@ -385,6 +388,19 @@ export function useQueenBeeRealtime(
           ? { type: "response.create", response: { instructions } }
           : { type: "response.create" },
       );
+    };
+    // Push a webcam frame into the conversation as silent visual context. We do
+    // NOT trigger a response here — the frame simply becomes recent context the
+    // model can reference when the user next speaks ("what am I holding?").
+    sendVideoFrameRef.current = (base64Jpeg: string) => {
+      send({
+        type: "conversation.item.create",
+        item: {
+          type: "message",
+          role: "user",
+          content: [{ type: "input_image", image_url: `data:image/jpeg;base64,${base64Jpeg}` }],
+        },
+      });
     };
 
     let sessionInfo: RealtimeSessionInfo = {};
@@ -838,5 +854,9 @@ export function useQueenBeeRealtime(
     };
   }, [active, openingLine]);
 
-  return { phase, error, turns, speechDetected, failed, micAnalyserRef, sessionSerial };
+  const sendVideoFrame = React.useCallback((base64Jpeg: string) => {
+    if (base64Jpeg) sendVideoFrameRef.current?.(base64Jpeg);
+  }, []);
+
+  return { phase, error, turns, speechDetected, failed, micAnalyserRef, sessionSerial, sendVideoFrame };
 }

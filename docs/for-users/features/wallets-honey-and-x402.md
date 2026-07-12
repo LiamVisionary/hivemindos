@@ -6,13 +6,13 @@ title: "Wallets, Tokens, Honey, HIVE, And x402"
 
 Wallets give agents controlled money rails.
 
-They can hold capped budgets, token balances, prepaid inference deposits, and paid-request paths. Honey and HIVE sit on top as optional reward and compute loops.
+They can hold capped budgets, token balances, prepaid inference deposits, and paid-request paths. Honey is a contribution record, Hivemind Cloud credits fund managed services, and HIVE remains an optional ecosystem token.
 
-For the ecosystem-level plan behind Honey, HIVE, premium services, treasury reserves, and buybacks, see [Honey, HIVE, And Treasury](../../for-investors/honey-hive-treasury.html).
+For the separation between Honey, Hivemind Cloud credits, HIVE, and treasury policy, see [Honey, HIVE, And Treasury](../../for-investors/honey-hive-treasury.html).
 
 <figure class="imagePlate">
-  <img src="../../assets/img/diagrams/wallet-token-rails.jpg" alt="Generated wallet and token rails infographic with separate lanes for x402 paid APIs, UsePod prepaid runtime deposits, and Honey to Bankr HIVE claims.">
-  <figcaption>Wallets, UsePod prepaid runtime deposits, and Honey/Bankr HIVE claims are separate rails. They have different trust and funding rules.</figcaption>
+  <img src="../../assets/img/diagrams/wallet-token-rails.jpg" alt="Wallet and token rails infographic with separate lanes for paid APIs, prepaid runtime deposits, Honey, and HIVE.">
+  <figcaption>Wallets, prepaid runtime deposits, Honey contribution records, and HIVE are separate rails with different trust and funding rules.</figcaption>
 </figure>
 
 ## How It Works
@@ -52,17 +52,17 @@ For the ecosystem-level plan behind Honey, HIVE, premium services, treasury rese
 - Register local agent identity records with wallet, ENS/ERC-8004 metadata, service endpoint, x402 endpoint, capabilities, and proofs.
 - Run offline crypto risk checks over wallet policy, agent identity, required env-key presence, endpoint exposure, repo controls, DNS controls, and multisig posture.
 - Observe runtime usage and submit privacy-safe Honey metadata.
-- Hold spend-only managed HONEY credits for no-BYOK managed agents.
-- Exchange Honey for ledger HIVE, return legacy ledger HIVE back to Honey, or claim Bankr HIVE to a Base receiving address when the Bankr treasury rail is configured.
+- Hold spend-only Hivemind Cloud credits for no-BYOK managed agents.
+- Return legacy ledger-only HIVE balances to Honey. Honey-to-HIVE exchange and claim paths remain closed unless a separately authorized hosted policy enables them.
 
-## Managed HONEY Credits
+## Honey And Hivemind Cloud Credits
 
-Managed agents use HONEY as the visible credit unit, but the ledger keeps two separate buckets:
+The ledger keeps contribution and purchased service value separate:
 
-- Reward Honey: earned from trusted or observed contribution usage and claimable to HIVE when the reward treasury is configured.
-- Managed HONEY credits: funded service credits for HivemindOS-managed agents. These are spend-only and are not claimable to HIVE.
+- Honey: earned from reviewed, trusted, or bounded observed contribution. It is non-transferable and not automatically convertible to HIVE.
+- Hivemind Cloud credits: funded service credits for HivemindOS-managed agents. These are spend-only, nontransferable, and nonredeemable.
 
-This prevents a funding/cash-out loop while still giving users one simple credit language.
+Customer-facing billing shows ordinary dollar-denominated managed usage. This prevents a funding/cash-out loop and avoids presenting service credit as a token reward.
 
 Hosted model messages are **metered**: each successful message is charged the **upstream provider price × 1.25 (a 25% markup)**, with a **$0.001 minimum per message**. A short message on a cheap model hits the `$0.001` floor; a longer message on a premium model costs proportionally more.
 
@@ -72,17 +72,17 @@ Hosted model messages are **metered**: each successful message is charged the **
 | Cheap model, short reply | ~`$0.001` (floor) |
 | Premium (Opus-class) model, ~400 output tokens | ~`$0.038` (≈`$0.030` upstream × 1.25) |
 
-Prepaid HONEY/credit accounts are debited the actual metered usage after each message. A raw x402 caller pays the estimated maximum for the request up front, bounded by `max_tokens`. The flat `$0.001` is the floor and the fixed price for per-call tool routes — it is not the price of a typical model message.
+Prepaid cloud-credit accounts are debited the actual metered usage after each message. A raw x402 caller pays the estimated maximum for the request up front, bounded by `max_tokens`. The flat `$0.001` is the floor and the fixed price for per-call tool routes — it is not the price of a typical model message.
 
 The no-API-key flow is:
 
 1. The app quotes a managed run through `/api/managed-agent/billing` using a server-side pricing matrix and markup.
-2. The user funds managed HONEY through a verified rail such as Stripe Checkout, Stripe crypto payments, x402, Bankr, an agent wallet, or HIVE.
+2. The user funds Hivemind Cloud credits through a verified supported payment rail.
 3. Funding credits are written only after provider-side settlement proof, such as a verified Stripe webhook.
 4. Managed compute uses HivemindOS-held provider keys server-side.
 5. The trusted runtime submits a signed debit to the Honey ledger based on verified usage.
 
-The official ledger rejects browser-spoofed credits. Its `/managed-billing/events` endpoint requires either a HONEY billing HMAC signature or the operator admin token, dedupes idempotency keys, and refuses debits when the managed HONEY balance is insufficient.
+The official ledger rejects browser-spoofed credits. Its `/managed-billing/events` endpoint requires either a billing HMAC signature or the operator admin token, dedupes idempotency keys, and refuses debits when the managed cloud-credit balance is insufficient.
 
 ## Hosted Media Generation
 
@@ -145,13 +145,13 @@ For multiple products, use `HIVEMINDOS_PAID_AGENT_CATALOG_JSON` or `HIVEMINDOS_P
 
 Do not package an official `payTo` address into the downloadable app as the source of truth. A local app install is controlled by the user: they can edit env, config, app bundles, and local routes. If official revenue or feature access depends on the payment, the app must call a hosted HivemindOS resource server, or a HivemindOS backend must verify the x402 settlement against the expected official `payTo`, network, amount, and resource before granting server-side value. Local `self-hosted` seller mode is for operators who intentionally want to sell their own agent endpoint and receive payment to their own address.
 
-If a user changes `HIVEMINDOS_OFFICIAL_PAID_AGENT_BASE_URL`, they are changing which hosted service their app talks to; that must not grant official HivemindOS cloud entitlement by itself. Official entitlements, quotas, receipts, HONEY credits, HIVE funding credits, and enterprise usage state must be issued by HivemindOS-controlled backend services after verified settlement.
+If a user changes `HIVEMINDOS_OFFICIAL_PAID_AGENT_BASE_URL`, they are changing which hosted service their app talks to; that must not grant official HivemindOS cloud entitlement by itself. Official entitlements, quotas, receipts, Hivemind Cloud credits, HIVE-funded payment credits, and enterprise usage state must be issued by HivemindOS-controlled backend services after verified settlement.
 
 Optional accounting:
 
-- `HIVEMINDOS_PAID_AGENT_REWARD_HONEY_ENABLED=true` lets the trusted runtime submit reward-Honey usage observations for the agent's response.
-- `HIVEMINDOS_PAID_AGENT_MIRROR_MANAGED_HONEY=true` mirrors each settled x402 call into managed HONEY as an equal credit/debit pair for operator reporting.
-- HIVE can fund Bankr LLM credits or managed HONEY through the managed-agent billing rail; x402 remains the external per-call charge.
+- `HIVEMINDOS_PAID_AGENT_REWARD_HONEY_ENABLED=true` is a legacy-named compatibility flag that lets the trusted runtime submit signed Honey contribution observations for the agent's response.
+- `HIVEMINDOS_PAID_AGENT_MIRROR_MANAGED_HONEY=true` is a legacy-named compatibility flag that mirrors each settled x402 call into the internal Cloud-credit ledger as an equal credit/debit pair for operator reporting.
+- x402 remains an external per-call payment rail; Hivemind Cloud credits remain ordinary spend-only managed-service value.
 
 ## Wallet-Paid HivemindOS Models
 
@@ -176,27 +176,28 @@ The downloadable app cannot be the authority for official HivemindOS revenue: us
 
 - `HIVEMINDOS_PLATFORM_FEE_POLICY_URL=https://hivemindos-paid-agent-gateway.hivemindos.workers.dev/api/platform-fees/config`
 
-That hosted policy returns public terms such as fee basis points, minimum fee, supported rails, and recipient addresses. The current official local-wallet platform fee is **1% with a $0.01 minimum**. When a hosted policy has a recipient for the acting wallet network, supported actions quote the fee before confirmation, then collect it as a separate stablecoin transfer after the main action succeeds. Today that includes local stablecoin sends, local DEX swaps, xStocks trades, Robinhood Chain Stock Token trades, live Alpaca stock orders, Robinhood Agentic brokerage orders, ordinary public x402 payments, Veil private transfers, and Veil private x402 payments. Fees use USDC on Base/Solana and USDG on Robinhood Chain. A Robinhood Agentic order therefore needs an acting HivemindOS wallet on a supported fee network in addition to the connected brokerage account. Paper trades, read-only checks, and x402 calls where no payment is required do not charge a platform fee. HivemindOS-hosted MiroShark proxy runs are also excluded from the separate local platform-fee transfer because their **$1.20 USDC** x402 price already includes the expected **$0.20** HivemindOS cut. The fee transfer, when one applies, is recorded in wallet activity as a platform-fee item so it remains visible to the user.
+That hosted policy returns source-specific rates, minimums, caps, supported rails, and recipients. Ordinary wallet transfers and externally sourced company revenue carry **no HivemindOS platform fee**. Current default rates are 0.20% for DEX swaps, 0.10% for supported live stock/tokenized-stock execution, and 0.50% for ordinary paid x402 or private-payment execution, with a $0.01 minimum and $10 maximum where a fee applies. The fee is quoted before confirmation and collected as a separate stablecoin transfer only after the main action succeeds. Paper trades, read-only checks, rejected actions, and no-payment x402 calls do not charge a platform fee. HivemindOS-hosted MiroShark proxy runs also exclude the separate local fee because their retail price already includes the hosted-service spread.
 
-Zero Human Company revenue-share events are recorded through `/api/company-revenue` and shown in the company Treasury tab. They use the same visible collection rail, but the default company revenue share is **2% with a $0.01 minimum**. Recording revenue alone updates the company revenue ledger; collecting the HivemindOS share requires explicit confirmation and a selected company agent wallet. External revenue that never reports into HivemindOS, a hosted HivemindOS billing service, or a verifiable settlement rail is not automatically charged by the local app.
+Zero Human Company revenue events are recorded through `/api/company-revenue` and shown in the company Treasury tab. Revenue earned outside HivemindOS is not charged. A future marketplace-sourced or HivemindOS-billed sale may include a disclosed fee from the hosted settlement policy, but local revenue recording itself does not create a company claim.
 
 Simple examples:
 
 | Action | Amount | Fee |
 | --- | ---: | ---: |
-| Wallet send, swap, stock, x402, or private payment | `$0.25` | `$0.01` minimum |
-| Wallet send, swap, stock, x402, or private payment | `$100` | `$1.00` |
+| Ordinary wallet send | `$100` | `$0.00` |
+| DEX swap | `$100` | `$0.20` |
+| Supported live stock or tokenized-stock execution | `$100` | `$0.10` |
+| Paid x402 or private-payment execution | `$100` | `$0.50` |
 | HivemindOS-hosted MiroShark x402 simulation | `$1.20` | No extra local platform fee; `$0.20` proxy spread is included |
-| Recorded Zero Human Company revenue | `$100` | `$2.00` |
-| Recorded Zero Human Company revenue | `$1,000` | `$20.00` |
+| Externally sourced Zero Human Company revenue | `$1,000` | `$0.00` |
 
 Self-hosted operators can override the hosted policy for their own install by setting `HIVEMINDOS_TRADING_PLATFORM_FEES_ENABLED` or local recipient variables. Fee-rate defaults alone keep using the hosted official policy:
 
 - `HIVEMINDOS_TRADING_PLATFORM_FEES_ENABLED=true`
-- `HIVEMINDOS_TRADING_PLATFORM_FEE_BPS=100` for a 1% fee
-- `HIVEMINDOS_COMPANY_REVENUE_SHARE_BPS=200` for a 2% Zero Human Company revenue share
+- `HIVEMINDOS_TRADING_PLATFORM_FEE_BPS=25` for a 0.25% uniform self-hosted fallback
+- `HIVEMINDOS_COMPANY_REVENUE_SHARE_BPS=0` to keep external company revenue free
 - `HIVEMINDOS_TRADING_PLATFORM_MIN_FEE_USD=0.01` for a minimum fee
-- Optional: `HIVEMINDOS_TRADING_PLATFORM_MAX_FEE_USD=<max-fee>`
+- `HIVEMINDOS_PLATFORM_MAX_FEE_USD=10` for the default cap
 - `HIVEMINDOS_PLATFORM_FEE_RECIPIENT_EVM=<evm-address>` for Base and Robinhood Chain wallet sends, EVM DEX swaps, Robinhood Chain Stock Token swaps, live Alpaca and Robinhood Agentic fee collection, public x402, and Veil-backed private payments
 - `HIVEMINDOS_PLATFORM_FEE_RECIPIENT_SOLANA=<solana-address>` for Solana DEX, xStocks swaps, and Solana x402 payments
 
@@ -206,7 +207,7 @@ Runtime policy:
 
 - Recommended public runtime: `hivemind-os`, because it can route to local OpenAI-compatible models, Bankr LLM, Venice, UsePod, OpenRouter, and Hive Fusion while keeping provider keys server-side.
 - Allowed with curated profiles: `hermes` and `openclaw`, when the profile has a safe gateway and no unintended wallet/workspace tools.
-- Internal by default: `codex`, `claude-code`, `opencode`, `openhands`, `aider`, `aeon`, and `evo`. Use these as managed HONEY jobs with explicit workspace/task scope rather than public per-call chat.
+- Internal by default: `codex`, `claude-code`, `opencode`, `openhands`, `aider`, `aeon`, and `evo`. Use these as scoped managed jobs with explicit workspace/task limits rather than public per-call chat.
 
 Shared vault access and agent wallet tools are off unless the paid-agent profile explicitly includes them. Do not place secrets, private wallet material, or local workspace paths in public paid-agent config.
 
@@ -297,7 +298,7 @@ Token-facing surfaces:
 - Base, Robinhood Chain, and Solana addresses are treated as operational agent wallets, not user custody wallets.
 - Robinhood Chain wallets can hold USDG, WETH, and official Stock Token contracts. Stock Token trades may still be blocked by upstream liquidity, eligibility, or legal restrictions; HivemindOS surfaces that block instead of routing around it.
 - UsePod deposit addresses are shown as prepaid inference token rails when the selected agent uses the UsePod provider.
-- Honey is tracked as usage-earned accounting. HIVE can be a ledger-only legacy balance or an actual Bankr transfer when the claim path is configured.
+- Honey is tracked as a non-transferable contribution record. HIVE may appear as a ledger-only legacy balance; new exchange and transfer paths remain closed unless a separately authorized conversion policy is enabled.
 - x402 uses token/payment policy around requests instead of giving runtimes unrestricted wallet access.
 
 ## Trade Tab
@@ -386,30 +387,25 @@ Wallet export is available for local-custody user wallets and agent wallets from
 
 ## Honey Paths
 
-Reward pool math:
-
-- Bankr Doppler launches use a 1.2% swap fee.
-- The creator receives 57% of that fee.
-- HivemindOS allocates 5% of the creator share to the official Honey/HIVE reward pool.
-- The pool therefore receives at most 0.0342% of trading volume value, and Honey grants are clipped by remaining pool capacity.
+Honey is a non-transferable contribution record. It is not cash, purchased Cloud credit, HIVE, company ownership, a revenue claim, or a promise of a future reward. Official conversion and claim routes fail closed unless a separately authorized hosted policy enables them.
 
 Local observation:
 
 - The dashboard reads supported runtime usage.
 - It submits capped metadata without prompts, responses, files, wallet keys, local paths, machine names, or Tailnet IPs.
 
-Trusted reward compute:
+Trusted usage measurement:
 
 - The official compute gateway exposes an OpenAI-compatible endpoint.
 - Requests are forwarded through Bankr/OpenRouter-compatible routing.
 - Provider usage is read server-side.
-- Receipts are signed and submitted to the official Honey ledger.
+- Receipts are signed and submitted to the official Honey ledger as reviewed contribution evidence.
 
-Claiming:
+Contribution policy:
 
 - `POST /api/honey-ledger` with `action: "observe"` samples supported runtime usage and records Honey once per event.
-- `action: "claim-bankr-hive"` transfers claimable HIVE through Bankr when `HIVE_TOKEN_ADDRESS` and `HONEY_REWARD_BANKR_API_KEY` are configured.
-- `action: "return-hive-to-honey"` moves old ledger-only HIVE balances back to Honey so the visible claim rail stays honest.
+- `action: "exchange"` and `action: "claim-bankr-hive"` return HTTP 403 by default. Both the app and hosted ledger fail closed unless an authorized Honey-to-HIVE conversion policy is enabled.
+- `action: "return-to-honey"` moves old ledger-only HIVE balances back to Honey.
 
 ## Main Code Paths
 

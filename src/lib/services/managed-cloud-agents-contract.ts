@@ -16,6 +16,18 @@ export type ManagedCloudPlan = {
   setupUsd: number;
 };
 
+export type HivemindCloudCommercialPlan = {
+  id: "community" | "cloud-pro" | "cloud-team" | "enterprise";
+  label: string;
+  audience: string;
+  monthlyUsd: number | null;
+  annualMinimumUsd: number | null;
+  includedMembers: number | null;
+  includedUsageUsd: number;
+  availability: "available" | "design-partner" | "contact-sales";
+  capabilities: string[];
+};
+
 export type ManagedCloudAccount = {
   id: string;
   ownerWallet: string;

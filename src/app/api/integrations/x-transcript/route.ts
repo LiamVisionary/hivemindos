@@ -26,8 +26,9 @@ export async function POST(request: NextRequest) {
   const unauthorized = await requireAuth(request);
   if (unauthorized) return unauthorized;
 
-  const body = await request.json().catch(() => ({})) as { action?: unknown; url?: unknown; summarize?: unknown };
+  const body = await request.json().catch(() => ({})) as { action?: unknown; url?: unknown; summarize?: unknown; threadId?: unknown };
   const url = typeof body.url === "string" ? body.url.trim() : "";
+  const threadId = typeof body.threadId === "string" ? body.threadId.trim().slice(0, 512) : "";
   if (!url) return errorJson("An X post URL is required.", 400);
   if (!looksLikeXPost(url)) return errorJson("That doesn't look like an X post link. Paste a link like https://x.com/user/status/123…", 400);
 
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
     if (body.action === "start") {
       const inspection = await inspectXTranscript(url);
       const job = startXTranscriptJob(
-        { request, url, summarize: body.summarize === true },
+        { request, url, summarize: body.summarize === true, threadId },
         inspection,
       );
       return okJson({ jobId: job.id, inspection, job: xTranscriptJobView(job) });

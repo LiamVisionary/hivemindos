@@ -62,13 +62,20 @@ export type CapabilityToolOutcome = {
   approvalRequired?: boolean;
 };
 
+function capabilityRuntimeDetail(outcome: CapabilityToolOutcome) {
+  if (!outcome.ok && /^Capability (?:surface|operation) must\b/i.test(outcome.fallbackText)) {
+    return "The agent produced an invalid capability request. Nothing was run.";
+  }
+  return outcome.target || outcome.fallbackText;
+}
+
 export function invokeHiveCapabilityRuntimeEvent(outcome: CapabilityToolOutcome) {
   return {
     type: "chat.tool.done",
     toolName: INVOKE_HIVE_CAPABILITY_TOOL_NAME,
     name: INVOKE_HIVE_CAPABILITY_TOOL_NAME,
     message: outcome.ok ? outcome.operation === "invoke" ? "Hive capability completed" : "Hive capability inspected" : outcome.approvalRequired ? "Hive capability approval required" : "Hive capability failed",
-    detail: outcome.target || outcome.fallbackText,
+    detail: capabilityRuntimeDetail(outcome),
     status: outcome.ok ? "completed" : outcome.approvalRequired ? "running" : "failed",
     operation: outcome.operation,
   };

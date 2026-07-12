@@ -57,7 +57,7 @@ async function runTranscript(input: RunTranscriptInput) {
   input.appendMessage(input.selectedAgent.id, assistantMessage, input.selectedStorageKey);
   input.appendPreviewMessages(input.selectedAgent.id, input.selectedChatLeafKey, [userMessage, assistantMessage]);
   try {
-    const started = await startXTranscriptJobRequest(input.url);
+    const started = await startXTranscriptJobRequest(input.url, input.selectedStorageKey);
     const inspectedCard: ChatTranscriptCard = {
       ...runningCard,
       jobId: started.jobId,

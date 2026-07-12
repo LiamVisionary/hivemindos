@@ -1,219 +1,100 @@
 ---
 title: Honey, HIVE, And Treasury
-description: Honey earning paths, HIVE claims, treasury strategy, buybacks, future burns, staking, and ecosystem incentives.
+description: The separation between contribution records, purchased cloud credits, optional token utility, and company treasury policy.
 ---
 
 # Honey, HIVE, And Treasury
 
-Honey is the contribution layer. HIVE is the ownership layer.
+HivemindOS separates three concepts that must not be presented as one balance.
 
-The core product stays free. Honey and HIVE are designed to reward participation and align the people building, using, and extending the ecosystem.
+| Layer | Purpose | What it is not |
+| --- | --- | --- |
+| Honey | A non-transferable record of reviewed ecosystem contribution | Cash, purchased credit, ownership, or promised token value |
+| Hivemind Cloud credits | Purchased, spend-only service value for managed infrastructure | An investment, reward token, or cash-equivalent wallet |
+| HIVE | An optional ecosystem token and payment rail where supported | Company equity, a required product toll, or a guaranteed claim on revenue |
 
 ## Honey
 
-Honey represents productive participation in the Hivemind ecosystem.
+Honey can record useful participation such as reviewed agent work, accepted open-source contributions, verified testing, documentation, or completed bounties.
 
-### Earn Honey Through Usage
+Honey should be earned only from bounded evidence. Raw model tokens, self-reported activity, or unobserved output do not by themselves prove productive contribution.
 
-The current usage-based system remains the foundation:
+Honey is not automatically convertible to HIVE. Official Honey-to-HIVE exchange and claim routes fail closed unless a separately authorized hosted policy enables conversion. The product must not describe an unavailable or unreviewed conversion as “ready to claim.”
 
-- Running agents.
-- Running swarms.
-- Using compute.
-- Using HivemindOS services.
+Any future redemption program requires, before launch:
 
-### Earn Honey Through Creation
+- a documented legal and tax review
+- a funded and bounded reward budget
+- published eligibility and expiry rules
+- anti-fraud and anti-sybil controls
+- server-authoritative settlement and audit records
+- clear language that does not promise appreciation, ownership, or company revenue
 
-Future additions may include:
+## Hivemind Cloud Credits
 
-- Publishing agents.
-- Publishing workflows.
-- Publishing swarms.
-- Creating marketplace content.
+Purchased service credits are operational billing instruments.
 
-### Earn Honey Through Contribution
+They may fund:
 
-Future additions may include:
+- managed agent runtime
+- hosted models and APIs
+- app publishing and dynamic execution
+- managed media and tools
+- other HivemindOS-operated services
 
-- Open-source contributions.
-- Bug fixes.
-- Documentation.
-- Tutorials.
-- Community support.
-
-### Earn Honey Through Growth
-
-Future additions may include:
-
-- Referrals.
-- Bringing new users.
-- Ecosystem promotion.
+They remain spend-only, nontransferable, nonredeemable for cash, server-recorded, and funded only from verified payment events. Customer-facing pricing should show ordinary dollar-denominated balances and usage rather than implying that cloud service credit is a token reward.
 
 ## HIVE
 
-HIVE represents ownership of the ecosystem.
+HIVE may support optional community identity, payments, staking-based access signals, marketplace settlement, or bounties where those capabilities are available and legally reviewed.
+
+HIVE is not required to:
+
+- run HivemindOS locally
+- buy ordinary Hivemind Cloud services
+- join a paid workspace
+- use enterprise features
+- bring a provider key
+
+HIVE should never be described as company ownership unless a legally valid instrument actually provides that ownership.
+
+## Treasury Policy
+
+Customer collections are not distributable cash.
 
 ```text
-Use HivemindOS
-  -> Earn Honey
-  -> Claim HIVE
+customer collections
+- provider and infrastructure cost
+- payment processing
+- refunds and chargebacks
+- taxes
+- support and operating cost
+- required reserves
+= cash available for an authorized allocation decision
 ```
 
-Honey measures contribution. HIVE represents the ownership and alignment layer that sits above that contribution.
+The operating company does not promise a fixed revenue split to token buybacks, staking returns, rewards, or liquidity support. A future allocation requires sufficient runway, board authorization, accounting treatment, and specialist legal review at that time.
 
-HIVE can also be used as a payment rail.
+Product, reliability, support, and customer acquisition take priority while the managed-service business is being validated.
 
-Payment utility can include:
+## Public Communication Rules
 
-- Buying marketplace workflows, agents, swarms, templates, or skills.
-- Paying for marketplace and managed-service usage when HIVE checkout is supported.
-- Buying lifetime access or subscriptions when a creator supports that model.
-- Funding managed HONEY credits or hosted services when supported.
-- Settling commissions when a workflow earns revenue for a user.
+Do say:
 
-This is separate from staking utility. Spending HIVE pays for a product or service. Staking HIVE unlocks discounts, status, trust, distribution, alpha access, curation rights, and governance signal.
+- Honey records reviewed contribution.
+- Cloud credits pay for managed services.
+- HIVE is optional ecosystem infrastructure.
+- Staking does not automatically produce yield.
 
-When users pay for eligible Hive Cloud, managed compute, managed HONEY credits, or marketplace services with HIVE, HivemindOS can offer a small checkout discount, such as 3-5%. That payment discount can stack with staking discounts up to a capped maximum, such as 30% of eligible platform margin, but should never reduce prices below direct infrastructure, provider, or payment-processing cost.
+Do not say:
 
-## Treasury
-
-A treasury accumulates value generated by the ecosystem.
-
-The treasury exists to strengthen HivemindOS long-term. Treasury funds may be used for:
-
-- Honey reward pools.
-- Seasonal HIVE reward pools for stakers.
-- Grants.
-- Hackathons.
-- Ecosystem incentives.
-- Marketing.
-- Liquidity support.
-- Partnerships.
-
-## Buybacks
-
-As premium services generate revenue:
-
-```text
-Revenue
-  -> Buybacks
-  -> Acquire HIVE
-```
-
-Buybacks create direct alignment:
-
-```text
-More users
-  -> More revenue
-  -> More HIVE demand
-```
-
-Buybacks should be described as revenue-backed momentum, not a demand floor. They can support the ecosystem while premium services generate revenue, but they are not guaranteed support and should not be blended with stake-lock when explaining token utility.
-
-Stake-lock and buybacks do different jobs:
-
-- Stake-lock removes HIVE from circulation while users want staking benefits.
-- Buybacks use revenue to acquire HIVE for the treasury when the business can support them.
-
-## Treasury Strategy
-
-Initial strategy:
-
-```text
-Buyback + Treasury
-```
-
-Acquired HIVE is primarily held by the treasury.
-
-Benefits:
-
-- Creates buy pressure.
-- Builds reserves.
-- Funds ecosystem growth.
-- Maintains flexibility.
-
-## Future Burning
-
-Burning is not a launch feature.
-
-Burning may be considered later if:
-
-- Revenue becomes substantial.
-- Treasury is healthy.
-- Ecosystem funding is secure.
-
-Priority order:
-
-1. Build product.
-2. Grow revenue.
-3. Build treasury.
-4. Buybacks.
-5. Consider burns.
-
-## Staking
-
-Staking should provide ecosystem benefits rather than simply printing more tokens. The base staking contract should stay simple and readable: users stake HIVE for tier status, then can request unstaking and withdraw after the visible cooldown.
-
-Potential future benefits:
-
-- Status tiers and HIVE profile badges.
-- Private opportunity rooms.
-- Visionary council access for the top tier.
-- Marketplace curation rights.
-- Bounty boost visibility and curator eligibility.
-- Marketplace fee discounts.
-- Hive Cloud and managed compute discounts.
-- Managed HONEY credit purchase discounts or bonuses.
-- Priority compute access.
-- Governance voting.
-- Premium features.
-- Higher Honey earning multipliers.
-- Early access to new functionality.
-
-The preferred future reward framing is seasonal and weighted, not isolated tier buckets:
-
-```text
-Stake higher. Earn stronger reward weight.
-```
-
-Every reward season, eligible HivemindOS revenue can fund one fixed HIVE reward pool. Stakers split that pool by time-weighted active stake, with higher tiers applying stronger reward weight. The display model sends up to `3.9375%` of eligible revenue into the staker reward pool:
-
-| Tier      | Reward weight | Boost vs Holder |
-| --------- | ------------: | --------------: |
-| Holder    |         1.00x |            Base |
-| Supporter |         1.10x |            +10% |
-| Builder   |         1.25x |            +25% |
-| Curator   |         1.45x |            +45% |
-| Operator  |         1.70x |            +70% |
-| Visionary |         2.00x |           +100% |
-| **Pool**  |              | **3.9375% / `$39,375` in HIVE rewards** |
-
-The seasonal reward rules are now part of the product plan: no pre-season staking requirement, a 7 active-day minimum, rewards based on how much weighted HIVE was staked and for how long, estimated HIVE reward amounts when a season publishes the conversion price, and reward credit ending when a wallet requests unstaking. Actual payout still needs an official claim or treasury process. Do not describe the current stake vault as paying HIVE rewards directly.
-
-Managed-service discounts should apply to HivemindOS platform margin, not raw third-party provider cost. Non-stakers should still be able to buy the same paid services at the standard fiat, card, managed HONEY credit, or enterprise price.
-
-Marketplace curation, ecosystem ops influence, and Visionary council access should be treated as reputation, access, and signaling utility, not admin control. Curators can help surface quality work and get closer to early opportunities. Operators and Visionaries can help prioritize roadmap, bounty, grant, and marketplace-policy direction. Visionaries can also qualify for a scarce council seat that provides early roadmap visibility and a direct advisory channel to the developer or core team. Final treasury execution, payout disputes, user funds, binding votes, and contract controls should remain with explicit admin or multisig processes until the system is mature enough for stronger governance.
-
-The first staking design uses fixed HIVE tiers for community alignment rather than per-use token spending. See [HIVE Staking And Community Tiers](hive-staking-and-community-tiers.html) for the Holder, Supporter, Builder, Curator, Operator, and Visionary model.
-
-## Ecosystem Loop
-
-<ol class="valueWheel" aria-label="Honey and HIVE ecosystem loop">
-  <li><span>1</span><strong>Use HivemindOS</strong></li>
-  <li><span>2</span><strong>Earn Honey</strong></li>
-  <li><span>3</span><strong>Claim HIVE</strong></li>
-  <li><span>4</span><strong>Hold or stake</strong></li>
-  <li><span>5</span><strong>Strengthen ecosystem</strong></li>
-  <li><span>6</span><strong>More adoption</strong></li>
-  <li><span>7</span><strong>More revenue</strong></li>
-  <li><span>8</span><strong>Treasury reserves</strong></li>
-  <li><span>9</span><strong>Revenue-backed buybacks</strong></li>
-  <li><span>10</span><strong>Fund Honey and staking rewards</strong></li>
-</ol>
-
-Funded Honey and staking rewards feed back into product usage: people use HivemindOS, earn Honey for useful participation, stake HIVE for stronger ecosystem upside, and push more activity into the ecosystem.
+- HIVE is ownership of HivemindOS.
+- More company revenue automatically creates token demand.
+- Honey is guaranteed to become HIVE.
+- Stakers receive a fixed share of company revenue.
+- Buybacks support or guarantee token price.
 
 <nav class="nextNav" aria-label="Monetization reading path">
-  <a href="ecosystem-plan.html">Previous: Ecosystem Plan</a>
-  <a href="hive-staking-and-community-tiers.html">Next: HIVE Staking And Community Tiers</a>
+  <a href="index.html">Back to investor overview</a>
+  <a href="hive-staking-and-community-tiers.html">Next: HIVE Staking</a>
 </nav>

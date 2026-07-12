@@ -1,6 +1,7 @@
 import { type CompProps, type Registry } from "./render";
 import { layoutComponents } from "./Layout";
 import { controlComponents } from "./Controls";
+import { visualComponents } from "./Visuals";
 
 /* jsonui/registry.tsx — the full fr-styled catalog: all 36 shadcn components
    keyed by name. Pass this to <FrJsonRender registry={REGISTRY} /> (this
@@ -126,7 +127,7 @@ const legacyComponents: Registry = {
   },
 };
 
-export const REGISTRY: Registry = { ...layoutComponents, ...legacyComponents, ...controlComponents };
+export const REGISTRY: Registry = { ...layoutComponents, ...legacyComponents, ...controlComponents, ...visualComponents };
 
 /** The 36 component names this catalog supports, for reference / validation. */
 export const CATALOG_COMPONENTS = Object.keys(REGISTRY);

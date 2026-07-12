@@ -1,5 +1,5 @@
 import { beeWorkerPreset } from "@/lib/config/bee-worker-presets";
-import { searchContextIndex, type ContextConnectedApp, type ContextConnectedAppRoute, type ContextIndexItem } from "@/lib/services/context-index";
+import { searchContextIndexBatch, type ContextConnectedApp, type ContextConnectedAppRoute, type ContextIndexItem } from "@/lib/services/context-index";
 import { createContextXrayManifestFromContextIndex } from "@/lib/services/context-xray";
 import { applyAppPreferences, readAppPreferences, usageNoteAffinity } from "@/lib/services/fleet/app-preferences";
 import { generationMetricsContext } from "@/lib/services/generation-metrics";
@@ -281,7 +281,7 @@ function taskRetrievalQueries(query: string) {
     queries.push({ label: "image generation", query: "image generation open generative ai zimage z-image imagegen visual creative diffusion comfyui" });
   }
   if (/video|movie|clip|animation|reel|img2vid|i2v|animate/.test(normalized)) {
-    queries.push({ label: "video generation", query: "video generation image to video img2vid i2v animation connected app mcp palmier seedance higgsfield kling runway comfyui" });
+    queries.push({ label: "video generation", query: "video generation cloud local HTML HyperFrames hypergen image to video img2vid i2v motion graphics connected app mcp seedance higgsfield kling runway comfyui" });
   }
   if (/telegram|message|send|deliver|delivery|notify|notification/.test(normalized)) {
     queries.push({ label: "delivery channel", query: "telegram message send notification delivery channel configure access bot" });
@@ -456,9 +456,12 @@ function videoGenerationCapabilityContext(query: string) {
   if (!videoGenerationRequest(query)) return "";
   return [
     "Video generation capability routing:",
+    "- Interpret the user's conversational intent before acting. A concrete request to create, render, or deliver a video is actionable; discussion, brainstorming, hypotheticals, capability questions, and statements such as 'I'm thinking about video generation' are not authorization to generate or to interrupt with a method picker.",
+    "- For an actionable creation request, identify the production method: cloud AI video generation, local AI video generation, or HTML / HyperFrames rendering. If the method is genuinely unspecified by the request or prior context, ask one concise follow-up before selecting a capability or generating anything.",
+    "- Use the auto-installed HyperFrames router skill only after the user chooses HTML / HyperFrames, or when they explicitly name HyperFrames (including the common shorthand or typo 'hypergen'), HTML-based video, browser-rendered video, or motion graphics.",
     "- Prefer connected video-generation apps, MCP servers, or media services discovered by Hive capability search before provider-specific fallbacks.",
     "- If the user attached an image, use the current turn media artifact path/id as the image-to-video source input. Do not embed base64 in the model prompt.",
-    "- Tool-capable OpenAI-compatible runtimes may call the generate_video tool; the runtime will pass the prepared media artifact bytes/path to the selected connected video app.",
+    "- Tool-capable OpenAI-compatible runtimes may call the generate_video tool after the agent has established actionable cloud/local generation intent; the runtime will pass the prepared media artifact bytes/path to the selected connected video app.",
     "- For connected apps and MCP servers, resolve fresh routes through HivemindOS APIs instead of hard-coding Tailnet or localhost endpoints.",
     "- Do not claim a video was generated unless a tool/app route returns a video artifact or receipt.",
   ].join("\n");
@@ -560,17 +563,14 @@ export async function buildTaskRetrievalContextResult(input: {
   const localImageIntent = localImageGenerationRequest(trimmed);
   const generationPerformanceContext = await generationMetricsContext(trimmed).catch(() => "");
   const connectedMcpContext = buildConnectedMcpCapabilityContext();
-  const results = await Promise.all(queries.map(async (entry) => {
-    const result = await searchContextIndex({
-      query: entry.query,
-      vaultPath: input.sharedVault?.vaultPath,
-      connectedApps,
-      includeRuntimeProviders: false,
-      kinds: [...CHAT_CAPABILITY_SEARCH_KINDS],
-      limit: 8,
-    }).catch(() => null);
-    return (result?.items ?? []).map((item): RetrievalHit => ({ item, label: entry.label }));
-  }));
+  const batchResults = await searchContextIndexBatch({
+    vaultPath: input.sharedVault?.vaultPath,
+    connectedApps,
+    includeRuntimeProviders: false,
+    kinds: [...CHAT_CAPABILITY_SEARCH_KINDS],
+  }, queries.map((entry) => ({ query: entry.query, limit: 8 }))).catch(() => []);
+  const results = queries.map((entry, index) =>
+    (batchResults[index]?.items ?? []).map((item): RetrievalHit => ({ item, label: entry.label })));
   const seen = new Set<string>();
   const dedupedHits = results.flat().filter((hit) => {
     if (seen.has(hit.item.id)) return false;

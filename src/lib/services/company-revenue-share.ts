@@ -12,11 +12,8 @@ import {
   startCompanyRun,
 } from "@/lib/services/company-runs";
 import { getCompany } from "@/lib/services/companies-store";
-import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import {
-  collectTradingPlatformFee,
   quoteTradingPlatformFee,
-  type PlatformFeeCollection,
   type PlatformFeeQuote,
 } from "@/lib/services/wallet/platform-fees";
 import type {
@@ -38,7 +35,6 @@ export type {
 } from "@/lib/types/company-revenue";
 
 export const COMPANY_REVENUE_LEDGER_PATH = path.join(homedir(), ".hivemindos", "company-revenue-ledger.json");
-export const COMPANY_REVENUE_FEE_CONFIRMATION = "COLLECT_COMPANY_REVENUE_FEE";
 export const DEFAULT_COMPANY_REVENUE_NETWORK = "eip155:8453";
 
 export type RecordCompanyRevenueInput = {
@@ -133,20 +129,10 @@ export async function recordCompanyRevenue(input: RecordCompanyRevenueInput): Pr
   const normalized = normalizeInput(input);
   const company = await getCompany(normalized.companyId);
   if (!company) throw new Error("Company not found.");
-  assertFeeCollectionConfirmed(normalized);
 
   const records = await readCompanyRevenueLedger();
   const duplicate = findDuplicate(records, normalized);
   if (duplicate) {
-    if (normalized.collectFee && duplicate.fee.status !== "collected") {
-      const updated = await collectFeeForExistingRecord(records, duplicate, normalized);
-      return {
-        record: updated.record,
-        rollup: await companyRevenueRollup(normalized.companyId, updated.records),
-        duplicate: true,
-        feeError: updated.feeError,
-      };
-    }
     return {
       record: duplicate,
       rollup: await companyRevenueRollup(normalized.companyId, records),
@@ -173,12 +159,12 @@ export async function recordCompanyRevenue(input: RecordCompanyRevenueInput): Pr
       source: normalized.source,
       amountUsd: normalized.amountUsd,
       externalId: normalized.externalId,
-      collectFee: normalized.collectFee,
+      collectFee: false,
     },
   });
 
   const fee = await quoteCompanyRevenueShare({ amountUsd: normalized.amountUsd, network: normalized.network });
-  let record: CompanyRevenueRecord = {
+  const record: CompanyRevenueRecord = {
     id: randomUUID(),
     companyId: normalized.companyId,
     amountUsd: normalized.amountUsd,
@@ -191,19 +177,7 @@ export async function recordCompanyRevenue(input: RecordCompanyRevenueInput): Pr
     recordedAtMs: Date.now(),
     status: statusForFee(fee),
     fee,
-    collectingAgentId: normalized.collectingAgentId,
   };
-
-  let feeError: string | undefined;
-  if (normalized.collectFee) {
-    const collected = await collectCompanyRevenueFee(record, normalized.collectingAgentId, normalized.confirmation)
-      .catch((error) => {
-        feeError = error instanceof Error ? error.message : "Company revenue share collection failed.";
-        return null;
-      });
-    if (collected) record = applyCollectedFee(record, collected);
-    else record = applyFailedFee(record, feeError);
-  }
 
   records.push(record);
   await writeCompanyRevenueLedger(records);
@@ -214,19 +188,18 @@ export async function recordCompanyRevenue(input: RecordCompanyRevenueInput): Pr
       : `Revenue recorded: ${formatUsd(record.amountUsd)}`,
     detail: [
       `Source: ${record.source}`,
-      `HivemindOS share: ${formatUsd(record.fee.amountUsd)} ${record.fee.status}`,
-      feeError ? `Fee error: ${feeError}` : null,
+      `External revenue platform fee: ${formatUsd(record.fee.amountUsd)}`,
       record.description,
     ].filter(Boolean).join(" — "),
   }).catch(() => undefined);
   await createCompanyProposal(normalized.companyId, {
     kind: "revenue-share",
     status: "applied",
-    title: record.status === "fee-collected" ? `Revenue share collected: ${formatUsd(record.fee.amountUsd)}` : `Revenue recorded: ${formatUsd(record.amountUsd)}`,
+    title: `Revenue recorded: ${formatUsd(record.amountUsd)}`,
     summary: record.description,
     runId: companyRun.id,
     idempotencyKey: `revenue:${record.id}`,
-    risk: normalized.collectFee ? "medium" : "low",
+    risk: "low",
     proposedChange: {
       revenueEventId: record.id,
       amountUsd: record.amountUsd,
@@ -236,11 +209,11 @@ export async function recordCompanyRevenue(input: RecordCompanyRevenueInput): Pr
     },
     evidence: [
       `Revenue source: ${record.source}`,
-      `HivemindOS share: ${formatUsd(record.fee.amountUsd)} ${record.fee.status}`,
+      `External revenue platform fee: ${formatUsd(record.fee.amountUsd)}`,
     ],
     createdBy: "human",
     decidedBy: "human",
-    decision: normalized.collectFee ? "Recorded revenue and attempted share collection." : "Recorded revenue without immediate share collection.",
+    decision: "Recorded external revenue without a HivemindOS platform fee.",
   }).catch(() => undefined);
   await finishCompanyRun(normalized.companyId, companyRun.id, {
     status: "completed",
@@ -257,83 +230,7 @@ export async function recordCompanyRevenue(input: RecordCompanyRevenueInput): Pr
     record,
     rollup: await companyRevenueRollup(normalized.companyId, records),
     duplicate: false,
-    feeError,
   };
-}
-
-export async function collectCompanyRevenueFeeForEvent(input: {
-  eventId: string;
-  collectingAgentId: string;
-  confirmation?: string;
-}): Promise<RecordCompanyRevenueResult> {
-  const id = cleanText(input.eventId, 120);
-  if (!id) throw new Error("eventId is required.");
-  const records = await readCompanyRevenueLedger();
-  const record = records.find((item) => item.id === id);
-  if (!record) throw new Error("Revenue event not found.");
-  const updated = await collectFeeForExistingRecord(records, record, {
-    ...record,
-    network: record.fee.network,
-    collectFee: true,
-    collectingAgentId: cleanText(input.collectingAgentId, 160),
-    confirmation: input.confirmation,
-  });
-  return {
-    record: updated.record,
-    rollup: await companyRevenueRollup(record.companyId, updated.records),
-    duplicate: false,
-    feeError: updated.feeError,
-  };
-}
-
-async function collectFeeForExistingRecord(
-  records: CompanyRevenueRecord[],
-  record: CompanyRevenueRecord,
-  input: NormalizedRevenueInput,
-): Promise<{ record: CompanyRevenueRecord; records: CompanyRevenueRecord[]; feeError?: string }> {
-  assertFeeCollectionConfirmed(input);
-  let next = record;
-  let feeError: string | undefined;
-  const collected = await collectCompanyRevenueFee(record, input.collectingAgentId, input.confirmation)
-    .catch((error) => {
-      feeError = error instanceof Error ? error.message : "Company revenue share collection failed.";
-      return null;
-    });
-  next = collected ? applyCollectedFee(record, collected) : applyFailedFee(record, feeError);
-  const updatedRecords = records.map((item) => item.id === record.id ? next : item);
-  await writeCompanyRevenueLedger(updatedRecords);
-  return { record: next, records: updatedRecords, feeError };
-}
-
-function assertFeeCollectionConfirmed(input: Pick<NormalizedRevenueInput, "collectFee" | "confirmation">): void {
-  if (input.collectFee && input.confirmation !== COMPANY_REVENUE_FEE_CONFIRMATION) {
-    throw new Error(`Type ${COMPANY_REVENUE_FEE_CONFIRMATION} to collect the company revenue share.`);
-  }
-}
-
-async function collectCompanyRevenueFee(
-  record: CompanyRevenueRecord,
-  collectingAgentId?: string,
-  confirmation?: string,
-): Promise<PlatformFeeCollection> {
-  if (confirmation !== COMPANY_REVENUE_FEE_CONFIRMATION) {
-    throw new Error(`Type ${COMPANY_REVENUE_FEE_CONFIRMATION} to collect the company revenue share.`);
-  }
-  const agentId = cleanText(collectingAgentId, 160);
-  if (!agentId) throw new Error("collectingAgentId is required to collect the company revenue share.");
-  const wallet = await getWalletSecret(agentId);
-  if (!wallet) throw new Error("No local wallet exists for the collecting agent.");
-  const collected = await collectTradingPlatformFee({
-    agentId,
-    network: wallet.info.network,
-    secret: wallet.secret,
-    fromAddress: wallet.info.address,
-    amountUsd: record.amountUsd,
-    source: "company-revenue",
-    companyId: record.companyId,
-  });
-  if (!collected) throw new Error("Company revenue share policy is disabled.");
-  return collected;
 }
 
 async function writeCompanyRevenueLedger(records: CompanyRevenueRecord[]): Promise<void> {
@@ -362,33 +259,7 @@ function feeSnapshotFromQuote(quote: PlatformFeeQuote): CompanyRevenueFeeSnapsho
 
 function statusForFee(fee: CompanyRevenueFeeSnapshot): CompanyRevenueEventStatus {
   if (fee.status === "quoted") return "fee-pending";
-  return "fee-unavailable";
-}
-
-function applyCollectedFee(record: CompanyRevenueRecord, collected: PlatformFeeCollection): CompanyRevenueRecord {
-  return {
-    ...record,
-    collectingAgentId: record.collectingAgentId,
-    status: "fee-collected",
-    fee: {
-      ...feeSnapshotFromQuote(collected),
-      status: "collected",
-      signature: collected.signature,
-      collectedAt: new Date().toISOString(),
-    },
-  };
-}
-
-function applyFailedFee(record: CompanyRevenueRecord, reason?: string): CompanyRevenueRecord {
-  return {
-    ...record,
-    status: "fee-failed",
-    fee: {
-      ...record.fee,
-      status: "failed",
-      reason: reason || record.fee.reason || "Company revenue share collection failed.",
-    },
-  };
+  return fee.amountUsd <= 0 ? "recorded" : "fee-unavailable";
 }
 
 type NormalizedRevenueInput = {
@@ -400,9 +271,6 @@ type NormalizedRevenueInput = {
   customerLabel?: string;
   description?: string;
   network?: string;
-  collectFee?: boolean;
-  collectingAgentId?: string;
-  confirmation?: string;
 };
 
 function emptyRevenueRollup(companyId: string): CompanyRevenueRollup {
@@ -432,9 +300,6 @@ function normalizeInput(input: RecordCompanyRevenueInput): NormalizedRevenueInpu
     description: cleanText(input.description, MAX_TEXT_CHARS),
     receivedAt: normalizeDate(input.receivedAt),
     network: cleanText(input.network, 80) || DEFAULT_COMPANY_REVENUE_NETWORK,
-    collectFee: input.collectFee === true,
-    collectingAgentId: cleanText(input.collectingAgentId, 160),
-    confirmation: cleanText(input.confirmation, 80),
   };
 }
 

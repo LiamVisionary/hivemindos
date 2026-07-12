@@ -98,6 +98,9 @@ export function useQueenBeeGeminiLive(
   const micAnalyserRef = React.useRef<AnalyserNode | null>(null);
   const screenContextRef = React.useRef(screenContext);
   const driveDashboardRef = React.useRef(onDriveDashboard);
+  // Set by the live session effect; lets the overlay's camera loop stream webcam
+  // frames into the Gemini Live session as native realtime video input.
+  const sendVideoFrameRef = React.useRef<((base64Jpeg: string) => void) | null>(null);
 
   React.useEffect(() => {
     mutedRef.current = muted;
@@ -191,6 +194,11 @@ export function useQueenBeeGeminiLive(
     };
     const send = (payload: unknown) => {
       if (!cancelled && ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
+    };
+    // Gemini Live accepts realtime video frames natively alongside the audio
+    // stream; each frame is a base64 JPEG the model sees in near real time.
+    sendVideoFrameRef.current = (base64Jpeg: string) => {
+      send({ realtimeInput: { video: { data: base64Jpeg, mimeType: "image/jpeg" } } });
     };
     const flushPlayback = () => {
       playing.forEach((node) => {
@@ -471,5 +479,9 @@ export function useQueenBeeGeminiLive(
     };
   }, [active, openingLine]);
 
-  return { phase, error, turns, speechDetected, failed, micAnalyserRef, sessionSerial };
+  const sendVideoFrame = React.useCallback((base64Jpeg: string) => {
+    if (base64Jpeg) sendVideoFrameRef.current?.(base64Jpeg);
+  }, []);
+
+  return { phase, error, turns, speechDetected, failed, micAnalyserRef, sessionSerial, sendVideoFrame };
 }

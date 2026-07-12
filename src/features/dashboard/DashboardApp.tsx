@@ -79,6 +79,7 @@ import { loadDashboardStateSnapshot, removeDashboardStateValue, saveDashboardSta
 import { normalizeChatResponseBilling } from "@/lib/types/chat-billing";
 import { normalizeEvaluationHumanFeedback } from "@/lib/types/evaluation";
 import { normalizeApplicationGenerationCard } from "@/features/dashboard/chat-application-generation";
+import { runtimePromptFromSessionMessage } from "@/features/dashboard/hooks/status-chat-input-helpers";
 import { readNativeDashboardBootstrap } from "@/lib/native/dashboard-bootstrap";
 import { getNativeAppVersion } from "@/lib/native/desktop-status";
 import { getNativeFleetAppsCache, getNativeFleetDiscovery, getNativeTailscaleDevices } from "@/lib/native/fleet";
@@ -165,6 +166,7 @@ import {
   TelemetryView,
   TradePanel,
   UtilityPanels,
+  PodcastStudioView,
   VaultPanel,
   WalletPanel,
   preloadDashboardView,
@@ -662,7 +664,7 @@ function runtimeSessionMessages(session: unknown): ChatMessage[] {
   const sessionId = String((session as { sessionId?: string; id?: string } | null)?.sessionId ?? (session as { id?: string } | null)?.id ?? "");
   const output: ChatMessage[] = [];
   let pendingProcessEvents: Array<{ at: number; label: string; detail?: string; status?: string }> = [];
-  for (const message of rawMessages.filter((item): item is { role?: string; content?: string; createdAt?: number; index?: number; billing?: unknown; feedback?: unknown; type?: string; applicationGeneration?: unknown } => (
+  for (const message of rawMessages.filter((item): item is { role?: string; content?: string; createdAt?: number; index?: number; billing?: unknown; feedback?: unknown; type?: string; applicationGeneration?: unknown; raw?: unknown } => (
       typeof item === "object"
       && item !== null
       && typeof (item as { content?: unknown }).content === "string"
@@ -684,6 +686,7 @@ function runtimeSessionMessages(session: unknown): ChatMessage[] {
       processEvents: role === "assistant" && pendingProcessEvents.length ? pendingProcessEvents : undefined,
       billing: role === "assistant" ? normalizeChatResponseBilling(message.billing) : undefined,
       applicationGeneration: normalizeApplicationGenerationCard(message.applicationGeneration),
+      agentPrompt: runtimePromptFromSessionMessage(message) ?? undefined,
     };
     output.push(...splitCombinedUserAssistantMessage(normalizedMessage));
     if (role === "assistant" && pendingProcessEvents.length) pendingProcessEvents = [];
@@ -4745,6 +4748,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
           onOpenMachine={() => setActiveView("agents")}
         />
       ) : null}
+      {activeView === "podcast" ? <PodcastStudioView /> : null}
       {(isUtilityPanelView(activeView) || (activeView === "vault" && vaultPanelMode === "env")) ? <UtilityPanels {...{ AgentEnvCard, Activity, Button, Check, ChevronDown, ChevronLeft, Download, EnvValueRow, FileText, FileUp, FolderOpen, LoaderCircle, MorePanel, NotificationsPanel, Pencil, Plus, RefreshCcw, RotateCcw, ShieldCheck, Sparkles, URL, Upload, activeView, addAgentEnvValue, addSharedEnvValue, agentEnvDrafts, agentSpecificEnvCount, displayAgents, fleetClass, formatRelativeTime, generateSharedEnvSecret, hiveEnvLoading, hiveEnvRestoring, hiveEnvSavingKey, hiveEnvStatus, hiveEnvSyncing, importSharedEnvEntries, listRuntimeFiles, maintenanceBusy, maintenanceMessage, maintenanceReport, markAllNotificationsRead, markNotificationRead, memoryTelemetry, notificationCursor, notificationGroups, notificationSummary, notifications, notificationsLoading, notificationsStatus, onOpenNotification: openDashboardNotification, onNavigateTarget: navigateDashboardTarget, schedules, openRuntimeFile, pinnedUtilities, promoteRuntimeEnvValue, refreshHiveEnv, refreshMaintenanceReport, refreshMemoryTelemetry, refreshNotifications, refreshRuntimeFileRoots, renderAgentKey, restoreSharedEnvBackup, revealedEnvValues, runMaintenanceAction, runtimeEnvSources, runtimeFileDraft, runtimeFileOpen, runtimeFilePath, runtimeFileRootKey, runtimeFileRoots, runtimeFileStatus, runtimeFiles, runtimeModelSelectionsByRuntime, saveAgentEnvValue, saveRuntimeFile, saveSharedEnvValue, searchAllRuntimeSessions, selectedRuntimeEnvSource, sessionSearchLoading, sessionSearchMessage, sessionSearchQuery, sessionSearchResults, setActiveView, setAgentEnvDrafts, setHiveEnvRuntimeSourceId, setRuntimeFileDraft, setRuntimeFileOpen, setRuntimeFilePath, setRuntimeFileRootKey, setSessionSearchQuery, setSharedEnvAddMenuOpen, setSharedEnvDraft, setSharedEnvEditable, setSharedEnvImportOpen, setSharedEnvImportText, sharedBackupStatus, sharedEnvAddMenuOpen, sharedEnvCount, sharedEnvDraft, sharedEnvEditable, sharedEnvImport, sharedEnvImportChangedCount, sharedEnvImportDiff, sharedEnvImportNewCount, sharedEnvImportOpen, sharedEnvImportSameCount, sharedEnvImportText, sharedEnvImporting, sharedEnvSource, sharedVault, startAgentChat, syncSharedEnvMachines, toggleEnvValue, togglePinnedUtility, updateNotificationSettings, vaultClass, vaultPanelMode, walletClass }} /> : null}
       {activeView === "aeon" ? <AeonAutopilotPanel agentProfiles={displayAgents.filter((agent) => agent.runtime === "aeon")} sharedVault={sharedVault} machineGroups={machineGroups} chooseDirectoryForMachine={chooseDirectoryForMachine} onWorkspaceCreated={handleAeonWorkspaceCreated} /> : null}
       {activeView === "fusion" ? <FusionPanel sharedVault={sharedVault} /> : activeView === "phone" ? <PhonePanel activeView={activeView} fleetClass={fleetClass} formatRelativeTime={formatRelativeTime} sharedVault={sharedVault} /> : null}

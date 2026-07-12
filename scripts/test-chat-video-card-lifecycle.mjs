@@ -10,7 +10,7 @@ register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 const nativeVideoModule = await import(
   "../src/app/api/chat/agent-runtime/stream-native-video-generation.ts"
 ).catch(() => null);
-assert.ok(nativeVideoModule?.streamNativeVideoGeneration, "explicit video generation needs an immediate native SSE stream");
+assert.ok(nativeVideoModule?.streamNativeVideoGeneration, "an agent-selected video tool needs a native SSE stream");
 
 const sessionStore = await import("../src/lib/services/chat/runtime-session-store.ts");
 assert.equal(
@@ -28,7 +28,7 @@ const { normalizeApplicationGenerationCard } = await import(
   "../src/features/dashboard/chat-application-generation.ts"
 );
 
-const prompt = "generate a video of this bee flying";
+const prompt = "use local video generation to generate a video of this bee flying";
 const runningCard = {
   id: "video-run-1",
   kind: "video",
@@ -130,7 +130,7 @@ try {
 }
 
 const routeSource = readFileSync(new URL("../src/app/api/chat/agent-runtime/route.ts", import.meta.url), "utf8");
-assert.match(routeSource, /return streamNativeVideoGeneration\(\{/, "the real chat route should bypass model inference for explicit native video generation");
+assert.doesNotMatch(routeSource, /return streamNativeVideoGeneration\(\{/, "the chat route must not bypass agent inference from video keywords");
 const controllerSource = readFileSync(new URL("../src/features/dashboard/hooks/use-status-chat-input-controller.tsx", import.meta.url), "utf8");
 assert.match(controllerSource, /normalizeApplicationGenerationCard\(sessionMessage\?\.applicationGeneration\)/, "timeout polling should recover a persisted result card");
 const dashboardSource = readFileSync(new URL("../src/features/dashboard/DashboardApp.tsx", import.meta.url), "utf8");

@@ -5,6 +5,7 @@ export type WalletSendUsdcRequest = {
   maxPaymentUsd?: number;
   autoPayEnabled?: boolean;
   confirmation?: string;
+  gasSponsorAgentId?: string;
 };
 
 export type WalletSendUsdcResponse = {
@@ -13,6 +14,7 @@ export type WalletSendUsdcResponse = {
   network?: string;
   assetSymbol?: "USDC" | "USDG";
   platformFee?: unknown;
+  gasAssist?: { signature: string; amountEth: number; sponsorAgentId: string };
   error?: string;
 };
 

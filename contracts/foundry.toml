@@ -8,5 +8,14 @@ optimizer_runs = 200
 via_ir = true
 
 remappings = [
-  "@openzeppelin/contracts/=../node_modules/@openzeppelin/contracts/"
+  "@openzeppelin/contracts/=../node_modules/@openzeppelin/contracts/",
+  "@layerzerolabs/oft-evm/=../node_modules/@layerzerolabs/oft-evm/",
+  "@layerzerolabs/oapp-evm/=../node_modules/@layerzerolabs/oapp-evm/",
+  "@layerzerolabs/lz-evm-protocol-v2/=../node_modules/@layerzerolabs/lz-evm-protocol-v2/",
+  "@layerzerolabs/lz-evm-messagelib-v2/=../node_modules/@layerzerolabs/lz-evm-messagelib-v2/",
+  "@layerzerolabs/lz-definitions/=../node_modules/@layerzerolabs/lz-definitions/",
+  "@layerzerolabs/test-devtools-evm-foundry/=../node_modules/@layerzerolabs/test-devtools-evm-foundry/",
+  "@layerzerolabs/lz-evm-v1-0.7/=../node_modules/@layerzerolabs/lz-evm-v1-0.7/",
+  "solidity-bytes-utils/=../node_modules/solidity-bytes-utils/",
+  "forge-std/=../node_modules/@layerzerolabs/toolbox-foundry/lib/forge-std/"
 ]

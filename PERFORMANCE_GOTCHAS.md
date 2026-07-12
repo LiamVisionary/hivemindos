@@ -228,3 +228,29 @@ The real repeat Chat → Trade path improved from 19.5s to usable content to
 3.12-4.43s (77-84% faster). The saved holdings render first with `Syncing…`; the authoritative
 live holdings and deferred Stock/activity data replace them afterward. Fixed
 2026-07-10.
+
+## G4 - Parallel retrieval queries can duplicate the corpus, not just the ranking
+
+### Symptom
+
+The runtime reports `capability search timed out after 2500ms before returning retrieval telemetry` on a multi-intent prompt, while the same search is fast after the first turn. Raising the timeout reduces false alarms but does not remove the cold-work spike.
+
+### Why it fools you
+
+The query fan-out uses `Promise.all`, and the filesystem source cache coalesces cold source builds. That makes the code look parallel and cached. But if each query calls the top-level search API, every branch can still repeat the per-request half: app preferences, shared-env connection checks, Hive action/connector/runtime creation, connected-app endpoint expansion, artifact discovery, authorization, and index assembly.
+
+### Root cause and fix
+
+Separate corpus construction from ranking. Build and authorize one complete point-in-time `ContextIndex`, then score the full-task and intent-specific queries independently against that snapshot. Preserve per-query limits, labels, priority boosts, deduplication, and downstream agent reranking. Do not optimize by dropping capability kinds or reducing the shared skill/app inventory.
+
+### Diagnosis recipe
+
+1. Count targeted queries from task retrieval telemetry.
+2. Benchmark a realistic connected-app inventory, not an empty `apps=0` index.
+3. Record corpus totals before and after; identical totals prove the latency win did not strip capabilities.
+4. Compare fresh processes because Next dev recompiles/restarts reset in-memory source caches.
+5. If one-corpus batching is still slow, time source groups independently (`tool-schema`/`connector` reads are often dominated by shared-env process startup) before adding another timeout increase.
+
+### Fixed evidence
+
+The exact reported three-query workload over 1,237 indexed items improved from a fresh-process median of 577.5 ms to 296.1 ms, while retaining all 559 skills, 104 tool schemas, 349 API routes, 33 apps, 149 app endpoints, 17 connectors, 16 artifacts, and 10 runtimes. Fixed 2026-07-12.

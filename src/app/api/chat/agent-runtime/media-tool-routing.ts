@@ -1,6 +1,5 @@
 import { latestUserMessage, type IncomingMessage } from "./messages";
 import type { ChatMediaArtifact } from "./media-artifacts";
-import { VIDEO_GENERATION_TOOL_NAME, type AccumulatedToolCall } from "./openai-compatible-tools";
 
 function clean(value: string) {
   return value.replace(/\s+/g, " ").trim();
@@ -46,20 +45,6 @@ export function videoInputImagesForArgs(
     mimeType: selected.mimeType,
     name: selected.name,
   }] : [];
-}
-
-export function forceVideoGenerationToolCall(
-  toolCalls: AccumulatedToolCall[],
-  force: boolean,
-  prompt: string,
-) {
-  if (!force) return toolCalls;
-  const selected = toolCalls.find((call) => call.name === VIDEO_GENERATION_TOOL_NAME);
-  return [selected ?? {
-    id: "forced_generate_video",
-    name: VIDEO_GENERATION_TOOL_NAME,
-    arguments: JSON.stringify({ prompt }),
-  }];
 }
 
 export function explicitLocalCommandRequest(query: string) {

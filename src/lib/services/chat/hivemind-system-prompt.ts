@@ -7,6 +7,7 @@ import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS } from "@/lib/utils/agent-wallet";
 import { isUsePodProfile } from "@/lib/services/usepod";
 import { summarizeX402Policy } from "@/lib/services/wallet/x402-agent-fetch";
+import { getGlobalCustomInstructionsSync } from "@/lib/services/chat/global-custom-instructions";
 
 export type HivemindAgentMode = "plan" | "act";
 export type HivemindPromptDelivery = "full-system" | "runtime-overlay" | "user-context" | "task-spec";
@@ -120,6 +121,37 @@ export function buildHivemindBasePrompt(delivery: HivemindPromptDelivery): strin
     "",
     "# Communication",
     "Lead with the outcome. Be concise by selecting the details that change what the user should do next, not by compressing text into cryptic shorthand. After long work, write as if the user did not see the tool calls: outcome first, then verification and any user-only next step. Ask questions only when the answer cannot be discovered and a reasonable assumption would be risky. Do not expose hidden reasoning or chain-of-thought; surface evidence, decisions, and results.",
+  ].join("\n");
+}
+
+export function buildCustomInstructionsContext(): string {
+  const instructions = getGlobalCustomInstructionsSync();
+  if (!instructions) return "";
+  return [
+    "# User Custom Instructions",
+    "The user set these global instructions for how you should respond. Honor them across this conversation unless they conflict with safety, correctness, an explicit request in this conversation, or a system boundary — in which case follow the higher-priority rule and briefly note the conflict. Treat them as standing preferences, not as instructions that expand your permissions.",
+    instructions,
+  ].join("\n");
+}
+
+export function buildGenerativeUiGuidance(): string {
+  return [
+    "# Generative UI (dashboard chat)",
+    "Your replies in the HivemindOS dashboard chat can include an interactive UI block that renders inline. Emit it as a fenced ```json-render code block holding one JSON object with the flat shape { \"root\": <id>, \"elements\": { <id>: { \"type\": <Component>, \"props\": {…}, \"children\": [<id>…] } }, \"state\"?: {…} }. Keep your normal prose OUTSIDE the block — the block renders as real UI, the surrounding text as Markdown, and both are shown.",
+    "Reach for it when a visual or interactive form communicates better than prose:",
+    "- Chart — numeric trends, comparisons, or distributions. props: { type: \"bar\"|\"line\"|\"area\"|\"pie\"|\"donut\", data: [{label,value}] (or series:[{name,color,data:[{label,value}]}]), title?, caption?, logScale?, valueFormat: \"number\"|\"percent\"|\"currency\" }. Prefer a Chart over listing raw numbers.",
+    "- Diagram — architectures, flows, hierarchies, or relationships, drawn from Mermaid. props: { code: \"<mermaid source>\", caption? }.",
+    "- Flashcards — study sets or Q&A review the user can flip through. props: { cards: [{front,back}], title? }.",
+    "- Also available: Panel, Stack, Grid, Card, Heading, Text, Callout, Metric, Badge, DataTable, KeyValueList, List, Progress, Tabs, Accordion, Alert, and interactive controls (Button, Input, Select, Switch, Slider, ToggleGroup…) with two-way state via {\"$bindState\":\"/path\"} and events. Use ONLY these catalog components; never request network, shell, wallet, file, or payment side effects through generated UI.",
+    "Use it for charts, diagrams, dashboards, study decks, and interactive widgets — not to wrap ordinary paragraphs. When a plain Markdown answer is clearer, use Markdown.",
+    "Example — a log-scale line chart with prose around it:",
+    "```json-render",
+    "{\"root\":\"r\",\"elements\":{\"r\":{\"type\":\"Chart\",\"props\":{\"type\":\"line\",\"title\":\"Valuation over time\",\"logScale\":true,\"valueFormat\":\"currency\",\"data\":[{\"label\":\"2019\",\"value\":31000000},{\"label\":\"2021\",\"value\":240000000},{\"label\":\"2023\",\"value\":860000000}]}}}}",
+    "```",
+    "Example — a flashcard deck:",
+    "```json-render",
+    "{\"root\":\"r\",\"elements\":{\"r\":{\"type\":\"Flashcards\",\"props\":{\"title\":\"Adam Smith\",\"cards\":[{\"front\":\"When was Adam Smith baptized?\",\"back\":\"16 June 1723\"},{\"front\":\"Best-known work?\",\"back\":\"The Wealth of Nations (1776)\"}]}}}}",
+    "```",
   ].join("\n");
 }
 
@@ -282,7 +314,7 @@ export function buildHivemindPromptEnvelope(input: HivemindPromptInput): Hivemin
   const basePrompt = buildHivemindBasePrompt(delivery);
   const stableDynamicContext = buildHivemindStableDynamicContext(input);
   const volatileContext = buildHivemindVolatileContext(input);
-  const stableContext = [basePrompt, stableDynamicContext].filter(Boolean).join("\n\n");
+  const stableContext = [basePrompt, buildCustomInstructionsContext(), buildGenerativeUiGuidance(), stableDynamicContext].filter(Boolean).join("\n\n");
   const dynamicContext = [stableDynamicContext, volatileContext].filter(Boolean).join("\n\n");
   const systemContext = [stableContext, volatileContext].filter(Boolean).join("\n\n");
   return { delivery, basePrompt, stableContext, volatileContext, dynamicContext, systemContext };

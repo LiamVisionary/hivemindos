@@ -2052,6 +2052,7 @@ export function useDashboardDerivedState(props: any) {
       aeon: { label: "Aeon", title: "What runs unattended" },
       fusion: { label: "Hive Fusion", title: "What the hive can create" },
       governance: { label: "Zero Human Company", title: "How the hive is held accountable" },
+      podcast: { label: "Podcast", title: "Turn sources into a two-host deep dive" },
     };
     const header = headers[activeView] ?? { label: "Zero Human Company", title: "" };
     return {

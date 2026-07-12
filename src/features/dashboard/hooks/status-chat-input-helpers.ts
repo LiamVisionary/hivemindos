@@ -36,6 +36,11 @@ export function runtimePromptFromPayload(parsed: any) {
   };
 }
 
+export function runtimePromptFromSessionMessage(message: any) {
+  if (String(message?.role ?? "").trim().toLowerCase() !== "assistant") return null;
+  return runtimePromptFromPayload(message?.raw);
+}
+
 export function processLabelFromComment(eventText: string) {
   return eventText
     .split("\n")

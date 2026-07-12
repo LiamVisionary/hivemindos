@@ -195,7 +195,7 @@ export function ImportCompanyModal({
       footer={
         <>
           <span style={{ flex: 1, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)", lineHeight: 1.45 }}>
-            Imported companies track existing code, actions, and schedules. Revenue share is still only collected from explicit revenue events.
+            Imported companies track existing code, actions, and schedules. Historical and off-platform revenue carries no HivemindOS fee.
           </span>
           <GhostButton onClick={onClose}>Cancel</GhostButton>
           <PrimaryButton disabled={!canImport || busy} onClick={importCompany}>{busy ? <><Spinner size={12} /> Importing</> : "Import company"}</PrimaryButton>

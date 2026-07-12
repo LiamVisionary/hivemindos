@@ -471,8 +471,8 @@
       "ref": "3351fb1a6d7f0202d07db9bf9ad335fd0d1ec344",
       "license": "Apache-2.0",
       "skillPath": "skills/hyperframes/SKILL.md",
-      "packagedPath": "packaged-skills/optional/media/heygen-com/hyperframes/SKILL.md",
-      "computedHash": "ad670946b01c694b39e32e599561fb4320f56622799957ba9260d29d9d9b5eb0"
+      "packagedPath": "packaged-skills/auto-install/hyperframes/SKILL.md",
+      "computedHash": "009d63201e5fd2a5ad1ce018f8d17107932fe73be596fd6be828321b51d86b2f"
     },
     "image-first-grid-layout": {
       "source": "MengTo/Skills",

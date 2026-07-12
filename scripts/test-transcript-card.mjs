@@ -16,6 +16,11 @@ register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 const { buildTranscriptCardContent, extractTranscriptCard, transcriptCardIsRunning } = await import(
   "../src/features/dashboard/chat-transcript-card.ts"
 );
+const {
+  TRANSCRIPT_BRAIN_INTAKE_FOLDER,
+  buildTranscriptBrainNoteContent,
+  sendTranscriptToBrain,
+} = await import("../src/features/dashboard/transcript-brain-capture.ts");
 
 const card = {
   id: "transcript-abc",
@@ -83,5 +88,51 @@ assert.equal(extractTranscriptCard("<!--hive-transcript:" + encodeURIComponent(J
 const transcriptCardSource = readFileSync(new URL("../src/features/dashboard/views/chat/TranscriptCard.tsx", import.meta.url), "utf8");
 assert.match(transcriptCardSource, /readXTranscriptJob/, "running cards should poll their persisted job after a reload");
 assert.match(transcriptCardSource, /lost its connection/i, "legacy running cards without a job id should show an honest terminal state");
+
+// 9) Transcript source captures use the canonical raw-source intake folder and
+// preserve the source metadata alongside the full transcript.
+assert.equal(TRANSCRIPT_BRAIN_INTAKE_FOLDER, "Intake/Sources");
+const brainNote = buildTranscriptBrainNoteContent({
+  ...card,
+  canonicalUrl: "https://x.com/user/status/123",
+  title: "How top AI users work with LLMs",
+  durationSec: 4_200,
+});
+assert.match(brainNote, /^Transcript: How top AI users work with LLMs/m);
+assert.match(brainNote, /Source: https:\/\/x\.com\/user\/status\/123/);
+assert.match(brainNote, /Author: @user/);
+assert.match(brainNote, /Duration: 1:10:00/);
+assert.match(brainNote, /## Transcript\n\nline one\nline two/);
+
+let captureRequest;
+const originalFetch = globalThis.fetch;
+try {
+  globalThis.fetch = async (url, init) => {
+    captureRequest = { url, body: JSON.parse(init.body) };
+    return new Response(JSON.stringify({
+      ok: true,
+      note: {
+        vaultPath: "/tmp/test-brain",
+        notePath: "Intake/Sources/2026-07-12/transcript.md",
+        title: "Transcript",
+        createdAt: "2026-07-12T00:00:00.000Z",
+      },
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+  const captureResult = await sendTranscriptToBrain({
+    card: { ...card, title: "How top AI users work with LLMs" },
+    vaultPath: "/tmp/test-brain",
+  });
+  assert.equal(captureResult.ok, true);
+} finally {
+  globalThis.fetch = originalFetch;
+}
+assert.equal(captureRequest.url, "/api/obsidian/note");
+assert.equal(captureRequest.body.action, "capture");
+assert.equal(captureRequest.body.vaultPath, "/tmp/test-brain");
+assert.equal(captureRequest.body.inboxFolder, "Intake/Sources");
+assert.match(captureRequest.body.content, /## Transcript\n\nline one\nline two/);
+assert.match(transcriptCardSource, /Send to brain/, "the brain icon should use the custom tooltip copy");
+assert.match(transcriptCardSource, /sendTranscriptToBrain/, "the transcript card should call the shared brain capture helper");
 
 console.log("test-transcript-card: all assertions passed");

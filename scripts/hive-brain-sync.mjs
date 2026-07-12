@@ -94,8 +94,13 @@ function syncSkill(sourceDir, slug, provider, providerLabel, sourceUrl) {
   if (!existsSync(srcSkill)) return;
   const dest = join(vaultPath, "Skills", slug);
   const sourceChecksum = hashDir(sourceDir);
+  const sourceMeta = readJson(join(sourceDir, SKILL_METADATA_FILE));
   const writeMeta = () => writeJson(join(dest, SKILL_METADATA_FILE), {
     provider, providerLabel, sourceUrl, managedBy: "hivemindos",
+    ...(sourceMeta?.upstreamSourceUrl ? { upstreamSourceUrl: sourceMeta.upstreamSourceUrl } : {}),
+    ...(sourceMeta?.repository ? { repository: sourceMeta.repository } : {}),
+    ...(sourceMeta?.license ? { license: sourceMeta.license } : {}),
+    ...(sourceMeta?.commit ? { commit: sourceMeta.commit } : {}),
     sourceChecksum, importedAt: new Date().toISOString(),
   });
   if (!existsSync(join(dest, "SKILL.md"))) {

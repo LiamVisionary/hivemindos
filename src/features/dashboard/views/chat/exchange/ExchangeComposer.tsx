@@ -383,7 +383,7 @@ export function ExchangeComposer(props: ExchangeComposerProps) {
                 onClick={() => setMenu((current) => (current === "perm" ? "" : "perm"))}
                 aria-expanded={menu === "perm"}
                 title="Permission mode"
-                style={{ ...PILL_STYLE, border: "1px solid color-mix(in srgb, var(--honey) 40%, transparent)", background: "var(--honey-soft)", color: "var(--honey)" }}
+                style={{ ...PILL_STYLE, color: "var(--honey)" }}
               >
                 <Ico d={ICON_PATHS.shield} size={13} />
                 {permissionOption.label.split(" ")[0]}
@@ -427,7 +427,7 @@ export function ExchangeComposer(props: ExchangeComposerProps) {
                   onClick={() => { setMenu((current) => (current === "model" ? "" : "model")); setModelSearch(""); onOpenModelMenu?.(); }}
                   aria-expanded={menu === "model"}
                   title="Switch model"
-                  style={{ ...PILL_STYLE, border: "1px solid var(--line-2)", background: "var(--panel-2)", color: "var(--fg-2)" }}
+                  style={{ ...PILL_STYLE, color: "var(--fg-2)" }}
                 >
                   <ModelIco size={14} />
                   {currentModel || "Model"}
@@ -566,7 +566,7 @@ export function ExchangeComposer(props: ExchangeComposerProps) {
                 onClick={() => setMenu((current) => (current === "ctx" ? "" : "ctx"))}
                 aria-expanded={menu === "ctx"}
                 title="Set machine & working directory"
-                style={{ ...PILL_STYLE, maxWidth: 230, border: `1px solid ${contextActive ? "var(--honey)" : "var(--line-2)"}`, background: contextActive ? "var(--honey-soft)" : "var(--panel-2)", color: contextActive ? "var(--honey)" : "var(--fg-2)" }}
+                style={{ ...PILL_STYLE, maxWidth: 230, color: contextActive ? "var(--honey)" : "var(--fg-2)" }}
               >
                 <Ico d={contextActive && workingDirectoryLabel ? ICON_PATHS.folder : ICON_PATHS.chat} size={14} />
                 <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{contextLabel}</span>

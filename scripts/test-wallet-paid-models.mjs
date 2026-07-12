@@ -157,13 +157,16 @@ includes(runtimeRoute, "ssePayload({ billing: responseBilling })", "chat runtime
 includes(runtimeRoute, "extractOpenAIToolCalls", "chat runtime extracts non-stream OpenAI tool calls");
 includes(runtimeRoute, "runNonStreamToolCalls", "chat runtime executes non-stream model tool calls");
 includes(runtimeRoute, "const leakedToolCalls = winningRequest?.sentTools ? extractLeakedToolCalls(rawChunk) : []", "chat runtime checks non-stream text for leaked tool-call markup before text fallback");
-includes(runtimeRoute, "forceVideoGenerationToolCall(winningRequest?.sentTools ? [...extractOpenAIToolCalls(json), ...leakedToolCalls] : [], forceVideoTool, userText)", "chat runtime checks non-stream tool calls and enforces explicit video intent before text fallback");
+includes(runtimeRoute, "winningRequest?.sentTools ? [...extractOpenAIToolCalls(json), ...leakedToolCalls] : []", "chat runtime executes only tool calls returned by the model");
+assert.ok(!runtimeRoute.includes("forceVideoGenerationToolCall"), "chat runtime must not synthesize a video tool call from keyword matching");
 includes(runtimeRoute, "nonStream: true", "chat runtime records non-stream command tool telemetry");
 includes(runtimeRoute, "runNonStreamToolConversation", "chat runtime continues non-stream tool-call turns");
 includes(runtimeRoute, "conversation.push({ role: \"assistant\", content: \"\", tool_calls: toolRun.assistantToolCalls })", "chat runtime preserves non-stream assistant tool calls before continuation");
 includes(runtimeRoute, "conversation.push(...toolRun.toolResultMessages)", "chat runtime appends non-stream tool results before continuation");
-includes(runtimeRoute, "toolCalls = toolRoundsLeft > 0 && winningRequest.sentTools ? [...extractOpenAIToolCalls(continuationJson), ...extractLeakedToolCalls(continuationText)] : []", "chat runtime can chain structured and leaked non-stream tool-call continuations");
-includes(runtimeRoute, "stripLeakedToolCallMarkup(continuationText) || fallbackText", "chat runtime does not render exhausted leaked tool-call continuations");
+includes(runtimeRoute, "toolRoundsLeft > 0 && input.request.sentTools", "chat runtime can chain structured and leaked non-stream tool-call continuations");
+includes(runtimeRoute, "stripLeakedToolCallMarkup(continuationText).trim()", "chat runtime strips exhausted leaked tool-call continuations");
+includes(runtimeRoute, "Tool-loop recovery: tools are unavailable for this final response.", "chat runtime recovers malformed tool loops with a final tool-free answer");
+includes(runtimeRoute, "Nothing was run. Please retry", "chat runtime keeps a safe fallback when the recovery model also fails");
 assert.ok(!runtimeRoute.includes("shouldUseCompactFreeScoutContext"), "chat runtime must not compact simple free Scout prompts");
 assert.ok(!runtimeRoute.includes("compactFreeScoutContext"), "chat runtime must not carry a compact free Scout context gate");
 includes(runtimeRoute, "buildTaskRetrievalContextResult", "chat runtime keeps capability retrieval context for Scout turns");
@@ -219,6 +222,9 @@ includes(taskRetrievalContext, "export function videoGenerationRequest", "capabi
 includes(taskRetrievalContext, "|| videoGenerationRequest(query)", "video generation prompts force capability routing");
 includes(taskRetrievalContext, "label: \"video generation\"", "capability routing runs a video-generation retrieval query");
 includes(taskRetrievalContext, "videoGenerationCapabilityContext", "capability routing injects video-generation tool guidance");
+assert.ok(!runtimeRoute.includes("videoCreationClarification(userPrompt)"), "chat runtime must not intercept video conversation with a regex clarification");
+assert.ok(!runtimeRoute.includes("streamNativeVideoGeneration({"), "chat runtime must not dispatch video before the agent chooses a tool");
+includes(runtimeRoute, "tool_choice: \"auto\"", "video tools remain agent-selected when capability discovery offers them");
 includes(statusChatProcessImageGeneration, "isCapabilitySearchProcessEvent", "image generation process card ignores discovery-only capability events");
 runTsxAssertion(`
   import assert from "node:assert/strict";

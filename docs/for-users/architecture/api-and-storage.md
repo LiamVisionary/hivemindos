@@ -256,12 +256,12 @@ Routes:
 | `GET /ledger` | Ledger balance/summary |
 | `POST /receipts` | Signed usage receipt ingestion |
 | `POST /observations` | Lower-trust local usage observations |
-| `POST /exchange` | Honey to HIVE exchange |
+| `POST /exchange` | Honey-to-HIVE ledger exchange; fails closed by default unless a separately authorized hosted conversion policy is enabled |
 | `POST /return-to-honey` | Move legacy ledger-only HIVE back to Honey |
-| `POST /claim-bankr-hive` | Official Honey claim that sends HIVE from the worker-held Bankr treasury, then spends Honey after a tx hash |
+| `POST /claim-bankr-hive` | Honey-to-HIVE claim route; fails closed by default unless a separately authorized hosted conversion policy is enabled |
 | `POST /pool-events` | Admin reward-pool funding events |
 
-Pool math: Bankr Doppler swap fee `1.2%` * creator share `57%` * Honey allocation `5%` = `0.0342%` of trading volume value.
+Legacy reward-pool accounting remains visible for audit and return-to-Honey repair. It is not a current promise of token conversion or a fixed allocation of company revenue.
 
 ### Compute Gateway
 
@@ -317,9 +317,9 @@ Common local variables:
 | `HONEY_LEDGER_REMOTE_URL` | Official or forked Honey ledger worker |
 | `HONEY_LEDGER_ISSUER_ID` | Honey ledger issuer id |
 | `HONEY_LEDGER_SIGNING_SECRET` | Trusted receipt signing secret |
-| `HONEY_BILLING_SIGNING_SECRET` | Trusted managed HONEY credit/debit signing secret |
-| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Operator-side Stripe Checkout and webhook keys for managed HONEY funding |
-| `MANAGED_HONEY_CREDITS_PER_USD` | Display conversion for spend-only managed HONEY credits |
+| `HONEY_BILLING_SIGNING_SECRET` | Trusted Hivemind Cloud credit/debit signing secret (legacy variable name) |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | Operator-side Stripe Checkout and webhook keys for Hivemind Cloud credit funding |
+| `MANAGED_HONEY_CREDITS_PER_USD` | Display conversion for spend-only Hivemind Cloud credits (legacy variable name) |
 | `MANAGED_AGENT_MARKUP_BPS` | Managed-agent retail markup over server-side provider cost |
 
 Do not commit private values, Tailnet IPs, wallet keys, or local vault contents.

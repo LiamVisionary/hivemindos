@@ -3,11 +3,11 @@ import "server-only";
 import { createHmac } from "crypto";
 import type { BinaryLike } from "crypto";
 import { getAssociatedTokenAddressSync, createAssociatedTokenAccountInstruction, createTransferInstruction } from "@solana/spl-token";
-import { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL, Transaction } from "@solana/web3.js";
 import { generateMnemonic, mnemonicToSeedSync, validateMnemonic } from "@scure/bip39";
 import { wordlist as englishWordlist } from "@scure/bip39/wordlists/english";
 import bs58 from "bs58";
-import { concat, createPublicClient, createWalletClient, fallback, formatEther, formatUnits, http, maxUint256, numberToHex, parseUnits, size, webSocket } from "viem";
+import { concat, createPublicClient, createWalletClient, encodeFunctionData, fallback, formatEther, formatUnits, http, keccak256, maxUint256, numberToHex, parseUnits, size, webSocket } from "viem";
 import { generatePrivateKey, mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
 import {
   ROBINHOOD_CHAIN,
@@ -72,8 +72,7 @@ const BASE_HIVE = "0xA382c83e2a3B79368f372c2EB9b6925ffAf45bA3";
 const SOLANA_USDC = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const SOLANA_DEVNET_USDC = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU";
 const USDG_ICON_URL = "https://assets.coingecko.com/coins/images/67036/large/USDG_Icon_200x200.png";
-const EVM_RECOVERY_PATH = "m/44'/60'/0'/0/0";
-const SOLANA_RECOVERY_PATH = "m/44'/501'/0'/0'";
+const MAX_RECOVERY_PHRASE_ACCOUNT_INDEX = 99;
 const HARDENED_OFFSET = 0x80000000;
 const MAX_DEXSCREENER_TOKEN_QUOTE_HYDRATIONS = 50;
 const ETH_ICON_URL = "https://assets.coingecko.com/coins/images/279/large/ethereum.png";
@@ -316,10 +315,26 @@ export function importWalletSecret(networkInput: string, secretInput: string, im
   return { network, address: keypair.publicKey.toBase58(), secret: bs58.encode(keypair.secretKey), importKind };
 }
 
-export function importRecoveryPhraseWallets(secretInput: string): RecoveryPhraseWalletSecret[] {
+function recoveryPhraseAccountIndex(value: number): number {
+  if (!Number.isInteger(value) || value < 0 || value > MAX_RECOVERY_PHRASE_ACCOUNT_INDEX) {
+    throw new Error(`Recovery-phrase account must be between 1 and ${MAX_RECOVERY_PHRASE_ACCOUNT_INDEX + 1}.`);
+  }
+  return value;
+}
+
+export function recoveryPhraseDerivationPaths(accountIndex = 0) {
+  const index = recoveryPhraseAccountIndex(accountIndex);
+  return {
+    evm: `m/44'/60'/0'/0/${index}`,
+    solana: `m/44'/501'/${index}'/0'`,
+  } as const;
+}
+
+export function importRecoveryPhraseWallets(secretInput: string, accountIndex = 0): RecoveryPhraseWalletSecret[] {
   const mnemonic = normalizeMnemonic(secretInput);
-  const evmAccount = mnemonicToAccount(mnemonic, { path: EVM_RECOVERY_PATH });
-  const solanaKeypair = solanaKeypairFromMnemonic(mnemonic, SOLANA_RECOVERY_PATH);
+  const paths = recoveryPhraseDerivationPaths(accountIndex);
+  const evmAccount = mnemonicToAccount(mnemonic, { path: paths.evm });
+  const solanaKeypair = solanaKeypairFromMnemonic(mnemonic, paths.solana);
   return [
     {
       label: "Base",
@@ -327,7 +342,7 @@ export function importRecoveryPhraseWallets(secretInput: string): RecoveryPhrase
       address: evmAccount.address,
       secret: mnemonic,
       importKind: "recovery-phrase",
-      derivationPath: EVM_RECOVERY_PATH,
+      derivationPath: paths.evm,
     },
     {
       label: "Robinhood Chain",
@@ -335,7 +350,7 @@ export function importRecoveryPhraseWallets(secretInput: string): RecoveryPhrase
       address: evmAccount.address,
       secret: mnemonic,
       importKind: "recovery-phrase",
-      derivationPath: EVM_RECOVERY_PATH,
+      derivationPath: paths.evm,
     },
     {
       label: "Solana",
@@ -343,7 +358,7 @@ export function importRecoveryPhraseWallets(secretInput: string): RecoveryPhrase
       address: solanaKeypair.publicKey.toBase58(),
       secret: bs58.encode(solanaKeypair.secretKey),
       importKind: "recovery-phrase",
-      derivationPath: SOLANA_RECOVERY_PATH,
+      derivationPath: paths.solana,
     },
   ];
 }
@@ -364,18 +379,19 @@ export function isRecoveryPhraseSecret(secret: string): boolean {
  *  own key family (EVM key → EVM chain, Solana key → Solana network). */
 export function deriveWalletForAdditionalChain(
   targetNetworkInput: string,
-  source: { network: string; secret: string },
+  source: { network: string; secret: string; accountIndex?: number },
 ): ImportedWalletSecret {
   const network = assertNetwork(targetNetworkInput);
   const secret = source.secret.trim();
   if (!secret) throw new Error("This wallet has no stored secret to derive from.");
   if (isRecoveryPhraseSecret(secret)) {
     const mnemonic = normalizeMnemonic(secret);
+    const paths = recoveryPhraseDerivationPaths(source.accountIndex ?? 0);
     if (network.startsWith("eip155:")) {
-      const account = mnemonicToAccount(mnemonic, { path: EVM_RECOVERY_PATH });
+      const account = mnemonicToAccount(mnemonic, { path: paths.evm });
       return { network, address: account.address, secret: mnemonic, importKind: "recovery-phrase" };
     }
-    const keypair = solanaKeypairFromMnemonic(mnemonic, SOLANA_RECOVERY_PATH);
+    const keypair = solanaKeypairFromMnemonic(mnemonic, paths.solana);
     return { network, address: keypair.publicKey.toBase58(), secret: bs58.encode(keypair.secretKey), importKind: "recovery-phrase" };
   }
   const sourceIsEvm = String(source.network || "").startsWith("eip155:");
@@ -540,23 +556,103 @@ export async function sendUsdStable(params: {
   toAddress: string;
   amountUsd: number;
 }): Promise<{ signature: string; assetSymbol: "USDC" | "USDG" }> {
+  const prepared = await prepareUsdStableTransfer(params);
+  return submitPreparedUsdStableTransfer(prepared);
+}
+
+export async function readEvmNativeBalanceWei(networkInput: string, address: string): Promise<bigint> {
+  const network = assertNetwork(networkInput);
+  if (!network.startsWith("eip155:")) throw new Error("Native EVM balance checks require an EVM wallet.");
+  const client = createPublicClient({ chain: evmChain(network), transport: evmReadTransport(network) });
+  return client.getBalance({ address: address as `0x${string}` });
+}
+
+export async function sendEvmNative(params: {
+  network: string;
+  secret: string;
+  fromAddress: string;
+  toAddress: string;
+  amountWei: bigint;
+}): Promise<{ signature: `0x${string}` }> {
+  const network = assertNetwork(params.network);
+  if (!network.startsWith("eip155:")) throw new Error("Native EVM transfers require an EVM wallet.");
+  if (params.amountWei <= 0n) throw new Error("Native EVM transfer amount must be greater than zero.");
+  const account = resolveEvmSigningAccount(params.secret, params.fromAddress);
+  const chain = evmChain(network);
+  const transport = http(evmRpc(network));
+  const wallet = createWalletClient({ account, chain, transport });
+  const publicClient = createPublicClient({ chain, transport: evmReadTransport(network) });
+  const signature = await wallet.sendTransaction({
+    account,
+    to: params.toAddress as `0x${string}`,
+    value: params.amountWei,
+  });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: signature });
+  if (receipt.status === "reverted") throw new Error("Native EVM gas top-up reverted on-chain.");
+  return { signature };
+}
+
+export type PreparedUsdStableTransfer =
+  | {
+      kind: "evm";
+      network: SupportedWalletNetwork;
+      assetSymbol: "USDC" | "USDG";
+      serializedTransaction: `0x${string}`;
+      signature: `0x${string}`;
+    }
+  | {
+      kind: "solana";
+      network: SupportedWalletNetwork;
+      assetSymbol: "USDC";
+      serializedTransactionBase64: string;
+      signature: string;
+      blockhash: string;
+      lastValidBlockHeight: number;
+    };
+
+/**
+ * Build and sign a stablecoin transfer without broadcasting it. Brokerage
+ * orders use this as a short-lived fee reservation: an invalid or unfunded fee
+ * fails before the order, while a rejected order leaves the signed transfer
+ * unbroadcast and therefore does not charge the user.
+ */
+export async function prepareUsdStableTransfer(params: {
+  network: string;
+  secret: string;
+  fromAddress: string;
+  toAddress: string;
+  amountUsd: number;
+}): Promise<PreparedUsdStableTransfer> {
   const network = assertNetwork(params.network);
   if (!Number.isFinite(params.amountUsd) || params.amountUsd <= 0) throw new Error("Amount must be greater than zero.");
   if (network.startsWith("eip155:")) {
-    const account = evmAccountFromSecret(params.secret);
-    if (account.address.toLowerCase() !== params.fromAddress.toLowerCase()) throw new Error("Stored key does not match wallet address.");
+    const account = resolveEvmSigningAccount(params.secret, params.fromAddress);
     const stable = evmUsdToken(network);
     const wallet = createWalletClient({ account, chain: evmChain(network), transport: http(evmRpc(network)) });
-    const hash = await wallet.writeContract({
-      address: stable.address,
-      abi: ERC20_ABI,
-      functionName: "transfer",
-      args: [params.toAddress as `0x${string}`, parseUnits(params.amountUsd.toFixed(stable.decimals), stable.decimals)],
+    const request = await wallet.prepareTransactionRequest({
+      account,
+      to: stable.address,
+      data: encodeFunctionData({
+        abi: ERC20_ABI,
+        functionName: "transfer",
+        args: [params.toAddress as `0x${string}`, parseUnits(params.amountUsd.toFixed(stable.decimals), stable.decimals)],
+      }),
     });
-    const publicClient = createPublicClient({ chain: evmChain(network), transport: evmReadTransport(network) });
-    const receipt = await publicClient.waitForTransactionReceipt({ hash });
-    if (receipt.status === "reverted") throw new Error(`${stable.symbol} transfer reverted on-chain.`);
-    return { signature: hash, assetSymbol: stable.symbol };
+    const signableRequest: Partial<typeof request> = { ...request };
+    delete signableRequest.account;
+    delete signableRequest.chain;
+    delete signableRequest.from;
+    delete signableRequest._capabilities;
+    const serializedTransaction = await account.signTransaction(
+      signableRequest as Parameters<typeof account.signTransaction>[0],
+    );
+    return {
+      kind: "evm",
+      network,
+      assetSymbol: stable.symbol,
+      serializedTransaction,
+      signature: keccak256(serializedTransaction),
+    };
   }
 
   const connection = new Connection(solanaRpc(network), "confirmed");
@@ -572,8 +668,66 @@ export async function sendUsdStable(params: {
     transaction.add(createAssociatedTokenAccountInstruction(payer.publicKey, toAta, recipient, mint));
   }
   transaction.add(createTransferInstruction(fromAta, toAta, payer.publicKey, BigInt(Math.round(params.amountUsd * 1_000_000))));
-  const signature = await sendAndConfirmTransaction(connection, transaction, [payer], { commitment: "confirmed" });
-  return { signature, assetSymbol: "USDC" };
+  const latestBlockhash = await connection.getLatestBlockhash("confirmed");
+  transaction.feePayer = payer.publicKey;
+  transaction.recentBlockhash = latestBlockhash.blockhash;
+  transaction.sign(payer);
+  const simulation = await connection.simulateTransaction(transaction);
+  if (simulation.value.err) throw new Error(`USDC fee reservation simulation failed: ${JSON.stringify(simulation.value.err)}.`);
+  const signature = transaction.signature;
+  if (!signature) throw new Error("USDC fee reservation could not be signed.");
+  return {
+    kind: "solana",
+    network,
+    assetSymbol: "USDC",
+    serializedTransactionBase64: transaction.serialize().toString("base64"),
+    signature: bs58.encode(Uint8Array.from(signature)),
+    blockhash: latestBlockhash.blockhash,
+    lastValidBlockHeight: latestBlockhash.lastValidBlockHeight,
+  };
+}
+
+/** Broadcast a previously signed stablecoin transfer and wait for final status. */
+export async function submitPreparedUsdStableTransfer(
+  prepared: PreparedUsdStableTransfer,
+): Promise<{ signature: string; assetSymbol: "USDC" | "USDG" }> {
+  if (prepared.kind === "evm") {
+    const publicClient = createPublicClient({ chain: evmChain(prepared.network), transport: evmReadTransport(prepared.network) });
+    try {
+      await publicClient.sendRawTransaction({ serializedTransaction: prepared.serializedTransaction });
+    } catch (sendError) {
+      // A provider can lose the submission response after accepting the raw tx.
+      // Waiting on its deterministic hash makes retries idempotent.
+      await publicClient.waitForTransactionReceipt({ hash: prepared.signature, timeout: 15_000 }).catch(() => {
+        throw sendError;
+      });
+    }
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: prepared.signature });
+    if (receipt.status === "reverted") throw new Error(`${prepared.assetSymbol} transfer reverted on-chain.`);
+    return { signature: prepared.signature, assetSymbol: prepared.assetSymbol };
+  }
+
+  const connection = new Connection(solanaRpc(prepared.network), "confirmed");
+  let sendError: unknown;
+  try {
+    await connection.sendRawTransaction(Buffer.from(prepared.serializedTransactionBase64, "base64"), {
+      maxRetries: 3,
+      skipPreflight: false,
+    });
+  } catch (error) {
+    sendError = error;
+  }
+  try {
+    const confirmation = await connection.confirmTransaction({
+      signature: prepared.signature,
+      blockhash: prepared.blockhash,
+      lastValidBlockHeight: prepared.lastValidBlockHeight,
+    }, "confirmed");
+    if (confirmation.value.err) throw new Error(`USDC transfer failed: ${JSON.stringify(confirmation.value.err)}.`);
+  } catch (confirmationError) {
+    throw sendError ?? confirmationError;
+  }
+  return { signature: prepared.signature, assetSymbol: "USDC" };
 }
 
 /** Read an ERC-20 token's decimals on-chain (for tokens outside the curated map). */
@@ -608,8 +762,7 @@ export async function executeEvmZeroExSwap(params: {
 }): Promise<{ approvalHash?: string; swapHash: string }> {
   const network = assertNetwork(params.network);
   if (!network.startsWith("eip155:")) throw new Error("0x swaps require an EVM wallet.");
-  const account = evmAccountFromSecret(params.secret);
-  if (account.address.toLowerCase() !== params.fromAddress.toLowerCase()) throw new Error("Stored key does not match wallet address.");
+  const account = resolveEvmSigningAccount(params.secret, params.fromAddress);
   const chain = evmChain(network);
   const transport = http(evmRpc(network));
   const wallet = createWalletClient({ account, chain, transport });
@@ -651,12 +804,29 @@ export async function executeEvmZeroExSwap(params: {
   return { approvalHash, swapHash };
 }
 
-function evmAccountFromSecret(secret: string) {
-  try {
-    return privateKeyToAccount(normalizeEvmPrivateKey(secret));
-  } catch {
-    return mnemonicToAccount(secret.trim());
+/** Resolve a local EVM signer against the wallet address selected by the caller.
+ * Recovery phrases may represent any supported Phantom account, so the address
+ * is the authority instead of silently assuming Account 1. */
+export function resolveEvmSigningAccount(secret: string, expectedAddress: string) {
+  const normalizedExpectedAddress = expectedAddress.trim().toLowerCase();
+  const compactSecret = secret.trim();
+  const prefixedSecret = compactSecret.startsWith("0x") ? compactSecret : `0x${compactSecret}`;
+  if (/^0x[a-fA-F0-9]{64}$/.test(prefixedSecret)) {
+    const account = privateKeyToAccount(prefixedSecret as `0x${string}`);
+    if (account.address.toLowerCase() !== normalizedExpectedAddress) {
+      throw new Error("Stored key does not match the selected wallet address.");
+    }
+    return account;
   }
+  const mnemonic = normalizeMnemonic(secret);
+  for (let accountIndex = 0; accountIndex <= MAX_RECOVERY_PHRASE_ACCOUNT_INDEX; accountIndex += 1) {
+    const hdAccount = mnemonicToAccount(mnemonic, { path: recoveryPhraseDerivationPaths(accountIndex).evm });
+    if (hdAccount.address.toLowerCase() !== normalizedExpectedAddress) continue;
+    const privateKey = hdAccount.getHdKey().privateKey;
+    if (!privateKey) throw new Error("Recovery phrase did not derive an EVM private key.");
+    return privateKeyToAccount(`0x${Buffer.from(privateKey).toString("hex")}`);
+  }
+  throw new Error(`Stored recovery phrase does not derive the selected wallet address in Accounts 1-${MAX_RECOVERY_PHRASE_ACCOUNT_INDEX + 1}.`);
 }
 
 function normalizeMnemonic(secret: string) {

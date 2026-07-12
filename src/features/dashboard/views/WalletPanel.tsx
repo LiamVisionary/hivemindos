@@ -4,6 +4,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WalletsView } from "@/components/wallets-drop-in/WalletsView";
 import { AGENT_PAYMENT_PROVIDER_FEATURES, type WalletDropInGroup } from "@/lib/config/agent-payments";
 import { HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER } from "@/lib/config/hivemindos-wallet-paid-models";
+import { MULTI_CHAIN_WALLET_LABEL, personalWalletNetworkForChainLabel } from "@/lib/config/personal-wallet-chains";
 import { fetchPersonalWalletRecords } from "@/lib/native/personal-wallets";
 import { loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import { switchBrowserWalletToBase } from "@/lib/services/hive-staking-client";
@@ -19,6 +20,7 @@ import {
   mergePersonalWalletSources,
   nativeSymbolForWallet,
   personalWalletAccountKey,
+  recoveryPhraseWalletGroupId,
   type GroupedPersonalWallet,
 } from "@/lib/utils/personal-wallet-grouping";
 
@@ -310,11 +312,7 @@ function walletBalanceUsd(wallet: any): number {
 }
 
 function chainToNetwork(chain: string): string {
-  const normalized = chain.toLowerCase();
-  if (normalized.includes("solana")) return "solana:mainnet";
-  if (normalized.includes("robinhood")) return "eip155:4663";
-  if (normalized.includes("sepolia")) return "eip155:84532";
-  return "eip155:8453";
+  return personalWalletNetworkForChainLabel(chain);
 }
 
 function stableSendAssetForNetwork(network: string): "USDC" | "USDG" {
@@ -1114,7 +1112,7 @@ function WalletPanelComponent(props: any) {
       if (asset !== recipientAsset) throw new Error(`That agent wallet receives ${recipientAsset} on ${fundingNetworkLabel(String(wallet.network || ""))}.`);
       const sourceAgentId = resolvePersonalWalletAgentIdForAsset(input.source, asset, mergedPersonalWallets);
       if (!sourceAgentId) throw new Error(`No local ${asset} wallet is available to fund this agent.`);
-      const data = await sendApprovedWalletUsdc({ agentId: sourceAgentId, toAddress, amountUsd: Number(input.amount), autoPayEnabled: false, confirmation: input.confirmation, maxPaymentUsd: Number(input.amount) || undefined });
+      const data = await sendApprovedWalletUsdc({ agentId: sourceAgentId, toAddress, amountUsd: Number(input.amount), autoPayEnabled: false, confirmation: input.confirmation, maxPaymentUsd: Number(input.amount) || undefined, gasSponsorAgentId: input.agentId });
       if (!data?.ok) throw new Error(data?.error || "Could not fund agent.");
       const [recipientWallet] = await Promise.all([refreshWalletBalance?.(input.agentId), refreshPersonalWalletSourceBalance(input.source), loadWalletActivity()]);
       if (recipientWallet) {
@@ -1178,9 +1176,8 @@ function WalletPanelComponent(props: any) {
       return { ok: true, name };
     },
     onCreateWallet: async (input: any) => {
-      const chain = String(input.chain || "Base + Robinhood Chain + Solana");
-      const normalizedChain = chain.toLowerCase();
-      const multiChain = normalizedChain.includes("base") && normalizedChain.includes("solana") && normalizedChain.includes("robinhood");
+      const chain = String(input.chain || MULTI_CHAIN_WALLET_LABEL);
+      const multiChain = chain === MULTI_CHAIN_WALLET_LABEL;
       const response = await fetch("/api/wallet/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId: `user:${globalThis.crypto?.randomUUID?.() || Date.now()}`, createKind: multiChain ? "multi-chain" : "single-network", network: multiChain ? undefined : chainToNetwork(chain), name: input.name, vaultPath: vaultPath || undefined }) }).catch(() => null);
       const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string } | null;
       if (!response?.ok || !data?.ok) throw new Error(data?.error || "Could not create wallet.");
@@ -1189,7 +1186,16 @@ function WalletPanelComponent(props: any) {
     },
     onImportWallet: async (input: any) => {
       const secret = String(input.secret || "").trim();
-      const response = await fetch("/api/wallet/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId: input.wallet?.id || `user:${globalThis.crypto?.randomUUID?.() || Date.now()}`, network: chainToNetwork(input.chain || "Base"), name: input.name, secret, importKind: secret.split(/\s+/).length >= 12 ? "recovery-phrase" : "private-key", vaultPath: vaultPath || undefined }) }).catch(() => null);
+      const chain = String(input.chain || MULTI_CHAIN_WALLET_LABEL);
+      const multiChainImport = chain === MULTI_CHAIN_WALLET_LABEL;
+      const recoveryPhrase = secret.split(/\s+/).length >= 12;
+      const accountIndex = Number.isInteger(Number(input.accountIndex)) && Number(input.accountIndex) >= 0 ? Number(input.accountIndex) : 0;
+      if (multiChainImport && !recoveryPhrase) {
+        throw new Error("Multi-chain import requires the wallet's recovery phrase. Choose one chain to import a raw private key.");
+      }
+      const newWalletId = `user:${globalThis.crypto?.randomUUID?.() || Date.now()}`;
+      const agentId = input.wallet?.id || (recoveryPhrase ? recoveryPhraseWalletGroupId(newWalletId, accountIndex) : newWalletId);
+      const response = await fetch("/api/wallet/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId, network: multiChainImport ? undefined : chainToNetwork(chain), name: input.name, secret, importKind: recoveryPhrase ? "recovery-phrase" : "private-key", importTarget: multiChainImport ? "multi-chain" : "single-network", accountIndex, vaultPath: vaultPath || undefined }) }).catch(() => null);
       const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string } | null;
       if (!response?.ok || !data?.ok) throw new Error(data?.error || "Could not import wallet.");
       await loadPersonalWallets();

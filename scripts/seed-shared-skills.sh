@@ -301,6 +301,9 @@ write_packaged_auto_install_metadata() {
     obsidian-markdown|obsidian-bases|json-canvas|defuddle)
       upstream_line='  "upstreamSourceUrl": "https://github.com/kepano/obsidian-skills",'
       ;;
+    hyperframes)
+      upstream_line='  "upstreamSourceUrl": "https://github.com/heygen-com/hyperframes",'
+      ;;
   esac
   cat > "$dir/.hivemind-skill-source.json" <<JSON
 {

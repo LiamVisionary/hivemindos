@@ -213,6 +213,7 @@
 /* ---------- pills / chips ---------- */
 
 .cx-pill {
+  background: transparent;
   transition:
     background 140ms ease,
     border-color 140ms ease,
@@ -220,8 +221,7 @@
 }
 
 .cx-pill:hover {
-  border-color: var(--honey-line);
-  color: var(--honey);
+  background: var(--panel-2);
 }
 
 .cx-chip {

@@ -1,8 +1,6 @@
 import { NextRequest } from "next/server";
 
 import {
-  collectCompanyRevenueFeeForEvent,
-  COMPANY_REVENUE_FEE_CONFIRMATION,
   companyRevenueRollup,
   listCompanyRevenueRecords,
   quoteCompanyRevenueShare,
@@ -53,18 +51,11 @@ export async function POST(request: NextRequest) {
           amountUsd: Number(body.amountUsd),
           network: body.network,
         }),
-        confirmation: COMPANY_REVENUE_FEE_CONFIRMATION,
       });
     }
 
     if (action === "collect-fee") {
-      const result = await collectCompanyRevenueFeeForEvent({
-        eventId: body.eventId ?? "",
-        collectingAgentId: body.collectingAgentId ?? "",
-        confirmation: body.confirmation,
-      });
-      if (result.feeError) return errorJson(result.feeError, 424, { record: result.record, rollup: result.rollup });
-      return okJson({ ...result, confirmation: COMPANY_REVENUE_FEE_CONFIRMATION });
+      return errorJson("Revenue earned outside HivemindOS carries no platform fee. Marketplace or managed-billing fees settle through their hosted transaction policy.", 409);
     }
 
     const result = await recordCompanyRevenue({
@@ -76,12 +67,10 @@ export async function POST(request: NextRequest) {
       description: body.description,
       receivedAt: body.receivedAt,
       network: body.network,
-      collectFee: body.collectFee === true,
-      collectingAgentId: body.collectingAgentId,
-      confirmation: body.confirmation,
+      collectFee: false,
     });
     if (result.feeError) return errorJson(result.feeError, 424, { record: result.record, rollup: result.rollup });
-    return okJson({ ...result, confirmation: COMPANY_REVENUE_FEE_CONFIRMATION });
+    return okJson(result);
   } catch (error) {
     return errorJson(error instanceof Error ? error.message : "Company revenue action failed", 400);
   }

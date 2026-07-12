@@ -1,4 +1,5 @@
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+import { mergePersonalWalletList } from "@/lib/utils/personal-wallet-grouping";
 
 export type NativePersonalWalletsPayload = {
   ok?: boolean;
@@ -21,74 +22,6 @@ export async function readNativePersonalWallets(input: {
   }
 }
 
-function personalWalletRecordKey(wallet: Record<string, unknown>): string {
-  const network = String(wallet.network || "").trim();
-  const address = String(wallet.address || "").trim().toLowerCase();
-  return network && address ? `${network}:${address}` : "";
-}
-
-function isGenericPersonalWalletName(name: unknown): boolean {
-  const normalized = String(name || "").trim().toLowerCase();
-  return normalized === "my wallet"
-    || normalized === "my wallet base"
-    || normalized === "my wallet solana"
-    || normalized === "my base wallet"
-    || normalized === "my solana wallet"
-    || /^my (?:base(?: mainnet)?|base sepolia|solana(?: mainnet)?|solana devnet|robinhood chain(?: testnet)?|evm \d+) wallet$/.test(normalized)
-    || /^my wallet (?:base(?: mainnet)?|base sepolia|solana(?: mainnet)?|solana devnet|robinhood chain(?: testnet)?|evm \d+)$/.test(normalized);
-}
-
-function personalWalletRecordTime(wallet: Record<string, unknown>): number {
-  return Math.max(Number(wallet.updatedAt ?? 0) || 0, Number(wallet.lastOnchainSyncAt ?? 0) || 0);
-}
-
-function preferredPersonalWalletName(base: Record<string, unknown>, next: Record<string, unknown>): string {
-  const baseName = String(base.name || "").trim();
-  const nextName = String(next.name || "").trim();
-  if (nextName && !isGenericPersonalWalletName(nextName)) return nextName;
-  if (baseName && !isGenericPersonalWalletName(baseName)) return baseName;
-  return nextName || baseName;
-}
-
-function mergePersonalWalletRecord(base: Record<string, unknown> | undefined, next: Record<string, unknown>): Record<string, unknown> {
-  if (!base) return next;
-  const baseTime = personalWalletRecordTime(base);
-  const nextTime = personalWalletRecordTime(next);
-  const preferNextBalance = nextTime >= baseTime || Number(base.currentBalanceUsd ?? 0) <= 0;
-  const custodyMode = base.custodyMode === "local" || next.custodyMode === "local" ? "local" : next.custodyMode || base.custodyMode;
-  const importedFrom = base.importedFrom !== "watch" ? base.importedFrom : next.importedFrom || base.importedFrom;
-  return {
-    ...base,
-    ...next,
-    id: base.id || next.id,
-    agentId: base.agentId || next.agentId,
-    name: preferredPersonalWalletName(base, next),
-    custodyMode,
-    importedFrom,
-    currentBalanceUsd: preferNextBalance && Number(next.currentBalanceUsd ?? 0) > 0
-      ? Number(next.currentBalanceUsd)
-      : Number(base.currentBalanceUsd ?? 0) || Number(next.currentBalanceUsd ?? 0) || 0,
-    nativeBalance: preferNextBalance && Number(next.nativeBalance ?? 0) > 0
-      ? Number(next.nativeBalance)
-      : Number(base.nativeBalance ?? 0) || Number(next.nativeBalance ?? 0) || 0,
-    tokens: Array.isArray(next.tokens) && next.tokens.length ? next.tokens : Array.isArray(base.tokens) ? base.tokens : [],
-    lastOnchainSyncAt: Math.max(Number(base.lastOnchainSyncAt ?? 0) || 0, Number(next.lastOnchainSyncAt ?? 0) || 0),
-    updatedAt: Math.max(baseTime, nextTime),
-  };
-}
-
-function mergePersonalWalletRecords(...sources: Array<Array<Record<string, unknown>> | null | undefined>): Array<Record<string, unknown>> {
-  const merged = new Map<string, Record<string, unknown>>();
-  for (const wallets of sources) {
-    for (const wallet of wallets ?? []) {
-      const key = personalWalletRecordKey(wallet);
-      if (!key) continue;
-      merged.set(key, mergePersonalWalletRecord(merged.get(key), wallet));
-    }
-  }
-  return [...merged.values()];
-}
-
 async function fetchHttpPersonalWalletRecords(vaultPath?: string): Promise<Array<Record<string, unknown>>> {
   const query = vaultPath ? `?vaultPath=${encodeURIComponent(vaultPath)}` : "";
   const response = await fetch(`/api/wallet/personal${query}`, { headers: { accept: "application/json" }, cache: "no-store" }).catch(() => null);
@@ -106,7 +39,7 @@ export async function fetchPersonalWalletRecords(vaultPath?: string): Promise<Ar
   const native = await readNativePersonalWallets({ vaultPath });
   const nativeWallets = native?.ok && Array.isArray(native.wallets) ? native.wallets : null;
   const httpWallets = await fetchHttpPersonalWalletRecords(vaultPath);
-  return nativeWallets ? mergePersonalWalletRecords(nativeWallets, httpWallets) : httpWallets;
+  return nativeWallets ? mergePersonalWalletList([...nativeWallets, ...httpWallets]) : httpWallets;
 }
 
 /** Persist refreshed personal-wallet snapshots to the canonical wallet ledger. */

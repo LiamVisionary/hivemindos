@@ -41,7 +41,20 @@ container lifecycle and resource-limit checks are complete. Users who do not
 need always-on cloud execution can build and preview through a local or fleet
 machine without managed credits.
 
-## Plans
+## Hivemind Cloud Plans
+
+Hivemind Cloud separates the managed control-plane subscription from metered infrastructure. This keeps pricing aligned when one person operates many agents.
+
+| Plan | Price | Availability | Included managed usage |
+| --- | ---: | --- | ---: |
+| Community | Free | Available | $0 |
+| Cloud Pro | $39/month | Design-partner validation | $10/month |
+| Cloud Team | $299/month | Design-partner validation; five members | $50/month |
+| Enterprise | $30,000/year minimum | Contact-led | Contract-specific |
+
+Cloud Pro and Cloud Team prices are launch hypotheses being validated with design partners. A plan shown as design-partner or contact-led is not a self-serve entitlement.
+
+## Metered Agent Sizes
 
 | Plan | Compute | Persistent storage | Running | Stopped | Setup |
 | --- | --- | --- | --- | --- | --- |
@@ -49,7 +62,7 @@ machine without managed credits.
 | Medium | 2 vCPU · 4 GB RAM | 20 GB | $0.060/hour | $0.0050/hour | $0.075 |
 | Large | 4 vCPU · 8 GB RAM | 40 GB | $0.110/hour | $0.0100/hour | $0.100 |
 
-Model and tool use is billed separately from compute and storage. Current
+Agent runtime, model, tool, hosted-app, and API usage is billed separately from the control-plane subscription. Current
 prices are always loaded from the managed service; rebuilding or editing the
 downloaded app cannot change official rates, recipients, balances, or resource
 entitlements.

@@ -1,6 +1,6 @@
 // src/components/fleet/economy-strip.tsx
 // Compact fleet-wide economy readout for the fleet side rail: combined agent
-// wallet balances, the HIVE reward pool, and Bankr LLM credits.
+// wallet balances, Honey contribution records, and Bankr LLM credits.
 "use client";
 
 import * as React from "react";
@@ -97,15 +97,15 @@ export function EconomyStrip({ machines }: { machines: FleetMachine[] }) {
     {
       key: "honey",
       label: "honey",
-      value: data === null ? "···" : data.availableHoney === null ? "—" : formatHoney(data.availableHoney),
+      value: data?.availableHoney == null ? "—" : formatHoney(data.availableHoney),
       title: data?.totalHoney != null
-        ? `Honey available to claim as HIVE · ${formatHoney(data.totalHoney)} earned lifetime`
-        : "Honey available to claim as HIVE",
+        ? `Honey contribution record · ${formatHoney(data.totalHoney)} recorded lifetime`
+        : "Honey contribution record; not cash and not automatically convertible to HIVE",
     },
     {
       key: "bankr",
       label: "bankr credits",
-      value: data === null ? "···" : data.bankrLabel,
+      value: data?.bankrLabel ?? "—",
       title: "Bankr LLM credit balance",
     },
   ];

@@ -44,7 +44,7 @@ Existing projects can be imported as companies without being re-founded from scr
 
 The importer records the repository, Git remote, GitHub Actions workflows, scheduled workflow crons, Supabase `pg_cron` schedules, Render services, Vercel crons, cron-like files, and package scripts when those signals are present. The company cockpit then shows those systems in a **Systems** tab so operators can inspect the code and operating schedules that already keep the product running.
 
-Importing a legacy project does not automatically make historical or off-platform revenue subject to HivemindOS revenue share. Imported companies still show the Treasury revenue recorder, but fee collection remains tied to explicit revenue events recorded through a trusted or verifiable settlement path.
+Importing a legacy project does not make historical or off-platform revenue subject to a HivemindOS fee. Imported companies still show the Treasury revenue recorder; only a separately disclosed hosted marketplace or billing policy can attach a fee to a HivemindOS-sourced transaction.
 
 ## Cockpit
 
@@ -218,13 +218,13 @@ For official paid access, managed credits, marketplace revenue, hosted-agent acc
 
 Self-hosted operators may configure their own wallets, pay-to addresses, providers, quotas, and terms. Those flows should be presented as self-hosted, not as official HivemindOS-managed revenue or entitlement.
 
-## Revenue Share
+## Revenue Recording And Platform Fees
 
-Zero Human Companies can now record external revenue events and collect the HivemindOS company revenue share through the same policy-driven platform-fee rail used by local wallet payments. The default share is **2% of recorded company revenue with a $0.01 minimum**, net of refunds and chargebacks when those are known to the settlement route.
+Zero Human Companies can record external revenue events without giving HivemindOS a share of revenue earned elsewhere. **Revenue earned outside HivemindOS is not charged.**
 
-The Treasury tab shows recorded revenue, quoted share, collected share, and pending share for the company. Operators can record a revenue event by amount and source, and can optionally collect the share immediately from a selected company agent wallet. Collection requires explicit confirmation and writes the fee as a visible platform-fee receipt in wallet activity.
+The Treasury tab shows recorded revenue and any hosted-policy fee attached to a HivemindOS-sourced or HivemindOS-billed transaction. Operators can record an external event by amount and source without creating a fee.
 
-This does not make the downloadable app the authority over official revenue. External revenue is charged only when it is reported through HivemindOS, a hosted HivemindOS marketplace or billing service, or a verifiable third-party payment rail. Off-app cash, invoices, Stripe revenue, or marketplace sales that never report through one of those paths are not automatically charged by the local app.
+A future marketplace-sourced or managed commercial transaction may carry a disclosed server-authoritative fee when HivemindOS supplies the buyer, billing, hosting, execution, or protection. The downloaded app and a manually recorded event cannot invent that obligation.
 
 ## Related Docs
 
@@ -232,6 +232,6 @@ This does not make the downloadable app the authority over official revenue. Ext
 - [Use AEON With Zero Human Companies](../runtimes/aeon/zero-human-companies.html) covers choosing, launching, monitoring, and troubleshooting the optional AEON engine.
 - [AEON v0.1 Control Plane](../runtimes/aeon/v01-control-plane.html) covers linking and operating a current AEON workspace.
 - [Evo Optimization Runtime](evo-optimization.html) covers benchmark-driven optimizer loops and frontier-style experiments.
-- [Wallets, Tokens, Honey, HIVE, And x402](wallets-honey-and-x402.html) covers agent wallets, payment rails, managed HONEY credits, and x402 paid requests.
+- [Wallets, Tokens, Honey, HIVE, And x402](wallets-honey-and-x402.html) covers agent wallets, payment rails, Hivemind Cloud credits, and x402 paid requests.
 - [Agent Provider Integrations](agent-provider-integrations.html) covers agent mailbox provisioning (the **Create mailbox** flow, AgentMail and Cloudflare Agentic Inbox backends, and Agentic Inbox setup) that the Emails tab reads from.
 - [Monetization](../../for-investors/) covers the free-vs-paid product boundary for managed services.

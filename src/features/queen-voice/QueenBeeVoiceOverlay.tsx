@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import {
   AlertTriangle,
   AudioLines,
+  Camera,
+  CameraOff,
   Check,
   Crown,
   FileText,
@@ -24,6 +26,7 @@ import { HIVE_CHAT_TRANSCRIPT_BOTTOM_OFFSET } from "./hive-chat-layout";
 import { useQueenClapActivation } from "./use-queen-clap-activation";
 import { useQueenBeeGeminiLive } from "./use-queen-bee-gemini-live";
 import { useQueenBeeRealtime } from "./use-queen-bee-realtime";
+import { useQueenCamera } from "./use-queen-camera";
 import {
   useQueenBeeVoice,
   type QueenVoicePhase,
@@ -661,6 +664,20 @@ export function QueenBeeVoiceOverlay({
     recordedInputForOpen,
   );
   const voiceState = geminiLiveMode ? geminiLive : realtimeMode ? realtime : pipeline;
+  // Live camera for advanced voice mode: only the two realtime backends can see
+  // frames (the pipeline/fake-audio path cannot), so the camera is gated to
+  // them. Frames stream into whichever realtime session is active.
+  const cameraCapable = realtimeMode || geminiLiveMode;
+  const activeSendVideoFrame = geminiLiveMode ? geminiLive.sendVideoFrame : realtime.sendVideoFrame;
+  const camera = useQueenCamera(
+    React.useCallback((frame: string) => { activeSendVideoFrame?.(frame); }, [activeSendVideoFrame]),
+    geminiLiveMode ? 1000 : 2500,
+  );
+  const cameraStop = camera.stop;
+  const cameraActive = camera.active;
+  React.useEffect(() => {
+    if ((!voiceSessionOpen || !cameraCapable) && cameraActive) cameraStop();
+  }, [voiceSessionOpen, cameraCapable, cameraActive, cameraStop]);
   const lastVoiceFailureRef = React.useRef("");
   React.useEffect(() => {
     const message = voiceState.error || (voiceModeForOpen === "pipeline" ? pipeline.voiceNotice : "");
@@ -916,6 +933,28 @@ export function QueenBeeVoiceOverlay({
           />
         ) : null}
         {open ? (
+          <>
+            {cameraCapable ? (
+              // Preview stays mounted (visibility toggled) so the ref is bound
+              // before getUserMedia resolves and sets srcObject.
+              <video
+                ref={camera.videoRef}
+                autoPlay
+                muted
+                playsInline
+                style={{
+                  display: cameraActive ? "block" : "none",
+                  width: 184,
+                  height: 138,
+                  objectFit: "cover",
+                  borderRadius: 12,
+                  border: "1px solid var(--line-2)",
+                  background: "#000",
+                  alignSelf: "center",
+                  marginBottom: 8,
+                }}
+              />
+            ) : null}
           <div className={styles.controlBar}>
             <span className={styles.statusBadge}>
               <Crown size={14} aria-hidden="true" />
@@ -959,6 +998,19 @@ export function QueenBeeVoiceOverlay({
               <AudioLines size={14} aria-hidden="true" />
               Clap
             </button>
+            {cameraCapable ? (
+              <button
+                type="button"
+                className={`${styles.controlButton} ${cameraActive ? styles.controlButtonActive : ""}`}
+                onClick={camera.toggle}
+                aria-label={cameraActive ? "Turn camera off" : "Turn camera on"}
+                aria-pressed={cameraActive}
+                title={camera.error || (cameraActive ? "Camera on — she can see what you point at" : "Show the camera to Queen Bee")}
+              >
+                {cameraActive ? <Camera size={14} aria-hidden="true" /> : <CameraOff size={14} aria-hidden="true" />}
+                Camera
+              </button>
+            ) : null}
             <button
               type="button"
               className={`${styles.controlButton} ${muted ? styles.controlButtonActive : ""}`}
@@ -980,6 +1032,7 @@ export function QueenBeeVoiceOverlay({
               End
             </button>
           </div>
+          </>
         ) : null}
       </div>
     </>,

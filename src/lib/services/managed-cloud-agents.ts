@@ -13,6 +13,7 @@ import {
   type ManagedCloudAppProject,
   type ManagedCloudIntegration,
   type ManagedCloudPlan,
+  type HivemindCloudCommercialPlan,
 } from "@/lib/services/managed-cloud-agents-contract";
 import {
   clearPendingManagedCloudSettlement,
@@ -152,20 +153,25 @@ export async function recoverPendingManagedCloudSettlement(): Promise<boolean> {
 export async function getManagedCloudDashboard(): Promise<{
   configured: boolean;
   plans: ManagedCloudPlan[];
+  commercialPlans: HivemindCloudCommercialPlan[];
   topUpAmountsUsd: number[];
   account: ManagedCloudAccount | null;
   agents: ManagedCloudAgent[];
 }> {
   await recoverPendingManagedCloudSettlement().catch(() => false);
-  const catalog = await managedCloudRequest<{ plans: ManagedCloudPlan[]; topUpAmountsUsd: number[] }>("/v1/plans");
+  const catalog = await managedCloudRequest<{
+    plans: ManagedCloudPlan[];
+    commercialPlans: HivemindCloudCommercialPlan[];
+    topUpAmountsUsd: number[];
+  }>("/v1/plans");
   const credential = await getManagedCloudAccountCredential();
-  if (!credential) return { configured: false, plans: catalog.plans, topUpAmountsUsd: catalog.topUpAmountsUsd, account: null, agents: [] };
+  if (!credential) return { configured: false, plans: catalog.plans, commercialPlans: catalog.commercialPlans, topUpAmountsUsd: catalog.topUpAmountsUsd, account: null, agents: [] };
   try {
     const owned = await managedCloudRequest<{ account: ManagedCloudAccount; agents: ManagedCloudAgent[] }>("/v1/agents", {}, credential.token);
-    return { configured: true, plans: catalog.plans, topUpAmountsUsd: catalog.topUpAmountsUsd, account: owned.account, agents: owned.agents };
+    return { configured: true, plans: catalog.plans, commercialPlans: catalog.commercialPlans, topUpAmountsUsd: catalog.topUpAmountsUsd, account: owned.account, agents: owned.agents };
   } catch (error) {
     if (error instanceof ManagedCloudApiError && error.status === 401) {
-      return { configured: false, plans: catalog.plans, topUpAmountsUsd: catalog.topUpAmountsUsd, account: null, agents: [] };
+      return { configured: false, plans: catalog.plans, commercialPlans: catalog.commercialPlans, topUpAmountsUsd: catalog.topUpAmountsUsd, account: null, agents: [] };
     }
     throw error;
   }

@@ -42,7 +42,13 @@ immediate outage after a failed renewal, and a 30-day retention window gives the
 customer time to recover an expired or unpublished release. This is renewable
 hosting revenue, not a lifetime-hosting promise.
 
-## Why The Economics Can Scale
+## Role In The Revenue Model
+
+Publishing is a concrete first paid activation. It lets a free local user pay HivemindOS for one managed outcome before the user needs a recurring control-plane subscription.
+
+Retained publishers can later expand into Cloud Pro, Cloud Team, managed agents, models, APIs, and dynamic execution. Hosting is therefore an acquisition and expansion surface inside Hivemind Cloud, not a standalone company thesis.
+
+## Unit-Economics Boundary
 
 The HivemindOS price is collected per Site, while Cloudflare's base Workers
 subscription and included request/CPU allowances are shared at the account
@@ -52,22 +58,9 @@ meter unique workers invoked per day. See Cloudflare's current
 [Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/)
 and [Dynamic Workers pricing](https://developers.cloudflare.com/dynamic-workers/pricing/).
 
-An illustrative portfolio of **3,000 Dynamic Apps at $25 each produces $75,000
-in 30-day hosting revenue**. If all 3,000 stable-ID apps are invoked every day,
-the current Dynamic Worker creation schedule contributes approximately $178
-above its included allocation, plus the $5 account minimum. At an average of
-10,000 dynamic invocations per Site per month and approximately 2.2ms of dynamic
-CPU per invocation, the published Cloudflare request, CPU, and worker-creation
-rates imply roughly **$190-$200 in monthly Cloudflare compute charges** before
-storage, logs, payment processing, support, taxes, and other operating costs.
-That illustration produces approximately **99.7% cloud-infrastructure gross
-margin**, but it is a utilization example rather than a guaranteed company
-margin.
+The base platform and included allowances are shared across Sites, while storage, requests, CPU, logs, databases, support, payment processing, refunds, and taxes vary with real usage. Infrastructure gross margin must therefore be measured from production cohorts rather than inferred from a hypothetical portfolio.
 
-The same low unit rates preserve strong portfolio economics as usage grows. The
-important distinction is that the $5 is a monthly minimum, not an unlimited
-flat bill: aggregate request, CPU, worker-creation, storage, and database usage
-can all create overages.
+The $1 preview should debit an existing hosted-credit balance or be bundled into a larger top-up. It should not normally create an isolated $1 card charge whose fixed payment-processing fee consumes a large share of the purchase.
 
 ## Margin Protection
 
@@ -85,12 +78,7 @@ shared account allocation is exhausted. This replaces an unlimited tail risk
 with a known maximum; future published overage packs can create incremental
 revenue without silently passing through an unbounded bill.
 
-Investor models should therefore use two cases:
-
-- **Ordinary utilization:** shared fixed infrastructure and inexpensive
-  overages can support very high infrastructure gross margins.
-- **Heavy utilization:** revenue and enforced allowances remain per Site. The
-  product is deliberately bounded and should not be marketed as unlimited.
+Investor reporting should show hosted properties, conversion from preview to renewable hosting, 30/90-day hosting retention, revenue per property, infrastructure cost, payment cost, support cost, and contribution margin. Customer-count illustrations without conversion and churn assumptions are not forecasts.
 
 Official prices, entitlements, renewals, credit debits, and public slug ownership
 remain server-authoritative. The open-source app can display and submit a plan,

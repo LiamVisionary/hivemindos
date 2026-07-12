@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
 
     if (body.action === "credit") {
       if (process.env.MANAGED_HONEY_MANUAL_CREDIT_ENABLED !== "true") {
-        return NextResponse.json({ ok: false, error: "Manual managed HONEY credits are disabled. Use Stripe/webhook or another verified funding rail." }, { status: 403 });
+        return NextResponse.json({ ok: false, error: "Manual Hivemind Cloud credits are disabled. Use Stripe/webhook or another verified funding rail." }, { status: 403 });
       }
       if (body.confirmation !== CREDIT_CONFIRMATION) {
         return NextResponse.json({ ok: false, error: `Confirmation required: ${CREDIT_CONFIRMATION}` }, { status: 400 });

@@ -8034,3 +8034,168 @@
 - Decision: selected
 - Reason: Local HivemindOS modules were the contract-compatible backbone; no public donor was relevant.
 - Selected backbone: local-project:hivemind-os
+## 2026-07-12T06:21:15.228251+00:00 - shared-brain
+
+- Request: Add heygen-com/hyperframes as a packaged non-optional HivemindOS skill and clarify generic video generation intent across cloud, local, and HTML-based routes.
+- Source: shared-brain
+- Decision: inspected
+
+### Candidates
+- Shared Brain full-vault
+  - Decision: inspected
+  - Reason: No stronger prior product decision found; current packaged-skill and video-route code remain authoritative
+  - Path: `hive-brain answer`
+## 2026-07-12T06:21:15.345757+00:00 - local-search
+
+- Request: Add heygen-com/hyperframes as a packaged non-optional HivemindOS skill and clarify generic video generation intent across cloud, local, and HTML-based routes.
+- Source: local-index
+- Decision: inspected
+
+### Candidates
+- local assimilation index
+  - Decision: inspected
+  - Reason: Checked for existing HyperFrames packaging and video-intent routing donors; current hivemind-os paths are the relevant implementation
+  - Path: `index search`
+## 2026-07-12T06:21:15.400402+00:00 - triage
+
+- Request: Add heygen-com/hyperframes as a packaged non-optional HivemindOS skill and clarify generic video generation intent across cloud, local, and HTML-based routes.
+- Source: pinned-source
+- Decision: selected
+- Selected backbone: heygen-com/hyperframes
+
+### Candidates
+- heygen-com/hyperframes
+  - Decision: selected
+  - Reason: User-pinned Apache-2.0 upstream router skill and runtime contract
+  - Path: `skills/hyperframes/SKILL.md`
+- hivemind-os
+  - Decision: selected-donor
+  - Reason: Existing auto-install packaging, setup projection, capability retrieval, and native video-routing tests
+  - Path: `packaged-skills; src/lib/services/chat; scripts/test-chat-video-*`
+## 2026-07-12T06:24:29.842703+00:00 - audit
+
+- Request: Add heygen-com/hyperframes as a packaged non-optional HivemindOS skill and clarify generic video generation intent across cloud, local, and HTML-based routes.
+- Source: pinned-source
+- Decision: selected
+
+### Candidates
+- heygen-com/hyperframes
+  - Decision: selected
+  - Reason: Cloned inertly and audited repository plus selected router/package/license paths; no execution or dependency install
+  - Path: `skills/hyperframes; package.json; LICENSE`
+## 2026-07-12T06:24:29.898399+00:00 - public-search
+
+- Request: Add heygen-com/hyperframes as a packaged non-optional HivemindOS skill and clarify generic video generation intent across cloud, local, and HTML-based routes.
+- Source: github
+- Decision: not-assimilated
+
+### Candidates
+- additional public repositories
+  - Decision: not-assimilated
+  - Reason: Skipped broader search because the user pinned HyperFrames and local HivemindOS already supplies the missing packaging/routing integration; no unresolved donor gap remained
+## 2026-07-12T06:32:09.054695+00:00 - implementation
+
+- Request: Add heygen-com/hyperframes as a packaged non-optional HivemindOS skill and clarify generic video generation intent across cloud, local, and HTML-based routes.
+- Source: pinned-source
+- Decision: adapted_code
+
+### Candidates
+- heygen-com/hyperframes
+  - Decision: adapted_code
+  - Reason: Promoted and adapted the pinned Apache-2.0 router with a HivemindOS cloud/local/HTML method boundary
+  - Path: `skills/hyperframes/SKILL.md=>packaged-skills/auto-install/hyperframes/SKILL.md`
+- hivemind-os
+  - Decision: adapted_code
+  - Reason: Reused the existing runtime clarification event and dashboard prompt controls for deterministic video-method selection
+  - Path: `src/lib/services/runtime-stream-events.ts; src/features/dashboard/hooks/status-chat-input-helpers.ts=>src/app/api/chat/agent-runtime/stream-video-creation-clarification.ts`
+- hivemind-os
+  - Decision: test_adapted
+  - Reason: Extended the existing video follow-up/card/runtime suites to preserve native generation while gating ambiguous requests
+  - Path: `scripts/test-chat-video-follow-up.mjs; scripts/test-chat-video-card-lifecycle.mjs; scripts/test-chat-video-runtime-routing.mjs`
+## 2026-07-12T06:32:09.159381+00:00 - assimilation-manifest
+
+- Request: Add heygen-com/hyperframes as a packaged non-optional HivemindOS skill and clarify generic video generation intent across cloud, local, and HTML-based routes.
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: heygen-com/hyperframes:skills/hyperframes/SKILL.md => packaged-skills/auto-install/hyperframes/SKILL.md, hivemind-os:src/lib/services/runtime-stream-events.ts => src/app/api/chat/agent-runtime/stream-video-creation-clarification.ts, hivemind-os:scripts/test-chat-video-follow-up.mjs => scripts/test-chat-video-follow-up.mjs
+- Verification: Wrote ASSIMILATION.hyperframes-video-routing.json with 3 entries and custom_code_assessment=balanced.
+## 2026-07-12T06:32:09.251756+00:00 - verification
+
+- Request: Add heygen-com/hyperframes as a packaged non-optional HivemindOS skill and clarify generic video generation intent across cloud, local, and HTML-based routes.
+- Source: verify-assimilation-manifest
+- Decision: below-threshold
+- Reason: ASSIMILATION.hyperframes-video-routing.json: below-threshold: need at least 3 substantive code/config reuse entries; found 2. Search for stronger donors before finalizing.
+## 2026-07-12T06:32:09.302254+00:00 - verification
+
+- Request: Add heygen-com/hyperframes as a packaged non-optional HivemindOS skill and clarify generic video generation intent across cloud, local, and HTML-based routes.
+- Source: local-project
+- Decision: selected
+
+### Candidates
+- focused verification
+  - Decision: selected
+  - Reason: Video route suites, full TypeScript, focused ESLint, packaged-skill hash verification, shared-skill projection, shell/PowerShell parsing, and temporary-vault sync passed; broader pre-existing gate failures recorded in changelog
+  - Path: `test outputs and artifacts`
+## 2026-07-12T06:32:09.346786+00:00 - assimilation-manifest
+
+- Request: Add heygen-com/hyperframes as a packaged non-optional HivemindOS skill and clarify generic video generation intent across cloud, local, and HTML-based routes.
+- Source: local-project
+- Decision: selected
+
+### Candidates
+- ASSIMILATION.hyperframes-video-routing.json
+  - Decision: selected
+  - Reason: Three concrete adapted code/test mappings verified successfully
+  - Path: `ASSIMILATION.hyperframes-video-routing.json`
+## 2026-07-12T06:32:23.932289+00:00 - correction
+
+- Request: Add heygen-com/hyperframes as a packaged non-optional HivemindOS skill and clarify generic video generation intent across cloud, local, and HTML-based routes.
+- Source: local-project
+- Decision: adapted_code
+
+### Candidates
+- hivemind-os
+  - Decision: config_adapted
+  - Reason: Reused the existing auto-installed third-party provenance paths used by the Obsidian Native Brain Pack for HyperFrames across Unix, Windows, and checksum sync
+  - Path: `scripts/seed-shared-skills.sh; setup.ps1; scripts/hive-brain-sync.mjs`
+## 2026-07-12T06:32:24.030923+00:00 - assimilation-manifest
+
+- Request: Add heygen-com/hyperframes as a packaged non-optional HivemindOS skill and clarify generic video generation intent across cloud, local, and HTML-based routes.
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: heygen-com/hyperframes:skills/hyperframes/SKILL.md => packaged-skills/auto-install/hyperframes/SKILL.md, hivemind-os:src/lib/services/runtime-stream-events.ts => src/app/api/chat/agent-runtime/stream-video-creation-clarification.ts, hivemind-os:scripts/seed-shared-skills.sh => scripts/seed-shared-skills.sh, hivemind-os:scripts/test-chat-video-follow-up.mjs => scripts/test-chat-video-follow-up.mjs
+- Verification: Wrote ASSIMILATION.hyperframes-video-routing.json with 4 entries and custom_code_assessment=balanced.
+## 2026-07-12T06:32:24.122519+00:00 - verification
+
+- Request: Add heygen-com/hyperframes as a packaged non-optional HivemindOS skill and clarify generic video generation intent across cloud, local, and HTML-based routes.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.hyperframes-video-routing.json: 4 concrete reuse entries, 3 substantive
+## 2026-07-12T06:32:24.188324+00:00 - assimilation-manifest
+
+- Request: Add heygen-com/hyperframes as a packaged non-optional HivemindOS skill and clarify generic video generation intent across cloud, local, and HTML-based routes.
+- Source: local-project
+- Decision: selected
+
+### Candidates
+- ASSIMILATION.hyperframes-video-routing.json
+  - Decision: selected
+  - Reason: Verifier passed after recording the third substantive config donor plus the adapted routing and package sources
+  - Path: `ASSIMILATION.hyperframes-video-routing.json`
+## 2026-07-12T06:35:27.162668+00:00 - verification
+
+- Request: Add heygen-com/hyperframes as a packaged non-optional HivemindOS skill and clarify generic video generation intent across cloud, local, and HTML-based routes.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.hyperframes-video-routing.json: 4 concrete reuse entries, 3 substantive
+## 2026-07-12T06:35:37.303092+00:00 - final
+
+- Request: Add heygen-com/hyperframes as a packaged non-optional HivemindOS skill and clarify generic video generation intent across cloud, local, and HTML-based routes.
+- Source: local-project
+- Decision: selected
+
+### Candidates
+- HyperFrames auto-install and video method routing
+  - Decision: selected
+  - Reason: Implementation complete and verified; no commit, push, deployment, real-vault mutation, or external generation performed
+  - Path: `packaged-skills/auto-install/hyperframes; src/lib/services/chat/video-creation-intent.ts; src/app/api/chat/agent-runtime`

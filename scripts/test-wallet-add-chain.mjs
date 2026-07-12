@@ -19,6 +19,13 @@ const {
   importRecoveryPhraseWallets,
   isRecoveryPhraseSecret,
 } = await import("../src/lib/services/wallet/chain-wallet.ts");
+const {
+  MULTI_CHAIN_WALLET_LABEL,
+  PERSONAL_WALLET_ADDABLE_CHAINS,
+  PERSONAL_WALLET_CREATE_CHAIN_LABELS,
+  PERSONAL_WALLET_IMPORT_CHAIN_LABELS,
+  personalWalletNetworkForChainLabel,
+} = await import("../src/lib/config/personal-wallet-chains.ts");
 
 // Well-known BIP39 test mnemonic (hardhat default) — never fund it.
 const TEST_MNEMONIC = "test test test test test test test test test test test junk";
@@ -34,6 +41,13 @@ const phraseWallets = importRecoveryPhraseWallets(TEST_MNEMONIC);
 const baseWallet = phraseWallets.find((wallet) => wallet.network === "eip155:8453");
 const solanaWallet = phraseWallets.find((wallet) => wallet.network === "solana:mainnet");
 assert(baseWallet && solanaWallet, "recovery-phrase import must produce Base and Solana wallets");
+
+const ninthAccountWallets = importRecoveryPhraseWallets(TEST_MNEMONIC, 8);
+const ninthAccountBase = ninthAccountWallets.find((wallet) => wallet.network === "eip155:8453");
+const ninthAccountSolana = ninthAccountWallets.find((wallet) => wallet.network === "solana:mainnet");
+assert.equal(ninthAccountBase?.derivationPath, "m/44'/60'/0'/0/8", "account 9 must use Phantom's bip44Change EVM index 8 path");
+assert.equal(ninthAccountSolana?.derivationPath, "m/44'/501'/8'/0'", "account 9 must use Phantom's paired Solana index 8 path");
+assert.notEqual(ninthAccountBase?.address, baseWallet.address, "different recovery-phrase accounts must derive different EVM addresses");
 
 const robinhoodFromPhrase = deriveWalletForAdditionalChain("eip155:4663", { network: "eip155:8453", secret: TEST_MNEMONIC });
 assert.equal(robinhoodFromPhrase.network, "eip155:4663");
@@ -71,6 +85,15 @@ assert.throws(
 assert.throws(() => deriveWalletForAdditionalChain("eip155:1", { network: "eip155:8453", secret: TEST_MNEMONIC }), /Unsupported wallet network/);
 assert.throws(() => deriveWalletForAdditionalChain("eip155:4663", { network: "eip155:8453", secret: "  " }), /no stored secret/);
 
+// ── single-sourced UI chain capability matrix ─────────────────────────────────
+assert.equal(PERSONAL_WALLET_CREATE_CHAIN_LABELS[0], MULTI_CHAIN_WALLET_LABEL, "create must default to multi-chain");
+assert.equal(PERSONAL_WALLET_IMPORT_CHAIN_LABELS[0], MULTI_CHAIN_WALLET_LABEL, "import must expose and default to multi-chain");
+assert.deepEqual(PERSONAL_WALLET_ADDABLE_CHAINS.map((chain) => chain.label), ["Base", "Robinhood Chain", "Solana"]);
+assert.equal(personalWalletNetworkForChainLabel("Base"), "eip155:8453");
+assert.equal(personalWalletNetworkForChainLabel("Robinhood Chain"), "eip155:4663");
+assert.equal(personalWalletNetworkForChainLabel("Solana"), "solana:mainnet");
+assert.equal(personalWalletNetworkForChainLabel("Base Sepolia"), "eip155:84532");
+
 // ── route + UI wiring stays intact ──────────────────────────────────────────────
 function read(relativePath) {
   return readFileSync(path.join(ROOT, relativePath), "utf8");
@@ -91,9 +114,23 @@ contains(addChainRoute, 'if (network === "eip155:4663") return "USDG"', "add-cha
 const walletPanel = read("src/features/dashboard/views/WalletPanel.tsx");
 contains(walletPanel, "onAddWalletChain", "WalletPanel must expose the add-chain action");
 contains(walletPanel, '"/api/wallet/add-chain"', "WalletPanel add-chain action must call the add-chain route");
+contains(walletPanel, 'importTarget: multiChainImport ? "multi-chain" : "single-network"', "WalletPanel must send the selected import target");
+contains(walletPanel, "accountIndex", "WalletPanel must send the selected recovery-phrase account index");
+
+const importModal = read("src/components/wallets-drop-in/CreateImportWalletModal.tsx");
+contains(importModal, "PERSONAL_WALLET_IMPORT_CHAIN_LABELS", "the import dropdown must use the canonical chain options");
+contains(importModal, "Import target", "the import dropdown must describe both recovery-phrase and private-key targets");
+contains(importModal, "Import multi-chain wallet", "the primary action must confirm multi-chain import");
+contains(importModal, "record.addresses.length > 1", "reimporting a grouped wallet must default back to multi-chain");
+contains(importModal, "Recovery-phrase account", "multi-chain import must let the user select the matching Phantom account");
+
+const importRoute = read("src/app/api/wallet/import/route.ts");
+contains(importRoute, 'importTarget?: "single-network" | "multi-chain"', "the import route must accept an explicit target");
+contains(importRoute, 'body.importTarget === "multi-chain" && body.importKind !== "recovery-phrase"', "the import route must reject raw-key multi-chain requests");
+contains(importRoute, "body.accountIndex", "the import route must pass the selected recovery-phrase account index into derivation");
 
 const walletsView = read("src/components/wallets-drop-in/WalletsView.tsx");
-contains(walletsView, "ADDABLE_WALLET_CHAINS", "WalletsView must derive missing chains from the addable set");
+contains(walletsView, "PERSONAL_WALLET_ADDABLE_CHAINS", "WalletsView must derive missing chains from the canonical addable set");
 contains(walletsView, "Add chain", "the personal wallet card must offer an Add chain affordance");
 contains(walletsView, 'onAddWalletChain?: (input: { source: GroupedPersonalWallet; chain: string }) => Promise<unknown>', "WalletDropInActions must type the add-chain action");
 

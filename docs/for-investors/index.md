@@ -1,245 +1,131 @@
 ---
 title: For Investors
-description: HivemindOS business model — app hosting, managed services, trading and on-chain fees, paid-feature boundaries, Honey and HIVE rewards, staking tiers, treasury, and buybacks.
+description: HivemindOS monetizes one managed agent-operations platform through subscriptions and metered usage while the local-first open-source product remains free.
 ---
 
 # For Investors
 
-This is the business side of HivemindOS: how it makes money, where the free-vs-paid line sits, and how the Honey/HIVE economy, treasury, and buybacks fit together. For the product itself, see the [For Users](../for-users/) docs.
+HivemindOS is a free and open-source control plane for autonomous agent operations.
 
-Revenue comes from optional premium services, trading and on-chain fees, hosted agent/model messages, managed hosted integrations, the Agent Marketplace, and Enterprise. The details live in the [Ecosystem Plan](ecosystem-plan.html) and [Paid Features](paid-features/), but the current numbers should be visible up front.
-
-## Current Revenue Snapshot
-
-| Revenue stream | Current number | What that means |
-| --- | ---: | --- |
-| Wallet sends, swaps, live Alpaca or Robinhood Agentic orders, tokenized stocks, ordinary public x402, and private payments | **1%**, with a **$0.01 minimum** | A `$100` action produces `$1.00` in revenue. A tiny `$0.25` test action produces the `$0.01` minimum. |
-| MiroShark hosted x402 simulations | **$0.20 gross proxy spread** inside the **$1.20 USDC** user charge | The user pays HivemindOS `$1.20`; the hosted proxy pays MiroShark upstream up to `$1.00`; HivemindOS keeps the expected `$0.20` only after upstream success. No extra 1% local x402 platform fee is added. |
-| Hive Compute marketplace inference | Default **20% platform fee** on token-metered marketplace usage | At the current default provider price, 1M input plus 1M output tokens debits `$0.040`: `$0.032` provider earning and `$0.008` gross HivemindOS platform revenue before infrastructure, payment, support, and payout costs. |
-| Zero Human Company revenue share | **2%**, with a **$0.01 minimum** | A company running in HivemindOS that records `$1,000` in revenue produces `$20.00` in HivemindOS revenue. |
-| Hyperliquid builder fee | **0.005%** of eligible filled notional | A `$10,000` fill produces `$0.50` in revenue. |
-| Hosted HivemindOS agent/model messages | Metered: **upstream provider price × 1.25 (25% markup)**, with a **$0.001 minimum** per message | HivemindOS keeps the markup — about **20% of buyer spend** after upstream cost. `$1,000` of hosted message spend produces about `$200` in HivemindOS revenue. A short message on a cheap model hits the `$0.001` floor. |
-| Managed X API and X MCP calls | Hosted policy retail debit: upstream X API unit cost plus **25% markup**, with a **$0.001 minimum** by default | The current default X MCP tool-call policy debits `$0.00625` from hosted credits for a `$0.005` upstream unit. HivemindOS collects the retail debit and keeps the markup after upstream X/API cost, infrastructure, and payment-processing costs. |
-| App publishing and web hosting | **$1** seven-day share preview; renewable **$5** Hosted Site, **$15** Pro Site, and **$25** Dynamic App plans | Hosting is purchased per Site, independently of whether its source was built locally, on a linked machine, or on a Managed Cloud Agent. Renewable plans debit hosted credits every 30 days when auto-renew is enabled. |
-| Future paid infrastructure | TBD by product | Hive Cloud, managed compute, marketplace fees, and enterprise contracts. |
-
-The app still shows fees before users confirm money movement. The point here is not mystery monetization. It is clear take rate, clear message pricing, and paid infrastructure where HivemindOS actually runs something.
-
-HivemindOS should be useful before anyone pays for a cloud feature. Start here when you want to understand what stays free, what becomes paid, and how Honey and HIVE fit around the product without blocking it.
-
-The line is simple: local-first control room features stay available by default, and paid services cover infrastructure that costs real money to run or maintain for users.
-
-The ecosystem plan keeps that boundary explicit: HivemindOS remains free and open source, while optional premium services fund company operations, growth, treasury reserves, revenue-backed HIVE buybacks, and proposed seasonal HIVE reward pools for stakers.
-
-## A Trust Layer For Agent Work
-
-Most agent products can tell you that a model ran. HivemindOS is building around a harder question: did the work deserve credit?
-
-Managed agent tasks can be checked against evidence, expected artifacts, trusted commands, and separate reviewers. Work HivemindOS cannot observe is labeled unobserved instead of being counted as a success. Accepted outcomes can improve future routing, while weak or unverifiable work is kept out of that learning signal.
-
-This creates a practical product advantage:
-
-- Users get a clearer line between agent activity and completed work.
-- Zero Human Companies build operating history from evaluated outcomes, not self-reported wins.
-- Teams can apply stronger review to publishing, payments, deployments, and customer work without imposing that cost on every chat reply.
-- Future managed services and marketplaces have a stronger evidence layer to build on, while official reputation, entitlement, settlement, and payout decisions remain server-controlled.
-
-See [Agent Evaluations](../for-users/features/agent-evaluations.html) for the user-facing model and measured benchmark.
-
-## Recommended Path
-
-<ol class="routePath" aria-label="Recommended monetization reading path">
-  <li>
-    <span>1</span>
-    <a href="ecosystem-plan.html">Ecosystem Plan</a>
-    <small>Free product, premium services, revenue allocation, and value loop.</small>
-  </li>
-  <li>
-    <span>2</span>
-    <a href="honey-hive-treasury.html">Honey, HIVE, And Treasury</a>
-    <small>Contribution, ownership, treasury, buybacks, staking, and rewards.</small>
-  </li>
-  <li>
-    <span>3</span>
-    <a href="hive-staking-and-community-tiers.html">HIVE Staking And Community Tiers</a>
-    <small>Stake-to-unlock, tier benefits, weighted seasonal HIVE rewards, alpha rooms, bounties, governance, and review policy.</small>
-  </li>
-  <li>
-    <span>4</span>
-    <a href="./paid-features/">Paid Features</a>
-    <small>The rule for paid infrastructure and the current paid-feature shelf.</small>
-  </li>
-  <li>
-    <span>5</span>
-    <a href="paid-features/hivemind-cloud-agent-calls.html">Cloud Agent Calls</a>
-    <small>The first concrete paid feature example.</small>
-  </li>
-  <li>
-    <span>6</span>
-    <a href="paid-features/hive-compute-marketplace.html">Hive Compute Marketplace</a>
-    <small>Marketplace inference, spare-GPU supply, x402/MPP rails, provider earnings, and the platform fee.</small>
-  </li>
-</ol>
-
-## Start With The Boundary
-
-If a feature can run locally with the user's own keys and machine, keep it free by default.
-
-If a feature needs HivemindOS to provide hosted infrastructure, shared room orchestration, reliability work, or ongoing third-party usage, put it in the paid-feature shelf and say so plainly.
-
-## Strategy Pages
-
-<div class="docGrid">
-  <section class="docCard">
-    <h3>HivemindOS Ecosystem Plan</h3>
-    <p>The full plan for the free product, premium services, Honey, HIVE, revenue allocation, treasury reserves, buybacks, and the value wheel.</p>
-    <a href="ecosystem-plan.html">Open ecosystem plan</a>
-  </section>
-  <section class="docCard">
-    <h3>Honey, HIVE, And Treasury</h3>
-    <p>The contribution and ownership layers: Honey earning paths, HIVE claims, treasury strategy, buybacks, future burns, staking, and seasonal reward pools.</p>
-    <a href="honey-hive-treasury.html">Open token model</a>
-  </section>
-  <section class="docCard">
-    <h3>HIVE Staking And Community Tiers</h3>
-    <p>The stake-to-unlock model for holder identity, alpha rooms, bounties, marketplace curation, private opportunity rooms, seasonal HIVE rewards, Operator influence, and Visionary council access.</p>
-    <a href="hive-staking-and-community-tiers.html">Open staking tiers</a>
-  </section>
-</div>
-
-## Seasonal HIVE Reward Pool
-
-The proposed staking reward message is simple:
+The commercial product is **Hivemind Cloud**. Customers pay HivemindOS to keep agents available, governed, observable, and deployable when user-owned machines are off or when a team needs shared operating controls.
 
 ```text
-Stake higher. Earn stronger reward weight.
+Free local HivemindOS
+  -> Hivemind Cloud subscription
+  -> metered managed usage
+  -> team and enterprise expansion
 ```
 
-Every reward season, eligible HivemindOS revenue can fund one fixed HIVE reward pool. Stakers split that pool by time-weighted active stake, with higher tiers applying stronger reward weight. This keeps the company payout capped while making anonymous wallet splitting worse than staking the same HIVE in the highest tier it qualifies for.
+This is one monetization engine, not a collection of unrelated fee businesses.
 
-For every `$1,000,000` in eligible HivemindOS revenue, the proposed display model is:
+## The Free-To-Paid Boundary
 
-| Tier      | Reward weight | Boost vs Holder |
-| --------- | ------------: | --------------: |
-| Holder    |         1.00x |            Base |
-| Supporter |         1.10x |            +10% |
-| Builder   |         1.25x |            +25% |
-| Curator   |         1.45x |            +45% |
-| Operator  |         1.70x |            +70% |
-| Visionary |         2.00x |           +100% |
-| **Pool**  |              | **3.9375% / `$39,375` in HIVE rewards** |
+Local agents, local memory, local workflows, BYOK models, linked machines, and self-hosted runtimes remain available without a Hivemind Cloud subscription.
 
-The seasonal reward rules are simple: there is no pre-season staking requirement, a wallet needs at least 7 active staking days in the season to qualify, rewards are based on how much weighted HIVE was staked and for how long, and reward credit stops when a wallet requests unstaking. When a season publishes the HIVE price used for rewards, the page can show both the dollar value and the estimated HIVE amount. Actual payouts still need an official claim or treasury process. The current staking vault should not be described as paying HIVE rewards directly.
+Customers pay when HivemindOS operates an ongoing service on their behalf:
 
-## Paid-Service Pages
+- always-on agent runtime and persistent workspace
+- hosted control plane, schedules, monitoring, and deployment history
+- shared agents, approvals, budgets, and audit history
+- public app hosting and isolated dynamic execution
+- managed model and API access without customer-owned provider accounts
+- private deployment, identity controls, support, and service commitments
 
-<div class="docGrid">
-  <section class="docCard">
-    <h3>Paid Features</h3>
-    <p>The current paid-feature shelf. Start here when a capability needs managed infrastructure, hosted reliability, or premium orchestration.</p>
-    <a href="./paid-features/">Open paid features</a>
-  </section>
-  <section class="docCard">
-    <h3>App Builder And Hosting</h3>
-    <p>Local-first app creation feeding one-time share links and renewable static, Pro, and dynamic hosting revenue.</p>
-    <a href="paid-features/app-builder-hosting.html">Open hosting economics</a>
-  </section>
-  <section class="docCard">
-    <h3>HivemindOS Cloud Agent Calls</h3>
-    <p>Managed LiveKit/SFU rooms for mobile-friendly, multi-party, and multi-agent voice calls.</p>
-    <a href="paid-features/hivemind-cloud-agent-calls.html">Open cloud calls</a>
-  </section>
-  <section class="docCard">
-    <h3>Hive Compute Marketplace</h3>
-    <p>First-party marketplace inference with spare-GPU supply, x402 and MPP payment rails, provider earnings, and a default 20% platform fee.</p>
-    <a href="paid-features/hive-compute-marketplace.html">Open compute marketplace</a>
-  </section>
-</div>
+## Commercial Plans
 
-## Current Boundary
+The managed service owns the official catalog. Launch packaging is intentionally small:
 
-| Area               | Free default                                          | Paid path                                                    |
-| ------------------ | ----------------------------------------------------- | ------------------------------------------------------------ |
-| Agent calls        | BYOK Agent Calls using the user's OpenAI Realtime key | HivemindOS Cloud Agent Calls using managed LiveKit/SFU rooms |
-| Agent runtime work | Local and user-configured runtimes                    | Future managed runtime capacity, if offered                  |
-| Model inference    | Local models and user-configured model keys           | Hive Compute marketplace routing, settlement, receipts, reputation, and payout state |
-| Brain and vault    | Local Obsidian vault and user-owned sync choices      | Future managed brain hosting, if offered                     |
-| App building and hosting | Local/fleet building and loopback previews | Seven-day share links, renewable static hosting, and isolated dynamic app hosting |
+| Plan | Price | Current commercial status | Primary job |
+| --- | ---: | --- | --- |
+| Community | Free | Available | Local-first building, BYOK, and self-hosting |
+| Cloud Pro | $39/month | Design-partner validation | One-person managed agent operations; includes $10 managed usage |
+| Cloud Team | $299/month | Design-partner validation | Five-member governed workspace; includes $50 managed usage |
+| Enterprise | $30,000/year minimum | Contact-led | Private or BYOC deployment, SSO, policy controls, SLA, and support |
 
-## Managed Agent Credits
+Subscriptions pay for the control plane and governance layer. Agent hours, model/API calls, hosted apps, storage, and other variable infrastructure remain separately metered. This prevents a one-seat workspace from operating an unbounded fleet for one seat fee.
 
-Managed agents use HONEY as the visible credit unit. The ledger separates reward Honey from managed HONEY credits:
+The Pro, Team, and Enterprise numbers are launch hypotheses under validation, not proven willingness-to-pay claims. They should change only through customer evidence and server-authoritative policy.
 
-- Reward Honey is earned through ecosystem participation and may be claimable to HIVE.
-- Managed HONEY credits are spend-only service credits for HivemindOS-managed agents and cannot be claimed to HIVE.
+## Current Metered Add-Ons
 
-Users can start without provider API keys. Hosted messages are metered at the **upstream provider price × 1.25 (25% markup)**, with a **$0.001 minimum** per message, so revenue scales with usage instead of a flat per-message price. HivemindOS can also quote larger managed jobs through managed HONEY credits, then run the agent through HivemindOS-held provider keys at the same markup.
+| Managed service | Current server-owned rate |
+| --- | ---: |
+| Seven-day Share Preview | $1 from an existing hosted-credit balance |
+| Hosted Site | $5 per 30 days |
+| Pro Site | $15 per 30 days |
+| Dynamic App | $25 per 30 days |
+| Small managed agent | $0.020/hour running; $0.0025/hour stopped |
+| Medium managed agent | $0.060/hour running; $0.0050/hour stopped |
+| Large managed agent | $0.110/hour running; $0.0100/hour stopped |
+| Managed models and APIs | Published upstream cost plus service markup |
 
-Official credit changes are spoof-resistant: credits are written only from verified funding events, and debits are signed by trusted managed runtimes after provider usage is observed server-side.
+These products are expansion usage inside Hivemind Cloud. They are not separate investor pillars.
 
-## Payment Rails
+## Near-Term Customer Development
 
-Paid HivemindOS services and marketplace items should support multiple payment rails.
+Before presenting self-serve pricing as validated, HivemindOS should sell a bounded **Managed Agent Operations Pilot**:
 
-Supported or planned rails include:
+- six weeks
+- $5,000 upfront
+- one production operating workflow
+- up to three managed agents
+- monitoring, approvals, spending boundaries, deployment, and outcome receipts
+- explicit implementation limits
+- conversion to Cloud Team or a separately contracted high-touch managed plan
 
-- Card and fiat checkout.
-- Managed HONEY credits.
-- Crypto payments.
-- HIVE payments.
-- x402-enabled pay-per-use payments.
-- Enterprise invoices or contracts.
+The pilot is a customer-development and implementation offer, not a permanent fifth product line.
 
-HIVE is a first-class payment rail and the staking alignment layer. Users can spend HIVE when they choose it as the payment method, and they can stake HIVE when they want status, discounts, trust, distribution, early access, curation rights, and governance signal.
+## Revenue Reporting
 
-The product rule is: HIVE can be used to pay, but HIVE should not be the only way to access ordinary paid services.
+Operating revenue should be shown as:
 
-## Revenue Sources
+```text
+subscription revenue
++ hosted product revenue
++ managed execution gross profit
++ implementation revenue
+```
 
-Optional premium services may include Hive Cloud, Hive Compute, managed compute, the Agent Marketplace, and Enterprise.
+Provider spend, payment volume, marketplace GMV, creator/provider payouts, and token activity are reported separately. Buyer collections are not automatically company revenue. Principal-versus-agent accounting treatment requires review for each managed-provider and marketplace arrangement.
 
-Hive Cloud covers one-click deployment, managed infrastructure, hosted memory, team workspaces, and monitoring.
+The operating model should be built from observed cohorts:
 
-Hive Publish lets users become cloud customers without renting a managed agent. Projects may be built on user-owned hardware, then published as a seven-day share link or renewable static site. Dynamic plans use isolated customer Workers with server-controlled limits. Official plan prices, credit debits, expirations, release activation, and public slug ownership remain in HivemindOS-controlled infrastructure; the open-source client only prepares bounded artifacts and submits confirmed plan identifiers.
+```text
+activated workspaces
+x product-qualified conversion
+x paid conversion
+x retained subscription revenue
++ usage expansion
+```
 
-That creates four direct hosting revenue streams: short-lived share previews,
-renewable standard Sites, higher-capacity Pro Sites, and renewable Dynamic Apps.
-The free local builder is the acquisition surface; hosting converts a user only
-when they want a stable public URL, controlled sharing, server-side execution,
-or ongoing availability. Because the base cloud platform and included usage are
-shared across many Sites while revenue is collected per Site, ordinary hosting
-utilization can produce high infrastructure gross margins. The detailed model,
-including a 3,000-Site illustration and the usage risks that still require
-metering, is in [App Builder And Hosting](paid-features/app-builder-hosting.html).
+Investor reporting should include paid workspaces, 30/90-day retention, recurring revenue per workspace, usage gross profit, support cost, contribution margin, and expansion versus contraction. Illustrative customer counts without funnel, churn, and cost assumptions are not forecasts.
 
-Hive Compute routes marketplace inference to live worker capacity and settles usage through the hosted gateway. The current default marketplace policy charges token-metered retail usage, keeps a **20% HivemindOS platform fee**, and records provider earnings for payout.
+## Deferred Platform Options
 
-Managed compute runs agents and swarms on Hivemind infrastructure with usage-based pricing.
+Marketplaces, compute-provider take rates, workflow commissions, payment settlement, x402, trading fees, and HIVE utility may become valuable after the core managed-service business has retained buyer demand.
 
-The Agent Marketplace can support paid agents, swarms, workflows, and templates, with Hivemind taking a marketplace fee.
+They are not required to prove the company today.
 
-Marketplace creators can choose pricing models such as free, pay-per-use, lifetime access, subscription access, bounty-funded creation, or commissions on revenue generated through a workflow.
+- Revenue earned outside HivemindOS carries no platform fee.
+- Marketplace fees apply only when HivemindOS supplies measurable distribution, hosting, execution, billing, or protection.
+- Ordinary wallet transfers carry no HivemindOS platform fee.
+- Financial and marketplace take rates remain capped, disclosed, and subordinate to the Hivemind Cloud story.
 
-Enterprise covers SSO, teams, compliance, private deployments, and support contracts.
+## HIVE And Honey Boundary
 
-Managed hosted integrations are also direct revenue. The managed X API and X MCP path lets users sign in with X through HivemindOS-controlled hosted infrastructure, then spend hosted HivemindOS credits on vetted X API or X MCP calls. The hosted gateway owns OAuth token custody, pricing policy, credit balances, and debits. The downloaded app only forwards the server-issued credit token. The current default policy charges retail at upstream X API unit cost plus **25% markup**, with a **$0.001 minimum debit**; the default X MCP tool call is `$0.005` upstream and `$0.00625` retail. Production pricing is served by the hosted pricing policy so it can track X Developer Console rates without making the local app authoritative.
+HIVE is optional ecosystem infrastructure. It is not company ownership, a required payment method, or part of the core pricing ladder.
 
-Trading and on-chain activity is also a direct revenue source. Official builds collect a policy-driven **1% platform fee with a $0.01 minimum** on supported actions: stablecoin sends, DEX swaps, xStocks trades, Robinhood Chain Stock Token trades, live Alpaca orders, Robinhood Agentic brokerage orders, ordinary public x402 payments, and Veil private transfers. A Robinhood Agentic order uses the dedicated brokerage account for execution and the acting HivemindOS wallet for the separate quoted fee. HivemindOS-hosted MiroShark proxy runs are the named exception: the **$1.20 USDC** charge already includes the **$0.20** HivemindOS cut, so the local wallet does not add a separate 1% x402 platform-fee transfer. Zero Human Companies running in HivemindOS use a **2% revenue share with a $0.01 minimum** on recorded company revenue. Official builds also collect a **0.005% Hyperliquid builder fee** on eligible local Hyperliquid fills. Paper trades and read-only checks are never charged. Recipient addresses and official wallet-fee policy stay in HivemindOS-managed infrastructure. See [Wallets, Honey, And x402](../for-users/features/wallets-honey-and-x402.html) and the [Trading](../for-users/trading/index.html) docs for the mechanism.
+Honey records reviewed ecosystem contribution. Hivemind Cloud credits are separate purchased, spend-only service credits. Honey is not cash and is not automatically convertible to HIVE. Revenue-funded buybacks, staking returns, and conversion promises are not part of the operating model.
 
-## HIVE Staker Discounts
+See [Honey, HIVE, And Treasury](honey-hive-treasury.html) and [HIVE Staking And Community Tiers](hive-staking-and-community-tiers.html) for the separated policy.
 
-HIVE staking can make paid managed services cheaper without making them HIVE-only.
+## One-Sentence Pitch
 
-Eligible discounts may apply to Hive Cloud subscriptions, managed compute, managed HONEY credit purchases, Agent Marketplace platform fees, and hosted team, memory, monitoring, or orchestration add-ons. Non-stakers should still be able to buy the same paid services at the standard fiat, card, managed HONEY credit, or enterprise price.
+> HivemindOS is the open-source control plane for autonomous agent operations; local use is free, and teams pay Hivemind Cloud to keep agents running, governed, observable, and deployable across local and cloud infrastructure.
 
-HIVE can lower managed-service pricing in two ways: paying with HIVE can earn a small checkout discount, and staking HIVE can earn a tiered platform-margin discount. The launch target is a 3-5% checkout discount for HIVE payment, plus the staking tier discount when eligible, capped at 30% combined.
+## Read Next
 
-Discounts apply to HivemindOS platform margin, not raw provider or infrastructure cost. A checkout should not discount below direct compute cost, provider API cost, payment processor fees, or other pass-through costs needed to deliver the service.
-
-## HIVE Community Utility
-
-HIVE staking also powers community utility around the future Agent Marketplace and bounty economy.
-
-Curators are marketplace power users who help surface useful agents, workflows, templates, skills, and bounties. Their benefit is early opportunity access, reputation as trusted recommenders, and better distribution surfaces for their own high-quality listings.
-
-Operators and Visionaries get stronger ecosystem ops influence: roadmap signaling, bounty theme prioritization, marketplace quality standards, grant direction, and strategy-room access. Visionary can also qualify for a scarce council seat with direct roadmap access and a structured channel to advise the developer or core team. This influence does not grant treasury control, admin access to user funds, binding voting authority, or unilateral payout authority.
+- [Ecosystem Plan](ecosystem-plan.html)
+- [Paid Features](paid-features/)
+- [App Builder And Hosting](paid-features/app-builder-hosting.html)
+- [Hive Compute Marketplace](paid-features/hive-compute-marketplace.html)

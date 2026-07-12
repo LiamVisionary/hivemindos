@@ -15,6 +15,7 @@ import {
 } from "./AgentSettingsConnectionPanels";
 import { AgentSettingsModalFrame } from "./AgentSettingsModalFrame";
 import { AgentSettingsQueenPersonalityPanel } from "./AgentSettingsQueenPersonalityPanel";
+import { AgentSettingsCustomInstructionsPanel } from "./AgentSettingsCustomInstructionsPanel";
 // AgentSettingsToolsPanel owns the Agent mailbox "Create mailbox" action.
 import { AgentSettingsToolsPanel } from "./AgentSettingsToolsPanel";
 import { AdaptiveProviderSettings } from "./AdaptiveProviderSettings";
@@ -1311,11 +1312,14 @@ export function AgentSettingsModal(props: any) {
   function renderWorkerPanel() {
     if (isQueenSettings) {
       return (
-        <AgentSettingsQueenPersonalityPanel
-          iconSrc={agentSettingsWorkerImage}
-          personality={currentSoulPrompt}
-          onChange={updateAgentSoulPrompt}
-        />
+        <>
+          <AgentSettingsQueenPersonalityPanel
+            iconSrc={agentSettingsWorkerImage}
+            personality={currentSoulPrompt}
+            onChange={updateAgentSoulPrompt}
+          />
+          <AgentSettingsCustomInstructionsPanel />
+        </>
       );
     }
     if (!showWorkerClassSection) return null;

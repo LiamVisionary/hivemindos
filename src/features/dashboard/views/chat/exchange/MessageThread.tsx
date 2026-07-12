@@ -585,6 +585,7 @@ function MessageThreadBase({
   setOpenKanbanTaskMenuKey,
   chatKanbanGeneration,
   dismissChatKanbanGeneration,
+  sharedVault,
 }: {
   AgentResponseLoader?: AgentResponseLoaderComponent;
   ChatMarkdown?: ChatMarkdownComponent;
@@ -614,6 +615,7 @@ function MessageThreadBase({
   setOpenKanbanTaskMenuKey: Dispatch<SetStateAction<string>>;
   chatKanbanGeneration?: ChatKanbanGeneration | null;
   dismissChatKanbanGeneration?: (key: string) => void;
+  sharedVault?: { enabled?: boolean; vaultPath?: string } | null;
 }) {
   const pendingAssistantBubbleVisible = busy && !hasStreamingChunk && messages.some((message, index) => (
     index === messages.length - 1
@@ -804,7 +806,13 @@ function MessageThreadBase({
                   {applicationGenerationCard ? <ApplicationGenerationCard card={applicationGenerationCard} /> : null}
                   {!applicationGenerationCard && generatedImagePathCard ? <ApplicationGenerationCard card={generatedImagePathCard} /> : null}
                   {mirosharkCard ? <MiroSharkSimulationCard card={mirosharkCard} ChatMarkdown={ChatMarkdown} /> : null}
-                  {transcriptCard ? <TranscriptCard card={transcriptCard.card} /> : null}
+                  {transcriptCard ? (
+                    <TranscriptCard
+                      brainEnabled={sharedVault?.enabled !== false}
+                      card={transcriptCard.card}
+                      vaultPath={sharedVault?.vaultPath}
+                    />
+                  ) : null}
                   {jsonRenderPayload && !applicationGenerationCard && !generatedImagePathCard && !mirosharkCard?.hideRawContent ? (
                     <div style={{ display: "grid", gap: 8 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 7, color: "var(--fg-4)", fontFamily: "var(--f-mono)", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>

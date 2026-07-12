@@ -139,8 +139,35 @@ assert.equal(followUpPrepared?.inputImages[0]?.path, sourcePath);
 assert.equal(followUpPrepared?.sourceArtifacts[0]?.url, signedSourceUrl);
 
 const routeSource = readFileSync(new URL("../src/app/api/chat/agent-runtime/route.ts", import.meta.url), "utf8");
-assert.match(routeSource, /prepareNativeVideoGenerationRequest\(\{/, "the real chat route should resolve video follow-ups from its runtime session");
-assert.match(routeSource, /prompt:\s*nativeVideoRequest\.prompt/, "the expanded follow-up prompt should reach Media Studio");
-assert.match(routeSource, /sourceArtifacts:\s*nativeVideoRequest\.sourceArtifacts/, "the source thumbnail should reach the live generation card");
+assert.doesNotMatch(routeSource, /videoCreationClarification|streamVideoCreationClarification/, "chat must not use a keyword interceptor to take over ambiguous video turns");
+assert.doesNotMatch(routeSource, /prepareNativeVideoGenerationRequest\(\{|streamNativeVideoGeneration\(\{/, "chat must let the agent decide whether a turn authorizes video generation before dispatching a tool");
 
-console.log("Video follow-ups reuse the prior prompt and source image without hijacking ordinary questions.");
+const runtimeSource = readFileSync(new URL("../src/app/api/chat/agent-runtime/stream-openai-compatible.ts", import.meta.url), "utf8");
+assert.doesNotMatch(runtimeSource, /forceVideoGenerationToolCall|forced_generate_video/, "the runtime must not synthesize a video tool call from keywords");
+assert.match(runtimeSource, /tool_choice:\s*"auto"/, "the model should choose whether the offered video tool is appropriate");
+
+const retrievalSource = readFileSync(new URL("../src/lib/services/chat/task-retrieval-context.ts", import.meta.url), "utf8");
+assert.match(retrievalSource, /Interpret the user's conversational intent before acting/);
+assert.match(retrievalSource, /discussion, brainstorming, hypotheticals, capability questions/);
+
+const packagedHyperframes = readFileSync(new URL("../packaged-skills/auto-install/hyperframes/SKILL.md", import.meta.url), "utf8");
+const packagedHyperframesMetadata = JSON.parse(readFileSync(
+  new URL("../packaged-skills/auto-install/hyperframes/.hivemind-skill-source.json", import.meta.url),
+  "utf8",
+));
+const skillsLock = JSON.parse(readFileSync(new URL("../skills-lock.json", import.meta.url), "utf8"));
+assert.match(packagedHyperframes, /HivemindOS method boundary/);
+assert.match(packagedHyperframes, /Cloud AI video generation/);
+assert.match(packagedHyperframes, /Local AI video generation/);
+assert.match(packagedHyperframes, /HTML \/ HyperFrames rendering/);
+assert.match(packagedHyperframes, /I'm thinking about generating a video/);
+assert.match(packagedHyperframes, /Do not treat the presence of words such as “generate” or “video” as authorization/);
+assert.equal(packagedHyperframesMetadata.provider, "packaged-auto-install");
+assert.equal(packagedHyperframesMetadata.upstreamSourceUrl, "https://github.com/heygen-com/hyperframes");
+assert.equal(
+  skillsLock.skills.hyperframes.packagedPath,
+  "packaged-skills/auto-install/hyperframes/SKILL.md",
+  "the reproducibility lock should follow the auto-installed package",
+);
+
+console.log("Video routing is agent-decided, HyperFrames is auto-installed, and source-image follow-ups remain reusable.");

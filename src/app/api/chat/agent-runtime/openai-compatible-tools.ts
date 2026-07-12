@@ -15,6 +15,7 @@ export type NonStreamToolRun = {
   toolResultMessages: Array<Record<string, unknown>>;
   fallbacks: string[];
   finalTexts: string[];
+  failures: string[];
   prompted: boolean;
 };
 
@@ -87,7 +88,7 @@ export function videoGenerationToolDefinition() {
     type: "function",
     function: {
       name: VIDEO_GENERATION_TOOL_NAME,
-      description: "Generate a video using a connected HivemindOS video-generation app or service. Call this when the user asks for video, animation, image-to-video, img2vid, or to animate an attached image. If the current turn has media artifact handles, pass the relevant artifact id or path; otherwise HivemindOS will use the current turn's first attached image by default.",
+      description: "Generate a video using a connected cloud or local HivemindOS video-generation app or service. Call this only when conversational context establishes that the user is asking to create a video and has selected cloud/local generation. Discussion, brainstorming, hypotheticals, and capability questions are not generation requests. If an actionable creation request leaves the method open, ask whether they want cloud AI, local AI, or HTML / HyperFrames before calling a tool. Never use this tool for HTML / HyperFrames rendering. If the current turn has media artifact handles, pass the relevant artifact id or path; otherwise HivemindOS will use the current turn's first attached image by default.",
       parameters: {
         type: "object",
         properties: {

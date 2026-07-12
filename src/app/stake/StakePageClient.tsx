@@ -3,11 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, ArrowUpFromLine, Check, Clock, Hexagon, RefreshCcw, Share2, Shield, Sparkles, WalletCards } from "lucide-react";
+import { ArrowLeft, ArrowUpFromLine, Check, Hexagon, RefreshCcw, Share2, Shield, Sparkles, WalletCards } from "lucide-react";
 import type { AgentWalletTokenBalance } from "@/lib/types/agent-wallet";
 import { DEFAULT_BASE_HIVE_TOKEN_ADDRESS, HIVE_STAKING_TIERS } from "@/lib/config/hive-staking";
 import { isBaseHiveTokenLike, isEvmAddress, shortenEvmAddress, stakeHiveWithBrowserWallet, type BrowserEthereumProvider } from "@/lib/services/hive-staking-client";
-import { HIVE_STAKING_REWARD_MIN_ACTIVE_SECONDS, HIVE_STAKING_REWARD_RATE_LABEL, HIVE_STAKING_REWARD_USD_PER_MILLION } from "@/lib/services/hive-staking-rewards";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import BankrStakeCard from "./BankrStakeCard";
 import styles from "./stake.module.css";
@@ -62,7 +61,6 @@ type StakePageClientProps = {
 // A Builder-tier wallet set: ~62M HIVE staked, next target Curator (100M).
 const STAKE_DEMO_PRICE_USD = 0.0012;
 const STAKE_DEMO_COOLDOWN_SECONDS = 14 * 86_400;
-const MIN_ACTIVE_REWARD_DAYS = HIVE_STAKING_REWARD_MIN_ACTIVE_SECONDS / 86_400;
 
 function demoWallet(id: string, name: string, address: string, custodyMode: "local" | "watch", balance: number): PersonalWallet {
   const token = {
@@ -111,17 +109,10 @@ type LoadWalletsOptions = {
 // Why-stake benefits, paired with Fleet-style icon tiles. Glyphs match the
 // fr-/Reserve mock: sparkle, network, promote (arrow-up), shield.
 const STAKE_BENEFITS = [
-  { Icon: Sparkles, text: "Seasonal HIVE reward pool with tier weights" },
-  { Icon: Share2, text: "Governance signaling and roadmap weight" },
-  { Icon: ArrowUpFromLine, text: "Bounty boosting and curator eligibility" },
-  { Icon: Shield, text: "Marketplace trust, badges, and Honey multipliers" },
-];
-
-const STAKE_REWARD_RULES = [
-  { label: "No pre-season requirement", value: "Join during a season" },
-  { label: `${MIN_ACTIVE_REWARD_DAYS} active-day minimum`, value: "Claim eligibility" },
-  { label: "Time-weighted rewards", value: "Stake-seconds" },
-  { label: "Unstake request", value: "Stops accrual" },
+  { Icon: Sparkles, text: "Optional wallet-linked community identity" },
+  { Icon: Share2, text: "Non-binding governance signaling" },
+  { Icon: ArrowUpFromLine, text: "Contributor and curator eligibility" },
+  { Icon: Shield, text: "Community status and marketplace reputation context" },
 ];
 
 function walletKey(wallet: Pick<PersonalWallet, "network" | "address">) {
@@ -153,14 +144,6 @@ function formatHive(value: number) {
   if (value >= 1_000_000) return `${trimCompact(value / 1_000_000)}m HIVE`;
   if (value >= 1_000) return `${trimCompact(value / 1_000)}k HIVE`;
   return `${value.toLocaleString(undefined, { maximumFractionDigits: 4 })} HIVE`;
-}
-
-function formatUsd(value: number) {
-  return value.toLocaleString(undefined, {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  });
 }
 
 function trimCompact(value: number) {
@@ -549,7 +532,7 @@ export default function StakePageClient({ stakingContractAddress, demoMode = fal
           <div className={styles.topStats}>
             <span><b>{formatHive(totalStakedHive)}</b> staked</span>
             {contractTotalStakedHive != null ? <span><b>{formatHive(contractTotalStakedHive)}</b> vault</span> : null}
-            <span><b>{HIVE_STAKING_REWARD_RATE_LABEL}</b> rewards</span>
+            <span><b>Optional</b> community signal</span>
             <span><b>{formatHive(totalHive)}</b> detected</span>
             <span><b>{currentTier ? currentTier.label : "—"}</b> tier</span>
           </div>
@@ -559,22 +542,13 @@ export default function StakePageClient({ stakingContractAddress, demoMode = fal
         <section className={styles.hero}>
           <div className={styles.heroCopy}>
             <p className={`${styles.eyebrow} ${styles.eyebrowHoney}`}><Hexagon aria-hidden="true" /> HIVE staking</p>
-            <h1>Stake HIVE for status, access, and weighted seasonal rewards.</h1>
-            <p className={styles.lede}>Staking is not a payment. Your HIVE stays yours while it is locked in the Base staking contract. Higher tiers earn stronger reward weight when seasonal HIVE reward pools are funded.</p>
+            <h1>Stake HIVE for optional community identity and status.</h1>
+            <p className={styles.lede}>Staking is not a payment or investment product. Your HIVE stays yours while it is locked in the Base staking contract. Tiers are social and access signals only: they do not promise yield, company ownership, discounts, or revenue rights.</p>
             <div className={styles.benefits}>
               {STAKE_BENEFITS.map(({ Icon, text }) => (
                 <span key={text} className={styles.benefit}>
                   <i className={styles.benefitIcon}><Icon aria-hidden="true" /></i>
                   {text}
-                </span>
-              ))}
-            </div>
-            <div className={styles.rewardRules} aria-label="Seasonal reward rules">
-              {STAKE_REWARD_RULES.map((rule) => (
-                <span key={rule.label}>
-                  <Clock aria-hidden="true" />
-                  <b>{rule.label}</b>
-                  {rule.value}
                 </span>
               ))}
             </div>
@@ -603,8 +577,8 @@ export default function StakePageClient({ stakingContractAddress, demoMode = fal
               <div><span>Detected</span><strong>{formatHive(totalHive)}</strong></div>
               <div><span>Unstaking</span><strong>{formatHive(totalPendingUnstakeHive)}</strong></div>
               <div><span>Cooldown</span><strong>{formatCooldown(unstakeCooldownSeconds)}</strong></div>
-              <div><span>Claim min</span><strong>{MIN_ACTIVE_REWARD_DAYS} active days</strong></div>
-              <div><span>Reward pool</span><strong>{formatUsd(HIVE_STAKING_REWARD_USD_PER_MILLION)} / $1m</strong></div>
+              <div><span>Purpose</span><strong>Community signal</strong></div>
+              <div><span>Financial return</span><strong>None promised</strong></div>
             </div>
           </aside>
         </section>
@@ -645,11 +619,6 @@ export default function StakePageClient({ stakingContractAddress, demoMode = fal
                     {tierAmount(tier.thresholdHive).replace(" HIVE", "")}
                     <small className={styles.tierUnit}>HIVE</small>
                   </span>
-                  <div className={styles.tierReward}>
-                    <span>{tier.rewardWeightLabel} weight</span>
-                    <span>{tier.rewardBoostLabel} boost</span>
-                    <span>weighted pool share</span>
-                  </div>
                   <p>{tier.role}</p>
                 </article>
               );

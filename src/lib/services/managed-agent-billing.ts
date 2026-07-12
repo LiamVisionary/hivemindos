@@ -167,7 +167,7 @@ export async function createManagedHoneyStripeCheckout(input: {
   rail?: "stripe" | "stripe-crypto";
 }) {
   const secretKey = process.env.STRIPE_SECRET_KEY?.trim();
-  if (!secretKey) throw Object.assign(new Error("Set STRIPE_SECRET_KEY before creating managed HONEY checkout sessions."), { status: 500 });
+  if (!secretKey) throw Object.assign(new Error("Set STRIPE_SECRET_KEY before creating Hivemind Cloud credit checkout sessions."), { status: 500 });
   const workspaceId = await getHoneyWorkspaceId();
   const amountUsd = roundMoney(Math.max(1, input.amountUsd));
   const honeyAmount = roundHoney(amountUsd * getManagedAgentBillingConfig().honeyCreditsPerUsd);
@@ -180,7 +180,7 @@ export async function createManagedHoneyStripeCheckout(input: {
   params.set("line_items[0][quantity]", "1");
   params.set("line_items[0][price_data][currency]", "usd");
   params.set("line_items[0][price_data][unit_amount]", String(Math.round(amountUsd * 100)));
-  params.set("line_items[0][price_data][product_data][name]", "HivemindOS managed HONEY credits");
+  params.set("line_items[0][price_data][product_data][name]", "Hivemind Cloud credits");
   params.set("metadata[workspaceId]", workspaceId);
   params.set("metadata[agentId]", cleanAgentId(input.agentId));
   params.set("metadata[eventId]", eventId);

@@ -31,14 +31,32 @@ type XTranscriptJobGlobal = typeof globalThis & {
 
 const JOB_RETENTION_MS = 60 * 60_000;
 const MAX_RETAINED_JOBS = 40;
+export const X_TRANSCRIPT_PIPELINE_VERSION = "caption-structure-v2";
 const jobGlobal = globalThis as XTranscriptJobGlobal;
 const store = jobGlobal.__hivemindXTranscriptJobs ??= {
   jobs: new Map<string, XTranscriptJob>(),
   activeByKey: new Map<string, string>(),
 };
 
-function jobKey(input: ResolveXTranscriptInput): string {
-  return JSON.stringify({ url: input.url.trim(), summarize: input.summarize === true });
+export function xTranscriptJobCacheKey(
+  input: ResolveXTranscriptInput,
+  pipelineVersion = X_TRANSCRIPT_PIPELINE_VERSION,
+): string {
+  return JSON.stringify({
+    pipelineVersion,
+    threadId: input.threadId?.trim() || "unscoped",
+    url: input.url.trim(),
+    summarize: input.summarize === true,
+  });
+}
+
+function isReusableJob(job: XTranscriptJob, inspection: XTranscriptInspection): boolean {
+  if (job.status === "running") return true;
+  if (job.status !== "succeeded" || !job.result) return false;
+  // A video can fall through to its root post after every media path fails.
+  // That keeps the first response useful, but it is not a completed video
+  // transcript and must never block a later retry through an improved pipeline.
+  return inspection.kind !== "video" || job.result.kind === "video";
 }
 
 function pruneJobs(now: number): void {
@@ -70,7 +88,7 @@ async function runJob(
     job.updatedAt = Date.now();
     // Keep successful jobs addressable by key for the retention window so a
     // repeated command reconnects to its result instead of buying it twice.
-    if (job.status === "failed" && store.activeByKey.get(job.key) === job.id) {
+    if (!isReusableJob(job, job.inspection) && store.activeByKey.get(job.key) === job.id) {
       store.activeByKey.delete(job.key);
     }
   }
@@ -83,10 +101,11 @@ export function startXTranscriptJob(
 ): XTranscriptJob {
   const now = Date.now();
   pruneJobs(now);
-  const key = jobKey(input);
+  const key = xTranscriptJobCacheKey(input);
   const activeId = store.activeByKey.get(key);
   const active = activeId ? store.jobs.get(activeId) : undefined;
-  if (active && active.status !== "failed") return active;
+  if (active && isReusableJob(active, inspection)) return active;
+  if (activeId && store.activeByKey.get(key) === activeId) store.activeByKey.delete(key);
 
   const job: XTranscriptJob = {
     id: randomUUID(),

@@ -238,7 +238,7 @@ export function ImportedOperationsPanel({ colony }: { colony: Colony }) {
           <div>{ops.projectPath || "Repository path not stored"}</div>
           {git ? <div>{[git.repoName || git.remoteUrl, git.branch, git.commit].filter(Boolean).join(" · ")}</div> : null}
           <div style={{ color: "var(--fg-4)" }}>Discovered {new Date(ops.lastDiscoveredAt).toLocaleString()}</div>
-          <div style={{ color: "var(--fg-4)" }}>Revenue share is not automatic for imported legacy revenue. Use Treasury revenue recording only for intentional HivemindOS-attributed events.</div>
+          <div style={{ color: "var(--fg-4)" }}>Historical and off-platform revenue carries no HivemindOS fee. Treasury recording remains available for operating history.</div>
         </div>
       </Panel>
 

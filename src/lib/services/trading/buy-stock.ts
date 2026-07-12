@@ -29,8 +29,11 @@ import {
   platformFeeDetail,
   platformFeeReceiptDetail,
   quoteTradingPlatformFee,
+  reserveTradingPlatformFee,
+  settleReservedTradingPlatformFee,
   type PlatformFeeCollection,
   type PlatformFeeQuote,
+  type PlatformFeeReservation,
 } from "@/lib/services/wallet/platform-fees";
 import {
   evaluateSpend,
@@ -252,23 +255,34 @@ async function resolveAlpacaCreds(policy: BuyStockPolicy, paper: boolean): Promi
   return { apiKey: key.value, apiSecret: secret.value };
 }
 
+async function reserveBrokeragePlatformFee(
+  input: BuyStockInput,
+  source: "alpaca-live" | "robinhood-agentic",
+  venueLabel: string,
+): Promise<PlatformFeeReservation | undefined> {
+  const feeNetwork = input.network || input.policy.network;
+  const quote = await quoteTradingPlatformFee({ source, network: feeNetwork, amountUsd: input.notionalUsd });
+  if (!quote.enabled) return undefined;
+  if (!input.network || !input.secret || !input.fromAddress) {
+    throw new Error(`${venueLabel} trades need this agent's local wallet so HivemindOS can reserve and collect the platform fee.`);
+  }
+  return reserveTradingPlatformFee({
+    network: input.network,
+    secret: input.secret,
+    fromAddress: input.fromAddress,
+    amountUsd: input.notionalUsd,
+    source,
+  });
+}
+
 async function executeAlpaca(input: BuyStockInput): Promise<BuyStockResult> {
   const side = input.side ?? "buy";
   const underlying = alpacaSymbol(input.ticker);
   const paper = resolveAlpacaPaper(input);
   const { apiKey, apiSecret } = await resolveAlpacaCreds(input.policy, paper);
-  let shouldCollectPlatformFee = false;
-  if (!paper) {
-    const feeNetwork = input.network || input.policy.network;
-    const feeQuote = await quoteTradingPlatformFee({ source: "alpaca-live", network: feeNetwork, amountUsd: input.notionalUsd });
-    if (feeQuote.enabled) {
-      if (!input.network || !input.secret || !input.fromAddress) {
-        throw new Error("Live Alpaca trades need this agent's local wallet so HivemindOS can collect the platform fee.");
-      }
-      await assertTradingPlatformFeeReady({ source: "alpaca-live", network: input.network, amountUsd: input.notionalUsd });
-      shouldCollectPlatformFee = true;
-    }
-  }
+  const feeReservation = paper
+    ? undefined
+    : await reserveBrokeragePlatformFee(input, "alpaca-live", "Live Alpaca");
   const base = paper ? ALPACA_PAPER_BASE : ALPACA_LIVE_BASE;
   const order = input.qty && input.qty > 0
     ? { symbol: underlying, qty: String(input.qty), side, type: "market", time_in_force: "day" }
@@ -290,14 +304,9 @@ async function executeAlpaca(input: BuyStockInput): Promise<BuyStockResult> {
   if (!response.ok || !json?.id) {
     throw new Error(`Alpaca order rejected (HTTP ${response.status}): ${json?.message || "no order id returned"}.`);
   }
-  const platformFee = shouldCollectPlatformFee ? await collectTradingPlatformFee({
-    agentId: input.agentId,
-    network: input.network!,
-    secret: input.secret!,
-    fromAddress: input.fromAddress!,
-    amountUsd: input.notionalUsd,
-    source: "alpaca-live",
-  }) : undefined;
+  const platformFee = feeReservation
+    ? await settleReservedTradingPlatformFee({ agentId: input.agentId, reservation: feeReservation })
+    : undefined;
   const filled = Number(json.filled_qty || 0);
   return {
     ok: true,
@@ -772,29 +781,15 @@ async function quoteRobinhoodAgenticTrade(input: Pick<BuyStockInput, "side" | "t
 async function executeRobinhoodAgenticTrade(input: BuyStockInput): Promise<BuyStockResult> {
   const side = input.side ?? "buy";
   const ticker = alpacaSymbol(input.ticker);
-  const feeNetwork = input.network || input.policy.network;
-  const feeQuote = await quoteTradingPlatformFee({ source: "robinhood-agentic", network: feeNetwork, amountUsd: input.notionalUsd });
-  if (feeQuote.enabled) {
-    if (!input.network || !input.secret || !input.fromAddress) {
-      throw new Error("Robinhood Agentic trades need this agent's local wallet so HivemindOS can collect the platform fee.");
-    }
-    await assertTradingPlatformFeeReady({ source: "robinhood-agentic", network: input.network, amountUsd: input.notionalUsd });
-  }
+  const feeReservation = await reserveBrokeragePlatformFee(input, "robinhood-agentic", "Robinhood Agentic");
   const placed = await placeRobinhoodAgenticEquityOrder({
     side,
     ticker,
     notionalUsd: input.notionalUsd,
     qty: input.qty,
   });
-  const platformFee = feeQuote.enabled && input.network && input.secret && input.fromAddress
-    ? await collectTradingPlatformFee({
-      agentId: input.agentId,
-      network: input.network,
-      secret: input.secret,
-      fromAddress: input.fromAddress,
-      amountUsd: input.notionalUsd,
-      source: "robinhood-agentic",
-    })
+  const platformFee = feeReservation
+    ? await settleReservedTradingPlatformFee({ agentId: input.agentId, reservation: feeReservation })
     : undefined;
   return {
     ok: true,

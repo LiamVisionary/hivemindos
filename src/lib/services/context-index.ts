@@ -52,6 +52,7 @@ import {
   type PrincipalContext,
   type ScopePolicy,
 } from "@/lib/types/principal";
+import { searchContextIndexSnapshot } from "@/lib/services/context-index/search";
 
 export type ContextIndexKind =
   | "skill"
@@ -115,6 +116,8 @@ export type ContextIndexSearchOptions = ContextIndexOptions & {
   query?: string;
   limit?: number;
 };
+
+export type ContextIndexBatchQuery = Pick<ContextIndexSearchOptions, "query" | "limit">;
 
 export type ContextConnectedAppRoute = {
   method?: string;
@@ -822,7 +825,7 @@ function localCliToolItems(): ContextIndexItem[] {
         "GET /api/crypto/capabilities?intent=<status|portfolio|receive|send|private-transfer|paid-api|private-paid-api|trade|crosschain-swap|bridge|crosschain-payment|token-launch|polymarket|hyperliquid|automation|nft|agent-job|card-payment|fund-llm-credits>&agentId=<id> returns the capability map. POST { action: 'select', intent, agentId, wallet, preferredProvider? } selects a rail. POST { action: 'prepare', intent, agentId, wallet, url?, recipientAddress?, amountUsd?, asset?, fromChain?, toChain?, fromAsset?, toAsset? } returns the endpoint, draft body, missing readiness, approval requirement, confirmation token, clear-signing review, and crosschain plan when relevant.",
         "MCP path: run hivemind-mcp as a stdio MCP server. It exposes crypto_capabilities for readiness, select_crypto_rail for no-side-effect provider selection, prepare_crypto_action for provider endpoint/request-body drafts, review_crypto_action for clear-signing, agent_crypto_identity for local identity/listing records, and crypto_risk_monitor for DARC-style control checks.",
         "The router covers Bankr for wallet portfolio, swaps/trades, crosschain swaps/bridges/payments, token launches, Polymarket, Hyperliquid fallback, recurring automations, NFT actions, Agent API jobs, and LLM credit funding; local Hyperliquid for governed EVM-wallet perp quotes/orders with server-configured builder codes; x402 for public paid API fetches and local-wallet stablecoin sends (USDC, or USDG on Robinhood Chain); Veil for private transfers and private x402; MoneyClaw for card/web payment readiness; and UsePod for prepaid provider-managed paid inference/paywalls.",
-        "Official trading platform fee policy is fetched from the hosted HivemindOS policy endpoint by default; local HIVEMINDOS_TRADING_PLATFORM_FEES_ENABLED or HIVEMINDOS_PLATFORM_FEE_RECIPIENT_* variables switch an install to self-hosted override policy, while fee-rate defaults alone keep using hosted policy. Locally signed stablecoin-capable rails such as /api/wallet/send, /api/trading/swap, xStocks, Robinhood Chain stock-token swaps, live Alpaca fee collection, /api/wallet/x402, /api/wallet/veil/transfer, and /api/wallet/veil/x402 can quote and collect the 1% local-wallet policy fee as a separate USDC or USDG transfer depending on the acting network. /api/company-revenue records Zero Human Company revenue events in a separate revenue ledger and only collects the 2% company revenue share after explicit COLLECT_COMPANY_REVENUE_FEE confirmation from a selected agent wallet. Official Hyperliquid builder-code recipient, fee, max approval fee, network, and optional API URL are fetched from the HivemindOS-controlled builder-policy endpoint; client request bodies and shared env never choose the official builder recipient or fee. Bankr and MoneyClaw revenue needs hosted/proxy or provider-native fee enforcement.",
+        "Official money-movement fee policy is fetched from the hosted HivemindOS policy endpoint by default; local HIVEMINDOS_TRADING_PLATFORM_FEES_ENABLED or HIVEMINDOS_PLATFORM_FEE_RECIPIENT_* variables switch an install to self-hosted override policy. Ordinary wallet sends and externally sourced company revenue have no official HivemindOS fee. Current source rates are 0.20% for DEX swaps, 0.10% for supported live stock/tokenized-stock execution, and 0.50% for ordinary paid x402 or private-payment execution, with a $0.01 minimum and $10 cap where a fee applies. /api/company-revenue records Zero Human Company revenue without creating a fee; only a future hosted marketplace or billing policy can attach a disclosed fee to a HivemindOS-sourced transaction. Official Hyperliquid builder policy remains hosted and separate.",
         "Execution remains with hardened routes and gates: /api/bankr/actions, /api/bankr/llm-credits, /api/trading/hyperliquid, /api/wallet/x402, /api/wallet/veil/x402, /api/wallet/veil/transfer, /api/wallet/send, /api/wallet/moneyclaw, /api/usepod/status, /api/usepod/deposit-transaction, /api/crypto/clear-signing, /api/crypto/agent-identity, and /api/crypto/risk-monitor.",
         "Side-effect policy: call status/select/prepare first; do not execute sends, swaps, trades, token launches, bets, leverage positions, NFT mutations, automations, paid API calls, card payments, private transfers, or LLM credit funding unless wallet Spend and caps allow it, the wallet's explicit auto-send/auto-use policy allows that action, or the user has explicitly confirmed the prepared draft. Never ask for, print, store, or summarize private keys, seed phrases, API keys, card details, or wallet secrets.",
       ].join(" "),
@@ -838,7 +841,7 @@ function localCliToolItems(): ContextIndexItem[] {
       id: "tool-schema:managed-agent-billing",
       kind: "tool-schema",
       title: "managed agent Honey billing",
-      summary: "No-BYOK managed-agent billing through spend-only managed HONEY credits, Stripe Checkout funding, signed Honey ledger credit/debit events, and server-side provider markup.",
+      summary: "No-BYOK managed-agent billing through spend-only Hivemind Cloud credits, verified checkout funding, signed credit/debit events, and server-side provider markup.",
       tags: ["managed agent", "billing", "honey", "credits", "stripe", "x402", "bankr", "markup", "no api keys", "funding", "spend"],
       aliases: [
         "managed agent credits",
@@ -852,13 +855,13 @@ function localCliToolItems(): ContextIndexItem[] {
       ],
       retrievalText: [
         "Use /api/managed-agent/billing when the user wants one-step managed agent usage without bringing their own provider API keys.",
-        "GET /api/managed-agent/billing?agentId=<id> returns the Honey ledger, managed Honey balance for the agent, configured funding rails, and provider mode choices.",
-        "POST { action: 'quote', intent: 'chat'|'coding'|'research'|'paid-api'|'tool', provider?: 'auto'|'bankr'|'openai'|'x402'|'hivemindos-models'|'moneyclaw'|'agent-wallet'|'hive', estimatedTokens?, estimatedCalls? } returns a server-side quote in spend-only managed HONEY credits with markup.",
-        "POST { action: 'create-stripe-checkout', agentId, amountUsd, rail?: 'stripe'|'stripe-crypto' } creates a Stripe Checkout top-up session when STRIPE_SECRET_KEY is configured. The Stripe webhook credits managed HONEY only after a verified checkout.session.completed event.",
-        "Managed HONEY credits are separate from reward Honey: reward Honey can be claimed to HIVE, but managed HONEY is spend-only service credit for managed agents and cannot be cashed out.",
+        "GET /api/managed-agent/billing?agentId=<id> returns the billing ledger, Hivemind Cloud credit balance for the agent, configured funding rails, and provider mode choices.",
+        "POST { action: 'quote', intent: 'chat'|'coding'|'research'|'paid-api'|'tool', provider?: 'auto'|'bankr'|'openai'|'x402'|'hivemindos-models'|'moneyclaw'|'agent-wallet'|'hive', estimatedTokens?, estimatedCalls? } returns a server-side quote in spend-only Hivemind Cloud credits with markup.",
+        "POST { action: 'create-stripe-checkout', agentId, amountUsd, rail?: 'stripe'|'stripe-crypto' } creates a Stripe Checkout top-up session when STRIPE_SECRET_KEY is configured. The Stripe webhook credits Hivemind Cloud usage only after a verified checkout.session.completed event.",
+        "Hivemind Cloud credits are separate from Honey: Honey is a non-transferable contribution record and is not automatically convertible to HIVE; cloud credits are purchased, spend-only service value for managed agents and cannot be transferred or cashed out.",
         "Official spoof resistance lives in the HivemindOS-hosted Honey ledger service: /managed-billing/events requires HONEY_BILLING_SECRET/HONEY_LEDGER_SECRET HMAC or the admin token, is idempotent, and refuses debit events when the managed balance is insufficient.",
-        "The compute gateway's shared-key mode uses managed HONEY: if ALLOW_SHARED_BANKR_KEY=true and the caller does not provide a Bankr key, it checks managed Honey budget, calls the provider server-side, then submits a signed debit based on verified token usage.",
-        "Never let clients directly claim funded credits. Stripe, x402, Bankr, agent-wallet, and $HIVE funding rails must credit managed HONEY only after a provider-side settlement/webhook/proof is verified by HivemindOS.",
+        "The compute gateway's shared-key mode uses Hivemind Cloud credits: if ALLOW_SHARED_BANKR_KEY=true and the caller does not provide a Bankr key, it checks the managed-service budget, calls the provider server-side, then submits a signed debit based on verified token usage.",
+        "Never let clients directly mint funded credits. Any supported funding rail must credit Hivemind Cloud usage only after provider-side settlement, webhook, or payment proof is verified by HivemindOS.",
       ].join(" "),
       route: "/api/managed-agent/billing",
       methods: ["GET", "POST"],
@@ -890,10 +893,10 @@ function localCliToolItems(): ContextIndexItem[] {
         "Production configuration is fail-closed: set HIVEMINDOS_PAID_AGENT_GATEWAY_ENABLED=true plus HIVEMINDOS_PAID_AGENT_SELLER_MODE=self-hosted, HIVEMINDOS_PAID_AGENT_PAY_TO, CDP_API_KEY_ID, and CDP_API_KEY_SECRET, then define either one default agent with HIVEMINDOS_PAID_AGENT_PROFILE_JSON/HIVEMINDOS_PAID_AGENT_PROFILE_PATH or a catalog with HIVEMINDOS_PAID_AGENT_CATALOG_JSON/HIVEMINDOS_PAID_AGENT_CATALOG_PATH. The default paid-agent seller path is Base mainnet with the CDP facilitator; set HIVEMINDOS_PAID_AGENT_TESTNET_MODE=true only for Base Sepolia development with x402.org.",
         "Optional Base Builder Code attribution is configured with HIVEMINDOS_X402_CLIENT_BUILDER_CODE for compatible local wallet x402 calls and HIVEMINDOS_PAID_AGENT_BUILDER_CODE or per-catalog builderCode for paid-agent seller routes on eip155:8453. Builder Codes are public identifiers, not secrets, and must never replace server-side payTo, amount, network, resource, or entitlement checks.",
         "Do not package an official payTo address into the downloadable app as authoritative. A downloaded app is user-controlled; official monetized agents should use a HivemindOS-hosted resource server or server-side receipt verification against the expected payTo, network, amount, and resource. Local self-hosted seller mode is only for operators selling their own endpoint.",
-        "Recommended public runtimes are hivemind-os for local/OpenAI-compatible, Bankr, Venice, UsePod, OpenRouter, Hive Compute, and Hive Fusion model routes; Hermes and OpenClaw can be exposed only through curated profiles; Codex, Claude Code, OpenCode, OpenHands, Aider, Aeon, and Evo should stay as managed HONEY jobs with explicit workspace/task scope by default.",
-        "The route verifies x402 before invoking /api/chat/agent-runtime, settles after a successful answer, returns a PAYMENT-RESPONSE header, writes a local paid-agent receipt, and can mirror each settled call into managed HONEY credit/debit accounting when HIVEMINDOS_PAID_AGENT_MIRROR_MANAGED_HONEY=true.",
+        "Recommended public runtimes are hivemind-os for local/OpenAI-compatible, Bankr, Venice, UsePod, OpenRouter, Hive Compute, and Hive Fusion model routes; Hermes and OpenClaw can be exposed only through curated profiles; Codex, Claude Code, OpenCode, OpenHands, Aider, Aeon, and Evo should stay as scoped managed jobs with explicit workspace/task limits by default.",
+        "The route verifies x402 before invoking /api/chat/agent-runtime, settles after a successful answer, returns a PAYMENT-RESPONSE header, writes a local paid-agent receipt, and can mirror each settled call into internal managed-credit accounting when HIVEMINDOS_PAID_AGENT_MIRROR_MANAGED_HONEY=true.",
         "Shared vault access and wallet tools are not included by default. Add sharedVault or wallet only inside the curated paid-agent config when that public product intentionally needs them. Never place secrets, provider keys, private wallet material, or local workspace paths in the public config or response.",
-        "HONEY/HIVE positioning: x402 is the external per-call charge, managed HONEY is the internal no-BYOK credit/debit ledger, and HIVE can fund Bankr LLM credits or managed HONEY through the managed-agent billing rail.",
+        "Commercial positioning: x402 is an external per-call rail, Hivemind Cloud credits are the spend-only no-BYOK service ledger, Honey is a separate contribution record, and HIVE is not required for ordinary managed service access.",
       ].join(" "),
       route: "/api/paid-agents/<slug>/chat/completions",
       methods: ["GET", "POST"],
@@ -1634,45 +1637,6 @@ export async function buildContextIndex(rawOptions: ContextIndexOptions = {}): P
   return assembleIndex(options, [...fsItems, ...liveItems]);
 }
 
-function tokenize(value: string) {
-  return value.toLowerCase().split(/[^a-z0-9_-]+/).filter((word) => word.length > 2 && word !== "gen");
-}
-
-function expandedQueryWords(query: string) {
-  const normalized = query.toLowerCase();
-  const words = tokenize(normalized);
-  const expansions = [
-    /image|picture|photo|visual|render|diffusion|txt2img|text.?to.?image/.test(normalized) ? ["image", "image generation", "image gen", "text to image", "creative", "visual generation", "diffusion", "render"] : [],
-    /video|movie|clip|animation/.test(normalized) ? ["video", "media", "render", "generation"] : [],
-    /sim|simulation|scenario|swarm/.test(normalized) ? ["simulation", "scenario", "swarm", "swarm-goal", "parallel agents", "run history"] : [],
-    /goal|orchestrat|delegate|parallel|spawn|build|implement/.test(normalized) ? ["goal", "swarm-goal", "queen bee", "orchestration", "agent routing", "work board", "parallel agents", "build"] : [],
-    /graph|ontology|network/.test(normalized) ? ["graph", "ontology", "knowledge graph"] : [],
-    /api|endpoint|route|openapi|swagger|docs/.test(normalized) ? ["api", "endpoint", "openapi", "swagger", "api docs"] : [],
-  ].flat();
-  return uniqueList([...words, ...expansions]);
-}
-
-function scoreItem(query: string, item: ContextIndexItem) {
-  const normalizedQuery = query.toLowerCase().trim();
-  if (!normalizedQuery) return 1;
-  const aliases = item.aliases ?? [];
-  const text = `${item.title} ${item.summary} ${item.tags.join(" ")} ${aliases.join(" ")} ${item.retrievalText ?? ""} ${item.path ?? ""} ${item.route ?? ""}`.toLowerCase();
-  let score = text.includes(normalizedQuery) ? 40 : 0;
-  if (aliases.some((alias) => alias === normalizedQuery || alias.includes(normalizedQuery))) score += 35;
-  if ((item.retrievalText ?? "").toLowerCase().includes(normalizedQuery)) score += 20;
-  for (const word of expandedQueryWords(normalizedQuery)) {
-    if (item.title.toLowerCase().includes(word)) score += 12;
-    if (aliases.some((alias) => alias.includes(word))) score += 11;
-    if (item.tags.some((tag) => tag.includes(word))) score += 8;
-    if ((item.path ?? "").toLowerCase().includes(word) || (item.route ?? "").toLowerCase().includes(word)) score += 5;
-    if ((item.retrievalText ?? "").toLowerCase().includes(word)) score += 4;
-    if (item.summary.toLowerCase().includes(word)) score += 3;
-  }
-  if (item.kind === "skill") score += 2;
-  if (item.kind === "tool-schema" || item.kind === "api-route") score += 1;
-  return score;
-}
-
 // Long-lived index serving: the first request for a source blocks to build it
 // once; every later request reads the in-memory snapshot immediately and a
 // background pass refreshes only the sources whose fingerprints changed.
@@ -1692,21 +1656,17 @@ export async function getContextIndex(rawOptions: ContextIndexOptions = {}): Pro
 }
 
 export async function searchContextIndex(options: ContextIndexSearchOptions = {}) {
+  const [result] = await searchContextIndexBatch(options, [{
+    query: options.query,
+    limit: options.limit,
+  }]);
+  return result;
+}
+
+export async function searchContextIndexBatch(options: ContextIndexOptions, queries: ContextIndexBatchQuery[]) {
   const index = await getContextIndex(options);
-  const kinds = options.kinds?.length ? new Set(options.kinds) : null;
-  const scored = index.items
-    .filter((item) => !kinds || kinds.has(item.kind))
-    .map((item) => {
-      const base = scoreItem(options.query ?? "", item);
-      // Priority boost only re-ranks items that already match the query; it never surfaces irrelevant apps.
-      return { ...item, score: base > 0 ? base + (item.priorityBoost ?? 0) : base };
-    })
-    .filter((item) => !options.query?.trim() || (item.score ?? 0) > 0)
-    .sort((left, right) => (right.score ?? 0) - (left.score ?? 0) || left.kind.localeCompare(right.kind) || left.title.localeCompare(right.title));
-  return {
-    ...index,
-    query: options.query?.trim() || "",
-    items: scored.slice(0, options.limit ?? 40),
-    totalMatches: scored.length,
-  };
+  return queries.map((query) => searchContextIndexSnapshot(index, {
+    ...query,
+    kinds: options.kinds,
+  }));
 }

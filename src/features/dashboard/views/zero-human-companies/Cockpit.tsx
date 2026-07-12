@@ -609,29 +609,25 @@ function RevenueSharePanel({ colony: c, handlers }: { colony: Colony; handlers: 
   const imported = Boolean(c.importedOperations);
   const [amount, setAmount] = React.useState("");
   const [source, setSource] = React.useState<CompanyRevenueShareInput["source"]>("manual");
-  const [collectFee, setCollectFee] = React.useState(!imported);
-  const [collectingAgentId, setCollectingAgentId] = React.useState(c.agents[0]?.id ?? "");
   const amountUsd = Number(amount);
   const rollup = c.revenueShare;
-  const firstAgentId = c.agents.find((agent) => agent.id)?.id ?? "";
-  const effectiveAgentId = c.agents.some((agent) => agent.id === collectingAgentId) ? collectingAgentId : firstAgentId;
-  const canSubmit = Number.isFinite(amountUsd) && amountUsd > 0 && (!collectFee || Boolean(effectiveAgentId));
+  const canSubmit = Number.isFinite(amountUsd) && amountUsd > 0;
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!canSubmit || busy) return;
-    handlers.onRecordRevenue({ amountUsd, source, collectFee, collectingAgentId: collectFee ? effectiveAgentId : undefined });
+    handlers.onRecordRevenue({ amountUsd, source, collectFee: false });
     setAmount("");
   };
   const field: React.CSSProperties = { minWidth: 0, height: 34, borderRadius: 8, border: "1px solid var(--line-2)", background: "var(--panel-2)", color: "var(--fg)", padding: "0 10px", fontFamily: "var(--f-mono)", fontSize: 12, outline: "none" };
 
   return (
     <Panel>
-      <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--honey)" }}>policy share</span>}>record external revenue</SectionLabel>
+      <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--honey)" }}>external fee · $0</span>}>record external revenue</SectionLabel>
       <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))" }}>
         <MiniMetric label="recorded revenue" value={money(rollup?.totalRevenueUsd)} />
-        <MiniMetric label="share collected" value={money(rollup?.shareCollectedUsd)} />
-        <MiniMetric label="share pending" value={money(rollup?.sharePendingUsd)} />
+        <MiniMetric label="platform fees" value={money(rollup?.shareCollectedUsd)} />
+        <MiniMetric label="external fee rate" value="0%" />
         <MiniMetric label="events" value={String(rollup?.eventCount ?? 0)} />
       </div>
       <form onSubmit={submit} style={{ marginTop: 16, display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", alignItems: "center" }}>
@@ -644,27 +640,13 @@ function RevenueSharePanel({ colony: c, handlers }: { colony: Colony; handlers: 
           <option value="marketplace">Marketplace</option>
           <option value="other">Other</option>
         </select>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-          <label style={{ display: "inline-flex", alignItems: "center", gap: 7, fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-3)", whiteSpace: "nowrap" }}>
-            <input type="checkbox" checked={collectFee} onChange={(e) => setCollectFee(e.target.checked)} style={{ accentColor: "var(--honey)" }} />
-            collect
-          </label>
-          <select aria-label="Collecting agent wallet" disabled={!collectFee || c.agents.length === 0} value={effectiveAgentId} onChange={(e) => setCollectingAgentId(e.target.value)} style={{ ...field, flex: 1, cursor: "pointer", opacity: collectFee ? 1 : 0.5 }}>
-            {c.agents.length === 0 ? <option value="">No agent wallet</option> : null}
-            {c.agents.map((agent) => (
-              <option key={agent.id ?? agent.name} value={agent.id ?? ""}>{agent.name}</option>
-            ))}
-          </select>
-        </div>
         <button disabled={!canSubmit || busy} style={{ height: 34, minWidth: 150, padding: "0 13px", borderRadius: 8, cursor: !canSubmit || busy ? "not-allowed" : "pointer", fontFamily: "var(--f-mono)", fontSize: 10.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.06, border: "1px solid var(--btn-line)", background: !canSubmit || busy ? "var(--panel-hi)" : "var(--btn-bg)", color: !canSubmit || busy ? "var(--fg-4)" : "var(--btn-fg)", opacity: busy ? 0.6 : 1 }}>
-          {busy ? <Spinner size={12} /> : collectFee ? "Record + collect" : "Record"}
+          {busy ? <Spinner size={12} /> : "Record"}
         </button>
       </form>
-      {imported ? (
-        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)", fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)", lineHeight: 1.55 }}>
-          Imported legacy revenue is tracked only when you record it here. The collect toggle starts off for this company, so old Ami-style revenue is not treated as HivemindOS-attributed by accident.
-        </div>
-      ) : null}
+      <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--line)", fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)", lineHeight: 1.55 }}>
+        Revenue earned outside HivemindOS is recorded without a fee{imported ? ", including historical imported-company revenue" : ""}. A future HivemindOS-sourced marketplace or billing transaction can show its own hosted-policy fee separately.
+      </div>
     </Panel>
   );
 }

@@ -758,6 +758,9 @@ function Seed-BundledSharedSkills {
     if (@("obsidian-markdown", "obsidian-bases", "json-canvas", "defuddle") -contains $slug) {
       $metadata["upstreamSourceUrl"] = "https://github.com/kepano/obsidian-skills"
     }
+    if ($slug -eq "hyperframes") {
+      $metadata["upstreamSourceUrl"] = "https://github.com/heygen-com/hyperframes"
+    }
     $metadata = $metadata | ConvertTo-Json -Depth 3
     Set-Content -Path (Join-Path $destination ".hivemind-skill-source.json") -Value $metadata
   }

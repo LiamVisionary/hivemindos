@@ -11,7 +11,7 @@ import { runtimeChatFeature } from "@/lib/types/agent-runtime";
 import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } from "./runtime-stream-errors";
 import { agentColdStartProcessEvent, recordAgentRuntimeWarm } from "./agent-cold-start-status";
 import { handleStatusChatDashboardCommand } from "./status-chat-dashboard-command-router";
-import { compactRepeatedAssistantText, extractGeneratedKanbanTask, isChatTransportInterruption, kanbanBodyWithFullSource, nextChatTextDelta, processLabelFromComment, processLabelFromRuntimeEvent, processLabelFromSessionMessage, runtimePromptFromPayload, yieldChatPaint } from "./status-chat-input-helpers";
+import { compactRepeatedAssistantText, extractGeneratedKanbanTask, isChatTransportInterruption, kanbanBodyWithFullSource, nextChatTextDelta, processLabelFromComment, processLabelFromRuntimeEvent, processLabelFromSessionMessage, runtimePromptFromPayload, runtimePromptFromSessionMessage, yieldChatPaint } from "./status-chat-input-helpers";
 import { handleNativeImageGenerationCommand } from "./status-chat-image-generation";
 import { handleTranscriptCommand } from "./status-chat-transcript";
 import { appendPreviewMessagesForActiveChat, applicationGenerationSignature, buildActiveImageGenerationCard, cloneApplicationGenerationCard, findLatestAssistantIndexAfterLastUser, imageGenerationCardContent, imageGenerationCompletionPatchFromText, processEventSignature, shouldStartImageGenerationCard } from "./status-chat-process-image-generation";
@@ -1239,16 +1239,17 @@ export function useStatusChatInputController(props: any) {
         return { ...current, messages: replaceActiveAssistantMessage(current.messages, message) };
       });
     };
-    const renderAssistantText = (content: string, createdAt?: number) => {
+    const renderAssistantText = (content: string, createdAt?: number, agentPrompt?: ChatMessage["agentPrompt"]) => {
       const nextText = compactRepeatedAssistantText(content).trim();
       if (!nextText) return;
-      if (sawAssistantContent && nextText === streamedAssistantText.trim()) return;
+      if (!agentPrompt && sawAssistantContent && nextText === streamedAssistantText.trim()) return;
       maybeCompleteImageGenerationCardFromText(nextText);
       streamedAssistantText = nextText;
       sawAssistantContent = true;
+      if (agentPrompt) { sawAgentPrompt = true; sawDone = true; }
       markChatStreamChunk(selectedStorageKey);
-      replacePendingAssistant({ role: "assistant", content: nextText, surface: "chat", createdAt });
-      updateTask(taskId, { lastMessage: nextText });
+      replacePendingAssistant({ role: "assistant", content: nextText, surface: "chat", createdAt, agentPrompt });
+      updateTask(taskId, agentPrompt ? { status: "active", lastMessage: `Waiting for reply: ${nextText}` } : { lastMessage: nextText });
     };
     const abortController = new AbortController();
     let stallTimer = window.setTimeout(() => abortController.abort("chat-response-stall"), CHAT_RESPONSE_STALL_TIMEOUT_MS);
@@ -1312,7 +1313,7 @@ export function useStatusChatInputController(props: any) {
         if (String(sessionMessage?.role ?? "").toLowerCase() === "assistant") {
           const assistantText = String(sessionMessage?.content ?? "");
           recoveredAssistantText += assistantText;
-          renderAssistantText(assistantText, sessionMessageCreatedMs(sessionMessage) || undefined);
+          renderAssistantText(assistantText, sessionMessageCreatedMs(sessionMessage) || undefined, runtimePromptFromSessionMessage(sessionMessage) ?? undefined);
         }
       }
     };
@@ -1482,16 +1483,7 @@ export function useStatusChatInputController(props: any) {
           }
           const agentPrompt = runtimePromptFromPayload(parsed);
           if (agentPrompt) {
-            sawAgentPrompt = true;
-            sawAssistantContent = true;
-            replacePendingAssistant({
-              role: "assistant",
-              content: agentPrompt.question,
-              surface: "chat",
-              agentPrompt,
-            });
-            updateTask(taskId, { status: "active", lastMessage: `Waiting for reply: ${agentPrompt.question}` });
-            sawDone = true;
+            renderAssistantText(agentPrompt.question, undefined, agentPrompt);
             continue;
           }
           const chunk = parsed.choices?.[0]?.delta?.content;

@@ -103,6 +103,7 @@ try {
 }
 
 assert.equal(calls[0].body.action, "start", "Chat should start a detached transcript job");
+assert.equal(calls[0].body.threadId, storageKey, "Chat must scope the transcript job to the selected thread");
 assert.match(calls[1].target, /\?jobId=job-bencera$/, "Chat should poll the detached job status");
 const reconnectableSnapshot = snapshots
   .flat()

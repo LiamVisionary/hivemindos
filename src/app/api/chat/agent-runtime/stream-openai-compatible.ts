@@ -6,17 +6,14 @@ import { proxyInput, proxyOutput } from "@/lib/services/agent-security-proxy";
 import { RUNTIME_STREAM_EVENT_TYPES } from "@/lib/services/runtime-stream-events";
 import { summarizeUsePodResponseHeaders } from "@/lib/services/usepod";
 import { interpretVeniceError, isVeniceProfile, summarizeVeniceResponseHeaders } from "@/lib/services/venice";
-import {
-  isBankrAdaptiveModel,
-  isBankrLlmProfile,
-  resolveAdaptiveBankrLlmModels,
-} from "@/lib/services/bankr-llm";
+import { isBankrAdaptiveModel, isBankrLlmProfile, resolveAdaptiveBankrLlmModels } from "@/lib/services/bankr-llm";
 import {
   bankrActionToolDefinition,
   BANKR_ACTION_TOOL_NAME,
   runBankrActionTool,
 } from "@/lib/services/bankr-actions";
 import { imageGenerationRequest, videoGenerationRequest } from "@/lib/services/chat/task-retrieval-context";
+import { semanticVideoIntentCandidate } from "@/lib/services/chat/semantic-video-intent";
 import { AGENT_COLD_START_EVENT_TYPE, inferredModalColdStartProcessEvent, recordAgentRuntimeWarm } from "@/lib/services/chat/agent-cold-start";
 import { openAICompatibleInferenceCacheHints } from "@/lib/services/chat/inference-cache-hints";
 import { resolveAdaptiveOpenRouterModels } from "@/lib/services/chat/adaptive-openrouter-models";
@@ -45,7 +42,7 @@ import {
   type IncomingMessage,
 } from "./messages";
 import type { ChatMediaArtifact } from "./media-artifacts";
-import { explicitLocalCommandRequest, forceVideoGenerationToolCall, shouldSuppressCommandToolForNativeMedia, videoInputImagesForArgs } from "./media-tool-routing";
+import { shouldSuppressCommandToolForNativeMedia, videoInputImagesForArgs } from "./media-tool-routing";
 import { runtimeProcessEventsSsePayload } from "./process-events";
 import { isFreeHivemindosWalletPaidModel } from "@/lib/config/hivemindos-wallet-paid-models";
 import { recordRuntimeTelemetry, telemetryPayloadForProfile, type RuntimeRouteTelemetry } from "./route-telemetry";
@@ -112,6 +109,9 @@ import {
 } from "./openai-compatible-profile";
 import { createOpenAICompatibleModelMessagesBuilder } from "./openai-compatible-prompt";
 import { INVOKE_HIVE_CAPABILITY_TOOL_NAME, invokeHiveCapabilityRuntimeEvent, invokeHiveCapabilityToolDefinition, runInvokeHiveCapabilityTool } from "./invoke-hive-capability-tool";
+import { runNonStreamToolConversation, type NonStreamWinningRequest } from "./non-stream-tool-conversation";
+import { streamSemanticVideoClarification } from "./stream-semantic-video-clarification";
+import { resolveSemanticVideoRuntimeRoute } from "./semantic-video-runtime-route";
 export async function streamOpenAICompatibleRuntime(
   profile: AgentProfile,
   messages: IncomingMessage[],
@@ -153,13 +153,7 @@ export async function streamOpenAICompatibleRuntime(
     usePodEnabled,
     walletPaidModelsEnabled,
   } = resolvedProfile;
-  // Tool offers key on the user's bare request: FAB briefings and the Queen
-  // voice pipeline's flattened persona/history would otherwise re-trigger an
-  // offer on every turn (weak local models then CALL the offered tool even for
-  // "nothing much"). Falls back to the full text for ordinary chat messages.
   const intentText = extractUserText(unwrapLatestUserRequest(messages)).trim() || userText;
-  // Only advertise the image tool when the user is actually asking for an image and we
-  // can reach our own dispatch route. Every other chat is byte-for-byte unchanged.
   const offerImageTool = Boolean(requestOrigin) && imageGenerationRequest(intentText);
   const offerVideoTool = Boolean(requestOrigin) && videoGenerationRequest(intentText);
   const freeScoutModel = walletPaidModelsEnabled && isFreeHivemindosWalletPaidModel(runtimeProfile.model);
@@ -208,7 +202,6 @@ export async function streamOpenAICompatibleRuntime(
     releaseInteractiveRuntime(lockKey);
     return Response.json({ error: error instanceof Error ? error.message : "Adaptive OpenRouter model selection failed." }, { status: 502 });
   }
-  // Profiles with skillActions get real governed execution tools.
   const suppressCommandToolForNativeMedia = shouldSuppressCommandToolForNativeMedia({
     messages,
     mediaArtifacts,
@@ -218,11 +211,10 @@ export async function streamOpenAICompatibleRuntime(
   const offerCommandTool = profile.runtimeCapabilities?.skillActions === true
     && permissionMode !== "plan"
     && !suppressCommandToolForNativeMedia;
-  const forceVideoTool = offerVideoTool && !explicitLocalCommandRequest(intentText);
   const offerHiveCapabilityTool = Boolean(requestOrigin) && profile.runtimeCapabilities?.skillActions === true && permissionMode !== "plan";
   const offerBankrTool = /\b(bankr|bnkr|polymarket|hyperliquid|token\s+launch|launch\s+a\s+token|swap|dca|twap|nft|portfolio|wallet\s+balance|agent\s+api)\b/i.test(intentText);
   const offerXAccountTool = xAccountRuntimeToolAvailable();
-  const toolDefinitions = [
+  const baseToolDefinitions = [
     ...(offerImageTool ? [imageGenerationToolDefinition()] : []),
     ...(offerVideoTool ? [videoGenerationToolDefinition()] : []),
     ...(offerBankrTool ? [bankrActionToolDefinition()] : []),
@@ -230,13 +222,15 @@ export async function streamOpenAICompatibleRuntime(
     ...(offerHiveCapabilityTool ? [invokeHiveCapabilityToolDefinition()] : []),
     ...(offerXAccountTool ? [X_ACCOUNT_RUNTIME_TOOL_DEFINITION] : []),
   ];
-  let winningRequest: { url: string; headers: Record<string, string>; messages: IncomingMessage[]; model: string; provider: string; sentTools: boolean; cacheBody: Record<string, unknown>; inferenceBody: Record<string, unknown> } | null = null;
+  let activeToolDefinitions = baseToolDefinitions;
+  let winningRequest: NonStreamWinningRequest | null = null;
   const runNonStreamToolCalls = async (toolCalls: AccumulatedToolCall[]): Promise<NonStreamToolRun> => {
     const events: string[] = [];
     const assistantToolCalls: Array<Record<string, unknown>> = [];
     const toolResultMessages: Array<Record<string, unknown>> = [];
     const fallbacks: string[] = [];
     const finalTexts: string[] = [];
+    const failures: string[] = [];
     for (const call of toolCalls) {
       const callId = call.id || `call_${call.name}`;
       assistantToolCalls.push({ id: callId, type: "function", function: { name: call.name, arguments: call.arguments || "{}" } });
@@ -248,8 +242,22 @@ export async function streamOpenAICompatibleRuntime(
       }
       if (call.name === INVOKE_HIVE_CAPABILITY_TOOL_NAME) {
         const outcome = await runInvokeHiveCapabilityTool(call.arguments, { origin: requestOrigin, permissionMode: permissionMode, userText: intentText });
+        const runtimeEvent = invokeHiveCapabilityRuntimeEvent(outcome);
+        events.push(ssePayload(runtimeEvent));
+        await appendRuntimeChatSessionEvent(runtimeSessionId, runtimeEvent.message, runtimeEvent.detail).catch(() => undefined);
+        if (!outcome.ok && !outcome.approvalRequired) {
+          recordRuntimeTelemetry(telemetry, "agent_runtime.hive_capability.failed", {
+            ...telemetryPayloadForProfile(profile),
+            error: outcome.fallbackText,
+            nonStream: true,
+          });
+        }
         toolResultMessages.push({ role: "tool", tool_call_id: callId, content: outcome.toolResultContent });
         fallbacks.push(outcome.fallbackText);
+        if (!outcome.ok && !outcome.approvalRequired) failures.push(outcome.fallbackText);
+        if (outcome.approvalRequired) {
+          return { events, assistantToolCalls, toolResultMessages, fallbacks, finalTexts, failures, prompted: true };
+        }
         continue;
       }
       if (call.name === VIDEO_GENERATION_TOOL_NAME) {
@@ -280,6 +288,7 @@ export async function streamOpenAICompatibleRuntime(
           await appendRuntimeChatSessionEvent(runtimeSessionId, "Video generation failed", message).catch(() => undefined);
           toolResultMessages.push({ role: "tool", tool_call_id: callId, content: JSON.stringify({ ok: false, error: message }) });
           fallbacks.push(`I couldn't complete the video generation: ${message}`);
+          failures.push(message);
         }
         continue;
       }
@@ -296,6 +305,7 @@ export async function streamOpenAICompatibleRuntime(
         await appendRuntimeChatSessionEvent(runtimeSessionId, "Tool unavailable", message).catch(() => undefined);
         toolResultMessages.push({ role: "tool", tool_call_id: callId, content: JSON.stringify({ ok: false, error: message }) });
         fallbacks.push(message);
+        failures.push(message);
         continue;
       }
       const args = parseToolCallArguments(call.arguments);
@@ -327,6 +337,7 @@ export async function streamOpenAICompatibleRuntime(
         await appendRuntimeChatSessionEvent(runtimeSessionId, "Command failed", message).catch(() => undefined);
         toolResultMessages.push({ role: "tool", tool_call_id: callId, content: JSON.stringify({ ok: false, error: message }) });
         fallbacks.push("I couldn't run that command because the tool call did not include a command.");
+        failures.push(message);
         continue;
       }
       recordRuntimeTelemetry(telemetry, "agent_runtime.command_tool.dispatch", {
@@ -365,6 +376,7 @@ export async function streamOpenAICompatibleRuntime(
           toolResultMessages,
           fallbacks,
           finalTexts,
+          failures,
           prompted: true,
         };
       }
@@ -407,64 +419,12 @@ export async function streamOpenAICompatibleRuntime(
       fallbacks.push(result.ok
         ? commandSuccessText(label, commandLine)
         : commandFailureFallbackText(commandLine, result));
+      if (!result.ok) failures.push(result.error || result.stderr || "Command failed.");
     }
-    return { events, assistantToolCalls, toolResultMessages, fallbacks, finalTexts, prompted: false };
-  };
-  const runNonStreamToolConversation = async (initialToolCalls: AccumulatedToolCall[]) => {
-    const events: string[] = [];
-    const conversation: Array<Record<string, unknown>> = winningRequest
-      ? [...(winningRequest.messages as unknown as Array<Record<string, unknown>>)]
-      : [];
-    let toolCalls = initialToolCalls;
-    let toolRoundsLeft = winningRequest?.sentTools
-      ? forceVideoTool ? 1 : offerCommandTool ? 6 : offerXAccountTool ? 3 : 1
-      : 0;
-    let fallbackText = "The tool finished.";
-    let raw: unknown = null;
-    while (toolCalls.length && toolRoundsLeft > 0 && winningRequest) {
-      toolRoundsLeft -= 1;
-      const toolRun = await runNonStreamToolCalls(toolCalls);
-      events.push(...toolRun.events);
-      if (toolRun.prompted) return { events, text: "", raw, prompted: true };
-      if (toolRun.fallbacks.length) fallbackText = toolRun.fallbacks.join(" ");
-      if (toolRun.finalTexts.length) {
-        return { events, text: toolRun.finalTexts.join("\n\n"), raw, prompted: false };
-      }
-      conversation.push({ role: "assistant", content: "", tool_calls: toolRun.assistantToolCalls });
-      conversation.push(...toolRun.toolResultMessages);
-      const continuationBody: Record<string, unknown> = {
-        model: winningRequest.model,
-        messages: conversation,
-        stream: false,
-        ...winningRequest.cacheBody,
-        ...winningRequest.inferenceBody,
-        ...(toolRoundsLeft > 0 && toolDefinitions.length ? { tools: toolDefinitions, tool_choice: "auto" } : {}),
-      };
-      let continuation: Response | null = null;
-      try {
-        continuation = await fetch(winningRequest.url, {
-          method: "POST",
-          headers: winningRequest.headers,
-          body: JSON.stringify(continuationBody),
-          signal: AbortSignal.timeout(RUNTIME_FETCH_TIMEOUT_MS),
-        });
-      } catch {
-        continuation = null;
-      }
-      if (!continuation || !continuation.ok || !continuation.body) {
-        return { events, text: fallbackText, raw, prompted: false };
-      }
-      const continuationJson = await continuation.json().catch(async () => ({ text: await continuation.text().catch(() => "") }));
-      raw = continuationJson;
-      const continuationText = extractChunk(continuationJson);
-      toolCalls = toolRoundsLeft > 0 && winningRequest.sentTools ? [...extractOpenAIToolCalls(continuationJson), ...extractLeakedToolCalls(continuationText)] : [];
-      if (!toolCalls.length) {
-        return { events, text: stripLeakedToolCallMarkup(continuationText) || fallbackText, raw: continuationJson, prompted: false };
-      }
-    }
-    return { events, text: fallbackText, raw, prompted: false };
+    return { events, assistantToolCalls, toolResultMessages, fallbacks, finalTexts, failures, prompted: false };
   };
   const fetchStartedAt = Date.now();
+  const preflightProcessPayload = runtimeProcessEventsSsePayload(telemetry?.preflightProcessEvents ?? []);
   let upstream: Response | null = null;
   let model = candidateModels[0] ?? openAICompatibleModel(profile);
   let lastStatus = 0;
@@ -482,6 +442,7 @@ export async function streamOpenAICompatibleRuntime(
       token: runtimeProfile.token,
       headers: {} as Record<string, string>,
     }));
+  let semanticVideoClassified = false;
   const startLmStudioServerForProfile = async (candidateProfile: AgentProfile, failedUrl: string, error: unknown) => {
     if (!isLocalLmStudioProfile(candidateProfile) || adaptiveProvider || adaptiveOpenRouter || usePodEnabled || isBankrLlmProfile(candidateProfile)) return false;
     let port = "1234";
@@ -563,14 +524,38 @@ export async function streamOpenAICompatibleRuntime(
       ...cacheHints.headers,
       ...(routeAttempt.headers ?? {}),
     };
-    let sentTools = toolDefinitions.length > 0;
+    if (semanticVideoIntentCandidate(intentText) && !semanticVideoClassified) {
+      semanticVideoClassified = true;
+      const semanticRoute = await resolveSemanticVideoRuntimeRoute({
+        enabled: true,
+        url: candidateUrl,
+        headers: attemptHeaders,
+        model,
+        messages,
+        signal: telemetry?.request?.signal,
+        toolDefinitions: baseToolDefinitions,
+      });
+      const decision = semanticRoute.decision;
+      recordRuntimeTelemetry(telemetry, "agent_runtime.video_intent.semantic", {
+        ...telemetryPayloadForProfile(candidateProfile),
+        intent: decision?.intent ?? null,
+        confidence: decision?.confidence ?? null,
+      });
+      activeToolDefinitions = semanticRoute.toolDefinitions;
+      if (semanticRoute.modelContext) modelMessages.splice(Math.max(0, modelMessages.length - 1), 0, { role: "system", content: semanticRoute.modelContext });
+      if (semanticRoute.clarifyMethod) {
+        releaseInteractiveRuntime(lockKey);
+        return streamSemanticVideoClarification({ requestText: intentText, runtimeSessionId, runtime: profile.runtime, startedAt: fetchStartedAt, preflightProcessPayload });
+      }
+    }
+    let sentTools = activeToolDefinitions.length > 0;
     const requestBodyFor = (withTools: boolean) => JSON.stringify({
       model,
       messages: modelMessages,
       stream: true,
       ...cacheHints.body,
       ...inferenceBody,
-      ...(withTools && toolDefinitions.length ? { tools: toolDefinitions, tool_choice: forceVideoTool ? { type: "function", function: { name: VIDEO_GENERATION_TOOL_NAME } } : "auto" } : {}),
+      ...(withTools && activeToolDefinitions.length ? { tools: activeToolDefinitions, tool_choice: "auto" } : {}),
     });
     let requestBody = requestBodyFor(sentTools);
     const requestBodyBytes = () => Buffer.byteLength(requestBody);
@@ -586,8 +571,6 @@ export async function streamOpenAICompatibleRuntime(
       requestBodyBytes: requestBodyBytes(),
       modelVisibleMediaBytes: modelVisibleMediaBytes(mediaArtifacts),
     });
-    // A cold LM Studio model makes the chat fetch block on a JIT load with
-    // zero feedback (a dead LM Link host holds it ~70s before failing).
     // Tell the session up front so polling clients can show what's happening.
     if (isLocalLmStudioProfile(candidateProfile) && !adaptiveOpenRouter && !adaptiveProvider && !usePodEnabled && !isBankrLlmProfile(candidateProfile)) {
       const loadState = await lmStudioModelLoadState(candidateProfile.gatewayUrl, candidateModel);
@@ -792,7 +775,6 @@ export async function streamOpenAICompatibleRuntime(
   // refresh.
   const providerBalanceHeader = veniceResponse?.balanceRemaining || usePodResponse?.balanceRemaining || "";
   let responseBilling = walletPaidModelsEnabled ? hivemindosModelsBillingFromHeaders(upstream.headers) : null;
-  const preflightProcessPayload = runtimeProcessEventsSsePayload(telemetry?.preflightProcessEvents ?? []);
   if (veniceResponse?.balanceRemaining) {
     recordRuntimeTelemetry(telemetry, "agent_runtime.venice.response", {
       ...telemetryPayloadForProfile(runtimeProfile),
@@ -822,11 +804,18 @@ export async function streamOpenAICompatibleRuntime(
     const json = await upstream.json().catch(async () => ({ text: await upstream.text().catch(() => "") }));
     const rawChunk = extractChunk(json);
     const leakedToolCalls = winningRequest?.sentTools ? extractLeakedToolCalls(rawChunk) : [];
-    const toolCalls = forceVideoGenerationToolCall(winningRequest?.sentTools ? [...extractOpenAIToolCalls(json), ...leakedToolCalls] : [], forceVideoTool, userText);
-    if (toolCalls.length) {
-      const toolRun = await runNonStreamToolConversation(toolCalls);
+    const toolCalls = winningRequest?.sentTools ? [...extractOpenAIToolCalls(json), ...leakedToolCalls] : [];
+    if (toolCalls.length && winningRequest) {
+      const toolRun = await runNonStreamToolConversation({
+        initialToolCalls: toolCalls,
+        request: winningRequest,
+        toolDefinitions: activeToolDefinitions,
+        maxToolRounds: offerCommandTool ? 6 : offerXAccountTool ? 3 : 1,
+        timeoutMs: RUNTIME_FETCH_TIMEOUT_MS,
+        runToolCalls: runNonStreamToolCalls,
+      });
       if (toolRun.prompted) {
-        await finishRuntimeChatSession(runtimeSessionId, "completed").catch(() => undefined);
+        await finishRuntimeChatSession(runtimeSessionId, toolRun.failed ? "failed" : "completed").catch(() => undefined);
         releaseInteractiveRuntime(lockKey);
         return new Response(
           preflightProcessPayload
@@ -1359,8 +1348,16 @@ export async function streamOpenAICompatibleRuntime(
         if (call.name === X_ACCOUNT_RUNTIME_TOOL_NAME) return runXAccountRuntimeTool(call.arguments);
         if (call.name === INVOKE_HIVE_CAPABILITY_TOOL_NAME) {
           const outcome = await runInvokeHiveCapabilityTool(call.arguments, { origin: requestOrigin, permissionMode: permissionMode, userText: intentText });
-          controller.enqueue(encoder.encode(ssePayload(invokeHiveCapabilityRuntimeEvent(outcome))));
-          queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, outcome.ok ? outcome.operation === "invoke" ? "Hive capability completed" : "Hive capability inspected" : outcome.approvalRequired ? "Hive capability approval required" : "Hive capability failed", outcome.target || outcome.fallbackText));
+          const runtimeEvent = invokeHiveCapabilityRuntimeEvent(outcome);
+          controller.enqueue(encoder.encode(ssePayload(runtimeEvent)));
+          queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, runtimeEvent.message, runtimeEvent.detail));
+          if (!outcome.ok && !outcome.approvalRequired) {
+            recordRuntimeTelemetry(telemetry, "agent_runtime.hive_capability.failed", {
+              ...telemetryPayloadForProfile(profile),
+              error: outcome.fallbackText,
+              nonStream: false,
+            });
+          }
           return outcome;
         }
         if (call.name === RUN_COMMAND_TOOL_NAME) return runCommandToolCall(call);
@@ -1377,14 +1374,14 @@ export async function streamOpenAICompatibleRuntime(
         // is on offer. Each round consumes the model's tool_calls, runs them,
         // and feeds the results back for a continuation turn.
         let toolRoundsLeft = winningRequest?.sentTools
-          ? forceVideoTool ? 1 : offerCommandTool ? 6 : offerXAccountTool ? 3 : 1
+          ? offerCommandTool ? 6 : offerXAccountTool ? 3 : 1
           : 0;
         const conversation: Array<Record<string, unknown>> = winningRequest
           ? [...(winningRequest.messages as unknown as Array<Record<string, unknown>>)]
           : [];
         while (true) {
           const { toolCalls: returnedToolCalls } = await consume(active, toolRoundsLeft > 0);
-          const toolCalls = forceVideoGenerationToolCall(returnedToolCalls, forceVideoTool && toolRoundsLeft > 0, userText);
+          const toolCalls = returnedToolCalls;
           if (!toolCalls.length || toolRoundsLeft <= 0 || !winningRequest) break;
           toolRoundsLeft -= 1;
           // Run every tool call the model emitted this round and collect the
@@ -1424,7 +1421,7 @@ export async function streamOpenAICompatibleRuntime(
             stream: true,
             ...winningRequest.cacheBody,
             ...winningRequest.inferenceBody,
-            ...(toolRoundsLeft > 0 && toolDefinitions.length ? { tools: toolDefinitions, tool_choice: "auto" } : {}),
+            ...(toolRoundsLeft > 0 && activeToolDefinitions.length ? { tools: activeToolDefinitions, tool_choice: "auto" } : {}),
           };
           let continuation: Response | null = null;
           try {

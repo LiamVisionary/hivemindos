@@ -337,7 +337,7 @@ export async function returnHiveToHoney(agentId?: string) {
 export async function claimHoneyToBankrHive(input: { agentId?: string; recipientAddress?: string } = {}): Promise<BankrHoneyClaim> {
   const ledger = await readHoneyLedger();
   const amount = claimableHiveAmount(ledger, input.agentId);
-  if (amount <= 0) throw new HoneyClaimError("No Honey is ready to claim.", 400);
+  if (amount <= 0) throw new HoneyClaimError("No Honey conversion is available.", 400);
 
   const recipientAddress = normalizeEvmAddress(
     input.recipientAddress || process.env.HONEY_BANKR_RECIPIENT_ADDRESS || process.env.BANKR_RECIPIENT_ADDRESS,
@@ -753,7 +753,7 @@ async function recordLocalManagedHoneyBillingEvent(input: ManagedHoneyBillingEve
     };
   const managedBalance = Math.max(0, Number(existing.managedHoneyBalance ?? 0));
   if (input.kind === "debit" && managedBalance < amount) {
-    throw new HoneyClaimError("Insufficient managed HONEY credits.", 402);
+    throw new HoneyClaimError("Insufficient Hivemind Cloud credits.", 402);
   }
 
   const nextBalance = {

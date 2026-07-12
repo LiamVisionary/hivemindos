@@ -7,6 +7,7 @@ import "./wallets.css";
 import * as D from "./wallet-data";
 import type { DropInWallet, WalletBankrInfo, WalletHolding, WalletRail, WalletRailId, WalletRuntimeData, WalletTokenMeta } from "./wallet-data";
 import { chainBadgeSrc, type GroupedPersonalWallet, type PersonalWalletAccount } from "@/lib/utils/personal-wallet-grouping";
+import { PERSONAL_WALLET_ADDABLE_CHAINS } from "@/lib/config/personal-wallet-chains";
 import { ClawBankStatusCard } from "./ClawBankStatusCard";
 import { CreateImportWalletModal } from "./CreateImportWalletModal";
 import { WalletRewardsActions, type WalletRewardsActionsSlice } from "./WalletRewardsActions";
@@ -19,6 +20,7 @@ type WalletSendResult = {
   assetSymbol?: "USDC" | "USDG";
   transfer?: { transactionHash?: string };
   shield?: { transactionHash?: string };
+  gasAssist?: { signature: string; amountEth: number; sponsorAgentId: string };
   status?: string;
 };
 
@@ -73,15 +75,6 @@ const {
 } = D;
 
 const STABLE_SEND_SYMBOLS = new Set(["USDC", "USDG"]);
-
-// Chains a local wallet can extend onto from its vault-stored secret — mirrors
-// the multi-chain create/import set in CreateImportWalletModal. The chain for
-// the API call is passed by label (WalletPanel's chainToNetwork resolves it).
-const ADDABLE_WALLET_CHAINS: Array<{ chainKey: string; label: string }> = [
-  { chainKey: "base", label: "Base" },
-  { chainKey: "robinhood", label: "Robinhood Chain" },
-  { chainKey: "solana", label: "Solana" },
-];
 
 function stableSendSymbolForNetwork(network: string): "USDC" | "USDG" {
   return String(network || "").toLowerCase().includes("4663") ? "USDG" : "USDC";
@@ -592,6 +585,7 @@ function FundAgentModal({ source, onClose, actions }: { source?: GroupedPersonal
   const transferable = stableWalletHoldings(ranked.top);
   const fundSym = fundSymState || (transferable[0] ? transferable[0].sym : "USDC");
   const fundBal = transferable.find((b) => b.sym === fundSym);
+  const baseEthBalance = ranked.top.find((holding) => holding.sym === "ETH")?.amount ?? 0;
   const AssetSel = AssetSelect;
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose && onClose(); };
@@ -599,6 +593,12 @@ function FundAgentModal({ source, onClose, actions }: { source?: GroupedPersonal
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
   const selected = agents.find((a) => a.id === sel);
+  const needsGasAssist = Boolean(
+    selected
+    && fundSym === "USDC"
+    && source?.accounts.some((account) => account.network === "eip155:8453")
+    && baseEthBalance < 0.00001,
+  );
   const fundAmount = Number(amount);
   const funding = fundState === "funding";
   const funded = fundState === "funded";
@@ -671,6 +671,7 @@ function FundAgentModal({ source, onClose, actions }: { source?: GroupedPersonal
             {funding ? "Funding..." : funded ? "Done" : selected ? "Fund " + selected.name : "Fund agent"}
           </button>
         </div>
+        {needsGasAssist ? <p className="fw-sheet-help">This wallet is short on Base gas. {selected?.name} will first cover only the missing gas reserve, up to 0.00001 ETH, then receive the USDC.</p> : null}
         {funded ? <div className="fw-fundsuccess"><span className="mark"><BIcon name="check" size={17} /></span><div><strong>{frFmtAmount(fundSym, fundAmount)} {fundSym} sent to {selected?.name || "agent"}</strong><small>{fundResult?.signature ? "Transaction " + frShortAddr(fundResult.signature) + " confirmed. " + successDetail : successDetail}</small></div></div> : null}
         {msg ? <p className="fw-sheet-help">{msg}</p> : null}
       </section>
@@ -1297,7 +1298,7 @@ function MyWalletCard({ w, actions }: { w: GroupedPersonalWallet; actions?: Wall
     setFundMenu(false);
     toggleSheet("send");
   };
-  const missingChains = ADDABLE_WALLET_CHAINS.filter((chain) => !(Array.isArray(w.accounts) ? w.accounts : []).some((account) => account.chainKey === chain.chainKey));
+  const missingChains = PERSONAL_WALLET_ADDABLE_CHAINS.filter((chain) => !(Array.isArray(w.accounts) ? w.accounts : []).some((account) => account.chainKey === chain.chainKey));
   const canAddChain = canSpend && missingChains.length > 0 && Boolean(actions?.onAddWalletChain);
   const [addingChain, setAddingChain] = React.useState("");
   const [addChainMsg, setAddChainMsg] = React.useState("");

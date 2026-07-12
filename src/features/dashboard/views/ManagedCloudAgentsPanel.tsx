@@ -27,6 +27,7 @@ import {
   type ManagedCloudAgent,
   type ManagedCloudIntegration,
   type ManagedCloudPlan,
+  type HivemindCloudCommercialPlan,
 } from "@/lib/services/managed-cloud-agents-contract";
 import { LoadingBar, Skeleton, Spinner } from "@/features/dashboard/views/zero-human-companies/primitives";
 import "@/features/dashboard/views/zero-human-companies/theme.css";
@@ -46,6 +47,7 @@ type DashboardPayload = {
   error?: string;
   configured: boolean;
   plans: ManagedCloudPlan[];
+  commercialPlans: HivemindCloudCommercialPlan[];
   topUpAmountsUsd: number[];
   account: ManagedCloudAccount | null;
   agents: ManagedCloudAgent[];
@@ -63,6 +65,11 @@ const REGIONS = [
 
 function formatUsd(value: number, digits = 2) {
   return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
+}
+
+function commercialPlanPrice(plan: HivemindCloudCommercialPlan) {
+  if (plan.annualMinimumUsd !== null) return `${formatUsd(plan.annualMinimumUsd, 0)}/year minimum`;
+  return `${formatUsd(plan.monthlyUsd || 0, 0)}/month`;
 }
 
 function shortAddress(address: string) {
@@ -297,6 +304,23 @@ export function ManagedCloudAgentsPanel() {
 
       {error ? <div className={styles.errorBanner} role="alert"><AlertTriangle size={16} aria-hidden="true" /><span>{error}</span></div> : null}
       {busy ? <LoadingBar style={{ marginBottom: 16 }} /> : null}
+
+      <section className={styles.commercialPanel} aria-label="Hivemind Cloud commercial plans">
+        <div className={styles.commercialHeading}>
+          <div><span className={styles.kicker}>One commercial model</span><h2>Control plane subscription + metered managed usage</h2></div>
+          <p>Subscriptions cover governance and collaboration. Agent hours, hosted apps, models, and APIs remain visible usage instead of being hidden inside a seat.</p>
+        </div>
+        <div className={styles.commercialGrid}>
+          {(dashboard.commercialPlans || []).map((plan) => (
+            <article key={plan.id} className={styles.commercialCard}>
+              <div><span>{plan.availability.replace("-", " ")}</span><strong>{plan.label}</strong></div>
+              <b>{commercialPlanPrice(plan)}</b>
+              <p>{plan.audience}</p>
+              <small>{plan.includedUsageUsd > 0 ? `${formatUsd(plan.includedUsageUsd, 0)} managed usage included` : "Managed usage billed separately"}</small>
+            </article>
+          ))}
+        </div>
+      </section>
 
       <div className={styles.workspace}>
         <div className={styles.primaryColumn}>

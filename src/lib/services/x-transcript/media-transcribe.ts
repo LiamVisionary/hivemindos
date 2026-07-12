@@ -7,7 +7,12 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 
 import { runtimeCommandExists } from "@/lib/services/runtime-command-env";
-import { transcribeAudioWithWhisper } from "@/lib/services/phone/transcription";
+import { transcribeElevenLabsAudio } from "@/lib/services/phone/cloud-voice-transports";
+import {
+  transcribeAudioWithWhisper,
+  transcriptionApiKey,
+} from "@/lib/services/phone/transcription";
+import { hiveEnvValue } from "@/lib/services/shared-hive-env";
 
 const execFileAsync = promisify(execFile);
 
@@ -23,8 +28,41 @@ const MAX_STDOUT_BYTES = 16 * 1024 * 1024;
 // from steering a server-side fetch at an internal host (SSRF).
 const TWIMG_HOST_RE = /(^|\.)twimg\.com$/i;
 
+export type XTranscriptionProvider = "whisper-compatible" | "elevenlabs" | "openai";
+
+export function chooseXTranscriptionProvider(input: {
+  customWhisperConfigured: boolean;
+  elevenLabsConfigured: boolean;
+  openAiConfigured: boolean;
+}): XTranscriptionProvider | null {
+  if (input.customWhisperConfigured) return "whisper-compatible";
+  if (input.elevenLabsConfigured) return "elevenlabs";
+  if (input.openAiConfigured) return "openai";
+  return null;
+}
+
+async function resolveXTranscriptionProvider(): Promise<XTranscriptionProvider> {
+  const [whisperBaseUrl, localWhisperBaseUrl, openAiTranscribeBaseUrl, elevenLabsKey, openAiKey] = await Promise.all([
+    hiveEnvValue("WHISPER_BASE_URL").catch(() => ""),
+    hiveEnvValue("LOCAL_WHISPER_BASE_URL").catch(() => ""),
+    hiveEnvValue("OPENAI_TRANSCRIBE_BASE_URL").catch(() => ""),
+    hiveEnvValue("ELEVENLABS_API_KEY").catch(() => ""),
+    transcriptionApiKey().catch(() => ""),
+  ]);
+  const provider = chooseXTranscriptionProvider({
+    customWhisperConfigured: Boolean(whisperBaseUrl || localWhisperBaseUrl || openAiTranscribeBaseUrl),
+    elevenLabsConfigured: Boolean(elevenLabsKey),
+    openAiConfigured: Boolean(openAiKey),
+  });
+  if (!provider) {
+    throw new Error("X video transcription needs a local Whisper endpoint, ELEVENLABS_API_KEY, or an OpenAI transcription key.");
+  }
+  return provider;
+}
+
 export type XMediaProbe = {
   hasVideo: boolean;
+  hasEnglishCaptions: boolean;
   title?: string;
   uploader?: string;
   uploaderId?: string;
@@ -92,10 +130,12 @@ export async function probeXMedia(url: string): Promise<XMediaProbe> {
       duration?: number;
       formats?: unknown[];
       entries?: unknown[];
+      subtitles?: Record<string, unknown[]>;
     };
     const hasVideo = Array.isArray(info.formats) ? info.formats.length > 0 : Boolean(info.entries?.length);
     return {
       hasVideo,
+      hasEnglishCaptions: Object.keys(info.subtitles ?? {}).some((language) => /^en(?:[-_]|$)/i.test(language)),
       title: (info.title || info.description || "").trim() || undefined,
       uploader: info.uploader?.trim() || undefined,
       uploaderId: info.uploader_id?.replace(/^@/, "").trim() || undefined,
@@ -106,7 +146,7 @@ export async function probeXMedia(url: string): Promise<XMediaProbe> {
     const message = `${stderr} ${error instanceof Error ? error.message : ""}`.toLowerCase();
     // "no video could be found" / "no media" ⇒ a text/thread post, not a failure.
     if (/no video|no media|there'?s no video|unsupported url/.test(message)) {
-      return { hasVideo: false, note: stderr.trim() || undefined };
+      return { hasVideo: false, hasEnglishCaptions: false, note: stderr.trim() || undefined };
     }
     // Auth-gated (protected/NSFW) or extractor breakage ⇒ surface honestly.
     if (/nsfw|age|log in|authenticat|cookies|private|protected/.test(message)) {
@@ -114,6 +154,155 @@ export async function probeXMedia(url: string): Promise<XMediaProbe> {
     }
     throw new Error(`Could not inspect the X media: ${error instanceof Error ? error.message : String(error)}`);
   }
+}
+
+function decodeCaptionEntities(text: string): string {
+  const named: Record<string, string> = {
+    amp: "&",
+    apos: "'",
+    gt: ">",
+    lt: "<",
+    nbsp: " ",
+    quot: '"',
+  };
+  return text.replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (entity, code: string) => {
+    if (code[0] !== "#") return named[code.toLowerCase()] ?? entity;
+    const numeric = code[1]?.toLowerCase() === "x"
+      ? Number.parseInt(code.slice(2), 16)
+      : Number.parseInt(code.slice(1), 10);
+    return Number.isFinite(numeric) ? String.fromCodePoint(numeric) : entity;
+  });
+}
+
+type WebVttCue = {
+  startMs: number;
+  endMs: number;
+  text: string;
+};
+
+const SENTENCE_PAUSE_MS = 650;
+const PARAGRAPH_PAUSE_MS = 1_200;
+const MAX_SENTENCE_CHARACTERS = 300;
+const HARD_MAX_SENTENCE_CHARACTERS = 520;
+const MAX_PARAGRAPH_SENTENCES = 4;
+const TARGET_PARAGRAPH_CHARACTERS = 420;
+
+function webVttTimestampMs(value: string): number | null {
+  const parts = value.trim().split(":");
+  if (parts.length !== 2 && parts.length !== 3) return null;
+  const seconds = Number(parts.at(-1));
+  const minutes = Number(parts.at(-2));
+  const hours = parts.length === 3 ? Number(parts[0]) : 0;
+  if (![hours, minutes, seconds].every(Number.isFinite)) return null;
+  return Math.round(((hours * 60 + minutes) * 60 + seconds) * 1000);
+}
+
+function hasTerminalPunctuation(text: string): boolean {
+  return /(?:[.!?…]|\.{3})["')\]]?$/.test(text.trim());
+}
+
+function closeCaptionSentence(text: string): string {
+  const trimmed = text.replace(/\s+/g, " ").trim();
+  if (!trimmed || hasTerminalPunctuation(trimmed)) return trimmed;
+  return `${trimmed.replace(/[,;:]$/, "")}.`;
+}
+
+function captionParagraphs(cues: WebVttCue[]): string {
+  const sentences: Array<{ text: string; gapAfterMs: number }> = [];
+  let sentenceParts: string[] = [];
+  let sentenceCharacters = 0;
+  for (const [index, cue] of cues.entries()) {
+    sentenceParts.push(cue.text);
+    sentenceCharacters += cue.text.length + 1;
+    const next = cues[index + 1];
+    const gapAfterMs = next ? Math.max(0, next.startMs - cue.endMs) : PARAGRAPH_PAUSE_MS;
+    const lowercaseContinuation = Boolean(next && /^[a-z]/.test(next.text.trim()));
+    const pauseEndsSentence = gapAfterMs >= SENTENCE_PAUSE_MS && !lowercaseContinuation;
+    const unsafeConnectorEnding = /\b(?:a|an|and|as|at|because|but|by|for|from|if|in|into|is|of|on|or|so|than|that|the|then|to|when|which|with)[,;:]?$/i.test(cue.text.trim());
+    const lengthEndsSentence = sentenceCharacters >= HARD_MAX_SENTENCE_CHARACTERS
+      || (sentenceCharacters >= MAX_SENTENCE_CHARACTERS && !unsafeConnectorEnding);
+    if (!hasTerminalPunctuation(cue.text) && !pauseEndsSentence && !lengthEndsSentence && next) continue;
+    const text = closeCaptionSentence(sentenceParts.join(" "));
+    if (text) sentences.push({ text, gapAfterMs });
+    sentenceParts = [];
+    sentenceCharacters = 0;
+  }
+
+  const paragraphs: string[] = [];
+  let paragraph: string[] = [];
+  let paragraphCharacters = 0;
+  for (const sentence of sentences) {
+    paragraph.push(sentence.text);
+    paragraphCharacters += sentence.text.length + 1;
+    const paragraphComplete = sentence.gapAfterMs >= PARAGRAPH_PAUSE_MS
+      || paragraph.length >= MAX_PARAGRAPH_SENTENCES
+      || (paragraph.length >= 2 && paragraphCharacters >= TARGET_PARAGRAPH_CHARACTERS);
+    if (!paragraphComplete) continue;
+    paragraphs.push(paragraph.join(" "));
+    paragraph = [];
+    paragraphCharacters = 0;
+  }
+  if (paragraph.length) paragraphs.push(paragraph.join(" "));
+  return paragraphs.join("\n\n").trim();
+}
+
+/** Convert WebVTT cues, including rolling captions, into readable prose. */
+export function parseWebVttTranscript(vtt: string): string {
+  const cues = vtt
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n\s*\r?\n/)
+    .flatMap((block) => {
+      const lines = block.split(/\r?\n/).map((line) => line.trim());
+      if (!lines.length || /^(?:WEBVTT|NOTE|STYLE|REGION)(?:\s|$)/.test(lines[0] ?? "")) return [];
+      const timingIndex = lines.findIndex((line) => line.includes("-->"));
+      if (timingIndex < 0) return [];
+      const timing = lines[timingIndex].split(/\s+-->\s+/);
+      const startMs = webVttTimestampMs(timing[0] ?? "");
+      const endMs = webVttTimestampMs((timing[1] ?? "").split(/\s+/)[0] ?? "");
+      if (startMs === null || endMs === null) return [];
+      const text = decodeCaptionEntities(
+        lines
+          .slice(timingIndex + 1)
+          .join(" ")
+          .replace(/<[^>]*>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim(),
+      );
+      return text ? [{ startMs, endMs, text }] : [];
+    });
+  const prose: WebVttCue[] = [];
+  for (const cue of cues) {
+    const previous = prose.at(-1);
+    if (!previous) {
+      prose.push(cue);
+    } else if (cue.text === previous.text || previous.text.startsWith(`${cue.text} `)) {
+      continue;
+    } else if (cue.text.startsWith(`${previous.text} `)) {
+      prose[prose.length - 1] = { ...cue, startMs: previous.startMs };
+    } else {
+      prose.push(cue);
+    }
+  }
+  return captionParagraphs(prose);
+}
+
+/** Download and parse English captions already published with an X video. */
+export async function downloadXCaptions(url: string, workDir: string): Promise<string> {
+  await runYtDlp([
+    "--write-subs",
+    "--sub-langs", "en,en-US,en-GB",
+    "--sub-format", "vtt",
+    "--skip-download",
+    "--no-playlist",
+    "--no-warnings",
+    "-o", join(workDir, "captions.%(ext)s"),
+    "--", url,
+  ], 90_000);
+  const captions = (await readdir(workDir)).find((name) => name.endsWith(".vtt"));
+  if (!captions) throw new Error("yt-dlp found captions but produced no WebVTT file.");
+  const transcript = parseWebVttTranscript(await readFile(join(workDir, captions), "utf8"));
+  if (!transcript) throw new Error("The video's English captions contained no readable text.");
+  return transcript;
 }
 
 /** Download and extract the post's audio track to a single mp3 via yt-dlp. */
@@ -203,13 +392,17 @@ export async function mapWithConcurrency<T, R>(
 /** Transcribe a prepared audio file's chunks (bounded-parallel), concatenated in playback order. */
 export async function transcribeAudioFile(audioPath: string, workDir: string): Promise<string> {
   const chunks = await extractAudioChunks(audioPath, workDir);
+  const provider = await resolveXTranscriptionProvider();
   const parts = await mapWithConcurrency(chunks, MAX_CONCURRENT_TRANSCRIPTIONS, async (chunkPath, index) => {
     const bytes = new Uint8Array(await readFile(chunkPath));
     const file = new File([bytes], `chunk_${String(index).padStart(3, "0")}.mp3`, { type: "audio/mpeg" });
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), FFMPEG_TIMEOUT_MS);
     try {
-      return (await transcribeAudioWithWhisper(file, controller.signal)).trim();
+      const transcript = provider === "elevenlabs"
+        ? await transcribeElevenLabsAudio(file, { signal: controller.signal })
+        : await transcribeAudioWithWhisper(file, controller.signal);
+      return transcript.trim();
     } finally {
       clearTimeout(timer);
     }

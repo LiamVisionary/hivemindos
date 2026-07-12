@@ -1,4 +1,5 @@
 import { sendUsdStable } from "@/lib/services/wallet/chain-wallet";
+import { ensureAgentFundingGas, type AgentFundingGasAssist } from "@/lib/services/wallet/agent-funding-gas";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { evaluateSpend, resolveSpendGovernance } from "@/lib/services/wallet/spend-governance";
 import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
@@ -11,7 +12,7 @@ import {
 } from "@/lib/services/wallet/platform-fees";
 
 export type GovernedUsdcSendResult =
-  | { ok: true; signature: string; network: string; assetSymbol: "USDC" | "USDG"; platformFee?: PlatformFeeCollection }
+  | { ok: true; signature: string; network: string; assetSymbol: "USDC" | "USDG"; platformFee?: PlatformFeeCollection; gasAssist?: AgentFundingGasAssist }
   | { ok: false; status: "not_found" | "blocked" | "pending_approval" | "error"; error: string; approval?: unknown };
 
 export async function quoteGovernedUsdcSendFee(input: {
@@ -33,6 +34,7 @@ export async function executeGovernedUsdcSend(input: {
   agentId: string;
   toAddress: string;
   amountUsd: number;
+  gasSponsorAgentId?: string;
   approvalToken?: string;
   approvalThresholdSatisfied?: boolean;
 }): Promise<GovernedUsdcSendResult> {
@@ -86,6 +88,14 @@ export async function executeGovernedUsdcSend(input: {
     amountUsd,
   });
 
+  const gasAssist = await ensureAgentFundingGas({
+    sourceAgentId: agentId,
+    sourceNetwork: stored.info.network,
+    sourceAddress: stored.info.address,
+    recipientAddress: toAddress,
+    sponsorAgentId: input.gasSponsorAgentId,
+  });
+
   const result = await sendUsdStable({
     network: stored.info.network,
     secret: stored.secret,
@@ -113,7 +123,7 @@ export async function executeGovernedUsdcSend(input: {
     approvalId: grantId,
     transactionHash: result.signature,
   }).catch(() => {});
-  return { ok: true, signature: result.signature, network: stored.info.network, assetSymbol: result.assetSymbol, platformFee };
+  return { ok: true, signature: result.signature, network: stored.info.network, assetSymbol: result.assetSymbol, platformFee, gasAssist };
 }
 
 function stableAssetSymbol(network: string): "USDC" | "USDG" {

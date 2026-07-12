@@ -67,7 +67,7 @@ const checks = [
   ["docs describe builder code attribution", contents.docs.includes("HIVEMINDOS_PAID_AGENT_BUILDER_CODE=<base-builder-code>")],
   ["docs describe CDP facilitator auth", contents.docs.includes("CDP_API_KEY_ID=<cdp-api-key-id>") && contents.docs.includes("@coinbase/x402")],
   ["docs describe testnet flag opt-in", contents.docs.includes("HIVEMINDOS_PAID_AGENT_TESTNET_MODE=true") && contents.docs.includes("disabled by default")],
-  ["docs distinguish x402 from HONEY/HIVE", contents.docs.includes("x402 remains the external per-call charge")],
+  ["docs distinguish x402 from Honey, Cloud credits, and HIVE", contents.docs.includes("x402 remains an external per-call payment rail; Hivemind Cloud credits remain ordinary spend-only managed-service value")],
 ];
 
 const failures = checks.filter(([, passed]) => !passed);

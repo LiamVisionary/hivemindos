@@ -67,43 +67,43 @@ export const PAID_AGENT_RUNTIME_MATRIX = [
   {
     runtime: HIVEMIND_OS_RUNTIME,
     status: "recommended",
-    rails: ["x402", "managed-HONEY", "HIVE-funded-Bankr", "UsePod"],
+    rails: ["x402", "cloud-credits", "HIVE-funded-Bankr", "UsePod"],
     notes: "Best default for OpenAI-compatible model hosts, local runtimes, Bankr LLM, Venice, UsePod, OpenRouter, and Hive Fusion.",
   },
   {
     runtime: "hermes",
     status: "allowed-with-profile",
-    rails: ["x402", "managed-HONEY"],
+    rails: ["x402", "cloud-credits"],
     notes: "Use for curated chat/workflow agents; expose wallet tools or workspace actions only when the paid-agent profile explicitly enables them.",
   },
   {
     runtime: "openclaw",
     status: "allowed-with-gateway",
-    rails: ["x402", "managed-HONEY"],
+    rails: ["x402", "cloud-credits"],
     notes: "Good for a dedicated OpenClaw HTTP gateway, not for raw local workspace side effects.",
   },
   {
     runtime: "codex",
     status: "internal-by-default",
-    rails: ["managed-HONEY"],
+    rails: ["cloud-credits"],
     notes: "Keep as managed jobs with explicit workspace/task scope instead of public per-call chat.",
   },
   {
     runtime: "claude-code",
     status: "internal-by-default",
-    rails: ["managed-HONEY"],
+    rails: ["cloud-credits"],
     notes: "Keep as managed jobs with explicit workspace/task scope instead of public per-call chat.",
   },
   {
     runtime: "opencode",
     status: "internal-by-default",
-    rails: ["managed-HONEY"],
+    rails: ["cloud-credits"],
     notes: "Keep as managed jobs with explicit workspace/task scope instead of public per-call chat.",
   },
   {
     runtime: "openhands",
     status: "internal-by-default",
-    rails: ["managed-HONEY"],
+    rails: ["cloud-credits"],
     notes: "Keep as managed jobs with explicit workspace/task scope instead of public per-call chat.",
   },
 ] as const;
@@ -116,12 +116,12 @@ export const PAID_AGENT_MODEL_PROVIDER_MATRIX = [
   },
   {
     provider: "bankr",
-    rail: "HIVE-funded Bankr credits or managed HONEY",
+    rail: "HIVE-funded Bankr credits or Hivemind Cloud credits",
     notes: "Useful when the operator or user funds Bankr LLM credits with HIVE/Bankr rails.",
   },
   {
     provider: "venice",
-    rail: "x402 or managed HONEY",
+    rail: "x402 or Hivemind Cloud credits",
     notes: "Privacy-oriented hosted inference through the server-side provider key.",
   },
   {
@@ -131,7 +131,7 @@ export const PAID_AGENT_MODEL_PROVIDER_MATRIX = [
   },
   {
     provider: "openrouter",
-    rail: "x402 or managed HONEY",
+    rail: "x402 or Hivemind Cloud credits",
     notes: "Broad hosted model catalog; keep provider keys server-side.",
   },
   {
@@ -141,7 +141,7 @@ export const PAID_AGENT_MODEL_PROVIDER_MATRIX = [
   },
   {
     provider: "hive-fusion",
-    rail: "x402 or managed HONEY",
+    rail: "x402 or Hivemind Cloud credits",
     notes: "Compound-model routing over configured server-side providers.",
   },
 ] as const;
@@ -736,7 +736,7 @@ async function mirrorManagedHoneyIfEnabled(
       retailUsd: entry.priceUsd,
       honeyAmount,
       honeyCreditsPerUsd: config.honeyCreditsPerUsd,
-      explanation: "x402 per-call settlement mirrored into managed HONEY for operator accounting.",
+      explanation: "x402 per-call settlement mirrored into Hivemind Cloud credits for operator accounting.",
     };
     const transaction = settlement?.transaction || receiptId;
     const credit = await recordManagedAgentCredit({
@@ -760,7 +760,7 @@ async function mirrorManagedHoneyIfEnabled(
   } catch (error) {
     return {
       mirrored: false,
-      error: error instanceof Error ? error.message : "Managed HONEY mirror failed.",
+      error: error instanceof Error ? error.message : "Hivemind Cloud credit mirror failed.",
     };
   }
 }

@@ -184,7 +184,6 @@ export const SOMA_FRAGMENT = /* glsl */ `
   varying float vDist;
   void main() {
     float facing = max(dot(normalize(vNormal), normalize(vView)), 0.0);
-    float breathe = 0.5 + 0.5 * sin(uTime * 1.35 + vSeed * 6.2831);
     // White-hot nucleus in the CENTER of the ball, falling through the tint
     // to a deep rim — a glowing core, not a rim-lit matte disc. The old
     // fresnel version was the opposite (bright rim, flat middle) and read as
@@ -192,7 +191,7 @@ export const SOMA_FRAGMENT = /* glsl */ `
     // flag): a white core on parchment would wash hive-light nodes out.
     float core = pow(facing, 3.0) * uAdditive;
     vec3 col = vTint * (0.28 + 0.55 * facing) * (0.7 + 0.5 * vGlow);
-    col += mix(vTint, vec3(1.0), 0.85) * core * (0.5 + 0.75 * vGlow + 0.1 * breathe * uMotion);
+    col += mix(vTint, vec3(1.0), 0.85) * core * (0.55 + 0.75 * vGlow);
     col += vTint * pow(1.0 - facing, 3.0) * 0.18;
     // Selection focus: recede clearly without blacking out.
     col = mix(col, uBg, vDim * 0.5);
@@ -221,8 +220,7 @@ export const HALO_VERTEX = /* glsl */ `
     vTint = iTint;
     vSeed = iSeed;
     vec4 mv = viewMatrix * modelMatrix * vec4(iPos, 1.0);
-    float breathe = 1.0 + 0.09 * uMotion * sin(uTime * 1.05 + iSeed * 6.2831);
-    mv.xy += position.xy * iScale * breathe;
+    mv.xy += position.xy * iScale;
     float fog = smoothstep(uFogNear, uFogFar, -mv.z);
     vAlpha = iAlpha * (1.0 - fog * 0.9);
     gl_Position = projectionMatrix * mv;
@@ -248,6 +246,7 @@ export const HALO_FRAGMENT = /* glsl */ `
     vec2 quadrant = vec2(step(0.5, fract(vSeed * 3.17)), step(0.5, fract(vSeed * 5.53)));
     vec2 atlasUv = clamp(rotated, 0.02, 0.98) * 0.5 + quadrant * 0.5;
     float mask = texture2D(uMap, atlasUv).a;
+    if (mask < 0.003) discard;
     float a = mask * vAlpha;
     vec3 additive = vTint * a;
     vec3 normal = vTint;
@@ -260,14 +259,14 @@ export const FIBER_VERTEX = /* glsl */ `
   attribute float aLit;
   attribute float aSeed;
   attribute float aAlpha;
-  attribute float aDendrite;
+  attribute float aSignal;
   attribute vec3 aColorA;
   attribute vec3 aColorB;
   varying float vT;
   varying float vLit;
   varying float vSeed;
   varying float vAlpha;
-  varying float vDendrite;
+  varying float vSignal;
   varying float vDist;
   varying vec3 vColA;
   varying vec3 vColB;
@@ -276,7 +275,7 @@ export const FIBER_VERTEX = /* glsl */ `
     vLit = aLit;
     vSeed = aSeed;
     vAlpha = aAlpha;
-    vDendrite = aDendrite;
+    vSignal = aSignal;
     vColA = aColorA;
     vColB = aColorB;
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
@@ -298,7 +297,7 @@ export const FIBER_FRAGMENT = /* glsl */ `
   varying float vLit;
   varying float vSeed;
   varying float vAlpha;
-  varying float vDendrite;
+  varying float vSignal;
   varying float vDist;
   varying vec3 vColA;
   varying vec3 vColB;
@@ -307,21 +306,28 @@ export const FIBER_FRAGMENT = /* glsl */ `
     // Dark theme: pull fibers toward pale blue-white — blue-on-blue has no
     // contrast no matter the alpha. (uAdditive doubles as the theme flag;
     // hive-light keeps the ink tint.)
-    col = mix(col, vec3(0.84, 0.94, 1.0), mix(0.56, 0.36, vDendrite) * uAdditive);
+    col = mix(col, vec3(0.84, 0.95, 1.0), 0.74 * uAdditive);
     col = mix(col, uLit, vLit * 0.7);
-    float shimmer = 0.85 + 0.15 * sin(vT * 16.0 - uTime * uMotion * (1.0 + vSeed * 1.8) + vSeed * 6.2831);
+    float shimmer = 1.0;
     // Lit synapses stand out via the honey hue and everything ELSE dimming
     // (uSelDim) — no alpha boost, or bundles converging on a hub white out.
-    float a = vAlpha * 1.04 * shimmer;
+    float a = vAlpha * 1.16 * shimmer;
     a *= mix(uSelDim, 1.0, vLit);
+    // A narrow, crackling current runs along the fiber independently of the
+    // particle packet. Real links carry a full signal; ambient paths flicker.
+    float signalHead = fract(vSeed + uTime * uMotion * (0.1 + vSeed * 0.06));
+    float signalDistance = abs(vT - signalHead);
+    float crackle = 1.0;
+    float signal = (1.0 - smoothstep(0.0, 0.13, signalDistance)) * vSignal * crackle * uAdditive;
+    col = mix(col, uLit, clamp(signal * 1.15, 0.0, 1.0));
+    a += signal * 1.15;
     // Taper near the endpoints: many fibers share the same few pixels where
     // they meet a node, so full-strength ends stack into a blown highlight.
-    float axonTaper = 0.35 + 0.65 * smoothstep(0.0, 0.15, vT) * (1.0 - smoothstep(0.85, 1.0, vT));
-    float branchTaper = (0.62 + 0.38 * smoothstep(0.0, 0.08, vT)) * (1.0 - smoothstep(0.58, 1.0, vT));
-    a *= mix(axonTaper, branchTaper, vDendrite);
+    float axonTaper = 0.52 + 0.48 * smoothstep(0.0, 0.12, vT) * (1.0 - smoothstep(0.88, 1.0, vT));
+    a *= axonTaper;
     float fog = smoothstep(uFogNear, uFogFar, vDist);
-    col = mix(col, uBg, fog * 0.3);
-    a *= 1.0 - fog * 0.55;
+    col = mix(col, uBg, fog * 0.18);
+    a *= 1.0 - fog * 0.34;
     gl_FragColor = vec4(col * (1.0 + 0.3 * vLit), a);
   }
 `;
@@ -348,7 +354,7 @@ export const PULSE_VERTEX = /* glsl */ `
     float t = fract(aPhase + uTime * aSpeed * max(uMotion, 0.0));
     vec3 p = mix(mix(aStart, aCtrl, t), mix(aCtrl, aEnd, t), t);
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
-    float ends = smoothstep(0.02, 0.16, t) * (1.0 - smoothstep(0.84, 0.98, t));
+    float ends = smoothstep(0.08, 0.2, t) * (1.0 - smoothstep(0.8, 0.92, t));
     float fog = smoothstep(uFogNear, uFogFar, -mv.z);
     vTint = aTint;
     vAlpha = ends * mix(uSelDim, 1.0, aLit) * (1.0 - fog * 0.9) * mix(0.18, 1.0, uAdditive);
@@ -364,6 +370,7 @@ export const PULSE_FRAGMENT = /* glsl */ `
   varying float vAlpha;
   void main() {
     float mask = texture2D(uMap, gl_PointCoord).a;
+    if (mask < 0.003) discard;
     float a = mask * vAlpha;
     gl_FragColor = vec4(mix(vTint, vTint * a, uAdditive), mix(a, 1.0, uAdditive) * mix(1.0, a, uAdditive));
   }
@@ -417,14 +424,10 @@ export const DUST_VERTEX = /* glsl */ `
   varying float vAlpha;
   void main() {
     vec3 p = position;
-    p.x += sin(uTime * 0.11 * uMotion + aSeed * 6.2831) * 7.0;
-    p.y += cos(uTime * 0.09 * uMotion + aSeed * 12.4) * 7.0;
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
     float fog = smoothstep(uFogNear, uFogFar, -mv.z);
-    // Twinkle: each mote breathes on its own phase. The dense field is a
-    // dark-theme effect; hive-light keeps it faint (uAdditive doubles as the
-    // theme flag).
-    vAlpha = (0.13 + 0.11 * sin(uTime * (0.4 + aSeed) * uMotion + aSeed * 20.0)) * (1.0 - fog) * mix(0.04, 1.0, uAdditive);
+    // Static depth motes keep the field textured without full-screen twinkle.
+    vAlpha = 0.16 * (1.0 - fog) * mix(0.04, 1.0, uAdditive);
     gl_PointSize = aSize * uScale / max(-mv.z, 1.0);
     gl_Position = projectionMatrix * mv;
   }
@@ -437,6 +440,7 @@ export const DUST_FRAGMENT = /* glsl */ `
   varying float vAlpha;
   void main() {
     float mask = texture2D(uMap, gl_PointCoord).a;
+    if (mask < 0.003) discard;
     float a = mask * vAlpha;
     gl_FragColor = vec4(mix(uTint, uTint * a, uAdditive), mix(a, 1.0, uAdditive) * mix(1.0, a, uAdditive));
   }

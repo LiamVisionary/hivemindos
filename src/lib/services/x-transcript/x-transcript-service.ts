@@ -8,6 +8,7 @@ import { getManagedXConnections, proxyManagedXApiCall } from "@/lib/services/man
 import {
   downloadTwimgMp4,
   downloadXAudio,
+  downloadXCaptions,
   probeXMedia,
   resolveYtDlp,
   transcribeAudioFile,
@@ -17,7 +18,7 @@ import { summarizeTranscript } from "@/lib/services/x-transcript/summarize";
 import { parseXPostUrl } from "@/lib/services/x-transcript/x-url";
 import { numberEnv } from "@/lib/config/env";
 
-// Safety ceiling on how long a clip we will pay Whisper to transcribe. X caps
+// Safety ceiling on how long a clip we will send to a speech-to-text provider. X caps
 // normal video at ~2h, but yt-dlp can also resolve multi-hour Spaces/broadcasts;
 // this bounds a single paid run. Generous by default; override to raise.
 const MAX_TRANSCRIBE_SECONDS = numberEnv("X_TRANSCRIPT_MAX_SECONDS", 10_800);
@@ -58,6 +59,8 @@ export type ResolveXTranscriptInput = {
   request: NextRequest;
   url: string;
   summarize?: boolean;
+  /** Cache isolation only; transcript resolution never reads or mutates chat state. */
+  threadId?: string;
 };
 
 type XTweet = {
@@ -209,6 +212,22 @@ export async function resolveXTranscript(input: ResolveXTranscriptInput): Promis
       throw new Error(`This video is ${Math.round(probe.durationSec / 60)} min, over the ${Math.round(MAX_TRANSCRIBE_SECONDS / 60)} min transcription limit. Raise X_TRANSCRIPT_MAX_SECONDS to allow it.`);
     }
     if (probe?.hasVideo) {
+      if (probe.hasEnglishCaptions) {
+        try {
+          const transcript = await withTempDir((dir) => downloadXCaptions(parsed.canonicalUrl, dir));
+          return withSummary({
+            ...base,
+            kind: "video",
+            author: probe.uploaderId || probe.uploader ? { handle: probe.uploaderId ?? parsed.handle, name: probe.uploader } : parsed.handle ? { handle: parsed.handle } : undefined,
+            title: probe.title,
+            durationSec: probe.durationSec,
+            transcript,
+            source: `${ytdlp.join(" ")} captions`,
+          }, input.summarize);
+        } catch (error) {
+          warnings.push(`Video captions could not be read (${error instanceof Error ? error.message : String(error)}); falling back to audio transcription.`);
+        }
+      }
       try {
         const transcript = await withTempDir(async (dir) => {
           const audio = await downloadXAudio(parsed.canonicalUrl, dir);
@@ -221,7 +240,7 @@ export async function resolveXTranscript(input: ResolveXTranscriptInput): Promis
           title: probe.title,
           durationSec: probe.durationSec,
           transcript,
-          source: `${ytdlp.join(" ")} + whisper`,
+          source: `${ytdlp.join(" ")} + speech-to-text`,
         }, input.summarize);
       } catch (error) {
         // Silent/music clip, empty transcript, or a no-ffmpeg box: fall through
@@ -261,7 +280,7 @@ export async function resolveXTranscript(input: ResolveXTranscriptInput): Promis
         title: tweetText(root).slice(0, 140) || undefined,
         durationSec: durationMs ? Math.round(durationMs / 1000) : undefined,
         transcript,
-        source: "x-api mp4 + whisper",
+        source: "x-api mp4 + speech-to-text",
       }, input.summarize);
     } catch (error) {
       warnings.push(`Authenticated X video transcription failed: ${error instanceof Error ? error.message : String(error)}`);

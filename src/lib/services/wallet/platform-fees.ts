@@ -1,15 +1,19 @@
 import "server-only";
 
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
-import { sendUsdStable } from "@/lib/services/wallet/chain-wallet";
+import {
+  prepareUsdStableTransfer,
+  submitPreparedUsdStableTransfer,
+  type PreparedUsdStableTransfer,
+} from "@/lib/services/wallet/chain-wallet";
 import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
 
 export const PLATFORM_FEE_CONFIRMATION_NOTE = "Platform fee collected as a separate stablecoin transfer.";
 
-const DEFAULT_FEE_BPS = 100; // 1%
-const DEFAULT_COMPANY_REVENUE_FEE_BPS = 200; // 2%
+const DEFAULT_FEE_BPS = 25; // 0.25% for self-hosted uniform-policy fallback
+const DEFAULT_COMPANY_REVENUE_FEE_BPS = 0;
 const DEFAULT_MIN_FEE_USD = 0.01;
-const DEFAULT_MAX_FEE_USD = 0;
+const DEFAULT_MAX_FEE_USD = 10;
 const DEFAULT_OFFICIAL_POLICY_URL = "https://hivemindos-paid-agent-gateway.hivemindos.workers.dev/api/platform-fees/config";
 const USDC_MICROS = 1_000_000;
 const BPS_DENOMINATOR = 10_000;
@@ -90,11 +94,18 @@ export type PlatformFeeCollection = PlatformFeeQuote & {
   signature: string;
 };
 
+export type PlatformFeeReservation = PlatformFeeQuote & {
+  configured: true;
+  recipient: string;
+  preparedTransfer: PreparedUsdStableTransfer;
+};
+
 type PlatformFeePolicy = {
   source: "local-env" | "hosted" | "disabled";
   enabled: boolean;
   basisPoints: number;
   companyRevenueBasisPoints?: number;
+  sourceBasisPoints?: Record<string, number>;
   minFeeUsd: number;
   maxFeeUsd: number;
   recipient?: string;
@@ -135,6 +146,20 @@ export async function quoteTradingPlatformFee(input: {
   const maxFeeUsd = policy.maxFeeUsd;
   const assetSymbol = stableAssetSymbol(input.network);
   const amountUsd = feeAmountUsd(input.amountUsd, basisPoints, minFeeUsd, maxFeeUsd);
+  if (basisPoints <= 0) {
+    return {
+      enabled: false,
+      configured: false,
+      source: input.source,
+      network: input.network,
+      amountUsd: 0,
+      basisPoints: 0,
+      minFeeUsd,
+      maxFeeUsd: maxFeeUsd > 0 ? maxFeeUsd : undefined,
+      assetSymbol,
+      reason: "No platform fee applies to this action.",
+    };
+  }
   if (!enabled) {
     return {
       enabled: false,
@@ -204,18 +229,50 @@ export async function collectTradingPlatformFee(input: {
   source: PlatformFeeSource;
   companyId?: string;
 }): Promise<PlatformFeeCollection | undefined> {
+  const reservation = await reserveTradingPlatformFee(input);
+  if (!reservation) return undefined;
+  return settleReservedTradingPlatformFee({
+    agentId: input.agentId,
+    companyId: input.companyId,
+    reservation,
+  });
+}
+
+/**
+ * Cryptographically authorize a fee without moving funds. Brokerage order
+ * flows reserve first, submit the order second, then broadcast this exact
+ * signed transfer. If the broker rejects the order, discarding the reservation
+ * leaves the wallet untouched.
+ */
+export async function reserveTradingPlatformFee(input: {
+  network: string;
+  secret: string;
+  fromAddress: string;
+  amountUsd: number;
+  source: PlatformFeeSource;
+}): Promise<PlatformFeeReservation | undefined> {
   const quote = await quoteTradingPlatformFee(input);
   if (!quote.enabled) return undefined;
   assertPlatformFeeCollectable(quote);
+  const preparedTransfer = await prepareUsdStableTransfer({
+    network: input.network,
+    secret: input.secret,
+    fromAddress: input.fromAddress,
+    toAddress: quote.recipient,
+    amountUsd: quote.amountUsd,
+  });
+  return { ...quote, configured: true, recipient: quote.recipient, preparedTransfer };
+}
+
+export async function settleReservedTradingPlatformFee(input: {
+  agentId: string;
+  companyId?: string;
+  reservation: PlatformFeeReservation;
+}): Promise<PlatformFeeCollection> {
+  const quote = input.reservation;
 
   try {
-    const result = await sendUsdStable({
-      network: input.network,
-      secret: input.secret,
-      fromAddress: input.fromAddress,
-      toAddress: quote.recipient,
-      amountUsd: quote.amountUsd,
-    });
+    const result = await submitPreparedUsdStableTransfer(quote.preparedTransfer);
     await appendSpend({
       agentId: input.agentId,
       companyId: input.companyId,
@@ -226,7 +283,20 @@ export async function collectTradingPlatformFee(input: {
       status: "executed",
       transactionHash: result.signature,
     }).catch(() => {});
-    return { ...quote, assetSymbol: result.assetSymbol, signature: result.signature };
+    return {
+      enabled: quote.enabled,
+      configured: quote.configured,
+      source: quote.source,
+      network: quote.network,
+      amountUsd: quote.amountUsd,
+      basisPoints: quote.basisPoints,
+      minFeeUsd: quote.minFeeUsd,
+      maxFeeUsd: quote.maxFeeUsd,
+      assetSymbol: result.assetSymbol,
+      recipient: quote.recipient,
+      recipientKey: quote.recipientKey,
+      signature: result.signature,
+    };
   } catch (error) {
     await appendSpend({
       agentId: input.agentId,
@@ -237,7 +307,7 @@ export async function collectTradingPlatformFee(input: {
       target: quote.recipient ? shortTarget(quote.recipient) : undefined,
       status: "failed",
     }).catch(() => {});
-    throw new Error(`Action succeeded, but platform fee collection failed: ${error instanceof Error ? error.message : "unknown error"}`);
+    throw new Error(`Action succeeded, but its pre-authorized platform fee could not settle: ${error instanceof Error ? error.message : "unknown error"}`);
   }
 }
 
@@ -329,6 +399,11 @@ async function hostedPlatformFeePolicy(network: string): Promise<PlatformFeePoli
   const companyRevenueBasisPoints = numberFromOptional(
     policy.sourceBasisPoints?.["company-revenue"] ?? policy.companyRevenueBasisPoints ?? policy.companyRevenueFeeBps,
   );
+  const sourceBasisPoints = Object.fromEntries(
+    Object.entries(policy.sourceBasisPoints ?? {})
+      .map(([source, value]) => [source, numberFromOptional(value)] as const)
+      .filter((entry): entry is [string, number] => entry[1] !== undefined),
+  );
   const minFeeUsd = numberFrom(policy.minFeeUsd, DEFAULT_MIN_FEE_USD);
   const maxFeeUsd = numberFrom(policy.maxFeeUsd, DEFAULT_MAX_FEE_USD);
   const recipient = hostedRecipientForNetwork(network, policy);
@@ -338,6 +413,7 @@ async function hostedPlatformFeePolicy(network: string): Promise<PlatformFeePoli
     enabled,
     basisPoints,
     companyRevenueBasisPoints,
+    sourceBasisPoints,
     minFeeUsd,
     maxFeeUsd,
     recipient: recipient?.value,
@@ -403,6 +479,8 @@ async function firstNumberOptional(keys: readonly string[]): Promise<number | un
 }
 
 async function basisPointsForSource(source: PlatformFeeSource, policy: PlatformFeePolicy): Promise<number> {
+  const hostedSourceRate = policy.sourceBasisPoints?.[source];
+  if (hostedSourceRate !== undefined) return hostedSourceRate;
   if (source !== "company-revenue") return policy.basisPoints;
   const explicitCompanyOverride = await firstNumberOptional(COMPANY_REVENUE_FEE_BPS_KEYS);
   if (explicitCompanyOverride !== undefined) return explicitCompanyOverride;

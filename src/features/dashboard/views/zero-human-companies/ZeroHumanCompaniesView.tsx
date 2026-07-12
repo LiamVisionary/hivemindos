@@ -296,16 +296,15 @@ function ZeroHumanCompaniesDemoView({
         shareFailedUsd: 0,
         shareUnavailableUsd: 0,
       };
-      const fee = Math.max(0.01, Math.round(input.amountUsd * 0.01 * 100) / 100);
       return {
         ...colony,
         revenueShare: {
           ...current,
           eventCount: current.eventCount + 1,
           totalRevenueUsd: Math.round((current.totalRevenueUsd + input.amountUsd) * 100) / 100,
-          shareQuotedUsd: Math.round((current.shareQuotedUsd + fee) * 100) / 100,
-          shareCollectedUsd: input.collectFee ? Math.round((current.shareCollectedUsd + fee) * 100) / 100 : current.shareCollectedUsd,
-          sharePendingUsd: input.collectFee ? current.sharePendingUsd : Math.round((current.sharePendingUsd + fee) * 100) / 100,
+          shareQuotedUsd: current.shareQuotedUsd,
+          shareCollectedUsd: current.shareCollectedUsd,
+          sharePendingUsd: current.sharePendingUsd,
           lastRevenueAt: new Date().toISOString(),
         },
       };
@@ -1197,9 +1196,7 @@ function ZeroHumanCompaniesLiveView({
           companyId,
           amountUsd: input.amountUsd,
           source: input.source,
-          collectFee: input.collectFee,
-          collectingAgentId: input.collectingAgentId,
-          confirmation: input.collectFee ? "COLLECT_COMPANY_REVENUE_FEE" : undefined,
+          collectFee: false,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -1209,10 +1206,7 @@ function ZeroHumanCompaniesLiveView({
         setError(null);
         const record = json.record as { amountUsd?: number; fee?: { amountUsd?: number; status?: string } } | undefined;
         const amount = typeof record?.amountUsd === "number" ? `$${record.amountUsd.toFixed(2)}` : "Revenue";
-        const fee = typeof record?.fee?.amountUsd === "number" ? `$${record.fee.amountUsd.toFixed(2)}` : "share";
-        showNotice(record?.fee?.status === "collected"
-          ? `${amount} recorded. HivemindOS share collected: ${fee}.`
-          : `${amount} recorded. HivemindOS share pending: ${fee}.`);
+        showNotice(`${amount} recorded. Revenue earned outside HivemindOS carries no platform fee.`);
       }
       await refresh();
     } finally {

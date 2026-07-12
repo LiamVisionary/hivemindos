@@ -6,7 +6,7 @@ import { join } from "node:path";
 // The grouping helpers were extracted from WalletPanel into a real module —
 // import the shipped code directly (Node strips the types) instead of
 // vm-compiling a source slice of the panel.
-const { buildGroupedPersonalWallets: buildDropInPersonalWallets, mergePersonalWalletSources } = await import(
+const { buildGroupedPersonalWallets: buildDropInPersonalWallets, mergePersonalWalletList, mergePersonalWalletSources } = await import(
   new URL("../src/lib/utils/personal-wallet-grouping.ts", import.meta.url)
 );
 const { walletSecretExportLabel } = await import(
@@ -120,6 +120,42 @@ const namedAfterReloadCards = buildDropInPersonalWallets(mergePersonalWalletSour
 }));
 assert.equal(namedAfterReloadCards[0]?.name, "MiroShark payment", "Generated reload names such as My Base mainnet wallet must not overwrite a custom wallet name.");
 
+const duplicateAddressRows = mergePersonalWalletList([{
+  id: "user:original:eip155-8453",
+  agentId: "user:original:eip155-8453",
+  name: "My Base mainnet wallet",
+  address: "0x5555000000000000000000000000000000005555",
+  network: "eip155:8453",
+  custodyMode: "local",
+  createdAt: 100,
+}, {
+  id: "user:duplicate:eip155-8453",
+  agentId: "user:duplicate:eip155-8453",
+  name: "New import name",
+  address: "0x5555000000000000000000000000000000005555",
+  network: "eip155:8453",
+  custodyMode: "local",
+  createdAt: 200,
+}]);
+assert.equal(duplicateAddressRows.length, 1, "the same network/address must remain one wallet account");
+assert.equal(duplicateAddressRows[0]?.id, "user:original:eip155-8453", "a duplicate import must preserve the established wallet identity");
+assert.equal(duplicateAddressRows[0]?.name, "My Base mainnet wallet", "a duplicate import must not rename an established wallet");
+const reversedDuplicateAddressRows = mergePersonalWalletList([duplicateAddressRows[0] && {
+  ...duplicateAddressRows[0],
+  id: "user:duplicate:eip155-8453",
+  agentId: "user:duplicate:eip155-8453",
+  name: "New import name",
+  createdAt: 200,
+}, {
+  ...duplicateAddressRows[0],
+  id: "user:original:eip155-8453",
+  agentId: "user:original:eip155-8453",
+  name: "My Base mainnet wallet",
+  createdAt: 100,
+}].filter(Boolean));
+assert.equal(reversedDuplicateAddressRows[0]?.id, "user:original:eip155-8453", "identity precedence must use creation time, not source ordering");
+assert.equal(reversedDuplicateAddressRows[0]?.name, "My Base mainnet wallet", "an older wallet name must survive when native rows arrive newest-first");
+
 const walletViewSource = readFileSync(join(root, "src/components/wallets-drop-in/WalletsView.tsx"), "utf8");
 assert.match(walletViewSource, /setTimeout\(\(\) => setOpen\(true\), 200\)/);
 assert.match(walletViewSource, /title=\{multi \? "Hover for all chain addresses" : undefined\}/);
@@ -157,8 +193,10 @@ assert.doesNotMatch(walletNativeExportSource, /blocking_save_file/);
 const nativePersonalWalletSource = readFileSync(join(root, "src/lib/native/personal-wallets.ts"), "utf8");
 const apiPersonalWalletSource = readFileSync(join(root, "src/app/api/wallet/personal/route.ts"), "utf8");
 const tauriObsidianSource = readFileSync(join(root, "src-tauri/src/obsidian.rs"), "utf8");
-assert.match(nativePersonalWalletSource, /base sepolia/);
+assert.match(nativePersonalWalletSource, /mergePersonalWalletList/, "native + HTTP wallet reads must use the canonical identity-preserving merge");
+assert.doesNotMatch(nativePersonalWalletSource, /function preferredPersonalWalletName/, "native wallet reads must not carry a second name-precedence implementation");
 assert.match(apiPersonalWalletSource, /base sepolia/);
+assert.match(apiPersonalWalletSource, /createdAt: Date\.parse\(vaultWallet\.createdAt\) \|\| wallet\.createdAt/, "vault creation time must remain the wallet identity timestamp");
 assert.match(tauriObsidianSource, /base sepolia/);
 
 console.log("Personal wallet grouping tests passed.");

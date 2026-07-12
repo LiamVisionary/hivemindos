@@ -19,11 +19,19 @@ export type StartedXTranscriptJob = {
 export const X_TRANSCRIPT_POLL_INTERVAL_MS = 1_500;
 export const X_TRANSCRIPT_POLL_TIMEOUT_MS = 12 * 60_000;
 
-export async function startXTranscriptJobRequest(url: string): Promise<StartedXTranscriptJob> {
+export async function startXTranscriptJobRequest(
+  url: string,
+  threadId = "",
+): Promise<StartedXTranscriptJob> {
   const response = await fetch("/api/integrations/x-transcript", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ action: "start", url, summarize: true }),
+    body: JSON.stringify({
+      action: "start",
+      url,
+      summarize: true,
+      ...(threadId.trim() ? { threadId: threadId.trim() } : {}),
+    }),
   });
   const data = (await response.json().catch(() => null)) as {
     ok?: boolean;

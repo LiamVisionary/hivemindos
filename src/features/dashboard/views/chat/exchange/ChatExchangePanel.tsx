@@ -161,6 +161,7 @@ export function ChatExchangePanel(props: any) {
     sendMessage,
     sendPromptMessage,
     sendQueuedChatMessageNow,
+    sharedVault,
     setChatThreadTitle,
     setMessagesByAgent,
     setStatusAgentId,
@@ -183,7 +184,7 @@ export function ChatExchangePanel(props: any) {
   const { chatThreadTitleConfig, updateChatThreadTitleConfig } = useChatThreadTitleConfig();
   const prefs = useChatViewPreferences();
 
-  const [shelfOpen, setShelfOpen] = useState(true);
+  const [shelfOpen, setShelfOpen] = useState(false);
   const [shelfMode, setShelfMode] = useState<ShelfMode>("details");
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [previewExpanded, setPreviewExpanded] = useState(false);
@@ -769,6 +770,7 @@ export function ChatExchangePanel(props: any) {
                     processEventsTargetKey={processEventsTargetKey}
                     selectedAgent={selectedAgent}
                     sendPromptMessage={sendPromptMessage}
+                    sharedVault={sharedVault}
                     onMessageFeedback={submitMessageFeedback}
                     setCopiedMessageKey={setCopiedMessageKey}
                     setOpenKanbanTaskMenuKey={setOpenKanbanTaskMenuKey}

@@ -19,8 +19,8 @@ description: Visual atlas for HivemindOS architecture, wallets, runtimes, fleet,
 
 <div class="imagePlateGrid">
   <figure class="imagePlate">
-    <img src="../assets/img/diagrams/wallet-token-rails.jpg" alt="Generated wallet and token rails infographic with separate lanes for x402 paid APIs, UsePod prepaid runtime deposits, and Honey to Bankr HIVE claims.">
-    <figcaption>Wallet rails are three separate paths: wallet to x402, wallet to UsePod prepaid runtime, and runtime usage to Honey to Bankr HIVE claim.</figcaption>
+    <img src="../assets/img/diagrams/wallet-token-rails.jpg" alt="Legacy wallet and token rails infographic; current policy separates x402 payments, hosted Cloud credits, Honey contribution records, and optional HIVE paths.">
+    <figcaption>Policy note: the legacy plate predates the separation of Hivemind Cloud credits, Honey contribution records, and optional HIVE paths. Honey-to-HIVE conversion is closed by default.</figcaption>
   </figure>
   <figure class="imagePlate">
     <img src="../assets/img/diagrams/fleet-tailnet-topology.jpg" alt="Generated fleet and Tailnet topology infographic showing dashboard, local collector, Tailnet or Link, remote collectors, apps, and runtimes.">
@@ -177,7 +177,8 @@ flowchart TD
   HoneyLedger --> Honey["Available Honey"]
   Honey --> LegacyHive["Legacy ledger HIVE"]
   LegacyHive --> Return["Return to Honey"]
-  Honey --> BankrClaim["Claim Bankr HIVE"]
+  Honey --> PolicyGate["Authorized conversion policy (closed by default)"]
+  PolicyGate --> BankrClaim["Optional HIVE claim"]
   BankrClaim --> Treasury["Bankr reward treasury"]
   Treasury --> BaseWallet["Operator Base receiving address"]
 ```

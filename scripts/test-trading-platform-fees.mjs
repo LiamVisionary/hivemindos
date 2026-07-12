@@ -6,6 +6,7 @@ const ROOT = new URL("../", import.meta.url);
 
 const files = {
   fees: "src/lib/services/wallet/platform-fees.ts",
+  chainWallet: "src/lib/services/wallet/chain-wallet.ts",
   workerBoundary: "workers/README.md",
   ledger: "src/lib/services/wallet/spend-ledger.ts",
   send: "src/lib/services/wallet/governed-send.ts",
@@ -38,7 +39,10 @@ const contents = Object.fromEntries(
 assert.match(contents.fees, /HIVEMINDOS_TRADING_PLATFORM_FEES_ENABLED/);
 assert.match(contents.fees, /HIVEMINDOS_PLATFORM_FEE_RECIPIENT_EVM/);
 assert.match(contents.fees, /HIVEMINDOS_PLATFORM_FEE_RECIPIENT_SOLANA/);
-assert.match(contents.fees, /DEFAULT_COMPANY_REVENUE_FEE_BPS = 200/);
+assert.match(contents.fees, /DEFAULT_COMPANY_REVENUE_FEE_BPS = 0/);
+assert.match(contents.fees, /DEFAULT_MAX_FEE_USD = 10/);
+assert.match(contents.fees, /policy\.sourceBasisPoints\?\.\[source\]/);
+assert.match(contents.fees, /No platform fee applies to this action/);
 assert.match(contents.fees, /HIVEMINDOS_COMPANY_REVENUE_SHARE_BPS/);
 assert.match(contents.fees, /DEFAULT_OFFICIAL_POLICY_URL/);
 assert.match(contents.fees, /fetchHostedPolicy/);
@@ -46,7 +50,16 @@ assert.match(contents.fees, /hostedPlatformFeePolicy/);
 assert.match(contents.fees, /collectTradingPlatformFee/);
 assert.match(contents.fees, /quoteTradingPlatformFee/);
 assert.match(contents.fees, /assertTradingPlatformFeeReady/);
-assert.match(contents.fees, /sendUsdStable/);
+assert.match(contents.fees, /reserveTradingPlatformFee/);
+assert.match(contents.fees, /settleReservedTradingPlatformFee/);
+assert.match(contents.fees, /prepareUsdStableTransfer/);
+assert.match(contents.fees, /submitPreparedUsdStableTransfer/);
+assert.match(contents.chainWallet, /export async function prepareUsdStableTransfer/);
+assert.match(contents.chainWallet, /wallet\.prepareTransactionRequest/);
+assert.match(contents.chainWallet, /transaction\.sign\(payer\)/);
+assert.match(contents.chainWallet, /connection\.simulateTransaction\(transaction\)/);
+assert.match(contents.chainWallet, /export async function submitPreparedUsdStableTransfer/);
+assert.match(contents.chainWallet, /sendRawTransaction/);
 
 assert.match(contents.ledger, /"platform-fee"/);
 assert.match(contents.walletPanel, /Platform fee/);
@@ -65,9 +78,27 @@ assert.match(contents.swap, /platformFeeReceiptDetail/);
 
 assert.match(contents.stocks, /source: "xstocks"/);
 assert.match(contents.stocks, /source: "alpaca-live"/);
+assert.match(contents.stocks, /source: "robinhood-agentic"/);
 assert.match(contents.stocks, /assertTradingPlatformFeeReady/);
 assert.match(contents.stocks, /platformFeeDetail/);
 assert.match(contents.stocks, /platformFeeReceiptDetail/);
+assert.match(contents.stocks, /reserveBrokeragePlatformFee/);
+assert.match(contents.stocks, /settleReservedTradingPlatformFee/);
+
+const alpacaFlow = contents.stocks.slice(
+  contents.stocks.indexOf("async function executeAlpaca"),
+  contents.stocks.indexOf("// ---- Alpaca portfolio"),
+);
+assert.ok(alpacaFlow.indexOf("reserveBrokeragePlatformFee") < alpacaFlow.indexOf("fetch(`${base}/v2/orders`"));
+assert.ok(alpacaFlow.indexOf("settleReservedTradingPlatformFee") > alpacaFlow.indexOf("fetch(`${base}/v2/orders`"));
+assert.match(alpacaFlow, /paper\s*\?\s*undefined\s*:\s*await reserveBrokeragePlatformFee/);
+
+const robinhoodFlow = contents.stocks.slice(
+  contents.stocks.indexOf("async function executeRobinhoodAgenticTrade"),
+  contents.stocks.indexOf("// ---- Public API"),
+);
+assert.ok(robinhoodFlow.indexOf("reserveBrokeragePlatformFee") < robinhoodFlow.indexOf("placeRobinhoodAgenticEquityOrder"));
+assert.ok(robinhoodFlow.indexOf("settleReservedTradingPlatformFee") > robinhoodFlow.indexOf("placeRobinhoodAgenticEquityOrder"));
 
 assert.match(contents.x402, /source: "x402-paid-api"/);
 assert.match(contents.x402, /assertTradingPlatformFeeReady/);
@@ -76,9 +107,10 @@ assert.match(contents.x402, /platformFee/);
 assert.match(contents.x402Route, /fromAddress: stored\.info\.address/);
 assert.match(contents.fees, /"company-revenue"/);
 assert.match(contents.companyRevenue, /source: "company-revenue"/);
-assert.match(contents.companyRevenue, /COMPANY_REVENUE_FEE_CONFIRMATION/);
-assert.match(contents.companyRevenue, /collectTradingPlatformFee/);
+assert.doesNotMatch(contents.companyRevenue, /COMPANY_REVENUE_FEE_CONFIRMATION/);
+assert.doesNotMatch(contents.companyRevenue, /collectTradingPlatformFee/);
 assert.match(contents.companyRevenueRoute, /\/api\/company-revenue|recordCompanyRevenue/);
+assert.match(contents.companyRevenueRoute, /Revenue earned outside HivemindOS carries no platform fee/);
 
 assert.match(contents.veilTransferRoute, /source: "veil-transfer"/);
 assert.match(contents.veilTransferRoute, /quoteTradingPlatformFee/);
@@ -100,14 +132,16 @@ assert.match(contents.workerBoundary, /fee-recipient/);
 assert.match(contents.workerBoundary, /HivemindOS-controlled infrastructure/);
 
 assert.match(contents.env, /HIVEMINDOS_PLATFORM_FEE_POLICY_URL=https:\/\/hivemindos-paid-agent-gateway\.hivemindos\.workers\.dev\/api\/platform-fees\/config/);
-assert.match(contents.env, /HIVEMINDOS_TRADING_PLATFORM_FEE_BPS=100/);
-assert.match(contents.env, /HIVEMINDOS_COMPANY_REVENUE_SHARE_BPS=200/);
+assert.match(contents.env, /HIVEMINDOS_TRADING_PLATFORM_FEE_BPS=25/);
+assert.match(contents.env, /HIVEMINDOS_COMPANY_REVENUE_SHARE_BPS=0/);
+assert.match(contents.env, /HIVEMINDOS_PLATFORM_MAX_FEE_USD=10/);
 assert.match(contents.env, /HIVEMINDOS_PLATFORM_FEE_RECIPIENT_EVM=/);
 assert.match(contents.docs, /Trading Platform Fees/);
 assert.match(contents.docs, /HivemindOS-hosted infrastructure by default/);
 assert.match(contents.docs, /official HivemindOS-wide revenue enforcement/);
-assert.match(contents.zhcDocs, /Revenue Share/);
-assert.match(contents.zhcDocs, /2% of recorded company revenue/);
-assert.match(contents.contextIndex, /Official trading platform fee policy is fetched from the hosted HivemindOS policy endpoint/);
+assert.match(contents.zhcDocs, /Revenue Recording And Platform Fees/);
+assert.match(contents.zhcDocs, /Revenue earned outside HivemindOS is not charged/);
+assert.match(contents.contextIndex, /Official money-movement fee policy is fetched from the hosted HivemindOS policy endpoint/);
+assert.match(contents.contextIndex, /Ordinary wallet sends and externally sourced company revenue have no official HivemindOS fee/);
 
 console.log("Trading platform fee checks passed.");

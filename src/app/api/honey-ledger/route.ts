@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { booleanEnv } from "@/lib/config/env";
 import { observeHoneyUsage } from "@/lib/services/wallet/honey-usage-observer";
 import { claimHoneyToBankrHive, exchangeHoneyForHive, readHoneyLedger, returnHiveToHoney } from "@/lib/services/wallet/honey-ledger";
 
@@ -64,6 +65,12 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => ({})) as { action?: string; agentId?: string; recipientAddress?: string };
+  if (["exchange", "claim-bankr-hive"].includes(body.action || "") && !booleanEnv("HIVEMINDOS_HONEY_HIVE_CONVERSION_ENABLED")) {
+    return NextResponse.json({
+      ok: false,
+      error: "Honey-to-HIVE conversion is not enabled. Honey remains a non-transferable contribution record until an authorized policy enables conversion.",
+    }, { status: 403 });
+  }
   if (body.action === "observe") {
     const { result, ledger } = await observeCachedUsage();
     return NextResponse.json({ ok: result.ok, ledger, observer: result });

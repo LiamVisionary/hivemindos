@@ -81,12 +81,13 @@ Equity placement and cancellation go through the governed HivemindOS trade route
 - A buy spends money, so it counts toward your spending limits. A sell brings money in,
   and a paper trade isn't real money — neither counts against your budgets. If you've
   frozen a company, even practice trades are blocked.
-- Official builds use the HivemindOS platform fee on xStocks, Robinhood Chain Stock
-  Tokens, Robinhood Agentic orders, and live Alpaca orders: **1% with a $0.01 minimum**.
-  A `$100` live brokerage or tokenized-stock order produces a `$1.00` platform fee.
-  The preview shows it before you confirm, and the fee is collected as its own USDC or
-  USDG transaction after the order is accepted or the swap completes. Paper trading
-  does not charge this fee.
+- Official builds use a capped HivemindOS execution fee on xStocks, Robinhood Chain Stock
+  Tokens, Robinhood Agentic orders, and live Alpaca orders: **0.10% with a $0.01 minimum
+  and $10 maximum**. A `$100` live brokerage or tokenized-stock order produces a `$0.10` fee.
+  The preview shows it before you confirm. Live brokerage trades pre-authorize the
+  separate USDC or USDG fee before submitting the order, then settle it only after the
+  broker accepts the order; a rejected order does not collect the fee. Tokenized-stock
+  fees settle after their on-chain swap completes. Paper trading does not charge this fee.
 - Robinhood Chain Stock Tokens can be blocked by upstream liquidity, legal, or
   eligibility rules. When that happens, HivemindOS shows the block instead of trying
   to route around it.

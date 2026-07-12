@@ -76,6 +76,7 @@ export const FusionPanel = dynamic(() => loadFusionPanel().then((mod) => mod.Fus
 export const GovernancePanel = dynamic(() => loadGovernancePanel().then((mod) => mod.GovernancePanel), { ssr: false, loading: routeLoadingFor("governance") });
 export const ManagedCloudAgentsPanel = dynamic(() => loadManagedCloudAgentsPanel().then((mod) => mod.ManagedCloudAgentsPanel), { ssr: false, loading: routeLoadingFor("cloud") });
 export const HiveComputePanel = dynamic(() => loadHiveComputePanel().then((mod) => mod.HiveComputePanel), { ssr: false, loading: routeLoadingFor("compute") });
+export const PodcastStudioView = dynamic(() => import("@/features/dashboard/views/PodcastStudioView").then((mod) => mod.PodcastStudioView), { ssr: false, loading: routeLoadingFor("podcast") });
 export const TelemetryView = dynamic(() => loadTelemetryView().then((mod) => mod.TelemetryView), { ssr: false, loading: routeLoadingFor("memory") });
 export const AeonAutopilotPanel = dynamic(() => loadAeonAutopilotPanel().then((mod) => mod.AeonAutopilotPanel), { ssr: false, loading: routeLoadingFor("aeon") });
 export const PhonePanel = dynamic(() => loadPhonePanel().then((mod) => mod.PhonePanel), { ssr: false, loading: routeLoadingFor("phone") });

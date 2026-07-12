@@ -320,6 +320,37 @@ export const jsonRenderComponentDefinitions = {
     slots: [],
     description: "An ordered or unordered list with optional item details.",
   },
+  Chart: {
+    props: looseProps({
+      type: dynamic(z.enum(["bar", "line", "area", "pie", "donut"])),
+      data: dynamic(z.array(z.object({ label: z.union([z.string(), z.number()]), value: z.union([z.number(), z.string()]) }).passthrough())),
+      series: dynamic(z.array(z.object({ name: z.string().optional(), color: z.string().optional(), data: z.array(z.object({ label: z.union([z.string(), z.number()]), value: z.union([z.number(), z.string()]) }).passthrough()) }).passthrough())),
+      title: stringishValue,
+      caption: stringishValue,
+      height: numberValue,
+      logScale: booleanValue,
+      valueFormat: dynamic(z.enum(["number", "percent", "currency"])),
+    }),
+    slots: [],
+    description: "A data chart rendered inline as SVG. Set type to bar, line, area, pie, or donut. Provide data as [{ label, value }] for one series, or series as [{ name, color, data: [{ label, value }] }] for several. Supports logScale and valueFormat. Prefer this over describing numeric trends or comparisons in prose.",
+  },
+  Diagram: {
+    props: looseProps({
+      code: stringishValue,
+      mermaid: stringishValue,
+      caption: stringishValue,
+    }),
+    slots: [],
+    description: "A conceptual diagram rendered from Mermaid syntax (flowchart, graph, sequence, mindmap, class, ER, etc). Put the Mermaid source string in code. Use for architectures, flows, hierarchies, and relationships.",
+  },
+  Flashcards: {
+    props: looseProps({
+      title: stringishValue,
+      cards: dynamic(z.array(z.object({ front: z.string(), back: z.string() }).passthrough())),
+    }),
+    slots: [],
+    description: "An interactive flashcard deck the user can flip and step through. Provide cards as [{ front, back }]. Use for study sets, Q&A review, and vocabulary.",
+  },
 };
 
 export const jsonRenderActionDefinitions = {

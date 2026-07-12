@@ -12,6 +12,7 @@ type SendUsdcBody = {
   autoPayEnabled?: boolean;
   confirmation?: string;
   approvalToken?: string;
+  gasSponsorAgentId?: string;
 };
 
 type RouteSendApproval = {
@@ -19,6 +20,7 @@ type RouteSendApproval = {
   toAddress: string;
   amountUsd: number;
   maxPaymentUsd?: number;
+  gasSponsorAgentId?: string;
   expiresAtMs: number;
 };
 
@@ -59,6 +61,7 @@ export async function POST(request: NextRequest) {
       agentId: body.agentId!.trim(),
       toAddress: body.toAddress!.trim(),
       amountUsd: Number(body.amountUsd),
+      gasSponsorAgentId: body.gasSponsorAgentId?.trim() || undefined,
       approvalToken: body.approvalToken,
       approvalThresholdSatisfied: true,
     });
@@ -66,7 +69,7 @@ export async function POST(request: NextRequest) {
       const status = result.status === "not_found" ? 404 : result.status === "blocked" ? 403 : result.status === "pending_approval" ? 202 : 400;
       return NextResponse.json({ ok: false, status: result.status === "error" ? undefined : result.status, error: result.error, approval: result.approval }, { status });
     }
-    return NextResponse.json({ ok: true, signature: result.signature, network: result.network, assetSymbol: result.assetSymbol, platformFee: result.platformFee });
+    return NextResponse.json({ ok: true, signature: result.signature, network: result.network, assetSymbol: result.assetSymbol, platformFee: result.platformFee, gasAssist: result.gasAssist });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Failed to send stablecoin" }, { status: 500 });
   }
@@ -81,6 +84,7 @@ function createRouteSendApproval(body: SendUsdcBody) {
     toAddress: body.toAddress!.trim(),
     amountUsd: Number(body.amountUsd),
     maxPaymentUsd: body.maxPaymentUsd == null ? undefined : Number(body.maxPaymentUsd),
+    gasSponsorAgentId: body.gasSponsorAgentId?.trim() || undefined,
     expiresAtMs,
   });
   return { token, expiresAtMs };
@@ -109,7 +113,8 @@ function matchesRouteSendApproval(approval: RouteSendApproval, body: SendUsdcBod
   return approval.agentId === body.agentId?.trim()
     && approval.toAddress.toLowerCase() === body.toAddress?.trim().toLowerCase()
     && sameUsd(approval.amountUsd, Number(body.amountUsd))
-    && sameOptionalUsd(approval.maxPaymentUsd, body.maxPaymentUsd == null ? undefined : Number(body.maxPaymentUsd));
+    && sameOptionalUsd(approval.maxPaymentUsd, body.maxPaymentUsd == null ? undefined : Number(body.maxPaymentUsd))
+    && approval.gasSponsorAgentId === (body.gasSponsorAgentId?.trim() || undefined);
 }
 
 function sameOptionalUsd(left: number | undefined, right: number | undefined) {

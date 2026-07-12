@@ -103,6 +103,21 @@ function walletAccountKey(input: Pick<PersonalWalletRecord, "network" | "address
   return `${input.network}:${input.address.toLowerCase()}`;
 }
 
+function walletCreatedAt(value: { createdAt?: number | string; updatedAt?: number }): number {
+  const createdAt = typeof value.createdAt === "string" ? Date.parse(value.createdAt) : Number(value.createdAt);
+  return Number.isFinite(createdAt) && createdAt > 0 ? createdAt : Number(value.updatedAt) || 0;
+}
+
+function isEarlierWallet(candidate: { createdAt?: number | string; updatedAt?: number }, current: { createdAt?: number | string; updatedAt?: number }): boolean {
+  const candidateCreatedAt = walletCreatedAt(candidate);
+  const currentCreatedAt = walletCreatedAt(current);
+  return candidateCreatedAt > 0 && (currentCreatedAt <= 0 || candidateCreatedAt < currentCreatedAt);
+}
+
+function isLaterWalletUpdate(candidate: { updatedAt?: number }, current: { updatedAt?: number }): boolean {
+  return (Number(candidate.updatedAt) || 0) >= (Number(current.updatedAt) || 0);
+}
+
 function walletFromVaultInfo(wallet: AgentWalletVaultInfo): PersonalWalletResponse {
   const timestamp = Date.parse(wallet.createdAt) || Date.now();
   return {
@@ -139,6 +154,7 @@ function ledgerWalletWithSignerTruth(wallet: PersonalWalletResponse, vaultByAcco
     name: vaultWallet.name && isGenericPersonalWalletName(wallet.name) ? vaultWallet.name : wallet.name,
     custodyMode: vaultWallet.custodyMode,
     importedFrom: personalWalletImportSource(vaultWallet.agentId, vaultWallet.custodyMode),
+    createdAt: Date.parse(vaultWallet.createdAt) || wallet.createdAt,
   };
 }
 
@@ -183,11 +199,33 @@ export async function GET(request: Request) {
       readWalletLedger(vaultPath),
       listWalletInfos({ agentIdPrefix: "user:" }),
     ]);
-    const vaultByAccount = new Map(vaultWallets.map((wallet) => [walletAccountKey(wallet), wallet]));
-    const ledgerWallets = ledger.records
+    const vaultByAccount = new Map<string, AgentWalletVaultInfo>();
+    for (const wallet of vaultWallets) {
+      const accountKey = walletAccountKey(wallet);
+      const current = vaultByAccount.get(accountKey);
+      if (!current || isEarlierWallet(wallet, current)) vaultByAccount.set(accountKey, wallet);
+    }
+    const ledgerWalletCandidates = ledger.records
       .filter((record) => record.agentId.startsWith("user:"))
       .map((record) => personalWalletFromAgentWallet(record.agentId, record.agentName, record.wallet))
-      .filter((wallet): wallet is NonNullable<typeof wallet> => Boolean(wallet))
+      .filter((wallet): wallet is NonNullable<typeof wallet> => Boolean(wallet));
+    const ledgerWalletsByAccount = new Map<string, (typeof ledgerWalletCandidates)[number]>();
+    for (const wallet of ledgerWalletCandidates) {
+      const accountKey = walletAccountKey(wallet);
+      const current = ledgerWalletsByAccount.get(accountKey);
+      if (!current) {
+        ledgerWalletsByAccount.set(accountKey, wallet);
+        continue;
+      }
+      const establishedAgentId = vaultByAccount.get(accountKey)?.agentId;
+      const currentIsEstablished = Boolean(establishedAgentId && current.agentId === establishedAgentId);
+      const walletIsEstablished = Boolean(establishedAgentId && wallet.agentId === establishedAgentId);
+      if ((walletIsEstablished && !currentIsEstablished)
+        || (walletIsEstablished === currentIsEstablished && wallet.agentId === current.agentId && isLaterWalletUpdate(wallet, current))) {
+        ledgerWalletsByAccount.set(accountKey, wallet);
+      }
+    }
+    const ledgerWallets = [...ledgerWalletsByAccount.values()]
       .map((wallet) => ledgerWalletWithSignerTruth(wallet, vaultByAccount));
     const existing = new Set(ledgerWallets.map(walletAccountKey));
     const wallets = [

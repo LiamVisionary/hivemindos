@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
 import { importRecoveryPhraseWallets, importWalletSecret } from "@/lib/services/wallet/chain-wallet";
 import { storeWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { writeWalletRecord } from "@/lib/services/obsidian/wallet-ledger";
 import { refreshWalletVaultBackup } from "@/lib/services/wallet/wallet-vault-backup";
 import { createDefaultAgentWallet } from "@/lib/utils/agent-wallet";
+import { errorJson, okJson } from "@/lib/utils/api-response";
 import { requireAuth } from "@/lib/utils/server-auth";
 
 export async function POST(request: NextRequest) {
@@ -18,12 +19,18 @@ export async function POST(request: NextRequest) {
       name?: string;
       secret?: string;
       importKind?: "private-key" | "recovery-phrase";
+      importTarget?: "single-network" | "multi-chain";
+      accountIndex?: number;
       vaultPath?: string;
     };
     const agentId = body.agentId?.trim();
-    if (!agentId) return NextResponse.json({ ok: false, error: "agentId is required" }, { status: 400 });
+    if (!agentId) return errorJson("agentId is required");
+    if (body.importTarget === "multi-chain" && body.importKind !== "recovery-phrase") {
+      return errorJson("Multi-chain import requires a recovery phrase.");
+    }
     if (body.importKind === "recovery-phrase") {
-      const importedWallets = importRecoveryPhraseWallets(body.secret || "");
+      const accountIndex = Number(body.accountIndex ?? 0);
+      const importedWallets = importRecoveryPhraseWallets(body.secret || "", accountIndex);
       const wallets: Awaited<ReturnType<typeof storeWalletSecret>>[] = [];
       const walletName = body.name?.trim() || "My wallet";
       for (const wallet of importedWallets) {
@@ -59,8 +66,7 @@ export async function POST(request: NextRequest) {
         (status) => ({ ok: true, status }),
         (error: unknown) => ({ ok: false, error: error instanceof Error ? error.message : "Encrypted wallet vault sync failed." }),
       );
-      return NextResponse.json({
-        ok: true,
+      return okJson({
         wallets: wallets.map((wallet, index) => ({
           ...wallet,
           label: importedWallets[index]?.label,
@@ -68,6 +74,7 @@ export async function POST(request: NextRequest) {
         })),
         wallet: wallets[0],
         importKind: "recovery-phrase",
+        accountIndex,
         vaultSync,
       });
     }
@@ -103,12 +110,9 @@ export async function POST(request: NextRequest) {
       (status) => ({ ok: true, status }),
       (error: unknown) => ({ ok: false, error: error instanceof Error ? error.message : "Encrypted wallet vault sync failed." }),
     );
-    return NextResponse.json({ ok: true, wallet: info, importKind: imported.importKind, vaultSync });
+    return okJson({ wallet: info, importKind: imported.importKind, vaultSync });
   } catch (error) {
-    return NextResponse.json({
-      ok: false,
-      error: error instanceof Error ? error.message : "Failed to import wallet.",
-    }, { status: 400 });
+    return errorJson(error instanceof Error ? error.message : "Failed to import wallet.");
   }
 }
 

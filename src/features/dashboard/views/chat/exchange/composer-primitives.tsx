@@ -19,12 +19,13 @@ export const PILL_STYLE: CSSProperties = {
   alignItems: "center",
   gap: 6,
   minHeight: 30,
-  borderRadius: 999,
+  border: "1px solid transparent",
+  borderRadius: 8,
   cursor: "pointer",
   fontFamily: "var(--f-body)",
   fontSize: 11,
   fontWeight: 600,
-  padding: "0 10px 0 11px",
+  padding: "0 7px",
 };
 
 export function iconBtnStyle(active: boolean): CSSProperties {

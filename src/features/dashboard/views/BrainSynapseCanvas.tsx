@@ -15,8 +15,10 @@ import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
+import { SMAAPass } from "three/examples/jsm/postprocessing/SMAAPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { CopyShader } from "three/examples/jsm/shaders/CopyShader.js";
+import { BrainFiberTubes } from "./brain-fiber-tubes";
 import {
   BACKDROP_FRAGMENT,
   BACKDROP_VERTEX,
@@ -67,9 +69,11 @@ type SynapseCanvasProps = {
 };
 
 const WORLD_RADIUS = 150;
-const FIBER_SEGMENTS = 10;
-const LINK_STRANDS = 2;
-const WEB_NEIGHBORS = 2;
+const FIBER_SEGMENTS = 14;
+const LINK_STRANDS = 4;
+const WEB_NEIGHBORS = 5;
+const WEB_STRANDS = 3;
+const AMBIENT_SPARK_THRESHOLD = 0.965;
 const MAX_PULSE_SLOTS = 9000;
 const MAX_LABELS = 28;
 const DUST_COUNT = 1400;
@@ -79,8 +83,8 @@ const DARK_DUST_TINT = "#b9c8ff";
 // Lit/selection tint: electric blue-white so firing paths read as signal in
 // the blue-violet field — never amber/orange, which breaks the palette.
 const DARK_LIT_TINT = "#dff0ff";
-const DARK_PULSE_TINT = "#9fc0ff";
-const DARK_WEB_SPARK_TINT = "#9fb5ff";
+const DARK_PULSE_TINT = "#e9f7ff";
+const DARK_WEB_SPARK_TINT = "#d5fbff";
 const DARK_FOG_TINT = "#061348";
 const DARK_CLEAR_TINT = "#02082d";
 
@@ -143,11 +147,13 @@ class SynapseEngine {
   private dust: THREE.Points | null = null;
   private fiberLines: THREE.LineSegments | null = null;
   private fiberPulse: Array<{ count: number; slot: number } | null> = [];
+  private fiberTubes: BrainFiberTubes | null = null;
+  private fiberTubeSlots = new Int32Array(0);
   private fibers: Fiber[] = [];
   private fitRadius = WORLD_RADIUS;
+  private geometryDirty = true;
   private haloMesh: THREE.Mesh | null = null;
   private hoveredId: string | null = null;
-  private idleSeconds = 0;
   private labelLayer: HTMLDivElement;
   private labelPool: Array<{ meta: HTMLElement; root: HTMLDivElement; title: HTMLElement }> = [];
   private labeledIndices: number[] = [];
@@ -170,6 +176,7 @@ class SynapseEngine {
   private resizeObserver: ResizeObserver | null = null;
   private scene = new THREE.Scene();
   private selectedId: string | null = null;
+  private smaaPass: SMAAPass | null = null;
   private soma: THREE.InstancedMesh | null = null;
   private texAtlas: THREE.CanvasTexture;
   private texDot: THREE.CanvasTexture;
@@ -202,7 +209,10 @@ class SynapseEngine {
 
     let renderer: THREE.WebGLRenderer | null = null;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+      // The scene renders into an offscreen composer target, so default-
+      // framebuffer antialiasing cannot affect it. The target itself receives
+      // MSAA below, before bloom thresholds are evaluated.
+      renderer = new THREE.WebGLRenderer({ antialias: false, alpha: false, powerPreference: "high-performance" });
     } catch {
       renderer = null;
     }
@@ -220,12 +230,16 @@ class SynapseEngine {
       container.appendChild(renderer.domElement);
       this.composer = new EffectComposer(renderer);
       this.composer.addPass(new RenderPass(this.scene, this.camera));
+      // Shader AA is stable across Chromium and WKWebView. Hardware MSAA on
+      // the composer's half-float target produced intermittent black tiles.
+      this.smaaPass = new SMAAPass();
+      this.composer.addPass(this.smaaPass);
       // Measured on three 0.184: the scene renders into the composer's buffer
       // ALREADY sRGB-encoded (readPixels: direct render #0c0d11, buffer 0.047),
       // so the chain must end in a raw copy — an OutputPass would encode a
       // second time and wash the whole frame gray. Bloom therefore operates in
       // encoded space, which these strength/radius/threshold values assume.
-      this.bloomPass = new UnrealBloomPass(new THREE.Vector2(640, 360), 0.86, 0.46, 0.36);
+      this.bloomPass = new UnrealBloomPass(new THREE.Vector2(640, 360), 0.38, 0.22, 0.72);
       this.bloomPass.enabled = !this.palette.light;
       this.composer.addPass(this.bloomPass);
       this.composer.addPass(new ShaderPass(CopyShader));
@@ -300,6 +314,7 @@ class SynapseEngine {
     this.texAtlas.dispose();
     this.texDot.dispose();
     this.labelLayer.remove();
+    this.smaaPass?.dispose();
     this.bloomPass?.dispose();
     this.composer?.dispose();
     if (this.renderer) {
@@ -328,9 +343,9 @@ class SynapseEngine {
     let added = 0;
     this.nodes = inputNodes.map((input) => {
       const existing = previousById.get(input.id);
-      // A readable soma anchors each local dendritic tree. Importance changes
-      // its mass without turning low-weight notes back into pinprick beads.
-      const radius = 3 + clamp(input.weight, 0, 1) * 6.4;
+      // Keep nodes subordinate to the neural tissue while preserving a clear
+      // importance range for hubs and frequently accessed notes.
+      const radius = 2.2 + clamp(input.weight, 0, 1) * 5.1;
       if (existing) {
         existing.label = input.label;
         existing.meta = input.meta;
@@ -399,7 +414,9 @@ class SynapseEngine {
       this.fitRadius = this.computeCloudRadius();
       this.cameraRadiusTarget = clamp(this.fitRadius * 1.72, 132, 520);
       this.cameraRadius = this.cameraRadiusTarget * 1.24;
-      this.alpha = 0.28;
+      // PRE_TICKS already settles the initial layout. Continuing the force
+      // simulation after reveal makes the entire tissue crawl on screen.
+      this.alpha = 0;
     } else {
       this.alpha = clamp(0.3 + added * 0.04, 0.3, 0.85);
     }
@@ -415,6 +432,7 @@ class SynapseEngine {
 
     this.rebuildNodeObjects();
     this.rebuildFiberObjects();
+    this.geometryDirty = true;
     this.applyNodeVisuals();
     this.applyFiberVisuals();
     this.refreshLabelSet();
@@ -464,6 +482,7 @@ class SynapseEngine {
         material.needsUpdate = true;
       }
     }
+    this.fiberTubes?.setTheme(this.palette.light);
     this.applyNodeVisuals();
     this.applyFiberVisuals();
   }
@@ -509,9 +528,9 @@ class SynapseEngine {
       this.nodeTints[index * 3 + 2] = this.tmpColor.b;
       if (haloTint && haloAlpha) {
         haloTint.setXYZ(index, this.tmpColor.r, this.tmpColor.g, this.tmpColor.b);
-        const base = this.palette.light ? 0.34 : 0.34;
+        const base = this.palette.light ? 0.34 : 0.22;
         // Capped so a selected hub reads as a bright cell, not a bloom blob.
-        haloAlpha.setX(index, Math.min(0.58, base + glow * 0.24) * (dim ? 0.3 : 1));
+        haloAlpha.setX(index, Math.min(this.palette.light ? 0.5 : 0.38, base + glow * 0.16) * (dim ? 0.3 : 1));
       }
     });
     tintAttr.needsUpdate = true;
@@ -522,8 +541,9 @@ class SynapseEngine {
   }
 
   private fiberAlpha(fiber: Fiber) {
-    if (fiber.linkIndex < 0) return this.palette.light ? 0.05 : 0.12;
-    const strands = this.palette.light ? [0.3, 0.12] : [0.64, 0.22];
+    const strands = fiber.linkIndex < 0
+      ? (this.palette.light ? [0.18, 0.1, 0.06] : [0.34, 0.22, 0.12])
+      : (this.palette.light ? [0.34, 0.2, 0.12, 0.07] : [0.62, 0.42, 0.26, 0.14]);
     return strands[fiber.strand] ?? strands[0];
   }
 
@@ -543,10 +563,17 @@ class SynapseEngine {
       const target = this.nodes[fiber.targetIndex];
       const lit = fiber.linkIndex >= 0 && this.selectedId !== null
         && (source.id === this.selectedId || target.id === this.selectedId) ? 1 : 0;
-      // Short fibers between packed nodes concentrate additive energy into a
-      // few pixels — scale their alpha by run length so clusters don't white out.
+      // Keep short proximity paths readable. Their old 0.25 floor multiplied
+      // against an already-faint base and effectively erased dense clusters.
       const run = Math.hypot(target.x - source.x, target.y - source.y, target.z - source.z);
-      const alpha = this.fiberAlpha(fiber) * clamp(run / 55, 0.25, 1);
+      const lengthScale = fiber.linkIndex < 0 ? clamp(run / 50, 0.82, 1) : clamp(run / 55, 0.62, 1);
+      const alpha = this.fiberAlpha(fiber) * lengthScale;
+      const tubeSlot = this.fiberTubeSlots[fiberIndex];
+      if (tubeSlot >= 0 && this.fiberTubes) {
+        this.tmpColor.setRGB(this.nodeTints[fiber.sourceIndex * 3], this.nodeTints[fiber.sourceIndex * 3 + 1], this.nodeTints[fiber.sourceIndex * 3 + 2]);
+        this.tmpColorB.setRGB(this.nodeTints[fiber.targetIndex * 3], this.nodeTints[fiber.targetIndex * 3 + 1], this.nodeTints[fiber.targetIndex * 3 + 2]);
+        this.fiberTubes.setColors(tubeSlot, this.tmpColor, this.tmpColorB);
+      }
       for (let v = 0; v < vertsPerFiber; v += 1) {
         const at = fiberIndex * vertsPerFiber + v;
         litAttr.setX(at, lit);
@@ -559,6 +586,7 @@ class SynapseEngine {
     alphaAttr.needsUpdate = true;
     colorA.needsUpdate = true;
     colorB.needsUpdate = true;
+    this.fiberTubes?.commitColors();
     if (pulseLit && pulseTint) {
       this.fibers.forEach((fiber, fiberIndex) => {
         const assignment = this.fiberPulse[fiberIndex];
@@ -587,6 +615,7 @@ class SynapseEngine {
       pulseTint.needsUpdate = true;
     }
     const dimUnlit = Boolean(this.selectedId);
+    this.fiberTubes?.setOpacity(this.palette.light ? (dimUnlit ? 0.055 : 0.14) : (dimUnlit ? 0.12 : 0.36));
     (this.fiberLines.material as THREE.ShaderMaterial).uniforms.uSelDim.value = dimUnlit ? 0.35 : 1;
     if (this.pulsePoints) {
       (this.pulsePoints.material as THREE.ShaderMaterial).uniforms.uSelDim.value = dimUnlit ? 0.35 : 1;
@@ -645,18 +674,21 @@ class SynapseEngine {
         const key = pairKey(i, index);
         if (linked.has(key) || webPairs.has(key)) continue;
         webPairs.add(key);
-        const seed = hashUnit(String(key), 59);
-        fibers.push({
-          linkIndex: -1,
-          strand: 0,
-          seed,
-          sourceIndex: i,
-          targetIndex: index,
-          startOffset: null,
-          endOffset: null,
-          bowAmount: 4 + seed * 9,
-          bowSeed: new THREE.Vector3(hashUnit(key, 61) - 0.5, hashUnit(key, 67) - 0.5, hashUnit(key, 71) - 0.5).normalize(),
-        });
+        for (let strand = 0; strand < WEB_STRANDS; strand += 1) {
+          const strandKey = `${key}:${strand}`;
+          const seed = hashUnit(strandKey, 59 + strand * 13);
+          fibers.push({
+            linkIndex: -1,
+            strand,
+            seed,
+            sourceIndex: i,
+            targetIndex: index,
+            startOffset: null,
+            endOffset: null,
+            bowAmount: 3 + seed * 10 + strand * 2.5,
+            bowSeed: new THREE.Vector3(hashUnit(strandKey, 61) - 0.5, hashUnit(strandKey, 67) - 0.5, hashUnit(strandKey, 71) - 0.5).normalize(),
+          });
+        }
       }
     }
     return fibers;
@@ -675,6 +707,12 @@ class SynapseEngine {
   }
 
   private disposeFiberObjects() {
+    if (this.fiberTubes) {
+      this.scene.remove(this.fiberTubes.mesh);
+      this.fiberTubes.dispose();
+      this.fiberTubes = null;
+    }
+    this.fiberTubeSlots = new Int32Array(0);
     for (const object of [this.fiberLines, this.pulsePoints] as Array<THREE.Object3D | null>) {
       if (!object) continue;
       this.scene.remove(object);
@@ -825,9 +863,18 @@ class SynapseEngine {
 
   private rebuildFiberObjects() {
     this.disposeFiberObjects();
+    this.geometryDirty = true;
     const fiberCount = this.fibers.length;
     if (fiberCount) {
       const vertsPerFiber = FIBER_SEGMENTS * 2;
+      this.fiberTubeSlots = new Int32Array(fiberCount);
+      this.fiberTubeSlots.fill(-1);
+      let tubeCount = 0;
+      this.fibers.forEach((fiber, fiberIndex) => {
+        if (fiber.strand === 0) this.fiberTubeSlots[fiberIndex] = tubeCount++;
+      });
+      this.fiberTubes = new BrainFiberTubes(tubeCount, this.palette.light);
+      this.scene.add(this.fiberTubes.mesh);
       const positions = new Float32Array(fiberCount * vertsPerFiber * 3);
       const ts = new Float32Array(fiberCount * vertsPerFiber);
       const seeds = new Float32Array(fiberCount * vertsPerFiber);
@@ -850,7 +897,9 @@ class SynapseEngine {
       geometry.setAttribute("aAlpha", new THREE.BufferAttribute(new Float32Array(fiberCount * vertsPerFiber), 1));
       const signals = new Float32Array(fiberCount * vertsPerFiber);
       this.fibers.forEach((fiber, fiberIndex) => {
-        const strength = fiber.linkIndex >= 0 ? 1 : fiber.seed > 0.78 ? 0.58 : 0.16;
+        const strength = fiber.linkIndex >= 0
+          ? (fiber.strand === 0 ? 1 : 0)
+          : fiber.strand === 0 && fiber.seed > AMBIENT_SPARK_THRESHOLD ? 0.5 : 0;
         signals.fill(strength, fiberIndex * vertsPerFiber, (fiberIndex + 1) * vertsPerFiber);
       });
       geometry.setAttribute("aSignal", new THREE.BufferAttribute(signals, 1));
@@ -869,18 +918,23 @@ class SynapseEngine {
       }));
       this.fiberLines = new THREE.LineSegments(geometry, material);
       this.fiberLines.frustumCulled = false;
+      this.fiberLines.renderOrder = 1;
+      // The legacy one-pixel strand overlay temporally aliases during orbit
+      // and is the remaining source of thread-like flashes. Connections are
+      // now carried by the antialiased triangle tubes; pulses remain separate.
+      this.fiberLines.visible = false;
       this.scene.add(this.fiberLines);
     }
 
-    // Electrical packets: four particles form a hot head plus a fading tail.
+    // Electrical packets: six particles form a hot head plus a fading tail.
     // Real links carry two packets; a deterministic subset of the ambient web
     // fires one so activity travels across the whole field without visual rain.
     let slotCursor = 0;
     this.fiberPulse = this.fibers.map((fiber) => {
       if (slotCursor >= MAX_PULSE_SLOTS) return null;
       if (fiber.linkIndex >= 0 && fiber.strand !== 0) return null;
-      if (fiber.linkIndex < 0 && fiber.seed <= 0.78) return null;
-      const count = Math.min(fiber.linkIndex >= 0 ? 8 : 4, MAX_PULSE_SLOTS - slotCursor);
+      if (fiber.linkIndex < 0 && (fiber.strand !== 0 || fiber.seed <= AMBIENT_SPARK_THRESHOLD)) return null;
+      const count = Math.min(6, MAX_PULSE_SLOTS - slotCursor);
       if (count <= 0) return null;
       const slot = slotCursor;
       slotCursor += count;
@@ -906,12 +960,12 @@ class SynapseEngine {
       if (!assignment) return;
       for (let p = 0; p < assignment.count; p += 1) {
         const slot = assignment.slot + p;
-        const packet = Math.floor(p / 4);
-        const tail = p % 4;
+        const packet = Math.floor(p / 6);
+        const tail = p % 6;
         const seed = hashUnit(`spark-${fiberIndex}-${packet}`, 7);
-        phases[slot] = seed + packet * 0.47 - tail * 0.022;
-        speeds[slot] = (fiber.linkIndex >= 0 ? 0.13 : 0.075) + hashUnit(`spark-speed-${fiberIndex}-${packet}`, 11) * 0.055;
-        sizes[slot] = (fiber.linkIndex >= 0 ? 26 : 19) * [1, 0.68, 0.44, 0.26][tail];
+        phases[slot] = seed + packet * 0.47 - tail * 0.014;
+        speeds[slot] = (fiber.linkIndex >= 0 ? 0.16 : 0.095) + hashUnit(`spark-speed-${fiberIndex}-${packet}`, 11) * 0.055;
+        sizes[slot] = (fiber.linkIndex >= 0 ? 26 : 22) * [1, 0.76, 0.56, 0.39, 0.25, 0.14][tail];
       }
     });
     pulseGeometry.setAttribute("aPhase", new THREE.BufferAttribute(phases, 1));
@@ -999,14 +1053,7 @@ class SynapseEngine {
   }
 
   private displayPosition(node: SimNode, target: THREE.Vector3) {
-    if (this.reducedMotion) return target.set(node.x, node.y, node.z);
-    const t = this.time;
-    const seed = node.drift * 6.2831;
-    return target.set(
-      node.x + Math.sin(t * 0.5 + seed) * 1.7,
-      node.y + Math.sin(t * 0.42 + seed * 2.1) * 1.7,
-      node.z + Math.cos(t * 0.36 + seed * 1.3) * 1.7,
-    );
+    return target.set(node.x, node.y, node.z);
   }
 
   private refreshLabelSet() {
@@ -1120,7 +1167,7 @@ class SynapseEngine {
 
   private onPointerDown = (event: PointerEvent) => {
     if (event.button !== 0) return;
-    this.idleSeconds = 0;
+    this.clearHover();
     this.drag = { id: event.pointerId, startX: event.clientX, startY: event.clientY, lastX: event.clientX, lastY: event.clientY, moved: 0 };
     this.pointer.down = true;
     this.container.setPointerCapture?.(event.pointerId);
@@ -1131,7 +1178,6 @@ class SynapseEngine {
     this.pointer.x = event.clientX;
     this.pointer.y = event.clientY;
     if (!this.drag || this.drag.id !== event.pointerId) return;
-    this.idleSeconds = 0;
     const dx = event.clientX - this.drag.lastX;
     const dy = event.clientY - this.drag.lastY;
     this.drag.lastX = event.clientX;
@@ -1155,6 +1201,10 @@ class SynapseEngine {
 
   private onPointerLeave = () => {
     this.pointer.inside = false;
+    this.clearHover();
+  };
+
+  private clearHover() {
     if (this.hoveredId) {
       this.hoveredId = null;
       this.container.style.cursor = "";
@@ -1162,7 +1212,7 @@ class SynapseEngine {
       this.applyNodeVisuals();
       this.refreshLabelSet();
     }
-  };
+  }
 
   private onDoubleClick = () => {
     this.cameraRadiusTarget = clamp(this.fitRadius * 1.72, 132, 520);
@@ -1172,7 +1222,6 @@ class SynapseEngine {
 
   private onWheel = (event: WheelEvent) => {
     event.preventDefault();
-    this.idleSeconds = 0;
     const multiplier = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 120 : 1;
     this.cameraRadiusTarget = clamp(this.cameraRadiusTarget * Math.exp(event.deltaY * multiplier * 0.0011), 70, 900);
   };
@@ -1215,7 +1264,6 @@ class SynapseEngine {
     const delta = Math.min(Math.max((now - (this.lastFrameAt || now)) / 1000, 0), 0.05);
     this.lastFrameAt = now;
     this.time += delta;
-    this.idleSeconds += delta;
     if (this.fadeIn < 1) {
       this.fadeIn = Math.min(1, this.fadeIn + Math.max(delta, 0.016) * 1.8);
       this.renderer.domElement.style.opacity = this.fadeIn.toFixed(3);
@@ -1224,6 +1272,7 @@ class SynapseEngine {
     if (this.alpha > 0.02) {
       this.simTick();
       this.simTick();
+      this.geometryDirty = true;
       this.alpha *= 0.986;
     } else if (this.webDirty) {
       // Layout has settled after a filter/search reflow — regrow the web.
@@ -1233,10 +1282,6 @@ class SynapseEngine {
       this.applyFiberVisuals();
     }
 
-    // Slow idle orbit keeps the tissue alive once the user stops interacting.
-    if (!this.reducedMotion && this.idleSeconds > 5) {
-      this.thetaTarget += delta * 0.032;
-    }
     this.theta += (this.thetaTarget - this.theta) * Math.min(1, delta * 7);
     this.phi += (this.phiTarget - this.phi) * Math.min(1, delta * 7);
     this.cameraRadius += (this.cameraRadiusTarget - this.cameraRadius) * Math.min(1, delta * 4);
@@ -1256,7 +1301,7 @@ class SynapseEngine {
       if (material.uniforms.uFogFar) material.uniforms.uFogFar.value = fogFar;
     }
 
-    if (this.soma && this.haloMesh) {
+    if (this.geometryDirty && this.soma && this.haloMesh) {
       const haloPos = (this.haloMesh.geometry as THREE.InstancedBufferGeometry).getAttribute("iPos") as THREE.InstancedBufferAttribute;
       this.nodes.forEach((node, index) => {
         this.displayPosition(node, this.tmpVecA);
@@ -1269,7 +1314,7 @@ class SynapseEngine {
       haloPos.needsUpdate = true;
     }
 
-    if (this.fiberLines) {
+    if (this.geometryDirty && this.fiberLines) {
       const positionAttr = this.fiberLines.geometry.getAttribute("position") as THREE.BufferAttribute;
       const pulseGeo = this.pulsePoints?.geometry;
       const pulseStart = pulseGeo?.getAttribute("aStart") as THREE.BufferAttribute | undefined;
@@ -1293,6 +1338,11 @@ class SynapseEngine {
         if (bowLength > 0.001) this.tmpVecD.multiplyScalar(1 / bowLength);
         const bow = fiber.bowAmount + this.tmpVecC.length() * 0.12;
         this.tmpVecC.multiplyScalar(0.5).add(this.tmpVecA).addScaledVector(this.tmpVecD, bow);
+        const tubeSlot = this.fiberTubeSlots[fiberIndex];
+        if (tubeSlot >= 0) {
+          const radius = fiber.linkIndex >= 0 ? 2 : 1.05 + fiber.seed * 0.55;
+          this.fiberTubes?.setCurve(tubeSlot, this.tmpVecA, this.tmpVecC, this.tmpVecB, radius);
+        }
         const pulseAssignment = this.fiberPulse[fiberIndex];
         if (pulseStart && pulseCtrl && pulseEnd && pulseAssignment) {
           for (let p = 0; p < pulseAssignment.count; p += 1) {
@@ -1314,12 +1364,22 @@ class SynapseEngine {
         }
       });
       positionAttr.needsUpdate = true;
+      this.fiberTubes?.commitGeometry();
       if (pulseStart) pulseStart.needsUpdate = true;
       if (pulseCtrl) pulseCtrl.needsUpdate = true;
       if (pulseEnd) pulseEnd.needsUpdate = true;
     }
+    this.geometryDirty = false;
 
-    this.updateHover();
+    // A stationary pointer crosses many projected nodes while orbit damping is
+    // still moving the camera. Re-picking during that interval rapidly swaps
+    // glow/label state and reads as a full-scene flicker. Resume hover only
+    // once the camera is visually settled.
+    const cameraMoving = Math.abs(this.thetaTarget - this.theta) > 0.00035
+      || Math.abs(this.phiTarget - this.phi) > 0.00035
+      || Math.abs(this.cameraRadiusTarget - this.cameraRadius) > 0.04;
+    if (cameraMoving) this.clearHover();
+    else this.updateHover();
     this.updateLabels();
     // Always render through the composer: the OutputPass owns the linear→sRGB
     // conversion for scene AND clear color in both themes (bloom toggles off

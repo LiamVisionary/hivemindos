@@ -1,8 +1,11 @@
 "use client";
 
 import * as React from "react";
+import { Brain, Check } from "lucide-react";
 
 import type { ChatTranscriptCard } from "@/features/dashboard/chat-transcript-card";
+import { sendTranscriptToBrain } from "@/features/dashboard/transcript-brain-capture";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { openExternalUrl } from "@/lib/native/open-external-url";
 import { readXTranscriptJob, X_TRANSCRIPT_POLL_INTERVAL_MS } from "@/lib/services/x-transcript/x-transcript-client";
 
@@ -49,9 +52,19 @@ const LABEL_STYLE: React.CSSProperties = {
   textTransform: "uppercase",
 };
 
-export function TranscriptCard({ card: sourceCard }: { card: ChatTranscriptCard }) {
+export function TranscriptCard({
+  brainEnabled = true,
+  card: sourceCard,
+  vaultPath,
+}: {
+  brainEnabled?: boolean;
+  card: ChatTranscriptCard;
+  vaultPath?: string;
+}) {
   const [expanded, setExpanded] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
+  const [brainStatus, setBrainStatus] = React.useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [brainError, setBrainError] = React.useState("");
   const [recoveredCard, setRecoveredCard] = React.useState<ChatTranscriptCard | null>(null);
   const matchingRecovery = recoveredCard?.id === sourceCard.id ? recoveredCard : null;
   const card: ChatTranscriptCard = sourceCard.status !== "running"
@@ -126,6 +139,33 @@ export function TranscriptCard({ card: sourceCard }: { card: ChatTranscriptCard 
     }
   }
 
+  async function sendToBrain() {
+    if (!brainEnabled || brainStatus === "sending" || !card.transcript) return;
+    setBrainStatus("sending");
+    setBrainError("");
+    try {
+      const result = await sendTranscriptToBrain({ card, vaultPath });
+      if (!result?.ok || !result.note) {
+        throw new Error(result?.error || "The brain intake did not return a saved note.");
+      }
+      setBrainStatus("sent");
+      window.setTimeout(() => setBrainStatus((current) => current === "sent" ? "idle" : current), 2200);
+    } catch (error) {
+      setBrainStatus("error");
+      setBrainError(error instanceof Error ? error.message : "Could not send this transcript to the brain.");
+    }
+  }
+
+  const brainTooltip = !brainEnabled
+    ? "Enable the shared brain to save this transcript"
+    : brainStatus === "sending"
+      ? "Sending to brain"
+      : brainStatus === "sent"
+        ? "Sent to brain"
+        : brainStatus === "error"
+          ? "Try sending to brain again"
+          : "Send to brain";
+
   return (
     <div style={CARD_STYLE}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontFamily: "var(--f-mono)", fontSize: 11 }}>
@@ -157,11 +197,42 @@ export function TranscriptCard({ card: sourceCard }: { card: ChatTranscriptCard 
         <div style={{ display: "grid", gap: 8 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
             <span style={LABEL_STYLE}>Transcript</span>
-            <span style={{ display: "flex", gap: 8 }}>
-              <button type="button" onClick={copyTranscript} style={miniButton}>{copied ? "Copied" : "Copy"}</button>
-              <button type="button" onClick={() => setExpanded((value) => !value)} style={miniButton}>{expanded ? "Collapse" : "Show full"}</button>
-            </span>
+            <TooltipProvider>
+              <span style={{ display: "flex", gap: 8 }}>
+                <button type="button" onClick={copyTranscript} style={miniButton}>{copied ? "Copied" : "Copy"}</button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={brainTooltip}
+                      disabled={!brainEnabled || brainStatus === "sending"}
+                      onClick={() => void sendToBrain()}
+                      style={{
+                        ...miniButton,
+                        alignItems: "center",
+                        display: "inline-flex",
+                        justifyContent: "center",
+                        minWidth: 27,
+                        padding: "2px 6px",
+                        ...(brainStatus === "sent" ? { color: "var(--live)" } : {}),
+                        ...(brainStatus === "error" ? { color: "var(--danger, #ef6a6a)" } : {}),
+                        ...(!brainEnabled ? { cursor: "not-allowed", opacity: 0.5 } : {}),
+                      }}
+                    >
+                      {brainStatus === "sending"
+                        ? <InlineSpinner size={13} />
+                        : brainStatus === "sent"
+                          ? <Check width={14} height={14} strokeWidth={1.8} aria-hidden="true" />
+                          : <Brain width={14} height={14} strokeWidth={1.7} aria-hidden="true" />}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">{brainTooltip}</TooltipContent>
+                </Tooltip>
+                <button type="button" onClick={() => setExpanded((value) => !value)} style={miniButton}>{expanded ? "Collapse" : "Show full"}</button>
+              </span>
+            </TooltipProvider>
           </div>
+          {brainError ? <div role="alert" style={{ color: "var(--danger, #ef6a6a)", fontSize: 11.5 }}>{brainError}</div> : null}
           <div
             style={{
               maxHeight: expanded ? 460 : 132,

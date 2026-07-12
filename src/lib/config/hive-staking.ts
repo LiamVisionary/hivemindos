@@ -18,9 +18,6 @@ export type HiveStakingTier = {
   id: HiveStakingTierId;
   label: string;
   thresholdHive: bigint;
-  rewardWeight: number;
-  rewardWeightLabel: string;
-  rewardBoostLabel: string;
   role: string;
 };
 
@@ -29,55 +26,37 @@ export const HIVE_STAKING_TIERS = [
     id: "holder",
     label: "Holder",
     thresholdHive: 1_000_000n,
-    rewardWeight: 1,
-    rewardWeightLabel: "1.00x",
-    rewardBoostLabel: "Base",
-    role: "Wallet-linked identity, basic status, base reward weight, and a visible place in the hive.",
+    role: "Wallet-linked identity, basic status, and a visible place in the community.",
   },
   {
     id: "supporter",
     label: "Supporter",
     thresholdHive: 10_000_000n,
-    rewardWeight: 1.1,
-    rewardWeightLabel: "1.10x",
-    rewardBoostLabel: "+10%",
-    role: "1.10x reward weight. Community access, stronger signal, better reward exposure, and eligible managed-service discounts.",
+    role: "Community access eligibility and a stronger ecosystem-alignment signal.",
   },
   {
     id: "builder",
     label: "Builder",
     thresholdHive: 50_000_000n,
-    rewardWeight: 1.25,
-    rewardWeightLabel: "1.25x",
-    rewardBoostLabel: "+25%",
-    role: "1.25x reward weight. Alpha workflow access, higher Honey multipliers, contributor status, and stronger seasonal rewards.",
+    role: "Contributor status and eligibility for explicitly experimental ecosystem access.",
   },
   {
     id: "curator",
     label: "Curator",
     thresholdHive: 100_000_000n,
-    rewardWeight: 1.45,
-    rewardWeightLabel: "1.45x",
-    rewardBoostLabel: "+45%",
-    role: "1.45x reward weight. Marketplace curation, bounty visibility, trust signals, better distribution surfaces, and stronger reward exposure.",
+    role: "Curation eligibility and marketplace reputation context, subject to verified work.",
   },
   {
     id: "operator",
     label: "Operator",
     thresholdHive: 250_000_000n,
-    rewardWeight: 1.7,
-    rewardWeightLabel: "1.70x",
-    rewardBoostLabel: "+70%",
-    role: "1.70x reward weight. Operator rooms, higher ecosystem influence, lower marketplace fees, stronger governance signal, and major reward exposure.",
+    role: "Ecosystem-operations signaling and eligibility for operator community spaces.",
   },
   {
     id: "visionary",
     label: "Visionary",
     thresholdHive: 1_000_000_000n,
-    rewardWeight: 2,
-    rewardWeightLabel: "2.00x",
-    rewardBoostLabel: "+100%",
-    role: "2.00x reward weight. Highest caps, earliest access to premium reward seasons, Visionary council eligibility, strongest status, and the clearest upside exposure.",
+    role: "Highest community status and eligibility for non-binding council participation.",
   },
 ] as const satisfies readonly HiveStakingTier[];
 

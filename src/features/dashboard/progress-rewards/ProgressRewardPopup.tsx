@@ -299,8 +299,8 @@ function rewardActivityParts(metrics: ProgressRewardPeriodSummary["metrics"]) {
     metrics.completedTasks ? `${metrics.completedTasks} work ${metrics.completedTasks === 1 ? "item" : "items"} completed` : "",
     metrics.honeyEarned ? `${formatHoney(metrics.honeyEarned)} HONEY earned` : "",
     metrics.trackedRevenueUsd ? `${formatMoney(metrics.trackedRevenueUsd)} tracked revenue` : "",
-    metrics.managedHoneyCredits ? `${formatHoney(metrics.managedHoneyCredits)} managed HONEY credited` : "",
-    metrics.managedHoneySpent ? `${formatHoney(metrics.managedHoneySpent)} managed HONEY used` : "",
+    metrics.managedHoneyCredits ? `${formatHoney(metrics.managedHoneyCredits)} Cloud credits added` : "",
+    metrics.managedHoneySpent ? `${formatHoney(metrics.managedHoneySpent)} Cloud credits used` : "",
   ].filter(Boolean);
 }
 

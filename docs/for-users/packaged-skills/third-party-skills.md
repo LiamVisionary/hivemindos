@@ -19,6 +19,7 @@ The Obsidian Native Brain Pack is auto-installed because agents need reliable Ob
 | `obsidian-bases` | `kepano/obsidian-skills` | Native `.base` YAML views over vault notes. |
 | `json-canvas` | `kepano/obsidian-skills` | Obsidian `.canvas` maps, boards, and flowcharts. |
 | `defuddle` | `kepano/obsidian-skills` | Clean markdown extraction from web pages when the local Defuddle CLI is installed. |
+| `hyperframes` | `heygen-com/hyperframes` | HTML-native deterministic video router. Agents distinguish requests to create from ordinary discussion. When a concrete request leaves the method open, they ask whether the user wants cloud AI, local AI, or HTML / HyperFrames; the rendering workflow runs only for the explicit HTML branch and fetches specialized HyperFrames workflows on demand. |
 
 HivemindOS does not auto-install the upstream `obsidian-cli` skill because the app already carries HivemindOS-aware Obsidian CLI and vault write policy.
 

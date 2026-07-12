@@ -42,6 +42,18 @@ export type GroupedPersonalWallet = {
 };
 
 export const RECOVERY_PHRASE_PERSONAL_WALLET_SUFFIX = /:(?:eip155-\d+|solana-[a-z0-9-]+)$/i;
+const RECOVERY_PHRASE_ACCOUNT_SUFFIX = /:account-(\d+)$/i;
+
+export function recoveryPhraseAccountIndexFromWalletId(id: unknown): number {
+  const groupId = String(id || "").replace(RECOVERY_PHRASE_PERSONAL_WALLET_SUFFIX, "");
+  const accountIndex = Number(groupId.match(RECOVERY_PHRASE_ACCOUNT_SUFFIX)?.[1]);
+  return Number.isInteger(accountIndex) && accountIndex >= 0 ? accountIndex : 0;
+}
+
+export function recoveryPhraseWalletGroupId(baseId: string, accountIndex: number): string {
+  const normalizedIndex = Number.isInteger(accountIndex) && accountIndex >= 0 ? accountIndex : 0;
+  return `${baseId.replace(RECOVERY_PHRASE_ACCOUNT_SUFFIX, "")}:account-${normalizedIndex}`;
+}
 
 /** Public path to the circular chain badge for a chain key (versioned so the
  *  immutable-cached public asset refetches when the art changes). */
@@ -228,9 +240,32 @@ export function personalWalletAccountKey(wallet: any): string {
   return network && address ? `${network}:${address}` : "";
 }
 
+function personalWalletIdentity(wallet: any): string {
+  return String(wallet?.id || wallet?.agentId || "").trim();
+}
+
+function personalWalletCreatedAt(wallet: any): number {
+  const createdAt = typeof wallet?.createdAt === "string" ? Date.parse(wallet.createdAt) : Number(wallet?.createdAt);
+  return Number.isFinite(createdAt) && createdAt > 0 ? createdAt : 0;
+}
+
+function establishedPersonalWalletRecord(base: any, next: any): any {
+  const baseId = personalWalletIdentity(base);
+  const nextId = personalWalletIdentity(next);
+  if (!baseId || !nextId || baseId === nextId) return base;
+  const baseCreatedAt = personalWalletCreatedAt(base);
+  const nextCreatedAt = personalWalletCreatedAt(next);
+  return nextCreatedAt > 0 && (baseCreatedAt <= 0 || nextCreatedAt < baseCreatedAt) ? next : base;
+}
+
 export function preferredPersonalWalletRecordName(base: any, next: any): string {
   const baseName = String(base?.name || "").trim();
   const nextName = String(next?.name || "").trim();
+  const baseId = personalWalletIdentity(base);
+  const nextId = personalWalletIdentity(next);
+  if (baseId && nextId && baseId !== nextId) {
+    return String(establishedPersonalWalletRecord(base, next)?.name || "").trim() || baseName || nextName;
+  }
   if (nextName && !isGenericPersonalWalletName(nextName)) return nextName;
   if (baseName && !isGenericPersonalWalletName(baseName)) return baseName;
   return nextName || baseName;
@@ -242,11 +277,12 @@ export function mergePersonalWalletRecord(base: any, next: any): any {
   const nextUpdated = Number(next.updatedAt ?? next.lastOnchainSyncAt ?? 0) || 0;
   const preferNextBalance = nextUpdated >= baseUpdated || Number(base.currentBalanceUsd ?? 0) <= 0;
   const nextHasTokenRows = Array.isArray(next.tokens);
+  const identity = establishedPersonalWalletRecord(base, next);
   return {
     ...base,
     ...next,
-    id: base.id || next.id,
-    agentId: base.agentId || next.agentId,
+    id: identity?.id || identity?.agentId || base.id || next.id,
+    agentId: identity?.agentId || identity?.id || base.agentId || next.agentId,
     name: preferredPersonalWalletRecordName(base, next),
     custodyMode: base.custodyMode === "local" || next.custodyMode === "local" ? "local" : "watch",
     importedFrom: base.importedFrom !== "watch" ? base.importedFrom : next.importedFrom,
@@ -254,6 +290,7 @@ export function mergePersonalWalletRecord(base: any, next: any): any {
     nativeBalance: preferNextBalance ? Math.max(0, Number(next.nativeBalance ?? 0) || 0) : Number(base.nativeBalance ?? 0) || Number(next.nativeBalance ?? 0) || 0,
     tokens: preferNextBalance && nextHasTokenRows ? next.tokens : Array.isArray(base.tokens) ? base.tokens : [],
     lastOnchainSyncAt: Math.max(Number(base.lastOnchainSyncAt ?? 0) || 0, Number(next.lastOnchainSyncAt ?? 0) || 0),
+    createdAt: identity?.createdAt ?? base.createdAt ?? next.createdAt,
     updatedAt: Math.max(baseUpdated, nextUpdated),
   };
 }
@@ -286,7 +323,7 @@ export function personalWalletFromDashboardState(agentId: string, wallet: any): 
     tokens: Array.isArray(wallet?.tokens) ? wallet.tokens : [],
     portfolioVersion: 0,
     lastOnchainSyncAt: Number(wallet?.lastOnchainSyncAt ?? 0) || 0,
-    createdAt: Number(wallet?.updatedAt ?? 0) || 0,
+    createdAt: Number(wallet?.createdAt ?? 0) || 0,
     updatedAt: Number(wallet?.updatedAt ?? 0) || 0,
   };
 }

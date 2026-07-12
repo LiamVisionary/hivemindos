@@ -89,7 +89,7 @@ holder identity/status badges, curator eligibility, bounty boosting, and
 early-access alpha rooms. Alpha rooms are early access and community status
 channels, including zero-human company monetization workflows; they are not
 permanent product lockouts. Paid product features should still have non-crypto
-paths such as card, fiat subscriptions, managed HONEY credits, or fiat-backed
+paths such as card, fiat subscriptions, Hivemind Cloud credits, or fiat-backed
 plans.
 
 ## Telegram member tags

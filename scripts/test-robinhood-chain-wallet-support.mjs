@@ -74,7 +74,8 @@ contains(capabilityRail, "walletNetworkLabel(wallet.network)", "Trade rail recei
 const walletPanel = read("src/features/dashboard/views/WalletPanel.tsx");
 contains(walletPanel, 'return String(network || "").toLowerCase() === "eip155:4663" ? "USDG" : "USDC"', "Wallet panel must resolve Robinhood Chain stable sends to USDG");
 contains(walletPanel, "resolvePersonalWalletAgentIdForAsset", "Grouped personal wallets must resolve the correct chain account by stable asset");
-contains(walletPanel, 'String(input.chain || "Base + Robinhood Chain + Solana")', "Wallet creation copy must name Robinhood Chain");
+contains(walletPanel, "MULTI_CHAIN_WALLET_LABEL", "Wallet creation must use the canonical multi-chain option");
+contains(read("src/lib/config/personal-wallet-chains.ts"), 'MULTI_CHAIN_WALLET_LABEL = "Multi-chain (Base + Robinhood Chain + Solana)"', "Wallet creation copy must name Robinhood Chain");
 
 const walletPickables = read("src/features/dashboard/views/trade/wallet-pickables.ts");
 contains(walletPickables, '"eip155:4663"', "x402-capable wallet picker must include Robinhood Chain");
