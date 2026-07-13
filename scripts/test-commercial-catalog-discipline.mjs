@@ -6,6 +6,7 @@ import { readFileSync } from "node:fs";
 const agents = readFileSync(new URL("../AGENTS.md", import.meta.url), "utf8");
 const claude = readFileSync(new URL("../CLAUDE.md", import.meta.url), "utf8");
 const endpoint = "https://hivemindos-paid-agent-gateway.hivemindos.workers.dev/api/commercial/catalog";
+const buybackPolicySource = "../hivemind-cloud-services/workers/paid-agent-gateway/src/commercial-service-policy.ts";
 
 for (const [name, source] of [["AGENTS.md", agents], ["CLAUDE.md", claude]]) {
   assert.ok(source.includes(endpoint), `${name} must name the canonical commercial catalog`);
@@ -16,6 +17,9 @@ for (const [name, source] of [["AGENTS.md", agents], ["CLAUDE.md", claude]]) {
     `${name} must require catalog maintenance alongside commercial changes`);
   assert.match(source, /missing[\s\S]*(?:do not infer|never infer|must not infer)/i,
     `${name} must preserve honest accounting gaps`);
+  assert.ok(source.includes(buybackPolicySource), `${name} must name the buyback percentage source of truth`);
+  assert.match(source, /never[\s\S]*service-local[\s\S]*BUYBACK_ALLOCATION_BPS/i,
+    `${name} must forbid duplicate per-worker buyback percentage knobs`);
 }
 
 console.log("commercial-catalog-discipline: agent instructions require canonical live accounting lookup and maintenance");
