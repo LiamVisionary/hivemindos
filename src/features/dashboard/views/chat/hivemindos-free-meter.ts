@@ -7,6 +7,9 @@ export type FreeAllowanceSnapshot = {
   observedAt: string;
   highWaterRequests: number | null;
   highWaterTokens: number | null;
+  stakeTierId?: string | null;
+  stakeTierLabel?: string | null;
+  quotaMultiplierBps?: number | null;
 };
 
 export type FreeMeterState = { fraction: number; label: string; exhausted: boolean };
@@ -24,16 +27,25 @@ function nextUtcDayMsAfter(value: string) {
   return Date.UTC(observed.getUTCFullYear(), observed.getUTCMonth(), observed.getUTCDate() + 1);
 }
 
+function stakeQuotaLabel(allowance: FreeAllowanceSnapshot) {
+  const multiplierBps = allowance.quotaMultiplierBps ?? 10_000;
+  if (multiplierBps <= 10_000) return "";
+  const multiplier = (multiplierBps / 10_000).toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  const tier = allowance.stakeTierLabel?.trim();
+  return ` · ${tier ? `${tier} ` : ""}${multiplier}× stake quota`;
+}
+
 /** Meter shape from the last-seen allowance snapshot. The gateway reports only
  *  "remaining", so the denominator is the highest value seen this reset
  *  window; a past reset marker means the window rolled over and the allowance
  *  is full again. Derived at fetch time (not render) so it stays pure. */
 export function deriveFreeMeter(allowance: FreeAllowanceSnapshot | null, nowMs: number): FreeMeterState | null {
   if (!allowance) return null;
+  const stakeLabel = stakeQuotaLabel(allowance);
   const reportedResetMs = allowance.resetAt ? Date.parse(allowance.resetAt) : NaN;
   const resetMs = Number.isFinite(reportedResetMs) ? reportedResetMs : nextUtcDayMsAfter(allowance.observedAt);
   if (Number.isFinite(resetMs) && resetMs <= nowMs) {
-    return { fraction: 1, label: "Full daily allowance available", exhausted: false };
+    return { fraction: 1, label: `Full daily allowance available${stakeLabel}`, exhausted: false };
   }
   const remaining = allowance.remainingRequests;
   const tokens = allowance.remainingTokens;
@@ -43,13 +55,13 @@ export function deriveFreeMeter(allowance: FreeAllowanceSnapshot | null, nowMs: 
     const resetLabel = Number.isFinite(reportedResetMs)
       ? ` — resets ${new Date(reportedResetMs).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
       : " — resets daily";
-    return { fraction: 0, label: `Daily allowance used up${resetLabel}`, exhausted: true };
+    return { fraction: 0, label: `Daily allowance used up${resetLabel}${stakeLabel}`, exhausted: true };
   }
   const ceiling = allowance.highWaterRequests;
   if (remaining === null || ceiling === null || ceiling <= 0) return null;
   return {
     fraction: Math.max(0, Math.min(1, remaining / ceiling)),
-    label: `${remaining} ${remaining === 1 ? "request" : "requests"}${tokens !== null ? ` · ${compactTokenCount(tokens)} tokens` : ""} left today`,
+    label: `${remaining} ${remaining === 1 ? "request" : "requests"}${tokens !== null ? ` · ${compactTokenCount(tokens)} tokens` : ""} left today${stakeLabel}`,
     exhausted: false,
   };
 }

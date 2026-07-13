@@ -1,11 +1,11 @@
 ---
 title: HIVE Staking And Community Tiers
-description: Non-custodial HIVE staking for optional community identity, access signals, and tier-based member usage pricing without yield, ownership, or required product access.
+description: Non-custodial HIVE staking for optional community identity, access signals, member usage pricing, and tier-based Swarm Scout free-quota bonuses without yield, ownership, or required product access.
 ---
 
 # HIVE Staking And Community Tiers
 
-HIVE staking is an optional on-chain signal of ecosystem alignment. Staking carries community status, access signals, and tier-based member usage pricing on participating hive products. It does not sit in front of the core product and it does not automatically produce rewards, company ownership, or a claim on revenue.
+HIVE staking is an optional on-chain signal of ecosystem alignment. Staking carries community status, access signals, tier-based member usage pricing, and a larger free Swarm Sovereign Scout allowance. It does not sit in front of the core product and it does not produce cash, tokens, company ownership, or a claim on revenue.
 
 ## Product Boundary
 
@@ -38,14 +38,14 @@ The user retains the right to withdraw principal after the cooldown. Administrat
 
 ## Launch Tiers
 
-| Tier | Stake | Community signal |
-| --- | ---: | --- |
-| Holder | 1m HIVE | Wallet-linked identity and basic status |
-| Supporter | 10m HIVE | Stronger community alignment signal |
-| Builder | 50m HIVE | Contributor status and experimental-access eligibility |
-| Curator | 100m HIVE | Curation eligibility and marketplace trust context |
-| Operator | 250m HIVE | Ecosystem-operations signaling |
-| Visionary | 1b HIVE | Highest community status and council eligibility |
+| Tier | Public name | Stake | Scout free quota | Community signal |
+| --- | --- | ---: | ---: | --- |
+| Holder | Honeybee | 1m HIVE | 1.10× | Wallet-linked identity and basic status |
+| Supporter | Bumblebee | 10m HIVE | 1.20× | Stronger community alignment signal |
+| Builder | Mason Bee | 50m HIVE | 1.35× | Contributor status and experimental-access eligibility |
+| Curator | Orchid Bee | 100m HIVE | 1.50× | Curation eligibility and marketplace trust context |
+| Operator | Carpenter Bee | 250m HIVE | 1.75× | Ecosystem-operations signaling |
+| Visionary | Queen Bee | 1b HIVE | 2.00× | Highest community status and council eligibility |
 
 These are social, access, and member-pricing tiers, not investment-return tiers. Tier names and thresholds do not promise future value.
 
@@ -73,6 +73,18 @@ Hive Research launches with the following server-enforced analysis prices. Disco
 
 The cost-backed floor may rise when the underlying data or model cost rises; the server will not price a tier below the configured landed-cost floor.
 
+## Swarm Scout Free-Quota Bonus
+
+The ordinary Swarm Sovereign Scout allowance remains available without staking. A workspace with a signature-verified staking-wallet link receives the tier multiplier shown above on both its daily request allowance and daily token allowance. The bonus is an in-kind service allowance only: it cannot be transferred, redeemed, withdrawn, sold, or converted into cash, HIVE, Honey, revenue, or treasury assets.
+
+- HivemindOS-controlled infrastructure resolves the linked wallet's active stake from the Base staking vault. A client cannot grant itself a tier or submit a multiplier.
+- One verified workspace shares one boosted allowance across its devices. Linking one staking wallet does not create a fresh boosted pool for every device id.
+- Existing IP and platform-wide safety limits remain unchanged, so the service can still limit abuse or protect shared capacity.
+- Missing authentication, an unlinked workspace, an unknown tier, or a failed server-to-server tier check falls back to the ordinary unstaked allowance.
+- Founding Bee Honey bonuses do not stack onto Swarm Scout quota. Scout quota follows only the six active-stake tiers above.
+
+The quota schedule may be changed or paused prospectively for capacity, abuse, legal, security, or operational reasons. Usage already consumed is not a stored balance or property right.
+
 ## HivemindOS Revenue Buyback Policy And Receipt
 
 HivemindOS allocates 15% of recognized HivemindOS platform revenue to weekly automatic HIVE purchase batches. Recognized revenue excludes directly attributable pass-through costs, refunds, reversals, gross marketplace transaction volume, and purchased credits that have not yet been consumed.
@@ -85,7 +97,7 @@ This policy operates independently from staking. HivemindOS may also earmark up 
 
 ## No Automatic Yield
 
-The v1 staking contract is not a yield farm. It has no automatic revenue share, token emission, reward multiplier, or buyback-funded distribution.
+The v1 staking contract is not a yield farm. It has no automatic revenue share, token emission, token reward multiplier, or buyback-funded distribution. Member pricing and Swarm Scout quota are service benefits, not staking-contract payouts.
 
 Member usage pricing is a product-pricing program, not a reward paid by the staking contract or the treasury. Revenue-linked purchases and burns are ecosystem treasury actions, not distributions or promises to stakers. Revenue share, cash distributions, or any claim on business proceeds remain separate and are not implied by staking.
 

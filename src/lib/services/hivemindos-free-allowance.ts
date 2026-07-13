@@ -21,6 +21,10 @@ export type FreeModelAllowanceSnapshot = {
    *  denominator, since the gateway never reports the maximum directly. */
   highWaterRequests: number | null;
   highWaterTokens: number | null;
+  /** Verified hosted entitlement observed on the same completion. */
+  stakeTierId: string | null;
+  stakeTierLabel: string | null;
+  quotaMultiplierBps: number | null;
 };
 
 const ALLOWANCE_PATH = join(
@@ -40,7 +44,12 @@ export async function readFreeModelAllowance(): Promise<FreeModelAllowanceSnapsh
     const raw = await readFile(ALLOWANCE_PATH, "utf8");
     const data = JSON.parse(raw) as FreeModelAllowanceSnapshot;
     if (!data || typeof data !== "object" || typeof data.observedAt !== "string") return null;
-    return data;
+    return {
+      ...data,
+      stakeTierId: typeof data.stakeTierId === "string" ? data.stakeTierId : null,
+      stakeTierLabel: typeof data.stakeTierLabel === "string" ? data.stakeTierLabel : null,
+      quotaMultiplierBps: asQuotaMultiplierBps(data.quotaMultiplierBps),
+    };
   } catch {
     return null;
   }
@@ -52,11 +61,17 @@ export async function recordFreeModelAllowance(headers: {
   remainingRequests?: string | null;
   remainingTokens?: string | null;
   resetAt?: string | null;
+  stakeTierId?: string | null;
+  stakeTierLabel?: string | null;
+  quotaMultiplierBps?: string | null;
 }): Promise<void> {
   const remainingRequests = asCount(headers.remainingRequests);
   const remainingTokens = asCount(headers.remainingTokens);
   const resetAt = headers.resetAt?.trim() || null;
   const hasRemainingCount = remainingRequests !== null || remainingTokens !== null;
+  const stakeTierId = cleanStakeTier(headers.stakeTierId);
+  const stakeTierLabel = stakeTierId ? cleanTierLabel(headers.stakeTierLabel) : null;
+  const quotaMultiplierBps = asQuotaMultiplierBps(headers.quotaMultiplierBps);
   if (!hasRemainingCount || !resetAt || !Number.isFinite(Date.parse(resetAt))) return;
   try {
     const prior = await readFreeModelAllowance();
@@ -75,6 +90,9 @@ export async function recordFreeModelAllowance(headers: {
       observedAt: new Date().toISOString(),
       highWaterRequests: highWater(remainingRequests, prior?.highWaterRequests ?? null),
       highWaterTokens: highWater(remainingTokens, prior?.highWaterTokens ?? null),
+      stakeTierId,
+      stakeTierLabel,
+      quotaMultiplierBps,
     };
     await mkdir(dirname(ALLOWANCE_PATH), { recursive: true, mode: 0o700 });
     const temporaryPath = `${ALLOWANCE_PATH}.${process.pid}.${Date.now()}.tmp`;
@@ -83,4 +101,21 @@ export async function recordFreeModelAllowance(headers: {
   } catch {
     // best-effort only
   }
+}
+
+function cleanStakeTier(value: unknown): string | null {
+  const tier = String(value ?? "").trim().toLowerCase();
+  return ["holder", "supporter", "builder", "curator", "operator", "visionary"].includes(tier)
+    ? tier
+    : null;
+}
+
+function cleanTierLabel(value: unknown): string | null {
+  const label = String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, 40);
+  return label || null;
+}
+
+function asQuotaMultiplierBps(value: unknown): number | null {
+  const parsed = Number(String(value ?? "").trim());
+  return Number.isInteger(parsed) && parsed >= 10_000 && parsed <= 20_000 ? parsed : null;
 }

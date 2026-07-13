@@ -14,6 +14,7 @@ import { freeTierDeviceId } from "@/lib/services/free-tier-identity";
 import { recordFreeModelAllowance } from "@/lib/services/hivemindos-free-allowance";
 import { resolvePooledHivemindosModelCreditToken } from "@/lib/services/hivemindos-model-credit-vault";
 import { freeModelChatCompletionsUrl } from "@/lib/services/paid-agent-cloud-client";
+import { getHoneyWorkspaceId } from "@/lib/services/wallet/honey-ledger";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { executeX402Fetch, type X402FetchPolicy } from "@/lib/services/wallet/x402-agent-fetch";
@@ -42,13 +43,17 @@ export async function GET(request: NextRequest) {
   if (!target) {
     return jsonError("The free HivemindOS model endpoint is not configured.", 424);
   }
-  const deviceId = await freeTierDeviceId();
+  const [deviceId, workspaceId] = await Promise.all([
+    freeTierDeviceId(),
+    getHoneyWorkspaceId().catch(() => ""),
+  ]);
   try {
     const response = await fetch(target, {
       method: "GET",
       headers: {
         Accept: "application/json",
         "X-HivemindOS-Free-Device": deviceId,
+        "X-HivemindOS-Free-Workspace": workspaceId,
       },
       cache: "no-store",
       signal: AbortSignal.timeout(MODEL_STATUS_TIMEOUT_MS),
@@ -238,12 +243,23 @@ const FREE_MODEL_CONTAINER_HEADERS = [
   "x-hivemindos-free-model-state-source",
 ];
 
+const FREE_STAKE_QUOTA_HEADERS = [
+  "x-hivemindos-free-stake-tier",
+  "x-hivemindos-free-stake-tier-label",
+  "x-hivemindos-free-quota-multiplier-bps",
+  "x-hivemindos-free-quota-source",
+];
+
 function applyFreeModelHeaders(upstream: Response, next: NextResponse) {
   for (const name of FREE_ALLOWANCE_HEADERS) {
     const value = upstream.headers.get(name);
     if (value) next.headers.set(name, value);
   }
   for (const name of FREE_MODEL_CONTAINER_HEADERS) {
+    const value = upstream.headers.get(name);
+    if (value) next.headers.set(name, value);
+  }
+  for (const name of FREE_STAKE_QUOTA_HEADERS) {
     const value = upstream.headers.get(name);
     if (value) next.headers.set(name, value);
   }
@@ -254,6 +270,9 @@ function applyFreeModelHeaders(upstream: Response, next: NextResponse) {
     remainingRequests: upstream.headers.get("x-hivemindos-free-remaining-requests"),
     remainingTokens: upstream.headers.get("x-hivemindos-free-remaining-tokens"),
     resetAt: upstream.headers.get("x-hivemindos-free-reset-at"),
+    stakeTierId: upstream.headers.get("x-hivemindos-free-stake-tier"),
+    stakeTierLabel: upstream.headers.get("x-hivemindos-free-stake-tier-label"),
+    quotaMultiplierBps: upstream.headers.get("x-hivemindos-free-quota-multiplier-bps"),
   });
 }
 
@@ -266,7 +285,10 @@ async function fetchFreeModelCompletion(
   if (!target) {
     return jsonError("The free HivemindOS model endpoint is not configured.", 424);
   }
-  const deviceId = await freeTierDeviceId();
+  const [deviceId, workspaceId] = await Promise.all([
+    freeTierDeviceId(),
+    getHoneyWorkspaceId().catch(() => ""),
+  ]);
   try {
     const response = await fetch(target, {
       method: "POST",
@@ -274,6 +296,7 @@ async function fetchFreeModelCompletion(
         Accept: "application/json",
         "Content-Type": "application/json",
         "X-HivemindOS-Free-Device": deviceId,
+        "X-HivemindOS-Free-Workspace": workspaceId,
       },
       body: JSON.stringify({
         ...body,
