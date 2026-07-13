@@ -5,6 +5,14 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-07-13 09:18:14 PDT (-0700) - Agents must consult the hosted commercial catalog
+  - Status: Uncommitted; not released or deployed.
+  - Areas changed: root `AGENTS.md` and `CLAUDE.md` operating rules; commercial-catalog discipline regression; full-gate registration.
+  - Summary: Pricing, free quotas, discounts, component costs, margins, reserves, buybacks, and hosted-service availability now have one mandatory server-authoritative read model. Agents must query it before commercial work, update the owning service payload and its adapter/tests when economics change, and report missing cost coverage explicitly instead of inferring zero.
+  - Verification: The focused discipline contract passes and confirms both agent instruction files name the canonical aggregate and focused service endpoints plus the required update rules; whole-project TypeScript passes. The repository file-size ratchet remains red on its existing/concurrent oversized benchmark artifacts and legacy files; the new 21-line contract is below the limit and none of this change's files appears in the oversized inventory.
+  - Rollback: Revert the two instruction sections, focused contract, gate registration, package-script entry, and this changelog record. Hosted pricing and enforcement are unaffected.
+  - Intended commit message: `agents: require the hosted commercial catalog`
+
 - 2026-07-13 15:57:20 PST+0800 - Preserve Hive Research dimension weights in shared-brain sync
   - Status: Uncommitted; no sync connection, vault memory, hosted analysis, deployment, or remote state changed.
   - Areas changed: Hive Research framework import mapping and focused bridge regression (`src/lib/services/hive-research-sync.ts`, `scripts/test-research-sync.mjs`); companion scoring authority and report UI live in the private hosted-services and public website sibling repos.

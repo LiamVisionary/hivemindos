@@ -267,6 +267,7 @@
     "test:wallet-paid-models": "node scripts/test-wallet-paid-models.mjs",
     "test:scout-staking-quota": "node --import tsx scripts/test-scout-staking-quota.mjs",
     "test:paid-agent-gateway": "node scripts/test-paid-agent-gateway.mjs",
+    "test:commercial-catalog-discipline": "node scripts/test-commercial-catalog-discipline.mjs",
     "test:hosted-media-generation": "node scripts/test-hosted-media-generation-domain.mjs && node scripts/test-hosted-media-generation-static.mjs",
     "test:personal-wallet-grouping": "node scripts/test-personal-wallet-grouping.mjs",
     "test:wallet-real-tabs": "node scripts/test-wallet-real-tabs.mjs",

@@ -78,6 +78,7 @@ const TESTS = [
   "test:approval-hold",
   "test:approval-consolidation",
   "test:company-autonomy",
+  "test:commercial-catalog-discipline",
   "test:company-deliverables",
   "test:company-issues",
   "test:company-outputs",
