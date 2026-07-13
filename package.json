@@ -28,6 +28,7 @@
     "copy-trading:daemon": "pnpm copy-trading:bundle && node dist/copy-trading.mjs",
     "test:copy-trading": "node --test scripts/test-copy-trading.mjs",
     "test:telegram-tip-bot": "node --test scripts/test-telegram-tip-bot.mjs",
+    "honey:seed-tip-leaderboard": "node scripts/seed-honey-leaderboard-from-hive-tips.mjs",
     "fleet-watchdog": "node scripts/fleet-health-watchdog.mjs",
     "fleet-watchdog:install": "scripts/install-fleet-health-watchdog.sh",
     "tauri:build": "HIVEMINDOS_TAURI_SOURCE_BUILD=1 HIVEMINDOS_TAURI_EMBEDDED_NEXT=1 tauri build --bundles app --config '{\"bundle\":{\"createUpdaterArtifacts\":false}}'",

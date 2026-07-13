@@ -12,7 +12,7 @@ import { ClawBankStatusCard } from "./ClawBankStatusCard";
 import { CreateImportWalletModal } from "./CreateImportWalletModal";
 import { WalletRewardsActions, type WalletRewardsActionsSlice } from "./WalletRewardsActions";
 import { WalletSecretExportSheet } from "./WalletSecretExportSheet";
-import { HoneyTelegramLinkCard, type HoneyTelegramLinkAction } from "./HoneyTelegramLinkCard";
+import { HoneyContributionCard, type HoneyContributionActions } from "./HoneyContributionCard";
 
 type WalletSendResult = {
   ok?: boolean;
@@ -37,7 +37,7 @@ type WalletSecretExportResultLike = {
 
 type WalletModalActionInput = { wallet?: unknown; name?: string; chain?: string; secret?: string };
 
-export type WalletDropInActions = WalletRewardsActionsSlice & {
+export type WalletDropInActions = WalletRewardsActionsSlice & HoneyContributionActions & {
   onToggleAgentSpend?: (agentId: string, enabled: boolean) => unknown;
   onUpdateAgentWallet?: (agentId: string, patch: Record<string, unknown>) => unknown;
   onCreateAgentWallet?: (agentId: string, network: string) => unknown;
@@ -62,7 +62,6 @@ export type WalletDropInActions = WalletRewardsActionsSlice & {
   onImportWallet?: (input: WalletModalActionInput) => Promise<unknown>;
   onOpenRailDocs?: (rail: { baseUrl?: string }) => unknown;
   onToggleHoneyLedger?: (enabled: boolean) => unknown;
-  onLinkTelegramHoney?: HoneyTelegramLinkAction;
   onMessageHive?: (text: string) => unknown;
 };
 const {
@@ -1991,7 +1990,7 @@ function HoneyPanel({ actions }: { actions?: WalletDropInActions }) {
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <span className="fw-rtile" style={{ width: 44, height: 44, background: "var(--honey-soft)", border: "1px solid var(--honey-line)" }}><HiveMark size={22} stroke="var(--honey)" dot={false} /></span>
             <div>
-              <span className="fb-eyebrow">Honey · rewards ledger</span>
+              <span className="fb-eyebrow">Honey · lifetime contribution record</span>
               <div style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 32, letterSpacing: "-0.02em", lineHeight: 1.05, marginTop: 4 }}>{s.balance.toLocaleString()} <span style={{ fontSize: 16, color: "var(--honey)", fontWeight: 500 }}>Honey</span></div>
             </div>
           </div>
@@ -2000,11 +1999,11 @@ function HoneyPanel({ actions }: { actions?: WalletDropInActions }) {
           </label>
         </div>
         <p style={{ fontSize: 12.5, color: "var(--fg-3)", lineHeight: 1.55, margin: 0, maxWidth: 620 }}>
-          Agents earn Honey for useful, reviewed work. Spend it on priority routing, or convert it to wallet runway. Earning and redemption are recorded here.
+          Agents earn Honey for useful, reviewed work and bounded peer recognition. It remains non-transferable and does not buy routing or automatically convert to HIVE; the same lifetime Honey total also unlocks higher daily free-agent usage.
         </p>
         <div style={{ display: "flex", gap: 28, flexWrap: "wrap", borderTop: "1px solid var(--line)", paddingTop: 14 }}>
           <WStat value={"+" + s.earned.toLocaleString()} label="earned · this week" tone="var(--honey)" />
-          <WStat value={"-" + s.redeemed.toLocaleString()} label="redeemed + converted" />
+          <WStat value={s.redeemed.toLocaleString()} label="policy-gated conversions" />
           <WStat value={fmtTokens(s.billed)} label="tokens billed" />
           <WStat value={s.holders} label="earning agents" />
           {(s.potentialHoney ?? 0) > 0 ? <WStat value={(s.potentialHoney ?? 0).toLocaleString()} label="potential · local models" tone="var(--fg-2)" /> : null}
@@ -2016,7 +2015,7 @@ function HoneyPanel({ actions }: { actions?: WalletDropInActions }) {
         ) : null}
       </div>
       <WalletRewardsActions actions={actions} />
-      <HoneyTelegramLinkCard onLink={actions?.onLinkTelegramHoney} />
+      <HoneyContributionCard onLoad={actions?.onLoadHoneyContributionStatus} onLink={actions?.onLinkTelegramHoney} />
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.55fr) minmax(280px,1fr)", gap: 16, alignItems: "start" }}>
         <div className="fb-card" style={{ overflow: "hidden", opacity: on ? 1 : 0.5 }}>
           <div style={{ padding: "15px 18px 12px", borderBottom: "1px solid var(--line)", fontSize: 12.5, fontWeight: 500 }}>Recent ledger</div>
@@ -2039,7 +2038,7 @@ function HoneyPanel({ actions }: { actions?: WalletDropInActions }) {
           }) : <div style={{ padding: 18, color: "var(--fg-3)", fontSize: 12.5 }}>No Honey ledger events have been recorded yet.</div>}
         </div>
         <div className="fb-card" style={{ overflow: "hidden", opacity: on ? 1 : 0.5 }}>
-          <div style={{ padding: "15px 18px 12px", borderBottom: "1px solid var(--line)", fontSize: 12.5, fontWeight: 500 }}>Balances by agent</div>
+          <div style={{ padding: "15px 18px 12px", borderBottom: "1px solid var(--line)", fontSize: 12.5, fontWeight: 500 }}>HONEY attribution by agent</div>
           {byAgent.length ? byAgent.map((a, i) => (
             <div key={a.id} style={{ display: "flex", flexDirection: "column", gap: 7, padding: "12px 18px", borderTop: i ? "1px solid var(--line)" : 0 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
@@ -2051,7 +2050,7 @@ function HoneyPanel({ actions }: { actions?: WalletDropInActions }) {
               </div>
               <span className="fr-meter"><i style={{ width: Math.max(3, (a.honey / maxHoney) * 100) + "%", background: "var(--honey)" }} /></span>
             </div>
-          )) : <div style={{ padding: 18, color: "var(--fg-3)", fontSize: 12.5 }}>No Honey balances yet.</div>}
+          )) : <div style={{ padding: 18, color: "var(--fg-3)", fontSize: 12.5 }}>No Honey has been attributed yet.</div>}
         </div>
       </div>
     </div>

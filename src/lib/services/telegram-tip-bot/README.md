@@ -34,10 +34,12 @@ new dependencies (raw Telegram Bot API over fetch, viem for Base).
 | `/boost <id> <amount>` | group/DM | debit your internal balance and lock it into the bounty escrow |
 | `/submit <id> <url or note>` | group/DM | submit work for admin review |
 | `/linkhoney` | DM preferred | create a private one-time code that connects Telegram to a verified HivemindOS HONEY workspace |
-| `/honey` | anywhere; result is private | show contribution HONEY and recent reviewed awards |
+| `/honey` or `/honey balance` | anywhere; result is private | show one lifetime HONEY total, its source provenance, and today's recognition allowance |
+| `/honey @name <why>` or reply with `/honey <why>` | group/DM | give exactly 1 peer-recognition HONEY with a meaningful reason |
+| Tap the bot-seeded 🏆 under a member message | group | give the message author the same bounded 1-HONEY recognition without typing a command |
 | `/missions` | group/DM | show open contribution missions and evidence requirements |
 | `/submit <hm_id> <evidence>` | group/DM | submit evidence for a HONEY mission |
-| `/honeyboard` | group/DM | current seasonal contribution leaderboard |
+| `/honeyboard` | group/DM | current seasonal HONEY leaderboard with reviewed, peer, and legacy totals |
 | `/compute` | group/DM | explain eligible verified-compute contribution paths |
 | `/mission create …` `/review` | admin | create bounded HONEY missions and inspect the review queue |
 | `/accept <id> @user` `/refund <id> [dispute]` | admin | pay a winner, refund escrow, or mark a dispute |
@@ -102,12 +104,51 @@ permanent product lockouts. Paid product features should still have non-crypto
 paths such as card, fiat subscriptions, Hivemind Cloud credits, or fiat-backed
 plans.
 
-## Reviewed contribution HONEY
+## One HONEY with auditable sources
 
 Contribution missions are separate from HIVE bounties. HIVE bounties escrow a
-transferable token balance in this bot; HONEY missions record bounded,
-reviewed contribution in the official hosted ledger. Ordinary messages,
-reactions, referrals, and raw chat volume never earn HONEY.
+transferable token balance in this bot; HONEY records useful contribution.
+Mission awards, peer recognition, verified agent work, and the historical
+launch seed all add to one cumulative HONEY total. Source labels remain for
+auditability; they are not separate balances or classes of HONEY. Ordinary
+messages, ordinary reactions, referrals, and raw chat volume never earn HONEY.
+
+The `/honey` tip is a bounded recognition, not a transfer from the
+giver's balance. A linked member can recognize useful work with
+`/honey @name <why>`; the recipient earns exactly 1 HONEY and the reason must
+be 8–160 characters. The hosted gateway lets each eligible member give three
+recognitions per UTC day, permits only one recognition per pair per day in
+either direction, and caps each recipient at 5 HONEY per day. The three daily
+recognitions reset and never become HONEY owned by the giver. Existing HIVE-tip
+participants can give immediately. Other members wait seven days after linking
+a signature-verified wallet, which adds friction against new-wallet Sybil rings.
+
+The fast path is a native Telegram reaction: the bot places 🏆 under eligible
+group messages so members can tap it directly. The bot's seed is only the
+one-tap affordance and awards nothing by itself. A member's tap is the explicit
+recognition action; it sends the same identities and Telegram update id to the
+hosted gateway and posts a short confirmation only after the award succeeds.
+The bot then removes its own seed, leaving the successful member reaction in
+place. Removing the reaction, adding another emoji, or reacting anonymously
+awards nothing. Message text is not sent to the gateway. The bot keeps only a
+bounded, in-memory index of recent message authors, so an older message that
+predates a bot restart falls back to replying with `/honey <why>`.
+
+Telegram does not let bots add custom items to the native message long-press
+menu, but it does let the bot seed this built-in reaction on each message. The
+bot must be a group administrator to receive member reaction updates, group
+reactions must allow 🏆 (or all emoji), Group Privacy must be disabled so it can
+observe message authors, and `message_reaction` must remain in the poller's
+`allowed_updates` list. Telegram's Bot API cannot change the group's allowed
+reaction set, so an admin enables that once in the group settings. The built-in
+reaction is intentionally used instead of a custom 🍯 emoji so the action does
+not require Premium or a group-specific emoji id.
+
+Peer-awarded HONEY and the one-time historical seed appear on `/honeyboard` and
+advance the same cumulative HONEY benefit tiers as every other HONEY source.
+The launch seed preserves the historical HIVE receiver ranking at 1 HONEY per
+1,000,000 HIVE received. It is idempotent and does not turn historical HIVE
+transfers into spendable value.
 
 The flow is:
 
@@ -130,17 +171,25 @@ Bot runtime configuration:
 Hosted compute-gateway configuration:
 
 - Secret: `HONEY_COMMUNITY_BOT_TOKEN`
+- Secret: `HONEY_COMMUNITY_MIGRATION_TOKEN` (one-time historical seed only)
 - Secret: `HONEY_COMMUNITY_IDENTITY_SECRET`
 - Secret: `HONEY_COMMUNITY_GITHUB_WEBHOOK_SECRET`
 - `HONEY_COMMUNITY_GITHUB_REPOSITORIES=owner/repository[,owner/repository]`
 - `HONEY_COMMUNITY_SEASON_ID=<optional fixed season; defaults to current UTC quarter>`
 - `HONEY_COMMUNITY_SEASON_BUDGET=1000`
 - `HONEY_COMMUNITY_MAX_MISSION_REWARD=25`
+- `HONEY_COMMUNITY_PEER_DAILY_GIVER_LIMIT=3`
+- `HONEY_COMMUNITY_PEER_DAILY_RECIPIENT_LIMIT=5`
+- `HONEY_COMMUNITY_PEER_LINK_COOLDOWN_DAYS=7`
+- `HONEY_COMMUNITY_PEER_SEASON_BUDGET=5000`
 
 Configure the GitHub repository webhook to send pull-request events to the
 gateway's `/community/github/webhook` endpoint with the same webhook secret.
-Apply the ledger community-contribution migration before the compute-gateway
-mission migration, deploy both Workers, then deploy the Telegram bot bundle.
+Apply the ledger community-contribution migration before compute-gateway
+migrations `0013` and `0014`, deploy both Workers, then deploy the Telegram bot
+bundle. Preview the historical seed with
+`pnpm honey:seed-tip-leaderboard`; only after the migration is deployed and a
+backup exists, run the same command with `--apply` under the shared hive env.
 Secrets are never included in the repo or downloadable app.
 
 ## Telegram member tags
@@ -271,5 +320,6 @@ node --test scripts/test-telegram-tip-bot.mjs
 Covers tip atomicity, claim lifecycle/expiry, deposit idempotency, withdrawal
 review/refund flows, leaderboard windows, bounty lifecycle/refunds, rich-table
 escaping, moderation classification/escalation, per-group trust/modes, and the
-liabilities invariant, plus HONEY mission parsing, identity-link wiring, and
-the separation between reviewed contribution and raw engagement.
+liabilities invariant, plus HONEY mission parsing, fixed peer-recognition
+policy, legacy HIVE conversion, identity-link wiring, and the one-HONEY
+cumulative tier contract.

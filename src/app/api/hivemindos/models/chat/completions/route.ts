@@ -246,6 +246,8 @@ const FREE_MODEL_CONTAINER_HEADERS = [
 const FREE_STAKE_QUOTA_HEADERS = [
   "x-hivemindos-free-stake-tier",
   "x-hivemindos-free-stake-tier-label",
+  "x-hivemindos-free-benefit-tier",
+  "x-hivemindos-free-benefit-tier-label",
   "x-hivemindos-free-quota-multiplier-bps",
   "x-hivemindos-free-quota-source",
 ];
@@ -272,6 +274,9 @@ function applyFreeModelHeaders(upstream: Response, next: NextResponse) {
     resetAt: upstream.headers.get("x-hivemindos-free-reset-at"),
     stakeTierId: upstream.headers.get("x-hivemindos-free-stake-tier"),
     stakeTierLabel: upstream.headers.get("x-hivemindos-free-stake-tier-label"),
+    quotaTierId: upstream.headers.get("x-hivemindos-free-benefit-tier"),
+    quotaTierLabel: upstream.headers.get("x-hivemindos-free-benefit-tier-label"),
+    quotaSource: upstream.headers.get("x-hivemindos-free-quota-source"),
     quotaMultiplierBps: upstream.headers.get("x-hivemindos-free-quota-multiplier-bps"),
   });
 }
@@ -314,7 +319,7 @@ async function fetchFreeModelCompletion(
       const next = NextResponse.json({
         ok: false,
         error: upstreamError(bodyJson) || (limited
-          ? "Today's free Swarm Sovereign Scout allowance is used up. It resets daily — or pick a wallet-paid route."
+          ? "Today's free agent usage is used up. It resets daily — or pick a wallet-paid route."
           : `The free HivemindOS model returned HTTP ${response.status}.`),
         status: response.status,
         paid: "free",

@@ -1129,21 +1129,27 @@ export function GuidedHivemindosModelsSetup({
                 <span className={styles.freeName}>{freeModelOption.name}<span className={styles.freeBadge}>Free</span></span>
                 <span className={styles.freeSub}>{freeModelOption.subtitle}</span>
                 {freeMeter ? (
-                  <span
-                    className={styles.freeMeter}
-                    data-exhausted={freeMeter.exhausted || undefined}
-                  >
+                  <span className={styles.freeUsage}>
+                    <span className={styles.freeUsageHead}>
+                      <span className={styles.freeUsageTitle}>Free agent usage</span>
+                      <span className={styles.freeUsagePower}>Powered by our Swarm Sovereign uncensored models</span>
+                    </span>
                     <span
-                      className={styles.freeMeterBar}
-                      role="img"
-                      aria-label={`Free allowance: ${freeMeter.label}`}
+                      className={styles.freeMeter}
+                      data-exhausted={freeMeter.exhausted || undefined}
                     >
                       <span
-                        className={styles.freeMeterFill}
-                        style={{ width: `${Math.round(freeMeter.fraction * 100)}%` }}
-                      />
+                        className={styles.freeMeterBar}
+                        role="img"
+                        aria-label={`Free agent usage: ${freeMeter.label}`}
+                      >
+                        <span
+                          className={styles.freeMeterFill}
+                          style={{ width: `${Math.round(freeMeter.fraction * 100)}%` }}
+                        />
+                      </span>
+                      <span className={styles.freeMeterLabel}>{freeMeter.label}</span>
                     </span>
-                    <span className={styles.freeMeterLabel}>{freeMeter.label}</span>
                   </span>
                 ) : null}
               </span>

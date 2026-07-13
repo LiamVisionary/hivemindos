@@ -840,47 +840,17 @@
   font-size: 11.5px;
 }
 
-/* Free daily-allowance meter: remaining requests vs the window's high-water. */
-.freeMeter {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 7px;
-  min-width: 0;
-}
-
-.freeMeterBar {
-  flex: 0 0 88px;
-  height: 4px;
-  border-radius: 99px;
-  background: color-mix(in srgb, var(--fg-4) 22%, transparent);
-  overflow: hidden;
-}
-
-.freeMeterFill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--live);
-  transition: width 0.3s ease;
-}
-
-.freeMeter[data-exhausted] .freeMeterFill {
-  background: var(--honey-fill, var(--honey));
-}
-
-.freeMeterLabel {
-  min-width: 0;
-  color: var(--fg-4);
-  font-family: var(--f-mono);
-  font-size: 10px;
-  letter-spacing: 0.02em;
-  white-space: nowrap;
-}
-
-.freeMeter[data-exhausted] .freeMeterLabel {
-  color: var(--honey);
-}
+/* Free agent usage: remaining requests vs the window's high-water. */
+.freeUsage { display: block; margin-top: 8px; min-width: 0; }
+.freeUsageHead { display: flex; align-items: baseline; gap: 5px 8px; flex-wrap: wrap; }
+.freeUsageTitle { color: var(--fg-2); font-family: var(--f-mono); font-size: 9.5px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+.freeUsagePower { color: var(--fg-4); font-size: 9.5px; line-height: 1.3; }
+.freeMeter { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: center; gap: 8px; margin-top: 5px; min-width: 0; }
+.freeMeterBar { flex: 0 0 88px; height: 4px; border-radius: 99px; background: color-mix(in srgb, var(--fg-4) 22%, transparent); overflow: hidden; }
+.freeMeterFill { display: block; height: 100%; border-radius: inherit; background: var(--live); transition: width 0.3s ease; }
+.freeMeter[data-exhausted] .freeMeterFill { background: var(--honey-fill, var(--honey)); }
+.freeMeterLabel { min-width: 0; color: var(--fg-4); font-family: var(--f-mono); font-size: 10px; line-height: 1.3; letter-spacing: 0.02em; }
+.freeMeter[data-exhausted] .freeMeterLabel { color: var(--honey); }
 
 .freeCheck {
   display: grid;

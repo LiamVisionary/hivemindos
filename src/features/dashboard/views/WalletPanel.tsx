@@ -224,12 +224,11 @@ function buildHoneyByAgentRows(ledger: HoneyLedgerRuntime | null, agents: any[])
     id: String(balance.agentId),
     tokensUsed: Math.max(0, Math.round(Number(balance.tokensUsed) || 0)),
     honeyEarned: Math.max(0, Number(balance.lifetimeHoney) || 0),
-    honey: Math.max(0, Number(balance.availableHoney) || 0),
+    honey: Math.max(0, Number(balance.lifetimeHoney) || 0),
   })) : Object.entries(ledger?.agentTokenUsage ?? {}).map(([agentId, tokens]) => {
     const tokensUsed = Math.max(0, Math.round(Number(tokens) || 0));
     const honeyEarned = calculateHoneyForTokens(tokensUsed, Number(ledger?.honeyPerThousandTokens) || 0);
-    const exchanged = Math.min(honeyEarned, Math.max(0, Number(ledger?.agentHoneyExchanged?.[agentId]) || 0));
-    return { id: agentId, tokensUsed, honeyEarned, honey: Math.max(0, honeyEarned - exchanged) };
+    return { id: agentId, tokensUsed, honeyEarned, honey: honeyEarned };
   });
   return rows.filter((row) => row.tokensUsed > 0 || row.honeyEarned > 0 || row.honey > 0).map((row) => {
     const agent = agentById.get(row.id);
@@ -268,7 +267,7 @@ function buildHoneySummary(ledger: HoneyLedgerRuntime | null, byAgent: any[], ho
   const out = events.filter((event) => Number(event.honeyDelta) < 0).reduce((sum, event) => sum + Number(event.honeyDelta || 0), 0);
   const fallbackRedeemed = Math.max(0, Number(honeyStats?.totalHoney || 0) - Number(honeyStats?.availableHoney || 0));
   return {
-    balance: Math.round((byAgent.length ? byAgent.reduce((sum, row) => sum + Number(row.honey || 0), 0) : Number(honeyStats?.availableHoney) || 0) * 1_000_000) / 1_000_000,
+    balance: Math.round((byAgent.length ? byAgent.reduce((sum, row) => sum + Number(row.honey || 0), 0) : Number(honeyStats?.totalHoney) || 0) * 1_000_000) / 1_000_000,
     earned: Math.round((ledger ? earned : Number(honeyStats?.totalHoney) || 0) * 1_000_000) / 1_000_000,
     redeemed: Math.round((ledger ? Math.abs(out) : fallbackRedeemed) * 1_000_000) / 1_000_000,
     billed: byAgent.reduce((sum, row) => sum + Number(row.billed || 0), 0),
@@ -1030,6 +1029,10 @@ function WalletPanelComponent(props: any) {
         body: JSON.stringify({ action: "link-telegram", code }),
       });
       return response.json().catch(() => ({ ok: false, error: `Telegram HONEY link failed (${response.status}).` }));
+    },
+    onLoadHoneyContributionStatus: async () => {
+      const response = await fetch("/api/honey-community", { cache: "no-store" });
+      return response.json().catch(() => ({ ok: false, error: `HONEY contribution status failed (${response.status}).` }));
     },
     onRunWalletVaultBackupAction: (action: "refresh" | "restore") => props.runWalletVaultBackupAction?.(action),
     onToggleAgentSpend: (agentId: string, enabled: boolean) => props.updateWallet?.(agentId, { enabled }),

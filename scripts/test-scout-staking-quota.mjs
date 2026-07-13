@@ -6,6 +6,8 @@ import { deriveFreeMeter } from "../src/features/dashboard/views/chat/hivemindos
 const route = await readFile(new URL("../src/app/api/hivemindos/models/chat/completions/route.ts", import.meta.url), "utf8");
 const allowance = await readFile(new URL("../src/lib/services/hivemindos-free-allowance.ts", import.meta.url), "utf8");
 const stakingDocs = await readFile(new URL("../docs/for-investors/hive-staking-and-community-tiers.md", import.meta.url), "utf8");
+const setup = await readFile(new URL("../src/features/dashboard/views/chat/GuidedHivemindosModelsSetup.tsx", import.meta.url), "utf8");
+const setupStyles = await readFile(new URL("../src/features/dashboard/views/chat/HivemindosModelsSetup.module.css", import.meta.url), "utf8");
 
 assert.equal(
   (route.match(/getHoneyWorkspaceId\(\)\.catch\(\(\) => ""\)/g) ?? []).length,
@@ -21,6 +23,13 @@ for (const term of ["1.10×", "1.20×", "1.35×", "1.50×", "1.75×", "2.00×"])
 }
 assert.match(stakingDocs, /cannot be transferred, redeemed, withdrawn, sold, or converted/i);
 assert.match(stakingDocs, /IP and platform-wide safety limits remain unchanged/i);
+assert.match(stakingDocs, /Free agent usage/);
+assert.match(stakingDocs, /powered by our Swarm Sovereign uncensored models/i);
+assert.match(setup, /Free agent usage/);
+assert.match(setup, /Powered by our Swarm Sovereign uncensored models/);
+assert.match(setup, /aria-label=\{`Free agent usage: \$\{freeMeter\.label\}`\}/);
+assert.match(setupStyles, /\.freeUsageTitle/);
+assert.match(setupStyles, /\.freeUsagePower/);
 
 const queenSnapshot = {
   remainingRequests: 799,
@@ -37,7 +46,7 @@ assert.deepEqual(
   deriveFreeMeter(queenSnapshot, Date.parse("2026-07-13T12:00:01.000Z")),
   {
     fraction: 1,
-    label: "799 requests · 2M tokens left today · Queen Bee 2× stake quota",
+    label: "799 requests · 2M tokens left today · Queen Bee 2× tier allowance",
     exhausted: false,
   },
 );

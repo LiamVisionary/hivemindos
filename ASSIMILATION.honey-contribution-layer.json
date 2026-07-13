@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-07-13T13:43:24.422046+00:00",
+  "request": "build the honey contribution layer",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemind-cloud-services",
+      "source_path": "workers/compute-gateway/src/community-contributions.ts",
+      "target_path": "src/lib/services/wallet/honey-community.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the hosted reviewed-award status into the app service boundary."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/components/wallets-drop-in/WalletsView.tsx",
+      "target_path": "src/components/wallets-drop-in/HoneyContributionCard.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Extracted and expanded the existing HONEY identity workflow into a focused status, progress, and benefit component."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-cloud-services",
+      "source_path": "workers/paid-agent-gateway/src/free-models.ts",
+      "target_path": "src/lib/services/hivemindos-free-allowance.ts",
+      "reuse_type": "adapted_code",
+      "note": "Mirrored authenticated quota benefit metadata into the durable local allowance snapshot."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-scout-staking-quota.mjs",
+      "target_path": "scripts/test-honey-contribution-layer.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Extended the existing Scout allowance contract to reviewed-contribution utility."
+    }
+  ]
+}

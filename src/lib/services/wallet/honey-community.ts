@@ -6,6 +6,64 @@ export type TelegramHoneyLinkResult = {
   publicLabel: string;
 };
 
+export type HoneyContributionTier = {
+  id: string;
+  label: string;
+  minimumHoney: number;
+  multiplierBps: number;
+  multiplier: number;
+};
+
+export type HoneyContributionStatus = {
+  linked: boolean;
+  publicLabel: string | null;
+  linkedAt: string | null;
+  honey: number;
+  sources: {
+    verifiedWork: number;
+    peerRecognition: number;
+    historicalTipSeed: number;
+  };
+  reviewedContributions: number;
+  tier: HoneyContributionTier | null;
+  nextTier: (HoneyContributionTier & { honeyNeeded: number }) | null;
+  quotaMultiplierBps: number;
+  quotaMultiplier: number;
+};
+
+export async function readHoneyContributionStatus(): Promise<HoneyContributionStatus> {
+  const workspaceId = await getHoneyWorkspaceId();
+  const response = await fetch(
+    `${honeyComputeGatewayUrl()}/community/status?workspaceId=${encodeURIComponent(workspaceId)}`,
+    { cache: "no-store", signal: AbortSignal.timeout(8_000) },
+  );
+  const data = await response.json().catch(() => null) as Record<string, unknown> | null;
+  if (!response.ok || !data?.ok || typeof data.linked !== "boolean") {
+    throw upstreamError(data?.error, response.status, "HONEY contribution status failed");
+  }
+  return {
+    linked: data.linked,
+    publicLabel: cleanNullableString(data.publicLabel),
+    linkedAt: cleanNullableString(data.linkedAt),
+    honey: nonNegativeNumber(data.honey),
+    sources: honeySources(data.sources),
+    reviewedContributions: Math.floor(nonNegativeNumber(data.reviewedContributions)),
+    tier: contributionTier(data.tier),
+    nextTier: contributionNextTier(data.nextTier),
+    quotaMultiplierBps: quotaMultiplierBps(data.quotaMultiplierBps),
+    quotaMultiplier: quotaMultiplierBps(data.quotaMultiplierBps) / 10_000,
+  };
+}
+
+function honeySources(value: unknown): HoneyContributionStatus["sources"] {
+  const sources = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return {
+    verifiedWork: nonNegativeNumber(sources.verifiedWork),
+    peerRecognition: nonNegativeNumber(sources.peerRecognition),
+    historicalTipSeed: nonNegativeNumber(sources.historicalTipSeed),
+  };
+}
+
 export async function linkTelegramHoney(codeInput: string): Promise<TelegramHoneyLinkResult> {
   const code = codeInput.trim();
   if (!/^hny_[a-f0-9]{10}$/i.test(code)) throw new Error("Enter the one-time code from /linkhoney.");
@@ -23,9 +81,50 @@ export async function linkTelegramHoney(codeInput: string): Promise<TelegramHone
     error?: string;
   } | null;
   if (!response.ok || !data?.ok || !data.linked || !data.publicLabel) {
-    const error = new Error(data?.error || `Telegram HONEY link failed (${response.status}).`) as Error & { status?: number };
-    error.status = response.status;
-    throw error;
+    throw upstreamError(data?.error, response.status, "Telegram HONEY link failed");
   }
   return { linked: true, publicLabel: data.publicLabel };
+}
+
+function contributionTier(value: unknown): HoneyContributionTier | null {
+  if (!value || typeof value !== "object") return null;
+  const tier = value as Record<string, unknown>;
+  const id = cleanNullableString(tier.id);
+  const label = cleanNullableString(tier.label);
+  const multiplierBps = quotaMultiplierBps(tier.multiplierBps);
+  if (!id || !label || !/^contributor-[1-6]$/.test(id) || multiplierBps <= 10_000) return null;
+  return {
+    id,
+    label,
+    minimumHoney: nonNegativeNumber(tier.minimumHoney),
+    multiplierBps,
+    multiplier: multiplierBps / 10_000,
+  };
+}
+
+function contributionNextTier(value: unknown): HoneyContributionStatus["nextTier"] {
+  const tier = contributionTier(value);
+  if (!tier || !value || typeof value !== "object") return null;
+  return { ...tier, honeyNeeded: nonNegativeNumber((value as Record<string, unknown>).honeyNeeded) };
+}
+
+function quotaMultiplierBps(value: unknown) {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 10_000 && number <= 20_000 ? number : 10_000;
+}
+
+function nonNegativeNumber(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, number) : 0;
+}
+
+function cleanNullableString(value: unknown) {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text ? text.slice(0, 160) : null;
+}
+
+function upstreamError(message: unknown, status: number, fallback: string) {
+  const error = new Error(typeof message === "string" && message.trim() ? message : `${fallback} (${status}).`) as Error & { status?: number };
+  error.status = status;
+  return error;
 }

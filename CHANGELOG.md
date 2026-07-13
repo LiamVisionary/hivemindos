@@ -5,6 +5,14 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-07-13 11:12:00 PDT (-0700) - Launch one HONEY contribution and Telegram recognition layer
+  - Status: Uncommitted; not released or deployed. No production HONEY row or historical seed has changed yet.
+  - Areas changed: one cumulative HONEY status and free-agent benefit UI; Telegram `/honey` recognition and 🏆 reaction flow; default trophy seeding; fixed recognition quotas and anti-abuse client contract; historical HIVE-tip leaderboard seed tooling; operator and public documentation; focused regressions and assimilation manifests.
+  - Summary: HONEY is one non-spendable lifetime contribution total. Verified work, reviewed missions, bounded Telegram recognition, and the historical launch seed all advance the same status and free-agent allowance levels. Linked Telegram members can give three one-HONEY recognitions per UTC day through `/honey` or the seeded 🏆 reaction; the hosted authority enforces identity, cooldown, pair, recipient, replay, and season limits.
+  - Verification: The combined Telegram and HONEY client suite passes 50/50, whole-project TypeScript passes, focused ESLint passes with zero warnings, the companion hosted Worker/D1 suite and three Worker typechecks/dry-runs pass, the website copy contract and TypeScript pass, and scoped diff hygiene is clean.
+  - Rollback: Redeploy the preceding bot bundle and companion Worker versions. Leave accepted recognition and seed rows as immutable audit history; disable intake instead of deleting production records. The historical seed tool is dry-run-first and production apply will be backed up before use.
+  - Intended commit message: `honey: launch contribution recognition`
+
 - 2026-07-13 10:18:39 PDT (-0700) - Require the single hosted buyback-policy source
   - Status: Pushed in `b1e0a686f`; instruction and contract changes only; no app runtime deployment is required.
   - Areas changed: root `AGENTS.md` and `CLAUDE.md` commercial-catalog discipline plus its focused regression contract.

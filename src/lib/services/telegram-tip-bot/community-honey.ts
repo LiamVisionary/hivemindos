@@ -57,9 +57,45 @@ export class CommunityHoneyClient {
     return this.request<{
       linked: boolean;
       publicLabel?: string;
-      honey?: { communityAvailable: number; communityLifetime: number; totalAvailable: number };
+      honey?: {
+        total: number;
+        sources: {
+          verifiedWork: number;
+          peerRecognition: number;
+          historicalTipSeed: number;
+        };
+      };
+      recognitionAllowance?: {
+        eligible: boolean;
+        eligibleAt: string | null;
+        qualification: string;
+        honeyPerRecognition: number;
+        dailyLimit: number;
+        usedToday: number;
+        remainingToday: number;
+        recipientDailyHoneyCap: number;
+      };
       recent?: Array<{ eventId: string; seasonId: string; honey: number; title: string; createdAt: string }>;
     }>(`/community/profile?telegramUserId=${encodeURIComponent(telegramUserId)}`);
+  }
+
+  givePeerHoney(input: {
+    giverTelegramUserId: string;
+    recipientTelegramUserId: string;
+    telegramUpdateId: string;
+    reason: string;
+  }) {
+    return this.request<{
+      duplicate: boolean;
+      honeyGiven: number;
+      recipientPublicLabel: string;
+      dailyRecognitionLimit: number;
+      recognitionsUsedToday: number;
+      recognitionsRemainingToday: number;
+    }>("/community/peer-honey", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
   }
 
   listMissions() {
@@ -101,7 +137,20 @@ export class CommunityHoneyClient {
   leaderboard() {
     return this.request<{
       seasonId: string;
-      leaderboard: Array<{ rank: number; publicLabel: string; honey: number; awards: number }>;
+      leaderboard: Array<{
+        rank: number;
+        publicLabel: string;
+        honey: number;
+        missionHoney: number;
+        recognitionHoney: number;
+        historicalHoney: number;
+        awards: number;
+        peerTips: number;
+      }>;
+      policy: {
+        allHoneyCountsTowardBenefits: true;
+        legacyHivePerHoney: number;
+      };
     }>("/community/leaderboard");
   }
 

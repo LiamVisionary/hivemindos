@@ -9,7 +9,7 @@ HivemindOS separates three concepts that must not be presented as one balance.
 
 | Layer | Purpose | What it is not |
 | --- | --- | --- |
-| Honey | A non-transferable record of reviewed ecosystem contribution | Cash, purchased credit, ownership, or promised token value |
+| Honey | One cumulative, non-transferable record of verified ecosystem contribution and bounded recognition, with auditable source labels | Cash, purchased credit, ownership, or promised token value |
 | Hivemind Cloud credits | Purchased, spend-only service value for managed infrastructure | An investment, reward token, or cash-equivalent wallet |
 | HIVE | An optional ecosystem token and payment rail where supported | Company equity, a required product toll, or a guaranteed claim on revenue |
 
@@ -18,6 +18,10 @@ HivemindOS separates three concepts that must not be presented as one balance.
 Honey can record useful participation such as reviewed agent work, accepted open-source contributions, verified testing, documentation, or completed bounties.
 
 Honey should be earned only from bounded evidence. Raw model tokens, self-reported activity, or unobserved output do not by themselves prove productive contribution.
+
+Telegram members with a signature-verified identity can issue a fixed, scarce Honey recognition for a named contribution. Hosted daily, pair, recipient, cooldown, season-budget, and idempotency controls bound that signal. Historical HIVE-tip receiver rank may be represented at 1 Honey per 1,000,000 HIVE received. Mission, verified-work, peer-recognition, and historical-seed labels preserve provenance, but they do not create different classes of Honey.
+
+Lifetime Honey can qualify a workspace for a larger daily free-agent request-and-token allowance, from 1.10× at 10 Honey to a capped 2.00× at 5,000. HivemindOS-controlled infrastructure calculates the total from verified ledger records, bounded recognition, and documented seed events; local state cannot grant it. The Honey allowance and a verified HIVE staking allowance do not stack—the higher one applies. This is revocable in-kind service access, not stored monetary value, a purchased credit, or a withdrawal right.
 
 Honey is not automatically convertible to HIVE. Official Honey-to-HIVE exchange and claim routes fail closed unless a separately authorized hosted policy enables conversion. The product must not describe an unavailable or unreviewed conversion as “ready to claim.”
 
@@ -99,7 +103,8 @@ Material changes are published with an effective date and apply prospectively un
 
 Do say:
 
-- Honey records reviewed contribution.
+- Honey is one cumulative record; source labels preserve where it came from without creating separate balances or classes.
+- Every verified Honey advances the same service-benefit levels.
 - Cloud credits pay for managed services.
 - HIVE is optional ecosystem infrastructure.
 - Staking tier can set member usage pricing on participating hive products; it lowers a unit price the member pays and never pays anything out.

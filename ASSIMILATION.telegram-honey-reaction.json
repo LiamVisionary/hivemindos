@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-07-13T17:09:30.372551+00:00",
+  "request": "ok and can we automate giving people honey in telegram? what would be some fun ways to?\n\nalso can we add long actions in telegram? like in the menu that appears when i hold on a message? would love to add a \"Give recognition button\"",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/telegram-tip-bot/telegram-api.ts",
+      "target_path": "src/lib/services/telegram-tip-bot/telegram-api.ts",
+      "reuse_type": "adapted_code",
+      "note": "extended the established long-poll update contract with explicit message reaction updates"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/telegram-tip-bot/honey-recognition.ts",
+      "target_path": "src/lib/services/telegram-tip-bot/honey-recognition.ts",
+      "reuse_type": "adapted_code",
+      "note": "extended the canonical pure recognition policy with built-in trophy detection and bounded attribution"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/telegram-tip-bot/commands.ts",
+      "target_path": "src/lib/services/telegram-tip-bot/commands.ts",
+      "reuse_type": "adapted_code",
+      "note": "reused the existing hosted givePeerHoney client path and Telegram confirmation helpers"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-telegram-tip-bot.mjs",
+      "target_path": "scripts/test-telegram-tip-bot.mjs",
+      "reuse_type": "test_adapted",
+      "note": "extended the canonical bot regression with reaction transitions attribution bounds and source wiring"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/telegram-tip-bot/README.md",
+      "target_path": "docs/for-users/features/wallets-honey-and-x402.md",
+      "reuse_type": "config_adapted",
+      "note": "carried the established identity quota privacy and operator requirements into public product guidance"
+    }
+  ]
+}

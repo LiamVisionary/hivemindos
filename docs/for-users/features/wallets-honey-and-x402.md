@@ -59,18 +59,33 @@ For the separation between Honey, Hivemind Cloud credits, HIVE, and treasury pol
 
 The ledger keeps contribution and purchased service value separate:
 
-- Honey: earned from reviewed, trusted, or bounded observed contribution. It is non-transferable and not automatically convertible to HIVE.
+- Honey: one cumulative, non-transferable record earned from verified work, bounded peer recognition, and explicitly documented historical seed events. Source labels preserve provenance; they are not separate balances or classes of Honey. Honey is not automatically convertible to HIVE.
 - Hivemind Cloud credits: funded service credits for HivemindOS-managed agents. These are spend-only, nontransferable, and nonredeemable.
 
 Customer-facing billing shows ordinary dollar-denominated managed usage. This prevents a funding/cash-out loop and avoids presenting service credit as a token reward.
+
+Lifetime Honey unlocks a larger daily allowance for HivemindOS free agents. The benefit starts at 10 Honey and grows through six levels to a maximum 2× request-and-token allowance. Honey from verified work, bounded peer recognition, and the documented historical launch seed all advances the same total and levels. Raw activity and ordinary chat volume do not earn Honey. If a workspace also has a HIVE staking benefit, HivemindOS uses whichever allowance multiplier is higher instead of stacking them. The allowance is an in-kind service benefit, not a spendable or withdrawable balance.
+
+| Lifetime Honey | Level | Daily free-agent allowance |
+| ---: | --- | ---: |
+| 10 | Contributor I | 1.10× |
+| 50 | Contributor II | 1.20× |
+| 150 | Contributor III | 1.35× |
+| 500 | Contributor IV | 1.50× |
+| 1,500 | Contributor V | 1.75× |
+| 5,000 | Contributor VI | 2.00× |
 
 ### Earn Honey From Telegram Contributions
 
 Communities can publish bounded missions in Telegram for documentation, code, testing, support, tutorials, research, moderation, and similar useful work. Each mission states its Honey amount and required evidence. A contributor submits evidence, and an independent community reviewer must approve it before Honey is recorded. GitHub pull-request missions also wait for confirmation that the pull request merged.
 
-To connect an account, first link and verify a wallet in HivemindOS. Then send `/linkhoney` to the community bot and enter its private one-time code in Wallets → Honey. `/missions` lists available work, `/honey` shows a private contribution summary, and `/honeyboard` shows the current seasonal leaderboard.
+To connect an account, first link and verify a wallet in HivemindOS. Then send `/linkhoney` to the community bot and enter its private one-time code in Wallets → Honey. `/missions` lists available work, `/honey` or `/honey balance` shows a private contribution summary, and `/honeyboard` shows the current seasonal leaderboard.
 
-Telegram messages, reactions, invites, and raw activity do not earn Honey. Honey remains a non-transferable contribution record; it is separate from HIVE tips, bounty escrow, and purchased Hivemind Cloud credits.
+Linked members can also recognize a specific useful contribution by replying with `/honey <why>`, using `/honey @name <why>`, or tapping a trophy. The bot places 🏆 beneath eligible group messages, so recognition is one tap instead of a manual reaction-menu action. The bot's seed reaction is only a “Give recognition” affordance and awards nothing by itself. Each accepted member recognition gives the recipient exactly 1 Honey. A linked giver can give up to three recognitions per UTC day—not 3 Honey of their own. Those recognitions reset daily and do not accumulate. The same pair can exchange only once per day in either direction, and a recipient can receive at most 5 Honey per day. Existing HIVE-tip participants can give immediately; other members wait seven days after linking a verified wallet.
+
+The 🏆 reaction uses the same hosted identity, cooldown, daily quota, pair, recipient, and replay checks as the typed command. After a successful award, the bot removes its seed while the member's trophy remains. Removing a trophy, adding an ordinary reaction, reacting anonymously, or reacting to a message whose author the bot cannot identify awards nothing. The bot does not send the message text to the hosted service. To use this shortcut, the bot must be a group administrator, Group Privacy must be disabled, and the group's reaction settings must allow 🏆 (or all emoji). Telegram bots cannot change that group-wide reaction setting, so a group admin enables it once; `/honey <why>` remains the fallback.
+
+The first seasonal leaderboard preserves historical HIVE-tip receiver rank at 1 Honey per 1,000,000 HIVE received. Mission, recognition, verified-work, and historical-seed labels show where Honey came from, but every Honey advances the same cumulative total and allowance levels. Telegram messages, ordinary reactions, invites, and raw activity do not earn Honey. Honey remains non-transferable and separate from HIVE tips, bounty escrow, and purchased Hivemind Cloud credits.
 
 Hosted model messages are **metered**: each successful message is charged the **upstream provider price × 1.25 (a 25% markup)**, with a **$0.001 minimum per message**. A short message on a cheap model hits the `$0.001` floor; a longer message on a premium model costs proportionally more.
 
@@ -395,7 +410,7 @@ Wallet export is available for local-custody user wallets and agent wallets from
 
 ## Honey Paths
 
-Honey is a non-transferable contribution record. It is not cash, purchased Cloud credit, HIVE, company ownership, a revenue claim, or a promise of a future reward. Official conversion and claim routes fail closed unless a separately authorized hosted policy enables them.
+Honey is one non-transferable contribution and recognition record. Verified-work, mission, peer-recognition, and historical-seed labels preserve provenance, but every Honey adds to the same lifetime total and allowance levels. Honey is not cash, purchased Cloud credit, HIVE, company ownership, a revenue claim, or a promise of a future reward. Official conversion and claim routes fail closed unless a separately authorized hosted policy enables them.
 
 Local observation:
 

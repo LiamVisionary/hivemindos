@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-07-13T17:41:59.786314+00:00",
+  "request": "users have to manually add the trophy reaction? we cant just have it by default in the group?",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/telegram-tip-bot/telegram-api.ts",
+      "target_path": "src/lib/services/telegram-tip-bot/telegram-api.ts",
+      "reuse_type": "adapted_code",
+      "note": "extended the established typed Bot API client with setMessageReaction seed and empty-list removal"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/telegram-tip-bot/honey-recognition.ts",
+      "target_path": "src/lib/services/telegram-tip-bot/honey-recognition.ts",
+      "reuse_type": "adapted_code",
+      "note": "extended the existing pure recognition policy with group-message seed eligibility"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/telegram-tip-bot/commands.ts",
+      "target_path": "src/lib/services/telegram-tip-bot/commands.ts",
+      "reuse_type": "adapted_code",
+      "note": "reused the existing message attribution and hosted givePeerHoney call chain to seed and clear the affordance"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-telegram-tip-bot.mjs",
+      "target_path": "scripts/test-telegram-tip-bot.mjs",
+      "reuse_type": "test_adapted",
+      "note": "extended the canonical bot regression with eligibility and seed-clear transport contracts"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/telegram-tip-bot/README.md",
+      "target_path": "docs/for-users/features/wallets-honey-and-x402.md",
+      "reuse_type": "config_adapted",
+      "note": "carried the established recognition security and Telegram admin boundaries into public one-tap guidance"
+    }
+  ]
+}

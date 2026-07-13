@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-07-13T15:49:38.643013+00:00",
+  "request": "can we add honey tipping to the HIVE TIP bought and for the new honey leaderboard, can we seed it with the tip leaderboards values but at a proper ratio that works with our HONEY units? then add a /honey command to our telegram bot that lets give honey? though i dont know how it should work, who can give honey? everyone? do we give everyone a daily quota of honey they can give? how can we create an anti-abuse system? etc",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/telegram-tip-bot/parse.ts",
+      "target_path": "src/lib/services/telegram-tip-bot/commands.ts",
+      "reuse_type": "adapted_code",
+      "note": "Reused the canonical reply, text-mention, stored-user, and username recipient resolver for peer HONEY."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/telegram-tip-bot/ledger.ts",
+      "target_path": "scripts/seed-honey-leaderboard-from-hive-tips.mjs",
+      "reuse_type": "adapted_code",
+      "note": "Reused tipLeaderboard as the single historical HIVE aggregation source for the dry-run-first seed."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/telegram-tip-bot/community-honey.ts",
+      "target_path": "src/lib/services/telegram-tip-bot/community-honey.ts",
+      "reuse_type": "adapted_code",
+      "note": "Extended the authenticated bot-only request client with peer-HONEY and decomposed leaderboard contracts."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-telegram-tip-bot.mjs",
+      "target_path": "scripts/test-telegram-tip-bot.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Extended the pure bot contract with fixed-unit parsing, conversion, command wiring, and seed-tool safeguards."
+    }
+  ]
+}

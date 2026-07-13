@@ -781,7 +781,7 @@ async function recordLocalManagedHoneyBillingEvent(input: ManagedHoneyBillingEve
   }
 
   const amount = roundHive(input.honeyAmount);
-  if (amount <= 0) throw new HoneyClaimError("Managed Honey billing amount must be greater than zero.", 400);
+  if (amount <= 0) throw new HoneyClaimError("Hivemind Cloud credit amount must be greater than zero.", 400);
   const balances = [...(ledger.balances ?? [])];
   const balanceIndex = balances.findIndex((balance) => balance.agentId === input.agentId);
   const existing = balanceIndex >= 0
@@ -873,10 +873,10 @@ function canonicalManagedBillingEvent(event: Omit<ManagedHoneyBillingEvent, "sig
 
 function normalizeManagedBillingEvent(input: ManagedHoneyBillingEvent): ManagedHoneyBillingEvent {
   const honeyAmount = roundHive(input.honeyAmount);
-  if (!input.eventId.trim()) throw new HoneyClaimError("Missing managed Honey billing event id.", 400);
-  if (!input.agentId.trim()) throw new HoneyClaimError("Missing managed Honey billing agent id.", 400);
-  if (input.kind !== "credit" && input.kind !== "debit") throw new HoneyClaimError("Unsupported managed Honey billing kind.", 400);
-  if (honeyAmount <= 0) throw new HoneyClaimError("Managed Honey billing amount must be greater than zero.", 400);
+  if (!input.eventId.trim()) throw new HoneyClaimError("Missing Hivemind Cloud credit billing event id.", 400);
+  if (!input.agentId.trim()) throw new HoneyClaimError("Missing Hivemind Cloud credit billing agent id.", 400);
+  if (input.kind !== "credit" && input.kind !== "debit") throw new HoneyClaimError("Unsupported Hivemind Cloud credit billing kind.", 400);
+  if (honeyAmount <= 0) throw new HoneyClaimError("Hivemind Cloud credit amount must be greater than zero.", 400);
   return {
     ...input,
     eventId: input.eventId.trim(),

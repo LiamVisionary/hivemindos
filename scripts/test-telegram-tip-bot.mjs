@@ -14,6 +14,18 @@ import {
   parseCommunityMissionCreateArgs,
   telegramPublicLabel,
 } from "../src/lib/services/telegram-tip-bot/community-honey-logic.ts";
+import {
+  HONEY_RECOGNITION_REACTION_EMOJI,
+  HoneyReactionMessageIndex,
+  HONEY_PEER_DAILY_GIVER_LIMIT,
+  HONEY_PEER_DAILY_RECIPIENT_LIMIT,
+  HONEY_PEER_LINK_COOLDOWN_DAYS,
+  HONEY_PEER_TIP_AMOUNT,
+  honeyRecognitionReactionWasAdded,
+  legacyHoneyMicroFromHiveRaw,
+  parseHoneyCommandArgs,
+  shouldSeedHoneyRecognitionReaction,
+} from "../src/lib/services/telegram-tip-bot/honey-recognition.ts";
 import { CLAW_LIGHT_RICH_THEME, richAccent, richCode, richMuted, richTable } from "../src/lib/services/telegram-tip-bot/rich-formatting.ts";
 import {
   bountyPayoutLeaderboard,
@@ -119,17 +131,141 @@ test("community HONEY public labels prefer Telegram usernames and sanitize names
   assert.equal(telegramPublicLabel({ id: 2, first_name: "<Bee>\nTwo" }), "Bee Two");
 });
 
+test("one HONEY uses fixed awards, three recognitions per giver, and reason-first syntax", () => {
+  assert.equal(HONEY_PEER_TIP_AMOUNT, 1);
+  assert.equal(HONEY_PEER_DAILY_GIVER_LIMIT, 3);
+  assert.equal(HONEY_PEER_DAILY_RECIPIENT_LIMIT, 5);
+  assert.equal(HONEY_PEER_LINK_COOLDOWN_DAYS, 7);
+  assert.deepEqual(parseHoneyCommandArgs(""), { kind: "profile" });
+  assert.deepEqual(parseHoneyCommandArgs("balance"), { kind: "profile" });
+  assert.deepEqual(parseHoneyCommandArgs("@builder Documented the complete setup path"), {
+    kind: "give",
+    reason: "Documented the complete setup path",
+  });
+  assert.deepEqual(parseHoneyCommandArgs("Reviewed the release checklist"), {
+    kind: "give",
+    reason: "Reviewed the release checklist",
+  });
+  assert.throws(() => parseHoneyCommandArgs("5 @builder great work"), /fixed at 1 HONEY/i);
+  assert.throws(() => parseHoneyCommandArgs("@builder thanks"), /at least 8 characters/i);
+});
+
+test("the built-in trophy reaction is an explicit recognition action", () => {
+  assert.equal(HONEY_RECOGNITION_REACTION_EMOJI, "🏆");
+  assert.equal(honeyRecognitionReactionWasAdded({
+    old_reaction: [],
+    new_reaction: [{ type: "emoji", emoji: "🏆" }],
+  }), true);
+  assert.equal(honeyRecognitionReactionWasAdded({
+    old_reaction: [{ type: "emoji", emoji: "🏆" }],
+    new_reaction: [{ type: "emoji", emoji: "🏆" }, { type: "emoji", emoji: "👏" }],
+  }), false);
+  assert.equal(honeyRecognitionReactionWasAdded({
+    old_reaction: [{ type: "emoji", emoji: "🏆" }],
+    new_reaction: [],
+  }), false);
+  assert.equal(honeyRecognitionReactionWasAdded({
+    old_reaction: [],
+    new_reaction: [{ type: "emoji", emoji: "👏" }],
+  }), false);
+});
+
+test("reaction targets are bounded to recent human-authored group messages", () => {
+  const index = new HoneyReactionMessageIndex({ ttlMs: 1_000, maxEntries: 2 });
+  const alice = { id: 101, username: "alice" };
+  const bob = { id: 102, username: "bob" };
+  const group = { id: -1001, type: "supergroup" };
+
+  index.remember({ message_id: 1, chat: group, from: alice }, 1_000);
+  assert.equal(index.resolve(group.id, 1, 1_999)?.id, alice.id);
+  assert.equal(index.resolve(group.id, 1, 2_001), null);
+
+  index.remember({ message_id: 2, chat: group, from: alice }, 3_000);
+  index.remember({ message_id: 3, chat: group, from: bob }, 3_001);
+  index.remember({ message_id: 4, chat: group, from: alice }, 3_002);
+  assert.equal(index.resolve(group.id, 2, 3_002), null);
+  assert.equal(index.resolve(group.id, 3, 3_002)?.id, bob.id);
+  assert.equal(index.resolve(group.id, 4, 3_002)?.id, alice.id);
+
+  index.remember({ message_id: 5, chat: { id: 5, type: "private" }, from: bob }, 3_003);
+  index.remember({ message_id: 6, chat: group, from: { id: 999, is_bot: true } }, 3_004);
+  assert.equal(index.resolve(5, 5, 3_004), null);
+  assert.equal(index.resolve(group.id, 6, 3_004), null);
+});
+
+test("the bot seeds a one-tap trophy only on eligible member messages", () => {
+  assert.equal(shouldSeedHoneyRecognitionReaction(groupMessage("Shipped the release notes")), true);
+  assert.equal(shouldSeedHoneyRecognitionReaction({
+    message_id: 2,
+    chat: { id: -101, type: "group" },
+    from: { id: 10, username: "artist" },
+    caption: "New launch graphic",
+  }), true);
+  assert.equal(shouldSeedHoneyRecognitionReaction(groupMessage("/honey @builder Great review")), false);
+  assert.equal(shouldSeedHoneyRecognitionReaction(groupMessage("/help@thebot")), false);
+  assert.equal(shouldSeedHoneyRecognitionReaction({
+    message_id: 3,
+    chat: { id: 10, type: "private" },
+    from: { id: 10 },
+    text: "Private message",
+  }), false);
+  assert.equal(shouldSeedHoneyRecognitionReaction(groupMessage("Bot output", {
+    from: { id: 11, is_bot: true },
+  })), false);
+});
+
+test("Telegram polling and bot handling wire message reactions into the existing HONEY endpoint", () => {
+  const api = readFileSync(new URL("../src/lib/services/telegram-tip-bot/telegram-api.ts", import.meta.url), "utf8");
+  const commands = readFileSync(new URL("../src/lib/services/telegram-tip-bot/commands.ts", import.meta.url), "utf8");
+  assert.match(api, /allowed_updates[^\n]+message_reaction/);
+  assert.match(api, /setMessageReaction/);
+  assert.match(commands, /handleHoneyReaction/);
+  assert.match(commands, /seedHoneyRecognitionReaction/);
+  assert.match(commands, /clearHoneyRecognitionReactionSeed/);
+  assert.match(commands, /givePeerHoney/);
+  assert.match(commands, /HONEY_REACTION_REASON/);
+});
+
+test("legacy HIVE receiver values convert to micro-HONEY at 1 HONEY per 1,000,000 HIVE", () => {
+  const hiveRaw = 1_500_000n * 10n ** 18n;
+  assert.equal(legacyHoneyMicroFromHiveRaw(hiveRaw.toString(), 18), 1_500_000n);
+  assert.equal(Number(legacyHoneyMicroFromHiveRaw(hiveRaw.toString(), 18)) / 1_000_000, 1.5);
+});
+
 test("community HONEY wiring keeps identity linking server-side and uses the canonical API envelope", () => {
   const commands = readFileSync(new URL("../src/lib/services/telegram-tip-bot/commands.ts", import.meta.url), "utf8");
+  const botReadme = readFileSync(new URL("../src/lib/services/telegram-tip-bot/README.md", import.meta.url), "utf8");
+  const userDocs = readFileSync(new URL("../docs/for-users/features/wallets-honey-and-x402.md", import.meta.url), "utf8");
   const route = readFileSync(new URL("../src/app/api/honey-community/route.ts", import.meta.url), "utf8");
   const service = readFileSync(new URL("../src/lib/services/wallet/honey-community.ts", import.meta.url), "utf8");
+  const botClient = readFileSync(new URL("../src/lib/services/telegram-tip-bot/community-honey.ts", import.meta.url), "utf8");
   assert.match(commands, /An independent admin review is required/);
-  assert.match(commands, /Raw Telegram messages, reactions, and spam do not earn HONEY/);
+  assert.match(commands, /ordinary reactions, and spam do not earn HONEY/);
+  assert.match(botReadme, /bot places 🏆 under eligible\s+group messages/i);
+  assert.match(userDocs, /bot places 🏆 beneath eligible group messages/i);
+  assert.match(userDocs, /bot must be a group administrator/i);
+  assert.match(commands, /givePeerHoney/);
+  assert.match(commands, /recognitions left today/i);
+  assert.match(botClient, /recognitionAllowance/);
+  assert.doesNotMatch(commands, /recognition actions/i);
+  assert.match(commands, /Every HONEY counts toward the same lifetime total and benefit tier/i);
+  assert.doesNotMatch(commands, /peer HONEY left today/i);
+  assert.match(botClient, /allHoneyCountsTowardBenefits: true/);
   assert.match(route, /okJson\(/);
   assert.match(route, /errorJson\(/);
   assert.match(service, /getHoneyWorkspaceId\(\)/);
   assert.match(service, /\/community\/link/);
   assert.doesNotMatch(service, /HONEY_COMMUNITY_BOT_TOKEN/);
+});
+
+test("legacy HIVE-tip seed tooling is dry-run by default and reuses the canonical leaderboard reducer", () => {
+  const script = readFileSync(new URL("./seed-honey-leaderboard-from-hive-tips.mjs", import.meta.url), "utf8");
+  assert.match(script, /tipLeaderboard\(/);
+  assert.match(script, /HONEY_LEGACY_TIP_SEED_VERSION/);
+  assert.match(script, /process\.argv\.includes\("--apply"\)/);
+  assert.match(script, /TELEGRAM_TIP_BOT_CLOUDFLARE_API_TOKEN/);
+  assert.match(script, /HONEY_COMMUNITY_MIGRATION_TOKEN/);
+  assert.doesNotMatch(script, /console\.log\([^\n]*(telegramUserId|username)/);
 });
 
 test("moderation detects the observed Binance article solicitation", () => {

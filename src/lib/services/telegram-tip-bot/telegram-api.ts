@@ -35,10 +35,25 @@ export type TgMessage = {
   reply_to_message?: TgMessage;
 };
 
+export type TgReactionType =
+  | { type: "emoji"; emoji: string }
+  | { type: "custom_emoji"; custom_emoji_id: string }
+  | { type: "paid" };
+
+export type TgMessageReactionUpdated = {
+  chat: TgChat;
+  message_id: number;
+  user?: TgUser;
+  date: number;
+  old_reaction: TgReactionType[];
+  new_reaction: TgReactionType[];
+};
+
 export type TgUpdate = {
   update_id: number;
   message?: TgMessage;
   edited_message?: TgMessage;
+  message_reaction?: TgMessageReactionUpdated;
   chat_member?: TgChatMemberUpdated;
 };
 
@@ -121,7 +136,7 @@ export class TelegramBotApi {
   getUpdates(offset: number | undefined, timeoutSec = 25): Promise<TgUpdate[]> {
     return this.call<TgUpdate[]>(
       "getUpdates",
-      { offset, timeout: timeoutSec, allowed_updates: ["message", "edited_message", "chat_member"] },
+      { offset, timeout: timeoutSec, allowed_updates: ["message", "edited_message", "message_reaction", "chat_member"] },
       (timeoutSec + 15) * 1000,
     );
   }
@@ -234,6 +249,19 @@ export class TelegramBotApi {
 
   setMyCommands(commands: Array<{ command: string; description: string }>): Promise<boolean> {
     return this.call<boolean>("setMyCommands", { commands });
+  }
+
+  setMessageReaction(params: {
+    chatId: number | string;
+    messageId: number;
+    emoji?: string;
+  }): Promise<boolean> {
+    return this.call<boolean>("setMessageReaction", {
+      chat_id: params.chatId,
+      message_id: params.messageId,
+      reaction: params.emoji ? [{ type: "emoji", emoji: params.emoji }] : [],
+      is_big: false,
+    }, 5_000);
   }
 
   getChatMember(params: { chatId: number | string; userId: number | string }): Promise<TgChatMember> {
