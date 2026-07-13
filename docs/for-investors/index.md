@@ -168,11 +168,13 @@ Honey records reviewed ecosystem contribution. Hivemind Cloud credits are separa
 
 HivemindOS allocates 15% of recognized HivemindOS platform revenue to weekly automatic HIVE purchase batches. Recognized revenue is measured after directly attributable pass-through costs, refunds, and reversals. For marketplaces it includes only the earned HivemindOS platform fee—not gross transaction volume—and purchased credits are recognized only when consumed. The policy is enforced by HivemindOS-controlled infrastructure across supported revenue streams.
 
+HivemindOS may separately earmark up to 15% of recognized platform revenue as a general company treasury reserve, subject to operating runway, liabilities, solvency, and authorization. The reserve remains company property and creates no automatic claim for holders or stakers. Any future seasonal HIVE reward program must be separately approved, fixed, and fully funded before it is presented as active; no current season or rate is promised.
+
 The live [Agent Buyback Ledger](https://hivemindos.app/buybacks/) is the source of truth for execution status and completed transactions. It preserves Hive Research's first paid production run and treasury-funded HIVE purchase on Base as historical evidence. A new purchase counts as HIVE bought only after confirmation; a burn counts only after its separate burn transaction is confirmed. Neither creates a staking payout, ownership right, or Honey-to-HIVE conversion promise.
 
 Tokenomics policies may change, pause, or end in response to legal, regulatory, tax, accounting, security, liquidity, market-integrity, reserve, or operational requirements. Material changes are published prospectively with an effective date, while completed on-chain receipts remain part of the historical record.
 
-See [HIVE Token Receipts](hive-token-receipts.html), [Honey, HIVE, And Treasury](honey-hive-treasury.html), and [HIVE Staking And Community Tiers](hive-staking-and-community-tiers.html) for the on-chain evidence and separated policy.
+See [HIVE Token Receipts](hive-token-receipts.html), [Honey, HIVE, And Treasury](honey-hive-treasury.html), [Treasury Reserve And Seasonal Programs](treasury-reserve-and-seasonal-programs.html), and [HIVE Staking And Community Tiers](hive-staking-and-community-tiers.html) for the on-chain evidence and separated policies.
 
 ## One-Sentence Pitch
 

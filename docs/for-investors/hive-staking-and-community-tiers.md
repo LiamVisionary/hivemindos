@@ -81,13 +81,15 @@ Hive Research completed one real paid production analysis and one treasury-funde
 
 Purchases use the dedicated company treasury rather than a connected user wallet or staked principal. A purchase is not reported as burned unless a separate burn transaction exists.
 
-This policy operates independently from staking. Treasury HIVE remains company property until spent or burned; no tier receives a payout, distribution, ownership right, or claim on purchases, burns, revenue, or treasury assets.
+This policy operates independently from staking. HivemindOS may also earmark up to 15% of recognized platform revenue as a general company reserve, but reserve assets remain company property; no tier receives an automatic payout, distribution, ownership right, or claim on purchases, burns, revenue, or treasury assets.
 
 ## No Automatic Yield
 
 The v1 staking contract is not a yield farm. It has no automatic revenue share, token emission, reward multiplier, or buyback-funded distribution.
 
 Member usage pricing is a product-pricing program, not a reward paid by the staking contract or the treasury. Revenue-linked purchases and burns are ecosystem treasury actions, not distributions or promises to stakers. Revenue share, cash distributions, or any claim on business proceeds remain separate and are not implied by staking.
+
+A future seasonal HIVE reward program may be considered only as a separate, fixed, fully funded program. It would require exact-program legal, company, tax, accounting, and reserve approval before publication; use a separate reward distributor; leave staked principal untouched; and publish its amount, dates, eligibility, calculation, funding transaction, and claim rules. No season or rate is promised until those gates are complete. See [Treasury Reserve And Seasonal Programs](treasury-reserve-and-seasonal-programs.html).
 
 ## Marketplace And Governance Use
 
@@ -104,6 +106,7 @@ Staking may inform reputation and eligibility, but verified work remains the str
 - Never imply that user principal is available to the company treasury.
 - Never market expected appreciation as a reason to stake.
 - Never present company revenue, buybacks, or reward pools as a promised staking return.
+- Never display an estimated variable APR unless a separately approved season is fully funded and publicly open.
 - Keep core product access independent from token ownership.
 
 Tier thresholds, member pricing, eligibility, staking benefits, purchase or burn policies, and execution may change, pause, or end for legal, regulatory, tax, accounting, security, liquidity, market-integrity, reserve, or operational reasons. Material changes are published prospectively with an effective date; completed on-chain receipts remain part of the historical record. See [Tokenomics Policy Changes](honey-hive-treasury.html#tokenomics-policy-changes) for the canonical policy.

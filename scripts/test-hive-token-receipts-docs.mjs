@@ -8,6 +8,7 @@ const receipts = read("docs/for-investors/hive-token-receipts.md");
 
 assert.match(receipts, /0xA382c83e2a3B79368f372c2EB9b6925ffAf45bA3/);
 assert.match(receipts, /zero creator premint/i);
+assert.match(receipts, /same wallet receives 95%[\s\S]*centralized fee right/i);
 assert.match(receipts, /NoOpMigrator[\s\S]*always reverts migration/i);
 assert.match(receipts, /2% yearly inflation parameter/i);
 assert.match(receipts, /17\.986%/);

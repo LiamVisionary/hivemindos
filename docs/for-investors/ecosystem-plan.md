@@ -99,7 +99,7 @@ Expansion should be evidence-gated:
 | Enterprise selling | A repeatable enterprise use case plus security and support readiness |
 | Agent/workflow marketplace | Retained buyers seeking reusable supply |
 | Compute marketplace expansion | Sufficient demand to create provider utilization |
-| Token utility expansion | Product-market fit, reserves, board approval, and specialist legal review |
+| Token utility expansion | Product-market fit, reserves, board approval, specialist legal review, exact public terms, and full funding before any reward season opens |
 
 ## Metrics That Matter
 

@@ -21,6 +21,7 @@ const [
   stakingConfig,
   marketplace,
   paidFeatures,
+  treasuryPrograms,
 ] = await Promise.all([
   read("docs/for-investors/index.md"),
   read("docs/for-investors/ecosystem-plan.md"),
@@ -37,6 +38,7 @@ const [
   read("src/lib/config/hive-staking.ts"),
   read("docs/for-investors/paid-features/hive-compute-marketplace.md"),
   read("docs/for-investors/paid-features/index.md"),
+  read("docs/for-investors/treasury-reserve-and-seasonal-programs.md"),
 ]);
 
 assert.match(investor, /one product relationship with two compounding revenue engines/i);
@@ -83,7 +85,8 @@ assert.match(honey, /weekly automatic HIVE purchase batches/i);
 assert.match(honey, /Credit purchases are not counted until the credits are consumed/i);
 assert.match(honey, /marketplace gross merchandise value is not counted as platform revenue/i);
 assert.match(honey, /not counted as a burn without a separate confirmed burn transaction/i);
-assert.match(honey, /Treasury HIVE and burn activity are not distributed to stakers/i);
+assert.match(honey, /general reserve remains company property and creates no holder or staker claim/i);
+assert.match(honey, /no revenue event automatically funds stakers/i);
 assert.match(honey, /## Tokenomics Policy Changes/);
 assert.match(honey, /not an immutable promise/i);
 assert.match(honey, /Completed on-chain actions and historical receipts remain part of the public record/i);
@@ -91,6 +94,7 @@ assert.match(staking, /Material changes are published prospectively with an effe
 assert.match(investor, /Tokenomics policies may change, pause, or end/i);
 assert.match(paidFeatures, /HivemindOS revenue buyback policy/);
 assert.match(investor, /15% of recognized HivemindOS platform revenue/i);
+assert.match(investor, /up to 15% of recognized platform revenue as a general company treasury reserve/i);
 assert.match(investor, /Agent Buyback Ledger/);
 assert.match(staking, /\| Tier \| Price per analysis \| Discount \|/);
 assert.doesNotMatch(honey, /discount/i);
@@ -99,6 +103,11 @@ await assert.rejects(access(new URL("src/app/api/hive/stake/rewards/route.ts", r
 await assert.rejects(access(new URL("src/lib/services/hive-staking-rewards.ts", root)));
 assert.match(marketplace, /not a near-term revenue assumption/i);
 assert.match(marketplace, /Evidence Gates/i);
+assert.match(treasuryPrograms, /The two treasury allocations can therefore total up to 30%/i);
+assert.match(treasuryPrograms, /No HIVE reward season, funded reward amount, APR, claim, or future season is currently promised/i);
+assert.match(treasuryPrograms, /complete fixed reward amount is transferred to a separate reward distributor before the season is announced as open/i);
+assert.match(treasuryPrograms, /existing Honey multipliers do not automatically become HIVE reward weights/i);
+assert.match(treasuryPrograms, /No revenue event automatically creates a staker balance or claim/i);
 
 assert.match(managedContract, /id: "community" \| "cloud-pro" \| "cloud-team" \| "enterprise"/);
 assert.match(managedPanel, /Control plane subscription \+ metered managed usage/);

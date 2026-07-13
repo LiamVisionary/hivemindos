@@ -75,13 +75,17 @@ customer collections
 
 HivemindOS allocates 15% of recognized HivemindOS platform revenue to weekly automatic HIVE purchase batches. The rule is enforced by HivemindOS-controlled infrastructure across supported revenue streams rather than selected by the downloadable app.
 
+Separately, HivemindOS may earmark up to 15% of recognized platform revenue as a general company treasury reserve. This is a policy ceiling rather than a guaranteed transfer. Reserve funding remains subordinate to operating runway, taxes, liabilities, solvency, and an authorized treasury review. The live 15% HIVE purchase allocation and the general reserve can therefore total up to 30% of recognized platform revenue, but they remain separate ledgers and serve different purposes.
+
 Recognized platform revenue is narrower than cash collected or transaction volume. Managed model, media, data, and research revenue is measured after directly attributable provider costs and reversals. Marketplace gross merchandise value is not counted as platform revenue; only HivemindOS's earned platform fee is counted. Credit purchases are not counted until the credits are consumed. Refunds and later cost corrections create auditable reversals before unexecuted allocations are purchased.
 
 Each recognized event matures for seven days before entering a weekly batch. Minimum and maximum batch controls, liquidity checks, a dedicated company treasury, pause controls, idempotent receipts, and server-held signing credentials limit execution risk. A connected user wallet, staked principal, local environment value, or client-supplied revenue claim cannot choose the amount or recipient.
 
 Hive Research's first real paid production analysis funded one confirmed HIVE purchase on Base under its earlier app-specific policy. That historical receipt remains public while new Hive Research revenue follows the same 15% policy as the other supported revenue streams.
 
-HivemindOS has adopted revenue-linked HIVE purchases and an auditable buy-and-burn mechanism as the intended tokenomics direction. The [Agent Buyback Ledger](https://hivemindos.app/buybacks/) reports recognized revenue allocations, current automation status, and confirmed transactions. Pending allocations, failed batches, projected capacity, and unconfirmed transactions do not count as HIVE bought or burned. A purchase is not counted as a burn without a separate confirmed burn transaction. Treasury HIVE and burn activity are not distributed to stakers.
+HivemindOS has adopted revenue-linked HIVE purchases and an auditable buy-and-burn mechanism as the intended tokenomics direction. The [Agent Buyback Ledger](https://hivemindos.app/buybacks/) reports recognized revenue allocations, current automation status, and confirmed transactions. Pending allocations, failed batches, projected capacity, and unconfirmed transactions do not count as HIVE bought or burned. A purchase is not counted as a burn without a separate confirmed burn transaction.
+
+The general reserve remains company property and creates no holder or staker claim. HivemindOS may later make a one-time, authorized allocation from accumulated treasury assets to a separate seasonal program, but no revenue event automatically funds stakers. A HIVE reward season must receive exact-program legal, company, tax, accounting, and reserve approval; publish a fixed reward amount and rules; and be fully funded in a separate distributor before it can be presented as active. See [Treasury Reserve And Seasonal Programs](treasury-reserve-and-seasonal-programs.html).
 
 Product, reliability, support, and customer acquisition take priority while the managed-service business is being validated.
 
@@ -100,9 +104,11 @@ Do say:
 - HIVE is optional ecosystem infrastructure.
 - Staking tier can set member usage pricing on participating hive products; it lowers a unit price the member pays and never pays anything out.
 - HivemindOS allocates 15% of recognized platform revenue to weekly automatic HIVE purchase batches.
+- HivemindOS may earmark up to 15% of recognized platform revenue as a general company reserve, subject to runway, liabilities, solvency, and authorization.
 - The public ledger publishes each supported revenue source, current execution status, and confirmed purchase and burn receipts.
 - A HIVE purchase and a HIVE burn are separate facts and require separate on-chain receipts.
 - Staking does not automatically produce yield.
+- A future reward season is not active until its fixed HIVE pool is approved, fully funded, and published with its own rules and receipts.
 
 Do not say:
 
@@ -110,6 +116,7 @@ Do not say:
 - Customer collections, gross marketplace volume, or purchased-but-unspent credits are the same as recognized platform revenue.
 - Honey is guaranteed to become HIVE.
 - Stakers receive a fixed share of company revenue.
+- The treasury reserve automatically belongs to stakers or guarantees a future reward season.
 - A purchase has been burned when no burn transaction exists.
 - Buybacks or burns support or guarantee token price, liquidity, profit, or a return.
 

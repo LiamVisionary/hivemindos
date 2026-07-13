@@ -27,7 +27,7 @@ The [launch transaction](https://basescan.org/tx/0x35adf31159934811e9bc99b7c1c22
 
 The zero-premint receipt describes the launch only. It does not claim that the founder, treasury, team, or related parties hold zero HIVE acquired later on the open market.
 
-The public [Bankr launch record](https://api.bankr.bot/token-launches/0xA382c83e2a3B79368f372c2EB9b6925ffAf45bA3) independently binds the contract to the same launch transaction and Uniswap V4 pool ID. It attributes both the deployer identity and fee recipient to [`0x8a25202e830f024aa5e1bdd01a8e997534655c51`](https://basescan.org/address/0x8a25202e830f024aa5e1bdd01a8e997534655c51). That attribution is a launch receipt, not a claim that the project has attested the wallet's complete deployer history or every related-wallet cluster.
+The public [Bankr launch record](https://api.bankr.bot/token-launches/0xA382c83e2a3B79368f372c2EB9b6925ffAf45bA3) independently binds the contract to the same launch transaction and Uniswap V4 pool ID. It attributes both the deployer identity and fee recipient to [`0x8a25202e830f024aa5e1bdd01a8e997534655c51`](https://basescan.org/address/0x8a25202e830f024aa5e1bdd01a8e997534655c51). The same wallet receives 95% of the Bankr/Doppler trading-fee allocation, with 5% assigned to Doppler. That centralized fee right is disclosed separately from token supply, liquidity custody, staking principal, and user wallets. The attribution is a launch receipt, not a claim that the project has attested the wallet's complete deployer history or every related-wallet cluster.
 
 ## Permanent Liquidity Architecture
 

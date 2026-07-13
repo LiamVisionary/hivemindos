@@ -30,11 +30,13 @@ export type HiveResearchSyncState = {
   syncToken: string;
   walletAddress: string | null;
   connectedAt: string;
-  cursors: { frameworks: string; analyses: string };
+  cursors: { frameworks: string; analyses: string; theses: string };
   // Idempotency ledgers: framework id -> highest imported version; analysis
-  // ids already written. memoryKeys give a second, vault-side guarantee.
+  // ids already written; thesis version ids already applied. memoryKeys give
+  // a second, vault-side guarantee.
   importedFrameworkVersions: Record<string, number>;
   importedAnalysisIds: string[];
+  importedThesisIds: string[];
   lastSyncAt?: string;
   lastError?: string;
 };
@@ -56,6 +58,10 @@ type SyncFramework = {
   source: string;
   body: {
     stance: string;
+    dimensionWeights?: Partial<Record<
+      "product_delivery" | "launch_contract_integrity" | "market_distribution" | "utility_value_capture" | "adoption_governance",
+      number
+    >>;
     focus: string[];
     redFlags: { rule: string; severity: string }[];
     greenFlags: string[];
@@ -80,13 +86,34 @@ type SyncAnalysis = {
   finishedAt: string | null;
 };
 
+// One VERSION of the user's evolving thesis about a token (research-gateway
+// thesis_memories rows; see that worker's src/thesis-memory.ts). Versions
+// arrive oldest-first on the theses cursor; each one evolves the SAME
+// canonical local memory instead of minting a sibling.
+type SyncThesis = {
+  id: string;
+  memoryKey: string | null; // server canonical key; local derivation is the fallback
+  analysisId: string;
+  chain: string;
+  tokenAddress: string;
+  tokenSymbol: string | null;
+  tokenName: string | null;
+  verdict: string | null;
+  score: number | null;
+  depthTier: string;
+  contentMd: string;
+  evolutionReason: string | null;
+  createdAt: string;
+};
+
 type SyncExportPage = {
   ok: boolean;
   error?: string;
   account?: { walletAddress: string | null };
   frameworks?: SyncFramework[];
   analyses?: SyncAnalysis[];
-  nextCursor?: { frameworks: string; analyses: string };
+  thesisMemories?: SyncThesis[];
+  nextCursor?: { frameworks: string; analyses: string; theses?: string };
   hasMore?: boolean;
 };
 
@@ -105,9 +132,13 @@ async function readState(): Promise<HiveResearchSyncState | null> {
       cursors: {
         frameworks: parsed.cursors?.frameworks || EPOCH_ISO,
         analyses: parsed.cursors?.analyses || EPOCH_ISO,
+        // Pre-thesis state files default to the epoch; the ledger + vault
+        // canonical keys keep the catch-up pull idempotent.
+        theses: parsed.cursors?.theses || EPOCH_ISO,
       },
       importedFrameworkVersions: parsed.importedFrameworkVersions ?? {},
       importedAnalysisIds: Array.isArray(parsed.importedAnalysisIds) ? parsed.importedAnalysisIds : [],
+      importedThesisIds: Array.isArray(parsed.importedThesisIds) ? parsed.importedThesisIds : [],
     };
   } catch {
     return null;
@@ -167,9 +198,10 @@ export async function connectHiveResearchSync(code: string): Promise<HiveResearc
     syncToken: payload.syncToken,
     walletAddress: payload.sync?.walletAddress ?? null,
     connectedAt: new Date().toISOString(),
-    cursors: { frameworks: EPOCH_ISO, analyses: EPOCH_ISO },
+    cursors: { frameworks: EPOCH_ISO, analyses: EPOCH_ISO, theses: EPOCH_ISO },
     importedFrameworkVersions: {},
     importedAnalysisIds: [],
+    importedThesisIds: [],
   };
   await writeState(state);
   return runHiveResearchSync();
@@ -214,6 +246,15 @@ export function analysisMemoryKey(analysisId: string): string {
   return `hive-research:analysis:${analysisId}`;
 }
 
+// One canonical memory per token thesis — deliberately NOT per analysis id,
+// so every new run of the same token EVOLVES the same memory. The engine's
+// canonicalMemoryKey normalization splits on both ":" and "/", so this local
+// form and the gateway's `hive-research/thesis/<chain>/<token>` key resolve
+// to the identical canonical identity.
+export function thesisSyncMemoryKey(thesis: Pick<SyncThesis, "memoryKey" | "chain" | "tokenAddress">): string {
+  return thesis.memoryKey || `hive-research:thesis:${thesis.chain}:${thesis.tokenAddress}`;
+}
+
 export function frameworkMemoryContent(framework: SyncFramework): string {
   const body = framework.body;
   const lines = [
@@ -221,6 +262,20 @@ export function frameworkMemoryContent(framework: SyncFramework): string {
     `Stance: ${body.stance}`,
     `Verdict bias: ${body.verdictBias}`,
   ];
+  if (body.dimensionWeights) {
+    const labels = {
+      product_delivery: "product/delivery",
+      launch_contract_integrity: "launch/contract",
+      market_distribution: "market/distribution",
+      utility_value_capture: "utility/value capture",
+      adoption_governance: "adoption/governance",
+    } as const;
+    const weights = Object.entries(labels).flatMap(([id, label]) => {
+      const value = body.dimensionWeights?.[id as keyof typeof labels];
+      return typeof value === "number" && Number.isFinite(value) ? [`${label} ${value}%`] : [];
+    });
+    if (weights.length) lines.push(`Dimension weights: ${weights.join("; ")}`);
+  }
   if (body.focus.length) lines.push(`Weighs heavily: ${body.focus.join("; ")}`);
   if (body.redFlags.length) {
     lines.push(`Red flags: ${body.redFlags.map((flag) => `[${flag.severity}] ${flag.rule}`).join("; ")}`);
@@ -257,6 +312,23 @@ export function analysisMemoryTitle(analysis: SyncAnalysis): string {
   return `Hive Research: ${tokenLabel} — ${analysis.verdict ?? "unknown"}${analysis.score !== null ? ` (${analysis.score})` : ""}`;
 }
 
+export function thesisMemoryTitle(thesis: SyncThesis): string {
+  const tokenLabel = thesis.tokenSymbol || thesis.tokenName || thesis.tokenAddress.slice(0, 12);
+  return `Hive Research thesis: ${tokenLabel} — ${thesis.verdict ?? "unknown"}${thesis.score !== null ? ` (${thesis.score})` : ""}`;
+}
+
+export function thesisMemoryContent(thesis: SyncThesis): string {
+  const tokenLabel = thesis.tokenSymbol || thesis.tokenName || thesis.tokenAddress;
+  const header = `Hive Research evolving thesis for ${tokenLabel} (${thesis.chain} ${thesis.tokenAddress}), `
+    + `updated by ${thesis.depthTier} run ${thesis.analysisId} on hivemindos.app/research.`;
+  const body = (thesis.contentMd ?? "").trim();
+  if (!body) return header;
+  const clipped = body.length > MAX_REPORT_CHARS
+    ? `${body.slice(0, MAX_REPORT_CHARS)}\n\n[Thesis truncated for memory; the full chain lives in the Hive Research account.]`
+    : body;
+  return `${header}\n\n${clipped}`;
+}
+
 const SHARED_MEMORY_FIELDS = {
   source: MEMORY_SOURCE,
   memoryOrigin: "imported",
@@ -291,6 +363,34 @@ async function importFramework(framework: SyncFramework): Promise<void> {
   }
 }
 
+// The Time Machine import: the first version of a token thesis plants the
+// memory; every later version EVOLVES it through the real Agent Memory
+// evolution engine (supersedes/evolution chain), carrying the gateway's
+// code-computed delta as the evolution reason. Identical content (fresh
+// ledger re-seeing an already-imported version) is a no-op, mirroring the
+// framework import above.
+async function importThesis(thesis: SyncThesis): Promise<void> {
+  const input = {
+    ...SHARED_MEMORY_FIELDS,
+    type: "learning",
+    title: thesisMemoryTitle(thesis),
+    content: thesisMemoryContent(thesis),
+    memoryKey: thesisSyncMemoryKey(thesis),
+    tags: ["hive-research", "research-thesis", thesis.chain],
+  };
+  const result = await rememberAgentMemory(input);
+  if ("blocked" in result && result.blocked && result.canonicalHeadConflict) {
+    const head = result.canonicalHeadConflict as { id: string; content?: string };
+    if (typeof head.content === "string" && head.content.trim() === input.content.trim()) return;
+    await evolveAgentMemory({
+      ...input,
+      memoryId: head.id,
+      evolutionReason: thesis.evolutionReason
+        || `Hive Research re-ran ${thesis.tokenSymbol || thesis.tokenAddress} (analysis ${thesis.analysisId}).`,
+    });
+  }
+}
+
 async function importAnalysis(analysis: SyncAnalysis): Promise<void> {
   const result = await rememberAgentMemory({
     ...SHARED_MEMORY_FIELDS,
@@ -317,6 +417,7 @@ export async function runHiveResearchSync(): Promise<HiveResearchSyncStatus> {
       const query = new URLSearchParams({
         frameworksSince: state.cursors.frameworks,
         analysesSince: state.cursors.analyses,
+        thesesSince: state.cursors.theses,
       });
       const response = await gatewayFetch(`/v1/sync/export?${query}`, { token: state.syncToken });
       const payload = await response.json().catch(() => null) as SyncExportPage | null;
@@ -332,9 +433,10 @@ export async function runHiveResearchSync(): Promise<HiveResearchSyncStatus> {
       // Restart from the epoch once; the ledgers keep re-imports no-ops.
       const wallet = payload.account?.walletAddress ?? null;
       if (wallet && wallet !== state.walletAddress
-        && (state.cursors.frameworks !== EPOCH_ISO || state.cursors.analyses !== EPOCH_ISO)) {
+        && (state.cursors.frameworks !== EPOCH_ISO || state.cursors.analyses !== EPOCH_ISO
+          || state.cursors.theses !== EPOCH_ISO)) {
         state.walletAddress = wallet;
-        state.cursors = { frameworks: EPOCH_ISO, analyses: EPOCH_ISO };
+        state.cursors = { frameworks: EPOCH_ISO, analyses: EPOCH_ISO, theses: EPOCH_ISO };
         await writeState(state);
         continue;
       }
@@ -351,12 +453,27 @@ export async function runHiveResearchSync(): Promise<HiveResearchSyncStatus> {
         await importAnalysis(analysis);
         state.importedAnalysisIds.push(analysis.id);
       }
-      // The ledger is a fast path, not the source of truth — the vault-side
+      // Thesis versions must apply oldest-first so the local memory evolves
+      // through the same chain the gateway recorded (the export is ordered;
+      // this sort is a cheap belt-and-braces).
+      const theses = [...(payload.thesisMemories ?? [])]
+        .sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt));
+      for (const thesis of theses) {
+        if (state.importedThesisIds.includes(thesis.id)) continue;
+        await importThesis(thesis);
+        state.importedThesisIds.push(thesis.id);
+      }
+      // The ledgers are a fast path, not the source of truth — the vault-side
       // canonical memoryKey guard makes a re-import of a trimmed id a no-op.
       if (state.importedAnalysisIds.length > 5000) {
         state.importedAnalysisIds = state.importedAnalysisIds.slice(-4000);
       }
-      if (payload.nextCursor) state.cursors = payload.nextCursor;
+      if (state.importedThesisIds.length > 5000) {
+        state.importedThesisIds = state.importedThesisIds.slice(-4000);
+      }
+      // Merge, don't replace: a gateway that predates the theses collection
+      // omits that cursor field, and it must not be knocked back to undefined.
+      if (payload.nextCursor) state.cursors = { ...state.cursors, ...payload.nextCursor };
       // Persist progress after every page so a crash never re-imports — but
       // never resurrect a connection that was disconnected mid-run.
       if (!(await readState())) return { connected: false };

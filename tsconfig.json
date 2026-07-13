@@ -55,9 +55,7 @@
     ".next-tauri/verify-5046/types/**/*.ts",
     ".next-tauri/verify-5046/dev/types/**/*.ts",
     ".next-tauri/verify-5032/types/**/*.ts",
-    ".next-tauri/verify-5032/dev/types/**/*.ts",
-    ".next-tauri/dev-5121/types/**/*.ts",
-    ".next-tauri/dev-5121/dev/types/**/*.ts"
+    ".next-tauri/verify-5032/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

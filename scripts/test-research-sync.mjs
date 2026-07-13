@@ -17,6 +17,9 @@ const {
   frameworkMemoryKey,
   frameworkMemoryTitle,
   researchGatewayBaseUrl,
+  thesisMemoryContent,
+  thesisMemoryTitle,
+  thesisSyncMemoryKey,
 } = await import("../src/lib/services/hive-research-sync.ts");
 const {
   RESEARCH_BRIDGE_PROTOCOL,
@@ -41,6 +44,13 @@ const framework = {
   source: "learned",
   body: {
     stance: "Receipts or it did not happen.",
+    dimensionWeights: {
+      product_delivery: 10,
+      launch_contract_integrity: 30,
+      market_distribution: 25,
+      utility_value_capture: 10,
+      adoption_governance: 25,
+    },
     focus: ["liquidity receipts"],
     redFlags: [{ rule: "tax > 5%", severity: "kill" }],
     greenFlags: ["locked liquidity"],
@@ -53,6 +63,7 @@ const framework = {
 const frameworkContent = frameworkMemoryContent(framework);
 assert.match(frameworkContent, /Receipts First \(yours\)/);
 assert.match(frameworkContent, /version 3, learned/);
+assert.match(frameworkContent, /Dimension weights: product\/delivery 10%; launch\/contract 30%; market\/distribution 25%; utility\/value capture 10%; adoption\/governance 25%/);
 assert.match(frameworkContent, /\[kill\] tax > 5%/);
 assert.match(frameworkContent, /distrust fresh deployers/);
 assert.match(frameworkContent, /rfw_abc v3/);
@@ -86,6 +97,54 @@ assert.match(clipped, /\[Report truncated for memory/);
 // Null verdict/score degrade to honest wording, not crashes.
 const bare = analysisMemoryContent({ ...analysis, verdict: null, score: null, reportMd: null });
 assert.match(bare, /: unknown\./);
+
+// --- thesis import mapping (Time Machine: evolve one memory per token) -------------
+
+const thesis = {
+  id: "rthes_v2",
+  memoryKey: "hive-research/thesis/base/0xabcd",
+  analysisId: "ranal_2",
+  chain: "base",
+  tokenAddress: "0xABCD",
+  tokenSymbol: "TEST",
+  tokenName: "Test Token",
+  verdict: "conviction",
+  score: 82,
+  depthTier: "scout",
+  contentMd: "## TEST — conviction (82/100)\n\nReceipts are public.",
+  evolutionReason: "verdict neutral -> now; score 55 -> 82 (+27)",
+  createdAt: "2026-07-13T00:00:00.000Z",
+};
+// The gateway's canonical key wins; local derivation is only the fallback —
+// and both normalize to the same canonical identity inside the engine.
+assert.equal(thesisSyncMemoryKey(thesis), "hive-research/thesis/base/0xabcd");
+assert.equal(
+  thesisSyncMemoryKey({ ...thesis, memoryKey: null }),
+  "hive-research:thesis:base:0xABCD",
+);
+assert.equal(thesisMemoryTitle(thesis), "Hive Research thesis: TEST — conviction (82)");
+const thesisContent = thesisMemoryContent(thesis);
+assert.match(thesisContent, /evolving thesis for TEST \(base 0xABCD\)/);
+assert.match(thesisContent, /scout run ranal_2/);
+assert.match(thesisContent, /## TEST — conviction \(82\/100\)/);
+// Long thesis bodies clip with an explicit notice, never silently.
+const clippedThesis = thesisMemoryContent({ ...thesis, contentMd: "y".repeat(9000) });
+assert.ok(clippedThesis.length < 9000);
+assert.match(clippedThesis, /\[Thesis truncated for memory/);
+// A body-less version still yields the honest provenance header.
+assert.match(thesisMemoryContent({ ...thesis, contentMd: "" }), /evolving thesis for TEST/);
+
+// Static invariants: thesis versions must EVOLVE the canonical memory (the
+// whole point of the Time Machine), ride the theses cursor, and apply
+// oldest-first.
+const syncServiceSource = await readSource("src/lib/services/hive-research-sync.ts");
+const importThesisBody = syncServiceSource.split("async function importThesis")[1]?.split("async function")[0] ?? "";
+assert.match(importThesisBody, /evolveAgentMemory/, "a changed thesis must evolve, not duplicate");
+assert.match(importThesisBody, /evolutionReason/, "the gateway delta must ride along as the evolution reason");
+assert.match(syncServiceSource, /thesesSince: state\.cursors\.theses/);
+assert.match(syncServiceSource, /importedThesisIds/);
+assert.match(syncServiceSource, /\{ \.\.\.state\.cursors, \.\.\.payload\.nextCursor \}/,
+  "cursor updates must merge so an older gateway can't wipe the theses cursor");
 
 // --- gateway base URL -------------------------------------------------------------
 
