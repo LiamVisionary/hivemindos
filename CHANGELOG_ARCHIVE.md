@@ -2,6 +2,16 @@
 
 Released changelog entries are moved here after a Tauri release is tagged or published.
 
+## v0.4.5 (2026-07-13)
+
+- 2026-07-13 16:46:36 PST+0800 - Show verified HIVE staking bonuses in Swarm Scout
+  - Status: Pushed in `095e25d64`; RELEASED in `v0.4.5` from source `2a5d46eb9` by workflow run `29240887212`. Hosted entitlement authority, public investor documentation, and the cross-platform desktop update are LIVE.
+  - Areas changed: free-model proxy workspace identity and entitlement headers, durable allowance snapshots, chat quota-meter copy, investor staking documentation, and the focused Scout staking-quota contract.
+  - Summary: Swarm Scout keeps its current unstaked free allowance while displaying the larger server-verified allowance granted to each HIVE staking tier: 1.10x through 2.00x for Queen Bee. The app cannot choose or inflate the tier; it forwards the stable workspace identity, mirrors hosted metadata, and treats missing or invalid entitlement data as the base allowance.
+  - Verification: The focused Scout staking-quota contract and whole-project TypeScript pass on the committed source. The release workflow successfully built the shared production app, passed the Tauri ACL gate on macOS Apple Silicon, Windows x64, and Linux x64, uploaded every platform artifact, created the signed updater manifest, and published `v0.4.5` as Latest. The live `latest.json` returns version `0.4.5` with all three updater platforms. GitHub Pages and the live investor guide return HTTP 200 with the exact 1.10x-through-2.00x Scout ladder. The aggregate app CI run has the same five pre-existing failures as the run immediately before this feature: size ratchet, Hive-action route drift, acting-wallet context, agent providers, and app builder; no new failing gate was introduced.
+  - Rollback: Mark `v0.4.4` as Latest to restore the prior updater target, revert `095e25d64` for later source builds, redeploy the prior hosted Worker versions recorded in the private-service changelog, and let GitHub Pages rebuild the prior documentation. Existing snapshots remain backward-compatible because the new entitlement fields are optional and normalized.
+  - Intended commit message: `models: surface HIVE stake bonuses for free Scout`
+
 ## v0.4.3 (2026-07-11)
 
 - 2026-07-11 03:49:11 +0800 - Windows setup no longer opens a blocking Script Host error
