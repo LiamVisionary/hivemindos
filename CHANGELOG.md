@@ -6,11 +6,11 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 ## Unreleased
 
 - 2026-07-13 16:46:36 PST+0800 - Show verified HIVE staking bonuses in Swarm Scout
-  - Status: Uncommitted; NOT deployed. No app release, hosted policy, quota counter, wallet link, or on-chain state changed.
+  - Status: Pushed in `095e25d64`; hosted entitlement authority and public investor documentation are LIVE. GitHub Pages run `29239894110` deployed the investor guide; no new Tauri desktop binary was published as part of this hosted-and-docs rollout.
   - Areas changed: free-model proxy workspace identity and entitlement headers, durable allowance snapshots, chat quota-meter copy, investor staking documentation, and the focused Scout staking-quota contract.
   - Summary: Swarm Scout keeps its current unstaked free allowance while displaying the larger server-verified allowance granted to each HIVE staking tier: 1.10x through 2.00x for Queen Bee. The app cannot choose or inflate the tier; it forwards the stable workspace identity, mirrors hosted metadata, and treats missing or invalid entitlement data as the base allowance.
-  - Verification: The focused Scout staking-quota contract and whole-project TypeScript pass on the current repository head. The unrelated `test-wallet-paid-models.mjs` suite still stops on the same pre-existing `...computeMarketplaceRows` assertion observed before this change. Diff hygiene passes, and none of the touched code files exceeds 1,500 lines; the repository size ratchet remains red only on its existing oversized-file inventory.
-  - Rollback: Revert the proxy, snapshot, meter, documentation, and focused-test changes. Existing snapshots remain backward-compatible because the new entitlement fields are optional and normalized.
+  - Verification: The focused Scout staking-quota contract and whole-project TypeScript pass on the committed repository head. The unrelated `test-wallet-paid-models.mjs` suite still stops on the same pre-existing `...computeMarketplaceRows` assertion observed before this change. Diff hygiene passes, and none of the touched code files exceeds 1,500 lines; the repository size ratchet remains red only on its existing oversized-file inventory. GitHub Pages completed successfully, and the live investor staking guide returns HTTP 200 with the exact 1.10x-through-2.00x Scout ladder and benefit boundaries.
+  - Rollback: Revert `095e25d64` for the client/docs surfaces, redeploy the prior hosted Worker versions recorded in the private-service changelog, and let GitHub Pages rebuild the prior documentation. Existing snapshots remain backward-compatible because the new entitlement fields are optional and normalized.
   - Intended commit message: `models: surface HIVE stake bonuses for free Scout`
 
 - 2026-07-13 15:57:20 PST+0800 - Preserve Hive Research dimension weights in shared-brain sync
