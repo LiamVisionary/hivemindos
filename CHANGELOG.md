@@ -6,7 +6,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 ## Unreleased
 
 - 2026-07-13 09:18:14 PDT (-0700) - Agents must consult the hosted commercial catalog
-  - Status: Uncommitted; not released or deployed.
+  - Status: Pushed in `7a1854585`; no runtime deployment is required for repository agent instructions.
   - Areas changed: root `AGENTS.md` and `CLAUDE.md` operating rules; commercial-catalog discipline regression; full-gate registration.
   - Summary: Pricing, free quotas, discounts, component costs, margins, reserves, buybacks, and hosted-service availability now have one mandatory server-authoritative read model. Agents must query it before commercial work, update the owning service payload and its adapter/tests when economics change, and report missing cost coverage explicitly instead of inferring zero.
   - Verification: The focused discipline contract passes and confirms both agent instruction files name the canonical aggregate and focused service endpoints plus the required update rules; whole-project TypeScript passes. The repository file-size ratchet remains red on its existing/concurrent oversized benchmark artifacts and legacy files; the new 21-line contract is below the limit and none of this change's files appears in the oversized inventory.
