@@ -35,14 +35,16 @@ const SELF_AUTHENTICATING_API_PREFIXES = [
   // the Tauri webview session. This route only records a short-lived local
   // receipt; the authenticated desktop app polls a separate protected route.
   "/api/integrations/x-managed/desktop-return",
-  // Local brain bridge for hivemindos.app/research: the browser page cannot
+  // Local brain bridge for hivemindos.app mini-apps: the browser page cannot
   // carry dashboard credentials cross-origin. hello is a harmless presence
-  // probe; recall is READ-ONLY and verifies a dedicated bridge token inside
-  // the route (or falls back to dashboard auth). The token-mint route
-  // (/api/research-bridge/token) is deliberately NOT listed — it stays behind
-  // this gate.
+  // probe; recall is READ-ONLY; skill is the one WRITE (save a generated
+  // SKILL.md), fail-closed audited inside the route. All three verify a
+  // dedicated bridge token inside the route (or fall back to dashboard auth).
+  // The token-mint route (/api/research-bridge/token) is deliberately NOT
+  // listed — it stays behind this gate.
   "/api/research-bridge/hello",
   "/api/research-bridge/recall",
+  "/api/research-bridge/skill",
 ];
 
 function isSelfAuthenticatingApi(pathname: string) {

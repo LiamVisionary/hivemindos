@@ -15,7 +15,8 @@ import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { answerFromAgentMemory } from "@/lib/services/obsidian/agent-memory";
+import { answerFromAgentMemory, rememberAgentMemory } from "@/lib/services/obsidian/agent-memory";
+import { writeBrainSkill } from "@/lib/services/obsidian/brain-skills";
 import { redactSecretText } from "@/lib/services/agent-security-proxy";
 import { optionalEnv } from "@/lib/config/env";
 
@@ -146,6 +147,87 @@ export function takeResearchBridgeRecallToken(nowMs = Date.now()): boolean {
   if (recallBucket.tokens < 1) return false;
   recallBucket.tokens -= 1;
   return true;
+}
+
+// --- skill save (the one WRITE the bridge allows) -------------------------------
+
+// Separate, tighter bucket than recall: writing a skill to the shared shelf is
+// heavier than a read, so 5/minute. Even a stolen-but-valid bridge token cannot
+// spam the vault. In-memory per-process, same rationale as the recall bucket.
+const SKILL_BUCKET_CAPACITY = 5;
+const SKILL_REFILL_PER_MS = SKILL_BUCKET_CAPACITY / 60_000;
+const skillBucket = { tokens: SKILL_BUCKET_CAPACITY, refilledAtMs: 0 };
+
+/** Takes one skill-save token; false = rate-limited. `nowMs` is injectable for tests. */
+export function takeResearchBridgeSkillToken(nowMs = Date.now()): boolean {
+  const elapsedMs = Math.max(0, nowMs - skillBucket.refilledAtMs);
+  skillBucket.tokens = Math.min(SKILL_BUCKET_CAPACITY, skillBucket.tokens + elapsedMs * SKILL_REFILL_PER_MS);
+  skillBucket.refilledAtMs = Math.max(skillBucket.refilledAtMs, nowMs);
+  if (skillBucket.tokens < 1) return false;
+  skillBucket.tokens -= 1;
+  return true;
+}
+
+// Skills are small documents; this bound is generous and blocks abuse/DoS.
+export const MAX_BRIDGE_SKILL_CHARS = 60_000;
+
+export type ResearchBridgeSkillResult = {
+  name: string;
+  savedToBrain: boolean;
+};
+
+function bridgeSkillName(markdown: string): string {
+  const frontmatter = markdown.match(/^---\s*[\r\n]([\s\S]*?)[\r\n]---/);
+  const nameLine = frontmatter?.[1]?.split(/[\r\n]+/).find((line) => /^\s*name\s*:/i.test(line));
+  if (nameLine) {
+    const value = nameLine.replace(/^\s*name\s*:/i, "").trim().replace(/^["']|["']$/g, "").trim();
+    if (value) return value.slice(0, 120);
+  }
+  const heading = markdown.match(/^#\s+(.+)$/m);
+  return (heading?.[1]?.trim() || "Written Skill").slice(0, 120);
+}
+
+/**
+ * Saves a web-generated skill into the user's shared brain. Reuses the app's
+ * own `writeBrainSkill`, which normalizes the markdown, FAIL-CLOSED audits it
+ * (rejecting any embedded plaintext secret), writes Skills/<slug>/SKILL.md plus
+ * its manifest sidecars, and reindexes the shelf README. A best-effort typed
+ * memory makes the skill recallable; a memory hiccup never fails the save.
+ */
+export async function saveResearchBridgeSkill(input: {
+  markdown: unknown;
+  slug?: unknown;
+}): Promise<ResearchBridgeSkillResult> {
+  const markdown = String(input.markdown ?? "").trim();
+  if (!markdown) throw new Error("skill markdown is required.");
+  if (markdown.length > MAX_BRIDGE_SKILL_CHARS) throw new Error("skill content is too large.");
+  const slugHint = typeof input.slug === "string" && input.slug.trim() ? input.slug.trim() : undefined;
+
+  // writeBrainSkill throws if its audit blocks the draft (e.g. embedded secret).
+  await writeBrainSkill({ markdown, slug: slugHint, replaceExisting: true });
+  const name = bridgeSkillName(markdown);
+
+  await rememberAgentMemory({
+    type: "artifact",
+    title: `Web-generated skill: ${name}`,
+    content: `A skill named "${name}" was generated on hivemindos.app and saved to the shared Skills shelf. ${firstBridgeSkillLine(markdown)}`,
+    memoryKey: `web-skill:${slugHint ?? name}`,
+    tags: ["web-skill", "mini-app"],
+    source: "hivemindos-web",
+    memoryOrigin: "imported",
+    project: "mini-apps",
+    agentName: "HivemindOS Web Skill Bridge",
+    proof: "auto",
+    allowDuplicate: true,
+  }).catch(() => undefined);
+
+  return { name, savedToBrain: true };
+}
+
+function firstBridgeSkillLine(markdown: string): string {
+  const body = markdown.replace(/^---[\s\S]*?---/, "").trim();
+  const line = body.split(/[\r\n]+/).map((entry) => entry.trim()).find((entry) => entry && !entry.startsWith("#") && !entry.startsWith(">"));
+  return (line ?? "").slice(0, 280);
 }
 
 // --- read-only recall ----------------------------------------------------------

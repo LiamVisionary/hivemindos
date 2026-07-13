@@ -22,11 +22,13 @@ const {
   thesisSyncMemoryKey,
 } = await import("../src/lib/services/hive-research-sync.ts");
 const {
+  MAX_BRIDGE_SKILL_CHARS,
   RESEARCH_BRIDGE_PROTOCOL,
   RESEARCH_BRIDGE_TOKEN_HEADER,
   researchBridgeCorsHeaders,
   researchBridgeOrigin,
   takeResearchBridgeRecallToken,
+  takeResearchBridgeSkillToken,
 } = await import("../src/lib/services/research-bridge.ts");
 
 const root = resolve(import.meta.dirname, "..");
@@ -186,11 +188,25 @@ for (let i = 0; i < 10; i += 1) {
 }
 assert.equal(takeResearchBridgeRecallToken(t0 + 66_001), false, "full refill still caps at capacity");
 
+// --- skill-save rate limit (the one WRITE the bridge allows) -------------------------
+
+// Tighter than recall: 5 skill-saves/minute, separate bucket. Injected clock.
+const s0 = 2_000_000;
+for (let i = 0; i < 5; i += 1) {
+  assert.equal(takeResearchBridgeSkillToken(s0), true, `skill-save ${i + 1} of 5 must pass`);
+}
+assert.equal(takeResearchBridgeSkillToken(s0), false, "6th skill-save in the same minute must be limited");
+assert.equal(takeResearchBridgeSkillToken(s0 + 12_001), true, "one skill token refills after ~12s (5/min)");
+assert.equal(takeResearchBridgeSkillToken(s0 + 12_001), false, "skill refill is gradual, not a burst");
+assert.equal(typeof MAX_BRIDGE_SKILL_CHARS, "number");
+assert.ok(MAX_BRIDGE_SKILL_CHARS > 0 && MAX_BRIDGE_SKILL_CHARS <= 200_000, "skill size bound is sane");
+
 // --- static route/proxy invariants ---------------------------------------------------
 
 const proxySource = await readSource("src/proxy.ts");
 assert.ok(proxySource.includes('"/api/research-bridge/hello"'), "hello must be self-authenticating");
 assert.ok(proxySource.includes('"/api/research-bridge/recall"'), "recall must be self-authenticating");
+assert.ok(proxySource.includes('"/api/research-bridge/skill"'), "skill-save must be self-authenticating");
 assert.ok(!proxySource.includes('"/api/research-bridge/token"'),
   "the bridge token-mint route must stay behind the dashboard auth gate");
 assert.ok(!proxySource.includes('"/api/research-sync"'),
@@ -200,6 +216,17 @@ const recallSource = await readSource("src/app/api/research-bridge/recall/route.
 assert.match(recallSource, /verifyResearchBridgeToken/);
 assert.match(recallSource, /verifyAuth/); // bridge token is an alternative, never a replacement
 assert.match(recallSource, /takeResearchBridgeRecallToken/); // stolen tokens can't bulk-exfiltrate
+
+// The skill WRITE route: same token-or-dashboard gate, its own rate bucket, and
+// it delegates to saveResearchBridgeSkill (which fail-closed audits the draft).
+const skillRouteSource = await readSource("src/app/api/research-bridge/skill/route.ts");
+assert.match(skillRouteSource, /verifyResearchBridgeToken/);
+assert.match(skillRouteSource, /verifyAuth/);
+assert.match(skillRouteSource, /takeResearchBridgeSkillToken/);
+assert.match(skillRouteSource, /saveResearchBridgeSkill/);
+// The bridge write must reuse the fail-closed skill writer, never a raw file write.
+const bridgeServiceSkill = await readSource("src/lib/services/research-bridge.ts");
+assert.match(bridgeServiceSkill, /writeBrainSkill\(/, "skill save must go through the fail-closed writeBrainSkill audit");
 assert.match(recallSource, /429/);
 
 const bridgeService = await readSource("src/lib/services/research-bridge.ts");
