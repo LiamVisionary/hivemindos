@@ -6,7 +6,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 ## Unreleased
 
 - 2026-07-13 10:18:39 PDT (-0700) - Require the single hosted buyback-policy source
-  - Status: Uncommitted; instruction and contract changes only; no app runtime deployment is required.
+  - Status: Pushed in `b1e0a686f`; instruction and contract changes only; no app runtime deployment is required.
   - Areas changed: root `AGENTS.md` and `CLAUDE.md` commercial-catalog discipline plus its focused regression contract.
   - Summary: Agents must now treat the private paid-agent service-policy matrix as the only authority for HIVE buyback percentages, configure reviewed percentages per service there, and never recreate service-local percentage variables, fallbacks, or constants.
   - Verification: The contract failed before the instructions named the source and now passes. Whole-project TypeScript and diff hygiene pass. The file-size ratchet remains red on existing benchmark artifacts and legacy files; none of the three touched app-repo files appears in the oversized inventory.
