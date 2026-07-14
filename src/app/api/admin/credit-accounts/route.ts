@@ -73,9 +73,15 @@ export async function GET(request: NextRequest) {
   }
 
   const labels = await labelsByTokenHash();
-  const accounts = (Array.isArray(payload.accounts) ? payload.accounts : []).map((account: Record<string, unknown>) => ({
+  const enriched = (Array.isArray(payload.accounts) ? payload.accounts : []).map((account: Record<string, unknown>) => ({
     ...account,
     label: (typeof account.tokenHash === "string" && labels[account.tokenHash]) || null,
   }));
-  return okJson({ accounts });
+  // This console is for OUR internal service/model/agent accounts — the ones in
+  // the local model-credit vault (they resolve to a label). Customer top-up
+  // accounts (card/wallet, no vault entry) are the customers' own balances, not
+  // something to fund from here, so they're excluded (reported as a count).
+  const accounts = enriched.filter((account: { label: string | null }) => account.label);
+  const customerAccountCount = enriched.length - accounts.length;
+  return okJson({ accounts, customerAccountCount });
 }

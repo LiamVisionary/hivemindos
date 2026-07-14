@@ -120,6 +120,7 @@ export function HivemindOSManagementPanel() {
   const [walletChoice, setWalletChoice] = useState<Record<string, string>>({});
   const [walletAmount, setWalletAmount] = useState<Record<string, string>>({});
   const [walletBusyId, setWalletBusyId] = useState<string | null>(null);
+  const [customerCount, setCustomerCount] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -133,6 +134,7 @@ export function HivemindOSManagementPanel() {
         return;
       }
       setAccounts(Array.isArray(body.accounts) ? body.accounts : []);
+      setCustomerCount(Number(body.customerAccountCount) || 0);
     } catch {
       setError("The credit gateway is unreachable right now.");
       setAccounts(null);
@@ -237,8 +239,9 @@ export function HivemindOSManagementPanel() {
           </button>
         </header>
         <p style={{ fontSize: 13, color: "var(--fg-2)", margin: "0 0 20px" }}>
-          Every internal prepaid credit account and its balance. Fund any account directly — no card or wallet needed.
+          Your internal service, model, and agent credit accounts — the rails that power the apps. Fund any of them directly.
           {accounts ? <> Total across {accounts.length} account{accounts.length === 1 ? "" : "s"}: <strong style={{ color: "var(--fg)" }}>{usd(totalBalance)}</strong>.</> : null}
+          {customerCount > 0 ? <> <span style={{ color: "var(--fg-3, var(--fg-2))" }}>({customerCount} customer top-up account{customerCount === 1 ? "" : "s"} hidden — those are customers' own balances, not managed here.)</span></> : null}
         </p>
 
         {notice ? (
