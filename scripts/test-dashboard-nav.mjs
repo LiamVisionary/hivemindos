@@ -43,7 +43,7 @@ assert.equal(navigation.DASHBOARD_ROUTE_LABELS.history, "Work History", "Route l
 assert.ok(navigation.DASHBOARD_UTILITY_VIEWS.includes("env"), "Utilities set includes env (the More grid renders every utility view)");
 assert.ok(navigation.DASHBOARD_UTILITY_VIEWS.includes("cloud"), "Utilities set includes managed Cloud Agents");
 assert.ok(navigation.DASHBOARD_UTILITY_VIEWS.includes("mini-apps"), "Utilities set includes HivemindOS Mini Apps");
-assert.match(dashboardApp, /activeView === "mini-apps" \? <MiniAppsPanel \/>/, "Dashboard should render the dedicated Mini Apps view");
+assert.match(dashboardApp, /activeView === "mini-apps" \? <MiniAppsPanel[ /]/, "Dashboard should render the dedicated Mini Apps view");
 assert.match(morePanel, /title: "HivemindOS Mini Apps"/, "More launcher should expose HivemindOS Mini Apps");
 
 assert.match(
