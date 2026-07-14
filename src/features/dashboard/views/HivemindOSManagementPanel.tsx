@@ -24,7 +24,20 @@ type CreditAccount = {
   createdAt: string;
   updatedAt: string;
   label: string | null;
+  services?: string[]; // gateway ids this account has been used by, e.g. ["x-studio-gateway"]
 };
+
+// Friendly names for the gateway ids stamped on ledger rows.
+const SERVICE_LABELS: Record<string, string> = {
+  "x-studio-gateway": "X Studio",
+  "research-gateway": "Hive Research",
+  "media-studio-gateway": "Media Studio",
+  "x-transcript-gateway": "X Transcript",
+};
+
+function serviceLabel(id: string): string {
+  return SERVICE_LABELS[id] || humanizeSlug(id.replace(/-gateway$/, ""));
+}
 
 // Balance below this reads as "at risk of draining" — the per-run X-read floor
 // is ~$1.30, so anything under a few runs' worth is flagged amber.
@@ -76,15 +89,23 @@ function prettyAccountName(account: CreditAccount): string {
   return `Credit account · ${account.id.replace(/^pagw_acct_/, "").slice(0, 8)}`;
 }
 
-// One line telling the user what the account IS. We know the funding source for
-// certain (payer/network); the "service rail" purpose comes from the vault label.
+// One line telling the user what the account IS FOR. The strongest signal is
+// which services have actually spent from it (from the ledger); fall back to the
+// vault label's role, then the funding source.
 function accountKind(account: CreditAccount): string {
+  const services = (account.services || []).filter(Boolean);
   const label = (account.label || "").trim();
-  if (label.startsWith("service:")) return "Service rail — funds this app's paid API reads";
+  if (label.startsWith("service:")) {
+    return `Service rail — funds ${prettyAccountName(account)}'s paid API reads`;
+  }
   if (label.startsWith("hmos-model-credits:") || label === "shared:hivemindos-models") return "Shared hosted-model credit pool";
   if (label.startsWith("agent:")) return "Agent credit account";
-  if (account.payer.startsWith("stripe:")) return "Card-funded prepaid credit";
-  if (account.network.startsWith("eip155")) return "Wallet-funded prepaid credit (USDC)";
+  if (services.length) {
+    const funded = account.payer.startsWith("stripe:") ? "Card credit" : account.network.startsWith("eip155") ? "Wallet credit (USDC)" : "Prepaid credit";
+    return `${funded}, used by ${services.map(serviceLabel).join(" · ")}`;
+  }
+  if (account.payer.startsWith("stripe:")) return "Card-funded credit — not used yet";
+  if (account.network.startsWith("eip155")) return "Wallet-funded credit (USDC) — not used yet";
   return "Prepaid credit account";
 }
 
