@@ -79,7 +79,10 @@ function prettyAccountName(account: CreditAccount): string {
     const prefix = idx >= 0 ? label.slice(0, idx) : "";
     const rest = idx >= 0 ? label.slice(idx + 1) : label;
     if (prefix === "service") return humanizeSlug(rest);
-    if (prefix === "hmos-model-credits" || label === "shared:hivemindos-models") return "HivemindOS Models";
+    if (label === "shared:hivemindos-models") return "HivemindOS Models (shared pool)";
+    // There can be more than one legacy per-install model-credit account; append
+    // the short handle so they're distinguishable instead of identically named.
+    if (prefix === "hmos-model-credits") return `HivemindOS Models · ${rest.slice(0, 8)}`;
     if (prefix === "agent") return `${humanizeSlug(rest)} agent`;
     return humanizeSlug(rest || label);
   }
