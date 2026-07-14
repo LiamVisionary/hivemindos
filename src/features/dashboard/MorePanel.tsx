@@ -39,7 +39,7 @@ type MoreItem = {
 // until it gets one; this is how a previously-unreachable view surfaces).
 const MORE_GROUP_DEFS = [
   { name: "Build & automate", ids: ["mini-apps", "fusion", "aeon", "swarm", "podcast"] },
-  { name: "Money & governance", ids: ["wallet", "trade", "governance", "cloud", "compute", "stake"] },
+  { name: "Money & governance", ids: ["wallet", "trade", "governance", "cloud", "compute", "credit-admin", "stake"] },
   { name: "Fleet health", ids: ["maintenance", "memory", "sessions", "tools"] },
   { name: "Connections", ids: ["integrations", "my-apps", "messaging", "phone"] },
   { name: "Data & access", ids: ["env", "files", "notifications"] },
@@ -180,6 +180,7 @@ export function MorePanel({
       governance: { id: "governance", icon: <Landmark aria-hidden="true" />, eyebrow: "Companies & budgets", title: "Zero Human Company", body: "Group agents into companies, set budgets and kill switches, and clear spend approvals.", keywords: "governance company companies budget approvals kill switch zhc", ...approvalBadge },
       cloud: { id: "cloud", icon: <Cloud aria-hidden="true" />, eyebrow: "Always-on Hermes", title: "Managed Cloud Agents", body: "Deploy dedicated pay-as-you-go agents with persistent workspaces that run while your computers are off.", keywords: "cloud managed hosted always on hermes pay as you go deploy", dot: "live" },
       compute: { id: "compute", icon: <Cpu aria-hidden="true" />, eyebrow: "GPU marketplace", title: "Hive Compute", body: "Route model calls through marketplace GPUs or install a worker to earn from spare local GPU capacity.", keywords: "compute gpu marketplace inference worker ollama earn rent models" },
+      "credit-admin": { id: "credit-admin", icon: <Coins aria-hidden="true" />, eyebrow: "Service credits", title: "Credit Accounts", body: "View every internal prepaid credit account and its balance, and fund any of them directly.", keywords: "credit credits accounts fund funding balance service account top up admin rail" },
       stake: { id: "stake", icon: <Coins aria-hidden="true" />, eyebrow: "Community tiers", title: "Stake HIVE", body: "Lock HIVE for Holder–Visionary status, alpha rooms, governance, and curator rights.", keywords: "stake hive holder visionary alpha governance curator", href: "/stake" },
       maintenance: { id: "maintenance", icon: <ShieldCheck aria-hidden="true" />, eyebrow: "Fleet checks", title: "Diagnostics", body: "Run dashboard and runtime health checks.", keywords: "diagnostics maintenance health checks repair", ...maintenanceBadge },
       memory: { id: "memory", icon: <Activity aria-hidden="true" />, eyebrow: rss ? `${rss} MB RSS` : "Review queue", title: "Memory & Review", body: "Review proposed brain writes, inspect Context X-Ray, and track process RSS growth.", keywords: "memory review rss telemetry context x-ray brain writes", ...(rss ? { badge: `${rss} MB`, badgeTone: "honey" as BadgeTone } : {}) },

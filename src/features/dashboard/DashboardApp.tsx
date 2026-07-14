@@ -156,6 +156,7 @@ import {
   MachineCell,
   MorePanel,
   ManagedCloudAgentsPanel,
+  HivemindOSManagementPanel,
   MiniAppsPanel,
   PhonePanel,
   SchedulerPanel,
@@ -918,10 +919,7 @@ function dedupeChatTranscript(messages: ChatMessage[]) {
 }
 
 function preserveLocalTurnProcessEvents(sessionTurn: ChatMessage[], localTurn: ChatMessage[]) {
-  const localAssistantProcessMessages = localTurn.filter((message) => (
-    message.role === "assistant"
-    && ((message.processEvents?.length ?? 0) > 0 || message.applicationGeneration || message.imageGeneration || message.feedback)
-  ));
+  const localAssistantMessages = localTurn.filter((message) => message.role === "assistant");
   const localUserMessage = localTurn.find((message) => message.role === "user" && message.content.trim());
   let fallbackProcessIndex = 0;
   return sessionTurn.map((message) => {
@@ -935,10 +933,10 @@ function preserveLocalTurnProcessEvents(sessionTurn: ChatMessage[], localTurn: C
       };
     }
     if (message.role !== "assistant") return message;
-    const sameContentProcessMessage = localAssistantProcessMessages.find((localMessage) => (
+    const sameContentProcessMessage = localAssistantMessages.find((localMessage) => (
       sameVisibleChatMessage(localMessage, message)
     ));
-    const fallbackProcessMessage = localAssistantProcessMessages[fallbackProcessIndex];
+    const fallbackProcessMessage = localAssistantMessages[fallbackProcessIndex];
     if (!sameContentProcessMessage && fallbackProcessMessage) fallbackProcessIndex += 1;
     const processSource = sameContentProcessMessage ?? fallbackProcessMessage;
     if (!processSource) return message;
@@ -948,6 +946,8 @@ function preserveLocalTurnProcessEvents(sessionTurn: ChatMessage[], localTurn: C
       applicationGeneration: message.applicationGeneration ?? processSource.applicationGeneration,
       imageGeneration: message.imageGeneration ?? processSource.imageGeneration,
       feedback: message.feedback ?? processSource.feedback,
+      sourceSessionId: processSource.sourceSessionId ?? message.sourceSessionId,
+      sourceIndex: processSource.sourceIndex ?? message.sourceIndex,
     };
   });
 }
@@ -1083,7 +1083,7 @@ type DashboardAppProps = {
   initialWorkHistory?: WorkHistoryPayload;
 };
 
-export type DashboardVaultPanelMode = "atlas" | "dream-inbox" | "skill-roi" | "hive-vault" | "shared-skills" | "brain-services" | "env" | "config";
+export type DashboardVaultPanelMode = "atlas" | "dream-inbox" | "skill-roi" | "hive-vault" | "brain-drop" | "shared-skills" | "brain-services" | "env" | "config";
 
 export default function DashboardApp({ initialChatAgentId, initialChatLeaf, initialView, initialVaultPanelMode, initialWorkHistory }: DashboardAppProps = {}) {
   // Initialize all persisted state with deterministic seed values so SSR and
@@ -4738,8 +4738,9 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       {activeView === "vault" ? <VaultPanel {...{ Activity, BRAIN_SKILL_PROVIDER_FALLBACK, Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, CircleAlert, Clock3, DEFAULT_SHARED_VAULT, Download, Eye, FileText, FolderOpen, GitBranch, Hexagon, Image, KeyRound, LoaderCircle, Network, PlugZap, RefreshCcw, Repeat2, Search, Sparkles, activeView, brainGraph, brainGraphLoading, brainGraphStats, brainGraphStatus, brainPan, brainSkillAeonSyncing, brainSkillImportAllDescription, brainSkillImportAllLabel, brainSkillImportProvider, brainSkillImportSuccess, brainSkillImportableCount, brainSkills, brainSkillsLoading, brainSkillsStatus, checkControlRoomStatus, checkVaultStatus, controlRoomStatus, displayAgents, endBrainPan, formatBrainDate, gbrainActionStatus, gbrainBusy, gbrainQuery, gbrainQueryResult, gbrainStatus, hermesUpdateRequired, hermesUpdateRequiredDetail, importBrainSkills, inspectBrainNode, installTradingBrainFromDashboard, moveBrainPan, neo4jActionStatus, neo4jBusy, neo4jQuery, neo4jQueryResult, neo4jStatus, openSkillBrowser, pairSyncthingVaultSync, qmdActionStatus, qmdBusy, qmdQuery, qmdQueryResult, qmdStatus, queryGbrainFromDashboard, queryNeo4jFromDashboard, queryQmdFromDashboard, querySyntoFromDashboard, refreshBrainGraph, refreshBrainSkills, refreshGbrainStatus, refreshNeo4jStatus, refreshQmdStatus, refreshRuntimeFileRoots, refreshRuntimeIntegrations, refreshSyntoStatus, refreshTradingBrainStatus, runGbrainAction, runNeo4jAction, runQmdAction, runRuntimeIntegrationAction, runSyntoAction, runVaultTailnetSync, runtimeIntegrationBusy, runtimeIntegrationMessage, runtimeIntegrationStatus, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setChatAttachments, setChatDirectories, setGbrainQuery, setNeo4jQuery, setQmdQuery, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, setSyntoQuery, setText, setTradingBrainForAllRuntimes, setTradingBrainForRuntime, setVaultPanelMode, sharedVault, skillBrowserSearch, skillRequiresHermesUpdate, startAgentChat, startBrainPan, syncBrainSkillsToAeon, syntoActionStatus, syntoBusy, syntoQuery, syntoQueryResult, syntoStatus, tradingBrainActionStatus, tradingBrainAllRuntimeAttached, tradingBrainBusy, tradingBrainRuntimeCards, tradingBrainStatus, updateAllSkillAutoSync, updateSharedVault, updateSkillAutoSync, vaultClass, vaultPanelMode, vaultStatus, vaultSyncPending, vaultSyncStatus, walletClass }} /> : null}
       {activeView === "integrations" ? <IntegrationsView embedded /> : null}
       {activeView === "cloud" ? <ManagedCloudAgentsPanel /> : null}
+      {activeView === "credit-admin" ? <HivemindOSManagementPanel /> : null}
       {activeView === "compute" ? <HiveComputePanel /> : null}
-      {activeView === "mini-apps" ? <MiniAppsPanel /> : null}
+      {activeView === "mini-apps" ? <MiniAppsPanel agents={displayAgents} walletsByAgent={walletsByAgent} vaultPath={sharedVault?.enabled ? String(sharedVault.vaultPath || "").trim() : ""} /> : null}
       {activeView === "memory" ? (
         <TelemetryView
           machines={fleetViewData.machines}

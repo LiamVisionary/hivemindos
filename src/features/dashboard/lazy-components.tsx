@@ -56,6 +56,7 @@ const loadMorePanel = () => import("@/features/dashboard/MorePanel");
 const loadFusionPanel = () => import("@/features/dashboard/views/FusionPanel");
 const loadGovernancePanel = () => import("@/features/dashboard/views/GovernancePanel");
 const loadManagedCloudAgentsPanel = () => import("@/features/dashboard/views/ManagedCloudAgentsPanel");
+const loadHivemindOSManagementPanel = () => import("@/features/dashboard/views/HivemindOSManagementPanel");
 const loadHiveComputePanel = () => import("@/features/dashboard/views/HiveComputePanel");
 const loadMiniAppsPanel = () => import("@/features/dashboard/views/MiniAppsPanel");
 const loadTelemetryView = () => import("@/features/dashboard/views/telemetry/TelemetryView");
@@ -76,6 +77,7 @@ export const MorePanel = dynamic(() => loadMorePanel().then((mod) => mod.MorePan
 export const FusionPanel = dynamic(() => loadFusionPanel().then((mod) => mod.FusionPanel), { ssr: false, loading: routeLoadingFor("fusion") });
 export const GovernancePanel = dynamic(() => loadGovernancePanel().then((mod) => mod.GovernancePanel), { ssr: false, loading: routeLoadingFor("governance") });
 export const ManagedCloudAgentsPanel = dynamic(() => loadManagedCloudAgentsPanel().then((mod) => mod.ManagedCloudAgentsPanel), { ssr: false, loading: routeLoadingFor("cloud") });
+export const HivemindOSManagementPanel = dynamic(() => loadHivemindOSManagementPanel().then((mod) => mod.HivemindOSManagementPanel), { ssr: false, loading: routeLoadingFor("credit-admin") });
 export const HiveComputePanel = dynamic(() => loadHiveComputePanel().then((mod) => mod.HiveComputePanel), { ssr: false, loading: routeLoadingFor("compute") });
 export const MiniAppsPanel = dynamic(() => loadMiniAppsPanel().then((mod) => mod.MiniAppsPanel), { ssr: false, loading: routeLoadingFor("mini-apps") });
 export const PodcastStudioView = dynamic(() => import("@/features/dashboard/views/PodcastStudioView").then((mod) => mod.PodcastStudioView), { ssr: false, loading: routeLoadingFor("podcast") });

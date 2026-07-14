@@ -9,6 +9,7 @@ import type { SyntoStatus } from "@/lib/services/brain/synto";
 import type { TradingBrainStatus } from "@/lib/services/brain/trading-brain";
 import type { ChatApplicationGenerationCard, ChatImageGeneration } from "@/features/dashboard/chat-application-generation";
 import type { ChatResponseBilling } from "@/lib/types/chat-billing";
+import type { CapabilityApprovalPlan } from "@/lib/types/capability-approval";
 import type { EvaluationHumanFeedback } from "@/lib/types/evaluation";
 import type { LocalModelDownloadJob, LocalModelHardwareSnapshot, LocalModelInstallCatalogStatus, LocalOpenAICompatibleServer, LocalRuntimeSetupStatus } from "@/lib/config/local-model-install-catalog";
 
@@ -324,6 +325,7 @@ export type ChatMessage = {
   attachments?: ChatAttachment[];
   applicationGeneration?: ChatApplicationGenerationCard;
   imageGeneration?: ChatImageGeneration;
+  capabilityApproval?: CapabilityApprovalPlan;
   agentPrompt?: {
     id: string;
     type: "clarify" | "approval" | "sudo" | "secret" | "prompt";
@@ -1091,7 +1093,7 @@ export type MiroSharkSurfaceView = "x" | "reddit" | "polymarket" | "timeline";
 
 export type MiroSharkWorkspaceMode = "new" | "run";
 
-export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "trade" | "vault" | "integrations" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "messaging" | "chat" | "more" | "env" | "my-apps" | "mini-apps" | "phone" | "aeon" | "fusion" | "governance" | "cloud" | "compute" | "podcast";
+export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "trade" | "vault" | "integrations" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "messaging" | "chat" | "more" | "env" | "my-apps" | "mini-apps" | "phone" | "aeon" | "fusion" | "governance" | "cloud" | "compute" | "podcast" | "credit-admin";
 
 export type WorkView = Extract<DashboardView, "kanban" | "scheduler" | "swarm" | "history">;
 
