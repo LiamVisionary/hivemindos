@@ -34,14 +34,58 @@ function usd(value: number): string {
   return `$${(Number.isFinite(value) ? value : 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
 }
 
-function shortId(id: string): string {
-  return id.length > 20 ? `${id.slice(0, 12)}…${id.slice(-6)}` : id;
+function shortHex(value: string): string {
+  return /^0x[a-fA-F0-9]{40}$/.test(value) ? `${value.slice(0, 6)}…${value.slice(-4)}` : value;
 }
 
-function accountName(account: CreditAccount): string {
-  if (account.label) return account.label;
-  if (account.payer) return account.payer;
-  return shortId(account.id);
+// "hive-research" -> "Hive Research", "x-studio" -> "X Studio".
+function humanizeSlug(slug: string): string {
+  return slug
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((word) => (word.toLowerCase() === "x" ? "X" : word.charAt(0).toUpperCase() + word.slice(1)))
+    .join(" ") || slug;
+}
+
+function networkLabel(network: string): string {
+  if (network === "stripe") return "Card";
+  if (network === "eip155:8453") return "Base";
+  if (network === "eip155:84532") return "Base Sepolia";
+  if (network.startsWith("solana")) return "Solana";
+  if (network.startsWith("eip155:")) return `EVM ${network.slice("eip155:".length)}`;
+  return network;
+}
+
+// A human title. Vault-labeled accounts get their real name; unlabeled ones are
+// named by how they were funded (card vs on-chain wallet) with a short handle,
+// instead of dumping a raw Stripe id or wallet address.
+function prettyAccountName(account: CreditAccount): string {
+  const label = (account.label || "").trim();
+  if (label) {
+    const idx = label.indexOf(":");
+    const prefix = idx >= 0 ? label.slice(0, idx) : "";
+    const rest = idx >= 0 ? label.slice(idx + 1) : label;
+    if (prefix === "service") return humanizeSlug(rest);
+    if (prefix === "hmos-model-credits" || label === "shared:hivemindos-models") return "HivemindOS Models";
+    if (prefix === "agent") return `${humanizeSlug(rest)} agent`;
+    return humanizeSlug(rest || label);
+  }
+  const payer = account.payer || "";
+  if (payer.startsWith("stripe:")) return `Card credit · …${payer.slice(-6)}`;
+  if (/^0x[a-fA-F0-9]{40}$/.test(payer)) return `Wallet credit · ${shortHex(payer)}`;
+  return `Credit account · ${account.id.replace(/^pagw_acct_/, "").slice(0, 8)}`;
+}
+
+// One line telling the user what the account IS. We know the funding source for
+// certain (payer/network); the "service rail" purpose comes from the vault label.
+function accountKind(account: CreditAccount): string {
+  const label = (account.label || "").trim();
+  if (label.startsWith("service:")) return "Service rail — funds this app's paid API reads";
+  if (label.startsWith("hmos-model-credits:") || label === "shared:hivemindos-models") return "Shared hosted-model credit pool";
+  if (label.startsWith("agent:")) return "Agent credit account";
+  if (account.payer.startsWith("stripe:")) return "Card-funded prepaid credit";
+  if (account.network.startsWith("eip155")) return "Wallet-funded prepaid credit (USDC)";
+  return "Prepaid credit account";
 }
 
 export function HivemindOSManagementPanel() {
@@ -139,8 +183,8 @@ export function HivemindOSManagementPanel() {
         return;
       }
       setNotice(body.duplicate
-        ? `Already credited — ${accountName(account)} is at ${usd(body.balanceUsd)}.`
-        : `Added ${usd(amountUsd)} to ${accountName(account)} — now ${usd(body.balanceUsd)}.`);
+        ? `Already credited — ${prettyAccountName(account)} is at ${usd(body.balanceUsd)}.`
+        : `Added ${usd(amountUsd)} to ${prettyAccountName(account)} — now ${usd(body.balanceUsd)}.`);
       setAmounts((prev) => ({ ...prev, [account.id]: "" }));
       await load();
     } catch {
@@ -205,17 +249,20 @@ export function HivemindOSManagementPanel() {
             return (
               <div key={account.id} style={{ border: "1px solid var(--border)", borderRadius: 12, padding: "14px 16px", background: "var(--bg-2, transparent)" }}>
                 <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "4px 12px" }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 14.5, fontWeight: 600 }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 15, fontWeight: 600 }}>
                     <Coins size={15} color={low ? "#f5a623" : "var(--live)"} />
-                    {accountName(account)}
+                    {prettyAccountName(account)}
                   </span>
-                  <code style={{ fontSize: 11, color: "var(--fg-3, var(--fg-2))" }}>{account.id}</code>
-                  <span style={{ fontSize: 11, color: "var(--fg-3, var(--fg-2))" }}>· {account.network} · {account.slug}</span>
                   <span style={{ marginLeft: "auto", fontSize: 18, fontWeight: 600, color: low ? "#f5a623" : "var(--fg)" }}>{usd(account.balanceUsd)}</span>
                 </div>
-                <div style={{ fontSize: 11.5, color: "var(--fg-2)", marginTop: 4 }}>
-                  credited {usd(account.totalCreditedUsd)} · debited {usd(account.totalDebitedUsd)}
+                <div style={{ fontSize: 12, color: "var(--fg-2)", marginTop: 3 }}>
+                  {accountKind(account)}
                   {low ? <span style={{ color: "#f5a623", fontWeight: 500 }}> · low balance</span> : null}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--fg-3, var(--fg-2))", marginTop: 3, display: "flex", flexWrap: "wrap", gap: "2px 10px", alignItems: "center" }}>
+                  <span>{networkLabel(account.network)}</span>
+                  <span>· credited {usd(account.totalCreditedUsd)} · debited {usd(account.totalDebitedUsd)}</span>
+                  <code style={{ opacity: 0.75 }}>· {account.id}</code>
                 </div>
                 <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center" }}>
                   <span style={{ fontSize: 13, color: "var(--fg-2)" }}>$</span>
