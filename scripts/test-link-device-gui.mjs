@@ -69,4 +69,11 @@ assert.match(workflow, /find release-assets[^\n]*HivemindOS-Link-\*/, "existing-
 assert.match(workflow, /gh release upload "\$target_release_tag"[\s\S]*--clobber/, "existing-release uploads should replace only the requested Link assets");
 assert.match(workflow, /name: Build updater manifest\s*\n\s*if: github\.event\.inputs\.link_release_tag == ''/, "Link-only attachment must not replace the Complete Hub updater manifest");
 
+const windowsSigningLogin = workflow.match(
+  /- name: Azure login for Windows signing[\s\S]*?(?=\n\s+- name: Sign Windows installers with Azure Artifact Signing)/,
+)?.[0] ?? "";
+assert.match(windowsSigningLogin, /allow-no-subscriptions:\s*true/, "Windows signing should permit tenant-only Azure login");
+assert.doesNotMatch(windowsSigningLogin, /subscription-id:/, "tenant-only Windows signing must not select an unavailable Azure subscription");
+assert.doesNotMatch(workflow, /AZURE_SUBSCRIPTION_ID/, "Windows signing should not require an unused subscription secret");
+
 console.log("HivemindOS Link GUI contract passed.");
