@@ -19,9 +19,14 @@ on:
         description: Notarize the macOS build with Apple ID credentials
         required: false
         default: "true"
+      link_release_tag:
+        description: Existing release tag to receive only HivemindOS Link assets (leave blank for a normal new release)
+        required: false
+        default: ""
 
 permissions:
   contents: write
+  id-token: write
 
 concurrency:
   group: tauri-cross-platform-release-${{ github.event.inputs.version }}
@@ -45,6 +50,7 @@ jobs:
         shell: bash
         env:
           RELEASE_VERSION: ${{ github.event.inputs.version }}
+          LINK_RELEASE_TAG: ${{ github.event.inputs.link_release_tag }}
         run: |
           set -euo pipefail
           release_tag="v${RELEASE_VERSION}"
@@ -52,9 +58,18 @@ jobs:
             echo "Release version must be semver like 0.4.1, got: $RELEASE_VERSION" >&2
             exit 1
           fi
-          if git ls-remote --exit-code --tags origin "refs/tags/${release_tag}" >/dev/null 2>&1; then
-            echo "Tag ${release_tag} already exists. Choose a new version." >&2
-            exit 1
+          if [ -n "${LINK_RELEASE_TAG:-}" ]; then
+            if ! [[ "$LINK_RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "Existing Link release tag must look like v0.4.5, got: $LINK_RELEASE_TAG" >&2
+              exit 1
+            fi
+            if ! git ls-remote --exit-code --tags origin "refs/tags/${LINK_RELEASE_TAG}" >/dev/null 2>&1; then
+              echo "Existing Link release tag does not exist: $LINK_RELEASE_TAG" >&2
+              exit 1
+            fi
+          elif git ls-remote --exit-code --tags origin "refs/tags/${release_tag}" >/dev/null 2>&1; then
+              echo "Tag ${release_tag} already exists. Choose a new version." >&2
+              exit 1
           fi
           echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
@@ -327,6 +342,27 @@ jobs:
           TAURI_NEXT_BUILD_TIMEOUT_SECONDS: "3600"
         run: pnpm tauri:build:release
 
+      - name: Build HivemindOS Link
+        if: runner.os != 'macOS' || github.event.inputs.notarize_macos == 'true'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ github.event.inputs.notarize_macos == 'true' && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ github.event.inputs.notarize_macos == 'true' && secrets.APPLE_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ github.event.inputs.notarize_macos == 'true' && secrets.APPLE_TEAM_ID || '' }}
+          CARGO_TARGET_DIR: src-tauri/target-link
+        run: pnpm tauri:build:link:release
+
+      - name: Build HivemindOS Link without macOS notarization
+        if: runner.os == 'macOS' && github.event.inputs.notarize_macos != 'true'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          CARGO_TARGET_DIR: src-tauri/target-link
+        run: pnpm tauri:build:link:release
+
       - name: Collect bundle assets
         shell: bash
         run: |
@@ -381,12 +417,142 @@ jobs:
                 ;;
             esac
           done
+          for item in \
+            src-tauri/target-link/release/bundle/dmg/*.dmg \
+            src-tauri/target-link/release/bundle/msi/*.msi \
+            src-tauri/target-link/release/bundle/nsis/*.exe \
+            src-tauri/target-link/release/bundle/appimage/*.AppImage \
+            src-tauri/target-link/release/bundle/deb/*.deb \
+            src-tauri/target-link/release/bundle/rpm/*.rpm; do
+            case "$(basename "$item")" in
+              *_aarch64.dmg)
+                cp "$item" release-assets/HivemindOS-Link-macos-apple-silicon.dmg
+                ;;
+              *_x64-setup.exe)
+                cp "$item" release-assets/HivemindOS-Link-windows-x64-setup.exe
+                ;;
+              *_x64_en-US.msi)
+                cp "$item" release-assets/HivemindOS-Link-windows-x64.msi
+                ;;
+              *_amd64.AppImage)
+                cp "$item" release-assets/HivemindOS-Link-linux-x64.AppImage
+                ;;
+              *_amd64.deb)
+                cp "$item" release-assets/HivemindOS-Link-linux-x64.deb
+                ;;
+              *-1.x86_64.rpm)
+                cp "$item" release-assets/HivemindOS-Link-linux-x64.rpm
+                ;;
+              *)
+                echo "Skipping non-release Link bundle asset: $item"
+                ;;
+            esac
+          done
           if [ -z "$(find release-assets -maxdepth 1 -type f -print -quit)" ]; then
             echo "No bundle assets found for ${{ matrix.label }}." >&2
             find src-tauri/target/release/bundle -maxdepth 4 -type f -print || true
             exit 1
           fi
+          if [ -z "$(find release-assets -maxdepth 1 -type f -name 'HivemindOS-Link-*' -print -quit)" ]; then
+            echo "No HivemindOS Link asset found for ${{ matrix.label }}." >&2
+            find src-tauri/target-link/release/bundle -maxdepth 4 -type f -print || true
+            exit 1
+          fi
           find release-assets -maxdepth 1 -type f -print
+
+      - name: Validate Windows signing configuration
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          AZURE_ARTIFACT_SIGNING_ENDPOINT: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          AZURE_ARTIFACT_SIGNING_ACCOUNT_NAME: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT_NAME }}
+          AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ vars.AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME }}
+        run: |
+          $required = @{
+            AZURE_CLIENT_ID = $env:AZURE_CLIENT_ID
+            AZURE_TENANT_ID = $env:AZURE_TENANT_ID
+            AZURE_SUBSCRIPTION_ID = $env:AZURE_SUBSCRIPTION_ID
+            AZURE_ARTIFACT_SIGNING_ENDPOINT = $env:AZURE_ARTIFACT_SIGNING_ENDPOINT
+            AZURE_ARTIFACT_SIGNING_ACCOUNT_NAME = $env:AZURE_ARTIFACT_SIGNING_ACCOUNT_NAME
+            AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME = $env:AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME
+          }
+          $missing = @(
+            $required.GetEnumerator() |
+              Where-Object { [string]::IsNullOrWhiteSpace([string]$_.Value) } |
+              ForEach-Object { $_.Key }
+          )
+          if ($missing.Count -gt 0) {
+            throw "Windows release signing is not configured. Missing GitHub secrets/variables: $($missing -join ', ')"
+          }
+
+      - name: Azure login for Windows signing
+        if: runner.os == 'Windows'
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Sign Windows installers with Azure Artifact Signing
+        if: runner.os == 'Windows'
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_ARTIFACT_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ vars.AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME }}
+          files-folder: ${{ github.workspace }}\release-assets
+          files-folder-filter: exe,msi
+          files-folder-recurse: false
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: HivemindOS
+          description-url: https://hivemindos.com
+
+      # Authenticode changes the EXE bytes after Tauri created its detached
+      # updater signature, so regenerate that signature before latest.json is built.
+      - name: Regenerate Tauri signature for signed Windows updater
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
+        run: |
+          $installer = Join-Path $env:GITHUB_WORKSPACE "release-assets\HivemindOS-windows-x64-setup.exe"
+          $signature = "$installer.sig"
+          if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) {
+            throw "Missing Windows updater installer: $installer"
+          }
+          Remove-Item -LiteralPath $signature -Force -ErrorAction SilentlyContinue
+          pnpm tauri signer sign $installer
+          if ($LASTEXITCODE -ne 0) {
+            throw "Tauri updater signing failed with exit code $LASTEXITCODE"
+          }
+          if (-not (Test-Path -LiteralPath $signature -PathType Leaf) -or (Get-Item -LiteralPath $signature).Length -eq 0) {
+            throw "Tauri updater signature was not regenerated: $signature"
+          }
+
+      - name: Verify Windows Authenticode signatures
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installers = @(
+            Get-ChildItem -LiteralPath "release-assets" -File |
+              Where-Object { $_.Extension -in ".exe", ".msi" }
+          )
+          if ($installers.Count -eq 0) {
+            throw "No Windows EXE or MSI release assets were found to verify."
+          }
+          foreach ($installer in $installers) {
+            $signature = Get-AuthenticodeSignature -LiteralPath $installer.FullName
+            if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid) {
+              throw "Invalid Authenticode signature for $($installer.Name): $($signature.Status) $($signature.StatusMessage)"
+            }
+            Write-Host "$($installer.Name) signed by $($signature.SignerCertificate.Subject)"
+          }
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -416,6 +582,7 @@ jobs:
           merge-multiple: true
 
       - name: Build updater manifest
+        if: github.event.inputs.link_release_tag == ''
         env:
           RELEASE_VERSION: ${{ github.event.inputs.version }}
           REPOSITORY: ${{ github.repository }}
@@ -430,6 +597,7 @@ jobs:
           cat release-assets/latest.json
 
       - name: Create tag and publish release
+        if: github.event.inputs.link_release_tag == ''
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_VERSION: ${{ github.event.inputs.version }}
@@ -477,3 +645,23 @@ jobs:
             --title "$release_tag" \
             "${prerelease_flag[@]}" \
             --generate-notes
+
+      - name: Attach HivemindOS Link assets to existing release
+        if: github.event.inputs.link_release_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          TARGET_RELEASE_TAG: ${{ github.event.inputs.link_release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          target_release_tag="$TARGET_RELEASE_TAG"
+          gh release view "$target_release_tag" --repo "$REPOSITORY" >/dev/null
+          mapfile -t link_assets < <(find release-assets -maxdepth 1 -type f -name 'HivemindOS-Link-*' -print | sort)
+          if [ "${#link_assets[@]}" -eq 0 ]; then
+            echo "No HivemindOS Link assets were built." >&2
+            exit 1
+          fi
+          gh release upload "$target_release_tag" "${link_assets[@]}" \
+            --repo "$REPOSITORY" \
+            --clobber

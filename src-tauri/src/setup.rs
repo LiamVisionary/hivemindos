@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpStream};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -41,6 +41,17 @@ struct NativeSetupStatus {
     platform: &'static str,
     checks: Vec<SetupCheck>,
     detected_agents: Vec<DetectedAgentRuntime>,
+    link_status: NativeLinkStatus,
+}
+
+#[derive(Serialize)]
+struct NativeLinkStatus {
+    running: bool,
+    connected: bool,
+    auth_needed: bool,
+    auth_url: Option<String>,
+    backend_state: Option<String>,
+    device_name: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -265,6 +276,105 @@ fn open_local_collector_port() -> Option<u16> {
         .find(|port| tcp_port_open(*port))
 }
 
+fn link_control_address() -> Option<(String, u16)> {
+    let raw = std::env::var("HIVE_LINK_CONTROL")
+        .ok()
+        .or_else(|| collector_env_value("HIVE_LINK_CONTROL"))
+        .unwrap_or_else(|| "127.0.0.1:8788".to_string());
+    let authority = raw
+        .trim()
+        .trim_start_matches("http://")
+        .trim_start_matches("https://")
+        .split('/')
+        .next()?;
+    let (host, port) = authority.rsplit_once(':')?;
+    if !matches!(host, "127.0.0.1" | "localhost" | "[::1]") {
+        return None;
+    }
+    let host = match host {
+        "localhost" => "127.0.0.1",
+        "[::1]" => "::1",
+        value => value,
+    };
+    Some((host.to_string(), port.parse().ok()?))
+}
+
+fn safe_link_auth_url(value: Option<&str>) -> Option<String> {
+    let value = value?.trim();
+    if value.len() > 4_096 {
+        return None;
+    }
+    let parsed = url::Url::parse(value).ok()?;
+    if !matches!(parsed.scheme(), "https" | "http") {
+        return None;
+    }
+    Some(value.to_string())
+}
+
+fn read_native_link_status() -> NativeLinkStatus {
+    let empty = || NativeLinkStatus {
+        running: false,
+        connected: false,
+        auth_needed: false,
+        auth_url: None,
+        backend_state: None,
+        device_name: None,
+    };
+    let Some((host, port)) = link_control_address() else {
+        return empty();
+    };
+    let socket = if host.contains(':') {
+        format!("[{host}]:{port}")
+    } else {
+        format!("{host}:{port}")
+    };
+    let Ok(address) = socket.parse::<SocketAddr>() else {
+        return empty();
+    };
+    let Ok(mut stream) = TcpStream::connect_timeout(&address, Duration::from_millis(350)) else {
+        return empty();
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(650)));
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(350)));
+    if stream
+        .write_all(format!("GET /status HTTP/1.0\r\nHost: {host}\r\nConnection: close\r\n\r\n").as_bytes())
+        .is_err()
+    {
+        return empty();
+    }
+    let mut response = String::new();
+    if stream.read_to_string(&mut response).is_err() {
+        return empty();
+    }
+    let Some(body) = response.split_once("\r\n\r\n").map(|(_, body)| body) else {
+        return empty();
+    };
+    let Ok(payload) = serde_json::from_str::<serde_json::Value>(body.trim()) else {
+        return empty();
+    };
+    let connected = payload.get("ok").and_then(serde_json::Value::as_bool).unwrap_or(false);
+    let auth_url = safe_link_auth_url(payload.get("authUrl").and_then(serde_json::Value::as_str));
+    let backend_state = payload
+        .get("backendState")
+        .and_then(serde_json::Value::as_str)
+        .map(ToString::to_string);
+    let device_name = payload.get("self").and_then(|value| {
+        ["DNSName", "HostName", "dnsName", "hostName"]
+            .into_iter()
+            .find_map(|key| value.get(key).and_then(serde_json::Value::as_str))
+            .map(|value| value.trim_end_matches('.').to_string())
+    });
+    NativeLinkStatus {
+        running: true,
+        connected,
+        auth_needed: auth_url.is_some()
+            || payload.get("authNeeded").and_then(serde_json::Value::as_bool).unwrap_or(false),
+        auth_url,
+        backend_state,
+        device_name,
+    }
+}
+
 fn runtime_home(agent: &str) -> Option<PathBuf> {
     home_dir().map(|home| match agent {
         "codex" => home.join(".codex"),
@@ -336,6 +446,7 @@ fn setup_mode_arg(mode: &str) -> &'static str {
     match mode {
         "system-tailscale" => "--system-tailscale",
         "link" => "--link",
+        "collector" => "--collector-only",
         _ => "--local-only",
     }
 }
@@ -501,6 +612,7 @@ pub(crate) fn native_setup_status() -> Result<serde_json::Value, String> {
         setup_script_path: setup_script.as_ref().map(|path| path.display().to_string()),
         platform: std::env::consts::OS,
         detected_agents: detected_agent_runtimes(),
+        link_status: read_native_link_status(),
         checks: vec![
             SetupCheck {
                 id: "app",
@@ -595,7 +707,13 @@ pub(crate) fn native_setup_status() -> Result<serde_json::Value, String> {
 }
 
 fn build_setup_invocation(request: NativeSetupRunRequest, platform: SetupPlatform) -> (String, String) {
-    let mode = request.install_mode.unwrap_or_else(|| "local".to_string());
+    let mode = match request.install_mode.as_deref() {
+        Some("collector") => "collector",
+        Some("link") => "link",
+        Some("system-tailscale") => "system-tailscale",
+        _ => "local",
+    }
+    .to_string();
     let skill_agents = sanitize_agent_list(request.skill_agents);
     let memory_agents = sanitize_agent_list(request.memory_agents);
     let import_skills = request.import_skills.unwrap_or(true);
@@ -612,11 +730,15 @@ fn build_setup_invocation(request: NativeSetupRunRequest, platform: SetupPlatfor
     };
 
     if platform == SetupPlatform::Windows {
-        // setup.ps1 takes a smaller flag surface than setup.sh: it has no
-        // network-mode flags (it detects Tailscale itself), no collector
-        // install, and handles vault/skills seeding internally, so the mode
-        // and import selections have no Windows equivalents to forward.
+        // setup.ps1 takes a smaller flag surface than setup.sh and handles
+        // vault/skills seeding internally. Collector mode is the exception:
+        // it must be forwarded explicitly so a Link download can never install
+        // or start a second dashboard.
         let mut flags = Vec::new();
+        if mode == "collector" {
+            flags.push("-CollectorOnly");
+            flags.push("-NonInteractive");
+        }
         if !request.start_dashboard.unwrap_or(true) {
             flags.push("-SkipDashboard");
         }
@@ -635,6 +757,20 @@ fn build_setup_invocation(request: NativeSetupRunRequest, platform: SetupPlatfor
         let command = format!(
             "{root}\r\nwhere pwsh >nul 2>&1 && (set \"HIVE_PS=pwsh\") || (set \"HIVE_PS=powershell\")\r\n%HIVE_PS% -ExecutionPolicy Bypass -File setup.ps1 {flags}",
             root = setup_root_command(platform),
+        );
+        return (mode, command);
+    }
+
+    if mode == "collector" {
+        let mut args = vec![setup_mode_arg(&mode).to_string()];
+        if request.force.unwrap_or(false) {
+            args.push("--force".to_string());
+        }
+        let quoted_args = args.iter().map(|arg| shell_quote(arg)).collect::<Vec<_>>().join(" ");
+        let command = format!(
+            "{root}\n./setup.sh {args}",
+            root = setup_root_command(platform),
+            args = quoted_args,
         );
         return (mode, command);
     }
@@ -890,6 +1026,35 @@ mod tests {
     }
 
     #[test]
+    fn collector_mode_is_dashboard_free_on_unix_and_windows() {
+        let request = || NativeSetupRunRequest {
+            install_mode: Some("collector".to_string()),
+            skill_agents: None,
+            memory_agents: None,
+            import_skills: None,
+            import_memory: None,
+            start_dashboard: Some(false),
+            install_collector: Some(true),
+            build_dashboard: Some(false),
+            install_deps: Some(false),
+            force: Some(false),
+        };
+        let (unix_mode, unix) = build_setup_invocation(request(), SetupPlatform::Unix);
+        assert_eq!(unix_mode, "collector");
+        assert!(unix.contains("'--collector-only'"));
+        assert!(!unix.contains("--import-skills"));
+        assert!(!unix.contains("import-agent-memory"));
+
+        let (windows_mode, windows) = build_setup_invocation(request(), SetupPlatform::Windows);
+        assert_eq!(windows_mode, "collector");
+        let ps_flags = windows.rsplit("-File setup.ps1").next().unwrap();
+        assert!(ps_flags.contains("-CollectorOnly"));
+        assert!(ps_flags.contains("-NonInteractive"));
+        assert!(ps_flags.contains("-SkipDashboard"));
+        assert!(ps_flags.contains("-SkipBuild"));
+    }
+
+    #[test]
     fn launcher_files_stream_hidden_setup_and_preserve_windows_exit_code() {
         let content = launcher_file_content("echo hi", SetupPlatform::Windows);
         assert!(content.starts_with("@echo off\r\n"));
@@ -954,6 +1119,7 @@ mod tests {
         assert_eq!(setup_mode_arg("local"), "--local-only");
         assert_eq!(setup_mode_arg("system-tailscale"), "--system-tailscale");
         assert_eq!(setup_mode_arg("link"), "--link");
+        assert_eq!(setup_mode_arg("collector"), "--collector-only");
         assert_eq!(setup_mode_arg("anything-else"), "--local-only");
     }
 }

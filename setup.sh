@@ -680,6 +680,30 @@ tailscale_auth_url_from_output() {
   awk '/https:\/\/login\.tailscale\.com\/a\// { print $1; exit }'
 }
 
+copy_hivemind_auth_url_to_clipboard() {
+  local auth_url="$1"
+  if command -v pbcopy >/dev/null 2>&1; then
+    printf "%s" "$auth_url" | pbcopy
+  elif command -v wl-copy >/dev/null 2>&1; then
+    printf "%s" "$auth_url" | wl-copy
+  elif command -v xclip >/dev/null 2>&1; then
+    printf "%s" "$auth_url" | xclip -selection clipboard
+  else
+    return 1
+  fi
+}
+
+print_hivemind_fleet_auth_instructions() {
+  local auth_url="$1"
+  echo "1. Open this URL on your main HivemindOS hub, or on any device signed into the same Tailscale account as that hub:"
+  printf "  %s\n" "$auth_url"
+  if copy_hivemind_auth_url_to_clipboard "$auth_url"; then
+    echo "   The URL was copied to this machine's clipboard."
+  fi
+  echo "2. Approve this machine in Tailscale."
+  echo "3. Return to the Hive Fleet on the main hub. This machine will appear automatically after the connection is ready."
+}
+
 wait_for_tailscale_running() {
   local formula_cli="$1"
   local seconds="${2:-180}"
@@ -741,7 +765,7 @@ connect_existing_tailscale_cli() {
   auth_url="$(printf "%s\n" "$output" | tailscale_auth_url_from_output)"
   if [[ -n "$auth_url" ]]; then
     warn "Tailscale sign-in required."
-    printf "Open this URL on any device to sign in:\n  %s\n" "$auth_url"
+    print_hivemind_fleet_auth_instructions "$auth_url"
     wait_for_tailscale_auth_confirmation
     if wait_for_tailscale_running "$cli" 180; then
       return 0
@@ -763,7 +787,7 @@ connect_homebrew_tailscaled() {
   auth_url="$(printf "%s\n" "$output" | tailscale_auth_url_from_output)"
   if [[ -n "$auth_url" ]]; then
     warn "Tailscale sign-in required."
-    printf "Open this URL on any device to sign in:\n  %s\n" "$auth_url"
+    print_hivemind_fleet_auth_instructions "$auth_url"
     wait_for_tailscale_auth_confirmation
     if wait_for_tailscale_running "$formula_cli" 180; then
       return 0
@@ -2375,9 +2399,9 @@ echo "  GitLawb node: lazy; not started by setup"
 echo
 if [[ "$hivemind_link_enabled" == "true" ]]; then
   echo "On other machines that run agents, clone the repo and run:"
-  echo "  HIVE_LINK_ENABLED=true ./scripts/install-telemetry-collector.sh"
+  echo "  ./setup.sh --collector-only"
   echo
-  echo "Each machine links to your own Tailscale account through the embedded Hivemind Link node. The dashboard discovers Link peers through the local sidecar."
+  echo "Setup will ask you to authorize each collector from your main HivemindOS hub using the same Tailscale account. The Hive Fleet discovers approved Link peers automatically."
 elif [[ "$tailnet_sync_enabled" == "true" ]]; then
   echo "On other Tailscale machines that run agents, clone the repo and run only:"
   echo "  ./scripts/install-telemetry-collector.sh"

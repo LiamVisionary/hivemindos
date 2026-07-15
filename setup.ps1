@@ -3,6 +3,10 @@
   [switch]$SkipDeps,
   [switch]$SkipBuild,
   [switch]$SkipDashboard,
+  [switch]$CollectorOnly,
+  [switch]$Full,
+  [ValidateSet("link", "system-tailscale", "local")]
+  [string]$NetworkMode = "",
   [switch]$Force,
   [int]$Port = 0,
   [int]$CollectorPort = 0
@@ -95,6 +99,47 @@ Set-Location $Root
 $Missing = New-Object System.Collections.Generic.List[string]
 if ($Port -eq 0) { $Port = if ($env:PORT) { [int]$env:PORT } else { 5020 } }
 if ($CollectorPort -eq 0) { $CollectorPort = if ($env:AGENT_TELEMETRY_PORT) { [int]$env:AGENT_TELEMETRY_PORT } else { 8787 } }
+
+if ($CollectorOnly -and $Full) {
+  throw "Choose either -CollectorOnly or -Full, not both."
+}
+$existingCollectorEnv = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".hivemindos\collector.env"
+$collectorOnlyMode = $false
+if ($CollectorOnly) {
+  $collectorOnlyMode = $true
+} elseif (-not $Full) {
+  if ($env:HIVE_COLLECTOR_ONLY -match '^(1|true|yes)$') {
+    $collectorOnlyMode = $true
+  } else {
+    if (Test-Path $existingCollectorEnv) {
+      $stickyCollectorMode = Select-String -Path $existingCollectorEnv -Pattern '^HIVE_COLLECTOR_ONLY=(1|true|yes)$' -Quiet
+      $collectorOnlyMode = [bool]$stickyCollectorMode
+    }
+  }
+}
+if ($collectorOnlyMode) {
+  $SkipDeps = $true
+  $SkipBuild = $true
+  $SkipDashboard = $true
+}
+$env:HIVE_COLLECTOR_ONLY = $collectorOnlyMode.ToString().ToLowerInvariant()
+
+$resolvedNetworkMode = if ($NetworkMode) {
+  $NetworkMode
+} elseif ($env:HIVE_NETWORK_MODE) {
+  $env:HIVE_NETWORK_MODE.Trim().ToLowerInvariant()
+} elseif ($env:HIVE_LINK_ENABLED -eq "true") {
+  "link"
+} elseif ($env:HIVE_LINK_ENABLED -eq "false") {
+  "system-tailscale"
+} elseif ((Test-Path $existingCollectorEnv) -and (Select-String -Path $existingCollectorEnv -Pattern '^HIVE_LINK_CONTROL=' -Quiet)) {
+  "link"
+} elseif ($collectorOnlyMode) { "link" } else { "system-tailscale" }
+if (@("link", "system-tailscale", "local") -notcontains $resolvedNetworkMode) {
+  throw "Unknown network mode '$resolvedNetworkMode'. Choose link, system-tailscale, or local."
+}
+$env:HIVE_NETWORK_MODE = $resolvedNetworkMode
+$env:HIVE_LINK_ENABLED = ($resolvedNetworkMode -eq "link").ToString().ToLowerInvariant()
 
 function Info($Message) { Write-Host $Message -ForegroundColor Cyan }
 function Ok($Message) { Write-Host "✓ $Message" -ForegroundColor Green }
@@ -238,7 +283,8 @@ function Ensure-Tailscale {
       return $true
     }
     Warn "Tailscale is installed but not connected"
-    Warn "Hivemind Sync is disabled until you open Tailscale and sign in, or run: tailscale up"
+    Warn "Open Tailscale and sign in with the same Tailscale account as your main HivemindOS hub, or run: tailscale up"
+    Warn "After sign-in, return to the Hive Fleet on the main hub; this machine will appear automatically."
     return $false
   }
   if (Ask-YesNo "Tailscale is missing. Install it for Hivemind Sync between machines?" $true) {
@@ -247,7 +293,8 @@ function Ensure-Tailscale {
   }
   if (Test-Command tailscale) {
     Warn "Tailscale is installed but not connected"
-    Warn "Open Tailscale and sign in, or run: tailscale up"
+    Warn "Open Tailscale and sign in with the same Tailscale account as your main HivemindOS hub, or run: tailscale up"
+    Warn "After sign-in, return to the Hive Fleet on the main hub; this machine will appear automatically."
   } else {
     Warn "Tailscale is optional and not installed."
     Warn "Hivemind Sync is disabled. Local-only dashboard, agents, and local vault features will still work."
@@ -595,6 +642,16 @@ function Get-HashForFiles($Files) {
 }
 
 Info "HivemindOS Windows setup"
+if ($collectorOnlyMode) {
+  Info "Collector-only mode: installing the agent bridge without the dashboard (use -Full to change)"
+}
+if ($resolvedNetworkMode -eq "link") {
+  Info "Network mode: Hivemind Link (private Fleet connection; authorize it from your main hub when prompted)"
+} elseif ($resolvedNetworkMode -eq "system-tailscale") {
+  Info "Network mode: system Tailscale"
+} else {
+  Info "Network mode: local only"
+}
 
 Ensure-Node
 $needsPnpm = (-not $SkipDeps) -or (-not $SkipBuild) -or (-not $SkipDashboard)
@@ -603,8 +660,15 @@ if ($needsPnpm) {
 } else {
   Ok "Skipping pnpm setup; no workspace install, build, or dev dashboard requested"
 }
-$tailnetSyncEnabled = Ensure-Tailscale
-Ensure-Syncthing $tailnetSyncEnabled
+$tailnetSyncEnabled = $false
+if ($resolvedNetworkMode -eq "system-tailscale") {
+  $tailnetSyncEnabled = Ensure-Tailscale
+  Ensure-Syncthing $tailnetSyncEnabled
+} elseif ($resolvedNetworkMode -eq "link") {
+  Ok "Skipping the system Tailscale and Syncthing prompts; Hivemind Link carries private Fleet traffic."
+} else {
+  Warn "Skipping multi-machine networking in local-only mode."
+}
 Ensure-Unison
 Ensure-Obsidian
 Ensure-Gpg
@@ -1149,16 +1213,15 @@ Write-Host "Collector:"
 # failure here as setup failure so app-driven first-run can stop and offer a
 # retry instead of showing a finished-but-still-working modal.
 #
-# Hivemind Link gating mirrors setup.sh, which passes HIVE_LINK_ENABLED to the
-# Unix installer based on the network mode. Windows v1 is opt-in (Unix defaults
-# to "link"): pass -EnableLink when HIVE_LINK_ENABLED=true or HIVE_NETWORK_MODE
-# is explicitly "link". $env:HIVE_LINK_ENABLED also reaches the installer
-# directly (it runs in-process); the explicit switch just makes the gate
-# legible and adds the HIVE_NETWORK_MODE spelling for parity with setup.sh.
+# Hivemind Link gating mirrors setup.sh. Collector-only Windows setup defaults
+# to Link, explicit -NetworkMode values can select system Tailscale or local
+# operation, and existing Link installs remain sticky through collector.env.
 $collectorInstallFailed = $false
 try {
   $collectorArgs = @{ Port = $CollectorPort; RepoRoot = $Root }
-  if ($env:HIVE_LINK_ENABLED -eq "true" -or $env:HIVE_NETWORK_MODE -eq "link") {
+  if ($collectorOnlyMode) { $collectorArgs.CollectorOnly = $true }
+  if ($Full) { $collectorArgs.Full = $true }
+  if ($resolvedNetworkMode -eq "link") {
     $collectorArgs.EnableLink = $true
   }
   & (Join-Path $Root "scripts\install-telemetry-collector.ps1") @collectorArgs
@@ -1176,7 +1239,9 @@ if (Test-Command gl) {
 }
 Write-Host "  GitLawb node: lazy; not started by setup"
 Write-Host ""
-if ($tailnetSyncEnabled) {
+if ($resolvedNetworkMode -eq "link") {
+  Write-Host "Hivemind Link is installed. Complete the printed authorization step, then return to the Hive Fleet on the main hub."
+} elseif ($tailnetSyncEnabled) {
   Write-Host "Tailscale is connected. Hivemind Sync can move shared brain folders, shared env, and handoff transfers between machines."
 } else {
   Write-Host "Local-only mode is ready. Install and log in to Tailscale later to enable Hivemind Sync."

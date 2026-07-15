@@ -13,8 +13,8 @@ the landing page.)
   GitHub's `/releases/latest/` redirect resolves to the newest **non-prerelease**
   release, so publishing a new Latest release is picked up automatically — no
   per-release link edits.
-- In the landing repo the base URL is defined once (`src/app/page.tsx`, ~line 10)
-  and reused for every card.
+- In the landing repo the base URL and both download families live in
+  `src/app/film/download-deck.tsx` and are reused by every card.
 - Header/footer "Download" links are `#download` in-page anchors. The
   "release notes" button points at `/releases/latest` (the page, **not**
   `/download/`), which is correct for notes.
@@ -42,6 +42,21 @@ Updater bundles + signatures (consumed by the updater, not the landing page):
 `HivemindOS-windows-x64-setup.exe.sig`, `HivemindOS-linux-x64.AppImage.sig`,
 and `latest.json`.
 
+HivemindOS Link is a separate collector-only app and does **not** participate in
+the Complete Hub auto-updater. Its landing-page filenames are still a stable
+release contract:
+
+| Platform | HivemindOS Link asset(s) |
+| --- | --- |
+| macOS Apple Silicon | `HivemindOS-Link-macos-apple-silicon.dmg` |
+| Windows | `HivemindOS-Link-windows-x64-setup.exe`, `HivemindOS-Link-windows-x64.msi` |
+| Linux | `HivemindOS-Link-linux-x64.AppImage`, `HivemindOS-Link-linux-x64.deb`, `HivemindOS-Link-linux-x64.rpm` |
+
+The public chooser links directly to the DMG, EXE, and AppImage. Alternate Link
+packages remain available on the Latest release page. Terminal and source setup
+are fallback paths inside the collapsed **Advanced setup** disclosure, not the
+consumer download path.
+
 ## Auto-update channel
 
 The desktop updater endpoint is `releases/latest/download/latest.json`
@@ -53,7 +68,13 @@ without `--prerelease` makes it Latest and triggers fleet-wide auto-update.
 
 ## When you add, rename, or drop a platform/asset
 
-Change all three in the same commit, or downloads/updates break:
+For a Complete Hub updater asset, change all three in the same commit, or
+downloads/updates break:
 1. the workflow's **Collect bundle assets** step (stable name),
 2. `scripts/build-updater-manifest.mjs` (`PLATFORM_ASSETS`),
 3. the landing repo's download-card list.
+
+For a collector-only Link asset, update the workflow, the landing download-card
+list, and `scripts/test-link-device-gui.mjs`. Do not add it to
+`PLATFORM_ASSETS`; Link intentionally has no authority over the Complete Hub
+updater channel.

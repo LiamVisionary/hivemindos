@@ -1648,8 +1648,7 @@ fn retry_native_server(app: tauri::AppHandle) -> serde_json::Value {
     }
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
+pub fn run(context: tauri::Context<tauri::Wry>) {
     install_native_panic_logger();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -1810,7 +1809,7 @@ pub fn run() {
             speech::speech_recognition_start,
             speech::speech_recognition_stop
         ])
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building HivemindOS desktop")
         .run(|app_handle, event| {
             guard_native_callback("app run event", || match event {
@@ -1827,4 +1826,20 @@ pub fn run() {
                 _ => {}
             });
         });
+}
+
+/// Lightweight collector-only setup application distributed as HivemindOS
+/// Link. It intentionally registers only the two setup commands: the Link app
+/// cannot start the dashboard or access any of its data surfaces.
+pub fn run_link(context: tauri::Context<tauri::Wry>) {
+    install_native_panic_logger();
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .invoke_handler(tauri::generate_handler![
+            setup::native_setup_run,
+            setup::native_setup_status,
+        ])
+        .build(context)
+        .expect("error while building HivemindOS Link")
+        .run(|_, _| {});
 }

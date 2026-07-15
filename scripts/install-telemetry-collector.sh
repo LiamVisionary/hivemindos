@@ -401,6 +401,30 @@ tailscale_auth_url_from_output() {
   awk '/https:\/\/login\.tailscale\.com\/a\// { print $1; exit }'
 }
 
+copy_hivemind_auth_url_to_clipboard() {
+  local auth_url="$1"
+  if command -v pbcopy >/dev/null 2>&1; then
+    printf "%s" "$auth_url" | pbcopy
+  elif command -v wl-copy >/dev/null 2>&1; then
+    printf "%s" "$auth_url" | wl-copy
+  elif command -v xclip >/dev/null 2>&1; then
+    printf "%s" "$auth_url" | xclip -selection clipboard
+  else
+    return 1
+  fi
+}
+
+print_hivemind_fleet_auth_instructions() {
+  local auth_url="$1"
+  echo "1. Open this URL on your main HivemindOS hub, or on any device signed into the same Tailscale account as that hub:"
+  printf "  %s\n" "$auth_url"
+  if copy_hivemind_auth_url_to_clipboard "$auth_url"; then
+    echo "   The URL was copied to this machine's clipboard."
+  fi
+  echo "2. Approve this collector in Tailscale."
+  echo "3. Return to the Hive Fleet on the main hub. This machine will appear automatically after the connection is ready."
+}
+
 wait_for_tailscale_running() {
   local formula_cli="$1"
   local seconds="${2:-180}"
@@ -448,7 +472,7 @@ connect_homebrew_tailscaled() {
   auth_url="$(printf "%s\n" "$output" | tailscale_auth_url_from_output)"
   if [[ -n "$auth_url" ]]; then
     echo "Tailscale sign-in required."
-    printf "Open this URL on any device to sign in:\n  %s\n" "$auth_url"
+    print_hivemind_fleet_auth_instructions "$auth_url"
     wait_for_tailscale_auth_confirmation
     if wait_for_tailscale_running "$formula_cli" 180; then
       return 0
@@ -1230,7 +1254,9 @@ LINK_ACTIVE="false"
 if build_hivemind_linkd_if_enabled; then
   LINK_ACTIVE="true"
 elif [[ "$LINK_ENABLED" == "true" ]]; then
-  echo "Hivemind Link was requested but could not be built; falling back to the normal collector network mode." >&2
+  echo "Hivemind Link was requested but could not be built. The collector was not exposed on a less-protected fallback network." >&2
+  echo "Install the reported prerequisite and rerun setup." >&2
+  exit 1
 fi
 
 TAILNET_SYNC_ENABLED="false"
@@ -1610,9 +1636,8 @@ if [[ "$LINK_ACTIVE" == "true" ]]; then
     fi
 
     if [[ -n "$LINK_AUTH_URL" ]]; then
-      echo "Hivemind Link sign-in required."
-      echo "Open this URL on any device to connect this Mac to your Tailscale account:"
-      echo "  $LINK_AUTH_URL"
+      echo "Hivemind Link authorization is required once for this collector."
+      print_hivemind_fleet_auth_instructions "$LINK_AUTH_URL"
       if wait_for_hivemind_link_auth_confirmation; then
         auth_wait_result=0
       else

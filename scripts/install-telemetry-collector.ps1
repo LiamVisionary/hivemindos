@@ -38,9 +38,13 @@ param(
   # themselves or run headless).
   [switch]$NoStart,
   # Install the Hivemind Link tsnet sidecar (Windows analog of running the Unix
-  # installer with HIVE_LINK_ENABLED=true). Also enabled by
-  # $env:HIVE_LINK_ENABLED = "true" or sticky via collector.env.
-  [switch]$EnableLink
+  # installer with HIVE_LINK_ENABLED=true). Also enabled by collector-only
+  # mode, $env:HIVE_LINK_ENABLED = "true", or sticky collector.env state.
+  [switch]$EnableLink,
+  # Persist this machine as an agent-bridge-only node. A later installer run
+  # keeps the mode until -Full is passed.
+  [switch]$CollectorOnly,
+  [switch]$Full
 )
 
 $ErrorActionPreference = "Stop"
@@ -91,13 +95,26 @@ $cmdFile  = Join-Path $hiveDir "run-collector.cmd"
 $launcherFile = Join-Path $hiveDir "run-collector-hidden.ps1"
 $legacyVbsFile = Join-Path $hiveDir "run-collector-hidden.vbs"
 
+if ($CollectorOnly -and $Full) {
+  throw "Choose either -CollectorOnly or -Full, not both."
+}
+$collectorOnlyMode = $false
+if ($CollectorOnly) {
+  $collectorOnlyMode = $true
+} elseif (-not $Full) {
+  if ($env:HIVE_COLLECTOR_ONLY -match '^(1|true|yes)$') {
+    $collectorOnlyMode = $true
+  } elseif (Test-Path $envFile) {
+    $collectorOnlyMode = [bool](Select-String -Path $envFile -Pattern '^HIVE_COLLECTOR_ONLY=(1|true|yes)$' -Quiet)
+  }
+}
+$collectorOnlyValue = $collectorOnlyMode.ToString().ToLowerInvariant()
+
 # --- Hivemind Link (optional): embedded tsnet Tailscale sidecar -------------
-# Windows analog of the Unix installer's HIVE_LINK_* wiring. Opt-in on Windows
-# for v1 (Unix setup defaults its network mode to "link"): enabled by
-# $env:HIVE_LINK_ENABLED = "true", the -EnableLink switch, or sticky via an
-# existing HIVE_LINK_CONTROL line in collector.env (written whenever a run
-# requested Link). An explicit HIVE_LINK_ENABLED beats stickiness, mirroring
-# the Unix precedence.
+# Windows analog of the Unix installer's HIVE_LINK_* wiring. Collector-only
+# mode defaults to Link; -EnableLink, HIVE_LINK_ENABLED, HIVE_NETWORK_MODE, and
+# sticky HIVE_LINK_CONTROL state provide explicit and repeat-run control. An
+# explicit HIVE_LINK_ENABLED beats stickiness, mirroring Unix precedence.
 $linkTaskName = "HivemindOS Link"
 $linkBinDir   = Join-Path $hiveDir "bin"
 $linkBin      = Join-Path $linkBinDir "hivemind-linkd.exe"
@@ -121,8 +138,46 @@ if ($EnableLink) {
   $linkRequested = $true
 } elseif ($env:HIVE_LINK_ENABLED) {
   $linkRequested = ($env:HIVE_LINK_ENABLED -eq "true")
-} elseif (Test-Path $envFile) {
-  $linkRequested = [bool](Select-String -Path $envFile -Pattern '^HIVE_LINK_CONTROL=' -Quiet)
+} elseif ($env:HIVE_NETWORK_MODE) {
+  $linkRequested = ($env:HIVE_NETWORK_MODE -eq "link")
+} elseif ((Test-Path $envFile) -and (Select-String -Path $envFile -Pattern '^HIVE_LINK_CONTROL=' -Quiet)) {
+  $linkRequested = $true
+} elseif ($collectorOnlyMode) {
+  $linkRequested = $true
+}
+
+function Refresh-HivemindInstallerPath {
+  $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+  $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+  $env:Path = @($machinePath, $userPath, $env:Path) -join ";"
+}
+
+function Resolve-HivemindGoCommand {
+  Refresh-HivemindInstallerPath
+  $command = Get-Command go -ErrorAction SilentlyContinue
+  if ($command) { return $command.Source }
+  $candidates = @()
+  if ($env:ProgramFiles) { $candidates += (Join-Path $env:ProgramFiles "Go\bin\go.exe") }
+  if ($env:LOCALAPPDATA) { $candidates += (Join-Path $env:LOCALAPPDATA "Programs\Go\bin\go.exe") }
+  foreach ($candidate in $candidates) {
+    if ($candidate -and (Test-Path $candidate)) { return $candidate }
+  }
+  return $null
+}
+
+function Ensure-HivemindLinkGo {
+  $goPath = Resolve-HivemindGoCommand
+  if ($goPath) { return $goPath }
+  if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+    throw "Hivemind Link requires Go. Install it with 'winget install --id GoLang.Go --exact', then rerun collector setup."
+  }
+  Write-Host "Installing Go for Hivemind Link..."
+  winget install --id GoLang.Go --exact --accept-package-agreements --accept-source-agreements | Out-Host
+  $goPath = Resolve-HivemindGoCommand
+  if (-not $goPath) {
+    throw "Hivemind Link requires Go, but Go was not available after winget setup. Reopen PowerShell and rerun collector setup."
+  }
+  return $goPath
 }
 
 # Control API address: env wins, then the sticky collector.env value, then the
@@ -140,12 +195,10 @@ if ($env:HIVE_LINK_CONTROL) {
 
 $linkActive = $false
 if ($linkRequested) {
-  $goCmd = Get-Command go -ErrorAction SilentlyContinue
+  $goPath = Ensure-HivemindLinkGo
   $linkSource = Join-Path $RepoRoot "cmd\hivemind-linkd\main.go"
-  if (-not $goCmd) {
-    Write-Warning "Hivemind Link was requested but Go is not on PATH; skipping the Link sidecar (the collector install continues). Install Go (winget install GoLang.Go), then rerun this installer."
-  } elseif (-not (Test-Path $linkSource)) {
-    Write-Warning "Hivemind Link was requested but $linkSource is missing; skipping the Link sidecar."
+  if (-not (Test-Path $linkSource)) {
+    throw "Hivemind Link source is missing at $linkSource. Update the HivemindOS checkout and rerun collector setup."
   } else {
     # Stop any previous linkd first: a running hivemind-linkd.exe holds a
     # Windows file lock that would fail the rebuild, and the Unix installer
@@ -171,7 +224,7 @@ if ($linkRequested) {
     Write-Host "Building hivemind-linkd.exe (commit $buildCommit)..."
     Push-Location $RepoRoot
     try {
-      & $goCmd.Source build -ldflags "-X main.buildCommit=$buildCommit -X main.buildTime=$buildTime" -o $linkBin ./cmd/hivemind-linkd
+      & $goPath build -ldflags "-X main.buildCommit=$buildCommit -X main.buildTime=$buildTime" -o $linkBin ./cmd/hivemind-linkd
       $goExit = $LASTEXITCODE
     } finally {
       Pop-Location
@@ -179,7 +232,7 @@ if ($linkRequested) {
     if ($goExit -eq 0 -and (Test-Path $linkBin)) {
       $linkActive = $true
     } else {
-      Write-Warning "Hivemind Link build failed (go build exit code $goExit); falling back to the normal collector network mode."
+      throw "Hivemind Link build failed (go build exit code $goExit). The collector was not exposed on a less-protected fallback network."
     }
   }
 }
@@ -217,7 +270,7 @@ if ($linkActive) {
 #     HIVE_LINK_* block also makes Link sticky for future installer reruns) ---
 $collectorEnvLines = @(
   "AGENT_TELEMETRY_PORT=$Port",
-  "HIVE_COLLECTOR_ONLY=false"
+  "HIVE_COLLECTOR_ONLY=$collectorOnlyValue"
 )
 if ($linkRequested) {
   # Written on "requested", not "built", so stickiness survives a transient
@@ -248,6 +301,7 @@ Set-Content -Path $cmdFile -Encoding ASCII -Value @(
   "@echo off",
   "set AGENT_TELEMETRY_PORT=$Port",
   "set AGENT_TELEMETRY_HOST=$collectorHost",
+  "set HIVE_COLLECTOR_ONLY=$collectorOnlyValue",
   "`"$nodeExe`" `"$collectorScript`""
 )
 
@@ -586,12 +640,20 @@ if ($linkActive) {
         if ($linkStatus.authUrl) { $authUrl = $linkStatus.authUrl }
       } catch {}
     }
-    Write-Host "Hivemind Link sign-in required (expected on first run; the collector install is complete)."
+    Write-Host "Hivemind Link authorization is required once for this collector."
     if ($authUrl) {
-      Write-Host "Open this URL on any device to connect this machine to your Tailscale account:"
+      Write-Host "1. Open this URL on your main HivemindOS hub, or on any device signed into the same Tailscale account as that hub:"
       Write-Host "  $authUrl"
+      try {
+        Set-Clipboard -Value $authUrl
+        Write-Host "   The URL was copied to this machine's clipboard."
+      } catch {
+        Write-Host "   Copy the URL manually if this terminal does not provide a clipboard."
+      }
+      Write-Host "2. Approve this collector in Tailscale."
+      Write-Host "3. Return to the Hive Fleet on the main hub. The collector will appear automatically after Link connects."
     } else {
-      Write-Host "Fetch the sign-in URL from http://$linkControl/status (authUrl field) once the daemon settles."
+      Write-Host "On this collector, fetch the authorization URL from http://$linkControl/status (authUrl field), then open it on the main HivemindOS hub using the same Tailscale account."
     }
     Write-Host "Headless alternative: set a HIVE_LINK_AUTH_KEY user environment variable (setx HIVE_LINK_AUTH_KEY <tailscale-auth-key>), then restart the '$linkTaskName' task."
   } elseif ($linkHealth) {

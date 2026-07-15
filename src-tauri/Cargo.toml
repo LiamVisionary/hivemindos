@@ -5,6 +5,10 @@ description = "HivemindOS desktop shell"
 authors = ["HivemindOS"]
 edition = "2021"
 
+[features]
+default = []
+link-app = []
+
 [lib]
 name = "hivemindos_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
