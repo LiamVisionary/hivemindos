@@ -61,7 +61,8 @@ for (const asset of [
   assert.ok(workflow.includes(asset), `release workflow should publish ${asset}`);
 }
 assert.match(workflow, /Build HivemindOS Link/, "every platform should build the downloadable Link GUI");
-assert.match(workflow, /CARGO_TARGET_DIR:\s*src-tauri\/target-link/, "Link and complete-hub bundles should use isolated build outputs");
+assert.match(workflow, /CARGO_TARGET_DIR:\s*\$\{\{ github\.workspace \}\}\/src-tauri\/target-link/, "Link builds should use one workspace-absolute target directory on every runner");
+assert.doesNotMatch(workflow, /CARGO_TARGET_DIR:\s*src-tauri\/target-link/, "a relative Link target would be nested below Tauri's src-tauri working directory");
 assert.match(workflow, /link_release_tag:/, "release dispatch should support attaching Link assets to an existing release");
 assert.match(workflow, /Attach HivemindOS Link assets to existing release/, "an existing release should have a focused Link-only upload path");
 assert.match(workflow, /find release-assets[^\n]*HivemindOS-Link-\*/, "existing-release uploads should select only Link assets");

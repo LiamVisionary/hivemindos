@@ -351,7 +351,7 @@ jobs:
           APPLE_ID: ${{ github.event.inputs.notarize_macos == 'true' && secrets.APPLE_ID || '' }}
           APPLE_PASSWORD: ${{ github.event.inputs.notarize_macos == 'true' && secrets.APPLE_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ github.event.inputs.notarize_macos == 'true' && secrets.APPLE_TEAM_ID || '' }}
-          CARGO_TARGET_DIR: src-tauri/target-link
+          CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target-link
         run: pnpm tauri:build:link:release
 
       - name: Build HivemindOS Link without macOS notarization
@@ -360,7 +360,7 @@ jobs:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          CARGO_TARGET_DIR: src-tauri/target-link
+          CARGO_TARGET_DIR: ${{ github.workspace }}/src-tauri/target-link
         run: pnpm tauri:build:link:release
 
       - name: Collect bundle assets
