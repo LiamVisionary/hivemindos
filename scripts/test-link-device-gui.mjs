@@ -76,4 +76,13 @@ assert.match(windowsSigningLogin, /allow-no-subscriptions:\s*true/, "Windows sig
 assert.doesNotMatch(windowsSigningLogin, /subscription-id:/, "tenant-only Windows signing must not select an unavailable Azure subscription");
 assert.doesNotMatch(workflow, /AZURE_SUBSCRIPTION_ID/, "Windows signing should not require an unused subscription secret");
 
+assert.match(workflow, /allow_unsigned_windows_link:[\s\S]*?default:\s*"false"/, "unsigned Windows Link publishing must be an explicit opt-in");
+assert.match(workflow, /ALLOW_UNSIGNED_WINDOWS_LINK:\s*\$\{\{ github\.event\.inputs\.allow_unsigned_windows_link \}\}/, "release validation should receive the unsigned Link opt-in");
+assert.match(workflow, /Unsigned Windows Link publishing requires link_release_tag/, "unsigned installers must be forbidden for normal Complete Hub releases");
+const unsignedWindowsLinkCondition = "runner.os == 'Windows' && github.event.inputs.link_release_tag != '' && github.event.inputs.allow_unsigned_windows_link == 'true'";
+assert.ok(workflow.includes(`name: Verify temporary unsigned Windows Link installers\n        if: ${unsignedWindowsLinkCondition}`), "the explicit unsigned path should verify and acknowledge only Link installers");
+assert.match(workflow, /Get-AuthenticodeSignature[\s\S]*SignatureStatus\]::NotSigned/, "temporary unsigned Link assets should be proven unsigned before publication");
+const requiredWindowsSigningCondition = `runner.os == 'Windows' && !(${unsignedWindowsLinkCondition.replace("runner.os == 'Windows' && ", "")})`;
+assert.equal(workflow.split(`if: ${requiredWindowsSigningCondition}`).length - 1, 5, "all five Windows signing and verification steps should remain mandatory outside the temporary Link-only path");
+
 console.log("HivemindOS Link GUI contract passed.");

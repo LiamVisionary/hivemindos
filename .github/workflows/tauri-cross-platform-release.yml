@@ -23,6 +23,10 @@ on:
         description: Existing release tag to receive only HivemindOS Link assets (leave blank for a normal new release)
         required: false
         default: ""
+      allow_unsigned_windows_link:
+        description: Temporarily allow unsigned Windows installers for an existing Link-only release
+        required: false
+        default: "false"
 
 permissions:
   contents: write
@@ -51,11 +55,16 @@ jobs:
         env:
           RELEASE_VERSION: ${{ github.event.inputs.version }}
           LINK_RELEASE_TAG: ${{ github.event.inputs.link_release_tag }}
+          ALLOW_UNSIGNED_WINDOWS_LINK: ${{ github.event.inputs.allow_unsigned_windows_link }}
         run: |
           set -euo pipefail
           release_tag="v${RELEASE_VERSION}"
           if ! [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Release version must be semver like 0.4.1, got: $RELEASE_VERSION" >&2
+            exit 1
+          fi
+          if [ "$ALLOW_UNSIGNED_WINDOWS_LINK" = "true" ] && [ -z "${LINK_RELEASE_TAG:-}" ]; then
+            echo "Unsigned Windows Link publishing requires link_release_tag; Complete Hub releases must stay signed." >&2
             exit 1
           fi
           if [ -n "${LINK_RELEASE_TAG:-}" ]; then
@@ -461,7 +470,7 @@ jobs:
           find release-assets -maxdepth 1 -type f -print
 
       - name: Validate Windows signing configuration
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && !(github.event.inputs.link_release_tag != '' && github.event.inputs.allow_unsigned_windows_link == 'true')
         shell: pwsh
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -487,7 +496,7 @@ jobs:
           }
 
       - name: Azure login for Windows signing
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && !(github.event.inputs.link_release_tag != '' && github.event.inputs.allow_unsigned_windows_link == 'true')
         uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -495,7 +504,7 @@ jobs:
           allow-no-subscriptions: true
 
       - name: Sign Windows installers with Azure Artifact Signing
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && !(github.event.inputs.link_release_tag != '' && github.event.inputs.allow_unsigned_windows_link == 'true')
         uses: azure/artifact-signing-action@v2
         with:
           endpoint: ${{ vars.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
@@ -513,7 +522,7 @@ jobs:
       # Authenticode changes the EXE bytes after Tauri created its detached
       # updater signature, so regenerate that signature before latest.json is built.
       - name: Regenerate Tauri signature for signed Windows updater
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && !(github.event.inputs.link_release_tag != '' && github.event.inputs.allow_unsigned_windows_link == 'true')
         shell: pwsh
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -534,7 +543,7 @@ jobs:
           }
 
       - name: Verify Windows Authenticode signatures
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && !(github.event.inputs.link_release_tag != '' && github.event.inputs.allow_unsigned_windows_link == 'true')
         shell: pwsh
         run: |
           $installers = @(
@@ -550,6 +559,26 @@ jobs:
               throw "Invalid Authenticode signature for $($installer.Name): $($signature.Status) $($signature.StatusMessage)"
             }
             Write-Host "$($installer.Name) signed by $($signature.SignerCertificate.Subject)"
+          }
+
+      - name: Verify temporary unsigned Windows Link installers
+        if: runner.os == 'Windows' && github.event.inputs.link_release_tag != '' && github.event.inputs.allow_unsigned_windows_link == 'true'
+        shell: pwsh
+        run: |
+          $expected = @(
+            "HivemindOS-Link-windows-x64-setup.exe",
+            "HivemindOS-Link-windows-x64.msi"
+          )
+          foreach ($name in $expected) {
+            $installer = Join-Path $env:GITHUB_WORKSPACE "release-assets\$name"
+            if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) {
+              throw "Missing temporary unsigned Windows Link installer: $name"
+            }
+            $signature = Get-AuthenticodeSignature -LiteralPath $installer
+            if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::NotSigned) {
+              throw "Expected $name to be explicitly unsigned, got: $($signature.Status)"
+            }
+            Write-Host "$name verified as temporarily unsigned by explicit Link-only release opt-in."
           }
 
       - name: Upload build artifacts

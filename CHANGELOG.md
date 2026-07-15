@@ -5,6 +5,14 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-07-15 17:33:05 EDT (-0400) - Temporarily publish the Windows Link installer without Authenticode
+  - Status: Uncommitted; explicit Link-only release run pending.
+  - Areas changed: the existing-release Link workflow input, Windows signing guards, unsigned-installer verification, and focused release contract (`.github/workflows/tauri-cross-platform-release.yml` and `scripts/test-link-device-gui.mjs`).
+  - Summary: While Azure Public Trust validation is pending, maintainers can explicitly publish the standalone Windows HivemindOS Link EXE/MSI without Authenticode. The exception is restricted to an existing Link-only release; normal Complete Hub releases still require Azure signing and valid Authenticode.
+  - Verification: RED was captured for the missing opt-in, Complete Hub rejection, unsigned-file verification, and signing guard. The focused Link contract now passes, the workflow parses as YAML, and diff hygiene passes. The unsigned cross-platform Link release run and public asset verification remain pending.
+  - Rollback: Remove the temporary `HivemindOS-Link-windows-*` assets from the release and revert this workflow opt-in. The Complete Hub assets and updater manifest are not part of this path.
+  - Intended commit message: `release: allow temporary unsigned Windows Link installer`
+
 - 2026-07-15 15:30:43 EDT (-0400) - Publish guided HivemindOS Link installers without changing the Complete Hub updater
   - Status: Pushed; signed release attachment is blocked by Azure Public Trust validation/profile activation.
   - Areas changed: standalone collector-only Tauri flavor and guided static GUI; native collector setup/status bridge; Windows, macOS, and Linux collector onboarding; stable Link asset collection and Windows Authenticode signing; existing-release Link-only upload mode; landing/release contract documentation and focused regression coverage (`src-tauri/link-static/`, `src-tauri/tauri.link.conf.json`, Tauri setup/entry files, setup and collector installers, `.github/workflows/tauri-cross-platform-release.yml`, `LANDING_PAGE.md`, and `scripts/test-link-device-gui.mjs`).
