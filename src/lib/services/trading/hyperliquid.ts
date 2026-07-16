@@ -35,7 +35,7 @@ import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
 import { evaluateSpend, resolveSpendGovernance, shouldEvaluateSpend } from "@/lib/services/wallet/spend-governance";
 import { hyperliquidOrderReasoning, hyperliquidValueTransferReasoning } from "@/lib/services/trading/hyperliquid-reasoning";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
-
+type CompanyTaskSpendContext = { companyTaskId?: string };
 // Match the wider connection window used by the local swap rail. Hyperliquid's
 // API is latency sensitive, but a too-small happy-eyeballs timeout can fail
 // before this network has completed a viable TCP handshake.
@@ -122,7 +122,7 @@ export type HyperliquidOrderInput = {
   slippageBps?: number;
   confirmation?: string;
   approvalToken?: string;
-};
+} & CompanyTaskSpendContext;
 
 export type HyperliquidOrderSummary = {
   coin: string;
@@ -271,7 +271,7 @@ export type HyperliquidSignedActionInput = {
   twapId?: number | string;
   confirmation?: string;
   approvalToken?: string;
-};
+} & CompanyTaskSpendContext;
 
 type HyperliquidOrderDraft = {
   config: HyperliquidBuilderConfig;
@@ -985,17 +985,16 @@ async function hyperliquidGovernance(input: HyperliquidOrderInput, order: Hyperl
   if (!order.reduceOnly && order.notionalUsd > cap + 0.01) {
     throw new Error(`This Hyperliquid order is ~$${order.notionalUsd.toFixed(2)}, over the wallet's $${cap.toFixed(2)} max trade cap.`);
   }
-
-  const governance = await resolveSpendGovernance(input.agentId);
+  const governance = await resolveSpendGovernance(input.agentId, { companyTaskId: input.companyTaskId });
   const spendForGovernance = order.reduceOnly ? 0 : order.notionalUsd;
-  if (!governance || !(order.reduceOnly || (await shouldEvaluateSpend(governance.wallet, cap)))) return {};
+  if (!governance || !(order.reduceOnly || (await shouldEvaluateSpend(governance.wallet, cap, { companyId: governance.companyId })))) return {};
   const decision = await evaluateSpend({
     wallet: governance.wallet,
     agentName: governance.agentName,
     kind: "trade",
     asset: "USDC",
     amountUsd: spendForGovernance,
-    target: `hyperliquid:${order.coin} ${order.side}`, approvalToken: input.approvalToken,
+    target: `hyperliquid:${order.coin} ${order.side}`, approvalToken: input.approvalToken, companyId: governance.companyId,
     explanation: hyperliquidOrderReasoning(order),
   });
   if (decision.decision !== "allow") throw new Error(decision.reason);
@@ -1013,15 +1012,15 @@ async function hyperliquidAmountGovernance(
   if (amountUsd > cap + 0.01) {
     throw new Error(`This Hyperliquid action is ~$${amountUsd.toFixed(2)}, over the wallet's $${cap.toFixed(2)} max payment cap.`);
   }
-  const governance = await resolveSpendGovernance(input.agentId);
-  if (!governance || !(await shouldEvaluateSpend(governance.wallet, cap))) return {};
+  const governance = await resolveSpendGovernance(input.agentId, { companyTaskId: input.companyTaskId });
+  if (!governance || !(await shouldEvaluateSpend(governance.wallet, cap, { companyId: governance.companyId }))) return {};
   const decision = await evaluateSpend({
     wallet: governance.wallet,
     agentName: governance.agentName,
     kind: "trade",
     asset: "USDC",
     amountUsd,
-    target, approvalToken: input.approvalToken,
+    target, approvalToken: input.approvalToken, companyId: governance.companyId,
     explanation: hyperliquidValueTransferReasoning(amountUsd, target),
   });
   if (decision.decision !== "allow") throw new Error(decision.reason);
@@ -1036,7 +1035,7 @@ function assertHyperliquidPolicy(policy: HyperliquidTradePolicy | undefined, act
 
 function orderInputFromSigned(input: HyperliquidSignedActionInput): HyperliquidOrderInput {
   return {
-    agentId: input.agentId,
+    agentId: input.agentId, companyTaskId: input.companyTaskId,
     walletAddress: input.walletAddress,
     walletNetwork: input.walletNetwork,
     secret: input.secret,

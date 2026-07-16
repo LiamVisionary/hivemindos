@@ -25,8 +25,8 @@ export async function quoteGovernedUsdcSendFee(input: {
 /**
  * Execute a governed on-chain dollar-stable transfer. This is the single source of truth
  * shared by POST /api/wallet/send and the chat-runtime send interceptor, so both
- * apply the same governance (company kill switch, cumulative budgets, approval
- * escalation) and ledger accounting. Callers are responsible for the explicit
+ * apply the same wallet governance and ledger accounting. Explicit company Work
+ * Board tasks add their company freeze/budget policy. Callers are responsible for the explicit
  * confirmation gate (SEND_USDC) and the never-auto rule for personal wallets —
  * this function assumes the spend was already authorized for execution.
  */
@@ -37,6 +37,8 @@ export async function executeGovernedUsdcSend(input: {
   gasSponsorAgentId?: string;
   approvalToken?: string;
   approvalThresholdSatisfied?: boolean;
+  /** Active Work Board company task id. Omit for ordinary wallet sends. */
+  companyTaskId?: string;
 }): Promise<GovernedUsdcSendResult> {
   const agentId = input.agentId.trim();
   const toAddress = input.toAddress.trim();
@@ -45,8 +47,9 @@ export async function executeGovernedUsdcSend(input: {
   const stored = await getWalletSecret(agentId);
   if (!stored) return { ok: false, status: "not_found", error: "No local wallet exists for this agent." };
 
-  // Governance: company kill switch, cumulative budgets, and approval escalation.
-  const governance = await resolveSpendGovernance(agentId);
+  // Wallet policy is always active; company policy requires explicit active
+  // Work Board task context and never follows membership alone.
+  const governance = await resolveSpendGovernance(agentId, { companyTaskId: input.companyTaskId });
   let grantId: string | undefined;
   let companyId: string | undefined;
   if (governance) {
@@ -59,6 +62,7 @@ export async function executeGovernedUsdcSend(input: {
       target: toAddress,
       approvalToken: input.approvalToken,
       approvalThresholdSatisfied: input.approvalThresholdSatisfied,
+      companyId: governance.companyId,
       explanation: {
         summary: "This is an on-chain stablecoin transfer from a local agent wallet.",
         whyNow: "The transfer amount crossed a wallet governance rule and was paused before signing.",

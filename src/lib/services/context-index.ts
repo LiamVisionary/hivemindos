@@ -225,17 +225,6 @@ function firstUsefulParagraph(markdown: string) {
     .find((part) => part && !part.startsWith("![")) ?? "";
 }
 
-function parseSimpleFrontmatter(markdown: string) {
-  const fields = new Map<string, string>();
-  const match = markdown.match(/^---\n([\s\S]*?)\n---/);
-  if (!match) return fields;
-  for (const line of match[1].split("\n")) {
-    const field = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
-    if (field) fields.set(field[1].toLowerCase(), field[2].replace(/^["']|["']$/g, "").trim());
-  }
-  return fields;
-}
-
 function titleFromMarkdown(path: string, markdown: string) {
   return markdown.match(/^#\s+(.+)$/m)?.[1]?.trim() || basename(path).replace(/\.[^.]+$/, "");
 }
@@ -987,7 +976,7 @@ function localCliToolItems(): ContextIndexItem[] {
       id: "tool-schema:stock-trading",
       kind: "tool-schema",
       title: "stock trading (buy/sell)",
-      summary: "Buy and sell stocks through Alpaca, Robinhood Agentic brokerage via the official MCP, on-chain xStocks via Jupiter, or Robinhood Chain Stock Token swaps via 0x/USDG, governed by per-trade caps, the company kill switch, and CONFIRM_BUY/CONFIRM_SELL.",
+      summary: "Buy and sell stocks through Alpaca, Robinhood Agentic brokerage via the official MCP, on-chain xStocks via Jupiter, or Robinhood Chain Stock Token swaps via 0x/USDG, governed by wallet caps, optional explicit company-task policy, and CONFIRM_BUY/CONFIRM_SELL.",
       tags: ["stock", "stocks", "shares", "equities", "trade", "trading", "buy", "sell", "alpaca", "robinhood", "agentic", "mcp", "xstocks", "robinhood-chain", "brokerage", "jupiter", "solana", "wallet", "spend", "agent", "tool"],
       aliases: [
         "buy a stock",
@@ -1006,7 +995,7 @@ function localCliToolItems(): ContextIndexItem[] {
         "HTTP surface: POST /api/trading with { action: 'quote'|'execute', side: 'buy'|'sell', agentId, ticker, notionalUsd, confirmation? }. GET /api/trading returns venue readiness for Alpaca, Robinhood Agentic OAuth/account/tool readiness, xStocks, and Robinhood Chain.",
         "The acting wallet is resolved server-side from the agent's persisted wallet config; a request never supplies the trade policy, venue, or live/paper flag. The venue comes from the agent wallet's tradingVenue.",
         "Venues: 'alpaca' places a market order through Alpaca (PAPER by default); 'robinhood-agentic' calls Robinhood's official OAuth MCP against the selected dedicated Agentic brokerage account, uses review_equity_order before place_equity_order, and never exposes raw mutation tools; 'xstocks' swaps USDC through Jupiter and signs with the local Solana wallet; 'robinhood-chain' swaps USDG against canonical Stock Token contracts through 0x and signs with the local Robinhood Chain wallet. Stock Token legal/eligibility blocks must be surfaced instead of routed around.",
-        "Governance: a buy spends USDC and runs the full per-trade cap, rolling-budget, and approval-escalation checks; a sell is an inflow and only enforces the company kill switch. A buy needs CONFIRM_BUY and a sell needs CONFIRM_SELL; both are recorded in the unified spend ledger as trade activity.",
+        "Governance: a buy spends USDC and runs wallet per-trade, rolling-budget, and approval-escalation checks; a sell is an inflow. Company freeze and budget policy applies only when an active company Work Board task passes companyTaskId. A buy needs CONFIRM_BUY and a sell needs CONFIRM_SELL; both are recorded in the unified spend ledger as trade activity.",
         "Native chat can also buy from prompts like 'buy AAPL for $500'. The Trade dashboard tab exposes a Crypto/Stocks UI over the same governed rails. Crypto trading, swaps, perps, prediction markets, and other rails go through /api/crypto/capabilities, not this stock route.",
         "Never request, print, store, or reveal private keys, seed phrases, or wallet secrets.",
       ].join(" "),
@@ -1035,7 +1024,7 @@ function localCliToolItems(): ContextIndexItem[] {
         "HTTP surface: GET /api/trading/hyperliquid?agentId=<id> returns non-secret readiness, configured builder details, confirmation tokens, and optional account status. POST /api/trading/hyperliquid accepts read actions status, positions, open-orders, fills, fees, order-status; quote/order actions for spot/perp marketType, trigger orders, timeInForce, clientOrderId; and signed actions approve-builder, cancel, cancel-by-cloid, modify, schedule-cancel, leverage, margin, usd-class, usd-send, spot-send, withdraw, twap-order, twap-cancel.",
         "Builder-code policy: builder address, per-order builder fee, max approval fee, testnet flag, and optional API URL are fetched server-side from the official HivemindOS builder-policy endpoint. Client request bodies and local/shared env never choose the official builder recipient or fee; self-hosters replace the policy by forking/rebuilding or pointing their own distribution at their own endpoint.",
         "Approval sequence: first quote the order. If builderApproval.approved is false, action 'approve-builder' signs Hyperliquid ApproveBuilderFee from the selected main local EVM wallet and requires CONFIRM_HYPERLIQUID_BUILDER. Then action 'order' places the order with the configured builder payload and requires CONFIRM_HYPERLIQUID_ORDER.",
-        "Execution policy: the route resolves wallet address, network, secret, and max trade/payment caps server-side from the local vault and governed wallet ledger. Orders, transfers, TWAPs, and margin changes pass the company kill switch, rolling budgets, approval escalation, maxTradeUsd/maxPaymentUsd cap, Hyperliquid tick/lot precision, and unified spend-ledger recording.",
+        "Execution policy: the route resolves wallet address, network, secret, and max trade/payment caps server-side from the local vault and governed wallet ledger. Orders, transfers, TWAPs, and margin changes pass wallet rolling budgets, approval escalation, maxTradeUsd/maxPaymentUsd cap, Hyperliquid tick/lot precision, and unified spend-ledger recording. Company freeze and budgets apply only when an active company Work Board task passes companyTaskId.",
         "MCP path: use hyperliquid_trade. quote/status/open-orders/fills/fees/order-status are read-style; approve-builder requires CONFIRM_HYPERLIQUID_BUILDER; order/modify requires CONFIRM_HYPERLIQUID_ORDER; cancels require CONFIRM_HYPERLIQUID_CANCEL; leverage/margin require CONFIRM_HYPERLIQUID_ACCOUNT; transfers/withdrawals require CONFIRM_HYPERLIQUID_TRANSFER; TWAPs require CONFIRM_HYPERLIQUID_TWAP. Never request, print, store, or reveal private keys, seed phrases, or wallet secrets.",
       ].join(" "),
       route: "/api/trading/hyperliquid",

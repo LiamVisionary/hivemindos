@@ -2,7 +2,9 @@ import "server-only";
 
 import type { AgentSpendCapAsset, AgentWalletConfig } from "@/lib/types/agent-wallet";
 import type { ReasoningTrail } from "@/lib/types/reasoning-trail";
-import { getCompanyForAgent } from "@/lib/services/companies-store";
+import { getCompany } from "@/lib/services/companies-store";
+import { readBoard } from "@/lib/services/kanban/local-kanban-store";
+import { companyIdFromSource } from "@/lib/services/queen-bee/company-task-context";
 import { readWalletLedger } from "@/lib/services/obsidian/wallet-ledger";
 import {
   ROLLING_DAY_MS,
@@ -23,9 +25,10 @@ import { buildSpendApprovalReasoning } from "@/lib/utils/spend-approval-reasonin
 /**
  * Single governance chokepoint for every spend rail. It layers three NEW
  * controls on top of the per-transaction hard cap / per-asset cap that each rail
- * already enforces inline:
- *   1. Company kill switch (frozen) — hard block across all member agents.
- *   2. Cumulative rolling budgets — per-agent and per-company daily/monthly/total.
+ * already enforces inline. Company controls are present only when the operation
+ * is bound to a validated active company task:
+ *   1. Company kill switch (frozen) — hard block for that company task.
+ *   2. Cumulative rolling budgets — per-agent and task-company daily/monthly/total.
  *   3. Approval threshold — escalate to a human, then execute once on retry.
  */
 
@@ -49,6 +52,8 @@ export type SpendGovernanceInput = {
   approvalThresholdSatisfied?: boolean;
   /** Human-facing context to attach when this spend becomes an approval request. */
   explanation?: Partial<ReasoningTrail>;
+  /** Validated company id returned by resolveSpendGovernance for a company task. */
+  companyId?: string;
   now?: number;
 };
 
@@ -65,7 +70,7 @@ export type SpendBudgetSnapshot = {
 export type SpendDecision = {
   decision: "allow" | "approve" | "block";
   reason: string;
-  /** Resolved company id this agent belongs to (for ledger tagging), if any. */
+  /** Resolved company id for the active company task (for ledger tagging), if any. */
   companyId?: string;
   /** Present when decision === "approve": the pending escalation row. */
   approval?: SpendApprovalRequest;
@@ -78,7 +83,7 @@ export type SpendDecision = {
 /**
  * Cheap predicate: does this wallet have any governance control that could bind?
  * Lets rails skip the (async, network-touching) governance path entirely for
- * agents that have not opted into budgets/companies/approval — zero behaviour
+ * agents that have not opted into wallet budgets/approval — zero behaviour
  * change for them.
  */
 /**
@@ -95,22 +100,39 @@ export async function loadGovernanceWallet(agentId: string): Promise<{ wallet: A
 }
 
 /**
- * Resolve the governance wallet for a spend. Prefers the agent's persisted wallet
- * config; when none exists but the agent is a company member, synthesizes a
- * minimal company-only wallet (no per-agent budgets/approval) so the company kill
- * switch + budgets STILL bind and the spend is tagged with its companyId. Returns
- * null only when neither a wallet config nor a company applies, so rails can keep
- * skipping governance entirely for truly ungoverned agents.
+ * Resolve the wallet policy for a spend. Company governance is deliberately
+ * opt-in per operation: callers must supply an active company Work Board task.
+ * Membership alone never changes an ordinary wallet operation.
  */
 export async function resolveSpendGovernance(
   agentId: string,
-): Promise<{ wallet: SpendGovernanceWallet; agentName?: string } | null> {
+  context: { companyTaskId?: string } = {},
+): Promise<{ wallet: SpendGovernanceWallet; agentName?: string; companyId?: string; companyTaskId?: string } | null> {
   const direct = await loadGovernanceWallet(agentId);
-  if (direct) return { wallet: direct.wallet, agentName: direct.agentName };
-  if (!agentId?.trim()) return null;
-  const company = await getCompanyForAgent(agentId.trim());
-  if (company) return { wallet: { agentId: agentId.trim(), approvalRequiredOverUsd: 0 } };
-  return null;
+  const companyTaskId = context.companyTaskId?.trim();
+  if (!companyTaskId) return direct ? { wallet: direct.wallet, agentName: direct.agentName } : null;
+  if (!agentId?.trim()) throw new Error("A company task spend requires an agent id.");
+
+  const board = await readBoard(null);
+  const task = board.tasks.find((candidate) => candidate.id === companyTaskId);
+  if (!task) throw new Error("The supplied company task does not exist on the Work Board.");
+  const companyId = companyIdFromSource(task.source);
+  if (!companyId) throw new Error("The supplied Work Board task is not company work.");
+  if (task.status !== "working") throw new Error("Company spend is allowed only while its Work Board task is actively working.");
+  if (task.assignee?.trim() !== agentId.trim()) {
+    throw new Error("The active company task is not assigned to this wallet agent.");
+  }
+  const company = await getCompany(companyId);
+  if (!company) throw new Error("The company attached to this Work Board task no longer exists.");
+  const isMember = company.agentIds.includes(agentId.trim())
+    || company.members?.some((member) => member.agentId === agentId.trim());
+  if (!isMember) throw new Error("This wallet agent is not a member of the company attached to the active task.");
+  return {
+    wallet: direct?.wallet ?? { agentId: agentId.trim(), approvalRequiredOverUsd: 0 },
+    agentName: direct?.agentName,
+    companyId,
+    companyTaskId,
+  };
 }
 
 export function governanceActive(wallet: SpendGovernanceWallet): boolean {
@@ -132,12 +154,15 @@ export function approvalCanBind(wallet: SpendGovernanceWallet, maxPaymentUsd: nu
 /**
  * Async gate for rails (x402) that want to skip the governance pre-flight
  * entirely when nothing could bind: any wallet budget, an approval threshold
- * below the per-payment cap, or membership in a company (which carries its own
- * budgets and kill switch).
+ * below the per-payment cap, or an explicitly validated company task context.
  */
-export async function shouldEvaluateSpend(wallet: SpendGovernanceWallet, maxPaymentUsd: number): Promise<boolean> {
+export async function shouldEvaluateSpend(
+  wallet: SpendGovernanceWallet,
+  maxPaymentUsd: number,
+  options: { companyId?: string } = {},
+): Promise<boolean> {
   if (governanceActive(wallet) || approvalCanBind(wallet, maxPaymentUsd)) return true;
-  return Boolean(await getCompanyForAgent(wallet.agentId));
+  return Boolean(options.companyId);
 }
 
 function remaining(cap: number | undefined, spent: number, amount: number): { remaining: number | null; exceeded: boolean } {
@@ -151,7 +176,11 @@ export async function evaluateSpend(input: SpendGovernanceInput): Promise<SpendD
   const amount = Math.max(0, Number(input.amountUsd) || 0);
   const wallet = input.wallet;
 
-  const company = await getCompanyForAgent(wallet.agentId);
+  const company = input.companyId ? await getCompany(input.companyId) : undefined;
+  if (input.companyId && !company) throw new Error("The company spend context is no longer valid.");
+  if (company && !company.agentIds.includes(wallet.agentId) && !company.members?.some((member) => member.agentId === wallet.agentId)) {
+    throw new Error("The wallet agent is not a member of the company spend context.");
+  }
   const companyId = company?.id;
   const ledger = await readSpendLedger();
 

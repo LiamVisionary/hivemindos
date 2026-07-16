@@ -40,6 +40,7 @@ export const managedCloudAgentsAction = defineHiveAction({
     authorization: z.string().optional(),
     localTailnetDnsName: z.string().optional(),
     integrationId: z.string().optional(),
+    companyTaskId: z.string().optional().describe("Active Work Board company task id for a company-funded top-up; omit otherwise."),
   }),
   sideEffects: ["read", "write", "network", "remote-machine", "wallet", "payment", "credential"],
   risk: "high",

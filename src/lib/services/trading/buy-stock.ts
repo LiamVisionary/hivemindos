@@ -63,9 +63,9 @@ import type { AgentTradingVenue, AgentWalletConfig } from "@/lib/types/agent-wal
  *
  * A buy requires CONFIRM_BUY, a sell CONFIRM_SELL (same shape as x402's PAY_X402).
  * Both flow through the shared spend-governance chokepoint + ledger. A buy spends
- * USD stablecoins, so the company kill switch, rolling budgets, and approval escalation all
- * apply; a sell is an inflow, so only the kill switch binds and it never debits
- * rolling budgets (see executeStockTrade).
+ * USD stablecoins, so wallet caps and approval escalation apply. An explicit
+ * active company task additionally applies that company's freeze and budgets; a
+ * sell is an inflow and never debits rolling budgets (see executeStockTrade).
  */
 
 // Alpaca issues SEPARATE credentials for the live brokerage and the paper
@@ -140,6 +140,8 @@ export type BuyStockInput = {
   fromAddress?: string;
   /** Slippage override for the swap, in basis points. */
   slippageBps?: number;
+  /** Active Work Board company task id. Omit for ordinary wallet trades. */
+  companyTaskId?: string;
 };
 
 export type BuyStockResult = {
@@ -820,20 +822,19 @@ export async function executeStockTrade(input: BuyStockInput): Promise<BuyStockR
   // A paper trade is simulated against the Alpaca paper account — no real money
   // moves — so it must NOT debit real rolling budgets or trip approval
   // escalation, exactly like a sell (an inflow). It's "non-spending" for
-  // governance: we still evaluate with amountUsd 0 so a frozen company kill
-  // switch hard-blocks it, but it never consumes the daily/monthly budget.
+  // governance: we evaluate with amountUsd 0 so an explicit company task's
+  // freeze switch can bind, but it never consumes daily/monthly budget.
   const isPaperTrade = venue === "alpaca" && resolveAlpacaPaper(input);
   const nonSpending = side === "sell" || isPaperTrade;
 
-  // Governance pre-flight. The company kill switch binds for ALL trades, so
-  // resolveSpendGovernance also covers company members without their own wallet
-  // config. A live buy spends USDC -> run the full budget/approval evaluation.
-  const governance = await resolveSpendGovernance(input.agentId);
+  // Ordinary trades use wallet policy only. Company policy binds only when the
+  // caller supplies an active validated company Work Board task.
+  const governance = await resolveSpendGovernance(input.agentId, { companyTaskId: input.companyTaskId });
   let approvalGrantId: string | undefined;
   let companyId: string | undefined;
   const spendForGovernance = nonSpending ? 0 : notionalUsd;
   const spendAsset = venue === "robinhood-chain" ? "USDG" : "USDC";
-  if (governance && (nonSpending || (await shouldEvaluateSpend(governance.wallet, maxTradeUsd(input.policy))))) {
+  if (governance && (nonSpending || (await shouldEvaluateSpend(governance.wallet, maxTradeUsd(input.policy), { companyId: governance.companyId })))) {
     const decision = await evaluateSpend({
       wallet: governance.wallet,
       agentName: governance.agentName,
@@ -842,12 +843,13 @@ export async function executeStockTrade(input: BuyStockInput): Promise<BuyStockR
       amountUsd: spendForGovernance,
       target: `${venue}:${input.ticker} ${side}${isPaperTrade ? " (paper)" : ""}`,
       approvalToken: input.approvalToken,
+      companyId: governance.companyId,
       explanation: {
         summary: isPaperTrade
-          ? "This is a paper stock trade. It is checked against the company kill switch, but it does not spend real funds."
+          ? "This is a paper stock trade. It does not spend real funds."
           : `This is a ${venue} stock trade request.`,
         whyNow: nonSpending
-          ? "The company governance check still runs even though this action is not a live spend."
+          ? "The governance check still runs, but the action does not debit a rolling spend budget."
           : "The trade notional crossed a wallet governance rule and was paused before execution.",
         impact: nonSpending
           ? "Approving lets the simulated or reducing trade continue. Rejecting stops this trade attempt."

@@ -16,6 +16,7 @@ import { isAbsolute } from "node:path";
 import { promisify } from "node:util";
 import { isLocalCollectorUrl } from "@/lib/services/local-collector-url";
 import { runtimeCommandEnv } from "@/lib/services/runtime-command-env";
+import { companyIdFromSource } from "@/lib/services/queen-bee/company-task-context";
 
 const execFileAsync = promisify(execFile);
 
@@ -370,6 +371,8 @@ export async function runQueenBeeAutonomousPickup(
           agent,
           context: {
             queenBeeTaskId: input.task.id,
+            companyId: companyIdFromSource(claimed.task.source) || undefined,
+            companyTaskId: companyIdFromSource(claimed.task.source) ? claimed.task.id : undefined,
             queenBeeAutonomousPickup: true,
             claimLock,
             marker: input.marker,
@@ -789,12 +792,15 @@ async function finalizeExhaustedPickup(
 
 function autonomousWorkerPrompt(task: KanbanTask, marker?: string) {
   const contract = loopContractForPrompt(task.loop);
+  const companyId = companyIdFromSource(task.source);
   return [
     `You are the selected Queen Bee delegate for Work Board task ${task.id}.`,
     "Claim and complete this task now. Return a concise result with any evidence requested by the task.",
     "If you are blocked on human input, access, approval, or a decision, end your result with a section named exactly `ACTION NEEDED:` containing one or two imperative sentences telling the human precisely what to do or decide (include the options if there is a choice). This section becomes the card's headline on the Work Board.",
     "When it helps the human act faster, add extra lines directly under `ACTION NEEDED:` — `LINK: <url>` pointing where they get or do the thing (for an API key, the exact page that issues it), `OPTIONS: <choice A> | <choice B>` when you need a decision, and `NEEDS: api-key <ENV_VAR_NAME>` (or `NEEDS: file` / `NEEDS: text`) naming what you are waiting for. The Work Board renders these as one-click answer buttons, a save-to-shared-env key input, or an attach-a-file prompt, and the human's answer comes back to you on this task.",
     marker ? `If the task asks for a verification marker, include this exact marker: ${marker}` : null,
+    companyId ? `Company task context: company ${companyId}; Work Board task ${task.id}.` : null,
+    companyId ? `When a wallet, trade, paid API, or hosted-spend tool supports companyTaskId, pass exactly ${task.id}. Never attach companyTaskId to unrelated work.` : null,
     "",
     `Title: ${task.title}`,
     "",

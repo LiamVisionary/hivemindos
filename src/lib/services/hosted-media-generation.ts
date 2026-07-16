@@ -29,7 +29,7 @@ export async function quoteHostedMedia(input: HostedMediaQuoteInput): Promise<Ho
 }
 
 export async function generateHostedMedia(input: HostedMediaGenerateInput): Promise<HostedMediaGatewayResult> {
-  const governance = await resolveSpendGovernance(input.agentId);
+  const governance = await resolveSpendGovernance(input.agentId, { companyTaskId: input.companyTaskId });
   const decision = governance
     ? await evaluateSpend({
         wallet: governance.wallet,
@@ -40,6 +40,7 @@ export async function generateHostedMedia(input: HostedMediaGenerateInput): Prom
         target: managedMediaBaseUrl(),
         approvalToken: input.approvalToken,
         approvalThresholdSatisfied: input.confirmation === "CONFIRM_HOSTED_MEDIA_GENERATION",
+        companyId: governance.companyId,
         explanation: {
           headline: `Generate media with up to $${input.maximumDebitUsd.toFixed(2)} of hosted credits.`,
           summary: `Reserve hosted HivemindOS credits for ${input.model}.`,

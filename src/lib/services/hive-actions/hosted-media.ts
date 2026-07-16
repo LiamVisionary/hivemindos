@@ -39,6 +39,7 @@ export const hostedMediaGenerationAction = defineHiveAction({
     idempotencyKey: z.string().optional(),
     approvalToken: z.string().optional(),
     confirmation: z.string().optional(),
+    companyTaskId: z.string().optional().describe("Active Work Board company task id; omit outside company work."),
   }),
   sideEffects: ["network", "payment"],
   risk: "high",
@@ -54,7 +55,7 @@ export const hostedMediaGenerationAction = defineHiveAction({
   contextIndex: {
     summary: "Generate hosted media with the shared HivemindOS credit balance.",
     retrievalText:
-      "Use hosted_media_generate via POST /api/hivemindos/media only after hosted_media_read returned the exact quote. Send action generate with the same model/input, a local agentId, maximumDebitUsd at least equal to the quote, and a stable idempotencyKey. Spend is checked against company freeze, budgets, and approval policy before the private gateway reserves credits. HivemindOS credits are the hard balance cap; provider credentials, provider billing, exact 25% markup, reservations, refunds, job ownership, and receipts stay server-side.",
+      "Use hosted_media_generate via POST /api/hivemindos/media only after hosted_media_read returned the exact quote. Send action generate with the same model/input, a local agentId, maximumDebitUsd at least equal to the quote, and a stable idempotencyKey. Ordinary calls use wallet policy only; an active company Work Board task must pass companyTaskId to add company freeze and budget policy. HivemindOS credits are the hard balance cap; provider credentials, provider billing, exact 25% markup, reservations, refunds, job ownership, and receipts stay server-side.",
     route: "/api/hivemindos/media",
     methods: ["POST"],
   },

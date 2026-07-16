@@ -26,7 +26,7 @@ The feature is local-first. It can run with local agents, user-configured runtim
 
 ## Agent Identity Isolation
 
-One operational agent identity belongs to one company at a time. A company assignment carries more than a display role: it determines the agent's company budget, member-level daily spend cap, freeze switch, approvals, mailbox scope, work history, and company context. Sharing that identity between companies would make those controls ambiguous.
+One operational agent identity belongs to one company at a time. A company assignment carries more than a display role: it determines the company budget, member-level daily spend cap, freeze switch, approvals, mailbox scope, work history, and company context for that company's Work Board tasks. The same agent's personal, product, and unrelated tasks continue under its ordinary wallet and workspace policy. Sharing one identity between companies would make task-scoped controls ambiguous.
 
 You can still reuse the same agent blueprint across as many companies as you need. When an agent is already assigned, choose **Duplicate agent** from the crew picker. The normal duplication flow creates a separate identity and wallet while letting you choose whether to copy its agent-specific environment, fork its private memory metadata, or copy chat history. Add the resulting copy to the other company; its model, runtime, skills, and personality can match the original while its operations remain isolated.
 

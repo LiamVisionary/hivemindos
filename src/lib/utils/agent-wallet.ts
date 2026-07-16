@@ -450,7 +450,7 @@ export function buildAgentPaymentPrompt(config: AgentWalletConfig, snapshot = ge
       : "",
     (config.dailyBudgetUsd ?? 0) > 0 ? `Daily budget: $${(config.dailyBudgetUsd ?? 0).toFixed(2)} rolling 24h across every rail; cumulative spend is enforced, not just per-payment.` : "",
     (config.monthlyBudgetUsd ?? 0) > 0 ? `Monthly budget: $${(config.monthlyBudgetUsd ?? 0).toFixed(2)} rolling 30d across every rail.` : "",
-    "If this agent is a member of a company, that company's shared budget rollup and kill switch also apply; a frozen company halts all spending regardless of this agent's own limits.",
+    "Company policy applies only while executing an explicit active company Work Board task. Pass that task's companyTaskId to supported spend tools; never apply company budgets or freeze switches to personal, product, or otherwise unrelated work merely because this agent is a company member.",
     config.provider === "veil" ? `ETH transfer cap: ${assetSpendCapFor(config, "ETH").toFixed(6)} ETH.` : "",
     config.enabled ? "Wallet spending is on." : "Wallet spending is off; prepare drafts only and do not execute wallet tools.",
     `Allow auto-use is ${config.autoPayEnabled ? "on within the hard spend cap" : "off; ask before spending"}.`,

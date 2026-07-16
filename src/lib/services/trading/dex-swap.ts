@@ -86,6 +86,8 @@ export type DexSwapInput = {
   approvalToken?: string;
   /** True when the caller already completed a concrete server-side user approval for this exact swap. */
   approvalThresholdSatisfied?: boolean;
+  /** Active Work Board company task id. Omit for ordinary wallet swaps. */
+  companyTaskId?: string;
 };
 
 export type DexSwapQuote = {
@@ -132,9 +134,10 @@ async function swapGovernance(
   target: string,
   approvalToken?: string,
   approvalThresholdSatisfied?: boolean,
+  companyTaskId?: string,
 ): Promise<{ companyId?: string }> {
-  const governance = await resolveSpendGovernance(agentId);
-  if (governance && (await shouldEvaluateSpend(governance.wallet, MAX_SWAP_USD))) {
+  const governance = await resolveSpendGovernance(agentId, { companyTaskId });
+  if (governance && (await shouldEvaluateSpend(governance.wallet, MAX_SWAP_USD, { companyId: governance.companyId }))) {
     const decision = await evaluateSpend({
       wallet: governance.wallet,
       agentName: governance.agentName,
@@ -144,6 +147,7 @@ async function swapGovernance(
       target,
       approvalToken,
       approvalThresholdSatisfied,
+      companyId: governance.companyId,
       explanation: {
         summary: "This is a decentralized exchange swap from the agent wallet.",
         whyNow: "The swap value crossed a wallet governance rule and was paused before signing.",
@@ -278,7 +282,7 @@ async function executeEvmSwap(input: DexSwapInput): Promise<DexSwapResult> {
   const { sell, buy, sellAtomic, valueUsd, slippageBps } = await prepareEvmLeg(input);
   const network = input.network as EvmSwapNetwork;
   const label = `dex:${sell.symbol}->${buy.symbol}`;
-  const { companyId } = await swapGovernance(input.network, input.agentId, valueUsd, label, input.approvalToken, input.approvalThresholdSatisfied);
+  const { companyId } = await swapGovernance(input.network, input.agentId, valueUsd, label, input.approvalToken, input.approvalThresholdSatisfied, input.companyTaskId);
   await assertTradingPlatformFeeReady({ source: "dex-swap", network: input.network, amountUsd: valueUsd });
 
   const quote = await zeroExFetch(`/swap/permit2/quote?chainId=${evmChainId(network)}&sellToken=${sell.address}&buyToken=${buy.address}&sellAmount=${sellAtomic.toString()}&slippageBps=${slippageBps}&taker=${input.fromAddress}`);
@@ -384,7 +388,7 @@ async function executeSolanaSwap(input: DexSwapInput): Promise<DexSwapResult> {
   if (!input.secret) throw new Error("No local Solana wallet key is available to sign the swap.");
   const { sell, buy, sellAtomic, valueUsd, slippageBps } = await prepareSolanaLeg(input);
   const label = `dex:${sell.symbol}->${buy.symbol}`;
-  const { companyId } = await swapGovernance(input.network, input.agentId, valueUsd, label, input.approvalToken, input.approvalThresholdSatisfied);
+  const { companyId } = await swapGovernance(input.network, input.agentId, valueUsd, label, input.approvalToken, input.approvalThresholdSatisfied, input.companyTaskId);
   await assertTradingPlatformFeeReady({ source: "dex-swap", network: input.network, amountUsd: valueUsd });
 
   const quote = await jupiterQuote(sell.mint, buy.mint, sellAtomic.toString(), slippageBps);

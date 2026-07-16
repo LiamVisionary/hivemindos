@@ -11,6 +11,7 @@ export type HostedMediaGenerateInput = HostedMediaQuoteInput & {
   idempotencyKey: string;
   approvalToken?: string;
   confirmation?: string;
+  companyTaskId?: string;
 };
 
 const MODEL_PATTERN = /^[a-z0-9][a-z0-9._-]{0,127}$/;
@@ -46,6 +47,7 @@ export function normalizeHostedMediaGenerateInput(value: unknown): HostedMediaGe
   if (!idempotencyKey) throw new Error("A bounded idempotency key is required for hosted media generation.");
   const approvalToken = boundedString(value.approvalToken, 200);
   const confirmation = boundedString(value.confirmation, 100);
+  const companyTaskId = boundedString(value.companyTaskId, 200);
   return {
     ...quote,
     agentId,
@@ -53,6 +55,7 @@ export function normalizeHostedMediaGenerateInput(value: unknown): HostedMediaGe
     idempotencyKey,
     ...(approvalToken ? { approvalToken } : {}),
     ...(confirmation ? { confirmation } : {}),
+    ...(companyTaskId ? { companyTaskId } : {}),
   };
 }
 

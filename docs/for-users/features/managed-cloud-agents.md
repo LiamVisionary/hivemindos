@@ -78,8 +78,8 @@ The selected wallet still enforces its normal controls:
 - spend must be enabled
 - the wallet must use local custody on Base
 - the top-up must fit the per-payment cap
-- daily, monthly, and company budgets still apply
-- company kill switches still apply
+- wallet daily and monthly budgets still apply
+- company budgets and freeze switches additionally apply only when the top-up belongs to an active company Work Board task
 - approval thresholds still pause the payment when required
 - the same onchain transaction cannot be credited twice
 

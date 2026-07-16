@@ -10,8 +10,9 @@ yourself or an agent does it for you.
 
 ## The checks, before anything moves
 
-1. **Freeze switch** — if you've frozen a company, all of its agents' actions stop
-   immediately, in every direction. This is your big red button.
+1. **Company-task freeze switch** — if you've frozen a company, actions performed for
+   its active Work Board tasks stop immediately. The same agent's personal, product,
+   and unrelated work is not treated as company work.
 2. **Per-action limits** — caps on how much a single action (or a single trade) can be.
    Anything over the cap is refused.
 3. **Daily & monthly limits** — rolling totals across everything a wallet spends, so
@@ -20,7 +21,7 @@ yourself or an agent does it for you.
    pauses and waits for a yes before it goes through.
 
 Money coming **in** (a sale) and **practice** (paper) trades don't count against your
-spending limits — but the freeze switch still stops them if a company is frozen.
+spending limits. A company freeze also stops them when they belong to an active company task.
 
 ## You always confirm
 
@@ -50,7 +51,7 @@ HivemindOS adds a few visible checkpoints:
 - Reduce-only trades are available for closing or shrinking a position.
 - Max trade and max payment limits apply before a new position can open, grow, or move
   funds.
-- The freeze switch still stops agents from trading.
+- A company freeze stops trades attached to an active company Work Board task; company membership alone does not stop unrelated trades.
 
 HivemindOS can enforce the wallet rules, but it cannot prevent normal market risks like
 liquidation, funding payments, slippage, or fast price moves. Keep position size inside

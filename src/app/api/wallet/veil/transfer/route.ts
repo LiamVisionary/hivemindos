@@ -47,6 +47,7 @@ type VeilTransferBody = {
   duplicateGuardEnabled?: boolean;
   duplicateGuardSeconds?: number | string;
   approvalToken?: string;
+  companyTaskId?: string;
 };
 
 export async function POST(request: NextRequest) {
@@ -57,6 +58,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({})) as VeilTransferBody;
     const agentId = body.agentId?.trim();
     const persisted = agentId ? await loadGovernanceWallet(agentId).catch(() => null) : null;
+    const governance = persisted
+      ? await resolveSpendGovernance(agentId!, { companyTaskId: body.companyTaskId })
+      : null;
     // Personal (`user:`) wallets never auto-spend: explicit confirmation is always
     // required for a private transfer, regardless of any persisted policy.
     const isPersonalWallet = Boolean(body.agentId?.trim().startsWith("user:"));
@@ -73,10 +77,10 @@ export async function POST(request: NextRequest) {
     const veilKey = await veilEnvValue("VEIL_KEY");
     if (!veilKey) return sendError("VEIL_KEY is not configured in the server environment. Run Veil setup before private transfers.", 424);
 
-    // Governance: company kill switch, cumulative budgets, and approval escalation.
+    // Wallet governance is always active; explicit active company tasks add
+    // their company freeze and cumulative budgets.
     // USDC is 1:1 USD; ETH uses the caller-supplied USD value when available.
     const usdValue = asset === "USDC" ? Number(amount) : Number(body.amountUsd ?? 0);
-    const governance = persisted ? { wallet: persisted.wallet, agentName: persisted.agentName } : agentId ? await resolveSpendGovernance(agentId) : null;
     let grantId: string | undefined;
     let companyId: string | undefined;
     if (governance) {
@@ -89,6 +93,7 @@ export async function POST(request: NextRequest) {
         assetAmount: Number(amount),
         target: recipient,
         approvalToken: body.approvalToken,
+        companyId: governance.companyId,
         explanation: {
           summary: "This is a private transfer through Veil. The app paused before submitting it.",
           whyNow: "The transfer crossed a wallet governance rule and needs a human decision before execution.",

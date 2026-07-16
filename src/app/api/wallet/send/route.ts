@@ -13,6 +13,7 @@ type SendUsdcBody = {
   confirmation?: string;
   approvalToken?: string;
   gasSponsorAgentId?: string;
+  companyTaskId?: string;
 };
 
 type RouteSendApproval = {
@@ -21,6 +22,7 @@ type RouteSendApproval = {
   amountUsd: number;
   maxPaymentUsd?: number;
   gasSponsorAgentId?: string;
+  companyTaskId?: string;
   expiresAtMs: number;
 };
 
@@ -64,6 +66,7 @@ export async function POST(request: NextRequest) {
       gasSponsorAgentId: body.gasSponsorAgentId?.trim() || undefined,
       approvalToken: body.approvalToken,
       approvalThresholdSatisfied: true,
+      companyTaskId: body.companyTaskId?.trim() || undefined,
     });
     if (!result.ok) {
       const status = result.status === "not_found" ? 404 : result.status === "blocked" ? 403 : result.status === "pending_approval" ? 202 : 400;
@@ -85,6 +88,7 @@ function createRouteSendApproval(body: SendUsdcBody) {
     amountUsd: Number(body.amountUsd),
     maxPaymentUsd: body.maxPaymentUsd == null ? undefined : Number(body.maxPaymentUsd),
     gasSponsorAgentId: body.gasSponsorAgentId?.trim() || undefined,
+    companyTaskId: body.companyTaskId?.trim() || undefined,
     expiresAtMs,
   });
   return { token, expiresAtMs };
@@ -114,7 +118,8 @@ function matchesRouteSendApproval(approval: RouteSendApproval, body: SendUsdcBod
     && approval.toAddress.toLowerCase() === body.toAddress?.trim().toLowerCase()
     && sameUsd(approval.amountUsd, Number(body.amountUsd))
     && sameOptionalUsd(approval.maxPaymentUsd, body.maxPaymentUsd == null ? undefined : Number(body.maxPaymentUsd))
-    && approval.gasSponsorAgentId === (body.gasSponsorAgentId?.trim() || undefined);
+    && approval.gasSponsorAgentId === (body.gasSponsorAgentId?.trim() || undefined)
+    && approval.companyTaskId === (body.companyTaskId?.trim() || undefined);
 }
 
 function sameOptionalUsd(left: number | undefined, right: number | undefined) {

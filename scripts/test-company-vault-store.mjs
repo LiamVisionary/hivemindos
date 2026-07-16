@@ -65,7 +65,8 @@ const { readCompanyConfigHistory } = await import("../src/lib/services/company-g
 const { submitQueenBeeMessage } = await import("../src/lib/services/queen-bee/control-plane.ts");
 const { readBoard } = await import("../src/lib/services/kanban/local-kanban-store.ts");
 const { appendSpend } = await import("../src/lib/services/wallet/spend-ledger.ts");
-const { evaluateSpend } = await import("../src/lib/services/wallet/spend-governance.ts");
+const { evaluateSpend, resolveSpendGovernance } = await import("../src/lib/services/wallet/spend-governance.ts");
+const { createTask } = await import("../src/lib/services/kanban/local-kanban-store.ts");
 
 const definitionsFile = join(vaultPath, "Operations", "Companies", "companies.json");
 const overlayFile = join(tempHome, ".hivemindos", "companies-runtime.json");
@@ -167,6 +168,7 @@ try {
     kind: "api",
     asset: "USDC",
     amountUsd: 3,
+    companyId: exclusiveOwner.id,
   });
   assert.equal(memberCapDecision.decision, "block", "company member daily cap blocks excess spend");
   assert.match(memberCapDecision.reason, /company member daily budget/i, "member-cap block explains the governing company-specific limit");
@@ -182,11 +184,70 @@ try {
     kind: "api",
     asset: "USDC",
     amountUsd: 1,
+    companyId: exclusiveOwner.id,
   });
   assert.equal(
     unrelatedSpendDecision.decision,
     "allow",
     "a member's personal or unrelated spend does not consume the company-specific member cap",
+  );
+  const walletOnlySpendDecision = await evaluateSpend({
+    wallet: { agentId: "shared-agent", approvalRequiredOverUsd: 0 },
+    kind: "x402",
+    asset: "USDC",
+    amountUsd: 50,
+  });
+  assert.equal(
+    walletOnlySpendDecision.decision,
+    "allow",
+    "a wallet-only product action does not inherit company member budgets",
+  );
+  assert.equal(walletOnlySpendDecision.companyId, undefined, "wallet-only spend is never tagged to a company");
+  const companyTask = await createTask(null, {
+    title: "Company spend context",
+    status: "working",
+    assignee: "shared-agent",
+    source: `company:${exclusiveOwner.id}:run-test`,
+  }, { vaultPath });
+  const companyTaskGovernance = await resolveSpendGovernance("shared-agent", { companyTaskId: companyTask.task.id });
+  assert.equal(companyTaskGovernance?.companyId, exclusiveOwner.id, "active company task resolves explicit company governance");
+  await assert.rejects(
+    resolveSpendGovernance("shared-agent", { companyTaskId: "missing-task" }),
+    /does not exist/i,
+    "invented company task ids fail closed",
+  );
+  const inactiveCompanyTask = await createTask(null, {
+    title: "Inactive company spend context",
+    status: "ready",
+    assignee: "shared-agent",
+    source: `company:${exclusiveOwner.id}:run-test`,
+  }, { vaultPath });
+  await assert.rejects(
+    resolveSpendGovernance("shared-agent", { companyTaskId: inactiveCompanyTask.task.id }),
+    /actively working/i,
+    "inactive company tasks cannot attach company restrictions",
+  );
+  const ordinaryTask = await createTask(null, {
+    title: "Ordinary product work",
+    status: "working",
+    assignee: "shared-agent",
+    source: "chat:test",
+  }, { vaultPath });
+  await assert.rejects(
+    resolveSpendGovernance("shared-agent", { companyTaskId: ordinaryTask.task.id }),
+    /not company work/i,
+    "ordinary Work Board tasks cannot be mislabeled as company work",
+  );
+  const otherAgentCompanyTask = await createTask(null, {
+    title: "Another agent's company spend context",
+    status: "working",
+    assignee: "different-agent",
+    source: `company:${exclusiveOwner.id}:run-test`,
+  }, { vaultPath });
+  await assert.rejects(
+    resolveSpendGovernance("shared-agent", { companyTaskId: otherAgentCompanyTask.task.id }),
+    /not assigned to this wallet agent/i,
+    "an agent cannot borrow another agent's active company task context",
   );
 
   // ── churn guard: hot writes must not rewrite the replicated definitions file ──

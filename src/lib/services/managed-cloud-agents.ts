@@ -182,6 +182,7 @@ export async function fundManagedCloudAccount(input: {
   amountUsd: number;
   confirmation?: string;
   approvalToken?: string;
+  companyTaskId?: string;
 }): Promise<{ account: ManagedCloudAccount; creditedUsd: number; transactionHash: string }> {
   const amountUsd = normalizeManagedCloudTopUp(input.amountUsd);
   const walletAgentId = input.walletAgentId.trim();
@@ -212,7 +213,7 @@ export async function fundManagedCloudAccount(input: {
     existingCredential?.token,
   );
   const quote = assertOfficialManagedCloudQuote(quoteResponse.quote, amountUsd);
-  const governance = await resolveSpendGovernance(walletAgentId);
+  const governance = await resolveSpendGovernance(walletAgentId, { companyTaskId: input.companyTaskId });
   let companyId: string | undefined;
   let approvalId: string | undefined;
   if (governance) {
@@ -225,6 +226,7 @@ export async function fundManagedCloudAccount(input: {
       target: quote.payTo,
       approvalToken: input.approvalToken,
       approvalThresholdSatisfied: confirmed,
+      companyId: governance.companyId,
       explanation: {
         summary: "Fund HivemindOS managed-agent compute and persistent storage credits.",
         whyNow: "A managed cloud agent needs prepaid credit before it can deploy or keep running.",

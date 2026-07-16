@@ -992,7 +992,7 @@ export function AgentWalletCard({
             </div>
           </div>
           <p className={styles.sheetHelp}>
-            Daily/monthly budgets cap cumulative spend across every rail. Add this agent to a company from the Zero Human Company panel for a shared budget and kill switch.
+            Daily/monthly budgets cap cumulative spend across every rail. Company budgets and freeze switches additionally apply while this agent executes that company's active Work Board tasks.
           </p>
           <button
             type="button"

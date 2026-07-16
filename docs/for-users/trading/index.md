@@ -18,6 +18,11 @@ confirmation before anything executes. Nothing moves silently.
     <a href="crypto.html">What you can do with crypto</a>
   </section>
   <section class="docCard">
+    <h3>Bankr Copy Trading</h3>
+    <p>Keep a hosted Base-wallet monitor online, start safely in paper mode, and explicitly promote a verified Bankr execution wallet to live trading under hard limits.</p>
+    <a href="bankr-copy-trading.html">Set up Bankr copy trading</a>
+  </section>
+  <section class="docCard">
     <h3>Hyperliquid</h3>
     <p>Trade spot or perps from a local EVM wallet, manage orders, leverage, margin, transfers, withdrawals, and TWAPs, and keep everything inside wallet limits.</p>
     <a href="hyperliquid.html">Trade on Hyperliquid</a>
@@ -49,6 +54,7 @@ confirmation before anything executes. Nothing moves silently.
 | You can… | Using |
 |---|---|
 | Swap one token for another | Built-in swaps (Base, Robinhood Chain, and Solana) or Bankr |
+| Follow new Base swaps through an always-on hosted monitor | HivemindOS copy-trading service + Bankr execution wallet |
 | Send USDC or USDG to someone | Your wallet |
 | Send privately | Veil (shielded transfer) |
 | Pay a pay-per-use API | x402 |

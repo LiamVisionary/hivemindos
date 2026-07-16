@@ -14,6 +14,7 @@ import { Badge, BBtn } from "./primitives";
 import { BIcon } from "./icons";
 import { useVisibilityAwarePolling } from "@/features/dashboard/hooks/use-visibility-aware-polling";
 import styles from "./CopyTradingPanel.module.css";
+import { ManagedBankrCopyTradingPanel } from "./ManagedBankrCopyTradingPanel";
 import {
   MAX_COPY_TRADE_USD,
   copyTradeNetworkLabel,
@@ -47,11 +48,6 @@ type Snapshot = {
   online: boolean;
   fundable: Record<string, CopyTradeFundable>;
 };
-
-/** Spendable balance the copy-trader can use for this config (acting wallet + chain). */
-function fundableFor(snap: Snapshot | null, config: CopyTradingConfig): CopyTradeFundable | null {
-  return snap?.fundable?.[`${config.walletAddress}:${config.network}`] ?? null;
-}
 
 type DaemonServiceStatus = {
   installed: boolean;
@@ -247,6 +243,7 @@ export function CopyTradingPanel(props: Props) {
 
   return (
     <div className={styles.wrap}>
+      <ManagedBankrCopyTradingPanel />
       <EngineStatus snap={snap} service={daemonService} installing={daemonBusy} error={daemonError} onInstall={installDaemon} />
 
       {!daemonReady ? (

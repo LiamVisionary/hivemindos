@@ -6,6 +6,7 @@ import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { createTask, patchTask, readBoard } from "@/lib/services/kanban/local-kanban-store";
 import { scheduleQueenBeeAutonomousPickup } from "@/lib/services/queen-bee/autonomous-worker";
 import { chooseQueenBeeDelegate, rankQueenBeeDelegates, type QueenBeeWorkerClass } from "@/lib/services/queen-bee/router";
+import { companyIdFromSource } from "@/lib/services/queen-bee/company-task-context";
 import { readQueenBeeOutcomeStats } from "@/lib/services/queen-bee/outcome-stats";
 import { readProjectRegistry } from "@/lib/services/projects/project-registry";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
@@ -267,11 +268,7 @@ export function isRoutablePendingQueenBeeTask(
   return now - (task.updatedAt ?? 0) >= REDISPATCH_MIN_READY_AGE_MS;
 }
 
-/** The company id stamped on a company dispatch source (`company:{id}:{runId}`), or null. */
-export function companyIdFromSource(source?: string | null): string | null {
-  if (!source || !source.startsWith("company:")) return null;
-  return source.split(":")[1] || null;
-}
+export { companyIdFromSource } from "@/lib/services/queen-bee/company-task-context";
 
 /** Restrict a fleet snapshot to a set of member agent ids (by id/agentId/name). */
 function scopeFleetToMemberIds(fleet: QueenBeeFleetMachine[], ids: Set<string>): QueenBeeFleetMachine[] {

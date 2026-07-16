@@ -57,7 +57,7 @@ dedicated Agentic brokerage account. HivemindOS encrypts the local OAuth session
 reconnects it after restart. Agents can use the explicit read allowlist for accounts,
 portfolio, orders, positions, market data, watchlists, options context, earnings, and
 scans. Raw mutation tools are not generally exposed: equity orders call Robinhood's
-pre-trade review and then pass through HivemindOS caps, company governance, explicit
+pre-trade review and then pass through HivemindOS wallet caps, task-scoped company governance when the order belongs to an active company task, explicit
 `CONFIRM_BUY` or `CONFIRM_SELL`, and the unified activity ledger before placement.
 
 Robinhood Agentic brokerage and Robinhood Chain are separate venues. The brokerage MCP

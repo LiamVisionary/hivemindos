@@ -5,7 +5,7 @@ export function hyperliquidOrderReasoning(order: HyperliquidOrderSummary): Parti
   return {
     summary: "This is a Hyperliquid order from the agent wallet.",
     whyNow: order.reduceOnly
-      ? "Reduce-only orders still pass the company governance check before execution."
+      ? "Reduce-only orders still pass the applicable wallet and explicit task governance checks before execution."
       : "The order notional crossed a wallet governance rule and was paused before execution.",
     impact: order.reduceOnly
       ? "Approving lets the reduce-only order continue. Rejecting stops this order attempt."

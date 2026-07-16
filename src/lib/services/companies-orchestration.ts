@@ -30,9 +30,9 @@ import {
  * (submitQueenBeeMessage), scoped to the company's member agents. The queen-bee
  * engine routes each task to the best member in the supplied fleet snapshot,
  * creates the Work Board card, and schedules autonomous pickup (claim → the
- * agent's collector /chat → complete). Spend during that work is already
- * company-governed via getCompanyForAgent, so the company budget + kill switch
- * bind without any extra wiring here.
+ * agent's collector /chat → complete). The autonomous worker carries the active
+ * company Work Board task id into supported spend tools so company policy binds
+ * to this work without leaking into the same agent's unrelated activity.
  */
 
 /** A directive verb per company role, used to seed the heuristic decomposer. */

@@ -29,6 +29,7 @@ type ManagedCloudBody = {
   amountUsd?: number;
   confirmation?: string;
   approvalToken?: string;
+  companyTaskId?: string;
   instanceId?: string;
   name?: string;
   planId?: "small" | "medium" | "large";
@@ -75,6 +76,7 @@ export async function POST(request: NextRequest) {
         amountUsd: Number(body.amountUsd),
         confirmation: body.confirmation,
         approvalToken: body.approvalToken,
+        companyTaskId: body.companyTaskId?.trim() || undefined,
       }));
     }
     if (body.action === "create") {

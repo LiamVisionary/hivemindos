@@ -54,6 +54,8 @@ export type X402FetchInput = {
   approvalThresholdSatisfied?: boolean;
   /** Human-facing context to attach if this paid request needs approval. */
   approvalContext?: Partial<ReasoningTrail>;
+  /** Active Work Board company task id. Omit for ordinary user/agent spending. */
+  companyTaskId?: string;
   /** Use plain fetch without x402 discovery/wrapping when an upstream bearer/prepaid token should decide access. */
   skipPaymentDiscovery?: boolean;
   /** True when the endpoint price already includes HivemindOS revenue, so the generic local platform fee should not be collected. */
@@ -334,18 +336,18 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
     });
   }
 
-  // Governance pre-flight: company kill switch, cumulative budgets, approval
-  // escalation. Skipped for agents with no governance configured so default
-  // behaviour and request count are unchanged.
-  // resolveSpendGovernance also covers company members without their own wallet
-  // config so the company kill switch/budgets bind for them too.
-  const governance = await resolveSpendGovernance(input.agentId);
+  // Governance pre-flight. Ordinary calls use only the selected wallet's own
+  // policy. Company policy is attached only by a validated active Work Board
+  // company task id; company membership by itself never changes a wallet call.
+  const governance = await resolveSpendGovernance(input.agentId, { companyTaskId: input.companyTaskId });
   let approvalGrantId: string | undefined;
   let spendCompanyId: string | undefined;
-  if (governance && (await shouldEvaluateSpend(governance.wallet, input.policy.maxPaymentUsd))) {
+  if (governance && (await shouldEvaluateSpend(governance.wallet, input.policy.maxPaymentUsd, {
+    companyId: governance.companyId,
+  }))) {
     const preflightAmountUsd = await discoverAmount();
-    // Always evaluate (amount 0 when undiscoverable) so the company kill switch
-    // blocks even when the paid amount can't be priced ahead of time.
+    // Always evaluate an explicit company task (amount 0 when undiscoverable)
+    // so its freeze switch binds even when the price cannot be discovered first.
     const decision = await evaluateSpend({
       wallet: governance.wallet,
       agentName: governance.agentName,
@@ -356,6 +358,7 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
       approvalToken: input.approvalToken,
       approvalThresholdSatisfied: input.approvalThresholdSatisfied,
       explanation: input.approvalContext,
+      companyId: governance.companyId,
     });
     if (decision.decision !== "allow") throw new Error(decision.reason);
     approvalGrantId = decision.grant?.id;

@@ -28,6 +28,7 @@ type SwapBody = {
   slippageBps?: number;
   confirmation?: string;
   approvalToken?: string;
+  companyTaskId?: string;
   /** Acting-wallet network for a price-only quote when the wallet has no local
    *  signing key (e.g. a Bankr-managed wallet). Ignored for execute. */
   network?: string;
@@ -74,6 +75,7 @@ export async function POST(request: NextRequest) {
       confirmation: body.confirmation,
       approvalToken: body.approvalToken?.trim() || undefined,
       approvalThresholdSatisfied: body.confirmation === SWAP_CONFIRMATION,
+      companyTaskId: body.companyTaskId?.trim() || undefined,
     };
 
     if (isExecute) {

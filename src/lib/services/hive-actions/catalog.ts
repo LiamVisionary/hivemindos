@@ -20,7 +20,7 @@ const handoffTargetSchema = {
 };
 
 const jsonObjectSchema = z.record(z.string(), z.unknown());
-
+const governedSpendSchema = { agentId: z.string().optional(), companyTaskId: z.string().optional().describe("Active Work Board company task id; omit outside company work.") };
 const kanbanStatusSchema = z.enum([
   "ideas",
   "ready",
@@ -583,7 +583,7 @@ export const sendUsdcAction = defineHiveAction({
   description:
     "Execute a governed stablecoin send through the wallet route after explicit confirmation: USDC on Base/Solana, USDG on Robinhood Chain.",
   schema: z.object({
-    agentId: z.string().optional(),
+    ...governedSpendSchema,
     wallet: z.record(z.string(), z.unknown()).optional(),
     recipientAddress: z.string().optional(),
     toAddress: z.string().optional(),
@@ -657,7 +657,7 @@ export const dexSwapAction = defineHiveAction({
   description:
     "Execute a governed local-wallet DEX swap after explicit confirmation.",
   schema: z.object({
-    agentId: z.string().optional(),
+    ...governedSpendSchema,
     wallet: z.record(z.string(), z.unknown()).optional(),
     fromAsset: z.string().optional(),
     toAsset: z.string().optional(),
@@ -696,7 +696,7 @@ export const stockTradeAction = defineHiveAction({
   description:
     "Execute or validate a governed Alpaca, Robinhood Agentic, xStocks, or Robinhood Chain stock-token trade after explicit buy/sell confirmation.",
   schema: z.object({
-    agentId: z.string().optional(),
+    ...governedSpendSchema,
     wallet: z.record(z.string(), z.unknown()).optional(),
     symbol: z.string().optional(),
     ticker: z.string().optional(),
@@ -726,7 +726,7 @@ export const stockTradeAction = defineHiveAction({
     summary:
       "Critical governed brokerage/xStocks/Robinhood Chain stock-token route.",
     retrievalText:
-      "Use stock_trade only after prepare/review paths establish venue, paper/live mode, symbol, side, amount, and required side-specific confirmation. CONFIRM_BUY is required for buys and CONFIRM_SELL for sells; server routes remain authoritative. The robinhood-agentic venue uses Robinhood's official OAuth MCP and dedicated Agentic brokerage account: it calls review_equity_order before place_equity_order, while HivemindOS enforces caps, company governance, and its ledger. Robinhood Chain remains a separate self-custody venue that swaps USDG through 0x on chain ID 4663; if 0x rejects a Stock Token for legal/eligibility restrictions, surface that block and do not route around it.",
+      "Use stock_trade only after prepare/review paths establish venue, paper/live mode, symbol, side, amount, and required side-specific confirmation. CONFIRM_BUY is required for buys and CONFIRM_SELL for sells; server routes remain authoritative. The robinhood-agentic venue uses Robinhood's official OAuth MCP and dedicated Agentic brokerage account: it calls review_equity_order before place_equity_order, while HivemindOS enforces wallet caps, explicit active company-task governance when companyTaskId is supplied, and its ledger. Robinhood Chain remains a separate self-custody venue that swaps USDG through 0x on chain ID 4663; if 0x rejects a Stock Token for legal/eligibility restrictions, surface that block and do not route around it.",
     route: "/api/trading",
     methods: ["POST"],
   },
@@ -739,7 +739,7 @@ export const hyperliquidTradeAction = defineHiveAction({
     "Quote, approve builder fees, trade spot/perps, manage orders, adjust account settings, transfer funds, or run TWAPs on Hyperliquid from a governed local EVM wallet.",
   schema: z.object({
     action: z.enum(["status", "positions", "open-orders", "fills", "fees", "order-status", "quote", "approve-builder", "order", "cancel", "cancel-by-cloid", "modify", "schedule-cancel", "leverage", "margin", "usd-class", "usd-send", "spot-send", "withdraw", "twap-order", "twap-cancel"]).optional(),
-    agentId: z.string().optional(),
+    ...governedSpendSchema,
     wallet: z.record(z.string(), z.unknown()).optional(),
     coin: z.string().optional(),
     marketType: z.enum(["perp", "spot"]).optional(),

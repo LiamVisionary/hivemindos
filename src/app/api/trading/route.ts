@@ -55,6 +55,7 @@ type TradingBody = {
   qty?: number;
   confirmation?: string;
   approvalToken?: string;
+  companyTaskId?: string;
   slippageBps?: number;
   /** Paper toggle from the Stocks screen. true forces paper; never escalates to live. */
   paper?: boolean;
@@ -233,6 +234,7 @@ export async function POST(request: NextRequest) {
       secret,
       fromAddress,
       slippageBps,
+      companyTaskId: body.companyTaskId?.trim() || undefined,
     });
     return NextResponse.json({ ok: true, result });
   } catch (error) {

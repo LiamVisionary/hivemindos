@@ -17,6 +17,7 @@ export async function POST(request: NextRequest) {
       body?: unknown;
       policy?: Partial<AgentWalletConfig>;
       confirmation?: string;
+      companyTaskId?: string;
     };
     const agentId = body.agentId?.trim();
     const url = body.url?.trim();
@@ -41,6 +42,7 @@ export async function POST(request: NextRequest) {
       body: body.body,
       policy,
       confirmation: body.confirmation,
+      companyTaskId: body.companyTaskId?.trim() || undefined,
       approvalContext: {
         summary: "This is a generic x402 paid HTTP request from the wallet API.",
         whyNow: "The endpoint requested payment and the wallet governance policy requires review before spending.",

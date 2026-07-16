@@ -82,6 +82,7 @@ type HyperliquidBody = {
   aggregateByTime?: boolean;
   confirmation?: string;
   approvalToken?: string;
+  companyTaskId?: string;
 };
 
 type HyperliquidAction =
@@ -261,6 +262,7 @@ function buildSignedInput(
     twapId: body.twapId,
     confirmation: body.confirmation,
     approvalToken: body.approvalToken?.trim() || undefined,
+    companyTaskId: body.companyTaskId?.trim() || undefined,
   };
 }
 
@@ -317,6 +319,7 @@ function buildOrderInput(
     clientOrderId: body.clientOrderId?.trim() || undefined,
     reduceOnly: Boolean(body.reduceOnly),
     slippageBps: numeric(body.slippageBps),
+    companyTaskId: body.companyTaskId?.trim() || undefined,
   };
 }
 
