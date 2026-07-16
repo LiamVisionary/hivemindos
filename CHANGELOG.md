@@ -6,7 +6,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 ## Unreleased
 
 - 2026-07-15 23:31:47 EDT (-0400) - Chat Preview recovers after collector restarts
-  - Status: Uncommitted; the Ubuntu repair is not yet deployed.
+  - Status: Pushed in `e839d569` on PR #11; the Ubuntu repair is pending merge and live deployment.
   - Areas changed: local App Builder runtime status reconciliation and its focused process-exit regression (`scripts/lib/app-builder.mjs`, `scripts/test-app-builder-local.mjs`).
   - Summary: Opening Preview now detects when a collector restart or process exit killed an app runtime whose manifest still says `running`. App Builder clears the stale PID, port, and URL so the existing Chat Preview flow starts a fresh loopback runtime automatically instead of showing an `unverified: 502` dead end.
   - Verification: The real Flappy Bird chat reproduced the 502. Its Ubuntu manifest still reported PID `3616678` and port `43301` as running, while `ps` returned no process and a loopback curl failed with connection refused; the collector checkout had advanced after the manifest timestamp. The new regression failed with `running` before the fix and now passes with the reconciled `stopped` state. The complete App Builder suite passes 13 Node tests plus its collector-recovery, MCP, and hosting integrations; Chat Preview target/artifact tests and whole-project TypeScript also pass. Live Ubuntu repair and the real Preview path remain pending publication.
