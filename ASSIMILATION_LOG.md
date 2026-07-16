@@ -9137,3 +9137,39 @@
 - Decision: passed
 - Reason: Hermes bridge test, real inventory read, isolated config write/readback, syntax, TypeScript, and focused lint passed; full gate retained the concurrent 17-failure baseline.
 - Assimilated: official Hermes inventory and model-set mutation in collector
+## 2026-07-16T00:06:10.296106+00:00 - triage
+
+- Request: sure i like it. do all that. also i would like a new Hivemind Mini app that does this that we can charge for
+- Source: user-pinned-and-current-project
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- mikefutia/reddit-research-agent
+  - Decision: selected-donor
+  - Reason: pinned source supplies the Reddit VOC synthesis contract, exact-comment citation discipline, and report information architecture
+  - Path: `SKILL.md,fetch_reddit.py,dashboard-template.html`
+- packaged-skills/auto-install/hive-pulse
+  - Decision: selected
+  - Reason: existing HivemindOS Reddit retrieval, enrichment, source normalization, and HTML/JSON output backbone
+- packaged-skills/optional/gtm/hivemindos/reddit-gtm
+  - Decision: selected-donor
+  - Reason: existing human-gated downstream Reddit GTM workflow
+## 2026-07-16T00:09:25.206292+00:00 - audit
+
+- Request: sure i like it. do all that. also i would like a new Hivemind Mini app that does this that we can charge for
+- Source: scoped-candidate-audit
+- Decision: passed
+- Reason: Pinned Reddit VOC donor paths passed heuristic audit with high=0 medium=0 low=0; manual inspection confirmed a standard-library fetcher, prompt contract, and static HTML template.
+## 2026-07-16T00:40:42.888943+00:00 - assimilation-manifest
+
+- Request: sure i like it. do all that. also i would like a new Hivemind Mini app that does this that we can charge for
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: mikefutia/reddit-research-agent:fetch_reddit.py => packaged-skills/optional/gtm/mikefutia/reddit-voc-research/scripts/fetch_reddit.py, mikefutia/reddit-research-agent:SKILL.md => packaged-skills/optional/gtm/mikefutia/reddit-voc-research/SKILL.md, mikefutia/reddit-research-agent:dashboard-template.html => packaged-skills/optional/gtm/mikefutia/reddit-voc-research/references/report-schema.json
+- Verification: Wrote ASSIMILATION.json with 3 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-16T00:42:30.662683+00:00 - verification
+
+- Request: sure i like it. do all that. also i would like a new Hivemind Mini app that does this that we can charge for
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.json: 3 concrete reuse entries, 3 substantive

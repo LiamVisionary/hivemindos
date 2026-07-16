@@ -1,0 +1,38 @@
+{
+  "upstreamName": "reddit-research-agent",
+  "upstreamSlug": "reddit-voc",
+  "hiveSlug": "reddit-voc-research",
+  "sourceLabel": "mikefutia",
+  "catalogSource": "Mike Futia",
+  "catalogCategory": "GTM",
+  "sourceUrl": "https://github.com/mikefutia/reddit-research-agent/blob/379d8e63801585e59e0660fe66a5e8a61fe51747/SKILL.md",
+  "repository": "https://github.com/mikefutia/reddit-research-agent",
+  "installCommand": "Install from the HivemindOS Skill Browser; copies the audited local package only.",
+  "importedAt": "2026-07-16T02:30:00.000Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/gtm/mikefutia/reddit-voc-research",
+  "packageGroup": "gtm",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "379d8e63801585e59e0660fe66a5e8a61fe51747",
+  "sourceArchiveSha256": "dab87e934b2f058d07de9890a8c0894c423e7d35d778ad2c022fef66e42dce3f",
+  "upstreamSourceUrl": "https://github.com/mikefutia/reddit-research-agent",
+  "normalized": "portable-frontmatter-evidence-and-secret-boundary-normalized-by-hivemindos",
+  "description": "Mine bounded public Reddit threads and comments for evidence-linked pains, desires, objections, verbatim phrases, competitor signals, and ad angles, with exact source URLs and a read-only action boundary.",
+  "securityVerdict": "Approved for optional, read-only HivemindOS packaging at commit 379d8e63801585e59e0660fe66a5e8a61fe51747.",
+  "auditSummary": {
+    "auditedAt": "2026-07-16T02:20:00Z",
+    "sourceReview": "Pinned repository and all shipped source files reviewed; scoped heuristic audit reported no high, medium, or low findings.",
+    "dependencyReview": "Collector uses the Python standard library only and makes bounded GET requests to the configured ScrapeCreators Reddit endpoints.",
+    "dynamicRuntime": "Python compilation and argument validation run without a provider key; live provider calls remain credential-dependent and were not executed during packaging.",
+    "sandboxNote": "The HivemindOS adaptation removes plaintext key-file discovery, author names, unbounded collection, and guessed non-Reddit URLs."
+  },
+  "hivemindAdaptations": [
+    "Packages the workflow as an optional GTM/research skill instead of auto-installing it.",
+    "Pins the reviewed commit and codeload archive hash; updates require a fresh audit.",
+    "Uses the shared-env SCRAPECREATORS_API_KEY only and never reads plaintext key files.",
+    "Bounds collection and removes author identity while preserving exact Reddit evidence URLs.",
+    "Separates the free local/BYOK workflow from the paid hosted Reddit VOC Hivemind Mini service."
+  ]
+}

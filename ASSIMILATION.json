@@ -1,56 +1,28 @@
 {
-  "created_at": "2026-07-10T07:06:45.984988+00:00",
-  "request": "Run standardized LoCoMo, LongMemEval, and BEAM memory benchmarks against HivemindOS in dev",
-  "custom_code_assessment": "balanced",
+  "created_at": "2026-07-16T00:40:42.839354+00:00",
+  "request": "sure i like it. do all that. also i would like a new Hivemind Mini app that does this that we can charge for",
+  "custom_code_assessment": "mostly_assimilated",
   "entries": [
     {
-      "source_repo": "mem0ai/memory-benchmarks",
-      "source_path": "benchmarks/locomo/run.py",
-      "target_path": "scripts/benchmark-standard-memory-retrieval.mjs",
+      "source_repo": "mikefutia/reddit-research-agent",
+      "source_path": "fetch_reddit.py",
+      "target_path": "packaged-skills/optional/gtm/mikefutia/reddit-voc-research/scripts/fetch_reddit.py",
       "reuse_type": "adapted_code",
-      "note": "Adapted LoCoMo session parsing, question ids, category filter, and prediction schema to the HivemindOS production recall path."
+      "note": "bounded shared-env collector with author removal and Reddit URL validation"
     },
     {
-      "source_repo": "mem0ai/memory-benchmarks",
-      "source_path": "benchmarks/longmemeval/run.py",
-      "target_path": "scripts/benchmark-standard-memory-retrieval.mjs",
+      "source_repo": "mikefutia/reddit-research-agent",
+      "source_path": "SKILL.md",
+      "target_path": "packaged-skills/optional/gtm/mikefutia/reddit-voc-research/SKILL.md",
       "reuse_type": "adapted_code",
-      "note": "Adapted chronological session parsing and prediction schema to isolated HivemindOS vaults."
+      "note": "portable HivemindOS evidence and commercial-boundary workflow"
     },
     {
-      "source_repo": "mem0ai/memory-benchmarks",
-      "source_path": "benchmarks/beam/run.py",
-      "target_path": "scripts/lib/standard-memory-benchmark.mjs",
-      "reuse_type": "adapted_code",
-      "note": "Adapted BEAM chat formats, question ordering, and rubric extraction."
-    },
-    {
-      "source_repo": "mem0ai/memory-benchmarks",
-      "source_path": "benchmarks/beam/run.py",
-      "target_path": "scripts/benchmark-standard-memory-extract-beam.py",
-      "reuse_type": "adapted_code",
-      "note": "Adapted official normalized dataset fields to streamed per-conversation extraction."
-    },
-    {
-      "source_repo": "mem0ai/memory-benchmarks",
-      "source_path": "benchmarks/locomo/prompts.py",
-      "target_path": "scripts/benchmark-standard-memory-evaluate.py",
-      "reuse_type": "config_adapted",
-      "note": "Loads the exact audited prompt module by pinned SHA-256 for answer and judge calls."
-    },
-    {
-      "source_repo": "mem0ai/memory-benchmarks",
-      "source_path": "benchmarks/longmemeval/prompts.py",
-      "target_path": "scripts/benchmark-standard-memory-evaluate.py",
-      "reuse_type": "config_adapted",
-      "note": "Loads the exact audited prompt module by pinned SHA-256 for answer and judge calls."
-    },
-    {
-      "source_repo": "mem0ai/memory-benchmarks",
-      "source_path": "benchmarks/beam/prompts.py",
-      "target_path": "scripts/benchmark-standard-memory-evaluate.py",
-      "reuse_type": "config_adapted",
-      "note": "Loads the exact audited prompt module by pinned SHA-256 for answer and rubric-nugget judge calls."
+      "source_repo": "mikefutia/reddit-research-agent",
+      "source_path": "dashboard-template.html",
+      "target_path": "packaged-skills/optional/gtm/mikefutia/reddit-voc-research/references/report-schema.json",
+      "reuse_type": "translated_code",
+      "note": "dashboard evidence sections translated into a reusable report contract"
     }
   ]
 }
