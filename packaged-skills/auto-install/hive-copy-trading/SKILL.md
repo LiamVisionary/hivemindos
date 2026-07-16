@@ -16,7 +16,7 @@ metadata:
 
 Use the hosted HivemindOS monitor to watch one Base wallet and execute bounded same-chain swaps through Bankr's direct Wallet API. Bankr holds the user's wallet and non-exportable signing key. HivemindOS receives only a dedicated restricted Bankr API credential over HTTPS, verifies its wallet and signing capability, encrypts it at rest, never returns it, and erases it when the monitor is canceled.
 
-There is no subscription or upfront x402 payment. A new monitor gets a seven-day paper trial. Live mode charges 0.5% of the independently verified copied-trade notional, with a $0.02 minimum and $0.50 maximum, directly in Base USDC from the Bankr execution wallet. Paper, skipped, and failed trades cost $0. Always read the hosted pricing response because the server policy is authoritative.
+There is no subscription or upfront x402 payment. A new monitor gets one eligible paper event within seven days, then pauses for review. Live mode charges 0.5% of the independently verified copied-trade notional, with a $0.02 minimum and $0.50 maximum, directly in Base USDC from the Bankr execution wallet. Paper, skipped, and failed trades cost $0. Always read the hosted pricing response because the server policy is authoritative.
 
 ## Install inside Bankr
 
