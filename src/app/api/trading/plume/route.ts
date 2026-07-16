@@ -31,6 +31,7 @@ type PlumePostBody = {
   approvalToken?: string;
   reviewFingerprint?: string;
   jurisdictionAttestation?: boolean;
+  companyTaskId?: string;
 };
 
 function normalizeAction(body: PlumePostBody): PlumeOptionAction | null {
@@ -101,6 +102,7 @@ export async function POST(request: NextRequest) {
       approvalToken: body.approvalToken?.trim() || undefined,
       reviewFingerprint: body.reviewFingerprint?.trim() || undefined,
       approvalThresholdSatisfied: body.confirmation === PLUME_ACTION_CONFIRMATIONS[action.action],
+      companyTaskId: body.companyTaskId?.trim() || undefined,
     });
     return okJson({ result });
   } catch (error) {

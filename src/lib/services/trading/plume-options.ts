@@ -507,6 +507,7 @@ export async function executePlumeOptionAction(input: {
   approvalToken?: string;
   approvalThresholdSatisfied?: boolean;
   reviewFingerprint?: string;
+  companyTaskId?: string;
 }): Promise<PlumeExecutionResult> {
   if (!input.walletNetwork.startsWith("eip155:")) throw new Error("Plume options require a local EVM wallet.");
   const account = evmAccount(input.secret);
@@ -522,7 +523,7 @@ export async function executePlumeOptionAction(input: {
     const persisted = await loadGovernanceWallet(input.agentId);
     const hardCap = Number(persisted?.wallet.maxTradeUsd) || 0;
     if (hardCap > 0 && review.spendUsd > hardCap + 0.01) throw new Error(`This option action locks or spends about $${review.spendUsd.toFixed(2)}, above the wallet's $${hardCap.toFixed(2)} per-trade cap.`);
-    const governance = await resolveSpendGovernance(input.agentId);
+    const governance = await resolveSpendGovernance(input.agentId, { companyTaskId: input.companyTaskId });
     if (governance) {
       const decision = await evaluateSpend({
         wallet: governance.wallet,
@@ -534,6 +535,7 @@ export async function executePlumeOptionAction(input: {
         target: `plume-options:${review.symbol} ${review.action}`,
         approvalToken: input.approvalToken,
         approvalThresholdSatisfied: input.approvalThresholdSatisfied,
+        companyId: governance.companyId,
         explanation: {
           summary: review.summary,
           whyNow: "A Plume option action is ready to simulate and sign on Robinhood Chain testnet.",
