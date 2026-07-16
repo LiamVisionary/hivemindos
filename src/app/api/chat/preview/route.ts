@@ -7,7 +7,7 @@ import {
   selectChatPreviewTargets,
   type ChatPreviewHostedApp,
 } from "@/lib/services/chat/chat-preview-targets";
-import { isAllowedChatPreviewUrl } from "@/lib/services/chat/chat-preview-guard";
+import { isAllowedChatPreviewUrl, isAllowedThreadAppPreviewUrl } from "@/lib/services/chat/chat-preview-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -63,6 +63,29 @@ async function fetchHostedApps(origin: string): Promise<ChatPreviewHostedApp[]> 
   return payload!.apps.map(toPreviewHostedApp);
 }
 
+async function fetchThreadAppProject(request: NextRequest) {
+  const projectId = request.nextUrl.searchParams.get("projectId")?.trim() ?? "";
+  const directory = request.nextUrl.searchParams.get("directory")?.trim() ?? "";
+  if (!projectId || !directory) return null;
+  const response = await fetch(new URL("/api/app-builder", request.nextUrl.origin), {
+    method: "POST",
+    cache: "no-store",
+    headers: { "content-type": "application/json", ...internalApiAuthHeaders() },
+    body: JSON.stringify({
+      action: "status",
+      backend: "local",
+      projectId,
+      directory,
+      machineKey: request.nextUrl.searchParams.get("machineKey")?.trim() || undefined,
+      collectorUrl: request.nextUrl.searchParams.get("collectorUrl")?.trim() || undefined,
+    }),
+    signal: AbortSignal.timeout(FLEET_APPS_FETCH_TIMEOUT_MS),
+  }).catch(() => null);
+  if (!response?.ok) return null;
+  const payload = await response.json().catch(() => null) as { project?: Record<string, unknown> } | null;
+  return payload?.project ?? null;
+}
+
 export async function GET(request: NextRequest) {
   const url = request.nextUrl.searchParams.get("url")?.trim() ?? "";
   const machine = request.nextUrl.searchParams.get("machine")?.trim() ?? "";
@@ -71,11 +94,16 @@ export async function GET(request: NextRequest) {
   }
 
   const hostedApps = await fetchHostedApps(request.nextUrl.origin);
+  const threadAppProject = await fetchThreadAppProject(request);
+  const threadAppIdentity = {
+    projectId: request.nextUrl.searchParams.get("projectId")?.trim() ?? "",
+    directory: request.nextUrl.searchParams.get("directory")?.trim() ?? "",
+  };
 
   // SSRF gate: only a URL that exactly matches a discovered hosted app AND sits
   // on the trusted fleet host surface may be probed. On reject, hand back the
   // real previewable targets so the pane can offer live apps instead of a mock.
-  if (!isAllowedChatPreviewUrl(url, hostedApps)) {
+  if (!isAllowedChatPreviewUrl(url, hostedApps) && !isAllowedThreadAppPreviewUrl(url, threadAppIdentity, threadAppProject)) {
     return errorJson(
       "Refusing to preview a URL that is not a known fleet-hosted app.",
       403,

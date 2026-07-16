@@ -29,6 +29,23 @@ export type ChatPreviewTarget = {
   port: number;
   url: string;
   interactive: boolean;
+  source?: "thread-app" | "fleet";
+  projectId?: string;
+  directory?: string;
+  machineKey?: string;
+  collectorUrl?: string;
+};
+
+export type ChatPreviewArtifactTarget = {
+  projectId: string;
+  name: string;
+  directory: string;
+  machine: string;
+  machineKey?: string;
+  collectorUrl?: string;
+  port?: number;
+  url?: string;
+  running: boolean;
 };
 
 // A hosted app is previewable only when its collector reports it live. The
@@ -52,6 +69,7 @@ function normalizedMachine(value?: string) {
 export function selectChatPreviewTargets(
   hostedApps: readonly ChatPreviewHostedApp[],
   machineName?: string,
+  threadApp?: ChatPreviewArtifactTarget,
 ): ChatPreviewTarget[] {
   const wantedMachine = normalizedMachine(machineName);
   const targets: ChatPreviewTarget[] = [];
@@ -69,8 +87,31 @@ export function selectChatPreviewTargets(
       interactive: Boolean(app.interactive),
     });
   }
-  return targets.sort((a, b) => {
+  const sorted = targets.sort((a, b) => {
     if (a.interactive !== b.interactive) return a.interactive ? -1 : 1;
     return a.name.localeCompare(b.name);
   });
+  if (!threadApp?.projectId) return sorted;
+  const exactFleetIndex = sorted.findIndex((target) => (
+    threadApp.port
+    && target.port === threadApp.port
+    && (!threadApp.machine || normalizedMachine(target.machine) === normalizedMachine(threadApp.machine))
+  ));
+  const exactFleetTarget = exactFleetIndex >= 0 ? sorted[exactFleetIndex] : undefined;
+  const url = threadApp.url?.trim() || exactFleetTarget?.url || "";
+  if (!threadApp.running || !url) return sorted;
+  const target: ChatPreviewTarget = {
+    id: `thread-app:${threadApp.projectId}`,
+    name: threadApp.name,
+    machine: threadApp.machine || exactFleetTarget?.machine || machineName || "",
+    port: threadApp.port || exactFleetTarget?.port || 0,
+    url,
+    interactive: true,
+    source: "thread-app",
+    projectId: threadApp.projectId,
+    directory: threadApp.directory,
+    machineKey: threadApp.machineKey,
+    collectorUrl: threadApp.collectorUrl,
+  };
+  return [target, ...sorted.filter((_candidate, index) => index !== exactFleetIndex && _candidate.url !== target.url)];
 }

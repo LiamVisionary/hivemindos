@@ -58,7 +58,7 @@ export type GitLawbProof = {
 export type AppBuilderProjectReference = {
   backend: "local" | "managed";
   contractVersion: string;
-  templateId: "nextjs";
+  templateId: "nextjs" | "static";
   status: "creating" | "stopped" | "starting" | "running" | "stopping" | "error";
   localProjectId?: string;
   managedAgentId?: string;

@@ -35,6 +35,26 @@ test("local project creation is approval-gated, idempotent, and confined to the 
     assert.equal(created.project.status, "stopped");
     assert.equal(JSON.parse(await readFile(join(project, "package.json"), "utf8")).dependencies.next, "16.2.6");
 
+    const nested = join(root, "scratchpad", "nested-app");
+    const nestedProject = await appBuilder.createLocalAppProject({
+      directory: nested,
+      workspaceDirectory: root,
+      name: "Nested",
+      templateId: "static",
+      confirmation: confirmations.create,
+    });
+    assert.equal(nestedProject.created, true, "confirmed project creation may create safe parent folders inside the selected workspace");
+    await assert.rejects(
+      appBuilder.createLocalAppProject({
+        directory: join(root, "..", "outside-app"),
+        workspaceDirectory: root,
+        name: "Outside",
+        templateId: "static",
+        confirmation: confirmations.create,
+      }),
+      /inside the selected chat workspace/,
+    );
+
     const replay = await appBuilder.createLocalAppProject({
       directory: project,
       name: "Portal",
@@ -97,6 +117,82 @@ test("local file operations enforce project boundaries and write/delete approval
       confirmation: confirmations.delete,
     });
     assert.equal(existsSync(join(project, "src/app/message.txt")), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("static projects start without dependencies and serve only project-owned files", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hivemind-static-runtime-"));
+  const project = join(root, "arcade");
+  const outside = join(root, "outside.txt");
+  try {
+    const created = await appBuilder.createLocalAppProject({
+      directory: project,
+      name: "Arcade",
+      templateId: "static",
+      confirmation: confirmations.create,
+    });
+    assert.equal(created.project.templateId, "static");
+    assert.equal(created.project.dependenciesReady, true);
+    assert.equal(existsSync(join(project, "index.html")), true);
+    await writeFile(outside, "private-value");
+    await symlink(outside, join(project, "linked-secret.txt"));
+    const started = await appBuilder.startLocalAppProject({ directory: project, confirmation: confirmations.runtime });
+    try {
+      const preview = await fetch(started.project.previewUrl);
+      assert.equal(preview.status, 200);
+      assert.match(await preview.text(), /HivemindOS App/);
+      const linked = await fetch(`${started.project.previewUrl}/linked-secret.txt`);
+      assert.doesNotMatch(await linked.text(), /private-value/);
+    } finally {
+      const stopped = await appBuilder.stopLocalAppProject({ directory: project, confirmation: confirmations.runtime });
+      assert.equal(stopped.project.status, "stopped");
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("existing static apps can be adopted inside the selected chat workspace without overwriting files", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hivemind-static-adopt-"));
+  const workspace = join(root, "workspace");
+  const project = join(workspace, "scratchpad", "flappy-bird-clone");
+  const outside = join(root, "outside-app");
+  try {
+    await mkdir(project, { recursive: true });
+    await mkdir(outside);
+    await writeFile(join(project, "index.html"), "<!doctype html><title>Flappy</title>");
+    await writeFile(join(outside, "index.html"), "<!doctype html><title>Outside</title>");
+    await assert.rejects(
+      appBuilder.adoptLocalAppProject({ directory: project, workspaceDirectory: workspace, name: "Flappy" }),
+      /CONFIRM_APP_PROJECT_CREATE/,
+    );
+    const adopted = await appBuilder.adoptLocalAppProject({
+      directory: project,
+      workspaceDirectory: workspace,
+      name: "Flappy",
+      confirmation: confirmations.create,
+    });
+    assert.equal(adopted.adopted, true);
+    assert.equal(adopted.project.templateId, "static");
+    assert.equal(await readFile(join(project, "index.html"), "utf8"), "<!doctype html><title>Flappy</title>");
+    const replay = await appBuilder.adoptLocalAppProject({
+      directory: project,
+      workspaceDirectory: workspace,
+      name: "Ignored on replay",
+      confirmation: confirmations.create,
+    });
+    assert.equal(replay.adopted, false);
+    assert.equal(replay.project.id, adopted.project.id);
+    await assert.rejects(
+      appBuilder.adoptLocalAppProject({
+        directory: outside,
+        workspaceDirectory: workspace,
+        confirmation: confirmations.create,
+      }),
+      /inside the selected chat workspace/,
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }

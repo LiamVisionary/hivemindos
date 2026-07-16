@@ -1,6 +1,6 @@
 {
   "protocol": "hivemindos.app-builder/v1",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "provenance": {
     "donors": {
       "december": {
@@ -35,6 +35,7 @@
     { "id": "projects.list", "sideEffect": "read", "backends": ["local", "managed"] },
     { "id": "projects.get", "sideEffect": "read", "backends": ["local", "managed"] },
     { "id": "projects.create", "sideEffect": "write", "backends": ["local", "managed"] },
+    { "id": "projects.adopt", "sideEffect": "write", "backends": ["local"] },
     { "id": "files.tree", "sideEffect": "read", "backends": ["local"] },
     { "id": "files.read", "sideEffect": "read", "backends": ["local"] },
     { "id": "files.write", "sideEffect": "write", "backends": ["local"] },
@@ -91,6 +92,15 @@
     "serverOnly": ["environmentValues", "resourceIds", "accessTokens", "pricing", "entitlements"]
   },
   "templates": {
+    "static": {
+      "label": "HTML, CSS, and JavaScript",
+      "files": {
+        ".gitignore": ".env*\n.hivemindos/\n",
+        "index.html": "<!doctype html>\n<html lang=\"en\">\n<head>\n  <meta charset=\"utf-8\" />\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n  <title>HivemindOS App</title>\n  <link rel=\"stylesheet\" href=\"styles.css\" />\n</head>\n<body>\n  <main>\n    <p>HivemindOS App</p>\n    <h1>Your workspace is ready.</h1>\n    <p>Ask your HivemindOS agent to build here.</p>\n  </main>\n  <script src=\"script.js\"></script>\n</body>\n</html>\n",
+        "styles.css": "* { box-sizing: border-box; }\nhtml, body { margin: 0; min-height: 100%; }\nbody { display: grid; place-items: center; padding: 32px; font-family: ui-sans-serif, system-ui, sans-serif; }\nmain { width: min(100%, 720px); }\n",
+        "script.js": "console.info(\"HivemindOS app preview ready\");\n"
+      }
+    },
     "nextjs": {
       "label": "Next.js",
       "files": {

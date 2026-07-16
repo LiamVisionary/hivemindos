@@ -12,6 +12,7 @@ import type { ChatResponseBilling } from "@/lib/types/chat-billing";
 import type { CapabilityApprovalPlan } from "@/lib/types/capability-approval";
 import type { EvaluationHumanFeedback } from "@/lib/types/evaluation";
 import type { LocalModelDownloadJob, LocalModelHardwareSnapshot, LocalModelInstallCatalogStatus, LocalOpenAICompatibleServer, LocalRuntimeSetupStatus } from "@/lib/config/local-model-install-catalog";
+import type { ChatAppArtifact } from "@/lib/services/chat/chat-app-artifact";
 
 export type GatewayStatus = {
   ok?: boolean;
@@ -326,6 +327,7 @@ export type ChatMessage = {
   applicationGeneration?: ChatApplicationGenerationCard;
   imageGeneration?: ChatImageGeneration;
   capabilityApproval?: CapabilityApprovalPlan;
+  appArtifact?: ChatAppArtifact;
   agentPrompt?: {
     id: string;
     type: "clarify" | "approval" | "sudo" | "secret" | "prompt";
@@ -634,7 +636,10 @@ export type MachineGroup = {
   agents: AgentProfile[];
   version?: AppVersion;
   machineId?: string;
-  capabilities?: AgentProfile["collectorCapabilities"];
+  capabilities?: AgentProfile["collectorCapabilities"] & {
+    appBuilder?: boolean;
+    appBuilderContractVersion?: string;
+  };
   envSync?: {
     ready?: boolean;
     user?: string;
@@ -715,7 +720,7 @@ export type DiscoveredMachine = {
   agents: AgentProfile[];
   snapshots: AgentSnapshot[];
   version?: AppVersion;
-  capabilities?: AgentProfile["collectorCapabilities"];
+  capabilities?: MachineGroup["capabilities"];
   envSync?: MachineGroup["envSync"];
   system?: MachineSystemStats;
   lastSeenAt?: number;

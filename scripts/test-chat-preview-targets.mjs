@@ -10,7 +10,7 @@ const { selectChatPreviewTargets } = await import(
 );
 // The SSRF gate is server-only (it pulls in `local-collector-url`, which needs
 // `fs/promises`), so it lives in a sibling module the client never imports.
-const { isAllowedChatPreviewUrl } = await import(
+const { isAllowedChatPreviewUrl, isAllowedThreadAppPreviewUrl } = await import(
   "../src/lib/services/chat/chat-preview-guard.ts"
 );
 
@@ -111,6 +111,32 @@ assert.deepEqual(selectChatPreviewTargets(allApps, "does-not-exist"), []);
 // Defensive: undefined/empty input never throws.
 assert.deepEqual(selectChatPreviewTargets([], undefined), []);
 
+const threadAppTargets = selectChatPreviewTargets(allApps, "Atlas", {
+  projectId: "local_thread_app",
+  name: "Flappy Bird",
+  directory: "/workspace/scratchpad/flappy-bird",
+  machine: "Atlas",
+  port: 8793,
+  running: true,
+});
+assert.equal(threadAppTargets[0].source, "thread-app");
+assert.equal(threadAppTargets[0].projectId, "local_thread_app");
+assert.equal(threadAppTargets[0].url, remoteInteractive.openUrl);
+assert.equal(threadAppTargets.filter((target) => target.url === remoteInteractive.openUrl).length, 1);
+
+assert.deepEqual(
+  selectChatPreviewTargets(allApps, "Atlas", {
+    projectId: "local_stopped_thread_app",
+    name: "Stopped thread app",
+    directory: "/workspace/scratchpad/stopped",
+    machine: "Atlas",
+    port: 8794,
+    running: false,
+  }).map((target) => target.id),
+  ["remote-2", "remote-1"],
+  "a stopped thread app must not fabricate a preview target",
+);
+
 // --- isAllowedChatPreviewUrl (the SSRF gate) ---------------------------------
 
 // Positive: an exact discovered openUrl / healthUrl on the fleet surface passes.
@@ -163,5 +189,32 @@ assert.equal(
 assert.equal(isAllowedChatPreviewUrl("", allApps), false);
 assert.equal(isAllowedChatPreviewUrl("not a url", allApps), false);
 assert.equal(isAllowedChatPreviewUrl("http://100.100.1.20:8792", []), false);
+
+const runningThreadProject = {
+  id: "local_thread_app",
+  directory: "/workspace/scratchpad/flappy-bird",
+  status: "running",
+  previewUrl: "http://127.0.0.1:4173",
+};
+assert.equal(isAllowedThreadAppPreviewUrl(
+  "http://127.0.0.1:4173",
+  { projectId: "local_thread_app", directory: "/workspace/scratchpad/flappy-bird" },
+  runningThreadProject,
+), true, "the exact running App Builder project is previewable before fleet discovery catches up");
+assert.equal(isAllowedThreadAppPreviewUrl(
+  "http://127.0.0.1:22",
+  { projectId: "local_thread_app", directory: "/workspace/scratchpad/flappy-bird" },
+  runningThreadProject,
+), false, "a thread artifact cannot widen the preview to another port");
+assert.equal(isAllowedThreadAppPreviewUrl(
+  "http://127.0.0.1:4173",
+  { projectId: "different-project", directory: "/workspace/scratchpad/flappy-bird" },
+  runningThreadProject,
+), false, "the project identity must match");
+assert.equal(isAllowedThreadAppPreviewUrl(
+  "http://127.0.0.1:4173",
+  { projectId: "local_thread_app", directory: "/workspace/scratchpad/flappy-bird" },
+  { ...runningThreadProject, status: "stopped" },
+), false, "stopped projects are not previewable");
 
 console.log("chat-preview-targets: all assertions passed");

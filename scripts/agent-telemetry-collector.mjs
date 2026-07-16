@@ -71,7 +71,7 @@ import {
   unpackTarToDir,
 } from "./lib/runtime-portable-state.mjs";
 import { createHostedAppsCache } from "./lib/hosted-apps-cache.mjs";
-import { runLocalAppBuilderAction } from "./lib/app-builder.mjs";
+import { APP_BUILDER_CONTRACT_VERSION, runLocalAppBuilderAction } from "./lib/app-builder.mjs";
 import { createAsyncTtlCache } from "./lib/async-ttl-cache.mjs";
 import { createCollectorMaintenance } from "./lib/collector-maintenance.mjs";
 import { launchCollectorUpdate } from "./lib/collector-update-launcher.mjs";
@@ -6733,7 +6733,7 @@ async function collectorHealthPayload() {
         runtimes,
         runtimeIntegrations: true,
         runtimeAgentCreation: true,
-        hostedApps: true,
+        hostedApps: true, appBuilder: true, appBuilderContractVersion: APP_BUILDER_CONTRACT_VERSION,
         skillInventory: true,
         skillAutoSync: true,
         fileTransfers: true,

@@ -5,6 +5,7 @@ export type AppBuilderCapabilityId =
   | "projects.list"
   | "projects.get"
   | "projects.create"
+  | "projects.adopt"
   | "files.tree"
   | "files.read"
   | "files.write"

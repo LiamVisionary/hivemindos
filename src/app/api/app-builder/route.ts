@@ -44,6 +44,10 @@ import {
 } from "@/lib/services/local-collector-url";
 import { errorJson, okJson, upstreamErrorJson } from "@/lib/utils/api-response";
 import { requireAuth } from "@/lib/utils/server-auth";
+import {
+  APP_BUILDER_COLLECTOR_UPDATE_REQUIRED,
+  collectorSupportsAppBuilderContract,
+} from "@/lib/services/app-builder/collector-recovery";
 import { readLocalAppSourceCommit, readLocalHostingManifest, runLocalAppBuilderAction, writeLocalHostingManifest, type LocalAppProject } from "../../../../scripts/lib/app-builder.mjs";
 
 export const runtime = "nodejs";
@@ -56,6 +60,7 @@ type AppBuilderBody = Record<string, unknown> & {
   directory?: string;
   name?: string;
   templateId?: string;
+  workspaceDirectory?: string;
   confirmation?: string;
   machineKey?: string;
   collectorUrl?: string;
@@ -78,6 +83,13 @@ type AppBuilderBody = Record<string, unknown> & {
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+class RemoteAppBuilderUpdateRequiredError extends Error {
+  constructor(readonly reportedVersion?: string) {
+    super("The linked machine needs a compatible App Builder before Preview can continue.");
+    this.name = "RemoteAppBuilderUpdateRequiredError";
+  }
 }
 
 function publicLocalProject(project: LocalAppProject, collectorUrl?: string) {
@@ -105,7 +117,7 @@ async function registerLocalProject(project: LocalAppProject, body: AppBuilderBo
     appBuilder: {
       backend: "local",
       contractVersion: project.contractVersion,
-      templateId: "nextjs",
+      templateId: project.templateId,
       status: project.status,
       localProjectId: project.id,
     },
@@ -130,6 +142,19 @@ async function registerManagedProject(project: Awaited<ReturnType<typeof createM
 async function remoteLocalAction(collectorUrl: string, body: AppBuilderBody) {
   const base = normalizeCollectorUrl(collectorUrl);
   if (!isFleetCollectorUrl(base)) throw new Error("Refusing to send an app-builder operation outside the fleet collector set.");
+  const healthResponse = await fetch(`${base}/health`, {
+    cache: "no-store",
+    signal: AbortSignal.timeout(8_000),
+  }).catch(() => null);
+  if (healthResponse?.ok) {
+    const health = await healthResponse.json().catch(() => null) as {
+      capabilities?: { appBuilderContractVersion?: string };
+    } | null;
+    const reportedVersion = clean(health?.capabilities?.appBuilderContractVersion);
+    if (!collectorSupportsAppBuilderContract(reportedVersion, APP_BUILDER_CONTRACT.version)) {
+      throw new RemoteAppBuilderUpdateRequiredError(reportedVersion || undefined);
+    }
+  }
   const response = await fetch(`${base}/app-builder`, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json" },
@@ -458,6 +483,13 @@ export async function POST(request: NextRequest) {
       : body.backend === "managed" ? await runManaged(body) : await runLocal(body);
     return okJson(result);
   } catch (error) {
+    if (error instanceof RemoteAppBuilderUpdateRequiredError) {
+      return errorJson(error.message, 409, {
+        code: APP_BUILDER_COLLECTOR_UPDATE_REQUIRED,
+        requiredContractVersion: APP_BUILDER_CONTRACT.version,
+        reportedContractVersion: error.reportedVersion,
+      });
+    }
     if (error instanceof ManagedCloudApiError) return errorJson(error.message, error.status, { code: error.code, ...error.details });
     const message = error instanceof Error ? error.message : "App-builder operation failed.";
     if (/requires CONFIRM_APP_/.test(message)) return errorJson(message, 409, { code: "confirmation_required" });

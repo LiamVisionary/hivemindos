@@ -22,6 +22,7 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const moduleDirectory = dirname(fileURLToPath(import.meta.url));
 const contractFile = resolve(moduleDirectory, "../../contracts/app-builder/v1.json");
+const staticServerFile = resolve(moduleDirectory, "app-builder-static-server.mjs");
 const manifestName = ".hivemindos-app.json";
 const runtimeDirectoryName = ".hivemindos";
 const hostingManifestName = "hosting.json";
@@ -31,9 +32,10 @@ const maxWriteBytes = 750_000;
 const maxCommandOutputBytes = 128_000;
 const hostingSecretName = /(^|\/)(?:\.env(?:\..*)?|\.npmrc|\.pypirc|id_(?:rsa|dsa|ecdsa|ed25519)|[^/]+\.(?:pem|key|p12|pfx))$/i;
 const cachedContract = JSON.parse(await readFile(contractFile, "utf8"));
-if (cachedContract?.protocol !== "hivemindos.app-builder/v1" || !cachedContract.templates?.nextjs?.files) {
+if (cachedContract?.protocol !== "hivemindos.app-builder/v1" || !cachedContract.templates?.nextjs?.files || !cachedContract.templates?.static?.files?.["index.html"]) {
   throw new Error("The HivemindOS app-builder contract is invalid.");
 }
+export const APP_BUILDER_CONTRACT_VERSION = cachedContract.version;
 const staticArtifactContract = cachedContract.artifacts.static;
 const dynamicArtifactContract = cachedContract.artifacts.dynamic;
 const maxHostingFiles = staticArtifactContract.clientLimits.files;
@@ -72,6 +74,25 @@ async function projectDirectory(value, { allowMissing = false } = {}) {
   const parentInfo = await stat(dirname(directory)).catch(() => null);
   if (!parentInfo?.isDirectory()) throw new Error("Project parent directory does not exist.");
   return directory;
+}
+
+async function creatableProjectDirectory(value, workspaceValue) {
+  if (!String(workspaceValue || "").trim()) return projectDirectory(value, { allowMissing: true });
+  const workspace = await projectDirectory(workspaceValue);
+  const directory = resolve(expandHome(value));
+  if (directory === workspace || !directory.startsWith(`${workspace}${sep}`)) {
+    throw new Error("The app project must stay inside the selected chat workspace.");
+  }
+  const parentSegments = relative(workspace, dirname(directory)).split(sep).filter(Boolean);
+  let cursor = workspace;
+  for (const segment of parentSegments) {
+    cursor = join(cursor, segment);
+    const info = await lstat(cursor).catch(() => null);
+    if (info?.isSymbolicLink()) throw new Error("Project directory cannot traverse a symbolic link.");
+    if (info && !info.isDirectory()) throw new Error("Project parent path is not a directory.");
+    if (!info) await mkdir(cursor, { recursive: false, mode: 0o700 });
+  }
+  return projectDirectory(directory, { allowMissing: true });
 }
 
 function normalizeRelativePath(value) {
@@ -207,7 +228,7 @@ export async function createLocalAppProject(input) {
   const template = contract.templates[templateId];
   if (!template) throw new Error("Only reviewed app-builder templates can be created.");
   const name = cleanName(input?.name);
-  const directory = await projectDirectory(input?.directory, { allowMissing: true });
+  const directory = await creatableProjectDirectory(input?.directory, input?.workspaceDirectory);
   const existing = await readManifest(directory).catch((error) => {
     if (error?.code === "ENOENT") return null;
     throw error;
@@ -239,7 +260,7 @@ export async function createLocalAppProject(input) {
     templateId,
     directory,
     status: "stopped",
-    dependenciesReady: false,
+    dependenciesReady: templateId === "static",
     previewUrl: null,
     pid: null,
     port: null,
@@ -249,6 +270,55 @@ export async function createLocalAppProject(input) {
   };
   await atomicWrite(manifestPath(directory), `${JSON.stringify(project, null, 2)}\n`);
   return { created: true, project };
+}
+
+async function detectedLocalTemplate(directory) {
+  const staticIndex = await lstat(join(directory, "index.html")).catch(() => null);
+  if (staticIndex?.isFile() && !staticIndex.isSymbolicLink()) return "static";
+  const packagePath = join(directory, "package.json");
+  const packageInfo = await lstat(packagePath).catch(() => null);
+  if (packageInfo?.isFile() && !packageInfo.isSymbolicLink()) {
+    const packageJson = JSON.parse(await readFile(packagePath, "utf8"));
+    const dependencies = { ...(packageJson?.dependencies || {}), ...(packageJson?.devDependencies || {}) };
+    if (typeof dependencies.next === "string") return "nextjs";
+  }
+  throw new Error("Only an existing Next.js project or a static app with index.html can be adopted.");
+}
+
+export async function adoptLocalAppProject(input) {
+  requireConfirmation(input?.confirmation, APP_BUILDER_CONFIRMATIONS.createProject);
+  const contract = await loadAppBuilderContract();
+  const directory = await projectDirectory(input?.directory);
+  const workspaceDirectory = await projectDirectory(input?.workspaceDirectory || input?.directory);
+  if (directory !== workspaceDirectory && !directory.startsWith(`${workspaceDirectory}${sep}`)) {
+    throw new Error("The app project must stay inside the selected chat workspace.");
+  }
+  const existing = await readManifest(directory);
+  if (existing) return { adopted: false, project: (await requiredProject(directory)).project };
+  const templateId = await detectedLocalTemplate(directory);
+  const name = cleanName(input?.name || basename(directory));
+  const nextBinary = join(directory, "node_modules", "next", "dist", "bin", "next");
+  const nextBinaryInfo = templateId === "nextjs" ? await lstat(nextBinary).catch(() => null) : null;
+  const now = new Date().toISOString();
+  const project = {
+    protocol: contract.protocol,
+    contractVersion: contract.version,
+    id: `local_${createHash("sha256").update(directory).digest("hex").slice(0, 20)}`,
+    backend: "local",
+    name,
+    templateId,
+    directory,
+    status: "stopped",
+    dependenciesReady: templateId === "static" || Boolean(nextBinaryInfo?.isFile() && !nextBinaryInfo.isSymbolicLink()),
+    previewUrl: null,
+    pid: null,
+    port: null,
+    lastError: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await atomicWrite(manifestPath(directory), `${JSON.stringify(project, null, 2)}\n`);
+  return { adopted: true, project };
 }
 
 export async function getLocalAppProject(input) {
@@ -317,18 +387,31 @@ export async function deleteLocalAppFile(input) {
   return { deleted: true, path: resolved.relativePath };
 }
 
-export function localAppRuntimeCommand(directory, port) {
+export function localAppRuntimeCommand(directory, port, templateId = "nextjs") {
+  if (templateId === "static") {
+    return {
+      command: process.execPath,
+      args: [staticServerFile, "--root", directory, "--port", String(port)],
+      ownershipToken: staticServerFile,
+    };
+  }
   const nextBinary = join(directory, "node_modules", "next", "dist", "bin", "next");
   return {
     command: process.execPath,
     args: [nextBinary, "dev", "--hostname", "127.0.0.1", "--port", String(port)],
-    nextBinary,
+    ownershipToken: nextBinary,
   };
 }
 
 export async function installLocalAppDependencies(input) {
   requireConfirmation(input?.confirmation, APP_BUILDER_CONFIRMATIONS.installDependencies);
   const { directory, project } = await requiredProject(input?.directory);
+  if (project.templateId === "static") {
+    const next = project.dependenciesReady
+      ? project
+      : await writeManifest(directory, { ...project, dependenciesReady: true, lastError: null });
+    return { project: next, output: "Static HTML apps do not require dependency installation." };
+  }
   const result = await execFileAsync(process.platform === "win32" ? "npm.cmd" : "npm", [
     "install",
     "--ignore-scripts",
@@ -403,7 +486,7 @@ async function stopOwnedProcess(project) {
   const pid = Number(project.pid);
   if (!Number.isInteger(pid) || pid <= 0) return;
   const command = await processCommand(pid).catch(() => "");
-  const expected = localAppRuntimeCommand(project.directory, project.port).nextBinary;
+  const expected = localAppRuntimeCommand(project.directory, project.port, project.templateId).ownershipToken;
   if (!command.includes(expected)) throw new Error("Refusing to stop a process that is no longer owned by this app project.");
   if (process.platform === "win32") {
     await execFileAsync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], { timeout: 5_000 }).catch(() => undefined);
@@ -427,10 +510,12 @@ export async function startLocalAppProject(input) {
     }
   }
   const port = await unusedLoopbackPort(input?.port);
-  const runtime = localAppRuntimeCommand(directory, port);
-  const binaryInfo = await lstat(runtime.nextBinary).catch(() => null);
+  const runtime = localAppRuntimeCommand(directory, port, project.templateId);
+  const binaryInfo = await lstat(runtime.ownershipToken).catch(() => null);
   if (!binaryInfo?.isFile() || binaryInfo.isSymbolicLink()) {
-    throw new Error(`Install project dependencies first with ${APP_BUILDER_CONFIRMATIONS.installDependencies}.`);
+    throw new Error(project.templateId === "static"
+      ? "The bundled static preview runtime is unavailable."
+      : `Install project dependencies first with ${APP_BUILDER_CONFIRMATIONS.installDependencies}.`);
   }
   const runtimeDirectory = join(directory, runtimeDirectoryName);
   await mkdir(runtimeDirectory, { recursive: true, mode: 0o700 });
@@ -614,6 +699,7 @@ export async function deployCloudflareTemporaryApp(input) {
 export async function runLocalAppBuilderAction(input) {
   const action = String(input?.action || "").trim();
   if (action === "create") return createLocalAppProject(input);
+  if (action === "adopt") return adoptLocalAppProject(input);
   if (action === "get" || action === "status") return { project: await getLocalAppProject(input) };
   if (action === "files_tree") return listLocalAppFiles(input);
   if (action === "files_read") return readLocalAppFile(input);
