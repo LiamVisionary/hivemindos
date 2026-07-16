@@ -10,9 +10,11 @@ import { IntegrationModalActions } from "./IntegrationModalActions";
 import { AzureMcpSetup } from "./AzureMcpSetup";
 import { BrowserExtensionInstallCard } from "./BrowserExtensionInstallCard";
 import { HiveResearchSyncCard } from "./HiveResearchSyncCard";
+import { NotebookLmIntegrationCard } from "./NotebookLmIntegrationCard";
 import { BBtn, BIcon, ServiceGlyph } from "./integrations-primitives";
 import { integrationModalTargetFromDashboardTarget, type IntegrationModalActionId, type IntegrationModalTarget } from "./integration-modal-actions";
 import { readJson } from "./integrations-view-helpers";
+import "./integrations-redesign.css";
 
 type FetchErrorPayload = { error?: string; message?: string };
 type ModalTab = "connect" | "actions";
@@ -27,6 +29,10 @@ const PROVIDER_STYLE: Record<ConnectionProviderKey, { mono: string; accent: stri
   azure: { mono: "Az", accent: "#4aa4e8" },
   posthog: { mono: "Ph", accent: "#f0a868" },
   plausible: { mono: "Pl", accent: "#4fb5a3" },
+  calcom: { mono: "Ca", accent: "#7967e8" },
+  shopify: { mono: "Sh", accent: "#95bf47" },
+  medusa: { mono: "Me", accent: "#7c6bf2" },
+  monid: { mono: "Mo", accent: "#7c8cff" },
   clawbank: { mono: "Cb", accent: "#e6dcc6", logo: "/icons/runtimes/clawbank.svg" },
 };
 
@@ -64,7 +70,15 @@ const OAUTH_START_URL: Partial<Record<ConnectionProviderKey, string>> = {
 /** One screen: connect apps in place. Credentials are validated live, then
  * saved to the shared hive env, which syncs them to every machine — no host
  * machine, no external dashboard, no separate account. */
-export function ConnectionsPanel() {
+export function ConnectionsPanel({
+  setupProviderKey,
+  onSetupClose,
+  onSetupComplete,
+}: {
+  setupProviderKey?: ConnectionProviderKey;
+  onSetupClose?: () => void;
+  onSetupComplete?: (provider: ConnectionProviderStatus) => void;
+} = {}) {
   const initialModalTarget = React.useMemo(
     () => typeof window === "undefined"
       ? null
@@ -75,7 +89,7 @@ export function ConnectionsPanel() {
   const [loading, setLoading] = React.useState(true);
   const [message, setMessage] = React.useState("");
   const [modalTarget, setModalTarget] = React.useState<IntegrationModalTarget | null>(initialModalTarget);
-  const [openKey, setOpenKey] = React.useState<ConnectionProviderKey | "">(initialModalTarget?.providerKey ?? "");
+  const [openKey, setOpenKey] = React.useState<ConnectionProviderKey | "">(setupProviderKey ?? initialModalTarget?.providerKey ?? "");
 
   const refresh = React.useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true);
@@ -141,6 +155,30 @@ export function ConnectionsPanel() {
   const connectedCount = providers.filter((provider) => provider.connected).length;
   const open = providers.find((provider) => provider.key === openKey) ?? null;
 
+  if (setupProviderKey) {
+    if (loading || !open) {
+      return (
+        <div className="fm-overlay">
+          <div className="fm-modal" role="dialog" aria-modal="true" aria-label="Loading connection setup">
+            <div className="fm-mbody"><span className="ni-tspin" aria-label="Checking connection status" /></div>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <ConnectModal
+        provider={open}
+        initialTab="connect"
+        onClose={() => onSetupClose?.()}
+        onUpdated={(next) => {
+          setPayload(next);
+          const connected = next.providers.find((provider) => provider.key === setupProviderKey);
+          if (connected?.connected && connected.verified) onSetupComplete?.(connected);
+        }}
+      />
+    );
+  }
+
   return (
     <>
       <div className="ni-top">
@@ -163,6 +201,7 @@ export function ConnectionsPanel() {
         <div className="ni-stage ni-pad">
           <BrowserExtensionInstallCard />
           <HiveResearchSyncCard />
+          <NotebookLmIntegrationCard />
           <div className="ni-atool">
             <div>
               <h2>Apps</h2>
@@ -235,6 +274,7 @@ function ConnectModal({
   onUpdated: (payload: ConnectionsPayload, note?: string) => void;
 }) {
   const [token, setToken] = React.useState("");
+  const [setupFields, setSetupFields] = React.useState<Record<string, string>>({});
   const [clientId, setClientId] = React.useState("");
   const [clientSecret, setClientSecret] = React.useState("");
   const [azureTenantId, setAzureTenantId] = React.useState("");
@@ -387,7 +427,7 @@ function ConnectModal({
   }
 
   async function saveToken() {
-    const data = await post({ action: "save-token", provider: provider.key, token }, "token");
+    const data = await post({ action: "save-token", provider: provider.key, token, fields: setupFields }, "token");
     if (!data) return;
     onUpdated(data, `${provider.label} connected${data.account ? ` as ${data.account}` : ""}.`);
     onClose();
@@ -600,6 +640,19 @@ function ConnectModal({
             <div style={{ display: "grid", gap: 9 }}>
               <div className="fm-sec" style={{ margin: "2px 0 0" }}>{isClawBank || (oauthUrl && provider.oauthReady) ? "Or paste a token" : "Paste a token"}</div>
               <div className="fm-note"><BIcon name="shield" size={15} /><span>{provider.tokenHint} The token is checked live, then stored in the shared hive env.</span></div>
+              {provider.setupFields?.map((field) => (
+                <label className="fb-label" key={field.id}>{field.label}
+                  <input
+                    className="fb-field fb-mono"
+                    value={setupFields[field.id] ?? ""}
+                    onChange={(event) => setSetupFields((current) => ({ ...current, [field.id]: event.target.value }))}
+                    placeholder={field.placeholder}
+                    autoComplete="off"
+                    required={field.required}
+                  />
+                  <span className="ni-note" style={{ margin: 0 }}>{field.hint}</span>
+                </label>
+              ))}
               <label className="fb-label">{provider.label} token
                 <div className="fm-keyrow">
                   <input className="fb-field fb-mono" type={show ? "text" : "password"} value={token} onChange={(event) => setToken(event.target.value)} placeholder={provider.tokenPlaceholder} />
@@ -632,7 +685,11 @@ function ConnectModal({
             </BBtn>
           ) : null}
           {!oauthOnly ? (
-            <BBtn variant="primary" onClick={() => void saveToken()} disabled={Boolean(busy) || token.trim().length < 8}>
+            <BBtn
+              variant="primary"
+              onClick={() => void saveToken()}
+              disabled={Boolean(busy) || token.trim().length < 8 || Boolean(provider.setupFields?.some((field) => field.required && !setupFields[field.id]?.trim()))}
+            >
               {busy === "token" ? <span className="ni-spin" /> : <BIcon name="plug" size={14} />} {busy === "token" ? "Checking..." : "Validate & save"}
             </BBtn>
           ) : null}

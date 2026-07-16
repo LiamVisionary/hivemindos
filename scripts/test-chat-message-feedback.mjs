@@ -28,6 +28,7 @@ try {
     userContent: "Give me a useful answer.",
     startedAt: 1_800_000_000_000,
   });
+  await sessionStore.appendRuntimeChatSessionEvent(sessionId, "Hive capability search", "One process event before the answer.");
   await sessionStore.appendRuntimeChatSessionText(
     sessionId,
     "assistant",
@@ -76,6 +77,7 @@ try {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       sessionId,
+      messageIndex: assistantIndex - 1,
       messageFingerprint: evaluationOutputFingerprint(fingerprintMatched.message.content),
       rating: "down",
     }),
@@ -85,6 +87,40 @@ try {
   assert.equal(routePayload.ok, true);
   assert.equal(routePayload.feedback.rating, "down");
   assert.equal(routePayload.evaluation.verdict, "rejected");
+  assert.deepEqual(routePayload.skillOutcomes, [], "feedback without attributed skills does not fabricate autoresearch outcomes");
+  assert.equal(routePayload.skillOutcomeError, null);
+
+  const fallbackSessionId = "feedback-canonical-session";
+  const fallbackChatStorageKey = "feedback-agent:chat-thread";
+  await sessionStore.startRuntimeChatSession({
+    sessionId: fallbackSessionId,
+    agent: { id: "feedback-agent", name: "Feedback Agent", runtime: "hermes" },
+    chatStorageKey: fallbackChatStorageKey,
+    userContent: "Preserve the canonical HivemindOS feedback session.",
+  });
+  await sessionStore.appendRuntimeChatSessionText(
+    fallbackSessionId,
+    "assistant",
+    "This response remains attributable even if provider hydration replaces the visible session id.",
+  );
+  await sessionStore.finishRuntimeChatSession(fallbackSessionId);
+  const fallbackSession = await sessionStore.readRuntimeChatSession({ sessionId: fallbackSessionId });
+  const fallbackAssistant = fallbackSession.messages.find((message) => message.role === "assistant");
+  const fallbackRouteResponse = await feedbackRoute.POST(new Request("http://localhost/api/chat/feedback", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      sessionId: "upstream-hermes-session-id",
+      chatStorageKey: fallbackChatStorageKey,
+      messageIndex: 1,
+      messageFingerprint: evaluationOutputFingerprint(fallbackAssistant.content),
+      rating: "up",
+    }),
+  }));
+  const fallbackRoutePayload = await fallbackRouteResponse.json();
+  assert.equal(fallbackRouteResponse.status, 200, "feedback recovers the canonical local session after provider hydration replaces its id");
+  assert.equal(fallbackRoutePayload.ok, true);
+  assert.equal(fallbackRoutePayload.feedback.rating, "up");
 
   const invalidRouteResponse = await feedbackRoute.POST(new Request("http://localhost/api/chat/feedback", {
     method: "POST",
@@ -131,6 +167,7 @@ try {
   assert.match(panelSource, /\/api\/chat\/feedback/);
   assert.match(panelSource, /sourceSessionId/);
   assert.match(panelSource, /sourceIndex/);
+  assert.match(panelSource, /chatStorageKey/);
   assert.match(storageSource, /parseStoredChatMessageFeedback/);
   assert.match(inputControllerSource, /sourceSessionId: localRuntimeSessionId/);
   assert.match(threadSource, /ThumbsUp/);

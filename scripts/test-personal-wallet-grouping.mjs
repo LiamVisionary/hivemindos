@@ -6,7 +6,7 @@ import { join } from "node:path";
 // The grouping helpers were extracted from WalletPanel into a real module —
 // import the shipped code directly (Node strips the types) instead of
 // vm-compiling a source slice of the panel.
-const { buildGroupedPersonalWallets: buildDropInPersonalWallets, mergePersonalWalletList, mergePersonalWalletSources } = await import(
+const { buildGroupedPersonalWallets: buildDropInPersonalWallets, mergePersonalWalletList, mergePersonalWalletSources, personalWalletOptionalNumber, personalWalletSpendAccountForAsset, personalWalletTransferTargets } = await import(
   new URL("../src/lib/utils/personal-wallet-grouping.ts", import.meta.url)
 );
 const { walletSecretExportLabel } = await import(
@@ -68,6 +68,46 @@ assert.equal(JSON.stringify(grouped.holdings), JSON.stringify([["USDC", 20]]));
 const separate = cards.find((wallet) => wallet.id === "user:private-key-wallet");
 assert.ok(separate, "Unrelated personal wallets should remain separate cards.");
 assert.equal(separate.addresses.length, 1);
+
+const tokenTransferCard = buildDropInPersonalWallets([{
+  id: "user:token-wallet:eip155-8453",
+  agentId: "user:token-wallet:eip155-8453",
+  name: "Token wallet",
+  address: "0x7777000000000000000000000000000000007777",
+  network: "eip155:8453",
+  custodyMode: "local",
+  importedFrom: "recovery-phrase",
+  tokens: [
+    { symbol: "ETH", balance: 0.25, priceUsd: 0, valueUsd: 625, isNative: true },
+    { symbol: "HIVE", balance: 42, valueUsd: 4.2, tokenAddress: "0x8888000000000000000000000000000000008888" },
+    { symbol: "USDC", balance: 12, valueUsd: 12, tokenAddress: "0x9999000000000000000000000000000000009999" },
+  ],
+}])[0];
+assert.equal(personalWalletOptionalNumber(null), undefined, "missing token prices must not be coerced into a real zero-dollar quote");
+assert.deepEqual(
+  tokenTransferCard.accounts[0]?.assets,
+  [
+    { symbol: "ETH", balance: 0.25, priceUsd: 2500, isNative: true },
+    { symbol: "HIVE", balance: 42, priceUsd: 0.1, tokenAddress: "0x8888000000000000000000000000000000008888" },
+    { symbol: "USDC", balance: 12, priceUsd: 1, tokenAddress: "0x9999000000000000000000000000000000009999" },
+  ],
+  "grouped accounts must preserve each held token's chain-local transfer metadata",
+);
+const tokenRecipientCard = buildDropInPersonalWallets([{
+  id: "user:token-recipient:eip155-8453",
+  agentId: "user:token-recipient:eip155-8453",
+  name: "Token recipient",
+  address: "0x6666000000000000000000000000000000006666",
+  network: "eip155:8453",
+  custodyMode: "watch",
+  tokens: [],
+}])[0];
+assert.equal(personalWalletSpendAccountForAsset(tokenTransferCard, "HIVE")?.id, "user:token-wallet:eip155-8453");
+assert.deepEqual(
+  personalWalletTransferTargets(tokenTransferCard, "HIVE", [tokenTransferCard, tokenRecipientCard]).targets.map((target) => target.account.address),
+  ["0x6666000000000000000000000000000000006666"],
+  "wallet-to-wallet token sends must keep recipient choices on the selected source account's network",
+);
 assert.equal(walletSecretExportLabel([{ kind: "private-key" }, { kind: "recovery-phrase" }]), "wallet secret");
 assert.equal(walletSecretExportLabel([{ kind: "private-key" }]), "private key");
 assert.equal(walletSecretExportLabel([{ kind: "recovery-phrase" }]), "recovery phrase");
@@ -170,7 +210,11 @@ assert.match(walletViewSource, /<BIcon name="key" size=\{14\} \/> Export keys/);
 assert.match(walletViewSource, /onRefreshPersonalWallet\?: \(source: GroupedPersonalWallet\)/);
 assert.match(walletViewSource, /function SendToMyWalletModal/);
 assert.match(walletViewSource, /Send to my wallet/);
-assert.match(walletViewSource, /personalWalletTransferTargets\(w, sendSym\)\.targets/);
+assert.match(walletViewSource, /transferableWalletHoldings\(source, ranked\.top\)/, "Send to my wallet must offer every held asset backed by a local chain account");
+assert.match(walletViewSource, /sourceAccount\?\.assets\.find\(\(asset\) => asset\.symbol === sendSym\)/, "send limits must use the selected chain account instead of an aggregate across chains");
+assert.match(walletViewSource, /personalWalletTransferTargets\(w, walletTransferHoldings\[0\]\?\.sym \|\| "", FR_MY_WALLETS\)\.targets/);
+assert.match(walletViewSource, /confirmation: "SEND_TOKEN"/, "the explicit modal action must use the token-send confirmation scope");
+assert.match(walletViewSource, /sourceAccountId: sourceAccount\.id/, "the modal must bind the send to the chain account used to build its destination list");
 assert.match(walletViewSource, /className="fw-split-menu"/);
 assert.match(walletViewSource, /actions\.onRefreshPersonalWallet\(w\)/);
 
@@ -178,7 +222,11 @@ const walletPanelSource = readFileSync(join(root, "src/features/dashboard/views/
 assert.match(walletPanelSource, /exportPersonalWalletGroupSecret/);
 assert.match(walletPanelSource, /buildGroupedPersonalWallets\(mergedPersonalWallets\)\.find\(\(wallet\) => wallet\.id === walletId \|\| wallet\.spendId === walletId\)/);
 assert.match(walletPanelSource, /onRefreshPersonalWallet: async \(source: any\) => refreshPersonalWalletSourceBalance\(source\)/);
-assert.match(walletPanelSource, /input\.recipient \? refreshPersonalWalletSourceBalance\(input\.recipient\) : undefined/);
+assert.match(walletPanelSource, /refreshWalletUntilAssetBalance/, "wallet-to-wallet sends must wait until the recipient's new asset balance is observable");
+assert.match(walletPanelSource, /minimumBalance: recipientStartingBalance \+ sentAmount/, "the post-send refresh must verify the expected recipient amount rather than accepting any successful read");
+assert.match(walletPanelSource, /invalidatePersonalWalletBalance\(recipientAccount\)/, "an unobserved post-send balance must be marked stale so reload retries it");
+assert.match(walletPanelSource, /sendApprovedPersonalWalletAsset/, "personal-wallet sends must use the asset-aware route client");
+assert.match(walletPanelSource, /walletId\(wallet\) === input\.sourceAccountId/, "the dashboard action must preserve the modal's selected source chain");
 assert.match(walletPanelSource, /onRefreshBankrWallet: loadBankrWallet/);
 
 const walletExportActionsSource = readFileSync(join(root, "src/features/dashboard/views/wallet-secret-export-actions.ts"), "utf8");

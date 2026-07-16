@@ -12,6 +12,7 @@ import {
   createQueenBeeVisualPlan,
   visualPlanReceipt,
 } from "@/lib/services/visual-plan";
+import { DEFAULT_QUEEN_BEE_NAME } from "@/lib/config/queen-bee-personality";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -131,7 +132,7 @@ async function recordQueenBeeOperationalEvent(vaultPath: string | undefined, inp
     operationKey: input.operationKey,
     outcome: "success",
     taskId: input.taskId,
-    agentName: "Queen Bee",
+    agentName: DEFAULT_QUEEN_BEE_NAME,
     agentId: "queen-bee",
     runtime: "hivemindos",
     project: "HivemindOS",

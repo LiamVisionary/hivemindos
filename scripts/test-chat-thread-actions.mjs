@@ -5,6 +5,7 @@ const {
   deleteChatThread,
   duplicateChatThreadSeed,
   renameChatThread,
+  chatTranscriptSourceMessages,
   serializeChatTranscript,
   agentIdFromChatStorageKey,
   applyChatThreadFilters,
@@ -112,6 +113,34 @@ const {
   // Empty title clears the override.
   const cleared = renameChatThread(titles, "agent-a", "   ", nowMs);
   assert.ok(!("agent-a" in cleared), "blank title removes the override");
+}
+
+// ---------------------------------------------------------------------------
+// chatTranscriptSourceMessages: full stored thread wins over a rendered window
+// ---------------------------------------------------------------------------
+{
+  const fullThread = [
+    { role: "user", content: "first question" },
+    { role: "assistant", content: "first answer" },
+    { role: "user", content: "latest question" },
+    { role: "assistant", content: "latest answer" },
+  ];
+  const renderedWindow = fullThread.slice(-1);
+  const source = chatTranscriptSourceMessages(
+    { "agent-a::thread": fullThread },
+    "agent-a::thread",
+    renderedWindow,
+  );
+  assert.strictEqual(source, fullThread, "copy chat uses the complete stored thread instead of the rendered window");
+  assert.equal(
+    serializeChatTranscript(source),
+    "User: first question\n\nAssistant: first answer\n\nUser: latest question\n\nAssistant: latest answer",
+  );
+  assert.strictEqual(
+    chatTranscriptSourceMessages({}, "agent-a::preview", renderedWindow),
+    renderedWindow,
+    "transient previews fall back to their rendered messages",
+  );
 }
 
 // ---------------------------------------------------------------------------

@@ -225,6 +225,9 @@ export function kanbanTaskDispatchPrompt(task: KanbanTask, assignment: ReturnTyp
     attachmentDetails,
     task.result ? `Existing notes:\n${task.result}` : "",
     `Suggested worker class: ${beeWorkerClassLabel(assignment.workerClass)}.`,
+    task.capabilityApprovalMode === "ask"
+      ? "Capability approval mode: ASK FIRST. Before installing, enabling, replacing, or materially changing a capability, map the task to available and setup-required capabilities. Park the task in Needs You with ACTION NEEDED:, list the proposed capabilities and alternatives in natural language, and wait for approval. If the human removes a capability, redesign the task without that entire step."
+      : "Capability approval mode: AUTOMATIC. Map the task to available and setup-required capabilities, select the best established route, and perform ordinary capability setup automatically so autonomous work does not pause. This does not bypass spend, secret, deploy, destructive-action, or external-send approval gates.",
     task.undoRequestedAt
       ? "This is an explicit undo request. Treat the previous completed change for this task as the target and reverse it narrowly, even if existing notes say the original task was verified or completed."
       : "Treat existing notes as authoritative retry context when they say an old expectation was superseded, removed, or already verified. Do not undo a verified dashboard change just to satisfy a stale task title.",

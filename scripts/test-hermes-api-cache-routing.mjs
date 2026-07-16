@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 
 const {
   hermesApiMessages,
+  hermesApiSelectionMatchesAgent,
   hermesApiSessionHeaders,
   hermesSessionIdFromResponse,
 } = await import("./lib/hermes-api-request-routing.mjs");
@@ -48,6 +49,37 @@ assert.equal(
   "api-upstream",
 );
 
+const gatewaySelection = { provider: "openai-codex", model: "gpt-5.6-sol" };
+assert.equal(
+  hermesApiSelectionMatchesAgent(
+    { provider: "openai-codex", model: "gpt-5.6-sol" },
+    gatewaySelection,
+  ),
+  true,
+  "an explicitly selected agent matching the warm gateway must stay on the API path",
+);
+assert.equal(
+  hermesApiSelectionMatchesAgent(
+    { provider: "openrouter", model: "gpt-5.6-sol" },
+    gatewaySelection,
+  ),
+  false,
+  "a provider mismatch must keep using the model-scoped CLI path",
+);
+assert.equal(
+  hermesApiSelectionMatchesAgent(
+    { provider: "openai-codex", model: "gpt-5.5" },
+    gatewaySelection,
+  ),
+  false,
+  "a model mismatch must keep using the model-scoped CLI path",
+);
+assert.equal(
+  hermesApiSelectionMatchesAgent({}, gatewaySelection),
+  true,
+  "an unscoped agent may use the gateway default",
+);
+
 const collectorSource = readFileSync(
   new URL("./agent-telemetry-collector.mjs", import.meta.url),
   "utf8",
@@ -55,6 +87,12 @@ const collectorSource = readFileSync(
 assert.match(collectorSource, /hermesApiSessionHeaders\(body, \{ authenticated: Boolean\(hermesApiKey\) \}\)/);
 assert.match(collectorSource, /hermesSessionIdFromResponse\(upstream\.headers\)/);
 assert.match(collectorSource, /hermesApiMessages\(body, text, normalizeMessageContent\)/);
+assert.match(collectorSource, /hermesApiSelectionMatchesAgent\(agent, gatewaySelection\)/);
+assert.match(
+  collectorSource,
+  /pathname === "\/ready"/,
+  "the phone must have a constant-time collector readiness endpoint",
+);
 assert.doesNotMatch(collectorSource, /HivemindOS request marker:/);
 
 const runtimeSource = readFileSync(

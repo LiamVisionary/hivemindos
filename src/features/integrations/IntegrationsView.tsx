@@ -37,7 +37,6 @@ import {
   tabFromLocation,
   timeAgo,
 } from "./integrations-view-helpers";
-import "./integrations-redesign.css";
 
 type TabId = "connections" | "mcp" | "transcript" | "codeproof";
 
@@ -100,6 +99,7 @@ const MCP_DEFAULTS: Record<string, McpTransportDefaults & { accent: string; mono
   linear: { transport: "stdio", command: "npx", args: ["-y", "linear-mcp"], accent: "#9b8cf0", mono: "Li" },
   stripe: { transport: "stdio", command: "npx", args: ["-y", "@stripe/mcp"], accent: "#9b8cf0", mono: "St" },
   notion: { transport: "stdio", command: "npx", args: ["-y", "@notionhq/notion-mcp-server"], accent: "#d8d6cf", mono: "No" },
+  notebooklm: { transport: "stdio", command: "node", args: ["scripts/notebooklm-mcp.mjs"], accent: "#f0b24d", mono: "Nl" },
 };
 
 const MCP_SOURCE = {

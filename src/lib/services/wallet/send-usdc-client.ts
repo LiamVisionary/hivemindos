@@ -18,6 +18,20 @@ export type WalletSendUsdcResponse = {
   error?: string;
 };
 
+export type PersonalWalletAssetSendRequest = {
+  agentId: string;
+  toAddress: string;
+  asset: string;
+  assetAmount: string;
+  tokenAddress?: string;
+  confirmation: "SEND_TOKEN";
+};
+
+export type PersonalWalletAssetSendResponse = Omit<WalletSendUsdcResponse, "assetSymbol"> & {
+  assetSymbol?: string;
+  assetAmount?: number;
+};
+
 type WalletSendApprovalResponse = {
   ok?: boolean;
   approvalToken?: string;
@@ -28,7 +42,7 @@ export async function sendApprovedWalletUsdc(input: WalletSendUsdcRequest): Prom
   const approval = await postWalletSend<WalletSendApprovalResponse>({
     ...input,
     action: "approve",
-  });
+  }, "Could not approve this stablecoin send.");
   if (!approval.ok || !approval.approvalToken) {
     return { ok: false, error: approval.error ?? "Could not approve this stablecoin send." };
   }
@@ -36,10 +50,22 @@ export async function sendApprovedWalletUsdc(input: WalletSendUsdcRequest): Prom
     ...input,
     action: "send",
     approvalToken: approval.approvalToken,
-  });
+  }, "Could not send stablecoin.");
 }
 
-async function postWalletSend<T extends { ok?: boolean; error?: string }>(body: Record<string, unknown>): Promise<T> {
+export async function sendApprovedPersonalWalletAsset(input: PersonalWalletAssetSendRequest): Promise<PersonalWalletAssetSendResponse> {
+  const approval = await postWalletSend<WalletSendApprovalResponse>({ ...input, action: "approve" }, "Could not approve this token send.");
+  if (!approval.ok || !approval.approvalToken) {
+    return { ok: false, error: approval.error ?? "Could not approve this token send." };
+  }
+  return postWalletSend<PersonalWalletAssetSendResponse>({
+    ...input,
+    action: "send",
+    approvalToken: approval.approvalToken,
+  }, `Could not send ${input.asset}.`);
+}
+
+async function postWalletSend<T extends { ok?: boolean; error?: string }>(body: Record<string, unknown>, fallbackError: string): Promise<T> {
   const response = await fetch("/api/wallet/send", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -50,7 +76,7 @@ async function postWalletSend<T extends { ok?: boolean; error?: string }>(body: 
     return {
       ...(data ?? {}),
       ok: false,
-      error: data?.error ?? "Could not send stablecoin.",
+      error: data?.error ?? fallbackError,
     } as T;
   }
   return data;

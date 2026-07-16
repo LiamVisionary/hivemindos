@@ -77,6 +77,7 @@ for (const path of ["setup.sh", "setup.ps1"]) {
   has(path, "hive-handoff", "handoff command installer");
   has(path, "hivemind-mcp", "Hivemind MCP command installer");
   has(path, "hive-pulse", "Hive Pulse command installer");
+  has(path, "hive-quant-research", "quant research command installer");
   has(path, "dashboard-auth", "dashboard auth command installer");
   has(path, "Python 3.12+", "Hive Pulse Python dependency check");
 }
@@ -92,12 +93,14 @@ for (const path of ["uninstall.sh", "uninstall.ps1"]) {
   has(path, "hive-handoff", "handoff command uninstaller");
   has(path, "hivemind-mcp", "Hivemind MCP command uninstaller");
   has(path, "hive-pulse", "Hive Pulse command uninstaller");
+  has(path, "hive-quant-research", "quant research command uninstaller");
   has(path, "dashboard-auth", "dashboard auth command uninstaller");
   has(path, path.endsWith(".ps1") ? "Python.Python.3.12" : "python@3.12", "Hive Pulse Python uninstall mirror");
 }
 
 assert.ok(existsSync(join(root, "scripts/dashboard-auth")), "missing dashboard-auth command shim");
 assert.ok(existsSync(join(root, "scripts/hive-pulse")), "missing Hive Pulse command shim");
+assert.ok(existsSync(join(root, "scripts/hive-quant-research")), "missing quant research command shim");
 assert.ok(existsSync(join(root, "scripts/hive-workspace")), "missing hive-workspace command");
 assert.ok(existsSync(join(root, "scripts/hive-workspace-switch")), "missing hive-workspace-switch command");
 assert.ok(existsSync(join(root, "scripts/hive-workspace-add")), "missing hive-workspace-add command");
@@ -314,6 +317,7 @@ has("docs/for-users/whole-brain/shared-skills.md", "defuddle");
 has("docs/for-users/whole-brain/shared-skills.md", "create-zero-human-company");
 has("docs/for-users/whole-brain/shared-skills.md", "hive-assimilate");
 has("docs/for-users/whole-brain/shared-skills.md", "hive-pulse");
+has("docs/for-users/whole-brain/shared-skills.md", "hive-quant-research");
 has("docs/for-users/whole-brain/shared-skills.md", "hive-remote-capability-use");
 has("docs/for-users/whole-brain/shared-skills.md", "hive-brain-memory");
 has("docs/for-users/whole-brain/shared-skills.md", "hive-brain-compiled-wiki");
@@ -327,6 +331,7 @@ has("packaged-skills/README.md", "Obsidian Native Brain Pack");
 has("packaged-skills/README.md", "create-zero-human-company");
 has("packaged-skills/README.md", "hive-assimilate");
 has("packaged-skills/README.md", "hive-pulse");
+has("packaged-skills/README.md", "hive-quant-research");
 has("packaged-skills/README.md", "engineering-discipline");
 has("packaged-skills/README.md", "hive-remote-capability-use");
 has("packaged-skills/README.md", "hive-brain-memory");
@@ -430,6 +435,7 @@ has("docs/for-users/packaged-skills/third-party-skills.md", "obra/superpowers");
 has("docs/for-users/whole-brain/shared-skills.md", "HivemindOS Engineering Discipline");
 has("docs/for-users/features/work-and-scheduler.md", "Engineering discipline");
 has("docs/for-users/packaged-skills/hive-skills.md", "hive-pulse");
+has("docs/for-users/packaged-skills/hive-skills.md", "hive-quant-research");
 has("docs/for-users/packaged-skills/hive-skills.md", "hive-remote-capability-use");
 has("docs/for-users/packaged-skills/hive-skills.md", "hive-brain-memory");
 has("docs/for-users/packaged-skills/hive-skills.md", "hive-brain-compiled-wiki");

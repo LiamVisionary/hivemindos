@@ -61,7 +61,7 @@ export function WalletSecretExportSheet({ walletId, actionBusy, actionStatus, ex
       <div className="fw-sheet-title">Export keys
         <button type="button" className="fw-x" onClick={onClose} aria-label="Close"><X size={14} strokeWidth={2} /></button>
       </div>
-      <p className="fw-sheet-help">This saves the local wallet secret for offline backup. Multi-chain wallets may export a recovery phrase plus per-chain secrets; single-chain wallets export a private key. Anyone with the export can spend from this wallet.</p>
+      <p className="fw-sheet-help">This saves the local wallet secret for offline backup. Wallets derived from a shared recovery phrase export this account&rsquo;s own private key (which maps to exactly this address), noting its derivation path; other wallets export their private key or recovery phrase. Anyone with the export can spend from this wallet.</p>
       <label className="fb-label">Confirm export
         <input className="fb-field fb-mono" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} placeholder={WALLET_SECRET_EXPORT_CONFIRMATION} />
       </label>

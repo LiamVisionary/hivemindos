@@ -1,6 +1,6 @@
 ---
 title: HIVE Token Receipts
-description: Direct on-chain evidence for the HIVE Base contract, launch distribution, permanent liquidity architecture, contract controls, holder concentration, staking, and treasury activity.
+description: Direct on-chain evidence for the HIVE Base contract, launch distribution, permanent liquidity architecture, contract controls, holder concentration, staking, and confirmed buybacks.
 ---
 
 # HIVE Token Receipts
@@ -21,7 +21,7 @@ The [launch transaction](https://basescan.org/tx/0x35adf31159934811e9bc99b7c1c22
 
 - 100,000,000,000 HIVE initial supply
 - 99,999,999,999.999999957521 HIVE routed to the Uniswap V4 PoolManager
-- 0.000000000000042479 HIVE of rounding dust burned
+- 0.000000000000042479 HIVE of historical launch rounding dust burned in that transaction
 - zero creator premint
 - zero creator vesting allocation
 
@@ -31,7 +31,7 @@ The public [Bankr launch record](https://api.bankr.bot/token-launches/0xA382c83e
 
 ## Permanent Liquidity Architecture
 
-HIVE uses Doppler multicurve liquidity on Uniswap V4. It does not issue a conventional creator-held V2 LP token that can be sent to a burn address.
+HIVE uses Doppler multicurve liquidity on Uniswap V4. It does not issue a conventional creator-held V2 LP token; launch-liquidity permanence comes from the immutable V4 configuration described below.
 
 The token's immutable Doppler asset configuration identifies:
 
@@ -42,7 +42,7 @@ The token's immutable Doppler asset configuration identifies:
 | NoOp migrator | `0x6ddfED58D238Ca3195E49d8ac3d4cEa6386E5C33` |
 | Migration destination | `0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD` |
 
-Doppler's [canonical NoOpMigrator source](https://github.com/whetstoneresearch/doppler/blob/568fc2fe42e6aaf5928fac5dd4365555f0dcad86/src/migrators/NoOpMigrator.sol) always reverts migration. HIVE's configuration therefore prevents the launch liquidity from being withdrawn through Doppler's migration path. This is the V4 equivalent of the permanent-liquidity receipt a V2 token would usually express through burned or locked LP tokens.
+Doppler's [canonical NoOpMigrator source](https://github.com/whetstoneresearch/doppler/blob/568fc2fe42e6aaf5928fac5dd4365555f0dcad86/src/migrators/NoOpMigrator.sol) always reverts migration. HIVE's configuration therefore prevents the launch liquidity from being withdrawn through Doppler's migration path. This is the V4 permanent-liquidity receipt; it does not depend on a creator-held LP position.
 
 Permanent launch liquidity does not guarantee market depth, price stability, demand, or an exit at a particular price.
 
@@ -62,15 +62,15 @@ The inflation parameter deserves explicit disclosure. Doppler Airlock starts the
 
 The July 12 snapshot paginated the public [Blockscout holder API](https://base.blockscout.com/api/v2/tokens/0xA382c83e2a3B79368f372c2EB9b6925ffAf45bA3/holders), which returned 319 holder addresses.
 
-After excluding only the named Uniswap V4 PoolManager, Doppler initializer, HIVE staking vault, Doppler Airlock, and burn/dead addresses, the largest included address held 3.2711% and the top ten included addresses held 17.986% of supply. Smart-contract wallets remained included unless they were one of those named protocol or pooled-custody exclusions.
+After excluding only the named Uniswap V4 PoolManager, Doppler initializer, HIVE staking vault, Doppler Airlock, and known sink/dead addresses, the largest included address held 3.2711% and the top ten included addresses held 17.986% of supply. Smart-contract wallets remained included unless they were one of those named protocol or pooled-custody exclusions.
 
 The exact addresses, balances, exclusions, and method are in the machine-readable manifest. This is a reproducible distribution snapshot, not proof that wallets are unrelated or that beneficial ownership is fully known.
 
-## Live Utility And Treasury Receipts
+## Live Utility And Buyback Receipts
 
 The [HIVE staking contract](https://basescan.org/address/0x26c7121e41e779327adbd5682646dc5deb764539#code) held 2.213947706948184371 billion actively staked HIVE at the snapshot block and was not paused. Staking is non-custodial and non-yield-bearing. It supplies community status, access signals, member usage pricing on participating apps, and Honey multipliers.
 
-The [Agent Buyback Ledger](https://hivemindos.app/buybacks/) publishes only confirmed HIVE purchases and separately confirmed burns. A treasury purchase does not count as a burn without its own transaction, and neither activity creates a holder return, staking payout, company ownership, price floor, or claim on revenue.
+The [HIVE Buyback Ledger](https://hivemindos.app/buybacks/) publishes confirmed HIVE purchases. These purchases use the separate 15% buyback allocation rather than the company treasury. HivemindOS does not destroy purchased HIVE. A buyback creates no holder return, staking payout, company ownership, price floor, or claim on revenue.
 
 ## Verification Boundary
 

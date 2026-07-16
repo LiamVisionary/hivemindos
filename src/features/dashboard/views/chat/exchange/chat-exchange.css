@@ -14,7 +14,7 @@
 }
 
 .fr-chat-root {
-  --fr-chat-content-width: 760px;
+  --fr-chat-content-width: 720px;
 
   position: relative;
   display: flex;
@@ -124,7 +124,8 @@
   display: grid;
   min-width: 0;
   min-height: 0;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .fr-chat-header {
@@ -145,9 +146,10 @@
 
 .fr-chat-agent-trigger {
   display: grid;
-  width: 100%;
+  width: fit-content;
+  max-width: 100%;
   min-width: 0;
-  grid-template-columns: 40px minmax(0, 1fr) auto;
+  grid-template-columns: 40px minmax(0, auto) auto;
   align-items: center;
   gap: 14px;
   border: 1px solid transparent;
@@ -483,10 +485,46 @@
   min-width: 0;
 }
 
+/* Keep the composer's glass layer separate from its menus. A backdrop filter
+   on the composer itself creates a backdrop root, which prevents nested
+   popovers from blurring the chat behind them in WKWebView. */
+.fr-chat-composer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--panel) 48%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  backdrop-filter: blur(20px) saturate(1.3);
+  pointer-events: none;
+  transition: background 140ms ease;
+}
+
+.fr-chat-composer[data-drop-active="true"]::before {
+  background: color-mix(in srgb, var(--honey-soft) 60%, var(--panel));
+}
+
+.fr-chat-composer > * {
+  position: relative;
+  z-index: 1;
+}
+
 .fr-chat-composer-dock {
+  position: absolute;
+  z-index: 5;
+  right: 0;
+  bottom: 0;
+  left: 0;
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
+  padding: 8px 24px 18px;
+  pointer-events: none;
+}
+
+.fr-chat-composer-rail {
+  pointer-events: auto;
 }
 
 .fr-chat-composer-rail :where([class*="chatComposerField"]) {
@@ -724,50 +762,6 @@
   opacity: 0.55;
 }
 
-.fr-chat-markdown {
-  display: grid;
-  gap: 0.7em;
-}
-
-.fr-chat-markdown :where(p, ul, ol, pre, blockquote, figure) {
-  margin: 0;
-}
-
-.fr-chat-markdown :where(ul, ol) {
-  display: grid;
-  gap: 0.45em;
-  padding-left: 1.2em;
-}
-
-.fr-chat-markdown :where(code) {
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: var(--panel-hi);
-  color: var(--fg);
-  font-family: var(--f-mono);
-  font-size: 0.84em;
-  padding: 1.5px 5px;
-}
-
-.fr-chat-markdown :where(pre) {
-  max-width: 100%;
-  overflow: auto;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--bg-soft);
-  padding: 12px 14px;
-  color: var(--fg-2);
-  font-family: var(--f-mono);
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.fr-chat-markdown :where(pre code) {
-  border: 0;
-  background: transparent;
-  padding: 0;
-}
-
 .fr-chat-user-command {
   display: inline-flex;
   max-width: 100%;
@@ -815,12 +809,10 @@
 .fr-chat-message-footer.is-agent {
   justify-content: flex-start;
   justify-self: start;
-  margin-left: 14px;
 }
 
 .fr-chat-response-billing {
   justify-self: start;
-  margin-left: 14px;
   color: var(--fg-4);
   font-family: var(--f-mono);
   font-size: 10px;
@@ -844,7 +836,7 @@
   white-space: nowrap;
 }
 
-.fr-chat-action-row > button,
+.fr-chat-action-row > button:not(.fr-chat-feedback-button),
 .fr-chat-mini-button {
   display: inline-flex;
   align-items: center;
@@ -865,14 +857,14 @@
   white-space: nowrap;
 }
 
-.fr-chat-action-row > button:hover,
+.fr-chat-action-row > button:not(.fr-chat-feedback-button):hover,
 .fr-chat-mini-button:hover {
   border-color: var(--honey-line);
   background: var(--honey-soft);
   color: var(--honey);
 }
 
-.fr-chat-action-row > button:disabled,
+.fr-chat-action-row > button:not(.fr-chat-feedback-button):disabled,
 .fr-chat-mini-button:disabled {
   cursor: default;
   opacity: 0.45;
@@ -1033,46 +1025,6 @@
   color: inherit;
   font: inherit;
   overflow-wrap: anywhere;
-}
-
-.fr-chat-segmented-actions {
-  overflow: hidden;
-  border: 1px solid var(--line-2);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--panel-2) 88%, transparent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-}
-
-.fr-chat-segmented-button {
-  width: 30px !important;
-  height: 28px !important;
-  min-height: 28px !important;
-  border: 0 !important;
-  border-radius: 0 !important;
-  background: transparent !important;
-  color: var(--fg-3) !important;
-  padding: 0 !important;
-}
-
-.fr-chat-segmented-button + .fr-chat-segmented-button {
-  border-left: 1px solid var(--line-2) !important;
-}
-
-.fr-chat-segmented-button:hover,
-.fr-chat-segmented-button:focus-visible,
-.fr-chat-segmented-button[data-active="true"] {
-  background: var(--honey-soft) !important;
-  color: var(--honey) !important;
-}
-
-.fr-chat-segmented-button:disabled {
-  cursor: default;
-  opacity: 0.48;
-}
-
-.fr-chat-segmented-button svg {
-  width: 14px;
-  height: 14px;
 }
 
 .fr-chat-spin-icon {

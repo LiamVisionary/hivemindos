@@ -23,6 +23,7 @@ The provider catalog makes external options retrievable by agents through `/api/
 - X API MCP as an official user-account bridge for X search, timelines, bookmarks, trends, news, and Articles.
 - Robinhood Trading MCP as the official OAuth bridge for Agentic brokerage accounts, portfolio and market reads, and governed equity orders.
 - n8n as an installable workflow automation service.
+- Listmonk as a localhost-only campaign and transactional-email manager that uses a separately configured SMTP provider.
 - Queen Bee PRD decomposition for turning product requirements into linked Work Board tasks.
 
 Catalog entries name required credential keys only. They do not store secret values.
@@ -86,6 +87,12 @@ The curated MCP catalog also includes RentAHuman. Use `npx -y rentahuman-mcp` fo
 
 The Apps & Services view includes n8n as an installable provider. The install action starts n8n through Docker, binds it to `127.0.0.1:5678`, sets localhost-safe HTTP settings, and keeps workflow execution outside the HivemindOS process. Once n8n is running, the existing connected-app discovery can surface its UI and API handles.
 
+## Listmonk Service
+
+The Apps & Services view includes Listmonk for self-hosted newsletters, subscriber lists, campaigns, and transactional templates. HivemindOS creates a dedicated Docker Compose project under its local service directory, binds the admin UI to `127.0.0.1:9000`, keeps PostgreSQL off host ports, preserves database and upload volumes across stops, and pins both container images by immutable digest.
+
+Listmonk is not an inbox and does not replace AgentMail, Cloudflare Agentic Inbox, or an IMAP mailbox. It also does not deliver mail by itself. Before a live send, the operator must configure an SMTP provider inside Listmonk, verify the sending domain, review recipients and content, and configure bounce handling. Keep administrative access limited to trusted operators because campaign HTML, templates, uploads, and advanced subscriber permissions are powerful.
+
 ## Palmier Pro Service
 
 The Apps & Services view includes Palmier Pro as an installable macOS video editor for agent-assisted timeline work. HivemindOS installs the reviewed GitHub release DMG by downloading the pinned asset, verifying its SHA-256 digest, mounting it read-only, and copying the app bundle into Applications. It does not run a shell installer.
@@ -95,6 +102,8 @@ Palmier Pro requires macOS 26 Tahoe on Apple Silicon. When the app is open, it e
 ## Agent Mailboxes
 
 Agent Settings exposes a mailbox action for existing agents. The intended user flow is: select an agent, press **Create mailbox**, and receive a persistent address for that agent. The app stores mailbox ownership under HivemindOS state and does not ask the user for per-agent IMAP, SMTP, password, or host settings in the primary flow.
+
+HivemindOS does not currently advertise a first-party managed mailbox broker as live. Reserved broker endpoint settings remain blocked until the app and hosted service share a reviewed provisioning contract. Today, hosted mailbox provisioning uses AgentMail, while Cloudflare Agentic Inbox provides the self-hosted Cloudflare path.
 
 Once agents have mailboxes, the outreach threads they send and receive are streamed onto a company's cockpit in the [Zero Human Companies](zero-human-companies.html) **Emails** tab, which reads across AgentMail and Cloudflare Agentic Inbox and lists the crew's mailboxes with per-mailbox status.
 

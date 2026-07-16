@@ -16,13 +16,15 @@ control to use, and clicks and types for you.
 It is built on the open-source [alibaba/page-agent](https://github.com/alibaba/page-agent)
 project (MIT), driven through your own configured model.
 
-## How to turn it on
+## How to try it
 
-Page Agent is an **installable app**. Open **My Apps**, find **Page Agent**, and
-enable it. It stays off until you do, and you can turn it off again at any time.
-It's a per-machine choice — enabling it on This Mac does not enable it elsewhere.
+Page Agent currently lives in the developer lab; it is not an installable My Apps
+card and it does not mount across the normal dashboard. In a development build,
+open `/page-agent-lab`. Production builds keep that lab unavailable unless the
+operator starts the dashboard with `PAGE_AGENT_LAB=1`.
 
-Once enabled, a command bar appears; type an instruction and it drives the screen.
+The lab shows a command bar. Type an instruction and Page Agent drives only that
+lab page.
 
 ## What it can — and can't — reach
 
@@ -45,6 +47,16 @@ constrained:
   wallet flow, never an automated click.
 - **No arbitrary code.** The tool that would let it run generated JavaScript is
   disabled and stays disabled.
+- **Fresh state before interaction.** Click, type, and selection tools re-read the
+  page immediately before acting instead of trusting an old element number.
+- **Untrusted pages pause the run.** Instruction-like page content is treated as
+  data and suspected prompt injection stops the task for human review.
+- **Consequences ask at the moment of action.** Submit, send, publish, purchase,
+  transfer, delete, install, upload, and signature-shaped controls require a
+  one-action confirmation.
+- **Receipts survive reloads.** Governed runs retain redacted observations,
+  policy decisions, action results, and post-action verification without storing
+  typed text or secrets.
 - **You stay in control.** It's opt-in, off by default, step-capped, and can be
   stopped mid-task at any time.
 
@@ -55,3 +67,6 @@ constrained:
 - It needs a model that supports tool calling; if your active agent's model
   can't, Page Agent will tell you rather than guess.
 - It operates one screen at a time — it doesn't span multiple windows or tabs.
+- The developer lab is not a promise that every dashboard control is ready for
+  autonomous operation. For general web browsing, HivemindOS uses the governed
+  computer-interaction capability and Browser Use instead.

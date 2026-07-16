@@ -1,0 +1,44 @@
+/* Keep full-size targets in the narrow rail, then pair the two icon utilities
+   once hover or keyboard focus opens enough horizontal room for both. */
+.fr-shelf[data-footer-tooltip-open="true"] {
+  width: 238px;
+  box-shadow: 34px 0 70px -34px rgba(0, 0, 0, 0.55);
+  background: color-mix(in srgb, var(--panel) 97%, transparent);
+}
+
+html[data-liquid-glass]:not([data-liquid-glass="disabled"]) .fr-shelf[data-footer-tooltip-open="true"] {
+  box-shadow: 34px 0 70px -34px rgba(0, 0, 0, 0.55), inset -1px 0 rgba(255, 255, 255, 0.05);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel-hi) 38%, transparent), transparent 54%),
+    color-mix(in srgb, var(--panel) 84%, transparent);
+}
+
+html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .fr-shelf.fr-shelf-app[data-footer-tooltip-open="true"] {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel-hi) 34%, transparent), transparent 58%),
+    color-mix(in srgb, var(--panel) 58%, transparent);
+}
+
+.fr-shelf[data-footer-tooltip-open="true"] :is(.fr-brand-name, .fr-nav-label, .fr-shelf-version) {
+  opacity: 1;
+  transform: none;
+}
+
+.fr-shelf-control-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.fr-shelf-control-row .fr-nav {
+  width: 100%;
+  justify-content: center;
+  padding: 0;
+}
+
+.fr-shelf:hover .fr-shelf-control-row,
+.fr-shelf[data-keyboard-focus="true"]:focus-within .fr-shelf-control-row,
+.fr-shelf[data-footer-tooltip-open="true"] .fr-shelf-control-row {
+  grid-template-columns: repeat(2, 44px);
+}

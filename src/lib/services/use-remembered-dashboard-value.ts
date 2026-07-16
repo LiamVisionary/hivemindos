@@ -10,9 +10,12 @@ import { loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/servi
  * HivemindOS state). Hydrates asynchronously: callers see `initialValue` on
  * the first render(s), then the stored value unless the user already changed
  * it locally this session.
+ * The third tuple value reports when hydration has settled; existing callers
+ * that only consume the value and setter remain unchanged.
  */
 export function useRememberedDashboardValue(stateKey: string, initialValue = "") {
   const [value, setValue] = useState(initialValue);
+  const [hydrated, setHydrated] = useState(false);
   const touchedRef = useRef(false);
 
   useEffect(() => {
@@ -24,7 +27,10 @@ export function useRememberedDashboardValue(stateKey: string, initialValue = "")
           setValue(stored);
         }
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setHydrated(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -39,5 +45,5 @@ export function useRememberedDashboardValue(stateKey: string, initialValue = "")
     [stateKey],
   );
 
-  return [value, remember] as const;
+  return [value, remember, hydrated] as const;
 }

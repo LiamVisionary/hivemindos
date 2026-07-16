@@ -97,6 +97,7 @@ export async function POST(request: NextRequest) {
         proposals: result.file.proposals,
         updatedAt: result.file.updatedAt,
         memory: result.memory,
+        task: result.task,
       });
     }
     return errorJson(`Unsupported brain review action: ${action}`, 400);

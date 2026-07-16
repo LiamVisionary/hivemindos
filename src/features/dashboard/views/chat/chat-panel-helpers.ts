@@ -1,4 +1,5 @@
 import { HIVEMIND_OS_RUNTIME } from "@/lib/types/agent-runtime";
+import { isAgentColdStartProcessEvent } from "@/lib/services/chat/agent-cold-start";
 import { normalizeChatPermissionMode } from "@/lib/types/chat-permissions";
 import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 
@@ -66,6 +67,7 @@ export type ChatPromptUi = {
 };
 
 export function isHiddenChatProcessEvent(event: ProcessEventLike = {}) {
+  if (isAgentColdStartProcessEvent(event)) return true;
   const label = String(event?.label ?? "").trim();
   const detail = String(event?.detail ?? "").trim();
   if (/assistant started writing|assistant wrote in session|agent replied|queued chat request/i.test(label)) return true;
@@ -73,6 +75,10 @@ export function isHiddenChatProcessEvent(event: ProcessEventLike = {}) {
   if (/^Runtime session active$/i.test(label)) return true;
   if (/^Runtime event$/i.test(label) || /^Runtime event$/i.test(detail)) return true;
   return false;
+}
+
+export function chatProcessTimerIsActive(streamActive: boolean, processEventsActive: boolean) {
+  return streamActive && processEventsActive;
 }
 
 const PROVIDER_LABELS: Record<string, string> = {

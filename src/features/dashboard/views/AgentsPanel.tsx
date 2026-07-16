@@ -16,6 +16,7 @@ import type { BrainReadiness } from "@/features/dashboard/hooks/use-brain-readin
 import type { DashboardView, HivemindLinkClientStatus, MachineGroup, RuntimeIntegrationStatus } from "@/features/dashboard/dashboard-types";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
+import { DEFAULT_QUEEN_BEE_NAME } from "@/lib/config/queen-bee-personality";
 import styles from "./AgentsPanel.module.css";
 
 type ClassNameBuilder = (...names: Array<string | false | null | undefined>) => string;
@@ -417,6 +418,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
     updateStatusByMachine: fleetUpdateStatusByMachine,
     updateDetailByMachine: fleetUpdateDetailByMachine,
     walletsByAgent,
+    queenName: queenAgent?.name ?? DEFAULT_QUEEN_BEE_NAME,
     onUpdateMachine: (machine) => {
       const group = machineGroups.find((item) => item.key === machine.id);
       if (group) void runMachineUpdate(group);

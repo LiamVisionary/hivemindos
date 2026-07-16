@@ -1,0 +1,36 @@
+# Secrets — never commit
+.env
+.env.*
+*.key
+*.pem
+secrets.json
+credentials.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+Thumbs.db
+
+# Local test artifacts
+*.mp4
+*.mov
+*.webm
+*.avi
+test-videos/
+sample-output/

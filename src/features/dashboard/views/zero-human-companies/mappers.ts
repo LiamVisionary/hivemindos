@@ -525,6 +525,7 @@ export function buildColony({ company, rollup, revenueShare, approvals, agentsBy
     directives: company.directives,
     approvalPolicies: company.approvalPolicies,
     importedOperations: company.importedOperations,
+    importedKnowledge: company.importedKnowledge,
     products: company.products,
     pricingProposals: company.pricingProposals,
     // Raw values for the edit form — the user's own input, not the derived

@@ -575,6 +575,8 @@ export interface AgentProfile {
   a2aUrl?: string;
   aeonMode?: "github" | "local";
   beeRole?: BeeAgentRole;
+  /** Set after an explicit queen rename so legacy-default migrations never overwrite the user's choice. */
+  queenNameCustomized?: boolean;
   workerClass?: BeeWorkerClass;
   customWorkerClass?: CustomWorkerClassProfile;
   customWorkerClasses?: CustomWorkerClassProfile[];

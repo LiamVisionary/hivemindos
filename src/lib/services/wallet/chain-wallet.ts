@@ -2,8 +2,8 @@ import "server-only";
 
 import { createHmac } from "crypto";
 import type { BinaryLike } from "crypto";
-import { getAssociatedTokenAddressSync, createAssociatedTokenAccountInstruction, createTransferInstruction } from "@solana/spl-token";
-import { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL, Transaction } from "@solana/web3.js";
+import { getAssociatedTokenAddressSync, createAssociatedTokenAccountInstruction, createTransferInstruction, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
+import { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL, SystemProgram, Transaction } from "@solana/web3.js";
 import { generateMnemonic, mnemonicToSeedSync, validateMnemonic } from "@scure/bip39";
 import { wordlist as englishWordlist } from "@scure/bip39/wordlists/english";
 import bs58 from "bs58";
@@ -592,6 +592,127 @@ export async function sendEvmNative(params: {
   return { signature };
 }
 
+export function walletAssetAtomicAmount(amountInput: string | number, decimals: number): bigint {
+  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 30) throw new Error("Token decimals must be between 0 and 30.");
+  let amountText = String(amountInput).trim();
+  if (typeof amountInput === "number") {
+    if (!Number.isFinite(amountInput)) throw new Error("Amount must be a finite number.");
+    amountText = amountInput.toLocaleString("en-US", { useGrouping: false, maximumFractionDigits: decimals });
+    if (Number(amountText) !== amountInput) throw new Error(`Amount supports at most ${decimals} decimal places.`);
+  }
+  if (!/^\d+(?:\.\d+)?$/.test(amountText)) throw new Error("Amount must be a positive decimal number.");
+  const [whole, fraction = ""] = amountText.split(".");
+  if (fraction.length > decimals && /[1-9]/.test(fraction.slice(decimals))) {
+    throw new Error(`Amount supports at most ${decimals} decimal places.`);
+  }
+  const atomic = BigInt(`${whole.replace(/^0+(?=\d)/, "") || "0"}${fraction.slice(0, decimals).padEnd(decimals, "0")}`);
+  if (atomic <= 0n) throw new Error("Amount must be greater than zero.");
+  return atomic;
+}
+
+function transferAssetAddressMatches(left: string | undefined, right: string): boolean {
+  if (!left) return false;
+  return left.startsWith("0x") && right.startsWith("0x") ? left.toLowerCase() === right.toLowerCase() : left === right;
+}
+
+export function resolveWalletTransferAsset(balance: Pick<AgentWalletBalance, "tokens">, assetInput: string, tokenAddressInput?: string): AgentWalletTokenBalance {
+  const assetSymbol = assetInput.trim().toUpperCase();
+  const tokenAddress = tokenAddressInput?.trim() || "";
+  const symbolMatches = (balance.tokens || []).filter((token) => token.symbol.trim().toUpperCase() === assetSymbol && token.balance > 0);
+  const matches = tokenAddress ? symbolMatches.filter((token) => transferAssetAddressMatches(token.tokenAddress, tokenAddress)) : symbolMatches;
+  if (!matches.length) throw new Error(`This wallet does not hold ${assetSymbol || "that asset"}.`);
+  if (matches.length > 1) throw new Error(`This wallet holds multiple ${assetSymbol} tokens. Refresh the wallet and choose the chain-specific asset.`);
+  return matches[0];
+}
+
+export async function sendWalletAsset(params: {
+  network: string;
+  secret: string;
+  fromAddress: string;
+  toAddress: string;
+  asset: AgentWalletTokenBalance;
+  amount: string | number;
+}): Promise<{ signature: string; assetSymbol: string; assetAmount: number }> {
+  const network = assertNetwork(params.network);
+  const assetSymbol = params.asset.symbol.trim().toUpperCase();
+  const assetAmount = Number(params.amount);
+  if (!Number.isFinite(assetAmount) || assetAmount <= 0) throw new Error("Amount must be greater than zero.");
+  if (assetAmount > params.asset.balance) throw new Error(`Amount exceeds the available ${assetSymbol} balance.`);
+
+  if (network.startsWith("eip155:")) {
+    if (params.asset.isNative) {
+      const result = await sendEvmNative({
+        network,
+        secret: params.secret,
+        fromAddress: params.fromAddress,
+        toAddress: params.toAddress,
+        amountWei: walletAssetAtomicAmount(params.amount, 18),
+      });
+      return { signature: result.signature, assetSymbol, assetAmount };
+    }
+    const tokenAddress = params.asset.tokenAddress?.trim();
+    if (!/^0x[a-fA-F0-9]{40}$/.test(tokenAddress || "")) throw new Error(`${assetSymbol} is missing a valid EVM token address.`);
+    const account = resolveEvmSigningAccount(params.secret, params.fromAddress);
+    const chain = evmChain(network);
+    const transport = evmReadTransport(network);
+    const publicClient = createPublicClient({ chain, transport });
+    const decimals = Number(await publicClient.readContract({ address: tokenAddress as `0x${string}`, abi: ERC20_ABI, functionName: "decimals" }));
+    const atomicAmount = walletAssetAtomicAmount(params.amount, decimals);
+    const balance = await publicClient.readContract({ address: tokenAddress as `0x${string}`, abi: ERC20_ABI, functionName: "balanceOf", args: [account.address] });
+    if (balance < atomicAmount) throw new Error(`Amount exceeds the available ${assetSymbol} balance.`);
+    const wallet = createWalletClient({ account, chain, transport: http(evmRpc(network)) });
+    const signature = await wallet.writeContract({
+      address: tokenAddress as `0x${string}`,
+      abi: ERC20_ABI,
+      functionName: "transfer",
+      args: [params.toAddress as `0x${string}`, atomicAmount],
+    });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: signature });
+    if (receipt.status === "reverted") throw new Error(`${assetSymbol} transfer reverted on-chain.`);
+    return { signature, assetSymbol, assetAmount };
+  }
+
+  const connection = new Connection(solanaRpc(network), "confirmed");
+  const payer = Keypair.fromSecretKey(bs58.decode(params.secret));
+  if (payer.publicKey.toBase58() !== params.fromAddress) throw new Error("Stored key does not match wallet address.");
+  const recipient = new PublicKey(params.toAddress);
+  const transaction = new Transaction();
+  if (params.asset.isNative) {
+    transaction.add(SystemProgram.transfer({
+      fromPubkey: payer.publicKey,
+      toPubkey: recipient,
+      lamports: walletAssetAtomicAmount(params.amount, 9),
+    }));
+  } else {
+    const mint = new PublicKey(params.asset.tokenAddress || "");
+    const tokenAccounts = (await fetchSolanaTokenAccountsByOwner(connection, payer.publicKey))
+      .filter((account) => String(account.account.data.parsed.info.mint || "") === mint.toBase58());
+    const source = tokenAccounts.find((account) => Number(account.account.data.parsed.info.tokenAmount?.uiAmount ?? 0) >= assetAmount);
+    if (!source) throw new Error(`Amount exceeds the available ${assetSymbol} token-account balance.`);
+    const decimals = Number(source.account.data.parsed.info.tokenAmount?.decimals ?? 0);
+    const atomicAmount = walletAssetAtomicAmount(params.amount, decimals);
+    const programId = source.account.owner;
+    if (!programId.equals(TOKEN_2022_PROGRAM_ID) && !SOLANA_TOKEN_PROGRAMS.includes(programId.toBase58())) {
+      throw new Error(`${assetSymbol} uses an unsupported Solana token program.`);
+    }
+    const destination = getAssociatedTokenAddressSync(mint, recipient, false, programId);
+    if (!await connection.getAccountInfo(destination)) {
+      transaction.add(createAssociatedTokenAccountInstruction(payer.publicKey, destination, recipient, mint, programId));
+    }
+    transaction.add(createTransferInstruction(source.pubkey, destination, payer.publicKey, atomicAmount, [], programId));
+  }
+  const latestBlockhash = await connection.getLatestBlockhash("confirmed");
+  transaction.feePayer = payer.publicKey;
+  transaction.recentBlockhash = latestBlockhash.blockhash;
+  transaction.sign(payer);
+  const simulation = await connection.simulateTransaction(transaction);
+  if (simulation.value.err) throw new Error(`${assetSymbol} transfer simulation failed: ${JSON.stringify(simulation.value.err)}.`);
+  const signature = await connection.sendRawTransaction(transaction.serialize(), { maxRetries: 3, skipPreflight: false });
+  const confirmation = await connection.confirmTransaction({ signature, ...latestBlockhash }, "confirmed");
+  if (confirmation.value.err) throw new Error(`${assetSymbol} transfer failed: ${JSON.stringify(confirmation.value.err)}.`);
+  return { signature, assetSymbol, assetAmount };
+}
+
 export type PreparedUsdStableTransfer =
   | {
       kind: "evm";
@@ -804,29 +925,58 @@ export async function executeEvmZeroExSwap(params: {
   return { approvalHash, swapHash };
 }
 
+export type RecoveryPhraseEvmDerivation = {
+  /** 0-based HD account index (UI labels this "Account {accountIndex + 1}"). */
+  accountIndex: number;
+  /** Full BIP44 path, e.g. m/44'/60'/0'/0/5. */
+  derivationPath: string;
+  /** The exact address this account derives to (checksummed). */
+  address: string;
+  /** This account's own private key — controls only `address`, not the whole seed. */
+  privateKey: `0x${string}`;
+};
+
+/** Find which Phantom-style account index of a stored recovery phrase derives
+ * `expectedAddress`, and return that single account's derivation path + own
+ * private key. The vault stores only the address (not the index), so the address
+ * is the authority — scan the supported account range to recover the index.
+ * Returns null when no account in range derives the address (e.g. an externally
+ * derived address at a non-standard path). */
+export function deriveEvmAccountFromRecoveryPhrase(secret: string, expectedAddress: string): RecoveryPhraseEvmDerivation | null {
+  const normalizedExpectedAddress = expectedAddress.trim().toLowerCase();
+  const mnemonic = normalizeMnemonic(secret);
+  for (let accountIndex = 0; accountIndex <= MAX_RECOVERY_PHRASE_ACCOUNT_INDEX; accountIndex += 1) {
+    const derivationPath = recoveryPhraseDerivationPaths(accountIndex).evm;
+    const hdAccount = mnemonicToAccount(mnemonic, { path: derivationPath });
+    if (hdAccount.address.toLowerCase() !== normalizedExpectedAddress) continue;
+    const privateKey = hdAccount.getHdKey().privateKey;
+    if (!privateKey) return null;
+    return {
+      accountIndex,
+      derivationPath,
+      address: hdAccount.address,
+      privateKey: `0x${Buffer.from(privateKey).toString("hex")}`,
+    };
+  }
+  return null;
+}
+
 /** Resolve a local EVM signer against the wallet address selected by the caller.
  * Recovery phrases may represent any supported Phantom account, so the address
  * is the authority instead of silently assuming Account 1. */
 export function resolveEvmSigningAccount(secret: string, expectedAddress: string) {
-  const normalizedExpectedAddress = expectedAddress.trim().toLowerCase();
   const compactSecret = secret.trim();
   const prefixedSecret = compactSecret.startsWith("0x") ? compactSecret : `0x${compactSecret}`;
   if (/^0x[a-fA-F0-9]{64}$/.test(prefixedSecret)) {
     const account = privateKeyToAccount(prefixedSecret as `0x${string}`);
-    if (account.address.toLowerCase() !== normalizedExpectedAddress) {
+    if (account.address.toLowerCase() !== expectedAddress.trim().toLowerCase()) {
       throw new Error("Stored key does not match the selected wallet address.");
     }
     return account;
   }
-  const mnemonic = normalizeMnemonic(secret);
-  for (let accountIndex = 0; accountIndex <= MAX_RECOVERY_PHRASE_ACCOUNT_INDEX; accountIndex += 1) {
-    const hdAccount = mnemonicToAccount(mnemonic, { path: recoveryPhraseDerivationPaths(accountIndex).evm });
-    if (hdAccount.address.toLowerCase() !== normalizedExpectedAddress) continue;
-    const privateKey = hdAccount.getHdKey().privateKey;
-    if (!privateKey) throw new Error("Recovery phrase did not derive an EVM private key.");
-    return privateKeyToAccount(`0x${Buffer.from(privateKey).toString("hex")}`);
-  }
-  throw new Error(`Stored recovery phrase does not derive the selected wallet address in Accounts 1-${MAX_RECOVERY_PHRASE_ACCOUNT_INDEX + 1}.`);
+  const derived = deriveEvmAccountFromRecoveryPhrase(secret, expectedAddress);
+  if (!derived) throw new Error(`Stored recovery phrase does not derive the selected wallet address in Accounts 1-${MAX_RECOVERY_PHRASE_ACCOUNT_INDEX + 1}.`);
+  return privateKeyToAccount(derived.privateKey);
 }
 
 function normalizeMnemonic(secret: string) {

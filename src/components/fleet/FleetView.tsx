@@ -88,6 +88,8 @@ export interface FleetViewProps {
   onCallAgent?: (m: FleetMachine, a: FleetAgent) => Promise<void> | void;
   onOpenWallet?: (m: FleetMachine, a: FleetAgent) => void;
   onEditSettings?: (m: FleetMachine, a: FleetAgent) => void;
+  /** Display name of the logical Queen Bee; the Hive view renders it separately from the Queen role. */
+  queenName?: string;
   /** When provided, the hive view renders a central Queen Bee cell connected to every machine; clicking it opens her settings. */
   onOpenQueenSettings?: () => void;
   /** "Message the hive" composer (new Hive layout only; legacy FleetView ignores it). */

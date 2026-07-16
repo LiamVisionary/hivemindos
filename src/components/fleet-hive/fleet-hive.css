@@ -41,34 +41,27 @@
 
   /* hive-stage paint tokens */
   --fr-cell-sheen: rgba(255, 255, 255, 0.06);
-  --fr-label-fill: var(--fg);
-  --fr-label-fill-selected: var(--honey-2);
-  --fr-label-halo: var(--bg);
-  --fr-label-halo-width: 2.6;
-  --fr-label-weight: 700;
-  --fr-working-glow: var(--live-soft);
-  --fr-image-shadow: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.4));
   --fr-queen-image-shadow: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.45));
   --fr-thread-lit: var(--honey-line);
-  --fr-thread-idle: var(--line-2);
+  --fr-thread-idle: color-mix(in srgb, var(--line-2) 58%, transparent);
   --fr-thread-flow: var(--honey-2);
   --fr-machine-ready-fill: var(--panel);
-  --fr-machine-ready-border: var(--line-3);
-  --fr-machine-working-fill: color-mix(in srgb, var(--live) 13%, var(--panel));
-  --fr-machine-working-border: color-mix(in srgb, var(--live) 60%, var(--line-3));
-  --fr-machine-setup-fill: color-mix(in srgb, var(--honey) 12%, var(--panel));
-  --fr-machine-setup-border: var(--honey-line);
-  --fr-machine-failed-fill: color-mix(in srgb, var(--danger) 13%, var(--panel));
+  --fr-machine-ready-border: var(--line-2);
+  --fr-machine-working-fill: var(--panel);
+  --fr-machine-working-border: var(--line-2);
+  --fr-machine-setup-fill: var(--panel);
+  --fr-machine-setup-border: var(--line-2);
+  --fr-machine-failed-fill: var(--panel);
   --fr-machine-failed-border: color-mix(in srgb, var(--danger) 58%, var(--line-3));
   --fr-agent-ready-fill: var(--panel-2);
   --fr-agent-ready-border: var(--line-2);
-  --fr-agent-working-fill: color-mix(in srgb, var(--live) 18%, var(--panel-2));
-  --fr-agent-working-border: color-mix(in srgb, var(--live) 70%, transparent);
-  --fr-agent-scheduled-fill: color-mix(in srgb, var(--honey) 15%, var(--panel-2));
-  --fr-agent-scheduled-border: var(--honey-line);
-  --fr-agent-setup-fill: color-mix(in srgb, var(--honey) 10%, var(--panel-2));
-  --fr-agent-setup-border: var(--honey-line);
-  --fr-agent-failed-fill: color-mix(in srgb, var(--danger) 16%, var(--panel-2));
+  --fr-agent-working-fill: var(--panel-2);
+  --fr-agent-working-border: var(--line-2);
+  --fr-agent-scheduled-fill: var(--panel-2);
+  --fr-agent-scheduled-border: var(--line-2);
+  --fr-agent-setup-fill: var(--panel-2);
+  --fr-agent-setup-border: var(--line-2);
+  --fr-agent-failed-fill: var(--panel-2);
   --fr-agent-failed-border: color-mix(in srgb, var(--danger) 64%, transparent);
   --fr-queen-fill: color-mix(in srgb, var(--honey) 16%, var(--panel));
 
@@ -121,34 +114,27 @@
   --danger-soft: rgba(184, 75, 69, 0.11);
 
   --fr-cell-sheen: rgba(255, 255, 255, 0.72);
-  --fr-label-fill: #435145;
-  --fr-label-fill-selected: #805806;
-  --fr-label-halo: rgba(255, 253, 248, 0.74);
-  --fr-label-halo-width: 1.55;
-  --fr-label-weight: 650;
-  --fr-working-glow: rgba(255, 253, 248, 0.64);
-  --fr-image-shadow: drop-shadow(0 4px 7px rgba(33, 44, 36, 0.25));
   --fr-queen-image-shadow: drop-shadow(0 7px 16px rgba(77, 55, 13, 0.28));
   --fr-thread-lit: rgba(169, 114, 9, 0.32);
-  --fr-thread-idle: rgba(44, 58, 47, 0.16);
+  --fr-thread-idle: rgba(44, 58, 47, 0.08);
   --fr-thread-flow: #956300;
   --fr-machine-ready-fill: linear-gradient(180deg, #fffefa 0%, #f6f4ed 100%);
   --fr-machine-ready-border: rgba(58, 70, 58, 0.26);
-  --fr-machine-working-fill: linear-gradient(180deg, #ffffff 0%, #edf5f1 100%);
-  --fr-machine-working-border: rgba(32, 127, 120, 0.38);
-  --fr-machine-setup-fill: linear-gradient(180deg, #fffdf8 0%, #f7ecd8 100%);
-  --fr-machine-setup-border: rgba(169, 114, 9, 0.31);
-  --fr-machine-failed-fill: linear-gradient(180deg, #fffaf8 0%, #f7e2de 100%);
+  --fr-machine-working-fill: linear-gradient(180deg, #fffefa 0%, #f6f4ed 100%);
+  --fr-machine-working-border: rgba(58, 70, 58, 0.26);
+  --fr-machine-setup-fill: linear-gradient(180deg, #fffefa 0%, #f6f4ed 100%);
+  --fr-machine-setup-border: rgba(58, 70, 58, 0.26);
+  --fr-machine-failed-fill: linear-gradient(180deg, #fffefa 0%, #f6f4ed 100%);
   --fr-machine-failed-border: rgba(184, 75, 69, 0.42);
   --fr-agent-ready-fill: linear-gradient(180deg, #ffffff 0%, #f1f5ec 100%);
   --fr-agent-ready-border: rgba(63, 82, 68, 0.24);
-  --fr-agent-working-fill: linear-gradient(180deg, #ffffff 0%, #eef6f2 100%);
-  --fr-agent-working-border: rgba(32, 127, 120, 0.40);
-  --fr-agent-scheduled-fill: linear-gradient(180deg, #fffef8 0%, #f7ead2 100%);
-  --fr-agent-scheduled-border: rgba(169, 114, 9, 0.30);
-  --fr-agent-setup-fill: linear-gradient(180deg, #fffdfa 0%, #f6efe1 100%);
-  --fr-agent-setup-border: rgba(169, 114, 9, 0.26);
-  --fr-agent-failed-fill: linear-gradient(180deg, #fffafa 0%, #f7e0dc 100%);
+  --fr-agent-working-fill: linear-gradient(180deg, #ffffff 0%, #f1f5ec 100%);
+  --fr-agent-working-border: rgba(63, 82, 68, 0.24);
+  --fr-agent-scheduled-fill: linear-gradient(180deg, #ffffff 0%, #f1f5ec 100%);
+  --fr-agent-scheduled-border: rgba(63, 82, 68, 0.24);
+  --fr-agent-setup-fill: linear-gradient(180deg, #ffffff 0%, #f1f5ec 100%);
+  --fr-agent-setup-border: rgba(63, 82, 68, 0.24);
+  --fr-agent-failed-fill: linear-gradient(180deg, #ffffff 0%, #f1f5ec 100%);
   --fr-agent-failed-border: rgba(184, 75, 69, 0.45);
   --fr-queen-fill: linear-gradient(180deg, #fff8df 0%, #f2c66c 100%);
 
@@ -166,10 +152,42 @@
 
 .fr-root * { box-sizing: border-box; }
 
+/* Compact hive actions share the same segmented, mono toolbar language as the
+   layout and view-mode controls that flank them. */
+.fr-hive-toolbar-actions {
+  display: inline-flex; align-items: center; gap: 2px; padding: 3px;
+  border: 1px solid var(--line); border-radius: 9999px;
+  background: color-mix(in srgb, var(--bg-2) 88%, transparent);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+}
+
+.fr-root .fr-hive-toolbar-action {
+  height: 22px; min-width: 0; padding: 0 10px;
+  border: 0; border-radius: 9999px; background: transparent; box-shadow: none;
+  color: var(--fg-3);
+  font: 600 10.5px/1 var(--f-mono);
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+
+.fr-root .fr-hive-toolbar-action:hover {
+  background: var(--panel-2); color: var(--fg);
+}
+
+.fr-root .fr-hive-toolbar-action[data-active="true"],
+.fr-root .fr-hive-toolbar-action[data-tone="primary"] {
+  background: var(--honey-soft); color: var(--honey);
+}
+
+.fr-root .fr-hive-toolbar-action[data-active="true"]:hover,
+.fr-root .fr-hive-toolbar-action[data-tone="primary"]:hover {
+  background: color-mix(in srgb, var(--honey) 20%, transparent); color: var(--honey-2);
+}
+.fr-root .fr-hive-toolbar-action:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--honey-line); }
+.fr-root .fr-hive-toolbar-action svg { width: 13px; height: 13px; stroke-width: 1.8; }
+
 .fr-cell,
-.fr-cell *,
-.fr-addcell,
-.fr-addcell * {
+.fr-cell * {
   -webkit-user-select: none;
   user-select: none;
   -webkit-user-drag: none;
@@ -178,8 +196,7 @@
 /* Cells rest on the comb, then lift on hover. The .fr-cell / .fr-queen-cell node
    owns absolute-centering + stacking; the inner .fr-cell-lift / .fr-queen-lift
    node owns scale + translate (selection via [data-selected], hover via :hover)
-   entirely in CSS — plain transforms so the tween always fires. Sweep the cursor
-   across the hive and each cell rises, then settles back gracefully. */
+   entirely in CSS. */
 .fr-cell { z-index: var(--fr-z, 4); }
 .fr-cell:hover { z-index: 30; }
 
@@ -190,14 +207,15 @@
   transform-origin: 50% 50%;
   transform: translateY(0) scale(1);
   transition:
-    transform 0.5s cubic-bezier(0.22, 0.61, 0.18, 1),
-    filter 0.5s cubic-bezier(0.22, 0.61, 0.18, 1);
+    transform 180ms cubic-bezier(0.22, 0.61, 0.18, 1),
+    filter 180ms cubic-bezier(0.22, 0.61, 0.18, 1);
   will-change: transform;
 }
 
-/* selected cells rest slightly enlarged */
-.fr-cell[data-selected="true"] > .fr-cell-lift { transform: translateY(0) scale(1.08); }
-.fr-queen-cell[data-selected="true"] > .fr-queen-lift { transform: translateY(0) scale(1.05); }
+/* Selected cells rest slightly enlarged without turning the map into a field of
+   competing motion. */
+.fr-cell[data-selected="true"] > .fr-cell-lift { transform: translateY(0) scale(1.035); }
+.fr-queen-cell[data-selected="true"] > .fr-queen-lift { transform: translateY(0) scale(1.025); }
 
 .fr-locate-ring {
   position: absolute;
@@ -219,20 +237,20 @@
 
 /* hover lifts the cell off the comb (scales relative to its resting size) */
 .fr-cell:hover > .fr-cell-lift {
-  transform: translateY(-6px) scale(1.05);
-  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.42));
+  transform: translateY(-3px) scale(1.025);
+  filter: drop-shadow(0 7px 12px rgba(0, 0, 0, 0.24));
 }
 .fr-cell[data-selected="true"]:hover > .fr-cell-lift {
-  transform: translateY(-6px) scale(1.11);
-  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.42));
+  transform: translateY(-3px) scale(1.055);
+  filter: drop-shadow(0 7px 12px rgba(0, 0, 0, 0.24));
 }
 .fr-queen-cell:hover > .fr-queen-lift {
-  transform: translateY(-8px) scale(1.04);
-  filter: drop-shadow(0 16px 24px rgba(0, 0, 0, 0.5));
+  transform: translateY(-4px) scale(1.025);
+  filter: drop-shadow(0 9px 16px rgba(0, 0, 0, 0.3));
 }
 .fr-queen-cell[data-selected="true"]:hover > .fr-queen-lift {
-  transform: translateY(-8px) scale(1.08);
-  filter: drop-shadow(0 16px 24px rgba(0, 0, 0, 0.5));
+  transform: translateY(-4px) scale(1.045);
+  filter: drop-shadow(0 9px 16px rgba(0, 0, 0, 0.3));
 }
 
 /* reduced motion: keep the hover lift as feedback, just drop the animated tween */
@@ -241,6 +259,283 @@
   .fr-queen-lift {
     transition: none;
   }
+}
+
+/* Dense-map identity stays typographic and schematic. Detailed character art
+   remains available in the detail panel, while these nodes preserve hierarchy
+   and keep every user-provided name readable. */
+.fr-agent-node-content,
+.fr-machine-node-content {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--fg-2);
+  text-align: center;
+  pointer-events: none;
+}
+.fr-agent-node-content {
+  grid-template-rows: 28px auto;
+  align-content: center;
+  gap: 4px;
+  padding: 15px 10px 13px;
+}
+.fr-machine-node-content {
+  grid-template-rows: 28px auto 9px;
+  align-content: center;
+  gap: 2px;
+  padding: 14px 13px 10px;
+}
+.fr-machine-node-content[data-updating="true"] {
+  grid-template-rows: 28px auto 9px 10px;
+  padding: 9px 13px 8px;
+}
+.fr-node-glyph {
+  display: grid;
+  place-items: center;
+  color: var(--fg-3);
+}
+.fr-agent-node-content .fr-node-glyph svg {
+  width: 28px;
+  height: 28px;
+  stroke-width: 1.65;
+}
+.fr-machine-node-content .fr-node-glyph svg {
+  width: 28px;
+  height: 28px;
+  stroke-width: 1.55;
+}
+.fr-cell[data-selected="true"] .fr-node-glyph,
+.fr-cell[data-primary="true"] .fr-node-glyph {
+  color: var(--honey);
+}
+.fr-node-name {
+  width: 100%;
+  color: var(--fg);
+  font-family: var(--f-body);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.fr-machine-node-content .fr-node-name {
+  font-size: 11.5px;
+  line-height: 1.03;
+}
+.fr-machine-agent-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--fg-3);
+  font-family: var(--f-mono);
+  font-size: 9px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.fr-machine-update-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: var(--live);
+  font-family: var(--f-mono);
+  font-size: 8.5px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+.fr-machine-update-status svg {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+}
+.fr-node-status {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 7px;
+  height: 7px;
+  border: 1px solid color-mix(in srgb, var(--bg) 72%, transparent);
+  border-radius: 999px;
+  background: currentColor;
+  color: var(--fg-4);
+}
+.fr-machine-node-content .fr-node-status {
+  top: 27px;
+  right: 27px;
+}
+.fr-node-status[data-state="working"] {
+  color: var(--live);
+  animation: fr-pulse 2.4s ease-in-out infinite;
+}
+.fr-node-status[data-state="scheduled"],
+.fr-node-status[data-state="setup"] { color: var(--honey); }
+.fr-node-status[data-state="failed"] { color: var(--danger); }
+@media (prefers-reduced-motion: reduce) {
+  .fr-node-status[data-state="working"] { animation: none; }
+  .fr-machine-update-spinner { animation: none !important; }
+}
+
+/* Optional pre-redesign "Reveal all" stage. Its expressive paint and portrait
+   cells are scoped here so the focused stage keeps the calmer operational
+   hierarchy by default. */
+.fr-legacy-stage {
+  --fr-legacy-label: var(--fg);
+  --fr-legacy-label-selected: var(--honey-2);
+  --fr-legacy-label-halo: var(--bg);
+  --fr-legacy-label-halo-width: 2.6;
+  --fr-legacy-working-glow: var(--live-soft);
+  --fr-machine-working-fill: color-mix(in srgb, var(--live) 13%, var(--panel));
+  --fr-machine-working-border: color-mix(in srgb, var(--live) 60%, var(--line-3));
+  --fr-machine-setup-fill: color-mix(in srgb, var(--honey) 12%, var(--panel));
+  --fr-machine-setup-border: var(--honey-line);
+  --fr-machine-failed-fill: color-mix(in srgb, var(--danger) 13%, var(--panel));
+  --fr-agent-working-fill: color-mix(in srgb, var(--live) 18%, var(--panel-2));
+  --fr-agent-working-border: color-mix(in srgb, var(--live) 70%, transparent);
+  --fr-agent-scheduled-fill: color-mix(in srgb, var(--honey) 15%, var(--panel-2));
+  --fr-agent-scheduled-border: var(--honey-line);
+  --fr-agent-setup-fill: color-mix(in srgb, var(--honey) 10%, var(--panel-2));
+  --fr-agent-setup-border: var(--honey-line);
+  --fr-agent-failed-fill: color-mix(in srgb, var(--danger) 16%, var(--panel-2));
+}
+:global([data-theme="hive-light"]) .fr-legacy-stage {
+  --fr-legacy-label: #435145;
+  --fr-legacy-label-selected: #805806;
+  --fr-legacy-label-halo: rgba(255, 253, 248, 0.74);
+  --fr-legacy-label-halo-width: 1.55;
+  --fr-legacy-working-glow: rgba(255, 253, 248, 0.64);
+  --fr-machine-working-fill: linear-gradient(180deg, #ffffff 0%, #edf5f1 100%);
+  --fr-machine-working-border: rgba(32, 127, 120, 0.38);
+  --fr-machine-setup-fill: linear-gradient(180deg, #fffdf8 0%, #f7ecd8 100%);
+  --fr-machine-setup-border: rgba(169, 114, 9, 0.31);
+  --fr-machine-failed-fill: linear-gradient(180deg, #fffaf8 0%, #f7e2de 100%);
+  --fr-agent-working-fill: linear-gradient(180deg, #ffffff 0%, #eef6f2 100%);
+  --fr-agent-working-border: rgba(32, 127, 120, 0.4);
+  --fr-agent-scheduled-fill: linear-gradient(180deg, #fffef8 0%, #f7ead2 100%);
+  --fr-agent-scheduled-border: rgba(169, 114, 9, 0.3);
+  --fr-agent-setup-fill: linear-gradient(180deg, #fffdfa 0%, #f6efe1 100%);
+  --fr-agent-setup-border: rgba(169, 114, 9, 0.26);
+  --fr-agent-failed-fill: linear-gradient(180deg, #fffafa 0%, #f7e0dc 100%);
+}
+.fr-legacy-stage *,
+.fr-legacy-addcell * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.fr-legacy-threads,
+.fr-legacy-hex-outline,
+.fr-legacy-edge-name {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.fr-legacy-cell-content {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+.fr-legacy-cell-glow {
+  position: absolute;
+  inset: -34%;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.fr-legacy-cell-glow[data-pulse="true"] {
+  animation: fr-legacy-cell-breathe 3.2s ease-in-out infinite;
+}
+.fr-legacy-bee,
+.fr-legacy-machine-glyph {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.fr-legacy-bee img {
+  transform: translateY(-4%);
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.4));
+}
+.fr-legacy-machine-glyph { color: var(--fg-2); }
+.fr-legacy-cell[data-selected="true"] .fr-legacy-machine-glyph,
+.fr-legacy-cell[data-primary="true"] .fr-legacy-machine-glyph { color: var(--honey); }
+.fr-legacy-edge-name g {
+  font-family: var(--f-body);
+  font-weight: 600;
+}
+.fr-legacy-addcell {
+  z-index: 2;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  transition: opacity 0.4s, transform 180ms ease;
+}
+.fr-legacy-addcell:hover { transform: translate(-50%, -52%) scale(1.025) !important; }
+.fr-legacy-addcell > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.fr-legacy-addcell-label {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translate(-50%, 4px);
+  white-space: nowrap;
+  pointer-events: none;
+  color: var(--fg-3);
+  font-family: var(--f-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.fr-legacy-stage .fr-queen-glow {
+  opacity: 0.76;
+  animation: fr-legacy-cell-breathe 4s ease-in-out infinite;
+}
+.fr-legacy-stage .fr-queen-cell[data-voice="speaking"] .fr-queen-glow {
+  animation: none;
+}
+.fr-legacy-stage .fr-queen-core {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+.fr-legacy-stage .fr-queen-core img { filter: var(--fr-queen-image-shadow); }
+.fr-legacy-queen-label {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 6px);
+  transform: translateX(-50%);
+  display: grid;
+  gap: 1px;
+  color: var(--honey);
+  font-family: var(--f-display);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  pointer-events: none;
+}
+.fr-legacy-queen-label small {
+  color: var(--fg-4);
+  font-family: var(--f-mono);
+  font-size: 9.5px;
+  font-weight: 400;
+}
+@keyframes fr-legacy-cell-breathe {
+  0%, 100% { transform: scale(0.92); opacity: 0.7; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fr-legacy-cell-glow[data-pulse="true"],
+  .fr-legacy-stage .fr-queen-glow { animation: none; }
 }
 
 /* quiet scrollbars */
@@ -284,15 +579,9 @@
   0%, 100% { transform: scale(1); opacity: 0.9; }
   50% { transform: scale(1.12); opacity: 1; }
 }
-@keyframes fr-cell-breathe {
-  0%, 100% { transform: scale(0.92); opacity: 0.7; }
-  50% { transform: scale(1.08); opacity: 1; }
-}
-
-/* The Queen's honey halo. Idle: a slow ambient breathe. While she's speaking in
-   voice chat, useQueenVoicePulse marks the cell [data-voice="speaking"] and
-   writes --queen-amp (0..1) each frame, so the halo swells and brightens on the
-   exact beat/volume of her voice. See src/lib/audio/queen-voice-amplitude.ts. */
+/* The Queen's honey halo stays quiet at rest. Voice chat marks the cell
+   [data-voice="speaking"] and writes --queen-amp (0..1) each frame, so the halo
+   only appears when it is communicating real activity. */
 .fr-queen-glow {
   position: absolute;
   inset: -30px;
@@ -300,12 +589,11 @@
   background: radial-gradient(circle, var(--honey-soft), transparent 66%);
   pointer-events: none;
   transform-origin: 50% 50%;
-  animation: fr-cell-breathe 4s ease-in-out infinite;
+  opacity: 0;
 }
 .fr-queen-cell[data-voice="speaking"] .fr-queen-glow {
-  animation: none;
   transform: scale(calc(1 + var(--queen-amp, 0) * 0.7));
-  opacity: calc(0.5 + var(--queen-amp, 0) * 0.5);
+  opacity: calc(0.35 + var(--queen-amp, 0) * 0.5);
   transition: transform 60ms linear, opacity 60ms linear;
 }
 /* a subtler sympathetic pulse on the Queen herself, so the whole cell — not
@@ -318,7 +606,6 @@
   transform: scale(calc(1 + var(--queen-amp, 0) * 0.1));
 }
 @media (prefers-reduced-motion: reduce) {
-  .fr-queen-glow { animation: none; }
   .fr-queen-cell[data-voice="speaking"] .fr-queen-glow {
     transform: none;
     opacity: calc(0.6 + var(--queen-amp, 0) * 0.3);
@@ -532,20 +819,20 @@
   pointer-events: none;
   overflow: hidden;
   background:
-    radial-gradient(680px 680px at 50% 50%, color-mix(in srgb, var(--honey) 18%, transparent), transparent 70%),
-    radial-gradient(1200px 900px at 50% 46%, color-mix(in srgb, var(--honey) 6%, transparent), transparent 72%);
+    radial-gradient(680px 680px at 50% 50%, color-mix(in srgb, var(--honey) 5%, transparent), transparent 70%),
+    radial-gradient(1200px 900px at 50% 46%, color-mix(in srgb, var(--honey) 2%, transparent), transparent 72%);
 }
 .fr-root[data-fr-theme="light"] .fr-hive-backdrop {
   background:
-    radial-gradient(620px 620px at 48% 42%, rgba(255, 253, 248, 0.72), transparent 64%),
-    radial-gradient(900px 740px at 52% 58%, rgba(169, 114, 9, 0.055), transparent 76%),
+    radial-gradient(620px 620px at 48% 42%, rgba(255, 253, 248, 0.48), transparent 64%),
+    radial-gradient(900px 740px at 52% 58%, rgba(169, 114, 9, 0.025), transparent 76%),
     linear-gradient(180deg, #fbfcf6 0%, #f0f3ea 100%);
 }
 .fr-hive-backdrop::before {
   content: "";
   position: absolute;
   inset: 0;
-  opacity: 0.62;
+  opacity: 0.24;
   background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2754%27 height=%2793.531%27 viewBox=%270 0 54 93.531%27 fill=%27none%27 stroke=%27%23e7b45c%27 stroke-opacity=%27.08%27 stroke-width=%27.6%27%3E%3Cpolygon points=%27-13.5%2C15.588%2013.5%2C31.177%2013.5%2C62.354%20-13.5%2C77.942%20-40.5%2C62.354%20-40.5%2C31.177%27/%3E%3Cpolygon points=%2713.5%2C62.354%2040.5%2C77.942%2040.5%2C109.119%2013.5%2C124.708%20-13.5%2C109.119%20-13.5%2C77.942%27/%3E%3Cpolygon points=%2713.5%2C-31.177%2040.5%2C-15.588%2040.5%2C15.588%2013.5%2C31.177%20-13.5%2C15.588%20-13.5%2C-15.588%27/%3E%3Cpolygon points=%2740.5%2C15.588%2067.5%2C31.177%2067.5%2C62.354%2040.5%2C77.942%2013.5%2C62.354%2013.5%2C31.177%27/%3E%3Cpolygon points=%2767.5%2C62.354%2094.5%2C77.942%2094.5%2C109.119%2067.5%2C124.708%2040.5%2C109.119%2040.5%2C77.942%27/%3E%3Cpolygon points=%2767.5%2C-31.177%2094.5%2C-15.588%2094.5%2C15.588%2067.5%2C31.177%2040.5%2C15.588%2040.5%2C-15.588%27/%3E%3C/svg%3E");
   background-size: 54px 93.531px;
   -webkit-mask-image: radial-gradient(circle at 50% 50%, transparent 20%, rgba(0, 0, 0, 0.42) 58%, #000 80%);
@@ -556,7 +843,7 @@
   background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2754%27 height=%2793.531%27 viewBox=%270 0 54 93.531%27 fill=%27none%27 stroke=%27%2376836f%27 stroke-opacity=%27.085%27 stroke-width=%27.6%27%3E%3Cpolygon points=%27-13.5%2C15.588%2013.5%2C31.177%2013.5%2C62.354%20-13.5%2C77.942%20-40.5%2C62.354%20-40.5%2C31.177%27/%3E%3Cpolygon points=%2713.5%2C62.354%2040.5%2C77.942%2040.5%2C109.119%2013.5%2C124.708%20-13.5%2C109.119%20-13.5%2C77.942%27/%3E%3Cpolygon points=%2713.5%2C-31.177%2040.5%2C-15.588%2040.5%2C15.588%2013.5%2C31.177%20-13.5%2C15.588%20-13.5%2C-15.588%27/%3E%3Cpolygon points=%2740.5%2C15.588%2067.5%2C31.177%2067.5%2C62.354%2040.5%2C77.942%2013.5%2C62.354%2013.5%2C31.177%27/%3E%3Cpolygon points=%2767.5%2C62.354%2094.5%2C77.942%2094.5%2C109.119%2067.5%2C124.708%2040.5%2C109.119%2040.5%2C77.942%27/%3E%3Cpolygon points=%2767.5%2C-31.177%2094.5%2C-15.588%2094.5%2C15.588%2067.5%2C31.177%2040.5%2C15.588%2040.5%2C-15.588%27/%3E%3C/svg%3E");
 }
 .fr-root[data-fr-theme="light"] .fr-hive-backdrop::before {
-  opacity: 0.44;
+  opacity: 0.22;
 }
 
 .fr-graph-clock {
@@ -568,10 +855,6 @@
   pointer-events: none;
   text-align: center;
 }
-
-/* ---- dashed "add agent" cell hover ---- */
-.fr-addcell:hover .fr-addcell-hex { fill: var(--honey-soft); stroke: var(--honey-line); }
-.fr-addcell:hover .fr-addcell-plus { stroke: var(--honey); }
 
 /* ---- nav shelf (collapsed icon rail → expands on hover) ---- */
 .fr-shelf {

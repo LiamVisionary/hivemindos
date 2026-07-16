@@ -1,0 +1,39 @@
+{
+  "upstreamName": "google-ads-builder",
+  "upstreamSlug": "google-ads-builder",
+  "hiveSlug": "google-ads-builder",
+  "sourceLabel": "mikefutia",
+  "catalogSource": "Mike Futia",
+  "catalogCategory": "GTM",
+  "sourceUrl": "https://github.com/mikefutia/google-ads-builder/blob/1518b766bc9fe5af6ce6595987e4c8318b1997e4/SKILL.md",
+  "repository": "https://github.com/mikefutia/google-ads-builder",
+  "installCommand": "Install from the HivemindOS Skill Browser; copies the audited local package only.",
+  "importedAt": "2026-07-15T23:59:54.765Z",
+  "refreshedAt": "2026-07-16T00:08:48.863Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/gtm/mikefutia/google-ads-builder",
+  "packageGroup": "gtm",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "1518b766bc9fe5af6ce6595987e4c8318b1997e4",
+  "sourceArchiveSha256": "92630aa8f2da388c40b8f107c3856f85594dc7d98822725fc9390905d8f3022e",
+  "upstreamSourceUrl": "https://github.com/mikefutia/google-ads-builder",
+  "normalized": "portable-frontmatter-and-safety-copy-normalized-by-importer",
+  "description": "Use when the user wants a draft Google Search Ads campaign built from a public website, including tightly themed keywords, negative keywords, Responsive Search Ads, extensions, settings, a Google Ads Editor CSV, and a review dashboard. The output is a draft only: validate claims, search volume, CPC, conversion tracking, budgets, and Google policy before import or launch.",
+  "securityVerdict": "Approved for optional, draft-only HivemindOS packaging at commit 1518b766bc9fe5af6ce6595987e4c8318b1997e4.",
+  "auditSummary": {
+    "auditedAt": "2026-07-15T23:59:00Z",
+    "sourceReview": "All 5 upstream files and both commits reviewed; no lifecycle hooks, dependencies, symlinks, credential reads, Google Ads API calls, or background-service code found.",
+    "dependencyReview": "Renderer uses Python standard library only: csv, html, json, os, sys, and webbrowser.",
+    "dynamicRuntime": "Synthetic campaign rendered successfully with network denied and user-home writes blocked; only the expected CSV and HTML outputs were created.",
+    "sandboxNote": "Docker daemon was unavailable; dynamic verification used macOS sandbox-exec with a blank HOME and --no-open."
+  },
+  "hivemindAdaptations": [
+    "Packages the skill as optional GTM content instead of auto-installing it.",
+    "Pins the audited commit and codeload archive hash; updates require a fresh audit.",
+    "Vendors the MIT license, README, renderer, and gitignore while excluding upstream Git metadata.",
+    "Normalizes Claude-specific frontmatter and negated safety copy into portable HivemindOS metadata without changing renderer behavior.",
+    "Keeps the workflow draft-only: users must review campaign claims, keywords, conversion tracking, budgets, and Google policy before import or launch."
+  ]
+}

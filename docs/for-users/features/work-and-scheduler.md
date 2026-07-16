@@ -113,6 +113,16 @@ Built-in patterns include Engineering Discipline, code-fix, app-build harness, r
 
 Choose **Engineering discipline** from a Work Board quick-add template when consequential code work needs the full evidence path. The created task carries a real closed loop: optional design approval for material ambiguity, required baseline evidence, red/green evidence or a concrete non-applicability receipt, focused tests, lint, types, independent review, and a final completion receipt. The attached `engineering-discipline` skill keeps the process proportionate and does not grant permission for destructive Git operations, external actions, or agent fan-out.
 
+### Built-In Skill Autoresearch
+
+HivemindOS watches reviewed outcomes from regular chat, Work Board tasks, Company tasks, scheduled skill actions, and the shared skill-analytics intake. Three failed or blocked executions of the same installed skill across three distinct chat turns, tasks, or runs create one pending Brain Review proposal. A later cycle needs three fresh failures after the previous suggestion. Successes remain useful analytics but do not create optimizer work.
+
+Regular chat uses conservative per-turn attribution across typed chat, low-latency voice, Hive Fusion, phone-hosted agents, and HTTP/OpenAI-compatible runtimes. A skill counts only when the user explicitly names it, the agent profile selects it as a preferred skill, or a runtime tool receipt shows the skill's `SKILL.md` was loaded. A skill that merely appeared in capability-search results does not count as used. The completed response is evaluated, and a thumbs-down records a corrected failure for that same turn; clearing feedback restores the automatic outcome. Repeated identical prompts still remain distinct turns.
+
+Approving the proposal records the decision. Applying it creates a high-priority Work Board optimizer task with the original skill as its baseline and four independent variants: better inputs, sharper output, more robust behavior, and a materially different rethink. Every candidate uses the same cases, rubric floors, evidence gates, and independent review. The task returns a winning diff or a no-improvement receipt; it never replaces the installed skill automatically.
+
+The native Work Board optimizer is always available. If Evo is installed and the target is a git repository with a benchmark command, HivemindOS can select Evo for isolated experiment branches. A missing repo-local Evo workspace can be initialized inside the already approved task. Users do not need to enable Evo globally or configure AEON for skill autoresearch.
+
 ### Zero-Human Company Learning Loops
 
 For the full company cockpit and launch flow, see [Zero Human Companies](zero-human-companies.html).
@@ -131,6 +141,8 @@ The Zero Human Company cockpit summarizes that layer as capability capital:
 - model-independence score from runtime diversity, eval structure, and Evo-compatible frontier metadata
 
 This keeps the native company learning loop owned by the workspace rather than any single model. Future workers can change, but the company's charter, evals, receipts, artifacts, and reviewed memory remain portable.
+
+Company tasks also report the outcomes of their attached skills to the app-wide autoresearch detector. Repeated failure can therefore propose an improvement while preserving the company id as provenance. The proposal still goes through Brain Review, and applying it creates an ordinary inspectable Work Board task; Company autonomy cannot silently rewrite a shared skill.
 
 With the optional **AEON background skill** engine, HivemindOS does not create a Work Board task automatically. Company Runs records the accepted handoff as unobserved, while AEON owns the detailed run state and outputs. AEON output does not become a reviewed company learning asset automatically. Promote durable evidence through the normal review flow when it should become company knowledge. See [Using AEON With Zero Human Companies](../runtimes/aeon/zero-human-companies.html).
 
@@ -174,6 +186,7 @@ What Scheduler can do:
 - Expand or collapse long schedule descriptions without silently truncating them.
 - Show run-state phases such as assigned, thinking, executing, wrapping, and done.
 - Create new jobs from the scheduler rail and use cadence templates for cron, interval, daily, weekday, and market/session-like schedules.
+- Run the `hive-quant-research` skill from a reviewed request file on an approved cadence; the action writes local research artifacts and cannot enable live trading.
 
 ## AEON Deliverables And Scheduled Work
 

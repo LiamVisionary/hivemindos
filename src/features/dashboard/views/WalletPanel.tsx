@@ -8,7 +8,8 @@ import { MULTI_CHAIN_WALLET_LABEL, personalWalletNetworkForChainLabel } from "@/
 import { fetchPersonalWalletRecords } from "@/lib/native/personal-wallets";
 import { loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import { switchBrowserWalletToBase } from "@/lib/services/hive-staking-client";
-import { sendApprovedWalletUsdc, type WalletSendUsdcRequest } from "@/lib/services/wallet/send-usdc-client";
+import { sendApprovedPersonalWalletAsset, sendApprovedWalletUsdc, type WalletSendUsdcRequest } from "@/lib/services/wallet/send-usdc-client";
+import { refreshWalletUntilAssetBalance } from "@/lib/services/wallet/post-send-balance-refresh";
 import { getSurvivalSnapshot, hasConfiguredAgentWallet, resolveAgentWallet } from "@/lib/utils/agent-wallet";
 import { exportAgentWalletSecret, exportPersonalWalletGroupSecret } from "./wallet-secret-export-actions";
 import { fetchBankrWallet, type BankrWalletInfo } from "./trade/trade-api";
@@ -20,6 +21,7 @@ import {
   mergePersonalWalletSources,
   nativeSymbolForWallet,
   personalWalletAccountKey,
+  personalWalletOptionalNumber,
   recoveryPhraseWalletGroupId,
   type GroupedPersonalWallet,
 } from "@/lib/utils/personal-wallet-grouping";
@@ -344,7 +346,11 @@ function personalWalletSupportsAsset(wallet: any, asset: string): boolean {
   return stableSendAssetForNetwork(String(wallet?.network || "")) === asset;
 }
 
-function resolvePersonalWalletAgentIdForAsset(source: any, asset: string, wallets: any[]): string {
+function walletId(wallet: any): string {
+  return String(wallet?.id || wallet?.agentId || "");
+}
+
+function resolvePersonalWalletRecordForAsset(source: any, asset: string, wallets: any[]): any | null {
   const ids = new Set<string>([
     String(source?.spendId || ""),
     String(source?.id || ""),
@@ -362,7 +368,12 @@ function resolvePersonalWalletAgentIdForAsset(source: any, asset: string, wallet
   const localCandidates = candidates.filter((wallet: any) => wallet?.custodyMode === "local");
   const funded = localCandidates.find((wallet: any) => tokenBalanceForAsset(wallet, asset) > 0);
   const supported = localCandidates.find((wallet: any) => personalWalletSupportsAsset(wallet, asset));
-  return String((funded ?? supported)?.id || (funded ?? supported)?.agentId || source?.spendId || source?.id || "");
+  return funded ?? supported ?? null;
+}
+
+function resolvePersonalWalletAgentIdForAsset(source: any, asset: string, wallets: any[]): string {
+  const wallet = resolvePersonalWalletRecordForAsset(source, asset, wallets);
+  return String(wallet?.id || wallet?.agentId || source?.spendId || source?.id || "");
 }
 
 function tokenSymbol(token: any): string {
@@ -371,10 +382,10 @@ function tokenSymbol(token: any): string {
 
 function tokenPriceUsd(token: any): number {
   const balance = Number(token?.balance ?? 0) || 0;
-  const explicit = Number(token?.priceUsd);
-  if (Number.isFinite(explicit) && explicit >= 0) return explicit;
-  const value = Number(token?.valueUsd);
-  if (balance > 0 && Number.isFinite(value) && value >= 0) return value / balance;
+  const explicit = personalWalletOptionalNumber(token?.priceUsd);
+  if (explicit != null && explicit > 0) return explicit;
+  const value = personalWalletOptionalNumber(token?.valueUsd);
+  if (balance > 0 && value != null && value > 0) return value / balance;
   return NaN;
 }
 
@@ -777,8 +788,8 @@ function WalletPanelComponent(props: any) {
   }, [refreshRuntimeUsage]);
   const fetchPersonalWallets = useCallback(() => fetchPersonalWalletRecords(vaultPath), [vaultPath]);
   const effectiveWalletsByAgent = useMemo(() => mergeWalletsByAgentWithFresh(props.walletsByAgent, freshWalletsByAgent), [freshWalletsByAgent, props.walletsByAgent]);
-  const refreshPersonalWalletBalances = useCallback(async (targets: any[]) => {
-    const refreshed = (await Promise.all(targets.map(async (wallet) => {
+  const readPersonalWalletBalances = useCallback(async (targets: any[]) => {
+    return (await Promise.all(targets.map(async (wallet) => {
       const address = String(wallet?.address || "").trim();
       const network = String(wallet?.network || "").trim();
       if (!address || !network) return null;
@@ -798,7 +809,9 @@ function WalletPanelComponent(props: any) {
         lastOnchainSyncAt: Number(data.balance.fetchedAt) || Date.now(),
         updatedAt: Date.now(),
       };
-    }))).filter(Boolean);
+    }))).filter(Boolean) as any[];
+  }, []);
+  const persistPersonalWalletBalances = useCallback(async (refreshed: any[]) => {
     if (!refreshed.length) return;
     setPersonalWallets((current) => mergePersonalWalletList([...(Array.isArray(current) ? current : []), ...refreshed]));
     await fetch("/api/wallet/personal", {
@@ -807,8 +820,13 @@ function WalletPanelComponent(props: any) {
       body: JSON.stringify({ vaultPath: vaultPath || undefined, wallets: refreshed }),
     }).catch(() => null);
   }, [vaultPath]);
+  const refreshPersonalWalletBalances = useCallback(async (targets: any[]) => {
+    const refreshed = await readPersonalWalletBalances(targets);
+    await persistPersonalWalletBalances(refreshed);
+    return refreshed;
+  }, [persistPersonalWalletBalances, readPersonalWalletBalances]);
   const loadPersonalWallets = useCallback(async () => setPersonalWallets(await fetchPersonalWallets()), [fetchPersonalWallets]);
-  const refreshPersonalWalletSourceBalance = useCallback(async (source: any) => {
+  const resolvePersonalWalletBalanceTargets = useCallback(async (source: any) => {
     const ids = new Set<string>([
       String(source?.spendId || ""),
       String(source?.id || ""),
@@ -819,20 +837,39 @@ function WalletPanelComponent(props: any) {
       ...(Array.isArray(source?.addresses) ? source.addresses.map((row: any) => String(row?.[1] || "")) : []),
       ...(Array.isArray(source?.accounts) ? source.accounts.map((account: any) => String(account?.address || "")) : []),
     ].map((value) => value.trim().toLowerCase()).filter(Boolean));
-    if (!ids.size && !addresses.size) { await loadPersonalWallets(); return; }
+    if (!ids.size && !addresses.size) return [];
     const matchesSource = (wallet: any) => {
       const id = String(wallet?.id || wallet?.agentId || "").trim();
       const address = String(wallet?.address || "").trim().toLowerCase();
-      return (id && ids.has(id)) || (address && addresses.has(address));
+      return ids.size ? Boolean(id && ids.has(id)) : Boolean(address && addresses.has(address));
     };
     let targets = mergePersonalWalletSources(personalWallets, effectiveWalletsByAgent).filter(matchesSource);
     if (!targets.length) {
       const latest = await fetchPersonalWallets();
       targets = mergePersonalWalletSources(latest, effectiveWalletsByAgent).filter(matchesSource);
-      if (!targets.length) { setPersonalWallets(latest); return; }
+      if (!targets.length) setPersonalWallets(latest);
     }
-    await refreshPersonalWalletBalances(targets);
-  }, [effectiveWalletsByAgent, fetchPersonalWallets, loadPersonalWallets, personalWallets, refreshPersonalWalletBalances]);
+    return targets;
+  }, [effectiveWalletsByAgent, fetchPersonalWallets, personalWallets]);
+  const invalidatePersonalWalletBalance = useCallback(async (source: any) => {
+    const targets = await resolvePersonalWalletBalanceTargets(source);
+    if (!targets.length) return;
+    const keys = new Set(targets.map(personalWalletAccountKey).filter(Boolean));
+    const invalidated = targets.map((wallet) => ({ ...wallet, lastOnchainSyncAt: 0, updatedAt: Date.now() }));
+    setPersonalWallets((current) => (Array.isArray(current) ? current : []).map((wallet) => (
+      keys.has(personalWalletAccountKey(wallet)) ? { ...wallet, lastOnchainSyncAt: 0 } : wallet
+    )));
+    await fetch("/api/wallet/personal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vaultPath: vaultPath || undefined, wallets: invalidated }),
+    }).catch(() => null);
+  }, [resolvePersonalWalletBalanceTargets, vaultPath]);
+  const refreshPersonalWalletSourceBalance = useCallback(async (source: any) => {
+    const targets = await resolvePersonalWalletBalanceTargets(source);
+    if (!targets.length) { await loadPersonalWallets(); return []; }
+    return refreshPersonalWalletBalances(targets);
+  }, [loadPersonalWallets, refreshPersonalWalletBalances, resolvePersonalWalletBalanceTargets]);
   const loadWalletActivity = useCallback(async () => setWalletActivity(await fetchWalletActivityRecords()), []);
   const loadHoneyLedger = useCallback(async () => setHoneyLedger(await fetchHoneyLedger()), []);
   const loadBankrWallet = useCallback(async () => {
@@ -1022,6 +1059,22 @@ function WalletPanelComponent(props: any) {
       await loadHoneyLedger();
       return result;
     },
+    onLoadHoneyWalletLinkStatus: async () => {
+      const response = await fetch("/api/honey-ledger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "wallet-link-status" }),
+      });
+      return response.json().catch(() => ({ ok: false, error: `HONEY wallet status failed (${response.status}).` }));
+    },
+    onLinkHoneyWallet: async (address: string) => {
+      const response = await fetch("/api/honey-ledger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "link-wallet", address }),
+      });
+      return response.json().catch(() => ({ ok: false, error: `HONEY wallet verification failed (${response.status}).` }));
+    },
     onLinkTelegramHoney: async (code: string) => {
       const response = await fetch("/api/honey-community", {
         method: "POST",
@@ -1148,18 +1201,43 @@ function WalletPanelComponent(props: any) {
     },
     onSendPersonalWallet: async (input: any) => {
       const asset = String(input.asset || "USDC").toUpperCase();
-      if (!isStableSendAsset(asset)) throw new Error("Personal wallet send is wired for USDC or USDG transfers only.");
       if (input.source?.canSpend === false) throw new Error("This personal wallet is watch-only. Reimport it locally before sending.");
-      const sourceAgentId = resolvePersonalWalletAgentIdForAsset(input.source, asset, mergedPersonalWallets);
+      const sourceWallet = mergedPersonalWallets.find((wallet: any) => walletId(wallet) === input.sourceAccountId)
+        ?? resolvePersonalWalletRecordForAsset(input.source, asset, mergedPersonalWallets);
+      const sourceAgentId = String(sourceWallet?.id || sourceWallet?.agentId || "");
       if (!sourceAgentId) throw new Error(`No local ${asset} wallet is available to send from.`);
-      const data = await sendApprovedWalletUsdc({ agentId: sourceAgentId, toAddress: input.toAddress, amountUsd: Number(input.amount), autoPayEnabled: false, confirmation: input.confirmation, maxPaymentUsd: Number(input.amount) || undefined });
+      const sourceToken = (Array.isArray(sourceWallet?.tokens) ? sourceWallet.tokens : []).find((token: any) => tokenSymbol(token) === asset && Number(token?.balance) > 0);
+      const data = await sendApprovedPersonalWalletAsset({ agentId: sourceAgentId, toAddress: input.toAddress, asset, assetAmount: String(input.amount), tokenAddress: String(sourceToken?.tokenAddress || "").trim() || undefined, confirmation: "SEND_TOKEN" });
       if (!data?.ok) throw new Error(data?.error || `Could not send ${asset}.`);
-      await Promise.all([
+      const recipientAccount = input.recipientAccount;
+      const recipientStartingBalance = Math.max(0, Number(input.recipientStartingBalance) || 0);
+      const sentAmount = Math.max(0, Number(input.amount) || 0);
+      const recipientBalanceSync = recipientAccount && sentAmount > 0
+        ? (async () => {
+            const targets = await resolvePersonalWalletBalanceTargets(recipientAccount);
+            if (!targets.length) {
+              await invalidatePersonalWalletBalance(recipientAccount);
+              return { synced: false };
+            }
+            return refreshWalletUntilAssetBalance({
+              asset,
+              address: String(recipientAccount.address || input.toAddress),
+              network: String(recipientAccount.network || ""),
+              minimumBalance: recipientStartingBalance + sentAmount,
+              read: () => readPersonalWalletBalances(targets),
+              persist: persistPersonalWalletBalances,
+              invalidate: () => invalidatePersonalWalletBalance(recipientAccount),
+            });
+          })()
+        : input.recipient
+          ? refreshPersonalWalletSourceBalance(input.recipient).then(() => ({ synced: true }))
+          : Promise.resolve({ synced: true });
+      const [recipientSync] = await Promise.all([
+        recipientBalanceSync,
         refreshPersonalWalletSourceBalance(input.source),
-        input.recipient ? refreshPersonalWalletSourceBalance(input.recipient) : undefined,
         loadWalletActivity(),
       ]);
-      return data;
+      return { ...data, balanceSyncPending: !recipientSync.synced };
     },
     onRefreshPersonalWallet: async (source: any) => refreshPersonalWalletSourceBalance(source),
     onRefreshBankrWallet: loadBankrWallet,
@@ -1247,7 +1325,7 @@ function WalletPanelComponent(props: any) {
       nextUrl.searchParams.set("view", "chat");
       window.location.assign(nextUrl.toString());
     },
-  }), [bankrRecipientAddress, effectiveWalletsByAgent, loadBankrWallet, loadHoneyLedger, loadPersonalWallets, loadWalletActivity, mergedPersonalWallets, props, refreshPersonalWalletSourceBalance, refreshUsePodTargets, refreshWalletBalance, vaultPath]);
+  }), [bankrRecipientAddress, effectiveWalletsByAgent, invalidatePersonalWalletBalance, loadBankrWallet, loadHoneyLedger, loadPersonalWallets, loadWalletActivity, mergedPersonalWallets, persistPersonalWalletBalances, props, readPersonalWalletBalances, refreshPersonalWalletSourceBalance, refreshUsePodTargets, refreshWalletBalance, resolvePersonalWalletBalanceTargets, vaultPath]);
   const navigateFromDropInShelf = useCallback((id: string) => {
     if (typeof window === "undefined") return;
     const nextView = walletViewForShelf(id);

@@ -19,6 +19,7 @@ import { SyntoModelTierSettings } from "./SyntoModelTierSettings";
 import { SYNTO_COMPARE_MODEL_OPTIONS } from "@/lib/config/synto-model-tiers";
 import brainServiceStyles from "./brain-services.module.css";
 import { SectionModeHeader } from "./WorkSectionHeader";
+import { BrainDropFab } from "./brain-drop/BrainDropFab";
 
 export const VaultPanel = memo(VaultPanelComponent);
 
@@ -1217,7 +1218,10 @@ function VaultPanelComponent(props: any) {
         ) : null}
 
         {vaultPanelMode === "hive-vault" ? (
-        <BrainGraphExplorer {...{ Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, Download, FileText, GitBranch, Hexagon, LoaderCircle, Network, RefreshCcw, Sparkles, brainGraph, brainGraphLoading, brainGraphStatus, brainPan, endBrainPan, formatBrainDate, inspectBrainNode, moveBrainPan, refreshBrainGraph, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setChatAttachments, setChatDirectories, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserView, setSkillBrowserWrittenContent, setText, sharedVault, startAgentChat, startBrainPan, vaultClass }} />
+        <>
+          <BrainGraphExplorer {...{ Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, Download, FileText, GitBranch, Hexagon, LoaderCircle, Network, RefreshCcw, Sparkles, brainGraph, brainGraphLoading, brainGraphStatus, brainPan, endBrainPan, formatBrainDate, inspectBrainNode, moveBrainPan, refreshBrainGraph, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setChatAttachments, setChatDirectories, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserView, setSkillBrowserWrittenContent, setText, sharedVault, startAgentChat, startBrainPan, vaultClass }} />
+          <BrainDropFab vaultPath={sharedVault.vaultPath} onImported={refreshBrainGraph} />
+        </>
         ) : null}
 
         {vaultPanelMode === "shared-skills" ? (

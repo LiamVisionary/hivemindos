@@ -1,7 +1,8 @@
 import type { LoopCapabilityCapital } from "@/lib/types/loops";
 import type { AnalyticsProviderKey, CompanyAnalyticsConfig } from "@/lib/services/company-analytics/types";
 import type { KanbanDeliverableKind, KanbanTaskAttachment } from "@/lib/types/kanban";
-import type { CompanyImportedOperations } from "@/lib/types/company-import";
+import type { CompanyImportedKnowledge, CompanyImportedOperations } from "@/lib/types/company-import";
+import type { ConnectionProviderKey } from "@/lib/types/integrations";
 
 /**
  * A Company groups agents into an accountable business unit: a shared charter, a
@@ -257,6 +258,27 @@ export interface CompanyApiBudget {
   budgetResourceName?: string;
 }
 
+/**
+ * A local preflight guardrail for calls made through one connected integration.
+ * A provider-wide row omits `operationId`; an operation row is additive, so
+ * both the broad provider cap and the narrower operation cap must allow a call.
+ */
+export interface CompanyIntegrationLimit {
+  id: string;
+  providerKey: ConnectionProviderKey;
+  operationId?: string;
+  /** UTC-calendar-day request cap. 0/undefined means unlimited. */
+  dailyRequestLimit?: number;
+  /** UTC-calendar-month request cap. 0/undefined means unlimited. */
+  monthlyRequestLimit?: number;
+  /** UTC-calendar-day estimated/observed spend cap. 0/undefined means unlimited. */
+  dailySpendLimitUsd?: number;
+  /** UTC-calendar-month estimated/observed spend cap. 0/undefined means unlimited. */
+  monthlySpendLimitUsd?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Company {
   id: string;
   name: string;
@@ -344,6 +366,8 @@ export interface Company {
   analyticsConfig?: CompanyAnalyticsConfig;
   /** Imported legacy project wiring: repo, GitHub Actions, cron jobs, hosting services, and scripts discovered from source. */
   importedOperations?: CompanyImportedOperations;
+  /** Reviewable knowledge extracted from a local company data room. Source text never becomes an automatic directive. */
+  importedKnowledge?: CompanyImportedKnowledge;
   /**
    * Standing directives injected by a human (Learning tab) or captured from a
    * rejected deliverable. Appended to every dispatched task's context so the
@@ -356,6 +380,8 @@ export interface Company {
    * not the generic upsert, so a treasury save can't blank it.
    */
   apiBudgets?: CompanyApiBudget[];
+  /** Local request/spend preflight limits for API and integration operations. */
+  integrationLimits?: CompanyIntegrationLimit[];
 }
 
 export interface CompanySpendRollup {

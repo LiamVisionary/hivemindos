@@ -15,7 +15,7 @@ export type AgentAppCatalogItem = {
   sourceUrl: string;
   badges: string[];
   handles: string[];
-  installableServiceId?: "n8n" | "browser-use" | "agentic-inbox" | "mcp-email-server" | "openhands" | "aider" | "agent-reach" | "palmier-pro";
+  installableServiceId?: InstallableServiceId;
 };
 
 export const BUILT_IN_AGENT_TOOLS: BuiltInAgentTool[] = [
@@ -60,6 +60,14 @@ export const BUILT_IN_AGENT_TOOLS: BuiltInAgentTool[] = [
     badges: ["Built-in", "Code"],
   },
   {
+    id: "document-ingestion",
+    name: "Document ingestion",
+    handle: "bundled-document-reader",
+    description: "Read common local documents for chat, Shared Brain imports, and governed company data rooms.",
+    scope: "Native",
+    badges: ["Built-in", "Local", "Knowledge"],
+  },
+  {
     id: "runtime-sessions",
     name: "Runtime sessions",
     handle: "runtime.sessions",
@@ -89,6 +97,7 @@ export const AGENT_APP_CATALOG: AgentAppCatalogItem[] = [
   { id: "hive-browser", name: "Hive Browser", category: "Mini app", description: "Embedded browser workspace for page inspection, guided control, and agent handoff.", sourceUrl: "https://github.com/LiamVisionary/hivemindos", badges: ["Mini app", "Browser", "Guided control"], handles: ["Open browser", "Inspect page", "Hand to agent"] },
   { id: "hive-files", name: "Hive Files", category: "Mini app", description: "Scoped file browser for shared-brain, project, and runtime files agents are allowed to inspect.", sourceUrl: "https://github.com/LiamVisionary/hivemindos", badges: ["Mini app", "Files", "Scoped"], handles: ["Browse files", "Attach files", "Open runtime file"] },
   { id: "hive-calendar", name: "Hive Calendar", category: "Mini app", description: "Calendar surface for availability, scheduling, and agent-readable event context.", sourceUrl: "https://github.com/LiamVisionary/hivemindos", badges: ["Mini app", "Calendar", "Scheduling"], handles: ["Read calendar", "Schedule event", "Check availability"] },
+  ...githubCapabilityAgentApps(),
   { id: "firecrawl", name: "Firecrawl", category: "AI-native", description: "Turn URLs into clean markdown or structured JSON for agents.", sourceUrl: "https://github.com/mendableai/firecrawl", badges: ["Agent API", "MCP", "Web data"], handles: ["Scrape URL", "Crawl site", "Extract JSON"] },
   { id: "crawl4ai", name: "Crawl4AI", category: "AI-native", description: "Crawl pages into LLM-ready structured data pipelines.", sourceUrl: "https://github.com/unclecode/crawl4ai", badges: ["Python", "LLM pipeline"], handles: ["Crawl site", "Extract schema"] },
   { id: "browser-use", name: "Browser Use", category: "AI-native", description: "Let agents navigate, click, fill forms, and extract web data.", sourceUrl: "https://github.com/browser-use/browser-use", badges: ["Installable", "Browser", "Agent control"], handles: ["Navigate", "Click", "Fill forms"], installableServiceId: "browser-use" },
@@ -98,7 +107,7 @@ export const AGENT_APP_CATALOG: AgentAppCatalogItem[] = [
   { id: "openhands", name: "OpenHands", category: "AI-native", description: "Autonomous software agent runtime for issue-to-change coding work.", sourceUrl: "https://github.com/OpenHands/OpenHands", badges: ["Installable", "Coding runtime", "SDK/CLI"], handles: ["Run coding task", "Resolve issue"], installableServiceId: "openhands" },
   { id: "aider", name: "Aider", category: "AI-native", description: "Terminal pair programmer with repo maps and git-aware code edits.", sourceUrl: "https://github.com/Aider-AI/aider", badges: ["Installable", "Repo map", "Terminal"], handles: ["Pair code", "Patch repo"], installableServiceId: "aider" },
   { id: "palmier-pro", name: "Palmier Pro", category: "Specialist", description: "macOS AI video editor with a local MCP server for timeline editing, media generation, and project-aware video workflows.", sourceUrl: "https://github.com/palmier-io/palmier-pro", badges: ["Installable", "MCP", "macOS", "Video"], handles: ["Edit timeline", "Generate media", "Export video"], installableServiceId: "palmier-pro" },
-  { id: "n8n", name: "n8n", category: "Production scale", description: "Self-hosted workflow automation service with webhooks, schedules, AI nodes, and hundreds of integrations.", sourceUrl: "https://github.com/n8n-io/n8n", badges: ["Installable", "Workflows"], handles: ["Webhook", "Run workflow", "Schedule"], installableServiceId: "n8n" },
+  { id: "listmonk", name: "Listmonk", category: "Production scale", description: "Self-hosted newsletter, subscriber-list, campaign, and transactional-email manager. Bring an SMTP provider; this is not an agent inbox.", sourceUrl: "https://github.com/knadh/listmonk", badges: ["Installable", "Email campaigns", "Self-hosted"], handles: ["Manage subscribers", "Send campaign", "Transactional email"], installableServiceId: "listmonk" },
   { id: "agentic-inbox", name: "Agentic Inbox", category: "Specialist", description: "Cloudflare email-agent setup for inbox triage, draft replies, and Work Board task intake.", sourceUrl: "https://github.com/cloudflare/agentic-inbox", badges: ["Installable", "Cloudflare", "Email"], handles: ["Draft reply", "Route email"], installableServiceId: "agentic-inbox" },
   { id: "mcp-email-server", name: "MCP Email Server", category: "Specialist", description: "Local MCP bridge for IMAP/SMTP inbox access from self-hosted or provider mailboxes.", sourceUrl: "https://github.com/ai-zerolab/mcp-email-server", badges: ["Installable", "MCP", "Email"], handles: ["Read inbox", "Search mail", "Send email"], installableServiceId: "mcp-email-server" },
   { id: "stagehand", name: "Stagehand", category: "AI-native", description: "TypeScript browser automation that maps intent to Playwright actions.", sourceUrl: "https://github.com/browserbase/stagehand", badges: ["TypeScript", "Playwright"], handles: ["Act", "Extract", "Observe"] },
@@ -119,3 +128,5 @@ export const AGENT_APP_CATALOG: AgentAppCatalogItem[] = [
   { id: "maxun", name: "Maxun", category: "Specialist", description: "No-code scraping workflows that operators can train visually.", sourceUrl: "https://github.com/getmaxun/maxun", badges: ["No-code", "Workflow"], handles: ["Run robot", "Export data"] },
   { id: "heritrix", name: "Heritrix", category: "Specialist", description: "Institutional crawler for very large archival web crawls.", sourceUrl: "https://github.com/internetarchive/heritrix3", badges: ["Archival", "Crawler"], handles: ["Launch crawl", "Archive pages"] },
 ];
+import { githubCapabilityAgentApps } from "@/lib/services/github-capability-catalog";
+import type { InstallableServiceId } from "@/lib/services/installable-services";

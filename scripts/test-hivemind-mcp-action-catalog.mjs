@@ -12,11 +12,15 @@ const {
 
 function mcpRequest(child, message) {
   return new Promise((resolve, reject) => {
+    let buffer = "";
     const timeout = setTimeout(() => {
       reject(new Error(`Timed out waiting for MCP response to ${message.method}`));
     }, 5_000);
     const onData = (chunk) => {
-      for (const line of String(chunk).split("\n")) {
+      buffer += String(chunk);
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
         if (!line.trim()) continue;
         const parsed = JSON.parse(line);
         if (parsed.id !== message.id) continue;
@@ -60,7 +64,7 @@ try {
   for (const expected of expectedTools) {
     assert.deepEqual(
       actualByName.get(expected.name),
-      expected,
+      JSON.parse(JSON.stringify(expected)),
       `${expected.name} MCP descriptor should come from the Hive action registry`,
     );
   }
@@ -75,6 +79,7 @@ try {
     "dex_swap",
     "stock_trade",
     "hyperliquid_trade",
+    "company_api_preflight",
   ]) {
     assert.ok(actualByName.has(existing), `${existing} should remain exposed`);
   }

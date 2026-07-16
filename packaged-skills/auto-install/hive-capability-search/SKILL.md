@@ -73,6 +73,14 @@ Return a compact capability map:
 
 If the selected component is a remote connected app, remote collector, Hivemind Link endpoint, or fleet machine capability, include enough handoff detail for `hive-remote-capability-use`: app or service name, machine identity, fresh catalog URL fields when available, required route/schema endpoints, transfer needs, verification expectations, and side-effect gates.
 
+## Build-Task Approval Handoff
+
+For a user-requested build or implementation task, classify every selected component as either `available` or `setup-required` and include the strongest alternatives. Capability approval governs selection, installation, and ordinary setup only; it never replaces spend, secret, deploy, destructive-action, payment, or external-send approvals.
+
+- In the HivemindOS Chat route, return the structured capability map to the chat approval surface and pause. Setup-required items default to approve; available items expose Browse so the user can select an alternative, supply a GitHub repository, or attach an instruction. The user may remove an entire capability intent; when they do, redesign the task so that whole step and its output are absent while the remaining task stays coherent. Continue only after the submitted plan returns to the agent.
+- In Codex, Claude Code, terminals, and other chat surfaces without dynamic controls, present the same information as a compact natural-language list. Mark each item `available` or `setup required`, state the proposed default, include material alternatives, then end with one final question: "I've drafted the capability list. Is this okay, and may I continue?" Wait for the answer before capability setup or task execution.
+- In autonomous Work Board and Zero Human Company runs, select and set up capabilities automatically by default so the work does not pause. If the task's or company's capability policy is `ask`, use its normal Needs You / `ACTION NEEDED:` path, present the capability list in natural language, and wait. Removing a capability still removes that task step; rejecting setup means use an available route or omit only the unsupported output when no coherent available route exists.
+
 ## Verification
 
 For fusion callers, include enough proof that the selected parts are reachable:

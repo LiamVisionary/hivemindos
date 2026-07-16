@@ -21,7 +21,7 @@ export async function GET() {
 }
 
 type ConnectionsAction =
-  | { action: "save-token"; provider?: string; token?: string }
+  | { action: "save-token"; provider?: string; token?: string; fields?: unknown }
   | { action: "disconnect"; provider?: string }
   | { action: "save-oauth-client"; provider?: string; clientId?: string; clientSecret?: string };
 
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
   try {
     if (body.action === "save-token") {
       if (!body.provider || !body.token) return errorJson("Provider and token are required.");
-      const saved = await saveProviderToken(body.provider, body.token);
+      const saved = await saveProviderToken(body.provider, body.token, body.fields);
       return okJson({ account: saved.account, ...(await readConnectionsPayload()) });
     }
     if (body.action === "disconnect") {

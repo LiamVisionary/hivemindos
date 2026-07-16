@@ -24,6 +24,7 @@ import type {
   CompanyAutonomyPause,
   CompanyAutonomyPauseMode,
   CompanyDirective,
+  CompanyIntegrationLimit,
   CompanyMember,
   CompanyMemberSpend,
   CompanyMetricUnit,
@@ -43,6 +44,9 @@ import type {
 } from "@/lib/types/company-import";
 import { normalizeCompanyApprovalPolicies } from "@/lib/services/company-approval-policies";
 import { normalizeCompanyExecutionConfig } from "@/lib/services/company-execution-capabilities";
+import { normalizeImportedKnowledge } from "@/lib/services/company-imported-knowledge";
+import { normalizeCompanyProductCatalog } from "@/lib/services/company-product-normalization";
+import { sameCompanyApiBudgetScope } from "@/lib/services/company-api-budget";
 import {
   assertExclusiveCompanyMembership,
   exclusiveCompanyForAgent,
@@ -307,8 +311,10 @@ function companyDefinitionOf(record: Company): Company {
     analyticsProvider: record.analyticsProvider,
     analyticsConfig: record.analyticsConfig,
     importedOperations: record.importedOperations,
+    importedKnowledge: record.importedKnowledge,
     directives: record.directives,
     apiBudgets: record.apiBudgets,
+    integrationLimits: record.integrationLimits,
   };
 }
 
@@ -717,93 +723,43 @@ function normalizedIsoDate(value: unknown): string {
   return Number.isFinite(time) ? new Date(time).toISOString() : new Date().toISOString();
 }
 
-/** Slug key for a product derived from its name when none is given. */
-function productKeyFrom(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64) || "product";
-}
-
-const PRODUCT_INTERVALS: NonNullable<CompanyProduct["interval"]>[] = ["one-time", "month", "year"];
-
-/** Normalize one product entry; null when it has no usable name or price. */
-function normalizeProduct(value: unknown, taken: Set<string>): CompanyProduct | null {
-  if (!value || typeof value !== "object") return null;
-  const raw = value as Record<string, unknown>;
-  const name = trimmed(raw.name);
-  const amount = Number(raw.amountUsd);
-  if (!name || !Number.isFinite(amount) || amount < 0) return null;
-  let key = trimmed(raw.key)?.toLowerCase() || productKeyFrom(name);
-  while (taken.has(key)) key = `${key}-2`;
-  taken.add(key);
-  const interval = typeof raw.interval === "string" && (PRODUCT_INTERVALS as string[]).includes(raw.interval)
-    ? (raw.interval as CompanyProduct["interval"])
-    : undefined;
-  return {
-    key,
-    name,
-    amountUsd: Math.round(amount * 100) / 100,
-    description: trimmed(raw.description),
-    recommended: raw.recommended === true || undefined,
-    interval: interval === "one-time" ? undefined : interval,
-    kind: raw.kind === "addon" ? "addon" : undefined,
-  };
-}
-
-/** Normalize a product catalog; undefined when the input has no valid items and no seed marker. */
-function normalizeProductCatalog(value: unknown): CompanyProductCatalog | undefined {
-  if (!value || typeof value !== "object") return undefined;
-  const raw = value as Record<string, unknown>;
-  const taken = new Set<string>();
-  const items = (Array.isArray(raw.items) ? raw.items : [])
-    .map((item) => normalizeProduct(item, taken))
-    .filter((item): item is CompanyProduct => item !== null);
-  // "Recommended" is THE default pick agents lead with in offers — at most one
-  // per group (packages / add-ons); the first marked one wins, extras clear.
-  const recommendedSeen = new Set<string>();
-  for (const item of items) {
-    if (!item.recommended) continue;
-    const group = item.kind === "addon" ? "addon" : "package";
-    if (recommendedSeen.has(group)) delete item.recommended;
-    else recommendedSeen.add(group);
-  }
-  const seededFrom = trimmed(raw.seededFrom);
-  // An empty catalog with a seed marker is meaningful: "seeded/considered, then
-  // emptied by the human" — it must not be re-seeded on the next read.
-  if (items.length === 0 && !seededFrom) return undefined;
-  return { items, seededFrom, updatedAt: trimmed(raw.updatedAt) };
-}
-
-/**
- * Replace a company's product catalog (the Products tab save path and the
- * seeders both land here so every change hits the replicated vault file and the
- * governance trail).
- */
-export async function setCompanyProducts(
+async function mutateCompanyDefinition(
   id: string,
-  input: { items: CompanyProduct[] | unknown[]; seededFrom?: string },
-  source = "companies-store:set-products",
+  source: string,
+  mutate: (company: Company) => void,
 ): Promise<Company | null> {
   const records = await readRaw();
   const company = records.find((record) => record.id === id);
   if (!company) return null;
   const before = companyDefinitionOf(company);
-  const catalog = normalizeProductCatalog({
-    items: input.items,
-    seededFrom: input.seededFrom ?? company.products?.seededFrom ?? "ui",
-    updatedAt: new Date().toISOString(),
-  });
-  company.products = catalog;
+  mutate(company);
   company.updatedAt = new Date().toISOString();
   await writeRaw(records);
   await recordConfigChange("updated", before, company, source);
   return company;
 }
 
+/** Replace a company's product catalog in the replicated definition and governance trail. */
+export async function setCompanyProducts(
+  id: string,
+  input: { items: CompanyProduct[] | unknown[]; seededFrom?: string },
+  source = "companies-store:set-products",
+): Promise<Company | null> {
+  return mutateCompanyDefinition(id, source, (company) => {
+    company.products = normalizeCompanyProductCatalog({
+      items: input.items,
+      seededFrom: input.seededFrom ?? company.products?.seededFrom ?? "ui",
+      updatedAt: new Date().toISOString(),
+    });
+  });
+}
+
 /**
  * Write a company's per-API cloud cost guardrail into the replicated definition
  * (mirrors {@link setCompanyProducts}). Only the dedicated apply route calls
  * this, so a generic treasury/upsert save can never blank `apiBudgets`. Replaces
- * the entry for the given service in place (keyed by provider + service) and
- * leaves other services' budgets untouched. The server owns `appliedAt` /
+ * the entry for the given service in place (keyed by provider + project +
+ * service) and leaves other projects/services untouched. The server owns `appliedAt` /
  * `appliedError` / `budgetResourceName`; callers pass whatever the provider
  * apply returned.
  */
@@ -812,20 +768,46 @@ export async function setCompanyApiBudget(
   apiBudget: CompanyApiBudget,
   source = "companies-store:set-api-budget",
 ): Promise<Company | null> {
-  const records = await readRaw();
-  const company = records.find((record) => record.id === id);
-  if (!company) return null;
-  const before = companyDefinitionOf(company);
-  const current = Array.isArray(company.apiBudgets) ? company.apiBudgets : [];
-  const next = current.filter(
-    (entry) => !(entry.provider === apiBudget.provider && entry.service === apiBudget.service),
-  );
-  next.push(apiBudget);
-  company.apiBudgets = next;
-  company.updatedAt = new Date().toISOString();
-  await writeRaw(records);
-  await recordConfigChange("updated", before, company, source);
-  return company;
+  return mutateCompanyDefinition(id, source, (company) => {
+    const current = Array.isArray(company.apiBudgets) ? company.apiBudgets : [];
+    company.apiBudgets = [
+      ...current.filter((entry) => !sameCompanyApiBudgetScope(entry, apiBudget)),
+      apiBudget,
+    ];
+  });
+}
+
+/** Replace one provider/operation integration limit without touching other company config. */
+export async function setCompanyIntegrationLimit(
+  id: string,
+  input: Omit<CompanyIntegrationLimit, "id" | "createdAt" | "updatedAt"> & { id?: string },
+  source = "companies-store:set-integration-limit",
+): Promise<Company | null> {
+  const now = new Date().toISOString();
+  const limitId = input.id?.trim() || `${input.providerKey}:${input.operationId?.trim() || "all"}`;
+  return mutateCompanyDefinition(id, source, (company) => {
+    const current = Array.isArray(company.integrationLimits) ? company.integrationLimits : [];
+    const existing = current.find((limit) => limit.id === limitId);
+    const limit: CompanyIntegrationLimit = {
+      ...input,
+      id: limitId,
+      operationId: input.operationId?.trim() || undefined,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    company.integrationLimits = [...current.filter((entry) => entry.id !== limitId), limit];
+  });
+}
+
+/** Remove exactly one integration limit; usage history remains intact for charts/audit. */
+export async function removeCompanyIntegrationLimit(
+  id: string,
+  limitId: string,
+  source = "companies-store:remove-integration-limit",
+): Promise<Company | null> {
+  return mutateCompanyDefinition(id, source, (company) => {
+    company.integrationLimits = (company.integrationLimits ?? []).filter((limit) => limit.id !== limitId);
+  });
 }
 
 export async function setCompanyApprovalPolicy(
@@ -1125,6 +1107,8 @@ export type UpsertCompanyInput = {
   analyticsConfig?: Company["analyticsConfig"];
   /** Imported legacy operations discovered from an existing repo. */
   importedOperations?: Company["importedOperations"];
+  /** Reviewable knowledge extracted from a local data room. */
+  importedKnowledge?: Company["importedKnowledge"];
   /** Standing directives (Learning-tab injections + deliverable-rejection feedback). */
   directives?: Company["directives"];
 };
@@ -1178,7 +1162,7 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<Company>
     // fleet driver auto-dispatches (definitions replicate through the vault).
     homeMachineKey: input.homeMachineKey !== undefined ? trimmed(input.homeMachineKey) : (existing?.homeMachineKey ?? (existing ? undefined : hostname())),
     projectId: input.projectId !== undefined ? trimmed(input.projectId) : existing?.projectId,
-    products: input.products !== undefined ? normalizeProductCatalog(input.products) : existing?.products,
+    products: input.products !== undefined ? normalizeCompanyProductCatalog(input.products) : existing?.products,
     // Proposals are crew/human-resolved only — never writable through upsert.
     pricingProposals: existing?.pricingProposals,
     approvalPolicies: input.approvalPolicies !== undefined ? normalizeCompanyApprovalPolicies(input.approvalPolicies) : existing?.approvalPolicies,
@@ -1188,7 +1172,12 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<Company>
         ? { projectId: trimmed(input.analyticsConfig.projectId), host: trimmed(input.analyticsConfig.host) }
         : existing?.analyticsConfig,
     importedOperations: input.importedOperations !== undefined ? normalizeImportedOperations(input.importedOperations) : existing?.importedOperations,
+    importedKnowledge: input.importedKnowledge !== undefined ? normalizeImportedKnowledge(input.importedKnowledge) : existing?.importedKnowledge,
     directives: input.directives !== undefined ? input.directives : existing?.directives,
+    // Guardrails have dedicated merge-safe mutation paths and are never writable
+    // through generic company edits, but they must survive those edits.
+    apiBudgets: existing?.apiBudgets,
+    integrationLimits: existing?.integrationLimits,
   };
 
   const next = existing

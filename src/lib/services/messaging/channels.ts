@@ -24,6 +24,7 @@ import {
   sendToProvider,
 } from "@/lib/services/messaging/senders";
 import { readSharedHiveEnvValues } from "@/lib/services/shared-hive-env";
+import { DEFAULT_QUEEN_BEE_NAME } from "@/lib/config/queen-bee-personality";
 import type {
   HiveMessagingChannel,
   HiveMessagingChannelDraft,
@@ -412,7 +413,7 @@ function normalizeChannelDraft(input: HiveMessagingChannelDraft & { id?: string 
   const parsedTarget = parseMessagingTarget(provider, targetText);
   const label = (input.label ?? current?.label ?? `${meta.label} channel`).trim();
   const agentId = (input.agentId ?? current?.agentId ?? "queen-bee").trim() || "queen-bee";
-  const agentName = (input.agentName ?? current?.agentName ?? "Queen Bee").trim() || "Queen Bee";
+  const agentName = (input.agentName ?? current?.agentName ?? DEFAULT_QUEEN_BEE_NAME).trim() || DEFAULT_QUEEN_BEE_NAME;
   const envManaged = credentialKind === "macos-messages" || credentialKind === "hermes-runtime";
   if (!label) throw new Error("Messaging channel label is required.");
   if (!parsedTarget.chatId && meta.targetRequired) throw new Error(`${meta.label} target is required.`);

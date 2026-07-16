@@ -70,6 +70,18 @@ Inspect with `evo status`, `evo tree`, `evo report --watch`, or the web dashboar
 optimization loop itself is driven from the orchestrator host and spends agent tokens —
 start it deliberately, not as a side effect.
 
+## Evo and built-in skill autoresearch
+
+Evo is a separate runtime, but it does not need to be enabled for HivemindOS skill autoresearch. The built-in mechanism detects repeated skill failures, creates a Brain Review proposal, and uses the native Work Board optimizer by default.
+
+HivemindOS selects Evo only when all of these are true:
+
+- Evo is installed.
+- The skill-improvement target belongs to a git repository.
+- A benchmark command is available for comparable scoring.
+
+If the repository does not yet contain `.evo/`, the approved autoresearch task may initialize that repo-local workspace before it dispatches the four variants. This is task-scoped initialization, not a global Evo toggle and not AEON setup. The review action remains the deliberate start: detecting failures does not spend optimization tokens, run Evo, or replace an installed skill.
+
 ## Fleet machines as evo execution backends
 
 Evo experiments can run on remote SSH hosts (dashboard → Backend tab) in addition to local

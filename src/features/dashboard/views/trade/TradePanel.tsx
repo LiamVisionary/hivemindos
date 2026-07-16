@@ -23,6 +23,7 @@ import type { DashboardActingWallet } from "@/features/dashboard/screen-context"
 import type { SharedVaultConfig } from "@/lib/types/agent-runtime";
 import type { AgentSurvivalSnapshot, AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { createDefaultAgentWallet, hasConfiguredAgentWallet } from "@/lib/utils/agent-wallet";
+import { useDisplayCurrency } from "@/lib/services/use-display-currency";
 import { useRememberedDashboardValue } from "@/lib/services/use-remembered-dashboard-value";
 import { fetchPersonalWalletBalanceResult, fetchPersonalWalletRecords, persistPersonalWalletRecords } from "@/lib/native/personal-wallets";
 import {
@@ -36,7 +37,7 @@ import {
 import {
   SWAP_MAX_USD, SWAP_TOKENS_BASE, SWAP_TOKENS_ROBINHOOD, SWAP_TOKENS_SOLANA,
   cancelStockOrder,
-  fetchBankrWallet, fetchCryptoCapabilities, fetchCryptoMarket, fetchFxRates, fetchStockEquityHistory,
+  fetchBankrWallet, fetchCryptoCapabilities, fetchCryptoMarket, fetchStockEquityHistory,
   fetchStockMarket, fetchStockPortfolio, fetchTradingReadiness, fetchWalletActivity,
   type BankrWalletInfo, type CryptoCapabilityMap,
 } from "./trade-api";
@@ -113,8 +114,7 @@ export function TradePanel(props: TradePanelProps) {
   const [bankr, setBankr] = useState<BankrWalletInfo | null>(null);
 
   const [paper, setPaper] = useState(true);
-  const [currency, setCurrency] = useState("USD");
-  const [fxRates, setFxRates] = useState<Record<string, number>>({ USD: 1 });
+  const { currency, fxRates, setCurrency } = useDisplayCurrency();
   const [data, setData] = useState<DeskData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -154,13 +154,6 @@ export function TradePanel(props: TradePanelProps) {
   useEffect(() => {
     let ignore = false;
     void fetchBankrWallet().then((info) => { if (!ignore) setBankr(info); });
-    return () => { ignore = true; };
-  }, []);
-
-  // FX rates are wallet-independent — load once.
-  useEffect(() => {
-    let ignore = false;
-    void fetchFxRates().then((response) => { if (!ignore && response.ok && response.rates) setFxRates(response.rates); });
     return () => { ignore = true; };
   }, []);
 
@@ -711,7 +704,7 @@ export function TradePanel(props: TradePanelProps) {
       onOpenView,
       refresh,
     };
-  }, [acting, wallet, walletChains, onSelectChain, availableChains, data, loading, refreshing, stockLoading, stockRefreshing, activityLoading, activityRefreshing, paper, currency, fxRates, actors, props.theme, onChangeWallet, onOpenView, refresh, onEnableStockVenue, onCancelStockOrder, onOptimisticStockOrder, displayStockPortfolio]);
+  }, [acting, wallet, walletChains, onSelectChain, availableChains, data, loading, refreshing, stockLoading, stockRefreshing, activityLoading, activityRefreshing, paper, currency, fxRates, setCurrency, actors, props.theme, onChangeWallet, onOpenView, refresh, onEnableStockVenue, onCancelStockOrder, onOptimisticStockOrder, displayStockPortfolio]);
 
   return (
     <div style={{ height: "100%", overflow: "hidden" }}>

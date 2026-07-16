@@ -7,6 +7,7 @@ register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 const {
   chooseQueenBeeDelegate,
   inferQueenBeeWorkerClass,
+  queenBeeMachineRoutingEligibility,
   rankQueenBeeDelegates,
 } = await import("../src/lib/services/queen-bee/router.ts");
 
@@ -275,6 +276,52 @@ const urlBackedMachine = {
   const idleNonCoder = { ...idleVps, agents: [{ id: "vps-writer", name: "VPS Writer", runtime: "hermes", beeRole: "worker", workerClass: "writer", runtimeCapabilities: { chat: true } }] };
   const stillMatches = chooseQueenBeeDelegate(codeTask, [busyMac, idleNonCoder], { assignments: busyAssignments });
   assert.equal(stillMatches.agent?.name, "Mac Coder", "class match dominates: a code task stays with the coder even on the busier machine");
+}
+
+// Collector-owned performance policy is a hard eligibility gate: Queen Bee
+// must skip a busy borrowed machine, and an explicit pin must remain queued on
+// that machine rather than silently rerouting elsewhere.
+{
+  const busyGpu = {
+    ...urlBackedMachine,
+    key: "borrowed-gpu",
+    device: { ...urlBackedMachine.device, self: false, name: "Borrowed GPU" },
+    system: { cpuPct: 91, ramPct: 45, diskPct: 38 },
+    fleetPolicy: {
+      configured: true,
+      performance: { enabled: true, ignore: false, maxCpuPct: 80, maxRamPct: 85, maxDiskPct: 90 },
+    },
+  };
+  const idleGpu = {
+    ...urlBackedMachine,
+    key: "idle-gpu",
+    device: { ...urlBackedMachine.device, self: false, name: "Idle GPU" },
+    system: { cpuPct: 12, ramPct: 31, diskPct: 40 },
+    fleetPolicy: {
+      configured: true,
+      performance: { enabled: true, ignore: false, maxCpuPct: 80, maxRamPct: 85, maxDiskPct: 90 },
+    },
+  };
+  const codeTask = { title: "Implement", body: "Implement the code change.", skills: ["code"] };
+
+  const eligibility = queenBeeMachineRoutingEligibility(busyGpu);
+  assert.equal(eligibility.eligible, false);
+  assert.match(eligibility.reason, /CPU is 91%/);
+
+  const routed = chooseQueenBeeDelegate(codeTask, [busyGpu, idleGpu]);
+  assert.equal(routed.status, "delegated");
+  assert.equal(routed.machine?.key, "idle-gpu");
+
+  const pinned = chooseQueenBeeDelegate(codeTask, [busyGpu, idleGpu], { targetMachineKey: "borrowed-gpu" });
+  assert.equal(pinned.status, "pending");
+  assert.match(pinned.reason, /excluded by its Fleet performance policy/);
+  assert.match(pinned.reason, /CPU is 91%/);
+
+  const manuallyIgnored = {
+    ...idleGpu,
+    fleetPolicy: { ...idleGpu.fleetPolicy, performance: { ...idleGpu.fleetPolicy.performance, ignore: true } },
+  };
+  assert.equal(queenBeeMachineRoutingEligibility(manuallyIgnored).eligible, false);
 }
 
 console.log("Queen Bee router delegation tests passed.");

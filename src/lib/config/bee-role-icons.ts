@@ -1,6 +1,6 @@
 import type { BeeAgentRole, BeeWorkerClass } from "@/lib/types/agent-runtime";
 
-const BEE_ICON_ASSET_VERSION = "20260619-blue-worker-bees";
+const BEE_ICON_ASSET_VERSION = "20260714-gold-queen-bee";
 
 function beeIcon(path: string) {
   return `${path}?v=${BEE_ICON_ASSET_VERSION}`;

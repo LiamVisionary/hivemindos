@@ -24,7 +24,8 @@ type HeaderGetter = {
 const runtimeWarmSuccessByKey = new Map<string, number>();
 
 export function agentWakeStatusText(agent?: AgentColdStartLike | null) {
-  return `waking up ${agentColdStartDisplayName(agent)}`;
+  if (isFreeAgentSession(agent)) return "Starting your free agent session";
+  return `Starting ${agentColdStartDisplayName(agent)}`;
 }
 
 export function buildAgentColdStartProcessEvent(
@@ -103,10 +104,17 @@ export function isLikelyModalHostedAgent(agent?: AgentColdStartLike | null) {
 function agentColdStartDisplayName(agent?: AgentColdStartLike | null) {
   const name = clean(agent?.name);
   const model = clean(agent?.model);
-  if (model === HIVEMINDOS_FREE_MODEL_ID || /swarm[\s_-]*(?:sovereign[\s_-]*)?scout/i.test(`${name} ${model}`)) {
+  if (isFreeAgentSession(agent)) {
     return "swarm scout";
   }
   return name || model.split("/").filter(Boolean).at(-1) || clean(agent?.runtime) || "agent";
+}
+
+function isFreeAgentSession(agent?: AgentColdStartLike | null) {
+  const name = clean(agent?.name);
+  const model = clean(agent?.model);
+  return model === HIVEMINDOS_FREE_MODEL_ID
+    || /swarm[\s_-]*(?:sovereign[\s_-]*)?scout/i.test(`${name} ${model}`);
 }
 
 function agentColdStartCacheKey(agent?: AgentColdStartLike | null) {

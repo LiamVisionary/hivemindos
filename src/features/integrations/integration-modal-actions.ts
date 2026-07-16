@@ -26,6 +26,7 @@ const CONNECTION_PROVIDER_KEYS = new Set<ConnectionProviderKey>([
   "azure",
   "posthog",
   "plausible",
+  "monid",
   "clawbank",
 ]);
 

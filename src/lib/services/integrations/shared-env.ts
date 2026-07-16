@@ -1,6 +1,7 @@
 import { execFile, spawn } from "child_process";
 import { join } from "path";
 import { promisify } from "util";
+export { sharedEnvValue } from "./shared-env-value";
 
 const execFileAsync = promisify(execFile);
 const SHARED_ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -95,8 +96,4 @@ export function saveSharedAgentEnvValues(values: Record<string, string>) {
 
 export function removeSharedAgentEnv(key: string) {
   return saveSharedAgentEnv(key, "");
-}
-
-export function sharedEnvValue(key: string, sharedEnv: Record<string, string>) {
-  return process.env[key]?.trim() || sharedEnv[key]?.trim() || "";
 }

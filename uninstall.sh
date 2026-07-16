@@ -525,6 +525,42 @@ if ask "Remove dashboard auth secret and device token from .env.local and shared
   fi
 fi
 
+if ask "Remove registered dashboard passkeys from ~/.hivemindos/dashboard-passkeys.json?" "no"; then
+  rm -f "$HOME/.hivemindos/dashboard-passkeys.json"
+  ok "Removed registered dashboard passkeys"
+fi
+
+if ask "Delete Beeline local credentials from the operating-system credential store and remove their local metadata?" "no"; then
+  beeline_broker=""
+  for candidate in \
+    "/Applications/HivemindOS.app/Contents/MacOS/HivemindOS" \
+    "$HOME/Applications/HivemindOS.app/Contents/MacOS/HivemindOS" \
+    "$ROOT/src-tauri/target/release/HivemindOS" \
+    "$ROOT/src-tauri/target/debug/HivemindOS"; do
+    if [[ -x "$candidate" ]]; then
+      beeline_broker="$candidate"
+      break
+    fi
+  done
+  if [[ -z "$beeline_broker" ]] && command -v HivemindOS >/dev/null 2>&1; then
+    beeline_broker="$(command -v HivemindOS)"
+  fi
+  if [[ -n "$beeline_broker" ]]; then
+    broker_response="$(printf '%s\n' '{"action":"delete-all"}' | "$beeline_broker" --beeline-credential-broker 2>/dev/null || true)"
+    if [[ "$broker_response" == *'"ok":true'* || "$broker_response" == *'"ok": true'* ]]; then
+      rm -rf "$HOME/.hivemindos/beeline/local-credentials.json" \
+        "$HOME/.hivemindos/beeline/local-credentials.lock" \
+        "$HOME/.hivemindos/beeline/local-credential-audit.jsonl" \
+        "$HOME/.hivemindos/beeline/browser-use-locks"
+      ok "Deleted Beeline local credentials and secret-free local metadata"
+    else
+      warn "The native broker could not delete Beeline credentials; metadata was preserved so the credential-store entries are not orphaned"
+    fi
+  else
+    warn "No HivemindOS native executable was found; open the desktop app and delete Beeline credentials before uninstalling"
+  fi
+fi
+
 if ask "Remove optional GBrain service note from the Obsidian vault?" "no"; then
   rm -f "$vault_path/$brain_services_folder/GBrain.md"
   ok "Removed $vault_path/$brain_services_folder/GBrain.md"
@@ -676,8 +712,8 @@ if ask "Remove the HivemindOS MCP server from agent harness configs (Claude, Cod
   node "$ROOT/scripts/register-mcp-clients.mjs" --remove --targets all || true
 fi
 
-if ask "Remove hive env, transfer, handoff, Hivemind MCP, update, brain, workspace, Hive Pulse, capability search, and dashboard auth commands from ~/.local/bin if they point to this checkout?" "yes"; then
-  for command_name in hive-env-add hive-env-remove hive-env-delete hive-env-run hive-env-check hive-transfer hive-handoff hivemind-mcp hive-update hive-brain hive-brain-hook hive-workspace hive-workspace-switch hive-workspace-add hive-pulse hive-capability-search dashboard-auth; do
+if ask "Remove hive env, transfer, handoff, Hivemind MCP, update, brain, workspace, Hive Pulse, quant research, capability search, and dashboard auth commands from ~/.local/bin if they point to this checkout?" "yes"; then
+  for command_name in hive-env-add hive-env-remove hive-env-delete hive-env-run hive-env-check hive-transfer hive-handoff hivemind-mcp hive-update hive-brain hive-brain-hook hive-workspace hive-workspace-switch hive-workspace-add hive-pulse hive-quant-research hive-capability-search dashboard-auth; do
     command_path="$HOME/.local/bin/$command_name"
     script_path="$ROOT/scripts/$command_name"
     if [[ -L "$command_path" && "$(readlink "$command_path")" == "$script_path" ]]; then

@@ -16,6 +16,7 @@ These skills are auto-installed into the shared brain because they are foundatio
 | `create-zero-human-company` | Creates a durable company from a business goal or existing repository, adds an available crew, measurable apex goal, products, budgets, and approval policies, verifies the saved record, and leaves autonomy stopped until the operator explicitly launches it. |
 | `hive-assimilate` | Mandatory pre-build search across shared brain, user projects, local/private indexes, and public GitHub before software creation. |
 | `hive-pulse` | Built-in last-30-days signal briefs across Reddit, X, YouTube, TikTok, Hacker News, Polymarket, GitHub, and web sources, powered by a pinned MIT licensed `last30days` engine. |
+| `hive-quant-research` | Runs research-only typed strategy families through lagged Rust simulation, independent Python statistics, overfitting controls, regime and factor audits, durable lineage, and approved scheduled runs. |
 | `hive-capability-search` | Discovers available tools, shared skills, optional packaged workflow playbooks, apps, agents, credentials by key name, and delivery channels such as slash commands, API routes, MCP tools, CLIs, and dashboard surfaces for a task. |
 | `hive-remote-capability-use` | Executes remote connected apps and fleet capabilities selected by capability search, including fresh discovery, Hivemind Link app-proxy routing, private file transfer, artifact verification, and side-effect gates. |
 | `hive-skill-fusion` | Turns a capability request into a reusable shared-brain skill. |
@@ -23,6 +24,8 @@ These skills are auto-installed into the shared brain because they are foundatio
 | `hive-aeon-fusion` | Converts reusable hive workflows into AEON-ready agent duties when appropriate. |
 | `hive-brain-memory` | Teaches agents how to recall canonical typed memory, keep operational receipts separate, review mined patterns, and evolve stale memories while preserving superseded history. |
 | `hive-brain-compiled-wiki` | Teaches agents how to compile durable findings into HivemindOS entity/concept/summary wiki pages, search/query the compiled graph through MCP, repair wiki health, and respect human collective shared-brain mirrors without restricting normal agent-to-agent work. |
+| `hive-skill-autoresearch` | Improves installed skills through a measured baseline, four independent variants, regression floors, independent review, and a human-approved winning diff. It works with native HivemindOS agents and can use Evo when a repository benchmark is available. |
+| `wrapup` | On an explicit session wrap-up, saves only durable reviewed facts through typed Shared Brain Memory and adds a concise redacted session summary to the user's verified NotebookLM AI Brain notebook. |
 
 ## Supporting Hive Search Commands
 
@@ -98,6 +101,7 @@ packaged-skills/auto-install/bankr-skill-deployment/SKILL.md
 packaged-skills/auto-install/create-zero-human-company/SKILL.md
 packaged-skills/auto-install/hive-assimilate/SKILL.md
 packaged-skills/auto-install/hive-pulse/SKILL.md
+packaged-skills/auto-install/hive-quant-research/SKILL.md
 packaged-skills/auto-install/hive-capability-search/SKILL.md
 packaged-skills/auto-install/hive-remote-capability-use/SKILL.md
 packaged-skills/auto-install/hive-skill-fusion/SKILL.md
@@ -105,6 +109,8 @@ packaged-skills/auto-install/hive-workflow-fusion/SKILL.md
 packaged-skills/auto-install/hive-aeon-fusion/SKILL.md
 packaged-skills/auto-install/hive-brain-memory/SKILL.md
 packaged-skills/auto-install/hive-brain-compiled-wiki/SKILL.md
+packaged-skills/auto-install/hive-skill-autoresearch/SKILL.md
+packaged-skills/auto-install/wrapup/SKILL.md
 ```
 
 Setup mirrors it into the shared brain at:
@@ -114,6 +120,7 @@ Skills/bankr-skill-deployment/SKILL.md
 Skills/create-zero-human-company/SKILL.md
 Skills/hive-assimilate/SKILL.md
 Skills/hive-pulse/SKILL.md
+Skills/hive-quant-research/SKILL.md
 Skills/hive-capability-search/SKILL.md
 Skills/hive-remote-capability-use/SKILL.md
 Skills/hive-skill-fusion/SKILL.md
@@ -121,6 +128,8 @@ Skills/hive-workflow-fusion/SKILL.md
 Skills/hive-aeon-fusion/SKILL.md
 Skills/hive-brain-memory/SKILL.md
 Skills/hive-brain-compiled-wiki/SKILL.md
+Skills/hive-skill-autoresearch/SKILL.md
+Skills/wrapup/SKILL.md
 ```
 
 Do not create duplicate shared-brain copies of the same Hive skill. If an imported runtime carries an equivalent workflow under another name, keep `hive-assimilate` as the canonical shared-brain skill.

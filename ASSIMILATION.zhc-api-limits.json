@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-07-14T19:10:57.935288+00:00",
+  "request": "Complete Zero Human Company API and integration limits with controls and data visualization",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/gcp-budget-admin.ts",
+      "target_path": "src/lib/services/gcp-budget-admin.ts",
+      "reuse_type": "adapted_code",
+      "note": "extended the existing provider enforcement backbone with corrected resource targeting and discovery"
+    },
+    {
+      "source_repo": "hivemind-cloud-services",
+      "source_path": "workers/app-hosting/src/usage.ts",
+      "target_path": "src/lib/services/company-api-usage.ts",
+      "reuse_type": "adapted_code",
+      "note": "adapted atomic locked idempotent usage accounting into company preflight reservations"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/features/dashboard/views/zero-human-companies/AnalyticsProviderCards.tsx",
+      "target_path": "src/features/dashboard/views/zero-human-companies/ApiLimitsPanel.tsx",
+      "reuse_type": "style_adapted",
+      "note": "reused the established provider picker loading and error control language"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/features/dashboard/views/telemetry/TelemetryView.tsx",
+      "target_path": "src/features/dashboard/views/zero-human-companies/ApiLimitsPanel.tsx",
+      "reuse_type": "adapted_code",
+      "note": "adapted the dashboard inline SVG time-series visualization approach"
+    },
+    {
+      "source_repo": "maps-agency",
+      "source_path": "mcp_servers/gmaps_server.py",
+      "target_path": "../maps-agency/scripts/hivemind_bridge.py",
+      "reuse_type": "adapted_code",
+      "note": "adapted real per-SKU Google Maps meter counts into observed company usage reporting"
+    }
+  ]
+}

@@ -49,6 +49,7 @@ export type OperatingUnitLearningLoopInput = {
   metricTarget?: string;
   strategicGoal?: string;
   branchAgent?: string;
+  skills?: string[];
   governanceLabel?: string;
   now?: number;
 };
@@ -135,6 +136,7 @@ export function buildOperatingUnitLearningLoop(input: OperatingUnitLearningLoopI
   const goal = input.strategicGoal?.trim() || input.unitName;
   const gatePrefix = `unit-${input.unitId}-${input.runId}-${input.workTitle}`.replace(/[^a-z0-9_-]+/gi, "-").slice(0, 80);
   const governanceLabel = input.governanceLabel ?? "governance policy";
+  const skillTargets = [...new Set((input.skills ?? []).map((skill) => skill.trim()).filter(Boolean))];
   const usesProductTasteRubric = shouldUseProductTasteRubric(input);
   return withObservation({
     mode: "optimizer",
@@ -184,11 +186,15 @@ export function buildOperatingUnitLearningLoop(input: OperatingUnitLearningLoopI
       "Prefer recording evidence and reusable learning over only marking the task done.",
       "Escalate irreversible external actions or budget exceptions for human approval.",
       "Use an isolated worktree or equivalent checkout for code-changing work tied to a repo.",
+      ...(skillTargets.length
+        ? [`Feed outcomes for ${skillTargets.join(", ")} into the app-wide skill autoresearch policy; repeated failures create a review proposal, never a silent skill rewrite.`]
+        : []),
     ],
     evidenceRequired: [
       "Outcome evidence tied to the operating metric.",
       "Reusable learning or a clear reason none was found.",
       "Artifacts, receipts, links, or test output when available.",
+      ...(skillTargets.length ? ["Skill performance evidence for the capabilities attached to this company task."] : []),
     ],
   });
 }

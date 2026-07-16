@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-open-in-apps"
+description = "Enables the list_open_in_apps command without any pre-configured scope."
+commands.allow = ["list_open_in_apps"]
+
+[[permission]]
+identifier = "deny-list-open-in-apps"
+description = "Denies the list_open_in_apps command without any pre-configured scope."
+commands.deny = ["list_open_in_apps"]

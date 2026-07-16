@@ -17,6 +17,7 @@ import { companySpendRollup, readCompanies } from "@/lib/services/companies-stor
 import type { Company } from "@/lib/types/company";
 import type { KanbanTask } from "@/lib/types/kanban";
 import { formatReasoningTrailForPlainText } from "@/lib/types/reasoning-trail";
+import { DEFAULT_QUEEN_BEE_NAME } from "@/lib/config/queen-bee-personality";
 
 /**
  * Escalation bridge: routes the events an unattended operator must hear about —
@@ -150,7 +151,7 @@ export async function notifyEscalation(event: EscalationEvent, options: Escalati
         priority: event.severity,
         kind: "alert",
         agentId: "queen-bee",
-        agentName: "Queen Bee",
+        agentName: DEFAULT_QUEEN_BEE_NAME,
         source: "escalation-bridge",
         tags: ["escalation", ...(event.tags ?? [])],
       }, { vaultPath: options.vaultPath ?? undefined }).catch(() => undefined);

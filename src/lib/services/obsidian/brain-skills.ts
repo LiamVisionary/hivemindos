@@ -6,12 +6,15 @@ import { basename, dirname, join, relative, resolve } from "path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { cachedCall } from "@/lib/services/async-cache";
 import {
+  importRemoteBrainSkillWithDependencies,
+  type RemoteBrainSkillInput,
+} from "@/lib/services/obsidian/brain-skill-remote-import";
+import {
   auditSkillDirectory,
   auditSkillInput,
   createSkillManifest,
   normalizeAgentAgnosticSkill,
   SKILL_MANIFEST_FILE,
-  sourceRefFromGitHubUrl,
 } from "@/lib/services/skills/skill-os";
 
 export type BrainSkillProviderId = "claude" | "codex" | "hermes" | "gemini" | "openclaw" | "aeon";
@@ -94,16 +97,7 @@ export type BrainSkillAeonSyncResult = {
   totalShared: number;
 };
 
-export type RemoteBrainSkillInput = {
-  slug?: string;
-  name?: string;
-  description?: string;
-  source?: string;
-  category?: string;
-  skillMdUrl?: string;
-  githubUrl?: string;
-  packagedPath?: string;
-};
+export type { RemoteBrainSkillInput };
 
 export type UploadedBrainSkillFile = {
   path: string;
@@ -645,15 +639,6 @@ function safeDestinationPath(root: string, relativePath: string) {
   return destination;
 }
 
-function resolvePackagedSkillDir(packagedPath: string) {
-  const packageRoot = resolve(process.cwd(), "packaged-skills");
-  const sourceDir = resolve(process.cwd(), packagedPath.trim());
-  if (sourceDir !== packageRoot && !sourceDir.startsWith(`${packageRoot}/`)) {
-    throw new Error("Packaged skill path is outside the HivemindOS packaged-skills folder.");
-  }
-  return sourceDir;
-}
-
 async function downloadGitHubSkillDirectory(input: {
   source: GitHubSkillSource;
   ref: string;
@@ -1184,125 +1169,15 @@ export async function importRemoteBrainSkill(input: {
   vaultPath?: string;
   skill: RemoteBrainSkillInput;
 }): Promise<BrainSkillInventory> {
-  const before = await getBrainSkillInventory(input.vaultPath);
-  await mkdir(before.skillsFolder, { recursive: true });
-  const skill = input.skill;
-  const slug = sanitizeSlug(skill.slug || skill.name || "skill");
-  const sharedBySlug = new Map(before.shared.map((item) => [item.slug, item]));
-  const destinationSlug = await nextDestinationSlug(before.skillsFolder, slug, "shared", sharedBySlug);
-  const destinationDir = join(before.skillsFolder, destinationSlug);
-  await mkdir(destinationDir, { recursive: true });
-
-  if (skill.packagedPath?.trim()) {
-    const sourceDir = resolvePackagedSkillDir(skill.packagedPath);
-    const sourceSkillPath = join(sourceDir, "SKILL.md");
-    const rawMarkdown = await readFile(sourceSkillPath, "utf8").catch(() => "");
-    if (!rawMarkdown.trim()) throw new Error("Packaged skill is missing SKILL.md.");
-    await rm(destinationDir, { recursive: true, force: true });
-    await cp(sourceDir, destinationDir, {
-      recursive: true,
-      force: true,
-      filter: (path) => !path.split("/").some((part) => SKIPPED_DIRS.has(part)),
-    });
-    const markdown = normalizeAgentAgnosticSkill(rawMarkdown, skill.source || skill.packagedPath);
-    await writeFile(join(destinationDir, "SKILL.md"), markdown.endsWith("\n") ? markdown : `${markdown}\n`, "utf8");
-    const audit = await auditSkillDirectory({
-      slug: destinationSlug,
-      dir: destinationDir,
-      sourceRef: `packaged:${skill.packagedPath}`,
-    });
-    if (audit.status === "blocked") {
-      await rm(destinationDir, { recursive: true, force: true });
-      throw new Error(`Skill audit blocked ${destinationSlug}: ${audit.findings.map((finding) => finding.title).join(", ")}`);
-    }
-    await writeFile(join(destinationDir, SKILL_MANIFEST_FILE), JSON.stringify(createSkillManifest({
-      slug: destinationSlug,
-      name: skill.name || skillNameFromMarkdown(markdown),
-      description: skill.description || firstParagraph(markdown) || "Shared agent skill.",
-      sourceType: "pack",
-      sourceLabel: skill.source || "HivemindOS optional packaged skills",
-      sourceUrl: skill.githubUrl || skill.skillMdUrl || "",
-      sourcePath: skill.packagedPath,
-      audit,
-      markdown,
-    }), null, 2), "utf8");
-    await writeFile(join(destinationDir, SOURCE_METADATA_FILE), JSON.stringify({
-      provider: "packaged-optional",
-      providerLabel: skill.source || "HivemindOS optional packaged skills",
-      sourceUrl: skill.githubUrl || skill.skillMdUrl || "",
-      sourcePath: skill.packagedPath,
-      agentAgnostic: true,
-      auditStatus: audit.status,
-      capabilities: audit.capabilities,
-      envKeys: audit.envKeys,
-      importedAt: new Date().toISOString(),
-    }, null, 2), "utf8");
-
-    const after = await getBrainSkillInventory(input.vaultPath);
-    await writeSkillsReadme(after);
-    return after;
-  }
-
-  let markdown = "";
-  if (skill.skillMdUrl) {
-    const response = await fetch(skill.skillMdUrl, { signal: AbortSignal.timeout(12_000) });
-    if (response.ok) markdown = await response.text();
-  }
-
-  if (!markdown.trim()) {
-    markdown = [
-      "---",
-      `name: "${(skill.name || slugToName(destinationSlug)).replace(/"/g, "'")}"`,
-      `description: "${(skill.description || "Shared agent skill.").replace(/"/g, "'")}"`,
-      "---",
-      "",
-      `# ${skill.name || slugToName(destinationSlug)}`,
-      "",
-      skill.description || "Use this skill when its title matches the task.",
-      "",
-      "## Source",
-      "",
-      skill.githubUrl ? `- Repository: ${skill.githubUrl}` : "",
-      skill.skillMdUrl ? `- SKILL.md: ${skill.skillMdUrl}` : "",
-    ].filter(Boolean).join("\n");
-  }
-  markdown = normalizeAgentAgnosticSkill(markdown, skill.source || skill.githubUrl || skill.skillMdUrl || "remote catalog");
-  const audit = await auditSkillInput({
-    slug: destinationSlug,
-    markdown,
-    sourceRef: skill.githubUrl ? sourceRefFromGitHubUrl(skill.githubUrl) : skill.skillMdUrl,
+  return importRemoteBrainSkillWithDependencies(input, {
+    getInventory: getBrainSkillInventory,
+    nextDestinationSlug,
+    writeSkillsReadme,
+    sanitizeSlug,
+    slugToName,
+    skillNameFromMarkdown,
+    firstParagraph,
   });
-  if (audit.status === "blocked") {
-    await rm(destinationDir, { recursive: true, force: true });
-    throw new Error(`Skill audit blocked ${destinationSlug}: ${audit.findings.map((finding) => finding.title).join(", ")}`);
-  }
-
-  await writeFile(join(destinationDir, "SKILL.md"), markdown.endsWith("\n") ? markdown : `${markdown}\n`, "utf8");
-  await writeFile(join(destinationDir, SKILL_MANIFEST_FILE), JSON.stringify(createSkillManifest({
-    slug: destinationSlug,
-    name: skill.name || slugToName(destinationSlug),
-    description: skill.description || "Shared agent skill.",
-    sourceType: "registry",
-    sourceLabel: skill.source || "Skill browser",
-    sourceUrl: skill.skillMdUrl || skill.githubUrl || "",
-    sourceRef: skill.githubUrl ? sourceRefFromGitHubUrl(skill.githubUrl) : skill.skillMdUrl,
-    audit,
-    markdown,
-  }), null, 2), "utf8");
-  await writeFile(join(destinationDir, SOURCE_METADATA_FILE), JSON.stringify({
-    provider: "remote",
-    providerLabel: skill.source || "Skill browser",
-    sourceUrl: skill.skillMdUrl || skill.githubUrl || "",
-    agentAgnostic: true,
-    auditStatus: audit.status,
-    capabilities: audit.capabilities,
-    envKeys: audit.envKeys,
-    importedAt: new Date().toISOString(),
-  }, null, 2), "utf8");
-
-  const after = await getBrainSkillInventory(input.vaultPath);
-  await writeSkillsReadme(after);
-  return after;
 }
 
 export async function importGitHubBrainSkill(input: {

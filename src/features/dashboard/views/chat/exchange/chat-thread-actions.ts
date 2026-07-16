@@ -170,6 +170,20 @@ function defaultTranscriptDisplayContent(message: ChatMessage): string {
 }
 
 /**
+ * Prefer the complete stored thread when copying a chat. The rendered message
+ * list can be a bounded window (for example, a task preview showing only the
+ * latest turn), so it is only a fallback for transient, not-yet-stored chats.
+ */
+export function chatTranscriptSourceMessages(
+  messagesByAgent: Record<string, ChatMessage[]>,
+  storageKey: string,
+  renderedMessages: ChatMessage[],
+): ChatMessage[] {
+  const storedMessages = storageKey ? messagesByAgent[storageKey] : undefined;
+  return storedMessages?.length ? storedMessages : renderedMessages;
+}
+
+/**
  * Serialize a thread's messages to a plain-text transcript. One block per
  * message separated by a blank line: `User: ...` for user turns and
  * `<agentName|Assistant>: ...` for assistant turns, using `displayContent` for

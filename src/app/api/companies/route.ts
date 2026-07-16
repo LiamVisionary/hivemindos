@@ -9,6 +9,7 @@ import {
   getCompany,
   markCompanyDispatched,
   readCompanies,
+  removeCompanyIntegrationLimit,
   removeCompanyDirective,
   resolveCompanyPricingProposal,
   setCompanyAgents,
@@ -16,6 +17,7 @@ import {
   setCompanyApprovalPolicy,
   setCompanyAutonomy,
   setCompanyFrozen,
+  setCompanyIntegrationLimit,
   updateCompanyMetric,
   upsertCompany,
 } from "@/lib/services/companies-store";
@@ -27,7 +29,14 @@ import {
   rememberCompanyDriverSelfBase,
 } from "@/lib/services/company-autonomy-driver";
 import { companyRevenueRollup, readCompanyRevenueLedger } from "@/lib/services/company-revenue-share";
-import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
+import { appendSpend, appendSpendIdempotent, shortTarget } from "@/lib/services/wallet/spend-ledger";
+import {
+  consumeCompanyApiUsage,
+  evaluateCompanyApiUsage,
+  recordCompanyApiUsage,
+  readCompanyApiUsage,
+  type CompanyApiUsageInput,
+} from "@/lib/services/company-api-usage";
 import {
   companyExecutionCapability,
   parseCompanyExecutionConfig,
@@ -36,7 +45,8 @@ import {
   CompanyAeonBindingError,
   resolveCompanyAeonBinding,
 } from "@/lib/services/company-aeon-binding";
-import { errorJson } from "@/lib/utils/api-response";
+import { errorJson, okJson } from "@/lib/utils/api-response";
+import { connectorManifest } from "@/lib/services/integrations/connector-manifests";
 import {
   CompanyMembershipConflictError,
   findDuplicateCompanyMemberships,
@@ -47,6 +57,7 @@ import type {
   CompanyApexGoal,
   CompanyApprovalPolicy,
   CompanyAutonomyPause,
+  CompanyIntegrationLimit,
   CompanyMember,
   CompanyRevenue,
 } from "@/lib/types/company";
@@ -147,7 +158,71 @@ type CompanyBody = {
   amountUsd?: number;
   target?: string;
   agentId?: string;
+  // set/remove/check/consume integration limits and usage
+  integrationLimit?: unknown;
+  limitId?: string;
+  providerKey?: string;
+  operationId?: string;
+  requestCount?: number;
+  idempotencyKey?: string;
 };
+
+type IntegrationLimitInput = Omit<CompanyIntegrationLimit, "id" | "createdAt" | "updatedAt"> & { id?: string };
+
+function positiveOptionalNumber(value: unknown, label: string, integer = false): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0 || (integer && !Number.isInteger(value))) {
+    throw new Error(`${label} must be a positive${integer ? " whole" : ""} number.`);
+  }
+  return value;
+}
+
+function validateIntegrationLimit(value: unknown): IntegrationLimitInput {
+  if (!value || typeof value !== "object") throw new Error("integrationLimit is required.");
+  const raw = value as Record<string, unknown>;
+  const providerKey = typeof raw.providerKey === "string" ? raw.providerKey.trim() : "";
+  const manifest = connectorManifest(providerKey);
+  if (!manifest) throw new Error("Choose a supported integration provider.");
+  const operationId = typeof raw.operationId === "string" ? raw.operationId.trim() : "";
+  if (operationId && !manifest.operations.some((operation) => operation.id === operationId)) {
+    throw new Error(`Choose an operation supported by ${manifest.label}.`);
+  }
+  const limit: IntegrationLimitInput = {
+    id: typeof raw.id === "string" ? raw.id.trim() || undefined : undefined,
+    providerKey: manifest.key,
+    operationId: operationId || undefined,
+    dailyRequestLimit: positiveOptionalNumber(raw.dailyRequestLimit, "dailyRequestLimit", true),
+    monthlyRequestLimit: positiveOptionalNumber(raw.monthlyRequestLimit, "monthlyRequestLimit", true),
+    dailySpendLimitUsd: positiveOptionalNumber(raw.dailySpendLimitUsd, "dailySpendLimitUsd"),
+    monthlySpendLimitUsd: positiveOptionalNumber(raw.monthlySpendLimitUsd, "monthlySpendLimitUsd"),
+  };
+  if (!limit.dailyRequestLimit && !limit.monthlyRequestLimit && !limit.dailySpendLimitUsd && !limit.monthlySpendLimitUsd) {
+    throw new Error("Set at least one positive request or spend limit.");
+  }
+  return limit;
+}
+
+function validateUsageInput(body: CompanyBody): CompanyApiUsageInput {
+  const providerKey = body.providerKey?.trim() ?? "";
+  const manifest = connectorManifest(providerKey);
+  if (!manifest) throw new Error("Choose a supported integration provider.");
+  const operationId = body.operationId?.trim();
+  if (operationId && !manifest.operations.some((operation) => operation.id === operationId)) {
+    throw new Error(`Choose an operation supported by ${manifest.label}.`);
+  }
+  const requestCount = body.requestCount === undefined ? 1 : body.requestCount;
+  if (!Number.isInteger(requestCount) || requestCount < 0) throw new Error("requestCount must be a non-negative integer.");
+  const amountUsd = body.amountUsd === undefined ? 0 : body.amountUsd;
+  if (!Number.isFinite(amountUsd) || amountUsd < 0) throw new Error("amountUsd must be a finite non-negative number.");
+  return {
+    providerKey: manifest.key,
+    operationId: operationId || undefined,
+    requestCount,
+    amountUsd,
+    source: body.source?.trim() || "companies-api",
+    idempotencyKey: body.idempotencyKey?.trim() || undefined,
+  };
+}
 
 export async function POST(request: NextRequest) {
   const unauthorized = await requireAuth(request);
@@ -173,6 +248,47 @@ export async function POST(request: NextRequest) {
       const company = await addCompanyMembers(body.id.trim(), body.members ?? []);
       if (!company) return NextResponse.json({ ok: false, error: "Company not found." }, { status: 404 });
       return NextResponse.json({ ok: true, company });
+    }
+    if (action === "set-integration-limit") {
+      if (!body.id?.trim()) return errorJson("id is required", 400);
+      const company = await setCompanyIntegrationLimit(body.id.trim(), validateIntegrationLimit(body.integrationLimit));
+      if (!company) return errorJson("Company not found.", 404);
+      return okJson({ company, integrationLimits: company.integrationLimits ?? [] });
+    }
+    if (action === "remove-integration-limit") {
+      if (!body.id?.trim() || !body.limitId?.trim()) return errorJson("id and limitId are required", 400);
+      const company = await removeCompanyIntegrationLimit(body.id.trim(), body.limitId.trim());
+      if (!company) return errorJson("Company not found.", 404);
+      return okJson({ company, integrationLimits: company.integrationLimits ?? [] });
+    }
+    if (action === "check-api-usage" || action === "consume-api-usage" || action === "record-api-usage") {
+      if (!body.id?.trim()) return errorJson("id is required", 400);
+      const company = await getCompany(body.id.trim());
+      if (!company) return errorJson("Company not found.", 404);
+      const usageInput = validateUsageInput(body);
+      if (action === "record-api-usage") {
+        const observation = await recordCompanyApiUsage(company.id, usageInput);
+        if (observation.record.amountUsd > 0) {
+          await appendSpendIdempotent({
+            agentId: body.agentId?.trim() || "system:api-meter",
+            companyId: company.id,
+            kind: "api",
+            asset: "USD",
+            amountUsd: observation.record.amountUsd,
+            target: shortTarget(body.target || `${observation.record.providerKey}:${observation.record.operationId || "all"}`),
+            status: "executed",
+            createdAtMs: observation.record.createdAtMs,
+          }, `company-api-usage:${observation.record.id}`);
+        }
+        return okJson({ ...observation, treasuryRecorded: observation.record.amountUsd > 0 });
+      }
+      const decision = action === "consume-api-usage"
+        ? await consumeCompanyApiUsage(company, usageInput)
+        : evaluateCompanyApiUsage(company, usageInput, await readCompanyApiUsage());
+      if (decision.decision === "block") {
+        return errorJson(decision.reason ?? "This integration call is blocked by a company limit.", 429, { decision });
+      }
+      return okJson({ decision });
     }
     if (action === "record-api-cost") {
       // A company's paid-API meter reports its incremental cloud spend so it lands

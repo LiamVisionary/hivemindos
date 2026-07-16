@@ -27,6 +27,7 @@ import { isXaiOAuthProvider } from "@/lib/services/xai-oauth-inference-contract"
 import {
   LOCAL_TTS_RUNTIME,
   isLocalTtsProviderId,
+  pcm16ToWav,
   resolveLocalTtsCallConfig,
   streamLocalTtsPcm,
   synthesizeLocalTtsWav,
@@ -1207,15 +1208,55 @@ async function streamSpokenReply(
   }
 
   const resolvedVoice = calls ? resolveVoiceRuntime(calls.voiceRuntime) : null;
-  if (resolvedVoice?.kind === "cloud-tts") {
-    return NextResponse.json(
-      {
+  if (calls && resolvedVoice && resolvedVoice.kind === "cloud-tts" && resolvedVoice.provider) {
+    try {
+      const cloudSpeech = await synthesizeVoicePreview(resolvedVoice.provider.id, {
+        text,
+        voice: calls.voiceId,
+        model: calls.voiceModelId,
+        keyEnv: calls.voiceKeyEnv,
+        languageCode: calls.voiceLanguage,
+      });
+      const pcm = new Uint8Array(await cloudSpeech.response.arrayBuffer());
+      if (!pcm.byteLength) throw new Error("The selected cloud voice returned no audio.");
+      const wav = pcm16ToWav(pcm, cloudSpeech.sampleRate, 1);
+      await appendVoiceTurnTelemetry({
+        ok: true,
+        stage: "speak",
+        engine: resolvedVoice.provider.id,
+        voice: calls.voiceId,
+        model: calls.voiceModelId,
+        audioBytes: pcm.byteLength,
+        ...timings,
+        ttsMs: Date.now() - startedAt,
+      });
+      return new Response(wav, {
+        headers: {
+          "Content-Type": "audio/wav",
+          "Cache-Control": "no-store, no-transform",
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "cloud TTS failed";
+      await appendVoiceTurnTelemetry({
         ok: false,
-        voiceUnavailable: true,
-        error: `The selected ${resolvedVoice.provider?.name || "cloud TTS"} voice could not be streamed.`,
-      },
-      { status: 503 },
-    );
+        stage: "speak",
+        engine: resolvedVoice.provider.id,
+        voice: calls.voiceId,
+        model: calls.voiceModelId,
+        error: message,
+        ...timings,
+        ttsMs: Date.now() - startedAt,
+      });
+      return NextResponse.json(
+        {
+          ok: false,
+          voiceUnavailable: true,
+          error: `The selected ${resolvedVoice.provider.name || "cloud TTS"} voice is unavailable (${message}).`,
+        },
+        { status: 503 },
+      );
+    }
   }
 
   const apiKey = await transcriptionApiKey();

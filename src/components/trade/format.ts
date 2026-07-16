@@ -7,17 +7,15 @@
    view root, like the original drop-in) because the formatters are called from
    every presentational leaf and a single Trade view is mounted at a time. */
 
-export type FxMeta = { symbol: string; name: string; dp0?: boolean };
+import {
+  availableDisplayCurrencies,
+  DISPLAY_CURRENCY_META,
+  normalizeDisplayCurrency,
+  type DisplayCurrencyMeta,
+} from "@/lib/services/display-currency";
 
-export const FX_META: Record<string, FxMeta> = {
-  USD: { symbol: "$", name: "US Dollar" },
-  EUR: { symbol: "€", name: "Euro" },
-  GBP: { symbol: "£", name: "British Pound" },
-  JPY: { symbol: "¥", name: "Japanese Yen", dp0: true },
-  CHF: { symbol: "Fr", name: "Swiss Franc" },
-  AUD: { symbol: "A$", name: "Australian Dollar" },
-  CAD: { symbol: "C$", name: "Canadian Dollar" },
-};
+export type FxMeta = DisplayCurrencyMeta;
+export const FX_META = DISPLAY_CURRENCY_META;
 
 let CURRENCY = "USD";
 let RATES: Record<string, number> = { USD: 1 };
@@ -25,12 +23,12 @@ let RATES: Record<string, number> = { USD: 1 };
 /** Set the active display currency + real FX rate table (called by the view root). */
 export function setDisplayCurrency(currency: string, rates: Record<string, number>) {
   RATES = rates && rates.USD ? rates : { USD: 1 };
-  CURRENCY = FX_META[currency] && Number(RATES[currency]) > 0 ? currency : "USD";
+  CURRENCY = normalizeDisplayCurrency(currency, RATES);
 }
 
 /** Currencies actually available right now: USD plus any with a live rate. */
 export function availableCurrencies(rates: Record<string, number>): string[] {
-  return Object.keys(FX_META).filter((c) => c === "USD" || Number(rates?.[c]) > 0);
+  return availableDisplayCurrencies(rates);
 }
 
 function meta(): FxMeta { return FX_META[CURRENCY] ?? FX_META.USD; }

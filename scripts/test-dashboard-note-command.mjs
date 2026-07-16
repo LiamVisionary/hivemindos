@@ -36,6 +36,50 @@ try {
   assert.match(markdown, /^# Remember the milk/m);
   assert.match(markdown, /And the coffee\./);
 
+  const shortcutNote = await captureObsidianNote({
+    vaultPath: vault,
+    inboxFolder: "Intake",
+    content: "A voice-originated idea",
+    source: "iphone-shortcut",
+    tags: ["hivemindos-note", "voice-input"],
+    idempotencyKey: "shortcut-voice-123",
+    now: new Date("2026-07-06T10:12:13.456Z"),
+  });
+  assert.equal(
+    shortcutNote.notePath,
+    "Intake/2026-07-06/2026-07-06-101213-shortcut-voice-123.md",
+  );
+  assert.equal(shortcutNote.created, true);
+  const shortcutMarkdown = await readFile(join(vault, shortcutNote.notePath), "utf8");
+  assert.match(shortcutMarkdown, /source: "iphone-shortcut"/);
+  assert.match(shortcutMarkdown, /capture_id: "shortcut-voice-123"/);
+  assert.match(shortcutMarkdown, /tags: \["hivemindos-note", "voice-input"\]/);
+
+  const replay = await captureObsidianNote({
+    vaultPath: vault,
+    inboxFolder: "Intake",
+    content: "A voice-originated idea",
+    source: "iphone-shortcut",
+    tags: ["hivemindos-note", "voice-input"],
+    idempotencyKey: "shortcut-voice-123",
+    now: new Date("2026-07-06T10:12:13.456Z"),
+  });
+  assert.equal(replay.notePath, shortcutNote.notePath);
+  assert.equal(replay.created, false);
+
+  await assert.rejects(
+    captureObsidianNote({
+      vaultPath: vault,
+      inboxFolder: "Intake",
+      content: "Different content must not overwrite the first capture",
+      source: "iphone-shortcut",
+      tags: ["hivemindos-note", "voice-input"],
+      idempotencyKey: "shortcut-voice-123",
+      now: new Date("2026-07-06T10:12:13.456Z"),
+    }),
+    /already belongs to another capture/i,
+  );
+
   await assert.rejects(
     captureObsidianNote({
       vaultPath: vault,
@@ -43,6 +87,16 @@ try {
       content: "bad path",
     }),
     /relative path inside the shared vault/,
+  );
+
+  await assert.rejects(
+    captureObsidianNote({
+      vaultPath: vault,
+      inboxFolder: "Intake",
+      content: "bad id",
+      idempotencyKey: "../escape",
+    }),
+    /idempotency key/i,
   );
 
   let capturedRequest = null;

@@ -4,9 +4,18 @@
    selector consume this, so there is exactly one place that decides how a seed's
    per-chain records collapse into one wallet, how it's named, and which chains it
    spans. Pure functions only (no React/DOM) so server routes can reuse the
-   helpers too. */
+   helpers too. This module is intentionally import-free so the hermetic wallet
+   test suites can load it under bare `node` type-stripping (no alias loader). */
 
 export type PersonalChainKey = "base" | "solana" | "robinhood" | "other";
+
+export type PersonalWalletTransferAsset = {
+  symbol: string;
+  balance: number;
+  priceUsd?: number;
+  isNative?: boolean;
+  tokenAddress?: string;
+};
 
 export type PersonalWalletAccount = {
   /** Executable per-chain record id (e.g. "user:abc:eip155-8453"). The backend
@@ -20,6 +29,7 @@ export type PersonalWalletAccount = {
   address: string;
   custodyMode: "local" | "watch";
   currentBalanceUsd: number;
+  assets: PersonalWalletTransferAsset[];
 };
 
 export type GroupedPersonalWallet = {
@@ -40,6 +50,30 @@ export type GroupedPersonalWallet = {
   /** Per-chain executable accounts for this wallet (Base, Solana, …). */
   accounts: PersonalWalletAccount[];
 };
+
+export type PersonalWalletTransferTarget = {
+  key: string;
+  wallet: GroupedPersonalWallet;
+  account: PersonalWalletAccount;
+};
+
+export function personalWalletSpendAccountForAsset(wallet: GroupedPersonalWallet | null | undefined, asset: string): PersonalWalletAccount | null {
+  const accounts = Array.isArray(wallet?.accounts) ? wallet.accounts : [];
+  const localAccounts = accounts.filter((account) => account.custodyMode === "local"
+    && account.assets.some((candidate) => candidate.symbol === asset && candidate.balance > 0));
+  return localAccounts.find((account) => account.id === wallet?.spendId) ?? localAccounts[0] ?? null;
+}
+
+export function personalWalletTransferTargets(source: GroupedPersonalWallet | null | undefined, asset: string, wallets: GroupedPersonalWallet[]) {
+  const sourceAccount = personalWalletSpendAccountForAsset(source, asset);
+  if (!sourceAccount) return { sourceAccount: null, targets: [] as PersonalWalletTransferTarget[] };
+  const sourceAddress = sourceAccount.address.toLowerCase();
+  const targets = wallets.flatMap((wallet) => wallet.accounts
+    .filter((account) => account.network === sourceAccount.network)
+    .filter((account) => account.address.toLowerCase() !== sourceAddress)
+    .map((account) => ({ key: `${wallet.id}:${account.id}`, wallet, account })));
+  return { sourceAccount, targets };
+}
 
 export const RECOVERY_PHRASE_PERSONAL_WALLET_SUFFIX = /:(?:eip155-\d+|solana-[a-z0-9-]+)$/i;
 const RECOVERY_PHRASE_ACCOUNT_SUFFIX = /:account-(\d+)$/i;
@@ -105,6 +139,40 @@ export function chainLabelForNetwork(network: string): string {
   return value;
 }
 
+/** Block-explorer name for a CAIP network — used to label a "View on <name>"
+ *  link so the affordance names where it goes rather than a bare glyph. */
+export function txExplorerName(network: string): string {
+  const lower = String(network || "").trim().toLowerCase();
+  if (lower.startsWith("solana")) return "Solscan";
+  if (lower === "eip155:4663" || lower === "eip155:46630") return "Blockscout";
+  return "Basescan";
+}
+
+/** Absolute block-explorer transaction URL for a `{network, hash}` pair, or ""
+ *  when the network or hash is unknown so callers can conditionally render the
+ *  link. Base/Base-Sepolia → Basescan, Robinhood → its Blockscout (single-sourced
+ *  from ROBINHOOD_CHAIN config), Solana → Solscan (devnet gets the cluster param).
+ *  Kept beside the chain-label helpers so there is one place that maps a CAIP
+ *  network to its explorer. */
+export function txExplorerUrl(network: string, hash: string): string {
+  const tx = String(hash || "").trim();
+  if (!tx) return "";
+  const lower = String(network || "").trim().toLowerCase();
+  if (lower.startsWith("solana")) {
+    const cluster = lower.includes("devnet") ? "?cluster=devnet" : lower.includes("testnet") ? "?cluster=testnet" : "";
+    return `https://solscan.io/tx/${tx}${cluster}`;
+  }
+  if (lower === "eip155:4663" || lower === "eip155:46630") {
+    // Mirrors ROBINHOOD_CHAIN.explorerUrl (src/lib/config/robinhood-chain.ts).
+    // Inlined so this module stays import-free for the bare-node wallet tests.
+    return `https://robinhoodchain.blockscout.com/tx/${tx}`;
+  }
+  if (lower === "eip155:84532") return `https://sepolia.basescan.org/tx/${tx}`;
+  // Base mainnet and any unlabeled EVM default to Basescan — every send in this
+  // app settles on Base unless an explicit non-Base network says otherwise.
+  return `https://basescan.org/tx/${tx}`;
+}
+
 export function isRecoveryPhrasePersonalWallet(wallet: any): boolean {
   const id = String(wallet?.id || wallet?.agentId || "");
   return wallet?.importedFrom === "recovery-phrase" || RECOVERY_PHRASE_PERSONAL_WALLET_SUFFIX.test(id);
@@ -143,6 +211,12 @@ export function nativeSymbolForWallet(network: string): string {
   return network.includes("solana") ? "SOL" : "ETH";
 }
 
+export function personalWalletOptionalNumber(value: unknown): number | undefined {
+  if (value == null || (typeof value === "string" && !value.trim())) return undefined;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
+}
+
 export function personalWalletHoldings(wallet: any): Array<[string, number]> {
   const tokens = Array.isArray(wallet?.tokens) ? wallet.tokens : [];
   const rows = tokens
@@ -152,6 +226,30 @@ export function personalWalletHoldings(wallet: any): Array<[string, number]> {
   if (Number(wallet?.nativeBalance) > 0) return [[nativeSymbolForWallet(String(wallet?.network || "")), Number(wallet.nativeBalance)]];
   if (Number(wallet?.currentBalanceUsd) > 0) return [["USDC", Number(wallet.currentBalanceUsd)]];
   return [];
+}
+
+export function personalWalletTransferAssets(wallet: any): PersonalWalletTransferAsset[] {
+  return (Array.isArray(wallet?.tokens) ? wallet.tokens : [])
+    .map((token: any): PersonalWalletTransferAsset | null => {
+      const symbol = String(token?.symbol || "").trim().toUpperCase();
+      const balance = Number(token?.balance ?? 0) || 0;
+      if (!symbol || balance <= 0) return null;
+      const explicitPrice = personalWalletOptionalNumber(token?.priceUsd);
+      const valueUsd = personalWalletOptionalNumber(token?.valueUsd);
+      const priceUsd = explicitPrice != null && explicitPrice > 0
+        ? explicitPrice
+        : valueUsd != null && valueUsd > 0
+          ? valueUsd / balance
+          : undefined;
+      return {
+        symbol,
+        balance,
+        ...(priceUsd == null ? {} : { priceUsd }),
+        ...(token?.isNative === true ? { isNative: true } : {}),
+        ...(String(token?.tokenAddress || "").trim() ? { tokenAddress: String(token.tokenAddress).trim() } : {}),
+      };
+    })
+    .filter((asset: PersonalWalletTransferAsset | null): asset is PersonalWalletTransferAsset => asset !== null);
 }
 
 export function combinePersonalWalletHoldings(wallets: any[]): Array<[string, number]> {
@@ -210,6 +308,7 @@ export function buildGroupedPersonalWallets(wallets: any[] | null): GroupedPerso
         address: String(wallet.address || ""),
         custodyMode: wallet.custodyMode === "local" ? "local" as const : "watch" as const,
         currentBalanceUsd: Number(wallet.currentBalanceUsd) || 0,
+        assets: personalWalletTransferAssets(wallet),
       }))
       .filter((account, accountIndex, rows) => account.id && account.address && rows.findIndex((other) => other.id === account.id) === accountIndex);
     return {

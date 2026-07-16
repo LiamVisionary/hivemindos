@@ -1,8 +1,7 @@
 /* hive-geometry.ts — pure layout math for the hive.
-   The stage is a fixed 1440×980 canvas that FleetHiveView scales to fit. The
+   The stage is a fixed 1012×980 canvas that FleetHiveView scales to fit. The
    Queen sits at (QX, QY); machines ring around her; each machine's agents bud
-   off as a contiguous arc of hex "petals" that tessellate with the machine and
-   with each other.
+   off as a contiguous arc of compact hex nodes around a larger machine anchor.
 
    Ported from the nextjs-drop-in Fleet "Hive" redesign. The machine ring angle
    is computed deterministically from the machine index so the layout works for
@@ -19,24 +18,27 @@ export const HIVE_H = 980;
 export const QX = 506;
 export const QY = 474;
 
-// Machines and agents share ONE cell size so they tessellate seamlessly.
-const CELL_SCALE = 1.3;
-const BASE_CELL = 85;
-const BASE_RING = 238;
-const BASE_ADD_MACHINE_GAP = 122;
-const BASE_CLEARANCE_PAD = 16;
-
-export const CELL = BASE_CELL * CELL_SCALE;
-export const RING = BASE_RING * CELL_SCALE; // machine ring radius
-export const MACHINE_SIZE = CELL;
-export const AGENT_SIZE = CELL;
+// A clear three-level hierarchy keeps the map readable at its default zoom,
+// while the modest size delta lets expanded clusters read as one honeycomb:
+// Queen (150) > machines (120) > agents (104).
+export const AGENT_SIZE = 104;
+export const MACHINE_SIZE = 120;
+export const CELL = AGENT_SIZE;
+export const RING = 290;
 
 const APO = 0.43;
 const QUEEN_SIZE = 150;
-const QUEEN_CLEARANCE = QUEEN_SIZE / 2 + CELL / 2 + BASE_CLEARANCE_PAD * CELL_SCALE;
-const CELL_STEP = 2 * APO * CELL + 1;
-const CELL_COLLISION_PAD = 10;
-const MACHINE_COLLISION_PAD = 18;
+const QUEEN_CLEARANCE = QUEEN_SIZE / 2 + AGENT_SIZE / 2 + 20;
+// Agent-to-agent cells keep a narrow two-pixel authored gutter, while every
+// radial spoke starts farther away from the larger machine anchor. Applying
+// the extra inset radially (rather than increasing CELL_STEP) preserves the
+// compact rhythm between agents on later rings.
+const AGENT_CELL_GUTTER = 2;
+export const MACHINE_AGENT_GUTTER = 10;
+const CELL_STEP = APO * (MACHINE_SIZE + AGENT_SIZE) + AGENT_CELL_GUTTER;
+const MACHINE_AGENT_RADIAL_OFFSET = MACHINE_AGENT_GUTTER - AGENT_CELL_GUTTER;
+const CELL_COLLISION_PAD = 7;
+const MACHINE_COLLISION_PAD = 14;
 const SLOT_SEARCH_EXTRA_CELLS = 96;
 
 export interface Pt {
@@ -48,7 +50,6 @@ export interface MachineLayout {
   pos: Pt;
   ang: number;
   agents: { agent: HiveAgent; pos: Pt }[];
-  addPos: Pt;
 }
 
 export interface HiveLayoutRect {
@@ -106,17 +107,20 @@ function frSpiralCandidates(count: number): Array<[number, number]> {
 
 function frSlotPoint(mx: number, my: number, [q, r]: [number, number]): Pt {
   const offset = axialToPixelWithStep(q, r, CELL_STEP);
-  return { x: mx + offset.x, y: my + offset.y };
+  const distance = Math.hypot(offset.x, offset.y);
+  if (distance === 0) return { x: mx, y: my };
+  const radialScale = (distance + MACHINE_AGENT_RADIAL_OFFSET) / distance;
+  return { x: mx + offset.x * radialScale, y: my + offset.y * radialScale };
 }
 
 function frSlotClears(pos: Pt, obstacles: HiveLayoutRect[]): boolean {
   if (!frClearsQueen(pos)) return false;
-  const rect = frCellRect(pos);
+  const rect = frCellRect(pos, AGENT_SIZE);
   return obstacles.every((obstacle) => !frRectsOverlap(rect, obstacle, CELL_COLLISION_PAD));
 }
 
-function frCellRect(pos: Pt, pad = CELL_COLLISION_PAD): HiveLayoutRect {
-  const half = CELL / 2 + pad;
+function frCellRect(pos: Pt, size: number, pad = CELL_COLLISION_PAD): HiveLayoutRect {
+  const half = size / 2 + pad;
   return {
     minX: pos.x - half,
     minY: pos.y - half,
@@ -134,72 +138,19 @@ function frRectsOverlap(left: HiveLayoutRect, right: HiveLayoutRect, gap = 0) {
   );
 }
 
-/** Where the dashed "onboard a new machine" cell sits: just outside the ring,
- *  in an angular gap between machines. Without a layout it takes the widest gap
- *  (biased toward straight-down for the familiar feel). With the layout, every
- *  gap competes and the winner is the clear spot needing the LEAST outward
- *  escape from the ring — so a dense cluster crowding one gap sends the cell to
- *  a genuinely free gap instead of pushing it ever further off-canvas. */
-export function frAddMachinePos(machines: HiveMachine[], layout?: Record<string, MachineLayout>): Pt {
-  const total = machines.length;
-  const radius = RING + BASE_ADD_MACHINE_GAP * CELL_SCALE; // just beyond the agent petals
-  if (total === 0) return frPolar(QX, QY, radius, 90); // straight down when empty
-  const angs = machines
-    .map((_, i) => ((frMachineAngle(i, total) % 360) + 360) % 360)
-    .sort((a, b) => a - b);
-  const gaps: { mid: number; size: number; downness: number }[] = [];
-  for (let i = 0; i < angs.length; i++) {
-    const a = angs[i];
-    const b = i + 1 < angs.length ? angs[i + 1] : angs[0] + 360;
-    const size = b - a;
-    const mid = ((a + b) / 2) % 360;
-    const diff = Math.abs(mid - 90) % 360;
-    const downness = Math.min(diff, 360 - diff); // angular distance to straight-down
-    gaps.push({ mid, size, downness });
-  }
-  // Prefer the widest gap; break ties toward the bottom of the ring.
-  const widerOrLower = (gap: { size: number; downness: number }, than: { size: number; downness: number }) =>
-    gap.size > than.size + 0.5 || (Math.abs(gap.size - than.size) <= 0.5 && gap.downness < than.downness);
-  const widest = gaps.reduce((best, gap) => (widerOrLower(gap, best) ? gap : best));
-  if (!layout) return frPolar(QX, QY, radius, widest.mid);
-
-  const obstacles: HiveLayoutRect[] = [];
-  for (const m of machines) {
-    const L = layout[m.id];
-    if (!L) continue;
-    obstacles.push(frCellRect(L.pos, MACHINE_COLLISION_PAD), frCellRect(L.addPos));
-    for (const a of L.agents) obstacles.push(frCellRect(a.pos));
-  }
-  let best: { pt: Pt; extra: number; size: number; downness: number } | null = null;
-  for (const gap of gaps) {
-    for (let extra = 0; extra <= CELL_STEP * 8; extra += CELL_STEP / 4) {
-      const pt = frPolar(QX, QY, radius + extra, gap.mid);
-      if (!frSlotClears(pt, obstacles)) continue;
-      if (!best || extra < best.extra - 0.5 || (Math.abs(extra - best.extra) <= 0.5 && widerOrLower(gap, best))) {
-        best = { pt, extra, size: gap.size, downness: gap.downness };
-      }
-      break; // this gap's nearest clear spot found; try the next gap
-    }
-  }
-  return best ? best.pt : frPolar(QX, QY, radius, widest.mid);
-}
-
 /** Where the phone placeholder sits before any real mobile Tailnet peer exists.
- *  It uses the same gap/collision search as the add-machine affordance, while
- *  avoiding that affordance too, so it never stacks on top of real hive cells. */
+ *  It searches the machine gaps and clears every possible expanded cluster. */
 export function frPhonePlaceholderPos(machines: HiveMachine[], layout?: Record<string, MachineLayout>): Pt {
-  const radius = RING + BASE_ADD_MACHINE_GAP * CELL_SCALE;
+  const radius = RING + 146;
   const preferredAngle = 150;
   const obstacles: HiveLayoutRect[] = [];
   if (layout) {
     for (const m of machines) {
       const L = layout[m.id];
       if (!L) continue;
-      obstacles.push(frCellRect(L.pos, MACHINE_COLLISION_PAD), frCellRect(L.addPos));
-      for (const a of L.agents) obstacles.push(frCellRect(a.pos));
+      obstacles.push(frCellRect(L.pos, MACHINE_SIZE, MACHINE_COLLISION_PAD));
+      for (const a of L.agents) obstacles.push(frCellRect(a.pos, AGENT_SIZE));
     }
-    const addMachine = frAddMachinePos(machines, layout);
-    obstacles.push(frCellRect(addMachine, MACHINE_COLLISION_PAD));
   }
 
   const gaps = frMachineGaps(machines.length, preferredAngle);
@@ -238,7 +189,7 @@ function frMachineGaps(total: number, preferredAngle: number) {
   return gaps;
 }
 
-/** Build a layout map: machine id -> { pos, ang, agents, addPos }. */
+/** Build a layout map: machine id -> { pos, ang, agents }. */
 export function frBuildLayout(machines: HiveMachine[]): Record<string, MachineLayout> {
   const map: Record<string, MachineLayout> = {};
   const total = machines.length;
@@ -251,71 +202,19 @@ export function frBuildLayout(machines: HiveMachine[]): Record<string, MachineLa
   machinePlacements.forEach(({ machine: m, pos, ang }) => {
     const otherMachineRects = machinePlacements
       .filter((placement) => placement.machine.id !== m.id)
-      .map((placement) => frCellRect(placement.pos, MACHINE_COLLISION_PAD));
-    // Compute one extra classic honeycomb slot for the dashed "add agent" cell.
-    const slots = frAgentSlots(pos.x, pos.y, m.agents.length + 1, [...otherMachineRects, ...placedRects]);
+      .map((placement) => frCellRect(placement.pos, MACHINE_SIZE, MACHINE_COLLISION_PAD));
+    const slots = frAgentSlots(pos.x, pos.y, m.agents.length, [...otherMachineRects, ...placedRects]);
     map[m.id] = {
       pos,
       ang,
       agents: m.agents.map((a, i) => ({ agent: a, pos: slots[i] })),
-      addPos: slots[m.agents.length] || slots[slots.length - 1] || pos,
     };
     placedRects.push(
-      frCellRect(pos, MACHINE_COLLISION_PAD),
-      ...slots.map((slot) => frCellRect(slot)),
+      frCellRect(pos, MACHINE_SIZE, MACHINE_COLLISION_PAD),
+      ...slots.map((slot) => frCellRect(slot, AGENT_SIZE)),
     );
   });
   return map;
-}
-
-/** Tight bounding box of everything actually drawn (queen, machines, agents,
- *  add-cells) with a little padding. Scaling THIS box — rather than the fixed
- *  canvas — makes the hive fill its area with no empty bands above/below. */
-export function frContentBounds(
-  machines: HiveMachine[],
-  layout: Record<string, MachineLayout>,
-  options: { includePhonePlaceholder?: boolean } = {},
-): { cx: number; cy: number; w: number; h: number } {
-  let minX = QX, maxX = QX, minY = QY, maxY = QY;
-  const acc = (x: number, y: number, half: number) => {
-    minX = Math.min(minX, x - half); maxX = Math.max(maxX, x + half);
-    minY = Math.min(minY, y - half); maxY = Math.max(maxY, y + half);
-  };
-  acc(QX, QY, 84); // queen cell (150) + label below
-  if (options.includePhonePlaceholder) {
-    const phone = frPhonePlaceholderPos(machines, layout);
-    acc(phone.x, phone.y, CELL / 2 + 16);
-  }
-  for (const m of machines) {
-    const L = layout[m.id];
-    if (!L) continue;
-    acc(L.pos.x, L.pos.y, CELL / 2 + 18); // machine cell + name
-    if (L.addPos) acc(L.addPos.x, L.addPos.y, CELL / 2);
-    for (const a of L.agents) acc(a.pos.x, a.pos.y, CELL / 2 + 14); // agent cell + edge name
-  }
-  const addMachine = frAddMachinePos(machines, layout); // the "onboard a machine" cell
-  acc(addMachine.x, addMachine.y, CELL / 2);
-  const pad = 16;
-  return {
-    cx: (minX + maxX) / 2,
-    cy: (minY + maxY) / 2,
-    w: Math.max(1, maxX - minX) + pad * 2,
-    h: Math.max(1, maxY - minY) + pad * 2,
-  };
-}
-
-// ---- agent name, split into balanced halves for the lower hex edges --------
-export function frAgentNameSegments(name: string): string[] {
-  const words = name
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .split(/[^a-zA-Z0-9α-ωΑ-Ω]+/)
-    .filter(Boolean);
-  if (words.length <= 2) return words;
-  // 3+ words → two balanced lines
-  const a = [words.slice(0, 1).join(" "), words.slice(1).join(" ")];
-  const b = [words.slice(0, 2).join(" "), words.slice(2).join(" ")];
-  const score = (p: string[]) => Math.abs(p[0].length - p[1].length);
-  return score(b) < score(a) ? b : a;
 }
 
 /** Hex clip-path shared by every cell. */

@@ -33,17 +33,25 @@ are suited to landing pages, portfolios, documentation, dashboards with
 client-side data, and generated exports. Dynamic Apps can run server-side
 request logic with isolated, Site-scoped capabilities.
 
-## Preview Apps From Chat
+## Build Directly From Chat
 
-The Preview button follows the app built in that conversation. For older chats,
-HivemindOS can safely adopt a static HTML app or Next.js project when the agent
-reported a directory inside the selected Chat workspace. It then starts a
-durable, loopback-only runtime and opens that exact project through the linked
-machine proxy.
+When a Chat request asks for a new app, website, dashboard, game, or clone,
+the capability plan includes the built-in App workspace. Approving it creates
+one durable project before the agent starts coding and assigns that exact
+directory to the run. The project identity stays on the conversation across
+restarts, so later messages continue in the same source folder.
 
-Simple HTML, CSS, JavaScript, canvas, and game projects run with the bundled
-static preview server and do not need package installation. Framework projects
-continue to use their project-owned Next.js runtime.
+The Preview button resolves that conversation's project, installs dependencies
+when the selected template needs them, starts its loopback-only runtime, and
+opens the exact matching preview through the linked machine proxy. It does not
+depend on a temporary port mentioned in the assistant's prose or choose an
+unrelated app that happens to be running on the same machine.
+
+Simple HTML, CSS, JavaScript, canvas, and game requests use the reviewed static
+starter and need no package installation. Framework and full-stack requests
+use the reviewed Next.js starter. Older chat results that already contain an
+HTML app can be adopted without overwriting their files when the assistant
+reported a project directory inside the selected Chat workspace.
 
 If the linked machine is missing the required App Builder protocol, Preview
 updates its HivemindOS collector, waits for the new collector to report ready,

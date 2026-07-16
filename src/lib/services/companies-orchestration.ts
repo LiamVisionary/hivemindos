@@ -140,6 +140,7 @@ export function companyWorkerContext(company: Company, memoryDigest: string, sal
     "",
     "---",
     `Company: ${company.name}${company.sector ? ` (${company.sector})` : ""}`,
+    `Company id: ${company.id}`,
     apex?.title?.trim() ? `Apex goal: ${apex.title.trim()}` : "",
     metricLine,
     mission ? `Charter: ${mission}` : "",
@@ -180,6 +181,28 @@ export function companyWorkerContext(company: Company, memoryDigest: string, sal
       } else {
         lines.push(`- Before ${policy.subject}, ask the human first: park the work in Needs You by ending your result with ACTION NEEDED:, include the concrete preview/draft/link/options they must approve, and wait for the human's answer before proceeding.`);
       }
+    }
+  }
+  const integrationLimits = company.integrationLimits ?? [];
+  const apiBudgets = company.apiBudgets ?? [];
+  if (integrationLimits.length || apiBudgets.length) {
+    lines.push(
+      "",
+      "API and integration limits — mandatory preflight:",
+      "Before every external API/integration call for this company, call company_api_preflight with this company id, the connector providerKey/operationId, request count, a conservative USD estimate, and a stable idempotency key. If it blocks, do not call the provider.",
+    );
+    for (const limit of integrationLimits) {
+      const caps = [
+        limit.dailyRequestLimit ? `${limit.dailyRequestLimit} requests/day` : null,
+        limit.monthlyRequestLimit ? `${limit.monthlyRequestLimit} requests/month` : null,
+        limit.dailySpendLimitUsd ? `$${limit.dailySpendLimitUsd}/day` : null,
+        limit.monthlySpendLimitUsd ? `$${limit.monthlySpendLimitUsd}/month` : null,
+      ].filter(Boolean).join(", ");
+      lines.push(`- ${limit.providerKey}:${limit.operationId || "all operations"} — ${caps}`);
+    }
+    for (const budget of apiBudgets) {
+      const caps = budget.dailyCaps.map((cap) => `${cap.metric} ${cap.value}/${cap.unit}`).join(", ");
+      lines.push(`- google-cloud:${budget.service} in ${budget.projectId || budget.projectNumber} — provider daily quotas ${caps || "none"}; $${budget.monthlyCeilingUsd}/month billing alert`);
     }
   }
   const directives = company.directives ?? [];
@@ -381,6 +404,7 @@ function buildCompanyLearningLoop(company: Company, draft: QueenBeePrdTaskDraft,
     metricTarget: company.apexGoal?.target?.trim(),
     strategicGoal: company.apexGoal?.title?.trim() || company.name,
     branchAgent: draft.skills?.[0],
+    skills: draft.skills,
     governanceLabel: "company governance",
   });
 }

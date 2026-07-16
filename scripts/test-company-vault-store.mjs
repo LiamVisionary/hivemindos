@@ -50,8 +50,11 @@ const {
   getCompany,
   markCompanyDispatched,
   readCompanies,
+  removeCompanyIntegrationLimit,
   setCompanyAgents,
   setCompanyApprovalPolicy,
+  setCompanyApiBudget,
+  setCompanyIntegrationLimit,
   setCompanyProducts,
   updateCompanyMetric,
   upsertCompany,
@@ -359,6 +362,51 @@ try {
   const dispatched = (board.tasks ?? []).find((task) => task.title === "Template refresh");
   assert.ok(dispatched, "queen-bee dispatch creates the task");
   assert.equal(dispatched.projectId, "maps-agency-1234", "task carries the company's projectId");
+
+  // ── API/integration limits: dedicated writes compose and generic saves preserve them ──
+  const guarded = await upsertCompany({ name: "Guarded API Co", sector: "Research" });
+  const withCloudBudget = await setCompanyApiBudget(guarded.id, {
+    provider: "gcp",
+    service: "places.googleapis.com",
+    projectId: "guarded-project",
+    projectNumber: "123456789",
+    billingAccount: "billingAccounts/ABCDEF-123456-ABCDEF",
+    monthlyCeilingUsd: 50,
+    dailyCaps: [{ metric: "places.googleapis.com/requests", value: 30, unit: "1/d/{project}" }],
+  });
+  assert.equal(withCloudBudget.apiBudgets.length, 1, "a provider-side cloud budget persists");
+  const withSecondProjectBudget = await setCompanyApiBudget(guarded.id, {
+    provider: "gcp",
+    service: "places.googleapis.com",
+    projectId: "guarded-project-two",
+    projectNumber: "987654321",
+    billingAccount: "billingAccounts/ABCDEF-123456-ABCDEF",
+    monthlyCeilingUsd: 25,
+    dailyCaps: [{ metric: "places.googleapis.com/requests", value: 10, unit: "1/d/{project}" }],
+  });
+  assert.equal(withSecondProjectBudget.apiBudgets.length, 2, "the same API can be guarded independently in two projects");
+  const withLimit = await setCompanyIntegrationLimit(guarded.id, {
+    providerKey: "google-cloud",
+    operationId: "places-text-search",
+    dailyRequestLimit: 20,
+    monthlySpendLimitUsd: 25,
+  });
+  assert.equal(withLimit.integrationLimits.length, 1, "a local integration guardrail persists");
+
+  const renamedGuarded = await upsertCompany({ id: guarded.id, name: "Guarded API Company" });
+  assert.equal(renamedGuarded.apiBudgets.length, 2, "a generic company save preserves provider-side API budgets");
+  assert.equal(renamedGuarded.integrationLimits.length, 1, "a generic company save preserves integration guardrails");
+  const guardedContext = companyWorkerContext(renamedGuarded, "");
+  assert.match(guardedContext, /Company id: /, "company workers receive the id required by preflight");
+  assert.match(guardedContext, /company_api_preflight/, "company workers are required to reserve integration usage");
+  assert.match(guardedContext, /google-cloud:places\.googleapis\.com in guarded-project-two/, "provider-side budgets reach worker context");
+
+  const withoutLimit = await removeCompanyIntegrationLimit(
+    guarded.id,
+    withLimit.integrationLimits[0].id,
+  );
+  assert.equal(withoutLimit.integrationLimits.length, 0, "removing one guardrail leaves no stale row");
+  assert.equal(withoutLimit.apiBudgets.length, 2, "removing a local guardrail does not remove GCP budgets");
 
   // ── products: catalog persists in the replicated definitions + reaches agents ──
   const shop = await upsertCompany({ name: "Catalog Co", sector: "Web Development" });

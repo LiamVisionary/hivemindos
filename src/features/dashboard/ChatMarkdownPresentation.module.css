@@ -1,0 +1,83 @@
+.root .heading {
+  margin: 1.15rem 0 0.12rem;
+  color: var(--fg, var(--foreground));
+  font-family: var(--f-body);
+  font-size: 1.04rem;
+  font-weight: 600;
+  line-height: 1.32;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+.root .heading[data-level="1"] {
+  margin-top: 1.35rem;
+  border-bottom: 1px solid var(--line, rgba(148, 163, 184, 0.16));
+  padding-bottom: 0.42rem;
+  font-size: 1.16rem;
+  letter-spacing: -0.025em;
+}
+
+.root .heading[data-level="3"] {
+  color: var(--fg-2, var(--foreground));
+  font-size: 0.96rem;
+}
+
+.root .heading:first-child {
+  margin-top: 0.12rem;
+}
+
+.root .list {
+  display: grid;
+  gap: 0.5rem;
+  overflow: visible;
+  margin: 0.22rem 0 0.48rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  list-style: none;
+}
+
+.root .nestedList {
+  margin: -0.1rem 0 0.35rem 1.35rem;
+}
+
+.root .listItem {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 0.72rem minmax(0, 1fr);
+  align-items: start;
+  gap: 0.62rem;
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+  line-height: 1.62;
+}
+
+.root .listItem::marker {
+  color: var(--honey, currentColor);
+}
+
+.root .orderedList .listItem {
+  grid-template-columns: 2rem minmax(0, 1fr);
+}
+
+.root .bulletMarker {
+  width: 0.3rem;
+  height: 0.3rem;
+  margin: 0.68em 0 0 0.16rem;
+  border-radius: 999px;
+  background: var(--honey, currentColor);
+  box-shadow: none;
+}
+
+.root .orderedMarker {
+  color: var(--honey-2, var(--honey, currentColor));
+  font-family: var(--f-mono);
+  font-size: 0.78em;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  line-height: 2.05;
+  white-space: nowrap;
+}

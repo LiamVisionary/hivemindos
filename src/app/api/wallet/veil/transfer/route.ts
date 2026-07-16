@@ -30,6 +30,7 @@ const ETH_DECIMAL = /^\d+(?:\.\d{1,18})?$/;
 
 type VeilTransferBody = {
   agentId?: string;
+  /** Legacy client policy hints. Authorization uses the persisted wallet record. */
   enabled?: boolean;
   provider?: string;
   network?: string;
@@ -38,6 +39,7 @@ type VeilTransferBody = {
   recipientAddress?: string;
   amount?: number | string;
   amountUsd?: number | string;
+  /** Legacy client cap hints. The server never lets these override persisted caps. */
   maxPaymentUsd?: number | string;
   maxAssetAmount?: number | string;
   confirmation?: string;
@@ -57,16 +59,17 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({})) as VeilTransferBody;
     const agentId = body.agentId?.trim();
-    const persisted = agentId ? await loadGovernanceWallet(agentId).catch(() => null) : null;
-    const governance = persisted
-      ? await resolveSpendGovernance(agentId!, { companyTaskId: body.companyTaskId })
-      : null;
+    if (!agentId) return sendError("agentId is required for Veil private transfers.");
+    const persisted = await loadGovernanceWallet(agentId).catch(() => null);
+    if (!persisted) return sendError("No saved wallet policy exists for this agent.", 404);
+    const governance = await resolveSpendGovernance(agentId, { companyTaskId: body.companyTaskId })
+      ?? { wallet: persisted.wallet, agentName: persisted.agentName };
     // Personal (`user:`) wallets never auto-spend: explicit confirmation is always
     // required for a private transfer, regardless of any persisted policy.
-    const isPersonalWallet = Boolean(body.agentId?.trim().startsWith("user:"));
+    const isPersonalWallet = agentId.startsWith("user:");
     const validation = validateTransferBody(body, {
-      autoSendAllowed: !isPersonalWallet && canAutoSendVeilTransfer(persisted?.wallet),
-      wallet: persisted?.wallet,
+      autoSendAllowed: !isPersonalWallet && canAutoSendVeilTransfer(persisted.wallet),
+      wallet: persisted.wallet,
     });
     if (validation) return validation;
 
@@ -81,52 +84,47 @@ export async function POST(request: NextRequest) {
     // their company freeze and cumulative budgets.
     // USDC is 1:1 USD; ETH uses the caller-supplied USD value when available.
     const usdValue = asset === "USDC" ? Number(amount) : Number(body.amountUsd ?? 0);
-    let grantId: string | undefined;
-    let companyId: string | undefined;
-    if (governance) {
-      const decision = await evaluateSpend({
-        wallet: governance.wallet,
-        agentName: governance.agentName,
-        kind: "veil-transfer",
-        asset,
-        amountUsd: usdValue,
-        assetAmount: Number(amount),
-        target: recipient,
-        approvalToken: body.approvalToken,
-        companyId: governance.companyId,
-        explanation: {
-          summary: "This is a private transfer through Veil. The app paused before submitting it.",
-          whyNow: "The transfer crossed a wallet governance rule and needs a human decision before execution.",
-          impact: `Approving lets the agent send ${amount} ${asset} to the private recipient. Rejecting keeps the transfer blocked.`,
-          requestedAction: "Approve only if the recipient, asset, and amount are expected. Reject if the agent should revise the transfer.",
-          evidence: [
-            `Recipient: ${recipient}`,
-            `Asset: ${asset}`,
-            `Amount: ${amount}`,
-          ],
-          missingContext: [],
-          source: "Veil private transfer",
-        },
-      });
-      if (decision.decision === "block") {
-        return NextResponse.json({ ok: false, status: "blocked", error: decision.reason }, { status: 403 });
-      }
-      if (decision.decision === "approve") {
-        return NextResponse.json(
-          { ok: false, status: "pending_approval", error: decision.reason, approval: decision.approval },
-          { status: 202 },
-        );
-      }
-      grantId = decision.grant?.id;
-      companyId = decision.companyId;
+    const decision = await evaluateSpend({
+      wallet: governance.wallet,
+      agentName: governance.agentName,
+      kind: "veil-transfer",
+      asset,
+      amountUsd: usdValue,
+      assetAmount: Number(amount),
+      target: recipient,
+      approvalToken: body.approvalToken,
+      companyId: governance.companyId,
+      explanation: {
+        summary: "This is a private transfer through Veil. The app paused before submitting it.",
+        whyNow: "The transfer crossed a wallet governance rule and needs a human decision before execution.",
+        impact: `Approving lets the agent send ${amount} ${asset} to the private recipient. Rejecting keeps the transfer blocked.`,
+        requestedAction: "Approve only if the recipient, asset, and amount are expected. Reject if the agent should revise the transfer.",
+        evidence: [
+          `Recipient: ${recipient}`,
+          `Asset: ${asset}`,
+          `Amount: ${amount}`,
+        ],
+        missingContext: [],
+        source: "Veil private transfer",
+      },
+    });
+    if (decision.decision === "block") {
+      return NextResponse.json({ ok: false, status: "blocked", error: decision.reason }, { status: 403 });
     }
+    if (decision.decision === "approve") {
+      return NextResponse.json(
+        { ok: false, status: "pending_approval", error: decision.reason, approval: decision.approval },
+        { status: 202 },
+      );
+    }
+    const grantId = decision.grant?.id;
+    const companyId = decision.companyId;
 
     let feeWallet: Awaited<ReturnType<typeof getWalletSecret>> | null = null;
     if (usdValue > 0) {
-      const feeNetwork = persisted?.wallet.network ?? VEIL_CASH_NETWORK;
+      const feeNetwork = persisted.wallet.network;
       const feeQuote = await quoteTradingPlatformFee({ source: "veil-transfer", network: feeNetwork, amountUsd: usdValue });
       if (feeQuote.enabled) {
-        if (!agentId) return sendError("agentId is required to collect the HivemindOS platform fee for private transfers.");
         feeWallet = await getWalletSecret(agentId);
         if (!feeWallet) return sendError("No local wallet exists for this agent, so the HivemindOS platform fee cannot be collected.", 424);
         await assertTradingPlatformFeeReady({ source: "veil-transfer", network: feeWallet.info.network, amountUsd: usdValue });
@@ -143,22 +141,20 @@ export async function POST(request: NextRequest) {
       duplicateGuardEnabled: body.duplicateGuardEnabled !== false,
       duplicateGuardSeconds: normalizeGuardSeconds(body.duplicateGuardSeconds),
     });
-    if (governance) {
-      await appendSpend({
-        agentId: body.agentId!.trim(),
-        companyId,
-        kind: "veil-transfer",
-        asset,
-        amountUsd: usdValue,
-        assetAmount: Number(amount),
-        target: shortTarget(recipient),
-        status: "executed",
-        approvalId: grantId,
-      }).catch(() => {});
-    }
+    await appendSpend({
+      agentId,
+      companyId,
+      kind: "veil-transfer",
+      asset,
+      amountUsd: usdValue,
+      assetAmount: Number(amount),
+      target: shortTarget(recipient),
+      status: "executed",
+      approvalId: grantId,
+    }).catch(() => {});
     const platformFee = feeWallet && usdValue > 0
       ? await collectTradingPlatformFee({
-        agentId: agentId!,
+        agentId,
         network: feeWallet.info.network,
         secret: feeWallet.secret,
         fromAddress: feeWallet.info.address,
@@ -177,10 +173,11 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function validateTransferBody(body: VeilTransferBody, options: { autoSendAllowed?: boolean; wallet?: AgentWalletConfig } = {}) {
-  if (body.enabled !== true) return sendError("Wallet spending is off for this agent. Enable Spend on before executing private transfers.", 403);
-  if (body.provider !== "veil") return sendError("Set this agent's payment provider to Veil Cash before private transfers.");
-  if (body.network !== VEIL_CASH_NETWORK) return sendError("Veil Cash transfers are only supported on Base mainnet.");
+function validateTransferBody(body: VeilTransferBody, options: { autoSendAllowed?: boolean; wallet: AgentWalletConfig }) {
+  const wallet = options.wallet;
+  if (wallet.enabled !== true) return sendError("Wallet spending is off for this agent. Enable Spend on before executing private transfers.", 403);
+  if (wallet.provider !== "veil") return sendError("Set this agent's payment provider to Veil Cash before private transfers.");
+  if (wallet.network !== VEIL_CASH_NETWORK) return sendError("Veil Cash transfers are only supported on Base mainnet.");
   const asset = normalizeAsset(body.asset);
   if (!asset || !VEIL_CASH_TRANSFER_ASSETS.includes(asset)) return sendError("Veil private transfers currently support ETH or USDC.");
   if (!options.autoSendAllowed && !isTransferConfirmed(body.confirmation)) return sendError(`Type ${VEIL_CASH_TRANSFER_CONFIRMATION_LABEL} to confirm this private transfer, or enable Veil auto-send for this wallet.`);
@@ -196,13 +193,7 @@ function validateTransferBody(body: VeilTransferBody, options: { autoSendAllowed
       : "Amount must be a positive USDC value with up to 6 decimals.");
   }
 
-  // Resolve the per-asset cap. The crypto-router's prepared body omits the cap
-  // for an asset the wallet has no explicit assetSpendCap for (e.g. a USDC
-  // transfer from a wallet that only set an ETH cap), so fall back to the
-  // persisted wallet's per-asset cap, then its USD payment cap. Without this the
-  // in-app Veil USDC transfer rejected with "USDC spend cap must be zero or greater."
-  const persistedCap = options.wallet ? (options.wallet.assetSpendCaps?.[asset] ?? options.wallet.maxPaymentUsd) : undefined;
-  const maxAssetAmount = Number(body.maxAssetAmount ?? body.maxPaymentUsd ?? persistedCap);
+  const maxAssetAmount = Number(wallet.assetSpendCaps?.[asset] ?? wallet.maxPaymentUsd);
   if (!Number.isFinite(maxAssetAmount) || maxAssetAmount < 0) return sendError(`${asset} spend cap must be zero or greater.`);
   if (Number(amount) > maxAssetAmount) return sendError(`Amount exceeds this agent's ${asset} spend cap (${formatAssetAmount(maxAssetAmount, asset)}).`);
   if (normalizeRecipientMode(body.recipientMode) !== "registered" && asset === "USDC" && Number(amount) < VEIL_CASH_USDC_PUBLIC_WITHDRAW_MINIMUM) {

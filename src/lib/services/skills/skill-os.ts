@@ -31,6 +31,7 @@ export const SKILL_ACTION_APPROVALS_FILE = join(homedir(), ".hivemindos", "skill
 export const SKILL_ANALYTICS_FILE = join(homedir(), ".hivemindos", "skill-analytics.jsonl");
 
 const ENV_KEY_RE = /\b[A-Z][A-Z0-9_]{5,}\b/g;
+const ENV_KEY_EXCLUSIONS = new Set(["README", "SKILL", "JSON", "YAML", "HTTP", "HTTPS", "POST", "DELETE", "LICENSE"]);
 const MAX_AUDIT_FILE_BYTES = 1024 * 1024;
 const AUDITABLE_EXTENSIONS = new Set([".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".sh", ".js", ".ts", ".py"]);
 const EXECUTABLE_EXTENSIONS = new Set([".sh", ".py", ".js", ".ts", ".mjs", ".cjs", ".exe", ".bin", ".so", ".dll", ".dylib"]);
@@ -668,9 +669,7 @@ export async function auditSkillInput(input: {
   for (const file of files) {
     const content = file.content ?? "";
     filesAudited.push(file.path);
-    for (const key of content.match(ENV_KEY_RE) ?? []) {
-      if (!["README", "SKILL", "JSON", "YAML", "HTTP", "HTTPS", "POST", "DELETE"].includes(key)) envKeys.add(key);
-    }
+    for (const key of extractEnvironmentKeys(content, file.path)) envKeys.add(key);
     inferCapabilities(content).forEach((capability) => capabilities.add(capability));
     parseWorkflowActions(content).forEach((action) => {
       actionRuntimes.add(action.runtime);
@@ -936,17 +935,20 @@ async function packagedCatalogEntry(skillPath: string): Promise<SkillCatalogEntr
   const description = frontmatterField(markdown, "description") || firstSentence(markdown) || "Optional packaged skill.";
   const group = packageParts.length > 1 ? packageParts[0] : "Optional";
   const sourceLabel = typeof metadata.sourceLabel === "string" ? metadata.sourceLabel : undefined;
+  const catalogSource = typeof metadata.catalogSource === "string" ? metadata.catalogSource : undefined;
+  const catalogCategory = typeof metadata.catalogCategory === "string" ? metadata.catalogCategory : undefined;
   const sourceUrl = typeof metadata.sourceUrl === "string" ? metadata.sourceUrl : undefined;
   const repository = typeof metadata.repository === "string" ? metadata.repository : undefined;
+  const catalogTags = Array.isArray(metadata.catalogTags) ? metadata.catalogTags.filter((tag): tag is string => typeof tag === "string") : [];
   return {
     id: `packaged-${slug}`,
     slug,
     name,
     description,
-    source: sourceLabel ? `UI Skills: ${sourceLabel}` : "HivemindOS optional packaged skills",
+    source: catalogSource || (sourceLabel ? `UI Skills: ${sourceLabel}` : "HivemindOS optional packaged skills"),
     sourceType: "pack",
-    category: titleCase(group),
-    tags: ["packaged", "optional", group, ...packageParts.slice(0, -1), upstreamSlug].filter(Boolean),
+    category: catalogCategory || titleCase(group),
+    tags: ["packaged", "optional", group, ...packageParts.slice(0, -1), upstreamSlug, ...catalogTags].filter(Boolean),
     githubUrl: repository || sourceUrl,
     packagedPath,
     sourceRef: `packaged:${packagedPath}`,
@@ -1425,6 +1427,35 @@ function extension(path: string) {
   const name = basename(path);
   const dot = name.lastIndexOf(".");
   return dot >= 0 ? name.slice(dot).toLowerCase() : "";
+}
+
+function extractEnvironmentKeys(content: string, filePath: string) {
+  const keys = new Set<string>();
+  const addMatches = (pattern: RegExp) => {
+    for (const match of content.matchAll(pattern)) {
+      const key = match.slice(1).find(Boolean);
+      if (key && !ENV_KEY_EXCLUSIONS.has(key)) keys.add(key);
+    }
+  };
+  const ext = extension(filePath);
+  if (ext === ".py") {
+    addMatches(/\b(?:os\.)?(?:getenv|environ\.get)\(\s*["']([A-Z][A-Z0-9_]{5,})["']/g);
+    addMatches(/\b(?:os\.)?environ\s*\[\s*["']([A-Z][A-Z0-9_]{5,})["']\s*\]/g);
+    return [...keys];
+  }
+  if ([".js", ".ts", ".mjs", ".cjs"].includes(ext)) {
+    addMatches(/\b(?:process|Bun)\.env(?:\.([A-Z][A-Z0-9_]{5,})|\[\s*["']([A-Z][A-Z0-9_]{5,})["']\s*\])/g);
+    return [...keys];
+  }
+  if (ext === ".sh") {
+    addMatches(/\$(?:\{)?([A-Z][A-Z0-9_]{5,})(?:\})?/g);
+    addMatches(/\b(?:export\s+)?([A-Z][A-Z0-9_]{5,})=/g);
+    return [...keys];
+  }
+  for (const key of content.match(ENV_KEY_RE) ?? []) {
+    if (!ENV_KEY_EXCLUSIONS.has(key)) keys.add(key);
+  }
+  return [...keys];
 }
 
 function safeId(value: string) {

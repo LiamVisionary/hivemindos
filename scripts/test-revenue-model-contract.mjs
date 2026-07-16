@@ -61,53 +61,56 @@ assert.match(sequence, /Base x402 transaction \| Builder Code attribution; rewar
 assert.match(paidFeatures, /One Platform, Two Revenue Engines/);
 assert.match(paidFeatures, /Base x402 Builder Code \| Attribution and potential rewards \| Live attribution; rewards not guaranteed/);
 
-for (const document of [investor, sequence, honey, staking]) {
-  assert.doesNotMatch(document, /HIVE represents ownership|HIVE is the ownership layer|revenue-backed momentum|seasonal HIVE reward pool|Every `\$1,000,000` in eligible/i);
+for (const document of [investor, sequence, honey, staking, paidFeatures, treasuryPrograms]) {
+  assert.doesNotMatch(document, /HIVE represents ownership|HIVE is the ownership layer|revenue-backed momentum|reward season|reward pool|reward distributor|buy-and-burn|Every `\$1,000,000` in eligible/i);
 }
-assert.match(honey, /Honey is not automatically convertible to HIVE/);
-assert.match(staking, /not a yield farm/i);
+assert.match(honey, /Honey does not automatically convert to HIVE/);
+assert.match(honey, /non-transferable, non-spendable/i);
+assert.match(staking, /does not grant company ownership, binding governance, treasury control[\s\S]*yield, revenue share/i);
 
-// Stake-tiered member usage pricing is consumption pricing. The 15% revenue
-// policy remains separate from staking, and the public ledger distinguishes
-// confirmed purchases, separate burn receipts, and current execution status.
-assert.match(staking, /## Member Usage Pricing/);
-assert.match(staking, /consumption pricing, not value distribution/);
-assert.match(staking, /Staking does not grant treasury control, company voting rights, admin access, guaranteed listing placement, or a financial return\./);
-assert.match(honey, /Staking tier can set member usage pricing/);
+// The six staking tiers keep all three product-benefit curves while exact
+// service pricing and both revenue allocations remain separate hosted policy.
+assert.match(staking, /## Member Pricing: Up To 61% Off/);
+assert.match(staking, /This is consumption pricing:[\s\S]*no tier receives a payout/);
+assert.match(staking, /Staking does not grant company ownership, binding governance, treasury control/i);
+assert.match(honey, /member pricing of up to 61% off/i);
 assert.match(paidFeatures, /member usage pricing/i);
-assert.match(staking, /HivemindOS Revenue Buyback Policy And Receipt/);
-assert.match(staking, /No stake \| \$0\.99 \| Standard price/);
-assert.match(staking, /Visionary \| \$0\.39 cost-backed floor \| 61%/);
-assert.match(staking, /15% of recognized HivemindOS platform revenue/i);
-assert.match(staking, /weekly automatic HIVE purchase batches/i);
-assert.match(honey, /15% of recognized HivemindOS platform revenue/i);
-assert.match(honey, /weekly automatic HIVE purchase batches/i);
-assert.match(honey, /Credit purchases are not counted until the credits are consumed/i);
-assert.match(honey, /marketplace gross merchandise value is not counted as platform revenue/i);
-assert.match(honey, /not counted as a burn without a separate confirmed burn transaction/i);
-assert.match(honey, /general reserve remains company property and creates no holder or staker claim/i);
-assert.match(honey, /no revenue event automatically funds stakers/i);
+assert.match(staking, /Revenue Policy Is Separate From Staking/);
+assert.match(staking, /up to 61% off/i);
+assert.match(staking, /Exact service prices, cost floors, eligible products, and tier-level discount calculations remain server-owned/i);
+assert.doesNotMatch(staking, /\$0\.99|\$0\.39/);
+assert.match(staking, /15% of recognized platform revenue/i);
+assert.match(staking, /separate exact 15% goes to the company treasury/i);
+assert.match(staking, /treasury does not fund buybacks/i);
+assert.match(honey, /15% of recognized platform revenue/i);
+assert.match(honey, /separate exact 15% of recognized platform revenue goes to the company treasury/i);
+assert.match(honey, /treasury does not fund HIVE buybacks/i);
+assert.match(honey, /Purchased credits are recognized only when consumed/i);
+assert.match(honey, /Marketplace gross merchandise value is not platform revenue/i);
+assert.match(honey, /HivemindOS does not burn HIVE/i);
+assert.match(honey, /treasury allocation remains company property/i);
+assert.match(honey, /no holder or staker ownership, redemption right, revenue share, governance right, or claim on treasury assets/i);
 assert.match(honey, /## Tokenomics Policy Changes/);
 assert.match(honey, /not an immutable promise/i);
 assert.match(honey, /Completed on-chain actions and historical receipts remain part of the public record/i);
-assert.match(staking, /Material changes are published prospectively with an effective date/i);
+assert.match(staking, /Publish material benefit or policy changes prospectively with an effective date/i);
 assert.match(investor, /Tokenomics policies may change, pause, or end/i);
-assert.match(paidFeatures, /HivemindOS revenue buyback policy/);
-assert.match(investor, /15% of recognized HivemindOS platform revenue/i);
-assert.match(investor, /up to 15% of recognized platform revenue as a general company treasury reserve/i);
-assert.match(investor, /Agent Buyback Ledger/);
-assert.match(staking, /\| Tier \| Price per analysis \| Discount \|/);
-assert.doesNotMatch(honey, /discount/i);
+assert.match(paidFeatures, /HIVE buyback allocation/);
+assert.match(investor, /15% of recognized platform revenue/i);
+assert.match(investor, /separate 15% to the company treasury/i);
+assert.doesNotMatch(investor, /up to 15%/i);
+assert.match(investor, /HIVE Buyback Ledger/);
+assert.match(investor, /tokenomics policy assigns no fixed use to the remaining 70%/i);
 assert.doesNotMatch(stakingConfig, /rewardWeight|rewardBoostLabel|seasonal rewards/i);
 await assert.rejects(access(new URL("src/app/api/hive/stake/rewards/route.ts", root)));
 await assert.rejects(access(new URL("src/lib/services/hive-staking-rewards.ts", root)));
 assert.match(marketplace, /not a near-term revenue assumption/i);
 assert.match(marketplace, /Evidence Gates/i);
-assert.match(treasuryPrograms, /The two treasury allocations can therefore total up to 30%/i);
-assert.match(treasuryPrograms, /No HIVE reward season, funded reward amount, APR, claim, or future season is currently promised/i);
-assert.match(treasuryPrograms, /complete fixed reward amount is transferred to a separate reward distributor before the season is announced as open/i);
-assert.match(treasuryPrograms, /existing Honey multipliers do not automatically become HIVE reward weights/i);
-assert.match(treasuryPrograms, /No revenue event automatically creates a staker balance or claim/i);
+assert.match(treasuryPrograms, /HIVE buybacks \| 15% of recognized platform revenue/i);
+assert.match(treasuryPrograms, /Company treasury \| 15% of recognized platform revenue/i);
+assert.match(treasuryPrograms, /Outside tokenomics allocation \| 70% of recognized platform revenue/i);
+assert.match(treasuryPrograms, /treasury is not the source of HIVE purchases/i);
+assert.match(treasuryPrograms, /HivemindOS does not burn HIVE/i);
 
 assert.match(managedContract, /id: "community" \| "cloud-pro" \| "cloud-team" \| "enterprise"/);
 assert.match(managedPanel, /Control plane subscription \+ metered managed usage/);

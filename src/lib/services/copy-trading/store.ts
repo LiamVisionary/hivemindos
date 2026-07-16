@@ -17,6 +17,8 @@ import { mkdir, readFile, rename, writeFile } from "fs/promises";
 import { dirname, join } from "path";
 import { homedir } from "@/lib/home-dir";
 import {
+  COPY_TRADE_EVOLUTION_MODEL,
+  COPY_TRADE_EVOLUTION_POLICY_VERSION,
   DEFAULT_COPY_POLL_MS,
   MAX_COPY_TRADE_USD,
   MIN_COPY_POLL_MS,
@@ -92,7 +94,7 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-export function normalizeConfig(input: CopyTradingConfig): CopyTradingConfig {
+export function normalizeConfig(input: CopyTradingConfig, touchUpdatedAt = true): CopyTradingConfig {
   const now = Date.now();
   const maxCopyUsd = clamp(num(input.maxCopyUsd, MAX_COPY_TRADE_USD), 0.5, MAX_COPY_TRADE_USD);
   return {
@@ -124,15 +126,25 @@ export function normalizeConfig(input: CopyTradingConfig): CopyTradingConfig {
     enabled: Boolean(input.enabled),
     dryRun: input.dryRun !== false,
     paperStartUsd: input.paperStartUsd == null ? null : Math.max(0, num(input.paperStartUsd, 0)),
+    evolution: input.evolution?.sourceConfigId
+      ? {
+          sourceConfigId: String(input.evolution.sourceConfigId),
+          model: COPY_TRADE_EVOLUTION_MODEL,
+          reasoningEffort: "medium",
+          minCloseConfidence: clamp(num(input.evolution.minCloseConfidence, 0.7), 0.5, 1),
+          policyVersion: COPY_TRADE_EVOLUTION_POLICY_VERSION,
+          createdAt: num(input.evolution.createdAt, now),
+        }
+      : undefined,
     createdAt: num(input.createdAt, now),
-    updatedAt: now,
+    updatedAt: touchUpdatedAt ? now : num(input.updatedAt, now),
   };
 }
 
 // ── config file: read by daemon, written by route/UI ─────────────────────────
 export async function readConfigs(): Promise<CopyTradingConfig[]> {
   const file = await readJsonFile<ConfigFile>(CONFIG_FILE, emptyConfigFile);
-  return Array.isArray(file.configs) ? file.configs.map(normalizeConfig) : [];
+  return Array.isArray(file.configs) ? file.configs.map((config) => normalizeConfig(config, false)) : [];
 }
 
 async function writeConfigs(configs: CopyTradingConfig[]): Promise<void> {
@@ -147,6 +159,38 @@ export function upsertConfig(config: CopyTradingConfig): Promise<CopyTradingConf
     next.push(normalized);
     await writeConfigs(next);
     return normalized;
+  });
+}
+
+export function createEvolvedConfig(sourceId: string, id: string): Promise<CopyTradingConfig> {
+  return runQueued("config", async () => {
+    const configs = await readConfigs();
+    const source = configs.find((config) => config.id === sourceId);
+    if (!source) throw new Error("No such source copy-trading config.");
+    if (source.evolution) throw new Error("Create evolved configs from an original config, not another evolved config.");
+    const existing = configs.find((config) => config.evolution?.sourceConfigId === sourceId);
+    if (existing) return existing;
+    const now = Date.now();
+    const evolved = normalizeConfig({
+      ...source,
+      id,
+      label: `${source.label?.trim() || "Copy trader"} · Agent analyzed`,
+      // A paper source can start its twin immediately. A live source's clone is
+      // deliberately stopped until the user explicitly starts the second rail.
+      enabled: source.dryRun ? source.enabled : false,
+      evolution: {
+        sourceConfigId: source.id,
+        model: COPY_TRADE_EVOLUTION_MODEL,
+        reasoningEffort: "medium",
+        minCloseConfidence: 0.7,
+        policyVersion: COPY_TRADE_EVOLUTION_POLICY_VERSION,
+        createdAt: now,
+      },
+      createdAt: now,
+      updatedAt: now,
+    });
+    await writeConfigs([...configs, evolved]);
+    return evolved;
   });
 }
 
@@ -201,6 +245,13 @@ function trimState(state: CopyTradeRuntimeState): CopyTradeRuntimeState {
     ...state,
     consumedTxRefs: state.consumedTxRefs.slice(-MAX_CONSUMED_REFS),
     events: state.events.slice(-MAX_EVENTS_PER_CONFIG),
+    agentAnalysis: state.agentAnalysis
+      ? {
+          ...state.agentAnalysis,
+          reviews: state.agentAnalysis.reviews.slice(-400),
+          counterfactuals: state.agentAnalysis.counterfactuals?.slice(-400),
+        }
+      : undefined,
   };
 }
 

@@ -1,11 +1,9 @@
 import { NextRequest } from "next/server";
-import { constants } from "fs";
-import { access, realpath, stat, readFile } from "fs/promises";
-import { basename, extname, isAbsolute, join, resolve, sep } from "path";
+import { stat, readFile } from "fs/promises";
+import { basename, extname } from "path";
 
 import { requireAuth } from "@/lib/utils/server-auth";
-import { homedir } from "@/lib/home-dir";
-import { expandHomePath, resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
+import { resolveLocalDeliverableFile } from "@/lib/services/deliverable-file-resolution";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,8 +24,6 @@ export const dynamic = "force-dynamic";
  */
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50 MB — generous for CSVs/docs, bounded so a huge file can't wedge the server
-const VAULT_SEGMENT = "hivemindos-vault";
-
 const CONTENT_TYPES: Record<string, string> = {
   ".md": "text/markdown; charset=utf-8",
   ".txt": "text/plain; charset=utf-8",
@@ -51,54 +47,6 @@ function contentTypeFor(path: string): string {
   return CONTENT_TYPES[extname(path).toLowerCase()] ?? "application/octet-stream";
 }
 
-/**
- * Turn a possibly-foreign deliverable path into candidate LOCAL paths, in
- * priority order: (1) re-home a shared-vault path onto this machine's vault root,
- * (2) the path as-is (a This-Mac deliverable), (3) `~`-expanded.
- */
-function localCandidates(rawPath: string, vaultRoot: string): string[] {
-  const candidates: string[] = [];
-  const normalizedInput = rawPath.replace(/\\/g, "/").trim();
-
-  // (1) Vault re-home: splice everything AFTER the vault folder segment onto the
-  // local vault root, so a different machine's home prefix doesn't matter.
-  const parts = normalizedInput.split("/").filter(Boolean);
-  const vaultIdx = parts.lastIndexOf(VAULT_SEGMENT);
-  if (vaultIdx >= 0 && vaultIdx < parts.length - 1) {
-    candidates.push(join(vaultRoot, ...parts.slice(vaultIdx + 1)));
-  }
-
-  // (2) As-is absolute path (This-Mac deliverables).
-  if (isAbsolute(rawPath)) candidates.push(resolve(rawPath));
-
-  // (3) Home-relative.
-  if (rawPath.startsWith("~")) candidates.push(resolve(expandHomePath(rawPath)));
-
-  return [...new Set(candidates)];
-}
-
-function withinRoot(target: string, root: string): boolean {
-  const normalizedRoot = root.endsWith(sep) ? root : root + sep;
-  return target === root || target.startsWith(normalizedRoot);
-}
-
-/** Resolve to a real, readable, in-bounds local file — or null if not available here. */
-async function resolveLocalFile(rawPath: string, vaultRoot: string, home: string): Promise<string | null> {
-  for (const candidate of localCandidates(rawPath, vaultRoot)) {
-    try {
-      await access(candidate, constants.R_OK);
-      const real = await realpath(candidate);
-      // Refuse anything that escapes the vault AND the home dir (no /etc/... reads).
-      if (!withinRoot(real, vaultRoot) && !withinRoot(real, home)) continue;
-      const info = await stat(real);
-      if (info.isFile()) return real;
-    } catch {
-      // Try the next candidate.
-    }
-  }
-  return null;
-}
-
 export async function GET(request: NextRequest) {
   const unauthorized = await requireAuth(request);
   if (unauthorized) return unauthorized;
@@ -107,11 +55,8 @@ export async function GET(request: NextRequest) {
   if (!rawPath) return Response.json({ ok: false, error: "path is required" }, { status: 400 });
   const asDownload = request.nextUrl.searchParams.get("download") === "1";
 
-  const vaultRoot = await realpath(resolveObsidianVaultPath()).catch(() => resolveObsidianVaultPath());
-  const home = await realpath(homedir()).catch(() => homedir());
-
-  const localFile = await resolveLocalFile(rawPath, vaultRoot, home);
-  if (!localFile) {
+  const resolvedFile = await resolveLocalDeliverableFile(rawPath);
+  if (!resolvedFile) {
     // Not present on this machine (e.g. a non-vault artifact on a remote box that
     // vault-sync doesn't cover). Honest 404 so the UI can show a "not synced" note
     // instead of a silent dead link.
@@ -121,6 +66,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const localFile = resolvedFile.path;
   const info = await stat(localFile);
   if (info.size > MAX_FILE_BYTES) {
     return Response.json({ ok: false, error: `File is too large to open here (${Math.round(info.size / 1024 / 1024)} MB > 50 MB cap).`, path: localFile }, { status: 413 });

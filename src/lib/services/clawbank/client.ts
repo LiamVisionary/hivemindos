@@ -4,6 +4,12 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "@/lib/home-dir";
 import { join } from "node:path";
 import { hiveEnvValue, hiveEnvPresence } from "@/lib/services/shared-hive-env";
+import {
+  CLAWBANK_DEFAULT_API_URL,
+  CLAWBANK_DEFAULT_MCP_PATH,
+  CLAWBANK_MISSING_CREDENTIAL_MESSAGE,
+  CLAWBANK_TOKEN_ENV_NAMES,
+} from "./constants";
 import type { ClawbankMe, ClawbankResponse } from "./types";
 
 /**
@@ -19,20 +25,6 @@ import type { ClawbankMe, ClawbankResponse } from "./types";
  * through ClawBank's three-step email flow (request_code -> verify_code ->
  * bootstrap/api_tokens); see {@link clawbankRequestCode} et al.
  */
-
-export const CLAWBANK_DEFAULT_API_URL = "https://app.clawbank.co";
-export const CLAWBANK_DEFAULT_MCP_PATH = "/mcp";
-
-/** Token env-var names, in priority order. CLAWBANK_TOKEN is canonical; the
- *  others are accepted so an existing CLI/env name keeps working. */
-export const CLAWBANK_TOKEN_ENV_NAMES = [
-  "CLAWBANK_TOKEN",
-  "CLAWBANK_API_TOKEN",
-  "CLAWBANK_API_KEY",
-] as const;
-
-export const CLAWBANK_MISSING_CREDENTIAL_MESSAGE =
-  "No ClawBank credential is configured. Set CLAWBANK_TOKEN in the shared hive env (hive-env-add CLAWBANK_TOKEN <token>) or run `clawbank login`.";
 
 const CLAWBANK_CONFIG_FILE = join(homedir(), ".config", "clawbank", "config.json");
 const CLAWBANK_DEFAULT_TIMEOUT_MS = 60_000;

@@ -10,6 +10,7 @@ import argparse
 import contextlib
 import getpass
 import hashlib
+import io
 import json
 import os
 import pathlib
@@ -19,6 +20,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.request
 from typing import Iterable
@@ -247,6 +249,189 @@ def tailscale_cli() -> str:
 
 def truthy(value: str | None) -> bool:
     return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+class Spinner:
+    """A tiny stderr spinner for slow, otherwise-silent CLI phases.
+
+    Only animates on a real TTY, so piped/app callers (which drive
+    hive-env-add with captured stdio) are byte-for-byte unaffected. Set
+    HIVE_ENV_NO_SPINNER=1 to force it off.
+    """
+
+    FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+    def __init__(self, message: str, stream=None):
+        self._message = message
+        self._stream = stream if stream is not None else sys.stderr
+        self._enabled = (
+            hasattr(self._stream, "isatty")
+            and self._stream.isatty()
+            and not truthy(os.environ.get("HIVE_ENV_NO_SPINNER"))
+        )
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._width = 0
+
+    def set_message(self, message: str) -> None:
+        self._message = message
+
+    def _draw(self, text: str) -> None:
+        # Pad to the widest line ever drawn so a shorter message can't leave
+        # stale characters from a previous, longer frame on screen.
+        self._width = max(self._width, len(text))
+        self._stream.write("\r" + text.ljust(self._width))
+        self._stream.flush()
+
+    def _run(self) -> None:
+        index = 0
+        while not self._stop.is_set():
+            frame = self.FRAMES[index % len(self.FRAMES)]
+            self._draw(f"{frame} {self._message}")
+            index += 1
+            self._stop.wait(0.1)
+
+    def __enter__(self) -> "Spinner":
+        if self._enabled:
+            self._thread = threading.Thread(target=self._run, daemon=True)
+            self._thread.start()
+        return self
+
+    def __exit__(self, *exc) -> bool:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join()
+        if self._enabled and self._width:
+            self._stream.write("\r" + " " * self._width + "\r")
+            self._stream.flush()
+        return False
+
+
+def prompt_secret(prompt: str, mask: str = "•") -> str:
+    """Read a secret from the terminal, echoing one mask glyph per character.
+
+    getpass.getpass echoes nothing, so a user can't tell whether a typed or
+    pasted value registered (the reported "nothing shows when I type or
+    paste"). This shows a bullet per character and supports backspace /
+    Ctrl-U / Ctrl-C, while keeping the secret off stdout. Falls back to
+    getpass when stdin is not a real TTY (pipes, the desktop app, dumb
+    terminals) or if putting the terminal into character mode fails.
+    """
+    try:
+        interactive = sys.stdin.isatty()
+    except (AttributeError, ValueError):
+        interactive = False
+    if not interactive:
+        return getpass.getpass(prompt)
+    reader = _prompt_secret_windows if os.name == "nt" else _prompt_secret_posix
+    try:
+        return reader(prompt, mask)
+    except (KeyboardInterrupt, EOFError):
+        raise
+    except Exception:
+        # Any terminal-mode failure: degrade to the stdlib silent prompt
+        # rather than dropping the interactive flow entirely.
+        return getpass.getpass(prompt)
+
+
+def _prompt_secret_posix(prompt: str, mask: str) -> str:
+    import codecs
+    import termios
+    import tty
+
+    # Prefer the controlling terminal (like getpass) so the mask echo is
+    # visible even when stdin/stderr are redirected.
+    try:
+        tty_fd = os.open("/dev/tty", os.O_RDWR | os.O_NOCTTY)
+        read_fd = write_fd = tty_fd
+        opened = True
+    except OSError:
+        read_fd = sys.stdin.fileno()
+        write_fd = sys.stderr.fileno()
+        opened = False
+
+    def emit(text: str) -> None:
+        os.write(write_fd, text.encode("utf-8", "replace"))
+
+    old = termios.tcgetattr(read_fd)
+    chars: list[str] = []
+    emit(prompt)
+    try:
+        tty.setcbreak(read_fd)  # leaves ISIG on so Ctrl-C still raises SIGINT
+        decoder = codecs.getincrementaldecoder("utf-8")()
+        escape = False
+        done = False
+        while not done:
+            data = os.read(read_fd, 64)
+            if not data:  # EOF (Ctrl-D on an empty line closes the fd)
+                break
+            for ch in decoder.decode(data):
+                if escape:
+                    # Swallow the rest of an ANSI sequence (arrows, Home, …)
+                    # so its bytes aren't captured as secret characters.
+                    if ch.isalpha() or ch == "~":
+                        escape = False
+                    continue
+                if ch == "\x1b":
+                    escape = True
+                    continue
+                if ch in ("\r", "\n"):
+                    done = True
+                    break
+                if ch in ("\x7f", "\x08"):  # DEL / Backspace
+                    if chars:
+                        chars.pop()
+                        emit("\b \b")
+                    continue
+                if ch == "\x15":  # Ctrl-U clears the whole line
+                    if chars:
+                        emit("\b \b" * len(chars))
+                        chars.clear()
+                    continue
+                if ch == "\x03":  # Ctrl-C (in case ISIG is off)
+                    raise KeyboardInterrupt
+                if ch == "\x04":  # Ctrl-D
+                    done = True
+                    break
+                if not ch.isprintable():
+                    continue  # ignore stray control bytes
+                chars.append(ch)
+                emit(mask)
+    finally:
+        termios.tcsetattr(read_fd, termios.TCSADRAIN, old)
+        emit("\n")
+        if opened:
+            os.close(tty_fd)
+    return "".join(chars)
+
+
+def _prompt_secret_windows(prompt: str, mask: str) -> str:
+    import msvcrt
+
+    sys.stderr.write(prompt)
+    sys.stderr.flush()
+    chars: list[str] = []
+    while True:
+        ch = msvcrt.getwch()
+        if ch in ("\r", "\n"):
+            break
+        if ch == "\x03":  # Ctrl-C
+            raise KeyboardInterrupt
+        if ch in ("\x00", "\xe0"):  # function/arrow key prefix
+            msvcrt.getwch()  # discard the scan code that follows
+            continue
+        if ch == "\b":  # Backspace
+            if chars:
+                chars.pop()
+                sys.stderr.write("\b \b")
+                sys.stderr.flush()
+            continue
+        chars.append(ch)
+        sys.stderr.write(mask)
+        sys.stderr.flush()
+    sys.stderr.write("\n")
+    sys.stderr.flush()
+    return "".join(chars)
 
 
 def quote_env(value: str) -> str:
@@ -1987,6 +2172,56 @@ def auto_sync_aeon_if_shared_agent_changed(args: argparse.Namespace, env_file: p
     auto_sync_aeon_shared_env(args, shared_env_values(args, env_file))
 
 
+def propagate_with_progress(
+    args: argparse.Namespace,
+    env_file: pathlib.Path,
+    key: str,
+    value: str,
+    changed: bool,
+) -> None:
+    """Run the slow post-write steps under a spinner so the terminal doesn't
+    look hung.
+
+    After the local write, hive-env-add refreshes the encrypted backup (GPG),
+    pushes the key to every online tailnet peer's collector (each probe has a
+    multi-second timeout — the reported 5-10s "hang"), and syncs agent
+    secrets. On a TTY we animate a spinner and buffer the phases' own result
+    lines, flushing them once the spinner clears so they land cleanly below
+    it. Non-TTY callers (the desktop app, shell pipes) skip both the spinner
+    and the buffering — byte-for-byte identical to the previous behavior.
+    """
+
+    def run_phases(spinner: Spinner | None = None) -> None:
+        maybe_refresh_encrypted_backup(args, env_file)
+        if spinner is not None:
+            spinner.set_message(f"Propagating {key} to fleet peers…")
+        sync_tailnet_updates(args, {key: value}, env_file)
+        if spinner is not None:
+            spinner.set_message(f"Syncing {key} to agent secrets…")
+        auto_sync_aeon_if_shared_agent_changed(args, env_file, changed)
+
+    stderr = sys.stderr
+    animate = (
+        hasattr(stderr, "isatty")
+        and stderr.isatty()
+        and not truthy(os.environ.get("HIVE_ENV_NO_SPINNER"))
+    )
+    if not animate:
+        run_phases()
+        return
+
+    out_buffer, err_buffer = io.StringIO(), io.StringIO()
+    try:
+        with Spinner(f"Refreshing backup for {key}…", stream=stderr) as spinner:
+            with contextlib.redirect_stdout(out_buffer), contextlib.redirect_stderr(err_buffer):
+                run_phases(spinner)
+    finally:
+        sys.stdout.write(out_buffer.getvalue())
+        sys.stdout.flush()
+        sys.stderr.write(err_buffer.getvalue())
+        sys.stderr.flush()
+
+
 def main() -> int:
     args = parse_args()
     env_file = pathlib.Path(os.path.expanduser(
@@ -2135,7 +2370,7 @@ def main() -> int:
             value = value[:-1]
     else:
         key = args.assignment
-        value = getpass.getpass(f"{key}=")
+        value = prompt_secret(f"{key}=")
 
     if not KEY_RE.match(key):
         print(f"Invalid env key: {key!r}", file=sys.stderr)
@@ -2143,9 +2378,7 @@ def main() -> int:
 
     changed = apply_update(args, env_file, key, value)
 
-    maybe_refresh_encrypted_backup(args, env_file)
-    sync_tailnet_updates(args, {key: value}, env_file)
-    auto_sync_aeon_if_shared_agent_changed(args, env_file, changed)
+    propagate_with_progress(args, env_file, key, value, changed)
     return 0
 
 

@@ -3,16 +3,14 @@
 import { Fragment, memo, useEffect, useState } from "react";
 import type { ComponentType, Dispatch, ElementType, SetStateAction } from "react";
 import { ThumbsDown, ThumbsUp } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { ButtonGroup } from "@/components/ui/button-group";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { JsonRenderSurface, extractJsonRenderPayload } from "@/components/json-render/JsonRenderSurface";
 import { imageGenerationToApplicationGeneration } from "@/features/dashboard/chat-application-generation";
-import { generatedImageCardFromAssistantText } from "@/features/dashboard/chat-generated-media";
+import { generatedMediaCardFromAssistantText } from "@/features/dashboard/chat-generated-media";
 import { shouldRenderImageGenerationCard } from "@/features/dashboard/hooks/status-chat-process-image-generation";
 import { ChatAttachmentView } from "@/features/chat/chat-attachment-view";
 import { parseUserSlashCommandDisplay } from "@/features/queen-voice/queen-command-display";
-import { markdownText, messageKey, messageText, promptUiFromMessage } from "@/features/dashboard/views/chat/chat-panel-helpers";
+import { chatProcessTimerIsActive, isHiddenChatProcessEvent, markdownText, messageKey, messageText, promptUiFromMessage } from "@/features/dashboard/views/chat/chat-panel-helpers";
 import { AgentProcessPanel, normalizeProcessEvents, processEventsAreActive, type ProcessEvent } from "@/features/dashboard/views/chat/AgentProcessPanel";
 import { ApplicationGenerationCard } from "@/features/dashboard/views/chat/ApplicationGenerationCard";
 import { extractMiroSharkSimulationCard, MiroSharkSimulationCard } from "@/features/dashboard/views/chat/MiroSharkSimulationCard";
@@ -22,14 +20,25 @@ import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 import type { ChatAttachment, ChatMessage } from "@/features/dashboard/dashboard-types";
 import type { ChatResponseBilling } from "@/lib/types/chat-billing";
+import type { CapabilityApprovalPlan } from "@/lib/types/capability-approval";
+import type { DeliverableSourceMachine } from "@/lib/services/deliverable-open-client";
 import { Dot, Glyph, ICON } from "./primitives";
+import { CapabilityApprovalCard } from "./CapabilityApprovalCard";
+import { HyperframesPromptBuilder } from "../HyperframesPromptBuilder";
+import { HYPERFRAMES_PROMPT_BUILDER_ID } from "@/lib/services/chat/hyperframes-prompt";
 
 type IconComponent = ElementType<{ "aria-hidden"?: boolean | "true" | "false"; className?: string }>;
 type AgentResponseLoaderComponent = ElementType<{ phrase?: string }>;
-type ChatMarkdownComponent = ComponentType<{ text: string; className?: string; headingClassName?: string }>;
+type ChatMarkdownComponent = ComponentType<{
+  text: string;
+  className?: string;
+  headingClassName?: string;
+  sourceMachine?: DeliverableSourceMachine;
+  surface?: "chat" | "default";
+}>;
 type PromptResponse = { label: string; value?: string; respondedAt?: number };
 type PromptOption = { label: string; value: string; permissionMode?: ChatPermissionMode };
-type SendPromptOptions = { permissionMode?: ChatPermissionMode; promptResponse?: PromptResponse };
+type SendPromptOptions = { permissionMode?: ChatPermissionMode; promptResponse?: PromptResponse; visiblePrompt?: string };
 
 // events/label are read defensively; the canonical ChatMessage/attachment types do not define them.
 export type ThreadMessage = ChatMessage & { events?: ProcessEvent[] };
@@ -62,6 +71,20 @@ function retryPromptForMessage(
   chatDisplayContent?: (message: unknown) => string,
 ) {
   for (let index = failedMessageIndex - 1; index >= 0; index -= 1) {
+    const candidate = messages[index];
+    if (candidate?.role !== "user") continue;
+    const content = messageText(candidate, chatDisplayContent).trim();
+    if (content) return content;
+  }
+  return "";
+}
+
+function userRequestBeforeMessage(
+  messages: ThreadMessage[],
+  messageIndex: number,
+  chatDisplayContent?: (message: unknown) => string,
+) {
+  for (let index = messageIndex - 1; index >= 0; index -= 1) {
     const candidate = messages[index];
     if (candidate?.role !== "user") continue;
     const content = messageText(candidate, chatDisplayContent).trim();
@@ -113,7 +136,7 @@ function UserMessageContent({ ChatMarkdown, text }: { ChatMarkdown?: ChatMarkdow
   const command = parseUserSlashCommandDisplay(text);
   if (!command) {
     return ChatMarkdown
-      ? <ChatMarkdown text={markdownText(text)} className="fr-chat-markdown" />
+      ? <ChatMarkdown text={markdownText(text)} className="fr-chat-markdown" surface="chat" />
       : renderInline(text);
   }
   const stacked = /^[\t ]*\r?\n/.test(command.suffix);
@@ -123,7 +146,7 @@ function UserMessageContent({ ChatMarkdown, text }: { ChatMarkdown?: ChatMarkdow
       <span className="fr-chat-command-badge">{command.name}</span>
       {suffix ? (
         <div className="fr-chat-user-command-suffix">
-          {ChatMarkdown ? <ChatMarkdown text={markdownText(suffix)} className="fr-chat-markdown" /> : renderInline(suffix)}
+          {ChatMarkdown ? <ChatMarkdown text={markdownText(suffix)} className="fr-chat-markdown" surface="chat" /> : renderInline(suffix)}
         </div>
       ) : null}
     </div>
@@ -282,6 +305,17 @@ function ThinkingLoader({ AgentResponseLoader, phrase }: { AgentResponseLoader?:
   );
 }
 
+function AgentSessionStartLoader({ label }: { label: string }) {
+  return (
+    <div className="fr-agent-session-start" role="status" aria-live="polite" aria-label={`${label}...`}>
+      <span className="fr-agent-session-start-label">{label}</span>
+      <span className="fr-agent-session-progress" aria-hidden="true">
+        <span className="fr-agent-session-progress-fill" />
+      </span>
+    </div>
+  );
+}
+
 function MessageActions({
   Check,
   Copy,
@@ -324,71 +358,68 @@ function MessageActions({
   return (
     <div style={{ position: "relative", justifySelf: "end" }}>
       <div className="fr-chat-action-row">
-        {onFeedback ? (
-          <div className="fr-chat-feedback-actions" aria-label="Rate this response">
-            {(["up", "down"] as const).map((rating) => {
-              const selected = feedback?.rating === rating;
-              const busy = Boolean(feedbackBusyKey?.startsWith(`${renderKey}:`));
-              const pending = feedbackBusyKey === `${renderKey}:${rating}`;
-              const Icon = rating === "up" ? ThumbsUp : ThumbsDown;
-              const label = rating === "up" ? "Good response" : "Bad response";
-              return (
-                <button
-                  key={rating}
-                  type="button"
-                  className={`fr-chat-feedback-button ${rating === "up" ? "is-positive" : "is-negative"}`}
-                  title={label}
-                  aria-label={label}
-                  aria-pressed={selected}
-                  data-active={selected ? "true" : "false"}
-                  disabled={busy}
-                  onClick={() => void onFeedback(rating)}
-                >
-                  {pending && LoaderCircle
-                    ? <LoaderCircle aria-hidden="true" className="cx-spin" />
-                    : <Icon aria-hidden="true" />}
-                </button>
-              );
-            })}
-          </div>
-        ) : null}
         <TooltipProvider>
-          <ButtonGroup className="fr-chat-segmented-actions">
-            <Tooltip {...(copied ? { open: true } : {})}>
+          {onFeedback ? (
+            <div className="fr-chat-feedback-actions" aria-label="Rate this response">
+              {(["up", "down"] as const).map((rating) => {
+                const selected = feedback?.rating === rating;
+                const busy = Boolean(feedbackBusyKey?.startsWith(`${renderKey}:`));
+                const pending = feedbackBusyKey === `${renderKey}:${rating}`;
+                const Icon = rating === "up" ? ThumbsUp : ThumbsDown;
+                const label = rating === "up" ? "Good response" : "Bad response";
+                return (
+                  <Tooltip key={rating}>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className={`fr-chat-feedback-button ${rating === "up" ? "is-positive" : "is-negative"}`}
+                        aria-label={label}
+                        aria-pressed={selected}
+                        data-active={selected ? "true" : "false"}
+                        disabled={busy}
+                        onClick={() => void onFeedback(rating)}
+                      >
+                        {pending && LoaderCircle
+                          ? <LoaderCircle aria-hidden="true" className="cx-spin" />
+                          : <Icon aria-hidden="true" />}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">{label}</TooltipContent>
+                  </Tooltip>
+                );
+              })}
+            </div>
+          ) : null}
+          <Tooltip {...(copied ? { open: true } : {})}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="fr-chat-feedback-button"
+                aria-label={copied ? "Copied message" : "Copy message"}
+                data-active={copied ? "true" : undefined}
+                onClick={onCopy}
+              >
+                {copied && Check ? <Check aria-hidden="true" /> : Copy ? <Copy aria-hidden="true" /> : <Glyph d={ICON.paperclip} s={12} />}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{copied ? "Copied!" : "Copy message"}</TooltipContent>
+          </Tooltip>
+          {generateKanbanTaskFromChat ? (
+            <Tooltip>
               <TooltipTrigger asChild>
-                <Button
+                <button
                   type="button"
-                  variant="outline"
-                  size="icon-xs"
-                  className="fr-chat-segmented-button"
-                  aria-label={copied ? "Copied message" : "Copy message"}
-                  data-active={copied ? "true" : undefined}
-                  onClick={onCopy}
+                  className="fr-chat-feedback-button"
+                  aria-label="Generate Kanban task from this message"
+                  disabled={generating}
+                  onClick={onToggleKanban}
                 >
-                  {copied && Check ? <Check aria-hidden="true" /> : Copy ? <Copy aria-hidden="true" /> : <Glyph d={ICON.paperclip} s={12} />}
-                </Button>
+                  {generating && LoaderCircle ? <LoaderCircle aria-hidden="true" className="fr-chat-spin-icon" /> : KanbanSquare ? <KanbanSquare aria-hidden="true" /> : <Glyph d={ICON.sparkles} s={12} />}
+                </button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">{copied ? "Copied!" : "Copy message"}</TooltipContent>
+              <TooltipContent side="bottom">Send to Kanban</TooltipContent>
             </Tooltip>
-            {generateKanbanTaskFromChat ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon-xs"
-                    className="fr-chat-segmented-button"
-                    aria-label="Generate Kanban task from this message"
-                    disabled={generating}
-                    onClick={onToggleKanban}
-                  >
-                    {generating && LoaderCircle ? <LoaderCircle aria-hidden="true" className="fr-chat-spin-icon" /> : KanbanSquare ? <KanbanSquare aria-hidden="true" /> : <Glyph d={ICON.sparkles} s={12} />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Send to Kanban</TooltipContent>
-              </Tooltip>
-            ) : null}
-          </ButtonGroup>
+          ) : null}
         </TooltipProvider>
       </div>
       {generateKanbanTaskFromChat && (open || generation) ? (
@@ -482,10 +513,12 @@ function WorkedForDivider({ active, events }: { active: boolean; events: Process
 }
 
 function ProcessPanel({ iconProps, active, events }: { iconProps: ThreadIconProps; active: boolean; events: ProcessEvent[] }) {
+  const visibleEvents = events.filter((event) => !isHiddenChatProcessEvent(event));
+  if (!visibleEvents.length) return null;
   return (
     <>
-      <WorkedForDivider active={active} events={events} />
-      <AgentProcessPanel {...iconProps} active={active} events={events} />
+      <WorkedForDivider active={active} events={visibleEvents} />
+      <AgentProcessPanel {...iconProps} active={active} events={visibleEvents} />
     </>
   );
 }
@@ -525,10 +558,14 @@ function parseResearchBriefTabs(text: string) {
   return introText ? [{ id: "overview", label: "Overview", content: introText }, ...sections] : sections;
 }
 
-function ResearchBriefTabs({ text, ChatMarkdown }: { text: string; ChatMarkdown?: ChatMarkdownComponent }) {
+function ResearchBriefTabs({ text, ChatMarkdown, sourceMachine }: {
+  text: string;
+  ChatMarkdown?: ChatMarkdownComponent;
+  sourceMachine?: DeliverableSourceMachine;
+}) {
   const sections = parseResearchBriefTabs(text);
   const [activeTab, setActiveTab] = useState(sections?.[0]?.id ?? "");
-  if (!sections?.length) return ChatMarkdown ? <ChatMarkdown text={text} className="fr-chat-markdown" /> : <>{renderInline(text)}</>;
+  if (!sections?.length) return ChatMarkdown ? <ChatMarkdown text={text} className="fr-chat-markdown" sourceMachine={sourceMachine} surface="chat" /> : <>{renderInline(text)}</>;
   const active = sections.find((section) => section.id === activeTab) ?? sections[0];
   return (
     <div className="fr-research-brief" aria-label="Research brief">
@@ -551,7 +588,7 @@ function ResearchBriefTabs({ text, ChatMarkdown }: { text: string; ChatMarkdown?
         })}
       </div>
       <div className="fr-research-panel" role="tabpanel">
-        {ChatMarkdown ? <ChatMarkdown text={active.content || "_No detail returned._"} className="fr-chat-markdown" /> : renderInline(active.content || "No detail returned.")}
+        {ChatMarkdown ? <ChatMarkdown text={active.content || "_No detail returned._"} className="fr-chat-markdown" sourceMachine={sourceMachine} surface="chat" /> : renderInline(active.content || "No detail returned.")}
       </div>
     </div>
   );
@@ -565,6 +602,7 @@ function MessageThreadBase({
   activeChatTaskRunning,
   agentSubline,
   busy,
+  capabilityPlanSubmittingId,
   chatDisplayContent,
   chatProcessScopeKey,
   copiedMessageKey,
@@ -579,7 +617,10 @@ function MessageThreadBase({
   processEventsForDisplay,
   processEventsTargetKey,
   selectedAgent,
+  sourceMachine,
   sendPromptMessage,
+  onCapabilityPlanChange,
+  onCapabilityPlanSubmit,
   onMessageFeedback,
   setCopiedMessageKey,
   setOpenKanbanTaskMenuKey,
@@ -595,6 +636,7 @@ function MessageThreadBase({
   /** "Coder · atlas" — the agent's role and machine, shown beside its name. */
   agentSubline?: string;
   busy?: boolean;
+  capabilityPlanSubmittingId?: string;
   chatDisplayContent?: (message: unknown) => string;
   chatProcessScopeKey: string;
   copiedMessageKey: string;
@@ -609,7 +651,10 @@ function MessageThreadBase({
   processEventsForDisplay: ProcessEvent[];
   processEventsTargetKey: string;
   selectedAgent?: AgentProfile | null;
+  sourceMachine?: DeliverableSourceMachine;
   sendPromptMessage?: (prompt: string, options?: SendPromptOptions) => void | Promise<void>;
+  onCapabilityPlanChange?: (plan: CapabilityApprovalPlan) => void;
+  onCapabilityPlanSubmit?: (plan: CapabilityApprovalPlan) => void | Promise<void>;
   onMessageFeedback?: (message: ThreadMessage, renderKey: string, rating: "up" | "down") => void | Promise<void>;
   setCopiedMessageKey: Dispatch<SetStateAction<string>>;
   setOpenKanbanTaskMenuKey: Dispatch<SetStateAction<string>>;
@@ -670,15 +715,20 @@ function MessageThreadBase({
         const rawApplicationGenerationCard = !isUser
           ? message.applicationGeneration ?? (message.imageGeneration ? imageGenerationToApplicationGeneration(message.imageGeneration) : null)
           : null;
-        const generatedImagePathCard = !isUser && content ? generatedImageCardFromAssistantText(content, message.createdAt) : null;
-        const preferredApplicationGenerationCard = generatedImagePathCard && rawApplicationGenerationCard?.status !== "ready"
-          ? generatedImagePathCard
+        const generatedMediaPathCard = !isUser && content ? generatedMediaCardFromAssistantText(content, message.createdAt) : null;
+        const preferredApplicationGenerationCard = generatedMediaPathCard && rawApplicationGenerationCard?.status !== "ready"
+          ? generatedMediaPathCard
           : rawApplicationGenerationCard;
         const applicationGenerationCard = shouldRenderImageGenerationCard(preferredApplicationGenerationCard)
           ? preferredApplicationGenerationCard
           : null;
-        const hasAssistantBody = Boolean(content || applicationGenerationCard || generatedImagePathCard || mirosharkCard || transcriptCard);
+        const capabilityApproval = !isUser ? message.capabilityApproval : undefined;
+        const hasAssistantBody = Boolean(content || capabilityApproval || applicationGenerationCard || generatedMediaPathCard || mirosharkCard || transcriptCard);
         const promptUi = !isUser && content ? promptUiFromMessage(message, content) : null;
+        const isHyperframesPromptBuilder = !isUser && message.agentPrompt?.id === HYPERFRAMES_PROMPT_BUILDER_ID;
+        const hyperframesSourceRequest = isHyperframesPromptBuilder
+          ? userRequestBeforeMessage(messages, index, chatDisplayContent)
+          : "";
         const assistantDisplayText = transcriptCard ? transcriptCard.remainingText : (promptUi?.displayText ?? content);
         const jsonRenderPayload = !isUser && assistantDisplayText ? extractJsonRenderPayload(assistantDisplayText) : null;
         const assistantDisplayTextWithoutJsonRender = jsonRenderPayload?.remainingText ?? assistantDisplayText;
@@ -744,7 +794,13 @@ function MessageThreadBase({
                 <AttachmentPills attachments={attachments} />
                 <MessageFooter align="user" timeLabel={timeLabel} actions={<MessageActions {...actionProps} />} />
               </article>
-              {userLiveEvents.length ? <ProcessPanel iconProps={iconProps} active={busy || processEventsAreActive(userLiveEvents)} events={userLiveEvents} /> : null}
+              {userLiveEvents.length ? (
+                <ProcessPanel
+                  iconProps={iconProps}
+                  active={chatProcessTimerIsActive(Boolean(busy), processEventsAreActive(userLiveEvents))}
+                  events={userLiveEvents}
+                />
+              ) : null}
             </Fragment>
           );
         }
@@ -754,33 +810,38 @@ function MessageThreadBase({
             {events.length ? (
               <ProcessPanel
                 iconProps={iconProps}
-                active={liveEvents.length ? busy || processEventsAreActive(liveEvents) : processEventsAreActive(messageEvents)}
+                active={chatProcessTimerIsActive(
+                  Boolean(busy && index === messages.length - 1),
+                  processEventsAreActive(events),
+                )}
                 events={events}
               />
             ) : null}
             {isPendingAssistant && !hasAssistantBody ? (
               <article aria-label={pendingAssistantLabel ? `${pendingAssistantLabel}...` : "Agent is thinking"} style={{ display: "grid", gap: 6 }}>
                 <div style={{ color: "var(--fg-2)", fontSize: 14.5, lineHeight: 1.7, paddingLeft: 13 }}>
-                  <ThinkingLoader AgentResponseLoader={AgentResponseLoader} phrase={pendingAssistantLabel} />
+                  {pendingAssistantLabel
+                    ? <AgentSessionStartLoader label={pendingAssistantLabel} />
+                    : <ThinkingLoader AgentResponseLoader={AgentResponseLoader} />}
                 </div>
               </article>
             ) : hasAssistantBody ? (
-              <article className={promptUi ? "fr-chat-prompt-article" : undefined} style={{ display: "grid", gap: 9 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                  <strong style={{ color: "var(--fg)", fontFamily: "var(--f-body)", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap" }}>{selectedAgent?.name ?? "Agent"}</strong>
-                  {promptUi?.options?.length && !promptUi.response ? (
+              <article className={`fr-chat-agent-article${promptUi ? " fr-chat-prompt-article" : ""}`}>
+                <div className="fr-chat-agent-message-header">
+                  <strong className="fr-chat-agent-message-name">{selectedAgent?.name ?? "Agent"}</strong>
+                  {capabilityApproval?.status === "pending" || (promptUi?.options?.length && !promptUi.response) ? (
                     /* Prototype 599: a pending decision reads "needs approval". */
-                    <span style={{ flexShrink: 0, fontFamily: "var(--f-body)", fontSize: 11, color: "var(--honey)" }}>needs approval</span>
+                    <span className="fr-chat-agent-message-state is-approval">needs approval</span>
                   ) : activeChatTaskRunning && index === messages.length - 1 ? (
-                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0, fontFamily: "var(--f-body)", fontSize: 11.5, color: "var(--live)" }}>
+                    <span className="fr-chat-agent-message-state is-working">
                       <Dot state="working" size={6} />
                       working
                     </span>
                   ) : agentSubline ? (
-                    <span style={{ fontFamily: "var(--f-body)", fontSize: 11.5, color: "var(--fg-4)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{agentSubline}</span>
+                    <span className="fr-chat-agent-message-subline">{agentSubline}</span>
                   ) : null}
                 </div>
-                <div style={{ display: "grid", gap: 10, color: "var(--fg-2)", fontSize: 14.5, lineHeight: 1.7, paddingLeft: 14 }}>
+                <div className="fr-chat-agent-message-body">
                   {assistantError ? (
                     <div className="fr-chat-error-card" role="alert">
                       <span className="fr-chat-error-card-icon" aria-hidden="true">
@@ -803,8 +864,23 @@ function MessageThreadBase({
                       </button>
                     </div>
                   ) : null}
+                  {capabilityApproval ? (
+                    <CapabilityApprovalCard
+                      plan={capabilityApproval}
+                      disabled={Boolean(busy || capabilityPlanSubmittingId === capabilityApproval.id)}
+                      onChange={onCapabilityPlanChange}
+                      onSubmit={onCapabilityPlanSubmit}
+                    />
+                  ) : null}
                   {applicationGenerationCard ? <ApplicationGenerationCard card={applicationGenerationCard} /> : null}
-                  {!applicationGenerationCard && generatedImagePathCard ? <ApplicationGenerationCard card={generatedImagePathCard} /> : null}
+                  {!applicationGenerationCard && generatedMediaPathCard ? <ApplicationGenerationCard card={generatedMediaPathCard} /> : null}
+                  {isHyperframesPromptBuilder ? (
+                    <HyperframesPromptBuilder
+                      sourceRequest={hyperframesSourceRequest}
+                      disabled={Boolean(busy || message.agentPrompt?.response)}
+                      sendPromptMessage={sendPromptMessage}
+                    />
+                  ) : null}
                   {mirosharkCard ? <MiroSharkSimulationCard card={mirosharkCard} ChatMarkdown={ChatMarkdown} /> : null}
                   {transcriptCard ? (
                     <TranscriptCard
@@ -813,7 +889,7 @@ function MessageThreadBase({
                       vaultPath={sharedVault?.vaultPath}
                     />
                   ) : null}
-                  {jsonRenderPayload && !applicationGenerationCard && !generatedImagePathCard && !mirosharkCard?.hideRawContent ? (
+                  {jsonRenderPayload && !applicationGenerationCard && !generatedMediaPathCard && !mirosharkCard?.hideRawContent && !isHyperframesPromptBuilder ? (
                     <div style={{ display: "grid", gap: 8 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 7, color: "var(--fg-4)", fontFamily: "var(--f-mono)", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase" }}>
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="var(--honey)" aria-hidden><path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z" /></svg>
@@ -822,14 +898,14 @@ function MessageThreadBase({
                       <JsonRenderSurface value={assistantDisplayText} className="m-0" />
                     </div>
                   ) : null}
-                  {assistantError || applicationGenerationCard || generatedImagePathCard || mirosharkCard?.hideRawContent ? null : ChatMarkdown
+                  {assistantError || capabilityApproval || applicationGenerationCard || generatedMediaPathCard || mirosharkCard?.hideRawContent || isHyperframesPromptBuilder ? null : ChatMarkdown
                     ? (assistantDisplayTextWithoutJsonRender
                       ? selectedAgent?.workerClass === "research"
-                        ? <ResearchBriefTabs text={markdownText(assistantDisplayTextWithoutJsonRender)} ChatMarkdown={ChatMarkdown} />
-                        : <ChatMarkdown text={markdownText(assistantDisplayTextWithoutJsonRender)} className="fr-chat-markdown" />
+                        ? <ResearchBriefTabs text={markdownText(assistantDisplayTextWithoutJsonRender)} ChatMarkdown={ChatMarkdown} sourceMachine={sourceMachine} />
+                        : <ChatMarkdown text={markdownText(assistantDisplayTextWithoutJsonRender)} className="fr-chat-markdown" sourceMachine={sourceMachine} surface="chat" />
                       : null)
                     : renderInline(assistantDisplayTextWithoutJsonRender)}
-                  {promptUi?.response ? (
+                  {isHyperframesPromptBuilder ? null : promptUi?.response ? (
                     <InteractivePromptResponse response={promptUi.response} />
                   ) : promptUi?.options?.length ? (
                     <InteractivePromptControls allowFreeText={promptUi.allowFreeText !== false} disabled={false} options={promptUi.options} sendPromptMessage={sendPromptMessage} Send={Send} />
@@ -845,7 +921,9 @@ function MessageThreadBase({
       {busy && !hasStreamingChunk && !pendingAssistantBubbleVisible ? (
         <div className="fr-chat-enter" style={{ display: "flex", alignItems: "center", gap: 9, paddingLeft: 1 }}>
           <span className="fr-dot live" style={{ color: "var(--live)" }} />
-          <ThinkingLoader AgentResponseLoader={AgentResponseLoader} phrase={pendingAssistantStatusText} />
+          {pendingAssistantStatusText
+            ? <AgentSessionStartLoader label={pendingAssistantStatusText} />
+            : <ThinkingLoader AgentResponseLoader={AgentResponseLoader} />}
         </div>
       ) : null}
     </>

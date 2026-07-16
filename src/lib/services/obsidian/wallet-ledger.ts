@@ -5,6 +5,7 @@ import { join } from "path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import type { AgentAssetSpendCaps, AgentSpendCapAsset, AgentWalletConfig, AgentWalletTokenBalance } from "@/lib/types/agent-wallet";
 import { DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS, stripUnfundedWalletBalance } from "@/lib/utils/agent-wallet";
+import { personalWalletOptionalNumber } from "@/lib/utils/personal-wallet-grouping";
 
 const WALLET_FOLDER = "Projects/HivemindOS/Wallets";
 
@@ -102,17 +103,17 @@ function parseWalletTokens(value: string | number | boolean | undefined): AgentW
       const network = typeof record.network === "string" ? record.network.trim() : "";
       const balance = Number(record.balance);
       if (!symbol || !network || !Number.isFinite(balance) || balance <= 0) return [];
-      const priceUsd = Number(record.priceUsd);
-      const valueUsd = Number(record.valueUsd);
-      const priceChange24hPct = Number(record.priceChange24hPct);
+      const priceUsd = personalWalletOptionalNumber(record.priceUsd);
+      const valueUsd = personalWalletOptionalNumber(record.valueUsd);
+      const priceChange24hPct = personalWalletOptionalNumber(record.priceChange24hPct);
       return [{
         symbol,
         name,
         balance,
         network,
-        priceUsd: Number.isFinite(priceUsd) ? priceUsd : null,
-        valueUsd: Number.isFinite(valueUsd) ? valueUsd : null,
-        priceChange24hPct: Number.isFinite(priceChange24hPct) ? priceChange24hPct : null,
+        priceUsd: priceUsd ?? null,
+        valueUsd: valueUsd ?? null,
+        priceChange24hPct: priceChange24hPct ?? null,
         isNative: record.isNative === true,
         tokenAddress: typeof record.tokenAddress === "string" ? record.tokenAddress : undefined,
         iconUrl: typeof record.iconUrl === "string" ? record.iconUrl : null,

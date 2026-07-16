@@ -14,6 +14,7 @@
  */
 
 import type { DashboardRouteTarget } from "@/features/dashboard/dashboard-navigation";
+import type { ChatDiscussContext } from "@/features/dashboard/chat-discuss-context";
 import type { AgentNotification } from "@/lib/types/agent-notifications";
 
 export type NotificationActionDescriptor =
@@ -53,6 +54,22 @@ function isApprovalNotification(notification: NotificationActionSource, text = h
   return hasTag(notification, "approval") || /approval|approve or deny/.test(text);
 }
 
+function capabilityApprovalChatTarget(notification: NotificationActionSource): DashboardRouteTarget | null {
+  if (!hasTag(notification, "capability-approval")) return null;
+  const source = notification.source ?? "";
+  const [prefix, encodedAgentId, encodedChatLeaf] = source.split("|");
+  if (prefix !== "chat-capability-approval" || !encodedAgentId) return { view: "chat" };
+  try {
+    return {
+      view: "chat",
+      agentId: decodeURIComponent(encodedAgentId),
+      chatLeaf: encodedChatLeaf ? decodeURIComponent(encodedChatLeaf) : undefined,
+    };
+  } catch {
+    return { view: "chat" };
+  }
+}
+
 /** The message the "Discuss" button sends into the shared Queen chat. */
 export function notificationDiscussPrompt(notification: NotificationActionSource): string {
   const body = notification.body.length > 900 ? `${notification.body.slice(0, 900)}\n[trimmed]` : notification.body;
@@ -66,6 +83,29 @@ export function notificationDiscussPrompt(notification: NotificationActionSource
     `Tell me: what caused this, whether it is already resolved, and the single next concrete action to take. If work is blocked on me, list exactly what needs my decision.`,
     `If you need the underlying Work Board task's current state, call the read_work_board tool${notificationTaskId(notification) ? ` with taskId ${notificationTaskId(notification)}` : ""} — do not ask me where the task lives.`,
   ].filter((line) => line !== null).join("\n");
+}
+
+/**
+ * The Queen-chat context BADGE for an alert row. Facts only — the user's
+ * question rides in the pre-filled composer draft, not here. Folded into the
+ * first chat message (see chat-discuss-context.ts) so the Queen answers from
+ * the real notification instead of a paraphrase.
+ */
+export function chatDiscussContextForNotification(notification: NotificationActionSource): ChatDiscussContext {
+  const taskId = notificationTaskId(notification);
+  const body = notification.body.length > 900 ? `${notification.body.slice(0, 900)}\n[trimmed]` : notification.body;
+  const lines = [
+    `Title: ${notification.title}`,
+    `From: ${notification.agentName}${notification.source ? ` (${notification.source})` : ""} at ${notification.createdAt}`,
+    body ? `Details: ${body}` : null,
+    taskId ? `Work Board task: ${taskId} (call read_work_board with this id for its current state)` : null,
+  ].filter((line): line is string => line !== null);
+  return {
+    id: `alert:${notification.id}`,
+    kind: "alert",
+    label: notification.title,
+    body: lines.join("\n"),
+  };
 }
 
 /**
@@ -83,6 +123,11 @@ export function deriveNotificationActions(notification: NotificationActionSource
   const actions: NotificationActionDescriptor[] = [];
   const text = haystack(notification);
   const taskId = notificationTaskId(notification);
+  const capabilityChatTarget = capabilityApprovalChatTarget(notification);
+
+  if (capabilityChatTarget) {
+    actions.push({ type: "navigate", label: "Review capability plan", target: capabilityChatTarget });
+  }
 
   if (taskId) {
     // openTask deep-links all the way: scroll the board to the card and open
@@ -96,7 +141,7 @@ export function deriveNotificationActions(notification: NotificationActionSource
     actions.push({ type: "navigate", label: "Open Companies", target: { view: "governance" } });
   }
 
-  if (hasTag(notification, "approval", "wallet") || isApprovalNotification(notification, text)) {
+  if (!capabilityChatTarget && (hasTag(notification, "approval", "wallet") || isApprovalNotification(notification, text))) {
     actions.push({ type: "navigate", label: "Open Wallet", target: { view: "wallet" } });
   }
 

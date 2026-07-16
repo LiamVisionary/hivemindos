@@ -30,6 +30,8 @@ import {
 import { holdTask, clearHold } from "@/lib/services/kanban/task-hold";
 import { buildLoopFromTemplate, listLoopTemplates, stripProtectedIntegrityReceipts, type LoopTemplateId } from "@/lib/services/loops";
 import { filterKanbanTasks, groupKanbanTasks } from "@/lib/utils/kanban-board";
+import { recordTaskSkillOutcome } from "@/lib/services/skills/skill-autoresearch";
+import { resolveFleetMachineAccessAnswer } from "@/lib/services/fleet/machine-access-approval";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -116,7 +118,13 @@ export async function POST(request: NextRequest) {
     }
     if (body.action === "complete") {
       const result = await completeTask(boardSlug, body.taskId, body, storageOptions);
-      return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
+      const skillAutoresearch = await recordTaskSkillOutcome(
+        result.task,
+        result.blocked ? "blocked" : "completed",
+        body.summary ?? body.result ?? undefined,
+        { vaultPath: storageOptions.vaultPath ?? undefined },
+      ).catch(() => undefined);
+      return NextResponse.json({ ok: true, ...result, skillAutoresearch, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
     }
     if (body.action === "loop-discover") {
       const result = await discoverTaskLoop(boardSlug, body.taskId, body.loop ?? body, storageOptions);
@@ -128,17 +136,29 @@ export async function POST(request: NextRequest) {
     }
     if (body.action === "block") {
       const result = await blockTask(boardSlug, body.taskId, body.reason ?? body.summary ?? "Blocked.", storageOptions);
-      return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
+      const skillAutoresearch = await recordTaskSkillOutcome(result.task, "blocked", body.reason ?? body.summary ?? undefined, { vaultPath: storageOptions.vaultPath ?? undefined }).catch(() => undefined);
+      return NextResponse.json({ ok: true, ...result, skillAutoresearch, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
     }
     if (body.action === "fail") {
       const result = await failTask(boardSlug, body.taskId, body, storageOptions);
-      return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
+      const skillAutoresearch = await recordTaskSkillOutcome(result.task, "failed", body.summary ?? body.error ?? body.reason ?? undefined, { vaultPath: storageOptions.vaultPath ?? undefined }).catch(() => undefined);
+      return NextResponse.json({ ok: true, ...result, skillAutoresearch, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
     }
     if (body.action === "unblock") {
       const result = await unblockTask(boardSlug, body.taskId, storageOptions);
       return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
     }
     if (body.action === "answer") {
+      const currentBoard = await readBoard(boardSlug, storageOptions);
+      const currentTask = currentBoard.tasks.find((task) => task.id === body.taskId);
+      if (!currentTask) throw new Error("Task not found.");
+      if (currentTask.status !== "needs-human") {
+        throw new Error(`Task is '${currentTask.status}'; answer only applies to Needs You tasks.`);
+      }
+      // A machine-policy answer must reach the collector authority before the
+      // task is resumed. If that enforcement fails, leave the card parked in
+      // Needs You instead of telling the same agent to retry without access.
+      const fleetAccessResolution = await resolveFleetMachineAccessAnswer(currentTask, body.answer);
       const result = await answerHumanTask(boardSlug, body.taskId, { answer: body.answer, author: body.author }, storageOptions);
       // A real answer supersedes any prior "parked" state so it doesn't stay
       // filtered after the task flows on (or if it later re-blocks).
@@ -164,7 +184,7 @@ export async function POST(request: NextRequest) {
           kanbanFolder: storageOptions.kanbanFolder,
         });
       }
-      return NextResponse.json({ ok: true, ...result, pickupScheduled, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
+      return NextResponse.json({ ok: true, ...result, fleetAccessResolution, pickupScheduled, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
     }
     if (body.action === "hold") {
       const result = await holdTask(boardSlug, body.taskId, { by: body.author, note: body.note ?? body.reason }, storageOptions);

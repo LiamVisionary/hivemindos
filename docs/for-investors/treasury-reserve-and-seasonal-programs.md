@@ -1,82 +1,58 @@
 ---
-title: Treasury Reserve And Seasonal Programs
-description: How HivemindOS can build a general company reserve without creating an automatic staking entitlement, and the gates required before any seasonal HIVE reward program can open.
+title: Revenue Allocations And Treasury Boundaries
+description: The separate 15% HIVE buyback and 15% company treasury allocations, plus the rights and accounting boundaries around both rails.
 ---
 
-# Treasury Reserve And Seasonal Programs
+# Revenue Allocations And Treasury Boundaries
 
-HivemindOS separates its live HIVE purchase policy, its general company reserve, and any future seasonal reward program. They are different allocations with different purposes and controls.
+This page keeps its existing filename for link compatibility. The current policy is a simple two-allocation model, not a staking-income program.
 
-## Current Policy Status
+## Current Allocation
 
-| Policy | Status | Current effect |
-| --- | --- | --- |
-| HIVE purchases | Live | 15% of recognized HivemindOS platform revenue enters weekly automatic HIVE purchase batches after the published maturity and execution controls. |
-| General treasury reserve | Policy framework | HivemindOS may earmark up to 15% of recognized platform revenue as a general company reserve, subject to operating runway, taxes, liabilities, solvency, and authorized treasury review. |
-| Seasonal HIVE rewards | Not active | No HIVE reward season, funded reward amount, APR, claim, or future season is currently promised. |
+| Revenue rail | Allocation | Boundary |
+| --- | ---: | --- |
+| HIVE buybacks | 15% of recognized platform revenue | Separate purchase rail; not funded by the company treasury |
+| Company treasury | 15% of recognized platform revenue | Company property; does not fund HIVE buybacks |
+| Outside tokenomics allocation | 70% of recognized platform revenue | This policy assigns no fixed use |
 
-The two treasury allocations can therefore total up to 30% of recognized platform revenue: 15% for the existing HIVE purchase policy and up to 15% for the general reserve. The reserve percentage is a ceiling, not a guaranteed transfer. At least 70% remains outside these two earmarks before general operating costs, taxes, liabilities, and other company uses are resolved.
+The two 15% allocations are exact and separate. They do not form one discretionary treasury bucket, and the treasury is not the source of HIVE purchases.
 
-## General Treasury Reserve
+## Recognized Revenue Boundary
 
-The reserve is company property. It may support operating runway, security and incident reserves, taxes and liabilities, grants, partnerships, ecosystem development, or another authorized company purpose.
+Recognized platform revenue is narrower than customer collections or transaction volume. It excludes directly attributable pass-through costs, refunds, and reversals. Marketplace gross merchandise value is not recognized platform revenue; only HivemindOS's earned platform fee is counted. Purchased credits are recognized only when consumed.
 
-The reserve does not give HIVE holders or stakers:
+Official hosted infrastructure calculates and records both allocations. A downloadable client, local environment value, connected user wallet, or client-supplied revenue claim cannot choose the allocation basis, amount, or recipient.
 
-- ownership of treasury assets
-- a redemption right
-- a fixed share of revenue
-- an automatic reward allocation
-- control over treasury decisions
-- a promise that the company will spend the reserve on HIVE
+## HIVE Buyback Rail
 
-Reserve assets may remain in cash or stable assets. Any decision to acquire, hold, use, or dispose of HIVE is a separate treasury action subject to its own legal, accounting, custody, liquidity, and market-integrity controls.
+The buyback rail purchases HIVE from its own 15% recognized-revenue allocation. Confirmed purchases are published in the [HIVE Buyback Ledger](https://hivemindos.app/buybacks/); pending allocations, failed batches, and unconfirmed transactions do not count as HIVE bought.
 
-## How A Future Reward Season Would Work
+HivemindOS does not burn HIVE. A buyback is not a distribution, staking payment, price floor, liquidity guarantee, or promise of token appreciation.
 
-A future seasonal HIVE reward program can open only as a discrete, fully funded program. It is not funded automatically from each revenue event and does not inherit the 15% reserve ceiling as a staker entitlement.
+## Company Treasury Rail
 
-The launch sequence is:
+The separate 15% treasury allocation is company property. This tokenomics policy does not prescribe one fixed use for treasury assets.
 
-1. HivemindOS proposes a fixed HIVE reward amount, eligibility period, claim period, and calculation rules.
-2. Specialist legal review, company authorization, tax and accounting review, and reserve/runway checks approve that exact season and its public language.
-3. The complete fixed reward amount is transferred to a separate reward distributor before the season is announced as open.
-4. The public season page identifies the funded amount, funding transaction, dates, eligibility rules, calculation method, claim contract, and change policy.
-5. Eligible participation is measured only for that published season. Staked principal remains in the existing non-custodial staking vault and is never used to fund rewards.
-6. Claims are reconciled against the fixed pool. Unclaimed assets follow the season's published closing policy.
+The treasury allocation gives HIVE holders and stakers no:
 
-Until all six conditions are satisfied, the staking page continues to show no HIVE yield.
+- ownership of company or treasury assets
+- redemption right
+- share of revenue
+- automatic distribution
+- binding governance or control over treasury decisions
+- promise that treasury funds will purchase HIVE
 
-## Variable Reward Calculation
+## Staking Separation
 
-If a season is approved, its fixed pool can be distributed proportionally:
+The staking vault holds user principal. It does not fund buybacks or the company treasury. Holding or staking HIVE does not create a balance or claim against either revenue allocation.
 
-```text
-wallet reward
-= funded season pool
-× wallet eligible weight
-÷ total eligible weight
-```
+The six staking tiers provide product benefits only: Honey earning multipliers, free-agent usage multipliers, and member pricing advertised as up to 61% off on participating services. They provide no yield, revenue share, ownership, binding governance, or treasury claim.
 
-Eligible weight can reflect the amount of HIVE staked and how long it remained eligible during that season. Any tier weighting must be published specifically for that season; existing Honey multipliers do not automatically become HIVE reward weights.
+## Change And Receipt Policy
 
-An estimated variable APR may appear only after the complete season pool is funded and the season rules are published. It must update with total eligible stake and must not be described as fixed, guaranteed, recurring, or evidence of a future season.
+Allocation definitions, percentages, cadence, minimums, caps, and execution may change, pause, or end prospectively because of legal, regulatory, tax, accounting, corporate, security, liquidity, market-integrity, reserve, solvency, or operational requirements.
 
-## Separation Rules
-
-- The staking vault holds user principal; it never funds treasury activity or rewards.
-- The buyback and burn policy has its own ledger, wallets, transactions, and receipts.
-- The general reserve remains company property until an authorized use occurs.
-- A reward distributor can receive only the fixed amount approved for one season.
-- No revenue event automatically creates a staker balance or claim.
-- No season can be advertised as active before its complete funding is verifiable.
-- A purchase, burn, season funding, and reward claim are separate facts with separate receipts.
-
-## Change And Suspension Policy
-
-The reserve ceiling, reserve funding, season design, eligibility, tier treatment, calculations, dates, and claim mechanics may change, pause, or end prospectively because of legal, regulatory, tax, accounting, corporate, security, liquidity, market-integrity, reserve, solvency, or operational requirements.
-
-Completed transactions and historical receipts remain part of the public record. Holding or staking HIVE creates no contractual right to a reserve allocation, reward season, reward amount, APR, or continuation of any policy.
+Material changes are published with an effective date. Completed on-chain purchases and historical receipts remain part of the public record. Continuation of an operating policy is not a contractual right of holding or staking HIVE.
 
 <nav class="nextNav" aria-label="Monetization reading path">
   <a href="honey-hive-treasury.html">Back: Honey, HIVE, And Treasury</a>

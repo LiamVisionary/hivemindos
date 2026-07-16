@@ -55,7 +55,9 @@
     "createUpdaterArtifacts": true,
     "externalBin": [
       "binaries/claw",
-      "binaries/hivemind-gateway-host"
+      "binaries/hivemind-gateway-host",
+      "binaries/hivemind-markitdown",
+      "binaries/hivemind-quant-research-engine"
     ],
     "macOS": {
       "bundleName": "HivemindOS",

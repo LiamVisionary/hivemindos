@@ -52,6 +52,21 @@ export type QueenBeeFleetMachine = {
     self?: boolean;
   };
   capabilities?: Record<string, unknown>;
+  system?: {
+    cpuPct?: number;
+    ramPct?: number;
+    diskPct?: number | null;
+  };
+  fleetPolicy?: {
+    configured?: boolean;
+    performance?: {
+      enabled?: boolean;
+      ignore?: boolean;
+      maxCpuPct?: number;
+      maxRamPct?: number;
+      maxDiskPct?: number;
+    };
+  };
   version?: {
     appDir?: string;
     commit?: string;

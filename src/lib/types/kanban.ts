@@ -18,6 +18,7 @@ import type {
   LoopSpec,
 } from "@/lib/types/loops";
 import type { EvaluationResult } from "@/lib/types/evaluation";
+import type { CapabilityApprovalMode } from "@/lib/types/capability-approval";
 
 export type KanbanStatus = "ideas" | "ready" | "working" | "needs-human" | "done" | "archived";
 
@@ -186,6 +187,8 @@ export type KanbanTask = {
   maxAttempts?: number;
   lastFailureReason?: KanbanFailureReason;
   idempotencyKey?: string;
+  /** Automatic by default for autonomous board work; "ask" parks capability choices in Needs You first. */
+  capabilityApprovalMode?: CapabilityApprovalMode;
   reviewedAt?: number;
   reviewedBy?: string;
   undoRequestedAt?: number;

@@ -1,0 +1,28 @@
+{
+  "created_at": "2026-07-14T05:45:35.758932+00:00",
+  "request": "Evaluate Coolify against HivemindOS managed app hosting and add Listmonk as an honest campaign-email capability if HivemindOS lacks it",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/installable-services.ts",
+      "target_path": "src/lib/services/listmonk-installable.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the established Docker status and install/start/stop lifecycle into a focused Listmonk service module."
+    },
+    {
+      "source_repo": "knadh/listmonk",
+      "source_path": "docker-compose.yml",
+      "target_path": "src/lib/services/listmonk-compose.ts",
+      "reuse_type": "config_adapted",
+      "note": "Adapted the v6.1.0 Listmonk and PostgreSQL topology with immutable images, loopback binding, private database networking, persistent volumes, and bounded logs."
+    },
+    {
+      "source_repo": "knadh/listmonk",
+      "source_path": "cmd/install.go",
+      "target_path": "src/lib/services/listmonk-compose.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the upstream idempotent first-run installation and upgrade sequence while leaving first-admin creation in the local web flow."
+    }
+  ]
+}

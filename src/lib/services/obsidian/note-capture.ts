@@ -1,5 +1,6 @@
 import { constants } from "fs";
-import { access, mkdir, writeFile } from "fs/promises";
+import { access, mkdir, readFile, writeFile } from "fs/promises";
+import { createHash } from "crypto";
 import { isAbsolute, join, relative, resolve, sep } from "path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
@@ -11,6 +12,9 @@ export type CaptureObsidianNoteInput = {
   inboxFolder?: string | null;
   content: string;
   now?: Date;
+  source?: string | null;
+  tags?: string[] | null;
+  idempotencyKey?: string | null;
 };
 
 export type CapturedObsidianNote = {
@@ -18,6 +22,7 @@ export type CapturedObsidianNote = {
   notePath: string;
   title: string;
   createdAt: string;
+  created: boolean;
 };
 
 function assertInside(root: string, path: string) {
@@ -65,17 +70,55 @@ function yamlScalar(value: string) {
   return JSON.stringify(value);
 }
 
+function safeSource(source?: string | null) {
+  const value = source?.trim() || "dashboard-slash-command";
+  if (value.length > 80 || /[\r\n]/.test(value)) throw new Error("Note source is invalid.");
+  return value;
+}
+
+function safeTags(tags?: string[] | null) {
+  const values = tags?.length ? tags : ["hivemindos-note"];
+  const unique = [...new Set(values.map((tag) => tag.trim()).filter(Boolean))];
+  if (unique.length > 16 || unique.some((tag) => tag.length > 64 || !/^[A-Za-z0-9/_-]+$/.test(tag))) {
+    throw new Error("Note tags are invalid.");
+  }
+  return unique;
+}
+
+function safeIdempotencyKey(value?: string | null) {
+  const key = value?.trim() || "";
+  if (!key) return "";
+  if (key.length > 80 || !/^[A-Za-z0-9_-]+$/.test(key)) {
+    throw new Error("Note idempotency key is invalid.");
+  }
+  return key;
+}
+
+function contentHash(content: string) {
+  return createHash("sha256").update(content, "utf8").digest("hex").slice(0, 20);
+}
+
 function noteMarkdown(input: {
   content: string;
   title: string;
   createdAt: string;
+  source: string;
+  tags: string[];
+  idempotencyKey: string;
+  contentHash: string;
 }) {
   return [
     "---",
     `type: ${yamlScalar("note")}`,
     `created: ${yamlScalar(input.createdAt)}`,
-    `source: ${yamlScalar("dashboard-slash-command")}`,
-    `tags: [${yamlScalar("hivemindos-note")}]`,
+    `source: ${yamlScalar(input.source)}`,
+    ...(input.idempotencyKey
+      ? [
+          `capture_id: ${yamlScalar(input.idempotencyKey)}`,
+          `content_sha256: ${yamlScalar(input.contentHash)}`,
+        ]
+      : []),
+    `tags: [${input.tags.map(yamlScalar).join(", ")}]`,
     "---",
     "",
     `# ${input.title}`,
@@ -95,6 +138,10 @@ export async function captureObsidianNote(input: CaptureObsidianNoteInput): Prom
 
   const createdAt = (input.now ?? new Date()).toISOString();
   const title = noteTitle(content);
+  const source = safeSource(input.source);
+  const tags = safeTags(input.tags);
+  const idempotencyKey = safeIdempotencyKey(input.idempotencyKey);
+  const hash = contentHash(content);
   const dateFolder = createdAt.slice(0, 10);
   const timeStamp = createdAt
     .slice(0, 19)
@@ -105,9 +152,20 @@ export async function captureObsidianNote(input: CaptureObsidianNoteInput): Prom
   assertInside(root, dir);
   await mkdir(dir, { recursive: true, mode: 0o700 });
 
-  const markdown = noteMarkdown({ content, title, createdAt });
-  const baseName = `${timeStamp}-${filenameSlug(title)}`;
+  const markdown = noteMarkdown({
+    content,
+    title,
+    createdAt,
+    source,
+    tags,
+    idempotencyKey,
+    contentHash: hash,
+  });
+  const baseName = idempotencyKey
+    ? `${timeStamp}-${idempotencyKey}`
+    : `${timeStamp}-${filenameSlug(title)}`;
   for (let index = 0; index < 50; index += 1) {
+    if (idempotencyKey && index > 0) break;
     const suffix = index === 0 ? "" : `-${index + 1}`;
     const file = resolve(dir, `${baseName}${suffix}.md`);
     assertInside(root, file);
@@ -118,8 +176,24 @@ export async function captureObsidianNote(input: CaptureObsidianNoteInput): Prom
         notePath: toVaultPath(root, file),
         title,
         createdAt,
+        created: true,
       };
     } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === "EEXIST" && idempotencyKey) {
+        const existing = await readFile(file, "utf8");
+        const sameCapture = existing.includes(`capture_id: ${yamlScalar(idempotencyKey)}`);
+        const sameContent = existing.includes(`content_sha256: ${yamlScalar(hash)}`);
+        if (!sameCapture || !sameContent) {
+          throw new Error("This note idempotency key already belongs to another capture.");
+        }
+        return {
+          vaultPath: root,
+          notePath: toVaultPath(root, file),
+          title,
+          createdAt,
+          created: false,
+        };
+      }
       if ((error as NodeJS.ErrnoException)?.code === "EEXIST") continue;
       throw error;
     }

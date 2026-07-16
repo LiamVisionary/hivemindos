@@ -29,6 +29,7 @@ const [
 assert.match(collectorSource, /activeCollectorChatRuns/, "collector tracks live chat processes");
 assert.match(collectorSource, /\/maintenance\/reserve-update/, "collector exposes an atomic maintenance reservation");
 assert.match(collectorMaintenanceSource, /active chat/i, "collector refuses maintenance around active chat work");
+assert.match(collectorMaintenanceSource, /updateQueued/, "collector can reserve the next idle maintenance window");
 assert.match(collectorMaintenanceSource, /releaseCollectorChatRun/, "collector releases chat activity when the runtime process exits");
 assert.match(collectorSource, /skillInventoryCache/, "ordinary skill inventory polling uses a cache");
 assert.match(collectorSource, /includeSourceFiles, force/, "source exports and explicit refreshes bypass stale summaries");
@@ -152,36 +153,52 @@ try {
     "fake Hermes did not start",
   );
 
-  const blockedReservation = await fetch(`${baseUrl}/maintenance/reserve-update`, { method: "POST" });
-  const blockedPayload = await blockedReservation.json();
-  assert.equal(blockedReservation.status, 409, "maintenance must not start while Hermes is working");
-  assert.equal(blockedPayload.activeChatRunCount, 1);
-
-  chatAbort.abort();
-  await chatRequest;
-  await waitFor(
-    () => fetch(`${baseUrl}/maintenance/readiness`)
-      .then((response) => response.json())
-      .then((payload) => payload.ready === true, () => false),
-    "collector did not release the completed chat run",
-  );
-
-  const reservationResponse = await fetch(`${baseUrl}/maintenance/reserve-update`, { method: "POST" });
-  const reservationPayload = await reservationResponse.json();
-  assert.equal(reservationResponse.status, 201);
-  assert.ok(reservationPayload.reservationToken);
+  const maintenanceRequestId = "test-maintenance-request";
+  const queuedReservation = await fetch(`${baseUrl}/maintenance/reserve-update`, {
+    method: "POST",
+    headers: { "x-hivemind-maintenance-request-id": maintenanceRequestId },
+  });
+  const queuedPayload = await queuedReservation.json();
+  assert.equal(queuedReservation.status, 202, "maintenance should reserve the next safe window");
+  assert.equal(queuedPayload.activeChatRunCount, 1);
+  assert.equal(queuedPayload.updateQueued, true);
+  assert.ok(queuedPayload.reservationToken);
 
   const blockedChat = await fetch(`${baseUrl}/chat`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ stream: false, message: "must wait" }),
   });
-  assert.equal(blockedChat.status, 503, "new chats must wait once maintenance is reserved");
+  assert.equal(blockedChat.status, 503, "new chats must wait once maintenance is queued");
+
+  chatAbort.abort();
+  await chatRequest;
+  await waitFor(
+    () => fetch(`${baseUrl}/maintenance/readiness`)
+      .then((response) => response.json())
+      .then((payload) => payload.activeChatRunCount === 0 && payload.updateStarting === true, () => false),
+    "collector did not release the completed chat run",
+  );
+
+  const reservationResponse = await fetch(`${baseUrl}/maintenance/reserve-update`, {
+    method: "POST",
+    headers: { "x-hivemind-maintenance-request-id": maintenanceRequestId },
+  });
+  const reservationPayload = await reservationResponse.json();
+  assert.equal(reservationResponse.status, 200);
+  assert.equal(reservationPayload.updateQueued, false);
+  assert.equal(reservationPayload.reservationToken, queuedPayload.reservationToken);
+
+  const competingReservation = await fetch(`${baseUrl}/maintenance/reserve-update`, {
+    method: "POST",
+    headers: { "x-hivemind-maintenance-request-id": "different-request" },
+  });
+  assert.equal(competingReservation.status, 409, "another updater cannot steal the reservation");
 
   const releaseResponse = await fetch(`${baseUrl}/maintenance/reserve-update`, {
     method: "DELETE",
     headers: {
-      "x-hivemind-maintenance-reservation": reservationPayload.reservationToken,
+      "x-hivemind-maintenance-reservation": queuedPayload.reservationToken,
     },
   });
   assert.equal(releaseResponse.status, 200);

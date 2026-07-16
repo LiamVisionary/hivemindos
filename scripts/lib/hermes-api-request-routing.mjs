@@ -41,3 +41,15 @@ export function hermesSessionIdFromResponse(headers) {
   if (!headers || typeof headers.get !== "function") return "";
   return cleanHeaderValue(headers.get("x-hermes-session-id"));
 }
+
+export function hermesApiSelectionMatchesAgent(agent, gatewaySelection) {
+  const requestedProvider = String(agent?.provider || "").trim();
+  const requestedModel = String(agent?.model || "").trim();
+  if (!requestedProvider && !requestedModel) return true;
+
+  const gatewayProvider = String(gatewaySelection?.provider || "").trim();
+  const gatewayModel = String(gatewaySelection?.model || "").trim();
+  if (requestedProvider && requestedProvider !== gatewayProvider) return false;
+  if (requestedModel && requestedModel !== gatewayModel) return false;
+  return true;
+}

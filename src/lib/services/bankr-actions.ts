@@ -50,7 +50,7 @@ type BankrActionDeps = {
 const BANKR_API_BASE = "https://api.bankr.bot";
 const DEFAULT_TIMEOUT_MS = 5 * 60_000;
 const DEFAULT_POLL_MS = 2_000;
-const MAX_SUMMARY_CHARS = 2_000;
+const MAX_SUMMARY_CHARS = 12_000;
 
 const INTENT_LABELS: Record<BankrActionIntent, string> = {
   portfolio: "Wallet portfolio",
@@ -238,14 +238,10 @@ export async function runBankrActionTool(args: Record<string, unknown>, deps: Ba
 
 export function bankrActionResultMessage(result: BankrActionResult) {
   return [
-    `**Bankr ${result.readOnly ? "read" : "action"} complete** · ${INTENT_LABELS[result.intent]}`,
-    "",
-    result.status ? `Status \`${result.status}\`` : "",
-    result.jobId ? `Job \`${result.jobId}\`` : "",
-    result.threadId ? `Thread \`${result.threadId}\`` : "",
+    `### Bankr · ${INTENT_LABELS[result.intent]}`,
     "",
     result.summary,
-  ].filter(Boolean).join("\n");
+  ].join("\n");
 }
 
 function isReadOnlyPrompt(prompt: string) {
@@ -408,6 +404,34 @@ export type BankrSubmitResult = {
   status: string;
   signer: string;
 };
+
+export type BankrPersonalSignResult = {
+  signature: string;
+  signer: string;
+};
+
+/** Sign a plain-text authentication message with the provisioned Bankr wallet. */
+export async function signBankrPersonalMessage(
+  message: string,
+  expectedAddress: string,
+  deps: BankrActionDeps = {},
+): Promise<BankrPersonalSignResult> {
+  const apiKey = deps.apiKey ?? await bankrApiKey();
+  if (!apiKey) throw new Error("Set BANKR_API_KEY, BANKR_LLM_KEY, or BANKR_MANAGEMENT_KEY before using the Bankr wallet.");
+  const data = await bankrFetch("/wallet/sign", apiKey, deps, {
+    method: "POST",
+    body: JSON.stringify({ signatureType: "personal_sign", message }),
+  });
+  const record = asRecord(data);
+  const signature = stringValue(record.signature);
+  const signer = stringValue(record.signer);
+  if (!/^0x[a-fA-F0-9]+$/.test(signature)) throw new Error("Bankr did not return a wallet signature.");
+  if (!/^0x[a-fA-F0-9]{40}$/.test(signer)) throw new Error("Bankr did not return the signing wallet address.");
+  if (signer.toLowerCase() !== expectedAddress.trim().toLowerCase()) {
+    throw new Error("The selected Bankr wallet does not match the wallet that signed the message.");
+  }
+  return { signature, signer };
+}
 
 /**
  * Submit a pre-built EVM transaction through Bankr's Wallet API (/wallet/submit).

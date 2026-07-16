@@ -16,6 +16,7 @@ import { honeyComputeGatewayUrl } from "@/lib/services/wallet/honey-economy-conf
 import { isHiveEvmAddress } from "@/lib/config/hive-staking";
 import { listWalletInfos, getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { resolveEvmSigningAccount } from "@/lib/services/wallet/chain-wallet";
+import { buildHoneyWalletLinkOptions, type HoneyWalletLinkOption } from "@/lib/services/wallet/honey-wallet-link-options";
 import {
   readHoneyWalletLink,
   resolveLocalHoneyMultiplier,
@@ -67,14 +68,19 @@ export async function honeyWalletLinkStatus(): Promise<{
   address: string | null;
   gatewayLinked: boolean;
   multiplier: HoneyWalletLinkCache & { address: string | null };
+  wallets: HoneyWalletLinkOption[];
 }> {
-  const link = await readHoneyWalletLink();
-  const multiplier = await resolveLocalHoneyMultiplier();
+  const [link, multiplier, wallets] = await Promise.all([
+    readHoneyWalletLink(),
+    resolveLocalHoneyMultiplier(),
+    listWalletInfos(),
+  ]);
   return {
     linked: Boolean(link),
     address: link?.address ?? null,
     gatewayLinked: link?.gatewayLinked === true,
     multiplier,
+    wallets: buildHoneyWalletLinkOptions(wallets),
   };
 }
 

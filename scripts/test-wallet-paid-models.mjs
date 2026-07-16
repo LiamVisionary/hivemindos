@@ -619,11 +619,11 @@ runTsxAssertion(`
   };
   assert.deepEqual(
     deriveFreeMeter(staleSnapshot, Date.parse("2026-07-08T09:00:00Z")),
-    { fraction: 0, label: "Daily allowance used up — resets daily", exhausted: true },
+    { fraction: 0, label: "Free agent usage used up — resets daily", exhausted: true },
   );
   assert.deepEqual(
     deriveFreeMeter(staleSnapshot, Date.parse("2026-07-09T00:00:00Z")),
-    { fraction: 1, label: "Full daily allowance available", exhausted: false },
+    { fraction: 1, label: "Full free agent usage available", exhausted: false },
   );
 `, "free Scout meter recovers stale 0/0 snapshot");
 assert.ok(!setupComponent.includes("async function finishSetup"), "embedded panel has no Done handler of its own — every change persists immediately via onComplete");

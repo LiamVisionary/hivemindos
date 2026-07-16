@@ -26,6 +26,7 @@ import {
   AGENT_MEMORY_ORIGINS,
   AGENT_MEMORY_SOURCE_TYPES,
   AGENT_MEMORY_TYPES,
+  normalizeAgentMemorySourceType as normalizeSourceType,
   type AgentMemoryActorRole,
   type AgentMemoryChainItem,
   type AgentMemoryCognitiveStage,
@@ -122,7 +123,6 @@ const VAULT_NOTE_TYPE_MAP: Array<[RegExp, AgentMemoryType]> = [
 const VALID_MEMORY_TYPES = new Set<AgentMemoryType>(AGENT_MEMORY_TYPES);
 const VALID_COGNITIVE_STAGES = new Set<AgentMemoryCognitiveStage>(AGENT_MEMORY_COGNITIVE_STAGES);
 const VALID_EVOLUTION_TYPES = new Set<AgentMemoryEvolutionType>(AGENT_MEMORY_EVOLUTION_TYPES);
-const VALID_SOURCE_TYPES = new Set<AgentMemorySourceType>(AGENT_MEMORY_SOURCE_TYPES);
 const VALID_ACTOR_ROLES = new Set<AgentMemoryActorRole>(AGENT_MEMORY_ACTOR_ROLES);
 const VALID_MEMORY_ORIGINS = new Set<AgentMemoryOrigin>(AGENT_MEMORY_ORIGINS);
 const AUTO_PROOF_TYPES = new Set<AgentMemoryType>(["instruction", "decision", "commitment", "preference", "artifact", "action"]);
@@ -294,15 +294,6 @@ function normalizeEvolutionType(value?: string) {
     throw new Error(`Unsupported memory evolution type "${value}". Use one of: ${AGENT_MEMORY_EVOLUTION_TYPES.join(", ")}.`);
   }
   return normalized as AgentMemoryEvolutionType;
-}
-
-function normalizeSourceType(value?: string) {
-  if (!value?.trim()) return undefined;
-  const normalized = value.trim().toLowerCase().replace(/[^a-z]+/g, "-");
-  if (!VALID_SOURCE_TYPES.has(normalized as AgentMemorySourceType)) {
-    throw new Error(`Unsupported memory source type "${value}". Use one of: ${AGENT_MEMORY_SOURCE_TYPES.join(", ")}.`);
-  }
-  return normalized as AgentMemorySourceType;
 }
 
 function normalizeActorRole(value?: string) {

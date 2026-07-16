@@ -24,6 +24,11 @@ const child = spawn("pnpm", [
     HIVEMINDOS_DASHBOARD_AUTH_SECRET: authSecret,
     HIVEMINDOS_DASHBOARD_DEVICE_TOKEN: deviceToken,
     HIVEMINDOS_TAURI_BUILD: "1",
+    HIVEMINDOS_COMPANY_AUTONOMY_DRIVER: "0",
+    HIVEMINDOS_HIVE_COMPUTE_RESUME: "0",
+    HIVEMINDOS_INBOX_TRIAGE: "0",
+    HIVEMINDOS_RESEARCH_SYNC: "0",
+    HIVEMINDOS_TELEGRAM_TIP_BOT_AUTOSTART: "0",
     NEXT_TELEMETRY_DISABLED: "1",
     // Pin the paid seller surface to deterministic, network-free states:
     // gateway disabled (404 from the route) and an official base URL that
@@ -57,6 +62,9 @@ try {
   const cookie = await openSession(baseUrl);
   await assertWalletApprovalFlow(baseUrl, cookie);
   console.log("Dashboard API auth checks passed");
+} catch (error) {
+  console.error(output);
+  throw error;
 } finally {
   await stopChild();
 }
@@ -70,6 +78,12 @@ async function assertSensitiveRoutesRejectAnonymous(url) {
     // Proxy bypasses this route for credential-less CORS preflight, so its own
     // explicit auth check must still reject an anonymous data request.
     { path: "/api/browser-extension", init: { method: "GET" } },
+    // Passkey authentication endpoints bypass the proxy so a locked browser can
+    // complete a challenge. Enrollment and management must still reject an
+    // anonymous caller inside their own routes.
+    { path: "/api/auth/passkeys", init: { method: "GET" } },
+    { path: "/api/auth/passkeys", init: jsonPost({ id: "not-a-real-passkey" }, "DELETE") },
+    { path: "/api/auth/passkeys/registration/options", init: { method: "POST" } },
     { path: "/api/env", init: { method: "GET" } },
     { path: "/api/env", init: jsonPost({ sourceId: "shared", key: "TEST_SECRET", value: "nope" }) },
     { path: "/api/wallet/create", init: jsonPost({ agentId: "queen-bee" }) },
@@ -169,9 +183,9 @@ async function assertWalletApprovalFlow(url, cookie) {
   assert.match((await replay.json()).error, /fresh server approval/i);
 }
 
-function jsonPost(body) {
+function jsonPost(body, method = "POST") {
   return {
-    method: "POST",
+    method,
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",

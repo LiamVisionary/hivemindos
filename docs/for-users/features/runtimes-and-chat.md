@@ -56,6 +56,7 @@ Managed assistant messages also include thumbs-up and thumbs-down controls. Rati
 - The collector bridges Hermes and other local runtime sessions when a remote machine owns the agent.
 - Chat history and thread preferences use the shared dashboard state, so they survive restarts consistently in the desktop app and browser. Folder creation is supported by `/api/chat/folders`.
 - Chat folder creation and linked directory context use the same machine-aware directory helper as Kanban and Scheduler: native local folder picker in Tauri, Hivemind Link/collector directory browsing for remote machines, and API fallback in the browser.
+- New app, site, dashboard, game, and clone requests can use the built-in App workspace. Chat creates the durable project before implementation, keeps its identity on the conversation, and makes Preview start and open that exact project on the selected machine. Simple HTML/CSS/JavaScript requests use a dependency-free static runtime; framework requests use the reviewed Next.js runtime.
 - Capability-search preflight can record redacted Context X-Ray manifests for a runtime session. The Memory workbench uses those manifests to show which skills, tools, API routes, connected apps, runtimes, docs, or workspace files were visible to the agent.
 - Runtime-specific powers such as deterministic connector queries and artifact authoring are declared in the runtime capability matrix. Hermes is the first runtime enabled for these PromptQL-style work-product flows; other runtimes opt in through the same matrix instead of separate branches.
 - Explicit Teach Hive phrasing in chat creates a Brain Review proposal, not an immediate memory write. The normal Brain Review approval/apply path still decides what becomes durable Shared Brain Memory.
@@ -196,6 +197,8 @@ attestation and fails closed when only local test evidence is available.
 - Dashboard agent calls that start through `/api/phone` using the gateway's in-app voice path instead of ringing the phone.
 - Scheduled/ring-agent calls that can ring the paired mobile device when explicitly triggered.
 - AEON call briefings with repository, branch, workspace, Strategy/Soul, memory, the v0.1 skill catalog, chains/reactive work, and recent MiroShark deliverable context.
+
+Chat document attachments use the bundled native reader rather than requiring a separate Python converter. See [Local Document Reader](local-document-reader.html) for all 16 supported extensions, local-versus-cloud privacy behavior, extraction limits, and format-specific caveats.
 
 For the full product split between free BYOK calls and paid Cloud/LiveKit rooms, see [Calling](calling.html).
 

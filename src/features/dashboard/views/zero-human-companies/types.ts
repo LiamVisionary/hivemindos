@@ -6,7 +6,7 @@ import type { AnalyticsProviderKey } from "@/lib/services/company-analytics/type
 import type { CompanyApprovalPolicy, CompanyAutonomyPauseMode, CompanyDirective, CompanyExecutionConfig, CompanyPricingProposal, CompanyProductCatalog } from "@/lib/types/company";
 import type { CompanyExecutionSelection } from "@/lib/services/company-execution-capabilities";
 import type { KanbanDeliverableKind } from "@/lib/types/kanban";
-import type { CompanyImportRequest, CompanyImportedOperations } from "@/lib/types/company-import";
+import type { CompanyDataRoomImportRequest, CompanyImportRequest, CompanyImportedKnowledge, CompanyImportedOperations } from "@/lib/types/company-import";
 import type { WorkBoardPipelineImpact, WorkBoardPipelineSummary } from "@/features/dashboard/work-board-pipeline";
 import type { SpendApprovalView } from "@/features/approvals/spend-approval-model";
 import type { ReasoningTrail } from "@/lib/types/reasoning-trail";
@@ -212,6 +212,8 @@ export interface Colony {
   approvalPolicies?: CompanyApprovalPolicy[];
   /** Imported legacy repo operations discovered from source. */
   importedOperations?: CompanyImportedOperations;
+  /** Reviewable local data-room sources attached to this company. */
+  importedKnowledge?: CompanyImportedKnowledge;
   /**
    * Raw, unformatted company values used to seed the edit form. Distinct from
    * display fields above (`apex`, `ticker`, …), which carry derived fallbacks
@@ -227,7 +229,9 @@ export interface CompanyRevenueShareInput {
   collectingAgentId?: string;
 }
 
-export type CompanyImportForm = CompanyImportRequest;
+export type CompanyImportForm =
+  | ({ source: "repo" } & CompanyImportRequest)
+  | ({ source: "data-room" } & CompanyDataRoomImportRequest);
 
 /** A fully-configured agent from the org roster, available to assign. */
 export interface PoolAgent {

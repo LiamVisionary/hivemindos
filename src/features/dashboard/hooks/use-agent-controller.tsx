@@ -117,13 +117,17 @@ export function useAgentController(props: UseAgentControllerProps) {
   function updateAgentProfile(agentId: string, patch: Partial<AgentProfile>) {
     setAgents((current) => {
       const existing = current.find((agent) => agent.id === agentId);
+      const discovered = displayAgents.find((agent) => agent.id === agentId);
+      const target = existing ?? discovered;
+      const nextPatch = target?.beeRole === "queen" && typeof patch.name === "string"
+        ? { ...patch, queenNameCustomized: true }
+        : patch;
       if (existing) {
         return current.map((agent) => (
-          agent.id === agentId ? { ...agent, ...patch } : agent
+          agent.id === agentId ? { ...agent, ...nextPatch } : agent
         ));
       }
-      const discovered = displayAgents.find((agent) => agent.id === agentId);
-      return discovered ? [...current, { ...discovered, ...patch }] : current;
+      return discovered ? [...current, { ...discovered, ...nextPatch }] : current;
     });
   }
 

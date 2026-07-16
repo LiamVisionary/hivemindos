@@ -63,9 +63,9 @@ These rails are documented in the [Trading guide](../../for-users/trading/) and 
 | Agent/workflow marketplace | Defer until recurring buyer demand exists |
 | Compute marketplace expansion | Defer supply growth until providers can receive realistic utilization |
 | Stake-tier member usage pricing | Server-enforced consumption pricing on participating hive products; never a payout |
-| HivemindOS revenue buyback policy | 15% of recognized platform revenue allocated to weekly automatic HIVE purchase batches across supported revenue streams; confirmed purchases remain publicly receipted |
-| General treasury reserve | Up to 15% of recognized platform revenue may be earmarked as company property, subject to runway, liabilities, solvency, and authorization; it creates no holder claim |
-| Seasonal HIVE reward program | Not active; any season requires a fixed fully funded pool plus exact-program legal, company, tax, accounting, eligibility, and public-receipt controls |
+| HIVE buyback allocation | 15% of recognized platform revenue funds a separate HIVE purchase rail; confirmed purchases remain publicly receipted and HIVE is not burned |
+| Company treasury allocation | A separate exact 15% of recognized platform revenue goes to company treasury; the treasury does not fund buybacks and creates no holder claim |
+| Outside tokenomics allocation | The remaining 70% has no fixed use assigned by the tokenomics policy |
 
 ## Billing Principles
 

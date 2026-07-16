@@ -1,8 +1,8 @@
 "use client";
 
 /* FleetHiveView.tsx — the redesigned default Fleet view: the Queen orchestrator
-   at the heart, machines ringed around her, every agent a tessellating hex
-   petal, honey-light pheromone trails flowing along the threads.
+   at the heart, machine summaries ringed around her, and the selected cluster's
+   agents revealed on demand.
 
    It consumes the SAME FleetViewProps as the legacy FleetView (AgentsPanel can
    render either one), maps the fleet payload into the lean hive shapes, and
@@ -10,11 +10,12 @@
    the legacy view (call / chat / wallet / settings / duplicate / remove,
    add agent / machine, update / rename / shell / host / code-proof / fix-sync).
 
-   The hive is authored on a fixed 1440×980 stage and scaled to fit; the detail
+   The hive is authored on a fixed 1012×980 stage and scaled to fit; the detail
    panel and chat pill live outside the scaled layer so they stay crisp. */
 
 import * as React from "react";
 import { createPortal } from "react-dom";
+import { Eye, Focus, Plus } from "lucide-react";
 import { AeonDeleteModal, isAeonAgent } from "@/components/fleet/aeon-delete-modal";
 import { MachineTerminalModal } from "@/components/fleet/machine-terminal-modal";
 import { MachineSendFileModal } from "@/components/fleet/machine-send-file-modal";
@@ -39,6 +40,7 @@ import {
   type FleetSearchItem,
 } from "@/components/fleet/fleet-search";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Button } from "@/design-system/ui/button";
 import { emitQueenVoiceToggle } from "@/lib/native/queen-voice-events";
 import { CompanionView } from "@/features/companion/CompanionView";
 import { consumePendingCompanionViewRequest, subscribeCompanionViewRequest } from "@/features/companion/companion-events";
@@ -49,11 +51,14 @@ import {
   type DashboardRouteTarget,
 } from "@/features/dashboard/dashboard-navigation";
 import { USEPOD_COMPUTE_RENTALS_ENABLED } from "@/lib/config/compute-rentals";
-import { HIVE_H, HIVE_W, frBuildLayout, frContentBounds } from "./hive-geometry";
+import { DEFAULT_QUEEN_BEE_NAME } from "@/lib/config/queen-bee-personality";
+import { HIVE_H, HIVE_W, QX, QY, frBuildLayout } from "./hive-geometry";
+import { frBuildLegacyLayout, frLegacyContentBounds } from "./hive-legacy-geometry";
 import { mapFleetMachines } from "./fleet-hive-mappers";
 import type { HiveAgent, HiveMachine, HiveSelection } from "./fleet-hive-types";
 import { isHiveMobileMachine } from "./fleet-hive-types";
 import { HiveStage } from "./HiveStage";
+import { LegacyHiveStage } from "./LegacyHiveStage";
 import { HivePanel, type HivePanelHandlers } from "./HivePanel";
 import { TopBar } from "./TopBar";
 import { useFrTheme } from "./use-fr-theme";
@@ -67,10 +72,11 @@ const NEW_AGENT_ARRIVAL_WINDOW_MS = 5 * 60_000;
 // this view, so commandMain is already inset clear of it). Must match
 // HivePanel's width.
 const PANEL_W = 340;
-// The hive cells are authored against a 1440×980 stage (same as the drop-in).
-// Fitting that whole canvas to the area reproduces the drop-in's cell size as
-// the default ("100%"); the user zooms/pans out from there.
-const BASELINE_CANVAS_W = 1440;
+// Keep the default view slightly wider than the authored stage so the Queen and
+// machine ring have breathing room without shrinking the hierarchy into icons.
+const BASELINE_CANVAS_W = 1280;
+const REVEAL_ALL_VERTICAL_CHROME_SPACE = 220;
+const HIVE_CENTER = { cx: QX, cy: QY } as const;
 const GRAPH_LAYOUT_TOGGLE_HUD_TOP = 86;
 const GRAPH_LAYOUT_TOGGLE_SELECTED_HUD_TOP = 158;
 const MIN_ZOOM = 0.5;
@@ -157,6 +163,7 @@ export function FleetHiveView({
   onCallAgent,
   onOpenWallet,
   onEditSettings,
+  queenName = DEFAULT_QUEEN_BEE_NAME,
   onOpenQueenSettings,
   onDuplicate,
   onRemove,
@@ -191,10 +198,19 @@ export function FleetHiveView({
     () => (loading && !settledHasValue ? [] : loading ? settled : hiveMachines),
     [hiveMachines, loading, settled, settledHasValue],
   );
+  const updatingMachineIds = React.useMemo(
+    () => new Set(
+      Object.entries(updateStatusByMachine ?? {})
+        .filter(([, status]) => status === "updating")
+        .map(([machineId]) => machineId),
+    ),
+    [updateStatusByMachine],
+  );
   const initialLoading = loading && displayMachines.length === 0;
   const refreshing = loading && !initialLoading;
 
   const [sel, setSel] = React.useState<HiveSelection>({ type: "queen" });
+  const [revealAll, setRevealAll] = React.useState(false);
   // View mode (parity with the legacy FleetView toolbar). "hive" is the new hex
   // layout; graph/map/list reuse the existing visualisations inside this chrome.
   const [viewMode, setViewMode] = React.useState<FleetViewMode>("hive");
@@ -245,20 +261,27 @@ export function FleetHiveView({
   const [spotlightKey, setSpotlightKey] = React.useState<string | null>(null);
   const [viewportAnimating, setViewportAnimating] = React.useState(false);
 
-  // The hive layout + the tight bounding box of what's actually drawn (used to
-  // keep the content centred). The baseline scale fits the whole authored
-  // canvas — matching the drop-in's cell size — and the user zooms from there.
-  const layout = React.useMemo(() => frBuildLayout(displayMachines), [displayMachines]);
+  // Keep the viewport anchored on Queen while cluster contents expand and
+  // collapse. This avoids the map drifting when the selection changes.
+  const focusedLayout = React.useMemo(() => frBuildLayout(displayMachines), [displayMachines]);
+  const legacyLayout = React.useMemo(() => frBuildLegacyLayout(displayMachines), [displayMachines]);
+  const layout = revealAll ? legacyLayout : focusedLayout;
   const primaryMobileMachine = React.useMemo(
     () => displayMachines.find(isHiveMobileMachine) ?? null,
     [displayMachines],
   );
-  const bounds = React.useMemo(
-    () => frContentBounds(displayMachines, layout, { includePhonePlaceholder: !primaryMobileMachine }),
-    [displayMachines, layout, primaryMobileMachine],
+  const legacyBounds = React.useMemo(
+    () => frLegacyContentBounds(displayMachines, legacyLayout, {
+      includePhonePlaceholder: !primaryMobileMachine,
+      includeAddMachine: Boolean(onAddMachine),
+    }),
+    [displayMachines, legacyLayout, onAddMachine, primaryMobileMachine],
   );
+  const bounds = revealAll ? { cx: legacyBounds.cx, cy: legacyBounds.cy } : HIVE_CENTER;
   const baseScale = (area.full > 0 && area.h > 0)
-    ? Math.min(area.full / BASELINE_CANVAS_W, area.h / HIVE_H)
+    ? revealAll
+      ? Math.min(1, area.full / (legacyBounds.w + 48), area.h / (legacyBounds.h + REVEAL_ALL_VERTICAL_CHROME_SPACE))
+      : Math.min(area.full / BASELINE_CANVAS_W, area.h / HIVE_H)
     : 1;
   const scale = baseScale * view.zoom;
   const searchIndex = React.useMemo(
@@ -302,6 +325,7 @@ export function FleetHiveView({
     selection: HiveSelection;
     filter: FleetSearchFilter;
     mode: FleetViewMode;
+    revealAll: boolean;
   } | null>(null);
   const searchInputRef = React.useRef<HTMLInputElement | null>(null);
   const wrapRef = React.useRef<HTMLDivElement>(null);
@@ -334,8 +358,8 @@ export function FleetHiveView({
 
   const captureLocateOrigin = React.useCallback(() => {
     if (locateOriginRef.current) return;
-    locateOriginRef.current = { view, selection: effectiveSel, filter: statusFilter, mode: viewMode };
-  }, [effectiveSel, statusFilter, view, viewMode]);
+    locateOriginRef.current = { view, selection: effectiveSel, filter: statusFilter, mode: viewMode, revealAll };
+  }, [effectiveSel, revealAll, statusFilter, view, viewMode]);
 
   const changeSearchOpen = React.useCallback((open: boolean) => {
     if (open) captureLocateOrigin();
@@ -350,6 +374,38 @@ export function FleetHiveView({
       LOCATE_VIEWPORT_ANIMATION_MS,
     );
   }, []);
+
+  const toggleRevealAll = React.useCallback(() => {
+    setRevealAll((current) => !current);
+    setSel({ type: "queen" });
+    setSpotlightKey(null);
+    animateViewport();
+    setView({ zoom: 1, x: 0, y: 0 });
+  }, [animateViewport]);
+
+  const selectHiveNode = React.useCallback((nextSelection: HiveSelection) => {
+    setSel(nextSelection);
+    if (nextSelection.type === "phone") return;
+
+    if (nextSelection.type === "queen") {
+      animateViewport();
+      setView({ zoom: 1, x: 0, y: 0 });
+      return;
+    }
+
+    const machineId = nextSelection.type === "machine" ? nextSelection.id : nextSelection.machineId;
+    const target = layout[machineId]?.pos;
+    if (!target) return;
+    animateViewport();
+    setView((current) => {
+      const currentScale = baseScale * current.zoom;
+      return {
+        ...current,
+        x: (bounds.cx - target.x) * currentScale,
+        y: (bounds.cy - target.y) * currentScale,
+      };
+    });
+  }, [animateViewport, baseScale, bounds.cx, bounds.cy, layout]);
 
   const locateSearchItem = React.useCallback((item: FleetSearchItem) => {
     const machine = displayMachines.find((candidate) => candidate.id === item.machineId);
@@ -390,6 +446,7 @@ export function FleetHiveView({
     setSel(origin.selection);
     setStatusFilter(origin.filter);
     chooseViewMode(origin.mode);
+    setRevealAll(origin.revealAll);
     setSearchQuery("");
     setSearchOpen(false);
     setSpotlightKey(null);
@@ -589,8 +646,21 @@ export function FleetHiveView({
         : updated
           ? (detail?.label ?? "Updated")
           : (detail?.label ?? "Update");
+    const tone: "idle" | "working" | "failed" | "updated" = busy
+      ? "working"
+      : failed
+        ? "failed"
+        : updated
+          ? "updated"
+          : "idle";
     // Disable while updating or after success (no redundant re-trigger).
-    return { label, busy: busy || updated, canUpdate: canUpdate || busy || failed || updated };
+    return {
+      label,
+      busy: busy || updated,
+      canUpdate: canUpdate || busy || failed || updated,
+      detail: detail?.detail,
+      tone,
+    };
   }, [updateDetailByMachine, updateStatusByMachine]);
 
   // Tailscale / network-issue repair — POSTs to the same endpoint the legacy
@@ -709,6 +779,36 @@ export function FleetHiveView({
             }}
           >
             {viewMode === "graph" ? <GraphPaletteToggle palette={graphPalette} onChoose={chooseGraphPalette} /> : null}
+            {viewMode === "hive" ? (
+              <div className="fr-hive-toolbar-actions" role="group" aria-label="Hive actions">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="xs"
+                  className="fr-hive-toolbar-action"
+                  data-active={revealAll ? "true" : undefined}
+                  aria-pressed={revealAll}
+                  onClick={toggleRevealAll}
+                  title={revealAll ? "Return to the focused Fleet Hive" : "Reveal the full pre-redesign Fleet Hive"}
+                >
+                  {revealAll ? <Focus aria-hidden /> : <Eye aria-hidden />}
+                  {revealAll ? "Focused view" : "Reveal all"}
+                </Button>
+                {onAddMachine && !revealAll ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    className="fr-hive-toolbar-action"
+                    data-tone="primary"
+                    onClick={onAddMachine}
+                  >
+                    <Plus aria-hidden />
+                    New machine
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
             <ViewModeToggle mode={viewMode} modes={availableViewModes} onChoose={chooseViewMode} />
           </div>
         ) : null}
@@ -729,9 +829,8 @@ export function FleetHiveView({
           <>
             {viewMode === "hive" ? (
               <>
-                {/* hive canvas — fills the space left of the panel. It renders at
-                    the drop-in baseline size by default; wheel-zoom and drag-to-pan
-                    let the user scale up/down and roam, just like the legacy graph. */}
+                {/* hive canvas — fills the space left of the panel. Wheel-zoom and
+                    drag-to-pan let the user scale up/down and roam. */}
                 <div
                   ref={hiveAreaRef}
                   onPointerDown={onPanPointerDown}
@@ -755,19 +854,36 @@ export function FleetHiveView({
                         : "none",
                     }}
                   >
-                    <HiveStage
-                      machines={displayMachines}
-                      sel={effectiveSel}
-                      onSelect={setSel}
-                      onOpenAgentSettings={onEditSettings ? openAgentSettings : undefined}
-                      onAddAgent={handlers.onAddAgent}
-                      onAddMachine={onAddMachine}
-                      onOpenQueenSettings={onOpenQueenSettings}
-                      newAgentId={newAgentId}
-                      focus={fleetFocus}
-                      spotlightKey={spotlightKey}
-                      tailnetLabel={tailnetLabel}
-                    />
+                    {revealAll ? (
+                      <LegacyHiveStage
+                        machines={displayMachines}
+                        sel={effectiveSel}
+                        onSelect={setSel}
+                        onOpenAgentSettings={onEditSettings ? openAgentSettings : undefined}
+                        onAddAgent={handlers.onAddAgent}
+                        onAddMachine={onAddMachine}
+                        onOpenQueenSettings={onOpenQueenSettings}
+                        queenName={queenName}
+                        newAgentId={newAgentId}
+                        focus={fleetFocus}
+                        spotlightKey={spotlightKey}
+                        tailnetLabel={tailnetLabel}
+                      />
+                    ) : (
+                      <HiveStage
+                        machines={displayMachines}
+                        sel={effectiveSel}
+                        onSelect={selectHiveNode}
+                        onOpenAgentSettings={onEditSettings ? openAgentSettings : undefined}
+                        onOpenQueenSettings={onOpenQueenSettings}
+                        queenName={queenName}
+                        updatingMachineIds={updatingMachineIds}
+                        newAgentId={newAgentId}
+                        focus={fleetFocus}
+                        spotlightKey={spotlightKey}
+                        tailnetLabel={tailnetLabel}
+                      />
+                    )}
                   </div>
                 </div>
                 {/* detail panel — full height, unscaled, crisp on the right */}
@@ -776,6 +892,7 @@ export function FleetHiveView({
                   sel={effectiveSel}
                   onSelect={setSel}
                   handlers={handlers}
+                  queenName={queenName}
                   walletsByAgent={walletsByAgent}
                   tailnetLabel={tailnetLabel}
                 />

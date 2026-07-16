@@ -260,31 +260,31 @@ const {
 }
 
 // --- low-latency voice runtime session boundary -----------------------------------
-// The agent-runtime voice fast path returns the stream before the normal chat
-// route reaches its shared session-start block. It must create the session
-// first, or assistant chunks can merge into an old assistant row because no new
-// user boundary was recorded for the long-lived queen-bee-voice session.
+// Every agent-runtime branch now crosses one shared session boundary before
+// Fusion, phone, wallet, or low-latency voice dispatch. Voice must remain after
+// that boundary so chunks cannot merge into an earlier queen-bee-voice turn.
 {
   const routeSource = readFileSync(
     new URL("../src/app/api/chat/agent-runtime/route.ts", import.meta.url),
     "utf8",
   );
+  const sessionStart = routeSource.indexOf("await startRuntimeChatSession({");
   const fastPathStart = routeSource.indexOf('const lowLatencyVoiceTurn = latencyMode === "voice";');
+  const firstDispatchBranch = routeSource.indexOf("if (isFusionProfile(profile))");
   assert.ok(fastPathStart > 0, "agent-runtime route still has a low-latency voice fast path");
   const fastPathReturn = routeSource.indexOf("return streamHttpRuntime(", fastPathStart);
-  const sessionStart = routeSource.indexOf("await startRuntimeChatSession({", fastPathStart);
-  assert.ok(sessionStart > fastPathStart, "voice fast path starts a runtime chat session");
+  assert.ok(sessionStart > 0, "agent-runtime route starts a runtime chat session");
   assert.ok(
-    sessionStart < fastPathReturn,
-    "voice fast path records the user boundary before returning the stream",
+    sessionStart < firstDispatchBranch && sessionStart < fastPathStart && sessionStart < fastPathReturn,
+    "the shared user boundary is recorded before every early dispatch, including voice",
   );
   assert.ok(
     routeSource.includes("userContent: bareUserRequestText(promptCheck.text) || promptCheck.text"),
     "voice fast path stores the unwrapped spoken request as the session user message",
   );
   assert.ok(
-    routeSource.includes('"agent_runtime.voice.session.started"'),
-    "voice fast path emits session-start telemetry",
+    routeSource.includes('"agent_runtime.session.started"'),
+    "the shared session boundary emits route telemetry for voice and every other branch",
   );
   console.log("low-latency voice session boundary ok");
 }

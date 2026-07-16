@@ -103,16 +103,31 @@ function ZeroHumanCompaniesDemoView({
         sector: form.sector || "Imported Product",
         apexTitle: form.apexGoalTitle || `Keep ${name}'s existing product operations visible and healthy`,
       }, []),
-      importedOperations: {
-        source: "repo",
-        importedAt: new Date().toISOString(),
-        lastDiscoveredAt: new Date().toISOString(),
-        projectPath: form.repoPath,
-        workflows: [],
-        schedules: [],
-        services: [],
-        scripts: [],
-      },
+      ...(form.source === "repo"
+        ? {
+            importedOperations: {
+              source: "repo" as const,
+              importedAt: new Date().toISOString(),
+              lastDiscoveredAt: new Date().toISOString(),
+              projectPath: form.repoPath,
+              workflows: [],
+              schedules: [],
+              services: [],
+              scripts: [],
+            },
+          }
+        : {
+            importedKnowledge: {
+              source: "data-room" as const,
+              importedAt: new Date().toISOString(),
+              lastDiscoveredAt: new Date().toISOString(),
+              dataRoomPath: form.dataRoomPath,
+              notesFolder: "Memory/Imported Sources/Companies/demo",
+              documents: [],
+              failedFiles: [],
+              totalSourceBytes: 0,
+            },
+          }),
     };
     setColonies((current) => [next, ...current]);
     return next.id;
@@ -654,7 +669,8 @@ function ZeroHumanCompaniesLiveView({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "import",
-          repoPath: form.repoPath,
+          source: form.source,
+          ...(form.source === "repo" ? { repoPath: form.repoPath } : { dataRoomPath: form.dataRoomPath }),
           companyName: form.companyName,
           ticker: form.ticker,
           sector: form.sector,
@@ -668,7 +684,15 @@ function ZeroHumanCompaniesLiveView({
         return null;
       }
       setError(null);
-      showNotice(json.updatedExisting ? `${json.company.name} systems refreshed.` : `${json.company.name} imported with repository systems attached.`);
+      showNotice(
+        form.source === "data-room"
+          ? json.updatedExisting
+            ? `${json.company.name} data-room sources refreshed.`
+            : `${json.company.name} imported with reviewable data-room knowledge.`
+          : json.updatedExisting
+            ? `${json.company.name} systems refreshed.`
+            : `${json.company.name} imported with repository systems attached.`,
+      );
       await refresh();
       return json.company.id;
     } finally {

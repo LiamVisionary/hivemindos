@@ -1,5 +1,5 @@
 import { applicationGenerationContent } from "@/features/dashboard/chat-application-generation";
-import { generatedImageCardFromAssistantText } from "@/features/dashboard/chat-generated-media";
+import { generatedMediaCardFromAssistantText } from "@/features/dashboard/chat-generated-media";
 
 function sameChatMessage(left: any, right: any) {
   return Boolean(left)
@@ -91,6 +91,9 @@ function promptWantsVideoGeneration(prompt: string) {
 export function shouldStartImageGenerationCard(prompt: string, label: string, detail?: string) {
   if (isCapabilitySearchProcessEvent(label, detail)) return false;
   const text = `${label}\n${detail ?? ""}`;
+  const currentTurnWantsVideoGeneration = promptWantsVideoGeneration(prompt);
+  const hyperframesRenderActivity = /\b(?:run\s+)?hyperframes\s+(?:lint|validate|inspect|snapshot|render)\b|\b(?:rendering|rendered)\b[\s\S]*\bhyperframes\b/i;
+  if (currentTurnWantsVideoGeneration && hyperframesRenderActivity.test(text)) return true;
   const currentTurnWantsImageGeneration = promptWantsImageGeneration(prompt);
   const imageGenerationActivityPattern = /\b(?:image[-_\s]?gen|image generation|generate(?:d|s|ing)? image|generating image|txt2img|text\s*to\s*image|comfyui|z[-_\s]?image|gpt-image|dall-e|local[-_\s]?ai|image studio|\/api\/job|job_url)\b/i;
   const strongImageGenerationActivityPattern = /\b(?:image[-_\s]?gen|txt2img|text\s*to\s*image|comfyui|z[-_\s]?image|gpt-image|dall-e|local[-_\s]?ai|image studio|\/api\/job|job_url)\b/i;
@@ -125,15 +128,16 @@ export function buildActiveImageGenerationCard(input: {
 }) {
   const patch = input.patch ?? {};
   const patchKind = (patch as { kind?: unknown }).kind;
+  const requestedKind = promptWantsVideoGeneration(input.prompt) ? "video" : "image";
   const generationKind = patchKind === "image" || patchKind === "music" || patchKind === "tts" || patchKind === "model3d" || patchKind === "video"
     ? patchKind
-    : input.current?.kind ?? "image";
+    : input.current?.kind ?? requestedKind;
   const current = input.current ?? {
-    id: `agent-image-gen-${input.taskId}`,
+    id: `agent-${generationKind}-gen-${input.taskId}`,
     kind: generationKind,
     prompt: input.prompt || input.outgoingLabel,
     status: "running",
-    title: "Image generation",
+    title: generationKind === "video" ? "HyperFrames render" : "Image generation",
     appId: input.appId,
     appName: input.agentName,
     serviceKind: input.serviceKind,
@@ -151,10 +155,11 @@ export function buildActiveImageGenerationCard(input: {
 }
 
 export function imageGenerationCompletionPatchFromText(text: string, current: any, prompt: string, completedAt = Date.now()) {
-  const generatedCard = generatedImageCardFromAssistantText(text, completedAt);
+  const generatedCard = generatedMediaCardFromAssistantText(text, completedAt);
   if (!generatedCard?.artifacts?.length) return null;
   return {
     status: "ready",
+    kind: generatedCard.kind,
     prompt: current?.prompt ?? prompt ?? generatedCard.prompt,
     title: generatedCard.title,
     appName: current?.appName ?? generatedCard.appName,

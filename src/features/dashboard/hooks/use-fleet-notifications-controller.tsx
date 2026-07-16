@@ -10,6 +10,24 @@ import { readNativeKanban } from "@/lib/native/kanban";
 import { APP_BUILDER_CONTRACT } from "@/lib/services/app-builder/contract";
 import { machineNeedsAppBuilderRepair } from "@/features/fleet/app-builder-collector-capability";
 
+const REMOTE_FLEET_UPDATE_REQUEST_TIMEOUT_MS = 210_000;
+const LOCAL_FLEET_UPDATE_REQUEST_TIMEOUT_MS = 330_000;
+const FLEET_UPDATE_MAINTENANCE_RETRY_MS = 5_000;
+const FLEET_UPDATE_MAINTENANCE_WAIT_MS = 20 * 60_000;
+
+function fleetUpdateIsWaitingForMaintenance(
+  response: Response | null,
+  data: { error?: string; queued?: boolean } | null,
+) {
+  return Boolean(
+    data?.queued === true ||
+      (response?.status === 409 &&
+        /active chat run|maintenance (?:is )?(?:already )?(?:starting|reserved)|reserved by another update request/i.test(
+          data?.error ?? "",
+        )),
+  );
+}
+
 export function useFleetNotificationsController(props: any) {
   const {
     DEFAULT_SHARED_VAULT,
@@ -278,36 +296,80 @@ export function useFleetNotificationsController(props: any) {
       ...current,
       [machine.key]: { label: "Updating...", tone: "working" },
     }));
-    const response = await fetch("/api/fleet/update", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        collectorUrl: machine.collectorUrl,
-        dnsName: machine.dnsName,
-        name: machine.name,
-        ip: machine.ip || machine.address,
-        appDir: machine.version?.appDir,
-        updateCommand: machine.version?.updateCommand,
-        expectedCommit:
-          machine.version?.latestCommit || appVersion?.latestCommit,
-        requiredCapabilities: {
-          appBuilderContractVersion: needsAppBuilderRepair
-            ? APP_BUILDER_CONTRACT.version
-            : undefined,
-          chat: needsChatBridgeRepair || undefined,
-          envHttpSync: needsEnvHttpSyncRepair || undefined,
-          skillInventory: needsSkillSyncRepair || undefined,
-          skillAutoSync: needsSkillSyncRepair || undefined,
-        },
-      }),
-    }).catch(() => null);
-    const data = (await response?.json().catch(() => null)) as {
+    const updateRequestTimeoutMs = machine.self
+      ? LOCAL_FLEET_UPDATE_REQUEST_TIMEOUT_MS
+      : REMOTE_FLEET_UPDATE_REQUEST_TIMEOUT_MS;
+    const maintenanceRequestId = crypto.randomUUID();
+    const maintenanceWaitStartedAt = Date.now();
+    let updateRequestError = "";
+    let response: Response | null = null;
+    let data: {
       ok?: boolean;
       error?: string;
+      message?: string;
+      queued?: boolean;
       method?: string;
       verified?: boolean;
       fallbackCommand?: string;
-    } | null;
+    } | null = null;
+    while (true) {
+      updateRequestError = "";
+      response = await fetch("/api/fleet/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(updateRequestTimeoutMs),
+        body: JSON.stringify({
+          maintenanceRequestId,
+          collectorUrl: machine.collectorUrl,
+          dnsName: machine.dnsName,
+          name: machine.name,
+          ip: machine.ip || machine.address,
+          appDir: machine.version?.appDir,
+          updateCommand: machine.version?.updateCommand,
+          expectedCommit:
+            machine.version?.latestCommit || appVersion?.latestCommit,
+          requiredCapabilities: {
+            appBuilderContractVersion: needsAppBuilderRepair
+              ? APP_BUILDER_CONTRACT.version
+              : undefined,
+            chat: needsChatBridgeRepair || undefined,
+            envHttpSync: needsEnvHttpSyncRepair || undefined,
+            skillInventory: needsSkillSyncRepair || undefined,
+            skillAutoSync: needsSkillSyncRepair || undefined,
+          },
+        }),
+      }).catch((error: unknown) => {
+        updateRequestError =
+          error instanceof DOMException && error.name === "TimeoutError"
+            ? `Update status timed out after ${Math.round(updateRequestTimeoutMs / 60_000)} minutes. The remote command may still be finishing, but this dashboard stopped waiting so the machine cannot remain stuck on Updating.`
+            : "The dashboard could not reach the fleet update service.";
+        return null;
+      });
+      data = (await response?.json().catch(() => null)) as typeof data;
+      if (!fleetUpdateIsWaitingForMaintenance(response, data)) break;
+      if (
+        Date.now() - maintenanceWaitStartedAt >=
+        FLEET_UPDATE_MAINTENANCE_WAIT_MS
+      ) {
+        data = {
+          ...data,
+          error:
+            "The update waited 20 minutes, but this agent bridge is still busy. No active agent work was interrupted. Try Update again after the work finishes.",
+        };
+        break;
+      }
+      live.setUpdateStatusByMachine((current) => ({
+        ...current,
+        [machine.key]: {
+          label: "Waiting for agent work…",
+          detail: `${data?.message ?? data?.error ?? "This agent bridge is busy."} The update will start automatically as soon as the active work finishes.`,
+          tone: "working",
+        },
+      }));
+      await new Promise((resolve) =>
+        setTimeout(resolve, FLEET_UPDATE_MAINTENANCE_RETRY_MS),
+      );
+    }
     const verified = Boolean(data?.ok && data.verified);
     const detail = verified
       ? data?.method === "already-current"
@@ -316,7 +378,7 @@ export function useFleetNotificationsController(props: any) {
           ? "The local checkout update finished, dependencies were installed, and the local agent bridge was restarted."
           : "The update command finished. The machine pulled the latest changes, installed dependencies, and restarted the agent bridge."
       : [
-          data?.error ?? "Update failed",
+          data?.error || updateRequestError || "Update failed",
           data?.fallbackCommand
             ? `Fallback script:\n${data.fallbackCommand}`
             : "",

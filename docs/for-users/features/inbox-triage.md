@@ -4,15 +4,28 @@ title: "Inbox Triage"
 
 # Inbox Triage
 
-Inbox Triage is a report-only brain service that keeps your vault's capture
-folders from silently piling up. Once a day it reads everything in `Inbox/`
-and your configured intake folder, classifies each note with fast local
-heuristics — no AI model calls, no network — and writes a report proposing
-where each item should go.
+Inbox Triage combines immediate Brain Drop processing with a report-only daily
+audit. New notes in `Inbox/` and the configured intake folder are preserved as
+raw captures. HivemindOS creates a separate cleaned note, classifies it, adds
+structured tags and links to relevant notes that already exist, and routes the
+result to the appropriate part of the vault.
 
-It never moves, edits, or deletes your notes. The report is the entire output.
+Tasks and reminders also become idempotent Work Board tasks. Ideas go to
+`Ideas/`, projects to `Projects/`, resources to `Memory/Imported Sources/`, and
+general notes to `Memory/Brain Drops/`. Ambiguous captures go to
+`Intake/Review/` instead of being confidently misrouted. Processing receipts
+prevent duplicate notes and tasks when a capture is retried.
 
-## What the report contains
+The original capture is never moved, edited, or deleted. Classification uses
+strong local signals first. Only ambiguous captures use the configured OpenAI
+route; if that route is unavailable or remains uncertain, the item goes to
+review.
+
+The daily Inbox Triage report remains a separate, read-only audit. It uses only
+local heuristics and no network calls, and it ignores Brain Drop's managed
+`Processed/` and `Review/` folders.
+
+## What the daily report contains
 
 Every captured note gets a row with a proposed rail, a confidence level, and
 the reasons behind the call:
@@ -41,10 +54,13 @@ a report on demand or disable the service.
 
 ## How it runs
 
-The service starts with the dashboard server and checks in every few minutes.
-After the configured report hour (20:00 by default) it generates the day's
-report once, then stays quiet until tomorrow. If the vault has no capture
-folders, it does nothing at all.
+Capture routes process immediately. The service also checks the inbox on its
+regular interval so notes written by native or manual vault paths are picked
+up and interrupted processing can retry safely.
+
+After the configured report hour (20:00 by default), the daily report runs
+once and then stays quiet until tomorrow. If the vault has no capture folders,
+it does nothing at all.
 
 Configuration is stored in the vault itself
 (`Operations/Brain Services/Inbox Triage.md`), so the toggle and report hour

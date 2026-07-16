@@ -9137,6 +9137,3848 @@
 - Decision: passed
 - Reason: Hermes bridge test, real inventory read, isolated config write/readback, syntax, TypeScript, and focused lint passed; full gate retained the concurrent 17-failure baseline.
 - Assimilated: official Hermes inventory and model-set mutation in collector
+## 2026-07-13T12:43:22.418668+00:00 - local-search
+
+- Request: build the honey contribution layer
+- Source: local-index
+- Query: `build the honey contribution layer`
+- Decision: no-results
+- Reason: No relevant local index hits after threshold filtering.
+## 2026-07-13T12:43:29.711807+00:00 - public-search
+
+- Request: build the honey contribution layer
+- Source: public-github
+- Query: `build the honey contribution layer`
+- Decision: retrieved
+- Reason: Retrieved 1 public candidates from GitHub search.
+
+### Candidates
+- juanedi/crystal-spacemacs-layer (12 stars, Emacs Lisp)
+  - URL: https://github.com/juanedi/crystal-spacemacs-layer
+  - Description: Spacemacs contribution layer for Crystal
+## 2026-07-13T12:43:29.774504+00:00 - prebuild-gate
+
+- Request: build the honey contribution layer
+- Source: public-github
+- Query: `build the honey contribution layer`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-07-13T12:52:02.223302+00:00 - shared-brain
+
+- Request: build the honey contribution layer
+- Source: hive-brain
+- Query: `build the honey contribution layer with verified community work and real non-transferable service benefits`
+- Decision: selected
+- Reason: Existing product decisions establish HONEY as non-transferable contribution reputation and identify verified community work plus service benefits as the intended path.
+- Selected backbone: HivemindOS Docs/for-investors/honey-hive-treasury.md; HivemindOS Docs/for-users/features/wallets-honey-and-x402.md; Agent Memory artifact: Honey economy LIVE
+- Assimilated: Non-transferable contribution rewards; reviewed mission awards; in-kind service benefits.
+- Verification: hive-brain answer returned these as the top relevant current product sources.
+## 2026-07-13T12:52:02.224302+00:00 - local-search
+
+- Request: build the honey contribution layer
+- Source: hive-assimilate-index
+- Query: `HONEY community contribution free model quota entitlement`
+- Decision: selected
+- Reason: The refreshed index matched the private hosted-service repo on every distinctive term and the public app repo provides the existing Wallets contribution surface.
+- Selected backbone: local-project:hivemind-cloud-services + local-project:hivemind-os
+- Assimilated: compute community contribution receipts; honey ledger crediting; paid-agent verified quota; app Telegram contribution linking.
+- Verification: Fresh local index returned LiamVisionary/hivemind-cloud-services with score 18.07 and all query terms.
+## 2026-07-13T12:52:02.231430+00:00 - prebuild-gate
+
+- Request: build the honey contribution layer
+- Source: hive-assimilate
+- Query: `build the honey contribution layer`
+- Decision: selected
+- Reason: The established local call chain already owns verified contribution issuance and server-side quota enforcement; extending it is the smallest compatible implementation.
+- Selected backbone: local-project:hivemind-os + local-project:hivemind-cloud-services
+- Assimilated: Contribution status from compute gateway, entitlement selection in paid-agent gateway, progress display in Wallets.
+- Verification: Manual call-chain inspection plus focused audits; implementation tests will verify the adapted seams.
+## 2026-07-13T12:52:02.257081+00:00 - security-audit
+
+- Request: build the honey contribution layer
+- Source: audit-candidate-repo
+- Query: `focused local backbone audit`
+- Decision: passed
+- Reason: Focused heuristic audits found no high, medium, or low findings in the selected contribution, ledger, quota, route, service, and UI files.
+- Selected backbone: local-project:hivemind-cloud-services + local-project:hivemind-os
+- Assimilated: Selected local source only.
+- Verification: Both audit_candidate_repo.py runs reported PASS with findings high=0 medium=0 low=0.
+## 2026-07-13T12:52:02.305923+00:00 - public-search
+
+- Request: build the honey contribution layer
+- Source: prebuild-assimilation-check
+- Query: `build the honey contribution layer`
+- Decision: rejected
+- Reason: The sole candidate, juanedi/crystal-spacemacs-layer, is an unrelated Emacs Lisp package found by phrase overlap and contains no reusable rewards, entitlement, or Worker architecture.
+- Selected backbone: none
+- Assimilated: none
+- Verification: Candidate metadata and repository topic are unrelated to HONEY or service entitlements.
+## 2026-07-13T12:52:13.577665+00:00 - audit
+
+- Request: build the honey contribution layer
+- Source: audit-candidate-repo
+- Query: `focused local backbone audit`
+- Decision: passed
+- Reason: Focused heuristic audits found no findings in the selected contribution, ledger, quota, route, service, and UI files.
+- Selected backbone: local-project:hivemind-cloud-services + local-project:hivemind-os
+- Assimilated: Selected local source only.
+- Verification: Both audit_candidate_repo.py runs reported PASS with findings high=0 medium=0 low=0.
+- Note: Canonical replacement for the immediately preceding security-audit event.
+## 2026-07-13T13:40:52.275228+00:00 - assimilation-manifest
+
+- Request: build the honey contribution layer
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemind-cloud-services:workers/compute-gateway/src/community-contributions.ts => src/lib/services/wallet/honey-community.ts, LiamVisionary/hivemindos:src/components/wallets-drop-in/WalletsView.tsx => src/components/wallets-drop-in/HoneyContributionCard.tsx, LiamVisionary/hivemind-cloud-services:workers/paid-agent-gateway/src/free-models.ts => src/lib/services/hivemindos-free-allowance.ts, LiamVisionary/hivemindos:scripts/test-scout-staking-quota.mjs => scripts/test-honey-contribution-layer.mjs
+- Verification: Wrote ASSIMILATION.honey-contribution-layer.json with 4 entries and custom_code_assessment=balanced.
+## 2026-07-13T13:43:11.856310+00:00 - verification
+
+- Request: build the honey contribution layer
+- Source: verify-assimilation-manifest
+- Decision: below-threshold
+- Reason: ASSIMILATION.honey-contribution-layer.json: below-threshold: need at least 3 substantive code/config reuse entries; found 2. Search for stronger donors before finalizing.
+## 2026-07-13T13:43:24.494690+00:00 - assimilation-manifest
+
+- Request: build the honey contribution layer
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemind-cloud-services:workers/compute-gateway/src/community-contributions.ts => src/lib/services/wallet/honey-community.ts, LiamVisionary/hivemindos:src/components/wallets-drop-in/WalletsView.tsx => src/components/wallets-drop-in/HoneyContributionCard.tsx, LiamVisionary/hivemind-cloud-services:workers/paid-agent-gateway/src/free-models.ts => src/lib/services/hivemindos-free-allowance.ts, LiamVisionary/hivemindos:scripts/test-scout-staking-quota.mjs => scripts/test-honey-contribution-layer.mjs
+- Verification: Wrote ASSIMILATION.honey-contribution-layer.json with 4 entries and custom_code_assessment=balanced.
+## 2026-07-13T13:43:31.092867+00:00 - verification
+
+- Request: build the honey contribution layer
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.honey-contribution-layer.json: 4 concrete reuse entries, 3 substantive
+## 2026-07-13T13:50:30.322481+00:00 - verification
+
+- Request: build the honey contribution layer
+- Source: local-gates
+- Query: `end-to-end contribution benefit verification`
+- Decision: passed
+- Reason: The adapted contribution, entitlement, UI, and documentation seams passed their focused gates and trust-boundary checks.
+- Selected backbone: local-project:hivemind-os + local-project:hivemind-cloud-services
+- Verification: App TypeScript, focused contracts, ESLint, revenue contracts, and commercial trust guard pass; compute and paid-agent TypeScript, focused suites, and Wrangler dry-runs pass; website TypeScript, commercial copy, and 38-route production build pass; diff hygiene passes in all three repos. The app file-size ratchet remains red only on existing benchmark/legacy/concurrent entries, while the task reduces WalletsView by one line and adds no oversized file.
+## 2026-07-13T13:50:30.322738+00:00 - final
+
+- Request: build the honey contribution layer
+- Source: hive-assimilate
+- Query: `build the honey contribution layer`
+- Decision: completed
+- Reason: Reviewed community HONEY now has a concrete server-authoritative free-agent usage benefit, with higher-of stake/contribution selection and honest public boundaries.
+- Selected backbone: local-project:hivemind-os + local-project:hivemind-cloud-services
+- Assimilated: Reviewed award aggregation; bounded quota curve; authenticated entitlement lookup; workspace-scoped metering; Wallets contribution progress; public utility copy.
+- Not assimilated: Unrelated public Emacs package; spendable HONEY; automatic HIVE conversion; locally asserted commercial entitlements.
+- Verification: App TypeScript, focused contracts, ESLint, revenue contracts, and commercial trust guard pass; compute and paid-agent TypeScript, focused suites, and Wrangler dry-runs pass; website TypeScript, commercial copy, and 38-route production build pass; diff hygiene passes in all three repos. The app file-size ratchet remains red only on existing benchmark/legacy/concurrent entries, while the task reduces WalletsView by one line and adds no oversized file.
+## 2026-07-13T14:46:47.825909+00:00 - shared-brain
+
+- Request: can we add honey tipping to the HIVE TIP bought and for the new honey leaderboard, can we seed it with the tip leaderboards values but at a proper ratio that works with our HONEY units? then add a /honey command to our telegram bot that lets give honey? though i dont know how it should work, who can give honey? everyone? do we give everyone a daily quota of honey they can give? how can we create an anti-abuse system? etc
+- Source: hive-brain full-vault
+- Query: `telegram HONEY peer recognition tipping daily quota anti sybil leaderboard seed`
+- Decision: selected
+- Reason: Recovered the existing reviewed-contribution HONEY policy, Telegram command contract, and tip-bot storage model.
+- Assimilated: Shared HONEY trust boundary and existing Telegram integration context
+## 2026-07-13T14:46:47.956253+00:00 - local-search
+
+- Request: can we add honey tipping to the HIVE TIP bought and for the new honey leaderboard, can we seed it with the tip leaderboards values but at a proper ratio that works with our HONEY units? then add a /honey command to our telegram bot that lets give honey? though i dont know how it should work, who can give honey? everyone? do we give everyone a daily quota of honey they can give? how can we create an anti-abuse system? etc
+- Source: workspace and local assimilation index
+- Query: `telegram HONEY peer recognition tipping daily quota anti sybil leaderboard seed`
+- Decision: selected
+- Reason: The current workspace already contains the Telegram identity client, HIVE recipient resolver, HIVE leaderboard reducer, hosted community gateway, D1 season budget, and signed-ledger path.
+- Assimilated: Existing bot recipient resolution, bot-only API client, D1 quota patterns, and leaderboard queries
+## 2026-07-13T14:46:48.233617+00:00 - local-search
+
+- Request: can we add honey tipping to the HIVE TIP bought and for the new honey leaderboard, can we seed it with the tip leaderboards values but at a proper ratio that works with our HONEY units? then add a /honey command to our telegram bot that lets give honey? though i dont know how it should work, who can give honey? everyone? do we give everyone a daily quota of honey they can give? how can we create an anti-abuse system? etc
+- Source: local-index
+- Query: `can we add honey tipping to the HIVE TIP bought and for the new honey leaderboard, can we seed it with the tip leaderboards values but at a proper ratio that works with our HONEY units? then add a /honey command to our telegram bot that lets give honey? though i dont know how it should work, who can give honey? everyone? do we give everyone a daily quota of honey they can give? how can we create an anti-abuse system? etc`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+
+### Candidates
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos
+  - Description: LiamVisionary/hivemindos Next.js React ( @tauri-apps/cli tailscale.com <div align="center"> <img width="220" height="220" alt="HivemindOS" src="public/hivemindos-logo.png" /> <p> <a href="https://github.com/LiamVisionary/hivemindos/stargaze
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services
+  - Description: LiamVisionary/hivemind-cloud-services React @aws-sdk/client-s3 @bomb.sh/tab @cloudflare/autoconfig @cloudflare/cli @cloudflare/cli-shared-helpers @cloudflare/codemod @cloudflare/config @cloudflare/containers-shared @cloudflare/deploy-helper
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos/blob/HEAD/src-tauri/Cargo.toml
+  - Path: `src-tauri/Cargo.toml`
+  - Description: [package] name = "hivemindos-desktop" version = "0.4.1" description = "HivemindOS desktop shell" authors = ["HivemindOS"] edition = "2021" [lib] name = "hivemindos_desktop_lib" crate-type = ["staticlib", "cdylib", "rlib"] [[bin]] name = "Hi
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services/blob/HEAD/workers/compute-gateway/package.json
+  - Path: `workers/compute-gateway/package.json`
+  - Description: { "name": "hivemindos-compute-gateway-worker", "version": "0.1.0", "private": true, "type": "module", "scripts": { "dev": "wrangler dev --local", "deploy": "wrangler deploy", "d1:create": "wrangler d1 create hivemindos_compute_gateway", "d1
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services/blob/HEAD/workers/research-gateway/package.json
+  - Path: `workers/research-gateway/package.json`
+  - Description: { "name": "hivemindos-research-gateway-worker", "version": "0.1.0", "private": true, "type": "module", "scripts": { "dev": "wrangler dev --config wrangler.jsonc --port 8931", "deploy": "wrangler deploy", "d1:create": "wrangler d1 create hiv
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services/blob/HEAD/workers/managed-agent-control-plane/node_modules/.pnpm/simple-swizzle@0.2.4/node_modules/simple-swizzle/package.json
+  - Path: `workers/managed-agent-control-plane/node_modules/.pnpm/simple-swizzle@0.2.4/node_modules/simple-swizzle/package.json`
+  - Description: { "name": "simple-swizzle", "description": "Simply swizzle your arguments", "version": "0.2.4", "author": "Qix (http://github.com/qix-)", "keywords": [ "argument", "arguments", "swizzle", "swizzling", "parameter", "parameters", "mixed", "ar
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services/blob/HEAD/workers/honey-ledger/package.json
+  - Path: `workers/honey-ledger/package.json`
+  - Description: { "name": "hivemindos-honey-ledger-worker", "version": "0.1.0", "private": true, "type": "module", "scripts": { "dev": "wrangler dev --local", "deploy": "wrangler deploy", "d1:create": "wrangler d1 create hivemindos_honey_ledger", "d1:migra
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos/blob/HEAD/package.json
+  - Path: `package.json`
+  - Description: { "name": "hivemindos", "version": "0.4.1", "private": false, "license": "MIT", "type": "module", "packageManager": "pnpm@8.6.12", "scripts": { "test": "node scripts/test-gate.mjs", "dev": "node scripts/dev-server.mjs", "dev:ui": "node scri
+## 2026-07-13T14:46:51.153079+00:00 - public-search
+
+- Request: can we add honey tipping to the HIVE TIP bought and for the new honey leaderboard, can we seed it with the tip leaderboards values but at a proper ratio that works with our HONEY units? then add a /honey command to our telegram bot that lets give honey? though i dont know how it should work, who can give honey? everyone? do we give everyone a daily quota of honey they can give? how can we create an anti-abuse system? etc
+- Source: public-github
+- Query: `can we add honey tipping to the HIVE TIP bought and for the new honey leaderboard, can we seed it with the tip leaderboards values but at a proper ratio that works with our HONEY units? then add a /honey command to our telegram bot that lets give honey? though i dont know how it should work, who can give honey? everyone? do we give everyone a daily quota of honey they can give? how can we create an anti-abuse system? etc`
+- Decision: retrieved
+- Reason: Retrieved 5 public candidates from GitHub search.
+
+### Candidates
+- DEEP13-2-5/Wallet (1 stars, TypeScript)
+  - URL: https://github.com/DEEP13-2-5/Wallet
+  - Description: Web3 Wallet Dashboard is a React-based dApp that connects to MetaMask, displays the user's wallet address, ETH balance, and network info. Built with ethers.js and hooks, it includes optional features like DAI token balance, ENS name, dark/l
+- aikonre/token-balance-dashboard (0 stars, JavaScript)
+  - URL: https://github.com/aikonre/token-balance-dashboard
+  - Description: A simple token balance checker built with React. Simulates checking token balances for a given wallet address
+- mohammedazfersheikh/fullstack-web3-token-dashboard (0 stars, JavaScript)
+  - URL: https://github.com/mohammedazfersheikh/fullstack-web3-token-dashboard
+  - Description: A complete end-to-end Web3 application built with React (Vite), Node.js/Express, and Ethers.js that demonstrates real-world decentralized application architecture. This project includes a backend API for blockchain data fetching and a moder
+- prakarsh-spheron/Wallet-Dashboard-Demo (1 stars, MIT License)
+  - URL: https://github.com/prakarsh-spheron/Wallet-Dashboard-Demo
+  - Description: Demo using the token balances react component to create a Wallet Dashboard
+- shubhbatra1991/OpenDeFi-Analytics- (0 stars, MIT License)
+  - URL: https://github.com/shubhbatra1991/OpenDeFi-Analytics-
+  - Description: Building a analytics dashboard where users connect a wallet and see token balances, portfolio value, and recent transactions in real time, using Next.js/React on the frontend and a .NET/Azure API backend.
+## 2026-07-13T14:46:51.232084+00:00 - prebuild-gate
+
+- Request: can we add honey tipping to the HIVE TIP bought and for the new honey leaderboard, can we seed it with the tip leaderboards values but at a proper ratio that works with our HONEY units? then add a /honey command to our telegram bot that lets give honey? though i dont know how it should work, who can give honey? everyone? do we give everyone a daily quota of honey they can give? how can we create an anti-abuse system? etc
+- Source: public-github
+- Query: `can we add honey tipping to the HIVE TIP bought and for the new honey leaderboard, can we seed it with the tip leaderboards values but at a proper ratio that works with our HONEY units? then add a /honey command to our telegram bot that lets give honey? though i dont know how it should work, who can give honey? everyone? do we give everyone a daily quota of honey they can give? how can we create an anti-abuse system? etc`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-07-13T14:47:10.985145+00:00 - public-search
+
+- Request: can we add honey tipping to the HIVE TIP bought and for the new honey leaderboard, can we seed it with the tip leaderboards values but at a proper ratio that works with our HONEY units? then add a /honey command to our telegram bot that lets give honey? though i dont know how it should work, who can give honey? everyone? do we give everyone a daily quota of honey they can give? how can we create an anti-abuse system? etc
+- Source: bounded public GitHub search
+- Query: `telegram HONEY peer recognition daily quota anti-sybil leaderboard`
+- Decision: rejected
+- Reason: Returned generic wallet dashboards without compatible Telegram identity, HONEY ledger, D1 quota, or signed-award primitives; reusing the authenticated HivemindOS repos is safer and materially closer.
+- Not assimilated: Unrelated public wallet dashboard candidates
+## 2026-07-13T14:47:11.139876+00:00 - audit
+
+- Request: can we add honey tipping to the HIVE TIP bought and for the new honey leaderboard, can we seed it with the tip leaderboards values but at a proper ratio that works with our HONEY units? then add a /honey command to our telegram bot that lets give honey? though i dont know how it should work, who can give honey? everyone? do we give everyone a daily quota of honey they can give? how can we create an anti-abuse system? etc
+- Source: /Users/liam/Documents/code/projects/hivemind-os
+- Query: `telegram-tip-bot recipient resolver commands client and tests`
+- Decision: selected
+- Reason: Audited the established bot command, recipient resolution, client, and test surfaces; no candidate code execution is needed.
+- Assimilated: parse.ts recipient resolution, community-honey.ts authenticated client, commands.ts handler pattern, test-telegram-tip-bot.mjs
+## 2026-07-13T14:47:11.253089+00:00 - audit
+
+- Request: can we add honey tipping to the HIVE TIP bought and for the new honey leaderboard, can we seed it with the tip leaderboards values but at a proper ratio that works with our HONEY units? then add a /honey command to our telegram bot that lets give honey? though i dont know how it should work, who can give honey? everyone? do we give everyone a daily quota of honey they can give? how can we create an anti-abuse system? etc
+- Source: /Users/liam/Documents/code/projects/hivemind-cloud-services
+- Query: `community contribution D1 quota signed award and leaderboard`
+- Decision: selected
+- Reason: Audited the hosted D1 schema, season reservation triggers, signed HONEY ledger call, and real route integration test.
+- Assimilated: community-contributions.ts, migration 0013 patterns, schema.sql, honey-community-contributions.mjs
+## 2026-07-13T15:49:15.356218+00:00 - implementation
+
+- Request: can we add honey tipping to the HIVE TIP bought and for the new honey leaderboard, can we seed it with the tip leaderboards values but at a proper ratio that works with our HONEY units? then add a /honey command to our telegram bot that lets give honey? though i dont know how it should work, who can give honey? everyone? do we give everyone a daily quota of honey they can give? how can we create an anti-abuse system? etc
+- Source: LiamVisionary/hivemindos and LiamVisionary/hivemind-cloud-services
+- Query: `recipient resolution leaderboard reducer authenticated community client D1 quota triggers`
+- Decision: selected
+- Reason: Adapted the established Telegram recipient resolver, HIVE leaderboard reducer, bot-only community client, identity hashing, season-budget triggers, and integration-test harness.
+- Assimilated: resolveTipRecipient, tipLeaderboard, CommunityHoneyClient.request, community identity HMAC, D1 guard triggers, unstable_dev route tests
+## 2026-07-13T15:49:15.491142+00:00 - verification
+
+- Request: can we add honey tipping to the HIVE TIP bought and for the new honey leaderboard, can we seed it with the tip leaderboards values but at a proper ratio that works with our HONEY units? then add a /honey command to our telegram bot that lets give honey? though i dont know how it should work, who can give honey? everyone? do we give everyone a daily quota of honey they can give? how can we create an anti-abuse system? etc
+- Source: focused and integrated gates
+- Query: `peer HONEY command quotas seed conversion non-benefit leaderboard verification`
+- Decision: selected
+- Reason: Test-first failures were observed before implementation; focused app/cloud/website gates pass and the integrated failure count is unchanged from the recorded shared-tree baseline.
+- Verification: Telegram 45/45; app/cloud/website TypeScript pass; real Worker route suite pass; seed dry run 6 participants/5 recipients/64 HONEY; integrated 169/187 with 18 existing red checks
+## 2026-07-13T15:49:38.693653+00:00 - assimilation-manifest
+
+- Request: can we add honey tipping to the HIVE TIP bought and for the new honey leaderboard, can we seed it with the tip leaderboards values but at a proper ratio that works with our HONEY units? then add a /honey command to our telegram bot that lets give honey? though i dont know how it should work, who can give honey? everyone? do we give everyone a daily quota of honey they can give? how can we create an anti-abuse system? etc
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemindos:src/lib/services/telegram-tip-bot/parse.ts => src/lib/services/telegram-tip-bot/commands.ts, LiamVisionary/hivemindos:src/lib/services/telegram-tip-bot/ledger.ts => scripts/seed-honey-leaderboard-from-hive-tips.mjs, LiamVisionary/hivemindos:src/lib/services/telegram-tip-bot/community-honey.ts => src/lib/services/telegram-tip-bot/community-honey.ts, LiamVisionary/hivemindos:scripts/test-telegram-tip-bot.mjs => scripts/test-telegram-tip-bot.mjs
+- Verification: Wrote ASSIMILATION.telegram-honey-peer-recognition.json with 4 entries and custom_code_assessment=balanced.
+## 2026-07-13T15:49:47.742986+00:00 - verification
+
+- Request: can we add honey tipping to the HIVE TIP bought and for the new honey leaderboard, can we seed it with the tip leaderboards values but at a proper ratio that works with our HONEY units? then add a /honey command to our telegram bot that lets give honey? though i dont know how it should work, who can give honey? everyone? do we give everyone a daily quota of honey they can give? how can we create an anti-abuse system? etc
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.telegram-honey-peer-recognition.json: 4 concrete reuse entries, 3 substantive
+## 2026-07-13T16:15:42.542763+00:00 - shared-brain
+
+- Request: but we do only have 1 HONEY right? we shouldnt have more than one
+- Source: hive-brain
+- Query: `one HONEY source provenance peer legacy reviewed access tiers`
+- Decision: inspected
+- Reason: Current shared docs distinguish HONEY provenance and Cloud credits; the user clarified that all HONEY must remain one product unit.
+
+### Candidates
+- HivemindOS Docs/for-investors/honey-hive-treasury.md
+  - Decision: inspected
+  - Reason: existing public HONEY boundary
+  - Path: `docs/for-investors/honey-hive-treasury.md`
+## 2026-07-13T16:15:42.559096+00:00 - public-search
+
+- Request: but we do only have 1 HONEY right? we shouldnt have more than one
+- Source: github
+- Decision: rejected
+- Reason: No external search needed: the user pinned HivemindOS and the existing local contribution implementation covers the full contract; third-party reward ledgers would add incompatible semantics.
+- Not assimilated: public GitHub candidates
+## 2026-07-13T16:15:42.581054+00:00 - local-search
+
+- Request: but we do only have 1 HONEY right? we shouldnt have more than one
+- Source: local-project
+- Query: `peer reviewed legacy HONEY totals tiers Telegram command client docs`
+- Decision: selected
+- Reason: The current uncommitted contribution layer is the pinned backbone and already contains the exact bot, API, UI, docs, and regression surfaces to unify.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/lib/services/telegram-tip-bot/commands.ts
+  - Decision: selected
+  - Reason: reuse existing profile and recognition response flow
+  - Path: `src/lib/services/telegram-tip-bot/commands.ts`
+- src/lib/services/wallet/honey-community.ts
+  - Decision: selected-donor
+  - Reason: reuse hosted contribution status contract
+  - Path: `src/lib/services/wallet/honey-community.ts`
+- docs/for-users/features/wallets-honey-and-x402.md
+  - Decision: selected-donor
+  - Reason: update canonical public HONEY model
+  - Path: `docs/for-users/features/wallets-honey-and-x402.md`
+## 2026-07-13T16:42:28.563174+00:00 - assimilation-manifest
+
+- Request: but we do only have 1 HONEY right? we shouldnt have more than one
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemind-cloud-services:workers/compute-gateway/src/community-contributions.ts => src/lib/services/wallet/honey-community.ts, LiamVisionary/hivemindos:src/lib/services/telegram-tip-bot/community-honey.ts => src/lib/services/telegram-tip-bot/commands.ts, LiamVisionary/hivemindos:src/components/wallets-drop-in/WalletsView.tsx => src/components/wallets-drop-in/HoneyContributionCard.tsx, LiamVisionary/hivemindos:scripts/test-telegram-tip-bot.mjs => scripts/test-honey-contribution-layer.mjs
+- Verification: Wrote ASSIMILATION.one-honey-model.json with 4 entries and custom_code_assessment=balanced.
+## 2026-07-13T16:42:49.497844+00:00 - verification
+
+- Request: but we do only have 1 HONEY right? we shouldnt have more than one
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.one-honey-model.json: 4 concrete reuse entries, 3 substantive
+## 2026-07-13T16:48:12.019568+00:00 - shared-brain
+
+- Request: and yes change to 3 recognitions for what users give
+- Source: hive-brain
+- Query: `HivemindOS one HONEY three recognitions per day user terminology`
+- Decision: selected
+- Reason: Retrieved the reviewed one-HONEY decision and confirmed the existing daily three is a non-HONEY recognition allowance.
+## 2026-07-13T16:48:12.290500+00:00 - local-search
+
+- Request: and yes change to 3 recognitions for what users give
+- Source: pinned-project
+- Query: `recognition actions action allowance daily actions`
+- Decision: selected
+- Reason: The user pinned the current HONEY implementation; exact bot, API, documentation, and contract surfaces already exist locally.
+- Selected backbone: LiamVisionary/hivemindos:src/lib/services/telegram-tip-bot/commands.ts
+
+### Candidates
+- LiamVisionary/hivemindos
+  - Decision: selected
+  - Reason: existing HONEY recognition contract is the authoritative backbone
+  - Path: `src/lib/services/telegram-tip-bot/commands.ts`
+- public-github
+  - Decision: rejected
+  - Reason: no external code gap; this is a terminology and coordinated contract correction in pinned product sources
+## 2026-07-13T16:51:11.789693+00:00 - assimilation-manifest
+
+- Request: and yes change to 3 recognitions for what users give
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemindos:src/lib/services/telegram-tip-bot/commands.ts => src/lib/services/telegram-tip-bot/commands.ts, LiamVisionary/hivemindos:src/lib/services/telegram-tip-bot/community-honey.ts => src/lib/services/telegram-tip-bot/community-honey.ts, LiamVisionary/hivemindos:src/lib/services/telegram-tip-bot/honey-recognition.ts => src/lib/services/telegram-tip-bot/commands.ts, LiamVisionary/hivemindos:scripts/test-telegram-tip-bot.mjs => scripts/test-telegram-tip-bot.mjs
+- Verification: Wrote ASSIMILATION.three-recognitions.json with 4 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-13T16:52:22.875380+00:00 - verification
+
+- Request: and yes change to 3 recognitions for what users give
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.three-recognitions.json: 4 concrete reuse entries, 3 substantive
+## 2026-07-13T17:04:00.314509+00:00 - shared-brain
+
+- Request: ok and can we automate giving people honey in telegram? what would be some fun ways to?
+
+also can we add long actions in telegram? like in the menu that appears when i hold on a message? would love to add a "Give recognition button"
+- Source: shared-brain
+- Query: `HivemindOS Telegram Honey recognition automation reaction long press anti abuse current decision`
+- Decision: selected
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- Memory/Distillations/Agent Memory/decision/2026-07-13-hivemindos-has-one-cumulative-honey-6ff96a2310.md
+  - Decision: selected
+  - Reason: One cumulative HONEY and three-recognition policy remain authoritative
+  - Path: `Memory/Distillations/Agent Memory/decision/2026-07-13-hivemindos-has-one-cumulative-honey-6ff96a2310.md`
+## 2026-07-13T17:04:00.528849+00:00 - local-search
+
+- Request: ok and can we automate giving people honey in telegram? what would be some fun ways to?
+
+also can we add long actions in telegram? like in the menu that appears when i hold on a message? would love to add a "Give recognition button"
+- Source: current-workspace
+- Query: `getUpdates allowed_updates message_reaction handleTipBotUpdate givePeerHoney`
+- Decision: selected
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- LiamVisionary/hivemindos
+  - Decision: selected
+  - Reason: Existing Telegram update loop command handler and pure recognition policy are the implementation backbone
+  - Path: `src/lib/services/telegram-tip-bot`
+- LiamVisionary/hivemind-cloud-services
+  - Decision: selected-donor
+  - Reason: Existing hosted peer-HONEY endpoint supplies identity quota pair recipient and idempotency enforcement
+  - Path: `workers/compute-gateway/src/community-contributions.ts`
+## 2026-07-13T17:04:00.727132+00:00 - local-search
+
+- Request: ok and can we automate giving people honey in telegram? what would be some fun ways to?
+
+also can we add long actions in telegram? like in the menu that appears when i hold on a message? would love to add a "Give recognition button"
+- Source: private-index
+- Query: `telegram bot message reaction recognition allowed_updates`
+- Decision: rejected
+- Reason: Fresh local index returned only weak manifest and repository-summary matches; no reusable reaction implementation.
+
+### Candidates
+- LiamVisionary/hivemindos
+  - Decision: rejected
+  - Reason: Manifest-only result did not contain reaction handling code
+  - Path: `src-tauri/Cargo.toml`
+- LiamVisionary/hivemind-cloud-services
+  - Decision: rejected
+  - Reason: Repository summary added no implementation beyond the directly inspected hosted endpoint
+## 2026-07-13T17:04:01.168466+00:00 - public-search
+
+- Request: ok and can we automate giving people honey in telegram? what would be some fun ways to?
+
+also can we add long actions in telegram? like in the menu that appears when i hold on a message? would love to add a "Give recognition button"
+- Source: official-telegram-docs
+- Query: `MessageReactionUpdated allowed_updates buttons menu long press`
+- Decision: selected
+- Reason: Official Telegram Bot API confirms reaction updates are supported for admin bots, while bot buttons attach only to bot messages or bot chat menus and no custom message long-press action API exists.
+
+### Candidates
+- https://core.telegram.org/bots/api
+  - Decision: selected
+  - Reason: Defines message_reaction update old/new reaction arrays and explicit allowed_updates/admin requirements
+  - Path: `MessageReactionUpdated`
+- https://core.telegram.org/bots/features
+  - Decision: selected-donor
+  - Reason: Defines command menu reply keyboard and inline keyboard surfaces; none extend arbitrary-message long-press menus
+  - Path: `Inline Keyboards`
+- public-github
+  - Decision: rejected
+  - Reason: Pinned product code plus official Telegram API fully cover the implementation; no external code gap remains
+## 2026-07-13T17:04:01.336731+00:00 - prebuild-gate
+
+- Request: ok and can we automate giving people honey in telegram? what would be some fun ways to?
+
+also can we add long actions in telegram? like in the menu that appears when i hold on a message? would love to add a "Give recognition button"
+- Source: assimilation
+- Decision: selected
+- Reason: Adapt the existing update loop, pure Honey recognition helper, command handler, hosted client, tests, and docs; no new ledger or hosted authority.
+- Selected backbone: local-project:hivemind-os
+## 2026-07-13T17:09:30.074128+00:00 - implementation
+
+- Request: ok and can we automate giving people honey in telegram? what would be some fun ways to?
+
+also can we add long actions in telegram? like in the menu that appears when i hold on a message? would love to add a "Give recognition button"
+- Source: local-project:hivemind-os
+- Decision: adapted_code
+- Selected backbone: local-project:hivemind-os
+- Assimilated: Existing Telegram polling, update dispatch, HONEY command client, pure recognition policy, and focused tests were extended rather than duplicated.
+
+### Candidates
+- LiamVisionary/hivemindos
+  - Decision: adapted_code
+  - Reason: Extended the existing Bot API update types and long-poll allowed_updates with message_reaction
+  - Path: `src/lib/services/telegram-tip-bot/telegram-api.ts`
+- LiamVisionary/hivemindos
+  - Decision: adapted_code
+  - Reason: Extended the pure HONEY recognition helper with built-in trophy detection and bounded recent-message attribution
+  - Path: `src/lib/services/telegram-tip-bot/honey-recognition.ts`
+- LiamVisionary/hivemindos
+  - Decision: adapted_code
+  - Reason: Routed reaction updates through the existing CommunityHoneyClient givePeerHoney call and confirmation path
+  - Path: `src/lib/services/telegram-tip-bot/commands.ts`
+- LiamVisionary/hivemindos
+  - Decision: test_adapted
+  - Reason: Expanded the existing standalone bot regression with reaction transition cache and wiring coverage
+  - Path: `scripts/test-telegram-tip-bot.mjs`
+## 2026-07-13T17:09:30.450407+00:00 - assimilation-manifest
+
+- Request: ok and can we automate giving people honey in telegram? what would be some fun ways to?
+
+also can we add long actions in telegram? like in the menu that appears when i hold on a message? would love to add a "Give recognition button"
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemindos:src/lib/services/telegram-tip-bot/telegram-api.ts => src/lib/services/telegram-tip-bot/telegram-api.ts, LiamVisionary/hivemindos:src/lib/services/telegram-tip-bot/honey-recognition.ts => src/lib/services/telegram-tip-bot/honey-recognition.ts, LiamVisionary/hivemindos:src/lib/services/telegram-tip-bot/commands.ts => src/lib/services/telegram-tip-bot/commands.ts, LiamVisionary/hivemindos:scripts/test-telegram-tip-bot.mjs => scripts/test-telegram-tip-bot.mjs, LiamVisionary/hivemindos:src/lib/services/telegram-tip-bot/README.md => docs/for-users/features/wallets-honey-and-x402.md
+- Verification: Wrote ASSIMILATION.telegram-honey-reaction.json with 5 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-13T17:09:35.507165+00:00 - verification
+
+- Request: ok and can we automate giving people honey in telegram? what would be some fun ways to?
+
+also can we add long actions in telegram? like in the menu that appears when i hold on a message? would love to add a "Give recognition button"
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.telegram-honey-reaction.json: 5 concrete reuse entries, 4 substantive
+## 2026-07-13T17:12:43.070795+00:00 - verification
+
+- Request: ok and can we automate giving people honey in telegram? what would be some fun ways to?
+
+also can we add long actions in telegram? like in the menu that appears when i hold on a message? would love to add a "Give recognition button"
+- Source: local-gates
+- Decision: passed
+- Selected backbone: local-project:hivemind-os + local-project:hivemind-cloud-services
+- Verification: Telegram baseline 45/45 and final 48/48; combined app run 49/49; app TypeScript and zero-warning focused ESLint; hosted Worker/D1 policy and TypeScript; current production daemon bundle with packages external; manifest 5/4; file sizes and diff hygiene.
+- Note: An initial ad-hoc bundle command omitted the repository's required --packages=external flag and failed on existing external Playwright/native packages; the current documented repository command passed and the artifact contains the reaction subscription and handler.
+## 2026-07-13T17:12:43.324128+00:00 - final
+
+- Request: ok and can we automate giving people honey in telegram? what would be some fun ways to?
+
+also can we add long actions in telegram? like in the menu that appears when i hold on a message? would love to add a "Give recognition button"
+- Source: hive-assimilate
+- Decision: passed
+- Selected backbone: local-project:hivemind-os
+- Assimilated: Existing Telegram long polling, update dispatch, pure HONEY recognition policy, hosted givePeerHoney client, bot regression, and documentation.
+- Not assimilated: Custom Telegram long-press menu item because the official Bot API exposes no such extension point; public GitHub code because no source gap remained.
+- Verification: ASSIMILATION.telegram-honey-reaction.json valid with 5 concrete entries and 4 substantive mappings; no deploy or live Telegram mutation was performed.
+## 2026-07-13T17:37:15.793004+00:00 - shared-brain
+
+- Request: users have to manually add the trophy reaction? we cant just have it by default in the group?
+- Source: shared-brain
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- Memory/Distillations/Agent Memory/decision/2026-07-13-hivemindos-has-one-cumulative-honey-6971abfa9b.md
+  - Decision: selected
+  - Reason: Confirms one HONEY and the built-in trophy as the bounded recognition action
+  - Path: `typed memory`
+## 2026-07-13T17:37:15.856703+00:00 - local-search
+
+- Request: users have to manually add the trophy reaction? we cant just have it by default in the group?
+- Source: current-workspace
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/lib/services/telegram-tip-bot/telegram-api.ts
+  - Decision: selected
+  - Reason: Existing typed Bot API client and reaction update subscription are the correct transport extension point
+  - Path: `telegram-api.ts`
+- src/lib/services/telegram-tip-bot/honey-recognition.ts
+  - Decision: selected
+  - Reason: Existing pure recognition policy and message index are the correct eligibility extension point
+  - Path: `honey-recognition.ts`
+- src/lib/services/telegram-tip-bot/commands.ts
+  - Decision: selected
+  - Reason: Existing message-to-reaction-to-hosted-award call chain is the correct interaction extension point
+  - Path: `commands.ts`
+- scripts/test-telegram-tip-bot.mjs
+  - Decision: selected
+  - Reason: Existing pure and source-contract tests provide the baseline and regression harness
+  - Path: `test-telegram-tip-bot.mjs`
+## 2026-07-13T17:37:15.949087+00:00 - local-search
+
+- Request: users have to manually add the trophy reaction? we cant just have it by default in the group?
+- Source: private-index
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- LiamVisionary/hivemind-cloud-services
+  - Decision: rejected
+  - Reason: Index hit only matched Telegram at repository-summary level and provides no client-side reaction affordance donor
+  - Path: `none`
+## 2026-07-13T17:37:16.003458+00:00 - public-search
+
+- Request: users have to manually add the trophy reaction? we cant just have it by default in the group?
+- Source: official-docs
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- core.telegram.org/bots/api#setmessagereaction
+  - Decision: selected-donor
+  - Reason: Primary Bot API confirms bots can seed one reaction and clear it with an empty reaction list
+  - Path: `setMessageReaction`
+- core.telegram.org/bots/api#update
+  - Decision: selected-donor
+  - Reason: Primary Bot API confirms bot-set reactions do not emit message_reaction updates
+  - Path: `Update.message_reaction`
+- public GitHub
+  - Decision: not-assimilated
+  - Reason: No implementation gap remained after the pinned project call chain and current Telegram primary API were inspected
+  - Path: `none`
+## 2026-07-13T17:41:59.835175+00:00 - assimilation-manifest
+
+- Request: users have to manually add the trophy reaction? we cant just have it by default in the group?
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemindos:src/lib/services/telegram-tip-bot/telegram-api.ts => src/lib/services/telegram-tip-bot/telegram-api.ts, LiamVisionary/hivemindos:src/lib/services/telegram-tip-bot/honey-recognition.ts => src/lib/services/telegram-tip-bot/honey-recognition.ts, LiamVisionary/hivemindos:src/lib/services/telegram-tip-bot/commands.ts => src/lib/services/telegram-tip-bot/commands.ts, LiamVisionary/hivemindos:scripts/test-telegram-tip-bot.mjs => scripts/test-telegram-tip-bot.mjs, LiamVisionary/hivemindos:src/lib/services/telegram-tip-bot/README.md => docs/for-users/features/wallets-honey-and-x402.md
+- Verification: Wrote ASSIMILATION.telegram-honey-default-reaction.json with 5 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-13T17:41:59.940742+00:00 - verification
+
+- Request: users have to manually add the trophy reaction? we cant just have it by default in the group?
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.telegram-honey-default-reaction.json: 5 concrete reuse entries, 4 substantive
+## 2026-07-13T17:42:44.049712+00:00 - implementation
+
+- Request: users have to manually add the trophy reaction? we cant just have it by default in the group?
+- Source: current-workspace
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/lib/services/telegram-tip-bot/telegram-api.ts
+  - Decision: adapted_code
+  - Reason: Added the typed setMessageReaction transport used to seed and clear the built-in trophy
+  - Path: `setMessageReaction`
+- src/lib/services/telegram-tip-bot/honey-recognition.ts
+  - Decision: adapted_code
+  - Reason: Added pure eligibility that limits seeds to human-authored group messages and excludes slash commands
+  - Path: `shouldSeedHoneyRecognitionReaction`
+- src/lib/services/telegram-tip-bot/commands.ts
+  - Decision: adapted_code
+  - Reason: Seeded the trophy on eligible messages and cleared only the bot seed after an accepted hosted award
+  - Path: `seedHoneyRecognitionReaction,clearHoneyRecognitionReactionSeed`
+- Memory/Distillations/Agent Memory/decision/2026-07-13-hivemindos-has-one-cumulative-honey-0dc2eb0fb2.md
+  - Decision: selected
+  - Reason: Evolved the durable one-HONEY decision with the non-awarding seeded-trophy interaction
+  - Path: `typed memory`
+## 2026-07-13T17:42:44.109063+00:00 - verification
+
+- Request: users have to manually add the trophy reaction? we cant just have it by default in the group?
+- Source: verification
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- Telegram focused baseline
+  - Decision: selected
+  - Reason: 48 of 48 tests passed before the follow-up change
+  - Path: `node --test scripts/test-telegram-tip-bot.mjs`
+- Telegram seeded-reaction regression
+  - Decision: selected
+  - Reason: New test was red before implementation and focused suite now passes 49 of 49
+  - Path: `node --test scripts/test-telegram-tip-bot.mjs`
+- Combined HONEY contract
+  - Decision: selected
+  - Reason: Telegram and contribution suites pass 50 of 50
+  - Path: `node --test scripts/test-telegram-tip-bot.mjs scripts/test-honey-contribution-layer.mjs`
+- Static gates
+  - Decision: selected
+  - Reason: Whole-project TypeScript and zero-warning focused ESLint pass
+  - Path: `tsc,eslint`
+- Hosted authority
+  - Decision: selected
+  - Reason: Real Worker/D1 HONEY policy suite and hosted TypeScript pass
+  - Path: `test:honey-community-contributions,typecheck`
+- Standalone daemon
+  - Decision: selected
+  - Reason: Production esbuild command passes and scoped code files remain below 1500 lines
+  - Path: `esbuild,wc`
+- ASSIMILATION.telegram-honey-default-reaction.json
+  - Decision: selected
+  - Reason: Manifest validates with five concrete and four substantive entries
+  - Path: `verify_assimilation_manifest.py`
+## 2026-07-13T17:43:07.372868+00:00 - final
+
+- Request: users have to manually add the trophy reaction? we cant just have it by default in the group?
+- Source: current-workspace
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- one-tap seeded trophy
+  - Decision: selected
+  - Reason: Implementation and local verification complete; live deployment and group reaction setting remain intentionally user-gated
+  - Path: `uncommitted,undeployed`
+## 2026-07-13T18:11:30.755902+00:00 - shared-brain
+
+- Request: why is the bankr wallet fund agent button collapsing? fix it
+- Source: shared-brain
+- Decision: inspected
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- HivemindOS Docs/for-users/bankr/bankr-platform-reference.md
+  - Decision: rejected
+  - Reason: wallet operations reference does not contain the dashboard card layout implementation
+- Skills/bankr/SKILL.md
+  - Decision: rejected
+  - Reason: provider operations workflow is unrelated to the CSS collapse
+## 2026-07-13T18:11:30.884262+00:00 - local-search
+
+- Request: why is the bankr wallet fund agent button collapsing? fix it
+- Source: current-project
+- Decision: selected
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/components/wallets-drop-in/WalletsView.tsx
+  - Decision: selected
+  - Reason: contains the Bankr wallet card and Fund agent action
+- src/components/wallets-drop-in/wallets.css
+  - Decision: selected
+  - Reason: contains the wallet card action-row layout
+- scripts/test-personal-wallet-grouping.mjs
+  - Decision: inspected
+  - Reason: shows the project pattern for focused wallet regression scripts
+## 2026-07-13T18:18:15.447462+00:00 - assimilation-manifest
+
+- Request: why is the bankr wallet fund agent button collapsing? fix it
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: hivemind-os:src/components/wallets-drop-in/wallets.css:.fw-split-wrap => src/components/wallets-drop-in/wallets.css:.fw-bankr-actions, hivemind-os:src/components/wallets-drop-in/WalletsView.tsx:MyWalletCard action row => src/components/wallets-drop-in/WalletsView.tsx:BankrWalletCard action row, hivemind-os:scripts/test-wallet-real-tabs.mjs => scripts/test-bankr-wallet-action-layout.mjs
+- Verification: Wrote ASSIMILATION.bankr-wallet-layout.json with 3 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-13T18:18:15.678342+00:00 - verification
+
+- Request: why is the bankr wallet fund agent button collapsing? fix it
+- Source: verify-assimilation-manifest
+- Decision: failed
+- Reason: ASSIMILATION.bankr-wallet-layout.json: Entry 1 target_path does not exist: /Users/liam/Documents/code/projects/hivemind-os/src/components/wallets-drop-in/wallets.css:.fw-bankr-actions
+## 2026-07-13T18:18:35.912715+00:00 - assimilation-manifest
+
+- Request: why is the bankr wallet fund agent button collapsing? fix it
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: hivemind-os:src/components/wallets-drop-in/wallets.css => src/components/wallets-drop-in/wallets.css, hivemind-os:src/components/wallets-drop-in/WalletsView.tsx => src/components/wallets-drop-in/WalletsView.tsx, hivemind-os:scripts/test-wallet-real-tabs.mjs => scripts/test-bankr-wallet-action-layout.mjs
+- Verification: Wrote ASSIMILATION.bankr-wallet-layout.json with 3 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-13T18:18:36.066888+00:00 - verification
+
+- Request: why is the bankr wallet fund agent button collapsing? fix it
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.bankr-wallet-layout.json: 3 concrete reuse entries, 3 substantive
+## 2026-07-13T18:19:26.610246+00:00 - verification
+
+- Request: why is the bankr wallet fund agent button collapsing? fix it
+- Source: current-project
+- Decision: passed
+- Selected backbone: local-project:hivemind-os
+- Note: Focused ESLint, whole-project TypeScript, UI typography, scoped diff hygiene, and live browser layout passed; existing wallet-real-tabs scanner drift and repository file-size ratchet remain unrelated red baselines.
+
+### Candidates
+- scripts/test-bankr-wallet-action-layout.mjs
+  - Decision: selected
+  - Reason: focused regression passed after failing on the original inline flex layout
+- http://localhost:5021 Wallets
+  - Decision: selected
+  - Reason: live computed width changed from 26.88px to 222.57px at the same 340px card width
+- ASSIMILATION.bankr-wallet-layout.json
+  - Decision: selected
+  - Reason: manifest validates with three concrete substantive reuse entries
+## 2026-07-13T18:20:24.742755+00:00 - verification
+
+- Request: why is the bankr wallet fund agent button collapsing? fix it
+- Source: current-project
+- Decision: passed
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- Bankr Fund agent interaction
+  - Decision: selected
+  - Reason: the repaired unique button opens and closes the Fund an agent via Bankr sheet without submitting a review or transfer
+## 2026-07-13T18:23:35.183448+00:00 - local-search
+
+- Request: now can can we homogenous the my wallets cards? seeing some of them with differrent heights looks bad
+- Source: current-project
+- Decision: selected
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/components/wallets-drop-in/wallets.css
+  - Decision: selected
+  - Reason: owns fw-myrow grid alignment plus wallet and add-card sizing
+- src/components/wallets-drop-in/WalletsView.tsx
+  - Decision: inspected
+  - Reason: renders personal, Bankr, and create/import cards into the same fw-myrow grid
+- scripts/test-bankr-wallet-action-layout.mjs
+  - Decision: selected-donor
+  - Reason: provides the focused wallet layout contract pattern
+## 2026-07-13T18:28:12.454755+00:00 - assimilation-manifest
+
+- Request: now can can we homogenous the my wallets cards? seeing some of them with differrent heights looks bad
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: hivemind-os:src/components/wallets-drop-in/wallets.css => src/components/wallets-drop-in/wallets.css, hivemind-os:src/components/wallets-drop-in/WalletsView.tsx => src/components/wallets-drop-in/wallets.css, hivemind-os:scripts/test-bankr-wallet-action-layout.mjs => scripts/test-bankr-wallet-action-layout.mjs
+- Verification: Wrote ASSIMILATION.my-wallet-card-heights.json with 3 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-13T18:28:12.594049+00:00 - verification
+
+- Request: now can can we homogenous the my wallets cards? seeing some of them with differrent heights looks bad
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.my-wallet-card-heights.json: 3 concrete reuse entries, 3 substantive
+## 2026-07-13T18:28:27.452869+00:00 - verification
+
+- Request: now can can we homogenous the my wallets cards? seeing some of them with differrent heights looks bad
+- Source: local-project
+- Decision: verified
+- Reason: The existing My wallets grid was the correct backbone; uniform 1fr rows and stretched direct children align every existing card type without introducing a parallel layout.
+- Selected backbone: hivemind-os:src/components/wallets-drop-in/wallets.css
+- Assimilated: Existing fw-myrow direct-child grid ownership, existing focused wallet layout contract, and responsive minmax columns.
+- Not assimilated: No external project or new card abstraction was needed.
+- Verification: Focused test red before the CSS change and green after; live port-5021 inspection measured all nine cards at 274.55px with Bankr actions readable.
+## 2026-07-13T18:37:19.585254+00:00 - retrieval
+
+- Request: also allow pressing on the card to expand and collapse it and remove the container from the carot, just keep the carot
+- Source: local-project
+- Decision: selected
+- Reason: The existing MyWalletCard and BankrWalletCard disclosure state already owns expansion, and the existing focused wallet layout contract is the correct regression backbone.
+- Selected backbone: hivemind-os:src/components/wallets-drop-in/WalletsView.tsx
+- Assimilated: Existing expanded state, caret disclosure control, shared fw-mywallet card shell, and focused wallet layout source contract.
+- Not assimilated: No external repository, new disclosure component, or parallel card system was needed.
+## 2026-07-13T18:37:30.604648+00:00 - assimilation-manifest
+
+- Request: also allow pressing on the card to expand and collapse it and remove the container from the carot, just keep the carot
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: hivemind-os:src/components/wallets-drop-in/WalletsView.tsx => src/components/wallets-drop-in/WalletsView.tsx, hivemind-os:src/components/wallets-drop-in/wallets.css => src/components/wallets-drop-in/wallets.css, hivemind-os:scripts/test-bankr-wallet-action-layout.mjs => scripts/test-bankr-wallet-action-layout.mjs
+- Verification: Wrote ASSIMILATION.wallet-card-disclosure.json with 3 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-13T18:37:30.765901+00:00 - verification
+
+- Request: also allow pressing on the card to expand and collapse it and remove the container from the carot, just keep the carot
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.wallet-card-disclosure.json: 3 concrete reuse entries, 3 substantive
+## 2026-07-13T18:38:16.788948+00:00 - verification
+
+- Request: also allow pressing on the card to expand and collapse it and remove the container from the carot, just keep the carot
+- Source: local-project
+- Decision: verified
+- Reason: The existing per-card disclosure state now responds to guarded card-surface clicks and the dedicated caret retains accessible disclosure semantics without a visible container.
+- Selected backbone: hivemind-os:src/components/wallets-drop-in/WalletsView.tsx
+- Assimilated: Existing personal and Bankr expanded state, card shell, disclosure labels, and focused wallet layout regression.
+- Not assimilated: No external repository or new card abstraction was required.
+- Verification: Focused test red before implementation and green after; live port-5021 browser clicks toggled personal and Bankr cards false to true to false, Copy address did not toggle the open card, and both carets compute to a zero-width border and transparent background. TypeScript, focused ESLint, typography guard, manifest validation, and scoped diff hygiene pass.
+## 2026-07-13T18:43:02.990877+00:00 - local-search
+
+- Request: why is the fund agent button so wide and seemingly asymmetrical?
+- Source: local-project
+- Decision: selected
+- Reason: The existing fw-split-wrap flex rule directly explains the width and is the correct narrow fix surface; the established split action and menu behavior remain unchanged.
+- Selected backbone: hivemind-os:src/components/wallets-drop-in/wallets.css
+- Assimilated: Existing split-button grid, 36px caret column, responsive action row, and focused wallet layout contract.
+- Not assimilated: No external component, new button abstraction, or action-flow change was needed.
+## 2026-07-13T18:43:03.144912+00:00 - assimilation-manifest
+
+- Request: why is the fund agent button so wide and seemingly asymmetrical?
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: hivemind-os:src/components/wallets-drop-in/wallets.css => src/components/wallets-drop-in/wallets.css, hivemind-os:src/components/wallets-drop-in/wallets.css => src/components/wallets-drop-in/wallets.css, hivemind-os:scripts/test-bankr-wallet-action-layout.mjs => scripts/test-bankr-wallet-action-layout.mjs
+- Verification: Wrote ASSIMILATION.fund-agent-button-width.json with 3 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-13T18:43:03.278653+00:00 - verification
+
+- Request: why is the fund agent button so wide and seemingly asymmetrical?
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.fund-agent-button-width.json: 3 concrete reuse entries, 3 substantive
+## 2026-07-13T18:43:31.527836+00:00 - verification
+
+- Request: why is the fund agent button so wide and seemingly asymmetrical?
+- Source: local-project
+- Decision: verified
+- Reason: Removing flex growth keeps the split control compact while preserving the established action and menu behavior.
+- Selected backbone: hivemind-os:src/components/wallets-drop-in/wallets.css
+- Assimilated: Existing split-button grid, 36px caret target, responsive row wrapping, and focused regression.
+- Not assimilated: No action-flow or component-structure change was needed.
+- Verification: Focused contract red before implementation and green after; live port-5021 measurements changed every personal-wallet split from 207.76px with a 171.76px main segment to 164px with a 128px main segment and the same 36px caret. The split menu and Fund an agent dialog opened and closed without expanding the card or submitting funds. TypeScript, focused ESLint, typography guard, manifest validation, and scoped diff hygiene pass.
+## 2026-07-13T18:53:18.269878+00:00 - local-search
+
+- Request: make the export keys button only show in the expanded card view
+- Source: local-project
+- Decision: selected
+- Reason: MyWalletCard already owns expanded state and uses an expanded-only action pattern for Send, so the existing pattern is the complete implementation backbone.
+- Selected backbone: hivemind-os:src/components/wallets-drop-in/WalletsView.tsx
+- Assimilated: Existing expanded state, expanded-only Send action convention, unchanged export sheet trigger, and focused wallet-card regression.
+- Not assimilated: No export-flow, secret-handling, or new component change was needed.
+## 2026-07-13T18:53:18.493114+00:00 - assimilation-manifest
+
+- Request: make the export keys button only show in the expanded card view
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: hivemind-os:src/components/wallets-drop-in/WalletsView.tsx => src/components/wallets-drop-in/WalletsView.tsx, hivemind-os:src/components/wallets-drop-in/WalletsView.tsx => src/components/wallets-drop-in/WalletsView.tsx, hivemind-os:scripts/test-bankr-wallet-action-layout.mjs => scripts/test-bankr-wallet-action-layout.mjs
+- Verification: Wrote ASSIMILATION.expanded-export-keys.json with 3 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-13T18:53:18.634514+00:00 - verification
+
+- Request: make the export keys button only show in the expanded card view
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.expanded-export-keys.json: 3 concrete reuse entries, 3 substantive
+## 2026-07-13T18:53:50.905703+00:00 - verification
+
+- Request: make the export keys button only show in the expanded card view
+- Source: local-project
+- Decision: verified
+- Reason: The existing expanded-only action pattern now governs Export keys without changing export behavior or secret handling.
+- Selected backbone: hivemind-os:src/components/wallets-drop-in/WalletsView.tsx
+- Assimilated: Existing expanded state, expanded-only Send convention, export sheet trigger, and focused wallet-card regression.
+- Not assimilated: No export component, route, storage, or secret-handling change was needed.
+- Verification: Focused contract red before implementation and green after; live port-5021 baseline showed one Export keys button on each of seven collapsed personal cards, while the fixed view showed zero on every collapsed card and exactly one after expanding the first personal wallet. TypeScript, focused ESLint, typography guard, manifest validation, and scoped diff hygiene pass.
+## 2026-07-14T05:34:31.247593+00:00 - shared-brain
+
+- Request: Evaluate Coolify against HivemindOS managed app hosting and add Listmonk as an honest campaign-email capability if HivemindOS lacks it
+- Source: full-vault
+- Query: `managed website hosting Coolify and agent email Listmonk`
+- Decision: selected
+- Reason: Found current App Hosting product context, AgentMail deliverability history, and Cloudflare email workflows.
+
+### Candidates
+- HivemindOS Docs/for-investors/paid-features/app-builder-hosting.md
+  - Decision: selected
+  - Reason: current managed hosting product context
+- Skills/cloudflare-email-service/SKILL.md
+  - Decision: selected-donor
+  - Reason: establishes transactional-versus-marketing email boundary
+## 2026-07-14T05:34:31.299009+00:00 - local-search
+
+- Request: Evaluate Coolify against HivemindOS managed app hosting and add Listmonk as an honest campaign-email capability if HivemindOS lacks it
+- Source: workspace-and-private-repo
+- Query: `app-hosting agent-mailboxes installable-services listmonk coolify`
+- Decision: selected
+- Reason: Found Cloudflare App Hosting control plane, AgentMail/Cloudflare mailbox adapters, an unimplemented managed-broker placeholder, and the local n8n Docker install pattern.
+
+### Candidates
+- src/lib/services/installable-services.ts
+  - Decision: selected-backbone
+  - Reason: existing Apps & Services Docker lifecycle and status contract
+- src/lib/services/agent-mailboxes.ts
+  - Decision: inspected
+  - Reason: confirms Listmonk cannot satisfy mailbox provider contract
+- ../hivemind-cloud-services/workers/app-hosting
+  - Decision: inspected
+  - Reason: current serverless hosting authority and lifecycle
+## 2026-07-14T05:34:31.461340+00:00 - local-search
+
+- Request: Evaluate Coolify against HivemindOS managed app hosting and add Listmonk as an honest campaign-email capability if HivemindOS lacks it
+- Source: local-index
+- Query: `Evaluate Coolify against HivemindOS managed app hosting and add Listmonk as an honest campaign-email capability if HivemindOS lacks it`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+
+### Candidates
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos
+  - Description: LiamVisionary/hivemindos Next.js React ( @tauri-apps/cli tailscale.com <div align="center"> <img width="220" height="220" alt="HivemindOS" src="public/hivemindos-logo.png" /> <p> <a href="https://github.com/LiamVisionary/hivemindos/stargaze
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services
+  - Description: LiamVisionary/hivemind-cloud-services React @aws-sdk/client-s3 @bomb.sh/tab @cloudflare/autoconfig @cloudflare/cli @cloudflare/cli-shared-helpers @cloudflare/codemod @cloudflare/config @cloudflare/containers-shared @cloudflare/deploy-helper
+## 2026-07-14T05:34:36.196964+00:00 - public-search
+
+- Request: Evaluate Coolify against HivemindOS managed app hosting and add Listmonk as an honest campaign-email capability if HivemindOS lacks it
+- Source: public-github
+- Query: `Evaluate Coolify against HivemindOS managed app hosting and add Listmonk as an honest campaign-email capability if HivemindOS lacks it`
+- Decision: retrieved
+- Reason: Retrieved 0 public candidates from GitHub search.
+## 2026-07-14T05:34:36.312674+00:00 - prebuild-gate
+
+- Request: Evaluate Coolify against HivemindOS managed app hosting and add Listmonk as an honest campaign-email capability if HivemindOS lacks it
+- Source: public-github
+- Query: `Evaluate Coolify against HivemindOS managed app hosting and add Listmonk as an honest campaign-email capability if HivemindOS lacks it`
+- Decision: blocked
+- Reason: Public search returned no usable candidates; broaden queries before implementing.
+- Note: cached 0 public candidates (cached in /Users/liam/Documents/hive-assimilate-vault)
+## 2026-07-14T05:34:47.094399+00:00 - public-search
+
+- Request: Evaluate Coolify against HivemindOS managed app hosting and add Listmonk as an honest campaign-email capability if HivemindOS lacks it
+- Source: public-github
+- Query: `self hosted newsletter mailing list manager Docker Postgres API`
+- Decision: retrieved
+- Reason: Retrieved 30 public candidates from GitHub search.
+
+### Candidates
+- garrip91/task_manager_sc_g (0 stars, Python)
+  - URL: https://github.com/garrip91/task_manager_sc_g
+  - Description: Task Manager API (FastAPI, Postgres, Alembic, pytest, Docker)
+- Mailtrain-org/mailtrain (5732 stars, JavaScript, GNU General Public License v3.0)
+  - URL: https://github.com/Mailtrain-org/mailtrain
+  - Description: Self hosted newsletter app
+- mkosir/typeorm-express-typescript (461 stars, TypeScript, MIT License)
+  - URL: https://github.com/mkosir/typeorm-express-typescript
+  - Description: 💊 Minimal Express RESTful API boilerplate. Spin it up with single command. TypeScript, TypeORM, Postgres, Docker.
+- mikemajesty/nestjs-microservice-boilerplate-api (393 stars, TypeScript)
+  - URL: https://github.com/mikemajesty/nestjs-microservice-boilerplate-api
+  - Description: Nestjs boilerplate microservice api | Mongodb CRUD - Postgres CRUD | Docker | Husky | Secrets service | HTTP service | Logs service | Authentication | Authorization | Error Handler | Swaggger Documentation | Mongo Generic Repository | Postg
+- Jon-Peppinck/messenger-api (169 stars, TypeScript)
+  - URL: https://github.com/Jon-Peppinck/messenger-api
+  - Description: Facebook Messenger Microservice API - NestJS, RabbitMQ, Docker, Postgres, Redis
+- 7ze/loan-manager (1 stars, TypeScript, MIT License)
+  - URL: https://github.com/7ze/loan-manager
+  - Description: Loan Manager API powered using typesccript, nestjs, postgres & swagger
+- ztvivn/Task-Manager (0 stars, Go)
+  - URL: https://github.com/ztvivn/Task-Manager
+  - Description: API (Go + Postgres + Docker + Clean Architecture)
+- j-rods/investment-manager-api (0 stars, TypeScript)
+  - URL: https://github.com/j-rods/investment-manager-api
+  - Description: A simple Express + TypeScript + Postgres API + Docker for managing Funds & investments
+- IstvanGodeny/SmartTaskAndActivityManagementAPI (0 stars, Python, MIT License)
+  - URL: https://github.com/IstvanGodeny/SmartTaskAndActivityManagementAPI
+  - Description: FastAPI + Postgres task manager API with JWT auth + tests
+- knadh/listmonk (22094 stars, Go, GNU Affero General Public License v3.0)
+  - URL: https://github.com/knadh/listmonk
+  - Description: High performance, self-hosted, newsletter and mailing list manager with a modern dashboard. Single binary app.
+- Boriszn/DeviceManager.Api (219 stars, C#)
+  - URL: https://github.com/Boriszn/DeviceManager.Api
+  - Description: Web API Framework demonstrates scalable, multitenant, architecture and allows building its own solution in the minutes. Uses: Entity Framework, UnitOfWork, Repository patterns. Wrapped in Docker, Kubernetes
+- poorna-soysa/books-api-docker-compose-postgresql-redis (288 stars, C#, MIT License)
+  - URL: https://github.com/poorna-soysa/books-api-docker-compose-postgresql-redis
+  - Description: This repository showcases a sample API built with .NET 10, designed to demonstrate the integration of Docker Compose for container orchestration. The application utilizes PostgreSQL as its primary database and Redis for caching, providing a
+- jgoerner/data-science-stack-cookiecutter (215 stars, Jupyter Notebook, MIT License)
+  - URL: https://github.com/jgoerner/data-science-stack-cookiecutter
+  - Description: 🐳📊🤓Cookiecutter template to launch an awesome dockerized Data Science toolstack (incl. Jupyster, Superset, Postgres, Minio, AirFlow & API Star)
+- KenMwaura1/Fast-Api-example (187 stars, Python, MIT License)
+  - URL: https://github.com/KenMwaura1/Fast-Api-example
+  - Description: Simple asynchronous API implemented with Fast-Api framework utilizing Postgres as a Database and SqlAlchemy as ORM . GitHub Actions as CI/CD Pipeline
+- ping13/listmonk-rss (35 stars, Python)
+  - URL: https://github.com/ping13/listmonk-rss
+  - Description: Provide an RSS integration for listmonk, a self-hosted newsletter and mailing list manager
+- nodemailer/mailcast (19 stars, JavaScript)
+  - URL: https://github.com/nodemailer/mailcast
+  - Description: Self hosted list management and newsletters
+- Pro-WebTech/list-monk3 (15 stars, Go, GNU Affero General Public License v3.0)
+  - URL: https://github.com/Pro-WebTech/list-monk3
+  - Description: listmonk is a standalone, self-hosted, newsletter and mailing list manager. It is fast, feature-rich, and packed into a single binary. It uses a PostgreSQL database as its data store.
+- redzumi/listmonk-chart (2 stars, Go Template, Other)
+  - URL: https://github.com/redzumi/listmonk-chart
+  - Description: Helm chart for Listmonk — self-hosted newsletter and mailing list manager. PS: AI Generated
+- hueske-digital/listmonk (1 stars)
+  - URL: https://github.com/hueske-digital/listmonk
+  - Description: High performance, self-hosted, newsletter and mailing list manager with a modern dashboard.
+- sidhardhbalaji/Listmonk-postgresql-version (1 stars, Go, GNU Affero General Public License v3.0)
+  - URL: https://github.com/sidhardhbalaji/Listmonk-postgresql-version
+  - Description: A personalized, high-performance, self-hosted newsletter & mailing list manager. Optimized for easy setup on macOS and Windows. Made by Sidhardh Balaji.
+- bursasha/flask-postgresql-docker-classroom-manager (1 stars, Python)
+  - URL: https://github.com/bursasha/flask-postgresql-docker-classroom-manager
+  - Description: A robust backend API for managing university classroom reservations, built with Python, Flask, SQLAlchemy, and Docker, ensuring efficient database interactions and seamless containerized deployment 🏫
+- EladReuveny/football-api-manager (1 stars, TypeScript)
+  - URL: https://github.com/EladReuveny/football-api-manager
+  - Description: A RESTful API for managing and viewing football data, featuring secure JWT-based authentication and authorization with role-based access control. Backend deployed and containerized with Docker. API tested and documented using Postman and Sw
+- NKTKLN/todo-api (1 stars, Go, MIT License)
+  - URL: https://github.com/NKTKLN/todo-api
+  - Description: A simple golang implementation of the task manager api
+- b-water/phpListmonk (0 stars, GNU General Public License v3.0)
+  - URL: https://github.com/b-water/phpListmonk
+  - Description: PHP Client for listmonk the self-hosted newsletter and mailing list manager
+- levjkeR/listmonk (0 stars, GNU Affero General Public License v3.0)
+  - URL: https://github.com/levjkeR/listmonk
+  - Description: High performance, self-hosted, newsletter and mailing list manager with a modern dashboard. Single binary app.
+- thenic-maker/task-manager-api (0 stars, Go)
+  - URL: https://github.com/thenic-maker/task-manager-api
+  - Description: Jwt, postgres docker
+- Sartori-RIA/user-manager-api (0 stars, HTML)
+  - URL: https://github.com/Sartori-RIA/user-manager-api
+  - Description: simple crud for users using rails, rspec, cancancan, devise, postgres, docker and pagy
+- 4reha/Bookmark-manager-API (0 stars, TypeScript)
+  - URL: https://github.com/4reha/Bookmark-manager-API
+  - Description: I build a CRUD REST AP for bookmarks from scratch using nestJs, docker, postgres, passport js, prisma, pactum and dotenv.
+- Billionmail/BillionMail (15316 stars, Go, GNU Affero General Public License v3.0)
+  - URL: https://github.com/Billionmail/BillionMail
+  - Description: BillionMail gives you open-source MailServer, NewsLetter, Email Marketing — fully self-hosted, dev-friendly, and free from monthly fees. Join the discord: https://discord.gg/asfXzBUhZr
+- benavlabs/FastAPI-boilerplate (2004 stars, Python, MIT License)
+  - URL: https://github.com/benavlabs/FastAPI-boilerplate
+  - Description: An extendable async API using FastAPI, Pydantic V2, SQLAlchemy 2.0, PostgreSQL and Redis.
+## 2026-07-14T05:34:50.880119+00:00 - public-search
+
+- Request: Evaluate Coolify against HivemindOS managed app hosting and add Listmonk as an honest campaign-email capability if HivemindOS lacks it
+- Source: public-github
+- Query: `self hosted PaaS Docker deployment API Coolify`
+- Decision: retrieved
+- Reason: Retrieved 20 public candidates from GitHub search.
+
+### Candidates
+- debarshibasak/awesome-paas (616 stars, HTML, MIT License)
+  - URL: https://github.com/debarshibasak/awesome-paas
+  - Description: A curated list of PaaS, developer platforms, Self hosted PaaS, Cloud IDEs and ADNs.
+- THJLI/doc2md-api (1 stars, Python, MIT License)
+  - URL: https://github.com/THJLI/doc2md-api
+  - Description: API built with Python (FastAPI + Microsoft MarkItDown) to convert common document formats (DOCX, PDF, PPTX, images, etc.) into Markdown. Secured with API Key (header X-API-Key) and packaged for Docker/Coolify deployments, including a health
+- SkyStreamRobot/polymarket-proxy (0 stars, JavaScript)
+  - URL: https://github.com/SkyStreamRobot/polymarket-proxy
+  - Description: CORS proxy for Polymarket Gamma API — Coolify/Docker deploy
+- kreamart-art/kingsen-server (0 stars, JavaScript)
+  - URL: https://github.com/kreamart-art/kingsen-server
+  - Description: Kingsen / Kings Cup community-sets API — Express + SQLite, deployable via Coolify/Docker
+- devsupport-tech/google-maps-scraper (0 stars)
+  - URL: https://github.com/devsupport-tech/google-maps-scraper
+  - Description: Google Maps Scraper deployment for Coolify/VPS. Scrapes contractor leads with REST API for n8n integration.
+- mragil/analytics-service (0 stars, TypeScript)
+  - URL: https://github.com/mragil/analytics-service
+  - Description: Lightweight, self-hosted web analytics platform — privacy-friendly tracking script, real-time dashboard, and REST API. Built with Hono, React, PostgreSQL, and Drizzle ORM. Docker-ready for Coolify/VPS deployment.
+- rebeccapowell/blog-demo-api (0 stars, C#, MIT License)
+  - URL: https://github.com/rebeccapowell/blog-demo-api
+  - Description: simple API using .NET minimal APIs for deployment to Coolify
+- strettch-cloud/coolify-express-api (0 stars, JavaScript)
+  - URL: https://github.com/strettch-cloud/coolify-express-api
+  - Description: ShopEase ecommerce API — Express.js + MongoDB. Demo app for the Strettch Cloud + Coolify deployment tutorial.
+- snowjs/cli (406 stars, TypeScript, MIT License)
+  - URL: https://github.com/snowjs/cli
+  - Description: CLI tool for dead-simple serverless Docker deployments on managed Kubernetes services. A self-hosted PaaS. ⚡️
+- dennisonbertram/agentic-hosting (30 stars, Go)
+  - URL: https://github.com/dennisonbertram/agentic-hosting
+  - Description: Agentic-first self-hosted PaaS — Docker + gVisor + Traefik + Nixpacks + SQLite, operated by AI agents
+- traien/ASP.net-Core-API-7.0-Sample-Docker-Coolify (1 stars, C#, MIT License)
+  - URL: https://github.com/traien/ASP.net-Core-API-7.0-Sample-Docker-Coolify
+  - Description: This repository contains a sample ASP.NET Core API 7.0 application that can be deployed to services like Heroku and Coolify.
+- AmenityDev/coolify-action (1 stars, MIT License)
+  - URL: https://github.com/AmenityDev/coolify-action
+  - Description: A GitHub Action to trigger deployments on Coolify via its API.
+- carlozanella/deploy-coolify (1 stars, JavaScript, Apache License 2.0)
+  - URL: https://github.com/carlozanella/deploy-coolify
+  - Description: GitHub Action to deploy applications on your Coolify instance via API
+- Thedurancode/Coolify-MCP (1 stars, TypeScript, MIT License)
+  - URL: https://github.com/Thedurancode/Coolify-MCP
+  - Description: A Model Context Protocol (MCP) server that exposes Coolify API functionality as safe, structured tools for AI agents. This enables AI-driven app marketplaces where users can deploy applications on Coolify with a single click.
+- api-evangelist/coolify (0 stars)
+  - URL: https://github.com/api-evangelist/coolify
+  - Description: API Evangelist profile of Coolify - open-source self-hostable PaaS alternative to Vercel, Heroku, Netlify
+- vaguul/coolify-stack-starters (0 stars, Dockerfile, MIT License)
+  - URL: https://github.com/vaguul/coolify-stack-starters
+  - Description: Docker Compose and Coolify starter stacks for self-hosted web apps, APIs, workers, and databases.
+- ad-altun/rest-countries-api (0 stars, TypeScript, MIT License)
+  - URL: https://github.com/ad-altun/rest-countries-api
+  - Description: REST Countries app built with React, TypeScript & Vite. Features Docker containerization, multi-stage builds, and automated CI/CD with GitHub Actions deploying to a VPS via Coolify.
+- Eleef/new-api-coolify (0 stars, PowerShell)
+  - URL: https://github.com/Eleef/new-api-coolify
+  - Description: Coolify deployment template for QuantumNous new-api
+- porpam82/browser-llm-api-deploy (0 stars)
+  - URL: https://github.com/porpam82/browser-llm-api-deploy
+  - Description: Fork for Coolify deployment (StaticB1/browser-llm-api)
+- coollabsio/coolify (58462 stars, PHP, Apache License 2.0)
+  - URL: https://github.com/coollabsio/coolify
+  - Description: An open-source, self-hostable PaaS alternative to Vercel, Heroku & Netlify that lets you easily deploy static sites, databases, full-stack applications and 280+ one-click services on your own servers.
+## 2026-07-14T05:45:21.734888+00:00 - triage
+
+- Request: Evaluate Coolify against HivemindOS managed app hosting and add Listmonk as an honest campaign-email capability if HivemindOS lacks it
+- Source: public-and-local
+- Decision: selected
+- Reason: Broadened search recovered the requested Listmonk donor and established Coolify as a strategic reference rather than the implementation backbone.
+- Selected backbone: LiamVisionary/hivemindos:src/lib/services/installable-services.ts
+
+### Candidates
+- knadh/listmonk
+  - Decision: selected-donor
+  - Reason: v6.1.0 provides the reviewed Docker/PostgreSQL campaign-email service and security boundary
+  - Path: `docker-compose.yml`
+- coollabsio/coolify
+  - Decision: reference-only
+  - Reason: best considered later as a stateful container deployment backplane; not assimilated because the root installer is privileged and the conservative full-repo audit blocked on destructive command paths
+  - Path: `templates/compose/listmonk.yaml`
+- Mailtrain-org/mailtrain
+  - Decision: rejected
+  - Reason: heavier JavaScript stack and weaker fit than the user-pinned Listmonk service
+- Billionmail/BillionMail
+  - Decision: rejected
+  - Reason: full mail-server scope would expand into mailbox delivery and abuse operations beyond the requested Listmonk campaign lane
+## 2026-07-14T05:45:21.784102+00:00 - audit
+
+- Request: Evaluate Coolify against HivemindOS managed app hosting and add Listmonk as an honest campaign-email capability if HivemindOS lacks it
+- Source: pinned-source
+- Decision: selected
+- Reason: Listmonk v6.1.0 selected paths passed the heuristic audit and manual review; Coolify remains research-only and is not automatically installed.
+- Verification: Listmonk exact-tag focused audit PASS; Docker manifests resolved immutable multi-architecture digests; dynamic container startup unavailable because the local Docker daemon is stopped.
+
+### Candidates
+- knadh/listmonk
+  - Decision: selected-donor
+  - Reason: focused audit passed with high=0 medium=0; manual review confirmed idempotent database setup, localhost-compatible service, separate SMTP configuration, and trusted-admin risks
+  - Path: `docker-compose.yml, Dockerfile, docker-entrypoint.sh, cmd`
+- coollabsio/coolify
+  - Decision: not-assimilated
+  - Reason: full-repo heuristic audit blocked with high=68 including real destructive filesystem command surfaces; official curl-to-root-shell install is unsuitable for silent desktop installation
+## 2026-07-14T05:45:35.803191+00:00 - assimilation-manifest
+
+- Request: Evaluate Coolify against HivemindOS managed app hosting and add Listmonk as an honest campaign-email capability if HivemindOS lacks it
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemindos:src/lib/services/installable-services.ts => src/lib/services/listmonk-installable.ts, knadh/listmonk:docker-compose.yml => src/lib/services/listmonk-compose.ts, knadh/listmonk:cmd/install.go => src/lib/services/listmonk-compose.ts
+- Verification: Wrote ASSIMILATION.coolify-listmonk.json with 3 entries and custom_code_assessment=balanced.
+## 2026-07-14T05:45:42.218742+00:00 - verification
+
+- Request: Evaluate Coolify against HivemindOS managed app hosting and add Listmonk as an honest campaign-email capability if HivemindOS lacks it
+- Source: assimilation-manifest
+- Decision: selected
+- Reason: The scoped manifest validates with three concrete substantive reuse entries.
+- Assimilated: Local installable-service lifecycle plus Listmonk v6.1.0 Docker topology and idempotent setup were adapted into the new focused service files.
+- Not assimilated: Coolify source and installer were not copied or executed; it remains a researched future hosting backplane.
+- Verification: python3 verify_assimilation_manifest.py ASSIMILATION.coolify-listmonk.json: PASS (3 concrete, 3 substantive)
+## 2026-07-14T06:37:45.603151+00:00 - shared-brain
+
+- Request: Build capability planning approvals for chat and autonomous agent work
+- Source: shared-brain
+- Decision: selected
+- Reason: Shared Brain confirmed the canonical hive-capability-search map and Queen Bee routing policy as load-bearing inputs.
+
+### Candidates
+- Skills/hive-capability-search/SKILL.md
+  - Decision: selected
+  - Reason: canonical bounded capability map contract
+  - Path: `Skills/hive-capability-search/SKILL.md`
+- Operations/Brain Services/Queen Bee/Routing Policy.md
+  - Decision: inspected
+  - Reason: existing Queen Bee routing order and control-plane primitives
+  - Path: `Operations/Brain Services/Queen Bee/Routing Policy.md`
+## 2026-07-14T06:37:45.972029+00:00 - local-search
+
+- Request: Build capability planning approvals for chat and autonomous agent work
+- Source: hive-capability-search
+- Decision: selected
+- Reason: Live local capability search found Queen Bee orchestration, Work Board lifecycle, registered capability invocation, and optional installable skills.
+
+### Candidates
+- src/lib/services/context-index.ts
+  - Decision: selected
+  - Reason: capability discovery and installable-state evidence
+  - Path: `src/lib/services/context-index.ts`
+- src/app/api/queen-bee/route.ts
+  - Decision: selected
+  - Reason: existing Queen Bee task entry path
+  - Path: `src/app/api/queen-bee/route.ts`
+- src/app/api/chat/agent-runtime/invoke-hive-capability-tool.ts
+  - Decision: selected-donor
+  - Reason: registered capability invocation and approval semantics
+  - Path: `src/app/api/chat/agent-runtime/invoke-hive-capability-tool.ts`
+## 2026-07-14T06:37:46.417653+00:00 - local-search
+
+- Request: Build capability planning approvals for chat and autonomous agent work
+- Source: current-project
+- Decision: inspected
+- Reason: Bounded ripgrep located existing approvals, chat thread UI, agent mailbox, company autonomy, installable-service, and capability-tool surfaces; these are being traced before design.
+
+### Candidates
+- src/lib/services/agent-mailboxes.ts
+  - Decision: inspected
+  - Reason: existing agent inbox source
+  - Path: `src/lib/services/agent-mailboxes.ts`
+- src/features/dashboard/views/chat/exchange/ChatSidebar.tsx
+  - Decision: inspected
+  - Reason: chat history row source
+  - Path: `src/features/dashboard/views/chat/exchange/ChatSidebar.tsx`
+- src/features/dashboard/views/zero-human-companies/ZeroHumanCompaniesView.tsx
+  - Decision: inspected
+  - Reason: autonomous company settings surface
+  - Path: `src/features/dashboard/views/zero-human-companies/ZeroHumanCompaniesView.tsx`
+## 2026-07-14T06:38:22.160364+00:00 - local-search
+
+- Request: Build capability planning approvals for chat and autonomous agent work
+- Source: private-index
+- Decision: inspected
+- Reason: Searched the local/private assimilation index for chat capability approval planning and autonomous policy donor code.
+- Note: Index result captured in this run; current-project approval and capability primitives remain the best-fit backbone.
+## 2026-07-14T06:38:22.381205+00:00 - local-search
+
+- Request: Build capability planning approvals for chat and autonomous agent work
+- Source: local-index
+- Query: `Build capability planning approvals for chat and autonomous agent work`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+
+### Candidates
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos
+  - Description: LiamVisionary/hivemindos Next.js React ( @tauri-apps/cli tailscale.com <div align="center"> <img width="220" height="220" alt="HivemindOS" src="public/hivemindos-logo.png" /> <p> <a href="https://github.com/LiamVisionary/hivemindos/stargaze
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos/blob/HEAD/package.json
+  - Path: `package.json`
+  - Description: { "name": "hivemindos", "version": "0.4.1", "private": false, "license": "MIT", "type": "module", "packageManager": "pnpm@8.6.12", "scripts": { "test": "node scripts/test-gate.mjs", "dev": "node scripts/dev-server.mjs", "dev:ui": "node scri
+## 2026-07-14T06:38:25.548281+00:00 - public-search
+
+- Request: Build capability planning approvals for chat and autonomous agent work
+- Source: public-github
+- Query: `Build capability planning approvals for chat and autonomous agent work`
+- Decision: retrieved
+- Reason: Retrieved 1 public candidates from GitHub search.
+
+### Candidates
+- niquewill/Consumer_Complaint (2 stars, HTML)
+  - URL: https://github.com/niquewill/Consumer_Complaint
+  - Description: Overview There are quite a few apps in the market that provide a public forum for bringing up complaints so they can get resolved. With these apps, customers could easily submit their complaints to companies via them and deliver them to the
+## 2026-07-14T06:38:25.626904+00:00 - prebuild-gate
+
+- Request: Build capability planning approvals for chat and autonomous agent work
+- Source: public-github
+- Query: `Build capability planning approvals for chat and autonomous agent work`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-07-14T06:38:37.359151+00:00 - public-search
+
+- Request: Build capability planning approvals for chat and autonomous agent work
+- Source: public-github
+- Decision: rejected
+- Reason: The only bounded public result was a small consumer-complaint HTML app with no reusable capability-planning, approval-state, or autonomous-agent modules.
+
+### Candidates
+- niquewill/Consumer_Complaint
+  - Decision: rejected
+  - Reason: wrong product domain and no extractable capability approval source paths
+## 2026-07-14T06:38:37.469683+00:00 - prebuild-gate
+
+- Request: Build capability planning approvals for chat and autonomous agent work
+- Source: current-project
+- Decision: selected
+- Reason: Selected the current HivemindOS project as the backbone because it already owns chat capability preflight, capability inventory, chat history, approvals, notifications, Work Board, and Zero Human Company autonomy.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/lib/services/chat/task-retrieval-context.ts
+  - Decision: selected
+  - Reason: existing chat capability preflight
+  - Path: `src/lib/services/chat/task-retrieval-context.ts`
+- src/features/approvals/ApprovalCard.tsx
+  - Decision: selected-donor
+  - Reason: existing approval interaction styling and semantics
+  - Path: `src/features/approvals/ApprovalCard.tsx`
+- src/lib/services/company-approval-policies.ts
+  - Decision: selected-donor
+  - Reason: existing autonomous approval policy resolution
+  - Path: `src/lib/services/company-approval-policies.ts`
+## 2026-07-14T07:12:50.713823+00:00 - verification
+
+- Request: Build capability planning and approval for Chat plus autonomous ask-first overrides
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.capability-approval.json: 6 concrete reuse entries, 6 substantive
+## 2026-07-14T14:47:55.893427+00:00 - local-search
+
+- Request: Add an action in the HivemindOS Trade route to use the quant research swarm
+- Source: local-index
+- Query: `Add an action in the HivemindOS Trade route to use the quant research swarm`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+
+### Candidates
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services
+  - Description: LiamVisionary/hivemind-cloud-services React @aws-sdk/client-s3 @bomb.sh/tab @cloudflare/autoconfig @cloudflare/cli @cloudflare/cli-shared-helpers @cloudflare/codemod @cloudflare/config @cloudflare/containers-shared @cloudflare/deploy-helper
+## 2026-07-14T14:47:59.017905+00:00 - public-search
+
+- Request: Add an action in the HivemindOS Trade route to use the quant research swarm
+- Source: public-github
+- Query: `Add an action in the HivemindOS Trade route to use the quant research swarm`
+- Decision: retrieved
+- Reason: Retrieved 1 public candidates from GitHub search.
+
+### Candidates
+- danderfer/Comp_Sci_Sem_2 (190 stars, Python)
+  - URL: https://github.com/danderfer/Comp_Sci_Sem_2
+  - Description: According to all known laws of aviation, there is no way that a bee should be able to fly. Its wings are too small to get its fat little body off the ground. The bee, of course, flies anyway. Because bees don’t care what humans think is imp
+## 2026-07-14T14:47:59.074163+00:00 - prebuild-gate
+
+- Request: Add an action in the HivemindOS Trade route to use the quant research swarm
+- Source: public-github
+- Query: `Add an action in the HivemindOS Trade route to use the quant research swarm`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-07-14T14:48:08.809482+00:00 - public-search
+
+- Request: Add an action in the HivemindOS Trade route to use the quant research swarm
+- Source: public-github
+- Decision: rejected
+- Reason: The bounded public result is an unrelated educational Python repository with no reusable Trade route, React action, or quant research UI path.
+
+### Candidates
+- danderfer/Comp_Sci_Sem_2
+  - Decision: rejected
+  - Reason: wrong product domain and no relevant source paths
+## 2026-07-14T14:48:08.925131+00:00 - prebuild-gate
+
+- Request: Add an action in the HivemindOS Trade route to use the quant research swarm
+- Source: current-project
+- Decision: selected
+- Reason: Selected the current HivemindOS project as the pinned backbone because it owns the Trade capability rail, research-only Nansen interaction pattern, and authenticated quant-research API.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/components/trade/CapabilityRail.tsx
+  - Decision: selected-donor
+  - Reason: existing Trade action and research result pattern
+  - Path: `src/components/trade/CapabilityRail.tsx`
+- src/app/api/quant-research/route.ts
+  - Decision: selected-donor
+  - Reason: existing research-only run and history API
+  - Path: `src/app/api/quant-research/route.ts`
+- src/components/trade/TradeView.tsx
+  - Decision: selected
+  - Reason: canonical Trade route composition
+  - Path: `src/components/trade/TradeView.tsx`
+## 2026-07-14T15:01:20.583427+00:00 - assimilation-manifest
+
+- Request: Add an action in the HivemindOS Trade route to use the quant research swarm
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemindos:src/components/trade/CapabilityRail.tsx => src/components/trade/QuantResearchPanel.tsx, LiamVisionary/hivemindos:src/components/trade/CapabilityRail.tsx => src/components/trade/CapabilityRail.tsx, LiamVisionary/hivemindos:src/features/dashboard/views/trade/trade-api.ts => src/features/dashboard/views/trade/trade-api.ts, LiamVisionary/hivemindos:scripts/test-nansen-intelligence.mjs => scripts/test-trade-quant-research-action.mjs
+- Verification: Wrote ASSIMILATION.trade-quant-research-action.json with 4 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-14T15:01:30.773278+00:00 - verification
+
+- Request: Add an action in the HivemindOS Trade route to use the quant research swarm
+- Source: verify-assimilation-manifest
+- Decision: below-threshold
+- Reason: ASSIMILATION.trade-quant-research-action.json: below-threshold: need at least 3 substantive code/config reuse entries; found 2. Search for stronger donors before finalizing.
+## 2026-07-14T15:01:30.890674+00:00 - verification
+
+- Request: Add an action in the HivemindOS Trade route to use the quant research swarm
+- Source: assimilation-manifest
+- Decision: failed
+- Reason: The Trade quant research action reuses the existing local capability rail, research result surface, same-origin API client, and focused test pattern.
+- Assimilated: Trade master/detail research interaction, typed same-origin calls, and focused capability contract.
+- Not assimilated: The unrelated public educational repository was rejected; no third-party packages or source were added.
+- Verification: Manifest verification failed.
+## 2026-07-14T15:01:48.922705+00:00 - assimilation-manifest
+
+- Request: Add an action in the HivemindOS Trade route to use the quant research swarm
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemindos:src/components/trade/CapabilityRail.tsx => src/components/trade/QuantResearchPanel.tsx, LiamVisionary/hivemindos:src/components/trade/CapabilityRail.tsx => src/components/trade/CapabilityRail.tsx, LiamVisionary/hivemindos:src/features/dashboard/views/trade/trade-api.ts => src/features/dashboard/views/trade/trade-api.ts, LiamVisionary/hivemindos:src/features/dashboard/views/trade/trade-intents.ts => src/features/dashboard/views/trade/trade-intents.ts, LiamVisionary/hivemindos:scripts/test-hive-brain-memory-hardening.mjs => src/lib/services/quant-research/runner.ts, LiamVisionary/hivemindos:scripts/test-nansen-intelligence.mjs => scripts/test-trade-quant-research-action.mjs
+- Verification: Wrote ASSIMILATION.trade-quant-research-action.json with 6 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-14T15:01:55.482667+00:00 - verification
+
+- Request: Add an action in the HivemindOS Trade route to use the quant research swarm
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.trade-quant-research-action.json: 6 concrete reuse entries, 4 substantive
+## 2026-07-14T15:02:03.151296+00:00 - verification
+
+- Request: Add an action in the HivemindOS Trade route to use the quant research swarm
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: Supersedes the earlier below-threshold receipt after adding the canonical Trade intent matrix and portable server path donor mappings.
+- Assimilated: Local Trade master/detail interaction, typed API calls, intent matrix, portable path resolution, and capability tests.
+- Not assimilated: No public third-party source or package was used.
+- Verification: ASSIMILATION.trade-quant-research-action.json: PASS with 6 concrete reuse entries and 4 substantive entries.
+## 2026-07-14T15:14:42.573251+00:00 - shared-brain
+
+- Request: Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.
+- Source: shared-brain
+- Decision: inspected
+- Reason: Full-vault recall found Python-oriented document skills but no existing Rust parser implementation; current project contracts remain the authoritative capability target.
+
+### Candidates
+- Skills/ocr-and-documents/SKILL.md
+  - Decision: inspected
+  - Reason: Python-focused and not suitable for a dependency-free desktop sidecar
+## 2026-07-14T15:15:09.856867+00:00 - local-search
+
+- Request: Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.
+- Source: current-workspace
+- Decision: selected
+- Reason: The current Rust quant engine provides the established locked Cargo build, release LTO/strip, target naming, staging, and version-verification pattern; existing MarkItDown protocol and runtime fixtures remain the behavioral backbone.
+
+### Candidates
+- native/quant-research-engine/Cargo.toml
+  - Decision: selected-donor
+  - Reason: reuse locked minimal Rust sidecar release profile
+- scripts/stage-quant-research-engine.mjs
+  - Decision: selected-donor
+  - Reason: adapt native build and Tauri staging flow
+- scripts/test-markitdown-sidecar-runtime.mjs
+  - Decision: selected-backbone
+  - Reason: preserve real 16-format and adversarial acceptance matrix
+- src/lib/services/markitdown-sidecar-client.ts
+  - Decision: selected-backbone
+  - Reason: preserve warm JSONL stdio protocol
+## 2026-07-14T15:15:09.904986+00:00 - local-search
+
+- Request: Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.
+- Source: local-index
+- Decision: rejected
+- Reason: Fresh private index returned only irrelevant Wrangler manifest matches and no reusable Rust document parser.
+
+### Candidates
+- LiamVisionary/hivemind-cloud-services
+  - Decision: rejected
+  - Reason: no document parser implementation
+## 2026-07-14T15:15:23.621802+00:00 - public-search
+
+- Request: Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.
+- Source: github-search-script
+- Decision: rejected
+- Reason: The bounded public-search helper failed before emitting candidates because its generated logger argument exceeded the host argument limit; live primary-source search continued through GitHub/web instead.
+
+### Candidates
+- search_github_public.py
+  - Decision: rejected
+  - Reason: host argument-list overflow
+## 2026-07-14T15:17:41.920172+00:00 - public-search
+
+- Request: Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.
+- Source: github-crates
+- Decision: selected
+- Reason: Live GitHub and crates.io search found a small pure-Rust composition: OfficeMD for PDF/OOXML-to-Markdown, Calamine for legacy XLS, msg_parser for Outlook MSG, and html-to-markdown-rs for HTML/EPUB; all use MIT-compatible licenses and disable native/ML runtimes.
+
+### Candidates
+- ThomAub/officemd@v0.1.8
+  - Decision: selected-backbone
+  - Reason: PDF DOCX PPTX XLSX extraction and Markdown rendering
+- tafia/calamine@v0.36.0
+  - Decision: selected-donor
+  - Reason: pure Rust legacy XLS reader
+- marirs/msg-parser-rs@0.3.6
+  - Decision: selected-donor
+  - Reason: pure Rust MSG reader
+- xberg-io/html-to-markdown@v3.8.3
+  - Decision: selected-donor
+  - Reason: MIT HTML and EPUB content conversion
+- xberg-io/xberg
+  - Decision: rejected
+  - Reason: broad framework and native-library integration conflicts with the size target
+- firecrawl/pdf-inspector
+  - Decision: rejected
+  - Reason: OfficeMD already embeds the relevant pure-Rust PDF extraction path
+- html2md@0.2.15
+  - Decision: rejected
+  - Reason: GPL-3.0+ license is incompatible with the intended MIT bundle
+## 2026-07-14T15:19:15.346737+00:00 - audit
+
+- Request: Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.
+- Source: audited-candidate-cache
+- Decision: selected
+- Reason: Exact parser source paths passed the heuristic audit and manual network/process/secret scan. The OfficeMD whole-repo block was an unrelated WASM Makefile cleanup and release installer; those paths are excluded from Cargo dependencies and runtime.
+
+### Candidates
+- ThomAub/officemd@89378cccd8f35d51605cf8316a115483ddc62fd9
+  - Decision: selected
+  - Reason: six exact parser crates passed scoped audit
+- tafia/calamine@2872ac1c7c02d03fc8549239f5ce629f6b08e54a
+  - Decision: selected
+  - Reason: src and manifest passed scoped audit
+- marirs/msg-parser-rs@c47e3186db94fb1a62c6ad2915ddb5c1c4a95f33
+  - Decision: selected
+  - Reason: src and manifest passed scoped audit
+- xberg-io/html-to-markdown@41376152bb4a24ec53788a7c6537d75afb5360f4
+  - Decision: selected
+  - Reason: library source and manifest passed scoped audit
+## 2026-07-14T15:19:20.738018+00:00 - local-search
+
+- Request: Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.
+- Source: local-index
+- Query: `Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+
+### Candidates
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services/blob/HEAD/workers/compute-gateway/package.json
+  - Path: `workers/compute-gateway/package.json`
+  - Description: { "name": "hivemindos-compute-gateway-worker", "version": "0.1.0", "private": true, "type": "module", "scripts": { "dev": "wrangler dev --local", "deploy": "wrangler deploy", "d1:create": "wrangler d1 create hivemindos_compute_gateway", "d1
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos
+  - Description: LiamVisionary/hivemindos Next.js React ( @tauri-apps/cli tailscale.com <div align="center"> <img width="220" height="220" alt="HivemindOS" src="public/hivemindos-logo.png" /> <p> <a href="https://github.com/LiamVisionary/hivemindos/stargaze
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos/blob/HEAD/apps/zimage-mobile-tauri/src-tauri/Cargo.toml
+  - Path: `apps/zimage-mobile-tauri/src-tauri/Cargo.toml`
+  - Description: [package] name = "zimage-mobile-tauri" version = "0.1.0" description = "Native shell for Liam's private Z-Image Mobile Tailnet app" authors = ["HivemindOS"] edition = "2021" [lib] name = "zimage_mobile_tauri_lib" crate-type = ["staticlib",
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services/blob/HEAD/workers/managed-agent-control-plane/node_modules/.pnpm/wrangler@4.110.0/node_modules/wrangler/package.json
+  - Path: `workers/managed-agent-control-plane/node_modules/.pnpm/wrangler@4.110.0/node_modules/wrangler/package.json`
+  - Description: { "name": "wrangler", "version": "4.110.0", "description": "Command-line interface for all things Cloudflare Workers", "keywords": [ "assembly", "cli", "cloudflare", "cloudflare workers", "compute", "edge", "emscripten", "graphql", "http",
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services/blob/HEAD/workers/managed-agent-control-plane/node_modules/.pnpm/wrangler@4.17.0_@cloudflare+workers-types@5.20260710.1/node_modules/wrangler/package.json
+  - Path: `workers/managed-agent-control-plane/node_modules/.pnpm/wrangler@4.17.0_@cloudflare+workers-types@5.20260710.1/node_modules/wrangler/package.json`
+  - Description: { "name": "wrangler", "version": "4.17.0", "description": "Command-line interface for all things Cloudflare Workers", "keywords": [ "wrangler", "cloudflare", "workers", "cloudflare workers", "edge", "compute", "serverless", "serverless appl
+## 2026-07-14T15:19:22.786687+00:00 - public-search
+
+- Request: Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.
+- Source: public-github
+- Query: `Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.`
+- Decision: retrieved
+- Reason: Retrieved 2 public candidates from GitHub search.
+
+### Candidates
+- faithcure/Nuke-code-editor (2 stars, Python, Apache License 2.0)
+  - URL: https://github.com/faithcure/Nuke-code-editor
+  - Description: An extended Python IDE for Foundry Nuke: dockable panel or standalone window with tabbed editor, Pygments syntax highlighting, smart completion, search/replace, project/workspace browser, an output console, and more for Python & Nuke script
+- davidszotten/osx-replace-readline (0 stars, Python, MIT License)
+  - URL: https://github.com/davidszotten/osx-replace-readline
+  - Description: Replace readline bundled with pythons on os x
+## 2026-07-14T15:19:22.855326+00:00 - prebuild-gate
+
+- Request: Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.
+- Source: public-github
+- Query: `Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-07-14T15:19:31.566338+00:00 - prebuild-gate
+
+- Request: Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.
+- Source: prebuild-assimilation-check
+- Decision: selected
+- Reason: The automated query decomposed around generic replace/bundled terms and returned unrelated Python editors; both were rejected. The manually decomposed live Rust-format search produced audited, format-specific crates and is the stronger backbone.
+
+### Candidates
+- faithcure/Nuke-code-editor
+  - Decision: rejected
+  - Reason: Nuke Python IDE; no document parser
+- davidszotten/osx-replace-readline
+  - Decision: rejected
+  - Reason: Python readline shim; no document parser
+- ThomAub/officemd@v0.1.8
+  - Decision: selected-backbone
+  - Reason: highest-fit reusable Rust document-to-Markdown implementation found
+## 2026-07-14T15:42:02.746234+00:00 - implementation
+
+- Request: Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.
+- Source: marirs/msg-parser-rs:examples/parse-email.rs,tafia/calamine:src/lib.rs,xberg-io/html-to-markdown:crates/html-to-markdown/src/lib.rs
+- Decision: selected
+- Reason: Adapted the public Rust APIs for MSG, workbook, and HTML extraction inside the bounded local sidecar.
+- Assimilated: format-specific conversion branches in native/document-reader/src/main.rs
+- Verification: representative MSG, XLS, XLSX, HTML, and EPUB fixtures pass
+## 2026-07-14T15:42:02.763372+00:00 - implementation
+
+- Request: Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.
+- Source: J-F-Liu/lopdf:src/parser_aux.rs
+- Decision: selected
+- Reason: Used lopdf 0.44.0's bounded text extraction directly, eliminating the vulnerable OfficeMD PDF dependency while keeping local PDF parsing.
+- Assimilated: bounded PDF page extraction into native/document-reader/src/main.rs
+- Verification: cargo test, 16-format runtime matrix, real RustSec audit
+## 2026-07-14T15:42:02.781262+00:00 - security-audit
+
+- Request: Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.
+- Source: rustsec
+- Decision: rejected
+- Reason: OfficeMD 0.1.8 resolved to lopdf 0.39.0 and quick-xml 0.37.5, which RustSec reported with three high-severity denial-of-service vulnerabilities; that dependency design was removed before release.
+- Not assimilated: officemd_* 0.1.8 runtime crates
+## 2026-07-14T15:42:02.804605+00:00 - implementation
+
+- Request: Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.
+- Source: LiamVisionary/hivemindos:native/quant-research-engine/Cargo.toml,scripts/stage-quant-research-engine.mjs
+- Decision: selected
+- Reason: Reused the project's established minimal Rust sidecar release profile and locked Cargo staging/version verification pattern.
+- Assimilated: native/document-reader/Cargo.toml and scripts/stage-markitdown-sidecar.mjs
+- Verification: 3,353,360-byte staged arm64 binary; version and 12 MiB gates pass
+## 2026-07-14T15:42:37.497066+00:00 - assimilation-manifest
+
+- Request: Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemindos:native/quant-research-engine/Cargo.toml => native/document-reader/Cargo.toml, LiamVisionary/hivemindos:scripts/stage-quant-research-engine.mjs => scripts/stage-markitdown-sidecar.mjs, ThomAub/officemd:crates/officemd_cli/src/main.rs => native/document-reader/src/main.rs, marirs/msg-parser-rs:examples/parse-email.rs => native/document-reader/src/main.rs, tafia/calamine:src/lib.rs => native/document-reader/src/main.rs, xberg-io/html-to-markdown:crates/html-to-markdown/src/lib.rs => native/document-reader/src/main.rs
+- Verification: Wrote ASSIMILATION.document-reader-rust.json with 6 entries and custom_code_assessment=balanced.
+## 2026-07-14T15:42:43.462917+00:00 - verification
+
+- Request: Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION.document-reader-rust.json: 6 concrete reuse entries, 6 substantive
+## 2026-07-14T15:42:51.046681+00:00 - correction
+
+- Request: Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.
+- Source: rustsec
+- Decision: corrected
+- Reason: The earlier security-audit event used a non-canonical phase label. Canonical result: OfficeMD 0.1.8 runtime dependencies were rejected after three high-severity RustSec findings; direct lopdf 0.44.0 and quick-xml 0.41.0 replacements now audit clean.
+- Verification: cargo-audit 0.22.2 scanned 128 locked dependencies with zero vulnerabilities after replacement
+## 2026-07-14T15:45:34.086526+00:00 - audit
+
+- Request: Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.
+- Source: lopdf 0.44.0; quick-xml 0.41.0; csv 1.4.0
+- Decision: selected
+- Reason: Exact selected parser source paths passed the conservative heuristic audit. The whole csv crate produced only three benchmark-data size cautions; its selected src directory passed with zero findings.
+- Verification: lopdf: 0 high/0 medium/0 low; quick-xml: 0/0/0; csv src: 0/0/0; cargo-audit: zero vulnerabilities in 128 locked dependencies
+## 2026-07-14T15:50:50.270714+00:00 - final
+
+- Request: Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.
+- Source: native/document-reader; Rust parser donors; HivemindOS sidecar patterns
+- Decision: selected
+- Reason: Shipped the assimilated design as a bundled Rust reader with no Python runtime, retaining the 16-format and security contract at 3.20 MiB raw.
+- Assimilated: 6 substantive mappings recorded in ASSIMILATION.document-reader-rust.json
+- Verification: manifest valid; focused gates green; broad gate unchanged at 180/199; cargo-audit clean; actual release sidecar 3,353,360 bytes and runtime matrix green
+## 2026-07-14T16:02:40.938898+00:00 - local-search
+
+- Request: Fix the Fleet Hive Reveal all and New machine buttons so they match the styling of the surrounding controls
+- Source: user-pinned-project
+- Query: `Fleet Hive toolbar action controls segmented mono button styling`
+- Decision: selected
+- Reason: The current project already contains exact adjacent Fleet control patterns and the canonical button primitive.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/design-system/ui/button.tsx
+  - Decision: selected
+  - Reason: Keeps canonical button semantics, focus behavior, and control typography baseline
+  - Path: `src/design-system/ui/button.tsx`
+- src/components/fleet-hive/FleetHiveView.tsx
+  - Decision: selected-donor
+  - Reason: The adjacent ViewModeToggle supplies the exact compact segmented toolbar treatment
+  - Path: `src/components/fleet-hive/FleetHiveView.tsx`
+- src/features/dashboard/views/AgentsPanel.tsx
+  - Decision: selected-donor
+  - Reason: FleetLayoutToggle supplies the matching mono uppercase Hive and Classic treatment
+  - Path: `src/features/dashboard/views/AgentsPanel.tsx`
+## 2026-07-14T16:02:41.000768+00:00 - public-search
+
+- Request: Fix the Fleet Hive Reveal all and New machine buttons so they match the styling of the surrounding controls
+- Source: public-github
+- Decision: not-assimilated
+- Reason: No external search was needed because the pinned HivemindOS project has exact reusable primitives on both sides of the reported controls.
+- Not assimilated: public GitHub
+## 2026-07-14T16:06:36.774418+00:00 - audit
+
+- Request: Fix the Fleet Hive Reveal all and New machine buttons so they match the styling of the surrounding controls
+- Source: local-project:hivemind-os
+- Decision: selected
+- Reason: Audited only the canonical Button primitive and the two adjacent Fleet segmented-control implementations; no dependency, external source, or executable donor code was introduced.
+
+### Candidates
+- src/design-system/ui/button.tsx
+  - Decision: selected
+  - Reason: Canonical accessible control primitive retained
+  - Path: `src/design-system/ui/button.tsx`
+- src/components/fleet-hive/FleetHiveView.tsx
+  - Decision: selected-donor
+  - Reason: Adjacent mode toggle is the exact visual target
+  - Path: `src/components/fleet-hive/FleetHiveView.tsx`
+- src/features/dashboard/views/AgentsPanel.tsx
+  - Decision: selected-donor
+  - Reason: Adjacent layout toggle confirms mono typography and honey emphasis
+  - Path: `src/features/dashboard/views/AgentsPanel.tsx`
+## 2026-07-14T16:06:36.932492+00:00 - assimilation-manifest
+
+- Request: Fix the Fleet Hive Reveal all and New machine buttons so they match the styling of the surrounding controls
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-project/hivemind-os:src/design-system/ui/button.tsx => src/components/fleet-hive/FleetHiveView.tsx, local-project/hivemind-os:src/components/fleet-hive/FleetHiveView.tsx => src/components/fleet-hive/FleetHiveView.tsx, local-project/hivemind-os:src/features/dashboard/views/AgentsPanel.tsx => src/components/fleet-hive/fleet-hive.css
+- Verification: Wrote ASSIMILATION.fleet-hive-toolbar-actions.json with 3 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-14T16:06:37.098020+00:00 - verification
+
+- Request: Fix the Fleet Hive Reveal all and New machine buttons so they match the styling of the surrounding controls
+- Source: verify-assimilation-manifest
+- Decision: below-threshold
+- Reason: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION.fleet-hive-toolbar-actions.json: below-threshold: need at least 3 substantive code/config reuse entries; found 1. Search for stronger donors before finalizing.
+## 2026-07-14T16:06:51.673718+00:00 - assimilation-manifest
+
+- Request: Fix the Fleet Hive Reveal all and New machine buttons so they match the styling of the surrounding controls
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-project/hivemind-os:src/design-system/ui/button.tsx => src/components/fleet-hive/FleetHiveView.tsx, local-project/hivemind-os:src/components/fleet-hive/FleetHiveView.tsx => src/components/fleet-hive/FleetHiveView.tsx, local-project/hivemind-os:src/features/dashboard/views/AgentsPanel.tsx => src/components/fleet-hive/fleet-hive.css
+- Verification: Wrote ASSIMILATION.fleet-hive-toolbar-actions.json with 3 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-14T16:06:51.846095+00:00 - verification
+
+- Request: Fix the Fleet Hive Reveal all and New machine buttons so they match the styling of the surrounding controls
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION.fleet-hive-toolbar-actions.json: 3 concrete reuse entries, 3 substantive
+## 2026-07-14T16:07:59.755732+00:00 - verification
+
+- Request: Fix the Fleet Hive Reveal all and New machine buttons so they match the styling of the surrounding controls
+- Source: local-gates-and-browser
+- Decision: passed
+- Reason: Live Fleet verification passed in dark and hive-light themes; Reveal all selected/restored correctly; New machine remained available; focused geometry, ESLint, TypeScript, typography, diff hygiene, and manifest gates passed.
+- Verification: The full size inventory remains red on unrelated existing/concurrent files; touched files are FleetHiveView.tsx 1006 lines and fleet-hive.css 1493 lines.
+## 2026-07-14T16:08:13.380232+00:00 - verification
+
+- Request: Fix the Fleet Hive Reveal all and New machine buttons so they match the styling of the surrounding controls
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION.fleet-hive-toolbar-actions.json: 3 concrete reuse entries, 3 substantive
+## 2026-07-14T17:43:16.203134+00:00 - shared-brain
+
+- Request: Improve HivemindOS capability approval mapping, ranking, installed/setup detection, multi-intent completeness, and pending-card durability; re-test until robust.
+- Source: full-vault
+- Query: `capability approval mapping installed setup autonomous defaults chat hydration`
+- Decision: selected
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- Skills/hive-capability-search/SKILL.md
+  - Decision: selected
+  - Reason: authoritative approval and ranking contract
+  - Path: `Skills/hive-capability-search/SKILL.md`
+- HivemindOS Docs/for-users/features/runtimes-and-chat.md
+  - Decision: inspected
+  - Reason: existing chat product contract
+  - Path: `HivemindOS Docs/for-users/features/runtimes-and-chat.md`
+## 2026-07-14T17:43:47.816081+00:00 - local-search
+
+- Request: Improve HivemindOS capability approval mapping, ranking, installed/setup detection, multi-intent completeness, and pending-card durability; re-test until robust.
+- Source: hive-capability-search
+- Query: `broad approval system plus presentation/audio/3d/diagram, Stripe, spreadsheets, X publishing, ComfyUI, chat hydration`
+- Decision: selected
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/lib/services/chat/capability-approval.ts
+  - Decision: selected
+  - Reason: existing typed intent and ranking service
+  - Path: `src/lib/services/chat/capability-approval.ts`
+- src/features/dashboard/hooks/use-chat-tree-controller.tsx
+  - Decision: selected-donor
+  - Reason: existing runtime-session hydration path
+  - Path: `src/features/dashboard/hooks/use-chat-tree-controller.tsx`
+- scripts/test-capability-approval.mjs
+  - Decision: selected-donor
+  - Reason: existing approval contract test
+  - Path: `scripts/test-capability-approval.mjs`
+- Skills/spreadsheets/SKILL.md
+  - Decision: inspected
+  - Reason: installed exact capability should outrank generic hits
+  - Path: `Skills/spreadsheets/SKILL.md`
+- Skills/comfyui-image-generation/SKILL.md
+  - Decision: inspected
+  - Reason: explicit provider preference test case
+  - Path: `Skills/comfyui-image-generation/SKILL.md`
+- Skills/architecture-diagram/SKILL.md
+  - Decision: inspected
+  - Reason: missing typed intent family evidence
+  - Path: `Skills/architecture-diagram/SKILL.md`
+- Skills/localtts/SKILL.md
+  - Decision: inspected
+  - Reason: missing typed intent family evidence
+  - Path: `Skills/localtts/SKILL.md`
+## 2026-07-14T17:44:21.702391+00:00 - local-search
+
+- Request: Improve HivemindOS capability approval mapping, ranking, installed/setup detection, multi-intent completeness, and pending-card durability; re-test until robust.
+- Source: assimilation-index
+- Query: `capability ranking dedupe installed setup approval chat hydration`
+- Decision: selected
+- Selected backbone: LiamVisionary/hivemindos
+- Note: Fresh primary index present; legacy index stale but not needed because the current repo is the exact backbone.
+
+### Candidates
+- LiamVisionary/hivemindos
+  - Decision: selected
+  - Reason: only relevant indexed project and exact target codebase
+  - Path: `src/lib/services/chat/capability-approval.ts`
+## 2026-07-14T17:44:35.820826+00:00 - public-search
+
+- Request: Improve HivemindOS capability approval mapping, ranking, installed/setup detection, multi-intent completeness, and pending-card durability; re-test until robust.
+- Source: public-github
+- Query: `TypeScript capability planner semantic ranking installed skill dedupe chat approval hydration`
+- Decision: retrieved
+- Reason: Retrieved 11 public candidates from GitHub search.
+
+### Candidates
+- krotrn/Chat_App (8 stars, TypeScript, MIT License)
+  - URL: https://github.com/krotrn/Chat_App
+  - Description: ChatApp — A production-grade, real-time messaging client built with Next.js 15, React 19, and TypeScript. Featuring Socket.IO-powered WebSockets, Redux Toolkit state management, Auth.js v5 authentication, Prisma-backed PostgreSQL user store
+- PranshuChauhan149/Track-Cart (3 stars, TypeScript)
+  - URL: https://github.com/PranshuChauhan149/Track-Cart
+  - Description: Track & Cart is a full-stack grocery delivery platform built with Next.js 15, MongoDB, NextAuth, and Socket.io. It features live map tracking for orders, real-time chat between users and delivery partners, AI-powered assistance, smooth Fram
+- selfabhijeetkumar/NEXUS-AI--CHATBOT- (2 stars, TypeScript)
+  - URL: https://github.com/selfabhijeetkumar/NEXUS-AI--CHATBOT-
+  - Description: A futuristic AI chat platform built with Next.js, React Three Fiber & Framer Motion — featuring 3D neural network visualizations, multi-model support (GPT-4, Claude, Gemini), real-time streaming, slash commands, and an immersive glassmorphi
+- erickloutse/Real-Time-Chat (1 stars, TypeScript)
+  - URL: https://github.com/erickloutse/Real-Time-Chat
+  - Description: Real-time chat application (WhatsApp Web Clone) built with MERN. WebSockets for live messaging, file and voice message support, dark/light mode, and a clean UI with ShadCN/UI, Tailwind CSS, and Framer Motion animations.
+- NitinTheGreat/DealHarbor-Frontend (1 stars, TypeScript)
+  - URL: https://github.com/NitinTheGreat/DealHarbor-Frontend
+  - Description: Next.js 15 PWA marketplace with React 19, TypeScript, real-time WebSocket chat, SSR for SEO, middleware auth guards, Workbox offline caching, shadcn/ui components, and Framer Motion animations. Companion frontend for DealHarbor Backend.
+- Mr-Broccolli/Cognee-Chat-v2.0 (1 stars, TypeScript, Apache License 2.0)
+  - URL: https://github.com/Mr-Broccolli/Cognee-Chat-v2.0
+  - Description: An innovative full-stack AI chat application featuring modern Next.js 14 frontend, Shadcn UI styling, dynamic Framer Motion animations, and custom persistent state. Backed by a high-performance Python FastAPI engine powered by Cognee, it bu
+- subhrangshudas05/ScripterAi (1 stars, TypeScript)
+  - URL: https://github.com/subhrangshudas05/ScripterAi
+  - Description: ScripterAi is a high-performance Next.js tool for viral content creators. It extracts audio from Reels, Shorts, and TikToks via yt-dlp and uses Gemini 1.5 Flash to generate structured, psychology-driven scripts. Features include a MongoDB-b
+- EnzoDV08/DAISY-UI-TEST (1 stars, TypeScript)
+  - URL: https://github.com/EnzoDV08/DAISY-UI-TEST
+  - Description: UI demo app built with Vite, React, TypeScript, TailwindCSS, and DaisyUI. Includes a WhatsApp-style fake chat interface, dynamic theme switcher (light/dark/cupcake), and a comment confirmation modal. Designed for testing and learning how to
+- alantoa/react-native-lottie-tabbar (50 stars, TypeScript, MIT License)
+  - URL: https://github.com/alantoa/react-native-lottie-tabbar
+  - Description: ✨ A lottie animation tab bar written in react-native-reanimated v2.
+- ytrofr/claude-remotion-editor (23 stars, TypeScript, MIT License)
+  - URL: https://github.com/ytrofr/claude-remotion-editor
+  - Description: SceneDirector: Interactive hand-path editor for Remotion video compositions. Draw, preview, and save animation paths with Lottie gestures.
+- Arena10x/AI-ChatBot-powered-by-Google-Gemini-API (2 stars, TypeScript)
+  - URL: https://github.com/Arena10x/AI-ChatBot-powered-by-Google-Gemini-API
+  - Description: Responsive UI: Crafted with Next.js, TailwindCSS, and Framer Motion for a seamless user experience. PDF Integration: leveraging CDN-loaded PDF.js. * Intelligent Responses: The AI intelligently synthesizes user prompts with uploaded PDF cont
+## 2026-07-14T17:44:44.224622+00:00 - public-search
+
+- Request: Improve HivemindOS capability approval mapping, ranking, installed/setup detection, multi-intent completeness, and pending-card durability; re-test until robust.
+- Source: github-public
+- Query: `TypeScript capability planner semantic ranking installed skill dedupe chat approval hydration`
+- Decision: rejected
+- Selected backbone: local-project:hivemind-os
+- Note: The exact target repo already contains the domain types, context-index scorer, chat hydration path, and tests; external candidates were lower-fit and would add incompatible abstractions.
+
+### Candidates
+- krotrn/Chat_App
+  - Decision: rejected
+  - Reason: generic messaging client with no reusable capability-ranking or hydration-merge module
+- Mr-Broccolli/Cognee-Chat-v2.0
+  - Decision: rejected
+  - Reason: Graph-RAG chat app does not match HivemindOS state or capability schemas
+- public-search remainder
+  - Decision: rejected
+  - Reason: unrelated chat UI and animation repositories; no extractable tested primitive
+## 2026-07-14T17:44:55.557250+00:00 - local-search
+
+- Request: Improve HivemindOS capability approval mapping, ranking, installed/setup detection, multi-intent completeness, and pending-card durability; re-test until robust.
+- Source: local-index
+- Query: `Improve HivemindOS capability approval mapping, ranking, installed/setup detection, multi-intent completeness, and pending-card durability; re-test until robust.`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+
+### Candidates
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos
+  - Description: LiamVisionary/hivemindos Next.js React ( @tauri-apps/cli tailscale.com <div align="center"> <img width="220" height="220" alt="HivemindOS" src="public/hivemindos-logo.png" /> <p> <a href="https://github.com/LiamVisionary/hivemindos/stargaze
+## 2026-07-14T17:44:57.715670+00:00 - public-search
+
+- Request: Improve HivemindOS capability approval mapping, ranking, installed/setup detection, multi-intent completeness, and pending-card durability; re-test until robust.
+- Source: public-github
+- Query: `Improve HivemindOS capability approval mapping, ranking, installed/setup detection, multi-intent completeness, and pending-card durability; re-test until robust.`
+- Decision: retrieved
+- Reason: Retrieved 2 public candidates from GitHub search.
+
+### Candidates
+- Sfedfcv/redesigned-pancake (247 stars)
+  - URL: https://github.com/Sfedfcv/redesigned-pancake
+  - Description: Skip to content github / docs Code Issues 80 Pull requests 35 Discussions Actions Projects 2 Security Insights Merge branch 'main' into 1862-Add-Travis-CI-migration-table 1862-Add-Travis-CI-migration-table (#1869, Iixixi/ZachryTylerWood#102
+- Itsdani0310/BPM-workflows (1 stars)
+  - URL: https://github.com/Itsdani0310/BPM-workflows
+  - Description: The goal of an ERP program is to supply a built-in answer to any or all company areas of a specific enterprise. Essentially, you've one pc software system that the entire company can accessibility and function with. So, as an example, all t
+## 2026-07-14T17:44:57.841835+00:00 - prebuild-gate
+
+- Request: Improve HivemindOS capability approval mapping, ranking, installed/setup detection, multi-intent completeness, and pending-card durability; re-test until robust.
+- Source: public-github
+- Query: `Improve HivemindOS capability approval mapping, ranking, installed/setup detection, multi-intent completeness, and pending-card durability; re-test until robust.`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-07-14T17:45:08.565724+00:00 - prebuild-gate
+
+- Request: Improve HivemindOS capability approval mapping, ranking, installed/setup detection, multi-intent completeness, and pending-card durability; re-test until robust.
+- Source: bounded-prebuild
+- Query: `capability approval mapping ranking installed setup durability`
+- Decision: selected
+- Reason: Current project is the only compatible backbone; public results are false-positive keyword matches.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- LiamVisionary/hivemindos
+  - Decision: selected
+  - Reason: exact domain schemas, live search engine, UI state, and regression harness
+  - Path: `src/lib/services/chat/capability-approval.ts`
+- Sfedfcv/redesigned-pancake
+  - Decision: rejected
+  - Reason: keyword collision with GitHub infrastructure data; no compatible capability planner code
+- Itsdani0310/BPM-workflows
+  - Decision: rejected
+  - Reason: generic ERP prose with no TypeScript chat or ranking implementation
+## 2026-07-14T17:55:51.098709+00:00 - shared-brain
+
+- Request: (not provided)
+- Source: shared-brain
+- Decision: inspected
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- Shared Brain full-vault recall
+  - Decision: inspected
+  - Reason: No durable Solara naming decision found; Queen Bee orchestration references only
+  - Path: `hive-brain answer`
+## 2026-07-14T17:56:04.395252+00:00 - correction
+
+- Request: lets give the queen bee the default name Solara everywhere. but allow the user to change it (i think already possible, in the queen bee agentsettingsmodal for me it says Hermes Lead and lets me edit it, though in the fleet hive view its just saying Queen so we need to display the actual name, and below it as subtitle above orchestrator, "Queen"
+- Source: shared-brain
+- Decision: inspected
+- Selected backbone: local-project:hivemind-os
+- Note: Corrects the immediately prior unattributed logger invocation by attaching the verbatim request.
+
+### Candidates
+- Shared Brain full-vault recall
+  - Decision: inspected
+  - Reason: No durable Solara naming decision found; Queen Bee orchestration references only
+  - Path: `hive-brain answer`
+## 2026-07-14T17:59:57.743912+00:00 - local-search
+
+- Request: lets give the queen bee the default name Solara everywhere. but allow the user to change it (i think already possible, in the queen bee agentsettingsmodal for me it says Hermes Lead and lets me edit it, though in the fleet hive view its just saying Queen so we need to display the actual name, and below it as subtitle above orchestrator, "Queen"
+- Source: current-workspace
+- Decision: selected
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/lib/config/queen-bee-personality.ts
+  - Decision: selected-donor
+  - Reason: existing canonical Queen Bee defaults and personality config
+  - Path: `src/lib/config/queen-bee-personality.ts`
+- src/features/dashboard/hooks/use-queen-ux.ts
+  - Decision: selected-donor
+  - Reason: existing create/settings flow preserves editable profile name
+  - Path: `src/features/dashboard/hooks/use-queen-ux.ts`
+- src/components/fleet-hive/HiveStage.tsx
+  - Decision: selected-donor
+  - Reason: existing center-cell rendering and accessible interaction
+  - Path: `src/components/fleet-hive/HiveStage.tsx`
+- src/features/dashboard/dashboard-storage.ts
+  - Decision: selected-donor
+  - Reason: existing profile normalization and persistence migration path
+  - Path: `src/features/dashboard/dashboard-storage.ts`
+## 2026-07-14T17:59:57.844413+00:00 - local-search
+
+- Request: lets give the queen bee the default name Solara everywhere. but allow the user to change it (i think already possible, in the queen bee agentsettingsmodal for me it says Hermes Lead and lets me edit it, though in the fleet hive view its just saying Queen so we need to display the actual name, and below it as subtitle above orchestrator, "Queen"
+- Source: local-private-index
+- Decision: selected
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- LiamVisionary/hivemindos
+  - Decision: selected
+  - Reason: fresh local index points back to the current canonical repo; no separate donor needed
+  - Path: `hive-assimilate index`
+- LiamVisionary/hivemind-cloud-services
+  - Decision: rejected
+  - Reason: commercial backend is unrelated to local agent naming and Fleet Hive display
+  - Path: `hive-assimilate index`
+## 2026-07-14T18:00:03.025477+00:00 - local-search
+
+- Request: lets give the queen bee the default name Solara everywhere. but allow the user to change it (i think already possible, in the queen bee agentsettingsmodal for me it says Hermes Lead and lets me edit it, though in the fleet hive view its just saying Queen so we need to display the actual name, and below it as subtitle above orchestrator, "Queen"
+- Source: local-index
+- Query: `lets give the queen bee the default name Solara everywhere. but allow the user to change it (i think already possible, in the queen bee agentsettingsmodal for me it says Hermes Lead and lets me edit it, though in the fleet hive view its just saying Queen so we need to display the actual name, and below it as subtitle above orchestrator, "Queen"`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+
+### Candidates
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos
+  - Description: LiamVisionary/hivemindos Next.js React ( @tauri-apps/cli tailscale.com <div align="center"> <img width="220" height="220" alt="HivemindOS" src="public/hivemindos-logo.png" /> <p> <a href="https://github.com/LiamVisionary/hivemindos/stargaze
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos/blob/HEAD/src-tauri/Cargo.toml
+  - Path: `src-tauri/Cargo.toml`
+  - Description: [package] name = "hivemindos-desktop" version = "0.4.1" description = "HivemindOS desktop shell" authors = ["HivemindOS"] edition = "2021" [lib] name = "hivemindos_desktop_lib" crate-type = ["staticlib", "cdylib", "rlib"] [[bin]] name = "Hi
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services/blob/HEAD/workers/managed-agent-control-plane/node_modules/.pnpm/tsx@4.22.4/node_modules/tsx/package.json
+  - Path: `workers/managed-agent-control-plane/node_modules/.pnpm/tsx@4.22.4/node_modules/tsx/package.json`
+  - Description: { "name": "tsx", "version": "4.22.4", "description": "TypeScript Execute (tsx): Node.js enhanced with esbuild to run TypeScript & ESM files", "keywords": [ "cli", "runtime", "node", "cjs", "commonjs", "esm", "typescript", "typescript runner
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services
+  - Description: LiamVisionary/hivemind-cloud-services React @aws-sdk/client-s3 @bomb.sh/tab @cloudflare/autoconfig @cloudflare/cli @cloudflare/cli-shared-helpers @cloudflare/codemod @cloudflare/config @cloudflare/containers-shared @cloudflare/deploy-helper
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services/blob/HEAD/workers/managed-agent-control-plane/node_modules/.pnpm/acorn@8.14.0/node_modules/acorn/package.json
+  - Path: `workers/managed-agent-control-plane/node_modules/.pnpm/acorn@8.14.0/node_modules/acorn/package.json`
+  - Description: { "name": "acorn", "description": "ECMAScript parser", "homepage": "https://github.com/acornjs/acorn", "main": "dist/acorn.js", "types": "dist/acorn.d.ts", "module": "dist/acorn.mjs", "exports": { ".": [ { "import": "./dist/acorn.mjs", "req
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services/blob/HEAD/workers/managed-agent-control-plane/node_modules/.pnpm/wrangler@4.110.0/node_modules/wrangler/package.json
+  - Path: `workers/managed-agent-control-plane/node_modules/.pnpm/wrangler@4.110.0/node_modules/wrangler/package.json`
+  - Description: { "name": "wrangler", "version": "4.110.0", "description": "Command-line interface for all things Cloudflare Workers", "keywords": [ "assembly", "cli", "cloudflare", "cloudflare workers", "compute", "edge", "emscripten", "graphql", "http",
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos/blob/HEAD/apps/zimage-mobile-tauri/src-tauri/Cargo.toml
+  - Path: `apps/zimage-mobile-tauri/src-tauri/Cargo.toml`
+  - Description: [package] name = "zimage-mobile-tauri" version = "0.1.0" description = "Native shell for Liam's private Z-Image Mobile Tailnet app" authors = ["HivemindOS"] edition = "2021" [lib] name = "zimage_mobile_tauri_lib" crate-type = ["staticlib",
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos/blob/HEAD/package.json
+  - Path: `package.json`
+  - Description: { "name": "hivemindos", "version": "0.4.1", "private": false, "license": "MIT", "type": "module", "packageManager": "pnpm@8.6.12", "scripts": { "test": "node scripts/test-gate.mjs", "dev": "node scripts/dev-server.mjs", "dev:ui": "node scri
+## 2026-07-14T18:00:06.569367+00:00 - public-search
+
+- Request: lets give the queen bee the default name Solara everywhere. but allow the user to change it (i think already possible, in the queen bee agentsettingsmodal for me it says Hermes Lead and lets me edit it, though in the fleet hive view its just saying Queen so we need to display the actual name, and below it as subtitle above orchestrator, "Queen"
+- Source: public-github
+- Query: `lets give the queen bee the default name Solara everywhere. but allow the user to change it (i think already possible, in the queen bee agentsettingsmodal for me it says Hermes Lead and lets me edit it, though in the fleet hive view its just saying Queen so we need to display the actual name, and below it as subtitle above orchestrator, "Queen"`
+- Decision: retrieved
+- Reason: Retrieved 8 public candidates from GitHub search.
+
+### Candidates
+- danderfer/Comp_Sci_Sem_2 (190 stars, Python)
+  - URL: https://github.com/danderfer/Comp_Sci_Sem_2
+  - Description: According to all known laws of aviation, there is no way that a bee should be able to fly. Its wings are too small to get its fat little body off the ground. The bee, of course, flies anyway. Because bees don’t care what humans think is imp
+- MarkipTheMudkip/in-class-project-2 (85 stars, HTML)
+  - URL: https://github.com/MarkipTheMudkip/in-class-project-2
+  - Description: According to all known laws of aviation, there is no way a bee should be able to fly. Its wings are too small to get its fat little body off the ground. The bee, of course, flies anyway because bees don't care what humans think is impossibl
+- S4ltster/Beemovie (45 stars, CSS)
+  - URL: https://github.com/S4ltster/Beemovie
+  - Description: Bee Movie script for educational purposes only, anyways According to all known laws of aviation, there is no way a bee should be able to fly. Its wings are too small to get its fat little body off the ground. The bee, of course, flies anywa
+- landonasato/Function (31 stars, HTML)
+  - URL: https://github.com/landonasato/Function
+  - Description: According to all known laws of aviation, there is no way a bee should be able to fly. Its wings are too small to get its fat little body off the ground. The bee, of course, flies anyway because bees don't care what humans think is impossibl
+- HimangshuCyber/Math-Quiz (26 stars, JavaScript)
+  - URL: https://github.com/HimangshuCyber/Math-Quiz
+  - Description: According to all known laws of aviation, there is no way a bee should be able to fly. Its wings are too small to get its fat little body off the ground. The bee, of course, flies anyway because bees don't care what humans think is impossibl
+- Skattermuffin/this-ones-for-you-my-retalyation.-also-haha-arrow-game-lolol (23 stars, CSS)
+  - URL: https://github.com/Skattermuffin/this-ones-for-you-my-retalyation.-also-haha-arrow-game-lolol
+  - Description: According to all known laws of aviation, there is no way a bee should be able to fly. Its wings are too small to get its fat little body off the ground. The bee, of course, flies anyway because beAccording to all known laws of aviation, the
+- Skattermuffin/hey-game-pepople-i-know-you-r-ment-to-like-make-these-long-but-come-on-its-fun-but-arrow-game-lol (16 stars)
+  - URL: https://github.com/Skattermuffin/hey-game-pepople-i-know-you-r-ment-to-like-make-these-long-but-come-on-its-fun-but-arrow-game-lol
+  - Description: According to all known laws of aviation, there is no way a bee should be able to fly. Its wings are too small to get its fat little body off the ground. The bee, of course, flies anyway because bees don't care what humans think is impossibl
+- kylesava/3-card-poker (1 stars, Python, The Unlicense)
+  - URL: https://github.com/kylesava/3-card-poker
+  - Description: I made this program over a year ago while I was bored on a train ride. I'll start by explaining the game of 3 card poker: 3 Card Poker is played with a 52 card deck and at least 2 players (one being the dealer), and a maximum of 3 players.
+## 2026-07-14T18:00:06.659379+00:00 - prebuild-gate
+
+- Request: lets give the queen bee the default name Solara everywhere. but allow the user to change it (i think already possible, in the queen bee agentsettingsmodal for me it says Hermes Lead and lets me edit it, though in the fleet hive view its just saying Queen so we need to display the actual name, and below it as subtitle above orchestrator, "Queen"
+- Source: public-github
+- Query: `lets give the queen bee the default name Solara everywhere. but allow the user to change it (i think already possible, in the queen bee agentsettingsmodal for me it says Hermes Lead and lets me edit it, though in the fleet hive view its just saying Queen so we need to display the actual name, and below it as subtitle above orchestrator, "Queen"`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-07-14T18:00:17.824490+00:00 - public-search
+
+- Request: lets give the queen bee the default name Solara everywhere. but allow the user to change it (i think already possible, in the queen bee agentsettingsmodal for me it says Hermes Lead and lets me edit it, though in the fleet hive view its just saying Queen so we need to display the actual name, and below it as subtitle above orchestrator, "Queen"
+- Source: public-github
+- Decision: rejected
+- Selected backbone: local-project:hivemind-os
+- Note: Bounded public search returned lexical bee/queen false positives; the current HivemindOS repo is the only directionally compatible backbone.
+
+### Candidates
+- danderfer/Comp_Sci_Sem_2
+  - Decision: rejected
+  - Reason: Bee Movie text corpus is unrelated to React identity persistence or Fleet UI
+  - Path: `public GitHub`
+- MarkipTheMudkip/in-class-project-2
+  - Decision: rejected
+  - Reason: Bee Movie HTML is unrelated to the product stack and has no reusable naming flow
+  - Path: `public GitHub`
+- S4ltster/Beemovie
+  - Decision: rejected
+  - Reason: Bee Movie CSS is unrelated to editable agent identity
+  - Path: `public GitHub`
+## 2026-07-14T18:00:17.891468+00:00 - prebuild-gate
+
+- Request: lets give the queen bee the default name Solara everywhere. but allow the user to change it (i think already possible, in the queen bee agentsettingsmodal for me it says Hermes Lead and lets me edit it, though in the fleet hive view its just saying Queen so we need to display the actual name, and below it as subtitle above orchestrator, "Queen"
+- Source: current-workspace
+- Decision: selected
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- local-project:hivemind-os
+  - Decision: selected
+  - Reason: canonical profile persistence, queen creation, and Fleet Hive rendering already exist and will be adapted directly
+  - Path: `src/features/dashboard + src/components/fleet-hive`
+## 2026-07-14T18:09:27.508752+00:00 - assimilation-manifest
+
+- Request: lets give the queen bee the default name Solara everywhere. but allow the user to change it (i think already possible, in the queen bee agentsettingsmodal for me it says Hermes Lead and lets me edit it, though in the fleet hive view its just saying Queen so we need to display the actual name, and below it as subtitle above orchestrator, "Queen"
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemindos:src/lib/config/queen-bee-personality.ts => src/lib/config/queen-bee-personality.ts, LiamVisionary/hivemindos:src/features/dashboard/dashboard-storage.ts => src/features/dashboard/dashboard-storage.ts, LiamVisionary/hivemindos:src/features/dashboard/hooks/use-agent-controller.tsx => src/features/dashboard/hooks/use-agent-controller.tsx, LiamVisionary/hivemindos:src/components/fleet-hive/HiveStage.tsx => src/components/fleet-hive/HiveStage.tsx, LiamVisionary/hivemindos:src/features/dashboard/views/AgentsPanel.tsx => src/features/dashboard/views/AgentsPanel.tsx
+- Verification: Wrote ASSIMILATION.queen-bee-solara-name.json with 5 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-14T18:09:30.768891+00:00 - verification
+
+- Request: lets give the queen bee the default name Solara everywhere. but allow the user to change it (i think already possible, in the queen bee agentsettingsmodal for me it says Hermes Lead and lets me edit it, though in the fleet hive view its just saying Queen so we need to display the actual name, and below it as subtitle above orchestrator, "Queen"
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.queen-bee-solara-name.json: 5 concrete reuse entries, 5 substantive
+## 2026-07-14T18:22:11.717123+00:00 - shared-brain
+
+- Request: Complete Zero Human Company API and integration limits with controls and data visualization
+- Source: shared-brain
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- Skills/google-api-budget-guardrails/SKILL.md
+  - Decision: selected
+  - Reason: defines the three-layer app meter, provider quota, and billing budget contract
+  - Path: `SKILL.md`
+- Memory/Distillations/Agent Memory/decision/2026-07-09-agents-must-budget-gate-paid-api-calls-and-report-costs-to-zhc-treasury-6481aeaa0c.md
+  - Decision: selected
+  - Reason: standing rule requires hard preflight gating and Treasury cost visibility
+  - Path: `agent-memory`
+## 2026-07-14T18:22:11.788135+00:00 - local-search
+
+- Request: Complete Zero Human Company API and integration limits with controls and data visualization
+- Source: current-workspace
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/lib/services/gcp-budget-admin.ts
+  - Decision: selected
+  - Reason: existing tested Google quota and billing-budget backend
+  - Path: `TypeScript`
+- src/app/api/companies/[id]/api-budget/route.ts
+  - Decision: selected
+  - Reason: existing authenticated per-company apply contract and raise confirmation gate
+  - Path: `TypeScript`
+- src/features/dashboard/views/zero-human-companies/AnalyticsProviderCards.tsx
+  - Decision: selected-donor
+  - Reason: existing in-ZHC connected-provider picker and loading/error interaction model
+  - Path: `React`
+- src/features/dashboard/views/telemetry/TelemetryView.tsx
+  - Decision: selected-donor
+  - Reason: existing inline SVG chart implementation
+  - Path: `React`
+- ../maps-agency/mcp_servers/gmaps_server.py
+  - Decision: selected-donor
+  - Reason: existing project-specific preflight meter and SKU cost model
+  - Path: `Python`
+## 2026-07-14T18:22:11.841982+00:00 - local-search
+
+- Request: Complete Zero Human Company API and integration limits with controls and data visualization
+- Source: private-index
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- LiamVisionary/hivemindos
+  - Decision: selected
+  - Reason: current project already contains the backend and dashboard shell to complete
+  - Path: `repository`
+- LiamVisionary/hivemind-cloud-services/workers/app-hosting/src/usage.ts
+  - Decision: selected-donor
+  - Reason: atomic usage consume and public used-limit snapshot contract
+  - Path: `TypeScript`
+- LiamVisionary/hivemind-cloud-services
+  - Decision: rejected
+  - Reason: hosted commercial quota authority is a different trust boundary; only its generic used-limit shape is reused
+  - Path: `repository`
+## 2026-07-14T18:22:11.896509+00:00 - public-search
+
+- Request: Complete Zero Human Company API and integration limits with controls and data visualization
+- Source: public-github
+- Decision: not-assimilated
+- Reason: The user is completing an existing pinned HivemindOS implementation; current local and private first-party modules already provide stronger compatible source than unrelated public dashboards.
+## 2026-07-14T18:22:21.373594+00:00 - local-search
+
+- Request: Complete Zero Human Company API and integration limits with controls and data visualization
+- Source: local-index
+- Query: `Complete Zero Human Company API and integration limits with controls and data visualization`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+
+### Candidates
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services/blob/HEAD/workers/managed-agent-control-plane/node_modules/.pnpm/tsx@4.22.4/node_modules/tsx/package.json
+  - Path: `workers/managed-agent-control-plane/node_modules/.pnpm/tsx@4.22.4/node_modules/tsx/package.json`
+  - Description: { "name": "tsx", "version": "4.22.4", "description": "TypeScript Execute (tsx): Node.js enhanced with esbuild to run TypeScript & ESM files", "keywords": [ "cli", "runtime", "node", "cjs", "commonjs", "esm", "typescript", "typescript runner
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos
+  - Description: LiamVisionary/hivemindos Next.js React ( @tauri-apps/cli tailscale.com <div align="center"> <img width="220" height="220" alt="HivemindOS" src="public/hivemindos-logo.png" /> <p> <a href="https://github.com/LiamVisionary/hivemindos/stargaze
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services
+  - Description: LiamVisionary/hivemind-cloud-services React @aws-sdk/client-s3 @bomb.sh/tab @cloudflare/autoconfig @cloudflare/cli @cloudflare/cli-shared-helpers @cloudflare/codemod @cloudflare/config @cloudflare/containers-shared @cloudflare/deploy-helper
+## 2026-07-14T18:22:24.680057+00:00 - public-search
+
+- Request: Complete Zero Human Company API and integration limits with controls and data visualization
+- Source: public-github
+- Query: `Complete Zero Human Company API and integration limits with controls and data visualization`
+- Decision: retrieved
+- Reason: Retrieved 13 public candidates from GitHub search.
+
+### Candidates
+- chinone369/Leading-Pet-Preform-CSD-caps-Alaska-Closures-manufacturers-in-India (1 stars)
+  - URL: https://github.com/chinone369/Leading-Pet-Preform-CSD-caps-Alaska-Closures-manufacturers-in-India
+  - Description: Bai Kakaji Polymers has established in 2013 at Latur Maharashtra, Bai Kakaji Polymers Pvt. Ltd is leading CAPS, CLOSURES and PET PREFORM manufacturer in India. We here at Bai Kakaji adheres to a flexible policy of compromises, oriented to t
+- 2389736818/Zombie-Outline (5 stars)
+  - URL: https://github.com/2389736818/Zombie-Outline
+  - Description: Zombie Outline Version: 1.0 Description: This mod is based on the old Zombie Horde mod, but with many more features. The ZH mod gives you a nice co-op environment for annihilating the mass of zombies, while this mod offers you a "smooth sto
+- 89girishkumar/Automated-Restaurant (4 stars, Java)
+  - URL: https://github.com/89girishkumar/Automated-Restaurant
+  - Description: Cloud-based web application using Amazon Web Services, which focuses on automated monitoring for restaurants focusing on minimal human intervention using parallel processing and multithreading. Technologies used: AWS, Java, Python, CSS, JSP
+- Kwamb0/API_homework (4 stars, Jupyter Notebook)
+  - URL: https://github.com/Kwamb0/API_homework
+  - Description: Part I - WeatherPy In this example, you’ll be creating a Python script to visualize the weather of 500+ cities across the world of varying distance from the equator. To accomplish this, you’ll be utilizing a simple Python library, the OpenW
+- CelticsGN/relayX (3 stars, Python)
+  - URL: https://github.com/CelticsGN/relayX
+  - Description: An AI‑powered voice agent that makes and handles business calls automatically — answering questions, capturing leads, and running full conversations in real‑time using open‑source speech + LLM technology. Built with Twilio, Whisper, Supabas
+- AutoBotSolutions/ResonanceOS (2 stars, HTML, Other)
+  - URL: https://github.com/AutoBotSolutions/ResonanceOS
+  - Description: A Revolutionary AI writing system with 8-dimensional Human-Resonant Value (HRV) vectors for quantifiable human engagement. Multi-tenant profiles, real-time feedback, modular architecture, zero dependencies. Complete with REST API, CLI, and
+- santoshgopal/ai-tandem (1 stars, TypeScript, MIT License)
+  - URL: https://github.com/santoshgopal/ai-tandem
+  - Description: A git-native multi-repo agent orchestrator that drives Claude Code agents through a backend-first → contract handoff → frontend pipeline, ticket by ticket, with zero human intervention until a feature is complete.
+- kaaproject/kaa (1437 stars)
+  - URL: https://github.com/kaaproject/kaa
+  - Description: Kaa is an Internet of Things platform for device management, data collection, analytics and visualization, remote control, and over-the-air updates.
+- sayantann11/all-classification-templetes-for-ML (297 stars, Python)
+  - URL: https://github.com/sayantann11/all-classification-templetes-for-ML
+  - Description: Classification - Machine Learning This is ‘Classification’ tutorial which is a part of the Machine Learning course offered by Simplilearn. We will learn Classification algorithms, types of classification algorithms, support vector machines(
+- Sfedfcv/redesigned-pancake (247 stars)
+  - URL: https://github.com/Sfedfcv/redesigned-pancake
+  - Description: Skip to content github / docs Code Issues 80 Pull requests 35 Discussions Actions Projects 2 Security Insights Merge branch 'main' into 1862-Add-Travis-CI-migration-table 1862-Add-Travis-CI-migration-table (#1869, Iixixi/ZachryTylerWood#102
+- rstecca/ColorBands (177 stars, C#, MIT License)
+  - URL: https://github.com/rstecca/ColorBands
+  - Description: Unity 3D's Gradient is a handy data type but comes with some limitations: for example you cannot set more than 8 color keys in its editor and RGB is the only color space available. ColorBand data type offers an alternative with less limitat
+- eR4Ys/DMARC-Insight (1 stars, TypeScript, MIT License)
+  - URL: https://github.com/eR4Ys/DMARC-Insight
+  - Description: Autonomous DMARC intelligence. Zero friction. Automatically ingest raw IMAP reports, extract complete threat analytics, and dispatch human-readable security insights.
+- owizdom/bobIsAlive (1 stars, TypeScript, MIT License)
+  - URL: https://github.com/owizdom/bobIsAlive
+  - Description: An autonomous digital organism that must earn to survive. It reads biology news, creates art, completes tasks, trades on DeFi, and stakes STRK, all inside an EigenCompute TEE. If its balance hits zero, it dies. No human bailout.
+## 2026-07-14T18:22:24.763026+00:00 - prebuild-gate
+
+- Request: Complete Zero Human Company API and integration limits with controls and data visualization
+- Source: public-github
+- Query: `Complete Zero Human Company API and integration limits with controls and data visualization`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-07-14T18:22:44.351771+00:00 - prebuild-gate
+
+- Request: Complete Zero Human Company API and integration limits with controls and data visualization
+- Source: hive-assimilate
+- Selected backbone: local-project:hivemind-os
+- Note: Pinned current HivemindOS implementation overrides irrelevant public keyword matches; no external backbone is substituted.
+
+### Candidates
+- LiamVisionary/hivemindos
+  - Decision: selected
+  - Reason: the user requested completion of this existing implementation and its typed backend/UI contracts are authoritative
+  - Path: `repository`
+- LiamVisionary/hivemind-cloud-services/workers/app-hosting/src/usage.ts
+  - Decision: selected-donor
+  - Reason: reusable atomic consume and used-limit snapshot logic
+  - Path: `TypeScript`
+- kaaproject/kaa
+  - Decision: rejected
+  - Reason: unrelated IoT platform and incompatible stack; no safe task-specific source path
+  - Path: `repository`
+- chinone369/Leading-Pet-Preform-CSD-caps-Alaska-Closures-manufacturers-in-India
+  - Decision: rejected
+  - Reason: keyword collision unrelated to software quota management
+  - Path: `repository`
+- 89girishkumar/Automated-Restaurant
+  - Decision: rejected
+  - Reason: unrelated Java/AWS student project
+  - Path: `repository`
+## 2026-07-14T18:23:09.738768+00:00 - audit
+
+- Request: Complete Zero Human Company API and integration limits with controls and data visualization
+- Source: local-project
+- Decision: inspected
+- Reason: Traced the existing CompanyApiBudget model through companies-store, the authenticated api-budget route, gcp-budget-admin provider calls, spend ledger rollups, ZHC mapper, Cockpit display, Treasury modal, and the maps-agency meter/bridge. Confirmed the missing frontend caller and missing request-count usage ledger.
+
+### Candidates
+- src/lib/types/company.ts=>src/lib/services/companies-store.ts=>src/app/api/companies/[id]/api-budget/route.ts=>src/lib/services/gcp-budget-admin.ts
+  - Decision: inspected
+  - Reason: actual persistence and provider-apply chain traced end to end
+- src/lib/services/wallet/spend-ledger.ts=>src/lib/services/companies-store.ts=>src/features/dashboard/views/zero-human-companies/mappers.ts=>Cockpit.tsx
+  - Decision: inspected
+  - Reason: actual spend visualization chain traced end to end
+- ../maps-agency/mcp_servers/gmaps_server.py=>../maps-agency/scripts/hivemind_bridge.py
+  - Decision: inspected
+  - Reason: app meter exists but bridge only writes a metric note, not Treasury usage
+## 2026-07-14T18:29:38.889048+00:00 - assimilation-manifest
+
+- Request: Improve the chat capability approval system thoroughly and keep retesting varied prompts until capability mappings are robust.
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemindos:src/lib/services/chat/task-retrieval-context.ts => src/lib/services/chat/capability-approval.ts, LiamVisionary/hivemindos:src/features/dashboard/hooks/use-chat-tree-controller.tsx => src/lib/services/chat/runtime-session-message-merge.ts, LiamVisionary/hivemindos:scripts/test-chat-thread-actions.mjs => scripts/test-capability-approval.mjs, LiamVisionary/hivemindos:src/lib/services/context-index.ts => scripts/eval-capability-approval-live.mjs
+- Verification: Wrote ASSIMILATION.capability-approval-robustness.json with 4 entries and custom_code_assessment=balanced.
+## 2026-07-14T18:29:45.074026+00:00 - verification
+
+- Request: Improve the chat capability approval system thoroughly and keep retesting varied prompts until capability mappings are robust.
+- Source: verify-assimilation-manifest
+- Decision: below-threshold
+- Reason: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION.capability-approval-robustness.json: below-threshold: need at least 3 substantive code/config reuse entries; found 2. Search for stronger donors before finalizing.
+## 2026-07-14T18:30:02.744384+00:00 - assimilation-manifest
+
+- Request: Improve the chat capability approval system thoroughly and keep retesting varied prompts until capability mappings are robust.
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemindos:src/lib/services/chat/task-retrieval-context.ts => src/lib/services/chat/capability-approval.ts, LiamVisionary/hivemindos:src/lib/types/capability-approval.ts => src/lib/services/chat/capability-approval.ts, LiamVisionary/hivemindos:src/features/dashboard/hooks/use-chat-tree-controller.tsx => src/lib/services/chat/runtime-session-message-merge.ts, LiamVisionary/hivemindos:scripts/test-chat-thread-actions.mjs => scripts/test-capability-approval.mjs, LiamVisionary/hivemindos:src/lib/services/context-index.ts => scripts/eval-capability-approval-live.mjs
+- Verification: Wrote ASSIMILATION.capability-approval-robustness.json with 5 entries and custom_code_assessment=balanced.
+## 2026-07-14T18:30:08.333055+00:00 - verification
+
+- Request: Improve the chat capability approval system thoroughly and keep retesting varied prompts until capability mappings are robust.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION.capability-approval-robustness.json: 5 concrete reuse entries, 3 substantive
+## 2026-07-14T19:10:58.001403+00:00 - assimilation-manifest
+
+- Request: Complete Zero Human Company API and integration limits with controls and data visualization
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: hivemind-os:src/lib/services/gcp-budget-admin.ts => src/lib/services/gcp-budget-admin.ts, hivemind-cloud-services:workers/app-hosting/src/usage.ts => src/lib/services/company-api-usage.ts, hivemind-os:src/features/dashboard/views/zero-human-companies/AnalyticsProviderCards.tsx => src/features/dashboard/views/zero-human-companies/ApiLimitsPanel.tsx, hivemind-os:src/features/dashboard/views/telemetry/TelemetryView.tsx => src/features/dashboard/views/zero-human-companies/ApiLimitsPanel.tsx, maps-agency:mcp_servers/gmaps_server.py => ../maps-agency/scripts/hivemind_bridge.py
+- Verification: Wrote ASSIMILATION.zhc-api-limits.json with 5 entries and custom_code_assessment=balanced.
+## 2026-07-14T19:10:58.318934+00:00 - verification
+
+- Request: Complete Zero Human Company API and integration limits with controls and data visualization
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.zhc-api-limits.json: 5 concrete reuse entries, 4 substantive
+## 2026-07-14T19:11:05.231688+00:00 - verification
+
+- Request: Complete Zero Human Company API and integration limits with controls and data visualization
+- Source: assimilation-manifest
+- Decision: selected
+- Reason: Manifest verifier passed with five concrete reuse entries and four substantive code/config entries.
+- Verification: python3 Skills/hive-assimilate/scripts/verify_assimilation_manifest.py ASSIMILATION.zhc-api-limits.json: passed (5 entries, 4 substantive)
+## 2026-07-14T19:31:51.131937+00:00 - correction
+
+- Request: Complete Zero Human Company API and integration limits with controls and data visualization
+- Source: official-google-cloud-docs
+- Query: `Service Usage importConsumerOverrides and operations.get semantics`
+- Decision: adapted_code
+- Reason: Official Service Usage docs confirm importConsumerOverrides atomically creates or updates overrides and operations.get must be polled for completion; replaced repeated create calls and added completion polling.
+
+### Candidates
+- docs.cloud.google.com/service-usage/docs/reference/rest/v1beta1/services.consumerQuotaMetrics/importConsumerOverrides
+  - Decision: selected
+  - Reason: provider-authoritative atomic create-or-update rail
+  - Path: `importConsumerOverrides`
+- docs.cloud.google.com/service-usage/docs/reference/rest/v1beta1/operations/get
+  - Decision: selected
+  - Reason: provider-authoritative completion check
+  - Path: `operations/get`
+## 2026-07-14T20:10:05.541647+00:00 - verification
+
+- Request: Complete Zero Human Company API and integration limits with controls and data visualization
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.zhc-api-limits.json: 5 concrete reuse entries, 4 substantive
+## 2026-07-14T20:12:02.613660+00:00 - final
+
+- Request: Complete Zero Human Company API and integration limits with controls and data visualization
+- Source: implementation
+- Decision: selected
+- Reason: Focused service/store/provider/MCP/bridge suites, whole-project TypeScript, scoped ESLint, typography, browser runtime, and manifest verification passed. Live GCP discovery remains limited by disabled Cloud Resource Manager and Cloud Billing APIs; no provider mutation was attempted.
+- Verification: test:company-api-limits; test:gcp-budget-admin; test:company-vault-store; connector manifests; MCP catalog; maps-agency unittest/py_compile; tsc; scoped eslint; UI typography; browser DOM/logs; assimilation manifest: passed
+- Note: Repository size inventory is red on unrelated benchmark outputs and concurrent/legacy oversized files; companies-store and every new limits file are below 1500 lines.
+## 2026-07-14T20:12:42.650049+00:00 - verification
+
+- Request: Complete Zero Human Company API and integration limits with controls and data visualization
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.zhc-api-limits.json: 5 concrete reuse entries, 4 substantive
+## 2026-07-14T20:19:14.978465+00:00 - verification
+
+- Request: Complete Zero Human Company API and integration limits with controls and data visualization
+- Source: implementation
+- Decision: selected
+- Reason: Final rerun passed after bridging observed API costs into the unified Treasury ledger and injecting both local and provider-side limits into company worker preflight context.
+- Verification: company API limits, GCP admin, company vault store, connector manifests, MCP catalog, MCP syntax, whole-project TypeScript, scoped ESLint, and UI typography: passed; maps-agency unittest and Python compilation: passed
+- Note: No live limit, usage observation, Treasury row, quota, or billing budget was mutated during verification.
+## 2026-07-14T20:19:33.629634+00:00 - verification
+
+- Request: Complete Zero Human Company API and integration limits with controls and data visualization
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.zhc-api-limits.json: 5 concrete reuse entries, 4 substantive
+## 2026-07-14T20:24:55.805908+00:00 - shared-brain
+
+- Request: Add Beeline family profiles with isolated integrations, OAuth accounts, MCPs, Chrome profiles, and agent-opaque credential use
+- Source: shared-brain
+- Selected backbone: local-project:hivemind-os
+- Note: No existing Beeline or family-profile decision was returned; proceed by tracing current repo implementation.
+
+### Candidates
+- HivemindOS Docs/for-users/features/managed-cloud-agents.md
+  - Decision: inspected
+  - Reason: related isolated agent workspace context, no family identity model
+- HivemindOS Docs/for-users/architecture/api-and-storage.md
+  - Decision: selected
+  - Reason: existing API and durable storage ownership map
+- Skills/hermes-agent/SKILL.md
+  - Decision: inspected
+  - Reason: runtime context only, no profile-scoped credential authority
+## 2026-07-14T20:27:14.180326+00:00 - local-search
+
+- Request: Add Beeline family profiles with isolated integrations, OAuth accounts, MCPs, Chrome profiles, and agent-opaque credential use
+- Source: local-private-index
+- Decision: rejected
+- Reason: Fresh July 13 hive-assimilate index returned no family-profile, credential-broker, or Chrome-profile implementation candidates; legacy index is stale and was not trusted.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- ~/.codex/hive-assimilate/index/chunks.jsonl
+  - Decision: inspected
+  - Reason: fresh 90KB index, no matching candidate
+- ~/.codex/github-assimilator/index/chunks.jsonl
+  - Decision: rejected
+  - Reason: stale May 9 legacy index
+## 2026-07-14T20:27:58.398267+00:00 - public-search
+
+- Request: Add Beeline family profiles with isolated integrations, OAuth accounts, MCPs, Chrome profiles, and agent-opaque credential use
+- Source: user-pinned-github
+- Decision: rejected
+- Reason: Bitwarden Secrets Manager is strong for machine-account secret retrieval, but sdk-sm's custom license forbids offering SDK-based compatible applications to third parties; it cannot be embedded in this MIT-distributed app. Its machine access token would also remain an agent-readable root credential unless isolated behind a separate broker.
+- Selected backbone: local-project:hivemind-os
+- Note: Static candidate audit of bitwarden/sdk-sm reported no high findings and 100 medium heuristic hits, mainly CI secret references; no code was executed or installed.
+
+### Candidates
+- bitwarden/sdk-sm@e88e1b69ea22b9cd15db21f5ddcfa543690ab70d
+  - Decision: rejected
+  - Reason: license and authority model do not fit public HivemindOS client
+- keepassxreboot/keepassxc-browser@1.10.3
+  - Decision: selected-donor
+  - Reason: optional browser-profile autofill path through native messaging without HivemindOS receiving passwords
+- keepassxreboot/keepassxc
+  - Decision: selected-donor
+  - Reason: optional local encrypted vault and browser integration, kept as an external user-installed boundary
+## 2026-07-14T20:28:07.088031+00:00 - public-search
+
+- Request: family profile credential broker OAuth Chrome profile agent
+- Source: public-github
+- Query: `family profile credential broker OAuth Chrome profile agent`
+- Decision: retrieved
+- Reason: Retrieved 4 public candidates from GitHub search.
+
+### Candidates
+- Godbyhub/108api (36 stars)
+  - URL: https://github.com/Godbyhub/108api
+  - Description: import os, wmi from sys import prefix from attr import validate import discord from discord.ext import commands from discord.ext import commands import discord from discord_buttons_plugin import * import requests, json, threading, requests,
+- mercerheather476/turbo-garbanzo (34 stars, GNU General Public License v3.0)
+  - URL: https://github.com/mercerheather476/turbo-garbanzo
+  - Description: ![AppAuth for Android](https://rawgit.com/openid/AppAuth-Android/master/appauth_lockup.svg) [![Download](https://img.shields.io/maven-central/v/net.openid/appauth)](https://search.maven.org/search?q=g:net.openid%20appauth) [![Javadocs](http
+- Wallace-Best/best (29 stars, Apache License 2.0)
+  - URL: https://github.com/Wallace-Best/best
+  - Description: <!DOCTYPE html>Wallace-Best <html lang="en-us"> <head> <link rel="node" href="//a.wallace-bestcdn.com/1391808583/img/favicon16-32.ico" type="image/vnd.microsoft.icon"> <meta http-equiv="Content-Type" content="text/html;charset=UTF-8"> <meta
+- dh-orko/Help-me-get-rid-of-unhumans (79 stars)
+  - URL: https://github.com/dh-orko/Help-me-get-rid-of-unhumans
+  - Description: /* JS */ gapi.loaded_0(function(_){var window=this; var ha,ia,ja,ma,sa,na,ta,ya,Ja;_.ea=function(a){return function(){return _.da[a].apply(this,arguments)}};_._DumpException=function(a){throw a;};_.da=[];ha="function"==typeof Object.defineP
+## 2026-07-14T20:28:14.625977+00:00 - public-search
+
+- Request: Add Beeline family profiles with isolated integrations, OAuth accounts, MCPs, Chrome profiles, and agent-opaque credential use
+- Source: public-github
+- Decision: rejected
+- Reason: Bounded live GitHub search returned four low-quality or unrelated keyword matches; none exposed a reusable typed family-profile or capability-broker module.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- Godbyhub/108api
+  - Decision: rejected
+  - Reason: unlicensed unrelated Discord/request dump
+- mercerheather476/turbo-garbanzo
+  - Decision: rejected
+  - Reason: unrelated AppAuth mirror
+- Wallace-Best/best
+  - Decision: rejected
+  - Reason: unrelated website content
+- dh-orko/Help-me-get-rid-of-unhumans
+  - Decision: rejected
+  - Reason: unrelated dumped Google client code
+## 2026-07-14T20:28:22.781707+00:00 - local-search
+
+- Request: Add Beeline family profiles with isolated integrations, OAuth accounts, MCPs, Chrome profiles, and agent-opaque credential use
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+- Note: Workspace trace confirmed current provider credentials are global shared-env values and no Chrome profile launcher exists in repo.
+
+### Candidates
+- src/lib/services/dashboard-state.ts
+  - Decision: selected-donor
+  - Reason: atomic mode-0600 durable state write and serialized mutation queue
+- src/lib/services/integrations/connector-manifests.ts
+  - Decision: selected-donor
+  - Reason: typed provider capability and risk matrix
+- src/lib/services/chat/hivemind-system-prompt.ts
+  - Decision: selected-donor
+  - Reason: existing extraDynamicContext prompt injection boundary
+- src/features/dashboard/dashboard-navigation.ts
+  - Decision: selected-donor
+  - Reason: canonical view registry and navigation ordering
+- src/lib/services/mcp/robinhood-mcp-vault.ts
+  - Decision: rejected
+  - Reason: cipher key is adjacent to ciphertext, so it cannot meet agent-opaque credential storage
+- docs/for-users/browser-extension.md
+  - Decision: selected-donor
+  - Reason: existing browser privacy boundary and explicit exclusion of health/password destinations
+## 2026-07-14T20:48:04.619021+00:00 - assimilation-manifest
+
+- Request: Add Beeline family profiles with isolated integrations, OAuth accounts, MCPs, Chrome profiles, and agent-opaque credential use
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemindos:src/lib/services/dashboard-state.ts => src/lib/services/beeline/profile-store.ts, LiamVisionary/hivemindos:src/lib/services/system-browsers.ts => src/lib/services/beeline/chrome-profiles.ts, LiamVisionary/hivemindos:src/lib/services/hive-actions/catalog.ts => src/lib/services/hive-actions/beeline.ts, LiamVisionary/hivemindos:src/features/dashboard/dashboard-navigation.ts => src/features/dashboard/dashboard-navigation.ts, LiamVisionary/hivemindos:scripts/test-messaging-channels-bridge.mjs => scripts/test-beeline-profiles.mjs
+- Verification: Wrote ASSIMILATION.beeline.json with 5 entries and custom_code_assessment=balanced.
+## 2026-07-14T20:48:05.317476+00:00 - verification
+
+- Request: Add Beeline family profiles with isolated integrations, OAuth accounts, MCPs, Chrome profiles, and agent-opaque credential use
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.beeline.json: 5 concrete reuse entries, 4 substantive
+## 2026-07-14T20:48:05.465799+00:00 - verification
+
+- Request: Add Beeline family profiles with isolated integrations, OAuth accounts, MCPs, Chrome profiles, and agent-opaque credential use
+- Source: local-project:hivemind-os
+- Decision: selected
+- Reason: Five concrete reuse mappings passed the assimilation manifest verifier.
+- Verification: python3 /Users/liam/.codex/skills/hive-assimilate/scripts/verify_assimilation_manifest.py ASSIMILATION.beeline.json: passed
+## 2026-07-14T20:50:22.089168+00:00 - local-search
+
+- Request: queen bee chat needs to same the name
+- Source: local-index
+- Query: `queen bee chat needs to same the name`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+
+### Candidates
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos/blob/HEAD/src-tauri/Cargo.toml
+  - Path: `src-tauri/Cargo.toml`
+  - Description: [package] name = "hivemindos-desktop" version = "0.4.1" description = "HivemindOS desktop shell" authors = ["HivemindOS"] edition = "2021" [lib] name = "hivemindos_desktop_lib" crate-type = ["staticlib", "cdylib", "rlib"] [[bin]] name = "Hi
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos
+  - Description: LiamVisionary/hivemindos Next.js React ( @tauri-apps/cli tailscale.com <div align="center"> <img width="220" height="220" alt="HivemindOS" src="public/hivemindos-logo.png" /> <p> <a href="https://github.com/LiamVisionary/hivemindos/stargaze
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services/blob/HEAD/workers/managed-agent-control-plane/node_modules/.pnpm/acorn@8.14.0/node_modules/acorn/package.json
+  - Path: `workers/managed-agent-control-plane/node_modules/.pnpm/acorn@8.14.0/node_modules/acorn/package.json`
+  - Description: { "name": "acorn", "description": "ECMAScript parser", "homepage": "https://github.com/acornjs/acorn", "main": "dist/acorn.js", "types": "dist/acorn.d.ts", "module": "dist/acorn.mjs", "exports": { ".": [ { "import": "./dist/acorn.mjs", "req
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos/blob/HEAD/apps/zimage-mobile-tauri/src-tauri/Cargo.toml
+  - Path: `apps/zimage-mobile-tauri/src-tauri/Cargo.toml`
+  - Description: [package] name = "zimage-mobile-tauri" version = "0.1.0" description = "Native shell for Liam's private Z-Image Mobile Tailnet app" authors = ["HivemindOS"] edition = "2021" [lib] name = "zimage_mobile_tauri_lib" crate-type = ["staticlib",
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services/blob/HEAD/workers/managed-agent-control-plane/node_modules/.pnpm/tsx@4.22.4/node_modules/tsx/package.json
+  - Path: `workers/managed-agent-control-plane/node_modules/.pnpm/tsx@4.22.4/node_modules/tsx/package.json`
+  - Description: { "name": "tsx", "version": "4.22.4", "description": "TypeScript Execute (tsx): Node.js enhanced with esbuild to run TypeScript & ESM files", "keywords": [ "cli", "runtime", "node", "cjs", "commonjs", "esm", "typescript", "typescript runner
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services
+  - Description: LiamVisionary/hivemind-cloud-services React @aws-sdk/client-s3 @bomb.sh/tab @cloudflare/autoconfig @cloudflare/cli @cloudflare/cli-shared-helpers @cloudflare/codemod @cloudflare/config @cloudflare/containers-shared @cloudflare/deploy-helper
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos/blob/HEAD/package.json
+  - Path: `package.json`
+  - Description: { "name": "hivemindos", "version": "0.4.1", "private": false, "license": "MIT", "type": "module", "packageManager": "pnpm@8.6.12", "scripts": { "test": "node scripts/test-gate.mjs", "dev": "node scripts/dev-server.mjs", "dev:ui": "node scri
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services/blob/HEAD/workers/managed-agent-control-plane/node_modules/.pnpm/exit-hook@2.2.1/node_modules/exit-hook/package.json
+  - Path: `workers/managed-agent-control-plane/node_modules/.pnpm/exit-hook@2.2.1/node_modules/exit-hook/package.json`
+  - Description: { "name": "exit-hook", "version": "2.2.1", "description": "Run some code when the process exits", "license": "MIT", "repository": "sindresorhus/exit-hook", "funding": "https://github.com/sponsors/sindresorhus", "author": { "name": "Sindre S
+## 2026-07-14T20:50:25.378934+00:00 - public-search
+
+- Request: queen bee chat needs to same the name
+- Source: public-github
+- Query: `queen bee chat needs to same the name`
+- Decision: retrieved
+- Reason: Retrieved 1 public candidates from GitHub search.
+
+### Candidates
+- niquewill/Consumer_Complaint (2 stars, HTML)
+  - URL: https://github.com/niquewill/Consumer_Complaint
+  - Description: Overview There are quite a few apps in the market that provide a public forum for bringing up complaints so they can get resolved. With these apps, customers could easily submit their complaints to companies via them and deliver them to the
+## 2026-07-14T20:50:25.492118+00:00 - prebuild-gate
+
+- Request: queen bee chat needs to same the name
+- Source: public-github
+- Query: `queen bee chat needs to same the name`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-07-14T20:50:36.416670+00:00 - shared-brain
+
+- Request: queen bee chat needs to same the name
+- Source: shared-brain
+- Decision: inspected
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- Shared Brain Queen Bee context
+  - Decision: inspected
+  - Reason: No separate chat-name decision; prior Solara feature remains the relevant canonical direction
+  - Path: `hive-brain answer`
+## 2026-07-14T20:50:36.714096+00:00 - local-search
+
+- Request: queen bee chat needs to same the name
+- Source: current-workspace
+- Decision: selected
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- LiamVisionary/hivemindos
+  - Decision: selected
+  - Reason: Current Queen profile, Solara default, transcript overlay, dashboard wiring, and focused test are the exact compatible backbone
+  - Path: `src/lib/config/queen-bee-personality.ts`
+## 2026-07-14T20:50:37.344048+00:00 - public-search
+
+- Request: queen bee chat needs to same the name
+- Source: public-github
+- Decision: rejected
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- niquewill/Consumer_Complaint
+  - Decision: rejected
+  - Reason: Generic complaint app has no reusable HivemindOS Queen identity or transcript profile wiring
+  - Path: `public GitHub`
+## 2026-07-14T20:54:58.145568+00:00 - final
+
+- Request: Add Beeline family profiles with isolated integrations, OAuth accounts, MCPs, Chrome profiles, and agent-opaque credential use
+- Source: local-project:hivemind-os
+- Decision: selected
+- Reason: Beeline first release implemented with local metadata, consent gates, Chrome binding, agent discovery, and an explicit no-fallback broker boundary.
+- Verification: Focused Beeline, dashboard navigation, Hive Action catalog, MCP catalog, TypeScript, scoped ESLint, typography, API auth smoke, and assimilation manifest passed; rendered browser QA unavailable because the required browser client module is missing.
+- Note: Repository-wide durable-state, size, route-drift, and diff-hygiene failures are unrelated/concurrent and do not name new Beeline files or routes.
+## 2026-07-14T21:20:58.969613+00:00 - assimilation-manifest
+
+- Request: Add Beeline family profiles with isolated integrations, OAuth accounts, MCPs, Chrome profiles, and agent-opaque credential use
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemind-cloud-services:workers/x-api-gateway/src/index.ts => src/lib/services/beeline/broker-client.ts, LiamVisionary/hivemindos:src/app/api/integrations/x-managed/route.ts => src/app/api/beeline/broker/route.ts, LiamVisionary/hivemindos:src/lib/services/browser-use-runner.ts => src/app/api/beeline/actions/route.ts, LiamVisionary/hivemindos:src/features/integrations/IntegrationsView.tsx => src/features/beeline/BeelineConnectionsPanel.tsx, LiamVisionary/hivemindos:src/lib/services/hive-actions/catalog.ts => src/lib/services/hive-actions/beeline.ts, LiamVisionary/hivemindos:scripts/test-agent-provider-integrations.mjs => scripts/test-beeline-profiles.mjs
+- Verification: Wrote ASSIMILATION.beeline.json with 6 entries and custom_code_assessment=balanced.
+## 2026-07-14T21:20:59.435412+00:00 - verification
+
+- Request: Add Beeline family profiles with isolated integrations, OAuth accounts, MCPs, Chrome profiles, and agent-opaque credential use
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION.beeline.json: 6 concrete reuse entries, 4 substantive
+## 2026-07-14T21:20:59.895766+00:00 - verification
+
+- Request: Add the hosted Beeline family OAuth and MCP action broker
+- Source: verify-assimilation-manifest
+- Decision: failed
+- Reason: /Users/liam/Documents/code/projects/hivemind-cloud-services/ASSIMILATION.beeline-broker.json: Entry 1 target_path does not exist: /Users/liam/Documents/code/projects/hivemind-os/workers/beeline-broker/src/index.ts
+## 2026-07-14T21:38:02.206647+00:00 - verification
+
+- Request: Add Beeline family profiles with isolated integrations, OAuth accounts, MCPs, Chrome profiles, and agent-opaque credential use
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.beeline.json: 6 concrete reuse entries, 4 substantive
+## 2026-07-14T21:41:04.974859+00:00 - verification
+
+- Request: queen bee chat needs to same the name
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.queen-chat-name.json: 4 concrete reuse entries, 3 substantive
+## 2026-07-14T22:32:43.133412+00:00 - assimilation-manifest
+
+- Request: Add Beeline family profiles with isolated integrations, OAuth accounts, MCPs, Chrome profiles, and agent-opaque credential use
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemind-cloud-services:workers/x-api-gateway/src/index.ts => src/lib/services/beeline/broker-client.ts, LiamVisionary/hivemindos:src/app/api/integrations/x-managed/route.ts => src/app/api/beeline/broker/route.ts, LiamVisionary/hivemindos:src/lib/services/browser-use-runner.ts => src/app/api/beeline/actions/route.ts, LiamVisionary/hivemindos:src/features/integrations/IntegrationsView.tsx => src/features/beeline/BeelineConnectionsPanel.tsx, LiamVisionary/hivemindos:src/lib/services/hive-actions/catalog.ts => src/lib/services/hive-actions/beeline.ts, LiamVisionary/hivemindos:scripts/test-agent-provider-integrations.mjs => scripts/test-beeline-profiles.mjs, open-source-cooperative/keyring-rs:keyring/src/v1.rs => src-tauri/src/beeline_credentials/storage.rs, browser-use/browser-use:browser_use/skill_cli/main.py => src-tauri/src/beeline_credentials/browser.rs, browser-use/browser-use:browser_use/skill_cli/daemon.py => src-tauri/src/beeline_credentials/browser.rs, LiamVisionary/hivemindos:src/lib/services/browser-use-runner.ts => src/lib/services/browser-use-runner.ts
+- Verification: Wrote ASSIMILATION.beeline.json with 10 entries and custom_code_assessment=balanced.
+## 2026-07-14T22:32:48.536511+00:00 - verification
+
+- Request: Add Beeline family profiles with isolated integrations, OAuth accounts, MCPs, Chrome profiles, and agent-opaque credential use
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.beeline.json: 10 concrete reuse entries, 8 substantive
+## 2026-07-14T22:32:48.638698+00:00 - verification
+
+- Request: Add Beeline family profiles with isolated integrations, OAuth accounts, MCPs, Chrome profiles, and agent-opaque credential use
+- Source: ASSIMILATION.beeline.json
+- Decision: selected
+- Reason: 10 concrete code, config, UI, and test adaptations verified; local credential extension assimilates keyring-rs and Browser Use authenticated daemon source
+## 2026-07-14T22:43:37.409025+00:00 - verification
+
+- Request: Add Beeline family profiles with isolated integrations, OAuth accounts, MCPs, Chrome profiles, and agent-opaque credential use
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.beeline.json: 10 concrete reuse entries, 8 substantive
+## 2026-07-15T00:33:37.310510+00:00 - triage
+
+- Request: ok do it all please, 1-5
+- Source: user-supplied
+- Query: `Anthropic Building Toward Computer Use transcript`
+- Decision: selected
+- Reason: Pinned source defines the multimodal screenshot, streaming, prompt-cache, strict JSON-schema tool, tool-result, and iterative loop mechanisms to transplant.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- pasted-text.txt
+  - Decision: selected-donor
+  - Reason: authoritative user-supplied course transcript
+  - Path: `/Users/liam/.codex/attachments/7d76371b-9848-44e1-9058-19d840bcaf0f/pasted-text.txt`
+## 2026-07-15T00:33:37.419340+00:00 - shared-brain
+
+- Request: ok do it all please, 1-5
+- Source: shared-brain
+- Query: `HivemindOS computer interaction browser automation safety policy receipts strict tools evaluations`
+- Decision: inspected
+- Reason: Retrieved existing Browser, Computer Use, Loop Engineering, and Brain Services knowledge; Loop Engineering is a donor for gates, budgets, receipts, and resumability.
+
+### Candidates
+- Skills/browser/SKILL.md
+  - Decision: selected-donor
+  - Reason: existing browser automation safety boundary
+  - Path: `Skills/browser/SKILL.md`
+- Skills/computer-use/SKILL.md
+  - Decision: selected-donor
+  - Reason: prefer narrower tools before screen automation
+  - Path: `Skills/computer-use/SKILL.md`
+- HivemindOS Docs/for-users/features/loop-engineering.md
+  - Decision: selected-donor
+  - Reason: existing loop gates budgets receipts and resumability contract
+  - Path: `HivemindOS Docs/for-users/features/loop-engineering.md`
+## 2026-07-15T00:33:37.534174+00:00 - local-search
+
+- Request: ok do it all please, 1-5
+- Source: current-project
+- Query: `browser-use PageAgent Bee Pilot tool calls process events inference cache`
+- Decision: selected
+- Reason: Existing HivemindOS service, API, process-event, cache-hint, and action-catalog modules are the implementation backbone.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/lib/services/browser-use-runner.ts
+  - Decision: selected
+  - Reason: existing browser action executor and receipts
+  - Path: `src/lib/services/browser-use-runner.ts`
+- src/app/api/chat/agent-runtime/process-events.ts
+  - Decision: selected-donor
+  - Reason: existing process event envelope
+  - Path: `src/app/api/chat/agent-runtime/process-events.ts`
+- src/lib/services/chat/inference-cache-hints.ts
+  - Decision: selected-donor
+  - Reason: provider-aware cache hints
+  - Path: `src/lib/services/chat/inference-cache-hints.ts`
+- src/lib/services/hive-actions/catalog.ts
+  - Decision: selected-donor
+  - Reason: canonical capability registration surface
+  - Path: `src/lib/services/hive-actions/catalog.ts`
+## 2026-07-15T00:33:49.698435+00:00 - public-search
+
+- Request: Anthropic computer use agent loop screenshot tool result prompt caching
+- Source: public-github
+- Query: `Anthropic computer use agent loop screenshot tool result prompt caching`
+- Decision: retrieved
+- Reason: Retrieved 18 public candidates from GitHub search.
+
+### Candidates
+- chrisneagu/FTC-Skystone-Dark-Angels-Romania-2020 (292 stars, Java)
+  - URL: https://github.com/chrisneagu/FTC-Skystone-Dark-Angels-Romania-2020
+  - Description: NOTICE This repository contains the public FTC SDK for the SKYSTONE (2019-2020) competition season. If you are looking for the current season's FTC SDK software, please visit the new and permanent home of the public FTC SDK: FtcRobotControl
+- rramatchandran/big-o-performance-java (82 stars, JavaScript, MIT License)
+  - URL: https://github.com/rramatchandran/big-o-performance-java
+  - Description: # big-o-performance A simple html app to demonstrate performance costs of data structures. - Clone the project - Navigate to the root of the project in a termina or command prompt - Run 'npm install' - Run 'npm start' - Go to the URL specif
+- Juadsuarezsan/computer-use-agent (0 stars, Python, MIT License)
+  - URL: https://github.com/Juadsuarezsan/computer-use-agent
+  - Description: Anthropic Computer Use API + Ubuntu VM + safety pre-check. LangGraph step loop for back-office automation.
+- yksanjo/computer-use-harness (0 stars, Python)
+  - URL: https://github.com/yksanjo/computer-use-harness
+  - Description: Model-agnostic computer use agent with robotics-style sense-plan-act loop — swap Anthropic, OpenAI, or Gemini
+- kernel/claude-cu-loop-sample (0 stars, JavaScript, MIT License)
+  - URL: https://github.com/kernel/claude-cu-loop-sample
+  - Description: Minimal implementation of Anthropic's Computer Use loop using Kernel browsers
+- A9T9/RPA (1944 stars, JavaScript, Other)
+  - URL: https://github.com/A9T9/RPA
+  - Description: Ui.Vision Open-Source RPA Software with Computer Vision, OCR, Anthropic Computer Use/LLM. Selenium IDE import/export.
+- deedy/mac_computer_use (877 stars, Python)
+  - URL: https://github.com/deedy/mac_computer_use
+  - Description: A fork of Anthropic Computer Use that you can run on Mac computers to give Claude and other AI models autonomous access to your computer.
+- Clevrr-AI/Clevrr-Computer (318 stars, Python)
+  - URL: https://github.com/Clevrr-AI/Clevrr-Computer
+  - Description: An open-source implementation of Anthropic's Computer Use to perform basic tasks using AI Agents.
+- 777genius/os-ai-computer-use (172 stars, Python, Apache License 2.0)
+  - URL: https://github.com/777genius/os-ai-computer-use
+  - Description: AI controls your OS. OS AI Computer Use, OS and API agnostic. For now on OpenAI and Anthropic API. Desktop app ready.
+- questionmark1122/cnn10 (15 stars)
+  - URL: https://github.com/questionmark1122/cnn10
+  - Description: #!bash # # bash completion support for core Git. # # Copyright (C) 2006,2007 Shawn O. Pearce <spearce@spearce.org> # Conceptually based on gitcompletion (http://gitweb.hawaga.org.uk/). # Distributed under the GNU General Public License, ver
+- e2b-dev/open-computer-use (2134 stars, Python, Apache License 2.0)
+  - URL: https://github.com/e2b-dev/open-computer-use
+  - Description: AI computer use powered by open source LLMs and E2B Desktop Sandbox
+- PallavAg/claude-computer-use-macos (293 stars, Python, MIT License)
+  - URL: https://github.com/PallavAg/claude-computer-use-macos
+  - Description: MacOS Demo for Claude Computer Use
+- AdieLaine/multi-agent-reasoning (186 stars, Python, MIT License)
+  - URL: https://github.com/AdieLaine/multi-agent-reasoning
+  - Description: The Multi-Agent Reasoning framework creates an interactive chatbot where AI agents collaborate via structured reasoning and Swarm Integration for optimal answers. Simulating a team that discusses, debates, and refines responses, it enables 
+- AB498/computer-control-mcp (153 stars, Python, MIT License)
+  - URL: https://github.com/AB498/computer-control-mcp
+  - Description: MCP server that provides computer control capabilities, like mouse, keyboard, OCR, etc. using PyAutoGUI, RapidOCR, ONNXRuntime. Similar to 'computer-use' by Anthropic. With Zero External Dependencies.
+- klonnet23/helloy-word (89 stars)
+  - URL: https://github.com/klonnet23/helloy-word
+  - Description: { "releases": { "2.0.4": [ "[Fixed] Refresh for Enterprise repositories did not handle API error querying branches - #7713", "[Fixed] Missing \"Discard all changes\" context menu in Changes header - #7696", "[Fixed] \"Select all\" keyboard 
+- 24kchengYe/desktop-controller-skill (8 stars, Python, MIT License)
+  - URL: https://github.com/24kchengYe/desktop-controller-skill
+  - Description: AI Computer Use for Claude Code — The open-source alternative to OpenAI Codex's playwright-interactive. Dual-engine: Win32 API + Playwright. Control WeChat, DingTalk, Feishu, QQ, Slack, Teams, and any web/Electron app. Automated QA, viewpor
+- sanusanth/java-all-basic-program-part-2 (8 stars)
+  - URL: https://github.com/sanusanth/java-all-basic-program-part-2
+  - Description: What is Java? Java is a popular programming language, created in 1995. It is owned by Oracle, and more than 3 billion devices run Java. It is used for: Mobile applications (specially Android apps) Desktop applications Web applications Web s
+- MikkoParkkola/glyphdown (1 stars, Rust, Other)
+  - URL: https://github.com/MikkoParkkola/glyphdown
+  - Description: Lossless, on-device token-cost reduction for Claude Code and LLM coding agents. Free plugin: compresses tool-result output, dedups context, compacts the system prompt — stacks on Anthropic prompt caching. Rust hot path, Python fallback, fai
+## 2026-07-15T00:33:56.019146+00:00 - public-search
+
+- Request: anthropics anthropic-quickstarts computer-use-demo
+- Source: public-github
+- Query: `anthropics anthropic-quickstarts computer-use-demo`
+- Decision: retrieved
+- Reason: Retrieved 3 public candidates from GitHub search.
+
+### Candidates
+- matheus-rech/anthropic-computer-use-demo (0 stars, Python, MIT License)
+  - URL: https://github.com/matheus-rech/anthropic-computer-use-demo
+  - Description: A clone of Anthropic's computer-use-demo from anthropic-quickstarts
+- kungfuflex/claude-shell (0 stars, TypeScript)
+  - URL: https://github.com/kungfuflex/claude-shell
+  - Description: Automation suite by CLI, adapted from anthropic-quickstarts/computer-use-demo
+- isan0786/anthropic-quickstarts-network-access (0 stars, Shell)
+  - URL: https://github.com/isan0786/anthropic-quickstarts-network-access
+  - Description: Modified version of `ghcr.io/anthropics/anthropic-quickstarts:computer-use-demo-latest` to enable network-wide access. Dynamically replaces `127.0.0.1` and `localhost` with the host machine's IP address, allowing users to connect to the app
+## 2026-07-15T00:35:08.507900+00:00 - local-search
+
+- Request: ok do it all please, 1-5
+- Source: private-index
+- Query: `computer use browser automation policy receipts tool loop`
+- Decision: inspected
+- Reason: Fresh 90 KB private index returned this project and the hosted-services repo; the local app remains the correct backbone and no hosted commercial authority is needed.
+
+### Candidates
+- LiamVisionary/hivemindos
+  - Decision: selected
+  - Reason: current TypeScript application owns the interaction surfaces
+  - Path: `package.json`
+- LiamVisionary/hivemind-cloud-services
+  - Decision: rejected
+  - Reason: hosted commercial service code is unrelated to local computer interaction policy
+  - Path: `repo-summary`
+## 2026-07-15T00:35:08.615106+00:00 - local-search
+
+- Request: ok do it all please, 1-5
+- Source: local-project-corpus
+- Query: `observation id prompt injection computer interaction action receipt consequence gate stale observation`
+- Decision: inspected
+- Reason: Found reusable local HivemindOS untrusted-context, security proxy, capability approval, and Beeline receipt primitives; unrelated companion and private runtime matches were rejected.
+
+### Candidates
+- src/lib/services/security/untrusted-context.ts
+  - Decision: selected-donor
+  - Reason: existing external-content trust boundary language
+  - Path: `src/lib/services/security/untrusted-context.ts`
+- src/lib/services/agent-security-proxy.ts
+  - Decision: selected-donor
+  - Reason: existing injection signal detection
+  - Path: `src/lib/services/agent-security-proxy.ts`
+- src/lib/services/chat/capability-approval.ts
+  - Decision: selected-donor
+  - Reason: existing browser capability approval mapping
+  - Path: `src/lib/services/chat/capability-approval.ts`
+- ../hivemind-cloud-services/workers/beeline-broker/src/index.ts
+  - Decision: rejected
+  - Reason: server idempotency receipts are commercial-service-specific and the local run store is the owning surface
+  - Path: `workers/beeline-broker/src/index.ts`
+## 2026-07-15T00:35:08.723650+00:00 - public-search
+
+- Request: ok do it all please, 1-5
+- Source: github-public
+- Query: `Anthropic computer use agent loop screenshot tool result prompt caching`
+- Decision: inspected
+- Reason: Broad search found mostly third-party Python agents; official Anthropic quickstarts was inspected directly as the authoritative donor.
+
+### Candidates
+- anthropics/anthropic-quickstarts
+  - Decision: selected-donor
+  - Reason: official computer-use and browser-use sampling loops
+  - Path: `computer-use-demo/computer_use_demo/loop.py`
+- e2b-dev/open-computer-use
+  - Decision: rejected
+  - Reason: Python sandbox application is a larger incompatible backbone than the existing TypeScript runner
+- A9T9/RPA
+  - Decision: rejected
+  - Reason: browser extension/RPA architecture and non-MIT licensing are incompatible
+- yksanjo/computer-use-harness
+  - Decision: rejected
+  - Reason: unreviewed zero-star Python harness offers no stronger donor than official Anthropic code
+## 2026-07-15T00:35:08.826433+00:00 - audit
+
+- Request: ok do it all please, 1-5
+- Source: github-public
+- Decision: selected-donor
+- Reason: Whole-repo audit flagged destructive strings in unrelated autonomous-coding security tests; selected computer-use/browser-use paths had no high findings and only expected dynamic browser-script cautions.
+- Selected backbone: local-project:hivemind-os
+- Note: Did not execute donor code. Whole-repo BLOCK came from literal rm -rf / security-test fixtures outside selected paths; scoped audit was REVIEW with browser JavaScript dynamic-eval cautions.
+
+### Candidates
+- anthropics/anthropic-quickstarts
+  - Decision: selected-donor
+  - Reason: selected loop and message-handler paths reviewed as inert source
+  - Path: `computer-use-demo/computer_use_demo/loop.py`
+- anthropics/anthropic-quickstarts
+  - Decision: selected-donor
+  - Reason: preserves text plus tool calls and returns correlated tool results
+  - Path: `browser-use-demo/browser_use_demo/message_handler.py`
+## 2026-07-15T00:35:13.979016+00:00 - local-search
+
+- Request: Implement a unified safe resumable computer-interaction runtime with strict tools and evaluations in HivemindOS
+- Source: local-index
+- Query: `Implement a unified safe resumable computer-interaction runtime with strict tools and evaluations in HivemindOS`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+
+### Candidates
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos
+  - Description: LiamVisionary/hivemindos Next.js React ( @tauri-apps/cli tailscale.com <div align="center"> <img width="220" height="220" alt="HivemindOS" src="public/hivemindos-logo.png" /> <p> <a href="https://github.com/LiamVisionary/hivemindos/stargaze
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services/blob/HEAD/workers/managed-agent-control-plane/node_modules/.pnpm/wrangler@4.110.0/node_modules/wrangler/package.json
+  - Path: `workers/managed-agent-control-plane/node_modules/.pnpm/wrangler@4.110.0/node_modules/wrangler/package.json`
+  - Description: { "name": "wrangler", "version": "4.110.0", "description": "Command-line interface for all things Cloudflare Workers", "keywords": [ "assembly", "cli", "cloudflare", "cloudflare workers", "compute", "edge", "emscripten", "graphql", "http", 
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services/blob/HEAD/workers/managed-agent-control-plane/node_modules/.pnpm/tsx@4.22.4/node_modules/tsx/package.json
+  - Path: `workers/managed-agent-control-plane/node_modules/.pnpm/tsx@4.22.4/node_modules/tsx/package.json`
+  - Description: { "name": "tsx", "version": "4.22.4", "description": "TypeScript Execute (tsx): Node.js enhanced with esbuild to run TypeScript & ESM files", "keywords": [ "cli", "runtime", "node", "cjs", "commonjs", "esm", "typescript", "typescript runner
+## 2026-07-15T00:35:16.168376+00:00 - public-search
+
+- Request: Implement a unified safe resumable computer-interaction runtime with strict tools and evaluations in HivemindOS
+- Source: public-github
+- Query: `Implement a unified safe resumable computer-interaction runtime with strict tools and evaluations in HivemindOS`
+- Decision: retrieved
+- Reason: Retrieved 3 public candidates from GitHub search.
+
+### Candidates
+- mdxedia/Awsome-Cash (29 stars)
+  - URL: https://github.com/mdxedia/Awsome-Cash
+  - Description: Updated January 2016 Note on translation: These Website Terms of Service may have been translated into various languages for the convenience of Cash Loophole Users. While the translation is correct to the best of Cash Loophole knowledge, Ca
+- ArcVielLouvent/yomi-triage-system (2 stars, Python, MIT License)
+  - URL: https://github.com/ArcVielLouvent/yomi-triage-system
+  - Description: Yomi is engineered to operate on a fundamentally faster timeline. By orchestrating SANS SIFT Workstation forensic tools through a strict, type-safe Model Context Protocol (MCP) server and evaluating evidence via a cascading Epistemic Doubt 
+- JJJayden-Yang/ai-werewolf (1 stars, Python)
+  - URL: https://github.com/JJJayden-Yang/ai-werewolf
+  - Description: A multi-agent Werewolf experiment platform with strict information isolation, structured replay, belief tracking, audit tools, and LLM-powered strategy evaluation.
+## 2026-07-15T00:35:16.223070+00:00 - prebuild-gate
+
+- Request: Implement a unified safe resumable computer-interaction runtime with strict tools and evaluations in HivemindOS
+- Source: public-github
+- Query: `Implement a unified safe resumable computer-interaction runtime with strict tools and evaluations in HivemindOS`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-07-15T00:35:24.261848+00:00 - prebuild-gate
+
+- Request: ok do it all please, 1-5
+- Source: hive-assimilate
+- Query: `Implement a unified safe resumable computer-interaction runtime with strict tools and evaluations in HivemindOS`
+- Decision: selected
+- Reason: The current HivemindOS repository is the directionally compatible backbone. The gate's public results were unrelated, so the audited official Anthropic quickstart remains the donor.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- LiamVisionary/hivemindos
+  - Decision: selected
+  - Reason: existing Next.js TypeScript runtime and action surfaces
+- mdxedia/Awsome-Cash
+  - Decision: rejected
+  - Reason: unrelated cash-terms repository
+- ArcVielLouvent/yomi-triage-system
+  - Decision: rejected
+  - Reason: Python forensic triage system unrelated to computer interaction
+- JJJayden-Yang/ai-werewolf
+  - Decision: rejected
+  - Reason: game experiment platform unrelated to computer interaction
+## 2026-07-15T01:00:34.069843+00:00 - verification
+
+- Request: ok do it all please, 1-5
+- Source: verify-assimilation-manifest
+- Decision: failed
+- Reason: ASSIMILATION.computer-interaction.json: Missing manifest: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION.computer-interaction.json
+## 2026-07-15T01:00:45.701099+00:00 - assimilation-manifest
+
+- Request: ok do it all please, 1-5
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: anthropics/anthropic-quickstarts:computer-use-demo/computer_use_demo/loop.py => src/lib/services/computer-interaction/orchestrator.ts, anthropics/anthropic-quickstarts:computer-use-demo/computer_use_demo/tools/collection.py => src/lib/services/computer-interaction/adapter-catalog.ts, anthropics/anthropic-quickstarts:computer-use-demo/computer_use_demo/tools/base.py => src/lib/services/computer-interaction/types.ts, anthropics/anthropic-quickstarts:browser-use-demo/browser_use_demo/loop.py => src/lib/services/computer-interaction/tool-contract.ts, anthropics/anthropic-quickstarts:browser-use-demo/browser_use_demo/message_handler.py => src/lib/services/computer-interaction/store.ts
+- Verification: Wrote ASSIMILATION.computer-interaction.json with 5 entries and custom_code_assessment=balanced.
+## 2026-07-15T01:00:45.798828+00:00 - verification
+
+- Request: ok do it all please, 1-5
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.computer-interaction.json: 5 concrete reuse entries, 5 substantive
+## 2026-07-15T01:09:04.457686+00:00 - verification
+
+- Request: ok do it all please, 1-5
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.computer-interaction.json: 5 concrete reuse entries, 5 substantive
+## 2026-07-15T05:25:52.546471+00:00 - shared-brain
+
+- Request: When a machine is updating on the Fleet Hive view, show that it is updating in its cell.
+- Source: full-vault
+- Query: `Fleet Hive machine cell updating status badge implementation existing UI`
+- Decision: retrieved
+- Reason: Confirmed the default Fleet Hive call chain and the fleet status-tone palette from Shared Brain sources.
+
+### Candidates
+- Memory/Distillations/Agent Memory/learning/2026-07-10-windows-linux-desktop-fleet-agent-ux-mac-only-assumptions-beyond-the-fle-bdc6a01ddb.md
+  - Decision: selected
+  - Reason: Confirms AgentsPanel to FleetHiveView to HiveStage/HivePanel is the default fleet route.
+- Skills/hivemindos-dashboard-ui/references/fleet-palette.md
+  - Decision: selected-donor
+  - Reason: Defines teal working-status treatment and light-theme requirements.
+## 2026-07-15T05:25:52.720783+00:00 - local-search
+
+- Request: When a machine is updating on the Fleet Hive view, show that it is updating in its cell.
+- Source: current-project
+- Query: `FleetHiveView HivePanel updateStatusByMachine MachineUpdateStatus`
+- Decision: selected
+- Reason: The existing HivemindOS Fleet Hive components and machine update status contract are the authoritative implementation backbone.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/features/dashboard/views/AgentsPanel.tsx
+  - Decision: selected
+  - Reason: Already owns fleetUpdateStatusByMachine at the Fleet Hive boundary.
+- src/components/fleet-hive/HivePanel.tsx
+  - Decision: selected-donor
+  - Reason: Existing machine-cell renderer to adapt.
+- src/components/fleet-hive/fleet-hive.css
+  - Decision: selected-donor
+  - Reason: Existing hex-cell status styles and themes to extend.
+## 2026-07-15T05:25:53.244078+00:00 - local-search
+
+- Request: When a machine is updating on the Fleet Hive view, show that it is updating in its cell.
+- Source: local-index
+- Query: `When a machine is updating on the Fleet Hive view, show that it is updating in its cell.`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+
+### Candidates
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos
+  - Description: LiamVisionary/hivemindos Next.js React ( @tauri-apps/cli tailscale.com <div align="center"> <img width="220" height="220" alt="HivemindOS" src="public/hivemindos-logo.png" /> <p> <a href="https://github.com/LiamVisionary/hivemindos/stargaze
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services
+  - Description: LiamVisionary/hivemind-cloud-services React @aws-sdk/client-s3 @bomb.sh/tab @cloudflare/autoconfig @cloudflare/cli @cloudflare/cli-shared-helpers @cloudflare/codemod @cloudflare/config @cloudflare/containers-shared @cloudflare/deploy-helper
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services/blob/HEAD/workers/managed-agent-control-plane/node_modules/.pnpm/exit-hook@2.2.1/node_modules/exit-hook/package.json
+  - Path: `workers/managed-agent-control-plane/node_modules/.pnpm/exit-hook@2.2.1/node_modules/exit-hook/package.json`
+  - Description: { "name": "exit-hook", "version": "2.2.1", "description": "Run some code when the process exits", "license": "MIT", "repository": "sindresorhus/exit-hook", "funding": "https://github.com/sponsors/sindresorhus", "author": { "name": "Sindre S
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos/blob/HEAD/src-tauri/Cargo.toml
+  - Path: `src-tauri/Cargo.toml`
+  - Description: [package] name = "hivemindos-desktop" version = "0.4.1" description = "HivemindOS desktop shell" authors = ["HivemindOS"] edition = "2021" [lib] name = "hivemindos_desktop_lib" crate-type = ["staticlib", "cdylib", "rlib"] [[bin]] name = "Hi
+## 2026-07-15T05:25:56.207335+00:00 - public-search
+
+- Request: When a machine is updating on the Fleet Hive view, show that it is updating in its cell.
+- Source: public-github
+- Query: `When a machine is updating on the Fleet Hive view, show that it is updating in its cell.`
+- Decision: retrieved
+- Reason: Retrieved 8 public candidates from GitHub search.
+
+### Candidates
+- Sfedfcv/redesigned-pancake (247 stars)
+  - URL: https://github.com/Sfedfcv/redesigned-pancake
+  - Description: Skip to content github / docs Code Issues 80 Pull requests 35 Discussions Actions Projects 2 Security Insights Merge branch 'main' into 1862-Add-Travis-CI-migration-table 1862-Add-Travis-CI-migration-table (#1869, Iixixi/ZachryTylerWood#102
+- jettbrains/-L- (149 stars, GNU General Public License v3.0)
+  - URL: https://github.com/jettbrains/-L-
+  - Description: W3C Strategic Highlights September 2019 This report was prepared for the September 2019 W3C Advisory Committee Meeting (W3C Member link). See the accompanying W3C Fact Sheet — September 2019. For the previous edition, see the April 2019 W3C
+- nima0011/nima0011 (24 stars, GNU General Public License v3.0)
+  - URL: https://github.com/nima0011/nima0011
+  - Description: # Contributing to this repository <!-- omit in toc --> ## Getting started <!-- omit in toc --> Before you begin: - This site is powered by Node.js. Check to see if you're on the [version of node we support](contributing/development.md). - H
+- molyswu/hand_detection (277 stars, Python)
+  - URL: https://github.com/molyswu/hand_detection
+  - Description: using Neural Networks (SSD) on Tensorflow. This repo documents steps and scripts used to train a hand detector using Tensorflow (Object Detection API). As with any DNN based task, the most expensive (and riskiest) part of the process has to
+- ShelvanLee/XFEM (61 stars, MATLAB, MIT License)
+  - URL: https://github.com/ShelvanLee/XFEM
+  - Description: # XFEM_Fracture2D ### Description This is a Matlab program that can be used to solve fracture problems involving arbitrary multiple crack propagations in a 2D linear-elastic solid based on the principle of minimum potential energy. The exte
+- Aryia-Behroziuan/Other-sources (41 stars)
+  - URL: https://github.com/Aryia-Behroziuan/Other-sources
+  - Description: Asada, M.; Hosoda, K.; Kuniyoshi, Y.; Ishiguro, H.; Inui, T.; Yoshikawa, Y.; Ogino, M.; Yoshida, C. (2009). "Cognitive developmental robotics: a survey". IEEE Transactions on Autonomous Mental Development. 1 (1): 12–34. doi:10.1109/tamd.200
+- jojo1317/Git-quick-reference-for-beginners (23 stars)
+  - URL: https://github.com/jojo1317/Git-quick-reference-for-beginners
+  - Description: There are many good resources for learning Git. (Here's an excellent online book, and this is my videos series introducing Git and GitHub.) But once you've learned the basics, it can be hard to remember which commands to use to execute the 
+- Meenakhi66/Blood-bank-managment-system (5 stars)
+  - URL: https://github.com/Meenakhi66/Blood-bank-managment-system
+  - Description: 1.1 Purpose The main objective of the Blood Bank Management System is to manage the details of Blood ,Donor,Blood Group,Blood Bank,Stock. It manages all the information about Blood , Blood Cell, Stock, Blood . The project is totally built a
+## 2026-07-15T05:25:56.338284+00:00 - prebuild-gate
+
+- Request: When a machine is updating on the Fleet Hive view, show that it is updating in its cell.
+- Source: public-github
+- Query: `When a machine is updating on the Fleet Hive view, show that it is updating in its cell.`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-07-15T05:27:50.715355+00:00 - public-search
+
+- Request: When a machine is updating on the Fleet Hive view, show that it is updating in its cell.
+- Source: public-github
+- Query: `When a machine is updating on the Fleet Hive view, show that it is updating in its cell.`
+- Decision: rejected
+- Reason: All returned repositories were unrelated to HivemindOS Fleet Hive UI; external code would add risk and no reusable value.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- Sfedfcv/redesigned-pancake
+  - Decision: rejected
+  - Reason: Unrelated repository despite keyword overlap.
+- jettbrains/-L-
+  - Decision: rejected
+  - Reason: Unrelated repository and incompatible license.
+- molyswu/hand_detection
+  - Decision: rejected
+  - Reason: Unrelated Python computer-vision project.
+## 2026-07-15T05:33:24.029174+00:00 - assimilation-manifest
+
+- Request: When a machine is updating on the Fleet Hive view, show that it is updating in its cell.
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemindos:src/components/fleet/roster.tsx => src/components/fleet-hive/HiveStage.tsx, LiamVisionary/hivemindos:src/features/dashboard/hooks/use-dashboard-derived-state.tsx => src/components/fleet-hive/FleetHiveView.tsx, LiamVisionary/hivemindos:src/components/fleet/fleet-tokens.module.css => src/components/fleet-hive/fleet-hive.css, LiamVisionary/hivemindos:scripts/test-fleet-hive-geometry.mjs => scripts/test-fleet-hive-update-status.mjs
+- Verification: Wrote ASSIMILATION.fleet-hive-update-status.json with 4 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-15T05:33:24.242897+00:00 - verification
+
+- Request: When a machine is updating on the Fleet Hive view, show that it is updating in its cell.
+- Source: verify-assimilation-manifest
+- Decision: below-threshold
+- Reason: ASSIMILATION.fleet-hive-update-status.json: below-threshold: need at least 3 substantive code/config reuse entries; found 2. Search for stronger donors before finalizing.
+## 2026-07-15T05:33:44.714956+00:00 - assimilation-manifest
+
+- Request: When a machine is updating on the Fleet Hive view, show that it is updating in its cell.
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemindos:src/components/fleet/roster.tsx => src/components/fleet-hive/HiveStage.tsx, LiamVisionary/hivemindos:src/components/cells/MachineCell.tsx => src/components/fleet-hive/HiveStage.tsx, LiamVisionary/hivemindos:src/features/dashboard/hooks/use-dashboard-derived-state.tsx => src/components/fleet-hive/FleetHiveView.tsx, LiamVisionary/hivemindos:src/components/fleet/fleet-tokens.module.css => src/components/fleet-hive/fleet-hive.css, LiamVisionary/hivemindos:scripts/test-fleet-hive-geometry.mjs => scripts/test-fleet-hive-update-status.mjs
+- Verification: Wrote ASSIMILATION.fleet-hive-update-status.json with 5 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-15T05:33:44.869274+00:00 - verification
+
+- Request: When a machine is updating on the Fleet Hive view, show that it is updating in its cell.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.fleet-hive-update-status.json: 5 concrete reuse entries, 3 substantive
+## 2026-07-15T05:34:29.499765+00:00 - verification
+
+- Request: When a machine is updating on the Fleet Hive view, show that it is updating in its cell.
+- Source: local-project
+- Query: `focused Fleet Hive update-state UI`
+- Decision: passed
+- Reason: Focused contract, scoped lint, whole-project types, scoped diff hygiene, verified assimilation manifest, and real browser preview all passed.
+- Selected backbone: local-project:hivemind-os
+- Assimilated: Canonical fleet update status mapping plus existing machine update spinner/status treatment into the focused Hive cell.
+- Verification: DOM exposed button name with updating and visible Updating… status; screenshot confirmed the machine name and agent count remain visible. No real machine update was triggered.
+## 2026-07-15T07:32:09.301283+00:00 - shared-brain
+
+- Request: Add a Hivemind GitHub capability index for yt-dlp, Whisper, Plausible, AppFlowy, n8n, Cal.com, Graphify, TradingAgents, Ghost, Medusa, and Shopify, plus in-chat install/setup/OAuth prompts
+- Source: hive-brain
+- Query: `capability catalog install prompts chat setup modal OAuth integrations and requested projects`
+- Decision: selected
+- Reason: Existing HivemindOS provider integrations and native connections are the authoritative local backbone.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- HivemindOS Docs/for-users/features/agent-provider-integrations.md
+  - Decision: selected
+  - Reason: documents current catalog and installer ownership
+  - Path: `HivemindOS Docs/for-users/features/agent-provider-integrations.md`
+- HivemindOS Docs/for-users/features/integrations-and-work-history.md
+  - Decision: selected-donor
+  - Reason: documents in-app connection ownership
+  - Path: `HivemindOS Docs/for-users/features/integrations-and-work-history.md`
+## 2026-07-15T07:32:09.352521+00:00 - local-search
+
+- Request: Add a Hivemind GitHub capability index for yt-dlp, Whisper, Plausible, AppFlowy, n8n, Cal.com, Graphify, TradingAgents, Ghost, Medusa, and Shopify, plus in-chat install/setup/OAuth prompts
+- Source: hive-capability-search
+- Query: `build a HivemindOS GitHub capability index and in-chat one-click setup/OAuth modal`
+- Decision: selected
+- Reason: Current context index exposes capability approval, chat, installable services, skill catalog, and native integration surfaces.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/lib/services/chat/capability-approval.ts
+  - Decision: selected
+  - Reason: existing capability approval domain service
+  - Path: `src/lib/services/chat/capability-approval.ts`
+- src/features/dashboard/views/chat/exchange/CapabilityApprovalCard.tsx
+  - Decision: selected
+  - Reason: existing in-chat approval UI
+  - Path: `src/features/dashboard/views/chat/exchange/CapabilityApprovalCard.tsx`
+- src/lib/services/installable-services.ts
+  - Decision: selected-donor
+  - Reason: existing installable service matrix
+  - Path: `src/lib/services/installable-services.ts`
+## 2026-07-15T07:32:09.425642+00:00 - local-search
+
+- Request: Add a Hivemind GitHub capability index for yt-dlp, Whisper, Plausible, AppFlowy, n8n, Cal.com, Graphify, TradingAgents, Ghost, Medusa, and Shopify, plus in-chat install/setup/OAuth prompts
+- Source: assimilation-index
+- Query: `capability catalog chat install modal oauth integration`
+- Decision: selected
+- Reason: Fresh local index selected HivemindOS as the only stack-compatible backbone; the legacy index was stale.
+- Selected backbone: LiamVisionary/hivemindos
+
+### Candidates
+- LiamVisionary/hivemindos
+  - Decision: selected
+  - Reason: exact current project and stack match
+  - Path: `src`
+- legacy github-assimilator index
+  - Decision: rejected
+  - Reason: stale small index last updated May 9
+## 2026-07-15T08:04:26.038085+00:00 - public-search
+
+- Request: Add a Hivemind GitHub capability index for yt-dlp, Whisper, Plausible, AppFlowy, n8n, Cal.com, Graphify, TradingAgents, Ghost, Medusa, and Shopify, plus in-chat install/setup/OAuth prompts
+- Source: GitHub and official upstream documentation
+- Query: `reviewed capability sources, licenses, current install paths, and API authentication contracts`
+- Decision: selected official upstream repositories and provider documentation
+- Reason: The catalog and installers must reflect current upstream contracts, not remembered package names.
+- Note: Confirmed the requested repository identities; corrected n8n and cal.diy licensing language; selected Graphify-Labs/graphify and current Medusa Store API connection instead of an obsolete Docker assumption.
+## 2026-07-15T08:04:26.193566+00:00 - candidate-audit
+
+- Request: Add a Hivemind GitHub capability index for yt-dlp, Whisper, Plausible, AppFlowy, n8n, Cal.com, Graphify, TradingAgents, Ghost, Medusa, and Shopify, plus in-chat install/setup/OAuth prompts
+- Source: Graphify-Labs/graphify README.md and pyproject.toml
+- Decision: review with mitigation
+- Reason: The focused audit found two README curl-to-shell examples but no high-severity finding. HivemindOS does not reuse or execute those commands.
+- Assimilated: Official graphifyy package identity, uv tool install, graphify install, Python floor, and CLI name.
+- Not assimilated: Upstream curl-to-shell uv installer and any automatic execution during background status.
+- Verification: Focused audit: high=0 medium=2; manual inspection confirmed both findings are prerequisite documentation.
+## 2026-07-15T08:04:26.317855+00:00 - candidate-audit
+
+- Request: Add a Hivemind GitHub capability index for yt-dlp, Whisper, Plausible, AppFlowy, n8n, Cal.com, Graphify, TradingAgents, Ghost, Medusa, and Shopify, plus in-chat install/setup/OAuth prompts
+- Source: TauricResearch/TradingAgents README.md and pyproject.toml
+- Decision: selected
+- Reason: Focused audit passed and the isolated git+uv setup matches the research-only capability boundary.
+- Assimilated: Upstream source identity, Python environment setup, editable package install, and research-only/provider requirements.
+- Verification: Focused audit: high=0 medium=0 low=0.
+## 2026-07-15T08:04:26.461994+00:00 - candidate-audit
+
+- Request: Add a Hivemind GitHub capability index for yt-dlp, Whisper, Plausible, AppFlowy, n8n, Cal.com, Graphify, TradingAgents, Ghost, Medusa, and Shopify, plus in-chat install/setup/OAuth prompts
+- Source: medusajs/dtc-starter README.md and env templates
+- Decision: selected after redesign
+- Reason: The first audit disproved an assumed Docker Compose path. The implementation was redesigned around a Store API connection that matches the current starter.
+- Assimilated: Current localhost backend default, publishable API key model, product/region Store API boundary, and self-hosted base URL.
+- Not assimilated: The nonexistent docker-compose.yml path and any false one-click Medusa deployment claim.
+- Verification: Focused audit of README.md and backend/storefront env templates: high=0 medium=0 low=0.
+## 2026-07-15T08:04:26.583503+00:00 - implementation
+
+- Request: Add a Hivemind GitHub capability index for yt-dlp, Whisper, Plausible, AppFlowy, n8n, Cal.com, Graphify, TradingAgents, Ghost, Medusa, and Shopify, plus in-chat install/setup/OAuth prompts
+- Source: official upstream repositories plus existing HivemindOS installer, connector, Context Index, and capability-approval primitives
+- Decision: adapted into typed matrices and shared setup surfaces
+- Reason: A single matrix keeps discovery, My Apps, chat prompts, setup routes, license copy, and provenance aligned.
+- Assimilated: Reviewed package/service setup conventions, existing in-app OAuth/token modal, existing installable-service API, connected-capability gating, and authenticated read-only integration patterns.
+- Not assimilated: Arbitrary GraphQL, commerce mutations, booking mutations, broker/order execution, client-held official secrets, and browser-only durable setup state.
+## 2026-07-15T08:05:06.175801+00:00 - assimilation-manifest
+
+- Request: Add a Hivemind GitHub capability index for yt-dlp, Whisper, Plausible, AppFlowy, n8n, Cal.com, Graphify, TradingAgents, Ghost, Medusa, and Shopify, plus in-chat install/setup/OAuth prompts
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: Graphify-Labs/graphify:pyproject.toml => src/lib/services/github-capability-installers.ts, Graphify-Labs/graphify:README.md => src/lib/services/github-capability-catalog.ts, TauricResearch/TradingAgents:pyproject.toml => src/lib/services/github-capability-installers.ts, TauricResearch/TradingAgents:README.md => src/lib/services/github-capability-catalog.ts, medusajs/dtc-starter:README.md => src/lib/services/integrations/medusa.ts, medusajs/dtc-starter:apps/backend/.env.template => src/lib/services/integrations/connector-manifests.ts, medusajs/dtc-starter:apps/storefront/.env.template => src/lib/services/hive-actions/integrations/medusa.ts
+- Verification: Wrote ASSIMILATION.github-capability-setup.json with 7 entries and custom_code_assessment=balanced.
+## 2026-07-15T08:05:13.553084+00:00 - verification
+
+- Request: Add a Hivemind GitHub capability index for yt-dlp, Whisper, Plausible, AppFlowy, n8n, Cal.com, Graphify, TradingAgents, Ghost, Medusa, and Shopify, plus in-chat install/setup/OAuth prompts
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.github-capability-setup.json: 7 concrete reuse entries, 5 substantive
+## 2026-07-15T08:11:55.788889+00:00 - verification
+
+- Request: Add a Hivemind GitHub capability index for yt-dlp, Whisper, Plausible, AppFlowy, n8n, Cal.com, Graphify, TradingAgents, Ghost, Medusa, and Shopify, plus in-chat install/setup/OAuth prompts
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.github-capability-setup.json: 7 concrete reuse entries, 5 substantive
+## 2026-07-15T08:13:13.997148+00:00 - verification
+
+- Request: Add a Hivemind GitHub capability index for yt-dlp, Whisper, Plausible, AppFlowy, n8n, Cal.com, Graphify, TradingAgents, Ghost, Medusa, and Shopify, plus in-chat install/setup/OAuth prompts
+- Source: (not provided)
+- Decision: pass
+- Verification: Focused catalog/setup, capability approval, connector, installer, TypeScript, ESLint, typography, hygiene, and assimilation gates passed; broader provider test remained at its one-failure baseline; repository size gate remained red only on generated/existing/concurrent files.
+- Note: Live browser path unverified: required Browser client missing and isolated server returned HTTP 500. No installer, OAuth, token entry, Docker startup, or provider mutation was performed.
+## 2026-07-15T08:13:14.143392+00:00 - final
+
+- Request: Add a Hivemind GitHub capability index for yt-dlp, Whisper, Plausible, AppFlowy, n8n, Cal.com, Graphify, TradingAgents, Ghost, Medusa, and Shopify, plus in-chat install/setup/OAuth prompts
+- Source: (not provided)
+- Decision: assimilated
+- Selected backbone: HivemindOS typed capability matrix, existing installable-service API, ConnectionsPanel OAuth/token flow, Context Index, and Hive Action registry
+- Assimilated: Graphify and TradingAgents upstream package/runtime facts; Medusa Store API connection requirements; existing project install, connection, and action backbones reused across all requested capabilities.
+- Not assimilated: Upstream curl-to-shell examples, unsafe client-authoritative commercial policy, nonexistent Medusa Docker Compose assumptions, and mutation-capable commerce actions.
+- Verification: ASSIMILATION.github-capability-setup.json valid with 7 concrete reuse entries and 5 substantive mappings.
+## 2026-07-15T08:13:23.313444+00:00 - verification
+
+- Request: Add a Hivemind GitHub capability index for yt-dlp, Whisper, Plausible, AppFlowy, n8n, Cal.com, Graphify, TradingAgents, Ghost, Medusa, and Shopify, plus in-chat install/setup/OAuth prompts
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.github-capability-setup.json: 7 concrete reuse entries, 5 substantive
+## 2026-07-15T12:27:34.713280+00:00 - local-search
+
+- Request: Fix Honey Telegram wallet prerequisite so connected wallets can be selected and signature-verified in context
+- Source: local-index
+- Query: `Fix Honey Telegram wallet prerequisite so connected wallets can be selected and signature-verified in context`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+
+### Candidates
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos
+  - Description: LiamVisionary/hivemindos Next.js React ( @tauri-apps/cli tailscale.com <div align="center"> <img width="220" height="220" alt="HivemindOS" src="public/hivemindos-logo.png" /> <p> <a href="https://github.com/LiamVisionary/hivemindos/stargaze
+- LiamVisionary/hivemind-cloud-services
+  - URL: https://github.com/LiamVisionary/hivemind-cloud-services
+  - Description: LiamVisionary/hivemind-cloud-services React @aws-sdk/client-s3 @bomb.sh/tab @cloudflare/autoconfig @cloudflare/cli @cloudflare/cli-shared-helpers @cloudflare/codemod @cloudflare/config @cloudflare/containers-shared @cloudflare/deploy-helper
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos/blob/HEAD/src-tauri/Cargo.toml
+  - Path: `src-tauri/Cargo.toml`
+  - Description: [package] name = "hivemindos-desktop" version = "0.4.1" description = "HivemindOS desktop shell" authors = ["HivemindOS"] edition = "2021" [lib] name = "hivemindos_desktop_lib" crate-type = ["staticlib", "cdylib", "rlib"] [[bin]] name = "Hi
+## 2026-07-15T12:27:37.744093+00:00 - public-search
+
+- Request: Fix Honey Telegram wallet prerequisite so connected wallets can be selected and signature-verified in context
+- Source: public-github
+- Query: `Fix Honey Telegram wallet prerequisite so connected wallets can be selected and signature-verified in context`
+- Decision: retrieved
+- Reason: Retrieved 5 public candidates from GitHub search.
+
+### Candidates
+- DEEP13-2-5/Wallet (1 stars, TypeScript)
+  - URL: https://github.com/DEEP13-2-5/Wallet
+  - Description: Web3 Wallet Dashboard is a React-based dApp that connects to MetaMask, displays the user's wallet address, ETH balance, and network info. Built with ethers.js and hooks, it includes optional features like DAI token balance, ENS name, dark/l
+- aikonre/token-balance-dashboard (0 stars, JavaScript)
+  - URL: https://github.com/aikonre/token-balance-dashboard
+  - Description: A simple token balance checker built with React. Simulates checking token balances for a given wallet address
+- mohammedazfersheikh/fullstack-web3-token-dashboard (0 stars, JavaScript)
+  - URL: https://github.com/mohammedazfersheikh/fullstack-web3-token-dashboard
+  - Description: A complete end-to-end Web3 application built with React (Vite), Node.js/Express, and Ethers.js that demonstrates real-world decentralized application architecture. This project includes a backend API for blockchain data fetching and a moder
+- prakarsh-spheron/Wallet-Dashboard-Demo (1 stars, MIT License)
+  - URL: https://github.com/prakarsh-spheron/Wallet-Dashboard-Demo
+  - Description: Demo using the token balances react component to create a Wallet Dashboard
+- shubhbatra1991/OpenDeFi-Analytics- (0 stars, MIT License)
+  - URL: https://github.com/shubhbatra1991/OpenDeFi-Analytics-
+  - Description: Building a analytics dashboard where users connect a wallet and see token balances, portfolio value, and recent transactions in real time, using Next.js/React on the frontend and a .NET/Azure API backend.
+## 2026-07-15T12:27:37.879140+00:00 - prebuild-gate
+
+- Request: Fix Honey Telegram wallet prerequisite so connected wallets can be selected and signature-verified in context
+- Source: public-github
+- Query: `Fix Honey Telegram wallet prerequisite so connected wallets can be selected and signature-verified in context`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-07-15T12:28:15.242791+00:00 - shared-brain
+
+- Request: Fix Honey Telegram wallet prerequisite so connected wallets can be selected and signature-verified in context
+- Source: full-vault
+- Query: `HoneyContributionCard linked verified wallet Telegram linkhoney HivemindOS wallet`
+- Decision: selected
+- Reason: Confirmed one cumulative HONEY decision and located the wallet/Honey product documentation; no prior decision removes signature verification.
+
+### Candidates
+- HivemindOS Docs/for-users/features/wallets-honey-and-x402.md
+  - Decision: inspected
+  - Reason: product context for Honey and wallet boundaries
+## 2026-07-15T12:28:15.398684+00:00 - local-search
+
+- Request: Fix Honey Telegram wallet prerequisite so connected wallets can be selected and signature-verified in context
+- Source: local-projects
+- Query: `Honey wallet link service, contribution card, local wallet vault, hosted community prerequisite`
+- Decision: selected
+- Reason: The current public and private HivemindOS repositories contain the complete existing proof API, vault inventory, hosted prerequisite, and dashboard visual language.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- LiamVisionary/hivemindos
+  - Decision: selected
+  - Reason: existing link-wallet API, wallet vault, Honey card, fb-select/fb-btn, focused tests
+  - Path: `src/lib/services/wallet/honey-wallet-link.ts`
+- LiamVisionary/hivemind-cloud-services
+  - Decision: selected-donor
+  - Reason: hosted D1 prerequisite proves the UI must create a honey_wallet_links row before Telegram redemption
+  - Path: `workers/compute-gateway/src/community-contributions.ts`
+## 2026-07-15T12:28:15.478495+00:00 - public-search
+
+- Request: Fix Honey Telegram wallet prerequisite so connected wallets can be selected and signature-verified in context
+- Source: github-public
+- Query: `react wallet dashboard token balance`
+- Decision: rejected
+- Reason: The public candidates are generic balance dashboards and provide no HivemindOS workspace proof, encrypted-vault signing, or Honey identity contract.
+
+### Candidates
+- DEEP13-2-5/Wallet
+  - Decision: rejected
+  - Reason: generic MetaMask balance dashboard; wrong trust model and no reusable Honey proof source
+- prakarsh-spheron/Wallet-Dashboard-Demo
+  - Decision: rejected
+  - Reason: generic dashboard demo; no signature-verified workspace link
+## 2026-07-15T12:28:15.554107+00:00 - audit
+
+- Request: Fix Honey Telegram wallet prerequisite so connected wallets can be selected and signature-verified in context
+- Source: local-projects
+- Decision: selected
+- Reason: Focused audits found no high-severity issues. The only medium findings are expected base64 decoding inside the established encrypted wallet-vault decryptor; hosted donor paths passed cleanly.
+- Verification: audit_candidate_repo.py focused public repo paths: REVIEW (3 expected vault decode cautions); focused hosted repo paths: PASS
+## 2026-07-15T12:47:44.142301+00:00 - assimilation-manifest
+
+- Request: Fix Honey Telegram wallet prerequisite so connected wallets can be selected and signature-verified in context
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemindos:src/lib/services/wallet/honey-wallet-link.ts => src/lib/services/wallet/honey-wallet-link-options.ts, LiamVisionary/hivemindos:src/lib/services/wallet/honey-wallet-link.ts => src/components/wallets-drop-in/HoneyContributionCard.tsx, LiamVisionary/hivemindos:src/components/wallets-drop-in/WalletsView.tsx => src/components/wallets-drop-in/HoneyContributionCard.tsx, LiamVisionary/hivemindos:scripts/test-honey-contribution-layer.mjs => scripts/test-honey-contribution-layer.mjs
+- Verification: Wrote ASSIMILATION.honey-wallet-link.json with 4 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-15T12:47:55.337270+00:00 - verification
+
+- Request: Fix Honey Telegram wallet prerequisite so connected wallets can be selected and signature-verified in context
+- Source: verify-assimilation-manifest
+- Decision: below-threshold
+- Reason: ASSIMILATION.honey-wallet-link.json: below-threshold: need at least 3 substantive code/config reuse entries; found 2. Search for stronger donors before finalizing.
+## 2026-07-15T12:48:10.622093+00:00 - assimilation-manifest
+
+- Request: Fix Honey Telegram wallet prerequisite so connected wallets can be selected and signature-verified in context
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemindos:src/lib/services/wallet/honey-wallet-link.ts => src/lib/services/wallet/honey-wallet-link-options.ts, LiamVisionary/hivemindos:src/lib/services/wallet/local-wallet-vault.ts => src/lib/services/wallet/honey-wallet-link.ts, LiamVisionary/hivemindos:src/lib/services/wallet/honey-wallet-link.ts => src/components/wallets-drop-in/HoneyContributionCard.tsx, LiamVisionary/hivemindos:src/components/wallets-drop-in/WalletsView.tsx => src/components/wallets-drop-in/HoneyContributionCard.tsx, LiamVisionary/hivemindos:scripts/test-honey-contribution-layer.mjs => scripts/test-honey-contribution-layer.mjs
+- Verification: Wrote ASSIMILATION.honey-wallet-link.json with 5 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-15T12:48:10.748602+00:00 - verification
+
+- Request: Fix Honey Telegram wallet prerequisite so connected wallets can be selected and signature-verified in context
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.honey-wallet-link.json: 5 concrete reuse entries, 3 substantive
+## 2026-07-15T15:52:00.937125+00:00 - shared-brain
+
+- Request: Implement all seven evolved copy-trading improvements: fast risk gate, precomputed intelligence, Sol adjudication, calibration, realistic EVO scoring, counterfactuals, and conservative promotion.
+- Source: shared-brain
+- Decision: inspected
+- Selected backbone: local-project:hivemind-os
+- Note: Full-vault recall found benchmark gaming and paired-gate guidance; no durable copy-trader-specific memory was returned.
+
+### Candidates
+- Skills/discover/references/constructing-benchmark.md
+  - Decision: selected-donor
+  - Reason: paired held-out benchmark guidance directly applies to EVO promotion
+  - Path: `constructing-benchmark.md`
+## 2026-07-15T15:52:01.071061+00:00 - local-search
+
+- Request: Implement all seven evolved copy-trading improvements: fast risk gate, precomputed intelligence, Sol adjudication, calibration, realistic EVO scoring, counterfactuals, and conservative promotion.
+- Source: current-workspace
+- Decision: selected
+- Selected backbone: local-project:hivemind-os
+- Note: Current workspace already contains the backbone and statistical validation primitives; preserve unrelated dirty work.
+
+### Candidates
+- scripts/quant-research-validator.py
+  - Decision: selected-donor
+  - Reason: existing circular block bootstrap and cost-adjusted promotion gates
+  - Path: `scripts/quant-research-validator.py`
+- src/lib/services/copy-trading/*
+  - Decision: selected
+  - Reason: existing evolved-copy-trader call chain and durable state
+  - Path: `src/lib/services/copy-trading`
+- src/lib/services/trading/dex-swap.ts
+  - Decision: selected-donor
+  - Reason: existing slippage and live quote semantics
+  - Path: `src/lib/services/trading/dex-swap.ts`
+## 2026-07-15T15:52:23.788493+00:00 - public-search
+
+- Request: TypeScript crypto copy trading token security GoPlus counterfactual evaluation bootstrap
+- Source: public-github
+- Query: `TypeScript crypto copy trading token security GoPlus counterfactual evaluation bootstrap`
+- Decision: retrieved
+- Reason: Retrieved 5 public candidates from GitHub search.
+
+### Candidates
+- DEEP13-2-5/Wallet (1 stars, TypeScript)
+  - URL: https://github.com/DEEP13-2-5/Wallet
+  - Description: Web3 Wallet Dashboard is a React-based dApp that connects to MetaMask, displays the user's wallet address, ETH balance, and network info. Built with ethers.js and hooks, it includes optional features like DAI token balance, ENS name, dark/l
+- aikonre/token-balance-dashboard (0 stars, JavaScript)
+  - URL: https://github.com/aikonre/token-balance-dashboard
+  - Description: A simple token balance checker built with React. Simulates checking token balances for a given wallet address
+- mohammedazfersheikh/fullstack-web3-token-dashboard (0 stars, JavaScript)
+  - URL: https://github.com/mohammedazfersheikh/fullstack-web3-token-dashboard
+  - Description: A complete end-to-end Web3 application built with React (Vite), Node.js/Express, and Ethers.js that demonstrates real-world decentralized application architecture. This project includes a backend API for blockchain data fetching and a moder
+- prakarsh-spheron/Wallet-Dashboard-Demo (1 stars, MIT License)
+  - URL: https://github.com/prakarsh-spheron/Wallet-Dashboard-Demo
+  - Description: Demo using the token balances react component to create a Wallet Dashboard
+- shubhbatra1991/OpenDeFi-Analytics- (0 stars, MIT License)
+  - URL: https://github.com/shubhbatra1991/OpenDeFi-Analytics-
+  - Description: Building a analytics dashboard where users connect a wallet and see token balances, portfolio value, and recent transactions in real time, using Next.js/React on the frontend and a .NET/Azure API backend.
+## 2026-07-15T15:52:43.374724+00:00 - public-search
+
+- Request: GoPlusLabs TypeScript token security SDK Base Solana
+- Source: public-github
+- Query: `GoPlusLabs TypeScript token security SDK Base Solana`
+- Decision: retrieved
+- Reason: Retrieved 5 public candidates from GitHub search.
+
+### Candidates
+- DEEP13-2-5/Wallet (1 stars, TypeScript)
+  - URL: https://github.com/DEEP13-2-5/Wallet
+  - Description: Web3 Wallet Dashboard is a React-based dApp that connects to MetaMask, displays the user's wallet address, ETH balance, and network info. Built with ethers.js and hooks, it includes optional features like DAI token balance, ENS name, dark/l
+- aikonre/token-balance-dashboard (0 stars, JavaScript)
+  - URL: https://github.com/aikonre/token-balance-dashboard
+  - Description: A simple token balance checker built with React. Simulates checking token balances for a given wallet address
+- mohammedazfersheikh/fullstack-web3-token-dashboard (0 stars, JavaScript)
+  - URL: https://github.com/mohammedazfersheikh/fullstack-web3-token-dashboard
+  - Description: A complete end-to-end Web3 application built with React (Vite), Node.js/Express, and Ethers.js that demonstrates real-world decentralized application architecture. This project includes a backend API for blockchain data fetching and a moder
+- prakarsh-spheron/Wallet-Dashboard-Demo (1 stars, MIT License)
+  - URL: https://github.com/prakarsh-spheron/Wallet-Dashboard-Demo
+  - Description: Demo using the token balances react component to create a Wallet Dashboard
+- shubhbatra1991/OpenDeFi-Analytics- (0 stars, MIT License)
+  - URL: https://github.com/shubhbatra1991/OpenDeFi-Analytics-
+  - Description: Building a analytics dashboard where users connect a wallet and see token balances, portfolio value, and recent transactions in real time, using Next.js/React on the frontend and a .NET/Azure API backend.
+## 2026-07-15T16:31:46.622188+00:00 - local-index
+
+- Request: Implement all seven evolved copy-trading improvements: fast risk gate, precomputed intelligence, Sol adjudication, calibration, realistic EVO scoring, counterfactuals, and conservative promotion.
+- Source: assimilation-index
+- Query: `copy trading token security counterfactual calibration bootstrap`
+- Decision: rejected
+- Reason: No indexed external candidate matched the existing copy-trading call chain and seven-part evaluation contract strongly enough to replace the project backbone.
+- Selected backbone: local-project:hivemind-os
+- Not assimilated: No weak indexed candidate was installed or copied.
+
+### Candidates
+- local-assimilation-index
+  - Decision: rejected
+  - Reason: No strong copy-trading engine candidate; retained the established project architecture.
+## 2026-07-15T16:31:53.293512+00:00 - triage
+
+- Request: Implement all seven evolved copy-trading improvements: fast risk gate, precomputed intelligence, Sol adjudication, calibration, realistic EVO scoring, counterfactuals, and conservative promotion.
+- Source: assimilation-index
+- Query: `copy trading token security counterfactual calibration bootstrap`
+- Decision: rejected
+- Reason: No indexed external candidate matched the established copy-trading execution path or the paired promotion contract.
+- Selected backbone: local-project:hivemind-os
+- Not assimilated: No weak indexed candidate was installed or copied.
+- Note: Canonical triage record for the preceding local-index search event.
+
+### Candidates
+- local-assimilation-index
+  - Decision: rejected
+  - Reason: No strong copy-trading engine candidate; retained the established project architecture.
+## 2026-07-15T16:32:00.851663+00:00 - triage
+
+- Request: Implement all seven evolved copy-trading improvements: fast risk gate, precomputed intelligence, Sol adjudication, calibration, realistic EVO scoring, counterfactuals, and conservative promotion.
+- Source: public-github
+- Query: `TypeScript crypto copy trading token security GoPlus counterfactual evaluation bootstrap`
+- Decision: rejected
+- Reason: The retrieved repositories were wallet and analytics UI demos, not security-intelligence or walk-forward copy-trading engines.
+- Selected backbone: local-project:hivemind-os
+- Not assimilated: No public demo code was installed, executed, or copied.
+
+### Candidates
+- aikonre/token-balance-dashboard
+  - Decision: rejected
+  - Reason: Simulated balance UI; no security or evaluation engine.
+- mohammedazfersheikh/fullstack-web3-token-dashboard
+  - Decision: rejected
+  - Reason: Generic wallet dashboard; no post-fill risk or counterfactual contract.
+- prakarsh-spheron/Wallet-Dashboard-Demo
+  - Decision: rejected
+  - Reason: UI component demo only.
+- shubhbatra1991/OpenDeFi-Analytics-
+  - Decision: rejected
+  - Reason: Portfolio analytics concept without promotion statistics or security gates.
+## 2026-07-15T16:32:08.164439+00:00 - triage
+
+- Request: Implement all seven evolved copy-trading improvements: fast risk gate, precomputed intelligence, Sol adjudication, calibration, realistic EVO scoring, counterfactuals, and conservative promotion.
+- Source: public-github
+- Query: `GoPlusLabs TypeScript token security SDK Base Solana`
+- Decision: selected
+- Reason: The official GoPlus SDK generator and tests confirmed Base and Solana endpoint and response shapes; the SDK itself was not installed because its repository-wide audit reported medium findings.
+- Selected backbone: local-project:hivemind-os
+- Assimilated: Endpoint, query parameter, and response-shape contracts only, implemented with the project's native fetch path.
+- Not assimilated: No SDK runtime, dependencies, generated client, or package scripts were installed or executed.
+
+### Candidates
+- GoPlusSecurity/goplus-sdk-node
+  - Decision: selected-donor
+  - Reason: Official API contract donor; selected files inspected inertly.
+  - Path: `src/gen/api/TokenControllerV1Api.js`
+- GoPlusSecurity/goplus-sdk-node
+  - Decision: selected-donor
+  - Reason: Official Solana API contract donor.
+  - Path: `src/gen/api/TokenSecurityAPIForSolanaBetaApi.js`
+## 2026-07-15T16:32:16.573943+00:00 - audit
+
+- Request: Implement all seven evolved copy-trading improvements: fast risk gate, precomputed intelligence, Sol adjudication, calibration, realistic EVO scoring, counterfactuals, and conservative promotion.
+- Source: /Users/liam/.codex/hive-assimilate/candidates/GoPlusSecurity-goplus-sdk-node
+- Decision: passed
+- Reason: Selected-path static audit passed with zero high, medium, or low findings; repository-wide audit remained review-only and the package was not installed.
+- Verification: audit_candidate_repo.py selected paths: PASS, findings high=0 medium=0 low=0.
+
+### Candidates
+- GoPlusSecurity/goplus-sdk-node
+  - Decision: audited-selected-paths
+  - Reason: PASS with zero findings.
+  - Path: `src/gen/api/TokenControllerV1Api.js`
+- GoPlusSecurity/goplus-sdk-node
+  - Decision: audited-selected-paths
+  - Reason: PASS with zero findings.
+  - Path: `src/gen/api/TokenSecurityAPIForSolanaBetaApi.js`
+- GoPlusSecurity/goplus-sdk-node
+  - Decision: audited-selected-paths
+  - Reason: PASS with zero findings.
+  - Path: `__tests__/TokenSecurity.test.js`
+- GoPlusSecurity/goplus-sdk-node
+  - Decision: audited-selected-paths
+  - Reason: PASS with zero findings.
+  - Path: `__tests__/SolanaTokenSecurity.test.js`
+## 2026-07-15T16:32:31.833234+00:00 - assimilation-manifest
+
+- Request: Implement all seven evolved copy-trading improvements: fast risk gate, precomputed intelligence, Sol adjudication, calibration, realistic EVO scoring, counterfactuals, and conservative promotion.
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemindos:scripts/quant-research-validator.py => src/lib/services/copy-trading/evolution.ts, LiamVisionary/hivemind-cloud-services:workers/token-autopsy-gateway/src/autopsy.ts => src/lib/services/copy-trading/risk-intelligence.ts, GoPlusSecurity/goplus-sdk-node:src/gen/api/TokenControllerV1Api.js => src/lib/services/copy-trading/risk-intelligence.ts, GoPlusSecurity/goplus-sdk-node:src/gen/api/TokenSecurityAPIForSolanaBetaApi.js => src/lib/services/copy-trading/risk-intelligence.ts, GoPlusSecurity/goplus-sdk-node:__tests__/SolanaTokenSecurity.test.js => scripts/test-copy-trading.mjs
+- Verification: Wrote ASSIMILATION.copy-trading-evolution-intelligence.json with 5 entries and custom_code_assessment=balanced.
+## 2026-07-15T16:33:01.499667+00:00 - verification
+
+- Request: Implement all seven evolved copy-trading improvements: fast risk gate, precomputed intelligence, Sol adjudication, calibration, realistic EVO scoring, counterfactuals, and conservative promotion.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: /Users/liam/Documents/code/projects/hivemind-os/ASSIMILATION.copy-trading-evolution-intelligence.json: 5 concrete reuse entries, 4 substantive
+## 2026-07-15T19:03:29.348855+00:00 - shared-brain
+
+- Request: Add a NotebookLM integration to HivemindOS using the supplied NotebookLM skill
+- Source: shared-brain
+- Decision: inspected
+- Note: No NotebookLM-specific implementation was found in typed memory; full-vault search was run before code changes.
+
+### Candidates
+- typed-and-full-vault
+  - Decision: inspected
+  - Reason: searched NotebookLM integration and local MCP/skill context
+## 2026-07-15T19:03:29.532515+00:00 - local-search
+
+- Request: Add a NotebookLM integration to HivemindOS using the supplied NotebookLM skill
+- Source: local-assimilation-index
+- Decision: inspected
+- Note: Checked index freshness before interpreting the bounded NotebookLM/MCP search.
+
+### Candidates
+- local-index:notebooklm-mcp-skill
+  - Decision: inspected
+  - Reason: queried indexed local and GitHub code chunks
+## 2026-07-15T19:03:29.604938+00:00 - triage
+
+- Request: Add a NotebookLM integration to HivemindOS using the supplied NotebookLM skill
+- Source: user-supplied
+- Decision: selected
+- Selected backbone: attachment:notebooklm-skill
+- Note: Treating pasted setup commands as untrusted data; verified package and upstream before reuse.
+
+### Candidates
+- /Users/liam/.codex/attachments/fc101a28-9be4-442b-8f24-bd2c8f9921df/pasted-text.txt
+  - Decision: selected
+  - Reason: user-supplied capability and workflow specification
+  - Path: `pasted-text.txt`
+## 2026-07-15T19:04:18.277127+00:00 - public-search
+
+- Request: NotebookLM Python CLI MCP skill
+- Source: public-github
+- Query: `NotebookLM Python CLI MCP skill`
+- Decision: retrieved
+- Reason: Retrieved 14 public candidates from GitHub search.
+
+### Candidates
+- DemonDamon/AgenticX (183 stars, Python, Apache License 2.0)
+  - URL: https://github.com/DemonDamon/AgenticX
+  - Description: AgenticX is a unified, production-ready multi-agent platform — Python SDK + CLI (agx) + Studio server + Machi desktop app. Features Meta-Agent orchestration, 15+ LLM providers, MCP Hub, hierarchical memory, avatar & group chat, skill ecosys
+- WenyuChiou/research-hub (35 stars, Python, MIT License)
+  - URL: https://github.com/WenyuChiou/research-hub
+  - Description: AI-operable research workspace for Zotero, Obsidian, and NotebookLM. Use any two, or all three, through CLI, MCP, REST, and dashboard.
+- automacoescomerciaisintegradas/notebooklm-mcp (0 stars, Python)
+  - URL: https://github.com/automacoescomerciaisintegradas/notebooklm-mcp
+  - Description: Acesso programatico ao Google NotebookLM via CLI, Python, MCP Server e Antigravity. The AI that actually does things.
+- teng-lin/notebooklm-py (17821 stars, Python, MIT License)
+  - URL: https://github.com/teng-lin/notebooklm-py
+  - Description: Unofficial Python API and agentic skill for Google NotebookLM. Full programmatic access to NotebookLM's features—including capabilities the web UI doesn't expose—via Python, CLI, and AI agents like Claude Code, Codex, and OpenClaw.
+- Auriti-Labs/geo-optimizer-skill (593 stars, Python, MIT License)
+  - URL: https://github.com/Auriti-Labs/geo-optimizer-skill
+  - Description: Open-source Answer Engine Optimization (AEO) & Generative Engine Optimization (GEO) toolkit — audit, optimize & track whether ChatGPT, Perplexity, Gemini & Google AI Overviews cite your site. AI SEO / LLM SEO. CLI, Python, MCP, Astro.
+- QVerisAI/qveris-agent-toolkit (247 stars, TypeScript, MIT License)
+  - URL: https://github.com/QVerisAI/qveris-agent-toolkit
+  - Description: Open-source toolkit for the QVeris capability routing network: CLI, MCP server, Python SDK, skills, and REST API docs for agents to discover, inspect, call, and audit real-world tools.
+- oxbshw/watch-skill (200 stars, Python, MIT License)
+  - URL: https://github.com/oxbshw/watch-skill
+  - Description: Video understanding and self-verification for AI agents. Turn videos, streams, and agent screen recordings into searchable, timestamped evidence—then use THE LOOP to inspect, fix, and verify the work. MCP, CLI, REST, local-first.
+- tobocop2/lilbee (38 stars, Python, MIT License)
+  - URL: https://github.com/tobocop2/lilbee
+  - Description: The whole local AI stack in one executable: it runs and manages local AI models across every GPU, and it's a search engine you can talk to, with cited answers from your files, code, and the web. MCP server for coding agents, web crawler, TU
+- K-dash/nblm-rs (84 stars, Rust, MIT License)
+  - URL: https://github.com/K-dash/nblm-rs
+  - Description: An unofficial NotebookLM Enterprise API client built on a Rust core, with interfaces for both the CLI and a Python SDK.
+- patriarchal-boothose896/notebooklm-py (4 stars, Python, MIT License)
+  - URL: https://github.com/patriarchal-boothose896/notebooklm-py
+  - Description: Provide full Python API access to NotebookLM features, including advanced functions beyond the web interface, via CLI and AI agent integration.
+- adrianstier/zotero-notebooklm-tool (2 stars, Python, MIT License)
+  - URL: https://github.com/adrianstier/zotero-notebooklm-tool
+  - Description: Python CLI tool for organizing academic citations from Zotero for use with Google NotebookLM
+- evalstate/fast-agent (3856 stars, Python, Apache License 2.0)
+  - URL: https://github.com/evalstate/fast-agent
+  - Description: Code, Build and Evaluate agents - excellent Model and Skills/MCP/ACP/A2A Support
+- apoorva-01/notebook-cli (4 stars, Python, MIT License)
+  - URL: https://github.com/apoorva-01/notebook-cli
+  - Description: A small wrapper around notebooklm-py: bundle a project, upload as a NotebookLM source, diff, and wire into Claude Code.
+- hencray/notebooklm-splitter (1 stars, Python, MIT License)
+  - URL: https://github.com/hencray/notebooklm-splitter
+  - Description: Split videos to fit NotebookLM's 200 MB / 60 min upload limits via ffmpeg stream-copy.
+## 2026-07-15T19:04:18.347118+00:00 - public-search
+
+- Request: Add a NotebookLM integration to HivemindOS using the supplied NotebookLM skill
+- Source: github-public
+- Decision: inspected
+- Note: Live PyPI reports notebooklm-py 0.7.3; the attachment identifies 0.3.4.
+
+### Candidates
+- teng-lin/notebooklm-py
+  - Decision: selected-donor
+  - Reason: current MIT CLI, canonical skill, and agent-install support
+- skyremote/claude-code-notebooklm-skills
+  - Decision: selected-donor
+  - Reason: user-supplied skill lineage and workflow reference
+- jgravelle/notebooklm-py
+  - Decision: rejected
+  - Reason: pasted source points to an older or unavailable lineage; current PyPI source is teng-lin/notebooklm-py
+## 2026-07-15T19:05:12.061138+00:00 - audit
+
+- Request: Add a NotebookLM integration to HivemindOS using the supplied NotebookLM skill
+- Source: github-candidate-audit
+- Decision: selected-donor
+- Note: Audited selected paths as inert source; no install/build/start commands were run.
+
+### Candidates
+- teng-lin/notebooklm-py:SKILL.md,src,docs
+  - Decision: selected-donor
+  - Reason: MIT upstream and current CLI/skill contract
+- skyremote/claude-code-notebooklm-skills:skills,README.md
+  - Decision: selected-donor
+  - Reason: workflow text matching the user-supplied skill lineage
+## 2026-07-15T19:22:07.596002+00:00 - assimilation-manifest
+
+- Request: Add a NotebookLM integration to HivemindOS using the supplied NotebookLM skill
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: teng-lin/notebooklm-py:pyproject.toml => scripts/install-notebooklm.mjs, teng-lin/notebooklm-py:src/notebooklm/cli/services/playwright_login.py => scripts/notebooklm-login.mjs, hivemind-os:src/lib/services/mcp/azure-mcp.ts => src/lib/services/mcp/notebooklm.ts, hivemind-os:scripts/test-azure-integration.mjs => scripts/test-notebooklm-integration.mjs
+- Verification: Wrote ASSIMILATION.notebooklm-integration.json with 4 entries and custom_code_assessment=balanced.
+## 2026-07-15T19:22:07.727692+00:00 - verification
+
+- Request: Add a NotebookLM integration to HivemindOS using the supplied NotebookLM skill
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.notebooklm-integration.json: 4 concrete reuse entries, 3 substantive
+## 2026-07-15T19:33:10.647954+00:00 - assimilation-manifest
+
+- Request: Add a NotebookLM integration to HivemindOS using the supplied NotebookLM skill
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: teng-lin/notebooklm-py:pyproject.toml => scripts/install-notebooklm.mjs, teng-lin/notebooklm-py:src/notebooklm/cli/services/playwright_login.py => scripts/notebooklm-login.mjs, hivemind-os:src/lib/services/mcp/azure-mcp.ts => src/lib/services/mcp/notebooklm.ts, hivemind-os:scripts/test-azure-integration.mjs => scripts/test-notebooklm-integration.mjs, hivemind-os:packaged-skills/auto-install/hive-brain-memory/SKILL.md => packaged-skills/auto-install/wrapup/SKILL.md
+- Verification: Wrote ASSIMILATION.notebooklm-integration.json with 5 entries and custom_code_assessment=balanced.
+## 2026-07-15T19:33:10.871828+00:00 - verification
+
+- Request: Add a NotebookLM integration to HivemindOS using the supplied NotebookLM skill
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.notebooklm-integration.json: 5 concrete reuse entries, 4 substantive
+## 2026-07-15T19:36:40.926150+00:00 - verification
+
+- Request: Add a NotebookLM integration to HivemindOS using the supplied NotebookLM skill
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.notebooklm-integration.json: 5 concrete reuse entries, 4 substantive
+## 2026-07-15T23:37:13.064788+00:00 - shared-brain
+
+- Request: Fill all gaps in HivemindOS Chat → App Builder → thread-bound Preview, using ntegrals/december as the reference.
+- Source: shared-brain
+- Decision: inspected
+- Reason: Full-vault recall returned the existing App Builder, managed-agent, and chat product contracts.
+
+### Candidates
+- HivemindOS Docs/for-users/features/app-builder.md
+  - Decision: inspected
+  - Reason: Existing prompt-to-preview contract is directly relevant
+- HivemindOS Docs/for-users/features/runtimes-and-chat.md
+  - Decision: inspected
+  - Reason: Existing chat runtime contract is directly relevant
+## 2026-07-15T23:37:13.112903+00:00 - public-search
+
+- Request: Fill all gaps in HivemindOS Chat → App Builder → thread-bound Preview, using ntegrals/december as the reference.
+- Source: github
+- Decision: selected
+- Reason: User-pinned MIT repository is the authoritative external reference.
+- Selected backbone: ntegrals/december
+
+### Candidates
+- ntegrals/december
+  - Decision: selected
+  - Reason: User-pinned local-first prompt-to-app repo with container lifecycle and live preview
+  - Path: `README.md`
+## 2026-07-15T23:45:18.965014+00:00 - audit
+
+- Request: Fill all gaps in HivemindOS Chat → App Builder → thread-bound Preview, using ntegrals/december as the reference.
+- Source: github
+- Decision: inspected
+- Reason: Pinned repo audit found no high-severity findings; selected lifecycle and project-bound preview files were read but not executed.
+
+### Candidates
+- ntegrals/december:backend/src/services/docker.ts
+  - Decision: selected-donor
+  - Reason: Durable project runtime identity, assigned port, and restart/status lifecycle
+- ntegrals/december:frontend/src/app/projects/components/LivePreview.tsx
+  - Decision: selected-donor
+  - Reason: Preview resolves and polls the project-specific runtime rather than an arbitrary app
+- ntegrals/december:frontend/src/app/projects/components/ProjectPromptInterface.tsx
+  - Decision: selected-donor
+  - Reason: Prompt creates a durable project identity before entering chat
+- ntegrals/december:frontend/src/app/projects/components/WorkspaceDashboard.tsx
+  - Decision: selected-donor
+  - Reason: Chat, files, and preview stay bound to one project identity
+## 2026-07-15T23:45:19.018720+00:00 - verification
+
+- Request: Fill all gaps in HivemindOS Chat → App Builder → thread-bound Preview, using ntegrals/december as the reference.
+- Source: local-project
+- Decision: inspected
+- Reason: Baseline: chat preview selector passed; app-builder contract and 10 local/hosting tests passed; capability approval passed. MCP test harness failed because its child process could not find node on the sparse PATH, not because an assertion failed.
+
+### Candidates
+- scripts/test-chat-preview-targets.mjs
+  - Decision: inspected
+  - Reason: baseline passed
+- scripts/test-app-builder-local.mjs
+  - Decision: inspected
+  - Reason: baseline 10 tests passed
+- scripts/test-capability-approval.mjs
+  - Decision: inspected
+  - Reason: baseline passed
+- scripts/test-app-builder-mcp.mjs
+  - Decision: inspected
+  - Reason: baseline environment failure: spawn node ENOENT
+## 2026-07-16T00:03:05.258235+00:00 - assimilation-manifest
+
+- Request: Fill all gaps in HivemindOS Chat → App Builder → thread-bound Preview, using ntegrals/december as the reference.
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: ntegrals/december:frontend/src/app/projects/components/ProjectPromptInterface.tsx => src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx, ntegrals/december:frontend/src/app/projects/components/LivePreview.tsx => src/lib/services/chat/chat-preview-targets.ts, ntegrals/december:backend/src/services/docker.ts => scripts/lib/app-builder.mjs, ntegrals/december:frontend/src/app/projects/components/WorkspaceDashboard.tsx => src/lib/services/chat/chat-app-artifact.ts
+- Verification: Wrote ASSIMILATION.chat-app-preview.json with 4 entries and custom_code_assessment=balanced.
+## 2026-07-16T00:03:09.213787+00:00 - verification
+
+- Request: Fill all gaps in HivemindOS Chat → App Builder → thread-bound Preview, using ntegrals/december as the reference.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.chat-app-preview.json: 4 concrete reuse entries, 4 substantive
 ## 2026-07-16T00:06:10.296106+00:00 - triage
 
 - Request: sure i like it. do all that. also i would like a new Hivemind Mini app that does this that we can charge for
@@ -9160,6 +13002,12 @@
 - Source: scoped-candidate-audit
 - Decision: passed
 - Reason: Pinned Reddit VOC donor paths passed heuristic audit with high=0 medium=0 low=0; manual inspection confirmed a standard-library fetcher, prompt contract, and static HTML template.
+## 2026-07-16T00:16:42.743553+00:00 - verification
+
+- Request: Fill all gaps in HivemindOS Chat → App Builder → thread-bound Preview, using ntegrals/december as the reference.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.chat-app-preview.json: 4 concrete reuse entries, 4 substantive
 ## 2026-07-16T00:40:42.888943+00:00 - assimilation-manifest
 
 - Request: sure i like it. do all that. also i would like a new Hivemind Mini app that does this that we can charge for

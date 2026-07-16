@@ -1233,6 +1233,41 @@ async function callTool(name, args = {}) {
   if (name === "x_api") {
     const method = String(args.method || "GET").toUpperCase(); if (method !== "GET" && args.confirmation !== "CONFIRM_X_API_CALL") throw new Error("x_api write calls require confirmation CONFIRM_X_API_CALL.");
     return callDashboard("/api/integrations/x-managed", "POST", { action: "proxy", creditAccountId: args.creditAccountId, connectionId: args.connectionId, slug: args.slug, method, path: args.path, query: args.query, json: args.json, confirmation: args.confirmation }); }
+  if (name === "beeline_profiles") {
+    const query = args.query ? `?query=${encodeURIComponent(String(args.query))}` : "";
+    return callDashboard(`/api/beeline/actions${query}`, "GET");
+  }
+  if (name === "beeline_open_browser") {
+    if (args.confirmation !== "CONFIRM_BEELINE_BROWSER") throw new Error("beeline_open_browser requires confirmation CONFIRM_BEELINE_BROWSER.");
+    return callDashboard("/api/beeline/actions", "POST", args);
+  }
+  if (name === "beeline_browser_use") {
+    if (args.confirmation !== "CONFIRM_BEELINE_BROWSER_ACTION") throw new Error("beeline_browser_use requires confirmation CONFIRM_BEELINE_BROWSER_ACTION.");
+    return callDashboard("/api/beeline/actions", "POST", args);
+  }
+  if (name === "beeline_local_credentials") {
+    return callDashboard(`/api/beeline/local-credentials?profileId=${encodeURIComponent(String(args.profileId || ""))}`, "GET");
+  }
+  if (name === "beeline_local_credential_use") {
+    return callDashboard("/api/beeline/local-credentials", "POST", args);
+  }
+  if (name === "beeline_connections") {
+    return callDashboard(`/api/beeline/broker?profileId=${encodeURIComponent(String(args.profileId || ""))}`, "GET");
+  }
+  if (name === "beeline_calendar_list") {
+    return callDashboard("/api/beeline/broker", "POST", { ...args, action: "calendar-list" });
+  }
+  if (name === "beeline_calendar_create") {
+    if (args.confirmation !== "CONFIRM_BEELINE_CALENDAR") throw new Error("beeline_calendar_create requires confirmation CONFIRM_BEELINE_CALENDAR.");
+    return callDashboard("/api/beeline/broker", "POST", { ...args, action: "calendar-create" });
+  }
+  if (name === "beeline_mcp_read") {
+    return callDashboard("/api/beeline/broker", "POST", { ...args, action: "mcp-read" });
+  }
+  if (name === "beeline_mcp_call") {
+    if (args.confirmation !== "CONFIRM_BEELINE_MCP_ACTION") throw new Error("beeline_mcp_call requires confirmation CONFIRM_BEELINE_MCP_ACTION.");
+    return callDashboard("/api/beeline/broker", "POST", { ...args, action: "mcp-call" });
+  }
   if (name === "slack_send_message") {
     if (args.confirmation !== "CONFIRM_SLACK_SEND") throw new Error("slack_send_message requires confirmation CONFIRM_SLACK_SEND.");
     return callDashboard("/api/integrations/slack/send", "POST", { text: args.text, channel: args.channel, confirmation: args.confirmation }); }
@@ -1241,6 +1276,22 @@ async function callTool(name, args = {}) {
   if (name === "google_slides_edit") {
     if (args.confirmation !== "CONFIRM_GOOGLE_SLIDES_EDIT") throw new Error("google_slides_edit requires confirmation CONFIRM_GOOGLE_SLIDES_EDIT.");
     return callDashboard("/api/integrations/google/slides", "POST", { mode: "edit", ...args }); }
+  if (name === "monid_read") {
+    return callDashboard("/api/integrations/monid", "POST", { mode: "read", ...args }); }
+  if (name === "monid_run") {
+    if (args.confirmation !== "CONFIRM_MONID_RUN") throw new Error("monid_run requires confirmation CONFIRM_MONID_RUN.");
+    return callDashboard("/api/integrations/monid", "POST", { mode: "run", ...args }); }
+  if (name === "company_api_preflight") {
+    return callDashboard("/api/companies", "POST", {
+      action: "consume-api-usage",
+      id: args.companyId,
+      providerKey: args.providerKey,
+      operationId: args.operationId,
+      requestCount: args.requestCount,
+      amountUsd: args.amountUsd,
+      source: args.source || "hivemind-mcp:company-api-preflight",
+      idempotencyKey: args.idempotencyKey,
+    }); }
   if (name === "azure_resources") {
     return callDashboard("/api/integrations/azure/resources", "POST", {
       action: args.action || "subscriptions",

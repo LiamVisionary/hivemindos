@@ -51,6 +51,48 @@ Seeded structure:
 - `Operations/Automations/Foundation Workflows/` contains disabled workflow schedules for context synthesis, intake processing, meeting processing, research ingestion, vault health checks, decision review, argument building, book notes, feedback capture, project updates, weekly synthesis, connection finding, and distillation.
 - `Operations/Code Projects/projects.json` stores Hivemind project records and optional GitLawb repo links. This is private coordination metadata. GitLawb proof records should not contain private keys, secrets, Tailnet IPs, or exact private vault paths.
 
+## Brain Drop And Bundled Document Reading
+
+HivemindOS desktop includes its document reader in the app. There is no separate Python setup, cloud upload, API key, or optional converter to install. Files are converted locally into Markdown that agents can reason over.
+
+There are three ways to use it:
+
+- Attach a document in Chat. The selected agent receives the extracted text with the current request, clearly marked as untrusted source material.
+- Open **Brain > Hive Vault** and use the **Feed the brain** control in the lower-right corner. Hover or focus it to add text, select multiple files, or select multiple folders. You can also drag files or folders directly onto Hive Vault; the full-vault overlay confirms where they will land. Supported documents become normal Obsidian notes under `Memory/Imported Sources`, with their original names, content hashes, conversion version, and import time.
+- Import a business data-room folder when creating a Zero Human Company. The preview lists readable documents before anything is saved, and the cockpit keeps the resulting source library separate from company directives.
+
+The bundled reader handles Markdown, plain text, CSV, JSON, XML, HTML, PDF, Word, PowerPoint, Excel, EPUB, Outlook MSG, and ZIP files. Archives have stricter safeguards: path traversal, encrypted entries, nested ZIPs, extreme compression ratios, and oversized expanded contents are rejected.
+
+Imported files are evidence, not authority. Text inside a document cannot silently become an agent instruction, standing company directive, approval, entitlement, or secret. Re-importing the same content reuses its source hash instead of creating duplicate notes. A private local cache avoids converting unchanged content repeatedly; the original document remains where the user selected it.
+
+Text entered through **Feed the brain** uses the same intelligent inbox as phone and API captures: the raw capture remains in `Intake`, while a cleaned copy is tagged, linked, classified, and routed. File and folder selections use the bundled 16-extension document reader. Each batch is bounded to 20 supported files, 16 MiB per file, and 64 MiB total; unsupported, empty, hidden, symlinked, or over-limit files are skipped and reported.
+
+See [Local Document Reader](local-document-reader.html) for the complete 16-extension table, what each format preserves, privacy behavior, size limits, archive rules, and troubleshooting.
+
+### Phone shortcuts and capture
+
+The authenticated phone API accepts bounded shortcut actions from a paired
+HivemindOS Mobile app. Shared Brain voice, text, and share captures become
+immutable raw Markdown notes in `Intake`. Brain Drop then cleans and classifies
+each capture, adds structured source/category tags and grounded links to notes
+that already exist, and routes a derived note to Ideas, Projects, Resources,
+Memory, the processed-intake folder, or review. Tasks and reminders also enter
+the Work Board without duplicating on retry. Hive task captures pass through
+the Queen Bee control plane into the Work Board, while Queen questions and
+daily briefings use the established Queen Bee agent route.
+
+Shortcut prompts and spoken results use the same Queen voice selection as the
+desktop overlay. Selected cloud voices return a decodable clip to the phone;
+if that selected voice is unavailable, the phone keeps the text visible rather
+than substituting a system voice.
+
+The phone supplies a stable action identifier for durable writes. Repeating a
+successful note or task request returns the original result instead of creating
+a duplicate, which lets the mobile app retain and safely retry an action after
+an app exit or connectivity failure. These routes use the phone API's existing
+device authentication; shortcuts do not receive vault paths, runtime secrets,
+or hub credentials.
+
 ## Brain Graph, QMD, GBrain, Neo4j, Syntho, And Trading Brain
 
 How it works:
@@ -172,6 +214,8 @@ What shared skills can do:
 - Save Hive Fusion generated skills into the shared brain for later retrieval.
 - Auto-install HivemindOS Hive skills such as `hive-assimilate`, `hive-pulse`, `hive-capability-search`, and the Hive Fusion skills from `packaged-skills/auto-install/`.
 - Auto-install `hive-brain-compiled-wiki` so agents learn the compiled-brain API/MCP workflow, compiled-wiki search, graph reading, health repairs, and shared-brain contribution contract.
+- Auto-install `hive-skill-autoresearch` so repeated, evidence-backed skill failures can become review proposals and measured optimizer tasks without automatically replacing the installed skill.
+- Attribute regular-chat outcomes only to explicitly selected, agent-preferred, or runtime-confirmed skills; ordinary capability retrieval alone never counts as skill use.
 - Auto-install the Obsidian Native Brain Pack: `obsidian-markdown`, `obsidian-bases`, `json-canvas`, and optional `defuddle`, curated from `kepano/obsidian-skills`.
 - Reconcile shared-vault skills with local runtime providers.
 - Auto-import, auto-update, and optionally track removals per provider.

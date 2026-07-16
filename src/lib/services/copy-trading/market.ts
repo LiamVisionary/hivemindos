@@ -15,7 +15,19 @@ const nativeCache = new Map<string, Cached<number | null>>();
 const marketCache = new Map<string, Cached<TokenMarket>>();
 
 /** Deepest-pool price/liquidity/symbol for a token (all best-effort, may be null). */
-export type TokenMarket = { priceUsd: number | null; liquidityUsd: number | null; symbol: string | null };
+export type TokenMarket = {
+  priceUsd: number | null;
+  liquidityUsd: number | null;
+  symbol: string | null;
+  priceChange24hPct: number | null;
+  volume24hUsd: number | null;
+  marketCapUsd: number | null;
+  fdvUsd: number | null;
+  pairUrl: string | null;
+  pairCreatedAt: number | null;
+  buys24h: number | null;
+  sells24h: number | null;
+};
 
 function dexScreenerChain(network: CopyTradeNetwork): string {
   return network === "solana:mainnet" ? "solana" : "base";
@@ -44,6 +56,13 @@ export async function nativeUsdPrice(network: CopyTradeNetwork): Promise<number 
 
 type DexPair = {
   priceUsd?: string | number;
+  priceChange?: { h24?: number };
+  volume?: { h24?: number };
+  marketCap?: number;
+  fdv?: number;
+  url?: string;
+  pairCreatedAt?: number;
+  txns?: { h24?: { buys?: number; sells?: number } };
   liquidity?: { usd?: number };
   baseToken?: { address?: string; symbol?: string };
 };
@@ -55,7 +74,7 @@ export async function tokenMarket(network: CopyTradeNetwork, tokenAddress: strin
   const key = `${network}:${tokenAddress.toLowerCase()}`;
   const cached = marketCache.get(key);
   if (cached && Date.now() - cached.at < MARKET_TTL_MS) return cached.value;
-  let value: TokenMarket = { priceUsd: null, liquidityUsd: null, symbol: null };
+  let value: TokenMarket = emptyTokenMarket();
   try {
     const res = await fetch(`https://api.dexscreener.com/token-pairs/v1/${dexScreenerChain(network)}/${tokenAddress}`, {
       headers: { accept: "application/json" },
@@ -75,13 +94,42 @@ export async function tokenMarket(network: CopyTradeNetwork, tokenAddress: strin
         priceUsd: Number.isFinite(price) && price > 0 ? price : null,
         liquidityUsd,
         symbol: top?.baseToken?.symbol ?? null,
+        priceChange24hPct: finiteOrNull(top?.priceChange?.h24),
+        volume24hUsd: finiteOrNull(top?.volume?.h24),
+        marketCapUsd: finiteOrNull(top?.marketCap),
+        fdvUsd: finiteOrNull(top?.fdv),
+        pairUrl: typeof top?.url === "string" && /^https?:\/\//i.test(top.url) ? top.url : null,
+        pairCreatedAt: finiteOrNull(top?.pairCreatedAt),
+        buys24h: finiteOrNull(top?.txns?.h24?.buys),
+        sells24h: finiteOrNull(top?.txns?.h24?.sells),
       };
     }
   } catch {
-    value = { priceUsd: null, liquidityUsd: null, symbol: null };
+    value = emptyTokenMarket();
   }
   marketCache.set(key, { value, at: Date.now() });
   return value;
+}
+
+function emptyTokenMarket(): TokenMarket {
+  return {
+    priceUsd: null,
+    liquidityUsd: null,
+    symbol: null,
+    priceChange24hPct: null,
+    volume24hUsd: null,
+    marketCapUsd: null,
+    fdvUsd: null,
+    pairUrl: null,
+    pairCreatedAt: null,
+    buys24h: null,
+    sells24h: null,
+  };
+}
+
+function finiteOrNull(value: unknown): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 /** Deepest-pool liquidity (USD) for a token via DexScreener, or null if unknown. */

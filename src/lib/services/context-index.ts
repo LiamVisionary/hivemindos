@@ -21,7 +21,7 @@ import { NANSEN_HIVEMIND_INTEGRATION_FACTS } from "@/lib/services/chat/nansen-ca
 import { getBrainSkillInventory, getSharedBrainSkillsCached } from "@/lib/services/obsidian/brain-skills";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { externalAgentProviderItems } from "@/lib/services/external-agent-providers";
-import { dashboardSwarmGoalContextIndexItem, founderModeContextIndexItem, hiveComputeContextIndexItem, jsonRenderContextIndexItem, loopEngineeringContextIndexItem, managedCloudAgentsContextIndexItem } from "@/lib/services/context-index/static-tool-items";
+import { dashboardSwarmGoalContextIndexItem, documentIngestionContextIndexItem, founderModeContextIndexItem, hiveComputeContextIndexItem, jsonRenderContextIndexItem, loopEngineeringContextIndexItem, managedCloudAgentsContextIndexItem } from "@/lib/services/context-index/static-tool-items";
 import { packagedSkillFileStats, packagedSkillItem } from "@/lib/services/context-index/packaged-skills";
 import { hiveActionContextIndexItems, hiveActionMcpName, listHiveActions } from "@/lib/services/hive-actions";
 import { HIVE_MCP_SERVER_CATALOG } from "@/lib/services/mcp/catalog";
@@ -42,6 +42,7 @@ import { RUNTIME_DEFINITIONS } from "@/lib/types/agent-runtime";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
 import { applyAppPreferences, readAppPreferences, type AppModelPreference } from "@/lib/services/fleet/app-preferences";
 import { connectorManifestContextIndexItems } from "@/lib/services/integrations/connector-context-index";
+import { githubCapabilityContextIndexItems } from "@/lib/services/github-capability-catalog";
 import { actionIntegrationConnected } from "@/lib/services/integrations/hive-action-connection";
 import { readSharedAgentEnv } from "@/lib/services/integrations/shared-env";
 import { visualArtifactContextIndexItems } from "@/lib/services/visual-artifact-context-index";
@@ -598,6 +599,7 @@ function localCliToolItems(): ContextIndexItem[] {
       },
     },
     dashboardSwarmGoalContextIndexItem(absolutePath),
+    documentIngestionContextIndexItem(absolutePath),
     founderModeContextIndexItem(absolutePath),
     jsonRenderContextIndexItem(absolutePath),
     loopEngineeringContextIndexItem(absolutePath),
@@ -682,7 +684,7 @@ function localCliToolItems(): ContextIndexItem[] {
       load: {
         type: "file",
         target: BANKR_VAULT_REFERENCE_PATH,
-        note: "Vault-relative imported Bankr docs. For live readiness use /api/crypto/capabilities; execution uses native Bankr chat actions, /api/bankr/actions, /api/bankr/llm-credits, and explicit approval gates.",
+        note: "Vault-relative imported Bankr docs. For live readiness use /api/crypto/capabilities; managed copy trading uses /api/trading/bankr-copy, while other execution uses native Bankr chat actions, /api/bankr/actions, /api/bankr/llm-credits, and explicit approval gates.",
       },
     },
     {
@@ -1570,7 +1572,7 @@ function perRequestItems(
   return [
     // Integration-backed hive actions (requiresConnection) are advertised only
     // when their integration is connected; core actions are always available.
-    ...(wants("tool-schema") ? [...hiveActionContextIndexItems(listHiveActions().filter((action) => actionIntegrationConnected(action, sharedEnv))), ...localCliToolItems(), ...externalAgentProviderItems(), ...mcpCatalogItems()] : []),
+    ...(wants("tool-schema") ? [...hiveActionContextIndexItems(listHiveActions().filter((action) => actionIntegrationConnected(action, sharedEnv))), ...githubCapabilityContextIndexItems(sharedEnv), ...localCliToolItems(), ...externalAgentProviderItems(), ...mcpCatalogItems()] : []),
     ...(wants("connected-app") || wants("app-endpoint") ? connectedAppItems(options.connectedApps) : []),
     // Connectors surface only when actually connected (token present) — see
     // connectorManifestContextIndexItems. Disconnected integrations are not capabilities.

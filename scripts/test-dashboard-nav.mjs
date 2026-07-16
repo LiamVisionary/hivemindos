@@ -6,6 +6,8 @@ const dashboardApp = readFileSync(new URL("../src/features/dashboard/DashboardAp
 const pollingEffects = readFileSync(new URL("../src/features/dashboard/hooks/use-dashboard-polling-effects.tsx", import.meta.url), "utf8");
 const dashboardHeader = readFileSync(new URL("../src/features/dashboard/views/DashboardHeader.tsx", import.meta.url), "utf8");
 const appNavShelf = readFileSync(new URL("../src/components/fleet-hive/AppNavShelf.tsx", import.meta.url), "utf8");
+const dashboardSecurityControl = readFileSync(new URL("../src/features/dashboard/DashboardSecurityControl.tsx", import.meta.url), "utf8");
+const appNavShelfCss = readFileSync(new URL("../src/components/fleet-hive/app-nav-shelf.css", import.meta.url), "utf8");
 const morePanel = readFileSync(new URL("../src/features/dashboard/MorePanel.tsx", import.meta.url), "utf8");
 const kanbanBoardUtils = readFileSync(new URL("../src/lib/utils/kanban-board.ts", import.meta.url), "utf8");
 
@@ -50,6 +52,33 @@ assert.match(
   appNavShelf,
   /<NavShelfItem[\s\S]*?badge=\{navBadges\[it\.id\]\}/,
   "Pinned shelf items should receive per-route badge counts",
+);
+assert.match(
+  appNavShelf,
+  /<div className="fr-shelf-control-row" role="group" aria-label="Dashboard controls">[\s\S]*?<DashboardSecurityControl onTooltipOpenChange=\{setSecurityTooltipOpen\} \/>[\s\S]*?<Tooltip onOpenChange=\{setThemeTooltipOpen\}>[\s\S]*?aria-label=\{theme === "light" \? "Switch to dark mode" : "Switch to light mode"\}[\s\S]*?<TooltipContent side="right" className="z-\[80\]">/,
+  "Security and theme should share the compact footer control row with the custom tooltip treatment",
+);
+assert.match(
+  dashboardSecurityControl,
+  /<Tooltip onOpenChange=\{onTooltipOpenChange\}>[\s\S]*?<TooltipTrigger asChild>[\s\S]*?aria-label="Dashboard security"[\s\S]*?<TooltipContent side="right" className="z-\[80\]">Manage security and passkeys<\/TooltipContent>/,
+  "The icon-only Security control should explain itself through the custom tooltip",
+);
+assert.match(
+  appNavShelf,
+  /data-footer-tooltip-open=\{footerTooltipOpen \? "true" : undefined\}/,
+  "The shelf should expose the footer tooltip state so portalled content can hold the expanded rail open",
+);
+assert.doesNotMatch(dashboardSecurityControl, /fr-nav-label/, "The Security footer action should not render a visible label");
+assert.doesNotMatch(appNavShelf, /fr-nav-label">\{theme === "light"/, "The theme footer action should not render a visible label");
+assert.match(
+  appNavShelfCss,
+  /\.fr-shelf:hover \.fr-shelf-control-row,[\s\S]*?grid-template-columns: repeat\(2, 44px\)/,
+  "Security and theme controls should sit side by side when the shelf opens",
+);
+assert.match(
+  appNavShelfCss,
+  /\.fr-shelf\[data-footer-tooltip-open="true"\][\s\S]*?width: 238px[\s\S]*?\.fr-shelf\[data-footer-tooltip-open="true"\] \.fr-shelf-control-row/,
+  "An open footer tooltip should preserve the complete expanded shelf state",
 );
 assert.match(
   kanbanBoardUtils,

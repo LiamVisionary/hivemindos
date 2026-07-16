@@ -43,6 +43,7 @@ type ReviewActionResponse = {
   proposal?: BrainReviewProposal;
   proposals?: BrainReviewProposal[];
   applied?: boolean;
+  task?: { id: string; title: string };
   reason?: string;
 };
 
@@ -290,6 +291,7 @@ function updateReviewInPlace(reviews: BrainReviewProposal[], proposal?: BrainRev
 
 function reviewActionStatus(action: "approve" | "reject" | "apply", response: ReviewActionResponse) {
   if (action === "apply") {
+    if (response.task) return `Autoresearch task queued on the Work Board: ${response.task.title}.`;
     if (response.applied) return "Proposal applied through Shared Brain Memory.";
     return response.reason || "Proposal remains approved for manual application.";
   }

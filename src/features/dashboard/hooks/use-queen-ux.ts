@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import { DEFAULT_QUEEN_BEE_PERSONALITY } from "@/lib/config/queen-bee-personality";
+import { DEFAULT_QUEEN_BEE_NAME, DEFAULT_QUEEN_BEE_PERSONALITY } from "@/lib/config/queen-bee-personality";
 import { listenForQueenSettingsOpen } from "@/lib/native/queen-voice-events";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { AgentCreateDraft } from "@/features/dashboard/agent-settings-types";
@@ -61,7 +61,7 @@ export function useQueenUx(input: {
       setAgentCreateDraft((current) => ({
         ...current,
         beeRole: "queen",
-        name: current.name || "Queen Bee",
+        name: DEFAULT_QUEEN_BEE_NAME,
         soulPrompt: DEFAULT_QUEEN_BEE_PERSONALITY,
       }));
     });

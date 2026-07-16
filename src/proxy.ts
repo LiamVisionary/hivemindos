@@ -6,6 +6,11 @@ import { unauthorizedJson, verifyAuth } from "@/lib/utils/server-auth";
 // ignored, which left every /api route without this gate until 2026-07-03.
 const SELF_AUTHENTICATING_API_PREFIXES = [
   "/api/auth/session",
+  // Passkey status/options/verification are part of the lock ceremony. The
+  // authentication verifier issues a session only after a one-use WebAuthn
+  // challenge succeeds; registration and management routes still call
+  // requireAuth themselves and remain closed while locked.
+  "/api/auth/passkeys",
   // Browser-extension preflights cannot carry dashboard credentials. The route
   // handles CORS and verifies the dashboard device token on every GET/POST.
   "/api/browser-extension",

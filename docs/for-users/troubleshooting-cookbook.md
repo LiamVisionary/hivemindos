@@ -21,17 +21,22 @@ Symptoms:
 
 - the dashboard unlock screen repeats
 - API routes return `Dashboard authentication is required`
+- Face ID, Touch ID, or the device passkey is not offered
 
 Checks:
 
 - run `dashboard-auth status`
 - confirm `.env.local` contains dashboard auth keys
+- in the macOS desktop app, confirm Touch ID is enrolled in System Settings and available to applications
+- for passkeys, use HTTPS or localhost and confirm the browser exposes a built-in authenticator for the current dashboard hostname
 
 Fixes:
 
 - run `dashboard-auth copy-token` to recover the device token
 - run `dashboard-auth reset-token` if the token is lost
 - restart the dashboard after rotating auth values
+- in the macOS desktop app, reopen **Security** to confirm Touch ID is shown as ready; no browser passkey enrollment is required there
+- in a browser, unlock with the token, then open **Security** to add or remove a device passkey
 
 ### Collector Unreachable
 

@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import http from "node:http";
-import { appendFileSync, readFileSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { appendFileSync, readFileSync, statSync, utimesSync } from "node:fs";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { register } from "node:module";
 import { tmpdir } from "node:os";
@@ -28,6 +28,7 @@ const {
   rememberAgentMemory,
   rebuildAgentMemoryIndex,
 } = await import("../src/lib/services/obsidian/agent-memory/core.ts");
+const { normalizeAgentMemorySourceType } = await import("../src/lib/services/obsidian/agent-memory/types.ts");
 const { searchFullVaultSearchIndex, rebuildFullVaultSearchIndex } = await import("../src/lib/services/obsidian/full-vault-search-index.ts");
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -95,6 +96,38 @@ const seedC = await rememberAgentMemory({
 });
 assert.ok(seedC.record, "seed C should write");
 ok("seed memories written");
+
+const legacyConversationSource = await rememberAgentMemory({
+  vaultPath,
+  type: "decision",
+  title: "Legacy conversation provenance",
+  content: "A direct conversation supplied this reviewed decision.",
+  sourceType: "conversation",
+});
+const legacyWorkBoardSource = await rememberAgentMemory({
+  vaultPath,
+  type: "learning",
+  title: "Legacy Work Board provenance",
+  content: "A Work Board result supplied this derived learning.",
+  sourceType: "reviewed-work-board-result",
+});
+assert.equal(legacyConversationSource.record?.sourceType, "explicit", "conversation provenance should normalize to explicit");
+assert.equal(legacyWorkBoardSource.record?.sourceType, "inferred", "Work Board provenance should normalize to inferred");
+for (const alias of [
+  "analysis",
+  "observed",
+  "reviewed-artifact",
+  "reviewed-work-board-result",
+  "work-board",
+  "work-board-artifact",
+  "work-board-research",
+  "work-board-result",
+  "work-board-task",
+]) {
+  assert.equal(normalizeAgentMemorySourceType(alias), "inferred", `${alias} should normalize to inferred`);
+}
+assert.throws(() => normalizeAgentMemorySourceType("unsupported-source"), /Unsupported memory source type/);
+ok("legacy source provenance aliases normalize to the canonical schema");
 
 // --- precision floors ----------------------------------------------------------
 

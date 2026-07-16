@@ -99,16 +99,15 @@ function deviceNounForOs(os?: string): string {
 }
 
 // Per-OS commands to repair / re-run setup for a machine's agent bridge.
-// Mac/Linux re-run the collector install script. Windows has no
-// install-telemetry-collector.ps1 yet, so it re-runs setup.ps1 (the closest
-// available Windows setup path); note setup.ps1 does not yet auto-install the
-// collector daemon on Windows — that path is still a follow-up.
+// Mac/Linux re-run the collector install script. Windows re-runs the sticky
+// collector-only setup path, which installs the scheduled collector and Link
+// sidecar without starting a source dashboard.
 function agentBridgeRepairCommands(machine: MachineGroup): string[] {
   if (isWindowsOs(machine.os)) {
     return [
       "cd $env:USERPROFILE\\hivemindos",
       "git pull --ff-only",
-      "powershell -ExecutionPolicy Bypass -File setup.ps1 -SkipDashboard -SkipBuild",
+      "powershell -ExecutionPolicy Bypass -File setup.ps1 -CollectorOnly",
     ];
   }
   return [
@@ -350,7 +349,7 @@ export function machineNetworkIssue(
       commands: isWindowsOs(machine.os)
         ? [
             "cd $env:USERPROFILE\\hivemindos",
-            "powershell -ExecutionPolicy Bypass -File setup.ps1 -SkipDashboard -SkipBuild",
+            "powershell -ExecutionPolicy Bypass -File setup.ps1 -CollectorOnly",
             "hive-env-add --reconcile",
           ]
         : [
@@ -870,14 +869,14 @@ export function setupCollectorCommand(os?: string) {
       `if (-not (Test-Path hivemindos)) { git clone ${REPO_CLONE_URL} hivemindos }`,
       "cd hivemindos",
       "git pull --ff-only",
-      "powershell -ExecutionPolicy Bypass -File setup.ps1",
+      "powershell -ExecutionPolicy Bypass -File setup.ps1 -CollectorOnly",
     ].join("\n");
   }
   return [
     `git clone ${REPO_CLONE_URL} hivemindos 2>/dev/null || true`,
     "cd hivemindos",
     "git pull --ff-only",
-    "./setup.sh",
+    "./setup.sh --collector-only",
   ].join("\n");
 }
 

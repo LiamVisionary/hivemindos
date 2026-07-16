@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-07-16T00:03:05.223589+00:00",
+  "request": "Fill all gaps in HivemindOS Chat \u2192 App Builder \u2192 thread-bound Preview, using ntegrals/december as the reference.",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "ntegrals/december",
+      "source_path": "frontend/src/app/projects/components/ProjectPromptInterface.tsx",
+      "target_path": "src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Create the durable project before sending the implementation continuation."
+    },
+    {
+      "source_repo": "ntegrals/december",
+      "source_path": "frontend/src/app/projects/components/LivePreview.tsx",
+      "target_path": "src/lib/services/chat/chat-preview-targets.ts",
+      "reuse_type": "adapted_code",
+      "note": "Resolve and poll the project-specific preview instead of selecting an arbitrary live service."
+    },
+    {
+      "source_repo": "ntegrals/december",
+      "source_path": "backend/src/services/docker.ts",
+      "target_path": "scripts/lib/app-builder.mjs",
+      "reuse_type": "adapted_code",
+      "note": "Keep runtime identity, port, and lifecycle attached to the durable project."
+    },
+    {
+      "source_repo": "ntegrals/december",
+      "source_path": "frontend/src/app/projects/components/WorkspaceDashboard.tsx",
+      "target_path": "src/lib/services/chat/chat-app-artifact.ts",
+      "reuse_type": "adapted_code",
+      "note": "Bind the chat workspace and preview to one persisted project identity."
+    }
+  ]
+}

@@ -106,6 +106,8 @@ dashboard-auth rotate-secret
 
 Use `copy-token` when you need to paste the token into the unlock screen again. Use `reset-token` if the token is lost, then restart the dashboard so it reloads `.env.local`. Use `rotate-secret` when you also want to invalidate existing browser sessions after restart. If the installed `dashboard-auth` helper is not on PATH yet, run the same commands from the cloned repo as `pnpm dashboard-auth <command>`.
 
+In the macOS desktop app, enrolled Touch ID is detected automatically and can unlock the dashboard without a separate passkey registration step. In a browser, unlock once with the token, open **Security** in the dashboard navigation, and choose **Add this device**. Supported devices can then use Face ID, Touch ID, Windows Hello, or another built-in user-verifying passkey. The token remains visible as the optional recovery or preference fallback. Browser passkeys require HTTPS or a localhost dashboard URL and are registered for the exact dashboard hostname, so a different hostname may need its own enrollment.
+
 Setup checks Node.js and pnpm/Corepack, installs dependencies, installs the hive env helpers and dashboard auth recovery command, installs the lightweight machine monitor where supported, prepares GitLawb Code Proof where available, starts the dashboard when possible, and can open the dashboard for you. Production dashboard builds are skipped by default; use `./setup.sh --build` when you explicitly want one. On macOS/Linux use `setup.sh`; on native Windows use `setup.ps1`.
 
 GitLawb setup is proof-ready by default, not full node hosting by default. On macOS/Linux, interactive setup offers to install `gl`, `git-remote-gitlawb`, and the `gitlawb-node` binary, then offers to create a local DID without registering with a public node. HivemindOS does not start a GitLawb node, install Docker/Postgres, expose repo hosting, or enable federation/IPFS/Arweave/staking during first setup. Full local node setup stays lazy and is surfaced from Integrations or project linking when a project needs local GitLawb repo hosting.
@@ -319,18 +321,29 @@ On each additional machine that runs agents:
 ```bash
 git clone https://github.com/LiamVisionary/hivemindos.git
 cd hivemindos
-./scripts/install-telemetry-collector.sh
+./setup.sh --collector-only
 ```
 
-The script installs the lightweight machine monitor and starts the services needed for dashboard discovery, Hivemind Sync env readiness, and optional Syncthing brain sync.
+On Windows, use:
 
-For app-managed Link mode instead of a system Tailscale install, use either normal setup or the collector-only command:
+```powershell
+git clone https://github.com/LiamVisionary/hivemindos.git
+cd hivemindos
+powershell -ExecutionPolicy Bypass -File .\setup.ps1 -CollectorOnly
+```
+
+Collector-only setup installs the lightweight machine monitor and chooses app-managed Hivemind Link by default. It starts the services needed for dashboard discovery without installing or running another dashboard on that machine.
+
+The first run builds `hivemind-linkd`, starts a localhost-only collector, and prints a Tailscale authorization URL. Open that URL on the main HivemindOS hub—or any device signed into the same Tailscale account as the hub—approve the machine, and return to Fleet Hive. The new collector appears automatically after Link connects.
+
+To choose a different network mode explicitly:
 
 ```bash
-HIVE_LINK_ENABLED=true ./scripts/install-telemetry-collector.sh
+./setup.sh --system-tailscale
+./setup.sh --local
 ```
 
-The first run builds `bin/hivemind-linkd`, starts a localhost-only collector, and prints a Tailscale sign-in URL when the embedded app node needs authorization. Remote HivemindOS traffic then travels over Tailscale's encrypted device links, while the collector itself stays on `127.0.0.1`.
+Remote HivemindOS traffic in Link mode travels over Tailscale's encrypted device links, while the collector itself stays on `127.0.0.1`.
 
 In Link mode, remote collectors are reached through the local sidecar URL shape
 `http://127.0.0.1:8788/peer/<tailnet-host%3A8787>/...`. Keep that `/peer/...`
@@ -342,7 +355,7 @@ Use `./setup.sh --system-tailscale` only when you want the older full Tailnet se
 ## Private By Default
 
 - The machine monitor is read-only by default.
-- The dashboard API requires a signed local session or device token before non-public routes can read secrets, mutate config, or touch wallet actions.
+- The dashboard API requires a signed local session, a verified dashboard passkey, or the device token before non-public routes can read secrets, mutate config, or touch wallet actions. On macOS, the desktop shell offers a Touch ID-gated unlock path while preserving the token as an explicit preference and recovery fallback.
 - Remote machines should stay private to Tailscale or Hivemind Link.
 - In Hivemind Link mode, the collector binds to localhost and the `hivemind-linkd` sidecar is the only Tailnet-facing entry point.
 - Chat requests pass through a local agent security proxy before reaching runtimes.

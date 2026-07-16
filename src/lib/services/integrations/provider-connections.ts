@@ -1,6 +1,7 @@
 import type { ConnectionProviderKey, ConnectionProviderStatus, ConnectionsPayload } from "@/lib/types/integrations";
 import { readSharedAgentEnv, removeSharedAgentEnv, saveSharedAgentEnv, sharedEnvValue } from "@/lib/services/integrations/shared-env";
 import { clawbankMe } from "@/lib/services/clawbank";
+import { monidBalance, monidBalanceLabel } from "@/lib/services/integrations/monid";
 import {
   CONNECTOR_MANIFESTS,
   type ConnectorManifest,
@@ -24,6 +25,7 @@ import {
   GOOGLE_CLOUD_REFRESH_TOKEN_ENV,
   GOOGLE_REFRESH_TOKEN_ENV,
 } from "@/lib/services/integrations/provider-connection-env";
+import { normalizeProviderSetupFields, providerSetupFieldEnv } from "@/lib/services/integrations/provider-setup-fields";
 
 export {
   GOOGLE_CLIENT_ID_ENV,
@@ -54,6 +56,10 @@ const VERIFY_BY_PROVIDER: Record<ConnectionProviderKey, ProviderSpec["verify"]> 
   azure: verifyAzure,
   posthog: verifyPostHog,
   plausible: verifyPlausible,
+  calcom: verifyCalcom,
+  shopify: verifyShopify,
+  medusa: verifyMedusa,
+  monid: verifyMonid,
   clawbank: verifyClawBank,
 };
 
@@ -72,7 +78,7 @@ export async function readConnectionsPayload(): Promise<ConnectionsPayload> {
   return { ok: true, providers };
 }
 
-export async function saveProviderToken(providerKey: string, token: string): Promise<{ account?: string }> {
+export async function saveProviderToken(providerKey: string, token: string, rawFields?: unknown): Promise<{ account?: string }> {
   const provider = connectionProvider(providerKey);
   if (!provider) throw new Error(`Unknown provider: ${providerKey}`);
   if (provider.key === "google") throw new Error("Google connects through sign-in, not a pasted token.");
@@ -81,8 +87,11 @@ export async function saveProviderToken(providerKey: string, token: string): Pro
   const clean = token.trim();
   if (clean.length < 8 || /\s/.test(clean)) throw new Error("That does not look like a valid token.");
   const sharedEnv = await readSharedAgentEnv();
-  const result = await provider.verify(clean, sharedEnv);
+  const fields = normalizeProviderSetupFields(provider.key, rawFields);
+  const fieldEnv = providerSetupFieldEnv(provider.key, fields);
+  const result = await provider.verify(clean, { ...sharedEnv, ...fieldEnv });
   if (!result.ok) throw new Error(result.error || `${provider.label} rejected the token.`);
+  for (const [key, value] of Object.entries(fieldEnv)) await saveSharedAgentEnv(key, value);
   await saveSharedAgentEnv(provider.auth.tokenEnvKey, clean);
   return { account: result.account };
 }
@@ -94,6 +103,7 @@ export async function disconnectProvider(providerKey: string) {
   // Remove the canonical key plus any legacy alias that is actually set —
   // otherwise a provider with an old-name credential stays "connected".
   const keys = [provider.auth.tokenEnvKey, ...(provider.auth.tokenEnvAliases ?? []).filter((alias) => sharedEnvValue(alias, sharedEnv))];
+  keys.push(...(provider.auth.setupFields ?? []).map((field) => field.envKey));
   if (provider.key === "azure") keys.push(AZURE_ACCOUNT_EMAIL_ENV, AZURE_TENANT_ID_ENV);
   for (const key of keys) await removeSharedAgentEnv(key);
 }
@@ -135,6 +145,7 @@ async function providerStatus(provider: ProviderSpec, sharedEnv: Record<string, 
       ...(provider.auth.oauthClientEnvKeys ?? []),
     ],
     operations: provider.operations.map((operation) => operation.id),
+    setupFields: provider.auth.setupFields?.map(({ id, label, placeholder, hint, required }) => ({ id, label, placeholder, hint, required })),
     oauthReady: providerOAuthReady(provider.key, sharedEnv),
     checkedAt: new Date().toISOString(),
   };
@@ -377,9 +388,10 @@ async function verifyPostHog(token: string): Promise<VerifyResult> {
 // returns 401 "Missing API key". The key's real per-site validity is proven when a
 // company's Analytics tab runs a query. (This means "verified" for Plausible attests
 // connectivity, not that the specific key is live — the copy above says so.)
-async function verifyPlausible(token: string): Promise<VerifyResult> {
+async function verifyPlausible(token: string, sharedEnv: Record<string, string>): Promise<VerifyResult> {
   return apiCheck(async () => {
-    const response = await fetch("https://plausible.io/api/v1/stats/aggregate?metrics=visitors", {
+    const baseUrl = sharedEnvValue("PLAUSIBLE_BASE_URL", sharedEnv) || "https://plausible.io";
+    const response = await fetch(`${baseUrl}/api/v1/stats/aggregate?metrics=visitors`, {
       cache: "no-store",
       headers: { Authorization: `Bearer ${token}`, "User-Agent": USER_AGENT },
       signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
@@ -388,6 +400,71 @@ async function verifyPlausible(token: string): Promise<VerifyResult> {
     if (response.status === 401) return { ok: false, error: payload?.error || "Plausible rejected the request." };
     if (response.status >= 500) return { ok: false, error: `Plausible is unavailable (HTTP ${response.status}).` };
     return { ok: true };
+  });
+}
+
+async function verifyCalcom(token: string, sharedEnv: Record<string, string>): Promise<VerifyResult> {
+  return apiCheck(async () => {
+    const baseUrl = (sharedEnvValue("CALCOM_API_BASE_URL", sharedEnv) || "https://api.cal.com/v2").replace(/\/+$/, "");
+    const response = await fetch(`${baseUrl}/me`, {
+      cache: "no-store",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "User-Agent": USER_AGENT,
+      },
+      signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
+    });
+    if (!response.ok) return { ok: false, error: `Cal.com rejected the API key (HTTP ${response.status}).` };
+    const payload = await response.json().catch(() => null) as { data?: { username?: string; email?: string; name?: string } } | null;
+    const account = payload?.data?.username || payload?.data?.email || payload?.data?.name;
+    return { ok: true, account };
+  });
+}
+
+async function verifyShopify(token: string, sharedEnv: Record<string, string>): Promise<VerifyResult> {
+  return apiCheck(async () => {
+    const shopDomain = sharedEnvValue("SHOPIFY_STORE_DOMAIN", sharedEnv);
+    if (!shopDomain) return { ok: false, error: "Shopify store domain is required." };
+    const response = await fetch(`https://${shopDomain}/admin/api/2026-07/graphql.json`, {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": token,
+        "User-Agent": USER_AGENT,
+      },
+      body: JSON.stringify({ query: "{ shop { name myshopifyDomain } }" }),
+      signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
+    });
+    const payload = await response.json().catch(() => null) as { data?: { shop?: { name?: string; myshopifyDomain?: string } }; errors?: Array<{ message?: string }> } | null;
+    if (!response.ok || !payload?.data?.shop) {
+      return { ok: false, error: payload?.errors?.[0]?.message || `Shopify rejected the connection (HTTP ${response.status}).` };
+    }
+    return { ok: true, account: payload.data.shop.name || payload.data.shop.myshopifyDomain };
+  });
+}
+
+async function verifyMedusa(token: string, sharedEnv: Record<string, string>): Promise<VerifyResult> {
+  return apiCheck(async () => {
+    const baseUrl = (sharedEnvValue("MEDUSA_API_BASE_URL", sharedEnv) || "http://127.0.0.1:9000").replace(/\/+$/, "");
+    const response = await fetch(`${baseUrl}/store/regions?limit=1`, {
+      cache: "no-store",
+      headers: {
+        "x-publishable-api-key": token,
+        "User-Agent": USER_AGENT,
+      },
+      signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
+    });
+    const payload = await response.json().catch(() => null) as { regions?: Array<{ name?: string }>; message?: string } | null;
+    if (!response.ok) return { ok: false, error: payload?.message || `Medusa rejected the connection (HTTP ${response.status}).` };
+    return { ok: true, account: payload?.regions?.[0]?.name || new URL(baseUrl).host };
+  });
+}
+
+async function verifyMonid(token: string): Promise<VerifyResult> {
+  return apiCheck(async () => {
+    const balance = await monidBalance(token);
+    return { ok: true, account: monidBalanceLabel(balance.data) };
   });
 }
 

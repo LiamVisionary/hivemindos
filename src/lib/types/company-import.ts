@@ -1,4 +1,4 @@
-export type CompanyImportSource = "repo";
+export type CompanyImportSource = "repo" | "data-room";
 
 export type ImportedScheduleKind =
   | "github-actions"
@@ -58,7 +58,7 @@ export interface ImportedScript {
 }
 
 export interface CompanyImportedOperations {
-  source: CompanyImportSource;
+  source: "repo";
   importedAt: string;
   lastDiscoveredAt: string;
   projectPath?: string;
@@ -68,6 +68,41 @@ export interface CompanyImportedOperations {
   schedules: ImportedSchedule[];
   services: ImportedService[];
   scripts: ImportedScript[];
+}
+
+export interface CompanyImportedKnowledgeDocument {
+  id: string;
+  sourceName: string;
+  relativePath: string;
+  title: string;
+  format: string;
+  sourceBytes: number;
+  sourceSha256: string;
+  notePath: string;
+  warnings: string[];
+}
+
+export interface CompanyImportedKnowledge {
+  source: "data-room";
+  importedAt: string;
+  lastDiscoveredAt: string;
+  dataRoomPath: string;
+  notesFolder: string;
+  documents: CompanyImportedKnowledgeDocument[];
+  failedFiles: Array<{ sourceName: string; error: string }>;
+  totalSourceBytes: number;
+}
+
+export interface CompanyDataRoomPreview {
+  source: "data-room";
+  dataRoomPath: string;
+  suggestedName: string;
+  suggestedTicker: string;
+  suggestedSector: string;
+  suggestedApexGoal: string;
+  documents: Array<Omit<CompanyImportedKnowledgeDocument, "notePath">>;
+  failedFiles: Array<{ sourceName: string; error: string }>;
+  totalSourceBytes: number;
 }
 
 export interface CompanyImportPreview {
@@ -81,6 +116,15 @@ export interface CompanyImportPreview {
 
 export interface CompanyImportRequest {
   repoPath: string;
+  companyName?: string;
+  ticker?: string;
+  sector?: string;
+  apexGoalTitle?: string;
+  companyId?: string;
+}
+
+export interface CompanyDataRoomImportRequest {
+  dataRoomPath: string;
   companyName?: string;
   ticker?: string;
   sector?: string;

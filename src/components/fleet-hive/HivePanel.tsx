@@ -4,6 +4,7 @@
    queen overview, machine detail, agent detail. Every action chip is wired to
    a real handler so the Hive view reaches parity with the legacy FleetView. */
 
+import * as React from "react";
 import { DeepProbesToggle } from "@/components/fleet/deep-probes-toggle";
 import { fleetAgentCanChat, type FleetAgentChat } from "@/components/fleet/fleet-data";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
@@ -31,6 +32,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { AgentHoldings } from "./AgentHoldings";
+import { MachineSettingsPanel } from "./MachineSettingsPanel";
 import type { HiveAgent, HiveMachine, HiveSelection } from "./fleet-hive-types";
 import { frFleetSummary, frMachineState, frStateMeta, hivePhoneStatus, isHiveMobileMachine } from "./fleet-hive-types";
 import { Dot, HiveMark, Meter, Summary } from "./primitives";
@@ -89,7 +91,13 @@ export interface HivePanelHandlers {
   onRemove?: (m: HiveMachine, a: HiveAgent) => void;
   onOpenPhonePairing?: () => void;
   /** Resolves the per-machine update action label/state from the live status maps. */
-  getMachineUpdate?: (m: HiveMachine) => { label: string; busy: boolean; canUpdate: boolean } | null;
+  getMachineUpdate?: (m: HiveMachine) => {
+    label: string;
+    busy: boolean;
+    canUpdate: boolean;
+    detail?: string;
+    tone: "idle" | "working" | "failed" | "updated";
+  } | null;
 }
 
 function FrHivePanelAgent({ a }: { a: HiveAgent }) {
@@ -137,6 +145,7 @@ export function HivePanel({
   sel,
   onSelect,
   handlers = {},
+  queenName,
   walletsByAgent = {},
   tailnetLabel = "",
 }: {
@@ -144,10 +153,12 @@ export function HivePanel({
   sel: HiveSelection;
   onSelect: (s: HiveSelection) => void;
   handlers?: HivePanelHandlers;
+  queenName: string;
   walletsByAgent?: Record<string, AgentWalletConfig>;
   tailnetLabel?: string;
 }) {
   const s = frFleetSummary(machines);
+  const [settingsMachineId, setSettingsMachineId] = React.useState<string | null>(null);
   let body: React.ReactNode;
   const renderPhoneBody = (selectedMobileMachine?: HiveMachine) => {
     const phone = hivePhoneStatus(machines, tailnetLabel);
@@ -242,7 +253,8 @@ export function HivePanel({
     body = (
       <div key="queen" style={{ animation: "fr-fade-up .3s ease" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span className="fr-eyebrow" style={{ color: "var(--honey)" }}>The Queen</span>
+          <span className="fr-eyebrow" style={{ color: "var(--honey)" }}>{queenName}</span>
+          <span className="fr-eyebrow">Queen · orchestrator</span>
         </div>
         <h2 style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 27, letterSpacing: "-0.02em", margin: "10px 0 0" }}>The hive is humming.</h2>
         <p style={{ fontSize: 13, color: "var(--fg-3)", lineHeight: 1.55, margin: "10px 0 0" }}>
@@ -272,7 +284,7 @@ export function HivePanel({
             {handlers.onOpenQueenSettings ? (
               <button type="button" className="fr-act" onClick={() => handlers.onOpenQueenSettings?.()}>
                 <ActionIcon icon={Settings} size={14} />
-                Queen settings
+                {queenName} settings
               </button>
             ) : null}
             {handlers.onAddMachine ? (
@@ -342,6 +354,9 @@ export function HivePanel({
     const m = machines.find((x) => x.id === sel.id);
     if (!m) { body = null; }
     else if (isHiveMobileMachine(m)) { body = renderPhoneBody(m); }
+    else if (settingsMachineId === m.id) {
+      body = <MachineSettingsPanel key={m.id} machine={m} onClose={() => setSettingsMachineId(null)} />;
+    }
     else {
       const working = m.agents.filter((a) => a.state === "working").length;
       const update = handlers.getMachineUpdate?.(m) ?? null;
@@ -365,6 +380,12 @@ export function HivePanel({
               <button type="button" className="fr-chip fr-chip-honey" data-bee={`fleet-hive-add-${m.name}`} onClick={() => handlers.onAddAgent?.(m)}>
                 <ActionIcon icon={Plus} />
                 Add agent
+              </button>
+            ) : null}
+            {m.source.collectorUrl ? (
+              <button type="button" className="fr-chip" onClick={() => setSettingsMachineId(m.id)}>
+                <ActionIcon icon={Settings} />
+                Settings
               </button>
             ) : null}
             {update?.canUpdate && handlers.onUpdateMachine ? (
@@ -421,6 +442,27 @@ export function HivePanel({
               </button>
             ) : null}
           </div>
+
+          {update?.detail ? (
+            <div
+              role="status"
+              aria-live="polite"
+              style={{
+                display: "flex",
+                gap: 10,
+                marginTop: 12,
+                padding: "10px 12px",
+                borderRadius: "var(--radius-sm)",
+                background: update.tone === "failed" ? "var(--danger-soft)" : "var(--honey-soft)",
+                border: "1px solid var(--line-2)",
+              }}
+            >
+              <ActionIcon icon={update.tone === "failed" ? AlertTriangle : RefreshCcw} size={14} />
+              <span style={{ fontSize: 12, color: "var(--fg-2)", lineHeight: 1.45, whiteSpace: "pre-wrap" }}>
+                {update.detail}
+              </span>
+            </div>
+          ) : null}
 
           {network || networkFixStatus ? (
             <div style={{ display: "flex", gap: 10, marginTop: 12, padding: "10px 12px", borderRadius: "var(--radius-sm)", background: "var(--danger-soft)", border: "1px solid var(--line-2)" }}>

@@ -1,0 +1,292 @@
+.layer {
+  position: absolute;
+  z-index: 8;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.dock {
+  position: absolute;
+  right: 22px;
+  bottom: 22px;
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+  max-width: calc(100% - 32px);
+  pointer-events: auto;
+}
+
+.shell {
+  width: 54px;
+  height: 54px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--brain-honey, #e7b45c) 30%, var(--brain-line-2, rgba(238, 232, 220, 0.16)));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brain-panel, #14161c) 62%, transparent);
+  box-shadow:
+    0 18px 42px -18px rgba(0, 0, 0, 0.72),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  -webkit-backdrop-filter: blur(22px) saturate(1.35);
+  backdrop-filter: blur(22px) saturate(1.35);
+  transition: width 280ms cubic-bezier(0.2, 0.82, 0.2, 1), border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.shell[data-expanded="true"] {
+  width: 318px;
+  border-color: color-mix(in srgb, var(--brain-honey, #e7b45c) 52%, var(--brain-line-2, rgba(238, 232, 220, 0.16)));
+  box-shadow:
+    0 22px 56px -20px rgba(0, 0, 0, 0.82),
+    0 0 0 1px color-mix(in srgb, var(--brain-honey, #e7b45c) 7%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.shell[data-mode="text"] {
+  width: min(480px, calc(100vw - 56px));
+}
+
+.menu,
+.textComposer {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 54px;
+  padding: 5px;
+}
+
+.collapsedButton,
+.circleButton,
+.sendButton {
+  display: inline-grid;
+  flex: 0 0 auto;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--brain-fg, #f3f0e9);
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 150ms ease, color 150ms ease, transform 150ms ease, opacity 150ms ease;
+}
+
+.collapsedButton {
+  background: var(--brain-honey, #e7b45c);
+  color: #1a1305;
+}
+
+.circleButton {
+  width: 38px;
+  height: 38px;
+  color: var(--brain-fg-2, #c4c0b7);
+}
+
+.sendButton {
+  width: 40px;
+  height: 40px;
+  background: var(--brain-honey, #e7b45c);
+  color: #1a1305;
+}
+
+.collapsedButton:hover,
+.collapsedButton:focus-visible,
+.circleButton:hover:not(:disabled),
+.circleButton:focus-visible,
+.sendButton:hover:not(:disabled),
+.sendButton:focus-visible {
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.circleButton:hover:not(:disabled),
+.circleButton:focus-visible {
+  background: color-mix(in srgb, var(--brain-honey, #e7b45c) 13%, transparent);
+  color: var(--brain-honey, #e7b45c);
+}
+
+.sendButton:hover:not(:disabled),
+.sendButton:focus-visible {
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--brain-honey, #e7b45c) 28%, transparent);
+}
+
+.collapsedButton:disabled,
+.circleButton:disabled,
+.sendButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.46;
+}
+
+.collapsedButton svg,
+.circleButton svg,
+.sendButton svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.8;
+}
+
+.title {
+  min-width: 0;
+  opacity: 0;
+  color: var(--brain-fg, #f3f0e9);
+  font-family: var(--f-body, "Geist", Inter, system-ui, sans-serif);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 0 10px 0 12px;
+  white-space: nowrap;
+  transform: translateX(4px);
+  transition: opacity 130ms ease, transform 180ms ease;
+}
+
+.shell[data-expanded="true"] .title {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  opacity: 0;
+  transform: translateX(8px);
+  transition: opacity 150ms ease 50ms, transform 200ms ease 40ms;
+}
+
+.shell[data-expanded="true"] .actions {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.textComposer {
+  gap: 4px;
+}
+
+.textComposer textarea {
+  min-width: 0;
+  flex: 1 1 auto;
+  max-height: 42px;
+  resize: none;
+  overflow-y: auto;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--brain-fg, #f3f0e9);
+  font-family: var(--f-body, "Geist", Inter, system-ui, sans-serif);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.4;
+  padding: 11px 7px 9px;
+}
+
+.textComposer textarea::placeholder {
+  color: var(--brain-fg-3, #8f8a80);
+}
+
+.status {
+  width: min(420px, calc(100vw - 56px));
+  border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.16));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--brain-panel, #14161c) 78%, transparent);
+  box-shadow: 0 16px 40px -22px rgba(0, 0, 0, 0.78);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  backdrop-filter: blur(18px) saturate(1.2);
+  color: var(--brain-fg-2, #c4c0b7);
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.45;
+  padding: 11px 14px;
+  animation: statusIn 180ms ease both;
+}
+
+.dropOverlay {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--brain-honey, #e7b45c) 48%, transparent);
+  background: color-mix(in srgb, var(--brain-bg, #0c0d11) 54%, transparent);
+  -webkit-backdrop-filter: blur(8px) saturate(0.8);
+  backdrop-filter: blur(8px) saturate(0.8);
+  color: var(--brain-fg, #f3f0e9);
+  pointer-events: none;
+  animation: overlayIn 150ms ease both;
+}
+
+.dropOverlay strong {
+  font-family: var(--f-display, "Space Grotesk", sans-serif);
+  font-size: clamp(22px, 3vw, 34px);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.dropOverlay > span:last-child {
+  color: var(--brain-fg-2, #c4c0b7);
+  font-size: 13px;
+}
+
+.dropGlyph {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--brain-honey, #e7b45c) 44%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brain-honey, #e7b45c) 14%, transparent);
+  color: var(--brain-honey, #e7b45c);
+}
+
+.dropGlyph svg {
+  width: 23px;
+  height: 23px;
+}
+
+.spin {
+  animation: spin 900ms linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes overlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes statusIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 640px) {
+  .dock {
+    right: 16px;
+    bottom: 16px;
+  }
+
+  .shell[data-expanded="true"] {
+    width: min(318px, calc(100vw - 48px));
+  }
+
+  .shell[data-mode="text"] {
+    width: calc(100vw - 48px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell,
+  .title,
+  .actions,
+  .collapsedButton,
+  .circleButton,
+  .sendButton,
+  .status,
+  .dropOverlay {
+    animation: none;
+    transition: none;
+  }
+}

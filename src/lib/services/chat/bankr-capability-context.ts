@@ -56,6 +56,7 @@ export const BANKR_HIVEMIND_INTEGRATION_FACTS = [
   "Bankr is a shared capability, not a provider feature: any agent on any runtime/provider/model can use it through the configured shared Bankr key.",
   "In HivemindOS, start crypto work at GET/POST /api/crypto/capabilities (intents: status, portfolio, trade, token-launch, polymarket, hyperliquid, automation, nft, agent-job, fund-llm-credits, paid-api, and more); it reports Bankr readiness by credential key name (BANKR_API_KEY, BANKR_LLM_KEY, BANKR_MANAGEMENT_KEY) and prepares gated request drafts.",
   "Execution paths from HivemindOS: native chat Bankr actions and POST /api/bankr/actions for Bankr wallet portfolio reads, swaps, token launches, Polymarket, Hyperliquid, recurring automations, NFT actions, and Bankr Agent API jobs; POST /api/bankr/llm-credits funds LLM credits and requires the FUND_BANKR_LLM_CREDITS confirmation.",
+  "Managed copy trading uses GET/POST /api/trading/bankr-copy. An existing Bankr user enters a dedicated Wallet API key once in the authenticated local UI, or the hosted partner service provisions a non-exportable Bankr embedded wallet when partner provisioning is configured. The hosted gateway encrypts the Wallet API key, executes direct Bankr Wallet API quotes/swaps, and erases the credential when the subscription is cancelled; the browser and local vault never persist it.",
   "Spend discipline: start read-only (price checks, balances, portfolio, job status, market search). Swaps, token launches, transfers, Polymarket bets, Hyperliquid positions, automations, NFT mutations, and credit funding need explicit user approval of a concrete draft. Never reveal or request keys; refer to credentials by key name and set/missing status only.",
 ] as const;
 
@@ -65,7 +66,7 @@ export async function buildBankrCapabilityContext(): Promise<string> {
   if (!(await bankrKeyConfigured())) {
     return [
       "Bankr capability status:",
-      `- No Bankr credential is configured (${BANKR_KEY_NAMES} unset in the shared hive env, and no Bankr CLI login). If the user asks for anything Bankr-related (trading, token launch, Bankr LLM credits, Bankr wallet), say a Bankr key must be added first — for example via the shared hive env or 'bankr login' — and do not role-play or claim Bankr actions.`,
+      `- No shared Bankr credential is configured (${BANKR_KEY_NAMES} unset in the shared hive env, and no Bankr CLI login). General Bankr actions require one — for example via the shared hive env or 'bankr login' — but managed copy trading is a separate authenticated flow at /api/trading/bankr-copy: an existing user can connect a dedicated Wallet API key once in the local UI, or HivemindOS can provision a non-exportable embedded wallet when the hosted partner service is configured. Do not role-play or claim either path is ready without checking its status.`,
     ].join("\n");
   }
   return [

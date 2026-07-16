@@ -9,7 +9,10 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -34,10 +37,15 @@ func writeFileReceiveJSON(w http.ResponseWriter, status int, body fileReceiveRes
 	_ = json.NewEncoder(w).Encode(body)
 }
 
-// serveFileReceive writes the request body to <dir>/<name>. dir and name come
-// from the query string; dir accepts a leading ~ for the linkd user's home.
+// serveFileReceive moves a single file across the link in either direction.
+// PUT/POST writes the request body to <dir>/<name>; GET streams an absolute
+// path from this machine back to the authenticated peer.
 func serveFileReceive() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			serveFileRead(w, r)
+			return
+		}
 		if r.Method != http.MethodPut && r.Method != http.MethodPost {
 			writeFileReceiveJSON(w, http.StatusMethodNotAllowed, fileReceiveResult{Error: "method not allowed"})
 			return
@@ -85,6 +93,47 @@ func serveFileReceive() http.Handler {
 	})
 }
 
+func serveFileRead(w http.ResponseWriter, r *http.Request) {
+	path, err := expandFileReadPath(r.URL.Query().Get("path"))
+	if err != nil {
+		writeFileReceiveJSON(w, http.StatusBadRequest, fileReceiveResult{Error: err.Error()})
+		return
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, os.ErrNotExist) {
+			status = http.StatusNotFound
+		} else if errors.Is(err, os.ErrPermission) {
+			status = http.StatusForbidden
+		}
+		writeFileReceiveJSON(w, status, fileReceiveResult{Error: "could not read source file"})
+		return
+	}
+	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil {
+		writeFileReceiveJSON(w, http.StatusInternalServerError, fileReceiveResult{Error: "could not inspect source file"})
+		return
+	}
+	if !info.Mode().IsRegular() {
+		writeFileReceiveJSON(w, http.StatusBadRequest, fileReceiveResult{Error: "source path is not a regular file"})
+		return
+	}
+	if info.Size() > fileReceiveMaxBytes {
+		writeFileReceiveJSON(w, http.StatusRequestEntityTooLarge, fileReceiveResult{Error: "file exceeds the 200MB limit"})
+		return
+	}
+
+	name := sanitizeFileReceiveName(info.Name())
+	if disposition := mime.FormatMediaType("attachment", map[string]string{"filename": name}); disposition != "" {
+		w.Header().Set("content-disposition", disposition)
+	}
+	w.Header().Set("cache-control", "no-store")
+	http.ServeContent(w, r, name, info.ModTime(), file)
+}
+
 // sanitizeFileReceiveName reduces an arbitrary name to a single basename so a
 // pushed file can only ever land directly inside dir, never traverse out of it.
 func sanitizeFileReceiveName(raw string) string {
@@ -119,4 +168,26 @@ func expandFileReceiveDir(raw string) (string, error) {
 		return filepath.Join(home, dir[2:]), nil
 	}
 	return dir, nil
+}
+
+func expandFileReadPath(raw string) (string, error) {
+	path := strings.TrimSpace(raw)
+	if path == "" {
+		return "", fmt.Errorf("missing source path")
+	}
+	if path == "~" || strings.HasPrefix(path, "~/") || strings.HasPrefix(path, `~\`) {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("could not resolve source path")
+		}
+		if path == "~" {
+			path = home
+		} else {
+			path = filepath.Join(home, path[2:])
+		}
+	}
+	if !filepath.IsAbs(path) {
+		return "", fmt.Errorf("source path must be absolute")
+	}
+	return filepath.Clean(path), nil
 }

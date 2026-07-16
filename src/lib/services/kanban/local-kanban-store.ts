@@ -93,6 +93,7 @@ type CreateTaskInput = {
   idempotencyKey?: string;
   maxRuntimeMs?: number;
   maxAttempts?: number;
+  capabilityApprovalMode?: KanbanTask["capabilityApprovalMode"];
   /** Origin tag, e.g. "flow:<runId>:<nodeId>" so completion can advance an agent flow. */
   source?: string;
 };
@@ -121,6 +122,7 @@ type PatchTaskInput = Partial<
     | "undoRequestedBy"
     | "maxRuntimeMs"
     | "maxAttempts"
+    | "capabilityApprovalMode"
   >
 > & {
   loop?: KanbanTask["loop"] | null;
@@ -523,6 +525,7 @@ function normalizeTask(task: KanbanTask): KanbanTask {
     loop: normalizeLoopSpec(task.loop, task.maxAttempts, task.maxRuntimeMs),
     loopReceipts: normalizeLoopReceipts(task.loopReceipts),
     claimLock: cleanOptional(task.claimLock),
+    capabilityApprovalMode: task.capabilityApprovalMode === "ask" ? "ask" : undefined,
     currentRunId: cleanOptional(task.currentRunId),
     attempt: positiveInteger(task.attempt) ?? 1,
     maxAttempts:
@@ -683,6 +686,7 @@ export async function createTask(
       loopMaxAttempts(loop) ??
       DEFAULT_MAX_ATTEMPTS,
     idempotencyKey: cleanOptional(input.idempotencyKey),
+    capabilityApprovalMode: input.capabilityApprovalMode === "ask" ? "ask" : undefined,
     createdAt: now,
     updatedAt: now,
   };
@@ -750,6 +754,11 @@ function applyPatchToBoard(
         : (patch.targetMachine ?? task.targetMachine),
     projectId:
       patch.projectId === "" ? undefined : (patch.projectId ?? task.projectId),
+    capabilityApprovalMode: patch.capabilityApprovalMode === "ask"
+      ? "ask"
+      : patch.capabilityApprovalMode === "automatic"
+        ? undefined
+        : task.capabilityApprovalMode,
     proofs: Array.isArray(patch.proofs)
       ? patch.proofs.map((proof) => sanitizeGitLawbProof(proof))
       : task.proofs,

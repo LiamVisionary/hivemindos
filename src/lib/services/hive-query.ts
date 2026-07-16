@@ -146,6 +146,7 @@ function credentialKeyNames(manifest: ConnectorManifest) {
     manifest.auth.tokenEnvKey,
     ...(manifest.auth.tokenEnvAliases ?? []),
     ...(manifest.auth.oauthClientEnvKeys ?? []),
+    ...(manifest.auth.setupFields ?? []).map((field) => field.envKey),
   ];
 }
 

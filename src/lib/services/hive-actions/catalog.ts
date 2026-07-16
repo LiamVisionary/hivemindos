@@ -8,17 +8,45 @@ import { managedCloudAgentsAction } from "./managed-cloud-agents";
 import { appBuilderAction } from "./app-builder";
 import { hostedMediaCatalogAction, hostedMediaGenerationAction, hostedMediaReadAction } from "./hosted-media";
 import { robinhoodAgenticReadAction } from "./robinhood-agentic";
+import { skillAutoresearchAction } from "./skill-autoresearch-action";
+import { quantResearchAction } from "./quant-research-action";
+import { INTEGRATION_HIVE_ACTIONS } from "./integrations/catalog-actions";
+import { computerInteractionAction } from "./computer-interaction";
+import { plumeOptionsAction } from "./plume-options-action";
+import {
+  beelineCalendarCreateAction,
+  beelineCalendarListAction,
+  beelineBrowserUseAction,
+  beelineConnectionsAction,
+  beelineMcpCallAction,
+  beelineMcpReadAction,
+  beelineLocalCredentialsAction,
+  beelineLocalCredentialUseAction,
+  beelineOpenBrowserAction,
+  beelineProfilesAction,
+} from "./beeline";
 export { deployHivemindosMachineAction, hivemindosMachinesCatalogAction } from "./integrations/hivemindos-machines";
 export { managedCloudAgentsAction } from "./managed-cloud-agents";
 export { appBuilderAction } from "./app-builder";
 export { robinhoodAgenticReadAction } from "./robinhood-agentic";
 export { googleSlidesEditAction, googleSlidesReadAction } from "./integrations/google-slides";
-
+export { computerInteractionAction } from "./computer-interaction";
+export {
+  beelineCalendarCreateAction,
+  beelineCalendarListAction,
+  beelineBrowserUseAction,
+  beelineConnectionsAction,
+  beelineMcpCallAction,
+  beelineMcpReadAction,
+  beelineLocalCredentialsAction,
+  beelineLocalCredentialUseAction,
+  beelineOpenBrowserAction,
+  beelineProfilesAction,
+} from "./beeline";
 const handoffTargetSchema = {
   target: z.string().describe("Fuzzy machine name, such as ubuntu."),
   allowAmbiguous: z.boolean().optional(),
 };
-
 const jsonObjectSchema = z.record(z.string(), z.unknown());
 const governedSpendSchema = { agentId: z.string().optional(), companyTaskId: z.string().optional().describe("Active Work Board company task id; omit outside company work.") };
 const kanbanStatusSchema = z.enum([
@@ -1710,6 +1738,17 @@ export const slackSendMessageAction = defineHiveAction({
 });
 
 export const HIVE_ACTIONS = [
+  computerInteractionAction,
+  beelineProfilesAction,
+  beelineOpenBrowserAction,
+  beelineBrowserUseAction,
+  beelineLocalCredentialsAction,
+  beelineLocalCredentialUseAction,
+  beelineConnectionsAction,
+  beelineCalendarListAction,
+  beelineCalendarCreateAction,
+  beelineMcpReadAction,
+  beelineMcpCallAction,
   appBuilderAction,
   azureResourcesAction,
   googleSlidesReadAction,
@@ -1718,9 +1757,11 @@ export const HIVE_ACTIONS = [
   deployHivemindosMachineAction,
   managedCloudAgentsAction,
   slackSendMessageAction,
+  ...INTEGRATION_HIVE_ACTIONS,
   listHivemindMachinesAction,
   planHandoffAction,
   workBoardAction,
+  skillAutoresearchAction,
   queenBeeAction,
   workEventAction,
   agentChallengeAction,
@@ -1734,9 +1775,11 @@ export const HIVE_ACTIONS = [
   b20IssuerProofAction,
   dexSwapAction,
   stockTradeAction,
+  plumeOptionsAction,
   hyperliquidTradeAction,
   cryptoPracticeBookAction,
   tradingMarketDataAction,
+  quantResearchAction,
   phoneLocalTtsAction,
   copyTradeConfigAction,
   hivemindosModelsWalletAction,

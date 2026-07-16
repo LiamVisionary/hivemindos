@@ -86,7 +86,7 @@ export function useWalletFilesController(props: any) {
     }).catch(() => null);
     const data = await response?.json().catch(() => null) as {
       ok?: boolean;
-      entries?: Array<{ agentId: string; address: string; network: string; kind: "private-key" | "recovery-phrase"; secret: string }>;
+      entries?: Array<{ agentId: string; address: string; network: string; kind: "private-key" | "recovery-phrase"; secret: string; accountIndex?: number; derivationPath?: string; derivationNote?: string }>;
       exportedCount?: number;
       label?: string;
       error?: string;

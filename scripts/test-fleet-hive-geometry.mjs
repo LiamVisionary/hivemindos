@@ -9,13 +9,16 @@ import {
   AGENT_SIZE,
   CELL,
   FR_HEX_CLIP,
+  MACHINE_AGENT_GUTTER,
   MACHINE_SIZE,
   QX,
   QY,
-  frAddMachinePos,
   frBuildLayout,
   frPhonePlaceholderPos,
 } from "../src/components/fleet-hive/hive-geometry.ts";
+import {
+  frBuildLegacyLayout,
+} from "../src/components/fleet-hive/hive-legacy-geometry.ts";
 
 const sharedProjection = axialToPixelWithStep(1, -1);
 assert.deepEqual(axialToPixel(1, -1), sharedProjection, "classic axialToPixel should delegate to the shared projection helper");
@@ -49,7 +52,6 @@ const machines = [
 const layout = frBuildLayout(machines);
 const cells = [
   { id: "queen", center: { x: QX, y: QY }, size: 150 },
-  { id: "add-machine", center: frAddMachinePos(machines, layout), size: MACHINE_SIZE },
   { id: "phone-placeholder", center: frPhonePlaceholderPos(machines, layout), size: MACHINE_SIZE },
 ];
 
@@ -57,8 +59,12 @@ for (const hiveMachine of machines) {
   const machineLayout = layout[hiveMachine.id];
   assert.ok(machineLayout, `missing layout for ${hiveMachine.id}`);
   cells.push({ id: `${hiveMachine.id}:machine`, center: machineLayout.pos, size: MACHINE_SIZE });
-  cells.push({ id: `${hiveMachine.id}:add`, center: machineLayout.addPos, size: AGENT_SIZE });
   for (const { agent: hiveAgent, pos } of machineLayout.agents) {
+    const centerDistance = Math.hypot(pos.x - machineLayout.pos.x, pos.y - machineLayout.pos.y);
+    assert.ok(
+      centerDistance >= 0.43 * (MACHINE_SIZE + AGENT_SIZE) + MACHINE_AGENT_GUTTER - 0.001,
+      `${hiveMachine.id}:${hiveAgent.id} should keep the machine-agent gutter`,
+    );
     cells.push({ id: `${hiveMachine.id}:${hiveAgent.id}`, center: pos, size: AGENT_SIZE });
   }
 }
@@ -75,92 +81,38 @@ for (let leftIndex = 0; leftIndex < cells.length; leftIndex += 1) {
   }
 }
 
-// Dense fleets grow agent petals past the add-machine cell's base radius; the
-// cell must slide outward instead of rendering underneath them (regression:
-// the New Machine cell stacked under agent hexes at zIndex 2).
-for (const [denseTotal, denseAgents] of [[6, 6], [6, 10], [4, 12], [2, 9]]) {
-  const denseMachines = Array.from({ length: denseTotal }, (_, machineIndex) =>
-    machine(
-      `dense-${machineIndex}`,
-      `Dense ${machineIndex}`,
-      machineIndex === 0 ? "Primary" : "Worker",
-      Array.from({ length: denseAgents }, (_, agentIndex) =>
-        agent(`dense-${machineIndex}-a${agentIndex}`, `Dense Agent ${machineIndex}-${agentIndex}`, "ready"),
-      ),
-    ),
-  );
-  const denseLayout = frBuildLayout(denseMachines);
-  const denseAddMachine = hexPolygon({
-    id: "dense-add-machine",
-    center: frAddMachinePos(denseMachines, denseLayout),
-    size: MACHINE_SIZE,
-  });
-  for (const denseMachine of denseMachines) {
-    const machineLayout = denseLayout[denseMachine.id];
-    const denseCells = [
-      { id: `${denseMachine.id}:machine`, center: machineLayout.pos, size: MACHINE_SIZE },
-      { id: `${denseMachine.id}:add`, center: machineLayout.addPos, size: AGENT_SIZE },
-      ...machineLayout.agents.map(({ agent: hiveAgent, pos }) => ({ id: hiveAgent.id, center: pos, size: AGENT_SIZE })),
-    ];
-    for (const cell of denseCells) {
-      assert.equal(
-        polygonsOverlap(denseAddMachine, hexPolygon(cell)),
-        false,
-        `dense fleet ${denseTotal}×${denseAgents}: add-machine cell overlaps ${cell.id}`,
-      );
-    }
-  }
-}
-
-// When one gap is crowded by a dense cluster, the add-machine cell must move to
-// a genuinely free gap at ring radius — not flee outward/off-canvas along the
-// crowded angle (regression: cell rendered near the bottom screen edge while
-// other gaps sat empty).
-{
-  const emptyPos = frAddMachinePos([]);
-  const ringRadius = Math.hypot(emptyPos.x - QX, emptyPos.y - QY);
-  // 5 machines spread evenly; the two flanking the bottom gap (54° and 126°)
-  // carry heavy agent loads, the rest are empty.
-  const lopsidedMachines = Array.from({ length: 5 }, (_, machineIndex) =>
-    machine(
-      `lop-${machineIndex}`,
-      `Lopsided ${machineIndex}`,
-      machineIndex === 0 ? "Primary" : "Worker",
-      machineIndex === 2 || machineIndex === 3
-        ? Array.from({ length: 12 }, (_, agentIndex) =>
-            agent(`lop-${machineIndex}-a${agentIndex}`, `Lop Agent ${machineIndex}-${agentIndex}`, "ready"))
-        : [],
-    ),
-  );
-  const lopsidedLayout = frBuildLayout(lopsidedMachines);
-  const lopsidedAdd = frAddMachinePos(lopsidedMachines, lopsidedLayout);
-  const lopsidedRadius = Math.hypot(lopsidedAdd.x - QX, lopsidedAdd.y - QY);
-  assert.ok(
-    lopsidedRadius <= ringRadius + 0.5,
-    `add-machine cell should sit at ring radius in a free gap (got ${Math.round(lopsidedRadius)} vs ring ${Math.round(ringRadius)})`,
-  );
-  const lopsidedAddHex = hexPolygon({ id: "lopsided-add-machine", center: lopsidedAdd, size: MACHINE_SIZE });
-  for (const lopsidedMachine of lopsidedMachines) {
-    const machineLayout = lopsidedLayout[lopsidedMachine.id];
-    const lopsidedCells = [
-      { id: `${lopsidedMachine.id}:machine`, center: machineLayout.pos, size: MACHINE_SIZE },
-      { id: `${lopsidedMachine.id}:add`, center: machineLayout.addPos, size: AGENT_SIZE },
-      ...machineLayout.agents.map(({ agent: hiveAgent, pos }) => ({ id: hiveAgent.id, center: pos, size: AGENT_SIZE })),
-    ];
-    for (const cell of lopsidedCells) {
-      assert.equal(
-        polygonsOverlap(lopsidedAddHex, hexPolygon(cell)),
-        false,
-        `lopsided fleet: add-machine cell overlaps ${cell.id}`,
-      );
-    }
-  }
-}
-
 assert.ok(FR_HEX_CLIP.includes("polygon("), "fleet hive cell clip path remains polygon-based");
 assert.ok(CELL > 0, "fleet hive cell size is positive");
+assert.ok(MACHINE_SIZE > AGENT_SIZE, "machine nodes should be larger than agent nodes");
+assert.ok(MACHINE_SIZE / AGENT_SIZE <= 1.2, "machine and agent sizes should keep expanded clusters cohesive");
+assert.equal(MACHINE_AGENT_GUTTER, 10, "selected clusters should keep a visible ten-pixel machine gutter");
+
+const legacyLayout = frBuildLegacyLayout(machines);
+for (const hiveMachine of machines) {
+  assert.equal(
+    legacyLayout[hiveMachine.id].agents.length,
+    hiveMachine.agents.length,
+    `Reveal all should render every agent on ${hiveMachine.id}`,
+  );
+  assert.ok(legacyLayout[hiveMachine.id].addPos, `Reveal all should retain the add-agent cell for ${hiveMachine.id}`);
+}
 
 const hiveStageSource = readFileSync("src/components/fleet-hive/HiveStage.tsx", "utf8");
+const legacyHiveStageSource = readFileSync("src/components/fleet-hive/LegacyHiveStage.tsx", "utf8");
+const beeRoleIconsSource = readFileSync("src/lib/config/bee-role-icons.ts", "utf8");
+for (const [label, source] of [
+  ["focused Hive stage", hiveStageSource],
+  ["Reveal all Hive stage", legacyHiveStageSource],
+]) {
+  assert.match(source, /beeRoleIconPath/, `${label} should use the canonical cache-busted bee icon helper`);
+  assert.match(source, /queenBeeSrc = beeRoleIconPath\("queen"\)/, `${label} should never load the Queen from a stale bare asset URL`);
+  assert.doesNotMatch(source, /queenBeeSrc = "\/icons\/queen-bee-v2\.png"/, `${label} should not bypass Queen asset versioning`);
+}
+assert.match(
+  beeRoleIconsSource,
+  /BEE_ICON_ASSET_VERSION = "20260714-gold-queen-bee"/,
+  "the canonical bee URL should invalidate WebView caches after the gold Queen artwork replacement",
+);
 assert.doesNotMatch(
   hiveStageSource,
   /FleetSelectionTooltipContent/,
@@ -178,12 +130,41 @@ assert.match(
 );
 assert.match(
   hiveStageSource,
-  /<TooltipContent>{m\.name}<\/TooltipContent>/,
-  "machine cells should show a small name tooltip",
+  /expandedMachineIds\.has\(m\.id\)/,
+  "only active machine clusters should render their agent nodes",
+);
+assert.match(hiveStageSource, /className="fr-node-name"/, "node names should render horizontally inside cells");
+assert.doesNotMatch(
+  hiveStageSource,
+  /AgentEdgeName|AddAgentCell|workerBeeSrc|agent\.iconSrc/,
+  "the map should avoid angled labels, spatial add cells, and repeated character portraits",
 );
 const fleetHiveViewSource = readFileSync("src/components/fleet-hive/FleetHiveView.tsx", "utf8");
 const hiveStageCall = fleetHiveViewSource.match(/<HiveStage[\s\S]*?\/>/)?.[0] ?? "";
 assert.doesNotMatch(hiveStageCall, /selectionTooltipKey=/, "HiveStage should not receive rich selection tooltip state");
+assert.match(fleetHiveViewSource, />\s*New machine\s*</, "New machine should live in the view toolbar");
+assert.match(fleetHiveViewSource, /aria-pressed={revealAll}/, "the full-hive control should expose its toggle state");
+assert.match(fleetHiveViewSource, /"Reveal all"/, "the toolbar should expose the full pre-redesign hive");
+assert.match(fleetHiveViewSource, /<LegacyHiveStage/, "Reveal all should render the isolated legacy stage");
+assert.match(fleetHiveViewSource, /onSelect={selectHiveNode}/, "Hive selections should use the cluster-aware viewport handler");
+assert.match(fleetHiveViewSource, /layout\[machineId\]\?\.pos/, "expanded clusters should center on their machine anchor");
+
+const fleetHiveCss = readFileSync("src/components/fleet-hive/fleet-hive.css", "utf8");
+assert.match(fleetHiveCss, /\.fr-node-status/, "semantic node status dots should be styled");
+assert.doesNotMatch(fleetHiveCss, /--fr-label-halo|--fr-label-weight/, "outlined diagonal-label tokens should be removed");
+const nodeStatusRule = fleetHiveCss.match(/\.fr-node-status\s*{[\s\S]*?}/)?.[0] ?? "";
+assert.match(nodeStatusRule, /top:\s*20px/, "agent status dots should be inset below the sloped outline");
+assert.match(nodeStatusRule, /right:\s*20px/, "agent status dots should be inset from the sloped outline");
+const machineStatusRule = fleetHiveCss.match(/\.fr-machine-node-content \.fr-node-status\s*{[\s\S]*?}/)?.[0] ?? "";
+assert.match(machineStatusRule, /top:\s*27px/, "machine status dots should be inset below the sloped outline");
+assert.match(machineStatusRule, /right:\s*27px/, "machine status dots should be inset from the sloped outline");
+const machineContentRule = [...fleetHiveCss.matchAll(/\.fr-machine-node-content\s*{[\s\S]*?}/g)]
+  .map((match) => match[0])
+  .find((rule) => rule.includes("grid-template-rows")) ?? "";
+assert.match(machineContentRule, /grid-template-rows:\s*28px auto 9px/, "machine content should reserve rows inside the hex");
+assert.match(machineContentRule, /align-content:\s*center/, "wrapped machine content should stay vertically contained");
+const queenGlowRule = fleetHiveCss.match(/(?:^|\n)\.fr-queen-glow\s*{[\s\S]*?}/)?.[0] ?? "";
+assert.doesNotMatch(queenGlowRule, /animation:/, "Queen's halo should stay quiet at rest");
 
 console.log(`fleet hive geometry + simple tooltip wiring ok: ${cells.length} cells checked`);
 

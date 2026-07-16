@@ -1,6 +1,10 @@
 import "server-only";
 
 import { answerFromAgentMemory } from "@/lib/services/obsidian/agent-memory";
+import {
+  formatBrainAccessInsightsForAgent,
+  readBrainAccessInsights,
+} from "@/lib/services/obsidian/brain-access-insights";
 import { untrustedContextMessage } from "@/lib/services/security/untrusted-context";
 import { readBoard } from "@/lib/services/kanban/local-kanban-store";
 import {
@@ -79,14 +83,27 @@ async function businessDigest() {
   return formatHiveDailyReportVoiceDigest(report);
 }
 
+async function accessHistoryDigest(vaultPath?: string | null) {
+  const insights = await readBrainAccessInsights({
+    vaultPath: vaultPath?.trim() || undefined,
+  });
+  return formatBrainAccessInsightsForAgent(insights);
+}
+
 export async function queenVoiceBrainContext(
   transcript: string,
-  options: { vaultPath?: string | null } = {},
+  options: {
+    vaultPath?: string | null;
+    includeAccessHistory?: boolean;
+  } = {},
 ): Promise<string> {
-  const [memories, board, business] = await Promise.all([
+  const [memories, board, business, accessHistory] = await Promise.all([
     withBudget(recallContext(transcript, options.vaultPath)),
     withBudget(openWorkDigest(options.vaultPath)),
     withBudget(businessDigest()),
+    options.includeAccessHistory
+      ? withBudget(accessHistoryDigest(options.vaultPath))
+      : Promise.resolve(""),
   ]);
-  return [memories, board, business].filter(Boolean).join("\n\n");
+  return [memories, board, business, accessHistory].filter(Boolean).join("\n\n");
 }

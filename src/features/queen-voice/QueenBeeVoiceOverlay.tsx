@@ -19,6 +19,7 @@ import { ChatMarkdown } from "@/features/dashboard/ChatMarkdown";
 import { AgentResponseLoader } from "@/features/chat/chat-composer";
 import type { AgentVoiceFailureDetail } from "@/features/dashboard/hooks/use-agent-voice-failure-notifications";
 import type { DashboardScreenContext } from "@/features/dashboard/screen-context";
+import { DEFAULT_QUEEN_BEE_NAME } from "@/lib/config/queen-bee-personality";
 import { emitQueenVoiceState, listenForQueenVoiceToggle } from "@/lib/native/queen-voice-events";
 import { QueenVoiceGlow } from "./QueenVoiceGlow";
 import { VoiceWaveform } from "./VoiceWaveform";
@@ -65,13 +66,14 @@ function statusLabel(
   phase: QueenVoicePhase,
   muted: boolean,
   speechDetected: boolean,
+  queenName: string,
 ) {
   if (muted) return "Mic muted";
   if (phase === "starting") return "Connecting...";
   if (phase === "listening")
-    return speechDetected ? "Listening..." : "Your turn - speak to Queen Bee";
-  if (phase === "thinking") return "Queen Bee is thinking...";
-  if (phase === "speaking") return "Queen Bee is speaking";
+    return speechDetected ? "Listening..." : `Your turn - speak to ${queenName}`;
+  if (phase === "thinking") return `${queenName} is thinking...`;
+  if (phase === "speaking") return `${queenName} is speaking`;
   return "Voice chat hit a snag";
 }
 
@@ -109,8 +111,8 @@ function isTransactionDetail(detail?: string | null): boolean {
 function detailBadgeLabel(detail?: string | null): string {
   return isTransactionDetail(detail) ? "Show transaction info" : "Show what she found";
 }
-function detailModalTitle(detail: string): string {
-  return isTransactionDetail(detail) ? "Transaction" : "What Queen Bee found";
+function detailModalTitle(detail: string, queenName: string): string {
+  return isTransactionDetail(detail) ? "Transaction" : `What ${queenName} found`;
 }
 
 function TranscriptTurns({
@@ -118,6 +120,7 @@ function TranscriptTurns({
   minimized,
   thinking,
   brainLabel,
+  queenName,
   working,
   onShowDetail,
   onCollapse,
@@ -128,6 +131,7 @@ function TranscriptTurns({
   thinking: boolean;
   /** Subtle "which brain answers" tag next to Queen Bee's name, e.g. "gpt-5.5 · ChatGPT". */
   brainLabel: string;
+  queenName: string;
   /** Live stages of the in-flight voice turn (tool calls, fleet scan, ...). */
   working: QueenVoiceWorkingStage[];
   onShowDetail: (detail: string) => void;
@@ -267,7 +271,7 @@ function TranscriptTurns({
             <span
               className={`${styles.turnWho} ${turn.who === "queen" ? styles.turnWhoQueen : styles.turnWhoYou}`}
             >
-              {turn.who === "queen" ? "Queen Bee" : "You"}
+              {turn.who === "queen" ? queenName : "You"}
               {/* Per-turn truth first: typed turns are tagged with the brain
                   the chat-turn response says actually answered; the static
                   voice-plan tag only applies to voice-sourced turns. */}
@@ -345,7 +349,7 @@ function TranscriptTurns({
         {thinking ? (
           <div className={styles.turn}>
             <span className={`${styles.turnWho} ${styles.turnWhoQueen}`}>
-              Queen Bee
+              {queenName}
               {brainLabel ? <span className={styles.brainTag}>{brainLabel}</span> : null}
             </span>
             {/* The chat route's thinking loader (bee lottie + rotating
@@ -389,7 +393,13 @@ function TranscriptTurns({
   );
 }
 
-function VoicePicker({ onVoiceChanged }: { onVoiceChanged: () => void }) {
+function VoicePicker({
+  onVoiceChanged,
+  queenName,
+}: {
+  onVoiceChanged: () => void;
+  queenName: string;
+}) {
   const [voices, setVoices] = React.useState<string[]>([]);
   const [voice, setVoice] = React.useState("");
   const [saving, setSaving] = React.useState("");
@@ -432,9 +442,9 @@ function VoicePicker({ onVoiceChanged }: { onVoiceChanged: () => void }) {
     <div
       className={styles.voicePicker}
       role="listbox"
-      aria-label="Queen Bee voice"
+      aria-label={`${queenName} voice`}
     >
-      <span className={styles.voicePickerTitle}>Queen Bee voice</span>
+      <span className={styles.voicePickerTitle}>{queenName} voice</span>
       {voices.map((option) => (
         <button
           key={option}
@@ -470,6 +480,7 @@ export function QueenBeeVoiceOverlay({
   onDriveDashboard,
   onVoiceFailure,
   openSpaceRightInset = 0,
+  queenName = DEFAULT_QUEEN_BEE_NAME,
   screenContext,
 }: {
   clapWakeEnabled?: boolean;
@@ -480,6 +491,7 @@ export function QueenBeeVoiceOverlay({
   ) => Promise<string>;
   onVoiceFailure?: (detail: AgentVoiceFailureDetail) => void;
   openSpaceRightInset?: number;
+  queenName?: string;
   screenContext?: DashboardScreenContext;
 } = {}) {
   const [open, setOpen] = React.useState(false);
@@ -688,11 +700,11 @@ export function QueenBeeVoiceOverlay({
     if (lastVoiceFailureRef.current === message) return;
     lastVoiceFailureRef.current = message;
     onVoiceFailure?.({
-      agentName: "Queen Bee",
+      agentName: queenName,
       agentRole: "queen",
       message,
     });
-  }, [onVoiceFailure, open, pipeline.voiceNotice, voiceModeForOpen, voiceState.error]);
+  }, [onVoiceFailure, open, pipeline.voiceNotice, queenName, voiceModeForOpen, voiceState.error]);
   const voiceThinking = open && voiceState.phase === "thinking";
 
   const { upsertTurn: chatUpsertTurn, removeTurn: chatRemoveTurn } = chat;
@@ -857,13 +869,14 @@ export function QueenBeeVoiceOverlay({
           right: openSpaceRightInset,
         }}
         role="dialog"
-        aria-label="Queen Bee voice chat"
+        aria-label={`${queenName} voice chat`}
       >
         <TranscriptTurns
           turns={chat.turns}
           minimized={!(chat.transcriptExpanded || voiceThinking)}
           thinking={voiceThinking}
           brainLabel={brainLabel}
+          queenName={queenName}
           // Live stages only exist on the pipeline hook; the realtime session
           // streams its own tool audio cues.
           working={voiceModeForOpen === "pipeline" ? pipeline.working : []}
@@ -876,7 +889,7 @@ export function QueenBeeVoiceOverlay({
             className={styles.detailBackdrop}
             role="dialog"
             aria-modal="true"
-            aria-label="Queen Bee details"
+            aria-label={`${queenName} details`}
             onClick={closeDetail}
           >
             <div
@@ -886,7 +899,7 @@ export function QueenBeeVoiceOverlay({
               <div className={styles.detailModalHeader}>
                 <span className={styles.detailModalTitle}>
                   <Crown size={14} aria-hidden="true" />
-                  {detailModalTitle(detailContent)}
+                  {detailModalTitle(detailContent, queenName)}
                 </span>
                 <button
                   type="button"
@@ -925,6 +938,7 @@ export function QueenBeeVoiceOverlay({
         ) : null}
         {voicePickerOpen && voiceModeForOpen === "realtime" ? (
           <VoicePicker
+            queenName={queenName}
             onVoiceChanged={() => {
               // Restart the session so the new voice takes effect now.
               setVoicePickerOpen(false);
@@ -961,7 +975,7 @@ export function QueenBeeVoiceOverlay({
               <span
                 className={`${styles.statusDot} ${statusDotClass(voiceState.phase)}`}
               />
-              {statusLabel(voiceState.phase, muted, voiceState.speechDetected)}
+              {statusLabel(voiceState.phase, muted, voiceState.speechDetected, queenName)}
             </span>
             <VoiceWaveform
               analyserRef={voiceState.micAnalyserRef}
@@ -981,7 +995,7 @@ export function QueenBeeVoiceOverlay({
                 type="button"
                 className={`${styles.controlButton} ${voicePickerOpen ? styles.controlButtonActive : ""}`}
                 onClick={() => setVoicePickerOpen((current) => !current)}
-                aria-label="Queen Bee voice settings"
+                aria-label={`${queenName} voice settings`}
               >
                 <Settings2 size={14} aria-hidden="true" />
                 Voice
@@ -1005,7 +1019,7 @@ export function QueenBeeVoiceOverlay({
                 onClick={camera.toggle}
                 aria-label={cameraActive ? "Turn camera off" : "Turn camera on"}
                 aria-pressed={cameraActive}
-                title={camera.error || (cameraActive ? "Camera on — she can see what you point at" : "Show the camera to Queen Bee")}
+                title={camera.error || (cameraActive ? "Camera on — she can see what you point at" : `Show the camera to ${queenName}`)}
               >
                 {cameraActive ? <Camera size={14} aria-hidden="true" /> : <CameraOff size={14} aria-hidden="true" />}
                 Camera

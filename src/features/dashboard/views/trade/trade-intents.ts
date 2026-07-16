@@ -10,6 +10,7 @@ export type CryptoIntentInputKind =
   | "address" // read-only receive address
   | "info" // informational / hand-off (e.g. cards)
   | "nansen" // read-only Nansen research templates
+  | "quant-research" // reviewed local request run through the quant research swarm
   | "none"; // read-only action with no inputs
 
 export type CryptoIntentDef = {
@@ -50,6 +51,7 @@ export const CRYPTO_INTENTS: CryptoIntentDef[] = [
 
   { id: "portfolio", label: "Portfolio", desc: "Read balances, PnL, positions", group: "Read", input: "none", mutating: false },
   { id: "nansen-defi-positions", label: "DeFi positions", desc: "Wallet DeFi holdings", group: "Read", input: "nansen", mutating: false },
+  { id: "quant-research", label: "Quant research", desc: "Rust backtests + independent validation", group: "Read", input: "quant-research", mutating: false },
   { id: "nansen-smart-money-holdings", label: "Smart Money holdings", desc: "Top Smart Money tokens", group: "Read", input: "nansen", mutating: false },
   { id: "nansen-token-holders", label: "Token holders", desc: "Top holder context", group: "Read", input: "nansen", mutating: false },
   { id: "nansen-token-screener", label: "Token screener", desc: "New-token discovery", group: "Read", input: "nansen", mutating: false },

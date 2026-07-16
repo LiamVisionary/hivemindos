@@ -1,0 +1,49 @@
+{
+  "created_at": "2026-07-14T15:01:48.861155+00:00",
+  "request": "Add an action in the HivemindOS Trade route to use the quant research swarm",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/components/trade/CapabilityRail.tsx",
+      "target_path": "src/components/trade/QuantResearchPanel.tsx",
+      "reuse_type": "style_adapted",
+      "note": "Adapted the existing master-detail research action and result evidence pattern."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/components/trade/CapabilityRail.tsx",
+      "target_path": "src/components/trade/CapabilityRail.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Extended the canonical Trade capability rail and its visible detail transition."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/features/dashboard/views/trade/trade-api.ts",
+      "target_path": "src/features/dashboard/views/trade/trade-api.ts",
+      "reuse_type": "adapted_code",
+      "note": "Reused the typed same-origin response envelope for quant history and run calls."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/features/dashboard/views/trade/trade-intents.ts",
+      "target_path": "src/features/dashboard/views/trade/trade-intents.ts",
+      "reuse_type": "config_adapted",
+      "note": "Extended the canonical typed Trade capability matrix."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-hive-brain-memory-hardening.mjs",
+      "target_path": "src/lib/services/quant-research/runner.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the portable dirname plus fileURLToPath project-root pattern for Next compilation."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-nansen-intelligence.mjs",
+      "target_path": "scripts/test-trade-quant-research-action.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Adapted the established Trade research capability contract pattern."
+    }
+  ]
+}

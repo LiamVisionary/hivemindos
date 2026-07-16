@@ -29,7 +29,7 @@ export function hoursAgo(ms: number, now: number): number {
 }
 
 // ── activity ─────────────────────────────────────────────────────────────────
-const STOCK_TARGET = /^(alpaca|robinhood-agentic|xstocks|robinhood-chain):/i;
+const STOCK_TARGET = /^(alpaca|robinhood-agentic|xstocks|robinhood-chain|plume-options):/i;
 // Stable "cash" tokens — a swap INTO one reads as a sell, OUT of one as a buy.
 const STABLE_SYMBOLS = new Set(["USDC", "USDT", "DAI", "USDS", "USDE", "PYUSD"]);
 
@@ -50,6 +50,11 @@ function activityDisplay(record: WalletActivityRecord): { kind: string; text: st
   if (isStockTrade) {
     // "alpaca:NVDA buy (paper)" → kind "Buy"/"Sell", text "NVDA buy …", via venue.
     const [venue, rest = ""] = target.split(":");
+    if (venue.toLowerCase() === "plume-options") {
+      const action = rest.trim().split(/\s+/).slice(1).join(" ");
+      const label = action ? action.replace(/(^|-)([a-z])/g, (_, separator: string, letter: string) => `${separator ? " " : ""}${letter.toUpperCase()}`) : "Option action";
+      return { kind: label, text: rest.trim() || "Plume option action", via: "Plume", src: "stocks" };
+    }
     const side = /sell/i.test(rest) ? "Sell" : "Buy";
     const via = venue.toLowerCase() === "xstocks" ? "xStocks" : venue.toLowerCase() === "robinhood-chain" ? "Robinhood Chain" : venue.toLowerCase() === "robinhood-agentic" ? "Robinhood Agentic" : "Alpaca";
     return { kind: side, text: rest.trim() || "Stock trade", via, src: "stocks" };

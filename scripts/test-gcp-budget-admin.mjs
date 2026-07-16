@@ -10,6 +10,7 @@ register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 register(new URL("./lib/json-esm-loader.mjs", import.meta.url));
 
 const admin = await import("../src/lib/services/gcp-budget-admin.ts");
+const budgetDomain = await import("../src/lib/services/company-api-budget.ts");
 
 const SAMPLE_BUDGET = {
   provider: "gcp",
@@ -23,6 +24,21 @@ const SAMPLE_BUDGET = {
   ],
 };
 
+const editedBudget = budgetDomain.preserveCompanyApiBudgetProviderState(
+  { ...SAMPLE_BUDGET, monthlyCeilingUsd: 300 },
+  { ...SAMPLE_BUDGET, budgetResourceName: "billingAccounts/AAAA-BBBB-CCCC/budgets/budget-xyz" },
+);
+assert.equal(
+  editedBudget.budgetResourceName,
+  "billingAccounts/AAAA-BBBB-CCCC/budgets/budget-xyz",
+  "a client-authored edit must retain the server-owned resource name for PATCH",
+);
+assert.equal(
+  budgetDomain.sameCompanyApiBudgetScope(SAMPLE_BUDGET, { ...SAMPLE_BUDGET, projectId: "another-project" }),
+  false,
+  "the same API in another project is a distinct company budget",
+);
+
 // ── Record every fetch call so we can assert URLs + bodies + auth header ──
 const calls = [];
 let mintCount = 0;
@@ -32,8 +48,8 @@ function makeFetch() {
     calls.push({ url: String(url), init });
     // Both surfaces (Service Usage + Billing Budgets) return a JSON resource.
     const body =
-      String(url).includes("/consumerOverrides")
-        ? { name: "operations/quota-override-op-1" }
+      String(url).includes(":importConsumerOverrides")
+        ? { name: "operations/quota-override-op-1", done: true }
         : { name: "billingAccounts/AAAA-BBBB-CCCC/budgets/budget-xyz" };
     return new Response(JSON.stringify(body), {
       status: 200,
@@ -67,18 +83,17 @@ assert.equal(
 // ── Exactly two calls: one quota override, one budget create. ──
 assert.equal(calls.length, 2, `expected 2 fetch calls (1 override + 1 budget), got ${calls.length}`);
 
-const overrideCall = calls.find((c) => c.url.includes("/consumerOverrides"));
+const overrideCall = calls.find((c) => c.url.includes(":importConsumerOverrides"));
 const budgetCall = calls.find((c) => c.url.includes("/budgets"));
 assert.ok(overrideCall, "a consumerOverrides call must be made");
 assert.ok(budgetCall, "a budgets call must be made");
 
-// ── Override URL: exact parent path with URL-encoded metric + limit id, force=true. ──
+// ── Override import: provider-documented atomic create-or-update path. ──
 assert.equal(
   overrideCall.url,
   "https://serviceusage.googleapis.com/v1beta1/projects/maps-agency-42/services/places.googleapis.com" +
-    "/consumerQuotaMetrics/places.googleapis.com%2FSearchTextRequest/limits/%2Fd%2F%7Bproject%7D" +
-    "/consumerOverrides?force=true",
-  "override URL must encode the metric + limit id and set force=true",
+    "/consumerQuotaMetrics:importConsumerOverrides",
+  "quota edits must use Google's atomic create-or-update import endpoint",
 );
 assert.equal(overrideCall.init.method, "POST", "override must be a POST");
 assert.equal(
@@ -89,14 +104,24 @@ assert.equal(
 const overrideBody = JSON.parse(overrideCall.init.body);
 assert.deepEqual(
   overrideBody,
-  { overrideValue: "1000", dimensions: {} },
-  "override body must be { overrideValue: '<int64 string>', dimensions: {} }",
+  {
+    force: true,
+    inlineSource: {
+      overrides: [{
+        metric: "places.googleapis.com/SearchTextRequest",
+        unit: "1/d/{project}",
+        overrideValue: "1000",
+        dimensions: {},
+      }],
+    },
+  },
+  "override import must carry the metric, unit, int64 value, and global dimensions",
 );
 
 // ── Budget create URL + body. ──
 assert.equal(
   budgetCall.url,
-  "https://billingbudgets.googleapis.com/v1/billingAccounts/billingAccounts%2FAAAA-BBBB-CCCC/budgets",
+  "https://billingbudgets.googleapis.com/v1/billingAccounts/AAAA-BBBB-CCCC/budgets",
   "budget create URL must post under the billing account's budgets collection",
 );
 assert.equal(budgetCall.init.method, "POST", "budget create must be a POST");
@@ -110,8 +135,8 @@ assert.equal(budgetBody.amount.specifiedAmount.currencyCode, "USD");
 assert.equal(budgetBody.amount.specifiedAmount.units, "250", "monthly ceiling must be a whole-unit int64 string");
 assert.deepEqual(
   budgetBody.budgetFilter,
-  { projects: ["projects/maps-agency-42"] },
-  "budget filter must scope to the project",
+  { projects: ["projects/123456789"] },
+  "budget filter must use the numeric project resource required by Cloud Billing",
 );
 assert.ok(Array.isArray(budgetBody.thresholdRules) && budgetBody.thresholdRules.length > 0, "threshold rules required");
 
@@ -121,6 +146,12 @@ const patchDeps = {
   mintToken: async () => "ya29.FAKE-ACCESS-TOKEN",
   fetchImpl: async (url, init) => {
     patchCalls.push({ url: String(url), init });
+    if (String(url).includes(":importConsumerOverrides")) {
+      return new Response(JSON.stringify({ name: "operations/quota-patch-op-1", done: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
     return new Response(JSON.stringify({ name: "billingAccounts/AAAA-BBBB-CCCC/budgets/budget-xyz" }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
@@ -137,6 +168,71 @@ const patchBudgetCall = patchCalls.find((c) => c.url.includes("/budgets/budget-x
 assert.ok(patchBudgetCall, "re-apply must target the existing budget resource name");
 assert.equal(patchBudgetCall.init.method, "PATCH", "an existing budget must be PATCHed, not re-created");
 assert.match(patchBudgetCall.url, /updateMask=/, "budget PATCH must send an updateMask");
+
+// ── Quota apply waits for the provider's long-running operation instead
+//    of marking a submitted-but-failed update as applied. ──
+const operationCalls = [];
+const operationResult = await admin.applyCompanyApiBudget(SAMPLE_BUDGET, {
+  mintToken: async () => "ya29.FAKE-ACCESS-TOKEN",
+  sleep: async () => {},
+  fetchImpl: async (url) => {
+    operationCalls.push(String(url));
+    if (String(url).includes(":importConsumerOverrides")) {
+      return new Response(JSON.stringify({ name: "operations/quota-wait-op-1", done: false }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    if (String(url).endsWith("/operations/quota-wait-op-1")) {
+      return new Response(JSON.stringify({ name: "operations/quota-wait-op-1", done: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify({ name: "billingAccounts/AAAA-BBBB-CCCC/budgets/budget-xyz" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  },
+});
+assert.deepEqual(operationResult.errors, [], "a completed quota operation is applied successfully");
+assert.ok(
+  operationCalls.some((url) => url.endsWith("/v1beta1/operations/quota-wait-op-1")),
+  "the apply path polls the provider operation to completion",
+);
+
+// ── Structured UI discovery: enabled services and the project's linked billing
+//    account are discoverable without asking the user to type identifiers. ──
+const discoveryCalls = [];
+const discoveryDeps = {
+  mintToken: async () => "ya29.FAKE-ACCESS-TOKEN",
+  fetchImpl: async (url) => {
+    discoveryCalls.push(String(url));
+    if (String(url).includes("/billingInfo")) {
+      return new Response(JSON.stringify({
+        projectId: "maps-agency-42",
+        billingAccountName: "billingAccounts/AAAA-BBBB-CCCC",
+        billingEnabled: true,
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+    return new Response(JSON.stringify({ services: [
+      { config: { name: "places.googleapis.com", title: "Places API (New)" }, state: "ENABLED" },
+      { config: { name: "serviceusage.googleapis.com", title: "Service Usage API" }, state: "ENABLED" },
+    ] }), { status: 200, headers: { "Content-Type": "application/json" } });
+  },
+};
+const services = await admin.listGcpEnabledServices("maps-agency-42", discoveryDeps);
+assert.deepEqual(services, [
+  { name: "places.googleapis.com", title: "Places API (New)" },
+  { name: "serviceusage.googleapis.com", title: "Service Usage API" },
+]);
+const billingInfo = await admin.getGcpProjectBillingInfo("maps-agency-42", discoveryDeps);
+assert.deepEqual(billingInfo, {
+  projectId: "maps-agency-42",
+  billingAccountName: "billingAccounts/AAAA-BBBB-CCCC",
+  billingEnabled: true,
+});
+assert.ok(discoveryCalls.some((url) => url.includes("filter=state%3AENABLED")), "service discovery filters to enabled APIs");
 
 // ── A minter failure must surface as a sanitized error, not throw, and must
 //    not leak the token. ──

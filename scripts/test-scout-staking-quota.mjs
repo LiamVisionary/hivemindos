@@ -21,10 +21,25 @@ assert.match(allowance, /quotaMultiplierBps: number \| null/, "the allowance sna
 for (const term of ["1.10×", "1.20×", "1.35×", "1.50×", "1.75×", "2.00×"]) {
   assert.ok(stakingDocs.includes(term), `staking docs should publish Scout quota tier ${term}`);
 }
+for (const [name, stake, honey, usage] of [
+  ["Honeybee", "1m HIVE", "1.00×", "1.10×"],
+  ["Bumblebee", "10m HIVE", "1.10×", "1.20×"],
+  ["Mason Bee", "50m HIVE", "1.25×", "1.35×"],
+  ["Orchid Bee", "100m HIVE", "1.45×", "1.50×"],
+  ["Carpenter Bee", "250m HIVE", "1.70×", "1.75×"],
+  ["Queen Bee", "1b HIVE", "2.00×", "2.00×"],
+]) {
+  assert.ok(
+    stakingDocs.includes(`| ${name} | ${stake} | ${honey} | ${usage} |`),
+    `staking docs should publish the locked ${name} stake, Honey, and usage curve`,
+  );
+}
 assert.match(stakingDocs, /cannot be transferred, redeemed, withdrawn, sold, or converted/i);
 assert.match(stakingDocs, /IP and platform-wide safety limits remain unchanged/i);
-assert.match(stakingDocs, /Free agent usage/);
-assert.match(stakingDocs, /powered by our Swarm Sovereign uncensored models/i);
+assert.match(stakingDocs, /Free-Agent Usage Multipliers/);
+assert.match(stakingDocs, /up to 61% off/i);
+assert.match(stakingDocs, /Exact service prices.*remain server-owned/i);
+assert.match(stakingDocs, /powered by Swarm Sovereign models/i);
 assert.match(setup, /Free agent usage/);
 assert.match(setup, /Powered by our Swarm Sovereign uncensored models/);
 assert.match(setup, /aria-label=\{`Free agent usage: \$\{freeMeter\.label\}`\}/);

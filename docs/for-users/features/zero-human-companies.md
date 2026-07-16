@@ -42,6 +42,12 @@ Compiling is read-only. Founding requires an explicit action and creates the com
 
 Existing projects can be imported as companies without being re-founded from scratch. The import flow starts from a repository folder, previews what HivemindOS can see, then creates or updates a company linked to that source project.
 
+The same flow also accepts a local **data room**: a folder of plans, reports, spreadsheets, presentations, exports, and other company documents. HivemindOS previews the readable files, converts them locally with the document reader bundled into the desktop app, and creates a reviewable **Sources** library in the company cockpit. The resulting Obsidian notes retain source names, paths, hashes, and conversion provenance so future agents can cite the material and detect unchanged re-imports.
+
+Data-room content stays explicitly untrusted. Importing a strategy deck, contract, or old operating manual does not turn its text into a standing directive, approve spend, launch autonomy, or grant an entitlement. The operator reviews the sources and decides what should become governed company work.
+
+See [Local Document Reader](local-document-reader.html) for every supported data-room extension, extraction behavior, local conversion guarantees, and archive limits.
+
 The importer records the repository, Git remote, GitHub Actions workflows, scheduled workflow crons, Supabase `pg_cron` schedules, Render services, Vercel crons, cron-like files, and package scripts when those signals are present. The company cockpit then shows those systems in a **Systems** tab so operators can inspect the code and operating schedules that already keep the product running.
 
 Importing a legacy project does not make historical or off-platform revenue subject to a HivemindOS fee. Imported companies still show the Treasury revenue recorder; only a separately disclosed hosted marketplace or billing policy can attach a fee to a HivemindOS-sourced transaction.
@@ -71,6 +77,8 @@ The cockpit is organized into tabs:
 - **Sales** — customer and pipeline activity.
 - **Products** — the catalog for companies that sell fixed products.
 - **Systems** — imported workflows and schedules for companies linked from an existing project.
+- **Sources** — locally imported data-room documents with type, provenance, and direct links to their Shared Brain notes.
+- **Limits** — integration request and spend guardrails, Google Cloud quotas and billing budgets, and 30-day usage charts.
 - **Team** — the org chart and agent membership.
 - **Analytics** — company performance and operating summaries.
 - **Learning** — capability-capital metrics and the eval frontier.
@@ -164,6 +172,8 @@ The tab never pretends. If no mail provider is connected, it says so and points 
 
 Zero Human Companies use the generic HivemindOS loop contract as their private learning layer. With the HivemindOS crew engine, each launched Work Board task can carry an optimizer loop with success criteria, evidence requirements, eval gates, experiment candidates, and frontier metadata. The loop contract is also shared by chat-started work, Scheduler, Queen Bee flows, and Evo-compatible optimization.
 
+The attached skills on those native Company tasks participate in HivemindOS's app-wide skill autoresearch mechanism. Three failed or blocked executions across distinct tasks can create one Brain Review proposal with Company provenance. Nothing changes automatically: applying the proposal launches a measured Work Board optimizer task, and any winning skill diff still needs human approval before installation.
+
 AEON mode records the company handoff in Runs but leaves detailed execution and outputs in the selected workspace. AEON output does not automatically become a completed Work Board task or company learning receipt; bring reviewed outputs into the normal company workflow when they should contribute to deliverables or durable learning.
 
 Every company task requires outcome evidence before completion. Product, design, content, and customer-facing work also requires a separate eligible agent to review the result. If the evidence or reviewer is unavailable, the task stops for review instead of quietly teaching the company that weak work succeeded.
@@ -208,6 +218,16 @@ This gives the operator a way to see whether the company is building reusable ca
 ## Budgets And Approvals
 
 Zero Human Companies can coordinate agent wallets, approval queues, spend caps, and kill switches. These controls govern native company work. External AEON provider usage follows the selected workspace's own credentials, permissions, and provider limits; a company Work Board budget does not automatically cap it. The local app may cache and display company controls, but it must not be the authority for official commercial value.
+
+### API And Integration Limits
+
+Every company has an always-available **Limits** tab. It lets the operator set daily or monthly request and estimated-spend limits for a connected provider, either across the provider or for one specific operation. Provider-wide and operation-specific limits stack: a call proceeds only when every applicable guardrail allows it. Removing a guardrail does not erase its historical usage.
+
+Company-aware HivemindOS tools reserve expected requests and cost before execution, using an idempotency key so a retry is not charged twice. A frozen company is denied before the call. Integrations with their own meter can report observed requests and cost into the same usage ledger; actual observed cost is also recorded once in the company's Treasury spend rollup. The cockpit distinguishes observed history from a preflight reservation. External tools and AEON workspaces are not automatically intercepted, so they must use the company preflight action or enforce equivalent limits in their own runtime.
+
+The Limits dashboard shows today's and this month's request and spend totals, a 30-day requests-or-spend chart, provider saturation bars, recent activity, and the number of active guardrails. These are local/BYOK operational controls and estimates, not official managed-service entitlements or a substitute for the provider's billing records.
+
+For Google Cloud, the same tab can discover accessible projects, enabled APIs, quota metrics, and billing accounts. The operator chooses the daily quota caps, monthly billing ceiling, optional per-call estimate, and free monthly allowance, and can manage the same API independently in more than one project. Applying a limit creates or updates the existing provider quota and billing budget instead of stacking duplicate provider resources. Raising an existing limit requires an explicit second confirmation. Daily quotas are hard provider-enforced caps; Google Cloud billing budgets are alerts and forecasts, not hard monthly shutdowns. Project and billing discovery also require the corresponding Google Cloud APIs and OAuth permissions to be enabled.
 
 For official paid access, managed credits, marketplace revenue, hosted-agent access, or enterprise quotas:
 

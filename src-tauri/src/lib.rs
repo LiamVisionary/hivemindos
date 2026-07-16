@@ -15,6 +15,8 @@ use tauri::{Manager, RunEvent};
 use tauri::Runtime;
 
 mod brain;
+mod brain_drop_files;
+mod beeline_credentials;
 mod dashboard_state;
 mod desktop_navigation;
 mod deliverables;
@@ -24,6 +26,7 @@ mod image_preview;
 mod kanban;
 mod memory;
 mod obsidian;
+mod open_in_app;
 mod phone;
 mod runtime_files;
 mod runtime_usage;
@@ -32,6 +35,8 @@ mod setup;
 mod slack_session;
 mod speech;
 mod wallet_export;
+
+pub use beeline_credentials::run_cli as run_beeline_credential_broker_cli;
 
 #[cfg(not(debug_assertions))]
 use std::net::TcpListener;
@@ -81,13 +86,13 @@ const NATIVE_PREFERRED_PORT: u16 = 5020;
 const NATIVE_CACHE_TTL: Duration = Duration::from_secs(30);
 #[cfg(not(debug_assertions))]
 const DASHBOARD_AUTH_SECRET_KEY: &str = "HIVEMINDOS_DASHBOARD_AUTH_SECRET";
-// Not debug-gated: dashboard_token_from_checkout() reads this in dev too.
+// Not debug-gated: dashboard_token_from_dev_sources() reads this in dev too.
 const DASHBOARD_DEVICE_TOKEN_KEY: &str = "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN";
 #[cfg(not(debug_assertions))]
 const NATIVE_BOOTSTRAP_TOKEN_KEY: &str = "HIVEMINDOS_NATIVE_BOOTSTRAP_TOKEN";
 #[cfg(not(debug_assertions))]
 const MIN_DASHBOARD_AUTH_SECRET_LENGTH: usize = 32;
-// Not debug-gated: used by dashboard_token_from_checkout()/native_dashboard_unlock_token in dev too.
+// Not debug-gated: used by dashboard_token_from_dev_sources()/native_dashboard_unlock_token in dev too.
 const MIN_DASHBOARD_DEVICE_TOKEN_LENGTH: usize = 24;
 
 struct NativeCacheEntry {
@@ -308,7 +313,7 @@ fn clean_path(path: &Path) -> PathBuf {
     cleaned
 }
 
-fn display_path(path: &Path) -> String {
+pub(crate) fn display_path(path: &Path) -> String {
     let clean = clean_path(path);
     if let Some(home) = home_dir().map(|item| clean_path(&item)) {
         if clean == home {
@@ -410,11 +415,11 @@ fn display_local_path(path: String) -> String {
     display_path(&expand_home_path(&path))
 }
 
-fn clean_target(value: &str) -> String {
+pub(crate) fn clean_target(value: &str) -> String {
     value.trim().replace(['\0', '\r', '\n'], "")
 }
 
-fn path_from_target(target: &str) -> Result<PathBuf, String> {
+pub(crate) fn path_from_target(target: &str) -> Result<PathBuf, String> {
     let cleaned = clean_target(target);
     if cleaned.starts_with("file://") {
         let url = url::Url::parse(&cleaned).map_err(|error| error.to_string())?;
@@ -429,7 +434,7 @@ fn path_from_target(target: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-fn open_system_target(target: &str) -> Result<(), String> {
+pub(crate) fn open_system_target(target: &str) -> Result<(), String> {
     if cfg!(target_os = "macos") {
         Command::new("open")
             .arg(target)
@@ -451,7 +456,7 @@ fn open_system_target(target: &str) -> Result<(), String> {
     }
 }
 
-fn reveal_system_path(path: &Path) -> Result<(), String> {
+pub(crate) fn reveal_system_path(path: &Path) -> Result<(), String> {
     if cfg!(target_os = "macos") {
         Command::new("open")
             .arg("-R")
@@ -495,7 +500,7 @@ fn dashboard_auth_project_dir() -> Option<PathBuf> {
     None
 }
 
-fn open_terminal_in_directory(path: &Path) -> Result<(), String> {
+pub(crate) fn open_terminal_in_directory(path: &Path) -> Result<(), String> {
     if cfg!(target_os = "macos") {
         return Command::new("open")
             .args(["-a", "Terminal"])
@@ -540,7 +545,11 @@ fn open_project_terminal() -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 fn open_deliverable(action: Option<String>, path: Option<String>, url: Option<String>) -> Result<serde_json::Value, String> {
-    let action = if action.as_deref() == Some("reveal") { "reveal" } else { "open" };
+    let action = match action.as_deref() {
+        Some("reveal") => "reveal",
+        Some("folder") => "folder",
+        _ => "open",
+    };
     let path_target = clean_target(path.as_deref().unwrap_or(""));
     let url_target = clean_target(url.as_deref().unwrap_or(""));
     let target = if path_target.is_empty() { url_target } else { path_target };
@@ -549,8 +558,8 @@ fn open_deliverable(action: Option<String>, path: Option<String>, url: Option<St
     }
 
     if target.starts_with("http://") || target.starts_with("https://") {
-        if action == "reveal" {
-            return Err("Web URLs can be opened, but not revealed in the file manager.".to_string());
+        if action != "open" {
+            return Err("Web URLs can be opened, but do not have a local folder.".to_string());
         }
         open_system_target(&target)?;
         return Ok(serde_json::json!({ "ok": true }));
@@ -562,179 +571,15 @@ fn open_deliverable(action: Option<String>, path: Option<String>, url: Option<St
     }
     if action == "reveal" {
         reveal_system_path(&file_path)?;
+    } else if action == "folder" {
+        let parent = file_path
+            .parent()
+            .ok_or_else(|| "Deliverable folder could not be resolved.".to_string())?;
+        open_system_target(&parent.to_string_lossy())?;
     } else {
         open_system_target(&file_path.to_string_lossy())?;
     }
     Ok(serde_json::json!({ "ok": true }))
-}
-
-/// How the chat header's "Open in <app>" menu launches a local target, per app
-/// id. This is the capability matrix for `open_in_app`: add a row here rather
-/// than scattering per-app `match`/`if` arms through the command body.
-enum OpenInAppMethod {
-    /// Editor-style launch: try the CLI on PATH first, then a macOS `open -a`
-    /// application bundle, then a URL scheme — in that order — until one works.
-    Editor {
-        /// CLI to try on PATH (all OSes), e.g. `code`.
-        cli: Option<&'static str>,
-        /// macOS application bundle name for `open -a <app>`.
-        mac_app: Option<&'static str>,
-        /// URL-scheme prefix appended with the absolute path, e.g. `vscode://file`.
-        url_scheme: Option<&'static str>,
-        /// When true, the app only exists on macOS; other OSes get a clear error.
-        mac_only: bool,
-    },
-    /// Open a terminal at the target directory (reuses `open_terminal_in_directory`).
-    Terminal,
-    /// Reveal the target in the OS file manager (reuses `reveal_system_path`).
-    Reveal,
-    /// Hand the target to the OS default handler (reuses `open_system_target`).
-    Default,
-}
-
-struct OpenInAppSpec {
-    id: &'static str,
-    /// Human-readable name used in error messages.
-    display: &'static str,
-    method: OpenInAppMethod,
-}
-
-const OPEN_IN_APP_MATRIX: &[OpenInAppSpec] = &[
-    OpenInAppSpec {
-        id: "vscode",
-        display: "Visual Studio Code",
-        method: OpenInAppMethod::Editor {
-            cli: Some("code"),
-            mac_app: Some("Visual Studio Code"),
-            url_scheme: Some("vscode://file"),
-            mac_only: false,
-        },
-    },
-    OpenInAppSpec {
-        id: "xcode",
-        display: "Xcode",
-        method: OpenInAppMethod::Editor {
-            cli: None,
-            mac_app: Some("Xcode"),
-            url_scheme: None,
-            mac_only: true,
-        },
-    },
-    OpenInAppSpec {
-        id: "terminal",
-        display: "Terminal",
-        method: OpenInAppMethod::Terminal,
-    },
-    OpenInAppSpec {
-        id: "finder",
-        display: "the file manager",
-        method: OpenInAppMethod::Reveal,
-    },
-    OpenInAppSpec {
-        id: "default",
-        display: "the default app",
-        method: OpenInAppMethod::Default,
-    },
-];
-
-/// Launch a program with a single path argument. Returns `Ok(false)` when the
-/// program is not on PATH so the caller can fall through to the next strategy;
-/// `Ok(true)` when it spawned; `Err` for any other spawn failure. The path is
-/// passed as a separate argument (never interpolated into a shell string).
-fn try_launch_cli(program: &str, path: &Path) -> Result<bool, String> {
-    match Command::new(program).arg(path).spawn() {
-        Ok(_) => Ok(true),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(error.to_string()),
-    }
-}
-
-/// Open a path with a macOS application bundle via `open -a <app> <path>`.
-fn open_with_mac_app(app: &str, path: &Path) -> Result<(), String> {
-    Command::new("open")
-        .args(["-a", app])
-        .arg(path)
-        .spawn()
-        .map(|_| ())
-        .map_err(|error| error.to_string())
-}
-
-/// Run the CLI → macOS-app → URL-scheme fallback chain for an editor entry.
-/// Returns the strategy that succeeded (`"cli"`/`"app"`/`"url"`).
-fn launch_editor(
-    display: &str,
-    cli: Option<&str>,
-    mac_app: Option<&str>,
-    url_scheme: Option<&str>,
-    mac_only: bool,
-    path: &Path,
-) -> Result<&'static str, String> {
-    if mac_only && !cfg!(target_os = "macos") {
-        return Err(format!("{} is only available on macOS.", display));
-    }
-    if let Some(program) = cli {
-        if try_launch_cli(program, path)? {
-            return Ok("cli");
-        }
-    }
-    if cfg!(target_os = "macos") {
-        if let Some(app) = mac_app {
-            open_with_mac_app(app, path)?;
-            return Ok("app");
-        }
-    }
-    if let Some(scheme) = url_scheme {
-        // path is absolute (validated below), so it already starts with a
-        // separator: `vscode://file` + `/Users/x` => `vscode://file/Users/x`.
-        let target = format!("{}{}", scheme, path.to_string_lossy());
-        open_system_target(&target)?;
-        return Ok("url");
-    }
-    Err(format!("{} is not available on this machine.", display))
-}
-
-#[tauri::command]
-fn open_in_app(app: String, path: String) -> Result<serde_json::Value, String> {
-    let app_id = clean_target(&app);
-    let spec = OPEN_IN_APP_MATRIX
-        .iter()
-        .find(|entry| entry.id == app_id.as_str())
-        .ok_or_else(|| format!("Unknown app target: {}", app_id))?;
-
-    // Reuse the existing validators: expands `~`, resolves `file://`, and
-    // requires an absolute path; then confirm it exists on this machine.
-    let file_path = path_from_target(&path)?;
-    if !file_path.exists() {
-        return Err("Target does not exist on this machine.".to_string());
-    }
-
-    let method_used: &'static str = match &spec.method {
-        OpenInAppMethod::Editor {
-            cli,
-            mac_app,
-            url_scheme,
-            mac_only,
-        } => launch_editor(spec.display, *cli, *mac_app, *url_scheme, *mac_only, &file_path)?,
-        OpenInAppMethod::Terminal => {
-            open_terminal_in_directory(&file_path)?;
-            "terminal"
-        }
-        OpenInAppMethod::Reveal => {
-            reveal_system_path(&file_path)?;
-            "reveal"
-        }
-        OpenInAppMethod::Default => {
-            open_system_target(&file_path.to_string_lossy())?;
-            "default"
-        }
-    };
-
-    Ok(serde_json::json!({
-        "ok": true,
-        "app": spec.id,
-        "method": method_used,
-        "path": display_path(&file_path),
-    }))
 }
 
 fn optional_build_value(value: &'static str) -> Option<&'static str> {
@@ -789,13 +634,16 @@ fn desktop_status(state: tauri::State<NativeServerState>) -> serde_json::Value {
     })
 }
 
-// The dashboard device token, read from the checkout .env.local — the SAME
-// source the dev `tauri:next-dev` server verifies against. Used as a fallback so
-// the pairing QR can embed a token the hub accepts even in dev, where the
-// dashboard webview has no session (its data comes via native commands, so a
-// bare /api/phone/pairing-token fetch 401s and the QR would otherwise be
-// token-less). Self-contained (no cfg-gated helpers); returns None on any miss.
-fn dashboard_token_from_checkout() -> Option<String> {
+// The dashboard device token inherited from the dev launcher, with the checkout
+// .env.local as a compatibility fallback. This is the SAME source the dev
+// `tauri:next-dev` server verifies against. The explicit handoff avoids making
+// the signed/disclaimed macOS app reopen a privacy-protected checkout file.
+fn dashboard_token_from_dev_sources() -> Option<String> {
+    if let Ok(value) = std::env::var(DASHBOARD_DEVICE_TOKEN_KEY) {
+        if let Some(token) = normalize_dashboard_token(&value) {
+            return Some(token);
+        }
+    }
     let mut candidates: Vec<PathBuf> = Vec::new();
     if let Ok(root) = std::env::var("HIVE_ENV_PROJECT_ROOT") {
         if !root.is_empty() {
@@ -814,9 +662,8 @@ fn dashboard_token_from_checkout() -> Option<String> {
         for raw in content.lines() {
             let line = raw.trim().strip_prefix("export ").unwrap_or(raw.trim());
             if let Some(rest) = line.strip_prefix(&prefix) {
-                let value = rest.trim().trim_matches('"').trim_matches('\'');
-                if value.len() >= MIN_DASHBOARD_DEVICE_TOKEN_LENGTH {
-                    return Some(value.to_string());
+                if let Some(token) = normalize_dashboard_token(rest) {
+                    return Some(token);
                 }
             }
         }
@@ -824,10 +671,31 @@ fn dashboard_token_from_checkout() -> Option<String> {
     None
 }
 
+fn normalize_dashboard_token(raw: &str) -> Option<String> {
+    let value = raw.trim().trim_matches('"').trim_matches('\'');
+    (value.len() >= MIN_DASHBOARD_DEVICE_TOKEN_LENGTH).then(|| value.to_string())
+}
+
+#[cfg(test)]
+mod dashboard_token_tests {
+    use super::normalize_dashboard_token;
+
+    #[test]
+    fn dashboard_token_normalization_accepts_valid_process_values() {
+        let token = "t".repeat(64);
+        assert_eq!(normalize_dashboard_token(&format!("  '{token}'  ")), Some(token));
+        assert_eq!(normalize_dashboard_token("too-short"), None);
+    }
+}
+
 #[tauri::command]
 fn native_dashboard_unlock_token(
     state: tauri::State<NativeServerState>,
 ) -> Result<Option<String>, String> {
+    Ok(native_dashboard_token_value(&state))
+}
+
+fn native_dashboard_token_value(state: &NativeServerState) -> Option<String> {
     // Packaged: the token the native server was started with.
     let from_state = state
         .dashboard_token
@@ -836,11 +704,61 @@ fn native_dashboard_unlock_token(
         .and_then(|guard| guard.clone())
         .filter(|token| token.len() >= MIN_DASHBOARD_DEVICE_TOKEN_LENGTH);
     if from_state.is_some() {
-        return Ok(from_state);
+        return from_state;
     }
     // Dev (native server not running / token not set): read the checkout
     // .env.local so a pairing QR still embeds a token the running hub accepts.
-    Ok(dashboard_token_from_checkout())
+    dashboard_token_from_dev_sources()
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NativeDashboardBiometricStatus {
+    available: bool,
+    kind: Option<String>,
+}
+
+#[tauri::command]
+fn native_dashboard_biometric_status() -> NativeDashboardBiometricStatus {
+    #[cfg(target_os = "macos")]
+    {
+        let status = hivemindos_biometric_native::status();
+        NativeDashboardBiometricStatus {
+            available: status.available,
+            kind: status.kind.map(|kind| kind.as_str().to_string()),
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        NativeDashboardBiometricStatus {
+            available: false,
+            kind: None,
+        }
+    }
+}
+
+#[tauri::command]
+async fn native_dashboard_biometric_unlock(
+    state: tauri::State<'_, NativeServerState>,
+) -> Result<Option<String>, String> {
+    let token = native_dashboard_token_value(&state);
+    if token.is_none() {
+        return Ok(None);
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        tauri::async_runtime::spawn_blocking(|| {
+            hivemindos_biometric_native::authenticate("unlock the HivemindOS dashboard")
+        })
+        .await
+        .map_err(|error| format!("Could not wait for device authentication: {error}"))??;
+        Ok(token)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Native biometric authentication is not available on this platform.".to_string())
+    }
 }
 
 fn native_payload(result: Result<serde_json::Value, String>) -> serde_json::Value {
@@ -1205,6 +1123,41 @@ fn start_native_next_server<R: Runtime>(
     let (stdout, stderr) = native_server_log_stdio(log_path.as_deref());
 
     let mut command = Command::new(&node_path);
+    let native_executable = std::env::current_exe().ok();
+    let markitdown_path = std::env::current_exe()
+        .ok()
+        .and_then(|exe| {
+            exe.parent().map(|dir| {
+                dir.join(if cfg!(target_os = "windows") {
+                    "hivemind-markitdown.exe"
+                } else {
+                    "hivemind-markitdown"
+                })
+            })
+        })
+        .filter(|path| path.exists());
+    let quant_engine_path = std::env::current_exe()
+        .ok()
+        .and_then(|exe| {
+            exe.parent().map(|dir| {
+                dir.join(if cfg!(target_os = "windows") {
+                    "hivemind-quant-research-engine.exe"
+                } else {
+                    "hivemind-quant-research-engine"
+                })
+            })
+        })
+        .filter(|path| path.exists());
+    let quant_validator_path = app
+        .path()
+        .resource_dir()
+        .ok()
+        .map(|dir| {
+            dir.join("resources")
+                .join("quant-research")
+                .join("quant-research-validator.py")
+        })
+        .filter(|path| path.exists());
     command
         // Node realpath-resolves the main-module path at startup. On Windows,
         // Tauri's resource_dir() yields an extended-length (verbatim) path
@@ -1231,6 +1184,18 @@ fn start_native_next_server<R: Runtime>(
         .stdin(Stdio::null())
         .stdout(stdout)
         .stderr(stderr);
+    if let Some(native_executable) = native_executable {
+        command.env("HIVEMINDOS_NATIVE_EXECUTABLE", native_executable);
+    }
+    if let Some(markitdown_path) = markitdown_path {
+        command.env("HIVEMINDOS_MARKITDOWN_BIN", markitdown_path);
+    }
+    if let Some(quant_engine_path) = quant_engine_path {
+        command.env("HIVEMINDOS_QUANT_ENGINE_PATH", quant_engine_path);
+    }
+    if let Some(quant_validator_path) = quant_validator_path {
+        command.env("HIVEMINDOS_QUANT_VALIDATOR_PATH", quant_validator_path);
+    }
 
     #[cfg(target_os = "windows")]
     command.creation_flags(CREATE_NO_WINDOW);
@@ -1760,6 +1725,12 @@ pub fn run(context: tauri::Context<tauri::Wry>) {
         .invoke_handler(tauri::generate_handler![
             desktop_status,
             native_pairing_host,
+            beeline_credentials::beeline_local_credentials_list,
+            beeline_credentials::beeline_local_credential_store,
+            beeline_credentials::beeline_local_credential_delete,
+            beeline_credentials::beeline_local_credentials_delete_profile,
+            native_dashboard_biometric_status,
+            native_dashboard_biometric_unlock,
             native_dashboard_unlock_token,
             dashboard_bootstrap,
             list_local_directories,
@@ -1767,7 +1738,8 @@ pub fn run(context: tauri::Context<tauri::Wry>) {
             display_local_path,
             open_deliverable,
             open_project_terminal,
-            open_in_app,
+            open_in_app::list_open_in_apps,
+            open_in_app::open_in_app,
             deliverables::list_aeon_deliverables,
             deliverables::list_aeon_outputs,
             deliverables::list_aeon_schedules,
@@ -1778,6 +1750,7 @@ pub fn run(context: tauri::Context<tauri::Wry>) {
             deliverables::get_aeon_run_log,
             brain::brain_skill_inventory,
             brain::brain_graph,
+            brain_drop_files::read_local_brain_drop_documents,
             env::hive_env_read,
             fleet::fleet_apps_cache,
             fleet::fleet_discover,

@@ -25,6 +25,32 @@ export function founderModeContextIndexItem(absolutePath: AbsolutePathResolver):
   };
 }
 
+export function documentIngestionContextIndexItem(absolutePath: AbsolutePathResolver): ContextIndexItem {
+  return {
+    id: "tool-schema:document-ingestion",
+    kind: "tool-schema",
+    title: "Bundled document ingestion",
+    summary: "Converts common local documents to bounded Markdown for chat context, Shared Brain imports, and Zero Human Company data rooms without a separate Python install.",
+    tags: ["document ingestion", "native document reader", "pdf", "docx", "pptx", "xlsx", "zip", "brain drop", "shared brain", "zero human company", "data room", "chat attachment", "local first"],
+    aliases: ["read attached document", "import files to brain", "brain drop", "import company data room", "summarize pdf", "convert office document", "ingest folder"],
+    retrievalText: [
+      "HivemindOS desktop bundles a pinned native Rust document reader; users do not install Python or a separate document service.",
+      "Attach a supported document in Chat to provide extracted, bounded Markdown to the selected agent. Supported families include Markdown, plain text, CSV, JSON, XML, HTML, PDF, Word, PowerPoint, Excel, EPUB, Outlook MSG, and bounded ZIP archives.",
+      "Use Brain > Hive Vault > Feed the brain to capture text or import selected and dropped files or folders. Agents can POST document bytes to /api/brain/imported-sources. Durable imports preserve source hashes, converter provenance, idempotent filenames, and an explicit untrusted-source boundary.",
+      "Use the Zero Human Companies import flow with source data-room to preview a local business folder, convert supported documents, attach reviewable imported knowledge to the company, and write company-scoped source notes. Importing source material never turns its claims into standing directives or starts autonomy.",
+      "All conversion is local. Inputs, expanded ZIP size, extracted output, prompt context, file counts, and request time are bounded; ZIP traversal, encrypted entries, nested archives, and extreme compression ratios are rejected.",
+    ].join(" "),
+    route: "/api/brain/imported-sources",
+    methods: ["GET", "POST"],
+    path: absolutePath("src/lib/services/document-ingestion.ts"),
+    load: {
+      type: "file",
+      target: absolutePath("src/lib/services/document-ingestion-capabilities.ts"),
+      note: "Load the capability matrix for exact supported extensions and the API route before importing. POST writes durable Shared Brain notes.",
+    },
+  };
+}
+
 export function dashboardSwarmGoalContextIndexItem(absolutePath: AbsolutePathResolver): ContextIndexItem {
   const hookPath = absolutePath("src/features/dashboard/hooks/dashboard-swarm-goal-command.ts");
   return {

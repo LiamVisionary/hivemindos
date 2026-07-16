@@ -165,17 +165,17 @@ Marketplaces, compute-provider take rates, workflow commissions, provider partne
 
 HIVE is optional ecosystem infrastructure. It is not company ownership, a required payment method, or part of the core pricing ladder.
 
-Honey records reviewed ecosystem contribution. Hivemind Cloud credits are separate purchased, spend-only service credits. Honey is not cash and is not automatically convertible to HIVE.
+Honey is one cumulative, non-transferable, non-spendable record of verified ecosystem contribution and bounded recognition, with source labels kept only for provenance. Hivemind Cloud credits are separate purchased, spend-only service credits. Honey is not cash and does not automatically convert to HIVE.
 
-HivemindOS allocates 15% of recognized HivemindOS platform revenue to weekly automatic HIVE purchase batches. Recognized revenue is measured after directly attributable pass-through costs, refunds, and reversals. For marketplaces it includes only the earned HivemindOS platform fee—not gross transaction volume—and purchased credits are recognized only when consumed. The policy is enforced by HivemindOS-controlled infrastructure across supported revenue streams.
+Staking HIVE is optional membership across six bee tiers: Honeybee, Bumblebee, Mason Bee, Orchid Bee, Carpenter Bee, and Queen Bee. The tiers preserve three benefits: higher Honey earning multipliers, higher free-agent usage multipliers, and member pricing advertised as up to 61% off on participating services. Exact service prices remain server-owned.
 
-HivemindOS may separately earmark up to 15% of recognized platform revenue as a general company treasury reserve, subject to operating runway, liabilities, solvency, and authorization. The reserve remains company property and creates no automatic claim for holders or stakers. Any future seasonal HIVE reward program must be separately approved, fixed, and fully funded before it is presented as active; no current season or rate is promised.
+HivemindOS allocates 15% of recognized platform revenue to HIVE buybacks and a separate 15% to the company treasury. The treasury does not fund the buybacks, the two allocations use separate accounting rails, and the tokenomics policy assigns no fixed use to the remaining 70%.
 
-The live [Agent Buyback Ledger](https://hivemindos.app/buybacks/) is the source of truth for execution status and completed transactions. It preserves Hive Research's first paid production run and treasury-funded HIVE purchase on Base as historical evidence. A new purchase counts as HIVE bought only after confirmation; a burn counts only after its separate burn transaction is confirmed. Neither creates a staking payout, ownership right, or Honey-to-HIVE conversion promise.
+The live [HIVE Buyback Ledger](https://hivemindos.app/buybacks/) is the source of truth for execution status and completed purchases. It preserves Hive Research's first paid production run and confirmed HIVE purchase on Base as historical evidence. HivemindOS does not burn HIVE. Buybacks create no staking payout, ownership right, treasury claim, price promise, or Honey-to-HIVE conversion.
 
 Tokenomics policies may change, pause, or end in response to legal, regulatory, tax, accounting, security, liquidity, market-integrity, reserve, or operational requirements. Material changes are published prospectively with an effective date, while completed on-chain receipts remain part of the historical record.
 
-See [HIVE Token Receipts](hive-token-receipts.html), [Honey, HIVE, And Treasury](honey-hive-treasury.html), [Treasury Reserve And Seasonal Programs](treasury-reserve-and-seasonal-programs.html), and [HIVE Staking And Community Tiers](hive-staking-and-community-tiers.html) for the on-chain evidence and separated policies.
+See [HIVE Token Receipts](hive-token-receipts.html), [Honey, HIVE, And Treasury](honey-hive-treasury.html), [Revenue Allocations And Treasury Boundaries](treasury-reserve-and-seasonal-programs.html), and [HIVE Staking And Community Tiers](hive-staking-and-community-tiers.html) for the on-chain evidence and separated policies.
 
 ## One-Sentence Pitch
 

@@ -60,12 +60,26 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>$HOME/Library/Logs/copy-trading.log</string>
   <key>StandardErrorPath</key><string>$HOME/Library/Logs/copy-trading.err.log</string>
-</dict>
+  </dict>
 </plist>
 PLIST
   launchctl bootout "gui/$(id -u)/$LABEL" >/dev/null 2>&1 || launchctl unload "$PLIST" >/dev/null 2>&1 || true
-  launchctl bootstrap "gui/$(id -u)" "$PLIST" >/dev/null 2>&1 || launchctl load "$PLIST" >/dev/null 2>&1 || true
-  launchctl kickstart -k "gui/$(id -u)/$LABEL" >/dev/null 2>&1 || true
+  loaded=""
+  for attempt in 1 2 3 4 5; do
+    if launchctl bootstrap "gui/$(id -u)" "$PLIST" >/dev/null 2>&1; then
+      loaded="yes"
+      break
+    fi
+    sleep 0.5
+  done
+  if [[ -z "$loaded" ]] && launchctl load "$PLIST" >/dev/null 2>&1; then
+    loaded="yes"
+  fi
+  if [[ -z "$loaded" ]] || ! launchctl print "gui/$(id -u)/$LABEL" >/dev/null 2>&1; then
+    echo "Failed to register LaunchAgent $LABEL." >&2
+    exit 1
+  fi
+  launchctl kickstart -k "gui/$(id -u)/$LABEL" >/dev/null
   echo "Installed + started LaunchAgent $LABEL. Logs: ~/Library/Logs/copy-trading.log"
 elif command -v systemctl >/dev/null 2>&1; then
   UNIT_DIR="$HOME/.config/systemd/user"

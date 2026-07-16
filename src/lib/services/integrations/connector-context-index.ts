@@ -22,6 +22,7 @@ export function connectorManifestContextIndexItems(sharedEnv: Record<string, str
       manifest.auth.tokenEnvKey,
       ...(manifest.auth.tokenEnvAliases ?? []),
       ...(manifest.auth.oauthClientEnvKeys ?? []),
+      ...(manifest.auth.setupFields ?? []).map((field) => field.envKey),
     ];
     const connectorItem: ContextIndexItem = {
       id: `connector:${manifest.key}`,

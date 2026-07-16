@@ -1,0 +1,29 @@
+{
+  "upstreamName": "notebooklm",
+  "hiveName": "notebooklm",
+  "sourceUrl": "https://github.com/teng-lin/notebooklm-py/blob/0617306e0fb20f2244a71704bceea05766b73937/SKILL.md",
+  "repository": "https://github.com/teng-lin/notebooklm-py",
+  "commit": "0617306e0fb20f2244a71704bceea05766b73937",
+  "license": "MIT",
+  "importedAt": "2026-07-15T19:25:29.000Z",
+  "provider": "packaged-auto-install",
+  "providerLabel": "HivemindOS auto-install packaged skills",
+  "sourcePath": "packaged-skills/auto-install/notebooklm",
+  "status": "auto-install",
+  "hivemindAdaptations": [
+    "Routes installation, browser authentication, package removal, and runtime registration through user-visible HivemindOS Integrations actions.",
+    "Pins the native MCP preview package to v0.8.0b1 and verifies the published wheel with a fixed SHA-256 digest.",
+    "Prefers the native 34-tool stdio MCP server, keeps full notebook IDs explicit for parallel safety, and limits CLI use to an installed fallback.",
+    "Removes direct pip, curl-to-shell, auth-file transfer, remote tunnel, and sandbox cookie-copy instructions from the default workflow.",
+    "Adds HivemindOS authority, destructive-action, outward-sharing, local-credential, source-content, and deliverable verification gates."
+  ],
+  "audit": {
+    "fullRepo": "review",
+    "selectedRuntime": "reviewed",
+    "notes": [
+      "Static scanning flagged destructive and remote-installer examples in upstream documentation; those examples are not included in the packaged HivemindOS skill.",
+      "The selected native MCP preview, CLI entrypoints, browser login flow, package metadata, and MIT license were manually reviewed at the pinned v0.8.0b1 commit.",
+      "The integration uses undocumented Google APIs and stores browser authentication in the upstream machine-local profile."
+    ]
+  }
+}

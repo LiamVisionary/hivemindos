@@ -66,6 +66,7 @@ import { streamOpenAICompatibleRuntime } from "./stream-openai-compatible";
 import { runtimeProcessEventsSsePayload } from "./process-events";
 import { isXaiOAuthProvider } from "@/lib/services/xai-oauth-inference-contract";
 import { resolveXaiOAuthRuntimeProfile } from "@/lib/services/xai-oauth-inference";
+import { runtimeSessionErrorResponse } from "./runtime-session-response";
 
 export async function streamHttpRuntime(
   profile: AgentProfile,
@@ -89,16 +90,14 @@ export async function streamHttpRuntime(
   const normalizedReasoningEffort = normalizeChatReasoningEffort(reasoningEffort);
   const inputCheck = proxyInput(userText);
   if (inputCheck.verdict === "block") {
-    return Response.json({ error: inputCheck.reason ?? "Message blocked by security policy" }, { status: 400 });
+    return runtimeSessionErrorResponse(runtimeSessionId, inputCheck.reason ?? "Message blocked by security policy", 400, "blocked");
   }
   if (isXaiOAuthProvider(profile.provider)) {
     try {
       const xaiProfile = await resolveXaiOAuthRuntimeProfile(profile);
       return streamOpenAICompatibleRuntime(xaiProfile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode, mediaArtifacts, normalizedReasoningEffort);
     } catch (error) {
-      return Response.json({
-        error: error instanceof Error ? error.message : "xAI OAuth setup is incomplete.",
-      }, { status: 502 });
+      return runtimeSessionErrorResponse(runtimeSessionId, error instanceof Error ? error.message : "xAI OAuth setup is incomplete.", 502);
     }
   }
   if (isAdaptiveProviderProfile(profile)) {
@@ -114,7 +113,7 @@ export async function streamHttpRuntime(
       // quality gates. The fallback model is read from adaptiveRouting.
       profile = { ...profile, provider: "openrouter", model: "adaptive" };
     } catch (error) {
-      return Response.json({ error: error instanceof Error ? error.message : "Adaptive provider routing failed." }, { status: 502 });
+      return runtimeSessionErrorResponse(runtimeSessionId, error instanceof Error ? error.message : "Adaptive provider routing failed.", 502);
     }
   }
   if (isBankrLlmProfile(profile)) {
@@ -134,7 +133,7 @@ export async function streamHttpRuntime(
       const openRouterProfile = await openRouterCompatibleProfile(profile);
       return streamOpenAICompatibleRuntime(openRouterProfile, messages, userText, sharedVault, agentMode, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, undefined, vaultPromptContext, normalizedPermissionMode, mediaArtifacts, normalizedReasoningEffort);
     } catch (error) {
-      return Response.json({ error: error instanceof Error ? error.message : "OpenRouter model selection failed." }, { status: 502 });
+      return runtimeSessionErrorResponse(runtimeSessionId, error instanceof Error ? error.message : "OpenRouter model selection failed.", 502);
     }
   }
   let runtimeProfile = profile;
@@ -144,7 +143,7 @@ export async function streamHttpRuntime(
       const [resolvedModel] = await resolveAdaptiveBankrLlmModels(profile, messages);
       runtimeProfile = profileWithResolvedModel(profile, resolvedModel);
     } catch (error) {
-      return Response.json({ error: error instanceof Error ? error.message : "Adaptive Bankr model selection failed." }, { status: 502 });
+      return runtimeSessionErrorResponse(runtimeSessionId, error instanceof Error ? error.message : "Adaptive Bankr model selection failed.", 502);
     }
   }
   if (isAdaptiveOpenRouterProfile(profile) && profile.runtime !== "hermes") {
@@ -152,7 +151,7 @@ export async function streamHttpRuntime(
       adaptiveResolvedModel = await resolveAdaptiveOpenRouterModel(profile, messages);
       runtimeProfile = profileWithResolvedModel(profile, adaptiveResolvedModel);
     } catch (error) {
-      return Response.json({ error: error instanceof Error ? error.message : "Adaptive OpenRouter model selection failed." }, { status: 502 });
+      return runtimeSessionErrorResponse(runtimeSessionId, error instanceof Error ? error.message : "Adaptive OpenRouter model selection failed.", 502);
     }
   }
   const url = getRuntimeUrl(profile, profile.chatPath || "/chat");
@@ -163,7 +162,7 @@ export async function streamHttpRuntime(
       ...telemetryPayloadForProfile(runtimeProfile),
       url,
     });
-    return Response.json({ error: message }, { status: 409 });
+    return runtimeSessionErrorResponse(runtimeSessionId, message, 409, "blocked");
   }
   if (isAdaptiveOpenRouterProfile(profile) && profile.runtime === "hermes") {
     return streamAdaptiveHermesOpenRouterRuntime(profile, messages, userText, sharedVault, agentMode, url, lockKey, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, vaultPromptContext);
@@ -337,6 +336,8 @@ export async function streamHttpRuntime(
     const outputCheck = proxyOutput(extractChunk(json));
     if (outputCheck.verdict === "block") {
       releaseInteractiveRuntime(lockKey);
+      await appendRuntimeChatSessionEvent(runtimeSessionId, "Runtime output blocked", outputCheck.reason).catch(() => undefined);
+      await finishRuntimeChatSession(runtimeSessionId, "blocked").catch(() => undefined);
       return new Response(
         ssePayload({ error: outputCheck.reason ?? "Response blocked by security policy" }) + "data: [DONE]\n\n",
         { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } },
@@ -411,6 +412,7 @@ export async function streamHttpRuntime(
       let textDeltaCount = 0;
       let processEventCount = 0;
       let lastRuntimeError = "";
+      let outputBlocked = false;
       const channelMarkupState = createChannelMarkupState();
       recordRuntimeTelemetry(telemetry, "agent_runtime.http.stream.start", {
         ...telemetryPayloadForProfile(runtimeProfile),
@@ -500,10 +502,12 @@ export async function streamHttpRuntime(
               const outputCheck = proxyOutput(rawOutput);
               const reasoningCheck = proxyOutput(rawReasoning);
               if (outputCheck.verdict === "block") {
+                outputBlocked = true;
                 safeEnqueue(ssePayload({ error: outputCheck.reason ?? "Response blocked by security policy" }));
                 continue;
               }
               if (reasoningCheck.verdict === "block") {
+                outputBlocked = true;
                 safeEnqueue(ssePayload({ error: reasoningCheck.reason ?? "Response blocked by security policy" }));
                 continue;
               }
@@ -574,6 +578,7 @@ export async function streamHttpRuntime(
               if (outputCheck.verdict !== "block") fullText += routed.content;
               if (outputCheck.verdict !== "block" && routed.content) queueSessionWrite(() => appendRuntimeChatSessionText(runtimeSessionId, "assistant", routed.content));
               if (outputCheck.verdict === "block") {
+                outputBlocked = true;
                 safeEnqueue(ssePayload({ error: outputCheck.reason ?? "Response blocked by security policy" }));
               } else if (routed.content) {
                 safeEnqueue(ssePayload({ choices: [{ delta: { content: routed.content } }] }));
@@ -649,7 +654,7 @@ export async function streamHttpRuntime(
           processEventCount,
           streamElapsedMs: Date.now() - fetchStartedAt,
         });
-        queueSessionWrite(() => finishRuntimeChatSession(runtimeSessionId, "completed"));
+        queueSessionWrite(() => finishRuntimeChatSession(runtimeSessionId, outputBlocked ? "blocked" : "completed"));
         safeEnqueue("data: [DONE]\n\n");
       } catch (error) {
         const message = runtimeStreamErrorMessage(profile, error);

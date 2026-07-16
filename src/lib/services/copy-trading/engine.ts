@@ -19,15 +19,18 @@ import { MAX_SWAP_USD, executeDexSwap } from "@/lib/services/trading/dex-swap";
 import { getWalletBalance } from "@/lib/services/wallet/chain-wallet";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import type {
+  CopyTradeAgentReview,
+  CopyTradeAgentAnalysisState,
   CopyTradeEngineStatus,
   CopyTradeEvent,
   CopyTradeEventKind,
+  CopyTradeExecutionCost,
   CopyTradeOpenPosition,
   CopyTradePaperLedger,
   CopyTradeRuntimeState,
   CopyTradingConfig,
 } from "@/lib/types/copy-trading";
-import { isCopyTradeNetwork } from "@/lib/types/copy-trading";
+import { COPY_TRADE_EVALUATION_BATCH_SIZE, isCopyTradeNetwork } from "@/lib/types/copy-trading";
 import {
   emptyRuntimeState,
   readConfigs,
@@ -35,7 +38,7 @@ import {
   writeEngineStatus,
   writeRuntimeState,
 } from "./store";
-import { nativeUsdPrice, tokenLiquidityUsd, tokenMarket, tokenPriceUsd } from "./market";
+import { nativeUsdPrice, tokenLiquidityUsd, tokenMarket, tokenPriceUsd, type TokenMarket } from "./market";
 import {
   copyTradeNativeSymbol,
   fundableSummary,
@@ -45,6 +48,21 @@ import {
 } from "./funding";
 import { applyPaperBuy, applyPaperSell, emptyPaperLedger, paperPositionValue } from "./paper";
 import { detectNewSwaps, type CopyTradeSignal } from "./watcher";
+import { reviewCopiedTrade } from "./agent-analysis";
+import { calibrateAgentDecision } from "./calibration";
+import {
+  createCounterfactualRecord,
+  dueCounterfactualHorizons,
+  markMissedCounterfactualHorizons,
+  observeCounterfactualHorizon,
+} from "./counterfactual";
+import { estimateCopyTradeExecutionCost } from "./execution-costs";
+import { paperPortfolioValue, startAgentAnalysisState } from "./evolution";
+import {
+  evaluatePostFillRisk,
+  warmCopyTradeIntelligence,
+  type CopyTradeIntelligence,
+} from "./risk-intelligence";
 
 const RECONCILE_MS = 10_000;
 const HEARTBEAT_MS = 15_000;
@@ -154,7 +172,7 @@ async function reconcile(engine: Engine): Promise<void> {
         existing.config = config; // pick up edits live
         continue;
       }
-      const state = persisted[config.id] ?? emptyRuntimeState(config.id);
+      const state = persisted[config.id] ?? seedEvolvedRuntimeState(config, persisted);
       state.running = true;
       const loop: Loop = { config, state, timer: null, busy: false, stop: false };
       engine.loops.set(config.id, loop);
@@ -173,6 +191,29 @@ async function reconcile(engine: Engine): Promise<void> {
   } finally {
     engine.starting = false;
   }
+}
+
+function seedEvolvedRuntimeState(
+  config: CopyTradingConfig,
+  persisted: Record<string, CopyTradeRuntimeState>,
+): CopyTradeRuntimeState {
+  const state = emptyRuntimeState(config.id);
+  const source = config.evolution ? persisted[config.evolution.sourceConfigId] : undefined;
+  if (!source) return state;
+  // Begin at the original's current cursor so a new twin evaluates future
+  // trades instead of replaying an unrelated historical window.
+  state.lastBlock = source.lastBlock;
+  state.lastSignature = source.lastSignature;
+  state.consumedTxRefs = [...source.consumedTxRefs];
+  if (config.dryRun && source.paper?.initialized) {
+    state.paper = {
+      ...source.paper,
+      positions: Object.fromEntries(
+        Object.entries(source.paper.positions).map(([token, position]) => [token, { ...position }]),
+      ),
+    };
+  }
+  return state;
 }
 
 function runnable(config: CopyTradingConfig): boolean {
@@ -196,6 +237,10 @@ async function tick(engine: Engine, loop: Loop): Promise<void> {
 
     // Seed the simulated bankroll once, before any paper action can spend it.
     if (config.dryRun) await seedPaperIfNeeded(loop);
+    if (config.evolution) {
+      await ensureAgentAnalysisState(loop);
+      await matureEvolvedCounterfactuals(loop);
+    }
 
     const { signals, cursor } = await detectNewSwaps({
       network: config.network,
@@ -296,8 +341,11 @@ async function handleBuy(loop: Loop, signal: CopyTradeSignal, token: string): Pr
     }
   }
 
+  const prepared = config.evolution ? prepareEvolvedBuy(loop, token) : null;
+
   if (config.dryRun) {
-    await paperBuy(loop, signal, token, usd);
+    const fill = await paperBuy(loop, signal, token, usd, prepared?.market);
+    if (fill && prepared) await analyzeEvolvedBuy(loop, signal, fill, prepared.intelligence);
     return;
   }
 
@@ -335,26 +383,41 @@ async function handleBuy(loop: Loop, signal: CopyTradeSignal, token: string): Pr
     record(state, "buy", `Bought ~$${result.valueUsd.toFixed(2)} of ${result.buy} with ${funding.sellToken}. Tx ${short(result.reference)}.`, {
       token, symbol: result.buy, usd: result.valueUsd, txRef: result.reference, targetTxRef: signal.targetTxRef,
     });
+    if (prepared) {
+      const market = await prepared.market;
+      const entryPriceUsd = market.priceUsd ?? (result.buyAmount > 0 ? result.valueUsd / result.buyAmount : null);
+      if (entryPriceUsd != null && entryPriceUsd > 0) {
+        await analyzeEvolvedBuy(loop, signal, {
+          token,
+          symbol: result.buy,
+          spentUsd: result.valueUsd,
+          entryPriceUsd,
+          market,
+          buyCost: executionCostFor(config, result.valueUsd, market.liquidityUsd),
+        }, prepared.intelligence);
+      }
+    }
   } catch (error) {
     recordSwapError(state, error, "buy", token, signal.targetTxRef);
   }
 }
 
-async function handleSell(loop: Loop, signal: CopyTradeSignal | null, token: string, reason: "sell" | "take-profit" | "stop-loss"): Promise<void> {
+type SellReason = "sell" | "take-profit" | "stop-loss" | "agent-close";
+
+async function handleSell(loop: Loop, signal: CopyTradeSignal | null, token: string, reason: SellReason): Promise<boolean> {
   const { config, state } = loop;
-  if (reason === "sell" && !config.copySells) return;
+  if (reason === "sell" && !config.copySells) return false;
   const position = activePositions(loop)[token];
   if (!position || !(position.amount > 0)) {
     if (reason === "sell") {
       state.stats.skipped += 1;
       record(state, "skip", `No copied position in ${short(token)} to sell.`, { token, targetTxRef: signal?.targetTxRef });
     }
-    return;
+    return false;
   }
 
   if (config.dryRun) {
-    await paperSell(loop, signal, token, reason);
-    return;
+    return paperSell(loop, signal, token, reason);
   }
 
   const signer = await resolveSigner(config);
@@ -375,12 +438,14 @@ async function handleSell(loop: Loop, signal: CopyTradeSignal | null, token: str
       token, symbol: position.symbol, usd: result.valueUsd, txRef: result.reference, targetTxRef: signal?.targetTxRef,
     });
     delete state.openPositions[token];
+    return true;
   } catch (error) {
     recordSwapError(state, error, "sell", token, signal?.targetTxRef);
+    return false;
   }
 }
 
-/** Take-profit / stop-loss exits on copied positions (revalue via wallet balance). */
+/** Take-profit / stop-loss exits on the amount owned by this config. */
 async function runExits(loop: Loop): Promise<void> {
   const { config, state } = loop;
   if (config.dryRun) {
@@ -391,25 +456,9 @@ async function runExits(loop: Loop): Promise<void> {
   const open = Object.values(state.openPositions);
   if (open.length === 0) return;
 
-  let balance;
-  try {
-    balance = await getWalletBalance(config.walletAddress, config.network);
-  } catch {
-    return; // can't revalue this tick; try next
-  }
-  // Index by both raw and lowercased address — EVM positions are lowercased,
-  // Solana mints keep their case.
-  const byAddress = new Map<string, NonNullable<typeof balance.tokens>[number]>();
-  for (const t of balance.tokens ?? []) {
-    const addr = t.tokenAddress ?? "";
-    if (!addr) continue;
-    byAddress.set(addr, t);
-    byAddress.set(addr.toLowerCase(), t);
-  }
-
   for (const position of open) {
-    const held = byAddress.get(position.token) ?? byAddress.get(position.token.toLowerCase());
-    const valueUsd = held?.valueUsd;
+    const priceUsd = await tokenPriceUsd(config.network, position.token);
+    const valueUsd = priceUsd == null ? null : priceUsd * position.amount;
     if (valueUsd == null || !(position.spentUsd > 0)) continue;
     const pnlPct = ((valueUsd - position.spentUsd) / position.spentUsd) * 100;
     if (config.takeProfitPct != null && pnlPct >= config.takeProfitPct) {
@@ -457,10 +506,247 @@ async function seedPaperIfNeeded(loop: Loop): Promise<void> {
   state.paper = emptyPaperLedger(start);
 }
 
-async function paperBuy(loop: Loop, signal: CopyTradeSignal, token: string, wantUsd: number): Promise<void> {
+async function ensureAgentAnalysisState(loop: Loop): Promise<void> {
+  const { config, state } = loop;
+  const evolution = config.evolution;
+  if (!evolution) return;
+  const sourceState = (await readRuntimeStates())[evolution.sourceConfigId];
+  if (!state.agentAnalysis) {
+    state.agentAnalysis = startAgentAnalysisState({
+      sourceConfigId: evolution.sourceConfigId,
+      sourceState,
+      evolvedState: state,
+    });
+    return;
+  }
+  state.agentAnalysis.counterfactuals ??= [];
+  state.agentAnalysis.nextSequence ??= nextCounterfactualSequence(state.agentAnalysis.counterfactuals);
+  if (state.agentAnalysis.sourceStartPortfolioUsd == null) {
+    state.agentAnalysis.sourceStartPortfolioUsd = paperPortfolioValue(sourceState?.paper);
+  }
+  if (state.agentAnalysis.evolvedStartPortfolioUsd == null) {
+    state.agentAnalysis.evolvedStartPortfolioUsd = paperPortfolioValue(state.paper);
+  }
+}
+
+type EvolvedBuyFill = {
+  token: string;
+  symbol: string;
+  spentUsd: number;
+  entryPriceUsd: number;
+  market: TokenMarket;
+  buyCost: CopyTradeExecutionCost;
+};
+
+function prepareEvolvedBuy(loop: Loop, token: string): {
+  market: Promise<TokenMarket>;
+  intelligence: Promise<CopyTradeIntelligence>;
+} {
+  const counterfactuals = loop.state.agentAnalysis?.counterfactuals ?? [];
+  return {
+    market: tokenMarket(loop.config.network, token),
+    intelligence: warmCopyTradeIntelligence({
+      network: loop.config.network,
+      token,
+      counterfactuals,
+    }),
+  };
+}
+
+async function analyzeEvolvedBuy(
+  loop: Loop,
+  signal: CopyTradeSignal,
+  fill: EvolvedBuyFill,
+  intelligencePromise: Promise<CopyTradeIntelligence>,
+): Promise<void> {
+  const { config, state } = loop;
+  const evolution = config.evolution;
+  if (!evolution) return;
+  await ensureAgentAnalysisState(loop);
+  const analysis = state.agentAnalysis;
+  if (!analysis) return;
+  analysis.counterfactuals ??= [];
+  const sequence = analysis.nextSequence ?? nextCounterfactualSequence(analysis.counterfactuals);
+  const evaluationBatch = Math.floor(sequence / COPY_TRADE_EVALUATION_BATCH_SIZE);
+  const intelligence = await intelligencePromise;
+  const riskGate = evaluatePostFillRisk({
+    spentUsd: fill.spentUsd,
+    market: fill.market,
+    security: intelligence.security,
+  });
+  const thresholdSnapshot = calibrateAgentDecision({
+    rawConfidence: 0,
+    baseThreshold: evolution.minCloseConfidence,
+    riskScore: riskGate.score,
+    securityCoverage: intelligence.security.coverage,
+    currentBatch: evaluationBatch,
+    counterfactuals: analysis.counterfactuals,
+  });
+  let review: CopyTradeAgentReview;
+  if (riskGate.hardClose) {
+    review = {
+      reviewedAt: Date.now(),
+      targetTxRef: signal.targetTxRef,
+      token: fill.token,
+      symbol: fill.symbol,
+      spentUsd: fill.spentUsd,
+      model: evolution.model,
+      decision: "close",
+      confidence: 1,
+      rawConfidence: 1,
+      calibratedConfidence: 1,
+      closeThreshold: 0,
+      reviewPath: "risk-close",
+      riskScore: riskGate.score,
+      riskFlags: [...intelligence.security.hardRiskFlags, ...intelligence.security.cautionFlags],
+      policyVersion: evolution.policyVersion,
+      evaluationBatch,
+      summary: riskGate.reasons.join(" ") || "The deterministic safety gate found an objective sellability risk.",
+      risks: riskGate.reasons,
+      sources: [],
+      researchUsed: false,
+      closeExecuted: false,
+    };
+  } else {
+    review = await reviewCopiedTrade({
+      config,
+      signal,
+      token: fill.token,
+      symbol: fill.symbol,
+      spentUsd: fill.spentUsd,
+      market: fill.market,
+      intelligence,
+      riskGate,
+      calibration: thresholdSnapshot,
+      recentReviews: analysis.reviews,
+    });
+    const calibration = calibrateAgentDecision({
+      rawConfidence: review.rawConfidence ?? review.confidence,
+      baseThreshold: evolution.minCloseConfidence,
+      riskScore: riskGate.score,
+      securityCoverage: intelligence.security.coverage,
+      currentBatch: evaluationBatch,
+      counterfactuals: analysis.counterfactuals,
+    });
+    review.rawConfidence = calibration.rawConfidence;
+    review.calibratedConfidence = calibration.calibratedConfidence;
+    review.confidence = calibration.calibratedConfidence;
+    review.closeThreshold = calibration.closeThreshold;
+    review.evaluationBatch = evaluationBatch;
+  }
+
+  const closeThreshold = review.closeThreshold ?? evolution.minCloseConfidence;
+  const shouldClose = !review.error
+    && review.decision === "close"
+    && (review.reviewPath === "risk-close" || review.confidence >= closeThreshold);
+  if (review.error) {
+    record(state, "agent-error", `GPT-5.6 Sol review failed; kept ${fill.symbol}. ${review.error}`, {
+      token: fill.token,
+      symbol: fill.symbol,
+      usd: fill.spentUsd,
+      dryRun: config.dryRun,
+      targetTxRef: signal.targetTxRef,
+    });
+  } else if (shouldClose) {
+    const reviewer = review.reviewPath === "risk-close" ? "Safety gate" : "GPT-5.6 Sol";
+    record(state, "agent-close", `${reviewer} rejected ${fill.symbol} (${fmtPct(review.confidence)}). ${review.summary}`, {
+      token: fill.token,
+      symbol: fill.symbol,
+      usd: fill.spentUsd,
+      dryRun: config.dryRun,
+      targetTxRef: signal.targetTxRef,
+    });
+    review.closeExecuted = await handleSell(loop, signal, fill.token, "agent-close");
+  } else {
+    const detail = review.decision === "close"
+      ? `GPT-5.6 Sol close confidence ${fmtPct(review.confidence)} was below calibrated ${fmtPct(closeThreshold)}; kept ${fill.symbol}. ${review.summary}`
+      : `GPT-5.6 Sol ${review.decision === "keep" ? "kept" : "was uncertain about"} ${fill.symbol} (${fmtPct(review.confidence)} calibrated). ${review.summary}`;
+    record(state, "agent-keep", detail, {
+      token: fill.token,
+      symbol: fill.symbol,
+      usd: fill.spentUsd,
+      dryRun: config.dryRun,
+      targetTxRef: signal.targetTxRef,
+    });
+  }
+
+  analysis.reviews.push(review);
+  const closePriceUsd = fill.market.priceUsd ?? fill.entryPriceUsd;
+  const sellCost = executionCostFor(config, fill.spentUsd, fill.market.liquidityUsd);
+  analysis.counterfactuals.push(createCounterfactualRecord({
+    sequence,
+    policyVersion: evolution.policyVersion,
+    targetTxRef: signal.targetTxRef,
+    token: fill.token,
+    symbol: fill.symbol,
+    entryAt: review.reviewedAt,
+    entryPriceUsd: fill.entryPriceUsd,
+    spentUsd: fill.spentUsd,
+    decision: review.decision,
+    reviewPath: review.reviewPath,
+    confidence: review.rawConfidence ?? review.confidence,
+    calibratedConfidence: review.calibratedConfidence ?? review.confidence,
+    closeThreshold,
+    closePriceUsd,
+    closeAt: review.closeExecuted ? Date.now() : undefined,
+    closeExecuted: review.closeExecuted,
+    buyCost: fill.buyCost,
+    sellCost,
+  }));
+  analysis.nextSequence = sequence + 1;
+}
+
+async function matureEvolvedCounterfactuals(loop: Loop): Promise<void> {
+  const records = loop.state.agentAnalysis?.counterfactuals ?? [];
+  const now = Date.now();
+  const dueByToken = new Map<string, typeof records>();
+  for (const counterfactual of records) {
+    markMissedCounterfactualHorizons(counterfactual, now);
+    if (!dueCounterfactualHorizons(counterfactual, now).length) continue;
+    const due = dueByToken.get(counterfactual.token) ?? [];
+    due.push(counterfactual);
+    dueByToken.set(counterfactual.token, due);
+  }
+  await Promise.all([...dueByToken.entries()].map(async ([token, due]) => {
+    const priceUsd = await tokenPriceUsd(loop.config.network, token);
+    if (priceUsd == null) return;
+    for (const counterfactual of due) {
+      for (const horizon of dueCounterfactualHorizons(counterfactual, now)) {
+        observeCounterfactualHorizon(counterfactual, horizon, priceUsd, now);
+      }
+    }
+  }));
+}
+
+function nextCounterfactualSequence(records: NonNullable<CopyTradeAgentAnalysisState["counterfactuals"]>): number {
+  return records.reduce((highest, record) => Math.max(highest, record.sequence + 1), 0);
+}
+
+function executionCostFor(
+  config: CopyTradingConfig,
+  notionalUsd: number,
+  liquidityUsd: number | null,
+): CopyTradeExecutionCost {
+  const estimate = estimateCopyTradeExecutionCost({
+    network: config.network,
+    notionalUsd,
+    liquidityUsd,
+    maxSlippageBps: config.slippageBps,
+  });
+  return { fixedUsd: estimate.fixedUsd, variableBps: estimate.variableBps };
+}
+
+async function paperBuy(
+  loop: Loop,
+  signal: CopyTradeSignal,
+  token: string,
+  wantUsd: number,
+  marketPromise?: Promise<TokenMarket>,
+): Promise<EvolvedBuyFill | null> {
   const { config, state } = loop;
   const ledger = ensurePaperLedger(state);
-  const market = await tokenMarket(config.network, token);
+  const market = await (marketPromise ?? tokenMarket(config.network, token));
+  const buyCost = executionCostFor(config, wantUsd, market.liquidityUsd);
   const res = applyPaperBuy(ledger, {
     token,
     symbol: market.symbol,
@@ -468,41 +754,55 @@ async function paperBuy(loop: Loop, signal: CopyTradeSignal, token: string, want
     wantUsd,
     minCopyUsd: config.minCopyUsd,
     at: Date.now(),
+    executionCost: buyCost,
   });
   if (!res.ok) {
     state.stats.skipped += 1;
     record(state, "skip", `[paper] skipped buy ${short(token)} — ${res.reason}.`, { token, dryRun: true, targetTxRef: signal.targetTxRef });
-    return;
+    return null;
   }
   const sym = market.symbol || short(token);
   record(state, "buy", `[paper] bought ~$${res.spentUsd.toFixed(2)} of ${sym} @ ${fmtPrice(res.priceUsd)} — sim cash ${fmtUsd(ledger.cashUsd)} (target ${short(signal.targetTxRef)}).`, {
     token, symbol: sym, usd: res.spentUsd, dryRun: true, targetTxRef: signal.targetTxRef,
   });
+  return {
+    token,
+    symbol: sym,
+    spentUsd: res.notionalUsd,
+    entryPriceUsd: res.priceUsd,
+    market,
+    buyCost,
+  };
 }
 
 async function paperSell(
   loop: Loop,
   signal: CopyTradeSignal | null,
   token: string,
-  reason: "sell" | "take-profit" | "stop-loss",
+  reason: SellReason,
   priceHint?: number,
-): Promise<void> {
+): Promise<boolean> {
   const { config, state } = loop;
   const ledger = ensurePaperLedger(state);
-  const price = priceHint ?? (await tokenMarket(config.network, token)).priceUsd;
-  const res = applyPaperSell(ledger, token, price, Date.now());
+  const market = await tokenMarket(config.network, token);
+  const price = priceHint ?? market.priceUsd;
+  const position = ledger.positions[token];
+  const grossProceedsUsd = price != null && position ? position.amount * price : position?.spentUsd ?? 0;
+  const sellCost = executionCostFor(config, grossProceedsUsd, market.liquidityUsd);
+  const res = applyPaperSell(ledger, token, price, Date.now(), sellCost);
   if (!res.ok) {
     // Can't value the exit this tick — leave the position and retry next poll.
     if (reason === "sell") {
       state.stats.skipped += 1;
       record(state, "skip", `[paper] can't value ${short(token)} to sell — ${res.reason}; will retry.`, { token, dryRun: true, targetTxRef: signal?.targetTxRef });
     }
-    return;
+    return false;
   }
   const kind: CopyTradeEventKind = reason === "sell" ? "sell" : reason;
   record(state, kind, `[paper] sold ${res.symbol} → ~$${res.proceedsUsd.toFixed(2)} (${reason}, P&L ${fmtSigned(res.pnlUsd)}) — sim cash ${fmtUsd(ledger.cashUsd)}.`, {
     token, symbol: res.symbol, usd: res.proceedsUsd, dryRun: true, targetTxRef: signal?.targetTxRef,
   });
+  return true;
 }
 
 /** Revalue every paper position to market each tick (updates the display mark) and
@@ -592,6 +892,10 @@ function fmtUsd(value: number): string {
 function fmtSigned(value: number): string {
   const sign = value < 0 ? "−" : "+";
   return `${sign}$${Math.abs(value).toFixed(2)}`;
+}
+
+function fmtPct(value: number): string {
+  return `${Math.round(value * 100)}%`;
 }
 
 /** Price formatting that survives sub-cent meme-token prices (e.g. $0.00000123). */

@@ -1,7 +1,7 @@
 "use client";
 
 /* Chat-route sidebar, ported from the `Chat route UI redesign` prototype:
- * brand + theme toggle, search, new chat, a Views menu (status / machine /
+ * brand, search, new chat, a Views menu (status / machine /
  * activity filters + group-by + sort-by), a Pinned section, a General section,
  * grouped project/machine/agent/date sections, and a per-row kebab menu
  * (duplicate / archive / delete).
@@ -33,6 +33,7 @@ import { HexIco, ICON_PATHS, Ico, POP_STYLE, SearchIco } from "./composer-primit
 export type SidebarRow = ChatThreadRow & {
   active?: boolean;
   running?: boolean;
+  capabilityApprovalPending?: boolean;
   subtitle?: string;
   onOpen?: () => void;
 };
@@ -71,8 +72,6 @@ export type ChatSidebarProps = {
   prefs: UseChatViewPreferences;
   search: string;
   onSearchChange: (value: string) => void;
-  theme: "dark" | "light";
-  onToggleTheme: () => void;
   onNewChat?: () => void;
   newChatLabel?: string;
   onDuplicate: (storageKey: string) => void;
@@ -83,7 +82,7 @@ export type ChatSidebarProps = {
 
 export function ChatSidebar(props: ChatSidebarProps) {
   const {
-    rows, machineNames, prefs, search, onSearchChange, theme, onToggleTheme,
+    rows, machineNames, prefs, search, onSearchChange,
     onNewChat, newChatLabel, onDuplicate, onDelete, footerLabel, loading,
   } = props;
 
@@ -167,23 +166,11 @@ export function ChatSidebar(props: ChatSidebarProps) {
 
   return (
     <aside className="fr-chat-sidebar" aria-label="Chats" style={{ position: "relative", display: "grid", gridTemplateRows: "auto auto auto minmax(0,1fr) auto", minHeight: 0, borderRight: "1px solid var(--line)", background: "color-mix(in srgb, var(--bg-soft) 88%, transparent)" }}>
-      <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "18px 16px 10px" }}>
+      <header style={{ display: "flex", alignItems: "center", gap: 10, padding: "18px 16px 10px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
           <span style={{ display: "grid", placeItems: "center", width: 26, height: 26, flexShrink: 0 }}><HexIco size={22} /></span>
           <span style={{ fontFamily: "var(--f-body)", fontWeight: 600, fontSize: 16, letterSpacing: "-0.01em" }}>Chat</span>
         </div>
-        <button
-          type="button"
-          className="cx-iconbtn"
-          onClick={onToggleTheme}
-          title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-          aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-          style={{ display: "grid", placeItems: "center", width: 30, height: 30, border: "1px solid var(--line-2)", borderRadius: 8, background: "transparent", color: "var(--fg-3)", cursor: "pointer" }}
-        >
-          {theme === "dark"
-            ? <Ico d={ICON_PATHS.sun} size={15} sw={1.7}><circle cx="12" cy="12" r="5" /></Ico>
-            : <Ico d={ICON_PATHS.moon} size={15} sw={1.7} />}
-        </button>
       </header>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "2px 14px 10px" }}>
@@ -426,7 +413,7 @@ function RowList({ rows, prefs, onOpenMenu, activeMenuKey }: { rows: SidebarRow[
               data-active={row.active ? "true" : "false"}
               onClick={row.onOpen}
               title={row.title}
-              style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", border: 0, borderRadius: 10, background: "transparent", cursor: "pointer", padding: "10px 64px 10px 13px", textAlign: "left", overflow: "hidden" }}
+              style={{ position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", border: 0, borderRadius: 10, background: "transparent", cursor: "pointer", padding: `10px ${row.capabilityApprovalPending ? 90 : 64}px 10px 13px`, textAlign: "left", overflow: "hidden" }}
             >
               <span className={row.running ? "cx-chatrow-running-dot" : undefined} style={{ width: 7, height: 7, flexShrink: 0, borderRadius: 99, background: "currentColor", color: dotColor }} />
               <span style={{ display: "grid", flex: 1, minWidth: 0, gap: 2 }}>
@@ -434,6 +421,16 @@ function RowList({ rows, prefs, onOpenMenu, activeMenuKey }: { rows: SidebarRow[
                 {row.subtitle ? <span style={{ fontFamily: "var(--f-body)", fontSize: 11.5, color: "var(--fg-4)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.subtitle}</span> : null}
               </span>
             </button>
+            {row.capabilityApprovalPending ? (
+              <span
+                role="img"
+                aria-label="Capability approval waiting"
+                title="Capability approval waiting"
+                style={{ position: "absolute", right: 61, top: "50%", transform: "translateY(-50%)", display: "grid", placeItems: "center", width: 23, height: 23, border: "1px solid var(--honey-line)", borderRadius: 7, color: "var(--honey)", background: "var(--honey-soft)", pointerEvents: "none", zIndex: 2 }}
+              >
+                <Ico d={ICON_PATHS.shield} size={13} sw={1.8} />
+              </span>
+            ) : null}
             <button
               type="button"
               className={pinned ? "cx-pinbtn cx-pinbtn-on" : "cx-pinbtn cx-hoverbtn"}

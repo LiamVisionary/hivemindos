@@ -1,4 +1,8 @@
 import type { KanbanTask } from "@/lib/types/kanban";
+import {
+  formatPreviewSalesJourneyQaBlock,
+  previewSalesJourneyQaBlockReason,
+} from "@/lib/services/kanban/preview-sales-journey-qa";
 
 export type OutreachCompletionBlock = {
   reason: string;
@@ -12,6 +16,7 @@ const RECEIPT_FIELD = /(?:^|\n)\s*(?:receipt|sent_at|sent at|submitted_at|submit
 const RECIPIENT_FIELD = /(?:^|\n)\s*(?:recipient|prospect|lead|business|client|to)\s*:/i;
 const BLOCKER_FIELD = /(?:^|\n)\s*(?:blocker|blocked reason|reason|action needed)\s*:/i;
 const EVIDENCE_FIELD = /(?:^|\n)\s*(?:evidence|verification|verified|checked|proof)\s*:/i;
+const PREVIEW_SALES_JOURNEY_TERMS = /\b(preview|customer-facing website|proposal link|proposal page|payment flow|checkout|lead form|sales journey)\b/i;
 const FINAL_FAILURE_TERMS = /\b(no final response|silent failure|fetch failed|429|rate limited|rate-limit|usage limit|usage-limit)\b/i;
 
 export function isOutreachRevenueTask(task: Pick<KanbanTask, "title" | "body" | "source">) {
@@ -44,6 +49,15 @@ export function validateOutreachCompletion(
     if (!RECIPIENT_FIELD.test(text)) missing.push("Recipient:/Prospect:/Lead:");
     if (!RECEIPT_FIELD.test(text)) missing.push("Receipt:/Message-ID:/Confirmation:/Provider response:");
     if (!EVIDENCE_FIELD.test(text)) missing.push("Evidence:/Verification:");
+    if (PREVIEW_SALES_JOURNEY_TERMS.test(text)) {
+      const qaBlock = previewSalesJourneyQaBlockReason(text);
+      if (qaBlock) {
+        return {
+          reason: formatPreviewSalesJourneyQaBlock(qaBlock),
+          requiredFields: qaBlock.requiredEvidence,
+        };
+      }
+    }
     return missing.length
       ? {
           reason: "Outreach/revenue task completion blocked: sent status needs a clear Work Board receipt before it can be done.",

@@ -75,6 +75,7 @@ import { APP_BUILDER_CONTRACT_VERSION, runLocalAppBuilderAction } from "./lib/ap
 import { createAsyncTtlCache } from "./lib/async-ttl-cache.mjs";
 import { createCollectorMaintenance } from "./lib/collector-maintenance.mjs";
 import { resolveHiveEnvAddCommand } from "./lib/hive-env-add-command.mjs";
+import { collectorUpdateCommand } from "./lib/collector-update-command.mjs";
 import { launchCollectorUpdate } from "./lib/collector-update-launcher.mjs";
 import {
   recordCollectorTelemetry,
@@ -84,6 +85,7 @@ import {
 } from "./lib/hermes-api-proxy-telemetry.mjs";
 import {
   hermesApiMessages,
+  hermesApiSelectionMatchesAgent,
   hermesApiSessionHeaders,
   hermesSessionIdFromResponse,
 } from "./lib/hermes-api-request-routing.mjs";
@@ -104,6 +106,21 @@ import {
   defaultSyncthingConfigCandidates,
 } from "./lib/syncthing-api-key.mjs";
 import { isMacosProtectedAppDataPath } from "./lib/macos-privacy-paths.mjs";
+import {
+  FleetMachinePolicyError,
+  claimFleetPolicyMaster,
+  effectiveFleetAccess,
+  fleetMachinePolicyFailureSummary,
+  fleetMachinePolicyHealthSummary,
+  fleetMachinePolicyPrompt,
+  fleetMachinePolicyPublicView,
+  fleetPolicyNeedsIsolatedHermes,
+  fleetPolicyRuntimeFlags,
+  readFleetMachinePolicy,
+  releaseFleetPolicyMaster,
+  resolveFleetAccessRequest,
+  updateFleetMachinePolicy,
+} from "./lib/fleet-machine-policy.mjs";
 // NOTE: bonjour-service is imported LAZILY inside advertiseHubMdns() (its only use),
 // not at top level. A -SkipDeps app-driven collector install (Windows) has no
 // node_modules, and a failed top-level import would crash the whole collector at
@@ -152,7 +169,8 @@ const chatTimeoutMs = Number(
 );
 const collectorMaintenance = createCollectorMaintenance({
   reservationTtlMs: Number(
-    process.env.AGENT_TELEMETRY_UPDATE_RESERVATION_TTL_MS || 10 * 60_000,
+    process.env.AGENT_TELEMETRY_UPDATE_RESERVATION_TTL_MS ||
+      Math.max(10 * 60_000, chatTimeoutMs + 2 * 60_000),
   ),
 });
 const activeCollectorChatRuns = collectorMaintenance.activeChatRuns;
@@ -209,6 +227,9 @@ const hermesApiKey =
   "";
 const hermesApiStartTimeoutMs = Number(
   process.env.AGENT_TELEMETRY_HERMES_API_START_TIMEOUT_MS || 15_000,
+);
+const hermesApiHealthTimeoutMs = Number(
+  process.env.AGENT_TELEMETRY_HERMES_API_HEALTH_TIMEOUT_MS || 2_500,
 );
 const hermesChatMode = (
   process.env.AGENT_TELEMETRY_HERMES_CHAT_MODE || "api"
@@ -430,6 +451,48 @@ let appVersionPromise = null;
 let installedRuntimesCache = null;
 let installedRuntimesPromise = null;
 const hostedAppAssetUrls = new Map();
+const slashCommandCatalogCache = new Map();
+const slashCommandCatalogCacheMs = Number(
+  process.env.AGENT_TELEMETRY_SLASH_COMMAND_CACHE_MS || 60_000,
+);
+
+const HERMES_SLASH_COMMAND_CATALOG_SCRIPT = String.raw`
+import json
+from hermes_cli.commands import COMMAND_REGISTRY, _is_gateway_available, _iter_plugin_command_entries, _resolve_config_gates
+
+commands = []
+seen = set()
+overrides = _resolve_config_gates()
+
+def add(name, description, category, args_hint=None, aliases=None):
+    clean = str(name or "").strip().lstrip("/")
+    if not clean or clean in seen:
+        return
+    seen.add(clean)
+    commands.append({
+        "name": clean,
+        "description": str(description or f"Run /{clean}"),
+        "category": str(category or "Other"),
+        "argsHint": str(args_hint).strip() if args_hint else None,
+        "aliases": [str(alias) for alias in (aliases or []) if str(alias).strip()],
+    })
+
+for command in COMMAND_REGISTRY:
+    if _is_gateway_available(command, overrides):
+        add(command.name, command.description, command.category, command.args_hint, command.aliases)
+
+for name, description, args_hint in _iter_plugin_command_entries():
+    add(name, description, "Plugins", args_hint)
+
+try:
+    from agent.skill_commands import scan_skill_commands
+    for slash_name, info in sorted(scan_skill_commands().items()):
+        add(slash_name, info.get("description", "Hermes skill"), "Skills")
+except Exception:
+    pass
+
+print(json.dumps({"commands": commands}))
+`;
 
 function expandHome(path) {
   return path?.replace(/^~(?=$|\/)/, homedir());
@@ -523,25 +586,29 @@ function safeAgentEnv(value) {
   return sanitizeProcessEnvEntries(value);
 }
 
-function runtimeProcessEnv(extra = {}) {
+function runtimeProcessEnv(extra = {}, options = {}) {
+  const inherited = { ...process.env };
+  for (const key of options.excludeKeys ?? []) delete inherited[key];
   const pathParts = [dirname(process.execPath), process.env.PATH].filter(
     Boolean,
   );
   return sanitizeProcessEnvEntries({
-    ...process.env,
+    ...inherited,
     PATH: pathParts.join(delimiter),
     ...extra,
   });
 }
 
-function hermesSafeFileSearchRoots(hermesHome = defaultHermesDir) {
+function hermesSafeFileSearchRoots(hermesHome = defaultHermesDir, fleetPolicy = null) {
+  const sharedBrainAllowed = !fleetPolicy?.authority
+    || effectiveFleetAccess(fleetPolicy).sharedBrain === "allow";
   const explicit = process.env.HERMES_SAFE_FILE_SEARCH_ROOTS?.trim();
-  if (explicit) return explicit;
+  if (explicit && sharedBrainAllowed) return explicit;
   return [
-    defaultSyncPath,
+    sharedBrainAllowed ? defaultSyncPath : "",
     appDir,
-    join(homedir(), "Documents"),
-    join(homedir(), ".hivemindos"),
+    sharedBrainAllowed ? join(homedir(), "Documents") : "",
+    sharedBrainAllowed ? join(homedir(), ".hivemindos") : "",
     hermesHome,
   ]
     .map((root) => resolve(expandHome(root)))
@@ -550,9 +617,9 @@ function hermesSafeFileSearchRoots(hermesHome = defaultHermesDir) {
     .join(delimiter);
 }
 
-function hermesPrivacyGuardEnv(hermesHome = defaultHermesDir) {
+function hermesPrivacyGuardEnv(hermesHome = defaultHermesDir, fleetPolicy = null) {
   return {
-    HERMES_SAFE_FILE_SEARCH_ROOTS: hermesSafeFileSearchRoots(hermesHome),
+    HERMES_SAFE_FILE_SEARCH_ROOTS: hermesSafeFileSearchRoots(hermesHome, fleetPolicy),
     HERMES_ALLOW_HOME_WIDE_FILE_SEARCH:
       process.env.HERMES_ALLOW_HOME_WIDE_FILE_SEARCH || "0",
     HERMES_ALLOW_MACOS_APP_DATA_SEARCH:
@@ -583,6 +650,33 @@ async function readSharedHiveEnvForSpawn() {
     if (value) values[key] = value;
   }
   return values;
+}
+
+async function currentFleetMachinePolicy() {
+  return readFleetMachinePolicy({ machineId: await stableMachineId().catch(() => "") });
+}
+
+function fleetPolicyChatContext(policy, dashboardContext) {
+  return [
+    typeof dashboardContext === "string" ? dashboardContext.trim() : "",
+    fleetMachinePolicyPrompt(policy),
+  ].filter(Boolean).join("\n\n");
+}
+
+function fleetPolicySpawnEnv(policy, sharedHiveEnv, extra = {}) {
+  const sharedEnvAllowed = !policy?.authority
+    || effectiveFleetAccess(policy).sharedEnv === "allow";
+  const excludedKeys = sharedEnvAllowed ? [] : Object.keys(sharedHiveEnv);
+  const filteredExtra = { ...extra };
+  for (const key of excludedKeys) delete filteredExtra[key];
+  return {
+    extra: {
+      ...(sharedEnvAllowed ? sharedHiveEnv : {}),
+      ...filteredExtra,
+      ...fleetPolicyRuntimeFlags(policy),
+    },
+    excludedKeys,
+  };
 }
 
 function hermesContextEnv(agentEnv, context) {
@@ -2779,6 +2873,23 @@ async function requireLinkOwner(request) {
   };
 }
 
+async function fleetPolicyCaller(request) {
+  const auth = await requireLinkOwner(request);
+  if (!auth.ok) return auth;
+  if (auth.via === "loopback") {
+    const machineId = await stableMachineId().catch(() => "");
+    if (!machineId) return { ok: false, status: 503, error: "This hub's stable machine identity is unavailable." };
+    return { ok: true, caller: { id: `machine:${machineId}`, label: hostname() } };
+  }
+  const node = String(
+    request.headers["x-hivemind-link-node"] || request.headers["x-tailscale-node"] || "",
+  ).replace(/[\r\n\0]/g, " ").trim().toLowerCase();
+  if (!node) {
+    return { ok: false, status: 403, error: "Machine policy changes require an attributed Hivemind Link node." };
+  }
+  return { ok: true, caller: { id: `tailnet-node:${node}`, label: node } };
+}
+
 async function runReliabilitySync(reason) {
   if (reliabilitySyncRunning) return reliabilitySyncStatus;
   reliabilitySyncRunning = true;
@@ -3523,6 +3634,45 @@ async function runHermesStdout(args, timeout = 10_000, envExtra = {}) {
     env: { ...process.env, ...envExtra },
   });
   return stdout.trim();
+}
+
+async function hermesSlashCommandCatalog(agent = {}) {
+  const hermesHome = expandHome(
+    sanitizeLocalDataDir(agent.localDataDir) || defaultHermesDir,
+  );
+  const cached = slashCommandCatalogCache.get(hermesHome);
+  if (cached && Date.now() - cached.at < slashCommandCatalogCacheMs) {
+    return cached.commands;
+  }
+  const { stdout } = await execFileAsync(
+    await resolveHermesPython(),
+    ["-c", HERMES_SLASH_COMMAND_CATALOG_SCRIPT],
+    {
+      timeout: 10_000,
+      maxBuffer: 2_000_000,
+      env: { ...process.env, HERMES_HOME: hermesHome },
+    },
+  );
+  const parsed = JSON.parse(stdout);
+  const commands = (Array.isArray(parsed?.commands) ? parsed.commands : [])
+    .filter((command) => command && typeof command === "object")
+    .map((command) => ({
+      name: String(command.name || "").trim().replace(/^\/+/, ""),
+      description: String(command.description || "").trim(),
+      category: String(command.category || "Other").trim(),
+      argsHint:
+        typeof command.argsHint === "string" && command.argsHint.trim()
+          ? command.argsHint.trim()
+          : null,
+      aliases: Array.isArray(command.aliases)
+        ? command.aliases
+            .filter((alias) => typeof alias === "string" && alias.trim())
+            .map((alias) => alias.trim())
+        : [],
+    }))
+    .filter((command) => command.name);
+  slashCommandCatalogCache.set(hermesHome, { at: Date.now(), commands });
+  return commands;
 }
 
 async function hermesIntegrationStatus(agent = {}) {
@@ -5327,7 +5477,11 @@ async function collectorSaveRuntimeAuth(env, value) {
 function startUpdate(reservationToken) {
   const updateLogDir = join(homedir(), ".hivemindos", "logs");
   const updateLogPath = join(updateLogDir, "agent-update.log");
-  const command = `mkdir -p ${shellQuote(updateLogDir)} && cd ${shellQuote(appDir)} && { echo "--- update $(date -u +%Y-%m-%dT%H:%M:%SZ) ---"; node ./scripts/pull-with-changelog-preserve.mjs; if command -v corepack >/dev/null 2>&1; then corepack prepare pnpm@8.6.12 --activate; hash -r 2>/dev/null || true; fi; CI=true NODE_OPTIONS="\${NODE_OPTIONS:+\$NODE_OPTIONS }--no-deprecation" pnpm install --frozen-lockfile; pnpm build; ./setup.sh; AGENT_TELEMETRY_PORT="\${AGENT_TELEMETRY_PORT:-8787}" ./scripts/install-telemetry-collector.sh; } >> ${shellQuote(updateLogPath)} 2>&1`;
+  const command = collectorUpdateCommand({
+    appDir,
+    collectorOnly,
+    logPath: updateLogPath,
+  });
   launchCollectorUpdate({
     command,
     reservationToken,
@@ -6615,7 +6769,7 @@ async function detectAeonInstalled() {
 
 // Installed runtime CLIs, independent of whether any agent uses them yet —
 // the dashboard gates create-agent runtime cards on this list.
-async function installedRuntimes() {
+async function installedRuntimes(options = {}) {
   const now = Date.now();
   if (
     installedRuntimesCache &&
@@ -6624,7 +6778,12 @@ async function installedRuntimes() {
     return installedRuntimesCache.value;
   }
   if (installedRuntimesPromise) {
-    // Serve a stale list rather than blocking /health on CLI probes.
+    // Health is a liveness path, so it must not wait behind cold CLI probes.
+    // The collector already reports configured agent runtimes; this inventory
+    // fills in additional installed CLIs as soon as the background probe ends.
+    if (options.waitForRefresh === false) {
+      return installedRuntimesCache ? installedRuntimesCache.value : [];
+    }
     return installedRuntimesCache
       ? installedRuntimesCache.value
       : installedRuntimesPromise;
@@ -6664,6 +6823,9 @@ async function installedRuntimes() {
   })().finally(() => {
     installedRuntimesPromise = null;
   });
+  if (options.waitForRefresh === false) {
+    return installedRuntimesCache ? installedRuntimesCache.value : [];
+  }
   return installedRuntimesCache
     ? installedRuntimesCache.value
     : installedRuntimesPromise;
@@ -6690,6 +6852,7 @@ async function collectorHealthPayload() {
       installed,
       processStats,
       tailnetSelf,
+      fleetPolicyState,
     ] = await Promise.all([
       syncthingInstalled(),
       resolveHiveEnvAdd(),
@@ -6697,9 +6860,12 @@ async function collectorHealthPayload() {
       stableMachineId(),
       appVersion(),
       systemStats().catch(() => null),
-      installedRuntimes().catch(() => []),
+      installedRuntimes({ waitForRefresh: false }).catch(() => []),
       processResourceStats().catch(() => null),
       tailnetSelfNode().catch(() => null),
+      currentFleetMachinePolicy()
+        .then((policy) => ({ policy }))
+        .catch(() => ({ policy: null })),
     ]);
     const runtimes = [
       ...new Set([...agents.map((agent) => agent.runtime), ...installed]),
@@ -6715,6 +6881,9 @@ async function collectorHealthPayload() {
       version,
       system,
       process: processStats,
+      fleetPolicy: fleetPolicyState.policy
+        ? fleetMachinePolicyHealthSummary(fleetPolicyState.policy)
+        : fleetMachinePolicyFailureSummary(),
       envSync: {
         ready: envSync.ready,
         user: currentUsername(),
@@ -6735,6 +6904,7 @@ async function collectorHealthPayload() {
         skillAutoSync: true,
         fileTransfers: true,
         workReceipts: true,
+        machinePolicy: true,
         runtimeState: true,
         runtimeStateRuntimes: portableStateRuntimes(),
         runtimeStateSync: isRuntimeStateSyncEnabled(),
@@ -6778,15 +6948,23 @@ async function sendHermesChat(body, options = {}) {
       sanitizeLocalDataDir(body.localDataDir) ||
       defaultHermesDir,
   );
-  const agentEnv = hermesContextEnv(safeAgentEnv(body.agentEnv), body.context);
-  const bin = await resolveHermesBin();
-  const env = runtimeProcessEnv({
+  const [fleetPolicy, sharedHiveEnv] = await Promise.all([
+    currentFleetMachinePolicy(),
+    readSharedHiveEnvForSpawn(),
+  ]);
+  const agentEnv = hermesContextEnv(
+    safeAgentEnv(body.agentEnv),
+    fleetPolicyChatContext(fleetPolicy, body.context),
+  );
+  const spawnEnv = fleetPolicySpawnEnv(fleetPolicy, sharedHiveEnv, {
     ...agentEnv,
     ...hermesModelHostEnv(body, agent),
     HERMES_HOME: hermesHome,
     PAGER: "cat",
-    ...hermesPrivacyGuardEnv(hermesHome),
+    ...hermesPrivacyGuardEnv(hermesHome, fleetPolicy),
   });
+  const bin = await resolveHermesBin();
+  const env = runtimeProcessEnv(spawnEnv.extra, { excludeKeys: spawnEnv.excludedKeys });
   // Tie the hermes CLI lifetime to the HTTP caller: queen-bee delegates abort
   // at 240s while chatTimeoutMs is 20 min, and every abandoned `hermes -z`
   // kept running as a zombie worker burning CPU/memory (the 2026-07-03 hel1-2
@@ -6896,7 +7074,7 @@ async function sendHermesChat(body, options = {}) {
 
 async function hermesApiHealthy() {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 800);
+  const timer = setTimeout(() => controller.abort(), hermesApiHealthTimeoutMs);
   try {
     const response = await fetch(`${hermesApiBaseUrl}/health`, {
       headers: hermesApiHeaders(),
@@ -7288,7 +7466,7 @@ async function waitForHermesApiSession(
   return null;
 }
 
-async function proxyHermesApiChat(body, response, text, hermesHome) {
+async function proxyHermesApiChat(body, response, text, hermesHome, fleetPolicy = null) {
   const requestStartedAt = Date.now();
   const requestMarker = `hivemindos-${requestStartedAt.toString(36)}-${randomBytes(4).toString("hex")}`;
   const runtimeSessionId = safeTelemetryText(
@@ -7418,6 +7596,18 @@ async function proxyHermesApiChat(body, response, text, hermesHome) {
     void emitTelemetry("model_request.start", {
       endpoint: "/v1/chat/completions",
     });
+    const policyPrompt = fleetMachinePolicyPrompt(fleetPolicy);
+    const policyAwareBody = policyPrompt
+      ? {
+          ...body,
+          messages: [
+            { role: "system", content: policyPrompt },
+            ...(Array.isArray(body.messages) && body.messages.length
+              ? body.messages
+              : [{ role: "user", content: text }]),
+          ],
+        }
+      : body;
     const upstream = await fetch(`${hermesApiBaseUrl}/v1/chat/completions`, {
       method: "POST",
       headers: hermesApiHeaders({
@@ -7428,7 +7618,7 @@ async function proxyHermesApiChat(body, response, text, hermesHome) {
         model: agent.model || "hermes-agent",
         provider: agent.provider || undefined,
         stream: true,
-        messages: hermesApiMessages(body, text, normalizeMessageContent),
+        messages: hermesApiMessages(policyAwareBody, text, normalizeMessageContent),
       }),
       signal: controller.signal,
     });
@@ -7745,22 +7935,32 @@ async function streamHermesChat(body, response, options = {}) {
       sanitizeLocalDataDir(body.localDataDir) ||
       defaultHermesDir,
   );
-  const agentEnv = hermesContextEnv(safeAgentEnv(body.agentEnv), body.context);
-  // The Hermes gateway API server always runs turns on the gateway's own
-  // default model and ignores per-request model/provider. Agents with their
-  // own model selection or profile home must therefore use the CLI path,
-  // which honors HERMES_HOME plus `-m/--provider`. The gateway default is
-  // never rewritten to work around this.
-  const agentScopedModel = Boolean(
-    (typeof agent.model === "string" && agent.model.trim()) ||
-    (typeof agent.provider === "string" && agent.provider.trim()) ||
-    hermesHome !== defaultHermesDir,
+  const [fleetPolicy, sharedHiveEnv] = await Promise.all([
+    currentFleetMachinePolicy(),
+    readSharedHiveEnvForSpawn(),
+  ]);
+  const agentEnv = hermesContextEnv(
+    safeAgentEnv(body.agentEnv),
+    fleetPolicyChatContext(fleetPolicy, body.context),
   );
+  // The Hermes gateway API server runs its configured default model and
+  // ignores per-request model/provider. An explicit selection does not need a
+  // cold CLI process when it already matches that live gateway. Distinct
+  // profile homes or genuinely different selections still use the CLI path,
+  // which honors HERMES_HOME plus `-m/--provider`.
+  const gatewaySelection =
+    hermesHome === defaultHermesDir
+      ? await readHermesModelConfig(defaultHermesDir)
+      : null;
+  const agentNeedsScopedCli =
+    hermesHome !== defaultHermesDir ||
+    !hermesApiSelectionMatchesAgent(agent, gatewaySelection) ||
+    fleetPolicyNeedsIsolatedHermes(fleetPolicy);
   if (
     body.forceHermesCli !== true &&
-    !agentScopedModel &&
+    !agentNeedsScopedCli &&
     hermesChatMode === "api" &&
-    (await proxyHermesApiChat(body, response, text, hermesHome))
+    (await proxyHermesApiChat(body, response, text, hermesHome, fleetPolicy))
   ) {
     releaseCollectorChatRun();
     return;
@@ -7781,25 +7981,26 @@ async function streamHermesChat(body, response, options = {}) {
   if (
     runtimeSessionId &&
     body.disableHermesResume !== true &&
+    (!fleetPolicy.authority || effectiveFleetAccess(fleetPolicy).chatHistory === "allow") &&
     isHermesCliSessionId(runtimeSessionId)
   )
     args.push("--resume", runtimeSessionId);
   const cwd = await resolveChatWorkingDirectory(body.workingDirectory);
   const requestStartedAt = Date.now();
 
-  // Latest shared creds (provider keys) win over the collector's startup env.
-  const sharedHiveEnv = await readSharedHiveEnvForSpawn();
+  // Latest shared creds (provider keys) win only when this machine's master-hub
+  // policy allows shared-env access. ASK/DENY strips inherited copies too.
+  const spawnEnv = fleetPolicySpawnEnv(fleetPolicy, sharedHiveEnv, {
+    ...agentEnv,
+    ...hermesModelHostEnv(body, agent),
+    HERMES_HOME: hermesHome,
+    HERMES_ACCEPT_HOOKS: "1",
+    PAGER: "cat",
+    ...hermesPrivacyGuardEnv(hermesHome, fleetPolicy),
+  });
   const child = spawn(await resolveHermesBin(), args, {
     cwd,
-    env: runtimeProcessEnv({
-      ...sharedHiveEnv,
-      ...agentEnv,
-      ...hermesModelHostEnv(body, agent),
-      HERMES_HOME: hermesHome,
-      HERMES_ACCEPT_HOOKS: "1",
-      PAGER: "cat",
-      ...hermesPrivacyGuardEnv(hermesHome),
-    }),
+    env: runtimeProcessEnv(spawnEnv.extra, { excludeKeys: spawnEnv.excludedKeys }),
     stdio: ["ignore", "pipe", "pipe"],
   });
 
@@ -8172,8 +8373,91 @@ async function handleCollectorRequest(request, response) {
     response.writeHead(204).end();
     return;
   }
+  if (pathname === "/ready" && request.method === "GET") {
+    jsonResponse(response, 200, {
+      ok: true,
+      host: hostname(),
+      collectorStartedAt,
+    });
+    return;
+  }
   if (pathname === "/health") {
     jsonResponse(response, 200, await collectorHealthPayload());
+    return;
+  }
+  if (pathname === "/fleet-policy") {
+    const auth = await fleetPolicyCaller(request);
+    if (!auth.ok) {
+      jsonResponse(response, auth.status || 403, { ok: false, error: auth.error });
+      return;
+    }
+    try {
+      const machineId = await stableMachineId();
+      let policy;
+      if (request.method === "GET") {
+        policy = await readFleetMachinePolicy({ machineId });
+      } else if (request.method === "POST") {
+        const rawBody = await readBody(request);
+        const body = rawBody ? JSON.parse(rawBody) : {};
+        if (body.action === "claim-master") {
+          policy = await claimFleetPolicyMaster({ caller: auth.caller, machineId });
+        } else if (body.action === "update") {
+          policy = await updateFleetMachinePolicy({
+            caller: auth.caller,
+            machineId,
+            access: body.access,
+            performance: body.performance,
+          });
+        } else if (body.action === "release-master") {
+          policy = await releaseFleetPolicyMaster({ caller: auth.caller, machineId });
+        } else if (body.action === "resolve-access") {
+          policy = await resolveFleetAccessRequest({
+            caller: auth.caller,
+            machineId,
+            capability: body.capability,
+            decision: body.decision,
+          });
+        } else {
+          throw new FleetMachinePolicyError("Unknown machine policy action.");
+        }
+        healthPayloadCache = null;
+      } else {
+        jsonResponse(response, 405, { ok: false, error: "Method not allowed." });
+        return;
+      }
+      jsonResponse(response, 200, {
+        ok: true,
+        host: hostname(),
+        machineId,
+        ...fleetMachinePolicyPublicView(policy, auth.caller),
+      });
+    } catch (error) {
+      jsonResponse(response, error instanceof FleetMachinePolicyError ? error.status : 500, {
+        ok: false,
+        error: error instanceof Error ? error.message : "Could not manage machine policy.",
+      });
+    }
+    return;
+  }
+  if (pathname === "/slash-commands" && request.method === "POST") {
+    try {
+      const rawBody = await readBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      const commands = await hermesSlashCommandCatalog(
+        body.agent && typeof body.agent === "object" ? body.agent : {},
+      );
+      jsonResponse(response, 200, {
+        runtime: "hermes",
+        source: "hermes-command-registry",
+        commands,
+        totalCommands: commands.length,
+      });
+    } catch {
+      jsonResponse(response, 503, {
+        ok: false,
+        error: "Hermes command inventory is unavailable.",
+      });
+    }
     return;
   }
   if (pathname.startsWith("/app-assets/") && request.method === "GET") {
@@ -8310,7 +8594,10 @@ async function handleCollectorRequest(request, response) {
     return;
   }
   if (pathname === "/maintenance/reserve-update" && request.method === "POST") {
-    const reservation = reserveCollectorUpdate();
+    const maintenanceRequestId = String(
+      request.headers["x-hivemind-maintenance-request-id"] || "",
+    );
+    const reservation = reserveCollectorUpdate(maintenanceRequestId);
     jsonResponse(response, reservation.status, {
       ...reservation,
       host: hostname(),

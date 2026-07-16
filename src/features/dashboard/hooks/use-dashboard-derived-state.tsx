@@ -923,6 +923,7 @@ export function useDashboardDerivedState(props: any) {
         capabilities: discovered?.capabilities,
         envSync: discovered?.envSync,
         system: discovered?.system,
+        fleetPolicy: discovered?.fleetPolicy,
         lastSeenAt: discovered?.lastSeenAt,
         reportedUnreachableBy: discovered?.reportedUnreachableBy,
       };
@@ -967,6 +968,7 @@ export function useDashboardDerivedState(props: any) {
         capabilities: machine.capabilities,
         envSync: machine.envSync,
         system: machine.system,
+        fleetPolicy: machine.fleetPolicy,
         lastSeenAt: machine.lastSeenAt,
         reportedUnreachableBy: machine.reportedUnreachableBy,
       });

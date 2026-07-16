@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { requireAuth } from "@/lib/utils/server-auth";
 import { executeGovernedUsdcSend } from "@/lib/services/wallet/governed-send";
+import { executePersonalWalletAssetSend } from "@/lib/services/wallet/personal-wallet-asset-send";
 
 type SendUsdcBody = {
   action?: string;
@@ -14,17 +15,15 @@ type SendUsdcBody = {
   approvalToken?: string;
   gasSponsorAgentId?: string;
   companyTaskId?: string;
+  asset?: string;
+  assetAmount?: string | number;
+  tokenAddress?: string;
 };
 
-type RouteSendApproval = {
-  agentId: string;
-  toAddress: string;
-  amountUsd: number;
-  maxPaymentUsd?: number;
-  gasSponsorAgentId?: string;
-  companyTaskId?: string;
-  expiresAtMs: number;
-};
+type RouteSendApproval = (
+  | { kind: "stable"; agentId: string; toAddress: string; amountUsd: number; maxPaymentUsd?: number; gasSponsorAgentId?: string; companyTaskId?: string }
+  | { kind: "asset"; agentId: string; toAddress: string; asset: string; assetAmount: string; tokenAddress?: string }
+) & { expiresAtMs: number };
 
 const SEND_APPROVAL_TTL_MS = 60_000;
 const routeSendApprovals = new Map<string, RouteSendApproval>();
@@ -37,12 +36,19 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({})) as SendUsdcBody;
     const validation = validateSendBody(body);
     if (validation) return validation;
+    const assetTransfer = hasAssetTransferFields(body);
     // Personal (`user:`) wallets never auto-spend: ignore any auto-pay flag so an
     // explicit SEND_USDC confirmation is always required. The user (or an agent
     // they tell) can still send "from my wallet" — it just always confirms.
     const isPersonalWallet = String(body.agentId || "").startsWith("user:");
     const autoPayEnabled = Boolean(body.autoPayEnabled) && !isPersonalWallet;
-    if (!autoPayEnabled && body.confirmation !== "SEND_USDC") {
+    if (assetTransfer && !isPersonalWallet) {
+      return sendError("Arbitrary-token sends are available only from personal wallets.");
+    }
+    if (assetTransfer && body.confirmation !== "SEND_TOKEN") {
+      return sendError("Confirm this personal-wallet token transfer before sending.");
+    }
+    if (!assetTransfer && !autoPayEnabled && body.confirmation !== "SEND_USDC") {
       return sendError("Wallet auto-use is off. Type SEND_USDC to confirm this transfer.");
     }
     if (body.action && body.action !== "approve" && body.action !== "send") {
@@ -59,6 +65,17 @@ export async function POST(request: NextRequest) {
     const approvalError = consumeRouteSendApproval(body);
     if (approvalError) return approvalError;
 
+    if (assetTransfer) {
+      const result = await executePersonalWalletAssetSend({
+        agentId: body.agentId!.trim(),
+        toAddress: body.toAddress!.trim(),
+        asset: normalizeAssetSymbol(body.asset),
+        assetAmount: canonicalAssetAmount(body.assetAmount),
+        tokenAddress: body.tokenAddress?.trim() || undefined,
+      });
+      if (!result.ok) return sendExecutionError(result);
+      return NextResponse.json({ ok: true, signature: result.signature, network: result.network, assetSymbol: result.assetSymbol, assetAmount: result.assetAmount });
+    }
     const result = await executeGovernedUsdcSend({
       agentId: body.agentId!.trim(),
       toAddress: body.toAddress!.trim(),
@@ -68,21 +85,32 @@ export async function POST(request: NextRequest) {
       approvalThresholdSatisfied: true,
       companyTaskId: body.companyTaskId?.trim() || undefined,
     });
-    if (!result.ok) {
-      const status = result.status === "not_found" ? 404 : result.status === "blocked" ? 403 : result.status === "pending_approval" ? 202 : 400;
-      return NextResponse.json({ ok: false, status: result.status === "error" ? undefined : result.status, error: result.error, approval: result.approval }, { status });
-    }
+    if (!result.ok) return sendExecutionError(result);
     return NextResponse.json({ ok: true, signature: result.signature, network: result.network, assetSymbol: result.assetSymbol, platformFee: result.platformFee, gasAssist: result.gasAssist });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Failed to send stablecoin" }, { status: 500 });
   }
 }
 
+function sendExecutionError(result: { status: string; error: string; approval?: unknown }) {
+  const status = result.status === "not_found" ? 404 : result.status === "blocked" ? 403 : result.status === "pending_approval" ? 202 : 400;
+  return NextResponse.json({ ok: false, status: result.status === "error" ? undefined : result.status, error: result.error, approval: result.approval }, { status });
+}
+
 function createRouteSendApproval(body: SendUsdcBody) {
   pruneRouteSendApprovals();
   const token = randomUUID();
   const expiresAtMs = Date.now() + SEND_APPROVAL_TTL_MS;
-  routeSendApprovals.set(token, {
+  routeSendApprovals.set(token, hasAssetTransferFields(body) ? {
+    kind: "asset",
+    agentId: body.agentId!.trim(),
+    toAddress: body.toAddress!.trim(),
+    asset: normalizeAssetSymbol(body.asset),
+    assetAmount: canonicalAssetAmount(body.assetAmount),
+    tokenAddress: body.tokenAddress?.trim() || undefined,
+    expiresAtMs,
+  } : {
+    kind: "stable",
     agentId: body.agentId!.trim(),
     toAddress: body.toAddress!.trim(),
     amountUsd: Number(body.amountUsd),
@@ -114,8 +142,13 @@ function pruneRouteSendApprovals() {
 }
 
 function matchesRouteSendApproval(approval: RouteSendApproval, body: SendUsdcBody) {
-  return approval.agentId === body.agentId?.trim()
-    && approval.toAddress.toLowerCase() === body.toAddress?.trim().toLowerCase()
+  if (approval.agentId !== body.agentId?.trim() || approval.toAddress.toLowerCase() !== body.toAddress?.trim().toLowerCase()) return false;
+  if (approval.kind === "asset") {
+    return approval.asset === normalizeAssetSymbol(body.asset)
+      && approval.assetAmount === canonicalAssetAmount(body.assetAmount)
+      && approval.tokenAddress === (body.tokenAddress?.trim() || undefined);
+  }
+  return !hasAssetTransferFields(body)
     && sameUsd(approval.amountUsd, Number(body.amountUsd))
     && sameOptionalUsd(approval.maxPaymentUsd, body.maxPaymentUsd == null ? undefined : Number(body.maxPaymentUsd))
     && approval.gasSponsorAgentId === (body.gasSponsorAgentId?.trim() || undefined)
@@ -135,10 +168,18 @@ function sameUsd(left: number, right: number) {
 function validateSendBody(body: SendUsdcBody) {
   const agentId = body.agentId?.trim();
   const toAddress = body.toAddress?.trim();
-  const amountUsd = Number(body.amountUsd);
-  const maxPaymentUsd = Number(body.maxPaymentUsd);
   if (!agentId) return sendError("agentId is required");
   if (!toAddress) return sendError("Recipient address is required");
+  if (hasAssetTransferFields(body)) {
+    const asset = normalizeAssetSymbol(body.asset);
+    if (!asset || !/^[A-Z0-9._-]{1,32}$/.test(asset)) return sendError("A valid asset symbol is required");
+    const amount = canonicalAssetAmount(body.assetAmount);
+    if (!amount || Number(amount) <= 0) return sendError("Asset amount must be greater than zero");
+    if ((body.tokenAddress?.trim().length ?? 0) > 128) return sendError("Token address is too long");
+    return null;
+  }
+  const amountUsd = Number(body.amountUsd);
+  const maxPaymentUsd = Number(body.maxPaymentUsd);
   if (!Number.isFinite(amountUsd) || amountUsd <= 0) return sendError("Amount must be greater than zero");
   if (body.maxPaymentUsd != null && (!Number.isFinite(maxPaymentUsd) || maxPaymentUsd < 0)) {
     return sendError("Per-payment cap must be zero or greater.");
@@ -147,6 +188,23 @@ function validateSendBody(body: SendUsdcBody) {
     return sendError(`Amount exceeds this agent's per-payment cap ($${maxPaymentUsd.toFixed(2)})`);
   }
   return null;
+}
+
+function hasAssetTransferFields(body: SendUsdcBody): boolean {
+  return body.asset != null || body.assetAmount != null || body.tokenAddress != null;
+}
+
+function normalizeAssetSymbol(value: unknown): string {
+  return String(value || "").trim().toUpperCase();
+}
+
+function canonicalAssetAmount(value: unknown): string {
+  const text = String(value ?? "").trim();
+  if (!/^\d+(?:\.\d+)?$/.test(text)) return "";
+  const [whole, fraction = ""] = text.split(".");
+  const normalizedWhole = whole.replace(/^0+(?=\d)/, "") || "0";
+  const normalizedFraction = fraction.replace(/0+$/, "");
+  return normalizedFraction ? `${normalizedWhole}.${normalizedFraction}` : normalizedWhole;
 }
 
 function sendError(error: string) {

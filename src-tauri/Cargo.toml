@@ -27,6 +27,8 @@ base64 = "0.22"
 sha2 = "0.10"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 getrandom = "0.2"
+keyring = "=4.1.5"
+reqwest = { version = "0.13.4", default-features = false, features = ["blocking", "json", "rustls"] }
 tauri = { version = "2", features = ["tray-icon", "macos-private-api"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-deep-link = "2.4.9"
@@ -35,6 +37,7 @@ tauri-plugin-opener = "2"
 tauri-plugin-process = "2"
 tauri-plugin-updater = "2"
 url = "2"
+zeroize = { version = "1.8.2", features = ["derive"] }
 
 # On-device speech recognition (macOS SFSpeechRecognizer, Windows WinRT)
 # for free live voice captions — Queen voice works without an OpenAI key.
@@ -43,6 +46,12 @@ url = "2"
 # audited unsafe boundary.
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 hivemindos-speech-native = { path = "speech-native" }
+
+# macOS LocalAuthentication (Touch ID) lives in a second focused path crate.
+# Like speech-native, it isolates the audited Objective-C `unsafe` boundary
+# from this parent crate, which forbids unsafe code.
+[target.'cfg(target_os = "macos")'.dependencies]
+hivemindos-biometric-native = { path = "biometric-native" }
 
 # Vendored inside src-tauri (not the repo-root vendor/) so the Go module's
 # `go mod vendor` can never delete the patched crate.

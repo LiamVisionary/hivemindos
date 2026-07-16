@@ -291,6 +291,7 @@ export function ExchangeComposer(props: ExchangeComposerProps) {
   return (
     <div
       ref={rootRef}
+      className="fr-chat-composer"
       {...dropHandlers}
       data-drop-active={dropActive || undefined}
       style={{
@@ -300,11 +301,11 @@ export function ExchangeComposer(props: ExchangeComposerProps) {
         minHeight: 140,
         border: `1px solid ${dropActive ? "var(--honey)" : "var(--line-2)"}`,
         borderRadius: 22,
-        background: dropActive ? "color-mix(in srgb, var(--honey-soft) 60%, var(--panel))" : "color-mix(in srgb, var(--panel) 94%, transparent)",
+        background: "transparent",
         boxShadow: dropActive
           ? "0 20px 60px -30px rgba(0,0,0,0.5), inset 0 0 0 1px var(--honey-line)"
           : "0 20px 60px -30px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.03)",
-        transition: "border-color 140ms ease, background 140ms ease",
+        transition: "border-color 140ms ease",
       }}
     >
       {/* sendMessage() reads these out of the form's FormData. */}

@@ -627,6 +627,22 @@
       "packagedPath": "packaged-skills/optional/design/mengto/gooey-blob-system/SKILL.md",
       "computedHash": "acd3ab5b2914136395ed684b1aaf6ea11ce92a2b30a9dbbc02803af63b3e666f"
     },
+    "google-ads-builder": {
+      "source": "mikefutia/google-ads-builder",
+      "sourceType": "github",
+      "ref": "1518b766bc9fe5af6ce6595987e4c8318b1997e4",
+      "license": "MIT",
+      "skillPath": "SKILL.md",
+      "packagedPath": "packaged-skills/optional/gtm/mikefutia/google-ads-builder/SKILL.md",
+      "computedHash": "b1c415b7798cdf97b0d420b24427d9fda87dc409d21f442badbaf00e4d459afb",
+      "resourceHashes": {
+        ".gitignore": "e30b4a23cec936647f234d80d2c313a097a7e163ea59d9820faa5325095a93be",
+        "LICENSE": "651cddcb587e7442fb22bff856bc54aa63fdbdcac57b4632d4b10364e4476da0",
+        "README.md": "b8a21e65919ab2ad823754c3f0fe26ab6d5487315f1c6392c424b38db5378726",
+        "scripts/render_report.py": "c6960ef696edefe0dcfba411b7b47e6605b26fc43e48858c6945608ec051f6e3",
+        "SKILL.md": "b1c415b7798cdf97b0d420b24427d9fda87dc409d21f442badbaf00e4d459afb"
+      }
+    },
     "gsap": {
       "source": "MengTo/Skills",
       "sourceType": "github",
@@ -1838,6 +1854,22 @@
       "resourceHashes": {
         "LICENSE": "a37e0e9697144819e1d965176ac4ae5bc3fa02d11e7812036bbcadf6dafe2400",
         "SKILL.md": "ed40dcdd8908ea28ebc4f9020479ab7771236772c960b5bbf80a0fa279872deb"
+      }
+    },
+    "video-analyzer": {
+      "source": "mikefutia/claude-vision",
+      "sourceType": "github",
+      "ref": "0665eb3f782f92cd50179e61ac66e6c504cd754e",
+      "license": "MIT",
+      "skillPath": "SKILL.md",
+      "packagedPath": "packaged-skills/optional/media/mikefutia/video-analyzer/SKILL.md",
+      "computedHash": "503b1c533ef3b218f420d0df89c89c416261d8eb9392064aedc889af7d408bbe",
+      "resourceHashes": {
+        ".gitignore": "4e363c25297ce59537ab8494777dc37066741a44a77fae8d42dce1b00964f51b",
+        "README.md": "05b8fda387bc0d70bb1b3800058034f3c8e957d341c9fd779f6280c60d503596",
+        "scripts/analyze_video.py": "8537b3d9f4c09e64e29529ec5af1359e1e31540c8264bea557ad9f914be99b4b",
+        "SECURITY_AUDIT.md": "9adec4fd85be0a3365654118a77d3029339666607ddf4bc88f0c5d8e10f0fdde",
+        "SKILL.md": "503b1c533ef3b218f420d0df89c89c416261d8eb9392064aedc889af7d408bbe"
       }
     },
     "video-to-superprompt": {

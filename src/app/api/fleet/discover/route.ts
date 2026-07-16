@@ -10,6 +10,7 @@ import { annotateReverseReachability } from "@/app/api/fleet/reverse-reachabilit
 import { readStoredAgentProfiles } from "@/lib/services/agent-profile-store";
 import { mobileAgentProfilesForMachine } from "@/lib/services/mobile-agents/fleet";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import type { FleetMachinePolicySummary } from "@/lib/types/fleet-machine-policy";
 
 export const runtime = "nodejs";
 
@@ -94,6 +95,7 @@ type CollectorCapabilities = {
   runtimeStateSync?: boolean;
   syncthing?: boolean;
   defaultSyncPath?: string;
+  machinePolicy?: boolean;
 };
 
 type CollectorEnvSync = {
@@ -182,6 +184,7 @@ type DiscoveredMachine = {
   capabilities?: CollectorCapabilities;
   envSync?: CollectorEnvSync;
   system?: CollectorSystemStats;
+  fleetPolicy?: FleetMachinePolicySummary;
   bridgeRepair?: BridgeRepairStatus;
   // Peers (by display name) whose collector reports it cannot reach this
   // machine over the tailnet — the reverse-reachability signal that exposes
@@ -630,6 +633,7 @@ type CollectorProbeResult = {
   capabilities?: CollectorCapabilities;
   envSync?: CollectorEnvSync;
   system?: CollectorSystemStats;
+  fleetPolicy?: FleetMachinePolicySummary;
   collectorHost?: string;
   machineId?: string;
   tailnetSelf?: TailnetSelfNode;
@@ -771,6 +775,7 @@ async function probeCollector(
     capabilities?: CollectorCapabilities;
     envSync?: CollectorEnvSync;
     system?: CollectorSystemStats;
+    fleetPolicy?: FleetMachinePolicySummary;
   };
   // Round-trip to the collector /health endpoint = a real RTT to this machine
   // over the tailnet (loopback for self). Rides along inside `system` so it
@@ -794,6 +799,7 @@ async function probeCollector(
     capabilities,
     envSync: healthData.envSync,
     system,
+    fleetPolicy: healthData.fleetPolicy,
     collectorHost: healthData.host,
     machineId: healthData.machineId,
     tailnetSelf: healthData.tailnetSelf,
@@ -1049,6 +1055,7 @@ async function probeCollectorViaTailscale(
     capabilities?: CollectorCapabilities;
     envSync?: CollectorEnvSync;
     system?: CollectorSystemStats;
+    fleetPolicy?: FleetMachinePolicySummary;
   };
   const agentsData = (await fetchRemoteCollectorJsonViaTailscale(
     device,
@@ -1069,6 +1076,7 @@ async function probeCollectorViaTailscale(
     capabilities,
     envSync: healthData.envSync,
     system: healthData.system,
+    fleetPolicy: healthData.fleetPolicy,
     collectorHost: healthData.host,
     machineId: healthData.machineId,
     tailnetSelf: healthData.tailnetSelf,
@@ -1184,6 +1192,7 @@ async function readDiscovery(
           capabilities: probe.capabilities,
           envSync: probe.envSync,
           system: probe.system,
+          fleetPolicy: probe.fleetPolicy,
           agents: probe.agents,
           snapshots: [],
         };
@@ -1209,6 +1218,7 @@ async function readDiscovery(
           capabilities: probe.capabilities,
           envSync: probe.envSync,
           system: probe.system,
+          fleetPolicy: probe.fleetPolicy,
           agents: probe.agents,
           snapshots: snapshotData.snapshots ?? [],
         };
@@ -1223,6 +1233,7 @@ async function readDiscovery(
           capabilities: probe.capabilities,
           envSync: probe.envSync,
           system: probe.system,
+          fleetPolicy: probe.fleetPolicy,
           agents: probe.agents,
           snapshots: [],
         };

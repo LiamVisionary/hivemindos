@@ -8,13 +8,21 @@ import { homedir } from "@/lib/home-dir";
 import { readBrowserUsePermissions } from "@/lib/services/browser-use-permissions";
 import { deployAgenticInbox, readAgenticInboxStatus, scaffoldAgenticInbox } from "@/lib/services/cloudflare/agentic-inbox-setup";
 import { readEngineStatus } from "@/lib/services/copy-trading/store";
+import { readListmonkInstallableServiceStatus, runListmonkInstallableServiceAction } from "@/lib/services/listmonk-installable";
 import { installPalmierProFromDmg, openPalmierProApp, quitPalmierProApp, readPalmierProInstallableServiceStatus } from "@/lib/services/palmier-pro-installable";
 import { hiveEnvPresence } from "@/lib/services/shared-hive-env";
 import { ENGINE_OFFLINE_AFTER_MS } from "@/lib/types/copy-trading";
+import {
+  GITHUB_CAPABILITY_INSTALLABLE_IDS,
+  isGitHubCapabilityInstallableId,
+  readGitHubCapabilityInstallableStatus,
+  runGitHubCapabilityInstallableAction,
+  type GitHubCapabilityInstallableId,
+} from "@/lib/services/github-capability-installers";
 
 const execFileAsync = promisify(execFile);
 
-export type InstallableServiceId = "n8n" | "browser-use" | "agentic-inbox" | "mcp-email-server" | "openhands" | "aider" | "agent-reach" | "palmier-pro" | "copy-trading-daemon";
+export type InstallableServiceId = "n8n" | "listmonk" | "browser-use" | "agentic-inbox" | "mcp-email-server" | "openhands" | "aider" | "agent-reach" | "palmier-pro" | "copy-trading-daemon" | GitHubCapabilityInstallableId;
 export type InstallableServiceAction =
   | "status"
   | "install"
@@ -33,7 +41,7 @@ export type InstallableServiceActionInput = {
   maxReplies?: number;
 };
 
-export const INSTALLABLE_SERVICE_IDS: InstallableServiceId[] = ["n8n", "browser-use", "agentic-inbox", "mcp-email-server", "openhands", "aider", "agent-reach", "palmier-pro", "copy-trading-daemon"];
+export const INSTALLABLE_SERVICE_IDS: InstallableServiceId[] = ["n8n", "listmonk", "browser-use", "agentic-inbox", "mcp-email-server", "openhands", "aider", "agent-reach", "palmier-pro", "copy-trading-daemon", ...GITHUB_CAPABILITY_INSTALLABLE_IDS];
 
 export type InstallableServiceStatus = {
   id: InstallableServiceId;
@@ -1185,6 +1193,10 @@ async function readMcpEmailServerInstallableServiceStatus(): Promise<Installable
 }
 
 export async function readInstallableServiceStatus(id: InstallableServiceId): Promise<InstallableServiceStatus> {
+  if (isGitHubCapabilityInstallableId(id)) return readGitHubCapabilityInstallableStatus(id);
+  if (id === "listmonk") {
+    return readListmonkInstallableServiceStatus();
+  }
   if (id === "copy-trading-daemon") {
     return readCopyTradingDaemonInstallableServiceStatus();
   }
@@ -1271,6 +1283,10 @@ export async function runInstallableServiceAction(
   action: InstallableServiceAction,
   input?: InstallableServiceActionInput,
 ): Promise<InstallableServiceStatus | InstallableServiceActionResult> {
+  if (isGitHubCapabilityInstallableId(id)) return runGitHubCapabilityInstallableAction(id, action);
+  if (id === "listmonk") {
+    return runListmonkInstallableServiceAction(action);
+  }
   if (id === "copy-trading-daemon") {
     if (action === "status") return readInstallableServiceStatus(id);
     if (!existsSync(COPY_TRADING_INSTALL_SCRIPT)) throw new Error("Copy-trading service installer script is not available in this build.");

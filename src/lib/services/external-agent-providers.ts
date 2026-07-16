@@ -11,6 +11,7 @@ export type ExternalAgentProviderId =
   | "palmier-pro"
   | "rentahuman"
   | "n8n"
+  | "listmonk"
   | "queen-bee-prd-decomposition";
 
 export type ExternalAgentProvider = {
@@ -146,6 +147,18 @@ export const EXTERNAL_AGENT_PROVIDERS: ExternalAgentProvider[] = [
     credentialKeys: [],
     sideEffectGate: "Run only on localhost/Tailnet by default and restrict workflow editing to trusted users.",
     fallback: "Use HivemindOS scheduler, Queen Bee tasks, or connected app APIs.",
+  },
+  {
+    id: "listmonk",
+    name: "Listmonk",
+    sourceUrl: "https://github.com/knadh/listmonk",
+    licenseNote: "AGPL-3.0; run as a separate self-hosted service and preserve upstream license obligations.",
+    summary: "Self-hosted subscriber, newsletter, campaign, and transactional-email manager backed by PostgreSQL and a separately configured SMTP delivery provider.",
+    capabilities: ["email-campaigns", "newsletter", "subscriber-lists", "transactional-email", "self-hosted-email"],
+    installSurface: "installable-service",
+    credentialKeys: [],
+    sideEffectGate: "Install on localhost through Apps & Services. Listmonk does not provide a mailbox or SMTP delivery; configure and verify a separate SMTP provider, sending domain, recipients, and campaign content before any live send.",
+    fallback: "Use AgentMail for provisioned agent inboxes, Cloudflare Agentic Inbox for self-hosted inbound workflows, or an email provider's campaign product when local Listmonk operations are not desired.",
   },
   {
     id: "queen-bee-prd-decomposition",

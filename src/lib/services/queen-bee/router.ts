@@ -84,6 +84,21 @@ type QueenBeeMachine = {
     syncthing?: boolean;
   } & Record<string, unknown>;
   version?: CollectorVersion;
+  system?: {
+    cpuPct?: number;
+    ramPct?: number;
+    diskPct?: number | null;
+  };
+  fleetPolicy?: {
+    configured?: boolean;
+    performance?: {
+      enabled?: boolean;
+      ignore?: boolean;
+      maxCpuPct?: number;
+      maxRamPct?: number;
+      maxDiskPct?: number;
+    };
+  };
   agents?: QueenBeeAgent[];
 };
 
@@ -225,14 +240,46 @@ export function chooseQueenBeeDelegate(task: QueenBeeTaskIntent, machines: Queen
   const [best] = rankQueenBeeDelegates(task, machines, options);
   if (best) return best;
   const workerClass = inferQueenBeeWorkerClass(task);
+  const policyBlockedMachine = (options.targetMachineKey
+    ? machines.filter((machine) => machineMatchesTarget(machine, options.targetMachineKey))
+    : machines
+  ).map((machine) => ({ machine, eligibility: queenBeeMachineRoutingEligibility(machine) }))
+    .find((entry) => !entry.eligibility.eligible);
   return {
     status: "pending",
     workerClass,
     score: 0,
-    reason: options.targetMachineKey
+    reason: policyBlockedMachine
+      ? `${policyBlockedMachine.machine.device?.name || policyBlockedMachine.machine.key || "This machine"} is excluded by its Fleet performance policy: ${policyBlockedMachine.eligibility.reason}`
+      : options.targetMachineKey
       ? `No chat-capable online agent is available on the pinned machine "${options.targetMachineKey}" right now; Queen Bee queued the task for that machine's next available worker.`
       : "No chat-capable online fleet agent is available yet; Queen Bee queued the task on the Work Board for later pickup.",
   };
+}
+
+export function queenBeeMachineRoutingEligibility(machine: QueenBeeMachine): { eligible: boolean; reason: string } {
+  const policy = machine.fleetPolicy;
+  const performance = policy?.performance;
+  if (!policy?.configured || !performance) return { eligible: true, reason: "No Fleet performance policy is configured." };
+  if (performance.ignore) return { eligible: false, reason: "the machine is manually ignored" };
+  if (performance.enabled === false) return { eligible: true, reason: "Automatic performance limits are off." };
+
+  const checks: Array<{ label: string; value?: number | null; limit?: number }> = [
+    { label: "CPU", value: machine.system?.cpuPct, limit: performance.maxCpuPct },
+    { label: "RAM", value: machine.system?.ramPct, limit: performance.maxRamPct },
+    { label: "storage", value: machine.system?.diskPct, limit: performance.maxDiskPct },
+  ];
+  for (const check of checks) {
+    if (typeof check.value !== "number" || !Number.isFinite(check.value)) continue;
+    if (typeof check.limit !== "number" || !Number.isFinite(check.limit)) continue;
+    if (check.value > check.limit) {
+      return {
+        eligible: false,
+        reason: `${check.label} is ${Math.round(check.value)}% (limit ${Math.round(check.limit)}%)`,
+      };
+    }
+  }
+  return { eligible: true, reason: "Live usage is within this machine's routing limits." };
 }
 
 export function rankQueenBeeDelegates(task: QueenBeeTaskIntent, machines: QueenBeeMachine[] = [], options: QueenBeeRouterOptions = {}): QueenBeeDelegate[] {
@@ -281,6 +328,7 @@ export function rankQueenBeeDelegates(task: QueenBeeTaskIntent, machines: QueenB
 function candidateAgents(machine: QueenBeeMachine, workerClass: QueenBeeWorkerClass, task: QueenBeeTaskIntent, options: QueenBeeRouterOptions): ScoredCandidate[] {
   if (!isCollectorUsable(machine.collector)) return [];
   if (machine.device?.online === false) return [];
+  if (!queenBeeMachineRoutingEligibility(machine).eligible) return [];
   return (machine.agents ?? [])
     .filter((agent) => agent.beeRole !== "observer" && agent.beeRole !== "human")
     .filter((agent) => isChatCapable(agent, machine))

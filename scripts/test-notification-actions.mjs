@@ -83,6 +83,24 @@ const types = (actions) => actions.map((a) => a.type);
   assert.ok(types(actions).includes("discuss"));
 }
 
+// ── capability approval returns to the exact chat, never the wallet ─────────
+{
+  const actions = deriveNotificationActions({
+    ...base,
+    title: "Capability plan waiting: Build a launch page",
+    body: "Queen Bee mapped the task to implementation and deployment.",
+    source: "chat-capability-approval|queen-bee|agent-queen-bee%3A%3Alaunch-page",
+    tags: ["approval", "capability-approval", "chat"],
+  });
+  assert.deepEqual(actions[0], {
+    type: "navigate",
+    label: "Review capability plan",
+    target: { view: "chat", agentId: "queen-bee", chatLeaf: "agent-queen-bee::launch-page" },
+  });
+  assert.ok(!labels(actions).includes("Open Wallet"), "capability approvals belong to chat, not spend approval");
+  assert.ok(!types(actions).includes("work-board"), "capability approval is already a direct decision");
+}
+
 // ── env / credential problems open the env setup panel ──────────────────────
 {
   const actions = deriveNotificationActions({

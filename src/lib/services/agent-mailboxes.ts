@@ -348,27 +348,23 @@ async function readManagedMailboxProviderStatus(): Promise<AgentMailboxProviderS
       "Managed mailbox provisioning is unavailable in this install.",
     ], evidence);
   }
-  let brokerHost = "";
   try {
-    brokerHost = new URL(apiUrl).hostname;
+    new URL(apiUrl);
   } catch {
     return blockedProviderStatus("hivemindos-managed", "HivemindOS managed mailbox broker endpoint is invalid.", [
       "Fix the managed mailbox broker endpoint before creating agent mailboxes.",
     ], evidence);
   }
-  return {
-    id: "hivemindos-managed",
-    name: "HivemindOS Mailbox Broker",
-    ready: true,
-    canProvision: true,
-    canSendLiveInternetMail: true,
-    canReceiveLiveInternetMail: true,
-    detail: "Managed mailbox broker is connected for one-click agent mailbox provisioning.",
-    domain: brokerHost,
-    blockers: [],
-    requiredActions: [],
-    evidence,
-  };
+  return blockedProviderStatus("hivemindos-managed", "HivemindOS managed mailbox provisioning is not available in this build.", [
+    "Use AgentMail or a configured Cloudflare Agentic Inbox until the first-party mailbox broker exposes a reviewed provisioning contract.",
+  ], [
+    ...evidence,
+    {
+      key: "managed-mailbox-provisioner",
+      ok: false,
+      detail: "This build has no implementation that can provision a mailbox through the configured endpoint.",
+    },
+  ]);
 }
 
 async function readCloudflareMailboxProviderStatus(input: { liveCheck: boolean }): Promise<AgentMailboxProviderStatus> {

@@ -163,7 +163,13 @@ async function remoteLocalAction(collectorUrl: string, body: AppBuilderBody) {
     signal: AbortSignal.timeout(600_000),
   });
   const payload = await response.json().catch(() => null) as Record<string, unknown> | null;
-  if (!response.ok || payload?.ok === false) throw new Error(clean(payload?.error) || `Fleet app-builder returned HTTP ${response.status}.`);
+  if (!response.ok || payload?.ok === false) {
+    const upstreamMessage = clean(payload?.error);
+    if (clean(body.action) === "adopt" && upstreamMessage === "Unsupported local app-builder action.") {
+      throw new Error("This linked machine is running an older HivemindOS collector that does not support Chat-bound Preview. Update HivemindOS on that machine, then press Preview again.");
+    }
+    throw new Error(upstreamMessage || `Fleet app-builder returned HTTP ${response.status}.`);
+  }
   return payload || {};
 }
 

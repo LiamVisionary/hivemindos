@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import { queenBeeNameOrDefault } from "@/lib/config/queen-bee-personality";
 import {
   fetchLiveModelStrengthHints,
   pickStrongestModelCandidate,
@@ -42,7 +43,13 @@ export function useQueenCrown(input: {
       setAgents((current) => (
         current.some((agent) => agent.beeRole === "queen")
           ? current
-          : current.map((agent) => (agent.id === agentId ? { ...agent, beeRole: "queen" } : agent))
+          : current.map((agent) => (agent.id === agentId
+            ? {
+              ...agent,
+              name: queenBeeNameOrDefault(agent.name, agent.queenNameCustomized),
+              beeRole: "queen",
+            }
+            : agent))
       ));
     };
 

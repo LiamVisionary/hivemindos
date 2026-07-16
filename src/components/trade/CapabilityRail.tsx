@@ -38,6 +38,7 @@ import {
 import { ChatMarkdown } from "@/features/dashboard/ChatMarkdown";
 import { HyperliquidTradeForm } from "@/features/dashboard/views/trade/HyperliquidTradeForm";
 import { CopyTradingPanel } from "./CopyTradingPanel";
+import { QuantResearchPanel } from "./QuantResearchPanel";
 
 const INTENT_ICON: Record<string, IconName> = {
   "crosschain-swap": "repeat", bridge: "branch", hyperliquid: "activity", polymarket: "spark",
@@ -45,6 +46,7 @@ const INTENT_ICON: Record<string, IconName> = {
   "private-transfer": "shield", "crosschain-payment": "network", receive: "download",
   "paid-api": "plug", "private-paid-api": "key", "fund-llm-credits": "bot", "card-payment": "doc",
   "copy-trading": "copy",
+  "quant-research": "brain",
   "nansen-defi-positions": "wallet", "nansen-smart-money-holdings": "spark",
   "nansen-token-holders": "eye", "nansen-token-screener": "search",
   "nansen-token-tracking": "search", "nansen-hyperliquid-wallets": "activity", "nansen-related-wallets": "network",
@@ -171,6 +173,7 @@ export function CapabilityRail() {
   // badge its capabilities (so a personal wallet never shows UsePod/MoneyClaw).
   const actingProvider = walletKind === "bankr" ? "bankr" : String((walletConfig as Record<string, unknown> | null)?.provider || "").toLowerCase();
   const [active, setActive] = React.useState<string | null>(null);
+  const railAnchor = React.useRef<HTMLDivElement>(null);
 
   const groups = CRYPTO_INTENT_GROUPS
     .map((group) => ({ group, items: RAIL_INTENTS.filter((i) => i.group === group) }))
@@ -178,12 +181,23 @@ export function CapabilityRail() {
 
   const activeIntent = RAIL_INTENTS.find((i) => i.id === active) ?? null;
 
+  const openAction = (intentId: string) => {
+    setActive(intentId);
+    requestAnimationFrame(() => {
+      railAnchor.current?.scrollIntoView({ block: "start" });
+    });
+  };
+
   if (activeIntent) {
-    return <CapabilityDetail intent={activeIntent} onBack={() => setActive(null)} />;
+    return (
+      <div ref={railAnchor} className="tk-rail-anchor">
+        <CapabilityDetail intent={activeIntent} onBack={() => setActive(null)} />
+      </div>
+    );
   }
 
   return (
-    <div className="tk-rail">
+    <div ref={railAnchor} className="tk-rail">
       <div className="tk-railhead">
         <h3>More you can do here</h3>
         <Badge>via {desk.wallet.short}</Badge>
@@ -193,8 +207,8 @@ export function CapabilityRail() {
           <div className="tk-grouplbl">{g.group}</div>
           <div className="tk-tiles">
             {g.items.map((it) => (
-              <button key={it.id} type="button" className="tk-tile" onClick={() => setActive(it.id)}>
-                <ProviderBadge provider={isNansenTradeIntent(it.id) ? "nansen" : badgeProviderForIntent(cryptoCaps, it.id, actingProvider)} />
+              <button key={it.id} type="button" className="tk-tile" onClick={() => openAction(it.id)}>
+                <ProviderBadge provider={it.id === "quant-research" ? "quant-research" : isNansenTradeIntent(it.id) ? "nansen" : badgeProviderForIntent(cryptoCaps, it.id, actingProvider)} />
                 <span className="ti"><BIcon name={INTENT_ICON[it.id] ?? "spark"} size={16} /></span>
                 <b>{it.label}</b>
                 <span>{it.desc}</span>
@@ -332,6 +346,14 @@ function CapabilityDetail({ intent, onBack }: { intent: CryptoIntentDef; onBack:
     return (
       <DetailShell intent={intent} walletShort="Nansen" onBack={onBack}>
         <NansenCapabilityPanel intentId={intent.id} />
+      </DetailShell>
+    );
+  }
+
+  if (intent.input === "quant-research") {
+    return (
+      <DetailShell intent={intent} walletShort="local Rust + Python" onBack={onBack}>
+        <QuantResearchPanel />
       </DetailShell>
     );
   }

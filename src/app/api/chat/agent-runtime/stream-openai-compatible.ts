@@ -8,11 +8,7 @@ import { summarizeUsePodResponseHeaders } from "@/lib/services/usepod";
 import { interpretVeniceError, isVeniceProfile, summarizeVeniceResponseHeaders } from "@/lib/services/venice";
 import { isBankrAdaptiveModel, isBankrLlmProfile, resolveAdaptiveBankrLlmModels } from "@/lib/services/bankr-llm";
 import { resolveVerifiedComputeRoute } from "@/lib/services/wallet/verified-compute";
-import {
-  bankrActionToolDefinition,
-  BANKR_ACTION_TOOL_NAME,
-  runBankrActionTool,
-} from "@/lib/services/bankr-actions";
+import { bankrActionToolDefinition, BANKR_ACTION_TOOL_NAME, runBankrActionTool } from "@/lib/services/bankr-actions";
 import { imageGenerationRequest, videoGenerationRequest } from "@/lib/services/chat/task-retrieval-context";
 import { semanticVideoIntentCandidate } from "@/lib/services/chat/semantic-video-intent";
 import { AGENT_COLD_START_EVENT_TYPE, inferredModalColdStartProcessEvent, recordAgentRuntimeWarm } from "@/lib/services/chat/agent-cold-start";
@@ -112,7 +108,10 @@ import { createOpenAICompatibleModelMessagesBuilder } from "./openai-compatible-
 import { INVOKE_HIVE_CAPABILITY_TOOL_NAME, invokeHiveCapabilityRuntimeEvent, invokeHiveCapabilityToolDefinition, runInvokeHiveCapabilityTool } from "./invoke-hive-capability-tool";
 import { runNonStreamToolConversation, type NonStreamWinningRequest } from "./non-stream-tool-conversation";
 import { streamSemanticVideoClarification } from "./stream-semantic-video-clarification";
+import { streamHyperframesPromptBuilder } from "./stream-hyperframes-prompt-builder";
 import { resolveSemanticVideoRuntimeRoute } from "./semantic-video-runtime-route";
+import { runtimeSessionErrorResponse } from "./runtime-session-response";
+
 export async function streamOpenAICompatibleRuntime(
   profile: AgentProfile,
   messages: IncomingMessage[],
@@ -135,7 +134,7 @@ export async function streamOpenAICompatibleRuntime(
   const allowUnlistedCommands = chatPermissionModeAllowsUnlistedCommands(permissionMode);
   const inputCheck = proxyInput(userText);
   if (inputCheck.verdict === "block") {
-    return Response.json({ error: inputCheck.reason ?? "Message blocked by security policy" }, { status: 400 });
+    return runtimeSessionErrorResponse(runtimeSessionId, inputCheck.reason ?? "Message blocked by security policy", 400, "blocked");
   }
   const requestOrigin = requestOriginFromUrl(telemetry?.request?.url);
   let resolvedProfile: Awaited<ReturnType<typeof resolveOpenAICompatibleProfile>>;
@@ -143,9 +142,7 @@ export async function streamOpenAICompatibleRuntime(
     resolvedProfile = await resolveOpenAICompatibleProfile({ profile, wallet, requestOrigin });
   } catch (error) {
     const status = error instanceof OpenAICompatibleProfileError ? error.status : 500;
-    return Response.json({
-      error: error instanceof Error ? error.message : "Provider setup is incomplete.",
-    }, { status });
+    return runtimeSessionErrorResponse(runtimeSessionId, error instanceof Error ? error.message : "Provider setup is incomplete.", status);
   }
   const {
     runtimeProfile,
@@ -166,7 +163,7 @@ export async function streamOpenAICompatibleRuntime(
   const url = buildOpenAICompatibleUrl(runtimeProfile);
   const lockKey = interactiveRuntimeLockKey(runtimeProfile, url, telemetry?.chatStorageKey || runtimeSessionId);
   if (!reserveInteractiveRuntime(lockKey)) {
-    return Response.json({ error: `${runtimeProfile.name || runtimeProfile.runtime} is already running another interactive request at ${url}.` }, { status: 409 });
+    return runtimeSessionErrorResponse(runtimeSessionId, `${runtimeProfile.name || runtimeProfile.runtime} is already running another interactive request at ${url}.`, 409, "blocked");
   }
   const adaptiveProvider = Boolean(adaptiveRoutePlan);
   const adaptiveOpenRouter = isAdaptiveOpenRouterProfile(runtimeProfile) || (isOpenRouterProvider(runtimeProfile) && Boolean(runtimeProfile.adaptiveOpenRouter));
@@ -201,7 +198,7 @@ export async function streamOpenAICompatibleRuntime(
         : [openAICompatibleModel(runtimeProfile)];
   } catch (error) {
     releaseInteractiveRuntime(lockKey);
-    return Response.json({ error: error instanceof Error ? error.message : "Adaptive OpenRouter model selection failed." }, { status: 502 });
+    return runtimeSessionErrorResponse(runtimeSessionId, error instanceof Error ? error.message : "Adaptive OpenRouter model selection failed.", 502);
   }
   const suppressCommandToolForNativeMedia = shouldSuppressCommandToolForNativeMedia({
     messages,
@@ -562,6 +559,10 @@ export async function streamOpenAICompatibleRuntime(
         releaseInteractiveRuntime(lockKey);
         return streamSemanticVideoClarification({ requestText: intentText, runtimeSessionId, runtime: profile.runtime, startedAt: fetchStartedAt, preflightProcessPayload });
       }
+      if (semanticRoute.guideHyperframesPrompt) {
+        releaseInteractiveRuntime(lockKey);
+        return streamHyperframesPromptBuilder({ requestText: intentText, runtimeSessionId, runtime: profile.runtime, startedAt: fetchStartedAt, preflightProcessPayload });
+      }
     }
     let sentTools = activeToolDefinitions.length > 0;
     const requestBodyFor = (withTools: boolean) => JSON.stringify({
@@ -855,7 +856,7 @@ export async function streamOpenAICompatibleRuntime(
       const event = outputCheck.verdict === "block" ? null : await recordChatHoney(profile, userText, chunk, honeyLedgerEnabled && !verifiedComputeActive);
       if (outputCheck.verdict === "block") {
         await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible response blocked", outputCheck.reason ?? "Response blocked by security policy").catch(() => undefined);
-        await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
+        await finishRuntimeChatSession(runtimeSessionId, "blocked").catch(() => undefined);
       } else {
         await appendRuntimeChatSessionText(runtimeSessionId, "assistant", chunk, toolRun.raw ?? json, responseBilling ? { billing: responseBilling } : undefined).catch(() => undefined);
         await finishRuntimeChatSession(runtimeSessionId, "completed").catch(() => undefined);
@@ -887,7 +888,7 @@ export async function streamOpenAICompatibleRuntime(
     const event = outputCheck.verdict === "block" ? null : await recordChatHoney(profile, userText, chunk, honeyLedgerEnabled && !verifiedComputeActive);
     if (outputCheck.verdict === "block") {
       await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible response blocked", outputCheck.reason ?? "Response blocked by security policy").catch(() => undefined);
-      await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
+      await finishRuntimeChatSession(runtimeSessionId, "blocked").catch(() => undefined);
     } else {
       await appendRuntimeChatSessionText(runtimeSessionId, "assistant", chunk, json, responseBilling ? { billing: responseBilling } : undefined).catch(() => undefined);
       await finishRuntimeChatSession(runtimeSessionId, "completed").catch(() => undefined);
@@ -926,6 +927,7 @@ export async function streamOpenAICompatibleRuntime(
       }
       if (preflightProcessPayload) controller.enqueue(encoder.encode(preflightProcessPayload));
       let fullText = "";
+      let outputBlocked = false;
       // Consume one upstream SSE stream: emit content/thinking to the client exactly as
       // before, and (when allowed) accumulate any tool_calls instead of leaking them as
       // raw deltas. Returns the completed tool calls so the caller can run the tool loop.
@@ -988,10 +990,12 @@ export async function streamOpenAICompatibleRuntime(
               const outputCheck = proxyOutput(extractChunk(parsed));
               const reasoningCheck = proxyOutput(extractReasoningChunk(parsed));
               if (outputCheck.verdict === "block") {
+                outputBlocked = true;
                 controller.enqueue(encoder.encode(ssePayload({ error: outputCheck.reason ?? "Response blocked by security policy" })));
                 continue;
               }
               if (reasoningCheck.verdict === "block") {
+                outputBlocked = true;
                 controller.enqueue(encoder.encode(ssePayload({ error: reasoningCheck.reason ?? "Response blocked by security policy" })));
                 continue;
               }
@@ -1014,6 +1018,7 @@ export async function streamOpenAICompatibleRuntime(
                 ? { content: "", thinking: "" }
                 : routeChannelMarkupDelta(outputCheck.text, channelMarkupState);
               if (outputCheck.verdict === "block") {
+                outputBlocked = true;
                 controller.enqueue(encoder.encode(ssePayload({ error: outputCheck.reason ?? "Response blocked by security policy" })));
               }
               if (routed.thinking) {
@@ -1485,7 +1490,7 @@ export async function streamOpenAICompatibleRuntime(
           outputLength: fullText.length,
           elapsedMs: Date.now() - fetchStartedAt,
         });
-        queueSessionWrite(() => finishRuntimeChatSession(runtimeSessionId, "completed"));
+        queueSessionWrite(() => finishRuntimeChatSession(runtimeSessionId, outputBlocked ? "blocked" : "completed"));
       } catch (error) {
         const message = error instanceof Error ? error.message : "OpenAI-compatible stream failed";
         queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Runtime stream failed", message));

@@ -4,12 +4,16 @@ const MAX_SUBJECT_LENGTH = 140;
 
 export const COMPANY_APPROVAL_POLICY_MODES: CompanyApprovalPolicyMode[] = ["off", "ask", "never"];
 
-// Default to "ask", not "off": a standard company must not send customer-facing
-// email or publish/hand off a customer-facing site without the human's sign-off
-// out of the box. Founder Mode already set these to "ask"; this makes every
-// company (including quick-start ones) safe by default. A company can still
-// explicitly relax a subject to "off" if its operator chooses.
+// Customer-facing sends and publishes default to "ask". Capability selection
+// is different: autonomous companies default to automatic setup so ordinary
+// tool installation does not wedge the crew, with a per-company opt-in to ask.
 export const DEFAULT_COMPANY_APPROVAL_POLICIES: CompanyApprovalPolicy[] = [
+  {
+    id: "capability-setup",
+    subject: "installing, enabling, or substituting task capabilities",
+    mode: "off",
+    source: "default",
+  },
   {
     id: "customer-email-send",
     subject: "sending customer-facing emails",

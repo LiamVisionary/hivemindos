@@ -129,7 +129,76 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--fg-3, #867d6e);
-  margin: 0 0 10px;
+  margin: 0;
+}
+
+.groupHeader {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.groupActionAnchor { position: relative; }
+.groupAddButton {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line-2, #2b3038);
+  border-radius: 7px;
+  background: var(--panel-hi, #1e222b);
+  color: var(--fg-3, #867d6e);
+  cursor: pointer;
+}
+.groupAddButton:hover,
+.groupAddButton[aria-expanded="true"] { border-color: color-mix(in srgb, var(--honey, #e7b45c) 52%, transparent); color: var(--honey, #e7b45c); }
+.groupAddButton svg { width: 13px; height: 13px; }
+.groupActionPopover {
+  position: absolute;
+  z-index: 12;
+  top: calc(100% + 7px);
+  left: 0;
+  width: min(280px, calc(100vw - 72px));
+  padding: 7px;
+  border: 1px solid var(--line-2, #2b3038);
+  border-radius: 12px;
+  background: var(--panel-hi, #1e222b);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.42);
+}
+.groupActionPopover > button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  padding: 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-1, #e9e4d8);
+  text-align: left;
+  cursor: pointer;
+}
+.groupActionPopover > button:hover { background: color-mix(in srgb, var(--honey, #e7b45c) 10%, transparent); }
+.groupActionPopover > button:disabled { cursor: wait; opacity: 0.72; }
+.groupActionPopover svg { width: 16px; height: 16px; color: var(--honey, #e7b45c); }
+.groupActionPopover span { min-width: 0; display: grid; gap: 2px; }
+.groupActionPopover strong { font-size: 12px; font-weight: 500; }
+.groupActionPopover small { color: var(--fg-3, #867d6e); font-size: 10.5px; line-height: 1.35; }
+.groupActionPopover p { margin: 6px 8px 3px; color: var(--danger, #f17878); font-size: 10.5px; line-height: 1.4; }
+.groupEmpty { padding: 11px 12px; border: 1px dashed var(--line-2, #2b3038); border-radius: 10px; color: var(--fg-3, #867d6e); font-size: 11px; }
+
+.walletLoading {
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: var(--fg-3, #867d6e);
+  font-size: 12px;
 }
 
 .intentGrid {

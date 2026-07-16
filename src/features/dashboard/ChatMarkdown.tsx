@@ -1,6 +1,9 @@
 import { memo, useState, type MouseEvent, type ReactNode } from "react";
 
 import chatStyles from "@/app/chat.module.css";
+import presentationStyles from "@/features/dashboard/ChatMarkdownPresentation.module.css";
+import { ChatRouteMarkdown } from "@/features/dashboard/ChatRouteMarkdown";
+import type { DeliverableSourceMachine } from "@/lib/services/deliverable-open-client";
 import { createStyleClass } from "@/features/dashboard/style-classes";
 import { isExternalHttpUrl, openExternalUrl } from "@/lib/native/open-external-url";
 
@@ -16,50 +19,6 @@ const indentBlockStyle = {
   background: "rgba(20, 184, 166, 0.08)",
   padding: "9px 12px 9px 14px",
   color: "rgba(232, 238, 247, 0.9)",
-} as const;
-const bulletListStyle = {
-  display: "grid",
-  gap: "9px",
-  margin: "4px 0",
-} as const;
-const nestedBulletListStyle = {
-  ...bulletListStyle,
-  margin: "-2px 0 4px 2.45rem",
-} as const;
-const bulletItemStyle = {
-  display: "grid",
-  gridTemplateColumns: "0.55rem minmax(0, 1fr)",
-  gap: "0.72rem",
-  alignItems: "start",
-  border: "1px solid rgba(255, 255, 255, 0.08)",
-  borderRadius: "12px",
-  background: "rgba(255, 255, 255, 0.026)",
-  padding: "0.62rem 0.72rem",
-} as const;
-const orderedItemStyle = {
-  display: "grid",
-  gridTemplateColumns: "1.8rem minmax(0, 1fr)",
-  gap: "0.65rem",
-  alignItems: "start",
-  border: "1px solid rgba(255, 255, 255, 0.08)",
-  borderRadius: "12px",
-  background: "rgba(255, 255, 255, 0.026)",
-  padding: "0.62rem 0.72rem",
-} as const;
-const bulletDotStyle = {
-  width: "0.38rem",
-  height: "0.38rem",
-  borderRadius: "999px",
-  background: "rgba(103, 232, 249, 0.96)",
-  boxShadow: "0 0 12px rgba(103, 232, 249, 0.9)",
-  transform: "translateY(0.52rem)",
-} as const;
-const orderedIndexStyle = {
-  color: "rgba(94, 234, 212, 0.9)",
-  fontSize: "0.82em",
-  fontWeight: 800,
-  fontVariantNumeric: "tabular-nums",
-  whiteSpace: "nowrap",
 } as const;
 const fieldLabelStyle = {
   color: "rgba(232, 238, 247, 0.98)",
@@ -448,8 +407,15 @@ export function ChatInlineMarkdown({ text }: { text: string }) {
   return <>{renderInlineMarkdown(text.replace(/\s+/g, " "), { links: "text" })}</>;
 }
 
-function ChatMarkdownBase({ text, className, headingClassName }: { text: string; className?: string; headingClassName?: string }) {
+function ChatMarkdownBase({ text, className, headingClassName, sourceMachine, surface = "default" }: {
+  text: string;
+  className?: string;
+  headingClassName?: string;
+  sourceMachine?: DeliverableSourceMachine;
+  surface?: "chat" | "default";
+}) {
   const [copiedCode, setCopiedCode] = useState("");
+  if (surface === "chat") return <ChatRouteMarkdown text={text} className={className} sourceMachine={sourceMachine} />;
   if (!text.trim()) return null;
   const leadingDraft = splitLeadingDraftBlock(text);
   const displayText = leadingDraft?.rest || text;
@@ -507,9 +473,22 @@ function ChatMarkdownBase({ text, className, headingClassName }: { text: string;
       previousBlockKind = "json";
       continue;
     }
-    const heading = /^(#{1,3})\s+(.+)$/.exec(line);
-    if (heading) {
-      blocks.push(<strong className={headingClassName ?? chatClass("markdownHeading")} key={`heading-${index}`}>{renderInlineMarkdown(heading[2], inlineOptions)}</strong>);
+    const markdownHeading = /^(#{1,3})\s+(.+)$/.exec(line);
+    const standaloneStrongHeading = /^\s*\*\*([^*]+)\*\*\s*$/.exec(line);
+    if (markdownHeading || standaloneStrongHeading) {
+      const level = markdownHeading ? markdownHeading[1].length : 2;
+      const headingText = markdownHeading?.[2] ?? standaloneStrongHeading?.[1] ?? "";
+      const HeadingTag = level === 1 ? "h2" : level === 2 ? "h3" : "h4";
+      const defaultHeadingClassName = `${chatClass("markdownHeading")} ${presentationStyles.heading}`;
+      blocks.push(
+        <HeadingTag
+          className={headingClassName ?? defaultHeadingClassName}
+          data-level={level}
+          key={`heading-${index}`}
+        >
+          {renderInlineMarkdown(headingText, inlineOptions)}
+        </HeadingTag>,
+      );
       index += 1;
       previousBlockKind = "heading";
       continue;
@@ -522,14 +501,17 @@ function ChatMarkdownBase({ text, className, headingClassName }: { text: string;
         index += 1;
       }
       blocks.push(
-        <div className={chatClass("markdownBulletList")} key={`list-${index}`} role="list" style={nested ? nestedBulletListStyle : bulletListStyle}>
+        <ul
+          className={`${chatClass("markdownBulletList")} ${presentationStyles.list}${nested ? ` ${presentationStyles.nestedList}` : ""}`}
+          key={`list-${index}`}
+        >
           {items.map((item, itemIndex) => (
-            <div className={chatClass("markdownBulletItem")} key={`${index}-${itemIndex}`} role="listitem" style={bulletItemStyle}>
-              <span aria-hidden="true" className={chatClass("markdownBulletDot")} style={bulletDotStyle} />
+            <li className={`${chatClass("markdownBulletItem")} ${presentationStyles.listItem}`} key={`${index}-${itemIndex}`}>
+              <span aria-hidden="true" className={`${chatClass("markdownBulletDot")} ${presentationStyles.bulletMarker}`} />
               <span>{renderFieldLine(item, inlineOptions)}</span>
-            </div>
+            </li>
           ))}
-        </div>,
+        </ul>,
       );
       previousBlockKind = "bullet";
       continue;
@@ -542,14 +524,14 @@ function ChatMarkdownBase({ text, className, headingClassName }: { text: string;
         index += 1;
       }
       blocks.push(
-        <div className={chatClass("markdownBulletList")} key={`ordered-${index}`} role="list" style={bulletListStyle}>
+        <ol className={`${chatClass("markdownBulletList")} ${presentationStyles.list} ${presentationStyles.orderedList}`} key={`ordered-${index}`}>
           {items.map((item, itemIndex) => (
-            <div className={chatClass("markdownBulletItem")} key={`${index}-${itemIndex}`} role="listitem" style={orderedItemStyle}>
-              <span aria-hidden="true" style={orderedIndexStyle}>{item.marker}</span>
+            <li className={`${chatClass("markdownBulletItem")} ${presentationStyles.listItem}`} key={`${index}-${itemIndex}`}>
+              <span aria-hidden="true" className={presentationStyles.orderedMarker}>{item.marker}</span>
               <span>{renderFieldLine(item.text, inlineOptions)}</span>
-            </div>
+            </li>
           ))}
-        </div>,
+        </ol>,
       );
       previousBlockKind = "ordered";
       continue;
@@ -562,14 +544,14 @@ function ChatMarkdownBase({ text, className, headingClassName }: { text: string;
         index += 1;
       }
       blocks.push(
-        <div className={chatClass("markdownBulletList")} key={`lettered-${index}`} role="list" style={bulletListStyle}>
+        <ol className={`${chatClass("markdownBulletList")} ${presentationStyles.list} ${presentationStyles.orderedList}`} key={`lettered-${index}`}>
           {items.map((item, itemIndex) => (
-            <div className={chatClass("markdownBulletItem")} key={`${index}-${itemIndex}`} role="listitem" style={orderedItemStyle}>
-              <span aria-hidden="true" style={orderedIndexStyle}>{item.marker}</span>
+            <li className={`${chatClass("markdownBulletItem")} ${presentationStyles.listItem}`} key={`${index}-${itemIndex}`}>
+              <span aria-hidden="true" className={presentationStyles.orderedMarker}>{item.marker}</span>
               <span>{renderFieldLine(item.text, inlineOptions)}</span>
-            </div>
+            </li>
           ))}
-        </div>,
+        </ol>,
       );
       previousBlockKind = "lettered";
       continue;
@@ -594,6 +576,7 @@ function ChatMarkdownBase({ text, className, headingClassName }: { text: string;
       && lines[index].trim()
       && !lines[index].trim().startsWith("```")
       && !/^(#{1,3})\s+/.test(lines[index])
+      && !/^\s*\*\*([^*]+)\*\*\s*$/.test(lines[index])
       && !/^\s*[-*]\s+/.test(lines[index])
       && !/^\s*\d+[.)]\s+/.test(lines[index])
       && !/^\s*[A-Z][.)]\s+/.test(lines[index])
@@ -607,7 +590,7 @@ function ChatMarkdownBase({ text, className, headingClassName }: { text: string;
   }
 
   return (
-    <div className={className ?? chatClass("messageMarkdown")}>
+    <div className={`${className ?? chatClass("messageMarkdown")} ${presentationStyles.root}`}>
       {blocks}
       {copiedCode ? <span className={chatClass("codeCopiedToast")} aria-live="polite">Copied</span> : null}
     </div>
@@ -615,6 +598,6 @@ function ChatMarkdownBase({ text, className, headingClassName }: { text: string;
 }
 
 // Memoized so non-streaming bubbles skip re-parsing markdown when an ancestor
-// re-renders (e.g. on each streamed token or composer keystroke). text/className
-// props are primitive strings, so the default shallow compare is sufficient.
+// re-renders (e.g. on each streamed token or composer keystroke). The source
+// machine object is memoized by the chat route, so shallow comparison is enough.
 export const ChatMarkdown = memo(ChatMarkdownBase);

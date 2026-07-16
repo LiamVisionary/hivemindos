@@ -55,6 +55,8 @@ Provider inventories must classify runtime mirrors as already handled before imp
 
 Setup copies a small default pack from `packaged-skills/auto-install/` into the shared vault `Skills/` shelf.
 
+That default pack includes `hive-skill-autoresearch`, the review-gated procedure used when repeated skill failures qualify for measured improvement. It preserves the installed skill while native HivemindOS agents—or optional Evo experiments—evaluate candidates.
+
 That default shelf includes `engineering-discipline`, HivemindOS' risk-scoped engineering orchestrator. Users who want the fuller method library can install the **HivemindOS Engineering Discipline** pack in the Skill Browser. Its manifest resolves every skill from the canonical packaged auto-install and optional directories, adds selected `obra/superpowers` methods, archives older HivemindOS-managed adaptations before refreshing them, and leaves unmanaged colliding skills untouched.
 
 The HivemindOS Hive skills are included by default:
@@ -64,6 +66,7 @@ The HivemindOS Hive skills are included by default:
 | `create-zero-human-company` | Turns a business goal or existing repository into a durable, approval-gated company record, verifies its crew and operating setup, and leaves autonomy stopped until explicitly launched. |
 | `hive-assimilate` | Requires agents to search pinned sources, the shared brain, user projects, local/private indexes, and public GitHub before building software from scratch. |
 | `hive-pulse` | Gives agents a bundled last-30-days signal brief across social, developer, market, GitHub, and web sources using a pinned MIT licensed engine, a setup-installed `hive-pulse` command shim, and Hive safety rules. |
+| `hive-quant-research` | Gives agents a research-only, schedulable quant workflow with typed hypotheses, lagged Rust simulation, independent Python statistics, fail-closed overfitting gates, and hashed local artifacts. |
 | `hive-capability-search` | Finds available tools, skills, apps, agents, credentials by key name, and delivery channels such as slash commands, API routes, MCP tools, CLIs, and dashboard surfaces for a task. |
 | `hive-remote-capability-use` | Runs remote connected apps and fleet capabilities selected by capability search, using fresh discovery, app-proxy routing, private file transfer, artifact verification, and side-effect gates. |
 | `hive-skill-fusion` | Turns a capability request into a reusable shared-brain skill. |
@@ -71,6 +74,9 @@ The HivemindOS Hive skills are included by default:
 | `hive-aeon-fusion` | Converts reusable hive workflows into AEON-ready agent duties when appropriate. |
 | `hive-brain-memory` | Teaches agents typed recall, canonical durable-memory heads, operational-event separation, review-gated pattern proposals, and evolution with superseded-history preservation. |
 | `hive-brain-compiled-wiki` | Teaches agents the HivemindOS compiled-brain workflow: entity/concept/summary writes, compiled-wiki search, graph-native MCP reads, wiki health, and human collective shared-brain contribution rules. |
+| `hive-skill-autoresearch` | Turns repeated, evidence-backed skill failures into a reviewed optimizer task with a measured baseline, four candidate variants, regression floors, and no automatic replacement. |
+| `notebooklm` | Teaches agents to use the optional local NotebookLM MCP integration with explicit notebook IDs, private machine-local authentication, verified artifacts, and confirmation for destructive or outward actions. |
+| `wrapup` | On an explicit wrap-up request, deduplicates or evolves durable typed memory and archives a concise redacted session summary in the user's verified NotebookLM AI Brain notebook. |
 | HyperFrames suite (`hyperframes` + 18 siblings) | Routes explicit HTML / HyperFrames video work into bundled HTML, CSS, media, and seekable-animation workflows. Generic creation requests first present an actionable choice between cloud AI, local AI, and HTML / HyperFrames; ordinary discussion stays conversational. |
 
 The Obsidian Native Brain Pack is also included by default:

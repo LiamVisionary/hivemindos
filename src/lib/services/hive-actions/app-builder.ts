@@ -5,7 +5,7 @@ import { defineHiveAction } from "./define";
 
 export const appBuilderAction = defineHiveAction({
   id: "apps.build",
-  title: "Build HivemindOS app",
+  title: "Create app workspace",
   description:
     "List, create, inspect, edit, install, start, stop, and preview app projects on a selected local/fleet machine, or create and inspect projects on a managed cloud agent.",
   schema: z.object({
@@ -78,7 +78,7 @@ export const appBuilderAction = defineHiveAction({
   sideEffects: ["read", "write", "filesystem", "network", "remote-machine"],
   risk: "high",
   tags: ["app-builder", "website", "code", "project", "local", "managed-cloud", "preview", "hosting", "publish", "files"],
-  aliases: ["app_builder", "build an app", "create a website", "lovable", "replit", "start app preview", "publish a site", "host a website"],
+  aliases: ["app_builder", "build an app", "create an app workspace", "create a website", "lovable", "replit", "start app preview", "publish a site", "host a website"],
   confirmation: {
     tokens: [...new Set(Object.values(APP_BUILDER_CONFIRMATIONS))],
     reason:

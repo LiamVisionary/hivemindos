@@ -13,8 +13,10 @@ import { groupIssuesByReason } from "./issue-reason";
 import type { PreviewDecision } from "./preview-review";
 import { DeliverableCard } from "./DeliverableCard";
 import { AnalyticsPanel } from "./AnalyticsPanel";
+import { ApiLimitsPanel } from "./ApiLimitsPanel";
 import { ProductsPanel } from "./ProductsPanel";
 import { ImportedOperationsPanel } from "./ImportedOperationsPanel";
+import { ImportedKnowledgePanel } from "./ImportedKnowledgePanel";
 import { CompanyKnowledgePanel } from "./CompanyKnowledgePanel";
 import { CommsPanel } from "./CommsPanel";
 import { SalesContentPanel } from "./SalesContentPanel";
@@ -606,7 +608,7 @@ function money(value?: number): string {
 
 function RevenueSharePanel({ colony: c, handlers }: { colony: Colony; handlers: CockpitHandlers }) {
   const busy = handlers.busyId === c.id;
-  const imported = Boolean(c.importedOperations);
+  const imported = Boolean(c.importedOperations || c.importedKnowledge);
   const [amount, setAmount] = React.useState("");
   const [source, setSource] = React.useState<CompanyRevenueShareInput["source"]>("manual");
   const amountUsd = Number(amount);
@@ -743,7 +745,7 @@ function TreasuryColumn({ colony: c, handlers }: { colony: Colony; handlers: Coc
 
       <PipelineForecastPanel colony={c} />
 
-      <RevenueSharePanel key={`${c.id}:${Boolean(c.importedOperations)}`} colony={c} handlers={handlers} />
+      <RevenueSharePanel key={`${c.id}:${Boolean(c.importedOperations || c.importedKnowledge)}`} colony={c} handlers={handlers} />
 
       {/* kill switch + disband */}
       <Panel style={c.frozen ? { borderColor: "color-mix(in srgb, var(--danger) 40%, transparent)", background: "color-mix(in srgb, var(--danger) 7%, var(--panel))" } : undefined}>
@@ -841,8 +843,10 @@ export function Cockpit({
     // Only companies that sell fixed products carry a catalog.
     ...(c.products ? [{ key: "products", label: "Products", badge: c.products.items.length || null }] : []),
     ...(c.importedOperations ? [{ key: "systems", label: "Systems", badge: (c.importedOperations.workflows.length + c.importedOperations.schedules.length) || null }] : []),
+    ...(c.importedKnowledge ? [{ key: "sources", label: "Sources", badge: c.importedKnowledge.documents.length || null }] : []),
     { key: "team", label: "Team" },
     { key: "analytics", label: "Analytics" },
+    { key: "limits", label: "Limits" },
     { key: "learning", label: "Learning", badge: c.capabilityCapital.distillationQueue || null },
     { key: "labs", label: "Labs" },
     { key: "approvals", label: "Approvals", badge: approveCount || null },
@@ -884,7 +888,7 @@ export function Cockpit({
             <h1 style={{ margin: 0, fontFamily: "var(--f-display)", fontSize: 34, fontWeight: 600, letterSpacing: -1, lineHeight: 1 }}>{c.name}</h1>
             <span style={{ fontFamily: "var(--f-mono)", fontSize: 11.5, color: "var(--fg-4)", padding: "2px 7px", border: "1px solid var(--line)", borderRadius: 5 }}>{c.ticker}</span>
             <StatusPill status={c.status} />
-            {c.importedOperations ? (
+            {c.importedOperations || c.importedKnowledge ? (
               <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--honey)", padding: "3px 8px", border: "1px solid var(--honey-line)", borderRadius: 999, background: "var(--honey-soft)", textTransform: "uppercase", letterSpacing: 0.06 }}>imported</span>
             ) : null}
             <button onClick={handlers.onEdit} title="Edit company details" className="zhc-btn-ghost" style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", border: "1px solid var(--line-2)", borderRadius: 8, cursor: "pointer", color: "var(--fg-3)", fontFamily: "var(--f-mono)", fontSize: 10.5, padding: "4px 10px", textTransform: "uppercase", letterSpacing: 0.06 }}>
@@ -1021,7 +1025,11 @@ export function Cockpit({
 
       {active === "systems" && <ImportedOperationsPanel colony={c} />}
 
+      {active === "sources" && <ImportedKnowledgePanel colony={c} />}
+
       {active === "analytics" && <AnalyticsPanel colony={c} />}
+
+      {active === "limits" && <ApiLimitsPanel companyId={c.id} companyName={c.name} />}
 
       {active === "learning" && <CapabilityCapitalPanel colony={c} openSkillAttachmentBrowser={openSkillAttachmentBrowser} />}
 

@@ -10,6 +10,8 @@ const setupSh = readFileSync("setup.sh", "utf8");
 const setupPs = readFileSync("setup.ps1", "utf8");
 const uninstallPs = readFileSync("uninstall.ps1", "utf8");
 const collectorPs = readFileSync("scripts/install-telemetry-collector.ps1", "utf8");
+const collectorSh = readFileSync("scripts/install-telemetry-collector.sh", "utf8");
+const fleetMachinePermissionsDocs = readFileSync("docs/for-users/features/fleet-machine-permissions.md", "utf8");
 const env = readFileSync("src-tauri/src/env.rs", "utf8");
 const nativeBootstrap = readFileSync("src-tauri/src/lib.rs", "utf8");
 const bootstrapClient = readFileSync("src/lib/native/dashboard-bootstrap.ts", "utf8");
@@ -64,6 +66,81 @@ if (!setupSh.includes("needs_pnpm=\"false\"") || !setupSh.includes("CLI_SKIP_DEP
 
 if (!setupPs.includes("$needsPnpm = (-not $SkipDeps) -or (-not $SkipBuild) -or (-not $SkipDashboard)")) {
   fail("setup.ps1 must not install or enable pnpm when no workspace install/build/dev dashboard is requested.");
+}
+
+if (
+  !setupPs.includes("[switch]$CollectorOnly")
+  || !setupPs.includes("$SkipDeps = $true")
+  || !setupPs.includes("$SkipBuild = $true")
+  || !setupPs.includes("$SkipDashboard = $true")
+  || !setupPs.includes("$collectorArgs.CollectorOnly = $true")
+) {
+  fail("setup.ps1 -CollectorOnly must skip dashboard work and persist the collector-only mode through the Windows collector installer.");
+}
+
+if (
+  !collectorPs.includes('"HIVE_COLLECTOR_ONLY=$collectorOnlyValue"')
+  || !collectorPs.includes('"set HIVE_COLLECTOR_ONLY=$collectorOnlyValue"')
+) {
+  fail("Windows collector-only mode must be written to collector.env and injected into the scheduled collector process.");
+}
+
+if (
+  !setupPs.includes('[ValidateSet("link", "system-tailscale", "local")]')
+  || !setupPs.includes('elseif ($collectorOnlyMode) { "link" }')
+  || !setupPs.includes('if ($resolvedNetworkMode -eq "link")')
+  || !setupPs.includes("'^HIVE_LINK_CONTROL='")
+  || !collectorPs.includes('} elseif ($collectorOnlyMode) {\n  $linkRequested = $true')
+) {
+  fail("Windows collector-only setup and its direct installer must choose Hivemind Link by default while preserving explicit, sticky, system-Tailscale, and local modes.");
+}
+
+if (
+  !collectorPs.includes("Installing Go for Hivemind Link")
+  || !collectorPs.includes('winget install --id GoLang.Go --exact')
+  || !collectorPs.includes("Hivemind Link requires Go")
+  || !uninstallPs.includes('Uninstall Go itself from this machine?')
+) {
+  fail("Windows Hivemind Link setup must install its Go prerequisite when possible, fail clearly otherwise, and retain the matching uninstall prompt.");
+}
+
+if (
+  !collectorSh.includes("The collector was not exposed on a less-protected fallback network.")
+  || collectorSh.includes("falling back to the normal collector network mode")
+) {
+  fail("macOS/Linux Hivemind Link setup must fail closed instead of exposing the collector when Link cannot build.");
+}
+
+for (const copy of [
+  "main HivemindOS hub",
+  "same Tailscale account",
+  "Return to the Hive Fleet",
+  "Set-Clipboard -Value $authUrl",
+]) {
+  if (!collectorPs.includes(copy)) {
+    fail(`Windows Hivemind Link authorization must include explicit hub onboarding copy: ${copy}`);
+  }
+}
+
+for (const [name, source] of [
+  ["setup.sh", setupSh],
+  ["scripts/install-telemetry-collector.sh", collectorSh],
+]) {
+  if (!source.includes("copy_hivemind_auth_url_to_clipboard")) {
+    fail(`${name} must copy the authorization URL locally when a supported clipboard command exists.`);
+  }
+  for (const copy of ["main HivemindOS hub", "same Tailscale account", "Return to the Hive Fleet"]) {
+    if (!source.includes(copy)) {
+      fail(`${name} must explain cross-platform Fleet authorization explicitly: ${copy}`);
+    }
+  }
+}
+
+if (
+  !fleetMachinePermissionsDocs.includes("automatically enables Hivemind Link")
+  || !fleetMachinePermissionsDocs.includes("same Tailscale account as the main hub")
+) {
+  fail("Fleet machine-permissions docs must explain automatic Link setup and where to authorize the collector.");
 }
 
 if (!setupPs.includes("$collectorInstallFailed = $false") || !setupPs.includes("if ($collectorInstallFailed)") || !setupPs.includes("exit 1")) {

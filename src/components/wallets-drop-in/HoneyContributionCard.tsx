@@ -39,22 +39,58 @@ export type HoneyTelegramLinkAction = (code: string) => Promise<{
   error?: string;
 } | null | undefined>;
 
+type HoneyWalletLinkOption = {
+  address: string;
+  name: string | null;
+};
+
+type HoneyWalletLinkStatus = {
+  linked: boolean;
+  address: string | null;
+  gatewayLinked: boolean;
+  wallets: HoneyWalletLinkOption[];
+};
+
+export type HoneyWalletLinkStatusAction = () => Promise<({
+  ok?: boolean;
+  error?: string;
+} & Partial<HoneyWalletLinkStatus>) | null | undefined>;
+
+export type HoneyWalletLinkAction = (address: string) => Promise<{
+  ok?: boolean;
+  address?: string;
+  gatewayLinked?: boolean;
+  gatewayError?: string;
+  error?: string;
+} | null | undefined>;
+
 export type HoneyContributionActions = {
   onLoadHoneyContributionStatus?: HoneyContributionStatusAction;
+  onLoadHoneyWalletLinkStatus?: HoneyWalletLinkStatusAction;
+  onLinkHoneyWallet?: HoneyWalletLinkAction;
   onLinkTelegramHoney?: HoneyTelegramLinkAction;
 };
 
 export function HoneyContributionCard({
   onLoad,
+  onLoadWalletLinkStatus,
+  onLinkWallet,
   onLink,
 }: {
   onLoad?: HoneyContributionStatusAction;
+  onLoadWalletLinkStatus?: HoneyWalletLinkStatusAction;
+  onLinkWallet?: HoneyWalletLinkAction;
   onLink?: HoneyTelegramLinkAction;
 }) {
   const [status, setStatus] = useState<HoneyContributionStatus | null>(null);
   const [loading, setLoading] = useState(Boolean(onLoad));
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const [walletLink, setWalletLink] = useState<HoneyWalletLinkStatus | null>(null);
+  const [walletLoading, setWalletLoading] = useState(Boolean(onLoadWalletLinkStatus));
+  const [selectedWalletAddress, setSelectedWalletAddress] = useState("");
+  const [walletBusy, setWalletBusy] = useState(false);
+  const [walletError, setWalletError] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -71,6 +107,26 @@ export function HoneyContributionCard({
       setLoading(false);
     }
   }, [onLoad]);
+
+  const loadWalletLinkStatus = useCallback(async () => {
+    if (!onLoadWalletLinkStatus) return;
+    setWalletLoading(true);
+    setWalletError("");
+    try {
+      const result = await onLoadWalletLinkStatus();
+      const next = walletLinkStatusFromResult(result);
+      setWalletLink(next);
+      setSelectedWalletAddress((current) => (
+        next.wallets.some((wallet) => wallet.address === current)
+          ? current
+          : defaultWalletSelection(next)
+      ));
+    } catch (cause) {
+      setWalletError(cause instanceof Error ? cause.message : "Wallet link status could not be loaded.");
+    } finally {
+      setWalletLoading(false);
+    }
+  }, [onLoadWalletLinkStatus]);
 
   useEffect(() => {
     if (!onLoad) return;
@@ -91,6 +147,47 @@ export function HoneyContributionCard({
     };
   }, [onLoad]);
 
+  useEffect(() => {
+    if (!onLoadWalletLinkStatus) return;
+    let cancelled = false;
+    const loadInitialWalletLinkStatus = async () => {
+      try {
+        const result = await onLoadWalletLinkStatus();
+        if (cancelled) return;
+        const next = walletLinkStatusFromResult(result);
+        setWalletLink(next);
+        setSelectedWalletAddress(defaultWalletSelection(next));
+      } catch (cause) {
+        if (!cancelled) setWalletError(cause instanceof Error ? cause.message : "Wallet link status could not be loaded.");
+      } finally {
+        if (!cancelled) setWalletLoading(false);
+      }
+    };
+    void loadInitialWalletLinkStatus();
+    return () => {
+      cancelled = true;
+    };
+  }, [onLoadWalletLinkStatus]);
+
+  const linkWallet = async () => {
+    if (!onLinkWallet || !selectedWalletAddress || walletBusy) return;
+    setWalletBusy(true);
+    setMessage("");
+    setError("");
+    setWalletError("");
+    try {
+      const result = await onLinkWallet(selectedWalletAddress);
+      if (!result?.ok) throw new Error(result?.error || "Wallet could not be verified.");
+      if (!result.gatewayLinked) throw new Error(result.gatewayError || "The official Honey service did not verify this wallet.");
+      setMessage(`Wallet ${shortWalletAddress(result.address || selectedWalletAddress)} verified for official Honey.`);
+      await loadWalletLinkStatus();
+    } catch (cause) {
+      setWalletError(cause instanceof Error ? cause.message : "Wallet could not be verified.");
+    } finally {
+      setWalletBusy(false);
+    }
+  };
+
   const connect = async () => {
     if (!onLink || busy) return;
     setBusy(true);
@@ -108,6 +205,8 @@ export function HoneyContributionCard({
       setBusy(false);
     }
   };
+
+  const walletVerified = walletLink?.gatewayLinked === true;
 
   return (
     <div className="fb-card pad" style={{ display: "flex", flexDirection: "column", gap: 13 }}>
@@ -155,26 +254,65 @@ export function HoneyContributionCard({
 
       {!loading && !status?.linked ? (
         <>
-          <p style={{ margin: 0, maxWidth: 720, color: "var(--fg-3)", fontSize: 12.5, lineHeight: 1.55 }}>
-            First link a HivemindOS wallet by signing the one-time proof message. That proves you control the address; it does not move funds or expose the key. Then send <code>/linkhoney</code> to the HIVE Telegram bot and enter its one-time code here.
-          </p>
-          <div style={{ display: "flex", gap: 9, alignItems: "center", flexWrap: "wrap" }}>
-            <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 250 }}>
-              <span style={{ color: "var(--fg-3)", fontSize: 11 }}>One-time Telegram code</span>
-              <input
-                value={code}
-                onChange={(event) => setCode(event.target.value.toUpperCase())}
-                placeholder="HNY_XXXXXXXXXX"
-                autoComplete="off"
-                spellCheck={false}
-                maxLength={14}
-                style={{ border: "1px solid var(--line-2)", borderRadius: 9, background: "var(--panel-hi)", color: "var(--fg)", padding: "9px 11px", fontFamily: "var(--f-mono)", fontSize: 12.5 }}
-              />
-            </label>
-            <button type="button" className="fb-btn primary" disabled={busy || !/^HNY_[A-F0-9]{10}$/.test(code.trim())} onClick={() => void connect()} style={{ alignSelf: "flex-end" }}>
-              {busy ? <><Spinner size={13} /> Connecting</> : "Connect Telegram"}
-            </button>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ color: "var(--fg-2)", fontSize: 12.5, fontWeight: 600 }}>1. Verify a wallet</div>
+            <p style={{ margin: 0, maxWidth: 720, color: "var(--fg-3)", fontSize: 12.5, lineHeight: 1.55 }}>
+              Choose a local wallet HivemindOS can sign with. The one-time proof confirms you control the address; it does not move funds or expose the key.
+            </p>
+            {walletLoading ? (
+              <div role="status" aria-label="Loading wallets" style={{ maxWidth: 520 }}><SkeletonText lines={1} /></div>
+            ) : walletVerified ? (
+              <div style={{ color: "var(--live)", fontSize: 12.5 }}>
+                Wallet verified{walletLink.address ? ` · ${shortWalletAddress(walletLink.address)}` : ""}.
+              </div>
+            ) : walletLink?.wallets.length ? (
+              <div style={{ display: "flex", gap: 9, alignItems: "flex-end", flexWrap: "wrap" }}>
+                <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 280 }}>
+                  <span style={{ color: "var(--fg-3)", fontSize: 11 }}>Wallet to verify</span>
+                  <select className="fb-select" value={selectedWalletAddress} onChange={(event) => setSelectedWalletAddress(event.target.value)}>
+                    <option value="" disabled>Choose a wallet</option>
+                    {walletLink.wallets.map((wallet) => (
+                      <option key={wallet.address} value={wallet.address}>{walletOptionLabel(wallet)}</option>
+                    ))}
+                  </select>
+                </label>
+                <button type="button" className="fb-btn primary" disabled={walletBusy || !selectedWalletAddress} onClick={() => void linkWallet()}>
+                  {walletBusy ? <><Spinner size={13} /> Verifying</> : walletLink.linked ? "Retry wallet verification" : "Sign & link wallet"}
+                </button>
+              </div>
+            ) : (
+              <div style={{ color: "var(--danger)", fontSize: 12.5 }}>
+                No signable EVM wallet is stored locally. Create or import one in Wallets first.
+              </div>
+            )}
+            {walletError ? <div role="alert" style={{ color: "var(--danger)", fontSize: 12.5 }}>{walletError}</div> : null}
           </div>
+
+          {walletVerified ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+              <div style={{ color: "var(--fg-2)", fontSize: 12.5, fontWeight: 600 }}>2. Connect Telegram</div>
+              <p style={{ margin: 0, maxWidth: 720, color: "var(--fg-3)", fontSize: 12.5, lineHeight: 1.55 }}>
+                Send <code>/linkhoney</code> to the HIVE Telegram bot, then enter its one-time code here.
+              </p>
+              <div style={{ display: "flex", gap: 9, alignItems: "center", flexWrap: "wrap" }}>
+                <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 250 }}>
+                  <span style={{ color: "var(--fg-3)", fontSize: 11 }}>One-time Telegram code</span>
+                  <input
+                    value={code}
+                    onChange={(event) => setCode(event.target.value.toUpperCase())}
+                    placeholder="HNY_XXXXXXXXXX"
+                    autoComplete="off"
+                    spellCheck={false}
+                    maxLength={14}
+                    style={{ border: "1px solid var(--line-2)", borderRadius: 9, background: "var(--panel-hi)", color: "var(--fg)", padding: "9px 11px", fontFamily: "var(--f-mono)", fontSize: 12.5 }}
+                  />
+                </label>
+                <button type="button" className="fb-btn primary" disabled={busy || !/^HNY_[A-F0-9]{10}$/.test(code.trim())} onClick={() => void connect()} style={{ alignSelf: "flex-end" }}>
+                  {busy ? <><Spinner size={13} /> Connecting</> : "Connect Telegram"}
+                </button>
+              </div>
+            </div>
+          ) : null}
         </>
       ) : null}
       {message ? <div style={{ color: "var(--live)", fontSize: 12.5 }}>{message}</div> : null}
@@ -207,6 +345,36 @@ function statusFromResult(result: Awaited<ReturnType<HoneyContributionStatusActi
     quotaMultiplierBps: result.quotaMultiplierBps ?? 10_000,
     quotaMultiplier: result.quotaMultiplier ?? 1,
   };
+}
+
+function walletLinkStatusFromResult(result: Awaited<ReturnType<HoneyWalletLinkStatusAction>>): HoneyWalletLinkStatus {
+  if (!result?.ok || typeof result.linked !== "boolean" || typeof result.gatewayLinked !== "boolean" || !Array.isArray(result.wallets)) {
+    throw new Error(result?.error || "Wallet link status could not be loaded.");
+  }
+  return {
+    linked: result.linked,
+    address: typeof result.address === "string" && /^0x[a-fA-F0-9]{40}$/.test(result.address) ? result.address.toLowerCase() : null,
+    gatewayLinked: result.gatewayLinked,
+    wallets: result.wallets.flatMap((wallet) => (
+      wallet && typeof wallet.address === "string" && /^0x[a-fA-F0-9]{40}$/.test(wallet.address)
+        ? [{ address: wallet.address.toLowerCase(), name: typeof wallet.name === "string" && wallet.name.trim() ? wallet.name.trim() : null }]
+        : []
+    )),
+  };
+}
+
+function defaultWalletSelection(status: HoneyWalletLinkStatus): string {
+  const linkedWallet = status.wallets.find((wallet) => wallet.address === status.address);
+  if (linkedWallet) return linkedWallet.address;
+  return status.wallets.length === 1 ? status.wallets[0]?.address ?? "" : "";
+}
+
+function walletOptionLabel(wallet: HoneyWalletLinkOption) {
+  return wallet.name ? `${wallet.name} · ${shortWalletAddress(wallet.address)}` : shortWalletAddress(wallet.address);
+}
+
+function shortWalletAddress(address: string) {
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
 function formatHoney(value: number) {

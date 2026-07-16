@@ -53,7 +53,8 @@ import {
   X_ACCOUNT_CAPABILITY_INSTRUCTION,
   X_ACCOUNT_READ_TOOL_NAME,
 } from "@/lib/services/x-account-tool-contract";
-import { queenPipelineChatTools } from "@/lib/services/queen-bee/queen-brain";
+import { isHivemindFastContextCommand, queenPipelineChatTools } from "@/lib/services/queen-bee/queen-brain";
+import { readQueenVoiceBrainContext } from "@/lib/services/queen-bee/voice-brain-reads";
 import {
   applyOpenAiChatChunk,
   createQueenChatStreamState,
@@ -69,7 +70,6 @@ import {
 // thread their draft through it because the agent-turn is otherwise stateless.
 const QUEEN_VOICE_SESSION_ID = "queen-bee-voice";
 const QUEEN_PIPELINE_CHAT_TOOLS = queenPipelineChatTools();
-
 // A bare confirmation token ("CONFIRM_SWAP", "confirm", ...) carries no request of
 // its own — it points at a draft prepared on the previous turn. Used to decide when
 // to strip the FAB's screen-context wrapper + thread the prior draft.
@@ -932,13 +932,21 @@ async function runProviderConversationTurn(
         const args = JSON.parse(call.arguments || "{}") as Record<string, unknown>;
         if (call.name === X_ACCOUNT_READ_TOOL_NAME) {
           content = await runXAccountReadTool(coerceXAccountReadToolInput(args));
+        } else if (call.name === "read_hivemind_context") {
+          const query = typeof args.query === "string" ? args.query.trim() : "";
+          if (!query) throw new Error("A read-only Brain query is required.");
+          content = await readQueenVoiceBrainContext(query);
         } else if (call.name === "use_hive_capability") {
           const message = typeof args.message === "string" ? args.message.trim() : "";
           if (!message) throw new Error("A capability goal is required.");
-          content = JSON.stringify({
-            ok: true,
-            ...(await runQueenBeeAgentTurn(origin, message, undefined, { preferBuiltInCapability: true })),
-          });
+          if (isHivemindFastContextCommand(message)) {
+            content = await readQueenVoiceBrainContext(message);
+          } else {
+            content = JSON.stringify({
+              ok: true,
+              ...(await runQueenBeeAgentTurn(origin, message, undefined, { preferBuiltInCapability: true })),
+            });
+          }
         } else {
           throw new Error(`Unknown Queen voice tool: ${call.name}.`);
         }

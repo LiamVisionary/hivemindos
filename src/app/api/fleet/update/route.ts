@@ -3,6 +3,10 @@ import { access } from "fs/promises";
 import { join } from "path";
 
 import { collectorSupportsAppBuilderContract } from "@/lib/services/app-builder/collector-recovery";
+import {
+  HivemindLinkUpdateError,
+  runHivemindLinkUpdateScript,
+} from "@/lib/services/fleet/hivemind-link-update";
 
 export const runtime = "nodejs";
 export const maxDuration = 360;
@@ -18,6 +22,7 @@ type UpdateBody = {
   preferRemoteShell?: boolean;
   simulate?: boolean;
   source?: string;
+  maintenanceRequestId?: string;
   requiredCapabilities?: {
     appBuilderContractVersion?: string;
     chat?: boolean;
@@ -59,9 +64,14 @@ type VerificationOptions = {
 type CollectorUpdateReservation = {
   supported: boolean;
   maintenanceReservationToken?: string;
+  queued?: boolean;
+  message?: string;
   error?: string;
   status?: number;
 };
+
+const COLLECTOR_VERIFICATION_TIMEOUT_MS = 90_000;
+const HIVEMIND_LINK_UPDATE_TIMEOUT_MS = 90_000;
 
 function collectorBase(collectorUrl?: string) {
   return collectorUrl?.replace(/\/+$/, "") || "";
@@ -240,9 +250,8 @@ async function waitForCollectorVerification(
   body: UpdateBody,
   options?: VerificationOptions,
 ) {
-  const delays = [
-    1_000, 2_000, 4_000, 8_000, 15_000, 30_000, 45_000, 60_000, 60_000, 60_000,
-  ];
+  const delays = [1_000, 2_000, 4_000, 8_000, 15_000, 20_000];
+  const deadline = Date.now() + COLLECTOR_VERIFICATION_TIMEOUT_MS;
   let health = await fetchCollectorHealth(body.collectorUrl);
   if (!hasVerificationTarget(body)) return { verified: false, health };
   if (
@@ -253,7 +262,14 @@ async function waitForCollectorVerification(
   ) {
     return { verified: true, health };
   }
-  for (const delay of delays) {
+  let attempt = 0;
+  while (Date.now() < deadline) {
+    const remainingMs = deadline - Date.now();
+    const delay = Math.min(
+      delays[Math.min(attempt, delays.length - 1)],
+      remainingMs,
+    );
+    if (delay <= 0) break;
     await new Promise((resolve) => setTimeout(resolve, delay));
     health = await fetchCollectorHealth(body.collectorUrl);
     if (
@@ -264,17 +280,24 @@ async function waitForCollectorVerification(
     ) {
       return { verified: true, health };
     }
+    attempt += 1;
   }
   return { verified: false, health };
 }
 
 async function reserveCollectorUpdate(
   collectorUrl?: string,
+  maintenanceRequestId?: string,
 ): Promise<CollectorUpdateReservation> {
   const base = collectorBase(collectorUrl);
   if (!base) return { supported: false };
   const response = await fetch(`${base}/maintenance/reserve-update`, {
     method: "POST",
+    headers: maintenanceRequestId?.trim()
+      ? {
+          "x-hivemind-maintenance-request-id": maintenanceRequestId.trim(),
+        }
+      : undefined,
     signal: AbortSignal.timeout(8_000),
     cache: "no-store",
   }).catch(() => null);
@@ -307,7 +330,13 @@ async function reserveCollectorUpdate(
       error: "The agent bridge accepted maintenance but did not return a reservation token.",
     };
   }
-  return { supported: true, maintenanceReservationToken };
+  return {
+    supported: true,
+    maintenanceReservationToken,
+    queued: payload?.updateQueued === true,
+    message:
+      typeof payload?.message === "string" ? payload.message.trim() : undefined,
+  };
 }
 
 async function releaseCollectorUpdateReservation(
@@ -434,7 +463,14 @@ function remoteUpdateScript(collectorOnly = false) {
     "repo_url=$(git remote get-url origin)",
     "branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)",
     "if ! (",
+    '  if [ "$branch" = "HEAD" ]; then',
+    '    branch=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed "s#^origin/##")',
+    '    [ -n "$branch" ] || branch=main',
+    '    git fetch origin "$branch"',
+    '    git merge --ff-only "origin/$branch"',
+    "  else",
     changelogPreservingPullScript(),
+    "  fi",
     "); then",
     "  status=$(git status --porcelain)",
     '  if [ -z "$status" ]; then',
@@ -737,11 +773,57 @@ async function tryDetachedTailscaleSsh(
   };
 }
 
+async function tryHivemindLinkShell(
+  body: UpdateBody,
+  collectorOnly = false,
+) {
+  const script = fallbackScript(body.appDir, true, collectorOnly);
+  const result = await runHivemindLinkUpdateScript({
+    collectorUrl: body.collectorUrl,
+    script,
+    timeoutMs: HIVEMIND_LINK_UPDATE_TIMEOUT_MS,
+  });
+  return {
+    ok: true,
+    accepted: true,
+    method: "hivemind-link-shell",
+    stdout: result.stdout,
+    stderr: "",
+    command: script,
+  };
+}
+
 async function tryPreferredRemoteUpdate(
   body: UpdateBody,
   collectorOnly = false,
   maintenanceReservationToken?: string,
 ) {
+  if (body.collectorUrl) {
+    try {
+      return await tryHivemindLinkShell(body, collectorOnly);
+    } catch (error) {
+      if (
+        error instanceof HivemindLinkUpdateError &&
+        error.commandAccepted
+      ) {
+        if (error.completionUnknown) {
+          return {
+            ok: true,
+            accepted: true,
+            method: "hivemind-link-shell-disconnected",
+            stdout: "",
+            stderr: error.message,
+          };
+        }
+        throw error;
+      }
+      // Older direct collectors may not run behind Hivemind Link. Continue to
+      // their supported update transport instead of treating a 404 as fatal.
+    }
+  }
+  if (collectorOnly && body.collectorUrl) {
+    return tryCollectorUpdate(body, maintenanceReservationToken);
+  }
   try {
     return await tryDetachedTailscaleSsh(body, collectorOnly);
   } catch {
@@ -837,18 +919,34 @@ export async function POST(request: Request) {
   const collectorOnly = preUpdateHealth?.mode === "collector-only";
   const reservation = body.simulate
     ? { supported: false }
-    : await reserveCollectorUpdate(body.collectorUrl);
+    : await reserveCollectorUpdate(
+        body.collectorUrl,
+        body.maintenanceRequestId,
+      );
   if (reservation.error) {
     return Response.json(
       { ok: false, error: reservation.error },
       { status: reservation.status === 409 ? 409 : 503 },
     );
   }
+  if (reservation.queued) {
+    return Response.json(
+      {
+        ok: true,
+        queued: true,
+        verified: false,
+        message:
+          reservation.message ||
+          "Maintenance is queued behind active agent work. The update will start when the bridge is idle.",
+      },
+      { status: 202 },
+    );
+  }
   const maintenanceReservationToken = reservation.maintenanceReservationToken;
   try {
     const result = await ((await isLocalCheckout(body.appDir))
       ? tryLocalShell(body, collectorOnly)
-      : body.preferRemoteShell
+      : body.preferRemoteShell || collectorOnly
         ? tryPreferredRemoteUpdate(body, collectorOnly, maintenanceReservationToken)
         : body.collectorUrl
           ? tryCollectorUpdate(body, maintenanceReservationToken)

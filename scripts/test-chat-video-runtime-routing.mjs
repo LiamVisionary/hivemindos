@@ -14,6 +14,7 @@ const explicitPrompt = "use local video generation to generate a video of this b
 const ambiguousPrompt = "create a video announcing our next product release";
 const conversationalPrompt = "I'm thinking about video generation for a future launch";
 const hypergenPrompt = "use our hypergen skill instead";
+const approvedHyperframesPrompt = "[HIVEMINDOS_HYPERFRAMES_RENDER_V1]\n/motion-graphics Make a 6-second 1080×1080 video. Beat 1 (0–6s): a bee glides through a geometric hive. No on-screen copy. Motion: Smooth easing. No narration.";
 const uncertainPrompt = "create a video while the semantic classifier is unavailable";
 const sourcePath = "/tmp/swarm-scout-card.jpg";
 const upstreamBodies = new Map([
@@ -21,6 +22,7 @@ const upstreamBodies = new Map([
   [ambiguousPrompt, []],
   [conversationalPrompt, []],
   [hypergenPrompt, []],
+  [approvedHyperframesPrompt, []],
   [uncertainPrompt, []],
 ]);
 const classifierBodies = [];
@@ -62,6 +64,11 @@ globalThis.fetch = async (input, init = {}) => {
     if (prompt === hypergenPrompt) {
       return Response.json({
         choices: [{ message: { content: "I'll use the HyperFrames HTML workflow for this video." } }],
+      });
+    }
+    if (prompt === approvedHyperframesPrompt) {
+      return Response.json({
+        choices: [{ message: { content: "I'll build this with the pinned local HyperFrames renderer." } }],
       });
     }
     if (prompt === uncertainPrompt) {
@@ -191,20 +198,31 @@ try {
     { role: "user", content: hypergenPrompt },
   ]);
   const hypergenRequests = upstreamBodies.get(hypergenPrompt);
-  const hypergenToolNames = hypergenRequests[0]?.tools?.map((tool) => tool.function?.name) ?? [];
-  const hypergenContext = hypergenRequests[0]?.messages?.filter((message) => message.role === "system").map((message) => message.content).join("\n") ?? "";
 
   assert.equal(hypergen.response.status, 200);
-  assert.equal(hypergenRequests.length, 1);
-  assert.ok(hypergenToolNames.includes("run_command"), "HyperFrames routing should retain the command tool used to load the packaged skill");
-  assert.ok(!hypergenToolNames.includes("invoke_hive_capability"), "HyperFrames routing must not expose the generic capability tool that cannot execute skill files");
-  assert.ok(!hypergenToolNames.includes("generate_video"), "HyperFrames intent must not expose the connected AI video generator");
-  assert.match(hypergenContext, /skill:packaged:auto-install:hyperframes/);
-  assert.match(hypergenContext, /packaged-skills\/auto-install\/hyperframes\/SKILL\.md/);
-  assert.match(hypergenContext, /packaged-skills\/auto-install\/<slug>\/SKILL\.md/);
-  assert.match(hypergenContext, /without adding unsupported flags/i);
-  assert.match(hypergenContext, /Do not run `npx skills (?:add|update)`/);
-  assert.match(hypergen.body, /HyperFrames HTML workflow/);
+  assert.equal(hypergenRequests.length, 0, "selecting HyperFrames should open the guided prompt card before the action model sees tools");
+  assert.match(hypergen.body, /"id":"hyperframes-prompt-builder"/);
+  assert.match(hypergen.body, /Shape this HyperFrames video before rendering/);
+
+  const approvedHyperframes = await runPrompt(approvedHyperframesPrompt, [], [
+    { role: "user", content: hypergenPrompt },
+    { role: "assistant", content: "Shape this HyperFrames video before rendering." },
+    { role: "user", content: approvedHyperframesPrompt },
+  ]);
+  const approvedRequests = upstreamBodies.get(approvedHyperframesPrompt);
+  const approvedToolNames = approvedRequests[0]?.tools?.map((tool) => tool.function?.name) ?? [];
+  const approvedContext = approvedRequests[0]?.messages?.filter((message) => message.role === "system").map((message) => message.content).join("\n") ?? "";
+
+  assert.equal(approvedHyperframes.response.status, 200);
+  assert.equal(approvedRequests.length, 1);
+  assert.ok(approvedToolNames.includes("run_command"), "an approved HyperFrames render should retain the command tool");
+  assert.ok(!approvedToolNames.includes("invoke_hive_capability"));
+  assert.ok(!approvedToolNames.includes("generate_video"));
+  assert.match(approvedContext, /skill:packaged:auto-install:hyperframes/);
+  assert.match(approvedContext, /command `hyperframes`/);
+  assert.match(approvedContext, /Do not run `hyperframes init`/);
+  assert.match(approvedContext, /Do not ask for a second render confirmation/);
+  assert.match(approvedHyperframes.body, /pinned local HyperFrames renderer/);
 
   const uncertain = await runPrompt(uncertainPrompt);
   const uncertainRequests = upstreamBodies.get(uncertainPrompt);
@@ -216,7 +234,7 @@ try {
   assert.match(uncertainContext, /semantic video routing was unavailable/i);
   assert.match(uncertainContext, /Markdown bullet options/i, "the safe fallback must request a dashboard-actionable decision format");
   assert.match(uncertain.body, /cloud AI video, local AI video, or HTML \/ HyperFrames/);
-  assert.equal(classifierBodies.length, 5, "each video-shaped turn and HyperFrames follow-up should receive bounded semantic classification");
+  assert.equal(classifierBodies.length, 5, "video-shaped turns are classified, while the signed guided render handoff bypasses reclassification");
 } finally {
   globalThis.fetch = originalFetch;
 }

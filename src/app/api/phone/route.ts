@@ -41,6 +41,7 @@ import { runChatImageGeneration } from "@/lib/services/chat/image-generation";
 import { cacheGeneratedImageForPhone } from "@/lib/services/chat/generated-media-cache";
 import { signedGeneratedMediaUrl } from "@/lib/services/chat/generated-media-signing";
 import { registerPushDevice } from "@/lib/services/push/mobile-push";
+import { runPhoneShortcutAction } from "@/lib/services/phone/shortcut-actions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -1280,6 +1281,14 @@ export async function POST(request: NextRequest) {
       throw new Error("Unsupported multipart phone action.");
     }
     const body = await request.json().catch(() => ({}));
+    if (body.action === "shortcut-action") {
+      const result = await runPhoneShortcutAction({
+        body,
+        origin: request.nextUrl.origin,
+        deviceToken: request.headers.get("x-hivemindos-device-token"),
+      });
+      return NextResponse.json({ ok: true, ...result });
+    }
     const writableVaultPath = () =>
       resolveObsidianVaultPath(
         body.vaultPath ??

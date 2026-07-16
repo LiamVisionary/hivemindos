@@ -162,6 +162,10 @@ assert.ok(
   "setupCollectorCommand / network-issue commands must offer the Windows setup.ps1 path",
 );
 assert.ok(
+  /setup\.ps1 -CollectorOnly/.test(helpers) && /setup\.sh --collector-only/.test(helpers),
+  "additional-machine setup commands must use the persisted collector-only mode on Windows and Unix",
+);
+assert.ok(
   /isWindowsOs/.test(helpers),
   "dashboard-display-helpers must branch commands on a Windows OS check",
 );

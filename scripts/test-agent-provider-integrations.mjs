@@ -16,6 +16,7 @@ for (const id of [
   "palmier-pro",
   "rentahuman",
   "n8n",
+  "listmonk",
   "queen-bee-prd-decomposition",
 ]) {
   assert.ok(providerIds.has(id), `missing provider ${id}`);
@@ -70,6 +71,7 @@ assert.match(browserUseRunner, /requires Full permissions on the Browser Use pro
 assert.match(browserUseRunner, /ANONYMIZED_TELEMETRY: "False"/);
 assert.match(browserUseRunner, /Browser Use open only allows http\(s\) URLs and about:blank/);
 assert.match(browserUseRunner, /safeScreenshotPath/);
+assert.match(browserUseRunner, /REDACTED_TYPED_TEXT/);
 assert.match(browserUseRunner, /"cloud"[\s\S]*"v2"[\s\S]*"POST"[\s\S]*"\/tasks"/);
 assert.match(rentAHumanRoute, /requireAuth/);
 assert.match(rentAHumanRoute, /normalizeRentAHumanAction/);
@@ -113,6 +115,7 @@ assert.match(installableServicesRoute, /value === "mcp-email-server"/);
 assert.match(installableServicesRoute, /value === "openhands"/);
 assert.match(installableServicesRoute, /value === "aider"/);
 assert.match(installableServicesRoute, /value === "palmier-pro"/);
+assert.match(installableServicesRoute, /value === "listmonk"/);
 
 const agenticInboxSetup = readFileSync("src/lib/services/cloudflare/agentic-inbox-setup.ts", "utf8");
 const agenticInboxRoute = readFileSync("src/app/api/cloudflare/agentic-inbox/route.ts", "utf8");
@@ -132,6 +135,7 @@ assert.match(appCatalog, /installableServiceId: "mcp-email-server"/);
 assert.match(appCatalog, /installableServiceId: "openhands"/);
 assert.match(appCatalog, /installableServiceId: "aider"/);
 assert.match(appCatalog, /installableServiceId: "palmier-pro"/);
+assert.match(appCatalog, /installableServiceId: "listmonk"/);
 assert.match(appCatalog, /id: "rentahuman"/);
 assert.match(myAppsPanel, /BrowserUseFullPermissionsModal/);
 assert.match(myAppsPanel, /Enable Browser Use full permissions/);

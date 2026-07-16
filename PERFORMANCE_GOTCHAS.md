@@ -254,3 +254,35 @@ Separate corpus construction from ranking. Build and authorize one complete poin
 ### Fixed evidence
 
 The exact reported three-query workload over 1,237 indexed items improved from a fresh-process median of 577.5 ms to 296.1 ms, while retaining all 559 skills, 104 tool schemas, 349 API routes, 33 apps, 149 app endpoints, 17 connectors, 16 artifacts, and 10 runtimes. Fixed 2026-07-12.
+
+## G5 - A typed chat FAB can silently enter the voice and fleet-permission pipelines
+
+### Symptom
+
+A simple local Brain question takes 20-40 seconds, shows no partial text, and finally asks for authorization even though the user is already on the Brain route and the requested data is local and read-only.
+
+### Why it fools you
+
+- The visible composer is typed, but an open voice overlay can change which backend route receives the message.
+- The voice request can omit the page's `screenContext`, so the server no longer knows the prompt came from Brain.
+- A generic capability tool name sounds able to read Brain data, yet its executor may enter the full fleet-agent runtime and correctly apply a remote `sharedBrain: ask` policy.
+- Sequential provider fallbacks hide the routing flaw: a 20-second primary timeout plus a 16-second fallback looks like model slowness, while the eventual permission copy looks intentional.
+
+### Root cause and fix
+
+Trace the UI event through the actual route, tool set, executor, and permission matrix. Typed text must stay on the typed, context-preserving model/tool loop; voice activation may add speech after the reply but must not swap inference routes. Local Brain reads should expose neutral evidence through a dedicated model-callable tool. The configured Queen model chooses the tool and authors the answer; the evidence service must not manufacture final prose. Keep fleet authorization for actual remote access instead of weakening the policy to compensate for a misrouted local request.
+
+For access-history questions, let `read_hivemind_context` retrieve the complete access log, rank recorded paths, verify current note existence, and return that as evidence. A request to read the user's own local Brain is itself authorization for that read; only a tool-reported remote, mutating, or consequential operation may ask again. If the model chooses the broad capability tool for a read-only local Brain question, route that tool execution to the same local evidence source and continue the model loop instead of entering the fleet runtime.
+
+### Diagnosis recipe
+
+1. Locate the click/send handler and record the exact API path selected under every UI mode flag.
+2. Confirm `screenContext` survives the selected request body.
+3. List the tools actually offered by that provider path and trace each executor; do not infer behavior from tool names.
+4. Read turn telemetry by stage: route receipt, first visible token, each provider attempt, fallback, tool call, and final response.
+5. Reproduce through the same visible FAB, then probe the dedicated read API and spoken endpoint separately.
+6. Prove the first configured-model round calls `read_hivemind_context`, prove the access API returns evidence without an `answer`, and prove the following configured-model round writes the visible response.
+
+### Fixed evidence
+
+The reported turn took 37.672 seconds, with no visible text until 37.548 seconds, a 20.003-second xAI timeout, and a 16.284-second OpenRouter fallback. After separating typed routing and grounding the configured model with a local evidence tool, the final real Brain FAB took about 7.1 seconds. The configured `grok-4.5 · xai-oauth` first round called `read_hivemind_context` in 1.263 seconds, the evidence-only local API took 79 ms, and the configured-model prose round took 1.534 seconds. The visible answer was model-authored, correct, and contained no permission request. The fleet `sharedBrain: ask` policy remains unchanged for genuine remote access. Fixed 2026-07-15.

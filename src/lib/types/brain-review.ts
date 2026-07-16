@@ -4,6 +4,7 @@ export const BRAIN_REVIEW_KINDS = [
   "memory",
   "memory-evolution",
   "skill",
+  "skill-evolution",
   "instruction",
   "job",
 ] as const;
@@ -55,6 +56,8 @@ export type BrainReviewProposal = {
   appliedAt?: string;
   appliedMemoryId?: string;
   appliedMemoryPath?: string;
+  appliedTaskId?: string;
+  metadata?: Record<string, unknown>;
 };
 
 export type BrainReviewProposalInput = {
@@ -64,6 +67,7 @@ export type BrainReviewProposalInput = {
   proposedContent?: unknown;
   targetPath?: unknown;
   supersedesMemoryId?: unknown;
+  metadata?: unknown;
   evidence?: unknown;
   risk?: unknown;
   createdByPrincipalId?: unknown;

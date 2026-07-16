@@ -51,6 +51,12 @@ type FastKnowledgeResponse = {
   search?: unknown;
 };
 
+type FastAccessHistoryResponse = {
+  ok?: unknown;
+  error?: unknown;
+  context?: unknown;
+};
+
 const FAST_CONTEXT_TIMEOUT_MS = 1_500;
 const FAST_CONTEXT_KINDS = [
   "skill",
@@ -71,7 +77,7 @@ export async function fetchHivemindFastContext(
 ) {
   const query =
     rawQuery.trim() || screenContext?.viewLabel || "HivemindOS app and brain context";
-  const [contextIndex, memory, knowledge] = await Promise.allSettled([
+  const [contextIndex, memory, knowledge, accessHistory] = await Promise.allSettled([
     postJsonWithTimeout<FastContextIndexResponse>(
       "/api/context-index",
       {
@@ -103,6 +109,11 @@ export async function fetchHivemindFastContext(
       },
       FAST_CONTEXT_TIMEOUT_MS,
     ),
+    postJsonWithTimeout<FastAccessHistoryResponse>(
+      "/api/brain/access-insights",
+      {},
+      FAST_CONTEXT_TIMEOUT_MS,
+    ),
   ]);
 
   return formatHivemindFastContext({
@@ -111,6 +122,7 @@ export async function fetchHivemindFastContext(
     contextIndex,
     memory,
     knowledge,
+    accessHistory,
   });
 }
 
@@ -165,6 +177,7 @@ function formatHivemindFastContext(input: {
   contextIndex: PromiseSettledResult<FastContextIndexResponse>;
   memory: PromiseSettledResult<FastMemoryResponse>;
   knowledge: PromiseSettledResult<FastKnowledgeResponse>;
+  accessHistory: PromiseSettledResult<FastAccessHistoryResponse>;
 }) {
   const lines = [
     `Fast read-only HivemindOS context for: ${compactFastText(input.query, 180)}`,
@@ -178,8 +191,29 @@ function formatHivemindFastContext(input: {
     ...formatMemorySection(input.memory),
     "",
     ...formatKnowledgeSection(input.knowledge),
+    "",
+    ...formatAccessHistorySection(input.accessHistory),
   ].filter((line, index, all) => line || all[index - 1] !== "");
   return lines.join("\n");
+}
+
+function formatAccessHistorySection(
+  result: PromiseSettledResult<FastAccessHistoryResponse>,
+) {
+  if (result.status === "rejected") {
+    return [
+      `Brain note access history: unavailable (${compactFastText(result.reason, 180)}).`,
+    ];
+  }
+  if (result.value.ok === false) {
+    return [
+      `Brain note access history: unavailable (${compactFastText(result.value.error, 180)}).`,
+    ];
+  }
+  const context = typeof result.value.context === "string"
+    ? result.value.context.trim()
+    : "";
+  return [context || "Brain note access history: no evidence returned."];
 }
 
 function formatContextIndexSection(result: PromiseSettledResult<FastContextIndexResponse>) {

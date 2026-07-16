@@ -24,6 +24,10 @@ export async function readRuntimeAvailability(): Promise<RuntimeAvailability> {
   return Object.fromEntries(entries);
 }
 
+export function readRuntimeAvailabilityFor(runtime: AgentRuntime) {
+  return checkRuntimeAvailability(runtime);
+}
+
 async function checkRuntimeAvailability(runtime: AgentRuntime) {
   if (runtime === "hermes") return checkHermes();
   if (runtime === "openclaw") return checkOpenClaw();

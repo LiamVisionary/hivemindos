@@ -6,6 +6,7 @@
 // answers, typed replies, and agent-requested API keys. Split from the
 // dispatch controller so each stays under the file-size gate.
 import { isValidHiveEnvKey, loadSharedHiveEnvKeys, saveSharedHiveEnvValue } from "@/features/dashboard/shared-hive-env-client";
+import { parseFleetMachineAccessRequest } from "@/lib/types/fleet-machine-policy";
 
 export function useKanbanNeedsHumanController(props: any) {
   const {
@@ -26,11 +27,14 @@ export function useKanbanNeedsHumanController(props: any) {
   // pipeline as an instant chat turn; otherwise the durable server path appends
   // the answer to the task body, moves the card back to Ready with the same
   // assignee, and schedules an immediate autonomous pickup by the agent that
-  // asked.
+  // asked. Fleet machine-access requests always take the durable path because
+  // the collector must apply the human decision before that agent resumes.
   async function answerKanbanNeedsHuman(task: any, answer: string) {
     const text = String(answer ?? "").trim();
     if (!text || !task) return;
+    const fleetAccessRequest = parseFleetMachineAccessRequest(task.result).requested;
     if (
+      !fleetAccessRequest &&
       task.id === selectedKanbanTask?.id &&
       selectedKanbanAgent &&
       !chatSetupIssue(selectedKanbanAgent)

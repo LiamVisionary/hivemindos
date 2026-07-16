@@ -275,8 +275,12 @@
 .fw-asset-menu button:hover { background: var(--panel-2); color: var(--fg); }
 .fw-asset-menu button[data-active] { color: var(--fg); background: var(--honey-soft); }
 .fw-asset-menu .amt { font-family: var(--f-mono); font-size: 11px; color: var(--fg-3); }
-.fw-myrow { display: grid; grid-template-columns: repeat(auto-fill, minmax(266px, 1fr)); gap: 14px; align-items: start; }
+.fw-myrow { display: grid; grid-template-columns: repeat(auto-fill, minmax(266px, 1fr)); grid-auto-rows: 1fr; gap: 14px; align-items: stretch; }
 .fw-mywallet { min-height: 215px; background: linear-gradient(180deg, color-mix(in srgb, var(--honey-fill, var(--honey)) 5%, var(--panel)), var(--panel)); border: 1px solid var(--line-2); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 13px; }
+.fw-mywallet-expandable[data-expandable] { cursor: pointer; transition: border-color .16s; }
+.fw-mywallet-expandable[data-expandable]:hover { border-color: var(--line-3); }
+.fw-wallet-card-caret { flex: 0 0 auto; width: 24px; height: 24px; padding: 0; border: 0; background: transparent; color: var(--fg-3); cursor: pointer; display: grid; place-items: center; line-height: 0; }
+.fw-wallet-card-caret:hover { color: var(--fg); }
 .fw-mywallet .top { display: flex; align-items: center; gap: 11px; }
 .fw-mywallet .nm { font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; }
 .fw-rename { display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -296,7 +300,9 @@
 .fw-mywallet .addr { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-family: var(--f-mono); font-size: 11px; color: var(--fg-3); border-top: 1px solid var(--line); padding-top: 11px; }
 .fw-mywallet .addr button { border: 0; background: transparent; color: var(--fg-3); cursor: pointer; display: grid; place-items: center; padding: 2px; }
 .fw-mywallet .addr button:hover { color: var(--honey); }
-.fw-split-wrap { position: relative; flex: 1 1 150px; min-width: 150px; }
+.fw-bankr-actions { display: flex; gap: 8px; margin-top: auto; flex-wrap: wrap; }
+.fw-bankr-actions > .fb-btn.primary { flex: 1 1 150px; min-width: 150px; }
+.fw-split-wrap { position: relative; flex: 0 0 164px; width: 164px; max-width: 100%; }
 .fw-split-action { display: grid; grid-template-columns: minmax(0, 1fr) 36px; border-radius: 99px; overflow: hidden; background: var(--honey-fill, var(--honey)); color: #1a1305; box-shadow: 0 0 0 1px color-mix(in srgb, var(--honey) 36%, transparent); }
 .fw-split-action[data-open] { filter: brightness(1.04); }
 .fw-split-main, .fw-split-caret { min-height: 32px; border: 0; background: transparent; color: inherit; font-family: var(--f-body); font-size: 12px; font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 7px; transition: background .16s, filter .16s; }
@@ -390,7 +396,18 @@
 .fw-fundcard .mn { font-size: 10.5px; color: var(--fg-3); font-family: var(--f-mono); }
 .fw-fundcard .check { color: var(--honey); display: grid; place-items: center; }
 .fw-fundfoot { display: flex; gap: 8px; align-items: center; }
+.fw-sendfoot { align-items: flex-start; }
+.fw-sendfoot .fw-asset-btn,
+.fw-sendfoot .fw-amount-entry > .fb-field,
+.fw-sendfoot > .fw-save { height: 38px; }
+.fw-sendfoot > .fw-save { flex: 0 0 auto; padding: 0 16px; white-space: nowrap; }
+.fw-amount-entry { flex: 1 1 180px; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.fw-amount-fiat { min-height: 14px; padding-left: 2px; color: var(--fg-3); font-family: var(--f-mono); font-size: 10.5px; line-height: 1.3; }
 .fw-fundsuccess { display: flex; align-items: center; gap: 10px; border: 1px solid color-mix(in srgb, var(--live) 30%, transparent); border-radius: var(--radius-sm); padding: 11px 12px; background: var(--live-soft); color: var(--live); animation: fb-fadein .18s ease both; }
 .fw-fundsuccess .mark { width: 28px; height: 28px; border-radius: 99px; display: grid; place-items: center; flex: 0 0 auto; background: color-mix(in srgb, var(--live) 16%, transparent); }
 .fw-fundsuccess strong { display: block; font-size: 12.5px; font-weight: 600; color: var(--fg); }
 .fw-fundsuccess small { display: block; margin-top: 3px; font-size: 11px; line-height: 1.4; color: var(--fg-2); }
+.fw-fundsuccess .fw-txlink { display: inline-block; margin-top: 5px; }
+.fw-txlink { font-size: 11px; font-weight: 500; color: var(--live); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--live) 40%, transparent); transition: border-color .15s ease, opacity .15s ease; }
+.fw-txlink:hover { border-bottom-color: var(--live); opacity: .85; }
+.fw-txlink:focus-visible { outline: 2px solid color-mix(in srgb, var(--live) 55%, transparent); outline-offset: 2px; border-radius: 2px; }

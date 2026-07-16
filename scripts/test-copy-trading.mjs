@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { register } from "node:module";
 
@@ -10,14 +11,61 @@ register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 const { classifyEvmSwaps, classifyEnrichedEvmSwap, classifySolanaSwap } = await import("../src/lib/services/copy-trading/watcher.ts");
 const { selectBuyFunding, fundingAssetsFromBalance, fundableSummary } = await import("../src/lib/services/copy-trading/funding.ts");
 const { normalizeConfig } = await import("../src/lib/services/copy-trading/store.ts");
-const { emptyPaperLedger, applyPaperBuy, applyPaperSell, paperPositionValue, paperEquityUsd } = await import("../src/lib/services/copy-trading/paper.ts");
-const { defaultCopyTradingConfig, MAX_COPY_TRADE_USD } = await import("../src/lib/types/copy-trading.ts");
+const { emptyPaperLedger, applyPaperBuy, applyPaperSell, paperPositionValue, paperEquityUsd, paperPortfolioSummary } = await import("../src/lib/services/copy-trading/paper.ts");
+const { compareCopyTradeEvolution, evaluateEvolutionPromotion, startAgentAnalysisState } = await import("../src/lib/services/copy-trading/evolution.ts");
+const { buildAgentAnalysisRequest, parseReviewPayload, readOAuthAgentAnalysisResponse } = await import("../src/lib/services/copy-trading/agent-analysis.ts");
+const { calibrateAgentDecision } = await import("../src/lib/services/copy-trading/calibration.ts");
+const {
+  createCounterfactualRecord,
+  dueCounterfactualHorizons,
+  markMissedCounterfactualHorizons,
+  observeCounterfactualHorizon,
+} = await import("../src/lib/services/copy-trading/counterfactual.ts");
+const { estimateCopyTradeExecutionCost } = await import("../src/lib/services/copy-trading/execution-costs.ts");
+const { buildWalletIntelligence, evaluatePostFillRisk, normalizeGoPlusSecurity } = await import("../src/lib/services/copy-trading/risk-intelligence.ts");
+const {
+  defaultCopyTradingConfig,
+  COPY_TRADE_EVALUATION_BATCH_SIZE,
+  COPY_TRADE_EVOLUTION_MODEL,
+  COPY_TRADE_EVOLUTION_POLICY_VERSION,
+  COPY_TRADE_PROMOTION_MIN_MATURED,
+  MAX_COPY_TRADE_USD,
+} = await import("../src/lib/types/copy-trading.ts");
 
 const TARGET = "0x1111111111111111111111111111111111111111";
 const USDC = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
 const WETH = "0x4200000000000000000000000000000000000006";
 const TOKEN = "0xabcabcabcabcabcabcabcabcabcabcabcabcabc0";
 const other = "0x2222222222222222222222222222222222222222";
+
+test("paper UI leads with portfolio value and keeps live-wallet funding in details", async () => {
+  const panelSource = await readFile(new URL("../src/components/trade/CopyTradingPanel.tsx", import.meta.url), "utf8");
+  assert.match(panelSource, /No real money used/);
+  assert.match(panelSource, /Portfolio value/);
+  assert.match(panelSource, /Profit · \{fmtSignedPercent\(summary\.returnPct\)\}/);
+  assert.match(panelSource, /Open positions/);
+  assert.match(panelSource, /simulated trades/);
+  assert.match(panelSource, /props\.fundable && !config\.dryRun/);
+  assert.match(panelSource, /Live wallet · not used in this simulation/);
+});
+
+test("zero-review evolved cards place the waiting status below learning evidence", async () => {
+  const panelSource = await readFile(new URL("../src/components/trade/CopyTradingPanel.tsx", import.meta.url), "utf8");
+  assert.match(panelSource, /comparison != null && comparison\.reviews === 0/);
+  assert.match(panelSource, /Agent waiting for next new buy/);
+  assert.match(panelSource, /Inherited portfolio baseline/);
+  assert.match(panelSource, /Inherited profit ·/);
+  assert.match(panelSource, /simulated trades inherited from original/);
+  const overviewSource = panelSource.slice(
+    panelSource.indexOf("function PaperPortfolioOverview"),
+    panelSource.indexOf("function EvolutionComparison"),
+  );
+  assert.ok(
+    overviewSource.indexOf("Agent waiting for next new buy")
+      > overviewSource.indexOf("<EvolutionComparison comparison={comparison} />"),
+    "waiting status should render below the learning evidence row",
+  );
+});
 
 function transfer(txHash, token, from, to, valueRaw) {
   return { txHash, blockNumber: "100", token, from, to, valueRaw };
@@ -286,6 +334,304 @@ test("normalizeConfig: paperStartUsd defaults null, clamps to >= 0", () => {
   assert.equal(normalizeConfig({ ...base, paperStartUsd: -50 }).paperStartUsd, 0);
 });
 
+test("normalizeConfig preserves a bounded, explicit evolved-config contract", () => {
+  const base = defaultCopyTradingConfig({ id: "evolved", agentId: "agent", walletAddress: TARGET, network: "eip155:8453" });
+  const normalized = normalizeConfig({
+    ...base,
+    evolution: {
+      sourceConfigId: "source",
+      model: COPY_TRADE_EVOLUTION_MODEL,
+      reasoningEffort: "medium",
+      minCloseConfidence: 99,
+      policyVersion: "tampered-policy",
+      createdAt: 123,
+    },
+  });
+  assert.deepEqual(normalized.evolution, {
+    sourceConfigId: "source",
+    model: "gpt-5.6-sol",
+    reasoningEffort: "medium",
+    minCloseConfidence: 1,
+    policyVersion: COPY_TRADE_EVOLUTION_POLICY_VERSION,
+    createdAt: 123,
+  });
+});
+
+test("normalizeConfig can preserve source timestamps while cloning", () => {
+  const base = defaultCopyTradingConfig({ id: "source", agentId: "agent", walletAddress: TARGET, network: "eip155:8453" });
+  base.updatedAt = 123;
+  assert.equal(normalizeConfig(base, false).updatedAt, 123);
+  assert.ok(normalizeConfig(base).updatedAt > 123);
+});
+
+test("agent analysis request uses GPT-5.6 Sol, web search, strict output, and no response storage", () => {
+  const config = defaultCopyTradingConfig({ id: "evolved", agentId: "agent", walletAddress: TARGET, network: "eip155:8453" });
+  config.targetAddress = other;
+  config.evolution = {
+    sourceConfigId: "source",
+    model: COPY_TRADE_EVOLUTION_MODEL,
+    reasoningEffort: "medium",
+    minCloseConfidence: 0.7,
+    policyVersion: COPY_TRADE_EVOLUTION_POLICY_VERSION,
+    createdAt: 123,
+  };
+  const request = buildAgentAnalysisRequest({
+    config,
+    signal: { direction: "buy", token: TOKEN, quoteSymbol: "USDC", quoteUsd: 5, targetTxRef: "0xtarget", at: 123 },
+    token: TOKEN,
+    symbol: "TOKEN",
+    spentUsd: 5,
+    market: { priceUsd: 1, liquidityUsd: 50_000, symbol: "TOKEN", priceChange24hPct: 3, volume24hUsd: 20_000, marketCapUsd: 1_000_000, fdvUsd: 1_200_000, pairUrl: "https://dexscreener.com/base/pair", pairCreatedAt: 100, buys24h: 90, sells24h: 40 },
+    intelligence: {
+      security: { provider: "goplus", coverage: "complete", hardRiskFlags: [], cautionFlags: ["mintable"], holderConcentrationPct: 22, buyTaxPct: 0, sellTaxPct: 0 },
+      wallet: { maturedTrades: 20, winRatePct: 60, meanReturnPct: 4, maxDrawdownPct: 8 },
+    },
+    riskGate: { path: "sol-adjudication", score: 28, reasons: ["Token remains mintable."], hardClose: false },
+    calibration: { rawConfidence: 0, calibratedConfidence: 0, closeThreshold: 0.78, sampleSize: 20 },
+    recentReviews: [],
+  });
+  assert.equal(request.model, "gpt-5.6-sol");
+  assert.equal(request.reasoning.effort, "medium");
+  assert.deepEqual(request.tools, [{ type: "web_search", search_context_size: "medium" }]);
+  assert.deepEqual(request.include, ["web_search_call.action.sources"]);
+  assert.equal(request.store, false);
+  assert.equal(request.text.format.type, "json_schema");
+  assert.equal(request.text.format.strict, true);
+  assert.deepEqual(request.text.format.schema.properties.decision.enum, ["keep", "close", "uncertain"]);
+  assert.match(request.input, /holderConcentrationPct/);
+  assert.match(request.input, /closeThreshold/);
+  assert.match(request.instructions, /evidence packet/);
+});
+
+test("risk intelligence normalizes explicit Base and Solana security failures", () => {
+  const base = normalizeGoPlusSecurity("eip155:8453", TOKEN, {
+    code: 1,
+    result: { [TOKEN]: { is_honeypot: "1", cannot_sell_all: "1", buy_tax: "0.02", sell_tax: "0.15", holders: [{ percent: "0.42" }] } },
+  });
+  assert.equal(base.coverage, "complete");
+  assert.deepEqual(base.hardRiskFlags, ["honeypot", "cannot-sell-all"]);
+  assert.equal(base.sellTaxPct, 15);
+  assert.equal(base.holderConcentrationPct, 42);
+
+  const mint = "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3";
+  const solana = normalizeGoPlusSecurity("solana:mainnet", mint, {
+    code: 1,
+    result: { [mint]: { closable: { status: "1" }, freezable: { status: "1" }, none_transferable: "1", creators: [{ malicious_address: "1" }], trusted_token: 0 } },
+  });
+  assert.deepEqual(solana.hardRiskFlags, ["non-transferable", "malicious-creator"]);
+  assert.deepEqual(solana.cautionFlags, ["closable-authority", "freeze-authority"]);
+});
+
+test("fast post-fill gate closes only on objective hard failures and otherwise sends evidence to Sol", () => {
+  const market = { priceUsd: 1, liquidityUsd: 50_000, symbol: "TOKEN", priceChange24hPct: 0, volume24hUsd: 20_000, marketCapUsd: 1_000_000, fdvUsd: 1_000_000, pairUrl: null, pairCreatedAt: Date.now() - 86_400_000, buys24h: 100, sells24h: 80 };
+  const hard = evaluatePostFillRisk({ spentUsd: 5, market, security: { provider: "goplus", coverage: "complete", hardRiskFlags: ["honeypot"], cautionFlags: [], holderConcentrationPct: null, buyTaxPct: null, sellTaxPct: null } });
+  assert.equal(hard.path, "risk-close");
+  assert.equal(hard.hardClose, true);
+
+  const unknown = evaluatePostFillRisk({ spentUsd: 5, market: { ...market, liquidityUsd: null }, security: { provider: "goplus", coverage: "unavailable", hardRiskFlags: [], cautionFlags: [], holderConcentrationPct: null, buyTaxPct: null, sellTaxPct: null } });
+  assert.equal(unknown.path, "sol-adjudication");
+  assert.equal(unknown.hardClose, false);
+  assert.ok(unknown.score > 0);
+});
+
+test("wallet intelligence is precomputed from matured cost-aware outcomes", () => {
+  const records = [
+    promotionRecord(0, 0, 0, { sourceReturnPct: 4 }),
+    promotionRecord(1, 0, 0, { sourceReturnPct: -2 }),
+    promotionRecord(2, 0, 0, { sourceReturnPct: 8 }),
+  ];
+  const profile = buildWalletIntelligence(records);
+  assert.equal(profile.maturedTrades, 3);
+  assert.equal(profile.winRatePct, 66.67);
+  assert.equal(profile.meanReturnPct, 3.33);
+  assert.ok(profile.maxDrawdownPct > 0);
+});
+
+test("execution cost model charges fixed network cost, venue/slippage, and liquidity impact", () => {
+  const deep = estimateCopyTradeExecutionCost({ network: "eip155:8453", notionalUsd: 5, liquidityUsd: 100_000, maxSlippageBps: 100 });
+  const thin = estimateCopyTradeExecutionCost({ network: "eip155:8453", notionalUsd: 5, liquidityUsd: 500, maxSlippageBps: 100 });
+  assert.ok(deep.fixedUsd > 0);
+  assert.ok(deep.variableBps >= 30);
+  assert.ok(thin.priceImpactBps > deep.priceImpactBps);
+  assert.ok(thin.totalUsd > deep.totalUsd);
+});
+
+test("paper fills deduct modeled buy and sell costs", () => {
+  const ledger = emptyPaperLedger(100);
+  const buy = applyPaperBuy(ledger, {
+    token: TOKEN, symbol: "TOKEN", priceUsd: 1, wantUsd: 10, minCopyUsd: 1, at: 1,
+    executionCost: { fixedUsd: 0.1, variableBps: 100 },
+  });
+  assert.equal(buy.ok, true);
+  assert.equal(Number(buy.executionCostUsd.toFixed(2)), 0.2);
+  assert.equal(Number(ledger.cashUsd.toFixed(2)), 89.9);
+  assert.equal(Number(ledger.positions[TOKEN].amount.toFixed(2)), 9.9);
+  const sell = applyPaperSell(ledger, TOKEN, 1, 2, { fixedUsd: 0.1, variableBps: 100 });
+  assert.equal(sell.ok, true);
+  assert.equal(Number(sell.proceedsUsd.toFixed(3)), 9.701);
+  assert.equal(Number(ledger.executionCostsUsd.toFixed(3)), 0.399);
+});
+
+test("confidence calibration is conservative when sparse and excludes the current frozen batch", () => {
+  const historical = Array.from({ length: 30 }, (_, index) => promotionRecord(index, index < 6 ? 1 : -1, 0, { confidence: 0.9 }));
+  const poisonedCurrentBatch = Array.from({ length: 30 }, (_, index) => promotionRecord(100 + index, 10, 1, { confidence: 0.9 }));
+  const calibrated = calibrateAgentDecision({
+    rawConfidence: 0.9,
+    baseThreshold: 0.7,
+    riskScore: 20,
+    securityCoverage: "complete",
+    currentBatch: 1,
+    counterfactuals: [...historical, ...poisonedCurrentBatch],
+  });
+  assert.equal(calibrated.sampleSize, 30);
+  assert.ok(calibrated.calibratedConfidence < 0.75);
+  assert.ok(calibrated.closeThreshold >= 0.7);
+
+  const sparse = calibrateAgentDecision({ rawConfidence: 0.8, baseThreshold: 0.7, riskScore: 0, securityCoverage: "unavailable", currentBatch: 0, counterfactuals: [] });
+  assert.equal(sparse.sampleSize, 0);
+  assert.ok(sparse.closeThreshold >= 0.84);
+});
+
+test("counterfactual records mature at fixed horizons with both hold and immediate-close paths", () => {
+  const record = createCounterfactualRecord({
+    sequence: 50,
+    policyVersion: COPY_TRADE_EVOLUTION_POLICY_VERSION,
+    targetTxRef: "0xtrade",
+    token: TOKEN,
+    symbol: "TOKEN",
+    entryAt: 1_000,
+    entryPriceUsd: 1,
+    spentUsd: 10,
+    decision: "close",
+    confidence: 0.9,
+    calibratedConfidence: 0.82,
+    closeThreshold: 0.75,
+    closePriceUsd: 0.99,
+    closeExecuted: true,
+    buyCost: { fixedUsd: 0.1, variableBps: 100 },
+    sellCost: { fixedUsd: 0.1, variableBps: 100 },
+  });
+  assert.equal(record.evaluationBatch, 1);
+  assert.equal(record.horizons["5m"].dueAt, 301_000);
+  const observed = observeCounterfactualHorizon(record, "5m", 0.8, 302_000);
+  assert.ok(observed.holdReturnPct < -20);
+  assert.ok(observed.closeReturnPct > observed.holdReturnPct);
+  assert.equal(observed.evolvedReturnPct, observed.closeReturnPct);
+  assert.equal(observed.pairedDeltaPct, observed.evolvedReturnPct - observed.holdReturnPct);
+});
+
+test("counterfactuals reject prices captured too late for their named horizon", () => {
+  const record = createCounterfactualRecord({
+    sequence: 0, policyVersion: COPY_TRADE_EVOLUTION_POLICY_VERSION, targetTxRef: "0xlate", token: TOKEN, symbol: "TOKEN",
+    entryAt: 1_000, entryPriceUsd: 1, spentUsd: 5, decision: "keep", confidence: 0.8, calibratedConfidence: 0.75,
+    closeThreshold: 0.7, closeExecuted: false, buyCost: { fixedUsd: 0, variableBps: 0 }, sellCost: { fixedUsd: 0, variableBps: 0 },
+  });
+  const lateAt = record.horizons["5m"].dueAt + 3 * 60_000 + 1;
+  assert.deepEqual(markMissedCounterfactualHorizons(record, lateAt), ["5m"]);
+  assert.equal(record.horizons["5m"].missedAt, lateAt);
+  assert.deepEqual(dueCounterfactualHorizons(record, lateAt), []);
+});
+
+test("promotion requires 200 matured trades, a frozen 50-trade holdout, positive 95% edge, and no worse drawdown", () => {
+  const strong = Array.from({ length: COPY_TRADE_PROMOTION_MIN_MATURED }, (_, index) => promotionRecord(index, 4, Math.floor(index / COPY_TRADE_EVALUATION_BATCH_SIZE)));
+  const eligible = evaluateEvolutionPromotion(strong, { bootstrapIterations: 2_000 });
+  assert.equal(eligible.status, "eligible");
+  assert.equal(eligible.holdoutSamples, COPY_TRADE_EVALUATION_BATCH_SIZE);
+  assert.ok(eligible.edgeCi95Pct[0] > 0);
+  assert.ok(eligible.evolvedMaxDrawdownPct <= eligible.sourceMaxDrawdownPct);
+
+  const tooSmall = evaluateEvolutionPromotion(strong.slice(0, 199), { bootstrapIterations: 500 });
+  assert.equal(tooSmall.status, "collecting");
+
+  const risky = strong.map((record, index) => index >= 150
+    ? promotionRecord(index, index % 5 === 0 ? -10 : 10, 3, { sourceReturnPct: 0 })
+    : record);
+  const rejected = evaluateEvolutionPromotion(risky, { bootstrapIterations: 2_000 });
+  assert.equal(rejected.status, "rejected");
+  assert.equal(rejected.gates.drawdown, false);
+});
+
+test("agent analysis parser rejects malformed decisions", () => {
+  assert.deepEqual(parseReviewPayload('{"decision":"close","confidence":0.8,"summary":"Material exploit report.","risks":["Exploit"]}'), {
+    decision: "close",
+    confidence: 0.8,
+    summary: "Material exploit report.",
+    risks: ["Exploit"],
+  });
+  assert.throws(() => parseReviewPayload('{"decision":"buy-more","confidence":1,"summary":"No","risks":[]}'), /invalid decision/);
+});
+
+test("ChatGPT OAuth review parser retains structured JSON and web sources", async () => {
+  const json = '{"decision":"keep","confidence":0.82,"summary":"Evidence supports holding.","risks":[]}';
+  const frames = [
+    { type: "response.output_item.done", item: { type: "web_search_call", action: { sources: [{ title: "Project", url: "https://example.com/project" }] } } },
+    { type: "response.output_text.delta", delta: json },
+    { type: "response.completed", response: { id: "resp_oauth", output: [] } },
+  ].map((event) => `data: ${JSON.stringify(event)}\n\n`).join("") + "data: [DONE]\n\n";
+  const result = await readOAuthAgentAnalysisResponse(new Response(frames, { headers: { "content-type": "text/event-stream" } }));
+  assert.equal(result.id, "resp_oauth");
+  assert.equal(result.text, json);
+  assert.deepEqual(result.sources, [{ title: "Project", url: "https://example.com/project" }]);
+});
+
+test("paired evolution comparison measures return after cloning, not lifetime source P&L", () => {
+  const source = { configId: "source", consumedTxRefs: [], openPositions: {}, stats: { polls: 0, mirrored: 0, skipped: 0, errors: 0 }, paper: emptyPaperLedger(100), lastError: null, lastPollAt: null, running: true, events: [] };
+  const evolved = { configId: "evolved", consumedTxRefs: [], openPositions: {}, stats: { polls: 0, mirrored: 0, skipped: 0, errors: 0 }, paper: emptyPaperLedger(100), lastError: null, lastPollAt: null, running: true, events: [] };
+  evolved.agentAnalysis = startAgentAnalysisState({ sourceConfigId: "source", sourceState: source, evolvedState: evolved, startedAt: 1 });
+  source.paper.cashUsd = 110;
+  evolved.paper.cashUsd = 120;
+  evolved.agentAnalysis.reviews.push({
+    reviewedAt: 2, targetTxRef: "0x1", token: TOKEN, symbol: "TOKEN", spentUsd: 5,
+    model: COPY_TRADE_EVOLUTION_MODEL, decision: "keep", confidence: 0.8, summary: "Keep", risks: [], sources: [], researchUsed: false, closeExecuted: false,
+  });
+  const comparison = compareCopyTradeEvolution(evolved, source);
+  assert.equal(comparison.status, "ready");
+  assert.equal(comparison.sourceReturnPct, 10);
+  assert.equal(comparison.evolvedReturnPct, 20);
+  assert.equal(comparison.returnDeltaPct, 10);
+  assert.equal(comparison.kept, 1);
+});
+
+test("evolved UI and engine expose the paired review while valuing only config-owned live positions", async () => {
+  const [panelSource, engineSource, routeSource] = await Promise.all([
+    readFile(new URL("../src/components/trade/CopyTradingPanel.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/lib/services/copy-trading/engine.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/app/api/trading/copy-trade/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(panelSource, /Create agent-analyzed copy/);
+  assert.match(panelSource, /Original vs agent-analyzed/);
+  assert.match(panelSource, /GPT-5\.6 Sol reviews/);
+  assert.match(engineSource, /priceUsd \* position\.amount/);
+  assert.doesNotMatch(engineSource, /const valueUsd = held\?\.valueUsd/);
+  assert.match(engineSource, /config\.dryRun && source\.paper\?\.initialized/);
+  assert.match(engineSource, /positions: Object\.fromEntries/);
+  assert.match(routeSource, /case "evolve"/);
+});
+
+test("engine wires precomputed evidence through the fast gate, calibrated Sol review, and counterfactual maturation", async () => {
+  const engineSource = await readFile(new URL("../src/lib/services/copy-trading/engine.ts", import.meta.url), "utf8");
+  assert.match(engineSource, /warmCopyTradeIntelligence/);
+  assert.match(engineSource, /evaluatePostFillRisk/);
+  assert.match(engineSource, /calibrateAgentDecision/);
+  assert.match(engineSource, /createCounterfactualRecord/);
+  assert.match(engineSource, /dueCounterfactualHorizons/);
+  assert.match(engineSource, /observeCounterfactualHorizon/);
+});
+
+test("EVO and the dashboard expose the conservative statistical promotion gate", async () => {
+  const [benchmarkSource, panelSource] = await Promise.all([
+    readFile(new URL("./benchmark-copy-trading-evolution.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/trade/CopyTradingPanel.tsx", import.meta.url), "utf8"),
+  ]);
+  assert.match(benchmarkSource, /promotion\.status === "eligible"/);
+  assert.match(benchmarkSource, /positive 95% confidence edge/);
+  assert.doesNotMatch(benchmarkSource, /returnDeltaPct - errorRate/);
+  assert.match(panelSource, /Learning evidence/);
+  assert.match(panelSource, /95% edge/);
+  assert.match(panelSource, /Eligible for promotion/);
+  assert.match(panelSource, /Execution costs/);
+});
+
 // ── paper-trading ledger (dry-run simulation) ────────────────────────────────
 const PTOKEN = "0xabcabcabcabcabcabcabcabcabcabcabcabcabc0";
 
@@ -387,5 +733,67 @@ test("paper: equity = cash + marked positions; total P&L = realized + unrealized
   assert.equal(totalPnl, 5);
   assert.equal(L.realizedPnlUsd + (15 - 10), totalPnl); // realized(0) + unrealized(5)
 });
+
+test("paper: portfolio summary reports the user-facing bankroll, value, profit, and return", () => {
+  const L = emptyPaperLedger(100);
+  applyPaperBuy(L, { token: PTOKEN, symbol: "PEP", priceUsd: 2, wantUsd: 10, minCopyUsd: 1, at: 1 });
+  L.positions[PTOKEN].markUsd = 15; // +$5 unrealized
+
+  const soldToken = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+  applyPaperBuy(L, { token: soldToken, symbol: "SOLD", priceUsd: 2, wantUsd: 10, minCopyUsd: 1, at: 2 });
+  applyPaperSell(L, soldToken, 1.6, 3); // -$2 realized
+
+  assert.deepEqual(paperPortfolioSummary(L), {
+    startCashUsd: 100,
+    cashUsd: 88,
+    positionCostUsd: 10,
+    positionValueUsd: 15,
+    equityUsd: 103,
+    realizedPnlUsd: -2,
+    executionCostsUsd: 0,
+    unrealizedPnlUsd: 5,
+    totalPnlUsd: 3,
+    returnPct: 3,
+  });
+});
+
+function promotionRecord(sequence, pairedDeltaPct, evaluationBatch, options = {}) {
+  const sourceReturnPct = options.sourceReturnPct ?? -2;
+  const evolvedReturnPct = sourceReturnPct + pairedDeltaPct;
+  const decision = options.decision ?? "close";
+  return {
+    sequence,
+    evaluationBatch,
+    policyVersion: COPY_TRADE_EVOLUTION_POLICY_VERSION,
+    targetTxRef: `0x${sequence}`,
+    token: TOKEN,
+    symbol: "TOKEN",
+    entryAt: sequence,
+    entryPriceUsd: 1,
+    spentUsd: 5,
+    decision,
+    confidence: options.confidence ?? 0.8,
+    calibratedConfidence: options.confidence ?? 0.8,
+    closeThreshold: 0.7,
+    closeExecuted: decision === "close",
+    closePriceUsd: 1,
+    buyCost: { fixedUsd: 0, variableBps: 0 },
+    sellCost: { fixedUsd: 0, variableBps: 0 },
+    horizons: {
+      "5m": { dueAt: 0 },
+      "30m": { dueAt: 0 },
+      "4h": { dueAt: 0 },
+      "24h": {
+        dueAt: 0,
+        observedAt: sequence + 1,
+        priceUsd: 1,
+        holdReturnPct: sourceReturnPct,
+        closeReturnPct: decision === "close" ? evolvedReturnPct : sourceReturnPct - pairedDeltaPct,
+        evolvedReturnPct,
+        pairedDeltaPct,
+      },
+    },
+  };
+}
 
 console.log("copy-trading watcher + store + paper tests passed.");

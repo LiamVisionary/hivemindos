@@ -21,11 +21,14 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	ps "github.com/mitchellh/go-ps"
 	"tailscale.com/client/local"
 )
 
@@ -233,32 +236,105 @@ func (m *shellManager) spawn(id string) (*shellSession, error) {
 	return session, nil
 }
 
+type shellStartOps struct {
+	timeout          time.Duration
+	start            func(*exec.Cmd) error
+	directChildren   func(int) (map[int]string, error)
+	killProcess      func(int) error
+	parentExecutable string
+}
+
+func shellDirectChildren(parentPID int) (map[int]string, error) {
+	processes, err := ps.Processes()
+	if err != nil {
+		return nil, err
+	}
+	children := make(map[int]string)
+	for _, process := range processes {
+		if process.PPid() == parentPID && process.Pid() > 0 {
+			children[process.Pid()] = process.Executable()
+		}
+	}
+	return children, nil
+}
+
+func killShellProcess(pid int) error {
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return err
+	}
+	return process.Kill()
+}
+
+func newPreExecChildPIDs(before, after map[int]string, parentExecutable string) []int {
+	var result []int
+	for pid, executable := range after {
+		// Before exec, the forked child still has the daemon's executable name.
+		// Do not kill unrelated children that another request started while this
+		// shell spawn was wedged.
+		if executable != parentExecutable {
+			continue
+		}
+		if _, existed := before[pid]; !existed {
+			result = append(result, pid)
+		}
+	}
+	sort.Ints(result)
+	return result
+}
+
 // startShellProcess runs cmd.Start with a hard timeout so a hung fork/exec
 // cannot block the caller or accumulate. On macOS, a process that has loaded
 // Network.framework (via the embedded Tailscale node) can deadlock in Apple's
 // post-fork handler (nw_settings_child_has_forked -> os_log) before the child
-// reaches exec, spinning a full core forever. We detect that case, reap the
-// half-born child, and surface an error instead of leaking a runaway process.
+// reaches exec, spinning a full core forever. In that state exec.Cmd.Process is
+// still nil, so cleanup must find the newly forked direct child in the process
+// table and kill it by its positive PID.
 func startShellProcess(cmd *exec.Cmd) error {
+	return startShellProcessWith(cmd, shellStartOps{
+		timeout:          shellSpawnTimeout,
+		start:            func(cmd *exec.Cmd) error { return cmd.Start() },
+		directChildren:   shellDirectChildren,
+		killProcess:      killShellProcess,
+		parentExecutable: filepath.Base(os.Args[0]),
+	})
+}
+
+func startShellProcessWith(cmd *exec.Cmd, ops shellStartOps) error {
+	parentPID := os.Getpid()
+	childrenBefore, snapshotErr := ops.directChildren(parentPID)
 	done := make(chan error, 1)
-	go func() { done <- cmd.Start() }()
+	go func() { done <- ops.start(cmd) }()
+	timer := time.NewTimer(ops.timeout)
+	defer timer.Stop()
 	select {
 	case err := <-done:
 		return err
-	case <-time.After(shellSpawnTimeout):
-		// cmd.Start() wedged (typically the macOS post-fork spin). Kill the
-		// child's process group if it exists so it stops burning CPU, then
-		// let the late Start result (if any) be discarded.
+	case <-timer.C:
+		// cmd.Start() wedged (typically the macOS post-fork spin). It has not
+		// published cmd.Process yet, but the kernel already exposes the child.
+		// A process-table snapshot is safe here because it does not fork.
+		if snapshotErr != nil {
+			log.Printf("shell: could not snapshot children before spawn: %v", snapshotErr)
+		} else if childrenAfter, err := ops.directChildren(parentPID); err != nil {
+			log.Printf("shell: could not snapshot children after timed-out spawn: %v", err)
+		} else {
+			for _, pid := range newPreExecChildPIDs(childrenBefore, childrenAfter, ops.parentExecutable) {
+				if err := ops.killProcess(pid); err != nil {
+					log.Printf("shell: could not kill timed-out child pid %d: %v", pid, err)
+				}
+			}
+		}
+		// If Start unwinds after the forced kill, reap a successfully started
+		// process. Reading cmd.Process only after the channel receive avoids a
+		// data race with exec.Cmd.Start publishing it.
 		go func() {
 			if err := <-done; err == nil && cmd.Process != nil {
 				_ = shellTerminateGroup(cmd.Process.Pid)
 				_, _ = cmd.Process.Wait()
 			}
 		}()
-		if cmd.Process != nil {
-			_ = shellTerminateGroup(cmd.Process.Pid)
-		}
-		return fmt.Errorf("shell spawn timed out after %s (process did not reach exec)", shellSpawnTimeout)
+		return fmt.Errorf("shell spawn timed out after %s (process did not reach exec)", ops.timeout)
 	}
 }
 

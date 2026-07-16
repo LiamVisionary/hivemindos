@@ -46,6 +46,10 @@ assert.ok(
 // A standard company with no explicit policies has both built-ins ACTIVE by default.
 const defaultActive = activeCompanyApprovalPolicies({ directives: [], approvalPolicies: [] });
 assert.ok(
+  resolved.some((policy) => policy.id === "capability-setup" && policy.mode === "off"),
+  "autonomous companies default capability setup to automatic/off",
+);
+assert.ok(
   defaultActive.some((policy) => policy.id === "customer-email-send" && policy.mode === "ask"),
   "customer email send is gated by default with no explicit configuration",
 );

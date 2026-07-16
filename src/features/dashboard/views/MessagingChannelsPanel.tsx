@@ -12,6 +12,7 @@ import {
   Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DEFAULT_QUEEN_BEE_NAME } from "@/lib/config/queen-bee-personality";
 import type { AgentProfile, SharedVaultConfig } from "@/lib/types/agent-runtime";
 import type {
   HiveMessagingChannel,
@@ -83,7 +84,7 @@ export function MessagingChannelsPanel({ active, displayAgents, fleetClass, shar
 
   const agentOptions = useMemo<MessagingAgentOption[]>(() => {
     const map = new Map<string, MessagingAgentOption>();
-    map.set(QUEEN_BEE_AGENT_ID, toAgentOption({ id: QUEEN_BEE_AGENT_ID, name: "Queen Bee", runtime: "hermes", beeRole: "queen" }));
+    map.set(QUEEN_BEE_AGENT_ID, toAgentOption({ id: QUEEN_BEE_AGENT_ID, name: DEFAULT_QUEEN_BEE_NAME, runtime: "hermes", beeRole: "queen" }));
     for (const agent of displayAgents) if (!map.has(agent.id)) map.set(agent.id, toAgentOption(agent));
     return [...map.values()];
   }, [displayAgents]);

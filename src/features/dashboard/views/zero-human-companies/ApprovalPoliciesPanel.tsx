@@ -92,14 +92,14 @@ export function ApprovalPoliciesPanel({
                   </div>
                   <div style={{ marginTop: 4, display: "flex", gap: 7, flexWrap: "wrap", alignItems: "center" }}>
                     <span style={{ fontFamily: "var(--f-mono)", fontSize: 9, textTransform: "uppercase", letterSpacing: 0.06, color: tone.color, border: `1px solid ${tone.border}`, borderRadius: 5, padding: "2px 6px" }}>
-                      {MODE_LABEL[visibleMode]}
+                      {policy.id === "capability-setup" && visibleMode === "off" ? "Automatic" : MODE_LABEL[visibleMode]}
                     </span>
                     <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{sourceLabel(policy)}</span>
                   </div>
                 </div>
               </div>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {COMPANY_APPROVAL_POLICY_MODES.map((mode) => {
+                {(policy.id === "capability-setup" ? (["off", "ask"] as CompanyApprovalPolicyMode[]) : COMPANY_APPROVAL_POLICY_MODES).map((mode) => {
                   const selected = visibleMode === mode;
                   return (
                     <button
@@ -120,11 +120,11 @@ export function ApprovalPoliciesPanel({
                         padding: "6px 10px",
                         fontFamily: "var(--f-mono)",
                         fontSize: 10.5,
-                        fontWeight: 700,
+                        fontWeight: 500,
                         opacity: busy && !selected ? 0.55 : 1,
                       }}
                     >
-                      {busy && selected ? <Spinner size={11} /> : MODE_LABEL[mode]}
+                      {busy && selected ? <Spinner size={11} /> : policy.id === "capability-setup" && mode === "off" ? "Automatic" : MODE_LABEL[mode]}
                     </button>
                   );
                 })}

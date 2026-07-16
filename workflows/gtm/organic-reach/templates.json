@@ -3,8 +3,8 @@
   "provenance": "authored",
   "license": "MIT (same as this repository)",
   "verifiedOn": "2026-07-11",
-  "note": "Organic content-to-pipeline building blocks: the 3-pillar weekly mix, 5 post-type skeletons, 6 viral wrapper shapes, cadence rows, content-team roles, the 4-part positioning formula, proof-library categories, distribution channels, metric tiers, and Instagram top-of-funnel rules. This bank is authored, not measured — impression/conversion figures circulating for this system are the source's own claims and agents must not present them as proven. A fuller playbook lives in the shared skills shelf as the organic-reach-gtm skill. Hard rules that travel with every row: proof is never fabricated (no invented results, testimonials, or screenshots — real proof or no post), every comment-keyword CTA's promised DM is actually sent by a human or human-approved draft, scheduling goes through platform-native schedulers only, and comments on others' posts follow the linkedin bank's human-approval rules. Slots are UPPERCASE so an unfilled template trips the placeholder check in src/lib/services/deliverables/acceptance-contracts.ts.",
-  "count": 41,
+  "note": "Organic content-to-pipeline building blocks: the 3-pillar weekly mix, 5 post-type skeletons, 6 viral wrapper shapes, cadence rows, content-team roles, the 4-part positioning formula, proof-library categories, distribution channels, metric tiers, Instagram top-of-funnel rules, and (from the 200k-impression-system augment) the source-content repurposing method, the 3 convert-buckets, the 60-minute daily rhythm, CTA-by-goal frameworks, the weekly posting schedule, and the content-to-pipeline signal-capture flow. This bank is authored, not measured — impression/conversion figures circulating for this system (200k impressions, 23 calls in 14 days, etc.) are the sources' own claims and agents must not present them as proven. A fuller playbook lives in the shared skills shelf as the organic-reach-gtm skill. Hard rules that travel with every row: proof is never fabricated (no invented results, testimonials, or screenshots — real proof or no post), every comment-keyword CTA's promised DM is actually sent by a human or human-approved draft, scheduling goes through platform-native schedulers only, comments on others' posts follow the linkedin bank's human-approval rules, and capturing engagers on a post is done with platform-native or manual review — third-party scrapers and fully-automated mass-DM tools violate platform terms and are never used. Slots are UPPERCASE so an unfilled template trips the placeholder check in src/lib/services/deliverables/acceptance-contracts.ts.",
+  "count": 63,
   "taxonomy": {
     "pillars": ["authority", "personal", "lead-magnet"],
     "metricTiers": ["primary", "secondary", "proof", "north-star"]
@@ -71,5 +71,42 @@
     { "id": "GI03", "rule": "teach one thing completely in under 90 seconds", "detail": "create a gap the lead magnet closes, and point every post at it via caption CTA and bio link" },
     { "id": "GI04", "rule": "never sell directly", "detail": "intercept with value, then move to a buying environment; downloads pre-qualify by topic (their pain, their stack, their willingness to act)" },
     { "id": "GI05", "rule": "for cold traffic, trials beat demos", "detail": "instant access, zero friction, self-qualification through product use" }
-  ]
+  ],
+  "sourceContentMethod": [
+    { "id": "GO01", "step": "write one deep source piece per week", "detail": "a detailed case study, step-by-step system breakdown, contrarian take with evidence, or a framework you actually use - substantial enough to be a mini-course; 30-60 minutes once, it fuels everything else" },
+    { "id": "GO02", "step": "break the source into a 7-day content run", "detail": "day 1 the contrarian hook, day 2 the step-by-step breakdown, day 3 the mistake post, day 4 the proof post, day 5 a thread version, day 6 a carousel or visual, day 7 the long newsletter" },
+    { "id": "GO03", "step": "repurpose across platforms", "detail": "one source becomes LinkedIn posts, threads, short-form video, newsletter, and community posts; roughly one source = seven-plus pieces, four sources a month = twenty-eight-plus posts, most of the time spent distributing not creating" }
+  ],
+  "sourceContentMath": "one source piece yields seven-plus derived pieces; four source pieces a month is twenty-eight-plus posts on roughly four hours of monthly creation, with the rest of the effort spent on distribution",
+  "convertBuckets": [
+    { "id": "GB01", "bucket": "proof and results", "purpose": "build authority", "post": "case studies with real numbers, results screenshots, permissioned client wins, before/after comparisons, dashboard snapshots", "why": "people don't trust claims, they trust evidence - and the evidence must be real" },
+    { "id": "GB02", "bucket": "education", "purpose": "demonstrate expertise", "post": "how-to posts with steps, frameworks they can apply today, tactical breakdowns, tool tutorials, process explanations", "why": "teaching is the fastest way to build trust" },
+    { "id": "GB03", "bucket": "identity and beliefs", "purpose": "create movement", "post": "strong opinions on your space, what you stand against, reasoned hot takes, this-is-what-we-believe posts, industry predictions", "why": "people follow people who stand for something; the position must be genuinely held" }
+  ],
+  "dailyRhythm": [
+    { "id": "GH01", "slot": "morning, about 45 minutes", "actions": "post the day's content, reply to every comment for the next 45 minutes, clear overnight and morning DMs, engage on 5-10 posts from ICP accounts, reply to any stragglers on yesterday's post" },
+    { "id": "GH02", "slot": "evening, about 15 minutes", "actions": "engage on 5-10 more ICP posts, send DMs to 2nd-degree ICP connections who engaged with your content, save high-performing posts to a swipe file" },
+    { "id": "GH03", "slot": "pro tips", "actions": "leave 2-3 sentence thoughtful comments not bare likes, comment on the same accounts repeatedly so the algorithm rewards the relationship, turn on notifications for 10-15 key accounts, and block the time on the calendar or it won't happen" }
+  ],
+  "ctaByGoal": [
+    { "id": "GK01", "goal": "lead magnet", "template": "Comment [KEYWORD] and I'll DM you the [RESOURCE].", "note": "every promised DM is actually delivered by a human or human-approved draft" },
+    { "id": "GK02", "goal": "conversation", "template": "What [TOOL OR SYSTEM OR METHOD] do you use for [SPECIFIC USE CASE]? Drop it below.", "note": "a low-stakes question earns comments and surfaces intent" },
+    { "id": "GK03", "goal": "authority", "template": "Agree? Disagree? Let me know in the comments.", "note": "invites debate on a genuinely held position" },
+    { "id": "GK04", "goal": "shares", "template": "Repost this if you know someone who needs it.", "note": "reach expansion; only ask when the piece genuinely warrants it" }
+  ],
+  "weeklySchedule": [
+    { "id": "GS01", "day": "monday", "post": "framework post", "why": "people want actionable content to start the week" },
+    { "id": "GS02", "day": "tuesday", "post": "case study", "why": "credibility day - show your work with real numbers" },
+    { "id": "GS03", "day": "wednesday", "post": "lead magnet", "why": "capture the mid-week engagement spike" },
+    { "id": "GS04", "day": "thursday", "post": "contrarian truth", "why": "debate drives comments" },
+    { "id": "GS05", "day": "friday", "post": "proof or results", "why": "end the week on a high with a real win" },
+    { "id": "GS06", "day": "weekend", "post": "personal or behind-the-scenes", "why": "lower stakes, higher authenticity, optional" }
+  ],
+  "postingTimes": "commonly effective LinkedIn windows are roughly 8-9am, 12-1pm, and 5-6pm local; these are starting points, not laws - test and find what works for your own audience",
+  "contentToPipeline": [
+    { "id": "GY01", "signal": "a post earns many likes", "action": "review the likers, filter for ICP fit by title, company size, and industry, and route the genuine matches to a human-approved DM conversation" },
+    { "id": "GY02", "signal": "a post earns many comments", "action": "review the commenters, personalize off what they actually said, and send human-approved outreach that references their specific comment" },
+    { "id": "GY03", "signal": "a lead-magnet post earns many comments", "action": "deliver the promised resource, follow up about 48 hours later, and book calls from the warm ones" }
+  ],
+  "contentToPipelineRule": "engagement on your own posts is a legitimate warm signal, but capturing it stays within platform terms: use the platform's native surfaces or manual review and human-approved DMs; third-party engager-scrapers and fully-automated mass-DM tools violate platform terms and are never used"
 }

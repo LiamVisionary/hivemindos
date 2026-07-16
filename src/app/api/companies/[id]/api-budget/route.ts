@@ -4,9 +4,19 @@ import { errorJson, okJson } from "@/lib/utils/api-response";
 import { getCompany, setCompanyApiBudget } from "@/lib/services/companies-store";
 import {
   applyCompanyApiBudget,
+  getGcpProjectBillingInfo,
   listBillingAccounts,
+  listGcpEnabledServices,
   listGcpProjects,
+  listOverridableDailyMetrics,
 } from "@/lib/services/gcp-budget-admin";
+import { mintGoogleCloudAccessToken } from "@/lib/services/integrations/google-cloud-oauth";
+import { CONNECTOR_MANIFESTS } from "@/lib/services/integrations/connector-manifests";
+import { buildCompanyApiUsageSnapshot, readCompanyApiUsage } from "@/lib/services/company-api-usage";
+import {
+  preserveCompanyApiBudgetProviderState,
+  sameCompanyApiBudgetScope,
+} from "@/lib/services/company-api-budget";
 import type { CompanyApiBudget, GcpApiDailyCap } from "@/lib/types/company";
 
 export const runtime = "nodejs";
@@ -119,14 +129,64 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   if (!company) return errorJson("Company not found.", 404);
 
   const apiBudgets = company.apiBudgets ?? [];
-  // The list helpers mint the OAuth token; if Google Cloud isn't connected they
-  // throw a human-readable error. Degrade to { connected: false } rather than a
-  // 500 so the editor can render its "connect Google Cloud" state.
+  const integrationLimits = company.integrationLimits ?? [];
+  const usage = buildCompanyApiUsageSnapshot(
+    company.id,
+    await readCompanyApiUsage(),
+    integrationLimits,
+  );
+  const connectors = CONNECTOR_MANIFESTS.map((manifest) => ({
+    key: manifest.key,
+    label: manifest.label,
+    detail: manifest.detail,
+    operations: manifest.operations.map((operation) => ({
+      id: operation.id,
+      label: operation.label,
+      description: operation.description,
+    })),
+  }));
+  const projectRef = request.nextUrl.searchParams.get("projectId")?.trim() ?? "";
+  const service = request.nextUrl.searchParams.get("service")?.trim() ?? "";
+  const base = { apiBudgets, integrationLimits, usage, connectors };
+
+  // Mint once so a valid connection remains "connected" even when the account
+  // lacks one optional discovery permission. Individual discovery errors are
+  // returned alongside every successful picker result.
   try {
-    const [projects, billingAccounts] = await Promise.all([listGcpProjects(), listBillingAccounts()]);
-    return okJson({ connected: true, apiBudgets, projects, billingAccounts });
+    const token = await mintGoogleCloudAccessToken();
+    const deps = { mintToken: async () => token };
+    const discovery = await Promise.allSettled([
+      listGcpProjects(deps),
+      listBillingAccounts(deps),
+      projectRef ? listGcpEnabledServices(projectRef, deps) : Promise.resolve([]),
+      projectRef ? getGcpProjectBillingInfo(projectRef, deps) : Promise.resolve(null),
+      projectRef && service ? listOverridableDailyMetrics(service, projectRef, deps) : Promise.resolve([]),
+    ]);
+    const errors = discovery
+      .filter((result): result is PromiseRejectedResult => result.status === "rejected")
+      .map((result) => result.reason instanceof Error ? result.reason.message : String(result.reason))
+      .map((message) => message.replace(/ya29\.[A-Za-z0-9._-]+/g, "[redacted-token]").slice(0, 300));
+    return okJson({
+      ...base,
+      connected: true,
+      projects: discovery[0].status === "fulfilled" ? discovery[0].value : [],
+      billingAccounts: discovery[1].status === "fulfilled" ? discovery[1].value : [],
+      enabledServices: discovery[2].status === "fulfilled" ? discovery[2].value : [],
+      billingInfo: discovery[3].status === "fulfilled" ? discovery[3].value : null,
+      metrics: discovery[4].status === "fulfilled" ? discovery[4].value : [],
+      discoveryErrors: errors,
+    });
   } catch {
-    return okJson({ connected: false, apiBudgets, projects: [], billingAccounts: [] });
+    return okJson({
+      ...base,
+      connected: false,
+      projects: [],
+      billingAccounts: [],
+      enabledServices: [],
+      billingInfo: null,
+      metrics: [],
+      discoveryErrors: [],
+    });
   }
 }
 
@@ -150,7 +210,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   // the same human-approval queue as other governed company actions; for now
   // the explicit confirmRaise flag is the guard.
   const current = (company.apiBudgets ?? []).find(
-    (entry) => entry.provider === "gcp" && entry.service === budget.service,
+    (entry) => sameCompanyApiBudgetScope(entry, budget),
   );
   const raised = raisedFields(budget, current);
   if (raised.length > 0 && body?.confirmRaise !== true) {
@@ -163,12 +223,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
   // Persist the requested config first (server owns provider-side status), then
   // apply to Google Cloud, then persist the apply result back onto the entry.
-  const saved = await setCompanyApiBudget(companyId, budget);
+  const budgetWithProviderState = preserveCompanyApiBudgetProviderState(budget, current);
+  const saved = await setCompanyApiBudget(companyId, budgetWithProviderState);
   if (!saved) return errorJson("Company not found.", 404);
 
-  const result = await applyCompanyApiBudget(budget);
+  const result = await applyCompanyApiBudget(budgetWithProviderState);
   const applied: CompanyApiBudget = {
-    ...budget,
+    ...budgetWithProviderState,
     appliedAt: result.appliedAt,
     budgetResourceName: result.budgetResourceName,
     appliedError: result.errors.length > 0 ? result.errors.join("; ") : undefined,

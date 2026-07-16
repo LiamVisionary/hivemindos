@@ -18,6 +18,7 @@ const QUEEN_OPERATIONAL_INSTRUCTIONS = [
   "Wallet and Bankr requests are HivemindOS agent-wallet operations, not consumer banking - never refuse them as banking; relay them through your tools.",
   "Keep replies short and natural - one to three sentences. No reasoning preambles.",
   "Use read_hivemind_context for read-only questions about HivemindOS app data, dashboard state, routes, capabilities, connected apps, Shared Brain memory, compiled brain knowledge, Work Board summaries, schedules, agents/fleet, and what the hive knows. It searches fast app/brain indexes directly instead of delegating to a runtime agent.",
+  "A user's request to read, search, compare, summarize, or analyze their own local HivemindOS Brain, notes, vault, memories, or access history is already authorized by that request. Use read_hivemind_context and answer from its evidence; never ask for permission or authorization to perform that local read. Permission is only relevant when a tool explicitly reports a governed remote-machine access, mutation, or consequential action.",
   "When the user asks a bare latest-status question like 'what's latest?', 'what's new?', or 'what's happening in the hive?', interpret it as the latest HivemindOS hive happenings and use read_hivemind_context. Do not answer from the coding runtime's git checkout unless the context evidence says repo work is the relevant hive update.",
   "Use read_wallet_readiness for read-only questions about which wallet/payment rails are configured, spend-ready, gated, or missing setup. It reads app capability state directly and does not fetch balances or move money.",
   "For 'open wallets' style requests, use drive_dashboard to open the Wallets screen, then use read_wallet_readiness if the user also needs the live readiness summary.",
@@ -164,7 +165,7 @@ const READ_WALLET_READINESS_TOOL_DEF: QueenToolDef = {
 const READ_HIVEMIND_CONTEXT_TOOL_DEF: QueenToolDef = {
   name: "read_hivemind_context",
   description:
-    "Read fast, read-only HivemindOS app and brain context directly: dashboard/API routes, connected apps, capabilities, runtime/tool surfaces, Shared Brain Memory, compiled brain knowledge, Work Board/schedule/fleet discovery hints, and what the hive knows about a topic. Use before delegating for read-only app-data or brain questions. Does NOT execute actions, edit notes/files, create tasks, fetch wallet balances, or move money.",
+    "Read fast, read-only HivemindOS app and local Brain context directly: dashboard/API routes, connected apps, capabilities, runtime/tool surfaces, Shared Brain Memory, compiled brain knowledge, Brain note access history, Work Board/schedule/fleet discovery hints, and what the hive knows about a topic. The user's request authorizes reads of their own local Brain, notes, vault, memories, and access history; do not ask for separate permission. Use before delegating for read-only app-data or Brain questions. Does NOT execute actions, edit notes/files, create tasks, fetch wallet balances, or move money.",
   parameters: {
     type: "object",
     properties: {
@@ -232,7 +233,11 @@ export function queenChatTools() {
   }));
 }
 
-const QUEEN_PIPELINE_TOOL_NAMES = new Set(["read_x_account", "use_hive_capability"]);
+const QUEEN_PIPELINE_TOOL_NAMES = new Set([
+  "read_hivemind_context",
+  "read_x_account",
+  "use_hive_capability",
+]);
 
 /** Server-executable tools offered by the direct pipeline voice/text lane. */
 export function queenPipelineChatTools() {

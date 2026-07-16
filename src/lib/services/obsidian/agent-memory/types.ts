@@ -28,6 +28,29 @@ export type AgentMemoryEvolutionType = (typeof AGENT_MEMORY_EVOLUTION_TYPES)[num
 export const AGENT_MEMORY_SOURCE_TYPES = ["explicit", "inferred", "composite"] as const;
 export type AgentMemorySourceType = (typeof AGENT_MEMORY_SOURCE_TYPES)[number];
 
+const LEGACY_AGENT_MEMORY_SOURCE_TYPE_ALIASES: Readonly<Record<string, AgentMemorySourceType>> = {
+  conversation: "explicit",
+  analysis: "inferred",
+  observed: "inferred",
+  "reviewed-artifact": "inferred",
+  "reviewed-work-board-result": "inferred",
+  "work-board": "inferred",
+  "work-board-artifact": "inferred",
+  "work-board-research": "inferred",
+  "work-board-result": "inferred",
+  "work-board-task": "inferred",
+};
+
+export function normalizeAgentMemorySourceType(value?: string): AgentMemorySourceType | undefined {
+  if (!value?.trim()) return undefined;
+  const normalized = value.trim().toLowerCase().replace(/[^a-z]+/g, "-");
+  const canonical = LEGACY_AGENT_MEMORY_SOURCE_TYPE_ALIASES[normalized] ?? normalized;
+  if (!(AGENT_MEMORY_SOURCE_TYPES as readonly string[]).includes(canonical)) {
+    throw new Error(`Unsupported memory source type "${value}". Use one of: ${AGENT_MEMORY_SOURCE_TYPES.join(", ")}.`);
+  }
+  return canonical as AgentMemorySourceType;
+}
+
 export const AGENT_MEMORY_ACTOR_ROLES = ["user", "assistant", "agent", "system", "tool"] as const;
 export type AgentMemoryActorRole = (typeof AGENT_MEMORY_ACTOR_ROLES)[number];
 

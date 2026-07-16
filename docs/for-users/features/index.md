@@ -34,9 +34,24 @@ The product starts with machines and agents. Fleet tells you what is online, whi
     <a href="fleet.html">Open Fleet</a>
   </section>
   <section class="docCard">
+    <h3>Fleet Machine Permissions</h3>
+    <p>Collector-only machines, per-capability Allow/Ask/Deny controls, master-hub authority, approval handoffs, and CPU/RAM/storage routing limits.</p>
+    <a href="fleet-machine-permissions.html">Open machine permissions</a>
+  </section>
+  <section class="docCard">
     <h3>Agents, Runtimes, And Chat</h3>
     <p>Runtime profiles, model selection, adaptive free-model routing, adapter behavior, streaming chat, `/swarm [number]` agent-team passes, `/swarm-goal` build orchestration, attachments, directory context, and phone-call handoff.</p>
     <a href="runtimes-and-chat.html">Open agents</a>
+  </section>
+  <section class="docCard">
+    <h3>Local Document Reader</h3>
+    <p>Sixteen bundled file extensions, local native conversion, Chat attachments, Hive Vault Feed the brain imports, company data rooms, archive limits, and trust boundaries.</p>
+    <a href="local-document-reader.html">Open document reader</a>
+  </section>
+  <section class="docCard">
+    <h3>Capability Plan Approvals</h3>
+    <p>Review the installed and setup-required capabilities behind a chat build, choose alternatives, remove entire task steps, and control when autonomous work should ask first.</p>
+    <a href="capability-approvals.html">Open capability approvals</a>
   </section>
   <section class="docCard">
     <h3>Calling</h3>
@@ -74,6 +89,11 @@ Looped work is where operator intent turns into agent execution. A loop contract
     <h3>Agent Challenges</h3>
     <p>Bounded multi-agent objectives with public challenge boards, credited lineage, per-agent run caps, verifier rulings, significance thresholds, and shared playbooks.</p>
     <a href="agent-challenges.html">Open challenge docs</a>
+  </section>
+  <section class="docCard">
+    <h3>Quant Research Swarm</h3>
+    <p>Research-only hypothesis families with lagged Rust backtests, independent Python validation, hard overfitting gates, regime and factor audits, and durable lineage.</p>
+    <a href="quant-research.html">Open quant research docs</a>
   </section>
   <section class="docCard">
     <h3>MiroShark And Runtime Gateways</h3>
@@ -162,13 +182,18 @@ The shared brain is a normal Obsidian vault, not a proprietary database. Hivemin
 
 ## Economy And Integrations
 
-Wallet and token features are explicit rails, not a background permission pool. Agent wallets handle controlled Base, Robinhood Chain, and Solana balances plus x402 paid requests, including HivemindOS Models calls paid directly from a local wallet without user API keys. The crypto capability router lets agents ask for intents such as paid API, private transfer, tokenized stock trade, or Bankr trading, then select or prepare the configured rail without executing spending itself. Hive Compute is an experimental marketplace inference and spare-GPU hosting path. Honey records reviewed contribution, Hivemind Cloud credits pay for managed service usage, and HIVE remains an optional community/payment rail. Integrations connect the control room to outside systems without making those systems own local state.
+Wallet and token features are explicit rails, not a background permission pool. Agent wallets handle controlled Base, Robinhood Chain, and Solana balances plus x402 paid requests, including HivemindOS Models calls paid directly from a local wallet without user API keys. The crypto capability router lets agents ask for intents such as paid API, private transfer, tokenized stock trade, or Bankr trading, then select or prepare the configured rail without executing spending itself. Hive Compute is an experimental marketplace inference and spare-GPU hosting path. Honey is one cumulative record of verified contribution and bounded recognition, Hivemind Cloud credits pay for managed service usage, and HIVE remains an optional community/payment rail. Integrations connect the control room to outside systems without making those systems own local state.
 
 <div class="docGrid">
   <section class="docCard">
     <h3>Wallets, Tokens, Honey, HIVE, And x402</h3>
     <p>Agent wallets, crypto rail routing, USDC/USDG sends, MoneyClaw, wallet-paid HivemindOS Models, wallet-vault backups, Honey contribution records, Hivemind Cloud credits, optional HIVE payment paths, and stock buying via Alpaca, Robinhood Agentic brokerage, xStocks, or Robinhood Chain Stock Tokens.</p>
     <a href="wallets-honey-and-x402.html">Open wallet docs</a>
+  </section>
+  <section class="docCard">
+    <h3>Agent-Analyzed Copy Trading</h3>
+    <p>Pair an unchanged copy-trader with a GPT-5.6 Sol research twin, review each copied buy after execution, close rejected positions, and compare both returns through an EVO-ready sample gate.</p>
+    <a href="copy-trading-agent-analysis.html">Open copy-trading analysis docs</a>
   </section>
   <section class="docCard">
     <h3>Hive Compute</h3>
@@ -201,9 +226,19 @@ Wallet and token features are explicit rails, not a background permission pool. 
     <a href="integrations-and-work-history.html">Open integrations</a>
   </section>
   <section class="docCard">
+    <h3>Beeline Family Profiles</h3>
+    <p>Separate family identities, explicit authority, allowed capability areas, and dedicated Chrome profiles without mixing them with your own account set.</p>
+    <a href="beeline.html">Open Beeline</a>
+  </section>
+  <section class="docCard">
     <h3>Agent Provider Integrations</h3>
     <p>External agent providers, MCP catalog discovery, Browser Use, OpenHands, Aider, n8n, Agentic Inbox, and Queen Bee PRD decomposition.</p>
     <a href="agent-provider-integrations.html">Open provider docs</a>
+  </section>
+  <section class="docCard">
+    <h3>Computer Interaction</h3>
+    <p>Governed dashboard and browser operation with semantic-first routing, allowed domains and apps, fresh observations, consequence approvals, durable redacted receipts, and post-action verification.</p>
+    <a href="computer-interaction.html">Open computer interaction docs</a>
   </section>
 </div>
 

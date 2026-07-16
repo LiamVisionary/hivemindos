@@ -2,11 +2,13 @@
 
 import "@/components/json-render/fr/fr-style.css";
 import "./chat-exchange.css";
+import "./chat-exchange-markdown.css";
 import "./chat-exchange-errors.css";
 import "./chat-exchange-motion.css";
 import "./chat-exchange-shell.css";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ChatFolderModal } from "@/features/dashboard/views/chat/ChatFolderModal";
 import { collapseSameTurnGenerationMessages } from "@/features/dashboard/chat-generation-message-dedupe";
 import { transcriptCardIsRunning } from "@/features/dashboard/chat-transcript-card";
@@ -26,7 +28,7 @@ import {
   selectedAgentIcon,
   titleCaseLabel,
 } from "@/features/dashboard/views/chat/chat-panel-helpers";
-import { mergeProcessEvents, normalizeProcessEvents, processEventsAreActive } from "@/features/dashboard/views/chat/AgentProcessPanel";
+import { mergeProcessEvents, normalizeProcessEvents } from "@/features/dashboard/views/chat/AgentProcessPanel";
 import { normalizeChatPermissionMode } from "@/lib/types/chat-permissions";
 import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 import { normalizeChatReasoningEffort } from "@/lib/types/chat-reasoning-effort";
@@ -37,6 +39,9 @@ import { evaluationOutputFingerprint } from "@/lib/services/evaluation/control-p
 import { selectChatPreviewTargets } from "@/lib/services/chat/chat-preview-targets";
 import {
   chatAppArtifactFromProject,
+  chatAppProjectDirectory,
+  chatAppProjectName,
+  chatAppTemplateForTask,
   chatWorkingDirectoryForThread,
   inferLegacyChatAppDirectory,
   latestChatAppArtifact,
@@ -45,6 +50,7 @@ import {
 import { APP_BUILDER_CONFIRMATIONS } from "@/lib/services/app-builder/contract";
 import { requestAppBuilderWithCollectorRecovery } from "@/lib/services/app-builder/collector-recovery";
 import { nativeOpenInAppSupported, openNativeInApp } from "@/lib/native/filesystem";
+import { hasPendingCapabilityApproval, type CapabilityApprovalPlan } from "@/lib/types/capability-approval";
 
 import { MessageThread } from "./MessageThread";
 import { ThreadTitleSettings } from "./ThreadTitleSettings";
@@ -59,6 +65,7 @@ import { ChatTerminalDrawer } from "./ChatTerminalDrawer";
 import { ExchangeComposer } from "./ExchangeComposer";
 import { useChatViewPreferences } from "./use-chat-view-preferences";
 import {
+  chatTranscriptSourceMessages,
   deleteChatThread,
   duplicateChatThreadSeed,
   serializeChatTranscript,
@@ -77,10 +84,19 @@ function elapsedLabel(startedAt: number | undefined, nowMs: number) {
   return `${hours ? `${hours}h ` : ""}${minutes}m ${seconds % 60}s`;
 }
 
-function appBuilderProject(payload: Record<string, unknown>) {
-  return payload.project && typeof payload.project === "object"
-    ? payload.project as Record<string, unknown>
-    : null;
+function appBuilderProject(payload: any) {
+  return payload?.project ?? payload?.data?.project ?? null;
+}
+
+async function requestAppBuilder(body: Record<string, unknown>) {
+  const response = await fetch("/api/app-builder", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await response.json().catch(() => null) as Record<string, any> | null;
+  if (!response.ok || !data?.ok) throw new Error(String(data?.error || "App Builder request failed."));
+  return data;
 }
 
 /** Real generated artifacts on this thread's messages — never fixtures. */
@@ -141,7 +157,6 @@ export function ChatExchangePanel(props: any) {
     chatStreamingByKey = {},
     chatThreadTitles = {},
     checkStatus,
-    dashboardTheme,
     dismissChatKanbanGeneration,
     displayAgents = [],
     fleetHostedApps = [],
@@ -161,11 +176,11 @@ export function ChatExchangePanel(props: any) {
     recording,
     refreshRuntimeIntegrations,
     refreshFleetHostedApps,
+    refreshNotifications,
     removeChatAttachment,
     removeChatDirectory,
     removeQueuedChatMessage,
     runRuntimeIntegrationAction,
-    runtimeIntegrationBusy,
     runtimeModelSelectionsByRuntime,
     selectedAgent,
     selectedChatDirectory,
@@ -188,7 +203,8 @@ export function ChatExchangePanel(props: any) {
     statusAgentId,
     stopAudioRecording,
     text,
-    toggleDashboardTheme,
+    chatDiscussContext,
+    clearChatDiscussContext,
     updateAgent,
     updateChatAutoScroll,
     visibleMessages = [],
@@ -196,7 +212,13 @@ export function ChatExchangePanel(props: any) {
     ChatMarkdown,
   } = props;
 
-  const renderMessages = useMemo(() => collapseSameTurnGenerationMessages(visibleMessages), [visibleMessages]);
+  const [capabilityPlanDrafts, setCapabilityPlanDrafts] = useState<Record<string, CapabilityApprovalPlan>>({});
+  const renderMessages = useMemo(() => collapseSameTurnGenerationMessages(visibleMessages).map((message) => {
+    const planId = message.capabilityApproval?.id;
+    return planId && capabilityPlanDrafts[planId]
+      ? { ...message, capabilityApproval: capabilityPlanDrafts[planId] }
+      : message;
+  }), [capabilityPlanDrafts, visibleMessages]);
   const { chatThreadTitleConfig, updateChatThreadTitleConfig } = useChatThreadTitleConfig();
   const prefs = useChatViewPreferences();
 
@@ -216,6 +238,7 @@ export function ChatExchangePanel(props: any) {
   const [openKanbanTaskMenuKey, setOpenKanbanTaskMenuKey] = useState("");
   const [copiedMessageKey, setCopiedMessageKey] = useState("");
   const [feedbackBusyKey, setFeedbackBusyKey] = useState("");
+  const [capabilityPlanSubmittingId, setCapabilityPlanSubmittingId] = useState("");
   const [threadAppProjectState, setThreadAppProjectState] = useState<{ storageKey: string; project: Record<string, any> } | null>(null);
   const [threadAppPreviewBusyKey, setThreadAppPreviewBusyKey] = useState("");
   const [threadAppPreviewErrorState, setThreadAppPreviewErrorState] = useState<{ storageKey: string; message: string } | null>(null);
@@ -229,10 +252,10 @@ export function ChatExchangePanel(props: any) {
   const [reasoningEffort, setReasoningEffort] = useState<ChatReasoningEffort>("medium");
   const [threadTitleSettingsOpen, setThreadTitleSettingsOpen] = useState(false);
   const [statusChecking, setStatusChecking] = useState(false);
-  const [usage, setUsage] = useState<ChatThreadUsage | null>(null);
-  const [usageLoading, setUsageLoading] = useState(false);
+  const [usageState, setUsageState] = useState<{ storageKey: string; usage: ChatThreadUsage | null } | null>(null);
   const [stickyChatProcess, setStickyChatProcess] = useState<any[]>([]);
   const [stickyChatProcessTargetKey, setStickyChatProcessTargetKey] = useState("");
+  const [composerClearance, setComposerClearance] = useState(184);
 
   const scrollNodeRef = useRef<HTMLDivElement | null>(null);
   const threadNodeRef = useRef<HTMLDivElement | null>(null);
@@ -242,8 +265,9 @@ export function ChatExchangePanel(props: any) {
   const previousChatScrollKeyRef = useRef("");
   const chatScrollFrameRef = useRef<number | null>(null);
   const toastTimerRef = useRef<number | null>(null);
-  const threadStartedAtRef = useRef<number>(Date.now());
+  const [threadClock, setThreadClock] = useState(() => ({ storageKey: selectedChatStorageKey, startedAt: Date.now(), nowMs: Date.now() }));
   const composerFormRef = useRef<HTMLFormElement | null>(null);
+  const composerDockRef = useRef<HTMLElement | null>(null);
 
   const flashToast = useCallback((message: string) => {
     setToast(message);
@@ -288,6 +312,7 @@ export function ChatExchangePanel(props: any) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionId,
+          chatStorageKey: storageKey,
           messageIndex: Number.isInteger(messageIndex) ? messageIndex : undefined,
           messageFingerprint: evaluationOutputFingerprint(message.content),
           rating: nextRating,
@@ -314,6 +339,115 @@ export function ChatExchangePanel(props: any) {
       flashToast(error instanceof Error ? error.message : "Could not save response feedback");
     } finally {
       setFeedbackBusyKey((current) => current === pendingKey ? "" : current);
+    }
+  }
+
+  const updateCapabilityPlan = useCallback((plan: CapabilityApprovalPlan, appArtifact?: ChatAppArtifact) => {
+    setCapabilityPlanDrafts((current) => ({ ...current, [plan.id]: plan }));
+    setMessagesByAgent?.((current: Record<string, any[]>) => {
+      const thread = current[plan.chatStorageKey] ?? [];
+      const next = thread.map((message) => message.capabilityApproval?.id === plan.id
+        ? { ...message, capabilityApproval: plan, appArtifact: appArtifact ?? message.appArtifact }
+        : message);
+      return { ...current, [plan.chatStorageKey]: next };
+    });
+  }, [setMessagesByAgent]);
+
+  const updateThreadAppArtifact = useCallback((appArtifact: ChatAppArtifact) => {
+    if (!selectedChatStorageKey) return;
+    setMessagesByAgent?.((current: Record<string, any[]>) => {
+      const thread = current[selectedChatStorageKey] ?? [];
+      let attached = false;
+      const next = thread.map((message) => {
+        if (message.appArtifact?.projectId !== appArtifact.projectId) return message;
+        attached = true;
+        return { ...message, appArtifact };
+      });
+      if (!attached) {
+        for (let index = next.length - 1; index >= 0; index -= 1) {
+          if (next[index]?.role !== "assistant") continue;
+          next[index] = { ...next[index], appArtifact };
+          attached = true;
+          break;
+        }
+      }
+      return attached ? { ...current, [selectedChatStorageKey]: next } : current;
+    });
+  }, [selectedChatStorageKey, setMessagesByAgent]);
+
+  function planUsesAppBuilder(plan: CapabilityApprovalPlan) {
+    return plan.items.some((item) => {
+      if (item.decision === "remove" || item.decision === "reject") return false;
+      const candidate = item.candidates.find((entry) => entry.id === item.selectedCapabilityId) ?? item.candidates[0];
+      return candidate?.id === "hive-action:apps.build" || candidate?.locator === "/api/app-builder";
+    });
+  }
+
+  async function prepareCapabilityAppProject(plan: CapabilityApprovalPlan) {
+    if (!planUsesAppBuilder(plan)) return undefined;
+    const baseDirectory = chatWorkingDirectory;
+    const directory = chatAppProjectDirectory(baseDirectory, plan.task, plan.id);
+    const data = await requestAppBuilder({
+      action: "create",
+      backend: "local",
+      directory,
+      workspaceDirectory: baseDirectory,
+      name: chatAppProjectName(plan.task),
+      templateId: chatAppTemplateForTask(plan.task),
+      machineKey: selectedChatMachine?.key,
+      collectorUrl: collectorUrl || undefined,
+      confirmation: APP_BUILDER_CONFIRMATIONS.createProject,
+    });
+    const project = appBuilderProject(data);
+    if (!project) throw new Error("App Builder did not return the created project.");
+    setThreadAppProjectState({ storageKey: selectedChatStorageKey, project });
+    return chatAppArtifactFromProject(project, { key: selectedChatMachine?.key, name: machineLabel });
+  }
+
+  async function submitCapabilityPlan(plan: CapabilityApprovalPlan) {
+    if (!sendPromptMessage || capabilityPlanSubmittingId) return;
+    setCapabilityPlanSubmittingId(plan.id);
+    try {
+      const appArtifact = await prepareCapabilityAppProject(plan);
+      const response = await fetch("/api/chat/capability-approval", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "resolve",
+          plan,
+          vaultPath: sharedVault?.vaultPath,
+          notificationsFolder: sharedVault?.notificationsFolder,
+        }),
+      });
+      const data = await response.json().catch(() => null) as { ok?: boolean; plan?: CapabilityApprovalPlan; continuationPrompt?: string; error?: string } | null;
+      if (!response.ok || !data?.ok || !data.plan || !data.continuationPrompt) {
+        throw new Error(data?.error || "Could not submit the capability plan.");
+      }
+      updateCapabilityPlan(data.plan, appArtifact);
+      await Promise.resolve(refreshNotifications?.()).catch(() => undefined);
+      const approvalMessageIndex = renderMessages.findIndex((message) => message.capabilityApproval?.id === plan.id);
+      const approvalRequestAttachments = approvalMessageIndex > 0
+        ? [...renderMessages.slice(0, approvalMessageIndex)].reverse().find((message) => message.role === "user")?.attachments ?? []
+        : [];
+      const appProjectContext = appArtifact ? [
+        "",
+        "Assigned App Builder project:",
+        `- Project id: ${appArtifact.projectId}`,
+        `- Directory: ${appArtifact.directory}`,
+        `- Template: ${appArtifact.templateId}`,
+        "Implement the app in that exact directory. Do not create a second project or use an untracked background preview server. Chat Preview owns installation and the durable runtime after the build finishes.",
+      ].join("\n") : "";
+      await sendPromptMessage(`${data.continuationPrompt}${appProjectContext}`, {
+        visiblePrompt: "Approved capability plan. Continue with the task.",
+        promptResponse: { label: "Capability plan approved", value: `${data.continuationPrompt}${appProjectContext}` },
+        attachments: approvalRequestAttachments,
+        workingDirectory: appArtifact?.directory,
+        appArtifact,
+      });
+    } catch (error) {
+      flashToast(error instanceof Error ? error.message : "Could not submit the capability plan");
+    } finally {
+      setCapabilityPlanSubmittingId((current) => current === plan.id ? "" : current);
     }
   }
 
@@ -420,18 +554,40 @@ export function ChatExchangePanel(props: any) {
 
   // Per-thread token/cost. Never fabricates: `tokensAvailable` gates the row.
   useEffect(() => {
-    if (!selectedChatStorageKey) { setUsage(null); return undefined; }
+    if (!selectedChatStorageKey) return undefined;
     let cancelled = false;
-    setUsageLoading(true);
     fetch(`/api/chat/thread-usage?chatStorageKey=${encodeURIComponent(selectedChatStorageKey)}`)
       .then((response) => response.json())
-      .then((payload) => { if (!cancelled) setUsage((payload?.data ?? payload) as ChatThreadUsage); })
-      .catch(() => { if (!cancelled) setUsage(null); })
-      .finally(() => { if (!cancelled) setUsageLoading(false); });
+      .then((payload) => { if (!cancelled) setUsageState({ storageKey: selectedChatStorageKey, usage: (payload?.data ?? payload) as ChatThreadUsage }); })
+      .catch(() => { if (!cancelled) setUsageState({ storageKey: selectedChatStorageKey, usage: null }); });
     return () => { cancelled = true; };
   }, [selectedChatStorageKey, busy]);
 
-  useEffect(() => { threadStartedAtRef.current = Date.now(); }, [selectedChatStorageKey]);
+  useEffect(() => {
+    let cancelled = false;
+    const tick = () => {
+      if (cancelled) return;
+      setThreadClock((current) => {
+        const nowMs = Date.now();
+        return current.storageKey === selectedChatStorageKey
+          ? { ...current, nowMs }
+          : { storageKey: selectedChatStorageKey, startedAt: nowMs, nowMs };
+      });
+    };
+    const frame = window.requestAnimationFrame(tick);
+    const timer = window.setInterval(tick, 1_000);
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(frame);
+      window.clearInterval(timer);
+    };
+  }, [selectedChatStorageKey]);
+
+  const usage = usageState && usageState.storageKey === selectedChatStorageKey ? usageState.usage : null;
+  const usageLoading = Boolean(selectedChatStorageKey && usageState?.storageKey !== selectedChatStorageKey);
+  const threadElapsed = threadClock.storageKey === selectedChatStorageKey
+    ? elapsedLabel(threadClock.startedAt, threadClock.nowMs)
+    : "—";
 
   const selectedRuntimeModelSelection = selectedAgent ? runtimeModelSelectionsByRuntime?.[selectedAgent.runtime] : undefined;
   const chatModelProviders = selectedRuntimeModelSelection?.providers ?? [];
@@ -498,6 +654,20 @@ export function ChatExchangePanel(props: any) {
     return () => observer.disconnect();
   }, [chatAutoScrollRef, chatScrollKey, scheduleChatScrollToBottom]);
 
+  useEffect(() => {
+    const dock = composerDockRef.current;
+    if (!dock) return undefined;
+    const syncComposerClearance = () => {
+      setComposerClearance(Math.ceil(dock.getBoundingClientRect().height) + 18);
+      if (chatAutoScrollRef?.current) scheduleChatScrollToBottom("auto");
+    };
+    syncComposerClearance();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver(syncComposerClearance);
+    observer.observe(dock);
+    return () => observer.disconnect();
+  }, [chatAutoScrollRef, scheduleChatScrollToBottom]);
+
   useEffect(() => () => { if (chatScrollFrameRef.current !== null) window.cancelAnimationFrame(chatScrollFrameRef.current); }, []);
 
   function handleScroll(event: any) {
@@ -531,7 +701,7 @@ export function ChatExchangePanel(props: any) {
   const processEventsTargetKey = currentProcessEvents.length
     ? activeTurnProcessTargetKey
     : stickyProcessBelongsToCurrentThread ? stickyChatProcessTargetKey : activeTurnProcessTargetKey;
-  const activeChatTaskRunning = busy || processEventsAreActive(processEventsForDisplay);
+  const activeChatTaskRunning = Boolean(busy);
   const liveOutput = processText(processEventsForDisplay);
 
   const runningChatStorageKeys = useMemo(() => new Set(Object.keys(chatStreamingByKey ?? {})), [chatStreamingByKey]);
@@ -565,13 +735,20 @@ export function ChatExchangePanel(props: any) {
             updatedAt: Number(chat.updatedAt ?? 0),
             active: Boolean(chat.active),
             running,
+            capabilityApprovalPending: hasPendingCapabilityApproval(messagesByAgent[storageKey] ?? []),
             onOpen: chat.onOpen,
           });
         }
       }
     }
     return rows;
-  }, [chatSidebarTree, chatThreadTitles, displayAgents, runningChatStorageKeys]);
+  }, [chatSidebarTree, chatThreadTitles, displayAgents, messagesByAgent, runningChatStorageKeys]);
+
+  const chatWorkingDirectory = chatWorkingDirectoryForThread(
+    sidebarRows,
+    selectedChatStorageKey,
+    selectedAgent?.localDataDir,
+  );
 
   const chatWorkingDirectory = chatWorkingDirectoryForThread(
     sidebarRows,
@@ -581,7 +758,7 @@ export function ChatExchangePanel(props: any) {
 
   const machineNames = useMemo(() => machinesWithChats.map((machine: any) => machine.name), [machinesWithChats]);
 
-  const newChatTarget = useMemo(() => {
+  const newChatTarget = (() => {
     for (const machine of chatSidebarTree) {
       for (const folder of machine.folders ?? []) {
         const holdsActiveChat = folder.active || (folder.chats ?? []).some((chat: any) => chat.active);
@@ -592,7 +769,7 @@ export function ChatExchangePanel(props: any) {
     }
     const fallback = machinesWithChats.find((machine: any) => machine.onStartChat);
     return fallback?.onStartChat ? { label: fallback.name, onStartChat: fallback.onStartChat } : null;
-  }, [chatSidebarTree, machinesWithChats]);
+  })();
 
   // ---- agent menu ----------------------------------------------------------
   const normalizedAgentMenuSearchQuery = normalizeSearchText(agentMenuSearchQuery);
@@ -642,7 +819,10 @@ export function ChatExchangePanel(props: any) {
   }
 
   function copyChat() {
-    const transcript = serializeChatTranscript(renderMessages, { agentName: selectedAgent?.name, displayContent: chatDisplayContent });
+    const transcriptMessages = collapseSameTurnGenerationMessages(
+      chatTranscriptSourceMessages(messagesByAgent, selectedChatStorageKey, renderMessages),
+    );
+    const transcript = serializeChatTranscript(transcriptMessages, { agentName: selectedAgent?.name, displayContent: chatDisplayContent });
     void navigator.clipboard?.writeText(transcript).then(() => {
       setCopiedAll(true);
       window.setTimeout(() => setCopiedAll(false), 1600);
@@ -796,6 +976,12 @@ export function ChatExchangePanel(props: any) {
     void ensureThreadAppPreview();
   }, [busy, ensureThreadAppPreview, selectedChatStorageKey]);
 
+  const sourceMachine = useMemo(() => (
+    selectedMachineGroup && !selectedMachineGroup.self && collectorUrl
+      ? { collectorUrl, name: selectedMachineGroup.name || machineLabel }
+      : undefined
+  ), [collectorUrl, machineLabel, selectedMachineGroup]);
+
   const threadTitle = (selectedChatStorageKey && chatThreadTitles[selectedChatStorageKey]?.title) || selectedChatDirectory || "agent chat";
   const agentSubline = [selectedAgent?.workerClass ?? selectedAgent?.beeRole, machineLabel].filter(Boolean).join(" · ");
   const headerSubline = selectedAgent
@@ -818,8 +1004,6 @@ export function ChatExchangePanel(props: any) {
             prefs={prefs}
             search={sidebarSearch}
             onSearchChange={setSidebarSearch}
-            theme={dashboardTheme === "hive-light" ? "light" : "dark"}
-            onToggleTheme={() => toggleDashboardTheme?.()}
             onNewChat={newChatTarget ? () => newChatTarget.onStartChat?.() : undefined}
             newChatLabel={newChatTarget ? `New chat in ${newChatTarget.label}` : undefined}
             onDuplicate={handleDuplicateThread}
@@ -911,7 +1095,7 @@ export function ChatExchangePanel(props: any) {
               </div>
             </header>
 
-            <div ref={attachScrollNode} className="cx-scroll fr-chat-scroller" onScroll={handleScroll} aria-busy={selectedChatHistoryLoading} style={{ minHeight: 0, overflow: "auto", padding: "26px 24px 14px" }}>
+            <div ref={attachScrollNode} className="cx-scroll fr-chat-scroller" onScroll={handleScroll} aria-busy={selectedChatHistoryLoading} style={{ minHeight: 0, overflow: "auto", padding: "26px 24px 14px", paddingBottom: composerClearance }}>
               <div ref={threadNodeRef} className="fr-chat-content-rail fr-chat-thread-rail" style={{ display: "grid", gap: 24 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                   <span style={{ flex: 1, height: 1, background: "var(--line)" }} />
@@ -944,6 +1128,7 @@ export function ChatExchangePanel(props: any) {
                     activeChatTaskRunning={activeChatTaskRunning}
                     agentSubline={agentSubline}
                     busy={busy}
+                    capabilityPlanSubmittingId={capabilityPlanSubmittingId}
                     chatDisplayContent={chatDisplayContent}
                     chatKanbanGeneration={chatKanbanGeneration}
                     chatProcessScopeKey={chatProcessScopeKey}
@@ -960,7 +1145,10 @@ export function ChatExchangePanel(props: any) {
                     processEventsForDisplay={processEventsForDisplay}
                     processEventsTargetKey={processEventsTargetKey}
                     selectedAgent={selectedAgent}
+                    sourceMachine={sourceMachine}
                     sendPromptMessage={sendPromptMessage}
+                    onCapabilityPlanChange={updateCapabilityPlan}
+                    onCapabilityPlanSubmit={submitCapabilityPlan}
                     sharedVault={sharedVault}
                     onMessageFeedback={submitMessageFeedback}
                     setCopiedMessageKey={setCopiedMessageKey}
@@ -971,7 +1159,7 @@ export function ChatExchangePanel(props: any) {
               </div>
             </div>
 
-            <section className="fr-chat-composer-dock" aria-label="Message composer" style={{ position: "relative", zIndex: 5, padding: "8px 24px 18px" }}>
+            <section ref={composerDockRef} className="fr-chat-composer-dock" aria-label="Message composer">
               <div className="fr-chat-content-rail fr-chat-composer-rail">
                 {queuedChatMessages.length ? (
                   <div className="cx-fade" style={{ display: "grid", gap: 8, border: "1px solid var(--line)", borderRadius: 14, background: "var(--panel-2)", color: "var(--fg-3)", fontFamily: "var(--f-mono)", fontSize: 11, padding: "9px 11px", marginBottom: 8 }} aria-label="Queued messages">
@@ -985,6 +1173,38 @@ export function ChatExchangePanel(props: any) {
                         </span>
                       ))}
                     </div>
+                  </div>
+                ) : null}
+                {chatDiscussContext ? (
+                  <div className="cx-fade" style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 8 }} aria-label="Discussion context">
+                    <span
+                      title={chatDiscussContext.body}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 7, minWidth: 0, maxWidth: "100%", border: "1px solid var(--line-2)", borderRadius: 999, background: "var(--panel)", color: "var(--fg-2)", fontFamily: "var(--f-body)", fontSize: 12, padding: "5px 6px 5px 11px" }}
+                    >
+                      <Ico d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" size={13} sw={1.8} stroke="var(--honey)" />
+                      <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        Discussing: {chatDiscussContext.label}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => clearChatDiscussContext?.()}
+                        aria-label="Remove discussion context"
+                        title="Remove — the Queen won't get this item's context"
+                        style={{ display: "grid", placeItems: "center", width: 18, height: 18, border: 0, borderRadius: 999, background: "var(--panel-hi)", color: "var(--fg-3)", cursor: "pointer", flex: "0 0 auto" }}
+                      >
+                        <Ico d="M6 6l12 12M18 6L6 18" size={11} sw={2} />
+                      </button>
+                    </span>
+                    {(text ?? "").trim() ? (
+                      <button
+                        type="button"
+                        onClick={() => setText("")}
+                        title="Clear the suggested text and write your own"
+                        style={{ border: 0, background: "transparent", color: "var(--fg-4)", fontFamily: "var(--f-body)", fontSize: 11.5, cursor: "pointer", padding: "4px 2px" }}
+                      >
+                        Clear text
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
                 <form ref={composerFormRef} onSubmit={sendMessage}>
@@ -1061,8 +1281,8 @@ export function ChatExchangePanel(props: any) {
                 runtimes={runtimeLabel ? [runtimeLabel] : []}
                 providers={providerLabel ? [providerLabel] : []}
                 models={chatCurrentModel ? [chatCurrentModel] : []}
-                elapsedLabel={activeChatTaskRunning ? elapsedLabel(threadStartedAtRef.current, Date.now()) : "—"}
-                workingDirectory={selectedChatDirectory ?? ""}
+                elapsedLabel={activeChatTaskRunning ? threadElapsed : "—"}
+                workingDirectory={chatWorkingDirectory}
                 usage={usage}
                 usageLoading={usageLoading}
                 messageCount={renderMessages.length}
@@ -1083,77 +1303,104 @@ export function ChatExchangePanel(props: any) {
 
         {/* floating header controls — overlay the shelf when it is open */}
         <div ref={headerPopRef} style={{ position: "absolute", top: 14, right: 18, zIndex: 70, display: "flex", alignItems: "center", gap: 2 }}>
-          {nativeOpenInAppSupported() && selectedChatDirectory ? (
-            <div style={{ position: "relative" }}>
-              <button type="button" className="cx-iconbtn" onClick={() => { setOpenInOpen((open) => !open); setMoreOpen(false); }} aria-expanded={openInOpen} title="Open working directory in an app" aria-label="Open in" style={headerIconBtnStyle(openInOpen)}>
-                <Ico d={ICON_PATHS.openIn} size={18} sw={1.7} />
-              </button>
-              {openInOpen ? (
-                <div className="cx-pop" role="menu" aria-label="Open in" style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 90, width: 214, ...POP_STYLE }}>
-                  <div style={{ padding: "5px 9px 6px", fontFamily: "var(--f-mono)", fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--fg-4)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selectedChatDirectory}</div>
-                  {(["vscode", "xcode", "terminal", "finder"] as const).map((app) => (
-                    <button
-                      key={app}
-                      type="button"
-                      className="cx-menuitem"
-                      onClick={() => {
-                        setOpenInOpen(false);
-                        void openNativeInApp({ app, path: selectedChatDirectory }).then((result) => {
-                          if (!result.ok) flashToast(result.error || `Could not open ${app}`);
-                        });
-                      }}
-                      style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", border: 0, borderRadius: 9, background: "transparent", color: "var(--fg)", cursor: "pointer", padding: "8px 9px", textAlign: "left", fontSize: 13.5 }}
-                    >
-                      <span style={{ textTransform: "capitalize" }}>{app === "vscode" ? "VS Code" : app}</span>
+          <TooltipProvider>
+            {nativeOpenInAppSupported() && chatWorkingDirectory ? (
+              <div style={{ position: "relative" }}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button type="button" className="cx-iconbtn" onClick={() => { setOpenInOpen((open) => !open); setMoreOpen(false); }} aria-expanded={openInOpen} aria-label="Open in" style={headerIconBtnStyle(openInOpen)}>
+                      <Ico d={ICON_PATHS.openIn} size={18} sw={1.7} />
                     </button>
-                  ))}
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Open working directory</TooltipContent>
+                </Tooltip>
+                {openInOpen ? (
+                  <div className="cx-pop" role="menu" aria-label="Open in" style={{ position: "absolute", top: "calc(100% + 8px)", left: 0, zIndex: 90, width: 214, ...POP_STYLE }}>
+                    <div style={{ padding: "5px 9px 6px", fontFamily: "var(--f-mono)", fontSize: 9.5, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--fg-4)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{chatWorkingDirectory}</div>
+                    {(["vscode", "xcode", "terminal", "finder"] as const).map((app) => (
+                      <button
+                        key={app}
+                        type="button"
+                        className="cx-menuitem"
+                        onClick={() => {
+                          setOpenInOpen(false);
+                          void openNativeInApp({ app, path: chatWorkingDirectory }).then((result) => {
+                            if (!result.ok) flashToast(result.error || `Could not open ${app}`);
+                          });
+                        }}
+                        style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", border: 0, borderRadius: 9, background: "transparent", color: "var(--fg)", cursor: "pointer", padding: "8px 9px", textAlign: "left", fontSize: 13.5 }}
+                      >
+                        <span style={{ textTransform: "capitalize" }}>{app === "vscode" ? "VS Code" : app}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button type="button" className="cx-iconbtn" onClick={() => setTerminalOpen((open) => !open)} aria-pressed={terminalOpen} aria-label="Open terminal" style={headerIconBtnStyle(terminalOpen)}>
+                  <Ico d={ICON_PATHS.terminal} size={18} sw={1.7}><rect x="3" y="4" width="18" height="16" rx="2" /></Ico>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Open terminal</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button type="button" className="cx-iconbtn" onClick={openThreadPreview} aria-pressed={shelfMode === "preview"} aria-label="Preview" style={headerIconBtnStyle(shelfMode === "preview")}>
+                  <Ico d={ICON_PATHS.eye} size={18} sw={1.7}><circle cx="12" cy="12" r="3" /></Ico>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Preview conversation app</TooltipContent>
+            </Tooltip>
+
+            <div style={{ position: "relative" }}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button type="button" className="cx-iconbtn" onClick={() => { setMoreOpen((open) => !open); setOpenInOpen(false); }} aria-expanded={moreOpen} aria-label="More actions" style={headerIconBtnStyle(moreOpen)}>
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden><circle cx="5" cy="12" r="1.3" /><circle cx="12" cy="12" r="1.3" /><circle cx="19" cy="12" r="1.3" /></svg>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">More actions</TooltipContent>
+              </Tooltip>
+              {moreOpen ? (
+                <div className="cx-pop" role="menu" aria-label="More actions" style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 90, width: 238, ...POP_STYLE }}>
+                  <button type="button" className="cx-menuitem" onClick={copyChat} style={moreItem}>
+                    <Ico d={copiedAll ? ICON_PATHS.check : ICON_PATHS.copy} size={16} sw={1.7} stroke={copiedAll ? "var(--live)" : "currentColor"}>
+                      {copiedAll ? null : <rect x="9" y="9" width="12" height="12" rx="2" />}
+                    </Ico>
+                    <span>{copiedAll ? "Copied chat" : "Copy chat"}</span>
+                  </button>
+                  <button type="button" className="cx-menuitem" onClick={() => { setShelfOpen(true); setShelfMode("files"); setMoreOpen(false); }} style={moreItem}>
+                    <Ico d={["M4 5a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z", "M4 10h16"]} size={16} sw={1.7} />
+                    <span>Files</span>
+                  </button>
+                  <button type="button" className="cx-menuitem" onClick={() => { setMoreOpen(false); setRenameDraft(threadTitle); setRenameOpen(true); }} style={moreItem} disabled={!selectedChatStorageKey}>
+                    <Ico d={ICON_PATHS.pencil} size={16} sw={1.7} />
+                    <span>Rename thread</span>
+                  </button>
+                  <button type="button" className="cx-menuitem" onClick={() => { setMoreOpen(false); setThreadTitleSettingsOpen(true); }} style={moreItem}>
+                    {Settings2 ? <Settings2 size={16} aria-hidden /> : null}
+                    <span>Thread title settings</span>
+                  </button>
+                  <button type="button" className="cx-menuitem" onClick={() => { setMoreOpen(false); if (selectedChatStorageKey) handleDuplicateThread(selectedChatStorageKey); }} style={moreItem} disabled={!selectedChatStorageKey}>
+                    <Ico d={ICON_PATHS.copy} size={16} sw={1.7}><rect x="9" y="9" width="12" height="12" rx="2" /></Ico>
+                    <span>Duplicate chat</span>
+                  </button>
                 </div>
               ) : null}
             </div>
-          ) : null}
 
-          <button type="button" className="cx-iconbtn" onClick={() => setTerminalOpen((open) => !open)} aria-pressed={terminalOpen} title="Open shell on this machine" aria-label="Open terminal" style={headerIconBtnStyle(terminalOpen)}>
-            <Ico d={ICON_PATHS.terminal} size={18} sw={1.7}><rect x="3" y="4" width="18" height="16" rx="2" /></Ico>
-          </button>
-          <button type="button" className="cx-iconbtn" onClick={openThreadPreview} aria-pressed={shelfMode === "preview"} title="Preview this conversation's app" aria-label="Preview" style={headerIconBtnStyle(shelfMode === "preview")}>
-            <Ico d={ICON_PATHS.eye} size={18} sw={1.7}><circle cx="12" cy="12" r="3" /></Ico>
-          </button>
-
-          <div style={{ position: "relative" }}>
-            <button type="button" className="cx-iconbtn" onClick={() => { setMoreOpen((open) => !open); setOpenInOpen(false); }} aria-expanded={moreOpen} title="More actions" aria-label="More actions" style={headerIconBtnStyle(moreOpen)}>
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden><circle cx="5" cy="12" r="1.3" /><circle cx="12" cy="12" r="1.3" /><circle cx="19" cy="12" r="1.3" /></svg>
-            </button>
-            {moreOpen ? (
-              <div className="cx-pop" role="menu" aria-label="More actions" style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 90, width: 238, ...POP_STYLE }}>
-                <button type="button" className="cx-menuitem" onClick={copyChat} style={moreItem}>
-                  <Ico d={copiedAll ? ICON_PATHS.check : ICON_PATHS.copy} size={16} sw={1.7} stroke={copiedAll ? "var(--live)" : "currentColor"}>
-                    {copiedAll ? null : <rect x="9" y="9" width="12" height="12" rx="2" />}
-                  </Ico>
-                  <span>{copiedAll ? "Copied chat" : "Copy chat"}</span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button type="button" className="cx-iconbtn" onClick={() => setShelfOpen((open) => !open)} aria-pressed={shelfOpen} aria-label="Toggle details panel" style={headerIconBtnStyle(shelfOpen)}>
+                  <Ico d={ICON_PATHS.panel} size={17} sw={1.7}><rect x="3" y="4" width="18" height="16" rx="2" /></Ico>
                 </button>
-                <button type="button" className="cx-menuitem" onClick={() => { setShelfOpen(true); setShelfMode("files"); setMoreOpen(false); }} style={moreItem}>
-                  <Ico d={["M4 5a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z", "M4 10h16"]} size={16} sw={1.7} />
-                  <span>Files</span>
-                </button>
-                <button type="button" className="cx-menuitem" onClick={() => { setMoreOpen(false); setRenameDraft(threadTitle); setRenameOpen(true); }} style={moreItem} disabled={!selectedChatStorageKey}>
-                  <Ico d={ICON_PATHS.pencil} size={16} sw={1.7} />
-                  <span>Rename thread</span>
-                </button>
-                <button type="button" className="cx-menuitem" onClick={() => { setMoreOpen(false); setThreadTitleSettingsOpen(true); }} style={moreItem}>
-                  {Settings2 ? <Settings2 size={16} aria-hidden /> : null}
-                  <span>Thread title settings</span>
-                </button>
-                <button type="button" className="cx-menuitem" onClick={() => { setMoreOpen(false); if (selectedChatStorageKey) handleDuplicateThread(selectedChatStorageKey); }} style={moreItem} disabled={!selectedChatStorageKey}>
-                  <Ico d={ICON_PATHS.copy} size={16} sw={1.7}><rect x="9" y="9" width="12" height="12" rx="2" /></Ico>
-                  <span>Duplicate chat</span>
-                </button>
-              </div>
-            ) : null}
-          </div>
-
-          <button type="button" className="cx-iconbtn" onClick={() => setShelfOpen((open) => !open)} aria-pressed={shelfOpen} title="Toggle details panel" aria-label="Toggle details panel" style={headerIconBtnStyle(shelfOpen)}>
-            <Ico d={ICON_PATHS.panel} size={17} sw={1.7}><rect x="3" y="4" width="18" height="16" rx="2" /></Ico>
-          </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Toggle details panel</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         {previewExpanded && previewTargets.length ? (

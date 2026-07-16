@@ -13,7 +13,9 @@ import { imageGenerationToApplicationGeneration, normalizeApplicationGenerationU
 import { dashboardStateValue, type DashboardStateSnapshot } from "@/lib/services/dashboard-state-client";
 import { normalizeChatResponseBilling } from "@/lib/types/chat-billing";
 import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
+import type { CapabilityApprovalPlan, CapabilityCandidate, CapabilityDecision } from "@/lib/types/capability-approval";
 import { normalizeEvaluationHumanFeedback } from "@/lib/types/evaluation";
+import { queenBeeNameOrDefault } from "@/lib/config/queen-bee-personality";
 import { normalizeChatAppArtifact } from "@/lib/services/chat/chat-app-artifact";
 
 const STORAGE_KEY = "hivemindos.agentProfiles.v1";
@@ -85,6 +87,10 @@ export function seedAgents(): AgentProfile[] {
 
 export function normalizeAgentProfile(agent: AgentProfile): AgentProfile {
   const runtime = normalizeAgentRuntime(agent.runtime);
+  const beeRole = agent.beeRole ?? "worker";
+  const name = beeRole === "queen"
+    ? queenBeeNameOrDefault(agent.name, agent.queenNameCustomized)
+    : agent.name;
   const workerClass = agent.workerClass ?? "general";
   const workerPreset = beeWorkerPreset(workerClass);
   const customWorkerClasses = agent.customWorkerClasses?.length
@@ -101,6 +107,7 @@ export function normalizeAgentProfile(agent: AgentProfile): AgentProfile {
   const localDataDir = normalizeAgentLocalDataDir(agent.localDataDir);
   return {
     ...agent,
+    name,
     runtime,
     localDataDir: runtime === "hermes" && agent.id === "hermes-orchestrator" && !localDataDir
       ? "~/.hermes"
@@ -113,12 +120,12 @@ export function normalizeAgentProfile(agent: AgentProfile): AgentProfile {
     aeonMode: runtime === "aeon" ? agent.aeonMode ?? "github" : agent.aeonMode,
     // Queen is an explicit, list-level choice (auto-crowned by model strength
     // in useQueenCrown when absent) — never inferred per-agent from the name.
-    beeRole: agent.beeRole ?? "worker",
+    beeRole,
     workerClass,
     customWorkerClasses,
     selectedCustomWorkerClassId,
     customWorkerClass: customWorkerClasses?.find((workerClass: CustomWorkerClassProfile) => workerClass.id === selectedCustomWorkerClassId) ?? agent.customWorkerClass,
-    soulPrompt: agent.soulPrompt ?? renderBeeSoulTemplate(workerPreset.soulTemplate, agent.name),
+    soulPrompt: agent.soulPrompt ?? renderBeeSoulTemplate(workerPreset.soulTemplate, name),
     skillProfilePrompt: agent.skillProfilePrompt ?? workerPreset.taskProfile,
     preferredSkillSlugs: migrateResearchSkills ? [RESEARCH_STORM_SKILL_SLUG, ...preferredSkillSlugs] : preferredSkillSlugs,
     researchMethod: workerClass === "research" ? normalizeResearchMethod(agent.researchMethod) : agent.researchMethod,
@@ -419,6 +426,9 @@ function normalizedChatMessageContent(message: Pick<ChatMessage, "content">) {
 
 function sameVisibleChatMessage(left: ChatMessage | undefined, right: ChatMessage | undefined) {
   if (!left || !right) return false;
+  if (left.capabilityApproval || right.capabilityApproval) {
+    return Boolean(left.capabilityApproval?.id && left.capabilityApproval.id === right.capabilityApproval?.id);
+  }
   return left.role === right.role && normalizedChatMessageContent(left) === normalizedChatMessageContent(right);
 }
 
@@ -484,6 +494,7 @@ function chatMessageHasPersistableContent(message: ChatMessage) {
   return Boolean(
     message.content.trim()
     || message.attachments?.length
+    || message.capabilityApproval
     || message.appArtifact
     || message.agentPrompt
     || message.applicationGeneration
@@ -627,6 +638,58 @@ function parseStoredAgentPrompt(message: ChatMessage, agentId: string): ChatMess
   };
 }
 
+function parseStoredCapabilityApproval(message: ChatMessage): CapabilityApprovalPlan | undefined {
+  const raw = message.capabilityApproval;
+  if (!raw || typeof raw !== "object" || raw.version !== 1 || typeof raw.id !== "string" || typeof raw.task !== "string" || !Array.isArray(raw.items)) return undefined;
+  const items = raw.items.flatMap((item, itemIndex) => {
+    if (!item || typeof item !== "object" || !Array.isArray(item.candidates)) return [];
+    const candidates = item.candidates.flatMap((candidate): CapabilityCandidate[] => {
+      if (!candidate || typeof candidate.id !== "string" || typeof candidate.name !== "string") return [];
+      if (candidate.availability !== "ready" && candidate.availability !== "setup-required") return [];
+      return [{
+        id: candidate.id,
+        name: candidate.name,
+        summary: typeof candidate.summary === "string" ? candidate.summary : "",
+        kind: typeof candidate.kind === "string" ? candidate.kind : "capability",
+        availability: candidate.availability,
+        locator: typeof candidate.locator === "string" ? candidate.locator : undefined,
+      }];
+    }).slice(0, 5);
+    if (!candidates.length) return [];
+    const selectedCapabilityId = candidates.some((candidate) => candidate.id === item.selectedCapabilityId)
+      ? item.selectedCapabilityId
+      : candidates[0].id;
+    const decision: CapabilityDecision = item.decision === "remove" || item.decision === "reject" || item.decision === "approve-setup" || item.decision === "use"
+      ? item.decision
+      : candidates.find((candidate) => candidate.id === selectedCapabilityId)?.availability === "setup-required" ? "approve-setup" : "use";
+    return [{
+      id: typeof item.id === "string" ? item.id : `${raw.id}-${itemIndex}`,
+      intent: typeof item.intent === "string" ? item.intent : "capability",
+      label: typeof item.label === "string" ? item.label : "Capability",
+      reason: typeof item.reason === "string" ? item.reason : "",
+      candidates,
+      selectedCapabilityId,
+      decision,
+      githubUrl: typeof item.githubUrl === "string" ? item.githubUrl : undefined,
+      instructions: typeof item.instructions === "string" ? item.instructions : undefined,
+    }];
+  });
+  if (!items.length || typeof raw.agentId !== "string" || typeof raw.chatStorageKey !== "string") return undefined;
+  return {
+    version: 1,
+    id: raw.id,
+    task: raw.task,
+    agentId: raw.agentId,
+    agentName: typeof raw.agentName === "string" ? raw.agentName : raw.agentId,
+    chatStorageKey: raw.chatStorageKey,
+    chatLeaf: typeof raw.chatLeaf === "string" ? raw.chatLeaf : `agent-${raw.agentId}`,
+    status: raw.status === "approved" || raw.status === "cancelled" ? raw.status : "pending",
+    items,
+    createdAt: typeof raw.createdAt === "number" ? raw.createdAt : Date.now(),
+    resolvedAt: typeof raw.resolvedAt === "number" ? raw.resolvedAt : undefined,
+  };
+}
+
 export function parseStoredChatMessages(snapshot: DashboardStateSnapshot = {}): Record<string, ChatMessage[]> {
   return parseChatMessagesValue(readStoredValue(snapshot, CHAT_MESSAGES_STORAGE_KEY, STORAGE_SUFFIXES.chatMessages));
 }
@@ -666,6 +729,7 @@ function parseChatMessagesValue(raw: string | null): Record<string, ChatMessage[
           attachments: Array.isArray(message.attachments) ? message.attachments : undefined,
           applicationGeneration: parseStoredApplicationGeneration(message),
           imageGeneration: parseStoredImageGeneration(message),
+          capabilityApproval: parseStoredCapabilityApproval(message),
           appArtifact: normalizeChatAppArtifact(message.appArtifact),
           agentPrompt: parseStoredAgentPrompt(message, agentId),
         })).slice(-120),

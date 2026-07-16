@@ -1,7 +1,7 @@
 import "server-only";
 
 import { mintGoogleCloudAccessToken } from "@/lib/services/integrations/google-cloud-oauth";
-import type { CompanyApiBudget, GcpApiDailyCap } from "@/lib/types/company";
+import type { CompanyApiBudget } from "@/lib/types/company";
 
 /**
  * Server-side "apply" backend for a per-company Google Cloud cost guardrail.
@@ -10,9 +10,9 @@ import type { CompanyApiBudget, GcpApiDailyCap } from "@/lib/types/company";
  * user's OAuth access token and pushes the guardrail directly to Google Cloud
  * via two REST surfaces:
  *
- *  1. Service Usage consumer quota overrides (v1beta1) — one per-day quota
- *     override per {@link GcpApiDailyCap} on its metric's per-day limit, so a
- *     runaway loop is throttled by Google before it can bill.
+ *  1. Service Usage consumer quota import (v1beta1) — atomically creates or
+ *     updates every selected per-day override, so re-applying a saved limit
+ *     cannot collide with the existing provider resource.
  *  2. Cloud Billing Budgets (v1) — a monthly billing budget that emails/pubsubs
  *     at threshold, so the human sees the spend approaching the ceiling.
  *
@@ -22,12 +22,10 @@ import type { CompanyApiBudget, GcpApiDailyCap } from "@/lib/types/company";
  * returned so re-applies PATCH the same budget instead of stacking duplicates.
  *
  * Verified REST shapes (Google docs, 2026-07-09):
- *  - Override create:
- *    POST https://serviceusage.googleapis.com/v1beta1/{parent}/consumerOverrides?force=true
- *    parent = projects/{project}/services/{service}/consumerQuotaMetrics/{metricId}/limits/{limitId}
- *    metricId and limitId are URL-encoded ("/" -> %2F). Body is a QuotaOverride:
- *    { overrideValue: "<int64>", dimensions: {} } (dimensions empty for a
- *    "1/d/{project}" unit — the project is implicit in the parent).
+ *  - Override import:
+ *    POST https://serviceusage.googleapis.com/v1beta1/projects/{project}/services/{service}/consumerQuotaMetrics:importConsumerOverrides
+ *    with { force, inlineSource: { overrides[] } }. Google documents this
+ *    method as an atomic create-or-update rail; override names stay server-owned.
  *  - Budget create: POST https://billingbudgets.googleapis.com/v1/billingAccounts/{id}/budgets
  *  - Budget patch:  PATCH https://billingbudgets.googleapis.com/v1/{budgetResourceName}?updateMask=...
  *  - Projects list: GET https://cloudresourcemanager.googleapis.com/v1/projects
@@ -41,12 +39,15 @@ const RESOURCE_MANAGER_BASE = "https://cloudresourcemanager.googleapis.com/v1";
 const CLOUD_BILLING_BASE = "https://cloudbilling.googleapis.com/v1";
 
 const REQUEST_TIMEOUT_MS = 20_000;
+const OPERATION_TIMEOUT_MS = 30_000;
+const OPERATION_POLL_MS = 500;
 
 /** Injectable dependencies so hermetic tests can stub the token + fetch. */
 export interface GcpBudgetDeps {
   mintToken?: () => Promise<string>;
   fetchImpl?: typeof fetch;
   now?: () => Date;
+  sleep?: (milliseconds: number) => Promise<void>;
 }
 
 export interface ApplyCompanyApiBudgetResult {
@@ -66,6 +67,17 @@ export interface GcpBillingAccountSummary {
   name: string;
   displayName: string;
   open: boolean;
+}
+
+export interface GcpEnabledServiceSummary {
+  name: string;
+  title: string;
+}
+
+export interface GcpProjectBillingInfo {
+  projectId: string;
+  billingAccountName: string;
+  billingEnabled: boolean;
 }
 
 export interface GcpOverridableMetricSummary {
@@ -91,11 +103,6 @@ function sanitizeError(error: unknown): string {
   message = message.replace(/ya29\.[A-Za-z0-9._-]+/g, "[redacted-token]");
   message = message.replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [redacted-token]");
   return message.slice(0, 500);
-}
-
-/** URL-encode a path segment that may itself contain slashes (metric / limit ids). */
-function encodeSegment(value: string): string {
-  return encodeURIComponent(value);
 }
 
 async function gcpFetch(
@@ -130,25 +137,35 @@ async function gcpFetch(
   return payload;
 }
 
-/**
- * Build the consumerOverrides parent path for a per-day cap. The metric and the
- * limit id are URL-encoded because they contain slashes ("/") that would
- * otherwise be read as extra path segments.
- *
- * A ConsumerQuotaLimit's short name is the trailing segment after `.../limits/`;
- * for a per-day, per-project limit it looks like "/d/{project}" — which is
- * exactly what {@link GcpApiDailyCap.unit} carries minus the leading "1". We
- * derive the limit id from the unit so the caller only has to supply the unit.
- */
-export function overrideParentPath(cap: GcpApiDailyCap, projectRef: string, service: string): string {
-  // unit "1/d/{project}" -> limit id "/d/{project}".
-  const limitId = cap.unit.replace(/^1/, "");
-  return (
-    `projects/${encodeURIComponent(projectRef)}` +
-    `/services/${encodeURIComponent(service)}` +
-    `/consumerQuotaMetrics/${encodeSegment(cap.metric)}` +
-    `/limits/${encodeSegment(limitId)}`
-  );
+type GcpOperation = {
+  name?: string;
+  done?: boolean;
+  error?: { code?: number; message?: string };
+};
+
+async function awaitGcpOperation(
+  initial: GcpOperation,
+  token: string,
+  fetchImpl: typeof fetch,
+  sleep: (milliseconds: number) => Promise<void>,
+): Promise<void> {
+  let operation = initial;
+  const name = operation.name?.trim();
+  if (!name || !/^operations\/[A-Za-z0-9._~-]+$/.test(name)) {
+    throw new Error("Google did not return a valid quota operation name.");
+  }
+  const deadline = Date.now() + OPERATION_TIMEOUT_MS;
+  while (!operation.done) {
+    if (Date.now() >= deadline) throw new Error(`Google quota operation ${name} did not finish within 30 seconds.`);
+    await sleep(OPERATION_POLL_MS);
+    operation = (await gcpFetch(fetchImpl, token, `${SERVICE_USAGE_BASE}/${name}`)) as GcpOperation;
+  }
+  if (operation.error) {
+    throw new Error(
+      `Google quota operation failed${operation.error.code ? ` (${operation.error.code})` : ""}: ` +
+        (operation.error.message || "unknown provider error"),
+    );
+  }
 }
 
 /**
@@ -164,6 +181,7 @@ export async function applyCompanyApiBudget(
   const mintToken = deps.mintToken ?? mintGoogleCloudAccessToken;
   const fetchImpl = deps.fetchImpl ?? fetch;
   const now = deps.now ?? (() => new Date());
+  const sleep = deps.sleep ?? ((milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
   const errors: string[] = [];
 
   let token: string;
@@ -180,24 +198,34 @@ export async function applyCompanyApiBudget(
     errors.push("No projectId or projectNumber set; cannot address quota overrides.");
   }
 
-  // 1) Per-day quota overrides — one per cap.
-  if (projectRef) {
-    for (const cap of budget.dailyCaps) {
-      try {
-        const parent = overrideParentPath(cap, projectRef, budget.service);
-        const url = `${SERVICE_USAGE_BASE}/${parent}/consumerOverrides?force=true`;
-        await gcpFetch(fetchImpl, token, url, {
+  // 1) Per-day quota overrides — the import endpoint is the provider's atomic
+  // create-or-update path, so both first apply and later edits are idempotent.
+  if (projectRef && budget.dailyCaps.length > 0) {
+    try {
+      const parent =
+        `projects/${encodeURIComponent(projectRef)}/services/${encodeURIComponent(budget.service)}`;
+      const operation = (await gcpFetch(
+        fetchImpl,
+        token,
+        `${SERVICE_USAGE_BASE}/${parent}/consumerQuotaMetrics:importConsumerOverrides`,
+        {
           method: "POST",
           body: JSON.stringify({
-            overrideValue: String(Math.trunc(cap.value)),
-            // Empty for a per-day/per-project unit; the project is implicit in
-            // the parent, so no dimension keys are required.
-            dimensions: {},
+            force: true,
+            inlineSource: {
+              overrides: budget.dailyCaps.map((cap) => ({
+                metric: cap.metric,
+                unit: cap.unit,
+                overrideValue: String(Math.trunc(cap.value)),
+                dimensions: {},
+              })),
+            },
           }),
-        });
-      } catch (error) {
-        errors.push(`Quota override for ${cap.metric} (${cap.unit}): ${sanitizeError(error)}`);
-      }
+        },
+      )) as GcpOperation;
+      await awaitGcpOperation(operation, token, fetchImpl, sleep);
+    } catch (error) {
+      errors.push(`Daily quota overrides: ${sanitizeError(error)}`);
     }
   }
 
@@ -219,7 +247,8 @@ export async function applyCompanyApiBudget(
         })) as { name?: string } | null;
         budgetResourceName = updated?.name || budgetResourceName;
       } else {
-        const url = `${BILLING_BUDGETS_BASE}/billingAccounts/${encodeURIComponent(billingAccount)}/budgets`;
+        const accountId = billingAccount.replace(/^billingAccounts\//, "");
+        const url = `${BILLING_BUDGETS_BASE}/billingAccounts/${encodeURIComponent(accountId)}/budgets`;
         const created = (await gcpFetch(fetchImpl, token, url, {
           method: "POST",
           body: JSON.stringify(budgetBody),
@@ -236,10 +265,10 @@ export async function applyCompanyApiBudget(
 
 /** Build the Cloud Billing Budget resource body from the company config. */
 function buildBudgetBody(budget: CompanyApiBudget): Record<string, unknown> {
-  const projectFilter = budget.projectId?.trim()
-    ? { projects: [`projects/${budget.projectId.trim()}`] }
-    : budget.projectNumber?.trim()
-      ? { projects: [`projects/${budget.projectNumber.trim()}`] }
+  const projectFilter = budget.projectNumber?.trim()
+    ? { projects: [`projects/${budget.projectNumber.trim()}`] }
+    : budget.projectId?.trim()
+      ? { projects: [`projects/${budget.projectId.trim()}`] }
       : {};
   // Cloud Billing budget "units" is an int64 string of whole currency units.
   const wholeUsd = Math.max(0, Math.trunc(budget.monthlyCeilingUsd));
@@ -311,6 +340,60 @@ export async function listBillingAccounts(deps: GcpBudgetDeps = {}): Promise<Gcp
     pageToken = payload?.nextPageToken || undefined;
   } while (pageToken);
   return out;
+}
+
+/** List APIs currently enabled on a project for the service picker. */
+export async function listGcpEnabledServices(
+  projectRef: string,
+  deps: GcpBudgetDeps = {},
+): Promise<GcpEnabledServiceSummary[]> {
+  const trimmedRef = projectRef.trim();
+  if (!trimmedRef) return [];
+  const token = await (deps.mintToken ?? mintGoogleCloudAccessToken)();
+  const fetchImpl = deps.fetchImpl ?? fetch;
+  const out: GcpEnabledServiceSummary[] = [];
+  let pageToken: string | undefined;
+  do {
+    const url = new URL(
+      `${SERVICE_USAGE_BASE}/projects/${encodeURIComponent(trimmedRef)}/services`,
+    );
+    url.searchParams.set("filter", "state:ENABLED");
+    url.searchParams.set("pageSize", "200");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+    const payload = (await gcpFetch(fetchImpl, token, url.toString())) as {
+      services?: Array<{ config?: { name?: string; title?: string }; state?: string }>;
+      nextPageToken?: string;
+    } | null;
+    for (const service of payload?.services ?? []) {
+      const name = service.config?.name?.trim();
+      if (!name || (service.state && service.state !== "ENABLED")) continue;
+      out.push({ name, title: service.config?.title?.trim() || name });
+    }
+    pageToken = payload?.nextPageToken || undefined;
+  } while (pageToken);
+  return out.sort((a, b) => a.title.localeCompare(b.title));
+}
+
+/** Read the billing account linked to one project so the UI can auto-select it. */
+export async function getGcpProjectBillingInfo(
+  projectRef: string,
+  deps: GcpBudgetDeps = {},
+): Promise<GcpProjectBillingInfo> {
+  const trimmedRef = projectRef.trim();
+  if (!trimmedRef) throw new Error("A Google Cloud project is required.");
+  const token = await (deps.mintToken ?? mintGoogleCloudAccessToken)();
+  const fetchImpl = deps.fetchImpl ?? fetch;
+  const payload = (await gcpFetch(
+    fetchImpl,
+    token,
+    `${CLOUD_BILLING_BASE}/projects/${encodeURIComponent(trimmedRef)}/billingInfo`,
+  )) as Partial<GcpProjectBillingInfo> | null;
+  return {
+    projectId: typeof payload?.projectId === "string" ? payload.projectId : trimmedRef,
+    billingAccountName:
+      typeof payload?.billingAccountName === "string" ? payload.billingAccountName : "",
+    billingEnabled: payload?.billingEnabled === true,
+  };
 }
 
 /**

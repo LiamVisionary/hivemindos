@@ -44,6 +44,8 @@ sections:
             url: /for-users/features/fleet.html
           - title: Agents And Chat
             url: /for-users/features/runtimes-and-chat.html
+          - title: Local Document Reader
+            url: /for-users/features/local-document-reader.html
           - title: Calling
             url: /for-users/features/calling.html
           - title: Work And Scheduler
@@ -86,6 +88,8 @@ sections:
             url: /for-users/features/integrations-and-work-history.html
           - title: MiroShark And OpenClaw
             url: /for-users/features/miroshark-and-openclaw.html
+          - title: Computer Interaction
+            url: /for-users/features/computer-interaction.html
           - title: Page Agent (Experimental)
             url: /for-users/features/page-agent.html
 

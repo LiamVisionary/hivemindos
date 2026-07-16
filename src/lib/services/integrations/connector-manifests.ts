@@ -1,4 +1,4 @@
-import type { ConnectionProviderKey } from "@/lib/types/integrations";
+import type { ConnectionProviderKey, ConnectionSetupField } from "@/lib/types/integrations";
 import type { HiveActionRisk, HiveActionSideEffect } from "@/lib/services/hive-actions/types";
 import {
   GOOGLE_CLIENT_ID_ENV,
@@ -6,9 +6,10 @@ import {
   GOOGLE_CLOUD_CLIENT_ID_ENV,
   GOOGLE_CLOUD_CLIENT_SECRET_ENV,
   AZURE_OAUTH_CLIENT_ID_ENV,
+  MONID_API_KEY_ENV,
   SLACK_OAUTH_CLIENT_ID_ENV,
 } from "@/lib/services/integrations/provider-connection-env";
-import { CLAWBANK_TOKEN_ENV_NAMES } from "@/lib/services/clawbank";
+import { CLAWBANK_TOKEN_ENV_NAMES } from "@/lib/services/clawbank/constants";
 
 // "oauth-user-token": a PKCE public-client sign-in that yields a long-lived user
 // token (no refresh token, no pasted client) — e.g. Slack.
@@ -21,6 +22,7 @@ export type ConnectorAuthManifest = {
   tokenHint: string;
   tokenPlaceholder: string;
   oauthClientEnvKeys?: string[];
+  setupFields?: Array<ConnectionSetupField & { envKey: string }>;
 };
 
 export type ConnectorOperationManifest = {
@@ -232,8 +234,125 @@ export const CONNECTOR_MANIFESTS: ConnectorManifest[] = [
       tokenEnvKey: "PLAUSIBLE_API_KEY",
       tokenHint: "Plausible -> Settings -> API keys. Validated per site at query time (Plausible can't check a key without a site).",
       tokenPlaceholder: "",
+      setupFields: [{
+        id: "baseUrl",
+        envKey: "PLAUSIBLE_BASE_URL",
+        label: "Plausible base URL",
+        placeholder: "https://plausible.io",
+        hint: "Leave the managed-cloud default, or enter the origin of your self-hosted Community Edition instance.",
+        required: false,
+      }],
     },
     operations: [READ_CONNECTION_OPERATION, READ_API_OPERATION],
+  },
+  {
+    key: "calcom",
+    label: "Cal.com",
+    detail: "Scheduling links, event types, availability, and bookings.",
+    tags: ["calendar", "scheduling", "bookings", "availability"],
+    auth: {
+      mode: "api-token",
+      tokenEnvKey: "CALCOM_API_KEY",
+      tokenHint: "Create an API key in Cal.com Settings -> Security, or in the matching settings page of your self-hosted instance.",
+      tokenPlaceholder: "cal_live_...",
+      setupFields: [{
+        id: "baseUrl",
+        envKey: "CALCOM_API_BASE_URL",
+        label: "Cal.com API base URL",
+        placeholder: "https://api.cal.com/v2",
+        hint: "Leave the hosted default, or enter the /v2 API base URL for your self-hosted instance.",
+        required: false,
+      }],
+    },
+    operations: [READ_CONNECTION_OPERATION, READ_API_OPERATION],
+  },
+  {
+    key: "shopify",
+    label: "Shopify",
+    detail: "Store identity, product catalog, collections, inventory context, and orders through the Admin GraphQL API.",
+    tags: ["commerce", "store", "products", "catalog", "orders", "graphql"],
+    auth: {
+      mode: "api-token",
+      tokenEnvKey: "SHOPIFY_ADMIN_ACCESS_TOKEN",
+      tokenHint: "Create or install a custom app in Shopify Admin, grant only the scopes you need, then copy its Admin API access token.",
+      tokenPlaceholder: "shpat_...",
+      setupFields: [{
+        id: "shopDomain",
+        envKey: "SHOPIFY_STORE_DOMAIN",
+        label: "Shop domain",
+        placeholder: "your-store.myshopify.com",
+        hint: "Use the permanent *.myshopify.com domain, not a customer-facing custom domain.",
+        required: true,
+      }],
+    },
+    operations: [
+      READ_CONNECTION_OPERATION,
+      {
+        ...READ_API_OPERATION,
+        id: "read-shopify-admin",
+        label: "Read Shopify store and catalog",
+        description: "Read store identity and product catalog through server-held Admin API credentials.",
+      },
+    ],
+  },
+  {
+    key: "medusa",
+    label: "Medusa",
+    detail: "Products, regions, and storefront context from a hosted or self-hosted Medusa Store API.",
+    tags: ["commerce", "store", "products", "catalog", "self-hosted"],
+    auth: {
+      mode: "api-token",
+      tokenEnvKey: "MEDUSA_PUBLISHABLE_API_KEY",
+      tokenHint: "Create or copy a publishable API key in Medusa Admin -> Settings -> Publishable API Keys.",
+      tokenPlaceholder: "pk_...",
+      setupFields: [{
+        id: "baseUrl",
+        envKey: "MEDUSA_API_BASE_URL",
+        label: "Medusa API base URL",
+        placeholder: "http://127.0.0.1:9000",
+        hint: "Enter the origin of your hosted or self-hosted Medusa backend.",
+        required: false,
+      }],
+    },
+    operations: [
+      READ_CONNECTION_OPERATION,
+      {
+        ...READ_API_OPERATION,
+        id: "read-medusa-store",
+        label: "Read Medusa store data",
+        description: "Read products and regions through server-held Store API credentials.",
+      },
+    ],
+  },
+  {
+    key: "monid",
+    label: "Monid",
+    detail: "Discover and run data tools, including AKTA Pro private-company intelligence, through one connected workspace.",
+    tags: ["research", "data", "private-companies", "akta-pro"],
+    auth: {
+      mode: "api-token",
+      tokenEnvKey: MONID_API_KEY_ENV,
+      tokenHint: "Create an API key in the Monid dashboard. HivemindOS checks it against your workspace balance before saving it.",
+      tokenPlaceholder: "Monid API key",
+    },
+    operations: [
+      READ_CONNECTION_OPERATION,
+      {
+        ...READ_API_OPERATION,
+        id: "discover-inspect-monid",
+        label: "Discover and inspect data tools",
+        description: "Search Monid's live catalog and inspect endpoint schemas and current prices without executing a paid request.",
+      },
+      {
+        id: "run-monid-tool",
+        label: "Run a data tool",
+        description: "Execute a reviewed Monid endpoint against the connected workspace balance after price verification and confirmation.",
+        methods: ["POST"],
+        sideEffects: ["network", "payment"],
+        risk: "high",
+        requiredClaims: ["wallet:spend"],
+      },
+    ],
   },
   {
     key: "clawbank",

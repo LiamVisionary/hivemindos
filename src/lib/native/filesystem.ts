@@ -110,7 +110,7 @@ export async function openNativeDirectory(input: {
 }
 
 export async function openNativeDeliverable(input: {
-  action: "open" | "reveal";
+  action: "folder" | "open" | "reveal";
   path?: string;
   url?: string;
 }): Promise<NativeActionResult | null> {

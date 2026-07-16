@@ -5,11 +5,11 @@ import { getSharedBrainSkills } from "@/lib/services/obsidian/brain-skills";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
 import {
-  appendSkillAnalyticsEvent,
   auditSkillInput,
   hasWorkflowActionApproval,
   parseWorkflowActions,
 } from "@/lib/services/skills/skill-os";
+import { recordSkillExecutionOutcome } from "@/lib/services/skills/skill-autoresearch";
 import { isAllowlistedCommand } from "@/lib/services/agent-shell/command-tool";
 import type { WorkflowAction } from "@/lib/types/skill-os";
 
@@ -119,6 +119,7 @@ export async function POST(request: Request) {
       slug,
       scheduleName: body.scheduleName,
       prompt: body.prompt,
+      vaultPath: body.vaultPath,
       startedAt,
       request,
     });
@@ -142,10 +143,11 @@ async function executeWorkflowAction(input: {
   slug: string;
   scheduleName?: string;
   prompt?: string;
+  vaultPath?: string;
   startedAt: number;
   request: Request;
 }) {
-  const { action, slug, scheduleName, prompt, request, startedAt } = input;
+  const { action, slug, scheduleName, prompt, vaultPath, request, startedAt } = input;
   if (action.runtime === "http") {
     if (!action.url) {
       return Response.json({ ok: false, skill: slug, actionId: action.id, error: "HTTP workflow actions require a URL.", elapsedMs: Date.now() - startedAt }, { status: 400 });
@@ -162,7 +164,15 @@ async function executeWorkflowAction(input: {
       ? { ok: true, skill: slug, actionId: action.id, title: action.title ?? scheduleName ?? slug, output: output.slice(0, 4000), elapsedMs }
       : { ok: false, skill: slug, actionId: action.id, error: output.slice(0, 1000) || `HTTP ${response.status}`, elapsedMs };
     await logRouteTelemetry(request, response.ok ? "scheduler.skill_action.completed" : "scheduler.skill_action.failed", result);
-    await appendSkillAnalyticsEvent({ skillSlug: slug, event: response.ok ? "action-completed" : "action-failed", status: response.ok ? "success" : "failure", durationMs: elapsedMs }).catch(() => undefined);
+    await recordSkillExecutionOutcome({
+      skillSlug: slug,
+      status: response.ok ? "success" : "failure",
+      runtime: action.runtime,
+      taskSource: schedulerRunSource(request, scheduleName, slug, startedAt),
+      note: result.error ?? result.output,
+      durationMs: elapsedMs,
+      vaultPath,
+    }).catch(() => undefined);
     return Response.json(result, { status: response.ok ? 200 : 502 });
   }
 
@@ -213,11 +223,24 @@ async function executeWorkflowAction(input: {
             elapsedMs,
           };
         await logRouteTelemetry(request, error ? "scheduler.skill_action.failed" : "scheduler.skill_action.completed", result);
-        await appendSkillAnalyticsEvent({ skillSlug: slug, event: error ? "action-failed" : "action-completed", status: error ? "failure" : "success", durationMs: elapsedMs }).catch(() => undefined);
+        await recordSkillExecutionOutcome({
+          skillSlug: slug,
+          status: error ? "failure" : "success",
+          runtime: action.runtime,
+          taskSource: schedulerRunSource(request, scheduleName, slug, startedAt),
+          note: result.error ?? result.output,
+          durationMs: elapsedMs,
+          vaultPath,
+        }).catch(() => undefined);
         resolve(Response.json(result, { status: error ? 500 : 200 }));
       },
     );
   });
+}
+
+function schedulerRunSource(request: Request, scheduleName: string | undefined, skillSlug: string, startedAt: number) {
+  const runId = request.headers.get("x-hivemind-run-id")?.trim() || String(startedAt);
+  return `schedule:${scheduleName?.trim() || skillSlug}:${runId}`;
 }
 
 function executableActionSpec(action: WorkflowAction, scheduleName?: string, prompt?: string): { ok: true; command: string; args: string[] } | { ok: false; error: string } {

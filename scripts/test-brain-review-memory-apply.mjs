@@ -134,13 +134,48 @@ try {
   assert.equal(manualBody.proposal.status, "approved");
   assert.match(manualBody.reason, /manual review\/application/);
 
+  const autoresearchProposal = await queue.createBrainReviewProposal({
+    kind: "skill-evolution",
+    title: "Evolve research-brief",
+    summary: "Repeated failures qualify research-brief for an isolated optimizer run.",
+    proposedContent: "Generate four measured variants and queue the winning diff for review.",
+    targetPath: "Skills/research-brief/SKILL.md",
+    risk: "medium",
+    metadata: {
+      skillSlug: "research-brief",
+      targetPath: "Skills/research-brief/SKILL.md",
+      symptom: "Three failed Work Board tasks.",
+      backendPreference: "hivemind-native",
+      companyIds: ["company-a"],
+    },
+  });
+  await queue.approveBrainReviewProposal(autoresearchProposal.proposal.id);
+
+  const autoresearchApply = await route.POST(jsonRequest(NextRequest, "http://127.0.0.1/api/brain/review", {
+    action: "apply",
+    id: autoresearchProposal.proposal.id,
+    vaultPath,
+    project: "HivemindOS",
+    runtime: "dashboard",
+  }));
+  assert.equal(autoresearchApply.status, 200);
+  const autoresearchBody = await autoresearchApply.json();
+  assert.equal(autoresearchBody.ok, true);
+  assert.equal(autoresearchBody.applied, true);
+  assert.equal(autoresearchBody.action, "launch-autoresearch");
+  assert.equal(autoresearchBody.proposal.status, "applied");
+  assert.equal(autoresearchBody.proposal.appliedTaskId, autoresearchBody.task.id);
+  assert.equal(autoresearchBody.task.status, "ready");
+  assert.ok(autoresearchBody.task.skills.includes("hive-skill-autoresearch"));
+  assert.equal(autoresearchBody.task.tenant, "company-a");
+
   const unauthorizedList = await route.GET(new NextRequest("http://127.0.0.1/api/brain/review?status=applied"));
   assert.equal(unauthorizedList.status, 401);
 
   const appliedList = await route.GET(authedRequest(NextRequest, "http://127.0.0.1/api/brain/review?status=applied"));
   assert.equal(appliedList.status, 200);
   const appliedListBody = await appliedList.json();
-  assert.equal(appliedListBody.proposals.length, 2);
+  assert.equal(appliedListBody.proposals.length, 3);
 
   console.log("Brain review memory apply tests passed.");
 } finally {

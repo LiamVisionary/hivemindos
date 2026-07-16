@@ -1,4 +1,5 @@
 import DashboardUnlockRecovery from "@/app/DashboardUnlockRecovery";
+import DashboardPasskeyUnlock from "@/app/DashboardPasskeyUnlock";
 import DashboardNativeFrame from "@/app/DashboardNativeFrame";
 import type { DashboardVaultPanelMode } from "@/features/dashboard/DashboardApp";
 import { isDashboardView } from "@/features/dashboard/dashboard-navigation";
@@ -90,51 +91,58 @@ function DashboardUnlock({ params }: { params?: Record<string, string | string[]
         </p>
         <h1 style={{ margin: "0 0 12px", fontSize: 30, lineHeight: 1.1 }}>Dashboard locked</h1>
         <p style={{ margin: "0 0 22px", color: "var(--text-soft, #5e574b)", lineHeight: 1.6 }}>
-          Enter this device's dashboard token to open a signed local session.
+          Use this device&apos;s secure unlock when available, or enter its dashboard token.
         </p>
         {!status.ok ? (
           <p style={{ margin: 0, padding: 14, border: "1px solid rgba(192, 82, 77, 0.38)", background: "rgba(192, 82, 77, 0.1)", color: "#8e3328", borderRadius: 8 }}>
             {status.reason}
           </p>
         ) : (
-          <form action="/api/auth/session" method="post" style={{ display: "grid", gap: 12 }}>
-            <input type="hidden" name="returnTo" value={returnTo} />
-            <label style={{ display: "grid", gap: 8, color: "var(--foreground, #221d14)", fontSize: 13, fontWeight: 800 }}>
-              Device token
-              <input
-                autoFocus
-                name="token"
-                type="password"
-                autoComplete="current-password"
+          <>
+            <DashboardPasskeyUnlock
+              authSecretPresent={dashboardAuthConfigured()}
+              deviceTokenPresent={dashboardDeviceTokenConfigured()}
+              nativeMode={process.env.HIVEMINDOS_NATIVE === "1"}
+              returnTo={returnTo}
+            />
+            <form action="/api/auth/session" method="post" style={{ display: "grid", gap: 12 }}>
+              <input type="hidden" name="returnTo" value={returnTo} />
+              <label style={{ display: "grid", gap: 8, color: "var(--foreground, #221d14)", fontSize: 13, fontWeight: 500 }}>
+                Device token
+                <input
+                  name="token"
+                  type="password"
+                  autoComplete="current-password"
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    border: "1px solid var(--button-input, rgba(54, 46, 30, 0.18))",
+                    borderRadius: 8,
+                    background: "var(--field, rgba(255, 252, 246, 0.92))",
+                    color: "var(--foreground, #221d14)",
+                    padding: "12px 14px",
+                    fontSize: 16,
+                  }}
+                />
+              </label>
+              {authFailed ? <p style={{ margin: 0, color: "#8e3328", fontWeight: 600 }}>That dashboard token was not accepted.</p> : null}
+              <button
+                type="submit"
                 style={{
-                  width: "100%",
-                  boxSizing: "border-box",
-                  border: "1px solid var(--button-input, rgba(54, 46, 30, 0.18))",
+                  border: 0,
                   borderRadius: 8,
-                  background: "var(--field, rgba(255, 252, 246, 0.92))",
-                  color: "var(--foreground, #221d14)",
+                  background: "var(--button-primary, #936811)",
+                  color: "var(--button-primary-foreground, #fff7df)",
                   padding: "12px 14px",
-                  fontSize: 16,
+                  fontSize: 15,
+                  fontWeight: 600,
+                  cursor: "pointer",
                 }}
-              />
-            </label>
-            {authFailed ? <p style={{ margin: 0, color: "#8e3328", fontWeight: 700 }}>That dashboard token was not accepted.</p> : null}
-            <button
-              type="submit"
-              style={{
-                border: 0,
-                borderRadius: 8,
-                background: "var(--button-primary, #936811)",
-                color: "var(--button-primary-foreground, #fff7df)",
-                padding: "12px 14px",
-                fontSize: 15,
-                fontWeight: 800,
-                cursor: "pointer",
-              }}
-            >
-              Unlock dashboard
-            </button>
-          </form>
+              >
+                Unlock dashboard
+              </button>
+            </form>
+          </>
         )}
         <DashboardUnlockRecovery
           authSecretPresent={dashboardAuthConfigured()}

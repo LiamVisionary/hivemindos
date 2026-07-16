@@ -9,12 +9,15 @@ import {
   type InstallableServiceStatus,
   type InstallableServiceId,
 } from "@/lib/services/installable-services";
+import { isGitHubCapabilityInstallableId } from "@/lib/services/github-capability-installers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function serviceId(value: unknown): InstallableServiceId {
+  if (typeof value === "string" && isGitHubCapabilityInstallableId(value)) return value;
   if (value === "n8n") return value;
+  if (value === "listmonk") return value;
   if (value === "browser-use") return value;
   if (value === "agentic-inbox") return value;
   if (value === "mcp-email-server") return value;

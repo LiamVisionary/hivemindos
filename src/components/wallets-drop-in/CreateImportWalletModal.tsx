@@ -9,7 +9,7 @@ import {
 } from "@/lib/config/personal-wallet-chains";
 import { recoveryPhraseAccountIndexFromWalletId } from "@/lib/utils/personal-wallet-grouping";
 
-type WalletActionInput = {
+export type WalletActionInput = {
   wallet?: unknown;
   name?: string;
   chain?: string;
@@ -17,7 +17,7 @@ type WalletActionInput = {
   accountIndex?: number;
 };
 
-type WalletActions = {
+export type WalletSetupActions = {
   onCreateWallet?: (input: WalletActionInput) => Promise<unknown>;
   onImportWallet?: (input: WalletActionInput) => Promise<unknown>;
 };
@@ -25,10 +25,14 @@ type WalletActions = {
 type CreateImportWalletModalProps = {
   wallet?: unknown;
   onClose?: () => void;
-  actions?: WalletActions;
+  onSaved?: () => Promise<unknown> | unknown;
+  actions?: WalletSetupActions;
+  initialMode?: WalletModalMode;
+  initialImportKind?: WalletImportKind;
 };
 
 type WalletModalMode = "create" | "import";
+export type WalletImportKind = "private-key" | "recovery-phrase";
 type WalletLike = {
   id?: unknown;
   name?: unknown;
@@ -75,14 +79,17 @@ function WalletModalIcon({ name, color = "currentColor", size = 16, sw = 1.7 }: 
   }
 }
 
-export function CreateImportWalletModal({ wallet, onClose, actions }: CreateImportWalletModalProps) {
+export function CreateImportWalletModal({ wallet, onClose, onSaved, actions, initialMode = "create", initialImportKind }: CreateImportWalletModalProps) {
   const reimport = Boolean(wallet);
   const record = walletRecord(wallet);
   const walletName = String(record.name || "");
-  const [mode, setMode] = React.useState<WalletModalMode>(reimport ? "import" : "create");
+  const [mode, setMode] = React.useState<WalletModalMode>(reimport ? "import" : initialMode);
+  const [importKind, setImportKind] = React.useState<WalletImportKind | null>(initialImportKind ?? null);
   const [name, setName] = React.useState(reimport ? walletName : "");
   const [createChain, setCreateChain] = React.useState(MULTI_CHAIN_WALLET_LABEL);
-  const [chain, setChain] = React.useState(reimport ? chainLabelFromWallet(wallet) : MULTI_CHAIN_WALLET_LABEL);
+  const [chain, setChain] = React.useState(reimport
+    ? chainLabelFromWallet(wallet)
+    : initialImportKind === "private-key" ? "Base" : MULTI_CHAIN_WALLET_LABEL);
   const [accountIndex, setAccountIndex] = React.useState(() => recoveryPhraseAccountIndexFromWalletId(record.id));
   const [secret, setSecret] = React.useState("");
   const [state, setState] = React.useState("idle");
@@ -98,6 +105,7 @@ export function CreateImportWalletModal({ wallet, onClose, actions }: CreateImpo
         if (!actions?.onImportWallet) throw new Error("Wallet import is not available in this build.");
         await actions.onImportWallet({ wallet, name, chain, secret, accountIndex });
       }
+      await onSaved?.();
       setState("saved");
       setTimeout(() => onClose?.(), 850);
     } catch (error) {
@@ -113,12 +121,19 @@ export function CreateImportWalletModal({ wallet, onClose, actions }: CreateImpo
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const title = reimport ? walletName || "Reimport wallet" : isCreate ? "Create wallet" : "Import wallet";
+  const recoveryPhraseImport = !isCreate && importKind === "recovery-phrase";
+  const privateKeyImport = !isCreate && importKind === "private-key";
+  const title = reimport
+    ? walletName || "Reimport wallet"
+    : isCreate ? "Create wallet"
+      : recoveryPhraseImport ? "Import recovery phrase"
+        : privateKeyImport ? "Import private key"
+          : "Import wallet";
   const help = reimport
     ? "Re-derive this wallet's addresses from its seed or key. Balances and holdings refresh on import."
     : isCreate
       ? "Generate a fresh wallet. Multi-chain creates Base, Robinhood Chain, and Solana from one recovery phrase; single-chain creates a local key for the selected network."
-      : chain === MULTI_CHAIN_WALLET_LABEL
+      : recoveryPhraseImport || chain === MULTI_CHAIN_WALLET_LABEL
         ? "Import the matching Phantom account across Base, Robinhood Chain, and Solana from one recovery phrase. Choose the same account number shown in Phantom; raw private keys can only be imported on one compatible chain."
         : "Import an existing wallet by recovery phrase or private key. Recovery phrases are imported across Base, Robinhood Chain, and Solana; the selected chain is used for raw private keys.";
   const busy = state === "checking";
@@ -144,10 +159,10 @@ export function CreateImportWalletModal({ wallet, onClose, actions }: CreateImpo
         </div>
         {!reimport ? (
           <div className="fb-seg sub" aria-label="Wallet setup mode">
-            <button type="button" data-active={isCreate ? "" : undefined} onClick={() => { setMode("create"); setState("idle"); }}>
+            <button type="button" data-active={isCreate ? "" : undefined} onClick={() => { setMode("create"); setImportKind(null); setState("idle"); }}>
               <WalletModalIcon name="key" size={13} /> Create
             </button>
-            <button type="button" data-active={!isCreate ? "" : undefined} onClick={() => { setMode("import"); setState("idle"); }}>
+            <button type="button" data-active={!isCreate ? "" : undefined} onClick={() => { setMode("import"); setImportKind(null); setChain(MULTI_CHAIN_WALLET_LABEL); setState("idle"); }}>
               <WalletModalIcon name="plus" size={13} /> Import
             </button>
           </div>
@@ -162,12 +177,16 @@ export function CreateImportWalletModal({ wallet, onClose, actions }: CreateImpo
           </label>
         ) : (
           <>
-            <label className="fb-label">Import target
-              <select className="fb-select" value={chain} onChange={(event) => { setChain(event.target.value); setState("idle"); }}>
-                {PERSONAL_WALLET_IMPORT_CHAIN_LABELS.map((option) => <option key={option}>{option}</option>)}
-              </select>
-            </label>
-            {chain === MULTI_CHAIN_WALLET_LABEL ? (
+            {!recoveryPhraseImport ? (
+              <label className="fb-label">{privateKeyImport ? "Network" : "Import target"}
+                <select className="fb-select" value={chain} onChange={(event) => { setChain(event.target.value); setState("idle"); }}>
+                  {PERSONAL_WALLET_IMPORT_CHAIN_LABELS
+                    .filter((option) => !privateKeyImport || option !== MULTI_CHAIN_WALLET_LABEL)
+                    .map((option) => <option key={option}>{option}</option>)}
+                </select>
+              </label>
+            ) : null}
+            {recoveryPhraseImport || chain === MULTI_CHAIN_WALLET_LABEL ? (
               <label className="fb-label">Recovery-phrase account
                 <select className="fb-select" value={accountIndex} onChange={(event) => { setAccountIndex(Number(event.target.value)); setState("idle"); }}>
                   {RECOVERY_PHRASE_ACCOUNT_OPTIONS.map((option) => <option key={option.accountIndex} value={option.accountIndex}>{option.label}</option>)}
@@ -177,8 +196,8 @@ export function CreateImportWalletModal({ wallet, onClose, actions }: CreateImpo
           </>
         )}
         {!isCreate ? (
-          <label className="fb-label">Seed phrase or private key
-            <input className="fb-field fb-mono fw-secret" type="password" value={secret} onChange={(event) => { setSecret(event.target.value); setState("idle"); }} placeholder="Enter the wallet secret" />
+          <label className="fb-label">{recoveryPhraseImport ? "Recovery phrase" : privateKeyImport ? "Private key" : "Seed phrase or private key"}
+            <input className="fb-field fb-mono fw-secret" type="password" value={secret} onChange={(event) => { setSecret(event.target.value); setState("idle"); }} placeholder={recoveryPhraseImport ? "Enter the recovery phrase" : privateKeyImport ? "Enter the private key" : "Enter the wallet secret"} />
           </label>
         ) : null}
         <button type="button" className="fw-save" data-state={state} disabled={blocked} onClick={save}>

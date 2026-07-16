@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, open, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { homedir } from "@/lib/home-dir";
@@ -13,9 +13,12 @@ export type BrowserUseAction =
   | "doctor"
   | "open"
   | "state"
+  | "current-url"
   | "click"
   | "input"
   | "type"
+  | "select"
+  | "scroll"
   | "upload"
   | "screenshot"
   | "eval"
@@ -27,6 +30,8 @@ type BrowserUseInput = {
   url?: string;
   index?: number;
   text?: string;
+  direction?: "up" | "down";
+  amount?: number;
   path?: string;
   script?: string;
   task?: string;
@@ -59,9 +64,12 @@ const LOCAL_ACTIONS = new Set<BrowserUseAction>([
   "doctor",
   "open",
   "state",
+  "current-url",
   "click",
   "input",
   "type",
+  "select",
+  "scroll",
   "upload",
   "screenshot",
   "eval",
@@ -137,9 +145,13 @@ function buildArgs(input: BrowserUseInput, fullAccess: boolean) {
   const args = baseArgs(input);
   if (action === "doctor") return ["doctor"];
   if (action === "state") return [...args, "state"];
-  if (action === "close") return [...args, "close", "--all"];
+  if (action === "current-url") return [...args, "eval", "location.href"];
+  if (action === "close") return [...args, "close"];
   if (action === "open") {
-    return [...args, "open", safeOpenUrl(input.url)];
+    const url = safeOpenUrl(input.url);
+    return url === "about:blank"
+      ? [...args, "eval", "window.location.replace('about:blank')"]
+      : [...args, "open", url];
   }
   if (action === "click") {
     if (!Number.isInteger(input.index)) throw new Error("index is required for Browser Use click.");
@@ -152,6 +164,15 @@ function buildArgs(input: BrowserUseInput, fullAccess: boolean) {
   if (action === "type") {
     if (!input.text) throw new Error("text is required for Browser Use type.");
     return [...args, "type", input.text];
+  }
+  if (action === "select") {
+    if (!Number.isInteger(input.index) || !input.text) throw new Error("index and text are required for Browser Use select.");
+    return [...args, "select", String(input.index), input.text];
+  }
+  if (action === "scroll") {
+    const direction = input.direction === "up" ? "up" : "down";
+    const amount = Number.isInteger(input.amount) && Number(input.amount) > 0 ? Number(input.amount) : 500;
+    return [...args, "scroll", direction, "--amount", String(amount)];
   }
   if (action === "upload") {
     if (!Number.isInteger(input.index) || !input.path?.trim()) throw new Error("index and path are required for Browser Use upload.");
@@ -174,7 +195,47 @@ function buildArgs(input: BrowserUseInput, fullAccess: boolean) {
   throw new Error(`Unsupported Browser Use action: ${action}`);
 }
 
-export async function runBrowserUse(input: BrowserUseInput) {
+function logSafeArgs(input: BrowserUseInput, args: string[]) {
+  if (input.action === "input" || input.action === "type" || input.action === "select") {
+    return args.map((arg, index) => index === args.length - 1 ? "[REDACTED_TYPED_TEXT]" : arg);
+  }
+  if (input.action === "eval") {
+    return args.map((arg, index) => index === args.length - 1 ? "[REDACTED_SCRIPT]" : arg);
+  }
+  if (input.action === "cloud-task") {
+    return args.map((arg, index) => index === args.length - 1 ? "[REDACTED_TASK_PAYLOAD]" : arg);
+  }
+  return args;
+}
+
+async function acquireBeelineBrowserLock(session: string | undefined) {
+  const normalized = session?.trim() ?? "";
+  if (!normalized.startsWith("beeline-") || !/^[a-zA-Z0-9_-]+$/.test(normalized)) return async () => {};
+  const lockDirectory = join(homedir(), ".hivemindos", "beeline", "browser-use-locks");
+  const lockPath = join(lockDirectory, `${normalized}.lock`);
+  await mkdir(lockDirectory, { recursive: true, mode: 0o700 });
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    try {
+      const handle = await open(lockPath, "wx", 0o600);
+      await handle.writeFile(`${process.pid}\n`);
+      return async () => {
+        await handle.close().catch(() => undefined);
+        await unlink(lockPath).catch(() => undefined);
+      };
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      const modified = await stat(lockPath).then((value) => value.mtimeMs).catch(() => Date.now());
+      if (Date.now() - modified > 120_000) {
+        await unlink(lockPath).catch(() => undefined);
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+    }
+  }
+  throw new Error("The Beeline browser session is busy filling a protected credential. Try again in a moment.");
+}
+
+async function runBrowserUseUnlocked(input: BrowserUseInput) {
   const permissions = await readBrowserUsePermissions();
   const args = buildArgs(input, permissions.fullAccess);
   await mkdir(RUN_ROOT, { recursive: true });
@@ -195,9 +256,10 @@ export async function runBrowserUse(input: BrowserUseInput) {
     },
   );
   const finishedAt = new Date().toISOString();
+  const persistedArgs = logSafeArgs(input, args);
   await mkdir(dirname(logPath), { recursive: true });
   await writeFile(logPath, [
-    `$ ${command} ${args.map((arg) => JSON.stringify(arg)).join(" ")}`,
+    `$ ${command} ${persistedArgs.map((arg) => JSON.stringify(arg)).join(" ")}`,
     result.stdout,
     result.stderr,
   ].filter(Boolean).join("\n"), { mode: 0o600 });
@@ -206,11 +268,20 @@ export async function runBrowserUse(input: BrowserUseInput) {
     ok: true,
     id,
     action: input.action || "state",
-    args,
+    args: persistedArgs,
     stdout: result.stdout,
     stderr: result.stderr,
     logPath,
     startedAt,
     finishedAt,
   };
+}
+
+export async function runBrowserUse(input: BrowserUseInput) {
+  const releaseLock = await acquireBeelineBrowserLock(input.session);
+  try {
+    return await runBrowserUseUnlocked(input);
+  } finally {
+    await releaseLock();
+  }
 }

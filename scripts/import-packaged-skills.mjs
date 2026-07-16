@@ -35,6 +35,58 @@ const OPTIONAL_ROOT = join(REPO_ROOT, "packaged-skills", "optional");
 const AUTO_INSTALL_ROOT = join(REPO_ROOT, "packaged-skills", "auto-install");
 const LOCK_PATH = join(REPO_ROOT, "skills-lock.json");
 
+const CLAUDE_VISION_SECURITY_AUDIT = [
+  "# Security Audit: mikefutia/claude-vision",
+  "",
+  "Verdict: Conditionally approved for optional HivemindOS packaging at commit `0665eb3f782f92cd50179e61ac66e6c504cd754e`, using the pinned `google-genai==1.64.0` dependency and explicit approval before each Google Gemini upload.",
+  "",
+  "## Scope",
+  "",
+  "- Repository: `https://github.com/mikefutia/claude-vision`",
+  "- Commit: `0665eb3f782f92cd50179e61ac66e6c504cd754e`",
+  "- Source archive SHA-256: `eba0e7725f035c52fa401e0cdd83229249241949c572d0e8ded4b56f5f46e2fb`",
+  "- Upstream files reviewed: `.gitignore`, `README.md`, `SKILL.md`, and `scripts/analyze_video.py`",
+  "- Upstream history reviewed: both commits present at audit time",
+  "- License evidence: the README declares MIT, but the repository has no standalone license file and GitHub reports no detected license",
+  "",
+  "## Threat Model",
+  "",
+  "The helper receives a user-selected local video path, reads the complete file, reads one named Gemini credential from the process environment, and sends the video plus prompt to Google's Gemini API. Files up to 18 MB are sent inline. Larger videos use the Gemini Files API, where Google documents automatic deletion after 48 hours; the HivemindOS adaptation also requests deletion immediately after analysis.",
+  "",
+  "The package does not need unrelated application profiles, cookies, keychains, SSH files, cloud CLI credentials, financial credentials, arbitrary `.env` files, persistent services, shell-profile edits, or broad directory scanning.",
+  "",
+  "## Source Findings",
+  "",
+  "- The Python helper uses `pathlib` to validate and read only the supplied video path.",
+  "- Network behavior is limited to the official `google-genai` client: inline generation, Files API upload/status/delete for larger files, and model generation.",
+  "- No subprocess, shell execution, dynamic evaluation, usage-reporting SDK, updater, persistence, listener, or lifecycle hook is present.",
+  "- The upstream README recommended global pip installation, `--break-system-packages`, shell-profile edits, and printing a credential-bearing environment variable during troubleshooting. The packaged copy removes those instructions.",
+  "- The upstream large-file path left uploads for Google's automatic 48-hour expiry. The packaged helper requests deletion in a `finally` block and reports cleanup failure without printing secret values.",
+  "",
+  "## Dependency Review",
+  "",
+  "- Direct dependency: `google-genai==1.64.0` (Apache-2.0 wheel).",
+  "- Audited wheel SHA-256: `78a4d2deeb33b15ad78eaa419f6f431755e7f0e03771254f8000d70f717e940b`.",
+  "- A clean Python 3.12 virtual environment resolved 33 packages and passed `pip check`.",
+  "- `pip-audit` found no known vulnerabilities in the resolved runtime dependencies. It did flag the audit environment's bootstrap `pip==25.0.1`, so installation guidance requires upgrading pip before installing the SDK.",
+  "- Bandit reported no findings in the upstream Python source.",
+  "",
+  "## HivemindOS Hardening",
+  "",
+  "- The skill remains optional and is never auto-installed or auto-run.",
+  "- A `--confirm-upload` flag is mandatory at the script boundary and may be supplied only after the user approves the specific external upload.",
+  "- Credential lookup is restricted to `GEMINI_API_KEY`, `GOOGLE_AI_STUDIO_API_KEY`, and `GOOGLE_API_KEY`; values are never printed.",
+  "- HivemindOS shared-env execution is documented instead of shell-profile mutation.",
+  "- The stable `gemini-3-flash` model replaces the upstream preview default.",
+  "- Large Files API uploads are deleted after analysis when possible; cleanup failures warn that Google's documented 48-hour retention may still apply.",
+  "- Dependency installation is a separate approval-gated action in an isolated virtual environment; global installs and `--break-system-packages` are forbidden.",
+  "",
+  "## Residual Risk",
+  "",
+  "A run sends the complete selected video and prompt to Google, where provider terms, billing, regional availability, and data-handling policy apply. Immediate Files API deletion is best-effort, inline request handling is provider-controlled, and model output can still be wrong despite the anti-hallucination prompt. No live video was uploaded during this audit; network behavior was verified by source tracing and mocked client tests. Re-audit before changing the upstream commit, SDK version, model default, credential set, or upload/cleanup behavior.",
+  "",
+].join("\n");
+
 // ---------------------------------------------------------------------------
 // Source registry. Each entry describes one upstream skill repo and how to map
 // it into the packaged-skills/optional/ layout. Add a new entry to make a new
@@ -104,6 +156,356 @@ const SOURCES = {
       "n8n-clay-integration": "Clay integration, Clay webhook, bidirectional Clay<->n8n sync",
       "n8n-self-hosting-guide": "self-host n8n, Docker, PostgreSQL, queue mode, scaling, backups",
     },
+  },
+
+  "google-ads-builder": {
+    category: "gtm",
+    sourceLabel: "mikefutia",
+    catalogSource: "Mike Futia",
+    catalogCategory: "GTM",
+    repo: "mikefutia/google-ads-builder",
+    repoUrl: "https://github.com/mikefutia/google-ads-builder",
+    license: "MIT",
+    skillsRoot: ".",
+    layout: "single",
+    slug: "google-ads-builder",
+    validated: true,
+    ref: "1518b766bc9fe5af6ce6595987e4c8318b1997e4",
+    expectedCommit: "1518b766bc9fe5af6ce6595987e4c8318b1997e4",
+    sourceArchiveSha256: "92630aa8f2da388c40b8f107c3856f85594dc7d98822725fc9390905d8f3022e",
+    sourceUrlTemplate:
+      "https://github.com/mikefutia/google-ads-builder/blob/1518b766bc9fe5af6ce6595987e4c8318b1997e4/{file}",
+    copySkillDirectory: true,
+    licenseFile: "LICENSE",
+    resourceExcludes: {
+      "google-ads-builder": [".git"],
+    },
+    descriptionOverrides: {
+      "google-ads-builder": "Use when the user wants a draft Google Search Ads campaign built from a public website, including tightly themed keywords, negative keywords, Responsive Search Ads, extensions, settings, a Google Ads Editor CSV, and a review dashboard. The output is a draft only: validate claims, search volume, CPC, conversion tracking, budgets, and Google policy before import or launch.",
+    },
+    contentReplacements: [
+      ["leaks spend", "leaks budget"],
+      ["does not spend money, connect to your Google Ads account, or need any API key", "cannot create or activate a live campaign, connect to your Google Ads account, or access account credentials"],
+      ["scaling spend", "scaling the budget"],
+      ["Zero API keys", "Zero account credentials"],
+      ["ad schedule", "ad timing"],
+      ["\"schedule\": \"...\"", "\"timing\": \"...\""],
+    ],
+    packagedResourceReplacements: {
+      "README.md": [
+        ["No API keys, no Google Ads login.", "No account credentials and no Google Ads login."],
+        ["does not spend money, connect to your Google Ads account, or need any API key", "cannot create or activate a live campaign, connect to your Google Ads account, or access account credentials"],
+        ["scaling spend", "scaling the budget"],
+      ],
+      "scripts/render_report.py": [
+        ["No API keys.", "No account credentials."],
+      ],
+    },
+    normalized: "portable-frontmatter-and-safety-copy-normalized-by-importer",
+    installCommand: "Install from the HivemindOS Skill Browser; copies the audited local package only.",
+    securityVerdict:
+      "Approved for optional, draft-only HivemindOS packaging at commit 1518b766bc9fe5af6ce6595987e4c8318b1997e4.",
+    auditSummary: {
+      auditedAt: "2026-07-15T23:59:00Z",
+      sourceReview: "All 5 upstream files and both commits reviewed; no lifecycle hooks, dependencies, symlinks, credential reads, Google Ads API calls, or background-service code found.",
+      dependencyReview: "Renderer uses Python standard library only: csv, html, json, os, sys, and webbrowser.",
+      dynamicRuntime: "Synthetic campaign rendered successfully with network denied and user-home writes blocked; only the expected CSV and HTML outputs were created.",
+      sandboxNote: "Docker daemon was unavailable; dynamic verification used macOS sandbox-exec with a blank HOME and --no-open.",
+    },
+    hivemindAdaptations: [
+      "Packages the skill as optional GTM content instead of auto-installing it.",
+      "Pins the audited commit and codeload archive hash; updates require a fresh audit.",
+      "Vendors the MIT license, README, renderer, and gitignore while excluding upstream Git metadata.",
+      "Normalizes Claude-specific frontmatter and negated safety copy into portable HivemindOS metadata without changing renderer behavior.",
+      "Keeps the workflow draft-only: users must review campaign claims, keywords, conversion tracking, budgets, and Google policy before import or launch.",
+    ],
+  },
+
+  "claude-vision": {
+    category: "media",
+    sourceLabel: "mikefutia",
+    catalogSource: "Mike Futia",
+    catalogCategory: "Media",
+    catalogTags: ["claude vision", "gemini", "video analysis"],
+    repo: "mikefutia/claude-vision",
+    repoUrl: "https://github.com/mikefutia/claude-vision",
+    license: "MIT",
+    skillsRoot: ".",
+    layout: "single",
+    slug: "video-analyzer",
+    validated: true,
+    ref: "0665eb3f782f92cd50179e61ac66e6c504cd754e",
+    expectedCommit: "0665eb3f782f92cd50179e61ac66e6c504cd754e",
+    sourceArchiveSha256: "eba0e7725f035c52fa401e0cdd83229249241949c572d0e8ded4b56f5f46e2fb",
+    sourceUrlTemplate:
+      "https://github.com/mikefutia/claude-vision/blob/0665eb3f782f92cd50179e61ac66e6c504cd754e/{file}",
+    copySkillDirectory: true,
+    preserveFrontmatter: true,
+    resourceExcludes: {
+      "video-analyzer": [".git"],
+    },
+    descriptionOverrides: {
+      "video-analyzer": "Use when the user explicitly wants a local video sent to Google Gemini for a structured, timestamped report covering scenes, visible text, audio, visual details, and key moments. Requires approval for the specific upload, a named Gemini API credential, and the pinned google-genai dependency; prefer local-only video analysis when external upload is unnecessary.",
+    },
+    contentReplacements: [
+      [
+        "# Analyze Video\n\nAnalyze a video file with Gemini and return a structured markdown report.",
+        [
+          "# Analyze Video",
+          "",
+          "Analyze a video file with Gemini and return a structured markdown report.",
+          "",
+          "## HivemindOS Integration",
+          "",
+          "- This is an optional external media-analysis workflow. Prefer the local-only `video-shot-transcript` skill unless the user specifically chooses Gemini or needs Gemini's native video understanding.",
+          "- Before every run, name the exact video path, explain that the complete video and prompt will be sent to Google, identify the selected model, and obtain explicit approval for that upload. Confirm the user has the right to share the material and call out sensitive meeting, customer, health, financial, or identity content.",
+          "- Files up to 18 MB are sent inline. Larger files use Google's Files API; the helper requests deletion after analysis, but if cleanup fails Google documents retention for up to 48 hours.",
+          "- Check only whether `GEMINI_API_KEY`, `GOOGLE_AI_STUDIO_API_KEY`, or `GOOGLE_API_KEY` is set. Never ask the user to paste a key into chat, print a key, inspect arbitrary env files, or modify a shell profile.",
+          "- Installing or updating Python or `google-genai` is a separate side effect. Require approval, use an isolated virtual environment, pin `google-genai==1.64.0`, upgrade pip first, and never use a global install or `--break-system-packages`.",
+          "- The script's `--confirm-upload` flag is a technical consent gate, not a substitute for user approval. Add it only after the approval above.",
+        ].join("\n"),
+      ],
+      [
+        "- `google-genai` installed globally (any Python the shell finds via `python3` works — verified working at version 1.64.0)\n- `GEMINI_API_KEY` set in the user's shell environment (e.g. exported in `~/.zshrc`)",
+        "- `google-genai==1.64.0` installed in an isolated Python environment after explicit approval\n- One supported Gemini credential available through the project environment first or the shared hive env as fallback: `GEMINI_API_KEY`, `GOOGLE_AI_STUDIO_API_KEY`, or `GOOGLE_API_KEY`",
+      ],
+      ["defaults to `gemini-3-flash-preview`", "defaults to stable `gemini-3-flash`"],
+      [
+        "python3 ~/.claude/skills/video-analyzer/scripts/analyze_video.py $ARGUMENTS",
+        "hive-env-run -- \"<PYTHON_WITH_GOOGLE_GENAI>\" \"<INSTALLED_SKILL_DIR>/scripts/analyze_video.py\" \"$VIDEO_PATH\" --confirm-upload",
+      ],
+      [
+        "- Upload the video — inline for files ≤18MB, Files API for larger files (with up-to-300s polling for ACTIVE state)",
+        "- Upload the approved video — inline for files ≤18MB, Files API for larger files (with up-to-300s polling for ACTIVE state and a best-effort delete after analysis)",
+      ],
+      [
+        "**Missing API key**: confirm `echo $GEMINI_API_KEY` is non-empty in their shell. If it's only in `~/.zshrc`, they may need to start a new terminal or `source ~/.zshrc`.",
+        "**Missing API key**: run `hive-env-check` separately for `GEMINI_API_KEY`, `GOOGLE_AI_STUDIO_API_KEY`, and `GOOGLE_API_KEY`; report set or missing status only and never print a credential value.",
+      ],
+    ],
+    packagedResourceReplacements: {
+      "README.md": [
+        [
+          "# Claude Vision — Video Analyzer Skill",
+          "# Claude Vision — Video Analyzer Skill\n\n> HivemindOS package note: install this optional skill through the Skill Browser. Do not follow the upstream global-install or shell-profile-edit steps below; the packaged `SKILL.md` contains the approval-gated, isolated-environment workflow.",
+        ],
+        [
+          "> \"Set my GEMINI_API_KEY to `your_key_here` so it's available in every new shell.\"",
+          "> Configure one supported Gemini key through HivemindOS credential settings. Never paste the value into chat.",
+        ],
+        [
+          "Claude Code will add the export to your shell profile and confirm it works. You won't need to touch `.zshrc` yourself.",
+          "HivemindOS keeps credential configuration separate from skill installation and reports key names as set or missing without printing values.",
+        ],
+        [
+          "If pip complains about an externally-managed environment, use:\n\n```bash\npip install google-genai --break-system-packages\n```",
+          "If pip reports an externally managed environment, stop and create an isolated virtual environment after explicit approval. Do not use `--break-system-packages`.",
+        ],
+        ["pip install google-genai", "python -m pip install google-genai==1.64.0"],
+        [
+          "your key isn't visible to the shell Claude Code is running in. Open a new terminal and try again, or ask Claude Code to fix it.",
+          "check supported key names with `hive-env-check` and report only set or missing status; never print the value.",
+        ],
+        ["default `gemini-3-flash-preview`", "default stable `gemini-3-flash`"],
+      ],
+      "scripts/analyze_video.py": [
+        [
+          "    GEMINI_API_KEY — required. Get one at https://aistudio.google.com/apikey",
+          "    GEMINI_API_KEY / GOOGLE_AI_STUDIO_API_KEY / GOOGLE_API_KEY — one required.",
+        ],
+        [
+          "    print(\"Install with: pip install google-genai --break-system-packages\", file=sys.stderr)",
+          "    print(\"Install google-genai==1.64.0 in an approved isolated virtual environment.\", file=sys.stderr)",
+        ],
+        [
+          "    parser.add_argument(\"--model\", default=\"gemini-3-flash-preview\", help=\"Gemini model ID\")\n    return parser.parse_args()",
+          "    parser.add_argument(\"--model\", default=\"gemini-3-flash\", help=\"Gemini model ID\")\n    parser.add_argument(\"--confirm-upload\", action=\"store_true\", help=\"Confirm the user approved sending this video to Google Gemini\")\n    return parser.parse_args()",
+        ],
+        [
+          [
+            "def get_api_key() -> str:",
+            "    key = os.environ.get(\"GEMINI_API_KEY\")",
+            "    if not key:",
+            "        print(",
+            "            \"ERROR: GEMINI_API_KEY environment variable is not set.\\n\"",
+            "            \"Set it with: export GEMINI_API_KEY=your_key_here\\n\"",
+            "            \"Get a key at: https://aistudio.google.com/apikey\",",
+            "            file=sys.stderr,",
+            "        )",
+            "        sys.exit(1)",
+            "    return key",
+          ].join("\n"),
+          [
+            "def get_api_key() -> str:",
+            "    for key_name in (\"GEMINI_API_KEY\", \"GOOGLE_AI_STUDIO_API_KEY\", \"GOOGLE_API_KEY\"):",
+            "        key = os.environ.get(key_name)",
+            "        if key:",
+            "            return key",
+            "    print(",
+            "        \"ERROR: No supported Gemini API credential is set.\\n\"",
+            "        \"Configure GEMINI_API_KEY, GOOGLE_AI_STUDIO_API_KEY, or GOOGLE_API_KEY through approved credential settings.\",",
+            "        file=sys.stderr,",
+            "    )",
+            "    sys.exit(1)",
+          ].join("\n"),
+        ],
+        [
+          "def build_video_part(client: genai.Client, path: Path, fps: float | None) -> types.Part:",
+          "def build_video_part(client: genai.Client, path: Path, fps: float | None) -> tuple[types.Part, str | None]:",
+        ],
+        [
+          "def build_video_part(client: genai.Client, path: Path, fps: float | None) -> tuple[types.Part, str | None]:",
+          [
+            "def delete_uploaded_file(client: genai.Client, uploaded_name: str) -> None:",
+            "    try:",
+            "        client.files.delete(name=uploaded_name)",
+            "        print(\"[info] Deleted the temporary Gemini Files API upload.\", file=sys.stderr)",
+            "    except Exception as error:",
+            "        print(",
+            "            f\"[warning] Gemini upload cleanup failed ({type(error).__name__}); Google's documented 48-hour retention may apply.\",",
+            "            file=sys.stderr,",
+            "        )",
+            "",
+            "",
+            "def build_video_part(client: genai.Client, path: Path, fps: float | None) -> tuple[types.Part, str | None]:",
+          ].join("\n"),
+        ],
+        [
+          [
+            "        return types.Part(",
+            "            inline_data=types.Blob(data=video_bytes, mime_type=mime_type),",
+            "            video_metadata=video_metadata,",
+            "        )",
+          ].join("\n"),
+          [
+            "        return (",
+            "            types.Part(",
+            "                inline_data=types.Blob(data=video_bytes, mime_type=mime_type),",
+            "                video_metadata=video_metadata,",
+            "            ),",
+            "            None,",
+            "        )",
+          ].join("\n"),
+        ],
+        [
+          [
+            "            return types.Part(",
+            "                file_data=types.FileData(",
+            "                    file_uri=refreshed.uri,",
+            "                    mime_type=refreshed.mime_type or mime_type,",
+            "                ),",
+            "                video_metadata=video_metadata,",
+            "            )",
+          ].join("\n"),
+          [
+            "            return (",
+            "                types.Part(",
+            "                    file_data=types.FileData(",
+            "                        file_uri=refreshed.uri,",
+            "                        mime_type=refreshed.mime_type or mime_type,",
+            "                    ),",
+            "                    video_metadata=video_metadata,",
+            "                ),",
+            "                uploaded.name,",
+            "            )",
+          ].join("\n"),
+        ],
+        [
+          [
+            "    video_part = build_video_part(client, video_path, fps)",
+            "    text_part = types.Part(text=prompt)",
+            "",
+            "    print(f\"[info] Running analysis with {model}...\", file=sys.stderr)",
+            "    response = client.models.generate_content(",
+            "        model=model,",
+            "        contents=types.Content(parts=[video_part, text_part]),",
+            "    )",
+            "    return response.text or \"(no response text returned)\"",
+          ].join("\n"),
+          [
+            "    uploaded_name = None",
+            "    try:",
+            "        video_part, uploaded_name = build_video_part(client, video_path, fps)",
+            "        text_part = types.Part(text=prompt)",
+            "",
+            "        print(f\"[info] Running analysis with {model}...\", file=sys.stderr)",
+            "        response = client.models.generate_content(",
+            "            model=model,",
+            "            contents=types.Content(parts=[video_part, text_part]),",
+            "        )",
+            "        return response.text or \"(no response text returned)\"",
+            "    finally:",
+            "        if uploaded_name:",
+            "            delete_uploaded_file(client, uploaded_name)",
+          ].join("\n"),
+        ],
+        [
+          [
+            "        if state == \"FAILED\":",
+            "            print(\"ERROR: Gemini failed to process the uploaded file.\", file=sys.stderr)",
+            "            sys.exit(1)",
+          ].join("\n"),
+          [
+            "        if state == \"FAILED\":",
+            "            delete_uploaded_file(client, uploaded.name)",
+            "            print(\"ERROR: Gemini failed to process the uploaded file.\", file=sys.stderr)",
+            "            sys.exit(1)",
+          ].join("\n"),
+        ],
+        [
+          "        refreshed = client.files.get(name=uploaded.name)\n        state = getattr(refreshed.state, \"name\", str(refreshed.state))",
+          [
+            "        try:",
+            "            refreshed = client.files.get(name=uploaded.name)",
+            "            state = getattr(refreshed.state, \"name\", str(refreshed.state))",
+            "        except BaseException:",
+            "            delete_uploaded_file(client, uploaded.name)",
+            "            raise",
+          ].join("\n"),
+        ],
+        [
+          "    print(f\"ERROR: File processing timed out after {FILE_PROCESSING_TIMEOUT_SEC}s.\", file=sys.stderr)\n    sys.exit(1)",
+          "    delete_uploaded_file(client, uploaded.name)\n    print(f\"ERROR: File processing timed out after {FILE_PROCESSING_TIMEOUT_SEC}s.\", file=sys.stderr)\n    sys.exit(1)",
+        ],
+        [
+          "def main():\n    args = parse_args()\n    path = validate_inputs(args.video_path)",
+          [
+            "def main():",
+            "    args = parse_args()",
+            "    if not args.confirm_upload:",
+            "        print(",
+            "            \"ERROR: External upload not confirmed. Obtain explicit user approval for this video, then pass --confirm-upload.\",",
+            "            file=sys.stderr,",
+            "        )",
+            "        sys.exit(2)",
+            "    path = validate_inputs(args.video_path)",
+          ].join("\n"),
+        ],
+      ],
+    },
+    generatedResources: {
+      "SECURITY_AUDIT.md": CLAUDE_VISION_SECURITY_AUDIT,
+    },
+    normalized: "portable-frontmatter-and-external-upload-safety-hardened-by-importer",
+    installCommand: "Install from the HivemindOS Skill Browser; dependency setup and every video upload remain separately approval-gated.",
+    securityVerdict:
+      "Conditionally approved for optional HivemindOS packaging at commit 0665eb3f782f92cd50179e61ac66e6c504cd754e with pinned SDK, explicit per-video upload approval, and best-effort remote-file deletion.",
+    auditSummary: {
+      auditedAt: "2026-07-16T00:30:39Z",
+      sourceReview: "All 4 upstream files and both commits reviewed; no subprocess, dynamic evaluation, usage-reporting SDK, updater, persistent service, arbitrary env-file read, or broad filesystem scan found.",
+      licenseReview: "Upstream README declares MIT, but the repository contains no standalone license file and GitHub reports no detected license.",
+      dependencyReview: "google-genai==1.64.0 wheel SHA-256 78a4d2deeb33b15ad78eaa419f6f431755e7f0e03771254f8000d70f717e940b; 33-package Python 3.12 resolution passed pip check; pip-audit found no runtime dependency vulnerabilities; Bandit found no source issues.",
+      dynamicRuntime: "No live video was uploaded. The consent gate, supported credential fallback, inline path, Files API path, and best-effort deletion are exercised with a mocked Google client in the focused package test.",
+      privacyBoundary: "Each approved run sends the complete selected video and prompt to Google; Files API cleanup is best-effort and Google's documented 48-hour retention may apply if deletion fails.",
+    },
+    hivemindAdaptations: [
+      "Packages the skill as optional media content instead of auto-installing or auto-running it.",
+      "Pins the audited commit, source archive, google-genai version, and audited wheel hash; updates require a fresh audit.",
+      "Requires explicit approval for the specific video upload and enforces a --confirm-upload script gate.",
+      "Uses project/shared-hive credential lookup by supported key name without printing values or editing shell profiles.",
+      "Replaces global and --break-system-packages advice with an approval-gated isolated Python environment.",
+      "Uses stable gemini-3-flash and deletes large Files API uploads after analysis when possible.",
+    ],
   },
 
   mengto: {
@@ -387,6 +789,18 @@ async function collectUpstream(source, rootDir) {
         });
       }
     }
+  } else if (source.layout === "single") {
+    const file = source.skillFile ?? "SKILL.md";
+    const skillFile = join(skillsDir, file);
+    if (!existsSync(skillFile)) throw new Error(`Single-skill source is missing ${source.skillsRoot}/${file}.`);
+    const markdown = await readFile(skillFile, "utf8");
+    const upstreamName = parseFrontmatter(markdown).fields.name;
+    units.push({
+      slug: slugify(source.slug || upstreamName || basename(rootDir)),
+      file,
+      sourceFolder: ".",
+      markdown,
+    });
   } else {
     throw new Error(`Layout "${source.layout}" not yet implemented for this importer.`);
   }
@@ -468,9 +882,13 @@ function hivemindOsPolicy(unit, source) {
 }
 
 function adaptUpstreamContent(content, unit, source) {
-  if (!source.hivemindOsAugmentation) return content;
+  let adaptedContent = content;
+  for (const [from, to] of source.contentReplacements ?? []) {
+    adaptedContent = adaptedContent.replaceAll(from, to);
+  }
+  if (!source.hivemindOsAugmentation) return adaptedContent;
   if (source.integrationPolicy === "hyperframes") {
-    let adapted = content.replace(
+    let adapted = adaptedContent.replace(
       /## If the matched workflow isn't installed[\s\S]*?(?=## Workflow details)/,
       [
         "## HivemindOS packaged workflow resolution",
@@ -485,7 +903,7 @@ function adaptUpstreamContent(content, unit, source) {
     );
     return adapted;
   }
-  let adapted = content.replaceAll("superpowers:", "");
+  let adapted = adaptedContent.replaceAll("superpowers:", "");
   if (unit.slug === "executing-plans") {
     adapted = adapted.replace(
       /\*\*Note:\*\* Tell your human partner that Superpowers works much better[\s\S]*?instead of this skill\./,
@@ -546,6 +964,30 @@ async function adaptHyperframesPackagedResources(packageDir) {
         );
       if (adapted !== original) await writeFile(path, adapted);
     }
+  }
+}
+
+async function adaptPackagedTextResources(packageDir, replacementsByPath) {
+  for (const [relativePath, replacements] of Object.entries(replacementsByPath ?? {})) {
+    const path = resolve(packageDir, relativePath);
+    if (path === packageDir || !path.startsWith(`${packageDir}/`)) {
+      throw new Error(`Packaged resource replacement is outside the skill directory: ${relativePath}`);
+    }
+    if (!existsSync(path)) throw new Error(`Packaged resource replacement target is missing: ${relativePath}`);
+    let content = await readFile(path, "utf8");
+    for (const [from, to] of replacements) content = content.replaceAll(from, to);
+    await writeFile(path, content);
+  }
+}
+
+async function writeGeneratedResources(packageDir, resources) {
+  for (const [relativePath, content] of Object.entries(resources ?? {})) {
+    const path = resolve(packageDir, relativePath);
+    if (path === packageDir || !path.startsWith(`${packageDir}/`)) {
+      throw new Error(`Generated packaged resource is outside the skill directory: ${relativePath}`);
+    }
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, content.endsWith("\n") ? content : `${content}\n`);
   }
 }
 
@@ -647,6 +1089,12 @@ async function importSource(id, { ref, dryRun }, lock) {
               await rm(excludedPath, { recursive: true, force: true });
             }
           }
+          if (source.packagedResourceReplacements) {
+            await adaptPackagedTextResources(packageDir, source.packagedResourceReplacements);
+          }
+          if (source.generatedResources) {
+            await writeGeneratedResources(packageDir, source.generatedResources);
+          }
           if (source.integrationPolicy === "hyperframes") {
             await adaptHyperframesPackagedResources(packageDir);
           }
@@ -668,9 +1116,13 @@ async function importSource(id, { ref, dryRun }, lock) {
           upstreamSlug: unit.slug,
           hiveSlug: unit.slug,
           sourceLabel: source.sourceLabel,
+          ...(source.catalogSource ? { catalogSource: source.catalogSource } : {}),
+          ...(source.catalogCategory ? { catalogCategory: source.catalogCategory } : {}),
+          ...(source.catalogTags ? { catalogTags: source.catalogTags } : {}),
           sourceUrl: sourceFileUrl,
           repository: source.repoUrl,
-          installCommand: autoInstall ? "Bundled with HivemindOS" : `npx skills add ${source.repoUrl} --skill ${unit.slug}`,
+          installCommand: source.installCommand
+            ?? (autoInstall ? "Bundled with HivemindOS" : `npx skills add ${source.repoUrl} --skill ${unit.slug}`),
           importedAt,
           refreshedAt: stamp,
           provider: autoInstall ? "packaged-auto-install" : "packaged-optional",
@@ -683,10 +1135,13 @@ async function importSource(id, { ref, dryRun }, lock) {
           commit,
           ...(source.sourceArchiveSha256 ? { sourceArchiveSha256: source.sourceArchiveSha256 } : {}),
           ...(source.repoUrl ? { upstreamSourceUrl: source.repoUrl } : {}),
-          normalized: source.hivemindOsAugmentation
-            ? "hivemindos-augmented-upstream"
-            : normalized.synthesized ? "frontmatter-synthesized-by-importer" : "verbatim-frontmatter",
+          normalized: source.normalized
+            ?? (source.hivemindOsAugmentation
+              ? "hivemindos-augmented-upstream"
+              : normalized.synthesized ? "frontmatter-synthesized-by-importer" : "verbatim-frontmatter"),
           description: normalized.description,
+          ...(source.securityVerdict ? { securityVerdict: source.securityVerdict } : {}),
+          ...(source.auditSummary ? { auditSummary: source.auditSummary } : {}),
           ...(source.hivemindAdaptations ? { hivemindAdaptations: source.hivemindAdaptations } : {}),
         };
         await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
@@ -698,7 +1153,7 @@ async function importSource(id, { ref, dryRun }, lock) {
         sourceType: "github",
         ref: commit,
         license: source.license,
-        skillPath: `${source.skillsRoot}/${unit.file}`.replace(/\\/g, "/"),
+        skillPath: [source.skillsRoot === "." ? "" : source.skillsRoot, unit.file].filter(Boolean).join("/").replace(/\\/g, "/"),
         packagedPath: packagedRel,
         computedHash: hash,
         ...(resourceHashes ? { resourceHashes } : {}),

@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-07-15T05:33:44.649337+00:00",
+  "request": "When a machine is updating on the Fleet Hive view, show that it is updating in its cell.",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/components/fleet/roster.tsx",
+      "target_path": "src/components/fleet-hive/HiveStage.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Reused the canonical updating status label, LoaderCircle treatment, and accessibility semantics."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/components/cells/MachineCell.tsx",
+      "target_path": "src/components/fleet-hive/HiveStage.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the in-cell Updating presentation and spinning refresh affordance from the existing machine cell."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/features/dashboard/hooks/use-dashboard-derived-state.tsx",
+      "target_path": "src/components/fleet-hive/FleetHiveView.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Reused the normalized per-machine updating status contract at the focused Hive boundary."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/components/fleet/fleet-tokens.module.css",
+      "target_path": "src/components/fleet-hive/fleet-hive.css",
+      "reuse_type": "style_adapted",
+      "note": "Reused the Fleet live teal status language with the existing Hive dark and light tokens."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-fleet-hive-geometry.mjs",
+      "target_path": "scripts/test-fleet-hive-update-status.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Adapted the existing source-contract test style into an isolated update-status regression."
+    }
+  ]
+}

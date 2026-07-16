@@ -24,6 +24,7 @@ How it works:
 What Integrations can do:
 
 - Connect GitHub, Linear, Slack, Notion, and Google in place, without leaving the app.
+- Connect Monid for confirmation-gated data research, including AKTA Pro private-company intelligence. See [Monid And AKTA Pro](../integrations/monid.md).
 - Connect GitHub with one click via in-app OAuth, or by pasting a personal access token.
 - Connect Google via in-app OAuth with a one-time pasted OAuth client (Desktop app type).
 - Show live per-app status (connected account, failing check) and disconnect in place.

@@ -17,6 +17,7 @@ import { buildBankrCapabilityContext } from "@/lib/services/chat/bankr-capabilit
 import { buildClawbankCapabilityContext } from "@/lib/services/chat/clawbank-capability-context";
 import { buildNansenCapabilityContext } from "@/lib/services/chat/nansen-capability-context";
 import { buildXMcpCapabilityContext } from "@/lib/services/chat/x-mcp-capability-context";
+import { buildBeelineContextForPrompt } from "@/lib/services/beeline/profile-store";
 import { buildSharedBrainMemoryContext } from "@/lib/services/chat/shared-brain-memory-context";
 import {
   buildTaskRetrievalContextResult,
@@ -55,6 +56,10 @@ import {
   type ChatMediaArtifact,
 } from "./media-artifacts";
 import {
+  ingestChatDocumentArtifacts,
+  messagesWithDocumentIngestionContext,
+} from "./document-artifacts";
+import {
   recordRouteTelemetry,
   telemetryPayloadForProfile,
 } from "./route-telemetry";
@@ -79,6 +84,8 @@ import {
 } from "./process-events";
 import { localAdminPrincipal } from "@/lib/types/principal";
 import { verifyAuth } from "@/lib/utils/server-auth";
+import { resolveChatSkillAttribution } from "@/lib/services/chat/skill-attribution";
+import { warmBundledMarkItDown } from "@/lib/services/document-ingestion";
 
 export const runtime = "nodejs";
 export const maxDuration = 600;
@@ -90,6 +97,7 @@ const CHAT_PREFLIGHT_CAPABILITY_SEARCH_TIMEOUT_MS = 1_500;
 // the agent blind to its own powers, so they get a larger preflight budget.
 const CHAT_PREFLIGHT_CAPABILITY_ROUTING_TIMEOUT_MS = 2_500;
 const CHAT_PREFLIGHT_MEMORY_TIMEOUT_MS = 650;
+const CHAT_PREFLIGHT_SKILL_ATTRIBUTION_TIMEOUT_MS = 250;
 
 export async function POST(request: NextRequest) {
   const routeStartedAt = Date.now();
@@ -111,6 +119,7 @@ export async function POST(request: NextRequest) {
   let reasoningEffort: ChatReasoningEffort = "medium";
   let requestAttachments: unknown[] = [];
   let mediaArtifacts: ChatMediaArtifact[] = [];
+  let documentArtifactContext = "";
   try {
     const body = (await request.json()) as {
       agent?: AgentProfile;
@@ -173,6 +182,9 @@ export async function POST(request: NextRequest) {
     honeyLedgerEnabled,
     elapsedMs: Date.now() - routeStartedAt,
   });
+  // Start the bundled converter while an ordinary first chat turn is running so
+  // a later document attachment usually avoids the one-file bundle's cold boot.
+  void warmBundledMarkItDown().catch(() => undefined);
 
   const userMessage = latestUserMessage(messages);
   const userText = extractUserText(messages).trim();
@@ -194,6 +206,7 @@ export async function POST(request: NextRequest) {
     });
     return Response.json({ error: promptCheck.reason ?? "Message blocked by security policy" }, { status: 400 });
   }
+  const beelineProfileContext = await buildBeelineContextForPrompt(userPrompt).catch(() => "");
   const auth = await verifyAuth(request);
   const principal = auth.principal ?? localAdminPrincipal(auth.userId ?? "local-user", "fallback");
   const vault = activeSharedVault(profile, sharedVault);
@@ -215,6 +228,16 @@ export async function POST(request: NextRequest) {
     });
     return Response.json({ error: error instanceof Error ? error.message : "Could not prepare attached media for tool routing." }, { status: 400 });
   }
+  const documentIngestion = await ingestChatDocumentArtifacts(mediaArtifacts);
+  documentArtifactContext = documentIngestion.context;
+  await recordRouteTelemetry(request, "agent_runtime.document_artifacts.completed", {
+    ...telemetryPayloadForProfile(profile),
+    runtimeSessionId,
+    chatStorageKey: chatStorageKey || null,
+    convertedCount: documentIngestion.converted.length,
+    failedCount: documentIngestion.failures.length,
+    elapsedMs: Date.now() - routeStartedAt,
+  });
   const teachHiveProposal = await maybeCreateTeachHiveReviewProposal({
     userPrompt,
     principal,
@@ -230,6 +253,38 @@ export async function POST(request: NextRequest) {
       elapsedMs: Date.now() - routeStartedAt,
     });
   }
+  const runtimeTurnId = clientRunId || `${runtimeSessionId}:${routeStartedAt}`;
+  const skillAttributionPreflight = await bestEffortPreflight(
+    resolveChatSkillAttribution({
+      prompt: promptCheck.text,
+      preferredSkillSlugs: profile.preferredSkillSlugs,
+      vaultPath: vault?.vaultPath,
+    }),
+    CHAT_PREFLIGHT_SKILL_ATTRIBUTION_TIMEOUT_MS,
+    [],
+  );
+  const skillAttribution = skillAttributionPreflight.value;
+  const runtimeSession = await startRuntimeChatSession({
+    sessionId: runtimeSessionId,
+    turnId: runtimeTurnId,
+    agent: profile,
+    chatStorageKey,
+    sharedVaultPath: vault?.vaultPath,
+    userContent: bareUserRequestText(promptCheck.text) || promptCheck.text,
+    skillAttribution,
+    startedAt: routeStartedAt,
+  }).catch(() => null);
+  await recordRouteTelemetry(request, "agent_runtime.session.started", {
+    ...telemetryPayloadForProfile(profile),
+    runtimeSessionId,
+    chatStorageKey: chatStorageKey || null,
+    turnId: runtimeTurnId,
+    attributedSkillSlugs: skillAttribution.map((item) => item.skillSlug),
+    skillAttributionTimedOut: skillAttributionPreflight.timedOut,
+    skillAttributionFailed: skillAttributionPreflight.failed,
+    session: chatTelemetrySession(runtimeSession),
+    elapsedMs: Date.now() - routeStartedAt,
+  });
   if (isFusionProfile(profile)) {
     // Hive Fusion compound model: fan out to a panel of configured models,
     // judge their responses, and stream a synthesized answer. Runs before the
@@ -242,7 +297,13 @@ export async function POST(request: NextRequest) {
       agentMode,
       elapsedMs: Date.now() - routeStartedAt,
     });
-    return streamFusionResponse({ profile, messages, runtimeSessionId, request, routeStartedAt });
+    return streamFusionResponse({
+      profile,
+      messages: messagesWithDocumentIngestionContext(messages, documentArtifactContext),
+      runtimeSessionId,
+      request,
+      routeStartedAt,
+    });
   }
   if (isMobileAgentGatewayUrl(profile.gatewayUrl)) {
     // Phone-hosted agent: the hub cannot call the phone, so the turn is queued
@@ -258,12 +319,14 @@ export async function POST(request: NextRequest) {
     });
     return streamMobileAgentTurn({
       profile,
-      messages,
+      messages: messagesWithDocumentIngestionContext(messages, documentArtifactContext),
       userPrompt,
       runtimeSessionId,
       chatStorageKey,
       sharedVaultPath: vault?.vaultPath,
       routeStartedAt,
+      turnId: runtimeTurnId,
+      skillAttribution,
     });
   }
   // Run the deterministic wallet / trade rails BEFORE the low-latency voice fast
@@ -293,6 +356,8 @@ export async function POST(request: NextRequest) {
         ...telemetryPayloadForProfile(effectiveProfile),
         elapsedMs: Date.now() - routeStartedAt,
       });
+      await appendRuntimeChatSessionEvent(runtimeSessionId, "Voice runtime validation failed", profileError).catch(() => undefined);
+      await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
       return Response.json({ error: profileError }, { status: 400 });
     }
     await recordRouteTelemetry(request, "agent_runtime.voice.fast_path.dispatch", {
@@ -300,23 +365,6 @@ export async function POST(request: NextRequest) {
       runtimeSessionId,
       chatStorageKey: chatStorageKey || null,
       agentMode,
-      elapsedMs: Date.now() - routeStartedAt,
-    });
-    const runtimeSession = runtimeSessionId
-      ? await startRuntimeChatSession({
-          sessionId: runtimeSessionId,
-          agent: effectiveProfile,
-          chatStorageKey,
-          sharedVaultPath: vault?.vaultPath,
-          userContent: bareUserRequestText(promptCheck.text) || promptCheck.text,
-          startedAt: routeStartedAt,
-        }).catch(() => null)
-      : null;
-    await recordRouteTelemetry(request, "agent_runtime.voice.session.started", {
-      ...telemetryPayloadForProfile(effectiveProfile),
-      runtimeSessionId,
-      chatStorageKey: chatStorageKey || null,
-      session: chatTelemetrySession(runtimeSession),
       elapsedMs: Date.now() - routeStartedAt,
     });
     return streamHttpRuntime(
@@ -335,7 +383,7 @@ export async function POST(request: NextRequest) {
         runtimeSessionId,
         chatStorageKey,
       },
-      "",
+      documentArtifactContext,
       "",
       "",
       permissionMode,
@@ -410,6 +458,7 @@ export async function POST(request: NextRequest) {
   const mediaArtifactContext = formatChatMediaArtifactContext(mediaArtifacts);
   const taskRetrievalContext = [
     mediaArtifactContext,
+    documentArtifactContext,
     taskRetrievalResult.context || buildTaskRetrievalFallbackContext({
       query: userPrompt,
       origin: request.url,
@@ -437,21 +486,6 @@ export async function POST(request: NextRequest) {
     contextInjected: Boolean(taskRetrievalContext),
     mediaArtifactCount: mediaArtifacts.length,
     telemetry: taskRetrievalResult.telemetry,
-    elapsedMs: Date.now() - routeStartedAt,
-  });
-  const runtimeSession = await startRuntimeChatSession({
-    sessionId: runtimeSessionId,
-    agent: profile,
-    chatStorageKey,
-    sharedVaultPath: vault?.vaultPath,
-    userContent: userPrompt,
-    startedAt: routeStartedAt,
-  }).catch(() => null);
-  await recordRouteTelemetry(request, "agent_runtime.session.started", {
-    ...telemetryPayloadForProfile(profile),
-    runtimeSessionId,
-    chatStorageKey: chatStorageKey || null,
-    session: chatTelemetrySession(runtimeSession),
     elapsedMs: Date.now() - routeStartedAt,
   });
   const capabilitySearchProcessDetail = taskRetrievalResult.telemetry?.queryCount
@@ -483,6 +517,7 @@ export async function POST(request: NextRequest) {
     wallet: promptWallet,
     runtimeSessionId,
     chatStorageKey,
+    extraDynamicContext: beelineProfileContext,
   });
   const textWithVaultContext = buildHivemindUserContextText(promptEnvelope, userPrompt) || promptCheck.text;
   if (profile.runtime !== "openclaw" || isBankrLlmProfile(profile)) {

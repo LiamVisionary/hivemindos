@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-07-15T19:33:10.536073+00:00",
+  "request": "Add a NotebookLM integration to HivemindOS using the supplied NotebookLM skill",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "teng-lin/notebooklm-py",
+      "source_path": "pyproject.toml",
+      "target_path": "scripts/install-notebooklm.mjs",
+      "reuse_type": "config_adapted",
+      "note": "Pinned browser and MCP extras, package version, and native entrypoints"
+    },
+    {
+      "source_repo": "teng-lin/notebooklm-py",
+      "source_path": "src/notebooklm/cli/services/playwright_login.py",
+      "target_path": "scripts/notebooklm-login.mjs",
+      "reuse_type": "adapted_code",
+      "note": "Detached browser login with automatic completion and credential-safe state"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/mcp/azure-mcp.ts",
+      "target_path": "src/lib/services/mcp/notebooklm.ts",
+      "reuse_type": "adapted_code",
+      "note": "Local install status, runtime registration, and guarded setup lifecycle"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "scripts/test-azure-integration.mjs",
+      "target_path": "scripts/test-notebooklm-integration.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Pinned installer, UI, skills, and merge-only runtime registration coverage"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "packaged-skills/auto-install/hive-brain-memory/SKILL.md",
+      "target_path": "packaged-skills/auto-install/wrapup/SKILL.md",
+      "reuse_type": "config_adapted",
+      "note": "Canonical typed-memory recall, deduplication, evolution, and secret-safe persistence"
+    }
+  ]
+}

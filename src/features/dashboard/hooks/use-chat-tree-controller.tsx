@@ -9,6 +9,7 @@ import { stripJsonRenderPayload } from "@/components/json-render/JsonRenderSurfa
 import { createNativeLocalFolder } from "@/lib/native/filesystem";
 import { runtimeSettingsFeature } from "@/lib/types/agent-runtime";
 import { visibleChannelMarkupText } from "@/lib/services/chat/channel-markup";
+import { mergeRuntimeHydratedChatMessages } from "@/lib/services/chat/runtime-session-message-merge";
 import { chatTelemetryMessages, chatTelemetrySession } from "@/lib/services/telemetry/chat-dev-telemetry";
 import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 import { normalizeEvaluationHumanFeedback } from "@/lib/types/evaluation";
@@ -284,11 +285,13 @@ export function useChatTreeController(props: any) {
         }, { threadId: storageKey, runId: sessionId });
         return userSentAfterOpen || hasLocalInFlightChat(existing, hydratedMessages)
           ? current
-          : { ...current, [storageKey]: hydratedMessages };
+          : { ...current, [storageKey]: mergeRuntimeHydratedChatMessages(existing, hydratedMessages) };
       });
       setSelectedChatPreview((current) => (
         current?.agentId === agent.id && current.leafKey === leafKey
-          ? hasLocalInFlightChat(current.messages, hydratedMessages) ? current : { ...current, messages: hydratedMessages }
+          ? hasLocalInFlightChat(current.messages, hydratedMessages)
+            ? current
+            : { ...current, messages: mergeRuntimeHydratedChatMessages(current.messages, hydratedMessages) }
           : current
       ));
       logClientTelemetry("chat.runtime_session.hydrate.completed", {

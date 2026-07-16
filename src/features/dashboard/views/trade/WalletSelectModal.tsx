@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { KeyRound, Plus, ShieldCheck, WalletCards } from "lucide-react";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { AgentSurvivalSnapshot, AgentWalletConfig } from "@/lib/types/agent-wallet";
 import {
@@ -12,6 +13,13 @@ import {
 } from "@/components/wallets-drop-in/WalletPickerCard";
 import { getDisplayWalletBalanceUsd } from "@/lib/utils/agent-wallet";
 import { chainBadgeSrc, chainKeyForNetwork, chainLabelForNetwork, type PersonalChainKey } from "@/lib/utils/personal-wallet-grouping";
+import {
+  CreateImportWalletModal,
+  type WalletImportKind,
+  type WalletSetupActions,
+} from "@/components/wallets-drop-in/CreateImportWalletModal";
+import { MULTI_CHAIN_WALLET_LABEL } from "@/lib/config/personal-wallet-chains";
+import { Spinner } from "@/features/dashboard/views/zero-human-companies/primitives";
 import styles from "./trade.module.css";
 
 const BANKR_LOGO_SRC = "/icons/runtimes/bankr.svg";
@@ -78,6 +86,9 @@ type WalletSelectModalProps = {
   title?: string;
   subtitle?: string;
   confirmLabel?: string;
+  walletActions?: WalletSetupActions;
+  onWalletsChanged?: () => Promise<unknown> | unknown;
+  loading?: boolean;
 };
 
 export type WalletSelectPanelProps = Omit<WalletSelectModalProps, "onClose"> & {
@@ -131,7 +142,7 @@ function sortPickables(list: PickableWallet[], getSurvivalSnapshot: (wallet: Age
   });
 }
 
-export function WalletSelectModal({ pickables, getSurvivalSnapshot, currentId, onConfirm, onClose, title = "Select a wallet", subtitle = "Pick which wallet trades. Your own wallets come first, then configured agent wallets.", confirmLabel = "Use this wallet" }: WalletSelectModalProps) {
+export function WalletSelectModal({ pickables, getSurvivalSnapshot, currentId, onConfirm, onClose, title = "Select a wallet", subtitle = "Pick which wallet trades. Your own wallets come first, then configured agent wallets.", confirmLabel = "Use this wallet", walletActions, onWalletsChanged, loading = false }: WalletSelectModalProps) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -147,6 +158,9 @@ export function WalletSelectModal({ pickables, getSurvivalSnapshot, currentId, o
         title={title}
         subtitle={subtitle}
         confirmLabel={confirmLabel}
+        walletActions={walletActions}
+        onWalletsChanged={onWalletsChanged}
+        loading={loading}
         onCancel={onClose}
         showCloseButton
         panelClassName={styles.modal}
@@ -173,8 +187,15 @@ export function WalletSelectPanel({
   emptyCopy = "No configured wallets yet. Open the Wallets tab to create or import one, then come back to trade.",
   panelClassName,
   showCloseButton = false,
+  walletActions,
+  onWalletsChanged,
+  loading = false,
 }: WalletSelectPanelProps) {
   const [selectedId, setSelectedId] = useState(() => (canSelectId(pickables, currentId) ? currentId : ""));
+  const [openActionGroup, setOpenActionGroup] = useState("");
+  const [importKind, setImportKind] = useState<WalletImportKind | null>(null);
+  const [creatingWallet, setCreatingWallet] = useState(false);
+  const [walletActionError, setWalletActionError] = useState("");
 
   // Within each section, surface the highest-balance spendable wallets first and
   // sink the muted/off ones (watch-only, wallet off, rails not set up) to the end.
@@ -182,11 +203,63 @@ export function WalletSelectPanel({
   const bankrWallets = sortPickables(pickables.filter((p) => p.kind === "bankr"), getSurvivalSnapshot);
   const agentWallets = sortPickables(pickables.filter((p) => p.kind === "agent"), getSurvivalSnapshot);
 
+  const createWallet = async () => {
+    if (creatingWallet) return;
+    setCreatingWallet(true);
+    setWalletActionError("");
+    try {
+      if (!walletActions?.onCreateWallet) throw new Error("Wallet creation is not available in this build.");
+      await walletActions.onCreateWallet({ name: "", chain: MULTI_CHAIN_WALLET_LABEL });
+      await onWalletsChanged?.();
+      setOpenActionGroup("");
+    } catch (error) {
+      setWalletActionError(error instanceof Error ? error.message : "Could not create the wallet.");
+    } finally {
+      setCreatingWallet(false);
+    }
+  };
+
   const renderGroup = (title: string, list: PickableWallet[]) => (
-    list.length ? (
+    list.length || walletActions ? (
       <div className={styles.intentGroup}>
-        <div className={styles.groupTitle}>{title}</div>
-        <div className={styles.modalCards}>
+        <div className={styles.groupHeader}>
+          <div className={styles.groupTitle}>{title}</div>
+          {walletActions ? (
+            <div className={styles.groupActionAnchor}>
+              <button
+                type="button"
+                className={styles.groupAddButton}
+                aria-label={`Add a wallet from ${title}`}
+                aria-haspopup="menu"
+                aria-expanded={openActionGroup === title}
+                onClick={() => {
+                  setWalletActionError("");
+                  setOpenActionGroup((current) => current === title ? "" : title);
+                }}
+              >
+                <Plus aria-hidden="true" />
+              </button>
+              {openActionGroup === title ? (
+                <div className={styles.groupActionPopover} role="menu" aria-label={`Wallet actions for ${title}`}>
+                  <button type="button" role="menuitem" disabled={creatingWallet} onClick={() => void createWallet()}>
+                    {creatingWallet ? <Spinner size={14} /> : <WalletCards aria-hidden="true" />}
+                    <span><strong>New wallet</strong><small>Create a local multi-chain wallet</small></span>
+                  </button>
+                  <button type="button" role="menuitem" onClick={() => { setImportKind("private-key"); setOpenActionGroup(""); }}>
+                    <KeyRound aria-hidden="true" />
+                    <span><strong>Import from private key</strong><small>Add one EVM or Solana account</small></span>
+                  </button>
+                  <button type="button" role="menuitem" onClick={() => { setImportKind("recovery-phrase"); setOpenActionGroup(""); }}>
+                    <ShieldCheck aria-hidden="true" />
+                    <span><strong>Import recovery phrase</strong><small>Restore the matching wallet family</small></span>
+                  </button>
+                  {walletActionError ? <p role="alert">{walletActionError}</p> : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+        {list.length ? <div className={styles.modalCards}>
           {list.map((p) => (
             p.accounts && p.accounts.length > 1 ? (
               <GroupedWalletPickerCard
@@ -214,7 +287,7 @@ export function WalletSelectPanel({
               />
             )
           ))}
-        </div>
+        </div> : <div className={styles.groupEmpty}>No wallets in this section yet.</div>}
       </div>
     ) : null
   );
@@ -232,7 +305,12 @@ export function WalletSelectPanel({
       </div>
 
       <div className={styles.modalBody}>
-        {pickables.length ? (
+        {loading ? (
+          <div className={styles.walletLoading} role="status" aria-label="Loading wallets">
+            <Spinner size={18} />
+            <span>Loading wallets</span>
+          </div>
+        ) : pickables.length || walletActions ? (
           <>
             {renderGroup("Your wallets", userWallets)}
             {renderGroup("Bankr", bankrWallets)}
@@ -254,6 +332,15 @@ export function WalletSelectPanel({
           {confirmLabel}
         </button>
       </div>
+      {importKind ? (
+        <CreateImportWalletModal
+          initialMode="import"
+          initialImportKind={importKind}
+          actions={walletActions}
+          onSaved={onWalletsChanged}
+          onClose={() => setImportKind(null)}
+        />
+      ) : null}
     </div>
   );
 }

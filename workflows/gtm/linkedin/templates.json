@@ -3,8 +3,8 @@
   "provenance": "authored",
   "license": "MIT (same as this repository)",
   "verifiedOn": "2026-07-11",
-  "note": "LinkedIn GTM building blocks: post hook shapes, content-type rotation, warming stages, connection-note and DM skeletons, the sell-by-chat phase spine, safety caps, and (from the call-booking augment) the profile conversion layer, lead-magnet post mechanics, niche first-touch openers, and anti-patterns. This bank is authored, not measured — reply-rate, reach, and calls-per-day figures circulating with these systems are vendor claims or rules of thumb, not results from our accounts, and agents must not present anything here as 'proven'. A fuller step-by-step playbook lives in the shared skills shelf as the linkedin-gtm skill; this bank is only the rows agents sample from. Hard rules that travel with every row: LinkedIn's terms prohibit unauthorized automation and scraping, so every outbound item is a human-approved draft, comment/connection caps are ceilings not targets, 'auto' posting modes and third-party follower/commenter scrapers are never used, every promised lead-magnet DM is actually fulfilled, scarcity and urgency lines are used only when literally true, and every claim, credential, or case-study number in a profile or message must be real. Slots are UPPERCASE so an unfilled template trips the placeholder check in src/lib/services/deliverables/acceptance-contracts.ts.",
-  "count": 56,
+  "note": "LinkedIn GTM building blocks: post hook shapes, content-type rotation, warming stages, connection-note and DM skeletons, the sell-by-chat phase spine, safety caps, the call-booking augment (profile conversion layer, lead-magnet post mechanics, niche first-touch openers, anti-patterns), and the social-selling full-funnel augment (audience-building groups, the 70/20/10 TOFU/MOFU/BOFU content model, buyer-signal contact capture, conversion channels, and the strategic-mistakes list). This bank is authored, not measured — reply-rate, reach, and calls-per-day figures circulating with these systems are vendor claims or rules of thumb, not results from our accounts, and agents must not present anything here as 'proven'. A fuller step-by-step playbook lives in the shared skills shelf as the linkedin-gtm skill; this bank is only the rows agents sample from. Hard rules that travel with every row: LinkedIn's terms prohibit unauthorized automation and scraping, so every outbound item is a human-approved draft, comment/connection caps are ceilings not targets, 'auto' posting modes and third-party follower/commenter scrapers are never used, every promised lead-magnet DM is actually fulfilled, scarcity and urgency lines are used only when literally true, buyer signals are captured with platform-native surfaces and human-approved follow-up, and every claim, credential, or case-study number in a profile or message must be real. Slots are UPPERCASE so an unfilled template trips the placeholder check in src/lib/services/deliverables/acceptance-contracts.ts.",
+  "count": 76,
   "taxonomy": {
     "contentTypes": ["proof", "framework", "authority", "story"],
     "warmingStages": ["cold", "warm", "hot"]
@@ -90,5 +90,38 @@
     { "id": "LA03", "pattern": "automated scraping and mass-DM tooling", "why": "third-party follower scrapers, commenter scrapers, and fully automated DM sequencers violate LinkedIn terms and get accounts restricted; competitor-engagement signals may only be gathered manually within the platform" },
     { "id": "LA04", "pattern": "false scarcity and urgency", "why": "free-for-24-hours and limited-to-N-copies lines are only usable when literally enforced; fake limits are a lie the audience eventually catches" },
     { "id": "LA05", "pattern": "fabricated proof", "why": "invented client results, revenue screenshots, retention rates, or credentials in profiles, posts, or DMs are fraud; real numbers or no claim" }
+  ],
+  "audienceGroups": [
+    { "id": "LB01", "group": "target accounts", "detail": "companies matching the ICP criteria; the accounts you want to be visible inside before you publish" },
+    { "id": "LB02", "group": "decision-makers", "detail": "the economic buyers, champions, and influencers inside those accounts" },
+    { "id": "LB03", "group": "niche influencers", "detail": "creators who already hold the attention of your ICP; engaging their audience borrows that attention" }
+  ],
+  "audienceSequence": "build the audience, then warm it, then publish consistently - most programs fail because they publish before they distribute; grow deliberately with segmented invite batches to ICP roles, competitors' engagers, and relevant commenters rather than volume-blasting connections",
+  "funnelContent": [
+    { "id": "LT01", "stage": "TOFU (top of funnel)", "allocation": "about 70% of output", "purpose": "awareness, visibility, authority", "formats": "thought leadership, educational how-tos, giveaways and templates, carousels, storytelling" },
+    { "id": "LT02", "stage": "MOFU (middle of funnel)", "allocation": "about 20% of output", "purpose": "move attention toward a specific problem and solution space", "formats": "short demos, how-to posts, frameworks, playbooks, webinars; roles are problem education, category positioning, and differentiation" },
+    { "id": "LT03", "stage": "BOFU (bottom of funnel)", "allocation": "about 10% of output", "purpose": "conviction through proof and validation", "formats": "case studies with before/after metrics, testimonials, product walk-throughs tied to outcomes, launch posts; BOFU only converts when preceded by TOFU credibility and MOFU education" }
+  ],
+  "funnelRatio": "70% TOFU / 20% MOFU / 10% BOFU; a suggested weekly cadence is 3-4 TOFU posts, 1 MOFU, 1 BOFU, plus daily engagement - the ratio expands reach, keeps education steady, and converts without overselling",
+  "buyerSignals": [
+    { "id": "LG01", "signal": "profile visit from an ICP role or target account", "strength": "a digital hand raise - treat it as a lead, not a coincidence" },
+    { "id": "LG02", "signal": "profile CTA click", "strength": "download, booking, or access action - explicit interest in the offer" },
+    { "id": "LG03", "signal": "lead-magnet request", "strength": "a comment or DM asking for the template, framework, or checklist" },
+    { "id": "LG04", "signal": "qualified post engagement", "strength": "an ICP-role like or comment on relevant content" },
+    { "id": "LG05", "signal": "direct message", "strength": "the warmest signal and where most conversions actually happen - never ignore the inbox" }
+  ],
+  "captureProcess": "log each signal into a CRM or tracker (name, role, company, LinkedIn URL, signal type, date), tag by segment and funnel stage and intent strength, and route to the right follow-up (newsletter, email nurture, retargeting, or a human-approved warm-outbound sequence); prioritize fit over volume, and capture only through platform-native surfaces with human review - never third-party scrapers",
+  "conversionChannels": [
+    { "id": "LV01", "channel": "newsletter", "role": "extends the conversation and keeps weekly visibility with people who raised a hand" },
+    { "id": "LV02", "channel": "landing page", "role": "clarifies the offer and gives a frictionless CTA once someone is warm" },
+    { "id": "LV03", "channel": "warm outbound", "role": "context-specific sequences to engaged followers that reference their actual engagement - never cold-blasted" },
+    { "id": "LV04", "channel": "retargeting", "role": "reinforces visibility among an already-aware audience" }
+  ],
+  "socialSellingMistakes": [
+    { "id": "LX01", "mistake": "posting before building an audience", "why": "content published into a network that isn't your ICP gets low reach and irrelevant followers no matter how good it is; build and warm the audience first" },
+    { "id": "LX02", "mistake": "posting only BOFU content", "why": "proof and product posts convert only on top of TOFU credibility and MOFU education; sell-only feeds stall" },
+    { "id": "LX03", "mistake": "ignoring DMs", "why": "the inbox holds the warmest leads and is where most conversions happen; unanswered DMs are lost pipeline" },
+    { "id": "LX04", "mistake": "no tracking system for warm leads", "why": "unlogged engagement signals sink back into the feed and disappear; a lightweight tracker keeps them" },
+    { "id": "LX05", "mistake": "treating LinkedIn as a feed, not a pipeline lever", "why": "the difference between average creators and social sellers is that one posts and the other runs a system - content builds awareness, engagement builds familiarity, DMs build relationships, capture builds data, conversion builds revenue" }
   ]
 }

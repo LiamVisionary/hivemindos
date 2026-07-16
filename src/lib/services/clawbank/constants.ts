@@ -1,3 +1,17 @@
+export const CLAWBANK_DEFAULT_API_URL = "https://app.clawbank.co";
+export const CLAWBANK_DEFAULT_MCP_PATH = "/mcp";
+
+/** Token env-var names, in priority order. CLAWBANK_TOKEN is canonical; the
+ *  others are accepted so an existing CLI/env name keeps working. */
+export const CLAWBANK_TOKEN_ENV_NAMES = [
+  "CLAWBANK_TOKEN",
+  "CLAWBANK_API_TOKEN",
+  "CLAWBANK_API_KEY",
+] as const;
+
+export const CLAWBANK_MISSING_CREDENTIAL_MESSAGE =
+  "No ClawBank credential is configured. Set CLAWBANK_TOKEN in the shared hive env (hive-env-add CLAWBANK_TOKEN <token>) or run `clawbank login`.";
+
 /**
  * Confirmation tokens for ClawBank money- and state-moving actions.
  *

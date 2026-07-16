@@ -64,18 +64,22 @@ const input = { vaultPath: vault };
 try {
   await mkdir(join(vault, "Inbox"), { recursive: true });
   await mkdir(join(vault, "Intake", "Audio Transcripts"), { recursive: true });
+  await mkdir(join(vault, "Intake", "Processed"), { recursive: true });
+  await mkdir(join(vault, "Intake", "Review"), { recursive: true });
   await mkdir(join(vault, "Synthesis", "raw"), { recursive: true });
   await writeFile(join(vault, "Inbox", "hive to do.md"), "- [ ] ship the triage service\n- [ ] write docs\n");
   await writeFile(join(vault, "Inbox", "monetization strategy.md"), "We could sell the compiled wiki as a paid tier for fleets.");
   await writeFile(join(vault, "Intake", "Cluster Article.md"), "---\nurl: https://example.com/a\n---\n" + "body ".repeat(1200));
   await writeFile(join(vault, "Intake", "Audio Transcripts", "standup.md"), "transcript body ".repeat(40));
+  await writeFile(join(vault, "Intake", "Processed", "routed task.md"), "# Already routed\n");
+  await writeFile(join(vault, "Intake", "Review", "uncertain.md"), "# Already queued for review\n");
   await writeFile(join(vault, "Inbox", "conflict sync-conflict-20260101.md"), "should be ignored entirely");
   const inboxBefore = await readFile(join(vault, "Inbox", "hive to do.md"), "utf8");
 
   // force run: writes report, audit, and service note
   const first = await runInboxTriage({ ...input, force: true });
   assert.equal(first.ran, true);
-  assert.equal(first.itemCount, 4, "sync-conflict file must be skipped");
+  assert.equal(first.itemCount, 4, "sync conflicts and Brain Drop managed folders must be skipped");
   assert.equal(first.newCount, 4);
   const reportDir = join(vault, "Operations", "Brain Services", "Inbox Triage");
   const report = await readFile(join(reportDir, `${first.reportDate}.md`), "utf8");

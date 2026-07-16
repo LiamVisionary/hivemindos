@@ -12,6 +12,7 @@ import type { ChatResponseBilling } from "@/lib/types/chat-billing";
 import type { CapabilityApprovalPlan } from "@/lib/types/capability-approval";
 import type { EvaluationHumanFeedback } from "@/lib/types/evaluation";
 import type { LocalModelDownloadJob, LocalModelHardwareSnapshot, LocalModelInstallCatalogStatus, LocalOpenAICompatibleServer, LocalRuntimeSetupStatus } from "@/lib/config/local-model-install-catalog";
+import type { FleetMachinePolicySummary } from "@/lib/types/fleet-machine-policy";
 import type { ChatAppArtifact } from "@/lib/services/chat/chat-app-artifact";
 
 export type GatewayStatus = {
@@ -647,6 +648,7 @@ export type MachineGroup = {
     error?: string;
   };
   system?: MachineSystemStats;
+  fleetPolicy?: FleetMachinePolicySummary;
   lastSeenAt?: number;
   bridgeRepair?: {
     status: "queued" | "running" | "succeeded" | "failed";
@@ -723,6 +725,7 @@ export type DiscoveredMachine = {
   capabilities?: MachineGroup["capabilities"];
   envSync?: MachineGroup["envSync"];
   system?: MachineSystemStats;
+  fleetPolicy?: FleetMachinePolicySummary;
   lastSeenAt?: number;
   bridgeRepair?: MachineGroup["bridgeRepair"];
   reportedUnreachableBy?: string[];
@@ -1098,7 +1101,7 @@ export type MiroSharkSurfaceView = "x" | "reddit" | "polymarket" | "timeline";
 
 export type MiroSharkWorkspaceMode = "new" | "run";
 
-export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "trade" | "vault" | "integrations" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "messaging" | "chat" | "more" | "env" | "my-apps" | "mini-apps" | "phone" | "aeon" | "fusion" | "governance" | "cloud" | "compute" | "podcast" | "credit-admin";
+export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "trade" | "vault" | "integrations" | "beeline" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "messaging" | "chat" | "more" | "env" | "my-apps" | "mini-apps" | "phone" | "aeon" | "fusion" | "governance" | "cloud" | "compute" | "podcast" | "credit-admin";
 
 export type WorkView = Extract<DashboardView, "kanban" | "scheduler" | "swarm" | "history">;
 

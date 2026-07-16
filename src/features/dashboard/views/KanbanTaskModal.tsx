@@ -150,6 +150,28 @@ export function KanbanTaskModal(props: any) {
                 {KANBAN_COLUMNS.map((column) => <option value={column.id} key={column.id}>{column.title}</option>)}
               </select>
             </label>
+            <fieldset style={{ display: "grid", gap: 8, margin: 0, border: 0, padding: 0 }}>
+              <legend style={{ marginBottom: 4 }}>Capability decisions</legend>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", overflow: "hidden", border: "1px solid var(--line-2)", borderRadius: 9 }}>
+                {(["automatic", "ask"] as const).map((mode) => {
+                  const selected = (task.capabilityApprovalMode ?? "automatic") === mode;
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => patchKanbanTask(task.id, { capabilityApprovalMode: mode })}
+                      style={{ minHeight: 36, border: 0, borderRight: mode === "automatic" ? "1px solid var(--line-2)" : 0, color: selected ? "var(--honey)" : "var(--fg-3)", background: selected ? "var(--honey-soft)" : "var(--panel-2)", cursor: "pointer", fontWeight: 500 }}
+                    >
+                      {mode === "automatic" ? "Automatic" : "Ask first"}
+                    </button>
+                  );
+                })}
+              </div>
+              <small style={{ color: "var(--fg-4)", lineHeight: 1.45 }}>
+                Automatic is the default for autonomous work. Ask first pauses only for capability setup or substitution decisions.
+              </small>
+            </fieldset>
           </div>
         ) : null}
 

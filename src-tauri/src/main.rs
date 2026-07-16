@@ -2,6 +2,9 @@
 
 #[cfg(not(feature = "link-app"))]
 fn main() {
+    if std::env::args().any(|argument| argument == "--beeline-credential-broker") {
+        std::process::exit(hivemindos_desktop_lib::run_beeline_credential_broker_cli());
+    }
     hivemindos_desktop_lib::run(tauri::generate_context!())
 }
 

@@ -14,10 +14,12 @@ import {
   formatWorkBoardTaskForPrompt,
 } from "@/features/dashboard/work-board-lookup";
 import {
+  chatDiscussContextForNotification,
   deriveNotificationActions,
   notificationTaskId,
   type NotificationActionDescriptor,
 } from "@/features/notifications/notification-actions";
+import { discussDraftForContext, type ChatDiscussContext } from "@/features/dashboard/chat-discuss-context";
 import { clusterNotifications } from "@/features/notifications/notification-clustering";
 import {
   groupNotifications,
@@ -86,6 +88,10 @@ export type NotificationsPanelProps = {
    *  (moved out of the scheduler route's top banner). Optional so other callers
    *  that don't have schedules simply show no health warnings. */
   schedules?: AgentSchedule[];
+  /** Open the /chat route on the Queen Bee agent with `context` pinned as a
+   *  first-message badge and `draft` pre-filled in the composer. When omitted,
+   *  Discuss falls back to the floating Queen chat bubble. */
+  onDiscussInChat?: (context: ChatDiscussContext, draft: string) => void;
 };
 
 function isResolved(notification: AgentNotification) {
@@ -148,6 +154,7 @@ export function NotificationsPanel({
   onNavigateTarget,
   onUpdateSettings,
   schedules,
+  onDiscussInChat,
 }: NotificationsPanelProps) {
   const queenChat = useQueenChat();
   // notification id → created board task id (flips "Send to board" into "Open task").
@@ -302,8 +309,17 @@ export function NotificationsPanel({
       void sendToBoard(notification);
       return;
     }
+    // Discuss: open the /chat route on the Queen with this alert pinned as a
+    // context badge; fall back to the floating bubble when the host didn't wire
+    // the chat route in.
+    if (onDiscussInChat) {
+      const context = chatDiscussContextForNotification(notification);
+      onDiscussInChat(context, discussDraftForContext(context));
+      onMarkRead(notification.id);
+      return;
+    }
     void discussWithQueen(notification, action.prompt);
-  }, [discussWithQueen, onNavigateTarget, sendToBoard]);
+  }, [discussWithQueen, onDiscussInChat, onMarkRead, onNavigateTarget, sendToBoard]);
 
   const dismissNotification = useCallback(async (notification: AgentNotification) => {
     setDismissBusyId(notification.id);
@@ -348,6 +364,24 @@ export function NotificationsPanel({
   }, []);
 
   const discussApproval = useCallback((approval: SpendApprovalView) => {
+    // Prefer the /chat route: pin the approval as a context badge and pre-fill a
+    // draft, so the user talks it over with the Queen with the real request in
+    // scope. Falls back to the floating bubble when the chat route isn't wired.
+    if (onDiscussInChat) {
+      const context: ChatDiscussContext = {
+        id: `approval:${approval.id}`,
+        kind: "approval",
+        label: approval.title,
+        body: [
+          approval.title,
+          `Requested by ${approval.agent} · ${approval.kind}${approval.amountUsd != null ? ` · $${approval.amountUsd.toFixed(2)} ${approval.asset ?? "USDC"}` : ""}`,
+          approval.reason ? `Reason: ${approval.reason}` : "",
+          approval.explanation ? `Reasoning trail:\n${formatReasoningTrailForPlainText(approval.explanation)}` : "",
+        ].filter(Boolean).join("\n"),
+      };
+      onDiscussInChat(context, discussDraftForContext(context));
+      return;
+    }
     queenChat.setHistoryMinimized(false);
     void queenChat.sendText([
       "I'm reviewing a spend-approval request and want your take before I decide:",
@@ -364,7 +398,7 @@ export function NotificationsPanel({
         ?? document.querySelector<HTMLInputElement>(".fr-chat-input");
       input?.focus();
     }, 250);
-  }, [queenChat]);
+  }, [onDiscussInChat, queenChat]);
 
   const renderActions = (notification: AgentNotification) => {
     const derived = deriveNotificationActions(notification);
@@ -589,6 +623,24 @@ export function NotificationsPanel({
                               <CalendarClock aria-hidden="true" />
                               Open scheduler
                             </button>
+                            {onDiscussInChat ? (
+                              <button
+                                type="button"
+                                className={notificationClass("actionBtn")}
+                                onClick={() => {
+                                  const context: ChatDiscussContext = {
+                                    id: `automation-health:${scheduleHealthWarningKey(warning)}`,
+                                    kind: "automation-health",
+                                    label: warning.title,
+                                    body: `${warning.title}\n${warning.detail}`,
+                                  };
+                                  onDiscussInChat(context, discussDraftForContext(context));
+                                }}
+                              >
+                                <MessageSquare aria-hidden="true" />
+                                Discuss
+                              </button>
+                            ) : null}
                             <button
                               type="button"
                               className={notificationClass("actionBtn", "dismissBtn")}

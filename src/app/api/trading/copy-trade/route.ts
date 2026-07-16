@@ -14,6 +14,7 @@ import {
   type CopyTradingConfig,
 } from "@/lib/types/copy-trading";
 import {
+  createEvolvedConfig,
   normalizeConfig,
   readConfigs,
   readEngineStatus,
@@ -85,7 +86,7 @@ async function computeFundable(configs: CopyTradingConfig[]): Promise<Record<str
 }
 
 type Body = {
-  action?: "upsert" | "start" | "stop" | "delete";
+  action?: "upsert" | "start" | "stop" | "delete" | "evolve";
   id?: string;
   config?: Partial<CopyTradingConfig>;
 };
@@ -106,6 +107,9 @@ export async function POST(request: NextRequest) {
         if (!body.id) return bad("A config id is required.");
         await removeConfig(body.id);
         return NextResponse.json({ ok: true });
+      case "evolve":
+        if (!body.id) return bad("A source config id is required.");
+        return NextResponse.json({ ok: true, config: await createEvolvedConfig(body.id, newEvolvedId()) });
       default:
         return bad("Unknown action.");
     }
@@ -154,6 +158,10 @@ function isValidAddress(address: string, network: CopyTradingConfig["network"]):
 
 function newId(): string {
   return `ct_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function newEvolvedId(): string {
+  return `cte_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function bad(error: string) {

@@ -26,7 +26,7 @@
 // upgrade changes that path, so setup AND hive-update re-run this to self-heal.
 //
 // Usage:
-//   node scripts/register-mcp-clients.mjs [--server hivemind|xapi|azure] [--targets all|none|claude,codex,…] [--azure-access read|manage] [--remove] [--force] [--dry-run] [--aeon-project <dir>]
+//   node scripts/register-mcp-clients.mjs [--server hivemind|xapi|azure|notebooklm] [--targets all|none|claude,codex,…] [--azure-access read|manage] [--remove] [--force] [--dry-run] [--aeon-project <dir>]
 
 import fs from "node:fs";
 import os from "node:os";
@@ -71,6 +71,15 @@ const AZURE_MCP_COMMAND = path.join(
   ".bin",
   process.platform === "win32" ? "azmcp.cmd" : "azmcp",
 );
+const NOTEBOOKLM_MCP_COMMAND = path.join(
+  HOME,
+  ".hivemindos",
+  "integrations",
+  "notebooklm",
+  "venv",
+  process.platform === "win32" ? "Scripts" : "bin",
+  process.platform === "win32" ? "notebooklm-mcp.exe" : "notebooklm-mcp",
+);
 const SERVER_CATALOG = {
   hivemind: {
     name: "hivemind",
@@ -92,6 +101,15 @@ const SERVER_CATALOG = {
     args: ["server", "start", "--mode", "consolidated", ...(AZURE_ACCESS === "read" ? ["--read-only"] : [])],
     env: { AZURE_MCP_COLLECT_TELEMETRY: "false" },
     description: `Microsoft Azure MCP (${AZURE_ACCESS === "read" ? "read-only" : "management"})`,
+  },
+  notebooklm: {
+    name: "notebooklm",
+    command: NOTEBOOKLM_MCP_COMMAND,
+    args: [],
+    env: {
+      PLAYWRIGHT_BROWSERS_PATH: path.join(HOME, ".hivemindos", "integrations", "notebooklm", "playwright"),
+    },
+    description: "NotebookLM MCP (unofficial preview)",
   },
 };
 const SERVER_KEY = (flagValue("--server") || flagValue("--name") || "hivemind").trim().toLowerCase();

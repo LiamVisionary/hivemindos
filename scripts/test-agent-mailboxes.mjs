@@ -25,6 +25,14 @@ try {
   assert.match(JSON.stringify(blocked), /provider|mailbox/i, "blocked state should explain provider readiness");
 
   delete process.env.HIVEMINDOS_AGENT_MAILBOX_PROVIDER;
+  process.env.HIVEMINDOS_AGENT_MAILBOX_API_URL = "https://mailbox-broker.example.test";
+  process.env.HIVEMINDOS_AGENT_MAILBOX_API_TOKEN = "fixture-token";
+  const unimplementedManagedProvider = await service.readAgentMailboxProviderStatus();
+  assert.notEqual(unimplementedManagedProvider.id, "hivemindos-managed", "an endpoint setting alone must not advertise an unimplemented managed mailbox provisioner as ready");
+  assert.equal(unimplementedManagedProvider.ready, false);
+  delete process.env.HIVEMINDOS_AGENT_MAILBOX_API_URL;
+  delete process.env.HIVEMINDOS_AGENT_MAILBOX_API_TOKEN;
+
   const readyProvider = {
     id: "cloudflare-agentic-inbox",
     name: "Fixture Mail Provider",

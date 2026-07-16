@@ -127,7 +127,7 @@ function scoutUiState(status) {
   const shouldWake = status.state === "cold" || status.state === "metadata-missing";
   return {
     uiEvent: shouldWake ? "Agent cold start" : "",
-    loader: shouldWake ? "waking up swarm scout" : "thinking",
+    loader: shouldWake ? "Starting your free agent session" : "thinking",
   };
 }
 

@@ -209,7 +209,10 @@ async function walkFiles(root: string, out: string[]): Promise<void> {
     if (out.length >= MAX_ITEMS) return;
     if (entry.name.startsWith(".") || entry.name.includes("sync-conflict")) continue;
     const path = join(root, entry.name);
-    if (entry.isDirectory()) await walkFiles(path, out);
+    if (entry.isDirectory()) {
+      if (entry.name === "Processed" || entry.name === "Review") continue;
+      await walkFiles(path, out);
+    }
     else if (entry.isFile()) out.push(path);
   }
 }

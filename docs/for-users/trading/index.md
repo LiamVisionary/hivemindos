@@ -4,8 +4,8 @@ title: "Trading"
 
 # Trading
 
-HivemindOS gives you and your agents one place to **move money and trade** — crypto
-and stocks — through wallets you control, with limits and confirmations on every action.
+HivemindOS gives you and your agents one place to **move money and trade** — crypto,
+stocks, and options research — through wallets you control, with limits and confirmations on every action.
 
 Whether you do it yourself or hand it to an agent, the same rules apply: a wallet
 with spending limits, a clear preview of exactly what's about to happen, and your
@@ -33,9 +33,19 @@ confirmation before anything executes. Nothing moves silently.
     <a href="nansen-intelligence.html">Research with Nansen</a>
   </section>
   <section class="docCard">
+    <h3>Quant Research</h3>
+    <p>Run a reviewed quant research request from the Trade tab through lagged Rust backtests, independent Python validation, and fail-closed robustness gates.</p>
+    <a href="../features/quant-research.html">Review the quant research workflow</a>
+  </section>
+  <section class="docCard">
     <h3>Stocks</h3>
     <p>Buy and sell through Alpaca paper/live brokerage or a dedicated Robinhood Agentic account, or trade tokenized stocks on Solana and Robinhood Chain. Includes governed previews and portfolio context.</p>
     <a href="stocks.html">Trade stocks</a>
+  </section>
+  <section class="docCard">
+    <h3>On-chain Options</h3>
+    <p>Browse, write, buy, cancel, exercise, settle, redeem, and reclaim Plume's TSLA and AMD covered calls and cash-secured puts on Robinhood Chain testnet. Mainnet remains locked while its registry and independent audit are pending.</p>
+    <a href="https://www.plume.trade/docs">Read the Plume protocol docs</a>
   </section>
   <section class="docCard">
     <h3>Ways to Trade</h3>
@@ -59,6 +69,7 @@ confirmation before anything executes. Nothing moves silently.
 | Send privately | Veil (shielded transfer) |
 | Pay a pay-per-use API | x402 |
 | Research token, wallet, DeFi positions, Smart Money holdings, token-holder, token-screener, Hyperliquid, related-wallet, and CEX-health context | Nansen |
+| Run a reviewed quant research request and inspect its local report and manifest | Quant Research Swarm (research-only; no order path) |
 | Bridge / move across chains | Bankr |
 | Trade Hyperliquid spot or perps with your wallet | Local Hyperliquid |
 | Carry crypto practice targets between venues | Shared practice book + Hyperliquid replay |
@@ -68,6 +79,7 @@ confirmation before anything executes. Nothing moves silently.
 | Launch your own token | Bankr |
 | Set up recurring/limit orders | Bankr automations |
 | Buy & sell stocks | Alpaca (paper or live), Robinhood Agentic Trading MCP, tokenized xStocks, or Robinhood Chain Stock Tokens |
+| Trade and manage fully collateralized stock options | Plume on Robinhood Chain testnet (TSLA and AMD covered calls and cash-secured puts) |
 
 ## Two kinds of wallet
 
@@ -85,6 +97,14 @@ confirmation before anything executes. Nothing moves silently.
    how much, to where, on which network, and any warnings.
 3. **Confirm** — only then does it execute, and only if it's within your wallet's
    limits.
+
+For Plume options, the preview also shows the pinned market contract, collateral or
+premium amount, testnet network, and an action-specific confirmation. Writing a call
+locks one stock token per option. Writing a put locks the strike value in testnet
+USDG. The app can approve the exact required testnet token amount, then simulates the
+option call before the local wallet signs it. The same screen manages offer
+cancellation, buy-to-close, American exercise, oracle-bound expiry settlement,
+holder redemption, and writer collateral reclaim.
 
 ## Good to know
 
@@ -105,6 +125,12 @@ confirmation before anything executes. Nothing moves silently.
   paper trades do not collect it.
 - **Stock trading** defaults to a free **paper** (practice) account so you can try it
   with no real money; live trading is something you opt into.
+- **Plume execution is testnet-only.** It uses faucet-issued test assets, requires a
+  local EVM signer and an acknowledgement that you are outside Plume's restricted
+  jurisdictions (United States, Canada, United Kingdom, and Switzerland), and adds
+  no HivemindOS platform fee. Mainnet does not reuse the testnet addresses and stays
+  fail-closed until Plume publishes the canonical mainnet registry and completed
+  independent audit for review.
 - One thing that doesn't fully work today: a **standalone "bridge X to another chain"**
   through Bankr is broken on Bankr's side. Bridging still happens automatically when
   it's part of something bigger (like funding a Hyperliquid trade). See

@@ -1231,7 +1231,7 @@ export async function resolveLocalTtsCallConfig(input: {
 // overlay buffers the whole reply and decodes it (it does not stream frames),
 // so it needs a real container — raw PCM would fail to decode and silently
 // fall back to browser speech synthesis.
-function pcm16ToWav(pcm: Uint8Array, sampleRate: number, channels: number): ArrayBuffer {
+export function pcm16ToWav(pcm: Uint8Array, sampleRate: number, channels: number): ArrayBuffer {
   const bitsPerSample = 16;
   const blockAlign = channels * (bitsPerSample / 8);
   const byteRate = sampleRate * blockAlign;

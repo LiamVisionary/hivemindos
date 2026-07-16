@@ -11,13 +11,16 @@
 
 import { Fragment, memo, useEffect, useRef, useState } from "react";
 import { BellRing, Brain, Building2, Cloud, Cpu } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { buildAppNavShelfGroups, resolveActiveShelfSlot } from "@/features/dashboard/dashboard-navigation";
+import { DashboardSecurityControl } from "@/features/dashboard/DashboardSecurityControl";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { applyAppNavLiquidGlass } from "@/lib/native/liquid-glass";
 import { useNativeUpdate } from "@/lib/native/use-native-update";
 import { MoonIcon, SunIcon } from "./primitives";
 import "./fleet-hive.css";
+import "./app-nav-shelf.css";
 
 export type ShelfTheme = "dark" | "light";
 
@@ -147,6 +150,9 @@ function AppNavShelfBase({
   const active = resolveActiveShelfSlot(activeView, renderedShelfIds);
   const keyboardNavigationRef = useRef(false);
   const [shelfKeyboardFocus, setShelfKeyboardFocus] = useState(false);
+  const [securityTooltipOpen, setSecurityTooltipOpen] = useState(false);
+  const [themeTooltipOpen, setThemeTooltipOpen] = useState(false);
+  const footerTooltipOpen = securityTooltipOpen || themeTooltipOpen;
 
   // Build version readout (relocated from the old header), with the same
   // /api/app/version fallback fetch so it works when appVersion isn't passed.
@@ -211,11 +217,13 @@ function AppNavShelfBase({
   }, []);
 
   return (
+    <TooltipProvider delayDuration={120}>
     <div className="fr-root" data-fr-theme={theme}>
       <nav
         className="fr-shelf fr-shelf-app"
         aria-label="Primary"
         data-keyboard-focus={shelfKeyboardFocus ? "true" : undefined}
+        data-footer-tooltip-open={footerTooltipOpen ? "true" : undefined}
         onFocusCapture={() => {
           if (keyboardNavigationRef.current) setShelfKeyboardFocus(true);
         }}
@@ -277,14 +285,29 @@ function AppNavShelfBase({
               <span className="fr-nav-label">Companion</span>
             </button>
           ) : null}
-          <button type="button" className="fr-nav" onClick={onToggleTheme} title="Toggle light and dark">
-            <span className="fr-nav-ico">{theme === "light" ? <MoonIcon /> : <SunIcon />}</span>
-            <span className="fr-nav-label">{theme === "light" ? "Dark mode" : "Light mode"}</span>
-          </button>
+          <div className="fr-shelf-control-row" role="group" aria-label="Dashboard controls">
+            <DashboardSecurityControl onTooltipOpenChange={setSecurityTooltipOpen} />
+            <Tooltip onOpenChange={setThemeTooltipOpen}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="fr-nav"
+                  onClick={onToggleTheme}
+                  aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+                >
+                  <span className="fr-nav-ico">{theme === "light" ? <MoonIcon /> : <SunIcon />}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="z-[80]">
+                {theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+              </TooltipContent>
+            </Tooltip>
+          </div>
           {displayVersion ? <div className="fr-shelf-version" aria-label={`HivemindOS version ${displayVersion}`}>v{displayVersion}</div> : null}
         </div>
       </nav>
     </div>
+    </TooltipProvider>
   );
 }
 

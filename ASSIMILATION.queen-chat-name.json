@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-07-14T21:40:46Z",
+  "request": "queen bee chat needs to same the name",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/config/queen-bee-personality.ts",
+      "target_path": "src/features/dashboard/DashboardApp.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Reused the canonical Solara fallback while resolving the live editable Queen profile once for every shared-chat surface."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/features/dashboard/DashboardApp.tsx",
+      "target_path": "src/features/queen-voice/QueenBeeVoiceOverlay.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Threaded the existing normalized dashboard agent identity into transcript speaker labels, thinking state, voice status, details, and accessibility copy."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/features/queen-voice/QueenBeeVoiceOverlay.tsx",
+      "target_path": "src/features/queen-voice/PersistentHiveChat.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Applied the same shared-chat name prop and canonical fallback to the persistent Brain composer instead of introducing separate identity state."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-queen-bee-name.mjs",
+      "target_path": "scripts/test-queen-bee-name.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Extended the focused Queen identity contract to prove both chat mounts receive the editable profile name and the transcript renders it."
+    }
+  ]
+}

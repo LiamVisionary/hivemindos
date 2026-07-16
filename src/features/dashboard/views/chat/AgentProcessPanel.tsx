@@ -261,7 +261,7 @@ export function AgentProcessPanel(props: { active?: boolean; events?: ProcessEve
                 <span style={{ fontFamily: "var(--f-body)", fontSize: 14, color: "var(--fg-2)" }}>{processDisplayLabel(event)}</span>
                 {detailText ? (
                   <code
-                    style={{ minWidth: 0, borderRadius: 7, background: "var(--panel-2)", color: "var(--honey-2)", padding: "2px 8px", fontFamily: "var(--f-body)", fontSize: 11.5, overflowWrap: "anywhere" }}
+                    style={{ minWidth: 0, borderRadius: 7, background: "color-mix(in srgb, var(--honey) 6%, var(--bg))", color: "var(--honey-2)", padding: "2px 8px", fontFamily: "var(--f-body)", fontSize: 11.5, overflowWrap: "anywhere" }}
                   >
                     {detailText}
                   </code>

@@ -1,40 +1,43 @@
 "use client";
 
-/* HiveStage.tsx — the living hive: Queen at the heart, machines ringed around
-   her, agents budded off as tessellating hex petals, pheromone light flowing
-   along the threads. Everything is laid out on a fixed 1440×980 canvas that
-   FleetHiveView scales to fit. */
+/* HiveStage.tsx — the living hive: Queen at the heart, machine summaries ringed
+   around her, and the selected machine's agents revealed as compact hex nodes.
+   Everything is laid out on a fixed 1012×980 canvas that FleetHiveView scales
+   to fit. */
 
+import { ChevronDown, ChevronUp, LoaderCircle } from "lucide-react";
 import { Fragment, forwardRef, useMemo, useRef } from "react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useQueenVoicePulse } from "@/lib/audio/queen-voice-amplitude";
-import type { AgentState, HiveMachine, HiveMachineKind, HiveSelection } from "./fleet-hive-types";
+import { beeRoleIconPath } from "@/lib/config/bee-role-icons";
+import type { AgentState, HiveMachine, HiveSelection } from "./fleet-hive-types";
 import { frMachineState, hivePhoneStatus } from "./fleet-hive-types";
 import {
   AGENT_SIZE, FR_HEX_CLIP, HIVE_H, HIVE_W, MACHINE_SIZE, QX, QY,
-  frAddMachinePos, frAgentNameSegments, frBuildLayout, frPhonePlaceholderPos, type Pt,
+  frBuildLayout, frPhonePlaceholderPos, type Pt,
 } from "./hive-geometry";
+import { AgentNodeGlyph, MachineKindGlyph } from "./hive-node-glyphs";
 
 interface Tone {
   fill: string;
   border: string;
-  glow: string | null;
 }
 
-interface HiveCellProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "children" | "onClick" | "title"> {
+interface HiveCellProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "children" | "onClick" | "title"> {
   x: number; y: number; size: number; tone: Tone;
-  selected?: boolean; dim?: boolean; pulse?: boolean; bounce?: boolean; spotlight?: boolean;
-  onClick?: React.MouseEventHandler<HTMLDivElement>; title?: string; children?: React.ReactNode; z?: number;
+  selected?: boolean; dim?: boolean; bounce?: boolean; spotlight?: boolean;
+  onClick?: React.MouseEventHandler<HTMLButtonElement>; title?: string; children?: React.ReactNode; z?: number;
 }
 
 // ---- the hex cell ---------------------------------------------------------
-const HiveCell = forwardRef<HTMLDivElement, HiveCellProps>(function HiveCell({
-  x, y, size, tone, selected, dim, pulse, bounce, spotlight, onClick, title, children, z,
+const HiveCell = forwardRef<HTMLButtonElement, HiveCellProps>(function HiveCell({
+  x, y, size, tone, selected, dim, bounce, spotlight, onClick, title, children, z,
   className, style, ...triggerProps
 }, ref) {
   return (
-    <div
+    <button
       {...triggerProps}
+      type="button"
       ref={ref}
       onClick={(e) => { e.stopPropagation(); onClick?.(e); }}
       title={title}
@@ -51,23 +54,16 @@ const HiveCell = forwardRef<HTMLDivElement, HiveCellProps>(function HiveCell({
         ["--fr-z" as string]: z ?? (selected ? 6 : 4),
         cursor: onClick ? "pointer" : "default",
         transition: "opacity .4s",
-        opacity: dim ? 0.4 : 1,
+        opacity: dim ? 0.52 : 1,
+        padding: 0,
+        border: 0,
+        background: "transparent",
       } as React.CSSProperties}
     >
       <div
         className="fr-cell-lift"
         style={{ animation: bounce ? "fr-breathe 0.88s ease" : undefined }}
       >
-        {tone.glow ? (
-          <div
-            style={{
-              position: "absolute", inset: -size * 0.34, borderRadius: "50%",
-              background: `radial-gradient(circle, ${tone.glow}, transparent 68%)`,
-              animation: pulse ? "fr-cell-breathe 3.2s ease-in-out infinite" : undefined,
-              pointerEvents: "none",
-            }}
-          />
-        ) : null}
         <div
           style={{
             position: "absolute", inset: 0, clipPath: FR_HEX_CLIP,
@@ -89,128 +85,78 @@ const HiveCell = forwardRef<HTMLDivElement, HiveCellProps>(function HiveCell({
         ) : null}
         <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>{children}</div>
       </div>
-    </div>
+    </button>
   );
 });
 
 function frMachineTone(state: AgentState, selected: boolean): Tone {
   const base: Tone =
     ({
-      working: { fill: "var(--fr-machine-working-fill)", border: "var(--fr-machine-working-border)", glow: "var(--fr-working-glow)" },
-      setup: { fill: "var(--fr-machine-setup-fill)", border: "var(--fr-machine-setup-border)", glow: "var(--honey-soft)" },
-      failed: { fill: "var(--fr-machine-failed-fill)", border: "var(--fr-machine-failed-border)", glow: "var(--danger-soft)" },
-      ready: { fill: "var(--fr-machine-ready-fill)", border: "var(--fr-machine-ready-border)", glow: null },
-    } as Record<string, Tone>)[state] || { fill: "var(--fr-machine-ready-fill)", border: "var(--fr-machine-ready-border)", glow: null };
-  if (selected) return { ...base, border: "var(--honey)", glow: base.glow || "var(--honey-soft)" };
+      working: { fill: "var(--fr-machine-working-fill)", border: "var(--fr-machine-working-border)" },
+      setup: { fill: "var(--fr-machine-setup-fill)", border: "var(--fr-machine-setup-border)" },
+      failed: { fill: "var(--fr-machine-failed-fill)", border: "var(--fr-machine-failed-border)" },
+      ready: { fill: "var(--fr-machine-ready-fill)", border: "var(--fr-machine-ready-border)" },
+    } as Record<string, Tone>)[state] || { fill: "var(--fr-machine-ready-fill)", border: "var(--fr-machine-ready-border)" };
+  if (selected) return { ...base, border: "var(--honey)" };
   return base;
 }
 
 function frAgentTone(state: AgentState, selected: boolean): Tone {
   const tints: Record<string, Tone> = {
-    working: { fill: "var(--fr-agent-working-fill)", border: "var(--fr-agent-working-border)", glow: "var(--fr-working-glow)" },
-    scheduled: { fill: "var(--fr-agent-scheduled-fill)", border: "var(--fr-agent-scheduled-border)", glow: null },
-    setup: { fill: "var(--fr-agent-setup-fill)", border: "var(--fr-agent-setup-border)", glow: null },
-    failed: { fill: "var(--fr-agent-failed-fill)", border: "var(--fr-agent-failed-border)", glow: "var(--danger-soft)" },
-    ready: { fill: "var(--fr-agent-ready-fill)", border: "var(--fr-agent-ready-border)", glow: null },
+    working: { fill: "var(--fr-agent-working-fill)", border: "var(--fr-agent-working-border)" },
+    scheduled: { fill: "var(--fr-agent-scheduled-fill)", border: "var(--fr-agent-scheduled-border)" },
+    setup: { fill: "var(--fr-agent-setup-fill)", border: "var(--fr-agent-setup-border)" },
+    failed: { fill: "var(--fr-agent-failed-fill)", border: "var(--fr-agent-failed-border)" },
+    ready: { fill: "var(--fr-agent-ready-fill)", border: "var(--fr-agent-ready-border)" },
   };
   const t = tints[state] || tints.ready;
-  return selected ? { ...t, border: "var(--honey)", glow: t.glow || "var(--honey-soft)" } : t;
+  return selected ? { ...t, border: "var(--honey)" } : t;
 }
 
-// ---- machine-kind icons ---------------------------------------------------
-function MachineKindIcon({ kind, color, size = 22 }: { kind: HiveMachineKind; color: string; size?: number }) {
-  const common = {
-    width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color,
-    strokeWidth: 1.6, strokeLinecap: "round" as const, strokeLinejoin: "round" as const,
-  };
-  switch (kind) {
-    case "Laptop":
-      return (<svg {...common}><rect x="4" y="5" width="16" height="11" rx="1.5" /><path d="M2 20h20l-1.5-2.5h-17L2 20z" /></svg>);
-    case "Cloud Server":
-      return (<svg {...common}><path d="M7 18a4 4 0 0 1-.6-7.95A5 5 0 0 1 16 9.5a3.5 3.5 0 0 1 1 6.86" /><path d="M8 18h9" /><circle cx="9.5" cy="14.5" r="0.3" fill={color} /></svg>);
-    case "Home Server":
-      return (<svg {...common}><rect x="4" y="4" width="16" height="7" rx="1.4" /><rect x="4" y="13" width="16" height="7" rx="1.4" /><circle cx="7.5" cy="7.5" r="0.4" fill={color} /><circle cx="7.5" cy="16.5" r="0.4" fill={color} /></svg>);
-    case "Edge":
-      return (<svg {...common}><rect x="7" y="7" width="10" height="10" rx="1.5" /><path d="M10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4" /></svg>);
-    case "Mobile":
-      return (<svg {...common}><rect x="7" y="2.5" width="10" height="19" rx="2.2" /><path d="M11 18.5h2" /></svg>);
-    case "Desktop":
-    default:
-      return (<svg {...common}><rect x="3" y="4" width="18" height="12" rx="1.5" /><path d="M9 20h6M12 16v4" /></svg>);
-  }
+function NodeStatus({ state }: { state: AgentState }) {
+  return <span className="fr-node-status" data-state={state} aria-hidden />;
 }
 
-// ---- agent name along the lower hex edges ---------------------------------
-function AgentEdgeName({ name, selected }: { name: string; selected: boolean }) {
-  const segs = frAgentNameSegments(name);
-  if (!segs.length) return null;
-  const color = selected ? "var(--fr-label-fill-selected)" : "var(--fr-label-fill)";
-  const len = segs.reduce((n, s) => n + s.length, 0);
-  const fs = len > 14 ? 8.4 : len > 10 ? 9.2 : 10;
-  // Each lower hex edge is ~42 units long. Rather than squeezing a long segment
-  // with lengthAdjust (which smears the glyphs into an illegible blur — very
-  // visible on long auto-generated names like the e2e agents), truncate it to
-  // what actually fits and add an ellipsis. The small hover tooltip keeps the
-  // full name reachable.
-  const EDGE_FIT_W = 42;
-  const maxChars = Math.max(2, Math.floor(EDGE_FIT_W / (fs * 0.56)));
-  const clamp = (s: string) => (s.length > maxChars ? s.slice(0, maxChars - 1).trimEnd() + "…" : s);
-  const left = clamp(segs[0]);
-  const right = segs.length > 1 ? clamp(segs[1]) : null;
+function AgentNodeContent({ agent }: { agent: HiveMachine["agents"][number] }) {
   return (
-    <svg viewBox="0 0 100 100" aria-hidden style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", overflow: "visible" }}>
-      <g fill={color} stroke="var(--fr-label-halo)" strokeWidth="var(--fr-label-halo-width)" strokeLinejoin="round" paintOrder="stroke" style={{ fontFamily: "var(--f-body)", fontWeight: "var(--fr-label-weight)" }}>
-        {/* a lone word hugs the bottom-left edge, just like the first segment of
-            a two-part name; a second segment hugs the bottom-right edge. */}
-        <text x="47" y="91" fontSize={fs} textAnchor="end" dominantBaseline="middle" transform="rotate(30 47 91)">{left}</text>
-        {right ? (
-          <text x="53" y="91" fontSize={fs} textAnchor="start" dominantBaseline="middle" transform="rotate(-30 53 91)">{right}</text>
-        ) : null}
-      </g>
-    </svg>
+    <span className="fr-agent-node-content">
+      <span className="fr-node-glyph"><AgentNodeGlyph agent={agent} /></span>
+      <span className="fr-node-name">{agent.name}</span>
+      <NodeStatus state={agent.state} />
+    </span>
   );
 }
 
-interface AddAgentCellProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "children" | "onClick" | "title"> {
-  x: number; y: number; size: number; dim?: boolean; title?: string; label?: string; dataBee?: string; onClick?: React.MouseEventHandler<HTMLDivElement>;
-}
-
-// ---- dashed "add" cell (per-machine "add agent", or the global "add machine") -
-const AddAgentCell = forwardRef<HTMLDivElement, AddAgentCellProps>(function AddAgentCell({
-  x, y, size, dim, title, label, dataBee, onClick, className, style, ...triggerProps
-}, ref) {
+function MachineNodeContent({
+  machine,
+  state,
+  expanded,
+  updating,
+}: {
+  machine: HiveMachine;
+  state: AgentState;
+  expanded: boolean;
+  updating: boolean;
+}) {
+  const agentLabel = machine.agents.length === 1 ? "agent" : "agents";
   return (
-    <div
-      {...triggerProps}
-      ref={ref}
-      onClick={(e) => { e.stopPropagation(); onClick?.(e); }}
-      title={title}
-      className={className ? `fr-addcell ${className}` : "fr-addcell"}
-      data-bee={dataBee}
-      style={{
-        ...style,
-        position: "absolute", left: x, top: y, width: size, height: size,
-        transform: "translate(-50%, -50%)", cursor: onClick ? "pointer" : "default", zIndex: 2,
-        opacity: dim ? 0.32 : 0.9, transition: "opacity .4s",
-      }}
-    >
-      <svg viewBox="0 0 100 100" style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} aria-hidden>
-        <polygon className="fr-addcell-hex" points="50,2 92,25 92,75 50,98 8,75 8,25" fill="transparent" stroke="var(--line-3)" strokeWidth="1.4" strokeDasharray="4 5" strokeLinejoin="round" />
-        <path className="fr-addcell-plus" d="M50 41 V 59 M41 50 H 59" stroke="var(--fg-4)" strokeWidth="2.4" strokeLinecap="round" />
-      </svg>
-      {label ? (
-        <span
-          style={{
-            position: "absolute", left: "50%", top: "100%", transform: "translate(-50%, 4px)",
-            whiteSpace: "nowrap", pointerEvents: "none",
-            fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 15,
-            letterSpacing: "-0.02em", color: "var(--fg-3)",
-          }}
-        >{label}</span>
+    <span className="fr-machine-node-content" data-updating={updating ? "true" : undefined}>
+      <span className="fr-node-glyph"><MachineKindGlyph kind={machine.kind} size={34} /></span>
+      <span className="fr-node-name">{machine.name}</span>
+      <span className="fr-machine-agent-count">
+        {machine.agents.length} {agentLabel}
+        {expanded ? <ChevronUp aria-hidden size={11} /> : <ChevronDown aria-hidden size={11} />}
+      </span>
+      {updating ? (
+        <span className="fr-machine-update-status" role="status" aria-live="polite">
+          <LoaderCircle className="fr-machine-update-spinner animate-spin" aria-hidden size={9} />
+          Updating…
+        </span>
       ) : null}
-    </div>
+      <NodeStatus state={state} />
+    </span>
   );
-});
+}
 
 // ---- pheromone thread + travelling light ----------------------------------
 function Thread({ a, b, lit, flow, delay = 0, dur = 2.6 }: { a: Pt; b: Pt; lit?: boolean; flow?: boolean; delay?: number; dur?: number }) {
@@ -234,28 +180,26 @@ export function HiveStage({
   sel,
   onSelect,
   onOpenAgentSettings,
-  onAddAgent,
-  onAddMachine,
   onOpenQueenSettings,
+  queenName,
+  updatingMachineIds,
   newAgentId,
   focus,
   spotlightKey,
   tailnetLabel = "",
-  workerBeeSrc = "/icons/worker-bee-general-v5.png",
-  queenBeeSrc = "/icons/queen-bee-v2.png",
+  queenBeeSrc = beeRoleIconPath("queen"),
 }: {
   machines: HiveMachine[];
   sel: HiveSelection;
   onSelect: (s: HiveSelection) => void;
   onOpenAgentSettings?: (machineId: string, agentId: string) => void;
-  onAddAgent?: (m: HiveMachine) => void;
-  onAddMachine?: () => void;
   onOpenQueenSettings?: () => void;
+  queenName: string;
+  updatingMachineIds?: ReadonlySet<string>;
   newAgentId?: string | null;
   focus?: { active: boolean; machineIds: ReadonlySet<string>; agentIds: ReadonlySet<string> };
   spotlightKey?: string | null;
   tailnetLabel?: string;
-  workerBeeSrc?: string;
   queenBeeSrc?: string;
 }) {
   const layout = useMemo(() => frBuildLayout(machines), [machines]);
@@ -270,18 +214,28 @@ export function HiveStage({
   const activeMachineId = sel.type === "machine" ? sel.id : sel.type === "agent" ? sel.machineId : null;
   const phoneToneState: AgentState =
     phone.state === "connected" ? "working" : phone.state === "tailnet-issue" ? "setup" : "ready";
-  // The Queen cell breathes to her voice while she speaks in voice chat: the
+  const expandedMachineIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (activeMachineId) ids.add(activeMachineId);
+    if (focus?.active) focus.machineIds.forEach((machineId) => ids.add(machineId));
+    if (newAgentId) {
+      const machine = machines.find((candidate) => candidate.agents.some((agent) => agent.id === newAgentId));
+      if (machine) ids.add(machine.id);
+    }
+    return ids;
+  }, [activeMachineId, focus, machines, newAgentId]);
+  // The Queen cell responds to her voice while she speaks in voice chat: the
   // pulse hook writes `--queen-amp` (0..1) on this node every frame (imperative,
   // so HiveStage's fleet-poll re-renders never touch the 60fps path).
-  const queenCellRef = useRef<HTMLDivElement | null>(null);
+  const queenCellRef = useRef<HTMLButtonElement | null>(null);
   useQueenVoicePulse(queenCellRef);
 
   const threads = machines.map((m, i) => {
     const L = layout[m.id];
     const isOnlineMobile = onlineMobileMachineIds.has(m.id);
     const hasWorking = isOnlineMobile || m.agents.some((a) => a.state === "working");
-    const lit = focus?.active ? focus.machineIds.has(m.id) : activeMachineId === m.id || sel.type === "queen";
-    return <Thread key={"q" + m.id} a={{ x: QX, y: QY }} b={L.pos} lit={lit} flow={hasWorking} delay={i * 0.5} dur={2.8} />;
+    const lit = focus?.active ? focus.machineIds.has(m.id) : activeMachineId === m.id;
+    return <Thread key={"q" + m.id} a={{ x: QX, y: QY }} b={L.pos} lit={lit} flow={lit && hasWorking} delay={i * 0.5} dur={2.8} />;
   });
 
   return (
@@ -296,7 +250,7 @@ export function HiveStage({
           <Thread
             a={{ x: QX, y: QY }}
             b={phonePlaceholder}
-            lit={sel.type === "queen" || sel.type === "phone"}
+            lit={sel.type === "phone"}
             flow={false}
             delay={0.2}
             dur={2.3}
@@ -305,8 +259,9 @@ export function HiveStage({
       </svg>
 
       {/* agent cells */}
-      {machines.map((m) =>
-        layout[m.id].agents.map(({ agent, pos }) => {
+      {machines.flatMap((m) => {
+        if (!expandedMachineIds.has(m.id)) return [];
+        return layout[m.id].agents.map(({ agent, pos }) => {
           const selected = sel.type === "agent" && sel.id === agent.id;
           const tone = frAgentTone(agent.state, selected);
           const dim = focus?.active ? !focus.agentIds.has(agent.id) : !!activeMachineId && activeMachineId !== m.id;
@@ -316,9 +271,11 @@ export function HiveStage({
               <TooltipTrigger asChild>
                 <HiveCell
                   x={pos.x} y={pos.y} size={AGENT_SIZE} tone={tone}
-                  selected={selected} dim={dim} pulse={agent.state === "working"}
+                  selected={selected} dim={dim}
                   bounce={newAgentId === agent.id || spotlight}
                   spotlight={spotlight}
+                  aria-label={`${agent.name}, ${agent.state}`}
+                  aria-pressed={selected}
                   // First click selects the petal; clicking it again while already
                   // selected opens its settings (so a double-click on an unselected
                   // agent lands straight in its AgentSettingsModal).
@@ -331,39 +288,13 @@ export function HiveStage({
                   }}
                   z={selected ? 7 : 3}
                 >
-                  <span style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={agent.iconSrc || workerBeeSrc} alt="" width={81} height={81}
-                      style={{ transform: "translateY(-4%)", opacity: agent.state === "ready" && !selected ? 0.78 : 1, filter: "var(--fr-image-shadow)" }}
-                    />
-                  </span>
-                  <AgentEdgeName name={agent.name} selected={selected} />
+                  <AgentNodeContent agent={agent} />
                 </HiveCell>
               </TooltipTrigger>
               <TooltipContent>{agent.name}</TooltipContent>
             </Tooltip>
           );
-        }),
-      )}
-
-      {/* dashed "add agent" cell — one per machine */}
-      {machines.map((m) => {
-        const ap = layout[m.id].addPos;
-        if (!ap) return null;
-        const dim = focus?.active ? !focus.machineIds.has(m.id) : !!activeMachineId && activeMachineId !== m.id;
-        return (
-          <Tooltip key={"add-" + m.id}>
-            <TooltipTrigger asChild>
-              <AddAgentCell
-                x={ap.x} y={ap.y} size={AGENT_SIZE} dim={dim}
-                dataBee={`fleet-hive-add-${m.name}`}
-                onClick={onAddAgent ? () => onAddAgent(m) : () => onSelect({ type: "machine", id: m.id })}
-              />
-            </TooltipTrigger>
-            <TooltipContent>Add agent to {m.name}</TooltipContent>
-          </Tooltip>
-        );
+        });
       })}
 
       {/* machine cells */}
@@ -373,6 +304,8 @@ export function HiveStage({
         const isOnlineMobile = onlineMobileMachineIds.has(m.id);
         const st = isMobile ? (isOnlineMobile ? "working" : "setup") : frMachineState(m);
         const selected = sel.type === "machine" && sel.id === m.id;
+        const expanded = expandedMachineIds.has(m.id);
+        const updating = updatingMachineIds?.has(m.id) ?? false;
         const dim = focus?.active ? !focus.machineIds.has(m.id) : !!activeMachineId && activeMachineId !== m.id && sel.type !== "queen";
         const tone = frMachineTone(st, selected);
         const spotlight = spotlightKey === `machine:${m.id}`;
@@ -382,23 +315,23 @@ export function HiveStage({
               <TooltipTrigger asChild>
                 <HiveCell
                   x={L.pos.x} y={L.pos.y} size={MACHINE_SIZE} tone={tone}
-                  selected={selected} dim={dim} pulse={st === "working"}
+                  selected={selected} dim={dim}
                   bounce={spotlight}
                   spotlight={spotlight}
+                  data-primary={m.role === "Primary" ? "true" : undefined}
                   data-bee={m.id === primaryPhoneMachineId ? "fleet-hive-phone" : undefined}
-                  aria-label={isMobile ? "Open phone connection" : undefined}
-                  onClick={() => onSelect({ type: "machine", id: m.id })}
+                  aria-label={isMobile
+                    ? `Open phone connection for ${m.name}`
+                    : `${m.name}, ${m.agents.length} ${m.agents.length === 1 ? "agent" : "agents"}, ${updating ? "updating, " : ""}${expanded ? "collapse agents" : "expand agents"}`}
+                  aria-expanded={expanded}
+                  aria-pressed={selected}
+                  onClick={() => onSelect(expanded ? { type: "queen" } : { type: "machine", id: m.id })}
                   z={selected ? 8 : 5}
                 >
-                  {/* icon centred in the hex; the name hugs the lower edges using
-                      the same edge-label logic as the agent cells. */}
-                  <span style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}>
-                    <MachineKindIcon kind={m.kind} size={39} color={selected ? "var(--honey)" : m.role === "Primary" ? "var(--honey)" : "var(--fg-2)"} />
-                  </span>
-                  <AgentEdgeName name={m.name} selected={selected} />
+                  <MachineNodeContent machine={m} state={st} expanded={expanded} updating={updating} />
                 </HiveCell>
               </TooltipTrigger>
-              <TooltipContent>{m.name}</TooltipContent>
+              <TooltipContent>{updating ? `${m.name} is updating` : expanded ? `Collapse ${m.name}` : `Show ${m.agents.length} agents on ${m.name}`}</TooltipContent>
             </Tooltip>
           </Fragment>
         );
@@ -414,61 +347,48 @@ export function HiveStage({
               tone={frMachineTone(phoneToneState, sel.type === "phone")}
               selected={sel.type === "phone"}
               dim={focus?.active || (!!activeMachineId && sel.type !== "phone")}
-              pulse={false}
               data-bee="fleet-hive-phone"
               aria-label="Open phone connection"
-              role="button"
+              aria-pressed={sel.type === "phone"}
               onClick={() => onSelect({ type: "phone" })}
               z={sel.type === "phone" ? 8 : 6}
             >
-              <span style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", pointerEvents: "none" }}>
-                <MachineKindIcon kind="Mobile" size={39} color={sel.type === "phone" ? "var(--honey)" : "var(--fg-2)"} />
+              <span className="fr-machine-node-content">
+                <span className="fr-node-glyph"><MachineKindGlyph kind="Mobile" size={34} /></span>
+                <span className="fr-node-name">Phone</span>
+                <span className="fr-machine-agent-count">Connect</span>
+                <NodeStatus state={phoneToneState} />
               </span>
-              <AgentEdgeName name="Phone" selected={sel.type === "phone"} />
             </HiveCell>
           </TooltipTrigger>
           <TooltipContent>{phone.phoneStatus}</TooltipContent>
         </Tooltip>
       ) : null}
 
-      {/* dashed "add machine" cell — sits just outside the ring in the widest
-          gap between machines (sliding further out when agent petals crowd that
-          spot), so it never stacks under existing hive cells */}
-      {onAddMachine ? (() => {
-        const amp = frAddMachinePos(machines, layout);
-        return (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <AddAgentCell
-                x={amp.x} y={amp.y} size={MACHINE_SIZE}
-                label="New Machine" onClick={() => onAddMachine()}
-              />
-            </TooltipTrigger>
-            <TooltipContent>Initialize new machine</TooltipContent>
-          </Tooltip>
-        );
-      })() : null}
-
       {/* the Queen */}
       <Tooltip>
         <TooltipTrigger asChild>
-          <div
+          <button
+            type="button"
             ref={queenCellRef}
             onClick={(e) => { e.stopPropagation(); onSelect({ type: "queen" }); }}
             onDoubleClick={(e) => { e.stopPropagation(); onOpenQueenSettings?.(); }}
             className="fr-queen-cell"
             data-selected={sel.type === "queen" ? "true" : undefined}
+            aria-label={`${queenName}, Queen orchestrator`}
+            aria-pressed={sel.type === "queen"}
             style={{
               position: "absolute", left: QX, top: QY, width: 150, height: 150,
               transform: "translate(-50%, -50%)", cursor: "pointer", zIndex: 9,
+              border: 0, padding: 0, background: "transparent",
             }}
           >
             {/* inner lift layer — selection scale + hover lift live in CSS, mirroring
                 the worker/machine cells. */}
             <div className="fr-queen-lift">
-              {/* honey halo: idle breathe by default; while she speaks in voice chat
-                  it tracks her voice amplitude via --queen-amp (see fleet-hive.css
-                  and src/lib/audio/queen-voice-amplitude.ts). */}
+              {/* The honey halo stays quiet at rest. While Queen speaks in voice
+                  chat it tracks her voice amplitude via --queen-amp (see
+                  fleet-hive.css and src/lib/audio/queen-voice-amplitude.ts). */}
               <div className="fr-queen-glow" />
               {/* opaque fill — no backdrop-filter (it was clipped to the hex on WebKit
                   but drew a rectangular box around it on Chromium/WebView2; see HiveCell). */}
@@ -480,14 +400,15 @@ export function HiveStage({
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={queenBeeSrc} alt="" width={91} height={91} style={{ filter: "var(--fr-queen-image-shadow)" }} />
               </div>
-              <div style={{ position: "absolute", left: "50%", top: "calc(100% + 6px)", transform: "translateX(-50%)", textAlign: "center", pointerEvents: "none" }}>
-                <div style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 13, color: "var(--honey)" }}>Queen</div>
+              <div style={{ position: "absolute", left: "50%", top: "calc(100% + 6px)", width: "max-content", minWidth: 150, maxWidth: 220, transform: "translateX(-50%)", overflowWrap: "anywhere", textAlign: "center", pointerEvents: "none" }}>
+                <div style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 13, color: "var(--honey)" }}>{queenName}</div>
+                <div style={{ fontFamily: "var(--f-display)", fontWeight: 500, fontSize: 10.5, color: "var(--fg-2)", marginTop: 1 }}>Queen</div>
                 <div style={{ fontSize: 9.5, color: "var(--fg-4)", fontFamily: "var(--f-mono)", marginTop: 1 }}>orchestrator</div>
               </div>
             </div>
-          </div>
+          </button>
         </TooltipTrigger>
-        <TooltipContent>Queen Bee</TooltipContent>
+        <TooltipContent>{queenName} · Queen</TooltipContent>
       </Tooltip>
     </div>
   );

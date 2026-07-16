@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-07-14T18:09:27.458933+00:00",
+  "request": "lets give the queen bee the default name Solara everywhere. but allow the user to change it (i think already possible, in the queen bee agentsettingsmodal for me it says Hermes Lead and lets me edit it, though in the fleet hive view its just saying Queen so we need to display the actual name, and below it as subtitle above orchestrator, \"Queen\"",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/config/queen-bee-personality.ts",
+      "target_path": "src/lib/config/queen-bee-personality.ts",
+      "reuse_type": "adapted_code",
+      "note": "Centralized the Solara default and exact legacy-default migration in the established Queen Bee personality module."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/features/dashboard/dashboard-storage.ts",
+      "target_path": "src/features/dashboard/dashboard-storage.ts",
+      "reuse_type": "adapted_code",
+      "note": "Reused the canonical AgentProfile hydration path so legacy default Queen names migrate while explicit names remain editable."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/features/dashboard/hooks/use-agent-controller.tsx",
+      "target_path": "src/features/dashboard/hooks/use-agent-controller.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Extended the existing settings update flow to preserve intentional Queen renames, including former default strings."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/components/fleet-hive/HiveStage.tsx",
+      "target_path": "src/components/fleet-hive/HiveStage.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the existing center-cell identity stack to show the canonical profile name, Queen role, and orchestrator subtitle."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/features/dashboard/views/AgentsPanel.tsx",
+      "target_path": "src/features/dashboard/views/AgentsPanel.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Threaded the already-resolved editable Queen profile name through the established Fleet view props."
+    }
+  ]
+}

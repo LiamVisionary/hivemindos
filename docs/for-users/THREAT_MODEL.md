@@ -13,7 +13,7 @@ consistent decisions.
 HivemindOS is designed for:
 
 - one operator or trusted team on a private machine or trusted Tailnet
-- local dashboard access protected by the device token and signed session cookie
+- local dashboard access protected by user-verified native biometrics, a device passkey, or the device token, followed by a signed session cookie
 - remote collectors reachable only through Hivemind Link, Tailscale, or another
   explicitly trusted private network path
 - agents that can be useful with powerful tools, but must still respect
@@ -47,7 +47,7 @@ Capability classes should stay explicit in code, docs, and runtime prompts.
 
 | Capability | Default boundary |
 | --- | --- |
-| Dashboard viewing | Requires dashboard auth unless explicitly running inside a signed native bootstrap |
+| Dashboard viewing | Requires verified native biometrics, a device passkey, or the dashboard token unless explicitly running inside a signed native bootstrap |
 | Fleet discovery | Read-only by default; remote mutation needs an explicit action |
 | Shared brain recall | Allowed, but retrieved text is untrusted source data |
 | Shared brain writes | Durable writes must use the memory, handoff, note, or vault services with redaction and provenance |
@@ -91,6 +91,12 @@ The dashboard uses:
 - `HIVEMINDOS_DASHBOARD_AUTH_SECRET` for signed session cookies
 - `HIVEMINDOS_DASHBOARD_DEVICE_TOKEN` for local unlock and API bearer/header auth
 - `HIVEMINDOS_NATIVE_BOOTSTRAP_TOKEN` only when native mode is active
+- macOS LocalAuthentication for automatic Touch ID verification in the desktop shell
+- WebAuthn platform passkeys for optional Face ID, Touch ID, Windows Hello, or equivalent device verification
+
+The macOS desktop shell checks LocalAuthentication availability without prompting. When Touch ID is available, the biometric unlock command runs the biometric-only device-owner policy and returns the existing local dashboard token to the locked webview only after success. Cancellation, timeout, missing enrollment, unavailable hardware, or a user preference for token unlock leaves the explicit token fallback intact. The LocalAuthentication boundary does not store biometric data, and the fallback means this remains the dashboard token security boundary rather than a replacement for it.
+
+Browser passkey enrollment requires an existing authenticated dashboard session. A successful passkey assertion creates the same time-bounded signed session as token unlock; it does not replace API device-token authentication or the recovery token. HivemindOS stores only the passkey public credential and counter, while private credential material remains with the operating system or password manager. Passkeys require HTTPS or localhost and are scoped to the dashboard hostname.
 
 Routes that expose local paths, wallet state, env status, runtime control, or
 fleet mutation should use `requireAuth`. Public or unauthenticated routes must

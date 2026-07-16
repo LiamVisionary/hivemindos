@@ -6,7 +6,10 @@
 // tool and the Discuss enrichment share.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { register } from "node:module";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 register(new URL("./lib/json-esm-loader.mjs", import.meta.url));
@@ -38,6 +41,10 @@ const {
   isHivemindFastContextCommand,
   isWalletReadinessCommand,
 } = await import("../src/lib/services/queen-bee/queen-brain.ts");
+const {
+  formatBrainAccessInsightsForAgent,
+  readBrainAccessInsights,
+} = await import("../src/lib/services/obsidian/brain-access-insights.ts");
 const {
   findWorkBoardTasks,
   flattenKanbanColumns,
@@ -120,13 +127,14 @@ const {
   assert.match(queenVoiceTurn, /stableSystemAddendum/, "Queen voice direct turns should keep model transparency in the stable cacheable section");
   assert.match(queenVoiceTurn, /openAICompatibleMessageCacheControlSupported/, "Queen voice direct turns should use explicit provider cache-control when available");
   assert.match(queenVoiceTurn, /cacheScope: "queen-agent-turn-fallback"/, "Queen voice agent-turn fallback should carry OpenAI cache hints");
-  assert.match(chatStoreSource, /return runQueenVoiceTextTurn\(trimmed, queenId, history, voiceTextAudioContext,/, "typed Queen chat should use the voice-quality conversation route by default");
-  assert.match(chatStoreSource, /speak: shouldSpeakReply/, "closed text chat must not trigger spoken audio");
-  assert.match(chatStoreSource, /Falling back to typed chat/, "closed text-chat should keep the legacy typed route as a fallback");
+  assert.match(chatStoreSource, /runQueenTurn\([\s\S]{0,180}trimmed,[\s\S]{0,180}opts\?\.screenContext,[\s\S]{0,120}opts\?\.suppressWalletIntents === true,/, "typed Queen chat should use the context-preserving typed route directly");
+  assert.doesNotMatch(chatStoreSource, /runQueenVoiceTextTurn/, "typed FAB sends must never enter the voice inference route");
+  assert.doesNotMatch(chatStoreSource, /fetchBrainAccessInsight|isMostAccessedBrainNoteCommand/, "typed Brain reads must stay in the intelligent tool loop instead of using a hardcoded answer path");
+  assert.match(chatStoreSource, /speak: shouldSpeakReply/, "voice-open typed replies should still be spoken after the typed turn completes");
   assert.doesNotMatch(chatStoreSource, /hivemindLatestBriefQuery|messagesForModel\(\)/, "shared typed Queen chat should not expose raw hive-context scaffolding to Codex");
   assert.doesNotMatch(source, /provider !== "openai-oauth" && provider !== "openai-codex"/, "typed Queen chat must not skip OpenAI Codex to the built-in fallback");
   assert.match(chatStoreSource, /suppressWalletIntents\?: boolean/, "Queen chat sendText should expose an advice-only wallet-intent suppression option");
-  assert.match(chatStoreSource, /runQueenTurn\(trimmed, queenId, opts\?\.screenContext, opts\?\.suppressWalletIntents === true\)/, "legacy typed fallback should pass the suppression flag to the text-chat route");
+  assert.match(chatStoreSource, /runQueenTurn\([\s\S]{0,180}trimmed,[\s\S]{0,180}opts\?\.screenContext,[\s\S]{0,120}opts\?\.suppressWalletIntents === true,/, "typed sends should pass screen context and the suppression flag to the text-chat route");
   assert.match(chatStoreSource, /action: "agent-turn"[\s\S]{0,160}suppressWalletIntents/, "Queen tool relays should keep advice-only turns out of wallet rails");
   assert.match(agentRuntimeRoute, /suppressWalletIntents = body\.suppressWalletIntents === true/, "agent runtime should parse the wallet-intent suppression flag");
   assert.match(agentRuntimeRoute, /if \(!suppressWalletIntents\) \{[\s\S]{0,500}dispatchWalletAndTradeIntents/, "agent runtime should skip deterministic wallet rails when suppression is active");
@@ -139,9 +147,9 @@ const {
 {
   const source = readFileSync(new URL("../src/features/queen-voice/queen-chat-store.tsx", import.meta.url), "utf8");
   const route = readFileSync(new URL("../src/app/api/queen-bee/chat/route.ts", import.meta.url), "utf8");
-  assert.equal(QUEEN_TEXT_CHAT_API_PATH, "/api/queen-bee/chat", "legacy typed fallback should keep the text-chat route");
-  assert.equal(source.match(/fetch\(QUEEN_TEXT_CHAT_API_PATH,/g)?.length, 2, "legacy typed fallback fetches should still go through the text-chat route constant");
-  assert.match(source, /Falling back to typed chat[\s\S]*runQueenTurn/, "closed text-chat should fall back to the legacy route if the voice-quality lane fails");
+  assert.equal(QUEEN_TEXT_CHAT_API_PATH, "/api/queen-bee/chat", "typed sends should keep the dedicated text-chat route");
+  assert.equal(source.match(/fetch\(QUEEN_TEXT_CHAT_API_PATH,/g)?.length, 2, "typed turn streaming and blocking fallback should share the text-chat route");
+  assert.doesNotMatch(source, /fetch\(QUEEN_VOICE_CHAT_API_PATH/, "typed FAB sends should never fetch the voice converse route");
   assert.match(route, /runQueenChatTurnStream/, "Queen text-chat route should serve the streaming typed chat action");
   assert.match(route, /runQueenChatTurn/, "Queen text-chat route should serve the blocking typed chat action");
 }
@@ -150,14 +158,13 @@ const {
 {
   const source = readFileSync(new URL("../src/features/queen-voice/queen-chat-store.tsx", import.meta.url), "utf8");
   const overlay = readFileSync(new URL("../src/features/queen-voice/QueenBeeVoiceOverlay.tsx", import.meta.url), "utf8");
-  assert.equal(QUEEN_VOICE_CHAT_API_PATH, "/api/queen-bee/voice", "shared Queen text should use the voice conversation route");
+  assert.equal(QUEEN_VOICE_CHAT_API_PATH, "/api/queen-bee/voice", "spoken and TTS actions retain the voice route");
   assert.equal(queenChatRouteForSend(false), "text", "closed voice chat keeps audio muted");
   assert.equal(queenChatRouteForSend(true), "voice", "open voice chat enables spoken replies");
   assert.match(source, /queenChatRouteForSend\(voiceChatActiveRef\.current\)/, "sendText should still use the active voice-chat flag to decide audio behavior");
-  assert.match(source, /source: "voice"/, "closed text chat should also render as the voice-quality conversation lane before fallback");
-  assert.match(source, /fetch\(QUEEN_VOICE_CHAT_API_PATH,[\s\S]{0,520}action: "converse-stream"/, "shared text sends should hit the voice converse-stream action");
+  assert.match(source, /source: "text"/, "typed turns should remain visibly attributed to the typed lane");
   assert.match(source, /shouldSpeakReply \? ensureVoiceTextAudioContext\(\) : null/, "only voice-open text sends should prime an audio context on the send gesture");
-  assert.match(source, /playSpokenReply\(text, abort\.signal, audioContext, false\)/, "voice-active text replies should be spoken through the shared playback ladder");
+  assert.match(source, /playSpokenReply\([\s\S]{0,120}text,[\s\S]{0,80}abort\.signal,[\s\S]{0,80}audioContext,[\s\S]{0,40}true,?/, "voice-active typed replies should be spoken through the selected playback ladder");
   assert.match(overlay, /setVoiceChatActive\(open\)/, "the overlay should publish its open state to the shared chat store");
   assert.deepEqual(
     queenVoiceHistoryBeforeTurn([
@@ -460,8 +467,8 @@ const {
   const pipelineNames = queenPipelineChatTools().map((tool) => tool.function.name);
   assert.deepEqual(
     pipelineNames.sort(),
-    ["read_x_account", "use_hive_capability"],
-    "pipeline Queen exposes the direct X optimization plus one provider-agnostic execution bridge",
+    ["read_hivemind_context", "read_x_account", "use_hive_capability"],
+    "pipeline Queen exposes direct read-only brain context before the generic execution bridge",
   );
 }
 
@@ -491,8 +498,22 @@ const {
     new URL("../src/lib/services/queen-bee/voice-turn.ts", import.meta.url),
     "utf8",
   );
+  const voiceBrainReadsSource = readFileSync(
+    new URL("../src/lib/services/queen-bee/voice-brain-reads.ts", import.meta.url),
+    "utf8",
+  );
+  const voiceBrainContextSource = readFileSync(
+    new URL("../src/lib/services/queen-bee/voice-brain-context.ts", import.meta.url),
+    "utf8",
+  );
   assert.match(pipelineSource, /queenPipelineChatTools/, "pipeline voice advertises the shared generic tool subset");
   assert.match(pipelineSource, /runXAccountReadTool/, "pipeline voice executes the same X tool server-side");
+  assert.match(pipelineSource, /isHivemindFastContextCommand/, "pipeline voice intercepts read-only brain questions before generic runtime execution");
+  assert.match(pipelineSource, /readQueenVoiceBrainContext/, "pipeline voice resolves read-only brain questions from local context");
+  assert.doesNotMatch(pipelineSource, /readDirectVoiceBrainAnswer/, "spoken Brain questions must reach the configured model before tool evidence is read");
+  assert.doesNotMatch(voiceBrainReadsSource, /isMostAccessedBrainNoteCommand|readBrainAccessInsights/, "the voice helper must not hardcode access-history answers before inference");
+  assert.match(voiceBrainReadsSource, /includeAccessHistory:\s*true/, "the model-invoked voice Brain tool should request access-history evidence");
+  assert.match(voiceBrainContextSource, /includeAccessHistory\?:\s*boolean/, "voice Brain context should make access-history evidence opt-in");
   assert.match(pipelineSource, /runQueenBeeAgentTurn/, "pipeline voice executes generic capabilities through the full agent runtime");
   assert.match(pipelineSource, /latencyMode: "capability"/, "generic execution enables full capability preflight instead of the voice fast path");
   assert.match(pipelineSource, /runBuiltInQueenCapabilityTurn/, "generic execution retains a tool-capable built-in fallback when configured runtimes fail");
@@ -559,6 +580,7 @@ const {
 // ── app/brain questions use direct fast context, not full runtime delegation ─
 {
   const fastContext = [
+    "what’s my most accessed note?",
     "what does the shared brain know about Hermes?",
     "which app capabilities do we have for image generation?",
     "show me HivemindOS dashboard routes for wallets",
@@ -674,6 +696,67 @@ const {
   // Must not collide with the affirmative path that authorizes task creation.
   for (const m of ["yes", "ok", "sure", "queue it"]) {
     assert.equal(isTrivialConversationalTurn(m), false, `"${m}" is an affirmative, not a greeting`);
+  }
+}
+
+// ── local Brain access evidence stays inside the intelligent tool loop ────
+{
+  const chatStoreSource = readFileSync(new URL("../src/features/queen-voice/queen-chat-store.tsx", import.meta.url), "utf8");
+  const fastContextSource = readFileSync(new URL("../src/features/queen-voice/queen-fast-context.ts", import.meta.url), "utf8");
+  const brainSource = readFileSync(new URL("../src/lib/services/queen-bee/queen-brain.ts", import.meta.url), "utf8");
+  const routeSource = readFileSync(new URL("../src/app/api/brain/access-insights/route.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(chatStoreSource, /fetchBrainAccessInsight|isMostAccessedBrainNoteCommand/, "the typed client must not synthesize Brain answers outside the model loop");
+  assert.match(fastContextSource, /Promise\.allSettled\([\s\S]{0,1800}\/api\/brain\/access-insights/, "read_hivemind_context should gather neutral access-history evidence alongside other Brain sources");
+  assert.match(brainSource, /own local (?:HivemindOS )?Brain[\s\S]{0,240}(?:never|do not) (?:ask|require)[^\n]{0,80}(?:permission|authorization)/i, "Queen must know the user's explicit local Brain read is already authorized");
+  assert.match(routeSource, /readBrainAccessInsights/, "the access-insights API should read the local Brain log directly");
+  assert.match(routeSource, /context:\s*formatBrainAccessInsightsForAgent/, "the access API should return neutral tool context for the model");
+  assert.doesNotMatch(routeSource, /answer:/, "the access API must not manufacture Queen's final answer");
+  assert.match(routeSource, /okJson/, "the access-insights API should use the canonical success envelope");
+  const vaultPath = await mkdtemp(join(tmpdir(), "hivemindos-brain-access-"));
+  try {
+    await mkdir(join(vaultPath, "Operations", "Brain Services"), { recursive: true });
+    await mkdir(join(vaultPath, "Projects"), { recursive: true });
+    await writeFile(join(vaultPath, "Projects", "Alpha.md"), "# Alpha\n", "utf8");
+    await writeFile(join(vaultPath, "Projects", "Beta.md"), "# Beta\n", "utf8");
+    const events = [
+      ...Array.from({ length: 4 }, (_, index) => ({ notePath: "Deleted/Stale.md", accessedAt: `2026-07-15T10:00:0${index}.000Z` })),
+      ...Array.from({ length: 3 }, (_, index) => ({ notePath: "Projects/Alpha.md", accessedAt: `2026-07-15T11:00:0${index}.000Z` })),
+      ...Array.from({ length: 3 }, (_, index) => ({ notePath: "Projects/Beta.md", accessedAt: `2026-07-15T12:00:0${index}.000Z` })),
+    ].map((event, index) => ({
+      id: `event-${index}`,
+      notePath: event.notePath,
+      agentName: "Test",
+      machineName: "test",
+      dashboardMachine: "test",
+      accessedAt: event.accessedAt,
+      action: "read",
+    }));
+    await writeFile(
+      join(vaultPath, "Operations", "Brain Services", "access-log.jsonl"),
+      `${events.map((event) => JSON.stringify(event)).join("\n")}\n`,
+      "utf8",
+    );
+
+    const insights = await readBrainAccessInsights({ vaultPath });
+    assert.equal(insights.totalAccesses, 10);
+    assert.deepEqual(
+      insights.rankedExisting.map((item) => [item.notePath, item.accessCount]),
+      [["Projects/Beta.md", 3], ["Projects/Alpha.md", 3]],
+      "ties should be stable and ordered by most recent access",
+    );
+    assert.deepEqual(
+      [insights.topRecorded?.notePath, insights.topRecorded?.accessCount, insights.topRecorded?.exists],
+      ["Deleted/Stale.md", 4, false],
+      "the raw leader should remain visible even when its note was deleted",
+    );
+    const context = formatBrainAccessInsightsForAgent(insights);
+    assert.match(context, /Brain note access history/i);
+    assert.match(context, /Projects\/Beta\.md[^\n]*3 recorded accesses/);
+    assert.match(context, /Projects\/Alpha\.md[^\n]*3 recorded accesses/);
+    assert.match(context, /Deleted\/Stale\.md[^\n]*exists: no/);
+    assert.doesNotMatch(context, /Your most-accessed/, "tool evidence must not impersonate Queen's final answer");
+  } finally {
+    await rm(vaultPath, { recursive: true, force: true });
   }
 }
 

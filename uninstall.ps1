@@ -403,6 +403,42 @@ if (Ask-YesNo "Remove dashboard auth secret and device token from .env.local and
   }
 }
 
+if (Ask-YesNo "Remove registered dashboard passkeys from ~/.hivemindos/dashboard-passkeys.json?" $false) {
+  $dashboardPasskeyStore = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".hivemindos\dashboard-passkeys.json"
+  Remove-Item $dashboardPasskeyStore -Force -ErrorAction SilentlyContinue
+  Ok "Removed registered dashboard passkeys"
+}
+
+if (Ask-YesNo "Delete Beeline local credentials from the operating-system credential store and remove their local metadata?" $false) {
+  $beelineCandidates = @(
+    (Join-Path $env:LOCALAPPDATA "HivemindOS\HivemindOS.exe"),
+    (Join-Path $env:ProgramFiles "HivemindOS\HivemindOS.exe"),
+    (Join-Path $Root "src-tauri\target\release\HivemindOS.exe"),
+    (Join-Path $Root "src-tauri\target\debug\HivemindOS.exe")
+  )
+  $beelineBroker = $beelineCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+  if (-not $beelineBroker) {
+    $installedCommand = Get-Command "HivemindOS.exe" -ErrorAction SilentlyContinue
+    if ($installedCommand) { $beelineBroker = $installedCommand.Source }
+  }
+  if ($beelineBroker) {
+    try {
+      $brokerResponse = '{"action":"delete-all"}' | & $beelineBroker --beeline-credential-broker 2>$null | Out-String | ConvertFrom-Json
+      if (-not $brokerResponse.ok) { throw "Native broker rejected credential deletion." }
+      $beelineRoot = Join-Path $UserHome ".hivemindos\beeline"
+      Remove-Item (Join-Path $beelineRoot "local-credentials.json") -Force -ErrorAction SilentlyContinue
+      Remove-Item (Join-Path $beelineRoot "local-credentials.lock") -Force -ErrorAction SilentlyContinue
+      Remove-Item (Join-Path $beelineRoot "local-credential-audit.jsonl") -Force -ErrorAction SilentlyContinue
+      Remove-Item (Join-Path $beelineRoot "browser-use-locks") -Recurse -Force -ErrorAction SilentlyContinue
+      Ok "Deleted Beeline local credentials and secret-free local metadata"
+    } catch {
+      Warn "The native broker could not delete Beeline credentials; metadata was preserved so the credential-store entries are not orphaned"
+    }
+  } else {
+    Warn "No HivemindOS native executable was found; open the desktop app and delete Beeline credentials before uninstalling"
+  }
+}
+
 if (Ask-YesNo "Remove optional GBrain service note from the Obsidian vault?" $false) {
   $gbrainServiceNote = Join-Path $vaultPath (Join-Path $brainServicesFolder "GBrain.md")
   Remove-Item $gbrainServiceNote -Force -ErrorAction SilentlyContinue
@@ -571,9 +607,9 @@ if (Ask-YesNo "Remove the HivemindOS MCP server from agent harness configs (Clau
   & node (Join-Path $Root "scripts\register-mcp-clients.mjs") --remove --targets all
 }
 
-if (Ask-YesNo "Remove hive env, transfer, handoff, Hivemind MCP, update, brain, workspace, Hive Pulse, capability search, and dashboard auth commands from ~/.local/bin if they point to this checkout?" $true) {
+if (Ask-YesNo "Remove hive env, transfer, handoff, Hivemind MCP, update, brain, workspace, Hive Pulse, quant research, capability search, and dashboard auth commands from ~/.local/bin if they point to this checkout?" $true) {
   $binDir = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".local\bin"
-  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-handoff", "hivemind-mcp", "hive-update", "hive-brain", "hive-brain-hook", "hive-workspace", "hive-workspace-switch", "hive-workspace-add", "hive-pulse", "hive-capability-search", "dashboard-auth")) {
+  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-handoff", "hivemind-mcp", "hive-update", "hive-brain", "hive-brain-hook", "hive-workspace", "hive-workspace-switch", "hive-workspace-add", "hive-pulse", "hive-quant-research", "hive-capability-search", "dashboard-auth")) {
     $shimPath = Join-Path $binDir "$commandName.cmd"
     if (Test-Path $shimPath) {
       $content = Get-Content $shimPath -Raw

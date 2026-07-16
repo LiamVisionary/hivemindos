@@ -32,6 +32,7 @@ const CRYPTO_PROVIDER_META: Record<string, { label: string; icon?: string; text?
   veil: { label: "Veil", icon: "/icons/runtimes/veil.svg" },
   x402: { label: "x402", text: "x402" },
   nansen: { label: "Nansen", text: "Nansen" },
+  "quant-research": { label: "Local Rust + Python", text: "Local" },
 };
 
 export function ProviderBadge({ provider, label }: { provider?: string; label?: string }) {

@@ -2,9 +2,9 @@
 
 /* queen-chat-store.tsx — the single shared Queen conversation.
    Both the typed "Message the hive" pill and the voice overlay read/write this
-   one turn history, so text and voice are one continuous chat. Shared typed
-   messages start with the Queen voice conversation lane for the same concise
-   answer style; the legacy text-chat route remains a closed-composer fallback.
+   one turn history, so text and voice are one continuous chat. Typed messages
+   always use the context-preserving typed tool loop; when the voice overlay is
+   open, the completed typed reply is also spoken through the selected voice.
    Bee Pilot is used only when Queen explicitly calls the drive_dashboard tool
    or when no chat brain is reachable for a simple dashboard navigation fallback. */
 
@@ -37,16 +37,8 @@ import {
 } from "./queen-fast-context";
 import {
   QUEEN_TEXT_CHAT_API_PATH,
-  QUEEN_VOICE_CHAT_API_PATH,
   queenChatRouteForSend,
-  queenVoiceHistoryBeforeTurn,
-  type QueenVoiceHistoryTurn,
 } from "./queen-chat-routing";
-import {
-  createNdjsonEventReader,
-  voiceRouteFailureMessage,
-  type ConverseStreamEvent,
-} from "./converse-stream";
 import { dispatchQueenSlashCommand } from "./queen-slash-commands";
 import { playSpokenReply } from "./spoken-reply-playback";
 
@@ -112,7 +104,7 @@ type QueenChatContextValue = {
   upsertTurn: (turn: QueenChatTurn) => void;
   removeTurn: (id: string) => void;
   clear: () => void;
-  /** Shared typed entry point: append the user turn, run the voice-quality Queen lane, fill the reply. */
+  /** Shared typed entry point: append the user turn, preserve screen context, and fill the reply. */
   sendText: (text: string, opts?: QueenChatSendOptions) => Promise<void>;
 };
 
@@ -441,6 +433,24 @@ export function QueenChatProvider({
     }
   }, []);
 
+  const speakTypedReply = React.useCallback(async (
+    reply: string,
+    audioContext: AudioContext | null,
+  ) => {
+    const text = reply.trim();
+    if (!text) return;
+    const abort = new AbortController();
+    const outcome = await playSpokenReply(
+      text,
+      abort.signal,
+      audioContext,
+      true,
+    ).catch(() => "none" as const);
+    if (outcome === "none" || outcome === "muted") {
+      console.warn(`[queen-chat] typed reply could not be spoken (${outcome}); shown as text only.`);
+    }
+  }, []);
+
   // One agentic turn: the SAME brain as voice. The Queen chats, or calls tools;
   // we run the tools client-side and loop until she gives a final reply. Falls
   // back to the heuristic Bee Pilot planner when no tool-capable model exists.
@@ -449,10 +459,14 @@ export function QueenChatProvider({
     queenId: string,
     screenContext?: DashboardScreenContext,
     suppressWalletIntents = false,
+    options: { speak?: boolean; audioContext?: AudioContext | null } = {},
   ) => {
     const messages = messagesRef.current;
     if (messages.length > 24) messages.splice(0, messages.length - 24);
     messages.push({ role: "user", content: trimmed });
+    const finishReply = async (reply: string) => {
+      if (options.speak) await speakTypedReply(reply, options.audioContext ?? null);
+    };
 
     // A bare greeting / chit-chat ("hi", "thanks", "how are you") needs no
     // tools. Scout ignores that instruction and fires read_work_board on a
@@ -465,8 +479,9 @@ export function QueenChatProvider({
     const heuristicFallback = async (serverError?: string) => {
       const run = runRef.current;
       if (!run) {
-        updateTurn(queenId, { text: "The Queen isn't reachable right now.", live: false, pending: false });
-        return;
+        const reply = "The Queen isn't reachable right now.";
+        updateTurn(queenId, { text: reply, live: false, pending: false });
+        return finishReply(reply);
       }
       const reply = (await run(trimmed, { screenContext }))?.trim() || "Done.";
       updateTurn(queenId, {
@@ -483,6 +498,7 @@ export function QueenChatProvider({
         },
       });
       messages.push({ role: "assistant", content: reply });
+      return finishReply(reply);
     };
 
     // Human-readable status shown in the live turn while a tool runs — the
@@ -618,8 +634,7 @@ export function QueenChatProvider({
         const forceAnswer = i === 3 || answerNextRound || (i === 0 && trivialTurn);
         const data = (await streamOneTurn(forceAnswer).catch(() => null)) ?? (await blockingTurn(forceAnswer));
         if (!data || data.fallback || data.ok === false) {
-          await heuristicFallback(data && typeof data.error === "string" ? data.error : undefined);
-          return;
+          return heuristicFallback(data && typeof data.error === "string" ? data.error : undefined);
         }
         const toolCalls = Array.isArray(data.toolCalls) ? data.toolCalls : [];
         if (toolCalls.length) {
@@ -682,7 +697,7 @@ export function QueenChatProvider({
                 ...asBrainFallback(data.brainFallback),
               });
               messages.push({ role: "assistant", content: reply });
-              return;
+              return finishReply(reply);
             }
           }
           continue; // loop back so she can read the tool results
@@ -707,117 +722,21 @@ export function QueenChatProvider({
         // The conversation log keeps the model's OWN final words (not the
         // accumulated display text) so the next turn's history stays faithful.
         messages.push({ role: "assistant", content: data.content?.trim() || "Done." });
-        return;
+        return finishReply(reply);
       }
       // Iteration cap reached — stop the spinner but never leave a blank
       // bubble: keep everything shown so far, or an honest minimal reply.
-      updateTurn(queenId, { text: shownText || "Done.", live: false, pending: false, working: undefined });
+      const reply = shownText || "Done.";
+      updateTurn(queenId, { text: reply, live: false, pending: false, working: undefined });
+      return finishReply(reply);
     } catch {
-      await heuristicFallback().catch(() => {
-        updateTurn(queenId, { text: "I couldn't reach the Queen just now.", live: false, pending: false });
+      return heuristicFallback().catch(() => {
+        const reply = "I couldn't reach the Queen just now.";
+        updateTurn(queenId, { text: reply, live: false, pending: false });
+        return finishReply(reply);
       });
     }
-  }, [updateTurn, executeQueenTool]);
-
-  const runQueenVoiceTextTurn = React.useCallback(async (
-    trimmed: string,
-    queenId: string,
-    history: QueenVoiceHistoryTurn[],
-    audioContext: AudioContext | null,
-    options: { speak?: boolean } = {},
-  ) => {
-    const speakReply = async (reply: string) => {
-      const text = reply.trim();
-      if (!text) return;
-      const abort = new AbortController();
-      // Same playback ladder as spoken voice turns: streamed pipeline TTS
-      // first — that is the ONLY path that carries the selected cloud/local
-      // pipeline voice (the buffered `speak` action refuses to substitute for
-      // either, by the voice-continuity rule), and it 409-falls-back to the
-      // buffered path for realtime-era configs. Passing `false` here was why
-      // typed replies went silent while the voice overlay was open.
-      const outcome = await playSpokenReply(text, abort.signal, audioContext, true)
-        .catch(() => "none" as const);
-      if (outcome === "none" || outcome === "muted") {
-        console.warn(`[queen-chat] typed reply could not be spoken (${outcome}); shown as text only.`);
-      }
-    };
-    const turnId = `text-voice-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-    const response = await fetch(QUEEN_VOICE_CHAT_API_PATH, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        action: "converse-stream",
-        transcript: trimmed,
-        turnId,
-        history,
-      }),
-      cache: "no-store",
-      signal: AbortSignal.timeout(75_000),
-    });
-    const contentType = response.headers.get("content-type") || "";
-    if (!response.ok || !response.body || !contentType.includes("ndjson")) {
-      const data = (await response.json().catch(() => null)) as {
-        ok?: boolean;
-        reply?: string;
-        error?: string;
-      } | null;
-      if (!response.ok || !data?.ok || !data.reply) {
-        throw new Error(data?.error || `Queen Bee voice route returned HTTP ${response.status}.`);
-      }
-      updateTurn(queenId, {
-        text: data.reply,
-        live: false,
-        pending: false,
-        working: undefined,
-      });
-      if (options.speak !== false) await speakReply(data.reply);
-      return;
-    }
-
-    const stream = createNdjsonEventReader<ConverseStreamEvent>(response.body);
-    let liveSpeech = "";
-    let finalReply = "";
-    let error = "";
-    const handleEvent = (event: ConverseStreamEvent) => {
-      if (event.type === "speech" && event.text) {
-        liveSpeech += event.text;
-        updateTurn(queenId, {
-          text: liveSpeech.trim(),
-          live: true,
-          pending: false,
-          working: undefined,
-        });
-        return;
-      }
-      if (event.type === "reset") {
-        liveSpeech = "";
-        updateTurn(queenId, { text: "", live: true, pending: true, working: undefined });
-        return;
-      }
-      if (event.type === "done") {
-        finalReply = event.ok && event.reply ? event.reply : liveSpeech.trim();
-        return;
-      }
-      if (event.type === "error") {
-        error = event.error || "Queen Bee voice route failed.";
-      }
-    };
-    while (await stream.pump()) {
-      for (const event of stream.take()) handleEvent(event);
-    }
-    for (const event of stream.take()) handleEvent(event);
-    if (error) throw new Error(error);
-    const reply = finalReply || liveSpeech.trim();
-    if (!reply) throw new Error("Queen Bee voice route returned no reply.");
-    updateTurn(queenId, {
-      text: reply,
-      live: false,
-      pending: false,
-      working: undefined,
-    });
-    if (options.speak !== false) await speakReply(reply);
-  }, [updateTurn]);
+  }, [updateTurn, executeQueenTool, speakTypedReply]);
 
   const sendText = React.useCallback(
     async (text: string, opts?: QueenChatSendOptions) => {
@@ -840,38 +759,27 @@ export function QueenChatProvider({
       const audioRoute = queenChatRouteForSend(voiceChatActiveRef.current);
       const shouldSpeakReply = audioRoute === "voice";
       const voiceTextAudioContext = shouldSpeakReply ? ensureVoiceTextAudioContext() : null;
-      const userId = appendTurn({ who: "you", text: trimmed, source: "text" });
+      appendTurn({ who: "you", text: trimmed, source: "text" });
       const queenId = appendTurn({
         who: "queen",
         text: "",
         live: true,
         pending: true,
-        source: "voice",
+        source: "text",
       });
       // Chain so overlapping sends don't interleave the OpenAI message log.
       const task = sendChainRef.current
         .catch(() => {})
-        .then(() => {
-          const history = queenVoiceHistoryBeforeTurn(turnsRef.current, userId);
-          return runQueenVoiceTextTurn(trimmed, queenId, history, voiceTextAudioContext, {
-            speak: shouldSpeakReply,
-          }).catch((error) => {
-            if (shouldSpeakReply) throw error;
-            updateTurn(queenId, {
-              text: "",
-              live: true,
-              pending: true,
-              working: "Falling back to typed chat…",
-              source: "text",
-            });
-            return runQueenTurn(trimmed, queenId, opts?.screenContext, opts?.suppressWalletIntents === true);
-          });
-        })
-        .catch((error) => {
+        .then(() => runQueenTurn(
+          trimmed,
+          queenId,
+          opts?.screenContext,
+          opts?.suppressWalletIntents === true,
+          { speak: shouldSpeakReply, audioContext: voiceTextAudioContext },
+        ))
+        .catch(() => {
           updateTurn(queenId, {
-            text: shouldSpeakReply
-              ? voiceRouteFailureMessage(error)
-              : "I couldn't reach the Queen just now.",
+            text: "I couldn't reach the Queen just now.",
             live: false,
             pending: false,
             working: undefined,
@@ -880,7 +788,7 @@ export function QueenChatProvider({
       sendChainRef.current = task;
       return task;
     },
-    [appendTurn, clear, ensureVoiceTextAudioContext, runQueenTurn, runQueenVoiceTextTurn, updateTurn],
+    [appendTurn, clear, ensureVoiceTextAudioContext, runQueenTurn, updateTurn],
   );
 
   const activeAgentTurn = React.useMemo(() => {

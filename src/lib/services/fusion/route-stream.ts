@@ -6,6 +6,10 @@ import { proxyOutput, redactSecretText } from "@/lib/services/agent-security-pro
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import { runFusion } from "./orchestrator";
 import type { FusionEvent, FusionMessage } from "./types";
+import {
+  appendRuntimeChatSessionText,
+  finishRuntimeChatSession,
+} from "@/lib/services/chat/runtime-session-store";
 
 export function isFusionProfile(profile: Pick<AgentProfile, "provider">): boolean {
   return profile.provider?.trim().toLowerCase() === "hive-fusion";
@@ -75,6 +79,7 @@ export function streamFusionResponse({ profile, messages, runtimeSessionId, requ
       // reaches the user is run through the output proxy (secret redaction +
       // output-policy block). Once blocked, stop forwarding model content.
       let blocked = false;
+      let safeOutput = "";
 
       if (runtimeSessionId) {
         send({ type: "chat.session", session: { id: runtimeSessionId, runtime: "hive-fusion", source: "hivemindos-chat" } });
@@ -119,6 +124,7 @@ export function streamFusionResponse({ profile, messages, runtimeSessionId, requ
               send({ type: "chat.error", error: outputCheck.reason ?? "Response blocked by security policy" });
               break;
             }
+            safeOutput += outputCheck.text;
             send({ choices: [{ delta: { content: outputCheck.text } }] });
             break;
           }
@@ -158,6 +164,10 @@ export function streamFusionResponse({ profile, messages, runtimeSessionId, requ
         telemetry("chat.fusion.error", { error: message, elapsedMs: Date.now() - startedAt });
         send({ type: "chat.error", error: message });
       } finally {
+        if (safeOutput) {
+          await appendRuntimeChatSessionText(runtimeSessionId, "assistant", safeOutput).catch(() => undefined);
+        }
+        await finishRuntimeChatSession(runtimeSessionId, fatal ? "failed" : "completed").catch(() => undefined);
         if (!fatal) controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         controller.close();
       }

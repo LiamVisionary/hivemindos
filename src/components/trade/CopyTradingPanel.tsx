@@ -13,6 +13,8 @@ import { flushSync } from "react-dom";
 import { Badge, BBtn } from "./primitives";
 import { BIcon } from "./icons";
 import { useVisibilityAwarePolling } from "@/features/dashboard/hooks/use-visibility-aware-polling";
+import { paperPortfolioSummary, type PaperPortfolioSummary } from "@/lib/services/copy-trading/paper";
+import { compareCopyTradeEvolution, type CopyTradeEvolutionComparison } from "@/lib/services/copy-trading/evolution";
 import styles from "./CopyTradingPanel.module.css";
 import { ManagedBankrCopyTradingPanel } from "./ManagedBankrCopyTradingPanel";
 import {
@@ -24,7 +26,6 @@ import {
   type CopyTradeEngineStatus,
   type CopyTradeFundable,
   type CopyTradeNetwork,
-  type CopyTradePaperLedger,
   type CopyTradeRuntimeState,
   type CopyTradingConfig,
 } from "@/lib/types/copy-trading";
@@ -191,7 +192,7 @@ export function CopyTradingPanel(props: Props) {
     await refresh();
   };
 
-  const act = async (action: "start" | "stop" | "delete", id: string) => {
+  const act = async (action: "start" | "stop" | "delete" | "evolve", id: string) => {
     setBusy(`${action}:${id}`);
     const res = await api({ action, id });
     setBusy(null);
@@ -214,6 +215,7 @@ export function CopyTradingPanel(props: Props) {
   };
 
   const configs = snap?.configs ?? [];
+  const evolvedSourceIds = new Set(configs.flatMap((config) => config.evolution ? [config.evolution.sourceConfigId] : []));
   const mine = configs.filter((c) => c.agentId === agentId && c.network === network);
   const others = configs.filter((c) => !(c.agentId === agentId && c.network === network));
   const daemonReady = Boolean(snap && (snap.online || daemonService?.installed));
@@ -276,6 +278,7 @@ export function CopyTradingPanel(props: Props) {
             <ConfigList
               list={mine}
               states={snap?.states ?? {}}
+              evolvedSourceIds={evolvedSourceIds}
               fundable={snap?.fundable ?? {}}
               online={snap?.online ?? false}
               busy={busy}
@@ -303,6 +306,7 @@ export function CopyTradingPanel(props: Props) {
           <ConfigList
             list={others}
             states={snap?.states ?? {}}
+            evolvedSourceIds={evolvedSourceIds}
             fundable={snap?.fundable ?? {}}
             online={snap?.online ?? false}
             busy={busy}
@@ -382,11 +386,12 @@ function DaemonSetupGate(props: { installing: boolean }) {
 function ConfigList(props: {
   list: CopyTradingConfig[];
   states: Record<string, CopyTradeRuntimeState>;
+  evolvedSourceIds: Set<string>;
   fundable: Record<string, CopyTradeFundable>;
   online: boolean;
   busy: string | null;
   onEdit?: (c: CopyTradingConfig) => void;
-  onAct: (action: "start" | "stop" | "delete", id: string) => void;
+  onAct: (action: "start" | "stop" | "delete" | "evolve", id: string) => void;
   editView?: { configId: string; content: React.ReactNode };
   returningConfigId?: string | null;
   foreign?: boolean;
@@ -406,6 +411,8 @@ function ConfigList(props: {
             key={c.id}
             config={c}
             state={props.states[c.id]}
+            sourceState={c.evolution ? props.states[c.evolution.sourceConfigId] : undefined}
+            hasEvolved={props.evolvedSourceIds.has(c.id)}
             fundable={props.fundable[`${c.walletAddress}:${c.network}`] ?? null}
             online={props.online}
             busy={props.busy}
@@ -423,11 +430,13 @@ function ConfigList(props: {
 function ConfigCard(props: {
   config: CopyTradingConfig;
   state?: CopyTradeRuntimeState;
+  sourceState?: CopyTradeRuntimeState;
+  hasEvolved: boolean;
   fundable?: CopyTradeFundable | null;
   online: boolean;
   busy: string | null;
   onEdit?: (c: CopyTradingConfig) => void;
-  onAct: (action: "start" | "stop" | "delete", id: string) => void;
+  onAct: (action: "start" | "stop" | "delete" | "evolve", id: string) => void;
   foreign?: boolean;
   returning?: boolean;
 }) {
@@ -445,7 +454,8 @@ function ConfigCard(props: {
   const summary = state ? summarizeState(state) : null;
   const paper = config.dryRun ? state?.paper : undefined;
   const openCount = Object.keys((config.dryRun ? state?.paper?.positions : state?.openPositions) ?? {}).length;
-  const totalPnl = paper ? paperTotalPnl(paper) : 0;
+  const paperSummary = paper ? paperPortfolioSummary(paper) : null;
+  const evolutionComparison = config.evolution ? compareCopyTradeEvolution(state, props.sourceState) : null;
 
   return (
     <div
@@ -459,12 +469,13 @@ function ConfigCard(props: {
           <span>{shortAddr(config.targetAddress)} · {copyTradeNetworkLabel(config.network)} · max ${config.maxCopyUsd}/trade</span>
         </span>
         <span className={`${styles.pill} ${pill.cls}`}>{pill.text}</span>
+        {config.evolution ? <span className={`${styles.pill} ${styles.pillEvolved}`}>Agent analyzed</span> : null}
         {state?.lastError && config.enabled ? <span className={`${styles.pill} ${styles.pillErr}`}>err</span> : null}
       </div>
 
-      {props.fundable ? (
-        <div className={styles.meta} title="What the copy-trader can spend from this wallet to mirror the copied trader's buys">
-          <span>fundable <b>{fmtUsd(props.fundable.totalUsd)}</b></span>
+      {props.fundable && !config.dryRun ? (
+        <div className={styles.meta} title="What the copy-trader can spend from this wallet to mirror copied buys">
+          <span>Available to trade <b>{fmtUsd(props.fundable.totalUsd)}</b></span>
           {props.fundable.assets.map((asset) => (
             <span key={asset.symbol}>{asset.symbol} <b>{fmtUsd(asset.usd)}</b></span>
           ))}
@@ -474,13 +485,7 @@ function ConfigCard(props: {
 
       {state ? (
         config.dryRun ? (
-          <div className={styles.meta} title="Simulated paper-trading portfolio — no real funds are spent in dry-run">
-            <span>signals <b>{summary?.signalCount ?? 0}</b></span>
-            <span>sim fills <b>{paper?.mirrored ?? 0}</b></span>
-            <span>sim cash <b>{fmtUsd(paper?.cashUsd ?? 0)}</b></span>
-            <span>P&amp;L <b className={totalPnl < 0 ? styles.metricDanger : undefined}>{fmtSignedUsd(totalPnl)}</b></span>
-            <span>open <b>{openCount}</b></span>
-          </div>
+          <PaperPortfolioOverview summary={paperSummary} simulatedTrades={paper?.mirrored ?? 0} openCount={openCount} comparison={evolutionComparison} />
         ) : (
           <div className={styles.meta}>
             <span>signals <b>{summary?.signalCount ?? 0}</b></span>
@@ -509,7 +514,7 @@ function ConfigCard(props: {
         </div>
       ) : null}
 
-      {expanded ? <ConfigPerformance id={detailsId} config={config} state={state} online={online} /> : null}
+      {expanded ? <ConfigPerformance id={detailsId} config={config} state={state} sourceState={props.sourceState} online={online} fundable={props.fundable} /> : null}
 
       <div className={styles.actions}>
         {config.enabled ? (
@@ -518,6 +523,9 @@ function ConfigCard(props: {
           <BBtn variant="primary" sm disabled={props.busy != null} onClick={() => props.onAct("start", config.id)}>Start</BBtn>
         )}
         {props.onEdit ? <BBtn variant="ghost" sm disabled={props.busy != null} onClick={() => props.onEdit!(config)}>Edit</BBtn> : null}
+        {!config.evolution && !props.hasEvolved ? (
+          <BBtn variant="ghost" sm disabled={props.busy != null} onClick={() => props.onAct("evolve", config.id)}>Create agent-analyzed copy</BBtn>
+        ) : null}
         <BBtn variant="ghost" sm aria-expanded={expanded} aria-controls={detailsId} onClick={() => setExpanded((open) => !open)}>
           <span className={styles.chev} data-open={expanded ? "true" : undefined}><BIcon name="chevron" size={12} /></span>
           {expanded ? "Hide data" : "Show data"}
@@ -529,13 +537,109 @@ function ConfigCard(props: {
   );
 }
 
-function ConfigPerformance(props: { id: string; config: CopyTradingConfig; state?: CopyTradeRuntimeState; online: boolean }) {
+function PaperPortfolioOverview(props: {
+  summary: PaperPortfolioSummary | null;
+  simulatedTrades: number;
+  openCount: number;
+  comparison: CopyTradeEvolutionComparison | null;
+}) {
+  const { summary, comparison } = props;
+  const waitingForFirstAgentReview = comparison != null && comparison.reviews === 0;
+  return (
+    <section className={styles.paperSummary} aria-label="Simulated copy-trading portfolio">
+      <div className={styles.paperNotice}>
+        <span>Simulation</span>
+        <b>No real money used</b>
+      </div>
+      {summary ? (
+        <>
+          <div className={styles.paperHero}>
+            <span>
+              <b>{fmtUsd(summary.equityUsd)}</b>
+              <small>{waitingForFirstAgentReview ? "Inherited portfolio baseline" : "Portfolio value"}</small>
+            </span>
+            <span>
+              <b className={metricClass(summary.totalPnlUsd)}>{fmtSignedUsd(summary.totalPnlUsd)}</b>
+              <small>
+                {waitingForFirstAgentReview
+                  ? <>Inherited profit · {fmtSignedPercent(summary.returnPct)}</>
+                  : <>Profit · {fmtSignedPercent(summary.returnPct)}</>}
+              </small>
+            </span>
+          </div>
+          <div className={styles.paperBreakdown}>
+            <span>Started <b>{fmtUsd(summary.startCashUsd)}</b></span>
+            <span>Cash <b>{fmtUsd(summary.cashUsd)}</b></span>
+            <span>Positions <b>{fmtUsd(summary.positionValueUsd)}</b></span>
+            <span>Execution costs <b>{fmtUsd(summary.executionCostsUsd)}</b></span>
+            <span>Open positions <b>{fmtInt(props.openCount)}</b></span>
+          </div>
+          <div className={styles.paperActivity}>
+            {fmtInt(props.simulatedTrades)} {waitingForFirstAgentReview ? "simulated trades inherited from original" : "simulated trades"}
+          </div>
+          {comparison ? <EvolutionComparison comparison={comparison} /> : null}
+          {waitingForFirstAgentReview ? (
+            <div className={styles.agentWaiting} role="status">
+              <span className={styles.agentWaitingDot} />
+              <span className={styles.agentWaitingCopy}>
+                <b>Agent waiting for next new buy</b>
+                <small>No new copied buy has arrived since this twin started. The portfolio above was inherited from the original simulation.</small>
+              </span>
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <p className={styles.paperWaiting}>Waiting for the first simulated portfolio update.</p>
+      )}
+    </section>
+  );
+}
+
+function EvolutionComparison(props: { comparison: CopyTradeEvolutionComparison }) {
+  const { comparison } = props;
+  const promotion = comparison.promotion;
+  const promotionLabel = promotion.status === "eligible"
+    ? "Eligible for promotion"
+    : promotion.status === "rejected"
+      ? "Not eligible yet"
+      : "Learning evidence";
+  const ci = promotion.edgeCi95Pct;
+  return (
+    <div className={styles.evolutionSummary}>
+      {comparison.status === "ready" ? (
+        <div className={styles.evolutionReturns}>
+          <span>Original <b>{fmtSignedPercent(comparison.sourceReturnPct ?? 0)}</b></span>
+          <span>Agent analyzed <b>{fmtSignedPercent(comparison.evolvedReturnPct ?? 0)}</b></span>
+          <span>Current edge <b className={metricClass(comparison.returnDeltaPct ?? 0)}>{fmtSignedPoints(comparison.returnDeltaPct ?? 0)}</b></span>
+        </div>
+      ) : null}
+      <div className={styles.evolutionReturns}>
+        <span>{promotionLabel} <b>{fmtInt(promotion.maturedSamples)}/{fmtInt(promotion.requiredSamples)}</b></span>
+        <span>95% edge <b>{ci[0] == null || ci[1] == null ? "waiting" : `${fmtSignedPoints(ci[0])} to ${fmtSignedPoints(ci[1])}`}</b></span>
+        <span>Drawdown <b>{promotion.evolvedMaxDrawdownPct == null ? "waiting" : `${promotion.evolvedMaxDrawdownPct.toFixed(1)}% agent · ${(promotion.sourceMaxDrawdownPct ?? 0).toFixed(1)}% original`}</b></span>
+      </div>
+      <small>{fmtInt(comparison.reviews)} reviewed · {fmtInt(comparison.closed)} closed · {fmtInt(comparison.kept)} kept · {fmtInt(comparison.errors)} errors · frozen {fmtInt(promotion.requiredHoldoutSamples)}-trade validation batches</small>
+    </div>
+  );
+}
+
+function ConfigPerformance(props: {
+  id: string;
+  config: CopyTradingConfig;
+  state?: CopyTradeRuntimeState;
+  sourceState?: CopyTradeRuntimeState;
+  online: boolean;
+  fundable?: CopyTradeFundable | null;
+}) {
   const { config, state, online } = props;
   const waiting = config.enabled && online && !state;
   const summary = state ? summarizeState(state) : null;
   const paper = config.dryRun ? state?.paper : undefined;
+  const paperSummary = paper ? paperPortfolioSummary(paper) : null;
   const openPositions = Object.values((config.dryRun ? state?.paper?.positions : state?.openPositions) ?? {});
   const events = (state?.events ?? []).slice(-8).reverse();
+  const reviews = (state?.agentAnalysis?.reviews ?? []).slice(-8).reverse();
+  const comparison = config.evolution ? compareCopyTradeEvolution(state, props.sourceState) : null;
   const loopStatus = !config.enabled ? "Stopped" : !online ? "Offline" : state?.running ? "Running" : "Waiting";
   const lastEvent = summary?.lastEventAt ? fmtAgo(summary.lastEventAt) : "none";
 
@@ -555,20 +659,19 @@ function ConfigPerformance(props: { id: string; config: CopyTradingConfig; state
             {state.lastError ? <span className={`${styles.healthItem} ${styles.healthErr}`}>Last error <b>{state.lastError}</b></span> : null}
           </div>
 
-          {paper ? (
+          {paper && paperSummary ? (
             <div className={styles.detailStats}>
               <DetailMetric label="Polls" value={fmtInt(state.stats.polls)} />
               <DetailMetric label="Signals" value={fmtInt(summary?.signalCount ?? 0)} />
-              <DetailMetric label="Sim fills" value={fmtInt(paper.mirrored)} />
+              <DetailMetric label="Simulated trades" value={fmtInt(paper.mirrored)} />
               <DetailMetric label="Skipped" value={fmtInt(state.stats.skipped)} />
               <DetailMetric label="Errors" value={fmtInt(state.stats.errors)} danger={state.stats.errors > 0} />
               <DetailMetric label="Open" value={fmtInt(openPositions.length)} />
-              <DetailMetric label="Sim cash" value={fmtUsd(paper.cashUsd)} />
-              <DetailMetric label="Start" value={fmtUsd(paper.startCashUsd)} />
-              <DetailMetric label="Equity" value={fmtUsd(paperEquity(paper))} />
-              <DetailMetric label="Realized" value={fmtSignedUsd(paper.realizedPnlUsd)} danger={paper.realizedPnlUsd < 0} />
-              <DetailMetric label="Unrealized" value={fmtSignedUsd(paperUnrealizedPnl(paper))} danger={paperUnrealizedPnl(paper) < 0} />
-              <DetailMetric label="Total P&L" value={fmtSignedUsd(paperTotalPnl(paper))} danger={paperTotalPnl(paper) < 0} />
+              <DetailMetric label="Position cost" value={fmtUsd(paperSummary.positionCostUsd)} />
+              <DetailMetric label="Execution costs" value={fmtUsd(paperSummary.executionCostsUsd)} />
+              <DetailMetric label="Realized profit" value={fmtSignedUsd(paperSummary.realizedPnlUsd)} danger={paperSummary.realizedPnlUsd < 0} />
+              <DetailMetric label="Unrealized profit" value={fmtSignedUsd(paperSummary.unrealizedPnlUsd)} danger={paperSummary.unrealizedPnlUsd < 0} />
+              <DetailMetric label="Total return" value={fmtSignedPercent(paperSummary.returnPct)} danger={paperSummary.returnPct < 0} />
             </div>
           ) : (
             <div className={styles.detailStats}>
@@ -582,6 +685,57 @@ function ConfigPerformance(props: { id: string; config: CopyTradingConfig; state
               <DetailMetric label="Logged USD" value={fmtUsd(summary?.loggedUsd ?? 0)} />
             </div>
           )}
+
+          {paper && props.fundable ? (
+            <div className={styles.detailBlock}>
+              <div className={styles.detailTitle}>Live wallet · not used in this simulation</div>
+              <div className={styles.liveWalletSummary}>
+                <span>Available to trade <b>{fmtUsd(props.fundable.totalUsd)}</b></span>
+                {props.fundable.assets.map((asset) => (
+                  <span key={asset.symbol}>{asset.symbol} <b>{fmtUsd(asset.usd)}</b></span>
+                ))}
+                {props.fundable.assets.length === 0 ? <span>No spendable balance</span> : null}
+              </div>
+            </div>
+          ) : null}
+
+          {comparison ? (
+            <div className={styles.detailBlock}>
+              <div className={styles.detailTitle}>Original vs agent-analyzed</div>
+              <EvolutionComparison comparison={comparison} />
+            </div>
+          ) : null}
+
+          {config.evolution ? (
+            <div className={styles.detailBlock}>
+              <div className={styles.detailTitle}>GPT-5.6 Sol reviews</div>
+              {reviews.length ? (
+                <div className={styles.reviews}>
+                  {reviews.map((review) => (
+                    <div key={`${review.targetTxRef}:${review.reviewedAt}`} className={styles.review}>
+                      <span className={`${styles.kind} ${review.error ? styles.kindErr : review.closeExecuted ? styles.kindSell : styles.kindBuy}`}>
+                        {review.error ? "error" : review.closeExecuted ? "closed" : review.decision}
+                      </span>
+                      <span className={styles.reviewBody}>
+                        <b>{review.symbol} · {fmtSignedPercent((review.calibratedConfidence ?? review.confidence) * 100).replace("+", "")} calibrated confidence</b>
+                        <span>{review.summary}</span>
+                        <small>Raw {fmtSignedPercent((review.rawConfidence ?? review.confidence) * 100).replace("+", "")} · close threshold {fmtSignedPercent((review.closeThreshold ?? config.evolution!.minCloseConfidence) * 100).replace("+", "")} · {review.reviewPath === "risk-close" ? "fast safety gate" : "Sol adjudication"}</small>
+                        {review.sources.length ? (
+                          <small>
+                            Sources: {review.sources.map((source, index) => (
+                              <React.Fragment key={source.url}>
+                                {index ? " · " : ""}<a href={source.url} target="_blank" rel="noreferrer">{source.title}</a>
+                              </React.Fragment>
+                            ))}
+                          </small>
+                        ) : <small>{review.error ? "Position kept because analysis failed." : "No web source returned."}</small>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className={styles.detailMuted}>Waiting for the first copied buy to review.</p>}
+            </div>
+          ) : null}
 
           <div className={styles.detailBlock}>
             <div className={styles.detailTitle}>{config.dryRun ? "Simulated positions" : "Open positions"}</div>
@@ -798,27 +952,25 @@ function summarizeState(state: CopyTradeRuntimeState) {
   return { signalCount, dryRunActionCount, loggedUsd, lastEventAt: last?.at ?? null };
 }
 
-/** Marked value of open paper positions (cost basis until first revalue). */
-function paperOpenValue(paper: CopyTradePaperLedger): number {
-  return Object.values(paper.positions ?? {}).reduce((sum, p) => sum + (p.markUsd ?? p.spentUsd), 0);
-}
-
-function paperEquity(paper: CopyTradePaperLedger): number {
-  return paper.cashUsd + paperOpenValue(paper);
-}
-
-function paperUnrealizedPnl(paper: CopyTradePaperLedger): number {
-  return Object.values(paper.positions ?? {}).reduce((sum, p) => sum + ((p.markUsd ?? p.spentUsd) - p.spentUsd), 0);
-}
-
-/** Total P&L = equity − starting bankroll = realized + unrealized. */
-function paperTotalPnl(paper: CopyTradePaperLedger): number {
-  return paperEquity(paper) - paper.startCashUsd;
-}
-
 function fmtSignedUsd(value: number): string {
   if (!Number.isFinite(value)) return "$0.00";
   return `${value < 0 ? "−" : "+"}${fmtUsd(Math.abs(value))}`;
+}
+
+function fmtSignedPercent(value: number): string {
+  if (!Number.isFinite(value)) return "0.0%";
+  return `${value < 0 ? "−" : "+"}${Math.abs(value).toLocaleString(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1 })}%`;
+}
+
+function fmtSignedPoints(value: number): string {
+  if (!Number.isFinite(value)) return "0.0 pts";
+  return `${value < 0 ? "−" : "+"}${Math.abs(value).toLocaleString(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1 })} pts`;
+}
+
+function metricClass(value: number): string | undefined {
+  if (value < 0) return styles.metricDanger;
+  if (value > 0) return styles.metricPositive;
+  return undefined;
 }
 
 function eventLabel(kind: CopyTradeEvent["kind"]): string {
@@ -853,10 +1005,8 @@ function fmtInt(value: number): string {
 }
 
 function fmtUsd(value: number): string {
-  if (!Number.isFinite(value)) return "$0";
-  const abs = Math.abs(value);
-  const digits = abs > 0 && abs < 100 ? 2 : 0;
-  return `$${value.toLocaleString(undefined, { maximumFractionDigits: digits, minimumFractionDigits: digits })}`;
+  if (!Number.isFinite(value)) return "$0.00";
+  return `$${value.toLocaleString(undefined, { maximumFractionDigits: 2, minimumFractionDigits: 2 })}`;
 }
 
 function fmtAmount(value: number): string {

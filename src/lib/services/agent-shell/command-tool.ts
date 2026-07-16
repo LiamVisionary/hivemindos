@@ -16,6 +16,7 @@
 
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { resolveHyperframesRuntimeCommand } from "@/lib/services/hyperframes-runtime";
 import { chatPermissionModeAllowsUnlistedCommands, normalizeChatPermissionMode } from "@/lib/types/chat-permissions";
 import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 
@@ -61,12 +62,32 @@ export const AGENT_SHELL_COMMANDS = [
   "nc",
   "evo",
   "uv",
+  "hive-quant-research",
 ] as const;
 
 const ALLOWED = new Set<string>(AGENT_SHELL_COMMANDS);
+const MANAGED_COMMANDS = new Set(["hyperframes"]);
+const HYPERFRAMES_LOCAL_SUBCOMMANDS = new Set([
+  "benchmark",
+  "capture",
+  "compositions",
+  "doctor",
+  "docs",
+  "info",
+  "inspect",
+  "layout",
+  "lint",
+  "remove-background",
+  "render",
+  "snapshot",
+  "transcribe",
+  "validate",
+]);
 
 export function isAllowlistedCommand(command: unknown): command is string {
-  return typeof command === "string" && /^[a-zA-Z0-9._-]+$/.test(command) && ALLOWED.has(command);
+  return typeof command === "string"
+    && /^[a-zA-Z0-9._-]+$/.test(command)
+    && (ALLOWED.has(command) || MANAGED_COMMANDS.has(command));
 }
 
 export function isExecutableCommandToken(command: unknown): command is string {
@@ -126,7 +147,7 @@ export async function runAgentCommand(input: {
       ok: false,
       command,
       args,
-      error: `Command "${command || "(empty)"}" is not allowlisted. Allowed executables: ${AGENT_SHELL_COMMANDS.join(", ")}.${bypassHint}`,
+      error: `Command "${command || "(empty)"}" is not allowlisted. Allowed executables: ${[...AGENT_SHELL_COMMANDS, ...MANAGED_COMMANDS].join(", ")}.${bypassHint}`,
       blockedByPolicy: true,
       permissionMode,
       elapsedMs: Date.now() - startedAt,
@@ -134,11 +155,33 @@ export async function runAgentCommand(input: {
   }
   const timeout = Math.max(500, Math.min(MAX_TIMEOUT_MS, Math.round(input.timeoutMs ?? DEFAULT_TIMEOUT_MS)));
   try {
-    const { stdout, stderr } = await execFileAsync(command, args, {
+    let executable = command;
+    let executionArgs = args;
+    let executionEnvironment: NodeJS.ProcessEnv | undefined;
+    if (command === "hyperframes") {
+      const subcommand = args[0]?.toLowerCase() ?? "";
+      if (!HYPERFRAMES_LOCAL_SUBCOMMANDS.has(subcommand)) {
+        return {
+          ok: false,
+          command,
+          args,
+          error: `Managed HyperFrames only permits reviewed local commands: ${[...HYPERFRAMES_LOCAL_SUBCOMMANDS].join(", ")}. Install, update, registry, publish, cloud, telemetry, and login commands stay blocked.`,
+          blockedByPolicy: true,
+          permissionMode,
+          elapsedMs: Date.now() - startedAt,
+        };
+      }
+      const managedRuntime = await resolveHyperframesRuntimeCommand();
+      executable = managedRuntime.executable;
+      executionArgs = [...managedRuntime.argsPrefix, ...args];
+      executionEnvironment = managedRuntime.env;
+    }
+    const { stdout, stderr } = await execFileAsync(executable, executionArgs, {
       timeout,
       maxBuffer: 2_000_000,
       cwd: input.cwd?.trim() || undefined,
       signal: input.signal,
+      env: executionEnvironment,
     });
     return {
       ok: true,
@@ -177,7 +220,7 @@ export function runCommandToolDefinition() {
       description:
         "Run a real command on this HivemindOS machine and read its output. Use this to ACTUALLY perform a local action instead of describing or claiming it. " +
         'Examples: open an app → command "open", args ["-a", "Notes"]; run AppleScript → command "osascript", args ["-e", "tell application \\"Notes\\" to activate"]; check a repo → command "git", args ["status"]; search files → command "rg", args ["-il", "Bankr", "/path/to/dir"]; inspect files → command "ls", args ["-la", "/path/to/dir"]; check a TCP port → command "nc", args ["-vz", "127.0.0.1", "11414"]. ' +
-        `Only these executables run without extra permission: ${AGENT_SHELL_COMMANDS.join(", ")}. Anything else asks the user for command permission unless the chat is in Bypass permissions mode. ` +
+        `Only these executables run without extra permission: ${[...AGENT_SHELL_COMMANDS, ...MANAGED_COMMANDS].join(", ")}. The managed hyperframes command resolves only to HivemindOS's pinned local renderer and blocks install, update, registry, publish, cloud, telemetry, and login operations. Anything else asks the user for command permission unless the chat is in Bypass permissions mode. ` +
         "There is NO shell: pipes (|), redirection, globs, and quoting are not interpreted; do not pass shell fragments like 2>/dev/null, and do not smuggle a shell line through python3/node as one argument. Pass the executable plus plain args only; output is truncated automatically, so you never need | head. " +
         "Never tell the user an action succeeded unless this tool returned ok:true.",
       parameters: {
@@ -185,7 +228,7 @@ export function runCommandToolDefinition() {
         properties: {
           command: {
             type: "string",
-            description: `The executable to run. One of: ${AGENT_SHELL_COMMANDS.join(", ")}.`,
+            description: `The executable to run. One of: ${[...AGENT_SHELL_COMMANDS, ...MANAGED_COMMANDS].join(", ")}.`,
           },
           args: {
             type: "array",

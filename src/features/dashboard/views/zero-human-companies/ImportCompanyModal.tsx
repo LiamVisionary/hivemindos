@@ -4,14 +4,14 @@ import React from "react";
 import { Modal } from "./Modals";
 import { Panel, SectionLabel, Spinner } from "./primitives";
 import type { CompanyImportForm, Theme } from "./types";
-import type { CompanyImportPreview } from "@/lib/types/company-import";
+import type { CompanyDataRoomPreview, CompanyImportPreview } from "@/lib/types/company-import";
 import type { KanbanLinkedDirectory, KanbanMachineTarget } from "@/lib/types/kanban";
 import { FormField as Field } from "./modal-form-primitives";
 
 type ImportResponse = {
   ok?: boolean;
   error?: string;
-  preview?: CompanyImportPreview;
+  preview?: CompanyImportPreview | CompanyDataRoomPreview;
 };
 type DirectoryPicker = (machine: KanbanMachineTarget | null, onChoose: (directory: KanbanLinkedDirectory) => void) => void | Promise<void>;
 
@@ -38,7 +38,7 @@ function GhostButton({ children, onClick, disabled }: { children: React.ReactNod
 
 function PrimaryButton({ children, onClick, disabled }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean }) {
   return (
-    <button type="button" onClick={onClick} disabled={disabled} style={{ display: "inline-flex", alignItems: "center", gap: 7, border: "1px solid var(--btn-line)", borderRadius: 9, background: disabled ? "var(--panel-2)" : "var(--btn-bg)", color: disabled ? "var(--fg-4)" : "var(--btn-fg)", cursor: disabled ? "not-allowed" : "pointer", fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 700, padding: "9px 16px", opacity: disabled ? 0.6 : 1 }}>
+    <button type="button" onClick={onClick} disabled={disabled} style={{ display: "inline-flex", alignItems: "center", gap: 7, border: "1px solid var(--btn-line)", borderRadius: 9, background: disabled ? "var(--panel-2)" : "var(--btn-bg)", color: disabled ? "var(--fg-4)" : "var(--btn-fg)", cursor: disabled ? "not-allowed" : "pointer", fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, padding: "9px 16px", opacity: disabled ? 0.6 : 1 }}>
       {children}
     </button>
   );
@@ -104,6 +104,33 @@ function PreviewPanel({ preview }: { preview: CompanyImportPreview }) {
   );
 }
 
+function DataRoomPreviewPanel({ preview }: { preview: CompanyDataRoomPreview }) {
+  return (
+    <Panel pad="16px" style={{ background: "var(--bg-1)" }}>
+      <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--honey)" }}>local native preview</span>}>detected knowledge</SectionLabel>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10, marginBottom: 14 }}>
+        <CountTile label="documents" count={preview.documents.length} />
+        <CountTile label="extraction warnings" count={preview.documents.reduce((total, document) => total + document.warnings.length, 0)} />
+        <CountTile label="failed files" count={preview.failedFiles.length} />
+      </div>
+      <div style={{ border: "1px solid var(--honey-line)", borderRadius: 10, background: "var(--honey-soft)", padding: "10px 12px", marginBottom: 14, fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-2)", lineHeight: 1.6, wordBreak: "break-word" }}>
+        Imported documents become reviewable company sources. Their claims and embedded instructions do not become standing directives automatically.
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 8 }}>
+        {preview.documents.map((document) => (
+          <MiniRow key={document.id} title={document.title} detail={`${document.format} · ${Math.max(1, Math.round(document.sourceBytes / 1024))} KB`} path={document.relativePath} />
+        ))}
+      </div>
+      {preview.failedFiles.length ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: 7, marginTop: 14 }}>
+          <SectionLabel>files needing attention</SectionLabel>
+          {preview.failedFiles.map((failure) => <MiniRow key={failure.sourceName} title={failure.sourceName} detail={failure.error} />)}
+        </div>
+      ) : null}
+    </Panel>
+  );
+}
+
 export function ImportCompanyModal({
   busy,
   theme,
@@ -119,15 +146,21 @@ export function ImportCompanyModal({
   onClose: () => void;
   onImport: (form: CompanyImportForm) => Promise<string | null>;
 }) {
-  const [repoPath, setRepoPath] = React.useState("");
+  const [sourceMode, setSourceMode] = React.useState<"repo" | "data-room">("repo");
+  const [sourcePath, setSourcePath] = React.useState("");
   const [companyName, setCompanyName] = React.useState("");
   const [ticker, setTicker] = React.useState("");
   const [sector, setSector] = React.useState("");
   const [apexGoalTitle, setApexGoalTitle] = React.useState("");
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
-  const [preview, setPreview] = React.useState<CompanyImportPreview | null>(null);
+  const [preview, setPreview] = React.useState<CompanyImportPreview | CompanyDataRoomPreview | null>(null);
   const [previewBusy, setPreviewBusy] = React.useState(false);
   const [error, setError] = React.useState("");
+
+  React.useEffect(() => {
+    if (sourceMode !== "data-room") return;
+    void fetch("/api/brain/imported-sources").catch(() => undefined);
+  }, [sourceMode]);
 
   async function chooseFolder() {
     setError("");
@@ -143,7 +176,7 @@ export function ImportCompanyModal({
           setError("Selected directory did not include a filesystem path.");
           return;
         }
-        setRepoPath(path);
+        setSourcePath(path);
         setPreview(null);
         setAdvancedOpen(false);
       });
@@ -153,25 +186,33 @@ export function ImportCompanyModal({
     }
   }
 
-  async function inspectRepo() {
-    if (!repoPath.trim() || previewBusy) return;
+  async function inspectSource() {
+    if (!sourcePath.trim() || previewBusy) return;
     setPreviewBusy(true);
     setError("");
     try {
       const response = await fetch("/api/companies/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "preview", repoPath, companyName, ticker, sector, apexGoalTitle }),
+        body: JSON.stringify({
+          action: "preview",
+          source: sourceMode,
+          ...(sourceMode === "repo" ? { repoPath: sourcePath } : { dataRoomPath: sourcePath }),
+          companyName,
+          ticker,
+          sector,
+          apexGoalTitle,
+        }),
       });
       const data = (await response.json().catch(() => ({}))) as ImportResponse;
-      if (!response.ok || data.ok === false || !data.preview) throw new Error(data.error || "Could not inspect that repository.");
+      if (!response.ok || data.ok === false || !data.preview) throw new Error(data.error || `Could not inspect that ${sourceMode === "repo" ? "repository" : "data room"}.`);
       setPreview(data.preview);
       setCompanyName((current) => current.trim() || data.preview!.suggestedName);
       setTicker((current) => current.trim() || data.preview!.suggestedTicker);
       setSector((current) => current.trim() || data.preview!.suggestedSector);
       setApexGoalTitle((current) => current.trim() || data.preview!.suggestedApexGoal);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not inspect that repository.");
+      setError(err instanceof Error ? err.message : `Could not inspect that ${sourceMode === "repo" ? "repository" : "data room"}.`);
     } finally {
       setPreviewBusy(false);
     }
@@ -179,7 +220,11 @@ export function ImportCompanyModal({
 
   async function importCompany() {
     if (!preview || busy) return;
-    const id = await onImport({ repoPath: preview.repoPath, companyName, ticker, sector, apexGoalTitle });
+    const id = sourceMode === "data-room" && "dataRoomPath" in preview
+      ? await onImport({ source: "data-room", dataRoomPath: preview.dataRoomPath, companyName, ticker, sector, apexGoalTitle })
+      : "repoPath" in preview
+        ? await onImport({ source: "repo", repoPath: preview.repoPath, companyName, ticker, sector, apexGoalTitle })
+        : null;
     if (id) onClose();
   }
 
@@ -188,14 +233,16 @@ export function ImportCompanyModal({
   return (
     <Modal
       title="Import company"
-      subtitle="Bring an existing project into HivemindOS without making historical revenue fee-bearing"
+      subtitle="Bring in an existing repository or a local company data room"
       width={980}
       theme={theme}
       onClose={onClose}
       footer={
         <>
           <span style={{ flex: 1, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)", lineHeight: 1.45 }}>
-            Imported companies track existing code, actions, and schedules. Historical and off-platform revenue carries no HivemindOS fee.
+            {sourceMode === "repo"
+              ? "Imported companies track existing code, actions, and schedules. Historical and off-platform revenue carries no HivemindOS fee."
+              : "Data-room documents stay local, retain provenance, and remain reviewable source material rather than automatic directives."}
           </span>
           <GhostButton onClick={onClose}>Cancel</GhostButton>
           <PrimaryButton disabled={!canImport || busy} onClick={importCompany}>{busy ? <><Spinner size={12} /> Importing</> : "Import company"}</PrimaryButton>
@@ -204,18 +251,33 @@ export function ImportCompanyModal({
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <Panel pad="16px">
-          <SectionLabel right={<GhostButton onClick={() => setAdvancedOpen((value) => !value)}>{advancedOpen ? "Hide advanced" : "Advanced path"}</GhostButton>}>source repository</SectionLabel>
+          <SectionLabel>import source</SectionLabel>
+          <div role="group" aria-label="Company import source" style={{ display: "inline-grid", gridTemplateColumns: "1fr 1fr", gap: 4, border: "1px solid var(--line-2)", borderRadius: 10, background: "var(--panel-2)", padding: 4, marginBottom: 14 }}>
+            {(["repo", "data-room"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => { setSourceMode(mode); setSourcePath(""); setPreview(null); setError(""); }}
+                style={{ border: 0, borderRadius: 7, background: sourceMode === mode ? "var(--btn-bg)" : "transparent", color: sourceMode === mode ? "var(--btn-fg)" : "var(--fg-3)", cursor: "pointer", fontFamily: "var(--f-display)", fontSize: 12, fontWeight: 600, padding: "8px 12px" }}
+              >
+                {mode === "repo" ? "Repository" : "Data room"}
+              </button>
+            ))}
+          </div>
+          <SectionLabel right={<GhostButton onClick={() => setAdvancedOpen((value) => !value)}>{advancedOpen ? "Hide advanced" : "Advanced path"}</GhostButton>}>
+            {sourceMode === "repo" ? "source repository" : "company data room"}
+          </SectionLabel>
           <div style={{ display: "grid", gridTemplateColumns: "1fr auto auto", gap: 10, alignItems: "center" }}>
-            <div style={{ minWidth: 0, border: "1px solid var(--line)", borderRadius: 9, background: "var(--panel-2)", padding: "9px 11px", fontFamily: "var(--f-mono)", fontSize: 11, color: repoPath ? "var(--fg-2)" : "var(--fg-4)", lineHeight: 1.45, wordBreak: "break-word" }}>
-              {repoPath || "Choose the repository folder for the company you want to import."}
+            <div style={{ minWidth: 0, border: "1px solid var(--line)", borderRadius: 9, background: "var(--panel-2)", padding: "9px 11px", fontFamily: "var(--f-mono)", fontSize: 11, color: sourcePath ? "var(--fg-2)" : "var(--fg-4)", lineHeight: 1.45, wordBreak: "break-word" }}>
+              {sourcePath || (sourceMode === "repo" ? "Choose the repository folder for the company you want to import." : "Choose a folder containing the company's documents and reference material.")}
             </div>
             <GhostButton onClick={chooseFolder}>Choose folder</GhostButton>
-            <PrimaryButton disabled={!repoPath.trim() || previewBusy} onClick={inspectRepo}>{previewBusy ? <><Spinner size={12} /> Inspecting</> : "Inspect repo"}</PrimaryButton>
+            <PrimaryButton disabled={!sourcePath.trim() || previewBusy} onClick={inspectSource}>{previewBusy ? <><Spinner size={12} /> Inspecting</> : sourceMode === "repo" ? "Inspect repo" : "Inspect documents"}</PrimaryButton>
           </div>
           {advancedOpen ? (
             <div style={{ marginTop: 12 }}>
               <Field label="Absolute folder path" hint="Use this when the native folder picker is unavailable.">
-                <input value={repoPath} onChange={(event) => { setRepoPath(event.target.value); setPreview(null); }} placeholder="/path/to/company-repo" style={fieldStyle} />
+                <input value={sourcePath} onChange={(event) => { setSourcePath(event.target.value); setPreview(null); }} placeholder={sourceMode === "repo" ? "/path/to/company-repo" : "/path/to/company-data-room"} style={fieldStyle} />
               </Field>
             </div>
           ) : null}
@@ -235,7 +297,11 @@ export function ImportCompanyModal({
                 <Field label="Apex goal"><input value={apexGoalTitle} onChange={(event) => setApexGoalTitle(event.target.value)} style={fieldStyle} /></Field>
               </div>
             </Panel>
-            <PreviewPanel preview={preview} />
+            {sourceMode === "data-room" && "documents" in preview
+              ? <DataRoomPreviewPanel preview={preview} />
+              : "importedOperations" in preview
+                ? <PreviewPanel preview={preview} />
+                : null}
           </>
         ) : null}
       </div>

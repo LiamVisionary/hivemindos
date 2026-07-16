@@ -24,6 +24,7 @@ import {
   type BrainReviewStatus,
 } from "@/lib/types/brain-review";
 import type { ScopePolicy } from "@/lib/types/principal";
+import type { KanbanTask } from "@/lib/types/kanban";
 
 const BRAIN_REVIEW_QUEUE_FILE = join(homedir(), ".hivemindos", "brain-review-queue.json");
 const MAX_TITLE_LENGTH = 160;
@@ -44,7 +45,7 @@ export type BrainReviewApplyPreview = {
   kind: BrainReviewKind;
   status: BrainReviewStatus;
   canAutoApply: boolean;
-  action: "remember" | "evolve" | "manual";
+  action: "remember" | "evolve" | "launch-autoresearch" | "manual";
   reason: string;
   targetPath?: string;
   supersedesMemoryId?: string;
@@ -52,6 +53,7 @@ export type BrainReviewApplyPreview = {
 
 export type BrainReviewApplyInput = {
   vaultPath?: unknown;
+  kanbanFolder?: unknown;
   type?: unknown;
   memoryType?: unknown;
   confidence?: unknown;
@@ -83,6 +85,7 @@ export type BrainReviewApplyInput = {
 
 type NormalizedBrainReviewApplyInput = {
   vaultPath?: string;
+  kanbanFolder?: string;
   type?: string;
   confidence?: number;
   cognitiveStage?: string;
@@ -123,6 +126,7 @@ export type BrainReviewApplyResult = {
   proposal: BrainReviewProposal;
   file: BrainReviewQueueFile;
   memory?: BrainReviewMemoryApplyResult;
+  task?: KanbanTask;
 };
 
 function emptyQueue(): BrainReviewQueueFile {
@@ -251,6 +255,35 @@ export async function applyBrainReviewProposal(
       };
     }
 
+    if (preview.action === "launch-autoresearch") {
+      const { launchSkillAutoresearchTask } = await import("@/lib/services/skills/skill-autoresearch-task");
+      const launched = await launchSkillAutoresearchTask(proposal, {
+        vaultPath: memoryInput.vaultPath,
+        kanbanFolder: memoryInput.kanbanFolder,
+      });
+      const now = new Date().toISOString();
+      const updated: BrainReviewProposal = {
+        ...proposal,
+        status: "applied",
+        rejectionReason: undefined,
+        appliedAt: now,
+        appliedTaskId: launched.task.id,
+        updatedAt: now,
+      };
+      const proposals = [...queue.proposals];
+      proposals[proposalIndex] = updated;
+      const next = { version: 1 as const, proposals, updatedAt: now };
+      await writeBrainReviewQueue(next);
+      return {
+        applied: true,
+        action: preview.action,
+        preview,
+        proposal: updated,
+        file: next,
+        task: launched.task,
+      };
+    }
+
     const memory = proposal.kind === "memory"
       ? await rememberAgentMemory(rememberInputForProposal(proposal, memoryInput))
       : await evolveAgentMemory(evolveInputForProposal(proposal, memoryInput));
@@ -324,6 +357,22 @@ function previewBrainReviewProposal(proposal: BrainReviewProposal): BrainReviewA
       supersedesMemoryId: proposal.supersedesMemoryId,
     };
   }
+  if (proposal.kind === "skill-evolution") {
+    const hasTarget = typeof proposal.metadata?.skillSlug === "string" && Boolean(proposal.metadata.skillSlug.trim());
+    return {
+      proposalId: proposal.id,
+      kind: proposal.kind,
+      status: proposal.status,
+      canAutoApply: proposal.status === "approved" && hasTarget,
+      action: "launch-autoresearch",
+      reason: proposal.status !== "approved"
+        ? statusReason
+        : hasTarget
+          ? "Applying this proposal launches a review-gated Work Board optimizer task; it does not install the winning skill."
+          : "Skill-evolution proposals need metadata.skillSlug before launching.",
+      targetPath: proposal.targetPath,
+    };
+  }
   return {
     proposalId: proposal.id,
     kind: proposal.kind,
@@ -331,7 +380,7 @@ function previewBrainReviewProposal(proposal: BrainReviewProposal): BrainReviewA
     canAutoApply: false,
     action: "manual",
     reason: proposal.status === "approved"
-      ? "Skill, instruction, and job proposals require manual review/application in v1."
+      ? "Skill, instruction, and job proposals require manual review/application."
       : statusReason,
     targetPath: proposal.targetPath,
   };
@@ -410,6 +459,7 @@ function normalizeApplyInput(input: BrainReviewApplyInput): NormalizedBrainRevie
     : {};
   return {
     vaultPath: cleanOptional(record.vaultPath),
+    kanbanFolder: cleanOptional(record.kanbanFolder),
     type: cleanOptional(record.type) ?? cleanOptional(record.memoryType),
     confidence: cleanNumber(record.confidence),
     cognitiveStage: cleanOptional(record.cognitiveStage),
@@ -501,6 +551,8 @@ function normalizeStoredProposal(value: unknown): BrainReviewProposal | null {
     appliedAt: cleanOptional(item.appliedAt),
     appliedMemoryId: cleanOptional(item.appliedMemoryId),
     appliedMemoryPath: cleanStoredPath(item.appliedMemoryPath),
+    appliedTaskId: cleanOptional(item.appliedTaskId),
+    metadata: cleanMetadata(item.metadata),
     createdByPrincipalId: cleanOptional(item.createdByPrincipalId),
     scope: normalizeScope(item.scope),
     createdAt: cleanOptional(item.createdAt) ?? new Date(0).toISOString(),
@@ -527,6 +579,7 @@ function normalizeProposalInput(input: BrainReviewProposalInput) {
     proposedContent,
     targetPath: cleanInputPath(input.targetPath),
     supersedesMemoryId,
+    metadata: cleanMetadata(input.metadata),
     evidence: normalizeEvidenceList(input.evidence),
     risk: normalizeRisk(input.risk),
     createdByPrincipalId: cleanOptional(input.createdByPrincipalId),
@@ -612,6 +665,18 @@ function cleanBounded(value: unknown, maxLength: number) {
 
 function cleanOptional(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function cleanMetadata(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  try {
+    const json = JSON.stringify(value);
+    if (json.length > 20_000) return undefined;
+    const parsed = JSON.parse(json) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function enqueueBrainReviewWrite<T>(operation: () => Promise<T>): Promise<T> {

@@ -63,6 +63,7 @@ const loadTelemetryView = () => import("@/features/dashboard/views/telemetry/Tel
 const loadAeonAutopilotPanel = () => import("@/components/aeon");
 const loadPhonePanel = () => import("@/features/dashboard/views/PhonePanel");
 const loadIntegrationsView = () => import("@/features/integrations/IntegrationsView");
+const loadBeelineView = () => import("@/features/beeline/BeelineView");
 
 export const AgentsPanel = dynamic(() => loadAgentsPanel().then((mod) => mod.AgentsPanel), { ssr: false, loading: routeLoadingFor("agents") });
 export const KanbanPanel = dynamic(() => loadKanbanPanel().then((mod) => mod.KanbanPanel), { ssr: false, loading: routeLoadingFromProps });
@@ -98,6 +99,7 @@ export const AgentSettingsModal = dynamic(() => import("@/features/dashboard/vie
 });
 export const SkillBrowserModal = dynamic(() => import("@/features/dashboard/views/chat/SkillBrowserModal").then((mod) => mod.SkillBrowserModal), { ssr: false });
 export const IntegrationsView = dynamic(() => loadIntegrationsView(), { ssr: false, loading: routeLoadingFor("integrations") });
+export const BeelineView = dynamic(() => loadBeelineView().then((mod) => mod.BeelineView), { ssr: false, loading: routeLoadingFor("beeline") });
 
 /**
  * Hover/focus prefetch loaders per view. Views without an entry share the
@@ -122,6 +124,7 @@ export const DASHBOARD_VIEW_PRELOADERS: Partial<Record<DashboardView, () => Prom
   memory: loadTelemetryView,
   aeon: loadAeonAutopilotPanel,
   integrations: loadIntegrationsView,
+  beeline: loadBeelineView,
 };
 
 export function preloadDashboardView(view: DashboardView) {

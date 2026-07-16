@@ -21,3 +21,5 @@ export const AZURE_TENANT_ID_ENV = "AZURE_OAUTH_TENANT_ID";
 // same key a pasted bot token used, so the send/verify paths are unchanged.
 export const SLACK_OAUTH_CLIENT_ID_ENV = "SLACK_OAUTH_CLIENT_ID";
 export const SLACK_TOKEN_ENV = "SLACK_BOT_TOKEN";
+
+export const MONID_API_KEY_ENV = "MONID_API_KEY";

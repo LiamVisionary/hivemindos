@@ -5,7 +5,6 @@ import path from "path";
 import { randomUUID } from "crypto";
 
 import { homedir } from "@/lib/home-dir";
-import type { AgentSpendCapAsset } from "@/lib/types/agent-wallet";
 
 /**
  * Unified, cross-rail spend ledger. Every executed agent payment (x402, wallet
@@ -21,7 +20,7 @@ export type SpendLedgerRecord = {
   agentId: string;
   companyId?: string;
   kind: SpendKind;
-  asset: AgentSpendCapAsset;
+  asset: string;
   /** USD value of the spend; 0 when no USD quote is available (e.g. a raw ETH send). */
   amountUsd: number;
   /** Raw asset amount when the spend is denominated in a non-USD asset. */
@@ -31,6 +30,8 @@ export type SpendLedgerRecord = {
   status: "executed" | "failed";
   /** Approval request id that authorised this spend, when it required escalation. */
   approvalId?: string;
+  /** Stable source key for retry-safe bridges such as observed company API usage. */
+  idempotencyKey?: string;
   /** Public chain transaction hash when the spend executed on-chain. */
   transactionHash?: string;
   /** For a "trade" (DEX swap): the tokens + human amounts on each leg, so the
@@ -103,24 +104,46 @@ function enqueueSpendLedgerWrite<T>(fn: () => Promise<T>): Promise<T> {
 export async function appendSpend(
   input: Omit<SpendLedgerRecord, "id" | "createdAt" | "createdAtMs"> & { createdAtMs?: number },
 ): Promise<SpendLedgerRecord> {
+  return (await appendSpendRecord(input)).record;
+}
+
+async function appendSpendRecord(
+  input: Omit<SpendLedgerRecord, "id" | "createdAt" | "createdAtMs"> & { createdAtMs?: number },
+  idempotencyKey?: string,
+): Promise<{ record: SpendLedgerRecord; duplicate: boolean }> {
   const createdAtMs = input.createdAtMs ?? Date.now();
-  const record: SpendLedgerRecord = {
-    ...input,
-    id: randomUUID(),
-    createdAtMs,
-    createdAt: new Date(createdAtMs).toISOString(),
-  };
   return enqueueSpendLedgerWrite(async () => {
     await fs.mkdir(path.dirname(SPEND_LEDGER_PATH), { recursive: true, mode: 0o700 });
     // readSpendLedger throws on a corrupt file → abort rather than overwrite (wipe) history.
     const records = await readSpendLedger();
+    if (idempotencyKey) {
+      const existing = records.find((entry) => entry.idempotencyKey === idempotencyKey);
+      if (existing) return { record: existing, duplicate: true };
+    }
+    const record: SpendLedgerRecord = {
+      ...input,
+      idempotencyKey: idempotencyKey || input.idempotencyKey,
+      id: randomUUID(),
+      createdAtMs,
+      createdAt: new Date(createdAtMs).toISOString(),
+    };
     records.push(record);
     // Atomic tmp+rename so a concurrent reader never sees a torn half-written file.
     const tmp = `${SPEND_LEDGER_PATH}.${process.pid}.${createdAtMs}.tmp`;
     await fs.writeFile(tmp, JSON.stringify(records.slice(-MAX_RECORDS), null, 2), { mode: 0o600 });
     await fs.rename(tmp, SPEND_LEDGER_PATH);
-    return record;
+    return { record, duplicate: false };
   });
+}
+
+/** Append one executed spend exactly once across retries from a metered source. */
+export async function appendSpendIdempotent(
+  input: Omit<SpendLedgerRecord, "id" | "createdAt" | "createdAtMs" | "idempotencyKey"> & { createdAtMs?: number },
+  idempotencyKey: string,
+): Promise<{ record: SpendLedgerRecord; duplicate: boolean }> {
+  const key = idempotencyKey.trim();
+  if (!key) throw new Error("A spend-ledger idempotency key is required.");
+  return appendSpendRecord(input, key);
 }
 
 function sumUsd(records: SpendLedgerRecord[], predicate: (record: SpendLedgerRecord) => boolean, sinceMs: number): number {

@@ -9,9 +9,11 @@ const composer = read("src/features/chat/chat-composer.tsx");
 const controller = read("src/features/dashboard/hooks/use-status-chat-input-controller.tsx");
 const coldStartStatus = read("src/features/dashboard/hooks/agent-cold-start-status.ts");
 const coldStartCore = read("src/lib/services/chat/agent-cold-start.ts");
+const chatPanelHelpers = read("src/features/dashboard/views/chat/chat-panel-helpers.ts");
 const modelsRoute = read("src/app/api/hivemindos/models/chat/completions/route.ts");
 const panel = read("src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx");
 const thread = read("src/features/dashboard/views/chat/exchange/MessageThread.tsx");
+const motion = read("src/features/dashboard/views/chat/exchange/chat-exchange-motion.css");
 const probe = read("scripts/probe-scout-cold-start-message.mjs");
 const runtimeEvents = read("src/lib/services/runtime-stream-events.ts");
 const statusHelpers = read("src/features/dashboard/hooks/status-chat-input-helpers.ts");
@@ -100,6 +102,16 @@ assert.match(
 );
 assert.match(
   coldStartCore,
+  /Starting your free agent session/,
+  "free-agent cold starts should use user-facing session copy",
+);
+assert.match(
+  chatPanelHelpers,
+  /isAgentColdStartProcessEvent\(event\)/,
+  "cold-start events should stay out of the visible process timeline",
+);
+assert.match(
+  coldStartCore,
   /isLikelyModalHostedAgent/,
   "cold-start helper should detect direct Modal-hosted agents",
 );
@@ -125,8 +137,23 @@ assert.match(
 );
 assert.match(
   thread,
-  /phrase=\{pendingAssistantStatusText\}/,
-  "MessageThread should use the pending label for non-bubble pending loaders",
+  /AgentSessionStartLoader label=\{pendingAssistantStatusText\}/,
+  "MessageThread should show the session-start loader outside a pending bubble",
+);
+assert.match(
+  thread,
+  /AgentSessionStartLoader label=\{pendingAssistantLabel\}/,
+  "MessageThread should show the session-start loader inside a pending bubble",
+);
+assert.match(
+  thread,
+  /const visibleEvents = events\.filter\(\(event\) => !isHiddenChatProcessEvent\(event\)\)/,
+  "MessageThread should omit hidden-only timelines and their worked divider",
+);
+assert.match(
+  motion,
+  /\.fr-agent-session-progress-fill[\s\S]*animation: fr-agent-session-progress/,
+  "free-agent session startup should render an animated indeterminate progress bar",
 );
 assert.match(
   probe,
@@ -140,7 +167,7 @@ assert.match(
 );
 assert.match(
   probe,
-  /loader: shouldWake \? "waking up swarm scout" : "thinking"/,
+  /loader: shouldWake \? "Starting your free agent session" : "thinking"/,
   "live Scout probe should keep warm waits on the thinking loader",
 );
 assert.match(

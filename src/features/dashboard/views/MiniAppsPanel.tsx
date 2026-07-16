@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowUpRight, Check, ChevronLeft, ExternalLink, Hexagon, RefreshCw } from "lucide-react";
 
 import { Skeleton, SkeletonText, Spinner } from "@/features/dashboard/views/zero-human-companies/primitives";
 import type { MiniAppCatalog } from "@/lib/services/mini-app-catalog";
 import { openExternalUrl } from "@/lib/native/open-external-url";
 import "@/features/dashboard/views/zero-human-companies/theme.css";
+import { MiniAppWalletBridge } from "./mini-apps/MiniAppWalletBridge";
 import styles from "./MiniAppsPanel.module.css";
 
 type MiniAppsResponse = {
@@ -37,12 +38,19 @@ function MiniAppsSkeleton() {
   );
 }
 
-export function MiniAppsPanel() {
+type MiniAppsPanelProps = {
+  agents?: Parameters<typeof MiniAppWalletBridge>[0]["agents"];
+  walletsByAgent?: Record<string, unknown>;
+  vaultPath?: string;
+};
+
+export function MiniAppsPanel({ agents, walletsByAgent, vaultPath }: MiniAppsPanelProps) {
   const [catalog, setCatalog] = useState<MiniAppCatalog | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [activeAppId, setActiveAppId] = useState<string | null>(null);
   const [frameLoading, setFrameLoading] = useState(false);
+  const frameRef = useRef<HTMLIFrameElement>(null);
 
   const loadCatalog = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -107,6 +115,7 @@ export function MiniAppsPanel() {
             </div>
           ) : null}
           <iframe
+            ref={frameRef}
             key={activeApp.id}
             className={styles.appFrame}
             title={activeApp.name}
@@ -117,6 +126,13 @@ export function MiniAppsPanel() {
             onLoad={() => setFrameLoading(false)}
           />
         </div>
+        <MiniAppWalletBridge
+          activeAppUrl={activeApp.url}
+          frameRef={frameRef}
+          agents={agents}
+          walletsByAgent={walletsByAgent}
+          vaultPath={vaultPath}
+        />
       </section>
     );
   }

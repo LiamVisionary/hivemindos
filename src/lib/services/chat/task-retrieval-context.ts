@@ -504,7 +504,7 @@ function refreshConnectedAppsForTaskRetrieval(origin: string) {
   return connectedAppsRefresh;
 }
 
-async function connectedAppsForTaskRetrieval(origin: string) {
+export async function connectedAppsForTaskRetrieval(origin: string) {
   const now = Date.now();
   const cached = connectedAppsCache?.origin === origin ? connectedAppsCache : null;
   if (cached && now - cached.updatedAt < CONNECTED_APPS_CACHE_TTL_MS) return cached.apps;

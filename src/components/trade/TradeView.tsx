@@ -15,6 +15,7 @@ import { BIcon } from "./icons";
 import { CurrencyMenu } from "./primitives";
 import { CryptoTicket } from "./CryptoTicket";
 import { StockTicket } from "./StockTicket";
+import { PlumeOptionsPanel } from "./PlumeOptionsPanel";
 import { CapabilityRail } from "./CapabilityRail";
 import { PortfolioCard, MoversCard, PositionsPanel, ActivityPanel, ActivityView } from "./surfaces";
 import { DeskSkeleton, ActivitySkeleton } from "./skeletons";
@@ -29,7 +30,7 @@ function DeskHeader() {
     <header style={{ padding: "18px 30px", borderBottom: "1px solid var(--line)", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 20, flexWrap: "wrap" }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 11, minWidth: 0 }}>
         <span style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 18, letterSpacing: "-0.01em" }}>Trade</span>
-        <span style={{ fontSize: 12.5, color: "var(--fg-3)", whiteSpace: "nowrap" }}>buy, sell &amp; swap — through governed wallets</span>
+        <span style={{ fontSize: 12.5, color: "var(--fg-3)", whiteSpace: "nowrap" }}>buy, sell, swap &amp; manage options — through governed wallets</span>
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <CurrencyMenu currency={currency} rates={fxRates} onCurrency={setCurrency} />
@@ -57,12 +58,13 @@ export function TradeView() {
   // Set the active display currency + real FX table before any child formats.
   setDisplayCurrency(desk.currency, desk.fxRates);
 
-  const [segment, setSegment] = React.useState<"crypto" | "stocks">("crypto");
+  const [segment, setSegment] = React.useState<"crypto" | "stocks" | "options">("crypto");
   const [view, setView] = React.useState<"trade" | "history">("trade");
   const [histFilter, setHistFilter] = React.useState<"crypto" | "stocks" | "all">("crypto");
   const isStock = segment === "stocks";
+  const isOptions = segment === "options";
   const { loading, refreshing, stockLoading, stockRefreshing, activityLoading, activityRefreshing, paper, setPaper, hasActingWallet } = desk;
-  const contentLoading = loading || (isStock && stockLoading);
+  const contentLoading = !isOptions && (loading || (isStock && stockLoading));
   const dataRefreshing = isStock ? stockRefreshing : refreshing;
   const pf = isStock ? desk.stockPortfolio : desk.cryptoPortfolio;
   const movers = isStock ? desk.stockMovers : desk.cryptoMovers;
@@ -80,8 +82,9 @@ export function TradeView() {
             <>
               <div className="dk-toprow">
                 <div className="dk-seg">
-                  <button type="button" data-active={!isStock ? "" : undefined} onClick={() => setSegment("crypto")}><BIcon name="trade" size={15} /> Crypto</button>
+                  <button type="button" data-active={segment === "crypto" ? "" : undefined} onClick={() => setSegment("crypto")}><BIcon name="trade" size={15} /> Crypto</button>
                   <button type="button" data-active={isStock ? "" : undefined} onClick={() => setSegment("stocks")}><BIcon name="activity" size={15} /> Stocks</button>
+                  <button type="button" data-active={isOptions ? "" : undefined} onClick={() => setSegment("options")}><BIcon name="spark" size={15} /> Options</button>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   {isStock && desk.stockReadiness.venue === "alpaca" ? (
@@ -91,14 +94,18 @@ export function TradeView() {
                     </div>
                   ) : null}
                   <span className="dk-marketpill">
-                    {contentLoading || (!isStock && refreshing)
+                    {isOptions
+                      ? <><span className="fr-dot" style={{ color: "var(--honey)" }} /> Plume · testnet · governed</>
+                      : contentLoading || (!isStock && refreshing)
                       ? <><span className="fr-dot" style={{ color: "var(--fg-4)" }} /> Syncing…</>
                       : <><span className="fr-dot live" style={{ color: "var(--live)" }} /> {isStock ? <>US market · {paper ? "paper" : "live"}</> : <>Markets live · on-chain · {tradeNetworkLabel(desk.network)}</>}</>}
                   </span>
                 </div>
               </div>
 
-              {!hasActingWallet ? (
+              {isOptions ? (
+                <PlumeOptionsPanel />
+              ) : !hasActingWallet ? (
                 <div className="dk-panel" style={{ textAlign: "center", padding: "40px 24px" }}>
                   <p style={{ color: "var(--fg-2)", fontSize: 13.5, margin: "0 0 14px" }}>No wallet to trade with yet. Create or import one in the Wallets tab, then come back to trade.</p>
                   <button type="button" className="tk-place" style={{ maxWidth: 220, margin: "0 auto" }} onClick={() => desk.onOpenView("wallet")}>Open Wallets</button>

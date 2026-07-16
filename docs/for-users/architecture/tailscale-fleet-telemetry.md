@@ -84,6 +84,12 @@ Next.js build, and dashboard dev server — the steps that OOM small hosts.
 ./setup.sh --collector-only
 ```
 
+On Windows, use the equivalent PowerShell mode:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File setup.ps1 -CollectorOnly
+```
+
 The mode is persisted as `HIVE_COLLECTOR_ONLY` in `~/.hivemindos/collector.env`,
 so later plain `./setup.sh` or `hive-update` runs stay collector-only. The
 collector advertises `mode: "collector-only"` (and
@@ -92,6 +98,8 @@ collector advertises `mode: "collector-only"` (and
 collector restart) instead of the full install + build. To convert a machine
 back to a full install, run `./setup.sh --full`; to force one full update
 without converting, `./scripts/update-hivemindos.sh --full`.
+On Windows, pass `-Full` to `setup.ps1` to convert the machine back to a full
+hub install.
 
 ## Per-Agent DIDs and Signed Work Receipts
 
@@ -114,11 +122,19 @@ push-time attestation layer for repos that are.
 
 ## Hivemind Link Setup
 
-Normal setup uses the app-managed Link sidecar by default. For collector-only installs on additional machines, run:
+Normal setup uses the app-managed Link sidecar by default. For collector-only installs on additional macOS or Linux machines, run:
 
 ```bash
-HIVE_LINK_ENABLED=true ./scripts/install-telemetry-collector.sh
+./setup.sh --collector-only
 ```
+
+On Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File setup.ps1 -CollectorOnly
+```
+
+Collector-only setup selects Hivemind Link by default, installs its build prerequisite when necessary, and prints a one-time Tailscale authorization URL. Open that URL on the main HivemindOS hub—or any device signed into the same Tailscale account as the hub—approve the collector, and return to Fleet Hive. Discovery is automatic after Link connects.
 
 This builds and starts `hivemind-linkd`, an embedded `tsnet` reverse proxy. The
 collector binds to `127.0.0.1`, and the sidecar exposes port `8787` only through

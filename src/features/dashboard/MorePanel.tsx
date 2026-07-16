@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, AppWindow, Bell, Bot, Boxes, ChevronRight, Cloud, Coins, Cpu, FolderOpen, KeyRound, Kanban, LayoutGrid, List, Landmark, MessageSquare, Mic, Network, PhoneCall, Pin, PinOff, PlugZap, Search, ShieldCheck, Sparkles, TrendingUp, Wallet, Wrench, X } from "lucide-react";
+import { Activity, AppWindow, Bell, Bot, Boxes, ChevronRight, Cloud, Coins, Cpu, FolderOpen, HeartHandshake, KeyRound, Kanban, LayoutGrid, List, Landmark, MessageSquare, Mic, Network, PhoneCall, Pin, PinOff, PlugZap, Search, ShieldCheck, Sparkles, TrendingUp, Wallet, Wrench, X } from "lucide-react";
 
 import type { DashboardUtilityView } from "@/features/dashboard/dashboard-navigation";
 import { isPinnableView } from "@/features/dashboard/dashboard-navigation";
@@ -41,7 +41,7 @@ const MORE_GROUP_DEFS = [
   { name: "Build & automate", ids: ["mini-apps", "fusion", "aeon", "swarm", "podcast"] },
   { name: "Money & governance", ids: ["wallet", "trade", "governance", "cloud", "compute", "credit-admin", "stake"] },
   { name: "Fleet health", ids: ["maintenance", "memory", "sessions", "tools"] },
-  { name: "Connections", ids: ["integrations", "my-apps", "messaging", "phone"] },
+  { name: "Connections", ids: ["integrations", "beeline", "my-apps", "messaging", "phone"] },
   { name: "Data & access", ids: ["env", "files", "notifications"] },
 ] as const satisfies ReadonlyArray<{ name: string; ids: readonly MoreItemId[] }>;
 
@@ -187,6 +187,7 @@ export function MorePanel({
       sessions: { id: "sessions", icon: <Search aria-hidden="true" />, eyebrow: "Runtime memory", title: "Sessions", body: "Search readable Hermes and OpenClaw conversations from one place.", keywords: "sessions search transcripts hermes openclaw conversations" },
       tools: { id: "tools", icon: <Wrench aria-hidden="true" />, eyebrow: "Capabilities", title: "Capability Store", body: "Review built-in, runtime, app, and mini-app handles agents can invoke.", keywords: "tools capabilities handles capability store skills" },
       integrations: { id: "integrations", icon: <PlugZap aria-hidden="true" />, eyebrow: "App connections", title: "Integrations", body: "Connect GitHub, Linear, Slack, Notion, and Google for the whole hive.", keywords: "integrations connections api apps github linear slack notion google" },
+      beeline: { id: "beeline", icon: <HeartHandshake aria-hidden="true" />, eyebrow: "Family profiles", title: "Beeline", body: "Keep family consent, capabilities, and browser identities separate from your own account set.", keywords: "beeline family mom parent delegated chrome profile oauth mcp" },
       "my-apps": { id: "my-apps", icon: <AppWindow aria-hidden="true" />, eyebrow: "Providers", title: "Apps & Services", body: "Open running apps and browse installable providers agents can also call.", keywords: "apps services providers running installable" },
       messaging: { id: "messaging", icon: <MessageSquare aria-hidden="true" />, eyebrow: "Telegram · Discord · iMessage", title: "Messaging", body: "Set up outbound channels for Queen Bee and individual agents.", keywords: "messaging telegram discord imessage channels outbound" },
       phone: { id: "phone", icon: <PhoneCall aria-hidden="true" />, eyebrow: "Call prompts", title: "Phone", body: "Manage the spoken prompts your iPhone calls you with.", keywords: "phone calls prompts iphone spoken" },

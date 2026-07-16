@@ -18,6 +18,7 @@ import {
   readOpenDialogContextFromDom,
   type DashboardScreenContext,
 } from "@/features/dashboard/screen-context";
+import { DEFAULT_QUEEN_BEE_NAME } from "@/lib/config/queen-bee-personality";
 import { createPortal } from "react-dom";
 import { useQueenChat } from "./queen-chat-store";
 import { HIVE_CHAT_DOCK_BOTTOM } from "./hive-chat-layout";
@@ -25,11 +26,13 @@ import { HIVE_CHAT_DOCK_BOTTOM } from "./hive-chat-layout";
 export function PersistentHiveChat({
   hidden = false,
   openSpaceRightInset = 0,
+  queenName = DEFAULT_QUEEN_BEE_NAME,
   screenContext,
   tone = "hive",
 }: {
   hidden?: boolean;
   openSpaceRightInset?: number;
+  queenName?: string;
   screenContext?: DashboardScreenContext;
   tone?: "hive" | "legacy";
 }) {
@@ -82,7 +85,7 @@ export function PersistentHiveChat({
       }}
     >
       <ChatPill
-        placeholder={isBrainRoute ? "Ask Queen Bee about this brain..." : "Ask the hive to dispatch a task..."}
+        placeholder={isBrainRoute ? `Ask ${queenName} about this brain...` : "Ask the hive to dispatch a task..."}
         tone={tone}
         onComposerActiveChange={queenChat.setComposerActive}
         // The full-width fixed dock owns centering; the pill itself opts back

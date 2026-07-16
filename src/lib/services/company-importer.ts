@@ -453,7 +453,7 @@ function sectorFromPackage(packageJson: Record<string, unknown> | null) {
   return undefined;
 }
 
-function tickerForName(name: string) {
+export function tickerForName(name: string) {
   const words = name.match(/[A-Za-z0-9]+/g) ?? [];
   const preferred = words.length === 1
     ? words[0].slice(0, 4)
@@ -461,7 +461,7 @@ function tickerForName(name: string) {
   return cleanTicker(preferred) || "CO";
 }
 
-function titleFromSlug(value: string) {
+export function titleFromSlug(value: string) {
   return value
     .replace(/\.[^.]+$/, "")
     .split(/[^A-Za-z0-9]+/)
@@ -484,11 +484,11 @@ function stringField(value: unknown, key: string): string | undefined {
   return cleanText(value[key]);
 }
 
-function cleanText(value: unknown): string | undefined {
+export function cleanText(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function cleanTicker(value: unknown): string | undefined {
+export function cleanTicker(value: unknown): string | undefined {
   const ticker = typeof value === "string" ? value.replace(/[^A-Za-z0-9]/g, "").slice(0, 5).toUpperCase() : "";
   return ticker || undefined;
 }

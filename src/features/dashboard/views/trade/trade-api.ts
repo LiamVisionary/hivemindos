@@ -4,6 +4,7 @@
    ambient session (same-origin cookies), matching the other dashboard panels. */
 
 import type { TradeTokenMetadata } from "@/lib/types/trading-token";
+import type { QuantResearchRunManifest } from "@/lib/types/quant-research";
 export type { TradeTokenMetadata } from "@/lib/types/trading-token";
 
 // Fallback only — the live confirmation token is always taken from the server's
@@ -325,6 +326,29 @@ export async function runNansenComplexTemplate(params: TradeNansenComplexTemplat
 
 export async function runNansenSimpleTemplate(params: TradeNansenSimpleTemplateParams): Promise<{ ok: boolean; error?: string; brief?: TradeNansenInsightBrief }> {
   return postJson<{ brief: TradeNansenInsightBrief }>("/api/nansen/simple-template", params);
+}
+
+export async function fetchQuantResearchRuns(): Promise<{
+  ok: boolean;
+  error?: string;
+  runs?: QuantResearchRunManifest[];
+}> {
+  const response = await fetch("/api/quant-research?action=list", {
+    headers: { accept: "application/json" },
+    cache: "no-store",
+  }).catch(() => null);
+  return asJson<{ runs: QuantResearchRunManifest[] }>(response);
+}
+
+export async function runTradeQuantResearch(request: unknown): Promise<{
+  ok: boolean;
+  error?: string;
+  run?: QuantResearchRunManifest;
+}> {
+  return postJson<{ run: QuantResearchRunManifest }>("/api/quant-research", {
+    action: "run",
+    request,
+  });
 }
 
 /** Generic execute: POST the router-prepared requestBody to its prepared route. */

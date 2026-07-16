@@ -83,6 +83,20 @@
   }
 }
 
+@keyframes fr-agent-session-progress {
+  0% {
+    transform: translateX(-120%) scaleX(0.55);
+  }
+
+  55% {
+    transform: translateX(70%) scaleX(1);
+  }
+
+  100% {
+    transform: translateX(320%) scaleX(0.7);
+  }
+}
+
 @keyframes fr-chat-live-glow {
   0%,
   100% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--live) 8%, transparent); }
@@ -313,6 +327,42 @@
   animation: fr-shimmer 1.5s ease-in-out infinite;
 }
 
+.fr-agent-session-start {
+  display: grid;
+  width: min(320px, 70vw);
+  gap: 8px;
+  padding-block: 3px;
+}
+
+.fr-agent-session-start-label {
+  color: var(--fg-3);
+  font-family: var(--f-body);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.fr-agent-session-progress {
+  display: block;
+  width: 100%;
+  height: 5px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--honey) 20%, var(--line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--honey) 7%, var(--panel-2));
+}
+
+.fr-agent-session-progress-fill {
+  display: block;
+  width: 42%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--honey-2), var(--honey), var(--honey-2));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--honey) 42%, transparent);
+  transform: translateX(-120%);
+  animation: fr-agent-session-progress 1.8s ease-in-out infinite;
+}
+
 /* Reduced motion: freeze every animation and transition in the chat view. */
 @media (prefers-reduced-motion: reduce) {
   .fr-chat-root,
@@ -326,6 +376,11 @@
 
   .fr-chat-thread-rail article .fr-chat-action-row {
     opacity: 1;
+    transform: none;
+  }
+
+  .fr-agent-session-progress-fill {
+    width: 62%;
     transform: none;
   }
 }

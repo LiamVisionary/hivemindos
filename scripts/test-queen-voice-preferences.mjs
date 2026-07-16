@@ -231,6 +231,14 @@ check("CLOUD TTS: Queen PCM speech uses the saved provider voice and model", () 
   assert.match(route, /"x-audio-sample-rate": String\(cloudSpeech\.sampleRate\)/, "Queen cloud TTS stream does not expose its PCM sample rate");
 });
 
+check("CLOUD TTS: buffered Queen speech returns a decodable selected-voice clip", () => {
+  const bufferedSpeak = route.slice(route.indexOf("async function streamSpokenReply("));
+  assert.match(bufferedSpeak, /resolvedVoice\.kind === "cloud-tts" && resolvedVoice\.provider/, "buffered Queen speech does not detect the selected cloud TTS capability");
+  assert.match(bufferedSpeak, /synthesizeVoicePreview\(resolvedVoice\.provider\.id, \{[\s\S]*text,[\s\S]*voice:\s*calls\.voiceId,[\s\S]*model:\s*calls\.voiceModelId,[\s\S]*languageCode:\s*calls\.voiceLanguage,/, "buffered Queen speech does not send the saved cloud voice configuration");
+  assert.match(bufferedSpeak, /pcm16ToWav\(pcm, cloudSpeech\.sampleRate, 1\)/, "buffered cloud speech is not wrapped in a decodable WAV container");
+  assert.match(bufferedSpeak, /"Content-Type": "audio\/wav"/, "buffered cloud speech does not advertise WAV audio");
+});
+
 check("CLOUD TTS PREVIEW: media playback is unlocked before the provider request", () => {
   const previewStart = callsVoiceSection.indexOf("const previewVoice = async () => {");
   const contextStart = callsVoiceSection.indexOf("createPcmPreviewPlayer()", previewStart);
