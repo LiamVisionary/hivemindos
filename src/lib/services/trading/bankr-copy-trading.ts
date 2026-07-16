@@ -87,20 +87,22 @@ export async function getBankrCopyDashboard(): Promise<BankrCopyDashboard> {
     managedExecutionAvailable: healthRecord.bankrManagedExecution === true,
     liveEnabled: healthRecord.liveEnabled === true,
     partnerProvisioningConfigured: healthRecord.partnerProvisioningConfigured === true,
-    billingMode: "per-successful-live-trade",
+    billingMode: "rolling-usage-minimum",
     feePolicyVersion: stringValue(fee.version),
     feePercent: positiveNumber(fee.feePercent, 0.5),
-    minimumFeeUsd: positiveNumber(fee.minimumFeeUsd, 0.02),
-    maximumFeeUsd: positiveNumber(fee.maximumFeeUsd, 0.5),
+    feeCapUsd: Number.isFinite(Number(fee.feeCapUsd)) && Number(fee.feeCapUsd) > 0 ? Number(fee.feeCapUsd) : null,
+    usageMinimumUsd: positiveNumber(fee.usageMinimumUsd, 1),
+    usagePeriodDays: positiveNumber(fee.usagePeriodDays, 30),
+    usageMinimumCreditedTowardFees: fee.usageMinimumCreditedTowardFees === true,
+    minimumCopyTradeUsd: positiveNumber(fee.minimumCopyTradeUsd, 5),
     feeRecipient,
-    paperTrialDays: positiveNumber(fee.paperTrialDays, 7),
     pendingRecoveryCount,
     fundingWallets,
     subscriptions,
   };
 }
 
-export async function verifyExistingBankrConnection(apiKey: string): Promise<{ evmAddress: string }> {
+export async function verifyExistingBankrConnection(apiKey: string): Promise<{ evmAddress: string; baseUsdcBalance: number }> {
   const payload = await hostedRequest<{ wallet?: JsonObject }>("/v1/bankr/verify", {
     method: "POST",
     body: JSON.stringify({ apiKey: apiKey.trim() }),
@@ -109,7 +111,8 @@ export async function verifyExistingBankrConnection(apiKey: string): Promise<{ e
     ? payload.wallet.evmAddress.toLowerCase()
     : "";
   if (!/^0x[0-9a-f]{40}$/.test(address)) throw new BankrCopyTradingError(502, "The hosted service did not return a valid Bankr wallet.");
-  return { evmAddress: address };
+  const baseUsdcBalance = isRecord(payload.wallet) ? nonNegativeNumber(payload.wallet.baseUsdcBalance, 0) : 0;
+  return { evmAddress: address, baseUsdcBalance };
 }
 
 export async function startBankrCopyTradingMonitor(input: {
@@ -122,13 +125,17 @@ export async function startBankrCopyTradingMonitor(input: {
   scalePercent: number;
   maxSlippageBps: number;
   mode?: "paper" | "live";
+  riskAcknowledgement?: string;
+  feeAcknowledgement?: string;
 }): Promise<BankrCopySubscription> {
   const requestBody = {
     targetWallet: input.targetWallet,
     bankrConnection: input.connectionKind === "existing"
       ? { kind: "existing", apiKey: input.bankrApiKey?.trim() || "" }
       : { kind: "provisioned" },
-    mode: input.mode || "paper",
+    mode: input.mode || "live",
+    riskAcknowledgement: input.riskAcknowledgement || "",
+    feeAcknowledgement: input.feeAcknowledgement || "",
     maxTradeUsd: input.maxTradeUsd,
     maxDailyUsd: input.maxDailyUsd,
     scalePercent: input.scalePercent,
@@ -374,6 +381,11 @@ async function hostedRequest<T extends JsonObject>(path: string, init: RequestIn
 function positiveNumber(value: unknown, fallback: number): number {
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric > 0 ? numeric : fallback;
+}
+
+function nonNegativeNumber(value: unknown, fallback: number): number {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric >= 0 ? numeric : fallback;
 }
 
 function stringValue(value: unknown): string {

@@ -9,7 +9,11 @@ import {
   startBankrCopyTradingMonitor,
   verifyExistingBankrConnection,
 } from "@/lib/services/trading/bankr-copy-trading";
-import { BANKR_COPY_TRADING_API_KEY_ENV_NAMES } from "@/lib/services/trading/bankr-copy-trading-contract";
+import {
+  BANKR_COPY_TRADING_API_KEY_ENV_NAMES,
+  BANKR_COPY_TRADING_FEE_ACKNOWLEDGEMENT,
+  BANKR_COPY_TRADING_RISK_ACKNOWLEDGEMENT,
+} from "@/lib/services/trading/bankr-copy-trading-contract";
 import { writeSharedHiveEnvValue } from "@/lib/services/hive-env-write";
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
 import { errorJson, okJson, upstreamErrorJson } from "@/lib/utils/api-response";
@@ -81,7 +85,13 @@ export async function POST(request: NextRequest) {
         maxDailyUsd: Number(body.maxDailyUsd),
         scalePercent: Number(body.scalePercent),
         maxSlippageBps: Number(body.maxSlippageBps),
-        mode: "paper",
+        mode: "live",
+        riskAcknowledgement: body.riskAcknowledgement === BANKR_COPY_TRADING_RISK_ACKNOWLEDGEMENT
+          ? body.riskAcknowledgement
+          : "",
+        feeAcknowledgement: body.feeAcknowledgement === BANKR_COPY_TRADING_FEE_ACKNOWLEDGEMENT
+          ? body.feeAcknowledgement
+          : "",
       });
       return okJson({ subscription }, { status: 201 });
     }

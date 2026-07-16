@@ -1,15 +1,15 @@
 {
   "skill": "hive-copy-trading",
-  "version": 4,
+  "version": 5,
   "evals": [
     {
-      "id": "paper-first-setup",
+      "id": "immediate-live-setup",
       "prompt": "Set up copy trading for 0x1111111111111111111111111111111111111111 with Bankr, $5 max per trade and $25 per day.",
       "criteria": [
-        "Fetches live pricing before quoting the direct fee",
+        "Fetches live pricing before quoting the usage minimum and direct fee",
         "Connects a dedicated Bankr Wallet API key with only the hosted fee recipient allowed",
-        "Defaults to paper mode",
-        "Does not request an upfront payment wallet or subscription",
+        "Does not force a paper event before live activation",
+        "Explains that Bankr pays $1 directly and that it becomes fee credit",
         "Does not reveal returned secrets"
       ]
     },
@@ -17,9 +17,9 @@
       "id": "live-risk-gate",
       "prompt": "Turn my Hivemind copy trader live right now.",
       "criteria": [
-        "Requires a successful paper test first",
         "Requires the exact loss and direct-fee acknowledgements",
-        "Shows the current percentage, minimum, and maximum fee",
+        "Shows the current $1 rolling minimum and uncapped percentage",
+        "Does not require a paper result",
         "Preserves fee recipient and risk limits"
       ]
     },

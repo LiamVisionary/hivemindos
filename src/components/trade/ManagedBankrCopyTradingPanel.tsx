@@ -16,6 +16,7 @@ import type {
 import {
   BANKR_COPY_TRADING_API_KEY_ENV_NAMES,
   BANKR_COPY_TRADING_FEE_ACKNOWLEDGEMENT,
+  BANKR_COPY_TRADING_LEGACY_FEE_ACKNOWLEDGEMENT,
   BANKR_COPY_TRADING_RISK_ACKNOWLEDGEMENT,
 } from "@/lib/services/trading/bankr-copy-trading-contract";
 import styles from "./ManagedBankrCopyTradingPanel.module.css";
@@ -23,7 +24,7 @@ import styles from "./ManagedBankrCopyTradingPanel.module.css";
 type ApiResponse = Partial<BankrCopyDashboard> & {
   ok: boolean;
   error?: string;
-  wallet?: { evmAddress: string };
+  wallet?: { evmAddress: string; baseUsdcBalance: number };
   apiKeyEnv?: string;
   subscription?: BankrCopySubscription;
   transfer?: { transactionHash: string; amountUsd: number };
@@ -58,6 +59,7 @@ export function ManagedBankrCopyTradingPanel() {
   const [walletPath, setWalletPath] = React.useState<BankrWalletPath>("existing");
   const [verifiedApiKeyEnv, setVerifiedApiKeyEnv] = React.useState("");
   const [verifiedWallet, setVerifiedWallet] = React.useState("");
+  const [verifiedWalletBalance, setVerifiedWalletBalance] = React.useState<number | null>(null);
   const [targetWallet, setTargetWallet] = React.useState("");
   const [risk, setRisk] = React.useState(initialRisk);
   const [busy, setBusy] = React.useState("");
@@ -65,6 +67,8 @@ export function ManagedBankrCopyTradingPanel() {
   const [notice, setNotice] = React.useState("");
   const [showSetup, setShowSetup] = React.useState(false);
   const [setupStep, setSetupStep] = React.useState<SetupStep>(1);
+  const [riskAcknowledged, setRiskAcknowledged] = React.useState(false);
+  const [feeAcknowledged, setFeeAcknowledged] = React.useState(false);
   const activationIdempotencyKey = React.useRef("");
 
   const refresh = React.useCallback(async () => {
@@ -103,6 +107,7 @@ export function ManagedBankrCopyTradingPanel() {
       return { ok: false, error: message };
     }
     setVerifiedWallet(result.wallet.evmAddress);
+    setVerifiedWalletBalance(result.wallet.baseUsdcBalance);
     setVerifiedApiKeyEnv(result.apiKeyEnv || credential.envKey);
     setSetupStep(2);
     return { ok: true };
@@ -119,6 +124,8 @@ export function ManagedBankrCopyTradingPanel() {
       targetWallet,
       connectionKind,
       ...(connectionKind === "existing" ? { apiKeyEnv: verifiedApiKeyEnv } : {}),
+      riskAcknowledgement: riskAcknowledged ? BANKR_COPY_TRADING_RISK_ACKNOWLEDGEMENT : "",
+      feeAcknowledgement: feeAcknowledged ? BANKR_COPY_TRADING_FEE_ACKNOWLEDGEMENT : "",
       ...risk,
     });
     setBusy("");
@@ -129,11 +136,14 @@ export function ManagedBankrCopyTradingPanel() {
     activationIdempotencyKey.current = "";
     setVerifiedApiKeyEnv("");
     setVerifiedWallet("");
+    setVerifiedWalletBalance(null);
     setWalletPath("existing");
     setTargetWallet("");
     setRisk(initialRisk);
+    setRiskAcknowledged(false);
+    setFeeAcknowledged(false);
     setSetupStep(1);
-    setNotice("The free paper monitor is active. It will record the first eligible new target trade, then pause for your review.");
+    setNotice("Activation started. Bankr is paying and HivemindOS is independently verifying the $1 usage minimum; the live monitor activates automatically after settlement.");
     setShowSetup(false);
     await refresh();
   };
@@ -157,8 +167,8 @@ export function ManagedBankrCopyTradingPanel() {
     ? "provisioned"
     : "existing";
   const targetWalletValid = /^0x[0-9a-fA-F]{40}$/.test(targetWallet.trim());
-  const riskValid = isWithin(risk.maxTradeUsd, 0.1, 100)
-    && isWithin(risk.maxDailyUsd, 0.1, 500)
+  const riskValid = isWithin(risk.maxTradeUsd, 5, 10_000)
+    && isWithin(risk.maxDailyUsd, 5, 50_000)
     && risk.maxDailyUsd >= risk.maxTradeUsd
     && isWithin(risk.scalePercent, 1, 100)
     && isWithin(risk.maxSlippageBps, 10, 500);
@@ -171,19 +181,25 @@ export function ManagedBankrCopyTradingPanel() {
     dashboard?.managedExecutionAvailable
     && dashboard.available
     && canContinueRisk
-    && canContinueWallet,
+    && canContinueWallet
+    && riskAcknowledged
+    && feeAcknowledged
+    && (connectionKind === "provisioned" || (verifiedWalletBalance ?? 0) >= dashboard.usageMinimumUsd),
   );
 
   const selectWalletPath = (path: BankrWalletPath) => {
     if (path === walletPath) return;
     setWalletPath(path);
     setVerifiedWallet("");
+    setVerifiedWalletBalance(null);
     setVerifiedApiKeyEnv("");
     setError("");
   };
 
   const openSetup = () => {
     setSetupStep(1);
+    setRiskAcknowledged(false);
+    setFeeAcknowledged(false);
     setError("");
     setShowSetup(true);
   };
@@ -202,9 +218,9 @@ export function ManagedBankrCopyTradingPanel() {
           <p>HivemindOS monitors the target on Base; Bankr executes from a separate wallet under your limits.</p>
         </div>
         <div className={styles.badges}>
-          <Badge tone="honey">Per trade</Badge>
+          <Badge tone="honey">$1 minimum + {dashboard?.feePercent ?? 0.5}%</Badge>
           {dashboard && !dashboard.managedExecutionAvailable ? <Badge>Managed unavailable</Badge> : null}
-          <Badge tone={dashboard?.liveEnabled ? "live" : undefined}>{dashboard?.liveEnabled ? "Live enabled" : "Paper only"}</Badge>
+          <Badge tone={dashboard?.liveEnabled ? "live" : undefined}>{dashboard?.liveEnabled ? "Live" : "Live paused"}</Badge>
         </div>
       </div>
 
@@ -297,11 +313,18 @@ export function ManagedBankrCopyTradingPanel() {
 
           {setupStep === 2 ? (
             <div className={styles.wizardStep}>
-              <div className={styles.stepHead}><span>2</span><div><b>Choose the target and limits</b><small>Start small. One eligible paper event is free within {dashboard?.paperTrialDays ?? 7} days, then the monitor pauses.</small></div></div>
+              <div className={styles.stepHead}><span>2</span><div><b>Choose the target and limits</b><small>The monitor can copy any eligible new trade as soon as the $1 usage payment is verified.</small></div></div>
+              {verifiedWallet ? (
+                <div className={(verifiedWalletBalance ?? 0) >= (dashboard?.usageMinimumUsd ?? 1) ? styles.balanceNote : styles.balanceWarning}>
+                  <div><span>Bankr wallet on Base</span><b>{shortAddress(verifiedWallet)} · ${(verifiedWalletBalance ?? 0).toFixed(2)} USDC</b></div>
+                  <BBtn sm onClick={() => void navigator.clipboard?.writeText(verifiedWallet)}>Copy address</BBtn>
+                  {(verifiedWalletBalance ?? 0) < (dashboard?.usageMinimumUsd ?? 1) ? <p>Fund at least ${(dashboard?.usageMinimumUsd ?? 1).toFixed(2)} Base USDC before activation. The wallet also needs enough USDC for copied trades.</p> : null}
+                </div>
+              ) : null}
               <div className={styles.formGrid}>
                 <label className={styles.wide}><span>Target Base wallet</span><input value={targetWallet} onChange={(event) => setTargetWallet(event.target.value)} placeholder="0x…" /></label>
-                <NumberField label="Max per trade" value={risk.maxTradeUsd} min={0.1} max={100} step={0.1} onChange={(value) => setRisk((current) => ({ ...current, maxTradeUsd: value }))} suffix="USD" />
-                <NumberField label="Max per day" value={risk.maxDailyUsd} min={0.1} max={500} step={1} onChange={(value) => setRisk((current) => ({ ...current, maxDailyUsd: value }))} suffix="USD" />
+                <NumberField label="Max per trade" value={risk.maxTradeUsd} min={5} max={10_000} step={1} onChange={(value) => setRisk((current) => ({ ...current, maxTradeUsd: value }))} suffix="USD" />
+                <NumberField label="Max per day" value={risk.maxDailyUsd} min={5} max={50_000} step={5} onChange={(value) => setRisk((current) => ({ ...current, maxDailyUsd: value }))} suffix="USD" />
                 <NumberField label="Copy scale" value={risk.scalePercent} min={1} max={100} step={1} onChange={(value) => setRisk((current) => ({ ...current, scalePercent: value }))} suffix="%" />
                 <NumberField label="Max slippage" value={risk.maxSlippageBps} min={10} max={500} step={10} onChange={(value) => setRisk((current) => ({ ...current, maxSlippageBps: value }))} suffix="bps" />
               </div>
@@ -316,7 +339,7 @@ export function ManagedBankrCopyTradingPanel() {
 
           {setupStep === 3 ? (
             <div className={styles.wizardStep}>
-              <div className={styles.stepHead}><span>3</span><div><b>Review and start</b><small>There is no subscription or upfront payment.</small></div></div>
+              <div className={styles.stepHead}><span>3</span><div><b>Review and start live</b><small>The rolling minimum is paid directly from this Bankr wallet, with no card subscription.</small></div></div>
               <div className={styles.reviewGrid}>
                 <ReviewItem label="Bankr wallet" value={connectionKind === "existing" ? shortAddress(verifiedWallet) : "Created on activation"} />
                 <ReviewItem label="Target" value={shortAddress(targetWallet.trim())} />
@@ -326,11 +349,16 @@ export function ManagedBankrCopyTradingPanel() {
                 <ReviewItem label="Max slippage" value={`${risk.maxSlippageBps} bps`} />
               </div>
               <div className={styles.priceSummary}>
-                <div><b>{dashboard?.feePercent ?? 0.5}% per verified live copied trade</b><span>${(dashboard?.minimumFeeUsd ?? 0.02).toFixed(2)} minimum · ${(dashboard?.maximumFeeUsd ?? 0.5).toFixed(2)} maximum · charged from this Bankr wallet · paper, skipped, and failed trades cost $0</span></div>
+                <div><b>${(dashboard?.usageMinimumUsd ?? 1).toFixed(2)} every {dashboard?.usagePeriodDays ?? 30} days, credited toward fees</b><span>Uncapped {dashboard?.feePercent ?? 0.5}% of actual verified copied notional · up to ${(risk.maxTradeUsd * (dashboard?.feePercent ?? 0.5) / 100).toFixed(2)} on a trade at your current cap · skipped and failed trades cost $0</span></div>
               </div>
+              <div className={styles.consentList}>
+                <label><input type="checkbox" checked={riskAcknowledged} onChange={(event) => setRiskAcknowledged(event.target.checked)} /><span>{BANKR_COPY_TRADING_RISK_ACKNOWLEDGEMENT}</span></label>
+                <label><input type="checkbox" checked={feeAcknowledged} onChange={(event) => setFeeAcknowledged(event.target.checked)} /><span>{BANKR_COPY_TRADING_FEE_ACKNOWLEDGEMENT}</span></label>
+              </div>
+              {connectionKind === "existing" && (verifiedWalletBalance ?? 0) < (dashboard?.usageMinimumUsd ?? 1) ? <p className={styles.fieldError}>Fund the Bankr wallet with at least ${(dashboard?.usageMinimumUsd ?? 1).toFixed(2)} Base USDC, then go back and reconnect the key to refresh its balance.</p> : null}
               <div className={styles.wizardActions}>
                 <BBtn sm disabled={busy === "start"} onClick={() => setSetupStep(2)}>Back</BBtn>
-                <BBtn variant="primary" disabled={!canSubscribe || busy === "start"} onClick={startMonitor}>{busy === "start" ? "Starting…" : "Start paper trial"}</BBtn>
+                <BBtn variant="primary" disabled={!canSubscribe || busy === "start"} onClick={startMonitor}>{busy === "start" ? "Activating…" : "Pay $1 & start live"}</BBtn>
               </div>
             </div>
           ) : null}
@@ -368,10 +396,14 @@ function SubscriptionCard(props: {
     maxSlippageBps: subscription.maxSlippageBps,
   });
   const isPerTrade = subscription.billingModel === "bankr-per-trade";
+  const isUsageMinimum = subscription.billingModel === "bankr-usage-minimum";
+  const minimumTradeLimit = isUsageMinimum ? 5 : 0.1;
+  const maximumTradeLimit = isUsageMinimum ? 10_000 : 100;
+  const maximumDailyLimit = isUsageMinimum ? 50_000 : 500;
   const paperTrialComplete = props.events.some((event) => event.receiptStatus === "paper");
   const paperTrialPaused = isPerTrade && subscription.mode === "paper" && subscription.status === "paused" && paperTrialComplete;
-  const limitsValid = isWithin(limits.maxTradeUsd, 0.1, 100)
-    && isWithin(limits.maxDailyUsd, 0.1, 500)
+  const limitsValid = isWithin(limits.maxTradeUsd, minimumTradeLimit, maximumTradeLimit)
+    && isWithin(limits.maxDailyUsd, minimumTradeLimit, maximumDailyLimit)
     && limits.maxDailyUsd >= limits.maxTradeUsd
     && isWithin(limits.scalePercent, 1, 100)
     && isWithin(limits.maxSlippageBps, 10, 500);
@@ -385,7 +417,7 @@ function SubscriptionCard(props: {
       ...(mode ? { mode } : {}),
       ...(mode === "live" ? {
         riskAcknowledgement: BANKR_COPY_TRADING_RISK_ACKNOWLEDGEMENT,
-        ...(isPerTrade ? { feeAcknowledgement: BANKR_COPY_TRADING_FEE_ACKNOWLEDGEMENT } : {}),
+        ...(isPerTrade ? { feeAcknowledgement: BANKR_COPY_TRADING_LEGACY_FEE_ACKNOWLEDGEMENT } : {}),
       } : {}),
       ...limits,
     });
@@ -433,21 +465,22 @@ function SubscriptionCard(props: {
         <span><small>Trade cap</small><b>${subscription.maxTradeUsd}</b></span>
         <span><small>Daily cap</small><b>${subscription.maxDailyUsd}</b></span>
         <span><small>Today</small><b>${props.usageToday?.reservedUsd ?? 0}</b></span>
-        <span><small>Service fee</small><b>{subscription.billingModel === "prepaid-period" ? "Prepaid" : `${subscription.billing.feePercent ?? props.dashboard.feePercent}%`}</b></span>
+        <span><small>Service fee</small><b>{isUsageMinimum ? `$${subscription.billing.usageMinimumUsd ?? 1} credit · ${subscription.billing.feePercent ?? props.dashboard.feePercent}%` : subscription.billingModel === "prepaid-period" ? "Prepaid" : `${subscription.billing.feePercent ?? props.dashboard.feePercent}%`}</b></span>
       </div>
+      {isUsageMinimum ? <UsagePeriodStatus subscription={subscription} /> : null}
       <details className={styles.management}>
-        <summary>Manage mode &amp; limits</summary>
+        <summary>{isUsageMinimum ? "Manage limits" : "Manage mode & limits"}</summary>
         <div className={styles.managementBody}>
           <div className={styles.formGrid}>
-            <NumberField label="Max per trade" value={limits.maxTradeUsd} min={0.1} max={100} step={0.1} onChange={(value) => setLimits((current) => ({ ...current, maxTradeUsd: value }))} suffix="USD" />
-            <NumberField label="Max per day" value={limits.maxDailyUsd} min={0.1} max={500} step={1} onChange={(value) => setLimits((current) => ({ ...current, maxDailyUsd: value }))} suffix="USD" />
+            <NumberField label="Max per trade" value={limits.maxTradeUsd} min={minimumTradeLimit} max={maximumTradeLimit} step={isUsageMinimum ? 1 : 0.1} onChange={(value) => setLimits((current) => ({ ...current, maxTradeUsd: value }))} suffix="USD" />
+            <NumberField label="Max per day" value={limits.maxDailyUsd} min={minimumTradeLimit} max={maximumDailyLimit} step={isUsageMinimum ? 5 : 1} onChange={(value) => setLimits((current) => ({ ...current, maxDailyUsd: value }))} suffix="USD" />
             <NumberField label="Copy scale" value={limits.scalePercent} min={1} max={100} step={1} onChange={(value) => setLimits((current) => ({ ...current, scalePercent: value }))} suffix="%" />
             <NumberField label="Max slippage" value={limits.maxSlippageBps} min={10} max={500} step={10} onChange={(value) => setLimits((current) => ({ ...current, maxSlippageBps: value }))} suffix="bps" />
           </div>
           {!limitsValid ? <p className={styles.fieldError}>Keep every limit inside its shown range, with the daily cap at least as high as the trade cap.</p> : null}
           <div className={styles.modeControls}>
             <BBtn sm disabled={!limitsValid || updating} onClick={() => updateSubscription()}>{updating ? "Updating…" : "Save limits"}</BBtn>
-            {subscription.mode === "paper" ? (
+            {!isUsageMinimum && subscription.mode === "paper" ? (
               props.dashboard.liveEnabled ? (
                 <div className={styles.liveGate}>
                   <label>
@@ -456,20 +489,20 @@ function SubscriptionCard(props: {
                   </label>
                   {isPerTrade ? <label>
                     <input type="checkbox" checked={feeAcknowledged} onChange={(event) => setFeeAcknowledged(event.target.checked)} />
-                    <span>I authorize the published {props.dashboard.feePercent}% fee (${props.dashboard.minimumFeeUsd.toFixed(2)}–${props.dashboard.maximumFeeUsd.toFixed(2)}) after each verified live copied trade.</span>
+                    <span>I authorize the published {subscription.billing.feePercent ?? props.dashboard.feePercent}% fee (${(subscription.billing.minimumFeeUsd ?? 0.02).toFixed(2)}–${(subscription.billing.maximumFeeUsd ?? 0.5).toFixed(2)}) after each verified live copied trade.</span>
                   </label> : null}
                   <BBtn variant="primary" sm disabled={!paperTrialComplete || !liveAcknowledged || (isPerTrade && !feeAcknowledged) || !limitsValid || updating} onClick={() => updateSubscription("live")}>Enable live</BBtn>
                   {!paperTrialComplete ? <p>Complete one new paper-mode copy event before live execution can be enabled.</p> : null}
                 </div>
               ) : <p className={styles.help}>Live execution is currently paused globally. Paper monitoring continues normally.</p>
-            ) : <BBtn sm disabled={!limitsValid || updating} onClick={() => updateSubscription("paper")}>Return to paper</BBtn>}
+            ) : !isUsageMinimum ? <BBtn sm disabled={!limitsValid || updating} onClick={() => updateSubscription("paper")}>Return to paper</BBtn> : null}
           </div>
         </div>
       </details>
       {paperTrialPaused ? <div className={styles.notice}>Paper test complete. Review the event, then open <b>Manage mode &amp; limits</b> to accept the live risk and fee terms, or cancel this monitor.</div> : null}
       {props.statusError ? <div className={styles.error}>{props.statusError}</div> : null}
       <div className={styles.funding}>
-        <div><span className={styles.eyebrow}>Fund the Bankr wallet</span><code>{subscription.bankrWallet}</code><p>Send Base USDC for copied trades and their small post-verification fees. Bankr sponsors Base gas. You can also copy this address and fund it from any wallet.</p></div>
+        <div><span className={styles.eyebrow}>Fund the Bankr wallet</span><code>{subscription.bankrWallet}</code><p>Send Base USDC for copied trades, the rolling $1 minimum, and any verified percentage fee above the remaining credit. Bankr sponsors Base gas. You can also copy this address and fund it from any wallet.</p></div>
         <BBtn sm onClick={() => void navigator.clipboard?.writeText(subscription.bankrWallet)}>Copy address</BBtn>
         <select value={fundingWalletId} onChange={(event) => setFundingWalletId(event.target.value)}><option value="">Funding wallet</option>{props.dashboard.fundingWallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{wallet.name}</option>)}</select>
         <input type="number" min="1" max="500" value={amountUsd} onChange={(event) => setAmountUsd(Number(event.target.value))} aria-label="USDC funding amount" />
@@ -481,9 +514,19 @@ function SubscriptionCard(props: {
           : <BBtn sm disabled={Boolean(props.busy)} onClick={() => props.onMutate(subscription.status === "paused" ? "resume" : "pause", subscription.id)}>{subscription.status === "paused" ? "Resume" : "Pause"}</BBtn>}
         <BBtn sm disabled={Boolean(props.busy)} onClick={() => props.onMutate("cancel", subscription.id)}>Cancel & erase key</BBtn>
       </div>
-      {props.events.length ? <div className={styles.events}>{props.events.slice(0, 5).map((event) => <div key={event.id}><span>{event.receiptStatus || event.status}</span><b>${event.executedNotionalUsd ?? event.maxTradeUsd}</b><code>{shortAddress(event.sourceTransactionHash)}</code>{event.fee ? <small>Fee ${event.fee.amountUsd.toFixed(2)} USDC · {event.fee.status}{event.fee.transactionHash ? ` · ${shortAddress(event.fee.transactionHash)}` : ""}</small> : null}{event.receiptError ? <small>{event.receiptError}</small> : null}{event.fee?.error ? <small>{event.fee.error}</small> : null}</div>)}</div> : <p className={styles.help}>Monitoring is active. New source trades appear here after the initial cursor baseline.</p>}
+      {props.events.length ? <div className={styles.events}>{props.events.slice(0, 5).map((event) => <div key={event.id}><span>{event.receiptStatus || event.status}</span><b>${event.executedNotionalUsd ?? event.maxTradeUsd}</b><code>{shortAddress(event.sourceTransactionHash)}</code>{event.fee ? <small>Fee ${event.fee.grossAmountUsd?.toFixed(2) ?? event.fee.amountUsd.toFixed(2)} gross{event.fee.usageCreditAppliedUsd ? ` · $${event.fee.usageCreditAppliedUsd.toFixed(2)} credit` : ""}{event.fee.amountUsd > 0 ? ` · $${event.fee.amountUsd.toFixed(2)} charged` : ""} · {event.fee.status}{event.fee.transactionHash ? ` · ${shortAddress(event.fee.transactionHash)}` : ""}</small> : null}{event.receiptError ? <small>{event.receiptError}</small> : null}{event.fee?.error ? <small>{event.fee.error}</small> : null}</div>)}</div> : <p className={styles.help}>Monitoring is active. New source trades appear here after the initial cursor baseline.</p>}
     </article>
   );
+}
+
+function UsagePeriodStatus({ subscription }: { subscription: BankrCopySubscription }) {
+  const usage = subscription.billing.usagePeriod;
+  if (!usage) return <div className={styles.usageStatus}><b>Usage payment pending</b><span>Bankr has not submitted this monitor’s $1 activation payment yet.</span></div>;
+  const settled = usage.status === "collected";
+  return <div className={settled ? styles.usageStatus : styles.usageWarning}>
+    <div><b>{settled ? `$${usage.creditRemainingUsd.toFixed(2)} fee credit remaining` : `Usage payment: ${usage.status.replaceAll("_", " ")}`}</b><span>{settled ? `Current period ends ${formatDate(usage.endsAt)}.` : usage.error || "Waiting for the $1 Base USDC payment to settle."}</span></div>
+    {usage.transactionHash ? <a href={`https://base.blockscout.com/tx/${usage.transactionHash}`} target="_blank" rel="noreferrer">View payment</a> : null}
+  </div>;
 }
 
 function NumberField(props: { label: string; value: number; min: number; max: number; step: number; suffix: string; onChange: (value: number) => void }) {
@@ -500,4 +543,11 @@ function isWithin(value: number, min: number, max: number): boolean {
 
 function shortAddress(value: string): string {
   return value.length > 14 ? `${value.slice(0, 7)}…${value.slice(-5)}` : value;
+}
+
+function formatDate(value: string): string {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime())
+    ? date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+    : "after 30 days";
 }

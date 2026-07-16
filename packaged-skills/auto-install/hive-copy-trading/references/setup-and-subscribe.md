@@ -1,19 +1,19 @@
-# Setup and start a monitor
+# Set up and activate a monitor
 
-Complete this workflow in order. New monitors always start in paper mode.
+Complete this workflow in order. A new monitor may activate live immediately; never force the user to wait for a paper signal.
 
-## 1. Read hosted availability and fee policy
+## 1. Read hosted availability and commercial policy
 
 ```bash
 curl -fsS https://hivemindos-copy-trading-gateway.hivemindos.workers.dev/health
 curl -fsS https://hivemindos-copy-trading-gateway.hivemindos.workers.dev/v1/pricing
 ```
 
-Stop if health is not configured or pricing does not report `pricingAuthority: server` and `clientOverridesAccepted: false`. Record the exact fee policy version, percentage, floor, cap, Base network, USDC asset, and official recipient. Do not reconstruct them from this file.
+Stop if health is not configured or pricing does not report `pricingAuthority: server` and `clientOverridesAccepted: false`. Record the exact policy version, usage minimum, period, percentage, cap status, minimum copied trade, Base network, USDC asset, and official recipient. Do not reconstruct them from this file.
 
-There is no subscription, renewal, x402 payment, or separate payment wallet. HivemindOS pays for its hosted monitor and collects the published fee from the user's Bankr execution wallet only after a live copied swap verifies.
+The current model is a $1 usage minimum per rolling 30-day active period, credited toward an uncapped 0.5% of actual verified copied notional. It is not $1 plus the percentage: the credit is consumed first. A $1,000 verified copy therefore has a $5 gross fee, uses up to $1 of remaining credit, and collects only the balance. Failed and skipped trades cost $0. There is no card subscription, x402 payment, or separate payer wallet; the Bankr execution wallet pays directly.
 
-## 2. Connect the Bankr wallet safely
+## 2. Connect and fund the Bankr wallet safely
 
 Use an existing Bankr wallet or create one at `https://bankr.bot/api`. Bankr embedded wallet keys are non-exportable; never request or promise a recovery phrase.
 
@@ -25,17 +25,17 @@ Create a dedicated `bk_usr` key with:
 - conservative per-transaction and daily Bankr spend limits
 - the pricing response's official fee recipient as the only allowed EVM transfer recipient
 
-The recipient allowlist does not redirect swaps: Bankr returns swap output to the same execution wallet. It permits only the separate, published Base USDC service-fee transfer.
+The recipient allowlist does not redirect swaps: Bankr returns swap output to the execution wallet. It permits only the separate Base USDC usage and excess-fee transfers.
 
-In HivemindOS, choose an existing Shared Hive Env variable. Continue resolves and verifies it server-side without rewriting it. The pencil opens manual entry; Save is only for a new value and writes through `hive-env-add` after verification. For direct integrations, send the key only over HTTPS to `POST /v1/bankr/verify`. Verification checks EVM identity and a non-broadcast `personal_sign` capability proof. Never paste the key into chat, logs, screenshots, or a checked-in file.
+In HivemindOS, choose an existing Shared Hive Env variable. Continue resolves and verifies it server-side without rewriting it. The pencil opens manual entry; Save is only for a new value and writes through `hive-env-add` after verification. For direct integrations, send the key only over HTTPS to `POST /v1/bankr/verify`. Verification checks EVM identity, a non-broadcast `personal_sign` capability proof, and the exact Base USDC balance. Never paste the key into chat, logs, screenshots, or a checked-in file.
 
-Inside Bankr, add the key in Settings → Env Vars as `HIVEMIND_COPY_TRADING_WALLET_KEY`; do not paste it into chat. Bankr returns environment-variable names only, while the packaged `scripts/monitor-client.mjs` reads the value inside `execute_cli`.
+Inside Bankr, add the key in Settings → Env Vars as `HIVEMIND_COPY_TRADING_WALLET_KEY`; do not paste it into chat. The packaged helper reads the value only inside `execute_cli`.
 
-If `GET /health` reports `partnerProvisioningConfigured: true`, the body may use `{ "kind": "provisioned" }`; HivemindOS then creates the Bankr wallet and a restricted key whose only allowed EVM recipient is the official fee wallet. If partner provisioning is unavailable, Bankr's normal self-serve wallet creation must remain usable.
+Fund the Bankr wallet with at least $1 Base USDC for activation plus the intended copy-trading budget. Bankr sponsors Base gas, so this flow does not require a separate ETH gas step. If `GET /health` reports `partnerProvisioningConfigured: true`, `{ "kind": "provisioned" }` can create a restricted wallet automatically; otherwise Bankr's self-serve wallet creation must remain usable.
 
-## 3. Start the free paper monitor
+## 3. Show terms and activate live
 
-Generate one stable idempotency key and reuse it if the request times out:
+Generate one stable idempotency key and reuse it if the request times out. Obtain both exact acknowledgements before sending this body:
 
 ```json
 {
@@ -45,7 +45,9 @@ Generate one stable idempotency key and reuse it if the request times out:
     "kind": "existing",
     "apiKey": "<dedicated-bk_usr-key>"
   },
-  "mode": "paper",
+  "mode": "live",
+  "riskAcknowledgement": "I understand copy trading can lose money",
+  "feeAcknowledgement": "I authorize HivemindOS to charge the published $1 usage minimum and uncapped 0.5% fee on each verified live copied trade",
   "maxTradeUsd": 5,
   "maxDailyUsd": 25,
   "scalePercent": 20,
@@ -59,36 +61,24 @@ POST it as ordinary HTTPS JSON to:
 https://hivemindos-copy-trading-gateway.hivemindos.workers.dev/v1/monitors
 ```
 
-When the skill is installed inside Bankr, prefer its credential-safe helper instead of constructing a shell command containing the key:
+Inside Bankr, prefer the credential-safe helper:
 
 ```bash
-node scripts/monitor-client.mjs start --target 0xTARGET_ON_BASE --max-trade 5 --max-daily 25 --scale 20 --slippage 100
+node scripts/monitor-client.mjs start --target 0xTARGET_ON_BASE --max-trade 5 --max-daily 25 --scale 20 --slippage 100 --confirm-risk --confirm-fee
 ```
 
-The helper fetches current pricing, persists the idempotency key before the network call, retries the same activation safely, stores the returned access token in a mode-600 private state file, and prints only non-secret monitor details.
+The helper fetches current pricing, verifies sufficient Base USDC, persists the idempotency key before the network call, stores the returned access token in a mode-600 private state file, and prints only non-secret monitor details.
 
-Do not add `price`, `priceUsd`, `payTo`, `payer`, `network`, `expiresAt`, `billingModel`, fee fields, or a client-selected fee recipient. The server rejects those authority overrides. Server bounds are $0.10–$100 per trade, $0.10–$500 per UTC day, 1–100% scale, and 10–500 bps slippage; the per-trade cap cannot exceed the daily cap.
+Do not add `price`, `priceUsd`, `payTo`, `payer`, `network`, `expiresAt`, `billingModel`, usage fields, fee fields, or a client-selected recipient. The server rejects those authority overrides. New-monitor bounds are $5–$10,000 per trade, $5–$50,000 per UTC day, 1–100% scale, and 10–500 bps slippage; the per-trade cap cannot exceed the daily cap.
+
+## 4. Verify activation and operation
 
 Capture the response privately. Store `accessToken` in encrypted owner-private storage with file mode `600`; never put it in chat or source. Retain `monitorId`, `manageUrl`, target, Bankr wallet, and published billing object. The Bankr API key is encrypted by the hosted Worker and is not returned.
 
-## 4. Verify paper behavior and fund
+GET `manageUrl` with `Authorization: Bearer <accessToken>`. The new subscription initially reports `billingModel: bankr-usage-minimum` and may be `paused` while usage status is `pending`, `charging`, or `verifying`. HivemindOS first claims the charge, Bankr submits exactly $1 Base USDC, and Blockscout must independently match the token, amount, sender, recipient, and successful transaction. Only `usagePeriod.status: collected` activates the monitor and creates $1 of fee credit.
 
-GET `manageUrl` with `Authorization: Bearer <accessToken>` and verify the target, Bankr wallet, risk caps, `billingModel: bankr-per-trade`, seven-day paper expiry, and `executionProvider: bankr-managed`.
+The first target scan establishes a cursor and never copies older trades. A live event under $5 after scale and caps is skipped. A verified event uses 0.5% of actual copied notional; `usageCreditAppliedUsd` shows how much credit was consumed and `amountUsd` shows only the excess sent by Bankr.
 
-The first poll creates a cursor and never copies older trades. Produce or wait for a new eligible target swap. A paper event must end as `receiptStatus: paper` with no execution or fee transaction. The free monitor then pauses automatically; enabling live with both acknowledgements reactivates it.
+Optional paper mode remains available for testing classification, but it uses the same paid usage period and is not a prerequisite for live execution. Copy-trading results are not proof of future profitability.
 
-Fund the Bankr wallet with Base USDC for copied trades plus a small fee reserve. Bankr sponsors Base gas, so this flow does not require a separate ETH gas step.
-
-## 5. Enable live only with explicit consent
-
-Immediately re-read `/v1/pricing`, show the exact current fee, and obtain both acknowledgements. Then PATCH `manageUrl`:
-
-```json
-{
-  "mode": "live",
-  "riskAcknowledgement": "I understand copy trading can lose money",
-  "feeAcknowledgement": "I authorize HivemindOS to charge the published fee after each verified live copied trade"
-}
-```
-
-Live enablement fails until at least one paper event exists. Once enabled, the monitor has no subscription renewal. Pausing or canceling stops new copies; cancellation erases the hosted credential.
+Pausing prevents new periods from renewing while paused. Resuming during an already funded period is immediate. If a known pre-submission failure says the wallet needs funds, fund it and resume to retry safely. Never retry an `uncertain` payment or execution outcome.

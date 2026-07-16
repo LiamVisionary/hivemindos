@@ -7,7 +7,7 @@ const BASE_URL = "https://hivemindos-copy-trading-gateway.hivemindos.workers.dev
 const KEY_ENV = "HIVEMIND_COPY_TRADING_WALLET_KEY";
 const STATE_PATH = process.env.HIVEMIND_COPY_TRADING_STATE_PATH || ".hive-copy-trading-monitors.json";
 const RISK_ACK = "I understand copy trading can lose money";
-const FEE_ACK = "I authorize HivemindOS to charge the published fee after each verified live copied trade";
+const FEE_ACK = "I authorize HivemindOS to charge the published $1 usage minimum and uncapped 0.5% fee on each verified live copied trade";
 
 const [command = "help", ...rawArgs] = process.argv.slice(2);
 const args = parseArgs(rawArgs);
@@ -26,7 +26,7 @@ try {
       usage: [
         "monitor-client.mjs pricing",
         "monitor-client.mjs verify",
-        "monitor-client.mjs start --target 0x... [--max-trade 5 --max-daily 25 --scale 20 --slippage 100]",
+        "monitor-client.mjs start --target 0x... --confirm-risk --confirm-fee [--max-trade 5 --max-daily 25 --scale 20 --slippage 100]",
         "monitor-client.mjs status [--id ctmon_...]",
         "monitor-client.mjs pause|resume|paper|cancel [--id ctmon_...]",
         "monitor-client.mjs live [--id ctmon_...] --confirm-risk --confirm-fee",
@@ -40,6 +40,9 @@ try {
 
 async function startMonitor(options) {
   const targetWallet = requiredAddress(options.target, "--target");
+  if (options["confirm-risk"] !== true || options["confirm-fee"] !== true) {
+    throw new Error("Starting live requires both --confirm-risk and --confirm-fee after showing current pricing to the user.");
+  }
   const pricing = await request("/v1/pricing");
   if (pricing.ok !== true || pricing.commercial?.pricingAuthority !== "server") {
     throw new Error("Hosted copy-trading pricing is unavailable or not server-authoritative.");
@@ -49,14 +52,23 @@ async function startMonitor(options) {
     || `ctstart_${randomUUID()}`;
   state.pending[targetWallet] = { activationIdempotencyKey, createdAt: new Date().toISOString() };
   await writeState(state);
+  const apiKey = walletKey();
+  const verified = await request("/v1/bankr/verify", { method: "POST", body: { apiKey } });
+  const balance = Number(verified.wallet?.baseUsdcBalance);
+  const minimum = Number(pricing.pricing?.usageMinimumUsd || 1);
+  if (!Number.isFinite(balance) || balance < minimum) {
+    throw new Error(`Fund at least $${minimum.toFixed(2)} Base USDC in the Bankr wallet before activation.`);
+  }
 
   const payload = await request("/v1/monitors", {
     method: "POST",
     body: {
       activationIdempotencyKey,
       targetWallet,
-      bankrConnection: { kind: "existing", apiKey: walletKey() },
-      mode: "paper",
+      bankrConnection: { kind: "existing", apiKey },
+      mode: "live",
+      riskAcknowledgement: RISK_ACK,
+      feeAcknowledgement: FEE_ACK,
       maxTradeUsd: numberArg(options["max-trade"], 5),
       maxDailyUsd: numberArg(options["max-daily"], 25),
       scalePercent: numberArg(options.scale, 20),
@@ -85,8 +97,8 @@ async function startMonitor(options) {
     bankrWallet: string(payload.bankrWallet),
     manageUrl,
     billing: payload.billing,
-    mode: "paper",
-    note: "The access token was stored privately and was not printed.",
+    mode: "live",
+    note: "The access token was stored privately and was not printed. Live activation follows independent verification of the $1 Base USDC usage payment.",
   });
 }
 
