@@ -322,7 +322,8 @@ export async function adoptLocalAppProject(input) {
 }
 
 export async function getLocalAppProject(input) {
-  return (await requiredProject(input?.directory)).project;
+  const { directory, project } = await requiredProject(input?.directory);
+  return reconcileLocalAppRuntimeState(directory, project);
 }
 
 export async function listLocalAppFiles(input) {
@@ -482,12 +483,31 @@ async function processCommand(pid) {
   return String((await execFileAsync("ps", ["-p", String(pid), "-o", "command="], { timeout: 3_000 })).stdout || "").trim();
 }
 
+async function ownedProcessCommand(project) {
+  const pid = Number(project.pid);
+  if (!Number.isInteger(pid) || pid <= 0) return "";
+  const command = await processCommand(pid).catch(() => "");
+  const expected = localAppRuntimeCommand(project.directory, project.port, project.templateId).ownershipToken;
+  return command.includes(expected) ? command : "";
+}
+
+async function reconcileLocalAppRuntimeState(directory, project) {
+  if (project.status !== "running") return project;
+  if (await ownedProcessCommand(project)) return project;
+  return writeManifest(directory, {
+    ...project,
+    status: "stopped",
+    pid: null,
+    port: null,
+    previewUrl: null,
+    lastError: "The app preview process exited and can be restarted.",
+  });
+}
+
 async function stopOwnedProcess(project) {
   const pid = Number(project.pid);
   if (!Number.isInteger(pid) || pid <= 0) return;
-  const command = await processCommand(pid).catch(() => "");
-  const expected = localAppRuntimeCommand(project.directory, project.port, project.templateId).ownershipToken;
-  if (!command.includes(expected)) throw new Error("Refusing to stop a process that is no longer owned by this app project.");
+  if (!await ownedProcessCommand(project)) throw new Error("Refusing to stop a process that is no longer owned by this app project.");
   if (process.platform === "win32") {
     await execFileAsync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], { timeout: 5_000 }).catch(() => undefined);
   } else {
