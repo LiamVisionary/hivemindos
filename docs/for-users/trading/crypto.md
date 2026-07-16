@@ -85,6 +85,9 @@ choose one of these.
 - **Launch a token** — create your own token on Base, with a liquidity pool set up for you.
 - **Automations** — recurring buys (DCA), scheduled orders (TWAP), and limit / stop
   orders that keep running on their own.
+- **Always-on copy trading** — follow bounded new Base swaps from a target wallet
+  using a separate Bankr wallet. New monitors start with one free paper event;
+  live copies carry a disclosed post-verification HivemindOS fee.
 - **Fund credits** — top up Bankr's LLM credits.
 - **Portfolio** — check balances, profit/loss, and positions across chains.
 
@@ -108,8 +111,10 @@ The preview shows the fee before confirmation, and the fee is sent as its own US
 USDG transaction only after the main action succeeds.
 
 Local Hyperliquid trades use a separate builder fee, described in the Hyperliquid
-guide. Bankr and card-style provider flows may have their own provider fees instead
-of the local-wallet platform fee.
+guide. Hosted Bankr copy trading charges 0.50% of verified copied-trade notional,
+with a $0.02 minimum and $0.50 maximum, directly from the Bankr execution wallet;
+paper, skipped, failed, and unverified copies cost $0. Other Bankr and card-style
+provider flows may have their own provider fees instead of this fee.
 
 ## One current limitation: standalone bridging
 

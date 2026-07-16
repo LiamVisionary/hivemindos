@@ -13,7 +13,11 @@ import type {
   BankrCopyDashboard,
   BankrCopySubscription,
 } from "@/lib/services/trading/bankr-copy-trading-contract";
-import { BANKR_COPY_TRADING_API_KEY_ENV_NAMES } from "@/lib/services/trading/bankr-copy-trading-contract";
+import {
+  BANKR_COPY_TRADING_API_KEY_ENV_NAMES,
+  BANKR_COPY_TRADING_FEE_ACKNOWLEDGEMENT,
+  BANKR_COPY_TRADING_RISK_ACKNOWLEDGEMENT,
+} from "@/lib/services/trading/bankr-copy-trading-contract";
 import styles from "./ManagedBankrCopyTradingPanel.module.css";
 
 type ApiResponse = Partial<BankrCopyDashboard> & {
@@ -55,13 +59,13 @@ export function ManagedBankrCopyTradingPanel() {
   const [verifiedApiKeyEnv, setVerifiedApiKeyEnv] = React.useState("");
   const [verifiedWallet, setVerifiedWallet] = React.useState("");
   const [targetWallet, setTargetWallet] = React.useState("");
-  const [paymentWalletId, setPaymentWalletId] = React.useState("");
   const [risk, setRisk] = React.useState(initialRisk);
   const [busy, setBusy] = React.useState("");
   const [error, setError] = React.useState("");
   const [notice, setNotice] = React.useState("");
   const [showSetup, setShowSetup] = React.useState(false);
   const [setupStep, setSetupStep] = React.useState<SetupStep>(1);
+  const activationIdempotencyKey = React.useRef("");
 
   const refresh = React.useCallback(async () => {
     const result = await api();
@@ -71,7 +75,6 @@ export function ManagedBankrCopyTradingPanel() {
     }
     const next = result as unknown as BankrCopyDashboard;
     setDashboard(next);
-    setPaymentWalletId((current) => current || next.fundingWallets[0]?.id || "");
   }, []);
 
   React.useEffect(() => {
@@ -84,7 +87,6 @@ export function ManagedBankrCopyTradingPanel() {
       }
       const next = result as unknown as BankrCopyDashboard;
       setDashboard(next);
-      setPaymentWalletId(next.fundingWallets[0]?.id || "");
     });
     return () => { cancelled = true; };
   }, []);
@@ -106,13 +108,14 @@ export function ManagedBankrCopyTradingPanel() {
     return { ok: true };
   };
 
-  const subscribe = async () => {
-    setBusy("subscribe");
+  const startMonitor = async () => {
+    setBusy("start");
     setError("");
     setNotice("");
+    activationIdempotencyKey.current ||= `ctstart_${crypto.randomUUID()}`;
     const result = await api({
-      action: "subscribe",
-      paymentWalletId,
+      action: "start",
+      activationIdempotencyKey: activationIdempotencyKey.current,
       targetWallet,
       connectionKind,
       ...(connectionKind === "existing" ? { apiKeyEnv: verifiedApiKeyEnv } : {}),
@@ -120,16 +123,17 @@ export function ManagedBankrCopyTradingPanel() {
     });
     setBusy("");
     if (!result.ok) {
-      setError(result.error || "The hosted subscription could not be created.");
+      setError(result.error || "The hosted monitor could not be created.");
       return;
     }
+    activationIdempotencyKey.current = "";
     setVerifiedApiKeyEnv("");
     setVerifiedWallet("");
     setWalletPath("existing");
     setTargetWallet("");
     setRisk(initialRisk);
     setSetupStep(1);
-    setNotice("The x402 subscription is active in paper mode. Fund the Bankr wallet when you are ready to trade.");
+    setNotice("The free paper monitor is active. It will record the first eligible new target trade, then pause for your review.");
     setShowSetup(false);
     await refresh();
   };
@@ -140,10 +144,10 @@ export function ManagedBankrCopyTradingPanel() {
     const result = await api({ action, subscriptionId });
     setBusy("");
     if (!result.ok) {
-      setError(result.error || `Could not ${action} this subscription.`);
+      setError(result.error || `Could not ${action} this monitor.`);
       return;
     }
-    setNotice(action === "cancel" ? "Subscription canceled and its hosted Bankr credential was erased." : `Subscription ${action === "pause" ? "paused" : "resumed"}.`);
+    setNotice(action === "cancel" ? "Monitor canceled and its hosted Bankr credential was erased." : `Monitor ${action === "pause" ? "paused" : "resumed"}.`);
     await refresh();
   };
 
@@ -166,7 +170,6 @@ export function ManagedBankrCopyTradingPanel() {
   const canSubscribe = Boolean(
     dashboard?.managedExecutionAvailable
     && dashboard.available
-    && paymentWalletId
     && canContinueRisk
     && canContinueWallet,
   );
@@ -199,13 +202,13 @@ export function ManagedBankrCopyTradingPanel() {
           <p>HivemindOS monitors the target on Base; Bankr executes from a separate wallet under your limits.</p>
         </div>
         <div className={styles.badges}>
-          <Badge tone="honey">x402</Badge>
-          {dashboard && !dashboard.managedExecutionAvailable ? <Badge>Backend update required</Badge> : null}
+          <Badge tone="honey">Per trade</Badge>
+          {dashboard && !dashboard.managedExecutionAvailable ? <Badge>Managed unavailable</Badge> : null}
           <Badge tone={dashboard?.liveEnabled ? "live" : undefined}>{dashboard?.liveEnabled ? "Live enabled" : "Paper only"}</Badge>
         </div>
       </div>
 
-      {dashboard && !dashboard.managedExecutionAvailable ? <div className={styles.error}>The deployed hosted gateway does not have managed Bankr execution yet. Connection and payment controls stay disabled until that backend revision is deployed.</div> : null}
+      {dashboard && !dashboard.managedExecutionAvailable ? <div className={styles.error}>Managed Bankr execution is unavailable on the hosted gateway right now.</div> : null}
       {dashboard?.pendingRecoveryCount ? <div className={styles.notice}>{dashboard.pendingRecoveryCount} paid subscription activation {dashboard.pendingRecoveryCount === 1 ? "is" : "are"} queued for automatic recovery. HivemindOS retries whenever this dashboard refreshes.</div> : null}
       {error ? <div className={styles.error}>{error}</div> : null}
       {notice ? <div className={styles.notice}>{notice}</div> : null}
@@ -277,7 +280,8 @@ export function ManagedBankrCopyTradingPanel() {
                   />
                   <details className={styles.keyHelp}>
                     <summary>How to create a safe key</summary>
-                    <p>Create a dedicated key at <a href="https://bankr.bot/api" target="_blank" rel="noreferrer">bankr.bot/api</a> with Wallet API on, read-only off, and Bankr spend limits set. Continue verifies a selected variable without exposing its value to the browser. Save verifies and stores a newly entered value in Shared Hive Env.</p>
+                    <p>Create a dedicated key at <a href="https://bankr.bot/api" target="_blank" rel="noreferrer">bankr.bot/api</a> with Wallet API on, read-only off, Bankr spend limits set, and only the published fee wallet in the EVM recipient allowlist. Continue verifies a selected variable without exposing its value to the browser. Save verifies and stores a newly entered value in Shared Hive Env.</p>
+                    {dashboard?.feeRecipient ? <p>Allowed EVM recipient: <code>{dashboard.feeRecipient}</code></p> : null}
                   </details>
                 </div>
               ) : (
@@ -293,7 +297,7 @@ export function ManagedBankrCopyTradingPanel() {
 
           {setupStep === 2 ? (
             <div className={styles.wizardStep}>
-              <div className={styles.stepHead}><span>2</span><div><b>Choose the target and limits</b><small>Start small. The first paid period runs in paper mode.</small></div></div>
+              <div className={styles.stepHead}><span>2</span><div><b>Choose the target and limits</b><small>Start small. The first {dashboard?.paperTrialDays ?? 7} days run free in paper mode.</small></div></div>
               <div className={styles.formGrid}>
                 <label className={styles.wide}><span>Target Base wallet</span><input value={targetWallet} onChange={(event) => setTargetWallet(event.target.value)} placeholder="0x…" /></label>
                 <NumberField label="Max per trade" value={risk.maxTradeUsd} min={0.1} max={100} step={0.1} onChange={(value) => setRisk((current) => ({ ...current, maxTradeUsd: value }))} suffix="USD" />
@@ -312,7 +316,7 @@ export function ManagedBankrCopyTradingPanel() {
 
           {setupStep === 3 ? (
             <div className={styles.wizardStep}>
-              <div className={styles.stepHead}><span>3</span><div><b>Review and start</b><small>Confirm the wallet, target, and hard limits before paying.</small></div></div>
+              <div className={styles.stepHead}><span>3</span><div><b>Review and start</b><small>There is no subscription or upfront payment.</small></div></div>
               <div className={styles.reviewGrid}>
                 <ReviewItem label="Bankr wallet" value={connectionKind === "existing" ? shortAddress(verifiedWallet) : "Created on activation"} />
                 <ReviewItem label="Target" value={shortAddress(targetWallet.trim())} />
@@ -321,24 +325,19 @@ export function ManagedBankrCopyTradingPanel() {
                 <ReviewItem label="Copy scale" value={`${risk.scalePercent}%`} />
                 <ReviewItem label="Max slippage" value={`${risk.maxSlippageBps} bps`} />
               </div>
-              <label className={styles.paymentField}><span>Pay the x402 subscription from</span><select value={paymentWalletId} onChange={(event) => setPaymentWalletId(event.target.value)}>
-                <option value="">Choose a funded Base wallet</option>
-                {dashboard?.fundingWallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{wallet.name} · {shortAddress(wallet.address)}</option>)}
-              </select></label>
-              {!dashboard?.fundingWallets.length ? <p className={styles.help}>Create or import a local Base wallet in Wallets, then fund it with the subscription price plus Base ETH for gas.</p> : null}
               <div className={styles.priceSummary}>
-                <div><b>${(dashboard?.priceUsd ?? 4.99).toFixed(2)} USDC</b><span>{dashboard?.periodDays ?? 30} days · one target · starts in paper mode · no profit guarantee</span></div>
+                <div><b>{dashboard?.feePercent ?? 0.5}% per verified live copied trade</b><span>${(dashboard?.minimumFeeUsd ?? 0.02).toFixed(2)} minimum · ${(dashboard?.maximumFeeUsd ?? 0.5).toFixed(2)} maximum · charged from this Bankr wallet · paper, skipped, and failed trades cost $0</span></div>
               </div>
               <div className={styles.wizardActions}>
-                <BBtn sm disabled={busy === "subscribe"} onClick={() => setSetupStep(2)}>Back</BBtn>
-                <BBtn variant="primary" disabled={!canSubscribe || busy === "subscribe"} onClick={subscribe}>{busy === "subscribe" ? "Paying & activating…" : "Pay with x402 & start"}</BBtn>
+                <BBtn sm disabled={busy === "start"} onClick={() => setSetupStep(2)}>Back</BBtn>
+                <BBtn variant="primary" disabled={!canSubscribe || busy === "start"} onClick={startMonitor}>{busy === "start" ? "Starting…" : "Start paper trial"}</BBtn>
               </div>
             </div>
           ) : null}
         </div>
       ) : null}
 
-      <div className={styles.boundary}>Local copy-trading engine controls remain below for self-hosted wallets. Bankr-managed subscriptions above run in the hosted Worker even when this app is closed.</div>
+      <div className={styles.boundary}>Local copy-trading controls remain below for self-hosted wallets. Bankr-managed monitors above run in the hosted Worker even when this app is closed.</div>
     </section>
   );
 }
@@ -361,13 +360,16 @@ function SubscriptionCard(props: {
   const [funding, setFunding] = React.useState(false);
   const [updating, setUpdating] = React.useState(false);
   const [liveAcknowledged, setLiveAcknowledged] = React.useState(false);
+  const [feeAcknowledged, setFeeAcknowledged] = React.useState(false);
   const [limits, setLimits] = React.useState({
     maxTradeUsd: subscription.maxTradeUsd,
     maxDailyUsd: subscription.maxDailyUsd,
     scalePercent: subscription.scalePercent,
     maxSlippageBps: subscription.maxSlippageBps,
   });
+  const isPerTrade = subscription.billingModel === "bankr-per-trade";
   const paperTrialComplete = props.events.some((event) => event.receiptStatus === "paper");
+  const paperTrialPaused = isPerTrade && subscription.mode === "paper" && subscription.status === "paused" && paperTrialComplete;
   const limitsValid = isWithin(limits.maxTradeUsd, 0.1, 100)
     && isWithin(limits.maxDailyUsd, 0.1, 500)
     && limits.maxDailyUsd >= limits.maxTradeUsd
@@ -381,12 +383,15 @@ function SubscriptionCard(props: {
       action: "update",
       subscriptionId: subscription.id,
       ...(mode ? { mode } : {}),
-      ...(mode === "live" ? { riskAcknowledgement: "I understand copy trading can lose money" } : {}),
+      ...(mode === "live" ? {
+        riskAcknowledgement: BANKR_COPY_TRADING_RISK_ACKNOWLEDGEMENT,
+        ...(isPerTrade ? { feeAcknowledgement: BANKR_COPY_TRADING_FEE_ACKNOWLEDGEMENT } : {}),
+      } : {}),
       ...limits,
     });
     setUpdating(false);
     if (!result.ok) {
-      props.onError(result.error || "Could not update this copy-trading subscription.");
+      props.onError(result.error || "Could not update this copy-trading monitor.");
       return;
     }
     if (result.subscription) {
@@ -398,7 +403,8 @@ function SubscriptionCard(props: {
       });
     }
     setLiveAcknowledged(false);
-    props.onNotice(mode === "live" ? "Live copy trading is enabled under the updated hard limits." : mode === "paper" ? "The subscription is back in paper mode." : "Copy-trading limits updated.");
+    setFeeAcknowledged(false);
+    props.onNotice(mode === "live" ? "Live copy trading and direct per-trade fees are enabled under the updated hard limits." : mode === "paper" ? "The monitor is back in paper mode." : "Copy-trading limits updated.");
     await props.onRefresh();
   };
   const fund = async () => {
@@ -427,6 +433,7 @@ function SubscriptionCard(props: {
         <span><small>Trade cap</small><b>${subscription.maxTradeUsd}</b></span>
         <span><small>Daily cap</small><b>${subscription.maxDailyUsd}</b></span>
         <span><small>Today</small><b>${props.usageToday?.reservedUsd ?? 0}</b></span>
+        <span><small>Service fee</small><b>{subscription.billingModel === "prepaid-period" ? "Prepaid" : `${subscription.billing.feePercent ?? props.dashboard.feePercent}%`}</b></span>
       </div>
       <details className={styles.management}>
         <summary>Manage mode &amp; limits</summary>
@@ -445,9 +452,13 @@ function SubscriptionCard(props: {
                 <div className={styles.liveGate}>
                   <label>
                     <input type="checkbox" checked={liveAcknowledged} onChange={(event) => setLiveAcknowledged(event.target.checked)} />
-                    <span>I understand copy trading can lose money</span>
+                    <span>{BANKR_COPY_TRADING_RISK_ACKNOWLEDGEMENT}</span>
                   </label>
-                  <BBtn variant="primary" sm disabled={!paperTrialComplete || !liveAcknowledged || !limitsValid || updating} onClick={() => updateSubscription("live")}>Enable live</BBtn>
+                  {isPerTrade ? <label>
+                    <input type="checkbox" checked={feeAcknowledged} onChange={(event) => setFeeAcknowledged(event.target.checked)} />
+                    <span>I authorize the published {props.dashboard.feePercent}% fee (${props.dashboard.minimumFeeUsd.toFixed(2)}–${props.dashboard.maximumFeeUsd.toFixed(2)}) after each verified live copied trade.</span>
+                  </label> : null}
+                  <BBtn variant="primary" sm disabled={!paperTrialComplete || !liveAcknowledged || (isPerTrade && !feeAcknowledged) || !limitsValid || updating} onClick={() => updateSubscription("live")}>Enable live</BBtn>
                   {!paperTrialComplete ? <p>Complete one new paper-mode copy event before live execution can be enabled.</p> : null}
                 </div>
               ) : <p className={styles.help}>Live execution is currently paused globally. Paper monitoring continues normally.</p>
@@ -455,19 +466,22 @@ function SubscriptionCard(props: {
           </div>
         </div>
       </details>
+      {paperTrialPaused ? <div className={styles.notice}>Paper test complete. Review the event, then open <b>Manage mode &amp; limits</b> to accept the live risk and fee terms, or cancel this monitor.</div> : null}
       {props.statusError ? <div className={styles.error}>{props.statusError}</div> : null}
       <div className={styles.funding}>
-        <div><span className={styles.eyebrow}>3 · Fund the Bankr wallet</span><code>{subscription.bankrWallet}</code><p>Send Base USDC for trades and a little Base ETH for gas. You can also copy this address and fund it from any wallet.</p></div>
+        <div><span className={styles.eyebrow}>Fund the Bankr wallet</span><code>{subscription.bankrWallet}</code><p>Send Base USDC for copied trades and their small post-verification fees. Bankr sponsors Base gas. You can also copy this address and fund it from any wallet.</p></div>
         <BBtn sm onClick={() => void navigator.clipboard?.writeText(subscription.bankrWallet)}>Copy address</BBtn>
         <select value={fundingWalletId} onChange={(event) => setFundingWalletId(event.target.value)}><option value="">Funding wallet</option>{props.dashboard.fundingWallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{wallet.name}</option>)}</select>
         <input type="number" min="1" max="500" value={amountUsd} onChange={(event) => setAmountUsd(Number(event.target.value))} aria-label="USDC funding amount" />
         <BBtn variant="primary" sm disabled={!fundingWalletId || funding} onClick={fund}>{funding ? "Sending…" : "Send USDC"}</BBtn>
       </div>
       <div className={styles.actions}>
-        <BBtn sm disabled={Boolean(props.busy)} onClick={() => props.onMutate(subscription.status === "paused" ? "resume" : "pause", subscription.id)}>{subscription.status === "paused" ? "Resume" : "Pause"}</BBtn>
+        {paperTrialPaused
+          ? <BBtn sm disabled>Paper test complete</BBtn>
+          : <BBtn sm disabled={Boolean(props.busy)} onClick={() => props.onMutate(subscription.status === "paused" ? "resume" : "pause", subscription.id)}>{subscription.status === "paused" ? "Resume" : "Pause"}</BBtn>}
         <BBtn sm disabled={Boolean(props.busy)} onClick={() => props.onMutate("cancel", subscription.id)}>Cancel & erase key</BBtn>
       </div>
-      {props.events.length ? <div className={styles.events}>{props.events.slice(0, 5).map((event) => <div key={event.id}><span>{event.receiptStatus || event.status}</span><b>${event.maxTradeUsd}</b><code>{shortAddress(event.sourceTransactionHash)}</code>{event.receiptError ? <small>{event.receiptError}</small> : null}</div>)}</div> : <p className={styles.help}>Monitoring is active. New source trades appear here after the initial cursor baseline.</p>}
+      {props.events.length ? <div className={styles.events}>{props.events.slice(0, 5).map((event) => <div key={event.id}><span>{event.receiptStatus || event.status}</span><b>${event.executedNotionalUsd ?? event.maxTradeUsd}</b><code>{shortAddress(event.sourceTransactionHash)}</code>{event.fee ? <small>Fee ${event.fee.amountUsd.toFixed(2)} USDC · {event.fee.status}{event.fee.transactionHash ? ` · ${shortAddress(event.fee.transactionHash)}` : ""}</small> : null}{event.receiptError ? <small>{event.receiptError}</small> : null}{event.fee?.error ? <small>{event.fee.error}</small> : null}</div>)}</div> : <p className={styles.help}>Monitoring is active. New source trades appear here after the initial cursor baseline.</p>}
     </article>
   );
 }

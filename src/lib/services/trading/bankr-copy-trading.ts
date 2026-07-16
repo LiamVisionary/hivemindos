@@ -2,8 +2,6 @@ import "server-only";
 
 import {
   BANKR_COPY_TRADING_FUND_CONFIRMATION,
-  BANKR_COPY_TRADING_MAX_PLAN_PRICE_USD,
-  BANKR_COPY_TRADING_PAYMENT_CONFIRMATION,
   BANKR_COPY_TRADING_PAYMENT_NETWORK,
   OFFICIAL_BANKR_COPY_TRADING_BASE_URL,
   type BankrCopyConnectionKind,
@@ -24,7 +22,6 @@ import { readWalletLedger } from "@/lib/services/obsidian/wallet-ledger";
 import { sendUsdStable } from "@/lib/services/wallet/chain-wallet";
 import { getWalletInfo, getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { evaluateSpend, loadGovernanceWallet } from "@/lib/services/wallet/spend-governance";
-import { executeX402Fetch } from "@/lib/services/wallet/x402-agent-fetch";
 import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
 
 type JsonObject = Record<string, unknown>;
@@ -81,14 +78,22 @@ export async function getBankrCopyDashboard(): Promise<BankrCopyDashboard> {
   }));
   const healthRecord = isRecord(health) ? health : {};
   const pricingRecord = isRecord(pricing) ? pricing : {};
-  const plan = isRecord(pricingRecord.pricing) ? pricingRecord.pricing : {};
+  const fee = isRecord(pricingRecord.pricing) ? pricingRecord.pricing : {};
+  const feeRecipient = typeof fee.recipient === "string" && /^0x[0-9a-fA-F]{40}$/.test(fee.recipient)
+    ? fee.recipient.toLowerCase()
+    : "";
   return {
-    available: healthRecord.enabled === true,
+    available: healthRecord.enabled === true && healthRecord.configured === true,
     managedExecutionAvailable: healthRecord.bankrManagedExecution === true,
     liveEnabled: healthRecord.liveEnabled === true,
     partnerProvisioningConfigured: healthRecord.partnerProvisioningConfigured === true,
-    priceUsd: positiveNumber(plan.priceUsd, 4.99),
-    periodDays: positiveNumber(plan.durationDays, 30),
+    billingMode: "per-successful-live-trade",
+    feePolicyVersion: stringValue(fee.version),
+    feePercent: positiveNumber(fee.feePercent, 0.5),
+    minimumFeeUsd: positiveNumber(fee.minimumFeeUsd, 0.02),
+    maximumFeeUsd: positiveNumber(fee.maximumFeeUsd, 0.5),
+    feeRecipient,
+    paperTrialDays: positiveNumber(fee.paperTrialDays, 7),
     pendingRecoveryCount,
     fundingWallets,
     subscriptions,
@@ -107,8 +112,8 @@ export async function verifyExistingBankrConnection(apiKey: string): Promise<{ e
   return { evmAddress: address };
 }
 
-export async function subscribeToBankrCopyTrading(input: {
-  paymentWalletId: string;
+export async function startBankrCopyTradingMonitor(input: {
+  activationIdempotencyKey: string;
   targetWallet: string;
   connectionKind: BankrCopyConnectionKind;
   bankrApiKey?: string;
@@ -118,18 +123,6 @@ export async function subscribeToBankrCopyTrading(input: {
   maxSlippageBps: number;
   mode?: "paper" | "live";
 }): Promise<BankrCopySubscription> {
-  const [walletRecord, signer] = await Promise.all([
-    loadGovernanceWallet(input.paymentWalletId),
-    getWalletSecret(input.paymentWalletId),
-  ]);
-  if (!walletRecord || !signer) throw new BankrCopyTradingError(404, "The selected Base payment wallet or its encrypted signer is missing.");
-  if (!walletRecord.wallet.enabled) throw new BankrCopyTradingError(403, "The selected payment wallet is disabled.");
-  if (signer.info.network !== BANKR_COPY_TRADING_PAYMENT_NETWORK || walletRecord.wallet.network !== BANKR_COPY_TRADING_PAYMENT_NETWORK) {
-    throw new BankrCopyTradingError(403, "The x402 subscription payment requires a Base wallet.");
-  }
-  const maxPaymentUsd = walletRecord.wallet.maxPaymentUsd > 0
-    ? Math.min(BANKR_COPY_TRADING_MAX_PLAN_PRICE_USD, walletRecord.wallet.maxPaymentUsd)
-    : BANKR_COPY_TRADING_MAX_PLAN_PRICE_USD;
   const requestBody = {
     targetWallet: input.targetWallet,
     bankrConnection: input.connectionKind === "existing"
@@ -140,57 +133,18 @@ export async function subscribeToBankrCopyTrading(input: {
     maxDailyUsd: input.maxDailyUsd,
     scalePercent: input.scalePercent,
     maxSlippageBps: input.maxSlippageBps,
+    activationIdempotencyKey: input.activationIdempotencyKey,
   };
-  const result = await executeX402Fetch({
-    agentId: input.paymentWalletId,
-    network: signer.info.network,
-    secret: signer.secret,
-    fromAddress: signer.info.address,
-    url: `${OFFICIAL_BANKR_COPY_TRADING_BASE_URL}/v1/subscriptions`,
+  const payload = await hostedRequest<JsonObject>("/v1/monitors", {
     method: "POST",
-    body: requestBody,
-    policy: {
-      enabled: true,
-      provider: "x402",
-      network: BANKR_COPY_TRADING_PAYMENT_NETWORK,
-      maxPaymentUsd,
-      approvalRequiredOverUsd: 0,
-      autoPayEnabled: false,
-      x402BaseUrl: OFFICIAL_BANKR_COPY_TRADING_BASE_URL,
-    },
-    confirmation: BANKR_COPY_TRADING_PAYMENT_CONFIRMATION,
-    approvalThresholdSatisfied: true,
-    skipPlatformFee: true,
-    timeoutMs: 90_000,
-    approvalContext: {
-      summary: "Buy 30 days of always-on Bankr copy-trading monitoring.",
-      whyNow: "The hosted worker needs a paid subscription before it can monitor the target wallet continuously.",
-      impact: "This pays the server-authored x402 USDC price on Base. It does not fund the Bankr trading wallet.",
-      requestedAction: "Approve only if this target wallet and subscription price are expected.",
-      evidence: [`Target: ${input.targetWallet}`, `Execution: ${input.connectionKind} Bankr wallet`],
-      source: "HivemindOS Bankr copy trading",
-    },
+    body: JSON.stringify(requestBody),
+    signal: AbortSignal.timeout(90_000),
   });
-  const payload = isRecord(result.bodyJson) ? result.bodyJson : {};
-  if (!result.ok && payload.paymentSettled === true) {
-    const receiptId = stringValue(payload.receiptId);
-    const recoveryToken = stringValue(payload.recoveryToken);
-    if (receiptId && recoveryToken) {
-      return recoverPaidBankrCopyActivation(receiptId, recoveryToken, 3);
-    }
-  }
-  if (!result.ok) {
-    throw new BankrCopyTradingError(
-      result.status || 502,
-      typeof payload.error === "string" ? payload.error : "The x402 Bankr copy-trading subscription failed.",
-      payload,
-    );
-  }
-  const subscriptionId = stringValue(payload.subscriptionId);
+  const subscriptionId = stringValue(payload.monitorId) || stringValue(payload.subscriptionId);
   const accessToken = stringValue(payload.accessToken);
   const targetWallet = stringValue(payload.targetWallet).toLowerCase();
   if (!subscriptionId || !accessToken || !/^0x[0-9a-f]{40}$/.test(targetWallet)) {
-    throw new BankrCopyTradingError(502, "The paid subscription response did not include its management credential.");
+    throw new BankrCopyTradingError(502, "The monitor response did not include its management credential.");
   }
   const current = await readHostedSubscription(targetWallet, subscriptionId, accessToken);
   await storeBankrCopyCredential({ subscription: current.subscription, accessToken });
@@ -202,6 +156,7 @@ export async function changeBankrCopySubscription(input: {
   status?: "active" | "paused";
   mode?: "paper" | "live";
   riskAcknowledgement?: string;
+  feeAcknowledgement?: string;
   maxTradeUsd?: number;
   maxDailyUsd?: number;
   scalePercent?: number;
@@ -212,18 +167,19 @@ export async function changeBankrCopySubscription(input: {
     ...(input.status ? { status: input.status } : {}),
     ...(input.mode ? { mode: input.mode } : {}),
     ...(input.riskAcknowledgement ? { riskAcknowledgement: input.riskAcknowledgement } : {}),
+    ...(input.feeAcknowledgement ? { feeAcknowledgement: input.feeAcknowledgement } : {}),
     ...(input.maxTradeUsd !== undefined ? { maxTradeUsd: input.maxTradeUsd } : {}),
     ...(input.maxDailyUsd !== undefined ? { maxDailyUsd: input.maxDailyUsd } : {}),
     ...(input.scalePercent !== undefined ? { scalePercent: input.scalePercent } : {}),
     ...(input.maxSlippageBps !== undefined ? { maxSlippageBps: input.maxSlippageBps } : {}),
   };
-  if (!Object.keys(patch).length) throw new BankrCopyTradingError(400, "Choose a subscription setting to update.");
+  if (!Object.keys(patch).length) throw new BankrCopyTradingError(400, "Choose a monitor setting to update.");
   const payload = await hostedRequest<{ subscription?: BankrCopySubscription }>(subscriptionPath(credential.subscription), {
     method: "PATCH",
     headers: { authorization: `Bearer ${credential.accessToken}` },
     body: JSON.stringify(patch),
   });
-  if (!payload.subscription) throw new BankrCopyTradingError(502, "The hosted service did not return the updated subscription.");
+  if (!payload.subscription) throw new BankrCopyTradingError(502, "The hosted service did not return the updated monitor.");
   await storeBankrCopyCredential({ subscription: payload.subscription, accessToken: credential.accessToken });
   return payload.subscription;
 }
@@ -278,11 +234,11 @@ export async function fundBankrCopyWallet(input: {
       approvalToken: input.approvalToken,
       approvalThresholdSatisfied: true,
       explanation: {
-        summary: "Fund the Bankr wallet used for this copy-trading subscription.",
+        summary: "Fund the Bankr wallet used for this copy-trading monitor.",
         whyNow: "Bankr can only copy trades from assets already held in its execution wallet.",
         impact: `This sends $${amountUsd.toFixed(2)} USDC on Base to ${credential.subscription.bankrWallet}.`,
         requestedAction: "Approve only if this is the expected Bankr execution wallet.",
-        evidence: [`Subscription: ${input.subscriptionId}`, `Target trader: ${credential.subscription.targetWallet}`],
+        evidence: [`Monitor: ${input.subscriptionId}`, `Target trader: ${credential.subscription.targetWallet}`],
         source: "HivemindOS Bankr copy trading",
       },
     });
@@ -375,19 +331,19 @@ async function readHostedSubscription(targetWallet: string, subscriptionId: stri
     subscription: BankrCopySubscription;
     events: BankrCopyDashboard["subscriptions"][number]["events"];
     usageToday?: { signalCount: number; reservedUsd: number; maxDailyUsd: number };
-  }>(`/v1/subscriptions/${targetWallet}/${encodeURIComponent(subscriptionId)}`, {
+  }>(`/v1/monitors/${targetWallet}/${encodeURIComponent(subscriptionId)}`, {
     headers: { authorization: `Bearer ${accessToken}` },
   });
 }
 
 async function requiredCredential(subscriptionId: string) {
   const credential = await getBankrCopyCredential(subscriptionId);
-  if (!credential) throw new BankrCopyTradingError(404, "This Bankr copy-trading subscription is not stored on this device.");
+  if (!credential) throw new BankrCopyTradingError(404, "This Bankr copy-trading monitor is not stored on this device.");
   return credential;
 }
 
 function subscriptionPath(subscription: Pick<BankrCopySubscription, "targetWallet" | "id">): string {
-  return `/v1/subscriptions/${subscription.targetWallet}/${encodeURIComponent(subscription.id)}`;
+  return `/v1/monitors/${subscription.targetWallet}/${encodeURIComponent(subscription.id)}`;
 }
 
 async function hostedRequest<T extends JsonObject>(path: string, init: RequestInit = {}): Promise<T> {

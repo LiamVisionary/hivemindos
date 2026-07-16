@@ -11,11 +11,11 @@ Copy trading is risky. A profitable simulation, backtest, or past wallet history
 ## How it works
 
 1. You choose the Base wallet to follow and set a per-trade cap, UTC daily cap, copy percentage, and maximum slippage.
-2. Your agent checks the current hosted offer. If the offer is unavailable or still marked coming soon, setup stops without a payment.
-3. An x402 USDC payment starts a 30-day monitor for that one target. The price and payment recipient come from the hosted service, not from your desktop or a request body.
-4. New, unambiguous Base swaps become short-lived managed events. Paper events are recorded without a transaction. Once live mode is enabled, the hosted worker quotes and executes through Bankr's Wallet API, then independently verifies the resulting Base transaction. The first scan only establishes a starting point, so historical transactions are not copied.
+2. The monitor starts in a free seven-day paper trial. It records the first eligible new trade without moving funds or charging a fee, then pauses so you can review the result.
+3. If you enable live mode, the hosted worker quotes and executes eligible swaps through Bankr's Wallet API, then independently verifies the resulting Base transaction. The first scan only establishes a starting point, so historical transactions are not copied.
+4. After a copied trade verifies, Bankr sends the published service fee directly from the same Bankr wallet in Base USDC. There is no subscription, separate payer wallet, or upfront x402 payment. Paper, skipped, failed, and unverified trades cost $0.
 
-Many subscribers following the same target share one hosted watcher, while each subscriber keeps separate Bankr credentials, limits, daily reservations, and outcomes.
+The current hosted fee is **0.5% of verified copied-trade notional**, with a **$0.02 minimum** and **$0.50 maximum**. The hosted pricing response is authoritative and is shown again before live consent. Many users following the same target share one hosted watcher, while each monitor keeps separate Bankr credentials, limits, daily reservations, and outcomes. One Bankr wallet can run up to three active monitors.
 
 ## Connect an existing Bankr key
 
@@ -27,27 +27,33 @@ If you do not have a Bankr wallet yet, choose **Create a Bankr wallet**. When ho
 
 ## Start in paper mode
 
-Paper mode is the default and cannot submit a transaction. Use it first to observe enough new trades to judge latency, skipped signals, fees, slippage, and results after costs.
+Paper mode is the default and cannot submit a transaction. The monitor records one eligible new event and pauses. Use that result to inspect classification and latency before accepting live risk; it is not evidence that the target is profitable.
 
 Live mode has a separate hosted availability switch. Enabling it requires all of the following:
 
 - a paper-mode trial;
 - the exact acknowledgement that copy trading can lose money;
 - a dedicated Bankr wallet key with Wallet API enabled, read-only off, and conservative Bankr spend limits;
-- enough Base funds for the bounded swaps and gas;
-- explicit approval of the current paid offer.
+- enough Base assets for the bounded swaps and enough Base USDC for the post-verification fee;
+- explicit approval of the current published fee policy.
 
 Live receipts are not accepted merely because they contain a transaction hash. The hosted service checks that the Base transaction is a successful matching swap from the configured Bankr wallet, follows the copied trade, uses the expected assets, and stays inside the server-issued spend ceiling.
 
-After at least one new paper-mode event is recorded, **Manage mode & limits** lets you tighten the caps and enter the exact loss acknowledgement before enabling live mode. The hosted service independently enforces the paper-trial requirement, the global live switch, and every limit; changing local UI state cannot bypass them.
+After the paper event is recorded, **Manage mode & limits** lets you tighten the caps and accept both the exact loss acknowledgement and the exact direct-fee acknowledgement before enabling live mode. Enabling live reactivates the paused monitor. The hosted service independently enforces the paper requirement, current fee policy, global live switch, and every limit; changing local UI state cannot bypass them.
 
 ## Ask an agent to set it up
 
-The bundled `hive-copy-trading` skill contains the complete existing-wallet, partner-provisioning, x402 purchase, funding, secret-handling, management, renewal, cancellation, and legacy webhook workflow. For example:
+The bundled `hive-copy-trading` skill contains the complete existing-wallet, partner-provisioning, paper trial, direct Bankr fee, funding, secret-handling, management, cancellation, and legacy webhook workflow. For example:
 
 > Set up Base copy trading for this wallet through Bankr. Use paper mode, copy 10%, cap each signal at $3 and each UTC day at $15, with 0.75% maximum slippage.
 
-The agent will check the current price before asking for payment approval. It should never paste the Bankr API key or subscription access token into chat, and it should never skip payment confirmation unless you approved that exact current charge.
+The agent checks current hosted pricing before asking for live consent. It should never paste the Bankr API key or monitor access token into chat, and it must not enable live mode without both exact acknowledgements.
+
+Inside Bankr, ask the agent:
+
+> install the hive-copy-trading skill from https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/auto-install/hive-copy-trading
+
+Then save the dedicated Wallet API key in Bankr Settings → Env Vars as `HIVEMIND_COPY_TRADING_WALLET_KEY`. The skill's helper keeps the monitor credential in a private file and can start, inspect, pause, resume, enable live, or cancel the hosted monitor from Bankr chat. Bankr runs the wallet calls; HivemindOS still hosts the always-on target watcher.
 
 Bankr embedded wallets do not expose recovery phrases or private keys. That is why the setup shows the Bankr deposit address and a funding action instead of a seed-phrase step. If you connect an existing Bankr wallet, your normal Bankr account recovery remains the recovery path.
 
@@ -63,19 +69,23 @@ See the [Bankr documentation](https://docs.bankr.bot/) for Bankr CLI and webhook
 | Verifying | Bankr returned a hash and the hosted worker is independently checking the Base swap. |
 | Paper | Bankr recorded a no-transaction paper outcome. |
 | Executed | The hosted service verified the reported Base swap against the signal. |
+| Fee pending, charging, or verifying | The copied trade verified, but its separate Base USDC fee has not yet been confirmed. |
+| Fee collected | The exact fee token, amount, Bankr sender, and official recipient were independently verified. |
+| Fee uncertain or verification failed | The monitor paused and will not submit another copied trade until the issue is reviewed. |
 | Skipped or failed | Bankr did not submit a matching trade. |
 
 Delivered or consumed does not mean a trade executed, and executed does not mean the trade was profitable.
 
 ## Built-in boundaries
 
-- Base only, one watched target per 30-day subscription.
+- Base only, up to three active target monitors per Bankr wallet.
 - New swaps only; no historical backfill.
 - Ambiguous, failed, unpriced, or multi-asset activity is skipped.
 - One-time managed event claims; the legacy webhook path also uses short-lived HMAC-signed delivery and one-time outcome capabilities.
 - Server-enforced scale, per-trade, daily, slippage, and signal-count limits.
-- Pause, resume, risk update, renewal, and cancellation through the private subscription credential.
-- If payment succeeds but wallet provisioning or subscription activation is interrupted, HivemindOS stores only an encrypted recovery token and retries the free recovery route. It does not ask you to pay again.
+- At most one unsettled live execution and fee per monitor. Ambiguous execution or fee submission pauses without retrying.
+- Pause, resume, risk update, mode change, and cancellation through the private monitor credential.
+- Activation uses a stable idempotency key, so retrying a failed start cannot create a second monitor credential.
 - HivemindOS never receives a Bankr wallet signing key. Managed mode stores only a dedicated Bankr API credential encrypted in hosted infrastructure and erases it on cancellation.
 
 Treat the paper period as measurement, not marketing evidence. Move to live only if your own after-cost results and loss tolerance justify it.

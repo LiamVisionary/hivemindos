@@ -74,16 +74,17 @@ Selected transaction economics are already live in official HivemindOS policy:
 | DEX swaps | 0.20% | Live platform fee |
 | xStocks, Robinhood Chain Stock Tokens, live Alpaca, and Robinhood Agentic | 0.10% | Live execution fee |
 | Paid x402 and Veil private-payment execution | 0.50% | Live platform fee |
+| Bankr-managed Base copy trades | 0.50%, $0.02–$0.50 | Live post-verification fee |
 | Eligible local Hyperliquid perp fills | 0.005% | Live builder fee after wallet approval |
 | Base Builder Code attribution on official Base x402 routes | No guaranteed fee | Live attribution with potential ecosystem rewards, analytics, and discovery upside |
 | Ordinary wallet transfers | 0% | Intentionally free |
 | Revenue recorded from outside HivemindOS | 0% | Intentionally free |
 
-The 0.20%, 0.10%, and 0.50% platform-fee rails currently use a $0.01 minimum and $10 maximum where a fee applies. Fees are disclosed before confirmation and settle only after the main action succeeds. Paper trades, rejected actions, read-only research, and unpaid calls do not create a fee.
+The general 0.20%, 0.10%, and 0.50% platform-fee rails use a $0.01 minimum and $10 maximum where a fee applies. Bankr copy trading instead uses a $0.02 minimum and $0.50 maximum. Fees are disclosed before confirmation and settle only after the main action succeeds. Paper trades, rejected actions, read-only research, and unpaid calls do not create a fee.
 
 [Base Builder Codes](https://docs.base.org/apps/builder-codes/builder-codes) are attribution infrastructure, not a contractual fee. They can make qualifying Base activity measurable and eligible for program rewards as those programs evolve, but rewards should be recognized only when actually earned.
 
-Bankr-mediated swaps, cross-chain actions, token launches, prediction markets, NFTs, and automations expand the product surface today, but they do not yet create a separate HivemindOS platform fee unless a hosted partner, routing, marketplace, or settlement agreement explicitly adds one.
+Ordinary Bankr swaps, cross-chain actions, token launches, prediction markets, NFTs, and automations do not create a separate HivemindOS platform fee. Hosted Bankr copy trading is the explicit exception because the managed monitor independently verifies each copied Base swap before collecting its bounded fee through Bankr.
 
 ## Why Transaction Revenue Can Become The Largest Engine
 

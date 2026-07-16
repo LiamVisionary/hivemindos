@@ -59,12 +59,13 @@ Current official rails include:
 | DEX swap | 0.20% platform fee |
 | Supported live stock or tokenized-stock execution | 0.10% execution fee |
 | Paid x402 or Veil private-payment execution | 0.50% platform fee |
+| Bankr-managed Base copy trade | 0.50% post-verification fee, $0.02–$0.50 |
 | Eligible Hyperliquid perp fill | 0.005% builder fee |
 | Qualifying Base x402 transaction | Builder Code attribution; rewards are contingent rather than guaranteed |
 
 The transaction engine should scale only while execution remains competitive, fees remain visible, and settlement success stays high. Ordinary wallet transfers and externally earned company revenue remain free.
 
-Bankr-mediated swaps, cross-chain actions, token launches, prediction markets, NFTs, and automations are already product capabilities. They become HivemindOS revenue only when a provider-native partner agreement, hosted routing layer, or verifiable settlement path can enforce the economics.
+Hosted Bankr copy trading now has a verifiable settlement path and charges only after the copied Base swap independently verifies. Other Bankr-mediated swaps, cross-chain actions, token launches, prediction markets, NFTs, and automations remain product capabilities without separate HivemindOS revenue until provider-native or hosted settlement can enforce it.
 
 ## Stage Five: Enterprise Expansion
 

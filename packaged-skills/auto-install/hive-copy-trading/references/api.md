@@ -2,102 +2,44 @@
 
 Base URL: `https://hivemindos-copy-trading-gateway.hivemindos.workers.dev`
 
-## Free routes
+## Public setup routes
 
-### `GET /health`
+- `GET /health` — monitoring, live-mode, managed Bankr execution, partner provisioning, fee-recipient configuration, and kill-switch status.
+- `GET /v1/pricing` — authoritative direct fee policy, seven-day paper allowance, commercial cost coverage, and no-profit-guarantee statement.
+- `POST /v1/bankr/verify` — checks a dedicated `bk_usr` key with `/wallet/me` plus a non-broadcast `personal_sign`; LLM-only and read-only keys fail during setup, and the route returns only EVM identity and fee policy.
+- `POST /v1/monitors` — idempotently starts a paper monitor. This is ordinary HTTPS, not a paid x402 route.
 
-Returns dark-launch, live-mode, Durable Object monitoring, managed Bankr execution, partner-provisioning availability, and required-secret configuration status. A healthy Worker can still report `enabled: false`.
+## Authenticated monitor management
 
-### `POST /v1/bankr/verify`
+Use the returned `manageUrl` with `Authorization: Bearer <accessToken>`.
 
-Verifies an existing `bk_usr` key against Bankr `GET /wallet/me`, then requires a unique non-broadcast `personal_sign` proof so LLM-only and read-only keys fail during setup. It returns only the EVM wallet identity and does not store the key or signature. Use it before payment. Never log the request body.
+- `GET <manageUrl>` — monitor, conservative UTC-day reservations, and 20 recent event/fee outcomes.
+- `PATCH <manageUrl>` — `status`, mode, or bounded risk settings.
+- `DELETE <manageUrl>` — stop monitoring and erase the hosted Bankr credential. Partner-provisioned credentials are also revoked when Bankr confirms revocation; owners of existing keys should revoke them in Bankr as defense in depth.
 
-### `GET /v1/pricing`
+Pause with `{"status":"paused"}` and resume with `{"status":"active"}`. Change risk settings with any supported subset of `maxTradeUsd`, `maxDailyUsd`, `scalePercent`, and `maxSlippageBps`.
 
-The authoritative commercial offer. When disabled it returns 503 and `comingSoon: true`. Never infer availability from source code.
+Switching to live requires a paper result, the global live gate, and both exact acknowledgement strings documented in setup. Per-trade monitors do not renew. Existing legacy prepaid monitors remain prepaid through their original expiry and receive no additional per-trade charge.
 
-## Paid route
+## Verified execution and fee state machine
 
-### `POST /v1/subscriptions`
+1. The Worker writes `executing` before calling Bankr. It never automatically retries an ambiguous swap submission.
+2. It quotes with `/wallet/swap-quote`, enforces the USD and slippage ceilings, then calls `/wallet/swap`.
+3. A returned swap hash becomes `verifying`. Blockscout must independently prove the exact Bankr wallet moved the signaled assets within the server limit before the event becomes `executed`.
+4. Only then does the server calculate the published fee from the verified actual notional and atomically claim `fee.status = charging`.
+5. It calls Bankr `/wallet/transfer` for exact Base USDC to the server-owned recipient. A returned hash becomes fee `verifying`.
+6. Blockscout must independently match transaction success, Base USDC, exact amount, Bankr sender, and official recipient before fee `collected` and revenue recognition.
+7. Unknown submission outcomes become fee `uncertain`; mismatches become `verification_failed`. Either state pauses the monitor and is never automatically retried. At most one live execution or unsettled fee may exist per monitor.
 
-An x402 USDC payment buys one 30-day Base target monitor. See `setup-and-subscribe.md` for the body and payment workflow. The settled payer becomes the subscription owner; caller-supplied payer and commercial fields are rejected.
-
-## Authenticated management
-
-Use the `manageUrl` returned at purchase with header:
-
-```text
-Authorization: Bearer <accessToken>
-```
-
-### Status
-
-`GET <manageUrl>` returns the subscription, conservative UTC-day reservations, and the 20 latest event outcomes.
-
-### Pause or resume
-
-```http
-PATCH <manageUrl>
-Content-Type: application/json
-Authorization: Bearer <accessToken>
-
-{"status":"paused"}
-```
-
-Paused subscriptions do not emit or consume new signals. Resume with `{"status":"active"}` before expiry.
-
-### Change risk settings
-
-Patch any supported subset:
-
-```json
-{
-  "maxTradeUsd": 3,
-  "maxDailyUsd": 15,
-  "scalePercent": 10,
-  "maxSlippageBps": 75
-}
-```
-
-Switching to live also requires at least one recorded paper result, the exact `riskAcknowledgement`, and the hosted live feature to be enabled. The managed worker enforces all three conditions before it uses Bankr's direct quote-then-swap Wallet API. Bankr's own per-transaction and rolling daily spend limits remain an independent final guard.
-
-### Cancel
-
-`DELETE <manageUrl>` stops monitoring and erases the hosted Bankr credential. For a partner-provisioned wallet, the service also attempts to revoke that specific Bankr key. For an existing user-owned Bankr key, tell the user to revoke it in Bankr as defense in depth. Cancellation does not imply a refund for the current paid period. Delete the private local credential only after the hosted cancellation succeeds.
-
-## Event and receipt semantics
-
-Managed Wallet API execution:
-
-1. The Worker atomically consumes the pending event and writes `executing` before calling Bankr. A crash cannot cause an automatic retry and duplicate swap.
-2. It derives the human sell amount from the source amount and the server-owned USD ceiling, quotes through `/wallet/swap-quote`, and requotes lower if Bankr's current USD value exceeds the cap.
-3. It enforces the stricter of Bankr's minimum buy amount and the subscription slippage floor, then calls `/wallet/swap`.
-4. A returned hash is `verifying`, not executed. The next alarms independently classify the Base transaction from the configured Bankr wallet before recording `executed`.
-
-Legacy webhook execution:
-
-1. It verifies `x-hivemind-signature` as HMAC-SHA256 over `<unix-seconds>.<raw-body>` with a five-minute window.
-2. It validates the exact hosted origin, target, event ID, action path, payload bounds, and expiry.
-3. It exchanges a one-time consume token. A second exchange returns 409 and cannot enqueue another agent prompt.
-4. It returns a bounded Bankr prompt containing only validated Base addresses, transaction hash, USD/slippage ceilings, and a one-time receipt capability.
-5. Bankr may post `executed`, `paper`, `skipped`, or `failed`. `executed` is accepted only for live signals after the hosted service verifies the Base transaction is a successful, matching swap from the configured Bankr wallet, uses the signaled assets, follows the source trade, and stays inside the server-issued USD ceiling.
-
-Interpret status precisely:
-
-- `pending`: queued for signed delivery
-- `delivered`: Bankr returned a successful webhook response
-- `consumed`: one-time execution prompt was claimed
-- `failed`: delivery exhausted retries
-- `expired`: signal was not consumed inside its short expiry
-- receipt `executed`: the hosted service verified Bankr's reported transaction against the Base swap and signal limits
-
-Webhook delivery, event consumption, and a profitable trade are three different claims. Never collapse them.
+Paper, skipped, failed, and unverified trades have no service fee. A fee is not collected merely because Bankr accepted the transfer request.
 
 ## Failure handling
 
-- 401: wrong/missing bearer or event token; do not retry with guessed credentials.
-- 409: replay, inactive/canceled subscription, invalid state transition, or paper-as-executed receipt.
+- 400: invalid or client-owned commercial input; fix the body rather than guessing.
+- 401: wrong or missing bearer/key; never retry with guessed credentials.
+- 409: replay, invalid state transition, missing paper result, or stale live consent.
 - 410: expired signal; never execute it manually.
-- 424: hosted settlement or encryption configuration is incomplete.
-- 503 with `comingSoon`: product or live mode remains dark.
-- 503 with `paymentSettled: true`: never pay again. The local app encrypts the returned recovery token, calls `POST /v1/subscriptions/recover`, and keeps retrying it on dashboard refresh until activation succeeds or the server declares the token terminally invalid.
+- 424: hosted encryption, fee-recipient, or optional partner provisioning is incomplete.
+- 503 with `comingSoon`: product or live mode is disabled.
+
+The legacy `POST /v1/subscriptions/recover` route exists only for already-settled historical x402 activations. If such a recovery is present, use the encrypted stored token and never pay again. New monitors never create a recovery payment token.

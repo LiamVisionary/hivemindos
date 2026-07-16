@@ -19,12 +19,15 @@ const smartEnvCssSource = await readFile(new URL("../src/features/env/hive-env-h
 assert.match(serviceSource, /\/v1\/subscriptions\/recover/);
 assert.match(serviceSource, /storeBankrCopyRecovery/);
 assert.match(serviceSource, /do not pay again/);
+assert.match(serviceSource, /\/v1\/monitors/);
+assert.match(serviceSource, /startBankrCopyTradingMonitor/);
+assert.doesNotMatch(serviceSource, /executeX402Fetch|PAY_X402|paymentWalletId/);
 assert.match(panelSource, /managedExecutionAvailable/);
-assert.match(panelSource, /Backend update required/);
+assert.match(panelSource, /Per trade/);
 assert.match(panelSource, /useState<SetupStep>\(1\)/, "setup must start on step one");
 assert.match(panelSource, /setupStep === 1/, "wallet setup must be shown only on step one");
 assert.match(panelSource, /setupStep === 2/, "risk setup must be shown only on step two");
-assert.match(panelSource, /setupStep === 3/, "review and payment must be shown only on step three");
+assert.match(panelSource, /setupStep === 3/, "review and start must be shown only on step three");
 assert.match(panelSource, /Step \{setupStep\} of 3/, "wizard must expose its current progress");
 assert.match(panelSource, />Continue</, "wizard must have an explicit forward action");
 assert.match(panelSource, />Back</, "wizard must let users return without losing their entries");
@@ -35,10 +38,18 @@ assert.match(panelSource, /Create wallet with Bankr/, "new users must have a wor
 assert.match(panelSource, /Create it directly with Bankr, then connect the new Wallet API key here\./, "the new-user path must explain how setup continues after Bankr creates the wallet");
 assert.doesNotMatch(panelSource, /Waiting for Bankr partner access\./, "new-user setup must not dead-end on unavailable partner provisioning");
 assert.match(panelSource, /paperTrialComplete/, "live controls must require a completed paper event");
-assert.match(panelSource, /I understand copy trading can lose money/, "live controls must require the exact loss acknowledgement");
+assert.match(panelSource, /BANKR_COPY_TRADING_RISK_ACKNOWLEDGEMENT/, "live controls must require the exact loss acknowledgement");
+assert.match(panelSource, /BANKR_COPY_TRADING_FEE_ACKNOWLEDGEMENT/, "live controls must submit the exact direct-fee acknowledgement");
+assert.match(panelSource, /feeAcknowledged/, "live controls must require separate fee consent");
+assert.match(panelSource, /Start paper trial/, "new monitors must start without an upfront payment");
+assert.match(panelSource, /Bankr sponsors Base gas/, "funding guidance must not ask for unnecessary Base ETH");
+assert.doesNotMatch(panelSource, /Pay with x402|Pay the x402 subscription|first paid period/);
+assert.match(panelSource, /Paper test complete/, "the UI must not offer an unlimited free-paper resume loop");
+assert.match(panelSource, /activationIdempotencyKey/, "monitor start retries must reuse a stable idempotency key");
 assert.match(panelSource, /action: "update"/, "subscription controls must expose hosted mode and risk updates");
 assert.match(routeSource, /"update"/, "the authenticated local route must accept subscription updates");
 assert.match(serviceSource, /riskAcknowledgement/, "hosted subscription patches must forward the exact live-risk acknowledgement");
+assert.match(serviceSource, /feeAcknowledgement/, "hosted monitor patches must forward direct-fee consent");
 assert.doesNotMatch(serviceSource, /companyTaskId/, "copy trading is user-level wallet work and must never attach company task context");
 assert.doesNotMatch(localCopyEngineSource, /companyTaskId|spend-governance|getCompanyForAgent/, "the in-app copy trader must never infer company restrictions either");
 assert.match(routeSource, /apiKeyEnv/, "Bankr actions must accept a server-side shared env reference");
@@ -141,10 +152,20 @@ function fixture(id, targetWallet) {
     executionProvider: "bankr-managed",
     status: "active",
     mode: "paper",
+    billingModel: "bankr-per-trade",
+    billing: {
+      feePolicyVersion: "2026-07-16-bankr-direct-v1",
+      feeBps: 50,
+      feePercent: 0.5,
+      minimumFeeUsd: 0.02,
+      maximumFeeUsd: 0.5,
+    },
     maxTradeUsd: 5,
     maxDailyUsd: 25,
     scalePercent: 20,
     maxSlippageBps: 100,
-    expiresAt: "2026-08-15T00:00:00.000Z",
+    paperTrialEndsAt: "2026-07-23T00:00:00.000Z",
+    expiresAt: "2026-07-23T00:00:00.000Z",
+    renews: false,
   };
 }

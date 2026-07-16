@@ -1,8 +1,9 @@
 export const OFFICIAL_BANKR_COPY_TRADING_BASE_URL = "https://hivemindos-copy-trading-gateway.hivemindos.workers.dev";
 export const BANKR_COPY_TRADING_PAYMENT_NETWORK = "eip155:8453";
-export const BANKR_COPY_TRADING_PAYMENT_CONFIRMATION = "PAY_X402";
 export const BANKR_COPY_TRADING_FUND_CONFIRMATION = "FUND_BANKR_COPY_WALLET";
-export const BANKR_COPY_TRADING_MAX_PLAN_PRICE_USD = 5;
+export const BANKR_COPY_TRADING_RISK_ACKNOWLEDGEMENT = "I understand copy trading can lose money";
+export const BANKR_COPY_TRADING_FEE_ACKNOWLEDGEMENT =
+  "I authorize HivemindOS to charge the published fee after each verified live copied trade";
 export const BANKR_COPY_TRADING_API_KEY_ENV_NAMES = [
   "BANKR_API_KEY",
   "BANKR_LLM_KEY",
@@ -27,7 +28,17 @@ export type BankrCopyEvent = {
   status: string;
   receiptStatus: string | null;
   executionTransactionHash: string | null;
+  executedNotionalUsd: number | null;
   receiptError: string | null;
+  fee: {
+    policyVersion: string | null;
+    feeBps: number | null;
+    amountUsd: number;
+    status: string | null;
+    transactionHash: string | null;
+    error: string | null;
+    collectedAt: string | null;
+  } | null;
   createdAt: string;
 };
 
@@ -39,11 +50,26 @@ export type BankrCopySubscription = {
   executionProvider: "bankr-managed" | "bankr-webhook";
   status: "active" | "paused" | "canceled" | "expired";
   mode: "paper" | "live";
+  billingModel: "bankr-per-trade" | "prepaid-period";
+  billing: {
+    feePolicyVersion?: string | null;
+    feeBps?: number;
+    feePercent?: number;
+    minimumFeeUsd?: number;
+    maximumFeeUsd?: number;
+    feeAcknowledgedAt?: string | null;
+    chargedFrom?: string;
+    chargedAfter?: string;
+    billingMode?: string;
+    additionalPerTradeFeeUsd?: number;
+  };
   maxTradeUsd: number;
   maxDailyUsd: number;
   scalePercent: number;
   maxSlippageBps: number;
-  expiresAt: string;
+  paperTrialEndsAt: string | null;
+  expiresAt: string | null;
+  renews: boolean;
 };
 
 export type BankrCopyDashboard = {
@@ -51,8 +77,13 @@ export type BankrCopyDashboard = {
   managedExecutionAvailable: boolean;
   liveEnabled: boolean;
   partnerProvisioningConfigured: boolean;
-  priceUsd: number;
-  periodDays: number;
+  billingMode: "per-successful-live-trade";
+  feePolicyVersion: string;
+  feePercent: number;
+  minimumFeeUsd: number;
+  maximumFeeUsd: number;
+  feeRecipient: string;
+  paperTrialDays: number;
   pendingRecoveryCount: number;
   fundingWallets: BankrCopyFundingWallet[];
   subscriptions: Array<{

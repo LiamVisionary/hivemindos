@@ -12,10 +12,11 @@ const root = process.cwd();
 const skillRoot = resolve(root, "packaged-skills/auto-install/hive-copy-trading");
 const read = (path) => readFile(resolve(skillRoot, path), "utf8");
 
-const [skill, setup, api, paperConfigSource, deployableConfigSource, deployableHandler, handlerSource, liveConfigSource, evalsSource] = await Promise.all([
+const [skill, setup, api, monitorClient, paperConfigSource, deployableConfigSource, deployableHandler, handlerSource, liveConfigSource, evalsSource] = await Promise.all([
   read("SKILL.md"),
   read("references/setup-and-subscribe.md"),
   read("references/api.md"),
+  read("scripts/monitor-client.mjs"),
   read("scripts/paper-webhook-config.json"),
   read("bankr.webhooks.json"),
   read("webhooks/hive-copy-trading/index.ts"),
@@ -26,30 +27,42 @@ const [skill, setup, api, paperConfigSource, deployableConfigSource, deployableH
 
 assert.match(skill, /^name: hive-copy-trading$/m);
 assert.match(skill, /Never describe observed, paper, backtested, or simulated returns as proof that this is profitable/);
-assert.match(skill, /Never pass `--yes` unless the user explicitly approved that exact current charge/);
 assert.match(skill, /I understand copy trading can lose money/);
+assert.match(skill, /I authorize HivemindOS to charge the published fee after each verified live copied trade/);
 assert.match(skill, /Bankr's direct Wallet API/);
-assert.match(skill, /Bankr embedded wallet keys are non-exportable/);
-assert.match(skill, /create a Bankr wallet and dedicated Wallet API key through Bankr/);
-assert.match(skill, /encrypts the credential at rest/);
+assert.match(skill, /non-exportable signing key/);
+assert.match(setup, /create one at `https:\/\/bankr\.bot\/api`/);
+assert.match(skill, /encrypts it at rest/);
 assert.match(skill, /names-only Shared Hive Env reference/);
+assert.match(skill, /There is no subscription or upfront x402 payment/);
+assert.match(skill, /install the hive-copy-trading skill from https:\/\/github\.com\/LiamVisionary\/hivemindos\/tree\/main\/packaged-skills\/auto-install\/hive-copy-trading/);
+assert.match(skill, /fee `uncertain` or `verification_failed`/);
 assert.match(setup, /pricingAuthority: server/);
 assert.match(setup, /clientOverridesAccepted: false/);
-assert.match(setup, /bankr x402 call/);
-assert.match(setup, /Never paste it into chat/);
+assert.match(setup, /There is no subscription, renewal, x402 payment, or separate payment wallet/);
+assert.match(setup, /ordinary HTTPS JSON/);
+assert.match(setup, /activationIdempotencyKey/);
+assert.match(setup, /\/v1\/monitors/);
 assert.match(setup, /"kind": "existing"/);
 assert.match(setup, /"kind": "provisioned"/);
 assert.match(setup, /partnerProvisioningConfigured: true/);
-assert.match(setup, /Create a Bankr wallet/);
 assert.match(setup, /must remain usable/);
 assert.match(setup, /non-broadcast `personal_sign` capability proof/);
-assert.match(api, /Webhook delivery, event consumption, and a profitable trade are three different claims/);
+assert.match(setup, /only allowed EVM transfer recipient/);
+assert.match(setup, /Bankr sponsors Base gas/);
+assert.match(skill, /An event, a successful copied trade, a collected fee, and profitability are four different claims/);
 assert.match(api, /writes `executing` before calling Bankr/);
 assert.match(api, /\/wallet\/swap-quote/);
-assert.match(api, /erases the hosted Bankr credential/);
+assert.match(api, /\/wallet\/transfer/);
+assert.match(api, /fee `uncertain`/);
+assert.match(api, /erase the hosted Bankr credential/);
 assert.match(api, /POST \/v1\/subscriptions\/recover/);
 assert.match(api, /never pay again/);
 assert.match(api, /LLM-only and read-only keys fail during setup/);
+assert.match(monitorClient, /HIVEMIND_COPY_TRADING_WALLET_KEY/, "Bankr-hosted setup must read its Wallet API key from secure env");
+assert.match(monitorClient, /mode: 0o600/, "Bankr-hosted monitor credentials must use a private state file");
+assert.match(monitorClient, /state\.pending\[targetWallet\][\s\S]*writeState\(state\)[\s\S]*request\("\/v1\/monitors"/, "the activation idempotency key must persist before the network call");
+assert.doesNotMatch(monitorClient, /print\(walletKey\(\)\)/, "the Bankr helper must never print its Wallet API key");
 
 const paperConfig = JSON.parse(paperConfigSource).webhooks["hive-copy-trading"];
 assert.equal(paperConfig.readOnly, true);

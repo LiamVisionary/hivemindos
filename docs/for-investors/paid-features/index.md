@@ -48,10 +48,11 @@ Individual features below are capabilities, usage meters, and transaction rails 
 | DEX swaps | 0.20% | Live |
 | Supported live stock/tokenized-stock execution | 0.10% | Live |
 | Paid x402 and Veil private-payment execution | 0.50% | Live |
+| Bankr-managed Base copy trades | 0.50% ($0.02 minimum, $0.50 maximum) | Live after independent execution verification |
 | Eligible Hyperliquid perp fills | 0.005% | Live builder fee |
 | Base x402 Builder Code | Attribution and potential rewards | Live attribution; rewards not guaranteed |
 
-These rails are documented in the [Trading guide](../../for-users/trading/) and [Wallets, Honey, And x402](../../for-users/features/wallets-honey-and-x402.html). Bankr-mediated trading, cross-chain activity, token launches, prediction markets, NFTs, and automations are available product capabilities but need provider-native or hosted settlement economics before they should be counted as HivemindOS transaction revenue.
+These rails are documented in the [Trading guide](../../for-users/trading/) and [Wallets, Honey, And x402](../../for-users/features/wallets-honey-and-x402.html). Ordinary Bankr swaps, cross-chain activity, token launches, prediction markets, NFTs, and automations remain product capabilities without a separate HivemindOS fee; the hosted Bankr copy-trading monitor is the explicit exception.
 
 ## Validation And Later Expansion
 

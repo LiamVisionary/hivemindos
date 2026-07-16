@@ -6,7 +6,7 @@ import {
   changeBankrCopySubscription,
   fundBankrCopyWallet,
   getBankrCopyDashboard,
-  subscribeToBankrCopyTrading,
+  startBankrCopyTradingMonitor,
   verifyExistingBankrConnection,
 } from "@/lib/services/trading/bankr-copy-trading";
 import { BANKR_COPY_TRADING_API_KEY_ENV_NAMES } from "@/lib/services/trading/bankr-copy-trading-contract";
@@ -20,11 +20,11 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 type RequestBody = {
-  action?: "verify" | "subscribe" | "update" | "pause" | "resume" | "cancel" | "fund";
+  action?: "verify" | "start" | "subscribe" | "update" | "pause" | "resume" | "cancel" | "fund";
   apiKey?: string;
   apiKeyEnv?: string;
   saveToHiveEnv?: boolean;
-  paymentWalletId?: string;
+  activationIdempotencyKey?: string;
   fundingWalletId?: string;
   targetWallet?: string;
   connectionKind?: "existing" | "provisioned";
@@ -35,6 +35,7 @@ type RequestBody = {
   maxSlippageBps?: number;
   mode?: "paper" | "live";
   riskAcknowledgement?: string;
+  feeAcknowledgement?: string;
   amountUsd?: number;
   confirmation?: string;
   approvalToken?: string;
@@ -64,15 +65,15 @@ export async function POST(request: NextRequest) {
       }
       return okJson({ wallet, apiKeyEnv: credential.envKey });
     }
-    if (body.action === "subscribe") {
-      if (!body.paymentWalletId || !body.targetWallet || !body.connectionKind) {
-        return errorJson("paymentWalletId, targetWallet, and connectionKind are required.", 400);
+    if (body.action === "start" || body.action === "subscribe") {
+      if (!body.activationIdempotencyKey || !body.targetWallet || !body.connectionKind) {
+        return errorJson("activationIdempotencyKey, targetWallet, and connectionKind are required.", 400);
       }
       const credential = body.connectionKind === "existing"
         ? await resolveBankrCopyApiKey(body)
         : null;
-      const subscription = await subscribeToBankrCopyTrading({
-        paymentWalletId: body.paymentWalletId,
+      const subscription = await startBankrCopyTradingMonitor({
+        activationIdempotencyKey: body.activationIdempotencyKey,
         targetWallet: body.targetWallet,
         connectionKind: body.connectionKind,
         bankrApiKey: credential?.apiKey,
@@ -96,6 +97,7 @@ export async function POST(request: NextRequest) {
         subscriptionId: body.subscriptionId,
         mode: body.mode,
         riskAcknowledgement: body.riskAcknowledgement,
+        feeAcknowledgement: body.feeAcknowledgement,
         maxTradeUsd: body.maxTradeUsd,
         maxDailyUsd: body.maxDailyUsd,
         scalePercent: body.scalePercent,
