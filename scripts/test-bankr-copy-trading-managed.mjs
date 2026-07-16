@@ -45,6 +45,8 @@ assert.match(panelSource, /Start paper trial/, "new monitors must start without 
 assert.match(panelSource, /Bankr sponsors Base gas/, "funding guidance must not ask for unnecessary Base ETH");
 assert.doesNotMatch(panelSource, /Pay with x402|Pay the x402 subscription|first paid period/);
 assert.match(panelSource, /Paper test complete/, "the UI must not offer an unlimited free-paper resume loop");
+assert.match(panelSource, /One eligible paper event is free within/, "setup must describe the one-event paper allowance precisely");
+assert.doesNotMatch(panelSource, /days run free in paper mode/, "setup must not imply unlimited free monitoring during the allowance window");
 assert.match(panelSource, /activationIdempotencyKey/, "monitor start retries must reuse a stable idempotency key");
 assert.match(panelSource, /action: "update"/, "subscription controls must expose hosted mode and risk updates");
 assert.match(routeSource, /"update"/, "the authenticated local route must accept subscription updates");

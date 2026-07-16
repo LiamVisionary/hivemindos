@@ -297,7 +297,7 @@ export function ManagedBankrCopyTradingPanel() {
 
           {setupStep === 2 ? (
             <div className={styles.wizardStep}>
-              <div className={styles.stepHead}><span>2</span><div><b>Choose the target and limits</b><small>Start small. The first {dashboard?.paperTrialDays ?? 7} days run free in paper mode.</small></div></div>
+              <div className={styles.stepHead}><span>2</span><div><b>Choose the target and limits</b><small>Start small. One eligible paper event is free within {dashboard?.paperTrialDays ?? 7} days, then the monitor pauses.</small></div></div>
               <div className={styles.formGrid}>
                 <label className={styles.wide}><span>Target Base wallet</span><input value={targetWallet} onChange={(event) => setTargetWallet(event.target.value)} placeholder="0x…" /></label>
                 <NumberField label="Max per trade" value={risk.maxTradeUsd} min={0.1} max={100} step={0.1} onChange={(value) => setRisk((current) => ({ ...current, maxTradeUsd: value }))} suffix="USD" />
