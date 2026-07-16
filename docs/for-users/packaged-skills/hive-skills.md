@@ -12,6 +12,7 @@ These skills are auto-installed into the shared brain because they are foundatio
 | Skill | Purpose |
 | --- | --- |
 | `engineering-discipline` | Selects a proportionate engineering path and anchors Work Board evidence: design only when needed, real baselines, red/green or non-applicability receipts, focused verification, independent review, rollback, and repository state. |
+| `bankr-skill-deployment` | Chooses the correct Bankr skill, app, x402, Wallet/Agent API, and always-on hosting boundaries, then packages, publishes, installs, updates, and verifies the capability end to end. |
 | `create-zero-human-company` | Creates a durable company from a business goal or existing repository, adds an available crew, measurable apex goal, products, budgets, and approval policies, verifies the saved record, and leaves autonomy stopped until the operator explicitly launches it. |
 | `hive-assimilate` | Mandatory pre-build search across shared brain, user projects, local/private indexes, and public GitHub before software creation. |
 | `hive-pulse` | Built-in last-30-days signal briefs across Reddit, X, YouTube, TikTok, Hacker News, Polymarket, GitHub, and web sources, powered by a pinned MIT licensed `last30days` engine. |
@@ -82,11 +83,18 @@ Source provenance and audit notes live in:
 packaged-skills/auto-install/hive-pulse/.hivemind-skill-source.json
 ```
 
+## Bankr Skill Deployment
+
+`bankr-skill-deployment` is the default delivery playbook when a capability should run with Bankr. It distinguishes a per-wallet skill, a request-time paid x402 endpoint, a wallet-aware Bankr app, and a separately hosted always-on backend before implementation begins.
+
+The skill includes package/version verification, public-GitHub and Bankr Agent API installation gates, names-only secret handling, direct Wallet API versus asynchronous Agent API guidance, and real-path x402 schema/payment verification. It also captures the managed copy trader's durable integration rules: existing Shared Hive Env selections continue without being re-saved, new variables use Save, company restrictions require a validated company task, and post-trade fees settle only after independent transaction verification.
+
 ## Source Of Truth
 
 The repository source is:
 
 ```text
+packaged-skills/auto-install/bankr-skill-deployment/SKILL.md
 packaged-skills/auto-install/create-zero-human-company/SKILL.md
 packaged-skills/auto-install/hive-assimilate/SKILL.md
 packaged-skills/auto-install/hive-pulse/SKILL.md
@@ -102,6 +110,7 @@ packaged-skills/auto-install/hive-brain-compiled-wiki/SKILL.md
 Setup mirrors it into the shared brain at:
 
 ```text
+Skills/bankr-skill-deployment/SKILL.md
 Skills/create-zero-human-company/SKILL.md
 Skills/hive-assimilate/SKILL.md
 Skills/hive-pulse/SKILL.md

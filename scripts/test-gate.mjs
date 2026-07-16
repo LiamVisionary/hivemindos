@@ -41,6 +41,7 @@ const TESTS = [
   "test:agent-providers",
   "test:app-builder",
   "test:bankr-actions",
+  "test:bankr-skill-deployment",
   "test:browser-extension",
   "test:clawbank",
   "test:code-intelligence",

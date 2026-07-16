@@ -250,6 +250,7 @@
     "e2e:mcp-work": "MCP_WORK_REAL_E2E=1 node scripts/e2e-mcp-work-orchestration-real.mjs",
     "test:agent-chat-readiness": "node scripts/test-agent-chat-readiness.mjs",
     "test:bankr-actions": "node scripts/test-bankr-actions.mjs",
+    "test:bankr-skill-deployment": "node scripts/test-bankr-skill-deployment.mjs",
     "test:chat-issue-notifications": "node scripts/test-chat-issue-notifications.mjs",
     "test:clawbank": "node scripts/test-clawbank-client.mjs && node scripts/test-clawbank-actions.mjs",
     "test:crypto-gaps": "node scripts/test-crypto-gap-capabilities.mjs",
