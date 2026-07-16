@@ -2,6 +2,8 @@ import { spawn } from "child_process";
 import { access } from "fs/promises";
 import { join } from "path";
 
+import { collectorSupportsAppBuilderContract } from "@/lib/services/app-builder/collector-recovery";
+
 export const runtime = "nodejs";
 export const maxDuration = 360;
 
@@ -17,6 +19,7 @@ type UpdateBody = {
   simulate?: boolean;
   source?: string;
   requiredCapabilities?: {
+    appBuilderContractVersion?: string;
     chat?: boolean;
     envHttpSync?: boolean;
     skillInventory?: boolean;
@@ -30,6 +33,8 @@ type CollectorHealth = {
   collectorStartedAt?: string;
   collectorStartedAtMs?: number;
   capabilities?: {
+    appBuilder?: boolean;
+    appBuilderContractVersion?: string;
     chat?: boolean;
     envHttpSync?: boolean;
     skillInventory?: boolean;
@@ -79,6 +84,13 @@ function hasRequiredCapabilities(
   health: CollectorHealth | null,
   required?: UpdateBody["requiredCapabilities"],
 ) {
+  if (
+    required?.appBuilderContractVersion &&
+    !collectorSupportsAppBuilderContract(
+      health?.capabilities?.appBuilderContractVersion,
+      required.appBuilderContractVersion,
+    )
+  ) return false;
   if (required?.chat && health?.capabilities?.chat !== true) return false;
   if (required?.envHttpSync && health?.capabilities?.envHttpSync !== true)
     return false;
@@ -140,6 +152,7 @@ function updateNeededBefore(body: UpdateBody, health: CollectorHealth | null) {
 function hasVerificationTarget(body: UpdateBody) {
   return Boolean(
     body.expectedCommit?.trim() ||
+    body.requiredCapabilities?.appBuilderContractVersion?.trim() ||
     body.requiredCapabilities?.chat ||
     body.requiredCapabilities?.envHttpSync ||
     body.requiredCapabilities?.skillInventory ||
@@ -190,6 +203,16 @@ function verificationError(
       health?.version?.latestShortCommit ||
       body.expectedCommit.trim().slice(0, 7);
     return `The update started, but this agent bridge still reports ${current} instead of ${expected}. It may still be building, or the remote update failed.`;
+  }
+  if (
+    body.requiredCapabilities?.appBuilderContractVersion &&
+    !collectorSupportsAppBuilderContract(
+      health?.capabilities?.appBuilderContractVersion,
+      body.requiredCapabilities.appBuilderContractVersion,
+    )
+  ) {
+    const current = health?.capabilities?.appBuilderContractVersion || "unreported";
+    return `The update command finished, but the agent bridge still reports App Builder ${current} instead of ${body.requiredCapabilities.appBuilderContractVersion} or newer.`;
   }
   if (body.requiredCapabilities?.chat && health?.capabilities?.chat !== true)
     return "The update command finished, but the agent bridge still does not report the Hermes chat bridge.";

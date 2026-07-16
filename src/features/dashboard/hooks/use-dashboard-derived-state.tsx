@@ -19,6 +19,7 @@ import type {
 } from "@/components/fleet/fleet-data";
 import { simpleStableHash } from "@/features/dashboard/dashboard-light-helpers";
 import { filterSuppressedAgents } from "@/features/fleet/fleet-identity";
+import { machineNeedsAppBuilderRepair } from "@/features/fleet/app-builder-collector-capability";
 import {
   dedupeMachineGroups,
   isTailnetSelfShadowGroup,
@@ -1147,6 +1148,7 @@ export function useDashboardDerivedState(props: any) {
           !mobile &&
           machine.collector === "ready" &&
           (versionState === "stale" ||
+            machineNeedsAppBuilderRepair(machine) ||
             machineNeedsChatBridgeRepair(machine) ||
             machineNeedsEnvHttpSyncRepair(machine) ||
             machineNeedsSkillSyncRepair(machine));
@@ -1492,6 +1494,7 @@ export function useDashboardDerivedState(props: any) {
           if (!machine) return true;
           return (
             fleetVersionState(machine) === "stale" ||
+            machineNeedsAppBuilderRepair(machine) ||
             machineNeedsChatBridgeRepair(machine) ||
             machineNeedsEnvHttpSyncRepair(machine) ||
             machineNeedsSkillSyncRepair(machine)
@@ -1526,6 +1529,7 @@ export function useDashboardDerivedState(props: any) {
             if (!machine) return true;
             return (
               fleetVersionState(machine) === "stale" ||
+              machineNeedsAppBuilderRepair(machine) ||
               machineNeedsChatBridgeRepair(machine) ||
               machineNeedsEnvHttpSyncRepair(machine) ||
               machineNeedsSkillSyncRepair(machine)

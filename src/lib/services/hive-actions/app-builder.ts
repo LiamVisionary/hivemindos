@@ -12,6 +12,7 @@ export const appBuilderAction = defineHiveAction({
     action: z.enum([
       "list",
       "create",
+      "adopt",
       "get",
       "status",
       "files_tree",
@@ -49,7 +50,8 @@ export const appBuilderAction = defineHiveAction({
     projectId: z.string().optional(),
     directory: z.string().optional(),
     name: z.string().optional(),
-    templateId: z.literal("nextjs").optional(),
+    templateId: z.enum(["nextjs", "static"]).optional(),
+    workspaceDirectory: z.string().optional(),
     path: z.string().optional(),
     nextPath: z.string().optional(),
     content: z.string().optional(),

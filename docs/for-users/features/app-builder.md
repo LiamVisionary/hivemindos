@@ -33,20 +33,40 @@ are suited to landing pages, portfolios, documentation, dashboards with
 client-side data, and generated exports. Dynamic Apps can run server-side
 request logic with isolated, Site-scoped capabilities.
 
+## Preview Apps From Chat
+
+The Preview button follows the app built in that conversation. For older chats,
+HivemindOS can safely adopt a static HTML app or Next.js project when the agent
+reported a directory inside the selected Chat workspace. It then starts a
+durable, loopback-only runtime and opens that exact project through the linked
+machine proxy.
+
+Simple HTML, CSS, JavaScript, canvas, and game projects run with the bundled
+static preview server and do not need package installation. Framework projects
+continue to use their project-owned Next.js runtime.
+
+If the linked machine is missing the required App Builder protocol, Preview
+updates its HivemindOS collector, waits for the new collector to report ready,
+and retries automatically. Fleet also shows the machine as updateable when its
+App Builder protocol is behind, even if its Git commit previously appeared
+current.
+
 ## Build On Your Own Machine
 
 Choose a directory on This Mac or another connected fleet machine. The agent
-can create a reviewed Next.js starter there and register it as a HivemindOS
-project. Source files remain on that machine.
+can create a reviewed static or Next.js starter there and register it as a
+HivemindOS project. Source files remain on that machine.
 
 Local projects support:
 
 - project creation and status
+- safe adoption of an existing static or Next.js folder inside the selected workspace
 - bounded file browsing and reading
 - confirmation-gated file writes, renames, and deletes
 - confirmation-gated dependency installation
 - confirmation-gated start and stop
 - a loopback-only development preview
+- conversation-bound preview identity in Chat
 - automatic discovery in Apps while the preview is running
 - deterministic static and dynamic hosting artifacts with secret and symbolic-link checks
 

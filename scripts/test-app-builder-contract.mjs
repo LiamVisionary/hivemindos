@@ -8,15 +8,20 @@ assert.equal(existsSync(contractPath), true, "the public repo must own the canon
 
 const contract = JSON.parse(await readFile(contractPath, "utf8"));
 assert.equal(contract.protocol, "hivemindos.app-builder/v1");
-assert.equal(contract.version, "1.1.0");
+assert.equal(contract.version, "1.2.0");
 assert.equal(contract.provenance?.donors?.december?.commit, "909b5c23dce9316e88a2755baef56b3ded2845e0");
 assert.equal(contract.templates.nextjs.files["package.json"].includes('"next": "16.2.6"'), true);
+assert.equal(contract.templates.static.files["index.html"].includes("HivemindOS App"), true);
 assert.deepEqual(
   contract.capabilities.find((item) => item.id === "projects.create")?.backends,
   ["local", "managed"],
 );
 assert.deepEqual(
   contract.capabilities.find((item) => item.id === "runtime.start")?.backends,
+  ["local"],
+);
+assert.deepEqual(
+  contract.capabilities.find((item) => item.id === "projects.adopt")?.backends,
   ["local"],
 );
 assert.deepEqual(
@@ -51,8 +56,11 @@ assert.match(action, /APP_BUILDER_CONFIRMATIONS/);
 assert.match(mcp, /name === "app_builder"/);
 assert.match(collector, /pathname === "\/app-builder"/);
 assert.match(collector, /pathname === "\/app-builder"[\s\S]{0,500}requireLinkOwner/);
+assert.match(collector, /appBuilderContractVersion:\s*APP_BUILDER_CONTRACT_VERSION/);
 assert.doesNotMatch(localAdapter, /CONFIRM_APP_PROJECT_CREATE/);
 assert.doesNotMatch(mcp, /CONFIRM_APP_PROJECT_CREATE/);
 assert.match(mcp, /collectorUrl: machine\.device\?\.collectorUrl/);
+assert.match(localAdapter, /adoptLocalAppProject/);
+assert.match(localAdapter, /app-builder-static-server\.mjs/);
 
 console.log("App-builder canonical contract and integration surfaces are single-sourced.");

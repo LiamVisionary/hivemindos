@@ -10,6 +10,18 @@ import {
 } from "@/lib/services/local-collector-url";
 import type { ChatPreviewHostedApp } from "@/lib/services/chat/chat-preview-targets";
 
+type ThreadAppPreviewIdentity = {
+  projectId?: string;
+  directory?: string;
+};
+
+type ThreadAppProject = {
+  id?: unknown;
+  directory?: unknown;
+  status?: unknown;
+  previewUrl?: unknown;
+};
+
 /**
  * SSRF gate for the preview probe. Returns true ONLY when `url` exactly matches
  * (trailing-slash-normalized) the openUrl or healthUrl of a discovered hosted
@@ -34,4 +46,23 @@ export function isAllowedChatPreviewUrl(
   }
   if (!known.has(candidate)) return false;
   return isFleetCollectorUrl(candidate);
+}
+
+export function isAllowedThreadAppPreviewUrl(
+  url: string,
+  identity: ThreadAppPreviewIdentity,
+  project: ThreadAppProject | null | undefined,
+) {
+  const candidate = normalizeCollectorUrl(url);
+  const previewUrl = normalizeCollectorUrl(typeof project?.previewUrl === "string" ? project.previewUrl : "");
+  return Boolean(
+    candidate
+    && identity.projectId
+    && identity.directory
+    && project?.id === identity.projectId
+    && project?.directory === identity.directory
+    && project?.status === "running"
+    && previewUrl === candidate
+    && isFleetCollectorUrl(candidate),
+  );
 }

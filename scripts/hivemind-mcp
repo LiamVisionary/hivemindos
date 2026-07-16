@@ -753,6 +753,23 @@ async function callDashboard(route, method, body) {
   throw lastError || new Error("No HivemindOS dashboard API could be reached.");
 }
 
+function localCollectorBase() {
+  const port = Number(process.env.AGENT_TELEMETRY_PORT || 8787);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("AGENT_TELEMETRY_PORT must be a valid local collector port.");
+  }
+  return `http://127.0.0.1:${port}`;
+}
+
+async function callAppBuilder(args = {}) {
+  try {
+    return await callDashboard("/api/app-builder", "POST", args);
+  } catch (error) {
+    if (String(args.backend || "local") !== "local" || error?.payload) throw error;
+    return requestJson(localCollectorBase(), "/app-builder", "POST", args);
+  }
+}
+
 const WORK_BOARD_CREATE_KEYS = [
   "title",
   "body",
@@ -1147,6 +1164,7 @@ async function callTool(name, args = {}) {
   if (name === "app_builder") {
     const requiredConfirmation = {
       create: APP_BUILDER_CONFIRMATIONS.createProject,
+      adopt: APP_BUILDER_CONFIRMATIONS.createProject,
       files_write: APP_BUILDER_CONFIRMATIONS.writeFile,
       files_rename: APP_BUILDER_CONFIRMATIONS.renameFile,
       files_delete: APP_BUILDER_CONFIRMATIONS.deleteFile,
@@ -1169,7 +1187,7 @@ async function callTool(name, args = {}) {
     if (requiredConfirmation && args.confirmation !== requiredConfirmation) {
       throw new Error(`app_builder ${args.action} requires confirmation ${requiredConfirmation}.`);
     }
-    return callDashboard("/api/app-builder", "POST", args);
+    return callAppBuilder(args);
   }
   if (name === "list_hivemind_machines") {
     const data = await callDashboard("/api/fleet/discover?includeSnapshots=0&fresh=1", "GET");

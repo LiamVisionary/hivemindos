@@ -4,7 +4,7 @@ export type LocalAppProject = {
   id: string;
   backend: "local";
   name: string;
-  templateId: "nextjs";
+  templateId: "nextjs" | "static";
   directory: string;
   status: "stopped" | "running" | "error";
   dependenciesReady: boolean;
@@ -34,6 +34,7 @@ export type LocalHostingManifest = {
 export const APP_BUILDER_CONFIRMATIONS: Readonly<Record<string, string>>;
 export function loadAppBuilderContract(): Promise<Record<string, unknown>>;
 export function createLocalAppProject(input: Record<string, unknown>): Promise<{ created: boolean; project: LocalAppProject }>;
+export function adoptLocalAppProject(input: Record<string, unknown>): Promise<{ adopted: boolean; project: LocalAppProject }>;
 export function getLocalAppProject(input: Record<string, unknown>): Promise<LocalAppProject>;
 export function readLocalHostingManifest(directory: string): Promise<LocalHostingManifest | null>;
 export function writeLocalHostingManifest(directory: string, input: {

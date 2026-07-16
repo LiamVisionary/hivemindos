@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { machineVersionCopy } from "@/features/dashboard/dashboard-display-helpers";
+import { machineNeedsAppBuilderRepair } from "@/features/fleet/app-builder-collector-capability";
 import { useVisibilityAwarePolling } from "@/features/dashboard/hooks/use-visibility-aware-polling";
 import type { AppVersion, MachineGroup, MachineUpdateStatus } from "@/features/dashboard/dashboard-types";
 
@@ -103,7 +104,7 @@ export function useFleetAutoUpdate(options: FleetAutoUpdateOptions) {
         if (selfAppDir && candidate.version?.appDir?.trim() === selfAppDir) return false;
         // "stale" means the collector reports a commit that differs from origin/main;
         // machines with no reported version stay manual-only.
-        if (machineVersionCopy(candidate, target)?.state !== "stale") return false;
+        if (machineVersionCopy(candidate, target)?.state !== "stale" && !machineNeedsAppBuilderRepair(candidate)) return false;
         const attempt = attemptsRef.current.get(candidate.key);
         if (!attempt || attempt.commit !== target) return true;
         return attempt.attempts < MAX_ATTEMPTS_PER_COMMIT && now - attempt.lastAttemptAt >= RETRY_BACKOFF_MS;

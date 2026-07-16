@@ -14,6 +14,7 @@ import { dashboardStateValue, type DashboardStateSnapshot } from "@/lib/services
 import { normalizeChatResponseBilling } from "@/lib/types/chat-billing";
 import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 import { normalizeEvaluationHumanFeedback } from "@/lib/types/evaluation";
+import { normalizeChatAppArtifact } from "@/lib/services/chat/chat-app-artifact";
 
 const STORAGE_KEY = "hivemindos.agentProfiles.v1";
 const VAULT_STORAGE_KEY = "hivemindos.sharedVault.v1";
@@ -434,11 +435,12 @@ function dedupeChatTranscript(messages: ChatMessage[]) {
     const message = messages[index];
     if (sameVisibleChatMessage(output.at(-1), message)) {
       const previous = output.at(-1);
-      if (previous && ((message.billing && !previous.billing) || message.feedback)) {
+      if (previous && ((message.billing && !previous.billing) || message.feedback || message.appArtifact)) {
         output[output.length - 1] = {
           ...previous,
           billing: message.billing ?? previous.billing,
           feedback: message.feedback ?? previous.feedback,
+          appArtifact: message.appArtifact ?? previous.appArtifact,
         } as ChatMessage;
       }
       continue;
@@ -462,11 +464,12 @@ function dedupeChatTranscript(messages: ChatMessage[]) {
       const previousUser = [...output.slice(0, previousAssistantIndex)].reverse().find((item) => item.role === "user");
       const currentUser = [...output].reverse().find((item) => item.role === "user");
       if (previousAssistantIndex >= 0 && sameVisibleChatMessage(previousUser, currentUser)) {
-        if ((message.billing && !output[previousAssistantIndex]?.billing) || message.feedback) {
+        if ((message.billing && !output[previousAssistantIndex]?.billing) || message.feedback || message.appArtifact) {
           output[previousAssistantIndex] = {
             ...output[previousAssistantIndex],
             billing: message.billing ?? output[previousAssistantIndex]?.billing,
             feedback: message.feedback ?? output[previousAssistantIndex]?.feedback,
+            appArtifact: message.appArtifact ?? output[previousAssistantIndex]?.appArtifact,
           };
         }
         continue;
@@ -481,6 +484,7 @@ function chatMessageHasPersistableContent(message: ChatMessage) {
   return Boolean(
     message.content.trim()
     || message.attachments?.length
+    || message.appArtifact
     || message.agentPrompt
     || message.applicationGeneration
     || message.imageGeneration
@@ -662,6 +666,7 @@ function parseChatMessagesValue(raw: string | null): Record<string, ChatMessage[
           attachments: Array.isArray(message.attachments) ? message.attachments : undefined,
           applicationGeneration: parseStoredApplicationGeneration(message),
           imageGeneration: parseStoredImageGeneration(message),
+          appArtifact: normalizeChatAppArtifact(message.appArtifact),
           agentPrompt: parseStoredAgentPrompt(message, agentId),
         })).slice(-120),
       ])

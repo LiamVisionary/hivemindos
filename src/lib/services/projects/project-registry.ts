@@ -73,11 +73,12 @@ function normalizeAppBuilderReference(value: unknown): AppBuilderProjectReferenc
   const status = ["creating", "stopped", "starting", "running", "stopping", "error"].includes(String(item.status))
     ? item.status as AppBuilderProjectReference["status"]
     : undefined;
-  if (!backend || !contractVersion || item.templateId !== "nextjs" || !status) return undefined;
+  const templateId = item.templateId === "nextjs" || item.templateId === "static" ? item.templateId : undefined;
+  if (!backend || !contractVersion || !templateId || !status) return undefined;
   return {
     backend,
     contractVersion,
-    templateId: "nextjs",
+    templateId,
     status,
     localProjectId: cleanOptional(item.localProjectId),
     managedAgentId: cleanOptional(item.managedAgentId),

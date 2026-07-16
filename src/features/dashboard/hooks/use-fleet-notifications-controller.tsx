@@ -7,6 +7,8 @@ import { useCallback, useEffect, useRef } from "react";
 import { getNativeAppVersion } from "@/lib/native/desktop-status";
 import { getNativeFleetDiscovery } from "@/lib/native/fleet";
 import { readNativeKanban } from "@/lib/native/kanban";
+import { APP_BUILDER_CONTRACT } from "@/lib/services/app-builder/contract";
+import { machineNeedsAppBuilderRepair } from "@/features/fleet/app-builder-collector-capability";
 
 export function useFleetNotificationsController(props: any) {
   const {
@@ -229,13 +231,17 @@ export function useFleetNotificationsController(props: any) {
     const needsChatBridgeRepair = live.machineNeedsChatBridgeRepair(machine);
     const needsEnvHttpSyncRepair = live.machineNeedsEnvHttpSyncRepair(machine);
     const needsSkillSyncRepair = live.machineNeedsSkillSyncRepair(machine);
+    const needsAppBuilderRepair = machineNeedsAppBuilderRepair(machine);
     if (
-      (needsChatBridgeRepair ||
+      (needsAppBuilderRepair ||
+        needsChatBridgeRepair ||
         needsEnvHttpSyncRepair ||
         needsSkillSyncRepair) &&
       live.localDashboardHasUnpublishedChanges(appVersion)
     ) {
-      const missingFeature = needsSkillSyncRepair
+      const missingFeature = needsAppBuilderRepair
+        ? "Chat Preview App Builder"
+        : needsSkillSyncRepair
         ? "shared skills bridge"
         : needsEnvHttpSyncRepair
           ? "shared-env sync endpoint"
@@ -252,6 +258,7 @@ export function useFleetNotificationsController(props: any) {
     }
     if (
       !live.isCollectorAutoUpdateable(versionCopy) &&
+      !needsAppBuilderRepair &&
       !needsChatBridgeRepair &&
       !needsEnvHttpSyncRepair &&
       !needsSkillSyncRepair
@@ -284,6 +291,9 @@ export function useFleetNotificationsController(props: any) {
         expectedCommit:
           machine.version?.latestCommit || appVersion?.latestCommit,
         requiredCapabilities: {
+          appBuilderContractVersion: needsAppBuilderRepair
+            ? APP_BUILDER_CONTRACT.version
+            : undefined,
           chat: needsChatBridgeRepair || undefined,
           envHttpSync: needsEnvHttpSyncRepair || undefined,
           skillInventory: needsSkillSyncRepair || undefined,

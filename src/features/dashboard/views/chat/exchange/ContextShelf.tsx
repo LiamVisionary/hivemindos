@@ -69,6 +69,8 @@ export type ContextShelfProps = {
   onOpenDeliverable?: (deliverable: ShelfDeliverable) => void;
 
   previewTargets: ChatPreviewTarget[];
+  previewBusy?: boolean;
+  previewError?: string;
   onExpandPreview: () => void;
 };
 
@@ -77,7 +79,7 @@ export function ContextShelf(props: ContextShelfProps) {
     mode, onModeChange, taskTitle, statusLabel, statusColor, agentLine, machineLabel,
     runtimes, providers, models, elapsedLabel, workingDirectory,
     usage, usageLoading, messageCount, liveOutput, live,
-    deliverables, onOpenDeliverable, previewTargets, onExpandPreview,
+    deliverables, onOpenDeliverable, previewTargets, previewBusy = false, previewError = "", onExpandPreview,
   } = props;
 
   if (mode === "preview") {
@@ -94,12 +96,16 @@ export function ContextShelf(props: ContextShelfProps) {
             </button>
           ) : null}
         </div>
-        {previewTargets.length ? (
+        {previewBusy ? (
+          <div role="status" aria-label="Preparing conversation preview" className="cx-genskel" style={{ width: "100%", aspectRatio: "9 / 16", border: "1px solid var(--line-2)", borderRadius: 22 }} />
+        ) : previewError ? (
+          <EmptyState title="Preview could not start" body={previewError} />
+        ) : previewTargets.length ? (
           <PreviewFrame target={previewTargets[0]} />
         ) : (
           <EmptyState
             title="No preview available"
-            body={`No hosted app is running on ${machineLabel || "this machine"}. Start one on the machine this chat is routed to and it will appear here.`}
+            body={`This conversation does not have a runnable app on ${machineLabel || "this machine"} yet.`}
           />
         )}
       </div>
@@ -234,27 +240,31 @@ function EmptyState({ title, body }: { title: string; body: string }) {
 
 /** Probes the target through the SSRF-gated route before embedding it. */
 export function PreviewFrame({ target, tall }: { target: ChatPreviewTarget; tall?: boolean }) {
-  const [state, setState] = useState<"probing" | "live" | "dead">("probing");
-  const [reason, setReason] = useState("");
+  const targetKey = [target.url, target.machine, target.projectId, target.directory].join("\u001f");
+  const [result, setResult] = useState<{ key: string; state: "live" | "dead"; reason: string } | null>(null);
+  const state = result?.key === targetKey ? result.state : "probing";
+  const reason = result?.key === targetKey ? result.reason : "";
 
   useEffect(() => {
     let cancelled = false;
-    setState("probing");
-    fetch(`/api/chat/preview?url=${encodeURIComponent(target.url)}&machine=${encodeURIComponent(target.machine)}`)
+    const query = new URLSearchParams({ url: target.url, machine: target.machine });
+    if (target.projectId) query.set("projectId", target.projectId);
+    if (target.directory) query.set("directory", target.directory);
+    if (target.machineKey) query.set("machineKey", target.machineKey);
+    if (target.collectorUrl) query.set("collectorUrl", target.collectorUrl);
+    fetch(`/api/chat/preview?${query}`)
       .then((response) => response.json())
       .then((payload) => {
         if (cancelled) return;
         const live = Boolean(payload?.live ?? payload?.data?.live);
-        setReason(String(payload?.reason ?? payload?.data?.reason ?? ""));
-        setState(live ? "live" : "dead");
+        setResult({ key: targetKey, state: live ? "live" : "dead", reason: String(payload?.reason ?? payload?.data?.reason ?? "") });
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        setReason(error instanceof Error ? error.message : "probe failed");
-        setState("dead");
+        setResult({ key: targetKey, state: "dead", reason: error instanceof Error ? error.message : "probe failed" });
       });
     return () => { cancelled = true; };
-  }, [target.url, target.machine]);
+  }, [target.collectorUrl, target.directory, target.machine, target.machineKey, target.projectId, target.url, targetKey]);
 
   const frameStyle: React.CSSProperties = {
     width: "100%",
