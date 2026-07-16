@@ -154,6 +154,41 @@ test("static projects start without dependencies and serve only project-owned fi
   }
 });
 
+test("status reconciles a stale running manifest after the preview process exits", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hivemind-stale-static-runtime-"));
+  const project = join(root, "arcade");
+  try {
+    await appBuilder.createLocalAppProject({
+      directory: project,
+      name: "Arcade",
+      templateId: "static",
+      confirmation: confirmations.create,
+    });
+    const started = await appBuilder.startLocalAppProject({ directory: project, confirmation: confirmations.runtime });
+    assert.equal(started.project.status, "running");
+    assert.ok(Number.isInteger(started.project.pid));
+
+    process.kill(started.project.pid, "SIGKILL");
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      try {
+        process.kill(started.project.pid, 0);
+      } catch {
+        break;
+      }
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 10));
+    }
+
+    const status = await appBuilder.getLocalAppProject({ directory: project });
+    assert.equal(status.status, "stopped");
+    assert.equal(status.pid, null);
+    assert.equal(status.port, null);
+    assert.equal(status.previewUrl, null);
+  } finally {
+    await appBuilder.stopLocalAppProject({ directory: project, confirmation: confirmations.runtime }).catch(() => undefined);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("existing static apps can be adopted inside the selected chat workspace without overwriting files", async () => {
   const root = await mkdtemp(join(tmpdir(), "hivemind-static-adopt-"));
   const workspace = join(root, "workspace");
