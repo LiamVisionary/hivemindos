@@ -3,6 +3,9 @@ node_modules/
 .next-tauri/
 .next-tauri-build/
 .next-tauri-static-build/
+# macOS TMPDIR (/var/folders/...) written repo-relative when an absolute path
+# is passed as a Next distDir — never real repo content.
+var/
 .setup-cache/
 out/
 dist/

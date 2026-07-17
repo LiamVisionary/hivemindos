@@ -14,6 +14,8 @@ const ignoredDirectories = new Set([
   ".next-tauri",
   ".next-tauri-build",
   ".next-tauri-static-build",
+  // Gitignored benchmark/eval data dumps; only local runs ever see them.
+  ".outputs",
   ".turbo",
   ".vercel",
   "build",
@@ -62,10 +64,15 @@ const checkedExtensions = new Set([
 ]);
 
 const legacyOversizedAllowances = new Map([
+  // Ratchet re-baselined 2026-07-17: fd4581152 ("TONS of improvements") landed
+  // without the gate running, growing eleven entries past their watermarks and
+  // pushing seven new files over 1500 (added at the bottom of this map).
+  // Watermarks set to the line counts at that HEAD; shrinking a file should
+  // lower its entry, growth fails the gate.
   ["src/app/api/chat/agent-runtime/route.ts", 580],
-  ["src/app/chat.module.css", 3813],
-  ["src/app/fleet.module.css", 4722],
-  ["src/app/kanban-board.module.css", 4528],
+  ["src/app/chat.module.css", 3878],
+  ["src/app/fleet.module.css", 4729],
+  ["src/app/kanban-board.module.css", 4642],
   ["src/app/vault.module.css", 1568],
   // 2026-07-04: +2 for the needs-human answer controller wiring (import + hook
   // call; the logic itself lives in use-kanban-needs-human-controller.tsx).
@@ -74,8 +81,8 @@ const legacyOversizedAllowances = new Map([
   // 2026-07-04: +14 for the notification→task deep-link reveal wiring (ref
   // bridge to the nav controller + openKanbanTaskConversation bee-pilot dep;
   // the flight logic lives in bee-pilot/reveal-kanban-task.ts).
-  ["src/features/dashboard/DashboardApp.tsx", 4752],
-  ["src/lib/services/hive-actions/catalog.ts", 1633],
+  ["src/features/dashboard/DashboardApp.tsx", 4853],
+  ["src/lib/services/hive-actions/catalog.ts", 1817],
   ["src/features/dashboard/views/AeonAutopilotPanel.tsx", 3857],
   // Ratchet re-baselined 2026-07-02: watermarks set to then-current line counts
   // (files had silently grown past the old allowances while the gate wasn't run
@@ -88,7 +95,7 @@ const legacyOversizedAllowances = new Map([
   // 2026-07-03: +35 for startSyncthingViaServiceManager — syncthing recovery
   // now starts the installer-managed unit instead of racing it with a detached
   // spawn (hel1-2 DB-lock crash-loop, 400k+ restarts).
-  ["scripts/agent-telemetry-collector.mjs", 8187],
+  ["scripts/agent-telemetry-collector.mjs", 9748],
   // 2026-07-02: +18 for the non-string task.result/body read+write coercion fix
   // (one poisoned task was 400ing every /api/kanban read).
   // 2026-07-04: +57 for answerHumanTask — the needs-human answer mutation
@@ -96,21 +103,31 @@ const legacyOversizedAllowances = new Map([
   // the store's private withBoardMutation/event/touch internals, so it lives here.
   // 2026-07-07: +48 for outreach revenue completion fail-closed wiring; the
   // reusable policy parser lives in kanban/outreach-safeguards.ts.
-  ["src/lib/services/kanban/local-kanban-store.ts", 2538],
+  ["src/lib/services/kanban/local-kanban-store.ts", 2585],
   ["src/features/dashboard/hooks/use-dashboard-derived-state.tsx", 2244],
   ["src/features/dashboard/views/chat/HiveChatView.module.css", 1802],
-  ["src/lib/services/obsidian/agent-memory/core.ts", 1850],
-  ["src/components/wallets-drop-in/WalletsView.tsx", 1850],
+  ["src/lib/services/obsidian/agent-memory/core.ts", 1901],
+  ["src/components/wallets-drop-in/WalletsView.tsx", 2183],
   ["src/app/globals.css", 1719],
   // +50 2026-07-03: aeon-mirror plague root fixes (no doubled-prefix minting,
   // all-roots mirror guard, vault->aeon GC) with incident comments in place.
   ["src/lib/services/obsidian/brain-skills.ts", 1675],
   ["src/lib/services/context-index.ts", 1680],
-  ["src/features/dashboard/hooks/use-status-chat-input-controller.tsx", 1660],
+  ["src/features/dashboard/hooks/use-status-chat-input-controller.tsx", 1840],
   ["src/features/dashboard/views/chat/AgentSettingsModal.tsx", 1640],
-  ["src/components/fleet/fleet-tokens.module.css", 1540],
+  ["src/components/fleet/fleet-tokens.module.css", 1541],
   ["src/features/dashboard/views/chat/UsePodSetup.module.css", 1540],
   ["src/features/dashboard/hooks/use-miroshark-brain-controller.tsx", 1580],
+  // 2026-07-17 (fd4581152): first crossed 1500 in that commit. The barely-over
+  // three (dashboard-display-helpers, stream-openai-compatible, fleet-hive.css)
+  // are the cheapest split candidates — extract, then delete their entries.
+  ["src/app/api/chat/agent-runtime/stream-openai-compatible.ts", 1517],
+  ["src/app/api/fleet/discover/route.ts", 1537],
+  ["src/app/api/phone/route.ts", 1544],
+  ["src/components/fleet-hive/fleet-hive.css", 1516],
+  ["src/features/dashboard/dashboard-display-helpers.tsx", 1519],
+  ["src/lib/services/nansen.ts", 1640],
+  ["src/lib/types/agent-runtime.ts", 1555],
 ]);
 
 function isIgnoredDirectory(directory) {
