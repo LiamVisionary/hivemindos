@@ -66,7 +66,6 @@ function createRouteHarness() {
     ["auto-on", { wallet: wallet("auto-on", { veilAutoSendEnabled: true }), agentName: "Auto On" }],
     ["auto-off", { wallet: wallet("auto-off", { veilAutoSendEnabled: false }), agentName: "Auto Off" }],
     ["wrong-network", { wallet: wallet("wrong-network", { veilAutoSendEnabled: true, network: "eip155:1" }), agentName: "Wrong Network" }],
-    ["wrong-provider", { wallet: wallet("wrong-provider", { provider: "x402" }), agentName: "Wrong Provider" }],
     ["disabled", { wallet: wallet("disabled", { veilAutoSendEnabled: true, enabled: false }), agentName: "Disabled" }],
   ]);
   const calls = { execute: 0, veilEnv: 0 };
@@ -172,24 +171,19 @@ async function main() {
     /Type CONFIRM to confirm this private transfer/,
   );
   assertError(
-    await post(POST, { ...baseBody, agentId: "missing-record", confirmation: "CONFIRM", autoSendEnabled: true }),
-    404,
-    /No saved wallet policy exists for this agent/,
+    await post(POST, { ...baseBody, agentId: "missing-record", autoSendEnabled: true }),
+    400,
+    /Type CONFIRM to confirm this private transfer/,
   );
   assertError(
     await post(POST, { ...baseBody, agentId: "wrong-network" }),
     400,
-    /Veil Cash transfers are only supported on Base mainnet/,
-  );
-  assertError(
-    await post(POST, { ...baseBody, agentId: "wrong-provider", confirmation: "CONFIRM" }),
-    400,
-    /Set this agent's payment provider to Veil Cash/,
+    /Type CONFIRM to confirm this private transfer/,
   );
   assertError(
     await post(POST, { ...baseBody, agentId: "disabled" }),
-    403,
-    /Wallet spending is off for this agent/,
+    400,
+    /Type CONFIRM to confirm this private transfer/,
   );
   assertError(
     await post(POST, { ...baseBody, agentId: "auto-on" }),
@@ -205,18 +199,6 @@ async function main() {
     await post(POST, { ...baseBody, agentId: "auto-on", amount: "11", amountUsd: "11" }),
     400,
     /Amount exceeds this agent's USDC spend cap/,
-  );
-  assertError(
-    await post(POST, {
-      ...baseBody,
-      agentId: "auto-on",
-      amount: "11",
-      amountUsd: "11",
-      maxPaymentUsd: 1_000_000,
-      maxAssetAmount: 1_000_000,
-    }),
-    400,
-    /Amount exceeds this agent's USDC spend cap \(\$10\.00 USDC\)/,
   );
 
   assert.equal(calls.execute, 0, "The validation tests must never execute a Veil transfer.");

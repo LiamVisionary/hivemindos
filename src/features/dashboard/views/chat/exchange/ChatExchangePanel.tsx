@@ -84,7 +84,7 @@ function elapsedLabel(startedAt: number | undefined, nowMs: number) {
   return `${hours ? `${hours}h ` : ""}${minutes}m ${seconds % 60}s`;
 }
 
-function appBuilderProject(payload: any) {
+function appBuilderProject(payload: any): Record<string, any> | null {
   return payload?.project ?? payload?.data?.project ?? null;
 }
 
@@ -275,28 +275,6 @@ export function ChatExchangePanel(props: any) {
     toastTimerRef.current = window.setTimeout(() => setToast(""), 2200);
   }, []);
   useEffect(() => () => { if (toastTimerRef.current !== null) window.clearTimeout(toastTimerRef.current); }, []);
-
-  const updateThreadAppArtifact = useCallback((appArtifact: ChatAppArtifact) => {
-    if (!selectedChatStorageKey) return;
-    setMessagesByAgent?.((current: Record<string, any[]>) => {
-      const thread = current[selectedChatStorageKey] ?? [];
-      let attached = false;
-      const next = thread.map((message) => {
-        if (message.appArtifact?.projectId !== appArtifact.projectId) return message;
-        attached = true;
-        return { ...message, appArtifact };
-      });
-      if (!attached) {
-        for (let index = next.length - 1; index >= 0; index -= 1) {
-          if (next[index]?.role !== "assistant") continue;
-          next[index] = { ...next[index], appArtifact };
-          attached = true;
-          break;
-        }
-      }
-      return attached ? { ...current, [selectedChatStorageKey]: next } : current;
-    });
-  }, [selectedChatStorageKey, setMessagesByAgent]);
 
   async function submitMessageFeedback(message: any, renderKey: string, rating: "up" | "down") {
     const sessionId = String(message?.sourceSessionId ?? "").trim();
@@ -743,12 +721,6 @@ export function ChatExchangePanel(props: any) {
     }
     return rows;
   }, [chatSidebarTree, chatThreadTitles, displayAgents, messagesByAgent, runningChatStorageKeys]);
-
-  const chatWorkingDirectory = chatWorkingDirectoryForThread(
-    sidebarRows,
-    selectedChatStorageKey,
-    selectedAgent?.localDataDir,
-  );
 
   const chatWorkingDirectory = chatWorkingDirectoryForThread(
     sidebarRows,

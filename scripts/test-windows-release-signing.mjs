@@ -14,7 +14,6 @@ assert.match(
 for (const requiredSetting of [
   "secrets.AZURE_CLIENT_ID",
   "secrets.AZURE_TENANT_ID",
-  "secrets.AZURE_SUBSCRIPTION_ID",
   "vars.AZURE_ARTIFACT_SIGNING_ENDPOINT",
   "vars.AZURE_ARTIFACT_SIGNING_ACCOUNT_NAME",
   "vars.AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME",
@@ -25,14 +24,21 @@ for (const requiredSetting of [
   );
 }
 
+// Tenant-only Azure login: no subscription is selected or required anywhere in
+// the signing flow (test-link-device-gui.mjs asserts the login step details).
+assert.ok(
+  !workflow.includes("AZURE_SUBSCRIPTION_ID"),
+  "Windows signing must stay on tenant-only Azure login without a subscription secret",
+);
+
 assert.match(
   workflow,
-  /- name: Azure login for Windows signing\s*\n\s+if: runner\.os == 'Windows'\s*\n\s+uses: azure\/login@v3/,
+  /- name: Azure login for Windows signing\s*\n\s+if: runner\.os == 'Windows'[^\n]*\n\s+uses: azure\/login@v3/,
   "Windows release jobs must authenticate to Azure through OIDC",
 );
 assert.match(
   workflow,
-  /- name: Sign Windows installers with Azure Artifact Signing\s*\n\s+if: runner\.os == 'Windows'\s*\n\s+uses: azure\/artifact-signing-action@v2/,
+  /- name: Sign Windows installers with Azure Artifact Signing\s*\n\s+if: runner\.os == 'Windows'[^\n]*\n\s+uses: azure\/artifact-signing-action@v2/,
   "Windows release jobs must use the supported Azure Artifact Signing action",
 );
 assert.match(

@@ -302,6 +302,15 @@ jobs:
         # by ACL"). Cheap insurance against the per-command declaration tax.
         run: node scripts/check-tauri-command-acl.mjs
 
+      - name: Verify bundled document-converter contract
+        run: node scripts/test-markitdown-bundle.mjs
+
+      - name: Stage bundled document converter
+        run: node scripts/stage-markitdown-sidecar.mjs
+
+      - name: Exercise bundled document converter
+        run: node scripts/test-markitdown-sidecar-runtime.mjs
+
       - name: Build Tauri app
         if: runner.os != 'macOS' || github.event.inputs.notarize_macos == 'true'
         env:

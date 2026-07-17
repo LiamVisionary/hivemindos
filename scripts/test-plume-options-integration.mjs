@@ -57,9 +57,9 @@ assert.match(actions, /toolName: "plume_options"/, "the Plume options capability
 assert.match(actions, /CONFIRM_OPTION_WRITE/, "agent execution must advertise the exact confirmation gate");
 assert.match(actions, /\/api\/trading\/plume/, "agent execution must route through the governed API");
 
-const css = read("src/components/trade/trade-desk.css");
-assert.match(css, /\.po-shell/, "options surface must have scoped route styling");
-assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.po-hero/, "options surface must include a responsive layout");
+const css = read("src/components/trade/PlumeOptionsPanel.module.css");
+assert.match(css, /\.card/, "options surface must have scoped route styling");
+assert.match(css, /@media \(max-width: 720px\)/, "options surface must include a responsive layout");
 
 const activity = read("src/components/trade/adapt-trade.ts");
 assert.match(activity, /plume-options/, "mined option receipts must appear in the stock activity feed");

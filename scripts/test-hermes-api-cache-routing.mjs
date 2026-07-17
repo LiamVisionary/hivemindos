@@ -86,7 +86,7 @@ const collectorSource = readFileSync(
 );
 assert.match(collectorSource, /hermesApiSessionHeaders\(body, \{ authenticated: Boolean\(hermesApiKey\) \}\)/);
 assert.match(collectorSource, /hermesSessionIdFromResponse\(upstream\.headers\)/);
-assert.match(collectorSource, /hermesApiMessages\(body, text, normalizeMessageContent\)/);
+assert.match(collectorSource, /hermesApiMessages\(policyAwareBody, text, normalizeMessageContent\)/);
 assert.match(collectorSource, /hermesApiSelectionMatchesAgent\(agent, gatewaySelection\)/);
 assert.match(
   collectorSource,

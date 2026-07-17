@@ -492,7 +492,10 @@ export async function processPendingBrainDropInbox(input: {
     }
     if (results.length >= limit) break;
     const fileStat = await stat(fullPath);
-    const createdAt = frontmatterValue(markdown, "created") || fileStat.mtime.toISOString();
+    // An injected clock must also govern the undated-note fallback, or replays
+    // under a frozen `now` route notes by the real file mtime instead.
+    const createdAt = frontmatterValue(markdown, "created")
+      || (input.now ?? fileStat.mtime).toISOString();
     const result = await processBrainDropCapture({
       vaultPath: root,
       capture: {
