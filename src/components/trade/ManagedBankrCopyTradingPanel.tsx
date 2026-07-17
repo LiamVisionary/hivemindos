@@ -11,6 +11,8 @@ import {
 import type {
   BankrCopyConnectionKind,
   BankrCopyDashboard,
+  BankrCopyPerformancePublication,
+  BankrCopyPerformanceShare,
   BankrCopySubscription,
 } from "@/lib/services/trading/bankr-copy-trading-contract";
 import {
@@ -27,6 +29,8 @@ type ApiResponse = Partial<BankrCopyDashboard> & {
   wallet?: { evmAddress: string; baseUsdcBalance: number };
   apiKeyEnv?: string;
   subscription?: BankrCopySubscription;
+  performancePublication?: BankrCopyPerformancePublication;
+  performanceRevocation?: { revoked: boolean; revokedAt: string };
   transfer?: { transactionHash: string; amountUsd: number };
 };
 
@@ -229,11 +233,12 @@ export function ManagedBankrCopyTradingPanel() {
       {error ? <div className={styles.error}>{error}</div> : null}
       {notice ? <div className={styles.notice}>{notice}</div> : null}
 
-      {dashboard?.subscriptions.map(({ subscription, events, usageToday, statusError }) => (
+      {dashboard?.subscriptions.map(({ subscription, performanceShare, events, usageToday, statusError }) => (
         <SubscriptionCard
           key={subscription.id}
           dashboard={dashboard}
           subscription={subscription}
+          performanceShare={performanceShare}
           events={events}
           usageToday={usageToday}
           statusError={statusError}
@@ -373,6 +378,7 @@ export function ManagedBankrCopyTradingPanel() {
 function SubscriptionCard(props: {
   dashboard: BankrCopyDashboard;
   subscription: BankrCopySubscription;
+  performanceShare?: BankrCopyPerformanceShare;
   events: BankrCopyDashboard["subscriptions"][number]["events"];
   usageToday?: { signalCount: number; reservedUsd: number; maxDailyUsd: number };
   statusError?: string;
@@ -389,6 +395,8 @@ function SubscriptionCard(props: {
   const [updating, setUpdating] = React.useState(false);
   const [liveAcknowledged, setLiveAcknowledged] = React.useState(false);
   const [feeAcknowledged, setFeeAcknowledged] = React.useState(false);
+  const [performanceBusy, setPerformanceBusy] = React.useState<"publish" | "revoke" | "">("");
+  const [publicPerformanceUrl, setPublicPerformanceUrl] = React.useState("");
   const [limits, setLimits] = React.useState({
     maxTradeUsd: subscription.maxTradeUsd,
     maxDailyUsd: subscription.maxDailyUsd,
@@ -454,6 +462,34 @@ function SubscriptionCard(props: {
     props.onNotice(`Sent $${amountUsd.toFixed(2)} USDC to the Bankr execution wallet.`);
     await props.onRefresh();
   };
+  const publishPerformance = async () => {
+    setPerformanceBusy("publish");
+    props.onError("");
+    const result = await api({ action: "publish-performance", subscriptionId: subscription.id });
+    setPerformanceBusy("");
+    if (!result.ok || !result.performancePublication?.publicUrl) {
+      props.onError(result.error || "The public performance link could not be created.");
+      return;
+    }
+    setPublicPerformanceUrl(result.performancePublication.publicUrl);
+    props.onNotice(result.performancePublication.rotated
+      ? "The previous performance link was revoked and a new link is ready to share."
+      : "The verified performance link is ready to share with Bankr or a public dashboard.");
+    await props.onRefresh();
+  };
+  const revokePerformance = async () => {
+    setPerformanceBusy("revoke");
+    props.onError("");
+    const result = await api({ action: "revoke-performance", subscriptionId: subscription.id });
+    setPerformanceBusy("");
+    if (!result.ok || !result.performanceRevocation) {
+      props.onError(result.error || "The public performance link could not be revoked.");
+      return;
+    }
+    setPublicPerformanceUrl("");
+    props.onNotice("The public performance link is revoked.");
+    await props.onRefresh();
+  };
   return (
     <article className={styles.subscription}>
       <div className={styles.subscriptionHead}>
@@ -468,6 +504,26 @@ function SubscriptionCard(props: {
         <span><small>Service fee</small><b>{isUsageMinimum ? `$${subscription.billing.usageMinimumUsd ?? 1} credit · ${subscription.billing.feePercent ?? props.dashboard.feePercent}%` : subscription.billingModel === "prepaid-period" ? "Prepaid" : `${subscription.billing.feePercent ?? props.dashboard.feePercent}%`}</b></span>
       </div>
       {isUsageMinimum ? <UsagePeriodStatus subscription={subscription} /> : null}
+      <div className={styles.performanceShare}>
+        <div>
+          <span className={styles.eyebrow}>Verified performance feed</span>
+          <b>{props.performanceShare?.enabled ? "Public link active" : "Not published"}</b>
+          <p>Publishes only HivemindOS-verified copied executions and service fees. Wallet transfers are excluded, and PnL stays unavailable when cost basis or current prices cannot be proven.</p>
+          {publicPerformanceUrl ? <code>{publicPerformanceUrl}</code> : null}
+        </div>
+        <div className={styles.performanceActions}>
+          {publicPerformanceUrl ? (
+            <>
+              <BBtn sm onClick={() => void navigator.clipboard?.writeText(publicPerformanceUrl)}>Copy link</BBtn>
+              <a href={publicPerformanceUrl} target="_blank" rel="noreferrer">Open</a>
+            </>
+          ) : null}
+          <BBtn sm disabled={Boolean(performanceBusy) || subscription.status === "canceled"} onClick={publishPerformance}>
+            {performanceBusy === "publish" ? "Publishing…" : props.performanceShare?.enabled ? "Rotate link" : "Publish performance"}
+          </BBtn>
+          {props.performanceShare?.enabled ? <BBtn sm disabled={Boolean(performanceBusy)} onClick={revokePerformance}>{performanceBusy === "revoke" ? "Revoking…" : "Revoke"}</BBtn> : null}
+        </div>
+      </div>
       <details className={styles.management}>
         <summary>{isUsageMinimum ? "Manage limits" : "Manage mode & limits"}</summary>
         <div className={styles.managementBody}>

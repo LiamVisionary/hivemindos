@@ -6,6 +6,8 @@ import {
   changeBankrCopySubscription,
   fundBankrCopyWallet,
   getBankrCopyDashboard,
+  publishBankrCopyPerformance,
+  revokeBankrCopyPerformance,
   startBankrCopyTradingMonitor,
   verifyExistingBankrConnection,
 } from "@/lib/services/trading/bankr-copy-trading";
@@ -24,7 +26,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 type RequestBody = {
-  action?: "verify" | "start" | "subscribe" | "update" | "pause" | "resume" | "cancel" | "fund";
+  action?: "verify" | "start" | "subscribe" | "update" | "pause" | "resume" | "cancel" | "fund" | "publish-performance" | "revoke-performance";
   apiKey?: string;
   apiKeyEnv?: string;
   saveToHiveEnv?: boolean;
@@ -117,6 +119,12 @@ export async function POST(request: NextRequest) {
     if (body.action === "cancel") {
       await cancelBankrCopySubscription(body.subscriptionId);
       return okJson({ canceled: true });
+    }
+    if (body.action === "publish-performance") {
+      return okJson({ performancePublication: await publishBankrCopyPerformance(body.subscriptionId) });
+    }
+    if (body.action === "revoke-performance") {
+      return okJson({ performanceRevocation: await revokeBankrCopyPerformance(body.subscriptionId) });
     }
     if (body.action === "fund") {
       if (!body.fundingWalletId) return errorJson("fundingWalletId is required.", 400);

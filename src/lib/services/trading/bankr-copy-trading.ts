@@ -7,6 +7,7 @@ import {
   type BankrCopyConnectionKind,
   type BankrCopyDashboard,
   type BankrCopyFundingWallet,
+  type BankrCopyPerformancePublication,
   type BankrCopySubscription,
 } from "./bankr-copy-trading-contract";
 import {
@@ -200,6 +201,36 @@ export async function cancelBankrCopySubscription(subscriptionId: string): Promi
   await removeBankrCopyCredential(subscriptionId);
 }
 
+export async function publishBankrCopyPerformance(subscriptionId: string): Promise<BankrCopyPerformancePublication> {
+  const credential = await requiredCredential(subscriptionId);
+  const payload = await hostedRequest<JsonObject>(`${subscriptionPath(credential.subscription)}/performance-share`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${credential.accessToken}` },
+  });
+  const publicUrl = validatedPerformanceUrl(payload.publicUrl, credential.subscription);
+  const createdAt = stringValue(payload.createdAt);
+  if (payload.schemaVersion !== "2026-07-17" || !createdAt) {
+    throw new BankrCopyTradingError(502, "The hosted service returned an invalid performance publication.");
+  }
+  return {
+    schemaVersion: "2026-07-17",
+    publicUrl,
+    createdAt,
+    rotated: payload.rotated === true,
+  };
+}
+
+export async function revokeBankrCopyPerformance(subscriptionId: string): Promise<{ revoked: boolean; revokedAt: string }> {
+  const credential = await requiredCredential(subscriptionId);
+  const payload = await hostedRequest<JsonObject>(`${subscriptionPath(credential.subscription)}/performance-share`, {
+    method: "DELETE",
+    headers: { authorization: `Bearer ${credential.accessToken}` },
+  });
+  const revokedAt = stringValue(payload.revokedAt);
+  if (!revokedAt) throw new BankrCopyTradingError(502, "The hosted service returned an invalid performance revocation.");
+  return { revoked: payload.revoked === true, revokedAt };
+}
+
 export async function fundBankrCopyWallet(input: {
   subscriptionId: string;
   fundingWalletId: string;
@@ -336,6 +367,7 @@ async function recoverPaidBankrCopyActivation(
 async function readHostedSubscription(targetWallet: string, subscriptionId: string, accessToken: string) {
   return hostedRequest<{
     subscription: BankrCopySubscription;
+    performanceShare?: BankrCopyDashboard["subscriptions"][number]["performanceShare"];
     events: BankrCopyDashboard["subscriptions"][number]["events"];
     usageToday?: { signalCount: number; reservedUsd: number; maxDailyUsd: number };
   }>(`/v1/monitors/${targetWallet}/${encodeURIComponent(subscriptionId)}`, {
@@ -351,6 +383,28 @@ async function requiredCredential(subscriptionId: string) {
 
 function subscriptionPath(subscription: Pick<BankrCopySubscription, "targetWallet" | "id">): string {
   return `/v1/monitors/${subscription.targetWallet}/${encodeURIComponent(subscription.id)}`;
+}
+
+function validatedPerformanceUrl(value: unknown, subscription: Pick<BankrCopySubscription, "targetWallet" | "id">): string {
+  const publicUrl = stringValue(value);
+  let parsed: URL;
+  try {
+    parsed = new URL(publicUrl);
+  } catch {
+    throw new BankrCopyTradingError(502, "The hosted service returned an invalid performance URL.");
+  }
+  const expectedOrigin = new URL(OFFICIAL_BANKR_COPY_TRADING_BASE_URL).origin;
+  const expectedPrefix = `/v1/public/monitors/${subscription.targetWallet.toLowerCase()}/${encodeURIComponent(subscription.id)}/performance/ctshare_`;
+  if (
+    parsed.origin !== expectedOrigin
+    || !parsed.pathname.startsWith(expectedPrefix)
+    || !/^ctshare_[A-Za-z0-9_-]{43}$/.test(parsed.pathname.slice(parsed.pathname.lastIndexOf("/") + 1))
+    || parsed.search
+    || parsed.hash
+  ) {
+    throw new BankrCopyTradingError(502, "The hosted service returned an invalid performance URL.");
+  }
+  return parsed.toString();
 }
 
 async function hostedRequest<T extends JsonObject>(path: string, init: RequestInit = {}): Promise<T> {

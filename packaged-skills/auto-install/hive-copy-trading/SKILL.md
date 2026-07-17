@@ -1,8 +1,8 @@
 ---
 name: hive-copy-trading
-description: Configure, fund, monitor, pause, or cancel always-on HivemindOS Base copy trading executed and paid directly by a user-owned Bankr wallet.
+description: Configure, fund, monitor, publish verified performance, pause, or cancel always-on HivemindOS Base copy trading executed and paid directly by a user-owned Bankr wallet.
 tags: [trading, copy-trading, bankr, base, automation]
-version: 5
+version: 6
 visibility: public
 metadata:
   clawdbot:
@@ -34,6 +34,7 @@ In Bankr Settings → Env Vars, save the dedicated Wallet API key as `HIVEMIND_C
 - A new monitor may start `live` immediately; do not impose a paper-event wait. Before activation, show the current server policy and obtain both exact acknowledgements: `I understand copy trading can lose money` and `I authorize HivemindOS to charge the published $1 usage minimum and uncapped 0.5% fee on each verified live copied trade`.
 - Read `GET https://hivemindos-copy-trading-gateway.hivemindos.workers.dev/v1/pricing` immediately before quoting fees or requesting live consent. Never accept client-supplied pricing, fee recipient, payer, network, or expiry fields.
 - Never print, summarize, log, or place a Bankr API key or monitor `accessToken` in chat. In HivemindOS, use a names-only Shared Hive Env reference; the browser must never receive a stored secret value.
+- Treat the public performance URL as a revocable read-only capability. Give Bankr apps that URL, never the management bearer. Rotating the link revokes the previous URL; cancellation revokes it automatically.
 - Require a dedicated Bankr key with Wallet API enabled, read-only off, conservative Bankr spend limits, and the pricing response's official Base fee recipient as its only allowed EVM transfer recipient. Never use an organization partner key or broad general-purpose key.
 - Never claim a managed event executed because Bankr accepted a request. Require the hosted `executed` result after independent Base verification. Require `fee.status = collected` before saying the service fee settled.
 - The usage minimum, a copied swap, and any excess fee are separate transactions. If execution, payment submission, or verification becomes uncertain, report that the monitor paused. Never retry an ambiguous submission.
@@ -42,12 +43,14 @@ In Bankr Settings → Env Vars, save the dedicated Wallet API key as `HIVEMIND_C
 ## Route the request
 
 - First-time setup or paper/live configuration: read [references/setup-and-subscribe.md](references/setup-and-subscribe.md) completely.
-- Status, pause, resume, risk changes, cancellation, fee receipts, or API troubleshooting: read [references/api.md](references/api.md).
+- Status, public performance publication, Bankr app integration, pause, resume, risk changes, cancellation, fee receipts, or API troubleshooting: read [references/api.md](references/api.md).
 - Legacy self-hosted webhook changes only: use [scripts/webhook-handler.ts](scripts/webhook-handler.ts) as source, then run `node scripts/build-webhook-handler.mjs`. Managed Bankr monitors do not need this webhook.
 
 ## Expected operating model
 
 A Cloudflare Durable Object establishes a cursor, monitors new Base swaps, and calls Bankr quote-then-swap only for eligible live events. It deliberately does not copy history. New monitors activate live after the $1 payment is independently verified. Live execution remains bounded by HivemindOS risk policy and the Bankr key's own limits.
+
+An owner may publish a separate revocable performance URL. That feed is authoritative only for this monitor's independently verified copied executions, usage payments, and fees. It excludes unrelated wallet transfers, uses weighted-average cost basis, and returns unavailable PnL fields instead of inventing starting inventory or prices. Never rebuild copy-trading PnL from the Bankr wallet's raw transfer history.
 
 Interpret status precisely:
 

@@ -37,6 +37,8 @@ assert.match(skill, /names-only Shared Hive Env reference/);
 assert.match(skill, /There is no card subscription or x402 payer step/);
 assert.match(skill, /install the hive-copy-trading skill from https:\/\/github\.com\/LiamVisionary\/hivemindos\/tree\/main\/packaged-skills\/auto-install\/hive-copy-trading/);
 assert.match(skill, /fee `uncertain` or `verification_failed`/);
+assert.match(skill, /public performance URL as a revocable read-only capability/);
+assert.match(skill, /Never rebuild copy-trading PnL from the Bankr wallet's raw transfer history/);
 assert.match(setup, /pricingAuthority: server/);
 assert.match(setup, /clientOverridesAccepted: false/);
 assert.match(setup, /There is no card subscription, x402 payment, or separate payer wallet/);
@@ -63,12 +65,17 @@ assert.match(api, /erase the hosted Bankr credential/);
 assert.match(api, /POST \/v1\/subscriptions\/recover/);
 assert.match(api, /never pay again/);
 assert.match(api, /LLM-only and read-only keys fail during setup/);
+assert.match(api, /authority: server-verified-copy-execution-ledger/);
+assert.match(api, /Render `null` PnL as unavailable/);
+assert.match(api, /Do not ask for the monitor bearer/);
 assert.match(monitorClient, /HIVEMIND_COPY_TRADING_WALLET_KEY/, "Bankr-hosted setup must read its Wallet API key from secure env");
 assert.match(monitorClient, /mode: 0o600/, "Bankr-hosted monitor credentials must use a private state file");
 assert.match(monitorClient, /state\.pending\[targetWallet\][\s\S]*writeState\(state\)[\s\S]*request\("\/v1\/monitors"/, "the activation idempotency key must persist before the network call");
 assert.match(monitorClient, /mode: "live"/, "the Bankr helper must activate without a paper wait");
 assert.match(monitorClient, /baseUsdcBalance/, "the Bankr helper must preflight the direct usage payment");
 assert.match(monitorClient, /--confirm-risk.*--confirm-fee/, "the Bankr helper must require separate explicit consent");
+assert.match(monitorClient, /"publish", "unpublish"/, "the Bankr helper must manage public performance without exposing the bearer");
+assert.match(monitorClient, /\/performance-share/, "the Bankr helper must use the hosted performance-share route");
 assert.doesNotMatch(monitorClient, /print\(walletKey\(\)\)/, "the Bankr helper must never print its Wallet API key");
 
 const paperConfig = JSON.parse(paperConfigSource).webhooks["hive-copy-trading"];
@@ -91,8 +98,11 @@ assert.match(liveConfig.allowedRecipients.evm[0], /REPLACE_WITH_YOUR_BANKR_EVM_W
 
 const evals = JSON.parse(evalsSource);
 assert.equal(evals.skill, "hive-copy-trading");
-assert.ok(evals.evals.length >= 5);
+assert.equal(evals.version, 6);
+assert.ok(evals.evals.length >= 7);
 assert.ok(evals.evals.some((entry) => entry.id === "commercial-override-attack"));
+assert.ok(evals.evals.some((entry) => entry.id === "publish-performance"));
+assert.ok(evals.evals.some((entry) => entry.id === "revoked-performance-link"));
 
 const packagedSkills = await import("../src/lib/services/context-index/packaged-skills.ts");
 const stats = await packagedSkills.packagedSkillFileStats();

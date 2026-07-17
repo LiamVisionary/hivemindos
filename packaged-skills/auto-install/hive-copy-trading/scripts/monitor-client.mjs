@@ -19,7 +19,7 @@ try {
     print(await request("/v1/bankr/verify", { method: "POST", body: { apiKey: walletKey() } }));
   } else if (command === "start") {
     await startMonitor(args);
-  } else if (["status", "pause", "resume", "paper", "live", "cancel"].includes(command)) {
+  } else if (["status", "pause", "resume", "paper", "live", "publish", "unpublish", "cancel"].includes(command)) {
     await manageMonitor(command, args);
   } else {
     print({
@@ -28,6 +28,7 @@ try {
         "monitor-client.mjs verify",
         "monitor-client.mjs start --target 0x... --confirm-risk --confirm-fee [--max-trade 5 --max-daily 25 --scale 20 --slippage 100]",
         "monitor-client.mjs status [--id ctmon_...]",
+        "monitor-client.mjs publish|unpublish [--id ctmon_...]",
         "monitor-client.mjs pause|resume|paper|cancel [--id ctmon_...]",
         "monitor-client.mjs live [--id ctmon_...] --confirm-risk --confirm-fee",
       ],
@@ -109,6 +110,22 @@ async function manageMonitor(commandName, options) {
     print(await authorizedRequest(monitor, "GET"));
     return;
   }
+  if (commandName === "publish") {
+    const publication = await authorizedRequest(monitor, "POST", undefined, "/performance-share");
+    print({
+      ok: true,
+      publicUrl: publication.publicUrl,
+      schemaVersion: publication.schemaVersion,
+      rotated: publication.rotated === true,
+      note: "Share this read-only capability URL with the Bankr app. The monitor access token was not exposed.",
+    });
+    return;
+  }
+  if (commandName === "unpublish") {
+    const revocation = await authorizedRequest(monitor, "DELETE", undefined, "/performance-share");
+    print({ ok: true, revoked: revocation.revoked === true, revokedAt: revocation.revokedAt });
+    return;
+  }
   if (commandName === "cancel") {
     await authorizedRequest(monitor, "DELETE");
     delete state.monitors[monitor.id];
@@ -132,8 +149,8 @@ async function manageMonitor(commandName, options) {
   print(await authorizedRequest(monitor, "PATCH", patch));
 }
 
-async function authorizedRequest(monitor, method, body) {
-  return request(new URL(monitor.manageUrl).pathname, {
+async function authorizedRequest(monitor, method, body, suffix = "") {
+  return request(`${new URL(monitor.manageUrl).pathname}${suffix}`, {
     method,
     token: monitor.accessToken,
     ...(body ? { body } : {}),
@@ -234,5 +251,6 @@ function print(value) {
 function safeMessage(error) {
   return (error instanceof Error ? error.message : "Copy-trading command failed.")
     .replace(/bk_usr_[A-Za-z0-9_-]+/g, "[redacted Bankr key]")
-    .replace(/ctaccess_[A-Za-z0-9_-]+/g, "[redacted access token]");
+    .replace(/ctaccess_[A-Za-z0-9_-]+/g, "[redacted access token]")
+    .replace(/ctshare_[A-Za-z0-9_-]+/g, "[redacted performance link]");
 }

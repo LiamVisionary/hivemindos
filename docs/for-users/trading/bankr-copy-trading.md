@@ -47,6 +47,14 @@ Only then does the service calculate 0.5% of actual verified notional. It atomic
 
 Many users following the same target can share one hosted watcher, while each monitor keeps separate Bankr credentials, limits, usage credit, daily reservations, and outcomes. One Bankr wallet can run up to three active target monitors.
 
+## Share verified performance
+
+Each monitor can publish a separate read-only performance link for a Bankr app or public dashboard. The feed comes from HivemindOS's verified copied-execution ledger, not the Bankr wallet's raw transfers. It includes copied notional, usage credit, excess fees, execution hashes, weighted-average realized PnL, current-mark unrealized PnL, and open positions when the service can prove the required cost basis and prices.
+
+If the monitor starts with token inventory the service did not observe, or a current price is unavailable, affected PnL fields remain unavailable instead of being shown as zero or profit. The feed excludes deposits, withdrawals, self-transfers, and unrelated trades. It is copy-execution performance, not whole-wallet accounting, and it remains subject to the no-performance-guarantee warning.
+
+Use **Publish performance** on the monitor card, then copy the URL into the Bankr app. **Rotate link** invalidates the old URL and creates a new one. **Revoke** disables public access, and canceling the monitor revokes its link automatically. The public link never exposes the private monitor credential.
+
 ## Ask an agent to set it up
 
 The bundled `hive-copy-trading` skill contains the existing-wallet, optional partner-provisioning, direct Bankr payment, funding, secret-handling, management, cancellation, and legacy workflow. For example:

@@ -96,6 +96,19 @@ export type BankrCopyUsagePeriod = {
   collectedAt: string | null;
 };
 
+export type BankrCopyPerformanceShare = {
+  enabled: boolean;
+  createdAt: string | null;
+  revokedAt: string | null;
+};
+
+export type BankrCopyPerformancePublication = {
+  schemaVersion: "2026-07-17";
+  publicUrl: string;
+  createdAt: string;
+  rotated: boolean;
+};
+
 export type BankrCopyDashboard = {
   available: boolean;
   managedExecutionAvailable: boolean;
@@ -114,6 +127,7 @@ export type BankrCopyDashboard = {
   fundingWallets: BankrCopyFundingWallet[];
   subscriptions: Array<{
     subscription: BankrCopySubscription;
+    performanceShare?: BankrCopyPerformanceShare;
     events: BankrCopyEvent[];
     usageToday?: { signalCount: number; reservedUsd: number; maxDailyUsd: number };
     statusError?: string;

@@ -19,6 +19,40 @@ Use the returned `manageUrl` with `Authorization: Bearer <accessToken>`.
 - `PATCH <manageUrl>` — active/paused status, optional paper/live mode, or bounded risk settings.
 - `DELETE <manageUrl>` — stop monitoring and erase the hosted Bankr credential. Owners of existing keys should also revoke them in Bankr as defense in depth.
 
+### Publish verified performance
+
+`POST <manageUrl>/performance-share` creates a new read-only public capability URL. Creating another link rotates and immediately revokes the previous one. The response contains `publicUrl`, `schemaVersion`, `createdAt`, and `rotated`; it never returns the monitor bearer.
+
+`DELETE <manageUrl>/performance-share` revokes the active link. Canceling the monitor revokes it automatically. Status exposes only `performanceShare.enabled`, `createdAt`, and `revokedAt`, never the link token.
+
+From the packaged helper:
+
+```bash
+node scripts/monitor-client.mjs publish --id ctmon_...
+node scripts/monitor-client.mjs unpublish --id ctmon_...
+```
+
+The helper reads the private mode-600 monitor state and prints only the newly issued public URL. Do not pass the management bearer to a Bankr app.
+
+### Bankr app contract
+
+A Bankr app should fetch the issued `publicUrl` from its server-side or scheduled script and render the returned feed. Do not scan the Bankr wallet or calculate copy-trading PnL from raw transfers.
+
+- Require `authority: server-verified-copy-execution-ledger` and schema `2026-07-17`.
+- Show `summary.verifiedCopiedTrades`, verified notional, fee credit, excess fees, usage minimums, realized/unrealized/gross/net PnL, and `openPositions` from the feed.
+- Respect `summary.accounting.complete` and `summary.accounting.reasons`. Render `null` PnL as unavailable; never coerce it to zero.
+- Link only the source, execution, and fee transaction hashes supplied by the feed.
+- Label the result as copy-execution performance, not whole-wallet PnL. Preserve `performanceGuarantee: false`.
+- Treat HTTP 404 as a rotated/revoked link and ask the owner for a new one. Do not ask for the monitor bearer.
+
+Public read shape:
+
+```text
+GET /v1/public/monitors/<targetWallet>/<monitorId>/performance/<ctshare_token>
+```
+
+The response is `Cache-Control: no-store`. It contains no Bankr key, monitor access token, encrypted credential, or arbitrary wallet-transfer ledger.
+
 Pause with `{"status":"paused"}` and resume with `{"status":"active"}`. Change risk settings with a supported subset of `maxTradeUsd`, `maxDailyUsd`, `scalePercent`, and `maxSlippageBps`.
 
 New monitors use `bankr-usage-minimum`. Already-consented `bankr-per-trade` monitors retain their original fee floor, cap, and paper gate; do not silently replace their commercial terms. Existing legacy prepaid monitors remain prepaid through their original expiry.

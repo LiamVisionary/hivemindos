@@ -65,6 +65,14 @@
 .balanceWarning p { flex-basis: 100%; margin: 0; color: var(--fg-3); font-size: 10px; line-height: 1.4; }
 .balanceWarning { flex-wrap: wrap; }
 .usageStatus a, .usageWarning a { flex: 0 0 auto; color: var(--honey); font-size: 10px; }
+.performanceShare { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border: 1px solid var(--honey-line); border-radius: var(--radius-sm); background: var(--honey-soft); }
+.performanceShare > div:first-child { min-width: 0; }
+.performanceShare b, .performanceShare p, .performanceShare code { display: block; }
+.performanceShare b { margin-top: 3px; color: var(--fg-2); font-size: 11px; font-weight: 500; }
+.performanceShare p { margin: 3px 0 0; color: var(--fg-3); font-size: 10px; line-height: 1.4; }
+.performanceShare code { margin-top: 6px; color: var(--fg-2); font: 9.5px var(--f-mono); overflow-wrap: anywhere; }
+.performanceActions { display: flex; align-items: center; justify-content: flex-end; flex: 0 0 auto; gap: 6px; flex-wrap: wrap; }
+.performanceActions a { color: var(--honey); font-size: 10.5px; }
 .subscriptionHead { display: flex; justify-content: space-between; gap: 12px; }
 .subscriptionHead b, .subscriptionHead span { display: block; }
 .subscriptionHead b { color: var(--fg); font-size: 13px; font-weight: 500; }
@@ -101,5 +109,6 @@
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .funding { grid-template-columns: 1fr 1fr; align-items: stretch; }
   .funding > div { grid-column: 1 / -1; }
-  .balanceNote, .balanceWarning, .usageStatus, .usageWarning { align-items: stretch; flex-direction: column; }
+  .balanceNote, .balanceWarning, .usageStatus, .usageWarning, .performanceShare { align-items: stretch; flex-direction: column; }
+  .performanceActions { justify-content: flex-start; }
 }
