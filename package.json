@@ -192,6 +192,7 @@
     "test:agent-memory-routing": "node scripts/test-agent-memory-routing.mjs",
     "test:agent-memory-pattern-review": "node scripts/test-agent-memory-pattern-review.mjs",
     "test:standard-memory-benchmark": "node scripts/test-standard-memory-benchmark.mjs && node scripts/test-agent-memory-conversation-recall.mjs && python3 -m py_compile scripts/benchmark-standard-memory-evaluate.py scripts/benchmark-standard-memory-extract-beam.py",
+    "test:hive-env-add-command": "node scripts/test-hive-env-add-command.mjs",
     "test:hive-brain-hardening": "node scripts/test-hive-brain-memory-hardening.mjs",
     "test:hive-brain-parity": "node scripts/test-hive-brain-scoring-parity.mjs",
     "test:neo4j-brain-service": "node scripts/test-neo4j-brain-service.mjs",

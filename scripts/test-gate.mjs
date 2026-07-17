@@ -123,6 +123,7 @@ const TESTS = [
   "test:hive-compute-remote-host",
   "test:hive-compute-worker",
   "test:hive-compute-workloads",
+  "test:hive-env-add-command",
   "test:hive-env-remove",
   "test:hive-env-roundtrip",
   "test:hive-staking",

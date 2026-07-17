@@ -74,6 +74,7 @@ import { createHostedAppsCache } from "./lib/hosted-apps-cache.mjs";
 import { APP_BUILDER_CONTRACT_VERSION, runLocalAppBuilderAction } from "./lib/app-builder.mjs";
 import { createAsyncTtlCache } from "./lib/async-ttl-cache.mjs";
 import { createCollectorMaintenance } from "./lib/collector-maintenance.mjs";
+import { resolveHiveEnvAddCommand } from "./lib/hive-env-add-command.mjs";
 import { launchCollectorUpdate } from "./lib/collector-update-launcher.mjs";
 import {
   recordCollectorTelemetry,
@@ -2419,31 +2420,10 @@ async function syncthingInstalled() {
 }
 
 async function resolveHiveEnvAdd() {
-  // On Windows hive-env-add is a Python script with no extension, so it can't be
-  // spawned directly; setup.ps1 installs a hive-env-add.cmd wrapper. Prefer the
-  // .cmd there (run via shell — see runHiveEnvImport) so env writes work.
-  const isWin = process.platform === "win32";
-  const candidates = [
-    process.env.HIVE_ENV_ADD_BIN,
-    ...(isWin ? [join(homedir(), ".local", "bin", "hive-env-add.cmd")] : []),
-    join(homedir(), ".local", "bin", "hive-env-add"),
-    ...(isWin ? [join(appDir, "scripts", "hive-env-add.cmd")] : []),
-    join(appDir, "scripts", "hive-env-add"),
-  ].filter(Boolean);
-  for (const path of candidates) {
-    try {
-      await access(path, constants.X_OK);
-      return { ready: true, command: path, shell: isWin && path.toLowerCase().endsWith(".cmd") };
-    } catch {
-      // try next
-    }
-  }
-  return {
-    ready: false,
-    command: "hive-env-add",
-    error:
-      "hive-env-add is not installed or executable. Run setup on this machine.",
-  };
+  // Cross-platform command + base argv (Windows Python-launcher handling lives
+  // in the lib module). Callers spread `envSync.args` before their own flags
+  // and pass `shell: Boolean(envSync.shell)`.
+  return resolveHiveEnvAddCommand({ appDir });
 }
 
 function encodeEnvEntries(entries) {
@@ -2468,6 +2448,7 @@ function runHiveEnvImport({ entries, scope = "agent", runtime = "generic" }) {
     const child = spawn(
       envSync.command,
       [
+        ...envSync.args,
         "--import-stdin",
         "--scope",
         scope,
@@ -2478,8 +2459,9 @@ function runHiveEnvImport({ entries, scope = "agent", runtime = "generic" }) {
       ],
       {
         stdio: ["pipe", "ignore", "pipe"],
-        // .cmd wrappers (Windows) must run through the shell to be spawnable.
+        // .cmd wrappers (Windows fallback) must run through the shell to be spawnable.
         shell: Boolean(envSync.shell),
+        windowsHide: true,
       },
     );
     let errorText = "";
@@ -2525,9 +2507,20 @@ function runHiveEnvE2eSync({ key, value, scope = "all", runtime = "generic" }) {
       );
       return;
     }
+    // The shell fallback joins argv into one unescaped cmd.exe line, so a
+    // caller-supplied value must not be able to break out of the assignment.
+    if (envSync.shell && !/^[A-Za-z0-9._:@/+-]*$/.test(value)) {
+      rejectSync(
+        new Error(
+          "E2E env value contains characters that cannot be passed safely through the Windows shell fallback.",
+        ),
+      );
+      return;
+    }
     const child = spawn(
       envSync.command,
       [
+        ...envSync.args,
         `${key}=${value}`,
         "--scope",
         scope,
@@ -2537,6 +2530,8 @@ function runHiveEnvE2eSync({ key, value, scope = "all", runtime = "generic" }) {
       ],
       {
         stdio: ["ignore", "pipe", "pipe"],
+        shell: Boolean(envSync.shell),
+        windowsHide: true,
       },
     );
     let output = "";
@@ -2594,10 +2589,12 @@ async function runEnvSyncMaintenance(reason) {
     }
     const { stdout } = await execFileAsync(
       envSync.command,
-      ["--sync-maintenance"],
+      [...envSync.args, "--sync-maintenance"],
       {
         timeout: 240_000,
         maxBuffer: 1_000_000,
+        shell: Boolean(envSync.shell),
+        windowsHide: true,
       },
     );
     const lines = stdout.trim().split("\n").filter(Boolean);
@@ -6721,7 +6718,7 @@ async function collectorHealthPayload() {
       envSync: {
         ready: envSync.ready,
         user: currentUsername(),
-        command: envSync.command,
+        command: [envSync.command, ...envSync.args].join(" "),
         error: envSync.error,
         maintenance: envSyncMaintenanceStatus,
       },
@@ -8498,10 +8495,12 @@ async function handleCollectorRequest(request, response) {
         : "generic";
       const { stdout } = await execFileAsync(
         envSync.command,
-        ["--export-json", "--scope", scope, "--runtime", runtime],
+        [...envSync.args, "--export-json", "--scope", scope, "--runtime", runtime],
         {
           timeout: 12_000,
           maxBuffer: 1_000_000,
+          shell: Boolean(envSync.shell),
+          windowsHide: true,
         },
       );
       const payload = JSON.parse(stdout);
