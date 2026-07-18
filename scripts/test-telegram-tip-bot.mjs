@@ -19,12 +19,10 @@ import {
   HoneyReactionMessageIndex,
   HONEY_PEER_DAILY_GIVER_LIMIT,
   HONEY_PEER_DAILY_RECIPIENT_LIMIT,
-  HONEY_PEER_LINK_COOLDOWN_DAYS,
   HONEY_PEER_TIP_AMOUNT,
   honeyRecognitionReactionWasAdded,
   legacyHoneyMicroFromHiveRaw,
   parseHoneyCommandArgs,
-  shouldSeedHoneyRecognitionReaction,
 } from "../src/lib/services/telegram-tip-bot/honey-recognition.ts";
 import { CLAW_LIGHT_RICH_THEME, richAccent, richCode, richMuted, richTable } from "../src/lib/services/telegram-tip-bot/rich-formatting.ts";
 import {
@@ -135,7 +133,6 @@ test("one HONEY uses fixed awards, three recognitions per giver, and reason-firs
   assert.equal(HONEY_PEER_TIP_AMOUNT, 1);
   assert.equal(HONEY_PEER_DAILY_GIVER_LIMIT, 3);
   assert.equal(HONEY_PEER_DAILY_RECIPIENT_LIMIT, 5);
-  assert.equal(HONEY_PEER_LINK_COOLDOWN_DAYS, 7);
   assert.deepEqual(parseHoneyCommandArgs(""), { kind: "profile" });
   assert.deepEqual(parseHoneyCommandArgs("balance"), { kind: "profile" });
   assert.deepEqual(parseHoneyCommandArgs("@builder Documented the complete setup path"), {
@@ -193,37 +190,19 @@ test("reaction targets are bounded to recent human-authored group messages", () 
   assert.equal(index.resolve(group.id, 6, 3_004), null);
 });
 
-test("the bot seeds a one-tap trophy only on eligible member messages", () => {
-  assert.equal(shouldSeedHoneyRecognitionReaction(groupMessage("Shipped the release notes")), true);
-  assert.equal(shouldSeedHoneyRecognitionReaction({
-    message_id: 2,
-    chat: { id: -101, type: "group" },
-    from: { id: 10, username: "artist" },
-    caption: "New launch graphic",
-  }), true);
-  assert.equal(shouldSeedHoneyRecognitionReaction(groupMessage("/honey @builder Great review")), false);
-  assert.equal(shouldSeedHoneyRecognitionReaction(groupMessage("/help@thebot")), false);
-  assert.equal(shouldSeedHoneyRecognitionReaction({
-    message_id: 3,
-    chat: { id: 10, type: "private" },
-    from: { id: 10 },
-    text: "Private message",
-  }), false);
-  assert.equal(shouldSeedHoneyRecognitionReaction(groupMessage("Bot output", {
-    from: { id: 11, is_bot: true },
-  })), false);
-});
-
 test("Telegram polling and bot handling wire message reactions into the existing HONEY endpoint", () => {
   const api = readFileSync(new URL("../src/lib/services/telegram-tip-bot/telegram-api.ts", import.meta.url), "utf8");
   const commands = readFileSync(new URL("../src/lib/services/telegram-tip-bot/commands.ts", import.meta.url), "utf8");
   assert.match(api, /allowed_updates[^\n]+message_reaction/);
-  assert.match(api, /setMessageReaction/);
   assert.match(commands, /handleHoneyReaction/);
-  assert.match(commands, /seedHoneyRecognitionReaction/);
-  assert.match(commands, /clearHoneyRecognitionReactionSeed/);
   assert.match(commands, /givePeerHoney/);
   assert.match(commands, /HONEY_REACTION_REASON/);
+  // The bot must never place reactions itself: Telegram animates every
+  // reaction placement, so a bot-seeded 🏆 plays the award animation on every
+  // comment. The trophy may only ever come from a member's own reaction.
+  assert.doesNotMatch(api, /setMessageReaction/);
+  assert.doesNotMatch(commands, /seedHoneyRecognitionReaction/);
+  assert.doesNotMatch(commands, /clearHoneyRecognitionReactionSeed/);
 });
 
 test("legacy HIVE receiver values convert to micro-HONEY at 1 HONEY per 1,000,000 HIVE", () => {
@@ -241,9 +220,21 @@ test("community HONEY wiring keeps identity linking server-side and uses the can
   const botClient = readFileSync(new URL("../src/lib/services/telegram-tip-bot/community-honey.ts", import.meta.url), "utf8");
   assert.match(commands, /An independent admin review is required/);
   assert.match(commands, /ordinary reactions, and spam do not earn HONEY/);
-  assert.match(botReadme, /bot places 🏆 under eligible\s+group messages/i);
-  assert.match(userDocs, /bot places 🏆 beneath eligible group messages/i);
+  assert.match(botReadme, /bot must never place the 🏆 reaction itself/i);
+  assert.match(userDocs, /bot never places the trophy itself/i);
   assert.match(userDocs, /bot must be a group administrator/i);
+  // Link-free recognition: HONEY banks to the Telegram identity and transfers
+  // to the workspace on /linkhoney — no link requirement may come back.
+  assert.match(botReadme, /No HivemindOS link is required on either side/i);
+  assert.match(userDocs, /No HivemindOS connection is needed to give or receive/i);
+  assert.match(commands, /recipientLinked === false/);
+  assert.match(commands, /Banked to their Telegram account/);
+  // Tap-to-link: /start link_<intent> must redeem through the gateway.
+  assert.match(commands, /args\.startsWith\("link_"\)/);
+  assert.match(commands, /redeemLinkIntent/);
+  assert.doesNotMatch(commands, /must run \/linkhoney before/i);
+  assert.doesNotMatch(botReadme, /wait seven days/i);
+  assert.doesNotMatch(userDocs, /wait seven days/i);
   assert.match(commands, /givePeerHoney/);
   assert.match(commands, /recognitions left today/i);
   assert.match(botClient, /recognitionAllowance/);

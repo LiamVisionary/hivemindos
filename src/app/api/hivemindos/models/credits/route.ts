@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - dashboard credits funding surface: card checkout or wallet-governed x402/swap behind explicit confirmation tokens, not an agent capability.
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 

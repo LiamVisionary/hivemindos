@@ -63,6 +63,30 @@ export function queryWordsForRecall(value, extraStopWords) {
     .filter((word) => word.length > 2 && !RECALL_STOP_WORDS.has(word) && !(extraStopWords && extraStopWords.has(word)));
 }
 
+// Mirrors the conservative suffix folding in agent-memory/query.ts. Keep
+// this local fallback in parity with the app scorer so an unavailable API
+// does not change which memory wins.
+export function morphologicalTermVariants(word) {
+  const variants = new Set();
+  const add = (value, minLength) => {
+    if (value.length >= minLength && value !== word) variants.add(value);
+  };
+  if (word.endsWith("ies") && word.length >= 5) add(`${word.slice(0, -3)}y`, 3);
+  if (word.endsWith("es") && word.length >= 5) add(word.slice(0, -2), 3);
+  if (word.endsWith("s") && !word.endsWith("ss") && word.length >= 4) add(word.slice(0, -1), 3);
+  if (word.endsWith("ed") && word.length >= 5) {
+    add(word.slice(0, -2), 4);
+    add(`${word.slice(0, -2)}e`, 4);
+    if (word.length >= 6 && word[word.length - 3] === word[word.length - 4]) add(word.slice(0, -3), 4);
+  }
+  if (word.endsWith("ing") && word.length >= 6) {
+    add(word.slice(0, -3), 4);
+    add(`${word.slice(0, -3)}e`, 4);
+    if (word.length >= 7 && word[word.length - 4] === word[word.length - 5]) add(word.slice(0, -4), 4);
+  }
+  return [...variants];
+}
+
 function stripBoilerplate(raw) {
   const withoutFences = raw.replace(/```[\s\S]*?```/g, " ");
   const lines = withoutFences.split("\n");
@@ -302,7 +326,7 @@ function temporalAsOfMs(input, now = Date.now()) {
   return undefined;
 }
 
-export function recordVisibleForRecall(record, input) {
+export function recordVisibleForRecall(record, input, referenceNow = Date.now()) {
   const explicitlyRequestsActions = String(input.type ?? "").trim().toLowerCase() === "action";
   if (record.type === "action" && !explicitlyRequestsActions && !input.includeOperational) return false;
   if (input.includeArchived) return true;
@@ -310,7 +334,7 @@ export function recordVisibleForRecall(record, input) {
   const mode = temporalRecallMode(input);
   if (mode === "current") return (record.status || "active") === "active";
   if (mode === "historical") return true;
-  const asOf = temporalAsOfMs(input);
+  const asOf = temporalAsOfMs(input, referenceNow);
   if (asOf === undefined) return true;
   return Date.parse(record.createdAt) <= asOf;
 }
@@ -399,7 +423,7 @@ export function bm25ScoresForRecords(records, input) {
   }));
 }
 
-export function scoreAgentMemory(record, input, lexical, semantic) {
+export function scoreAgentMemory(record, input, lexical, semantic, referenceNow = Date.now()) {
   const query = (input.query ?? "").trim();
   const queryWords = textWords(query);
   const haystack = recordSearchText(record);
@@ -419,19 +443,20 @@ export function scoreAgentMemory(record, input, lexical, semantic) {
   let contentPoints = 0;
   let sourcePoints = 0;
   for (const word of queryWords) {
-    if (titleText.includes(word)) {
+    const forms = [word, ...morphologicalTermVariants(word)];
+    if (forms.some((form) => titleText.includes(form))) {
       titlePoints += 8;
       matched.add(word);
     }
-    if ((record.tags ?? []).some((tag) => tag.includes(word))) {
+    if ((record.tags ?? []).some((tag) => forms.some((form) => tag.includes(form)))) {
       tagPoints += 6;
       matched.add(word);
     }
-    if (contentText.includes(word)) {
+    if (forms.some((form) => contentText.includes(form))) {
       contentPoints += 4;
       matched.add(word);
     }
-    if ((record.project ?? "").toLowerCase().includes(word) || (record.source ?? "").toLowerCase().includes(word)) {
+    if (forms.some((form) => (record.project ?? "").toLowerCase().includes(form) || (record.source ?? "").toLowerCase().includes(form))) {
       sourcePoints += 2;
       matched.add(word);
     }
@@ -469,9 +494,9 @@ export function scoreAgentMemory(record, input, lexical, semantic) {
     scoreDetails.search = Math.min(30, Math.max(0, Math.round(record.searchScore)));
   }
   scoreDetails.confidence = Math.round((record.confidence ?? 0.7) * 10);
-  scoreDetails.temporal = temporalScore(record, input);
+  scoreDetails.temporal = temporalScore(record, input, referenceNow);
   scoreDetails.usage = usageScore(record);
-  scoreDetails.recency = recencyScore(record.createdAt);
+  scoreDetails.recency = recencyScore(record.createdAt, referenceNow);
   scoreDetails.status = (record.tags ?? []).includes("agent-memory") || String(record.notePath ?? "").startsWith(`${MEMORY_FOLDER}/`) ? 4 : (record.tags ?? []).includes("vault-note") ? 1 : 0;
   const score = Math.round(Object.values(scoreDetails).reduce((sum, value) => sum + (value ?? 0), 0) * 10) / 10;
   return { score, matched: [...matched], scoreDetails };

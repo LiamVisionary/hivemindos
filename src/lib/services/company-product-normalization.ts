@@ -1,4 +1,4 @@
-import type { CompanyProduct, CompanyProductCatalog } from "@/lib/types/company";
+import type { CompanyProduct, CompanyProductCatalog, CompanyProductX402Offer } from "@/lib/types/company";
 
 const PRODUCT_INTERVALS: NonNullable<CompanyProduct["interval"]>[] = ["one-time", "month", "year"];
 
@@ -31,6 +31,20 @@ function normalizeProduct(value: unknown, taken: Set<string>): CompanyProduct | 
     recommended: raw.recommended === true || undefined,
     interval: interval === "one-time" ? undefined : interval,
     kind: raw.kind === "addon" ? "addon" : undefined,
+    x402Offer: normalizeX402Offer(raw.x402Offer),
+  };
+}
+
+/** Preserve seller publication across catalog saves; the slug is server-assigned and required. */
+function normalizeX402Offer(value: unknown): CompanyProductX402Offer | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const raw = value as Record<string, unknown>;
+  const slug = trimmed(raw.slug)?.toLowerCase();
+  if (!slug) return undefined;
+  return {
+    published: raw.published === true,
+    slug,
+    publishedAt: trimmed(raw.publishedAt),
   };
 }
 

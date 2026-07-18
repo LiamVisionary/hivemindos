@@ -22,11 +22,14 @@ const {
   thesisSyncMemoryKey,
 } = await import("../src/lib/services/hive-research-sync.ts");
 const {
+  MAX_BRIDGE_ARTIFACT_CHARS,
   MAX_BRIDGE_SKILL_CHARS,
   RESEARCH_BRIDGE_PROTOCOL,
   RESEARCH_BRIDGE_TOKEN_HEADER,
+  researchBridgeArtifactContent,
   researchBridgeCorsHeaders,
   researchBridgeOrigin,
+  takeResearchBridgeArtifactToken,
   takeResearchBridgeRecallToken,
   takeResearchBridgeSkillToken,
 } = await import("../src/lib/services/research-bridge.ts");
@@ -201,12 +204,41 @@ assert.equal(takeResearchBridgeSkillToken(s0 + 12_001), false, "skill refill is 
 assert.equal(typeof MAX_BRIDGE_SKILL_CHARS, "number");
 assert.ok(MAX_BRIDGE_SKILL_CHARS > 0 && MAX_BRIDGE_SKILL_CHARS <= 200_000, "skill size bound is sane");
 
+const a0 = 1_750_000_000_000;
+for (let i = 0; i < 10; i += 1) {
+  assert.equal(takeResearchBridgeArtifactToken(a0), true, `artifact-save ${i + 1} of 10 must pass`);
+}
+assert.equal(takeResearchBridgeArtifactToken(a0), false, "11th artifact save in the same minute must be limited");
+assert.ok(MAX_BRIDGE_ARTIFACT_CHARS > 0 && MAX_BRIDGE_ARTIFACT_CHARS < 128 * 1024, "artifact size leaves room for its memory envelope");
+const artifactBody = researchBridgeArtifactContent({
+  sourceApp: "x-transcript",
+  sourceId: "xtr_123",
+  path: "Transcripts/X/example.md",
+  title: "Example transcript",
+  kind: "markdown",
+  mimeType: "text/markdown",
+  contentText: "Hello from the transcript.",
+  links: ["https://x.com/example/status/1"],
+});
+assert.match(artifactBody, /Source Mini app: x-transcript/);
+assert.match(artifactBody, /Hello from the transcript/);
+assert.match(artifactBody, /https:\/\/x\.com\/example\/status\/1/);
+assert.throws(() => researchBridgeArtifactContent({
+  sourceApp: "media-studio",
+  sourceId: "media_123",
+  path: "Media/Images/example.png",
+  title: "Example image",
+  kind: "image",
+  mediaUrl: "javascript:alert(1)",
+}), /http or https/);
+
 // --- static route/proxy invariants ---------------------------------------------------
 
 const proxySource = await readSource("src/proxy.ts");
 assert.ok(proxySource.includes('"/api/research-bridge/hello"'), "hello must be self-authenticating");
 assert.ok(proxySource.includes('"/api/research-bridge/recall"'), "recall must be self-authenticating");
 assert.ok(proxySource.includes('"/api/research-bridge/skill"'), "skill-save must be self-authenticating");
+assert.ok(proxySource.includes('"/api/research-bridge/artifact"'), "artifact-save must be self-authenticating");
 assert.ok(!proxySource.includes('"/api/research-bridge/token"'),
   "the bridge token-mint route must stay behind the dashboard auth gate");
 assert.ok(!proxySource.includes('"/api/research-sync"'),
@@ -227,6 +259,12 @@ assert.match(skillRouteSource, /saveResearchBridgeSkill/);
 // The bridge write must reuse the fail-closed skill writer, never a raw file write.
 const bridgeServiceSkill = await readSource("src/lib/services/research-bridge.ts");
 assert.match(bridgeServiceSkill, /writeBrainSkill\(/, "skill save must go through the fail-closed writeBrainSkill audit");
+const artifactRouteSource = await readSource("src/app/api/research-bridge/artifact/route.ts");
+assert.match(artifactRouteSource, /verifyResearchBridgeToken/);
+assert.match(artifactRouteSource, /verifyAuth/);
+assert.match(artifactRouteSource, /takeResearchBridgeArtifactToken/);
+assert.match(artifactRouteSource, /saveResearchBridgeArtifact/);
+assert.match(bridgeServiceSkill, /rememberAgentMemory\(/, "generic Mini artifacts must use the typed Shared Brain writer");
 assert.match(recallSource, /429/);
 
 const bridgeService = await readSource("src/lib/services/research-bridge.ts");

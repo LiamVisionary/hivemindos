@@ -226,9 +226,24 @@ export async function recordCompanyRevenue(input: RecordCompanyRevenueInput): Pr
     },
   }).catch(() => undefined);
 
+  const rollup = await companyRevenueRollup(normalized.companyId, records);
+
+  // Move the apex needle: for currency-metric companies the recorded revenue
+  // total IS the goal's `current`. Before this, recordCompanyRevenue wrote the
+  // ledger + memory + a proposal and the goal stayed at $0 forever — the
+  // driver's progress gating and stall detection ran off a dead sensor, and
+  // the operator had to hand-type the same number into update-metric.
+  if ((company.apexGoal?.unit ?? "currency") === "currency") {
+    const { updateCompanyMetric } = await import("@/lib/services/companies-store");
+    await updateCompanyMetric(normalized.companyId, {
+      current: rollup.totalRevenueUsd,
+      revenueValue: formatUsd(rollup.totalRevenueUsd),
+    }).catch(() => undefined);
+  }
+
   return {
     record,
-    rollup: await companyRevenueRollup(normalized.companyId, records),
+    rollup,
     duplicate: false,
   };
 }

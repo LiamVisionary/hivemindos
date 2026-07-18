@@ -107,10 +107,25 @@ export class BrainDendriteField {
       if (!node) continue;
       const azimuth = hashUnit(`${node.id}:${branch.slot}`, 223) * Math.PI * 2;
       const vertical = hashUnit(`${node.id}:${branch.slot}`, 227) * 2 - 1;
-      const ring = Math.sqrt(Math.max(0.0001, 1 - vertical * vertical));
-      this.direction.set(Math.cos(azimuth) * ring, vertical, Math.sin(azimuth) * ring).normalize();
-      const length = 20 + branch.seed * 22 + node.weight * 18
-        + node.radius * (0.65 + node.weight * 0.8);
+      // Orient the arbor to the local cortical surface: sweep mostly tangent
+      // to the shell with an outward cant, so tissue flows along the cortex
+      // like real arborization instead of puffing out isotropically.
+      this.normal.set(node.x, node.y, node.z);
+      if (this.normal.lengthSq() < 1) this.normal.set(0, 1, 0);
+      else this.normal.normalize();
+      this.side.set(0, 1, 0);
+      if (Math.abs(this.normal.y) > 0.92) this.side.set(1, 0, 0);
+      this.side.cross(this.normal).normalize();
+      this.direction.crossVectors(this.normal, this.side);
+      const outwardLift = vertical * 0.45 - 0.05;
+      this.direction.multiplyScalar(Math.sin(azimuth))
+        .addScaledVector(this.side, Math.cos(azimuth))
+        .addScaledVector(this.normal, outwardLift)
+        .normalize();
+      // Arbor reach stays well under the organ radius (~104 world units) so
+      // the cortex reads as textured surface, not dandelion fuzz.
+      const length = 11 + branch.seed * 12 + node.weight * 10
+        + node.radius * (0.5 + node.weight * 0.5);
       this.start.set(node.x, node.y, node.z);
       this.end.copy(this.start).addScaledVector(this.direction, length);
       this.side.set(

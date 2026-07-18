@@ -62,6 +62,18 @@ The doctor checks:
 - legacy `Notes/` content
 - legacy root `Scheduled/` state
 
+## Memory Integrity And Recovery
+
+`hive-brain health --json` reports the current typed-memory generation, retained and invalid generation counts, replay coverage, the active retention/checkpoint policy, the transaction-journal size, embedding coverage, and embedding identity mismatches. `hive-brain generations` lists each retained generation and its verification/checkpoint state, plus the earliest generation from which replay is complete.
+
+Normal reads verify manifest and artifact checksums. If the current artifact is corrupt, recall uses its verified parent; if multiple recent generations are damaged, it scans backward for the newest remaining verified snapshot. If the current pointer itself is damaged, readers also scan for the newest verified generation. A newer legacy JSONL mirror from an older client remains readable and is folded into a fresh generation on rebuild.
+
+Physical history is bounded without changing the authoritative Markdown notes. Typed Agent Memory keeps at most 256 generated snapshots with a checkpoint every 32; full-vault search keeps at most 32 with a checkpoint every 4. Between checkpoints, artifacts use verified content-addressed deltas when smaller and gzip or full storage otherwise. Pruning commits only at a verified checkpoint and records its replay boundary in the index kind's `coverage.json`. Because pruning intentionally removes older generated snapshots, use the coverage fields instead of assuming replay reaches the first-ever write. An invalid receipt—or a missing receipt when retained manifests prove an earlier parent was removed—is reported explicitly and pauses further pruning until the last valid synced or backed-up copy is restored, so the service does not overwrite an unknown replay boundary.
+
+Memory source changes are journaled before promotion. A crash after source promotion does not require hand-editing generated indexes: the next memory writer completes recoverable staged files and rebuilds typed/entity generations from Markdown. An unrecoverable missing staged file is marked aborted and the generated pointer does not advance.
+
+Brain capsule verification is separate from vault health. Opening a capsule validates content addresses, payload/provenance checksums, embedded search rows, manifest counts, and expiry. Encrypted envelopes also validate bounded KDF/cipher parameters, authenticated metadata, and the AES-GCM tag. Plaintext checksums detect corruption but do not authenticate the sender because an editor can recompute them; use encryption when tamper detection or a trustworthy expiry matters. Capsule imports remain proposals until Brain Review approval and apply.
+
 ## Compiled Knowledge Health
 
 Compiled Knowledge has its own graph-aware health scan through:

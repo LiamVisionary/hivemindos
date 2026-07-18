@@ -44,6 +44,7 @@ const action = await readFile("src/lib/services/hive-actions/app-builder.ts", "u
 const mcp = await readFile("scripts/hivemind-mcp", "utf8");
 const collector = await readFile("scripts/agent-telemetry-collector.mjs", "utf8");
 const localAdapter = await readFile("scripts/lib/app-builder.mjs", "utf8");
+const bootReconcile = await readFile("scripts/lib/app-builder-boot-reconcile.mjs", "utf8");
 
 assert.match(projectTypes, /appBuilder\?:/);
 assert.match(projectRegistry, /appBuilder:/);
@@ -60,6 +61,12 @@ assert.match(mcp, /callAppBuilder/);
 assert.match(collector, /pathname === "\/app-builder"/);
 assert.match(collector, /pathname === "\/app-builder"[\s\S]{0,500}requireLinkOwner/);
 assert.match(collector, /appBuilderContractVersion:\s*APP_BUILDER_CONTRACT_VERSION/);
+// Collector boot must reconcile app-builder preview runtimes it took down with
+// it (preview servers are collector children), via the shared adapter's
+// restart helper — never a parallel start path.
+assert.match(collector, /reconcileAppBuilderRuntimesAtBoot\(\{/);
+assert.match(bootReconcile, /restartInterruptedLocalAppProject/);
+assert.doesNotMatch(bootReconcile, /spawn\(|execFile\(|child_process/, "boot reconcile must start runtimes only through the shared adapter");
 assert.doesNotMatch(localAdapter, /CONFIRM_APP_PROJECT_CREATE/);
 assert.doesNotMatch(mcp, /CONFIRM_APP_PROJECT_CREATE/);
 assert.match(mcp, /collectorUrl: machine\.device\?\.collectorUrl/);

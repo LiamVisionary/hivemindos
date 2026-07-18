@@ -12,6 +12,7 @@ import {
   Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 import { DEFAULT_QUEEN_BEE_NAME } from "@/lib/config/queen-bee-personality";
 import type { AgentProfile, SharedVaultConfig } from "@/lib/types/agent-runtime";
 import type {
@@ -198,7 +199,7 @@ export function MessagingChannelsPanel({ active, displayAgents, fleetClass, shar
   }
 
   async function deleteChannel(channel: HiveMessagingChannel) {
-    if (typeof window !== "undefined" && !window.confirm(`Remove “${channel.label}”? You can add it again later.`)) return;
+    if (!(await confirmUserAction(`Remove “${channel.label}”? You can add it again later.`))) return;
     setBusy(`del:${channel.id}`);
     const response = await fetch("/api/messaging-channels", {
       method: "DELETE",

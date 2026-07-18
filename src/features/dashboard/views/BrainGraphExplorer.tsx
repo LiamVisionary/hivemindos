@@ -4,8 +4,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { AudioLines } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import { ChatMarkdown } from "@/features/dashboard/ChatMarkdown";
+import { useQueenChat } from "@/features/queen-voice/queen-chat-store";
 import {
   brainNodeActivityWeight,
   brainNodeClusterKey,
@@ -13,6 +15,7 @@ import {
   buildBrainSemanticLinks,
 } from "./brain-graph-semantics";
 import styles from "./BrainGraphExplorer.module.css";
+import { SHARED_BRAIN_VOICE_DEMO_LINES } from "./shared-brain-voice-demo";
 
 const BrainSynapseCanvas = dynamic(() => import("./BrainSynapseCanvas"), { ssr: false });
 
@@ -139,10 +142,12 @@ export function BrainGraphExplorer(props: any) {
     startAgentChat,
     vaultClass,
   } = props;
+  const { speakScript } = useQueenChat();
   const [brainGraphFilter, setBrainGraphFilter] = useState("all");
   const [brainGraphQuery, setBrainGraphQuery] = useState("");
   const [brainContextNodeIds, setBrainContextNodeIds] = useState<string[]>([]);
   const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [voiceDemoState, setVoiceDemoState] = useState<"idle" | "playing" | "failed">("idle");
   const graphNow = Date.parse(brainGraph?.generatedAt ?? "") || 0;
   const brainFilterModes = [
     { id: "all", label: "All" },
@@ -327,6 +332,12 @@ export function BrainGraphExplorer(props: any) {
     void refreshBrainGraph(true);
   };
   const recentEvents = brainGraph?.recentAccesses.slice(0, 7) ?? [];
+  const playSharedBrainVoiceDemo = useCallback(async () => {
+    if (voiceDemoState === "playing") return;
+    setVoiceDemoState("playing");
+    const played = await speakScript(SHARED_BRAIN_VOICE_DEMO_LINES);
+    setVoiceDemoState(played ? "idle" : "failed");
+  }, [speakScript, voiceDemoState]);
 
   return (
     <div className={graphClass("stage", "fade")}>
@@ -363,6 +374,19 @@ export function BrainGraphExplorer(props: any) {
           >
             {brainGraphLoading ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
           </button>
+          {process.env.NODE_ENV === "development" ? (
+            <button
+              type="button"
+              className={graphClass("hudIconButton", "devSpeechButton")}
+              onClick={() => void playSharedBrainVoiceDemo()}
+              disabled={voiceDemoState === "playing"}
+              aria-label={voiceDemoState === "playing" ? "Shared Brain voice demo is speaking" : "Play Shared Brain voice demo"}
+              title="Uses Queen Bee's selected voice without the screen glow"
+            >
+              {voiceDemoState === "playing" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <AudioLines aria-hidden="true" />}
+              <span>{voiceDemoState === "playing" ? "Speaking..." : voiceDemoState === "failed" ? "Retry voice" : "Speak demo"}</span>
+            </button>
+          ) : null}
           <span className={graphClass("visibleCount")}>
             {visibleBrainNodes.length} neurons · {wikiSynapseLinks.length} wiki-links · {semanticLinks.length} associations
           </span>

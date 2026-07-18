@@ -34,6 +34,10 @@ const PROVIDER_STYLE: Record<ConnectionProviderKey, { mono: string; accent: stri
   medusa: { mono: "Me", accent: "#7c6bf2" },
   monid: { mono: "Mo", accent: "#7c8cff" },
   clawbank: { mono: "Cb", accent: "#e6dcc6", logo: "/icons/runtimes/clawbank.svg" },
+  "telegram-social": { mono: "Tg", accent: "#4fa8dd" },
+  farcaster: { mono: "Fc", accent: "#8a63d2" },
+  linkedin: { mono: "In", accent: "#4c86c9" },
+  reddit: { mono: "Re", accent: "#e0703a" },
 };
 
 /** Provider tile: the real logo when we ship one (ClawBank), else the mono glyph. */
@@ -65,6 +69,7 @@ const OAUTH_START_URL: Partial<Record<ConnectionProviderKey, string>> = {
   "google-cloud": "/api/integrations/google-cloud/oauth/start",
   slack: "/api/integrations/slack/oauth/start",
   azure: "/api/integrations/azure/oauth/start",
+  linkedin: "/api/integrations/linkedin/oauth/start",
 };
 
 /** One screen: connect apps in place. Credentials are validated live, then

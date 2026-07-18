@@ -37,8 +37,8 @@ type ChatMarkdownComponent = ComponentType<{
   surface?: "chat" | "default";
 }>;
 type PromptResponse = { label: string; value?: string; respondedAt?: number };
-type PromptOption = { label: string; value: string; permissionMode?: ChatPermissionMode };
-type SendPromptOptions = { permissionMode?: ChatPermissionMode; promptResponse?: PromptResponse; visiblePrompt?: string };
+type PromptOption = { label: string; value: string; permissionMode?: ChatPermissionMode; suppressUserMessage?: boolean };
+type SendPromptOptions = { permissionMode?: ChatPermissionMode; promptResponse?: PromptResponse; suppressUserMessage?: boolean; visiblePrompt?: string };
 
 // events/label are read defensively; the canonical ChatMessage/attachment types do not define them.
 export type ThreadMessage = ChatMessage & { events?: ProcessEvent[] };
@@ -168,6 +168,7 @@ function InteractivePromptControls({ allowFreeText = true, disabled, options, se
     if (!prompt) return;
     void sendPromptMessage(prompt, {
       ...(option.permissionMode ? { permissionMode: option.permissionMode } : {}),
+      suppressUserMessage: option.suppressUserMessage,
       promptResponse: { label: decisionResponseLabel(option.label, prompt), value: prompt },
     });
     setOtherText("");
@@ -723,7 +724,8 @@ function MessageThreadBase({
           ? preferredApplicationGenerationCard
           : null;
         const capabilityApproval = !isUser ? message.capabilityApproval : undefined;
-        const hasAssistantBody = Boolean(content || capabilityApproval || applicationGenerationCard || generatedMediaPathCard || mirosharkCard || transcriptCard);
+        const capabilityApprovalNeedsReview = Boolean(capabilityApproval);
+        const hasAssistantBody = Boolean(content || capabilityApprovalNeedsReview || applicationGenerationCard || generatedMediaPathCard || mirosharkCard || transcriptCard);
         const promptUi = !isUser && content ? promptUiFromMessage(message, content) : null;
         const isHyperframesPromptBuilder = !isUser && message.agentPrompt?.id === HYPERFRAMES_PROMPT_BUILDER_ID;
         const hyperframesSourceRequest = isHyperframesPromptBuilder
@@ -829,7 +831,7 @@ function MessageThreadBase({
               <article className={`fr-chat-agent-article${promptUi ? " fr-chat-prompt-article" : ""}`}>
                 <div className="fr-chat-agent-message-header">
                   <strong className="fr-chat-agent-message-name">{selectedAgent?.name ?? "Agent"}</strong>
-                  {capabilityApproval?.status === "pending" || (promptUi?.options?.length && !promptUi.response) ? (
+                  {(capabilityApprovalNeedsReview && capabilityApproval?.status === "pending") || (promptUi?.options?.length && !promptUi.response) ? (
                     /* Prototype 599: a pending decision reads "needs approval". */
                     <span className="fr-chat-agent-message-state is-approval">needs approval</span>
                   ) : activeChatTaskRunning && index === messages.length - 1 ? (
@@ -864,7 +866,7 @@ function MessageThreadBase({
                       </button>
                     </div>
                   ) : null}
-                  {capabilityApproval ? (
+                  {capabilityApprovalNeedsReview && capabilityApproval ? (
                     <CapabilityApprovalCard
                       plan={capabilityApproval}
                       disabled={Boolean(busy || capabilityPlanSubmittingId === capabilityApproval.id)}

@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 const composer = readFileSync(new URL("../src/features/chat/chat-composer.tsx", import.meta.url), "utf8");
 const dropReferences = readFileSync(new URL("../src/features/chat/chat-drop-references.ts", import.meta.url), "utf8");
 const references = readFileSync(new URL("../src/features/chat/chat-file-references.ts", import.meta.url), "utf8");
+const formatters = readFileSync(new URL("../src/features/chat/chat-formatters.ts", import.meta.url), "utf8");
 const kanbanTypes = readFileSync(new URL("../src/lib/types/kanban.ts", import.meta.url), "utf8");
 
 assert.match(
@@ -43,9 +44,14 @@ assert.match(
 );
 
 assert.match(
-  composer,
+  formatters,
   /if \(attachment\.referenceKind === "directory"\) return "Folder";/,
   "attachment pills and menus should label dropped folders as Folder",
+);
+assert.match(
+  composer,
+  /attachmentKindLabel\(attachment\)/,
+  "attachment pills must render labels through the shared chat formatter",
 );
 
 assert.match(

@@ -39,6 +39,9 @@ const cases = [
   { task: "Build a Flappy Bird clone", intent: "app-builder", name: /create app workspace/i, ready: true, rejectIntent: "implementation" },
   { task: "Fix the HivemindOS dashboard navigation", intent: "implementation", name: /hivemindos.feature.development/i, ready: true, rejectIntent: "app-builder" },
   { task: "Write a CLI that calls the HivemindOS API", intent: "implementation", name: /engineering|test.driven|frontend.design/i, reject: /hivemindos.feature.development/i },
+  { task: "Create a logo for the app", intent: "image-generation", name: /image|media studio|comfyui|generative/i, rejectIntents: ["implementation", "app-builder"] },
+  { task: "Build a Power BI dashboard", intent: "data-work", name: /spreadsheet|excel|power bi|tableau|sheets|workbook|csv/i, rejectIntents: ["implementation", "interface-design", "app-builder"] },
+  { task: "Build an iOS app", intent: "implementation", name: /engineering|test.driven|frontend.design|react|vercel/i, rejectIntents: ["app-builder"] },
 ];
 
 const failures = [];
@@ -56,7 +59,10 @@ for (const [index, testCase] of cases.entries()) {
   const item = plan.items.find((candidate) => candidate.intent === testCase.intent);
   const selected = item?.candidates.find((candidate) => candidate.id === item.selectedCapabilityId) ?? item?.candidates[0];
   rows.push({ task: testCase.task, intent: testCase.intent, selected: selected?.name ?? "missing", availability: selected?.availability ?? "missing" });
-  if (testCase.rejectIntent && plan.items.some((candidate) => candidate.intent === testCase.rejectIntent)) failures.push(`${testCase.intent}: unexpectedly included ${testCase.rejectIntent}`);
+  const rejectedIntents = [...(testCase.rejectIntents ?? []), ...(testCase.rejectIntent ? [testCase.rejectIntent] : [])];
+  for (const rejectedIntent of rejectedIntents) {
+    if (plan.items.some((candidate) => candidate.intent === rejectedIntent)) failures.push(`${testCase.intent}: unexpectedly included ${rejectedIntent}`);
+  }
   if (!item || !selected) failures.push(`${testCase.intent}: missing for "${testCase.task}"`);
   else {
     if (!testCase.name.test(selected.name)) failures.push(`${testCase.intent}: selected unrelated ${selected.name}`);

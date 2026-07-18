@@ -412,7 +412,11 @@ export async function runQueenBeeAutonomousPickup(
       // section; agents also open with "Blocked …" prose (live 2026-07-06: a
       // send batch blocked on a missing env token finished "done", so no card
       // ever pinged the human and the blocker sat invisible in a done result).
-      if (/^ACTION NEEDED:/m.test(text) || /^Blocked\b/.test(text.trim())) {
+      // Tolerant match, aligned with the display extractor (kanban-result-format.ts):
+      // agents emit "Action needed:", "ACTION_NEEDED:", indented variants — the old
+      // /^ACTION NEEDED:/m column-0 uppercase-only match let those complete as "done"
+      // with the ask buried in the result (live incident 2026-07-06).
+      if (/(?:^|\n)\s*ACTION[\s_-]*NEEDED\s*:/i.test(text) || /^Blocked\b/.test(text.trim())) {
         await block(null, input.task.id, text, storageOptions);
         await advanceFlowIfTagged(input.task, "failed", text, input.vaultPath);
         return { ok: false, status: "blocked", taskId: input.task.id, claimLock, collectorUrl, agentName, error: "Agent asked for human input." };
@@ -719,10 +723,20 @@ function exhaustedMessage(failures: string[]) {
 // not strand the company task on a human. Provider 429/usage-limit failures are also
 // retryable, but they keep their typed `rate-limit` reason so Work Board attempts and
 // infra-rescue receipts distinguish capacity from model quota. Content failures
-// ("produced no output", a rejected eval gate, a non-429 runtime/model error) are
-// deliberately excluded: those need a human, so a chain with any of them still escalates.
+// (a rejected eval gate, a non-429 runtime/model error) are deliberately excluded:
+// those need a human, so a chain with any of them still escalates.
 const TRANSIENT_PICKUP_FAILURE =
   /(timed?\s*out|timeout|aborted|abort(?:ed)? due to|bad gateway|gateway timeout|\b50[234]\b|service unavailable|temporarily unavailable|econnreset|econnrefused|socket hang ?up|connection (?:error|reset|refused)|network error|fetch failed)/i;
+
+// A runtime that ends its tool loop without emitting a final message ("no final
+// response was produced", even after our plain-text retry) is a runtime flake,
+// not a judgment about the work: the task body never got a real attempt. This
+// was previously excluded as a "content failure" and it strand-blocked 57 live
+// WEBS tasks at attempt 1/3 (measured 2026-07-16) — every one a human page for
+// something a re-route or later retry absorbs. It consumes the task's normal
+// retry budget via `failTask`; after maxAttempts it still escalates.
+const NO_OUTPUT_PICKUP_FAILURE =
+  /(no final response was produced|returned no final response|runtime failed instead of producing a result)/i;
 
 // Infrastructure failures that are not raw transport but still say nothing about
 // the WORK: a machine at its autonomous chat capacity (the slot frees up), a
@@ -739,7 +753,7 @@ const INFRA_PICKUP_FAILURE =
  * with the driver's infra-rescue sweep so both ends use one vocabulary.
  */
 export function isInfrastructurePickupFailure(line: string): boolean {
-  return TRANSIENT_PICKUP_FAILURE.test(line) || INFRA_PICKUP_FAILURE.test(line);
+  return TRANSIENT_PICKUP_FAILURE.test(line) || INFRA_PICKUP_FAILURE.test(line) || NO_OUTPUT_PICKUP_FAILURE.test(line);
 }
 
 /**

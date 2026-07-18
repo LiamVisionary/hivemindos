@@ -467,6 +467,14 @@ const APP_SOURCE_ARCHIVE_ZIP: &str =
     "https://github.com/LiamVisionary/hivemindos/archive/refs/heads/main.zip";
 const APP_SOURCE_ARCHIVE_TARBALL: &str =
     "https://github.com/LiamVisionary/hivemindos/archive/refs/heads/main.tar.gz";
+// `Accept: application/vnd.github.sha` returns the bare commit SHA as text.
+// Archive checkouts have no `.git`, so the bootstrap records the downloaded
+// commit in `.hivemindos-source-commit`; the telemetry collector reports it so
+// the fleet can tell current from stale (scripts/lib/collector-source-version.mjs
+// reads and validates it). Best-effort on purpose: a failed probe must never
+// fail setup, and an absent marker just reports the version as unknown.
+const APP_SOURCE_LATEST_COMMIT_API: &str =
+    "https://api.github.com/repos/LiamVisionary/hivemindos/commits/main";
 
 /// Download + extract the HivemindOS app source into `root` with no `git`
 /// dependency, using tools always present on a stock OS: PowerShell's
@@ -479,10 +487,11 @@ fn bootstrap_app_source_command(platform: SetupPlatform, root: &Path) -> String 
     let parent = root.parent().unwrap_or_else(|| Path::new("."));
     match platform {
         SetupPlatform::Unix => format!(
-            "mkdir -p {parent} && _hm_tmp=\"$(mktemp -d)\" && curl -fsSL {url} -o \"$_hm_tmp/src.tar.gz\" && rm -rf {root} && mkdir -p {root} && tar -xzf \"$_hm_tmp/src.tar.gz\" -C {root} --strip-components=1 && rm -rf \"$_hm_tmp\"",
+            "mkdir -p {parent} && _hm_tmp=\"$(mktemp -d)\" && curl -fsSL {url} -o \"$_hm_tmp/src.tar.gz\" && rm -rf {root} && mkdir -p {root} && tar -xzf \"$_hm_tmp/src.tar.gz\" -C {root} --strip-components=1 && (curl -fsSL --max-time 15 -H 'Accept: application/vnd.github.sha' {api_url} -o {root}/.hivemindos-source-commit || true) && rm -rf \"$_hm_tmp\"",
             parent = shell_quote(&parent.display().to_string()),
             root = shell_quote(&root.display().to_string()),
             url = APP_SOURCE_ARCHIVE_TARBALL,
+            api_url = APP_SOURCE_LATEST_COMMIT_API,
         ),
         SetupPlatform::Windows => {
             // The whole PowerShell program is ONE cmd-level double-quoted arg, so
@@ -491,9 +500,10 @@ fn bootstrap_app_source_command(platform: SetupPlatform, root: &Path) -> String 
             // 'Stop' makes any failure exit powershell non-zero for the caller's
             // `if errorlevel 1`. Tls12 keeps the download working on older boxes.
             format!(
-                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; Write-Host 'Downloading HivemindOS setup files...'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $root='{root}'; $tmp=Join-Path $env:TEMP ('hm-src-'+[guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Force -Path $tmp | Out-Null; $zip=Join-Path $tmp 'src.zip'; Invoke-WebRequest -UseBasicParsing -Uri '{url}' -OutFile $zip; Write-Host 'Unpacking setup files...'; Expand-Archive -Path $zip -DestinationPath $tmp -Force; $inner=Get-ChildItem -Directory $tmp | Select-Object -First 1; if (-not $inner) {{ throw 'app-source archive had no top-level folder' }}; $parent=Split-Path $root -Parent; if ($parent) {{ New-Item -ItemType Directory -Force -Path $parent | Out-Null }}; if (Test-Path $root) {{ Remove-Item -Recurse -Force $root }}; Move-Item $inner.FullName $root; Remove-Item -Recurse -Force $tmp\"",
+                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; Write-Host 'Downloading HivemindOS setup files...'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $root='{root}'; $tmp=Join-Path $env:TEMP ('hm-src-'+[guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Force -Path $tmp | Out-Null; $zip=Join-Path $tmp 'src.zip'; Invoke-WebRequest -UseBasicParsing -Uri '{url}' -OutFile $zip; Write-Host 'Unpacking setup files...'; Expand-Archive -Path $zip -DestinationPath $tmp -Force; $inner=Get-ChildItem -Directory $tmp | Select-Object -First 1; if (-not $inner) {{ throw 'app-source archive had no top-level folder' }}; $parent=Split-Path $root -Parent; if ($parent) {{ New-Item -ItemType Directory -Force -Path $parent | Out-Null }}; if (Test-Path $root) {{ Remove-Item -Recurse -Force $root }}; Move-Item $inner.FullName $root; try {{ $shaContent=(Invoke-WebRequest -UseBasicParsing -TimeoutSec 15 -Headers @{{Accept='application/vnd.github.sha'}} -Uri '{api_url}').Content; if ($shaContent -is [byte[]]) {{ $sha=[Text.Encoding]::ASCII.GetString($shaContent).Trim() }} else {{ $sha=(''+$shaContent).Trim() }}; if ($sha -match '^[0-9a-f]{{40}}$') {{ Set-Content -Path (Join-Path $root '.hivemindos-source-commit') -Value $sha -Encoding ASCII }} }} catch {{}}; Remove-Item -Recurse -Force $tmp\"",
                 root = root.display(),
                 url = APP_SOURCE_ARCHIVE_ZIP,
+                api_url = APP_SOURCE_LATEST_COMMIT_API,
             )
         }
     }
@@ -1095,6 +1105,10 @@ mod tests {
         assert!(windows.contains("Expand-Archive"));
         assert!(windows.contains("Move-Item"));
         assert!(windows.contains("archive/refs/heads/main.zip"));
+        // The bootstrap records the downloaded source commit so a git-free
+        // checkout still reports its version to the fleet.
+        assert!(windows.contains(".hivemindos-source-commit"));
+        assert!(windows.contains("vnd.github.sha"));
 
         let unix = bootstrap_app_source_command(SetupPlatform::Unix, &root);
         for pat in git_invocations {
@@ -1104,6 +1118,8 @@ mod tests {
         assert!(unix.contains("tar -xzf"));
         assert!(unix.contains("--strip-components=1"));
         assert!(unix.contains("archive/refs/heads/main.tar.gz"));
+        assert!(unix.contains(".hivemindos-source-commit"));
+        assert!(unix.contains("vnd.github.sha"));
     }
 
     #[test]

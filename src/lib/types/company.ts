@@ -29,11 +29,13 @@ export type CompanyAutonomyPauseMode = "all" | "deliverable-kinds";
  * Approval backpressure: auto-pause the company's autonomy driver from planning
  * NEW work once too many items are already waiting on a human. In-flight work
  * still finishes; the driver resumes on its own once the count drops back below
- * the threshold — no button, no permanent Stop. Absent/`maxWaitingOnHuman <= 0`
- * means never auto-pause (today's behavior).
+ * the threshold — no button, no permanent Stop. An explicit `maxWaitingOnHuman
+ * <= 0` disables the gate; ABSENT config now inherits the driver's default
+ * (HIVEMINDOS_COMPANY_MAX_WAITING_DEFAULT, 12) — the opt-in default shipped a
+ * live company to 115 unanswered asks before anyone noticed.
  */
 export interface CompanyAutonomyPause {
-  /** Pause new-work dispatch once this many items are waiting on a human. 0/undefined = disabled. */
+  /** Pause new-work dispatch once this many items are waiting on a human. 0 = explicitly disabled; undefined = driver default. */
   maxWaitingOnHuman?: number;
   /**
    * What counts toward the threshold. "all" (default) = every task of this company
@@ -138,6 +140,22 @@ export interface CompanyProduct {
   interval?: "one-time" | "month" | "year";
   /** "package" (core offer, default) or "addon" (optional extra, e.g. a care plan). */
   kind?: "package" | "addon";
+  /**
+   * x402 seller publication for this product. Set through the company offers
+   * API (publish/unpublish); the slug is server-assigned once and kept stable
+   * across unpublish/republish so buyer links keep working. The catalog price
+   * (`amountUsd`) is the only pricing authority — the public seller route reads
+   * it server-side and never accepts a client-supplied price.
+   */
+  x402Offer?: CompanyProductX402Offer;
+}
+
+/** Publication state for one catalog product on the local x402 seller gateway. */
+export interface CompanyProductX402Offer {
+  published: boolean;
+  /** Public seller slug under /api/paid-agents/offers/<slug>. Server-assigned. */
+  slug: string;
+  publishedAt?: string;
 }
 
 /**
@@ -382,6 +400,26 @@ export interface Company {
   apiBudgets?: CompanyApiBudget[];
   /** Local request/spend preflight limits for API and integration operations. */
   integrationLimits?: CompanyIntegrationLimit[];
+  /**
+   * Declared shared-env keys this company needs (seeded by its template).
+   * Drives the PROACTIVE setup checklist: a declared key missing from the hive
+   * env surfaces as a paste-and-save blocker card immediately — instead of the
+   * crew stalling mid-work and the operator discovering keys one drip at a time.
+   * Values never live here; only key names + operator-facing copy.
+   */
+  setupEnvKeys?: CompanyDeclaredSetupKey[];
+}
+
+/** One declared setup key on a company record (see Company.setupEnvKeys). */
+export interface CompanyDeclaredSetupKey {
+  envKey: string;
+  title?: string;
+  explanation?: string;
+  kind?: "secret" | "text";
+  placeholder?: string;
+  links?: Array<{ label: string; url: string }>;
+  /** True = surface at creation; absent/false = surface once work first needs it. */
+  requiredForLaunch?: boolean;
 }
 
 export interface CompanySpendRollup {

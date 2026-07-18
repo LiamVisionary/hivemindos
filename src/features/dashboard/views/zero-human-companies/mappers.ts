@@ -10,7 +10,7 @@ import type {
   CompanyCapabilityCapital,
   CompanySpendRollup,
 } from "@/lib/types/company";
-import type { CompanyRevenueRollup } from "@/lib/types/company-revenue";
+import type { CompanyRevenueRailStatus, CompanyRevenueRollup } from "@/lib/types/company-revenue";
 import type { KanbanDeliverable, KanbanLoopReceipt, KanbanLoopSpec } from "@/lib/types/kanban";
 import type { GitLawbProof } from "@/lib/types/gitlawb";
 import { computeLoopCapabilityCapital } from "@/lib/services/loops";
@@ -373,6 +373,10 @@ function deriveStatus(company: Company, agents: Agent[], approvals: ApprovalRow[
   if (company.status) return company.status;
   if (company.frozen) return "paused";
   if (agents.length === 0 || !hasWork) return "setup";
+  // Automation off means nothing dispatches: "shipping"/"review"/"drift" all
+  // imply a live loop, so a stopped company must read as paused even with
+  // agents staffed, work on the board, and approvals waiting.
+  if (!company.autonomy) return "paused";
   if (approvals.length > 0) return "review";
   if (alignment < 55) return "drift";
   return "shipping";
@@ -411,12 +415,13 @@ export interface BuildColonyInput {
   company: Company;
   rollup: CompanySpendRollup;
   revenueShare?: CompanyRevenueRollup;
+  revenueRail?: CompanyRevenueRailStatus;
   approvals: ApprovalRow[];
   agentsById: Map<string, AgentLite>;
   tasks: KanbanTaskLite[];
 }
 
-export function buildColony({ company, rollup, revenueShare, approvals, agentsById, tasks }: BuildColonyInput): Colony {
+export function buildColony({ company, rollup, revenueShare, revenueRail, approvals, agentsById, tasks }: BuildColonyInput): Colony {
   const safeName = (company.name || "").trim() || company.id || "Untitled company";
   const ticker = (company.ticker || safeName.replace(/[^a-z]/gi, "").slice(0, 4) || "ORG").toUpperCase();
   const agents = buildAgents(company, agentsById, rollup);
@@ -510,6 +515,7 @@ export function buildColony({ company, rollup, revenueShare, approvals, agentsBy
     capabilityCapital,
     revenue,
     revenueShare,
+    revenueRail,
     pipeline,
     velocity: deriveVelocity(liveTasks),
     approvals: approvals.map((a) => mapApproval(a, company.dailyBudgetUsd)),

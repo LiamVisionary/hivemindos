@@ -68,11 +68,19 @@ export function parseSourceHint(text: string, excludeAddress?: string): SourceHi
   const fromAddr = text.match(/\bfrom\b[^]*?(0x[a-fA-F0-9]{40})/i);
   if (fromAddr && (!excludeAddress || fromAddr[1].toLowerCase() !== excludeAddress.toLowerCase())) {
     source.address = fromAddr[1];
-  } else if (/\bfrom\s+(?:my\s+)?(?:the\s+)?(personal|base|solana|robinhood|my)\b/i.test(text) || /\bfrom\s+my\s+wallet\b/i.test(text)) {
-    source.personal = true;
-    if (/\brobinhood\b/i.test(text)) source.chain = "robinhood";
-    else if (/\bbase\b/i.test(text)) source.chain = "base";
-    else if (/\bsolana\b/i.test(text)) source.chain = "solana";
+  } else {
+    // Chain keywords must come from the "from …" clause itself, not a whole-text
+    // scan: prepended screen-context prose legitimately mentions venues like
+    // Robinhood Chain, and must never override an explicit "from my base wallet".
+    const fromClause = text.match(
+      /\bfrom\s+(?:my\s+)?(?:the\s+)?(?:personal|base|solana|robinhood|my)\b[^.\n]*|\bfrom\s+my\s+wallet\b[^.\n]*/i,
+    )?.[0];
+    if (fromClause) {
+      source.personal = true;
+      if (/\brobinhood\b/i.test(fromClause)) source.chain = "robinhood";
+      else if (/\bbase\b/i.test(fromClause)) source.chain = "base";
+      else if (/\bsolana\b/i.test(fromClause)) source.chain = "solana";
+    }
   }
   return source;
 }

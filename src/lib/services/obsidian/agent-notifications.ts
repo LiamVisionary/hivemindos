@@ -126,6 +126,68 @@ export async function markAllAgentNotificationsRead(options: NotificationStorage
   return listAgentNotifications({ ...options, cursor: 0, limit: 40 });
 }
 
+/**
+ * Bulk janitor for task-lifecycle escalation cards. Every "Work is blocked on
+ * you" card names its task (a `task:<id>` tag, else the
+ * `task-needs-human-<taskId>-<stamp>` id the escalation bridge mints); when
+ * that task is no longer in the needs-human lane the card is moot, but only
+ * the NEWEST card per dedupe key ever gets a lifecycle stamp — historical
+ * re-mints pile up unread forever (measured live: 964 such cards from ~160
+ * tasks). This resolves + marks read every matching card in TWO state-file
+ * writes total, instead of one read-modify-write per card.
+ */
+export async function resolveStaleTaskNotifications(
+  liveNeedsHumanTaskIds: Iterable<string>,
+  options: NotificationStorageOptions & { by?: string; note?: string } = {},
+): Promise<{ scanned: number; matched: number; resolved: number }> {
+  const storage = resolveNotificationStorage(options);
+  await ensureNotificationRoot(storage);
+  const live = new Set(liveNeedsHumanTaskIds);
+  const [readState, resolutionState, files] = await Promise.all([
+    readReadState(storage.readStateFile),
+    readResolutionState(storage.resolutionStateFile),
+    listMarkdownFiles(storage.notificationsRoot),
+  ]);
+  const notifications = (await Promise.all(files.map((file) => readNotificationFile(file, storage, readState, resolutionState))))
+    .filter((notification): notification is AgentNotification => Boolean(notification));
+  const now = new Date().toISOString();
+  let matched = 0;
+  let resolved = 0;
+  for (const notification of notifications) {
+    const taskId = taskIdForNotification(notification);
+    if (!taskId) continue;
+    matched += 1;
+    if (live.has(taskId)) continue;
+    const alreadyResolved = notification.resolution?.status === "resolved";
+    if (alreadyResolved && notification.read) continue;
+    if (!alreadyResolved) {
+      resolutionState.entries[notification.id] = {
+        status: "resolved",
+        note: options.note ?? "The task behind this alert left the Needs You lane — nothing to do here anymore.",
+        by: options.by ?? "stale-task-janitor",
+        updatedAt: now,
+      };
+    }
+    readState.read[notification.id] = readState.read[notification.id] ?? now;
+    resolved += 1;
+  }
+  if (resolved > 0) {
+    readState.updatedAt = now;
+    resolutionState.updatedAt = now;
+    await writeJsonAtomic(storage.readStateFile, readState);
+    await writeJsonAtomic(storage.resolutionStateFile, resolutionState);
+  }
+  return { scanned: notifications.length, matched, resolved };
+}
+
+/** The Work Board task a lifecycle card tracks: `task:<id>` tag first, escalation id prefix as fallback. */
+function taskIdForNotification(notification: Pick<AgentNotification, "id" | "tags">): string | null {
+  const tagged = (notification.tags ?? []).find((tag) => tag.startsWith("task:"));
+  if (tagged) return tagged.slice("task:".length).trim() || null;
+  const match = /^task-needs-human-(.+)-[a-z0-9]+$/.exec(notification.id);
+  return match ? match[1] : null;
+}
+
 /** Settings only (no notification-file scan) — cheap gate check for escalation senders. */
 export async function readAgentNotificationSettings(options: NotificationStorageOptions = {}): Promise<AgentNotificationSettings> {
   const storage = resolveNotificationStorage(options);

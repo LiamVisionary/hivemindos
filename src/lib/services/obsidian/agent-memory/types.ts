@@ -104,6 +104,8 @@ export type AgentMemoryRecord = {
   type: AgentMemoryType;
   title: string;
   content: string;
+  /** Exact normalized content identity used for dedupe and provenance. */
+  contentHash?: string;
   memoryKey?: string;
   confidence: number;
   status: "active" | "superseded" | "archived";
@@ -248,6 +250,8 @@ export type RecallAgentMemoryInput = {
   scope?: string;
   temporalMode?: "auto" | "current" | "historical" | "as-of";
   asOf?: string;
+  /** Replay recall against one verified immutable Agent Memory generation. */
+  generationId?: string;
   trackUsage?: boolean;
   usageContext?: string;
   // Floor applied by answer mode before hits reach model context.

@@ -119,6 +119,35 @@ try {
   card = (await listAgentNotifications(options)).notifications.find((n) => n.title === "Work is blocked on you");
   assert.equal(card?.resolution?.status, "resolved", "completed task → resolved");
 
+  // ── bulk janitor: resolve-stale task cards ─────────────────────────────────
+  {
+    const { resolveStaleTaskNotifications } = await import("../src/lib/services/obsidian/agent-notifications.ts");
+    // Historical re-mints: two cards for the same STALE task (only the newest
+    // would ever get a lifecycle stamp), one card for a still-live task, one
+    // unrelated non-task card that must never be touched.
+    await createAgentNotification({ id: "task-needs-human-t_stale_1-aaa111", title: "Work is blocked on you", body: "old mint", tags: ["escalation", "task:t_stale_1"] }, options);
+    await createAgentNotification({ id: "task-needs-human-t_stale_1-bbb222", title: "Work is blocked on you", body: "new mint", tags: ["escalation", "task:t_stale_1"] }, options);
+    await createAgentNotification({ id: "task-needs-human-t_live_1-ccc333", title: "Work is blocked on you", body: "live", tags: ["escalation", "task:t_live_1"] }, options);
+    // Id-prefix fallback: no task tag, id carries the task (underscored id + stamp suffix).
+    await createAgentNotification({ id: "task-needs-human-t_stale_2-ddd444", title: "Work is blocked on you", body: "untagged", tags: ["escalation"] }, options);
+    await createAgentNotification({ id: "unrelated-card-eee555", title: "Weekly report", body: "fyi", tags: ["report"] }, options);
+
+    const janitor = await resolveStaleTaskNotifications(["t_live_1"], options);
+    assert.equal(janitor.resolved, 3, "both stale re-mints + the untagged stale card resolve in one pass");
+
+    const byId = new Map((await listAgentNotifications({ ...options, limit: 100 })).notifications.map((n) => [n.id, n]));
+    assert.equal(byId.get("task-needs-human-t_stale_1-aaa111")?.resolution?.status, "resolved", "historical re-mint resolves too");
+    assert.equal(byId.get("task-needs-human-t_stale_1-aaa111")?.read, true, "janitor marks stale cards read");
+    assert.equal(byId.get("task-needs-human-t_stale_1-bbb222")?.resolution?.status, "resolved");
+    assert.equal(byId.get("task-needs-human-t_stale_2-ddd444")?.resolution?.status, "resolved", "id-prefix fallback matches untagged cards");
+    assert.equal(byId.get("task-needs-human-t_live_1-ccc333")?.resolution, undefined, "live task card stays untouched");
+    assert.equal(byId.get("task-needs-human-t_live_1-ccc333")?.read, false, "live task card stays unread");
+    assert.equal(byId.get("unrelated-card-eee555")?.resolution, undefined, "non-task cards are never janitored");
+
+    const second = await resolveStaleTaskNotifications(["t_live_1"], options);
+    assert.equal(second.resolved, 0, "second pass is a no-op — already resolved+read cards are skipped");
+  }
+
   console.log("PASS test-notification-resolution");
 } finally {
   await rm(tempHome, { recursive: true, force: true }).catch(() => {});

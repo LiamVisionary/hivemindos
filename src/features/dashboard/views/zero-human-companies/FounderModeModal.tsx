@@ -61,6 +61,21 @@ function StatusChip({ label, tone = "var(--fg-3)" }: { label: string; tone?: str
   return <span style={{ border: "1px solid var(--line-2)", borderRadius: 999, padding: "3px 8px", fontFamily: "var(--f-mono)", fontSize: 10, color: tone }}>{label}</span>;
 }
 
+type FounderTemplateCard = {
+  id: string;
+  name: string;
+  emoji: string;
+  tagline: string;
+  sector: string;
+  goalSeed: string;
+  budgetTier: string;
+  productCount: number;
+  skillCount: number;
+  setupKeyCount: number;
+  requiredSetupKeys: string[];
+  hostedRails: Array<{ serviceId: string; label: string }>;
+};
+
 export function FounderModeModal({ agentPool, theme, onClose, onCreated }: {
   agentPool: PoolAgent[];
   theme: Theme;
@@ -72,6 +87,30 @@ export function FounderModeModal({ agentPool, theme, onClose, onCreated }: {
   const [blueprint, setBlueprint] = React.useState<FounderBlueprint | null>(null);
   const [busy, setBusy] = React.useState<"compile" | "found" | null>(null);
   const [error, setError] = React.useState("");
+  const [templates, setTemplates] = React.useState<FounderTemplateCard[]>([]);
+  const [templateId, setTemplateId] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/founder", { cache: "no-store" })
+      .then((response) => response.json().catch(() => null))
+      .then((data: { ok?: boolean; templates?: FounderTemplateCard[] } | null) => {
+        if (!cancelled && data?.ok && Array.isArray(data.templates)) setTemplates(data.templates);
+      })
+      .catch(() => {
+        // Templates are an accelerator, not a dependency — the free-form goal path stays.
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const pickTemplate = React.useCallback((card: FounderTemplateCard | null) => {
+    setTemplateId(card?.id ?? null);
+    if (card) {
+      const tierOk = card.budgetTier === "local-free" || card.budgetTier === "starter" || card.budgetTier === "growth" || card.budgetTier === "scale";
+      setGoal((current) => (current.trim() ? current : card.goalSeed));
+      if (tierOk) setConstraints((current) => ({ ...current, budgetTier: card.budgetTier as FounderBudgetTier }));
+    }
+  }, []);
 
   const request = React.useCallback(async (action: "compile" | "found") => {
     setBusy(action);
@@ -88,7 +127,7 @@ export function FounderModeModal({ agentPool, theme, onClose, onCreated }: {
       const response = await fetch("/api/founder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, goal, constraints, machines, agentIds: agentPool.map((agent) => agent.id) }),
+        body: JSON.stringify({ action, goal, constraints, machines, templateId: templateId ?? undefined, agentIds: agentPool.map((agent) => agent.id) }),
       });
       const data = await response.json().catch(() => null) as { ok?: boolean; error?: string; blueprint?: FounderBlueprint; company?: { id?: string } } | null;
       if (!response.ok || !data?.ok || !data.blueprint) throw new Error(data?.error || "Founder Mode could not prepare the blueprint.");
@@ -119,6 +158,39 @@ export function FounderModeModal({ agentPool, theme, onClose, onCreated }: {
     <Modal title="Founder Mode" subtitle="Turn one outcome into a private, governed AI company" onClose={onClose} width={blueprint ? 980 : 720} theme={theme} footer={footer}>
       {!blueprint ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          {templates.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+              <span className="mono-cap" style={{ color: "var(--fg-4)" }}>start from a template (optional)</span>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 8 }}>
+                {templates.map((card) => {
+                  const selected = templateId === card.id;
+                  return (
+                    <button
+                      key={card.id}
+                      type="button"
+                      onClick={() => pickTemplate(selected ? null : card)}
+                      style={{
+                        textAlign: "left", cursor: "pointer", borderRadius: 10, padding: "10px 11px",
+                        border: `1px solid ${selected ? "var(--honey-line)" : "var(--line)"}`,
+                        background: selected ? "var(--honey-soft)" : "var(--panel-2)",
+                        display: "flex", flexDirection: "column", gap: 4,
+                      }}
+                    >
+                      <span style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                        <span style={{ fontSize: 16 }}>{card.emoji}</span>
+                        <strong style={{ fontFamily: "var(--f-display)", fontSize: 12.5, color: "var(--fg)" }}>{card.name}</strong>
+                      </span>
+                      <span style={{ fontSize: 11, lineHeight: 1.4, color: "var(--fg-3)" }}>{card.tagline}</span>
+                      <span style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, color: "var(--fg-4)" }}>
+                        {card.skillCount} skills · {card.productCount ? `${card.productCount} products · ` : ""}{card.setupKeyCount ? `${card.setupKeyCount} setup keys` : "no keys needed"}
+                        {card.hostedRails.length ? ` · hosted: ${card.hostedRails.map((rail) => rail.label).join(", ")}` : ""}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <label style={{ display: "flex", flexDirection: "column", gap: 7 }}>
             <span className="mono-cap" style={{ color: "var(--honey)" }}>what do you want to make happen?</span>
             <textarea
@@ -156,7 +228,7 @@ export function FounderModeModal({ agentPool, theme, onClose, onCreated }: {
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: 14, flexWrap: "wrap" }}>
             <div style={{ flex: 1, minWidth: 280 }}>
-              <div className="mono-cap" style={{ color: "var(--honey)" }}>{blueprint.archetype}</div>
+              <div className="mono-cap" style={{ color: "var(--honey)" }}>{blueprint.archetype}{blueprint.templateId ? ` · ${templates.find((card) => card.id === blueprint.templateId)?.name ?? blueprint.templateId}` : ""}</div>
               <h2 style={{ margin: "5px 0 3px", fontFamily: "var(--f-display)", fontSize: 25, color: "var(--fg)" }}>{blueprint.identity.name}</h2>
               <div style={{ fontSize: 13, lineHeight: 1.5, color: "var(--fg-3)" }}>{blueprint.identity.blurb}</div>
             </div>

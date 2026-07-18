@@ -981,6 +981,8 @@ func serveControl(ctx context.Context, ln net.Listener, lc *local.Client, ts *ts
 		// Local-only access for the dashboard's own machine; the listener is
 		// bound to loopback so no extra auth applies here.
 		mux.Handle(shellPathPrefix, shell.handler())
+	} else {
+		mux.HandleFunc(shellPathPrefix, serveShellUnavailable)
 	}
 	mux.HandleFunc("/peer/", servePeerProxy(ts))
 	mux.HandleFunc("/", servePeerRefererFallback(ts))
@@ -1079,8 +1081,12 @@ func main() {
 			fileHandler.ServeHTTP(w, r)
 			return
 		}
-		if shellHandler != nil && strings.HasPrefix(r.URL.Path, shellPathPrefix) {
-			shellHandler.ServeHTTP(w, r)
+		if strings.HasPrefix(r.URL.Path, shellPathPrefix) {
+			if shellHandler != nil {
+				shellHandler.ServeHTTP(w, r)
+			} else {
+				serveShellUnavailable(w, r)
+			}
 			return
 		}
 		collectorProxy.ServeHTTP(w, r)

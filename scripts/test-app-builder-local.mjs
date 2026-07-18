@@ -183,6 +183,126 @@ test("status reconciles a stale running manifest after the preview process exits
     assert.equal(status.pid, null);
     assert.equal(status.port, null);
     assert.equal(status.previewUrl, null);
+    assert.equal(status.lastError, appBuilder.APP_BUILDER_RUNTIME_EXITED_MESSAGE);
+  } finally {
+    await appBuilder.stopLocalAppProject({ directory: project, confirmation: confirmations.runtime }).catch(() => undefined);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+async function waitForProcessExit(pid) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    try {
+      process.kill(pid, 0);
+    } catch {
+      return;
+    }
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 10));
+  }
+}
+
+test("boot reconcile restarts an interrupted runtime on its previous port and leaves a live one alone", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hivemind-restart-interrupted-"));
+  const project = join(root, "arcade");
+  try {
+    await appBuilder.createLocalAppProject({
+      directory: project,
+      name: "Arcade",
+      templateId: "static",
+      confirmation: confirmations.create,
+    });
+    const started = await appBuilder.startLocalAppProject({ directory: project, confirmation: confirmations.runtime });
+
+    const untouched = await appBuilder.restartInterruptedLocalAppProject(project);
+    assert.equal(untouched.restarted, false, "a live runtime must not be restarted");
+    assert.equal(untouched.project.pid, started.project.pid);
+
+    process.kill(started.project.pid, "SIGKILL");
+    await waitForProcessExit(started.project.pid);
+
+    const restarted = await appBuilder.restartInterruptedLocalAppProject(project);
+    assert.equal(restarted.restarted, true);
+    assert.equal(restarted.project.status, "running");
+    assert.notEqual(restarted.project.pid, started.project.pid);
+    assert.equal(restarted.project.port, started.project.port, "the previous port keeps stale preview URLs working");
+    assert.equal(restarted.project.previewUrl, started.project.previewUrl);
+  } finally {
+    await appBuilder.stopLocalAppProject({ directory: project, confirmation: confirmations.runtime }).catch(() => undefined);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("the collector boot sweep restarts interrupted registry projects and skips foreign entries quietly", async () => {
+  const { reconcileAppBuilderRuntimesAtBoot } = await import(new URL("./lib/app-builder-boot-reconcile.mjs", import.meta.url).href);
+  const root = await mkdtemp(join(tmpdir(), "hivemind-boot-sweep-"));
+  const project = join(root, "arcade");
+  try {
+    await appBuilder.createLocalAppProject({
+      directory: project,
+      name: "Arcade",
+      templateId: "static",
+      confirmation: confirmations.create,
+    });
+    const started = await appBuilder.startLocalAppProject({ directory: project, confirmation: confirmations.runtime });
+    process.kill(started.project.pid, "SIGKILL");
+    await waitForProcessExit(started.project.pid);
+
+    const warnings = [];
+    const restarted = await reconcileAppBuilderRuntimesAtBoot({
+      readProjects: async () => [
+        // Another machine's checkout: no directory here — must skip quietly.
+        { id: "elsewhere", name: "Elsewhere", localPath: join(root, "not-on-this-machine"), appBuilder: { backend: "local" } },
+        // Managed/non-local registrations are not this collector's to restart.
+        { id: "managed", name: "Managed", localPath: project, appBuilder: { backend: "managed" } },
+        { id: "arcade", name: "Arcade", localPath: project, appBuilder: { backend: "local" } },
+      ],
+      expandHome: (path) => path,
+      log: () => {},
+      warn: (message) => warnings.push(message),
+    });
+    assert.equal(restarted.length, 1, "only the interrupted local project restarts");
+    assert.equal(restarted[0].status, "running");
+    assert.equal(restarted[0].port, started.project.port);
+    assert.deepEqual(warnings, [], "foreign registry entries must not spam boot logs");
+
+    const status = await appBuilder.getLocalAppProject({ directory: project });
+    assert.equal(status.status, "running");
+  } finally {
+    await appBuilder.stopLocalAppProject({ directory: project, confirmation: confirmations.runtime }).catch(() => undefined);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("boot reconcile restarts a reconcile-stamped exited stop but never a user-requested stop", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hivemind-restart-stamped-"));
+  const project = join(root, "arcade");
+  try {
+    await appBuilder.createLocalAppProject({
+      directory: project,
+      name: "Arcade",
+      templateId: "static",
+      confirmation: confirmations.create,
+    });
+    const started = await appBuilder.startLocalAppProject({ directory: project, confirmation: confirmations.runtime });
+    process.kill(started.project.pid, "SIGKILL");
+    await waitForProcessExit(started.project.pid);
+
+    // A status poll reconciled the dead runtime to a stamped exited stop first.
+    const stamped = await appBuilder.getLocalAppProject({ directory: project });
+    assert.equal(stamped.status, "stopped");
+    assert.equal(stamped.lastError, appBuilder.APP_BUILDER_RUNTIME_EXITED_MESSAGE);
+
+    const restarted = await appBuilder.restartInterruptedLocalAppProject(project);
+    assert.equal(restarted.restarted, true);
+    assert.equal(restarted.project.status, "running");
+
+    const stopped = await appBuilder.stopLocalAppProject({ directory: project, confirmation: confirmations.runtime });
+    assert.equal(stopped.project.status, "stopped");
+    assert.equal(stopped.project.lastError, null);
+
+    const left = await appBuilder.restartInterruptedLocalAppProject(project);
+    assert.equal(left.restarted, false, "a user-requested stop must stay stopped across collector boots");
+    assert.equal(left.project.status, "stopped");
   } finally {
     await appBuilder.stopLocalAppProject({ directory: project, confirmation: confirmations.runtime }).catch(() => undefined);
     await rm(root, { recursive: true, force: true });

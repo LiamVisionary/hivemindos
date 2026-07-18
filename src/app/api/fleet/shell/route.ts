@@ -1,7 +1,12 @@
 import { NextRequest } from "next/server";
 
 import { errorJson } from "@/lib/utils/api-response";
-import { SHELL_SESSION_PATTERN, shellBaseFromCollectorUrl, shellSessionUrl } from "./shell-target";
+import {
+  SHELL_SESSION_PATTERN,
+  shellBaseFromCollectorUrl,
+  shellEnvelopeFromUpstream,
+  shellSessionUrl,
+} from "./shell-target";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +35,8 @@ export async function GET(request: NextRequest) {
       cache: "no-store",
       signal: AbortSignal.timeout(10_000),
     });
-    return Response.json(await upstream.json(), { status: upstream.status });
+    const result = shellEnvelopeFromUpstream(await upstream.text(), upstream.status);
+    return Response.json(result.payload, { status: result.status });
   } catch (error) {
     return Response.json(
       { ok: false, error: error instanceof Error ? error.message : "shell history request failed" },
@@ -74,7 +80,8 @@ export async function POST(request: NextRequest) {
       cache: "no-store",
       signal: AbortSignal.timeout(10_000),
     });
-    return Response.json(await upstream.json(), { status: upstream.status });
+    const result = shellEnvelopeFromUpstream(await upstream.text(), upstream.status);
+    return Response.json(result.payload, { status: result.status });
   } catch (error) {
     return Response.json(
       { ok: false, error: error instanceof Error ? error.message : "shell action failed" },

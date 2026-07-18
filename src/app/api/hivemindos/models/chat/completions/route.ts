@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - OpenAI-compatible model inference data plane; spending stays behind the governed wallet x402 machinery and funding is modeled by hivemindos-models.funding-wallet.
 import { NextRequest, NextResponse } from "next/server";
 
 import {
@@ -93,7 +94,7 @@ export async function POST(request: NextRequest) {
   // The free model never touches credits or wallets: it goes to the hosted
   // free-models surface, which is the authority on the daily allowance.
   if (isFreeHivemindosWalletPaidModel(model)) {
-    return fetchFreeModelCompletion(body, upstreamModel, model);
+    return fetchFreeModelCompletion(body, upstreamModel, model, request.signal);
   }
 
   const directHiveComputeModel = hiveComputeRouteForHivemindosModel(model);
@@ -285,6 +286,7 @@ async function fetchFreeModelCompletion(
   body: OpenAIChatCompletionBody,
   upstreamModel: string,
   model: string,
+  requestSignal: AbortSignal,
 ) {
   const target = freeModelChatCompletionsUrl(upstreamModel);
   if (!target) {
@@ -295,10 +297,11 @@ async function fetchFreeModelCompletion(
     getHoneyWorkspaceId().catch(() => ""),
   ]);
   try {
+    const wantsStream = body.stream === true;
     const response = await fetch(target, {
       method: "POST",
       headers: {
-        Accept: "application/json",
+        Accept: wantsStream ? "text/event-stream" : "application/json",
         "Content-Type": "application/json",
         "X-HivemindOS-Free-Device": deviceId,
         "X-HivemindOS-Free-Workspace": workspaceId,
@@ -306,12 +309,27 @@ async function fetchFreeModelCompletion(
       body: JSON.stringify({
         ...body,
         model: upstreamModel,
-        stream: false,
+        stream: body.stream === true,
         cache_prompt: typeof body.cache_prompt === "boolean" ? body.cache_prompt : true,
       }),
       cache: "no-store",
-      signal: AbortSignal.timeout(MODEL_CALL_TIMEOUT_MS),
+      signal: AbortSignal.any([requestSignal, AbortSignal.timeout(MODEL_CALL_TIMEOUT_MS)]),
     });
+    if (wantsStream && response.ok && response.body) {
+      const next = new NextResponse(response.body, {
+        status: response.status,
+        headers: {
+          "Content-Type": response.headers.get("Content-Type") || "text/event-stream",
+          "Cache-Control": "no-cache, no-transform",
+          Connection: "keep-alive",
+          "X-HivemindOS-Wallet-Paid": "free",
+          "X-HivemindOS-Wallet-Paid-Network": "hosted",
+          "X-HivemindOS-Wallet-Paid-Amount-Usd": "0",
+        },
+      });
+      applyFreeModelHeaders(response, next);
+      return next;
+    }
     const bodyPreview = await response.text();
     const bodyJson = jsonFromText(bodyPreview);
     if (!response.ok) {

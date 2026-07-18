@@ -48,14 +48,21 @@ Basically: do not change the docs from memory if the code is sitting right here.
 ## Brain Services
 
 - `src/lib/services/context-index.ts`
+- `src/lib/services/hive-actions/brain-portability-action.ts`
 - `src/lib/services/queen-bee/control-plane.ts`
 - `src/lib/services/queen-bee/router.ts`
 - `src/lib/services/projects/project-registry.ts`
 - `src/lib/services/obsidian/agent-memory.ts`
 - `src/lib/services/obsidian/agent-memory/core.ts`
 - `src/lib/services/obsidian/agent-memory/entities.ts`
+- `src/lib/services/obsidian/agent-memory/proofs.ts`
 - `src/lib/services/obsidian/agent-memory/scoring.ts`
 - `src/lib/services/obsidian/agent-memory/usage.ts`
+- `src/lib/services/obsidian/agent-memory/write-transactions.ts`
+- `src/lib/services/obsidian/brain-index-artifact-storage.ts`
+- `src/lib/services/obsidian/brain-index-generations.ts`
+- `src/lib/services/obsidian/brain-capsules.ts`
+- `src/lib/services/obsidian/content-address.ts`
 - `src/lib/services/search/bm25-lite.ts`
 - `src/lib/services/obsidian/okf.ts`
 - `src/lib/services/obsidian/compiled-knowledge.ts`

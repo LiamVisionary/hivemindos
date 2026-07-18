@@ -1,0 +1,17 @@
+{
+  "upstreamName": "Viral Product Landing Page",
+  "upstreamSlug": "viral-product-landing-page",
+  "hiveSlug": "viral-product-landing-page",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/gtm/hivemindos/viral-product-landing-page",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-16T23:02:02Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional GTM skills",
+  "sourcePath": "packaged-skills/optional/gtm/hivemindos/viral-product-landing-page",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Packages the conversion-and-shareability landing page critique lens with its distilled principles reference.",
+    "Preserves product truth, legal accuracy, accessibility, and brand-trust constraints as hard rules."
+  ]
+}

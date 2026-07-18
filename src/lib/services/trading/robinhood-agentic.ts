@@ -98,10 +98,13 @@ let reconnectPromise: Promise<LiveConnection> | null = null;
 
 class RobinhoodOAuthProvider implements OAuthClientProvider {
   private authorizationUrl?: string;
+  // No constructor parameter properties: hermetic suites import this file through
+  // Node's strip-only TS loader, which rejects them (ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX).
+  private readonly pending: RobinhoodMcpPendingOAuth;
 
-  constructor(
-    private readonly pending: RobinhoodMcpPendingOAuth,
-  ) {}
+  constructor(pending: RobinhoodMcpPendingOAuth) {
+    this.pending = pending;
+  }
 
   get redirectUrl() {
     return this.pending.redirectUri;

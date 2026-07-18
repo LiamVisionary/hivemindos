@@ -41,6 +41,20 @@ try {
   assert.equal(session?.evaluation?.tier, "quick");
   assert.equal(session?.evaluation?.routingEligible, false, "casual chat must not train task routing");
 
+  // Evaluations attach in the child's close handler (log flush + evaluateCompletionEvent
+  // + run rewrite), so under parallel gate load this can take well over the process's own
+  // runtime. Poll on a generous deadline; the loop exits as soon as the evaluation lands.
+  const waitForEvaluatedRun = async (runId) => {
+    const deadline = Date.now() + 30_000;
+    let run;
+    while (Date.now() < deadline) {
+      run = (await listCliTaskRuns("codex")).find((candidate) => candidate.id === runId);
+      if (run?.status === "completed" && run.evaluation) return run;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    return run;
+  };
+
   const started = await startCliTaskRun({
     runtime: "codex",
     label: "Test CLI",
@@ -49,12 +63,7 @@ try {
   }, { task: "Run a deterministic managed CLI evaluation test.", cwd: tempHome });
   assert.equal(started.ok, true);
 
-  let cliRun;
-  for (let attempt = 0; attempt < 80; attempt += 1) {
-    cliRun = (await listCliTaskRuns("codex")).find((run) => run.id === started.id);
-    if (cliRun?.status === "completed" && cliRun.evaluation) break;
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
+  const cliRun = await waitForEvaluatedRun(started.id);
   assert.equal(cliRun?.status, "completed");
   assert.equal(cliRun?.evaluation?.surface, "runtime-cli");
   assert.equal(cliRun?.evaluation?.verdict, "accepted");
@@ -66,12 +75,7 @@ try {
     command: process.execPath,
     buildArgs: () => ["-e", "process.exit(0)"],
   }, { task: "This prompt is deliberately substantive but the process returns no output.", cwd: tempHome });
-  let silentRun;
-  for (let attempt = 0; attempt < 80; attempt += 1) {
-    silentRun = (await listCliTaskRuns("codex")).find((run) => run.id === silentStarted.id);
-    if (silentRun?.status === "completed" && silentRun.evaluation) break;
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
+  const silentRun = await waitForEvaluatedRun(silentStarted.id);
   assert.equal(silentRun?.evaluation?.verdict, "rejected", "the command echo must not let a silent exit-0 CLI run pass");
 
   const [evaluationGuide, navigation, readme, investorGuide] = await Promise.all([

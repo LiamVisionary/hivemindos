@@ -39,3 +39,27 @@ function resolveShellBase(control: string, trimmed: string): string | null {
 export function shellSessionUrl(base: string, session: string, action?: string) {
   return `${base}/_hivemind/shell/sessions/${encodeURIComponent(session)}${action ? `/${action}` : ""}`;
 }
+
+/**
+ * linkd answers shell requests with JSON, but several failure paths speak
+ * plain text: the Go reverse proxy's "hivemind-linkd proxy error: dial tcp
+ * ..." 502 (e.g. a Windows linkd without the shell service falling through to
+ * a dead collector), and 404 pages from stale builds. Forward JSON bodies
+ * verbatim; wrap anything else in the { ok, error } envelope so the terminal
+ * UI shows a readable error line instead of a JSON parse crash.
+ */
+export function shellEnvelopeFromUpstream(body: string, status: number): { payload: unknown; status: number } {
+  try {
+    return { payload: JSON.parse(body), status };
+  } catch {
+    const detail = body.trim().replace(/\s+/g, " ").slice(0, 400);
+    return {
+      payload: {
+        ok: false,
+        error: detail || `shell endpoint returned an empty non-JSON response (HTTP ${status})`,
+      },
+      // A non-JSON body is an upstream failure even when the status says 2xx.
+      status: status >= 400 ? status : 502,
+    };
+  }
+}

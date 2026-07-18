@@ -307,7 +307,7 @@ export function BrainDropFab({ onImported, vaultPath }: BrainDropFabProps) {
         </div>
       ) : null}
 
-      <div className={styles.dock}>
+      <div className={styles.dock} data-mode={mode}>
         {status ? <div className={styles.status} role="status">{status}</div> : null}
         <div
           className={styles.shell}

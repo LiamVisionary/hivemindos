@@ -9,10 +9,13 @@
 // scene can render directly without WKWebView-sensitive post-processing tiles.
 // Hive-light stays a plain ink-on-parchment render. Colors ride the
 // vault panel's --brain-* tokens, reduced motion is honored, and everything
-// is disposed on unmount. Shaders/textures live in ./brain-synapse-gpu.
+// is disposed on unmount. Shaders/textures live in ./brain-synapse-gpu; the
+// anatomical layout model (hemispheres, cortical shell, fissure, gyral
+// ripple) lives in ./brain-anatomy.
 
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
+import { applyBrainShellForce, brainClusterAnchor } from "./brain-anatomy";
 import { BrainDendriteField } from "./brain-dendrite-field";
 import { BrainFiberTubes } from "./brain-fiber-tubes";
 import { approachPointerProximity, pointerProximityRadius, pointerProximityStrength } from "./brain-pointer-proximity";
@@ -130,18 +133,6 @@ type EngineOptions = {
   onNodeHover: (id: string | null) => void;
 };
 
-function clusterAnchor(cluster: string) {
-  const u = hashUnit(cluster, 101) * 2 - 1;
-  const angle = hashUnit(cluster, 103) * Math.PI * 2;
-  const ring = Math.sqrt(Math.max(0.0001, 1 - u * u));
-  const radius = WORLD_RADIUS * 0.66;
-  return {
-    x: Math.cos(angle) * ring * radius,
-    y: u * radius * 0.72,
-    z: Math.sin(angle) * ring * radius * 0.82,
-  };
-}
-
 class SynapseEngine {
   private alpha = 0;
   private animationFrame = 0;
@@ -178,8 +169,8 @@ class SynapseEngine {
   private nodes: SimNode[] = [];
   private options: EngineOptions;
   private palette: Palette;
-  private phi = 1.18;
-  private phiTarget = 1.18;
+  private phi = 1.12;
+  private phiTarget = 1.12;
   private pointer = { down: false, inside: false, x: 0, y: 0 };
   private pulsePoints: THREE.Points | null = null;
   private graphLinks: GraphLink[] = [];
@@ -192,9 +183,9 @@ class SynapseEngine {
   private soma: THREE.InstancedMesh | null = null;
   private texAtlas: THREE.CanvasTexture;
   private texDot: THREE.CanvasTexture;
-  private theta = 0.55;
+  private theta = 1.02;
   private themeObserver: MutationObserver | null = null;
-  private thetaTarget = 0.55;
+  private thetaTarget = 1.02;
   private time = 0;
   private tmpColor = new THREE.Color();
   private tmpColorB = new THREE.Color();
@@ -345,7 +336,7 @@ class SynapseEngine {
       // Only structural wiki-link centrality changes physical size. Recent
       // edits and agent reads are activity, expressed later through glow.
       const radius = 2.35 + clamp(input.weight, 0, 1) * 5.45;
-      const anchor = clusterAnchor(input.cluster);
+      const anchor = brainClusterAnchor(input.cluster);
       if (existing) {
         existing.activity = input.activity;
         existing.anchorX = anchor.x;
@@ -424,9 +415,9 @@ class SynapseEngine {
       this.alpha = 1;
       for (let i = 0; i < PRE_TICKS; i += 1) this.simTick();
       this.fitRadius = this.computeCloudRadius();
-      // Frame the tissue as an immersive macro field rather than a small
-      // diagram floating in space; users can still scroll outward.
-      this.cameraRadiusTarget = clamp(this.fitRadius * 1.18, 108, 430);
+      // Frame the whole organ so the two-hemisphere silhouette reads on
+      // reveal; users can still scroll in for the immersive macro field.
+      this.cameraRadiusTarget = clamp(this.fitRadius * 2.7, 160, 520);
       this.cameraRadius = this.cameraRadiusTarget * 1.12;
       // PRE_TICKS already settles the initial layout. Continuing the force
       // simulation after reveal makes the entire tissue crawl on screen.
@@ -726,9 +717,10 @@ class SynapseEngine {
   private buildCoreGlow() {
     const geometry = new THREE.PlaneGeometry(2, 2);
     const material = this.registerMaterial(new THREE.ShaderMaterial({
-      // A broad tissue glow supports the network without replacing its many
-      // real neuron centers with one synthetic white orb.
-      uniforms: { uSize: { value: 240 } },
+      // Pulsating energy core at the organ's center. Sized to sit inside the
+      // cortical shell (~104 world units) so tissue drawn after it overlays
+      // the corona and the core reads as embedded, not pasted on top.
+      uniforms: { uSize: { value: 48 }, uTime: { value: 0 }, uMotion: { value: this.reducedMotion ? 0 : 1 } },
       vertexShader: CORE_GLOW_VERTEX,
       fragmentShader: CORE_GLOW_FRAGMENT,
       transparent: true,
@@ -751,12 +743,13 @@ class SynapseEngine {
       const u = hashUnit(`dust-${i}`, 3) * 2 - 1;
       const angle = hashUnit(`dust-${i}`, 5) * Math.PI * 2;
       const ring = Math.sqrt(Math.max(0.0001, 1 - u * u));
-      // Sparkle field threads through the tissue and out past it.
+      // Sparkle field threads through the tissue and out past it, stretched
+      // to the brain's proportions so even the ambient glow hints the organ.
       const radial = Math.pow(hashUnit(`dust-${i}`, 9), 0.72);
       const spread = WORLD_RADIUS * (0.035 + radial * 1.35);
-      positions[i * 3] = Math.cos(angle) * ring * spread;
-      positions[i * 3 + 1] = u * spread * 0.8;
-      positions[i * 3 + 2] = Math.sin(angle) * ring * spread;
+      positions[i * 3] = Math.cos(angle) * ring * spread * 0.94;
+      positions[i * 3 + 1] = u * spread * 0.72;
+      positions[i * 3 + 2] = Math.sin(angle) * ring * spread * 1.3;
       sizes[i] = 0.65 + hashUnit(`dust-${i}`, 13) * 1.5;
       seeds[i] = hashUnit(`dust-${i}`, 17);
     }
@@ -1006,7 +999,9 @@ class SynapseEngine {
           distSq = dx * dx + dy * dy + dz * dz;
         }
         const dist = Math.sqrt(distSq);
-        const force = Math.min(2.6, (1900 * alpha) / distSq);
+        // Kept below the anatomy shell forces so local spacing cannot inflate
+        // the cloud past the cortical silhouette.
+        const force = Math.min(2, (1400 * alpha) / distSq);
         const fx = (dx / dist) * force;
         const fy = (dy / dist) * force;
         const fz = (dz / dist) * force;
@@ -1034,13 +1029,12 @@ class SynapseEngine {
     for (const node of nodes) {
       // Real folder/tag cluster anchors organize sparse vaults without
       // inventing spatial-neighbor edges. Wiki springs can still pull related
-      // notes across those semantic regions.
+      // notes across those semantic regions; the anatomy shell force then
+      // shapes the whole tissue into a two-hemisphere cortical silhouette.
       node.vx += (node.anchorX - node.x) * 0.009 * alpha;
       node.vy += (node.anchorY - node.y) * 0.011 * alpha;
       node.vz += (node.anchorZ - node.z) * 0.01 * alpha;
-      node.vx -= node.x * 0.0035 * alpha;
-      node.vy -= node.y * 0.004 * alpha;
-      node.vz -= node.z * 0.0035 * alpha;
+      applyBrainShellForce(node, alpha);
       node.vx *= 0.86;
       node.vy *= 0.86;
       node.vz *= 0.86;
@@ -1213,9 +1207,9 @@ class SynapseEngine {
   }
 
   private onDoubleClick = () => {
-    this.cameraRadiusTarget = clamp(this.fitRadius * 1.72, 132, 520);
-    this.thetaTarget = 0.55;
-    this.phiTarget = 1.18;
+    this.cameraRadiusTarget = clamp(this.fitRadius * 2.7, 160, 520);
+    this.thetaTarget = 1.02;
+    this.phiTarget = 1.12;
   };
 
   private onWheel = (event: WheelEvent) => {
@@ -1362,6 +1356,24 @@ class SynapseEngine {
         this.tmpVecD.copy(fiber.bowSeed).cross(this.tmpVecC);
         const bowLength = this.tmpVecD.length();
         if (bowLength > 0.001) this.tmpVecD.multiplyScalar(1 / bowLength);
+        // Re-aim the bow tangent to the cortical shell with a slight outward
+        // lift, so arcs sweep along the surface like gyri (and cross-
+        // hemisphere fibers hump over the fissure) instead of cutting chords
+        // through the tissue.
+        const midX = (this.tmpVecA.x + this.tmpVecB.x) * 0.5;
+        const midY = (this.tmpVecA.y + this.tmpVecB.y) * 0.5;
+        const midZ = (this.tmpVecA.z + this.tmpVecB.z) * 0.5;
+        const midLen = Math.hypot(midX, midY, midZ);
+        if (midLen > 1) {
+          const rx = midX / midLen;
+          const ry = midY / midLen;
+          const rz = midZ / midLen;
+          const radial = this.tmpVecD.x * rx + this.tmpVecD.y * ry + this.tmpVecD.z * rz;
+          this.tmpVecD.x += rx * (0.45 - radial);
+          this.tmpVecD.y += ry * (0.45 - radial);
+          this.tmpVecD.z += rz * (0.45 - radial);
+          this.tmpVecD.normalize();
+        }
         const bow = fiber.bowAmount + this.tmpVecC.length() * 0.12;
         this.tmpVecC.multiplyScalar(0.5).add(this.tmpVecA).addScaledVector(this.tmpVecD, bow);
         const tubeSlot = this.fiberTubeSlots[fiberIndex];

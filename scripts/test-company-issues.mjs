@@ -125,7 +125,7 @@ assert.match(
 );
 assert.match(
   modalsSource,
-  /disabled=\{crew\.length === 0 \|\| !canNext \|\| busy\}/,
+  /disabled=\{\(requiresCrew && crew\.length === 0\) \|\| !canNext \|\| busy\}/,
   "create-company final submit stays disabled without a real apex goal",
 );
 
@@ -247,11 +247,11 @@ assert.match(cockpitSource, /isWorkApprovalIssue/, "cockpit routes approve/rejec
 assert.match(cockpitSource, /workApprovalIssueToView/, "cockpit maps Work Board approval tasks into the shared approval card shape");
 assert.match(cockpitSource, /onDecideIssueApproval/, "Work Board approvals answer the underlying task when decided");
 assert.match(cockpitSource, /onOpenDetails=\{item\.source === "work" \? \(\) => handlers\.onOpenIssue\(item\.issue\) : undefined\}/, "Work Board approval cards open the underlying task details");
-assert.match(cockpitSource, /const MAX_NEEDS_STRIP_ROWS = 3/, "needs-you strip caps visible rows at three");
-assert.match(cockpitSource, /const visibleApprovals = approvals\.slice\(0, MAX_NEEDS_STRIP_ROWS\)/, "needs-you strip counts visible approvals against the row cap");
-assert.match(cockpitSource, /const visibleBlocked = blocked\.slice\(0, Math\.max\(0, MAX_NEEDS_STRIP_ROWS - visibleApprovals\.length\)\)/, "needs-you strip fills remaining slots with blocked issues");
-assert.match(cockpitSource, /\+ \{hiddenCount\} more/, "needs-you strip shows the overflow count");
-assert.match(cockpitSource, /See all →/, "needs-you strip exposes a See all action for hidden rows");
+// The strip is a single digest band (count + See all), never a wall of rows.
+assert.match(cockpitSource, /things need you/, "needs-you strip is one digest band with a count, not per-item rows");
+assert.match(cockpitSource, /the crew handles the rest on its own/, "needs-you strip reassures instead of listing every item");
+assert.match(cockpitSource, /if \(needs === 0\) return null/, "needs-you strip disappears entirely when nothing is waiting");
+assert.match(cockpitSource, /See all →/, "needs-you strip exposes a See all action routing to the full list");
 
 const approvalCardSource = readFileSync("src/features/approvals/ApprovalCard.tsx", "utf8");
 const approvalCssSource = readFileSync("src/features/approvals/approvals.module.css", "utf8");
@@ -491,6 +491,52 @@ assert.doesNotMatch(viewSource.slice(retryStart, retryEnd), /archived/, "re-run 
   assert.equal(agentInfo.category, "needs-input", "a genuine agent ask stays needs-input");
   assert.ok(!agentInfo.systemGenerated, "a genuine agent ask is not system-generated");
   assert.match(issueReasoningTrail(agentIssue).requestedAction ?? "", /PORTFOLIO_OFFER_API_TOKEN/, "the agent's real ACTION NEEDED is preserved verbatim");
+}
+
+// ── status pill: automation off must read paused, not shipping ──────────────
+{
+  const statusColony = (companyOver = {}, approvals = []) => buildColony({
+    company: {
+      id: "co-status",
+      name: "Status Co",
+      ticker: "STAT",
+      sector: "Web",
+      agentIds: ["agent-1"],
+      frozen: false,
+      createdAt: "",
+      createdAtMs: Date.now(),
+      updatedAt: "",
+      apexGoal: { title: "Ship sites", metric: "Weekly Revenue", target: "1000", unit: "currency", current: "0" },
+      ...companyOver,
+    },
+    rollup: {
+      companyId: "co-status",
+      memberCount: 1,
+      dailySpentUsd: 0,
+      monthlySpentUsd: 0,
+      totalSpentUsd: 0,
+      dailyRemainingUsd: null,
+      monthlyRemainingUsd: null,
+      totalRemainingUsd: null,
+    },
+    revenueShare: undefined,
+    approvals,
+    agentsById: new Map([["agent-1", { id: "agent-1", name: "Ada Lovelace", runtime: "hermes" }]]),
+    tasks: [
+      { id: "t_done", title: "Build preview", status: "done", source: "company:co-status:r1", updatedAt: 10, result: "done" },
+      { id: "t_done2", title: "QA preview", status: "done", source: "company:co-status:r1", updatedAt: 11, result: "done" },
+    ],
+  });
+
+  // The live WEBS bug: staffed, work done, alignment high, automation OFF → the
+  // grid card read SHIPPING. A stopped company must read paused.
+  assert.equal(statusColony({ autonomy: false }).status, "paused", "automation off derives paused, never shipping");
+  assert.equal(statusColony({}).status, "paused", "absent autonomy flag (never launched) also derives paused");
+  assert.equal(statusColony({ autonomy: true }).status, "shipping", "automation on with aligned work derives shipping");
+  assert.equal(statusColony({ autonomy: false, frozen: true }).status, "paused", "frozen still derives paused");
+  assert.equal(statusColony({ autonomy: false, status: "review" }).status, "review", "an explicit status override still wins");
+  const pausedWithApprovals = statusColony({ autonomy: false }, [{ id: "ap1", agentId: "agent-1", agentName: "Ada", kind: "spend", amountUsd: 5, reason: "r", expiresAtMs: Date.now() + 60_000 }]);
+  assert.equal(pausedWithApprovals.status, "paused", "waiting approvals do not flip a stopped company to review");
 }
 
 console.log("company-issues: all assertions passed");

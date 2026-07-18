@@ -164,6 +164,10 @@ export interface FleetMachine {
   lat: number;
   lon: number;
   uptime: string;
+  /** Whether this machine's hivemind-linkd can host the remote Shell panel.
+   *  Derived from the collector-reported capability (falling back to the
+   *  machine OS) in the dashboard mapper; undefined means "assume available". */
+  remoteShell?: boolean;
   system?: FleetMachineSystem;
   networkIssue?: FleetMachineNetworkIssue;
   syncIssue?: FleetMachineSyncIssue;

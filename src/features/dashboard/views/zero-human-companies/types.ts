@@ -1,7 +1,7 @@
 // Zero Human Companies — shared types.
 // Ported from the nextjs-companies prototype; `id` fields added on Agent /
 // PoolAgent so the live view can persist real agent membership.
-import type { CompanyRevenueEventSource, CompanyRevenueRollup } from "@/lib/types/company-revenue";
+import type { CompanyRevenueEventSource, CompanyRevenueRailStatus, CompanyRevenueRollup } from "@/lib/types/company-revenue";
 import type { AnalyticsProviderKey } from "@/lib/services/company-analytics/types";
 import type { CompanyApprovalPolicy, CompanyAutonomyPauseMode, CompanyDirective, CompanyExecutionConfig, CompanyPricingProposal, CompanyProductCatalog } from "@/lib/types/company";
 import type { CompanyExecutionSelection } from "@/lib/services/company-execution-capabilities";
@@ -184,6 +184,8 @@ export interface Colony {
   capabilityCapital: CapabilityCapital;
   revenue?: Revenue;
   revenueShare?: CompanyRevenueRollup;
+  /** Whether money can land in the ledger without a human (x402 offers / Stripe webhook). */
+  revenueRail?: CompanyRevenueRailStatus;
   /** Latest labeled Work Board forecast for this company; quoted, not booked. */
   pipeline?: WorkBoardPipelineSummary;
   velocity: number[];

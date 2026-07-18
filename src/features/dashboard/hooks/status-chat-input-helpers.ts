@@ -15,7 +15,13 @@ export function runtimePromptFromPayload(parsed: any) {
       const label = String(choice.label ?? choice.value ?? "").trim();
       const value = String(choice.value ?? choice.label ?? "").trim();
       const permissionMode = String(choice.permissionMode ?? "").trim();
-      return label || value ? { label: label || value, value: value || label, permissionMode } : "";
+      const suppressUserMessage = choice.suppressUserMessage === true;
+      return label || value ? {
+        label: label || value,
+        value: value || label,
+        permissionMode,
+        ...(suppressUserMessage ? { suppressUserMessage: true } : {}),
+      } : "";
     }).filter(Boolean)
     : [];
   const promptType = /approval/i.test(type)

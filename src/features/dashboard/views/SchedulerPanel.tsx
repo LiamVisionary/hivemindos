@@ -8,6 +8,7 @@ import type { SchedulerJob, SchedulerRunHistoryEntry, SchedulerRunState, Automat
 import type { NewTaskPayload } from "@/components/task-modal";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import { runtimeDisplayLabel } from "@/lib/types/agent-runtime";
+import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 import type { AgentSchedule, MachineGroup, WorkView } from "@/features/dashboard/dashboard-types";
 import styles from "@/components/scheduler/scheduler-tokens.module.css";
 
@@ -115,9 +116,9 @@ export function SchedulerPanel(props: SchedulerPanelProps) {
     setScheduleImportStatus(`Loaded ${schedule.name} into the editor.`);
   };
   const deleteJob = (job: SchedulerJob) => {
-    if (typeof window !== "undefined"
-      && !window.confirm(`Delete “${job.name}”? This removes the automation and its run history from the shared vault.`)) return;
-    removeSchedule(job.id);
+    void confirmUserAction(`Delete “${job.name}”? This removes the automation and its run history from the shared vault.`).then((confirmed) => {
+      if (confirmed) removeSchedule(job.id);
+    });
   };
   const historyForJob = (job: SchedulerJob) => {
     const schedule = findScheduleForJob(job);

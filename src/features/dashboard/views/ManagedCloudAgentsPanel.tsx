@@ -29,6 +29,7 @@ import {
   type ManagedCloudPlan,
   type HivemindCloudCommercialPlan,
 } from "@/lib/services/managed-cloud-agents-contract";
+import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 import { LoadingBar, Skeleton, Spinner } from "@/features/dashboard/views/zero-human-companies/primitives";
 import "@/features/dashboard/views/zero-human-companies/theme.css";
 import styles from "./ManagedCloudAgentsPanel.module.css";
@@ -227,7 +228,7 @@ export function ManagedCloudAgentsPanel() {
   }), [run, topUpUsd, walletId]);
 
   const lifecycle = useCallback((agent: ManagedCloudAgent, action: "start" | "stop" | "delete") => run(`${action}:${agent.id}`, async () => {
-    if (action === "delete" && !window.confirm(`Delete ${agent.name} and its persistent workspace? This cannot be undone.`)) return;
+    if (action === "delete" && !(await confirmUserAction(`Delete ${agent.name} and its persistent workspace? This cannot be undone.`))) return;
     await managedCloudAction({ action, instanceId: agent.id });
   }), [run]);
 

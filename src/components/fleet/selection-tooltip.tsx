@@ -504,10 +504,14 @@ function FleetMachineDetailPanel({
         {onOpenShell && machine.collectorUrl ? (
           <Tooltip>
             <TooltipTrigger asChild>
+              {/* aria-disabled (not disabled) when the machine's linkd has no
+                  shell service, so the explanatory tooltip still fires. */}
               <button
                 type="button"
+                aria-disabled={machine.remoteShell === false}
                 onClick={(event) => {
                   event.stopPropagation();
+                  if (machine.remoteShell === false) return;
                   onOpenShell(machine);
                 }}
                 aria-label={`Open terminal on ${machine.name}`}
@@ -523,7 +527,8 @@ function FleetMachineDetailPanel({
                   fontFamily: "var(--f-mono)",
                   fontSize: 9.5,
                   fontWeight: 800,
-                  cursor: "pointer",
+                  cursor: machine.remoteShell === false ? "not-allowed" : "pointer",
+                  opacity: machine.remoteShell === false ? 0.55 : undefined,
                 }}
               >
                 <SquareTerminal size={12} aria-hidden="true" />
@@ -531,7 +536,9 @@ function FleetMachineDetailPanel({
               </button>
             </TooltipTrigger>
             <TooltipContent>
-              Open a shell on {machine.name} over the hive link
+              {machine.remoteShell === false
+                ? `Remote shell isn't available on ${machine.name} yet — Windows machines don't support it.`
+                : `Open a shell on ${machine.name} over the hive link`}
             </TooltipContent>
           </Tooltip>
         ) : null}

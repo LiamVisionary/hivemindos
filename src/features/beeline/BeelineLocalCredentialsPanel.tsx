@@ -9,6 +9,7 @@ import {
   storeNativeBeelineCredential,
 } from "@/lib/native/beeline-credentials";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 import type {
   BeelineLocalCredential,
   BeelineLocalCredentialKind,
@@ -116,7 +117,7 @@ export function BeelineLocalCredentialsPanel({
   }, [allowedMethods, headerStyle, kind, label, onActivity, onError, onMessage, origin, password, profile.displayName, profile.id, refresh, restricted, token, username]);
 
   const remove = React.useCallback(async (credential: BeelineLocalCredential) => {
-    if (!window.confirm(`Delete ${credential.label} from this device's secure credential store?`)) return;
+    if (!(await confirmUserAction(`Delete ${credential.label} from this device's secure credential store?`))) return;
     setBusy(credential.id);
     onError("");
     try {

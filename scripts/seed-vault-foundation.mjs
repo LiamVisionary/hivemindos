@@ -118,6 +118,8 @@ This vault is the shared brain for HivemindOS agents. It should stay useful to h
 - For synthesized entity/concept/summary knowledge under \`Synthesis/Compiled Knowledge/<domain>/\`, load the \`hive-brain-compiled-wiki\` skill and prefer \`brain_search_knowledge\` or \`/api/brain/knowledge\` action \`search\` before broad full-vault recall.
 - Recall before relying on prior preferences, decisions, instructions, goals, commitments, artifacts, lessons, or project context.
 - Save shared memories under \`Memory/Distillations/Agent Memory/\` through the API, include available agent/runtime/machine/Tailnet provenance, and prefer \`proof: "auto"\` unless explicit proof is requested.
+- Memory Markdown remains authoritative. Cross-process writes use a recovery journal, while verified compressed checkpoints and content-addressed deltas live under \`${folders.brainServicesFolder}/Index Generations/\`; Agent Memory keeps at most 256 generations with a checkpoint every 32, full-vault search keeps 32 with a checkpoint every 4, and each kind records visible replay coverage after pruning. The established JSONL paths remain complete compatibility mirrors.
+- Brain capsules require an explicit project or memory-id scope, open read-only, can be passphrase-encrypted through a named environment variable, and route every import candidate through Brain Review instead of writing memory directly.
 - Record run receipts and high-volume operational events with \`record-operation\`; they stay in the bounded local journal at \`~/.hivemindos/brain/operational-events.jsonl\` instead of durable Agent Memory. \`remember-action\` remains a compatibility alias and does not write durable memory.
 - Durable memories use a canonical \`memoryKey\`. Evolve the existing head when reviewed truth changes; do not create a competing active record with the same key.
 - Pattern mining is review-gated. Run \`hive-brain mine-patterns\` as a dry run, and use \`--enqueue\` only when proposals should enter Brain Review. Never auto-apply mined memory, skill, or job proposals.
@@ -516,7 +518,7 @@ HivemindOS seeds a small Obsidian-native skill pack into the shared Skills shelf
 - \`obsidian-bases\`: YAML \`.base\` files for native database-like views over vault notes.
 - \`json-canvas\`: Obsidian \`.canvas\` files for visual maps, project boards, flowcharts, and concept graphs.
 - \`defuddle\`: optional clean web-page-to-markdown extraction when the CLI is installed.
-- \`hive-brain-memory\`: HivemindOS typed Shared Brain Memory playbook for recall, durable writes, and evolving stale memories while preserving superseded history.
+- \`hive-brain-memory\`: HivemindOS typed Shared Brain Memory playbook for transactional writes, verified generation replay, evolving stale memories, and scoped review-gated capsules.
 - \`hive-brain-compiled-wiki\`: HivemindOS compiled-brain playbook for entity/concept/summary wiki writes, compiled-wiki search, graph-native MCP reads, wiki health, and human collective shared-brain contribution rules.
 
 ## Seeded Native Views
@@ -552,6 +554,7 @@ HivemindOS uses a generated lexical search index as the default broad shared-bra
 - Typed Agent Memory is checked first.
 - When typed memory is weak, full-vault recall searches \`${folders.brainServicesFolder}/Full Vault Search Index.jsonl\` before falling back to ripgrep, plain grep, or a filesystem walk.
 - The generated JSONL index is disposable and can be rebuilt from markdown notes.
+- Every rebuild publishes a checksummed generation under \`${folders.brainServicesFolder}/Index Generations/full-vault/\`, using a full or compressed checkpoint every four generations and a content-addressed delta between checkpoints when smaller, then updates the established JSONL compatibility mirror. The service retains at most 32 generations and reports the replay boundary after pruning.
 - The index stores compact terms and excerpts, not embeddings or model output.
 
 ## Refresh
@@ -1311,6 +1314,9 @@ await Promise.all([
   folders.kanbanFolder,
   folders.notificationsFolder,
   folders.brainServicesFolder,
+  join(folders.brainServicesFolder, "Index Generations"),
+  join(folders.brainServicesFolder, "Index Generations", "agent-memory"),
+  join(folders.brainServicesFolder, "Index Generations", "full-vault"),
   join(folders.brainServicesFolder, "Queen Bee"),
   join(folders.brainServicesFolder, "Queen Bee", "nodes"),
   join(folders.brainServicesFolder, "Queen Bee", "inbox"),

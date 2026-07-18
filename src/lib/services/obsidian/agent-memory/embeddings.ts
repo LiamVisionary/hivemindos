@@ -13,6 +13,7 @@ import type { AgentMemoryRecord } from "./types";
 export const AGENT_MEMORY_EMBEDDINGS_PATH = `${DEFAULT_SHARED_VAULT.brainServicesFolder}/Agent Memory Embeddings.jsonl`;
 
 const EMBEDDINGS_SCHEMA = "hivemindos.agent-memory-embedding.v1";
+const EMBEDDING_IDENTITY_SCHEMA = "hivemindos.embedding-identity.v1";
 const QUERY_TIMEOUT_MS = 3_500;
 const WRITE_TIMEOUT_MS = 8_000;
 const MAX_BATCH = 16;
@@ -22,6 +23,7 @@ type EmbeddingRow = {
   schema: typeof EMBEDDINGS_SCHEMA;
   memoryId: string;
   model: string;
+  configHash?: string;
   contentHash: string;
   dimensions: number;
   vector: number[];
@@ -44,6 +46,16 @@ export type AgentMemoryEmbeddingsConfig = {
   hasApiKey: boolean;
 };
 
+export type AgentMemoryEmbeddingIdentity = {
+  schema: typeof EMBEDDING_IDENTITY_SCHEMA;
+  provider: "openai-compatible";
+  model: string;
+  requestedDimensions: number;
+  maxInputCharacters: number;
+  endpointHash?: string;
+  configHash: string;
+};
+
 export function agentMemoryEmbeddingsConfig(): AgentMemoryEmbeddingsConfig {
   const url = process.env.HIVEMINDOS_EMBEDDINGS_URL?.trim();
   return {
@@ -52,6 +64,30 @@ export function agentMemoryEmbeddingsConfig(): AgentMemoryEmbeddingsConfig {
     model: process.env.HIVEMINDOS_EMBEDDINGS_MODEL?.trim() || "text-embedding-3-small",
     dimensions: Math.max(16, Math.trunc(Number(process.env.HIVEMINDOS_EMBEDDINGS_DIMENSIONS || 256)) || 256),
     hasApiKey: Boolean(process.env.HIVEMINDOS_EMBEDDINGS_API_KEY?.trim()),
+  };
+}
+
+export function agentMemoryEmbeddingIdentity(config = agentMemoryEmbeddingsConfig()): AgentMemoryEmbeddingIdentity {
+  let endpointHash: string | undefined;
+  if (config.url) {
+    try {
+      const parsed = new URL(embeddingsEndpoint(config.url));
+      endpointHash = `sha256:${createHash("sha256").update(`${parsed.origin}${parsed.pathname}`).digest("hex")}`;
+    } catch {
+      endpointHash = `sha256:${createHash("sha256").update(config.url.split("?")[0]).digest("hex")}`;
+    }
+  }
+  const identity = {
+    schema: EMBEDDING_IDENTITY_SCHEMA as typeof EMBEDDING_IDENTITY_SCHEMA,
+    provider: "openai-compatible" as const,
+    model: config.model,
+    requestedDimensions: config.dimensions,
+    maxInputCharacters: MAX_EMBED_CHARS,
+    endpointHash,
+  };
+  return {
+    ...identity,
+    configHash: `sha256:${createHash("sha256").update(JSON.stringify(identity)).digest("hex")}`,
   };
 }
 
@@ -140,8 +176,9 @@ export async function upsertAgentMemoryEmbedding(root: string, record: AgentMemo
   if (!config.enabled) return { embedded: false, reason: "disabled" as const };
   try {
     const hash = contentHashFor(record);
+    const identity = agentMemoryEmbeddingIdentity(config);
     const existing = (await readEmbeddingRows(root)).get(record.id);
-    if (existing && existing.contentHash === hash && existing.model === config.model) {
+    if (existing && existing.contentHash === hash && existing.configHash === identity.configHash) {
       return { embedded: false, reason: "unchanged" as const };
     }
     const vectors = await embedTexts([embeddingText(record)], WRITE_TIMEOUT_MS);
@@ -150,6 +187,7 @@ export async function upsertAgentMemoryEmbedding(root: string, record: AgentMemo
       schema: EMBEDDINGS_SCHEMA,
       memoryId: record.id,
       model: config.model,
+      configHash: identity.configHash,
       contentHash: hash,
       dimensions: vectors[0].length,
       vector: vectors[0],
@@ -162,7 +200,8 @@ export async function upsertAgentMemoryEmbedding(root: string, record: AgentMemo
 }
 
 function cosineSimilarity(left: number[], right: number[]) {
-  const length = Math.min(left.length, right.length);
+  if (left.length !== right.length) return 0;
+  const length = left.length;
   if (!length) return 0;
   let dot = 0;
   let leftNorm = 0;
@@ -212,12 +251,19 @@ export async function semanticScoresForRecords(root: string, query: string, reco
   if (!config.enabled || !query.trim() || !records.length) return scores;
   const rows = await readEmbeddingRows(root).catch(() => new Map<string, EmbeddingRow>());
   if (!rows.size) return scores;
+  const identity = agentMemoryEmbeddingIdentity(config);
   const vectors = await embedTexts([query], QUERY_TIMEOUT_MS);
   const queryVector = vectors?.[0];
   if (!queryVector) return scores;
   for (const record of records) {
     const row = rows.get(record.id);
-    if (!row) continue;
+    if (
+      !row
+      || row.configHash !== identity.configHash
+      || row.model !== identity.model
+      || row.dimensions !== queryVector.length
+      || row.contentHash !== contentHashFor(record)
+    ) continue;
     const similarity = cosineSimilarity(queryVector, row.vector);
     if (similarity > 0) scores.set(record.id, Math.max(0, Math.min(1, similarity)));
   }
@@ -229,9 +275,10 @@ export async function backfillAgentMemoryEmbeddings(root: string, records: Agent
   const config = agentMemoryEmbeddingsConfig();
   if (!config.enabled) return { enabled: false, embedded: 0, skipped: records.length, failed: 0 };
   const rows = await readEmbeddingRows(root);
+  const identity = agentMemoryEmbeddingIdentity(config);
   const pending = records.filter((record) => {
     const existing = rows.get(record.id);
-    return !existing || existing.contentHash !== contentHashFor(record) || existing.model !== config.model;
+    return !existing || existing.contentHash !== contentHashFor(record) || existing.configHash !== identity.configHash;
   });
   let embedded = 0;
   let failed = 0;
@@ -247,6 +294,7 @@ export async function backfillAgentMemoryEmbeddings(root: string, records: Agent
       schema: EMBEDDINGS_SCHEMA,
       memoryId: record.id,
       model: config.model,
+      configHash: identity.configHash,
       contentHash: contentHashFor(record),
       dimensions: vectors[index].length,
       vector: vectors[index],
@@ -259,6 +307,15 @@ export async function backfillAgentMemoryEmbeddings(root: string, records: Agent
 
 export async function agentMemoryEmbeddingsCoverage(root: string, records: AgentMemoryRecord[]) {
   const rows = await readEmbeddingRows(root).catch(() => new Map<string, EmbeddingRow>());
-  const covered = records.filter((record) => rows.has(record.id)).length;
-  return { config: agentMemoryEmbeddingsConfig(), stored: rows.size, covered, records: records.length };
+  const config = agentMemoryEmbeddingsConfig();
+  const identity = agentMemoryEmbeddingIdentity(config);
+  const covered = records.filter((record) => {
+    const row = rows.get(record.id);
+    return row?.configHash === identity.configHash && row.contentHash === contentHashFor(record);
+  }).length;
+  const mismatched = records.filter((record) => {
+    const row = rows.get(record.id);
+    return Boolean(row && (row.configHash !== identity.configHash || row.contentHash !== contentHashFor(record)));
+  }).length;
+  return { config, identity, stored: rows.size, covered, mismatched, records: records.length };
 }

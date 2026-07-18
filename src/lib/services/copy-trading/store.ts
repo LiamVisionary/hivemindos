@@ -231,6 +231,7 @@ export function emptyRuntimeState(configId: string): CopyTradeRuntimeState {
   return {
     configId,
     consumedTxRefs: [],
+    pendingSignals: [],
     openPositions: {},
     stats: { polls: 0, mirrored: 0, skipped: 0, errors: 0 },
     lastError: null,
@@ -244,6 +245,7 @@ function trimState(state: CopyTradeRuntimeState): CopyTradeRuntimeState {
   return {
     ...state,
     consumedTxRefs: state.consumedTxRefs.slice(-MAX_CONSUMED_REFS),
+    pendingSignals: state.pendingSignals?.slice(-100),
     events: state.events.slice(-MAX_EVENTS_PER_CONFIG),
     agentAnalysis: state.agentAnalysis
       ? {

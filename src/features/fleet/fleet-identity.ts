@@ -113,6 +113,28 @@ export function isDesktopMachineOs(os?: string) {
   return /^(windows|win32|linux)$/i.test(os ?? "");
 }
 
+export function isWindowsMachineOs(os?: string) {
+  return /^(windows|win32)$/i.test(os ?? "");
+}
+
+/**
+ * Can this machine host the remote Shell panel? The shell runs inside the
+ * machine's hivemind-linkd, whose Windows builds compile the unix-shell spawn
+ * path out (cmd/hivemind-linkd/main.go gates the service on GOOS). A
+ * machine-reported capability wins when present — collector /health
+ * `capabilities.remoteShell` — so a future Windows linkd that gains shell
+ * support opens the gate by flipping its own flag, with no dashboard change.
+ * The OS predicate is only the fallback for machines whose collector predates
+ * the flag.
+ */
+export function machineRemoteShellAvailable(
+  os?: string,
+  remoteShellCapability?: boolean,
+) {
+  if (typeof remoteShellCapability === "boolean") return remoteShellCapability;
+  return !isWindowsMachineOs(os);
+}
+
 export function isVisibleFleetMachine(
   machine: Pick<FleetMachineIdentity, "self" | "name" | "dnsName" | "os">,
 ) {

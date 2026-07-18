@@ -2,6 +2,8 @@
 
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
+import { relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const routing = await import(
   new URL("../src/lib/config/openai-provider-routing.ts", import.meta.url)
@@ -157,9 +159,14 @@ function sourceFiles(directoryUrl) {
   });
 }
 
+const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
+function repositoryRelativePath(url) {
+  return relative(repositoryRoot, fileURLToPath(url)).split(sep).join("/");
+}
+
 const oauthBackendOwners = sourceFiles(new URL("../src/", import.meta.url))
   .filter((url) => /chatgpt\.com\/backend-api\/codex/.test(readFileSync(url, "utf8")))
-  .map((url) => url.pathname.split("/hivemind-os/")[1]);
+  .map(repositoryRelativePath);
 assert.deepEqual(
   oauthBackendOwners,
   ["src/lib/services/openai-oauth.ts"],
@@ -168,7 +175,7 @@ assert.deepEqual(
 
 const directOpenAiChatEndpoints = sourceFiles(new URL("../src/", import.meta.url))
   .filter((url) => /api\.openai\.com\/v1\/chat\/completions/.test(readFileSync(url, "utf8")))
-  .map((url) => url.pathname.split("/hivemind-os/")[1]);
+  .map(repositoryRelativePath);
 assert.deepEqual(
   directOpenAiChatEndpoints,
   ["src/lib/services/openai-preferred-chat.ts"],

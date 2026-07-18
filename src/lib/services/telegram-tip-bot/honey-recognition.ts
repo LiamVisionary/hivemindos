@@ -3,7 +3,6 @@ import type { TgMessage, TgMessageReactionUpdated, TgUser } from "./telegram-api
 export const HONEY_PEER_TIP_AMOUNT = 1;
 export const HONEY_PEER_DAILY_GIVER_LIMIT = 3;
 export const HONEY_PEER_DAILY_RECIPIENT_LIMIT = 5;
-export const HONEY_PEER_LINK_COOLDOWN_DAYS = 7;
 export const HONEY_LEGACY_HIVE_PER_HONEY = 1_000_000;
 export const HONEY_LEGACY_TIP_SEED_VERSION = "hive-tip-receivers-v1";
 export const HONEY_MICRO_PER_HONEY = 1_000_000n;
@@ -62,18 +61,6 @@ export function honeyRecognitionReactionWasAdded(
   update: Pick<TgMessageReactionUpdated, "old_reaction" | "new_reaction">,
 ): boolean {
   return !hasRecognitionReaction(update.old_reaction) && hasRecognitionReaction(update.new_reaction);
-}
-
-export function shouldSeedHoneyRecognitionReaction(message: TgMessage): boolean {
-  if (
-    (message.chat.type !== "group" && message.chat.type !== "supergroup")
-    || !message.from
-    || message.from.is_bot
-  ) {
-    return false;
-  }
-  const commandText = (message.text ?? message.caption)?.trimStart();
-  return !commandText?.startsWith("/");
 }
 
 function hasRecognitionReaction(reactions: TgMessageReactionUpdated["new_reaction"]): boolean {

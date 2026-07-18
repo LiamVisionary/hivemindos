@@ -20,8 +20,6 @@ export type WalletRewardsActionsSlice = {
   walletVaultBackup?: { status?: WalletRewardsVaultStatus; busy?: boolean; message?: string };
   bankrRecipientAddress?: string;
   formatHiveAmount?: (amount: number) => string;
-  onConnectBankrWallet?: () => Promise<string | undefined>;
-  onClaimBankrHive?: (recipient: string) => Promise<{ ok?: boolean; error?: string; txHash?: string; amount?: number } | undefined>;
   onReturnAllHiveToHoney?: () => Promise<unknown>;
   onRunWalletVaultBackupAction?: (action: "refresh" | "restore") => unknown;
 };

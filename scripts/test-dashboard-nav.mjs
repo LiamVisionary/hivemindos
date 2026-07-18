@@ -31,11 +31,11 @@ const navigation = await import(new URL("../src/features/dashboard/dashboard-nav
 assert.deepEqual(
   navigation.APP_NAV_SHELF_GROUPS.map((group) => group.map((item) => item.id)),
   [
-    ["kanban", "vault", "chat", "wallet", "trade"],
+    ["kanban", "vault", "chat", "wallet", "trade", "socials"],
     ["scheduler", "swarm", "history"],
     ["governance", "cloud", "aeon", "integrations", "notifications"],
   ],
-  "App nav shelf groups should derive Work/Brain/Chat/Wallets/Trade, Schedules/Swarm/History, Companies/Cloud/Aeon/Integrations/Alerts",
+  "App nav shelf groups should derive Work/Brain/Chat/Wallets/Trade/Socials, Schedules/Swarm/History, Companies/Cloud/Aeon/Integrations/Alerts",
 );
 assert.equal(navigation.shelfSlotForView("agents"), "agents", "Fleet lights the brand slot");
 assert.equal(navigation.shelfSlotForView("my-apps"), "integrations", "Apps & Services lights the Integrations slot");

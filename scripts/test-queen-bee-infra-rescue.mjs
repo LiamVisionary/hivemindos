@@ -23,7 +23,11 @@ const INFRA_RESULT = [
   "ACTION NEEDED: Review the delegate failures above.",
 ].join("\n");
 
-const CONTENT_RESULT = [
+// "No final response" is a runtime flake (the tool loop ended without emitting
+// text — the work never got a real attempt), reclassified as infrastructure on
+// 2026-07-16 after 57 live WEBS tasks stranded on it at attempt 1/3. A chain
+// containing it now rescues like any transport failure.
+const NO_OUTPUT_RESULT = [
   "Queen Bee autonomous pickup exhausted all eligible delegates and now needs human input.",
   "Failures:",
   "- Grace Hopper: The operation was aborted due to timeout",
@@ -31,18 +35,41 @@ const CONTENT_RESULT = [
   "ACTION NEEDED: Review the delegate failures above.",
 ].join("\n");
 
+// A genuine content/config failure — the work or the agent's configuration is
+// wrong, and no retry fixes it. This must always stay with the human.
+const CONTENT_RESULT = [
+  "Queen Bee autonomous pickup exhausted all eligible delegates and now needs human input.",
+  "Failures:",
+  "- Grace Hopper: The operation was aborted due to timeout",
+  "- HermesAgent01: The agent's selected model (venice / venice-uncensored-role-play) cannot run on this machine's hermes config: Unknown provider 'venice'.",
+  "ACTION NEEDED: Review the delegate failures above.",
+].join("\n");
+
 // Stale-claim reclaim stranding: the claimed run's host process died (server
 // restart) — the reclaim's exact needs-human format (live t_mr7nml51_xvj4a).
 const RECLAIM_RESULT = "Reclaimed after 3824s without worker progress. Failure reason: timeout. Attempts: 3/3.";
 
+// Single-delegate strandings carry a one-line result instead of the exhausted
+// format — the shape of 74 of WEBS's 115 needs-human tasks on 2026-07-16.
+const SINGLE_NO_OUTPUT_RESULT =
+  "Queen Bee autonomous pickup failed for HermesMain: hermes -z: no final response was produced; treating the run as failed.";
+const SINGLE_TIMEOUT_RESULT =
+  "Queen Bee autonomous pickup failed for Grace Hopper: The operation was aborted due to timeout";
+const SINGLE_CONTENT_RESULT =
+  "Queen Bee autonomous pickup failed for HermesMain: hermes -z: agent failed: Unknown provider 'venice'. Check 'hermes model' for available providers.";
+
 // ── Classifier unit checks ───────────────────────────────────────────────────
 assert.equal(isInfrastructureOnlyExhaustion(INFRA_RESULT), true, "capacity + transport = infrastructure-only");
-assert.equal(isInfrastructureOnlyExhaustion(CONTENT_RESULT), false, "a no-output failure makes the chain a real failure");
+assert.equal(isInfrastructureOnlyExhaustion(NO_OUTPUT_RESULT), true, "no-final-response is a runtime flake — retry, don't page the human");
+assert.equal(isInfrastructureOnlyExhaustion(CONTENT_RESULT), false, "a config/content failure makes the chain a real failure");
 assert.equal(isInfrastructureOnlyExhaustion("ACTION NEEDED: Provide the STRIPE_API_KEY."), false, "genuine human asks are untouched");
 assert.equal(isInfrastructureOnlyExhaustion(undefined), false);
 assert.equal(isInfraStrandedResult(RECLAIM_RESULT), true, "a stale-claim reclaim stranding is infrastructure");
 assert.equal(isInfraStrandedResult("Reclaimed after 100s without worker progress. Failure reason: agent-error. Attempts: 3/3."), false, "non-infra reclaim reasons are not rescued");
 assert.equal(isInfraStrandedResult(CONTENT_RESULT), false, "content failures stay with the human");
+assert.equal(isInfraStrandedResult(SINGLE_NO_OUTPUT_RESULT), true, "single-delegate no-final-response stranding is rescueable");
+assert.equal(isInfraStrandedResult(SINGLE_TIMEOUT_RESULT), true, "single-delegate timeout stranding is rescueable");
+assert.equal(isInfraStrandedResult(SINGLE_CONTENT_RESULT), false, "single-delegate config failures stay with the human");
 
 // ── Behavioral checks against the real store in a temp vault ────────────────
 const vaultPath = await mkdtemp(join(tmpdir(), "hivemind-infra-rescue-"));

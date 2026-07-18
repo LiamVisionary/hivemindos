@@ -1,0 +1,463 @@
+/*
+ * Socials desk styles. Like trade-desk.css this deliberately re-declares no
+ * tokens or fonts: everything inherits from the global .fr-root scope in
+ * fleet-hive.css (--bg/--panel/--line/--fg/--honey/--live/--danger/--radius).
+ */
+
+.sc-wrap {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 18px 22px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sc-body {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 980px) {
+  .sc-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── account rail ─────────────────────────────────────────────────────── */
+
+.sc-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sc-acct {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 11px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.sc-acct:hover {
+  border-color: var(--line-3);
+}
+
+.sc-acct[data-active="true"] {
+  border-color: var(--honey-line);
+  background: var(--panel-hi);
+}
+
+.sc-acct-glyph {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--panel-2);
+  border: 1px solid var(--line-2);
+  color: var(--fg-2);
+  flex: none;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sc-acct-name {
+  font-weight: 640;
+  color: var(--fg);
+  font-size: 13.5px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.sc-acct-sub {
+  color: var(--fg-3);
+  font-size: 11.5px;
+  margin-top: 2px;
+}
+
+.sc-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  margin-left: auto;
+}
+
+.sc-dot[data-tone="live"] { background: var(--live); }
+.sc-dot[data-tone="warn"] { background: var(--honey); }
+.sc-dot[data-tone="off"] { background: var(--fg-4); }
+
+.sc-connect-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 12px;
+  border: 1px dashed var(--line-3);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--fg-2);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.sc-connect-btn:hover {
+  border-color: var(--honey-line);
+  color: var(--fg);
+}
+
+/* ── cards ────────────────────────────────────────────────────────────── */
+
+.sc-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.sc-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 15px 16px;
+}
+
+.sc-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.sc-card-title {
+  font-weight: 680;
+  font-size: 13.5px;
+  color: var(--fg);
+}
+
+.sc-card-hint {
+  color: var(--fg-3);
+  font-size: 11.5px;
+}
+
+.sc-probe {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  font-size: 12.5px;
+  color: var(--fg-2);
+  line-height: 1.45;
+}
+
+.sc-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sc-pill {
+  font-size: 11px;
+  font-weight: 620;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  color: var(--fg-3);
+  background: var(--panel-2);
+}
+
+.sc-pill[data-support="supported"] {
+  color: var(--live);
+  border-color: color-mix(in srgb, var(--live) 34%, transparent);
+  background: var(--live-soft);
+}
+
+.sc-pill[data-support="limited"] {
+  color: var(--honey);
+  border-color: var(--honey-line);
+  background: var(--honey-soft);
+}
+
+.sc-mode-badge {
+  font-size: 11px;
+  font-weight: 660;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  color: var(--fg-2);
+  background: var(--panel-2);
+}
+
+/* ── forms ────────────────────────────────────────────────────────────── */
+
+.sc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.sc-label {
+  font-size: 11px;
+  font-weight: 640;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+
+.sc-input,
+.sc-select {
+  background: var(--panel-2);
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+  color: var(--fg);
+  font-size: 13px;
+  padding: 8px 10px;
+  outline: none;
+  min-width: 0;
+}
+
+.sc-input:focus,
+.sc-select:focus {
+  border-color: var(--honey-line);
+}
+
+.sc-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.sc-daychips {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.sc-daychip {
+  border: 1px solid var(--line-2);
+  background: var(--panel-2);
+  color: var(--fg-3);
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 640;
+  padding: 5px 9px;
+  cursor: pointer;
+}
+
+.sc-daychip[data-on="true"] {
+  color: var(--honey);
+  border-color: var(--honey-line);
+  background: var(--honey-soft);
+}
+
+.sc-btn {
+  border: 1px solid var(--line-2);
+  background: var(--panel-2);
+  color: var(--fg);
+  border-radius: 9px;
+  font-size: 12.5px;
+  font-weight: 640;
+  padding: 8px 13px;
+  cursor: pointer;
+  transition: border-color 120ms ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.sc-btn:hover:not(:disabled) {
+  border-color: var(--honey-line);
+}
+
+.sc-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.sc-btn[data-tone="primary"] {
+  background: var(--honey-soft);
+  border-color: var(--honey-line);
+  color: var(--honey);
+}
+
+.sc-btn[data-tone="danger"] {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 34%, transparent);
+}
+
+/* ── context sources ──────────────────────────────────────────────────── */
+
+.sc-src {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  font-size: 12.5px;
+}
+
+.sc-src-kind {
+  font-size: 10.5px;
+  font-weight: 680;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+  flex: none;
+}
+
+.sc-src-ref {
+  color: var(--fg);
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.sc-src-note {
+  color: var(--fg-3);
+  font-size: 11.5px;
+}
+
+.sc-src-remove {
+  margin-left: auto;
+  border: none;
+  background: none;
+  color: var(--fg-4);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.sc-src-remove:hover {
+  color: var(--danger);
+}
+
+/* ── modal ────────────────────────────────────────────────────────────── */
+
+.sc-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(15, 12, 7, 0.45);
+  backdrop-filter: blur(14px);
+}
+
+.sc-modal {
+  width: min(680px, 100%);
+  max-height: min(80vh, 720px);
+  overflow: auto;
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sc-plat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 8px;
+}
+
+.sc-plat {
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--fg-2);
+  font-size: 12.5px;
+  font-weight: 640;
+  padding: 12px 8px;
+  cursor: pointer;
+  text-align: center;
+}
+
+.sc-plat[data-active="true"] {
+  color: var(--honey);
+  border-color: var(--honey-line);
+  background: var(--honey-soft);
+}
+
+.sc-note {
+  font-size: 11.5px;
+  color: var(--fg-3);
+  line-height: 1.5;
+}
+
+/* per-variable shared-env credential rows in the connect modal */
+.sc-env-var {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  margin-top: 4px;
+}
+
+.sc-env-var-name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--fg-2);
+}
+
+.sc-env-var-name em {
+  font-style: normal;
+  color: var(--honey);
+}
+
+.sc-error {
+  font-size: 12px;
+  color: var(--danger);
+}
+
+/* ── skeleton shimmer ─────────────────────────────────────────────────── */
+
+.sc-skel {
+  border-radius: 8px;
+  background: linear-gradient(100deg, var(--panel-2) 40%, var(--panel-hi) 50%, var(--panel-2) 60%);
+  background-size: 200% 100%;
+  animation: sc-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes sc-shimmer {
+  0% { background-position: 120% 0; }
+  100% { background-position: -80% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-skel {
+    animation: none;
+  }
+}
+
+.sc-spin {
+  animation: sc-rotate 0.9s linear infinite;
+}
+
+@keyframes sc-rotate {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-spin {
+    animation-duration: 2.4s;
+  }
+}

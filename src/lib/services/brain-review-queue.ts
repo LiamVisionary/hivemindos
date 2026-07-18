@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { mkdir, readFile, rename, writeFile } from "fs/promises";
 import { dirname, isAbsolute, join } from "path";
 import { homedir } from "@/lib/home-dir";
+import { contentAddressForText } from "@/lib/services/obsidian/content-address";
 import {
   evolveAgentMemory,
   rememberAgentMemory,
@@ -162,9 +163,20 @@ export async function listBrainReviewProposals(filter: BrainReviewListFilter = {
 }
 
 export async function createBrainReviewProposal(input: BrainReviewProposalInput) {
-  const proposal = normalizeProposalInput(input);
+  const normalized = normalizeProposalInput(input);
+  const contentHash = contentAddressForText(normalized.proposedContent);
+  const proposal = {
+    ...normalized,
+    metadata: { ...(normalized.metadata ?? {}), contentHash },
+  };
   return enqueueBrainReviewWrite(async () => {
     const queue = await readBrainReviewQueue();
+    const existing = queue.proposals.find((item) =>
+      item.kind === proposal.kind
+      && (item.status === "pending" || item.status === "approved")
+      && proposalDedupeScope(item) === proposalDedupeScope(proposal)
+      && (item.metadata?.contentHash === contentHash || contentAddressForText(item.proposedContent) === contentHash));
+    if (existing) return { file: queue, proposal: existing, deduplicated: true as const };
     const now = new Date().toISOString();
     const nextProposal: BrainReviewProposal = {
       id: `review_${Date.now().toString(36)}_${randomUUID().slice(0, 8)}`,
@@ -179,7 +191,20 @@ export async function createBrainReviewProposal(input: BrainReviewProposalInput)
       updatedAt: now,
     };
     await writeBrainReviewQueue(next);
-    return { file: next, proposal: nextProposal };
+    return { file: next, proposal: nextProposal, deduplicated: false as const };
+  });
+}
+
+function proposalDedupeScope(proposal: Pick<BrainReviewProposal, "kind" | "targetPath" | "supersedesMemoryId" | "metadata">) {
+  const metadataString = (key: string) => {
+    const value = proposal.metadata?.[key];
+    return typeof value === "string" ? value.trim() : "";
+  };
+  return JSON.stringify({
+    vaultPath: metadataString("vaultPath"),
+    project: metadataString("project"),
+    targetPath: proposal.kind === "memory" ? "" : proposal.targetPath ?? "",
+    supersedesMemoryId: proposal.supersedesMemoryId ?? "",
   });
 }
 
@@ -398,7 +423,7 @@ function rememberInputForProposal(
 ): RememberAgentMemoryInput {
   return {
     ...baseMemoryInputForProposal(proposal, input),
-    title: proposal.title,
+    title: proposalMetadataString(proposal, "originalTitle") ?? proposal.title,
     content: proposal.proposedContent,
   };
 }
@@ -424,16 +449,19 @@ function baseMemoryInputForProposal(
   proposal: BrainReviewProposal,
   input: NormalizedBrainReviewApplyInput,
 ): RememberAgentMemoryInput {
+  const metadataType = proposalMetadataString(proposal, "memoryType");
+  const metadataConfidence = proposalMetadataNumber(proposal, "confidence");
   return {
-    vaultPath: input.vaultPath,
-    type: input.type,
-    confidence: input.confidence,
+    vaultPath: input.vaultPath ?? proposalMetadataString(proposal, "vaultPath"),
+    type: input.type ?? metadataType,
+    memoryKey: proposalMetadataString(proposal, "memoryKey"),
+    confidence: input.confidence ?? metadataConfidence,
     cognitiveStage: input.cognitiveStage,
     evidenceCount: input.evidenceCount ?? (proposal.evidence.length || undefined),
     sourceType: input.sourceType ?? (proposal.evidence.length ? "composite" : "explicit"),
     metaTags: input.metaTags,
-    tags: mergeApplyTags(input.tags),
-    entities: input.entities,
+    tags: mergeApplyTags(input.tags ?? proposalMetadataStringList(proposal, "tags")),
+    entities: input.entities ?? proposalMetadataStringList(proposal, "entities"),
     aliases: input.aliases,
     actorRole: input.actorRole ?? "agent",
     memoryOrigin: input.memoryOrigin ?? "agent-action",
@@ -448,9 +476,24 @@ function baseMemoryInputForProposal(
     tailnetDnsName: input.tailnetDnsName,
     collectorUrl: input.collectorUrl,
     sessionId: input.sessionId,
-    project: input.project,
+    project: input.project ?? proposalMetadataString(proposal, "project"),
     proof: input.proof ?? "auto",
   };
+}
+
+function proposalMetadataString(proposal: BrainReviewProposal, key: string) {
+  const value = proposal.metadata?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function proposalMetadataNumber(proposal: BrainReviewProposal, key: string) {
+  const value = proposal.metadata?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function proposalMetadataStringList(proposal: BrainReviewProposal, key: string) {
+  const value = proposal.metadata?.[key];
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && Boolean(item.trim())) : undefined;
 }
 
 function normalizeApplyInput(input: BrainReviewApplyInput): NormalizedBrainReviewApplyInput {

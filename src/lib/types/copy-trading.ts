@@ -12,6 +12,28 @@ export type CopyTradeNetwork = "eip155:8453" | "solana:mainnet";
 
 export type CopyTradeMode = "fixed" | "proportional";
 
+export type CopyTradeSignal = {
+  /** Target's tx hash / signature that triggered this. */
+  targetTxRef: string;
+  direction: "buy" | "sell";
+  /** The non-quote token: 0x address (Base, lowercased) or mint (Solana). */
+  token: string;
+  /** Quote leg symbol — what the target paid with (buy) or received (sell). */
+  quoteSymbol: string;
+  /** Target's quote-leg size in USD, when resolvable (for proportional sizing). */
+  quoteUsd: number | null;
+  /** Block number (Base) or slot (Solana), stringified. */
+  blockOrSlot: string;
+};
+
+export type CopyTradePendingSignal = CopyTradeSignal & {
+  firstSeenAt: number;
+  lastAttemptAt: number;
+  nextAttemptAt: number;
+  attempts: number;
+  reason: string;
+};
+
 export const COPY_TRADE_EVOLUTION_MODEL = "gpt-5.6-sol" as const;
 export const COPY_TRADE_EVOLUTION_POLICY_VERSION = "copy-evo-v2.0.0" as const;
 export const COPY_TRADE_EVALUATION_BATCH_SIZE = 50;
@@ -108,6 +130,7 @@ export type CopyTradePaperLedger = {
 export type CopyTradeEventKind =
   | "buy"
   | "sell"
+  | "pending"
   | "skip"
   | "error"
   | "take-profit"
@@ -229,6 +252,8 @@ export type CopyTradeRuntimeState = {
   lastSignature?: string;
   /** Target tx refs already consumed (bounded), for restart-safe dedup. */
   consumedTxRefs: string[];
+  /** Retryable pre-execution signals, persisted so cursor advancement cannot lose them. */
+  pendingSignals?: CopyTradePendingSignal[];
   openPositions: Record<string, CopyTradeOpenPosition>;
   stats: { polls: number; mirrored: number; skipped: number; errors: number };
   /** Simulated portfolio for dry-run configs (absent until the first dry-run tick). */

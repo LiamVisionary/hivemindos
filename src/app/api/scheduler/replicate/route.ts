@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - dashboard scheduler replication fan-out across machine collectors; operator scheduling plumbing.
 import { NextRequest } from "next/server";
 
 import { okJson, errorJson } from "@/lib/utils/api-response";

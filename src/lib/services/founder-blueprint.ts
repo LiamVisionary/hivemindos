@@ -1,3 +1,4 @@
+import type { CompanyTemplate } from "@/lib/types/company-template";
 import type { ContextIndexItem } from "@/lib/services/context-index";
 import type { ModelFitRecommendation } from "@/lib/services/system/model-fit";
 import type {
@@ -219,13 +220,20 @@ export function compileFounderBlueprint(input: {
   agents?: FounderAgentCandidate[];
   contextItems?: ContextIndexItem[];
   modelFits?: ModelFitRecommendation[];
+  /** Company template driving archetype/identity/metric seeds (picker flow). */
+  template?: CompanyTemplate;
   now?: string;
 }): FounderBlueprint {
   const goal = cleanGoal(input.goal);
   if (goal.length < 12) throw new Error("Describe the outcome in at least a short sentence.");
-  const archetype = archetypeFor(goal);
+  const template = input.template;
+  // A picked template is authoritative for the business SHAPE (crew archetype,
+  // sector, metric, charter); the goal text stays the user's own words.
+  const archetype = (template && FOUNDER_ARCHETYPE_MATRIX.find((entry) => entry.id === template.archetype)) || archetypeFor(goal);
   const identity = identityFor(goal, archetype);
-  const metric = metricFor(goal);
+  const metric = template
+    ? { metric: template.apexGoal.metric, target: template.apexGoal.target, unit: template.apexGoal.unit }
+    : metricFor(goal);
   const budget = BUDGETS[input.constraints.budgetTier];
   const capabilities = capabilitiesFor(archetype, input.contextItems ?? []);
   const firstMilestoneTitle = `Prove the first ${metric.metric} milestone`;
@@ -234,10 +242,14 @@ export function compileFounderBlueprint(input: {
     generatedAt: input.now ?? new Date().toISOString(),
     goal,
     archetype: archetype.id,
+    templateId: template?.id,
     identity: {
       ...identity,
-      blurb: `An agent-run operating loop focused on: ${goal}`,
-      charter: `Pursue "${goal}" through small, evidence-backed milestones. External publishing, customer contact, money movement, and destructive actions require operator approval. Prefer ${input.constraints.privacy} execution and preserve receipts for consequential work.`,
+      ...(template ? { sector: template.sector } : {}),
+      blurb: template ? template.tagline : `An agent-run operating loop focused on: ${goal}`,
+      charter: template
+        ? template.charter
+        : `Pursue "${goal}" through small, evidence-backed milestones. External publishing, customer contact, money movement, and destructive actions require operator approval. Prefer ${input.constraints.privacy} execution and preserve receipts for consequential work.`,
     },
     apexGoal: { title: goal, ...metric },
     firstMilestone: {

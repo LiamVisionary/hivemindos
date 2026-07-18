@@ -78,10 +78,23 @@ export function isInfrastructureOnlyExhaustion(result: string | undefined): bool
 const RECLAIM_STALL_STRANDING =
   /^Reclaimed after \d+s without worker progress\. Failure reason: (?:timeout|runtime-offline|runtime-recovery|local-directory-error)\./;
 
-/** True when a needs-human result was stranded by infrastructure of either kind. */
+// A task stranded by a SINGLE-delegate pickup failure carries a one-line result
+// ("Queen Bee autonomous pickup failed for <agent>: <reason>") instead of the
+// multi-delegate exhausted format above. Live 2026-07-16: 74 of WEBS's 115
+// needs-human tasks had exactly this shape (57 "no final response", 17 timeout)
+// and 0 matched the exhausted matcher — the rescue built for them never fired.
+// The captured <reason> goes through the same shared infra vocabulary, so
+// content failures (eval gates, provider-config errors) still stay with the human.
+const SINGLE_PICKUP_STRANDING =
+  /^(?:Queen Bee )?[Aa]utonomous pickup failed for [^:\n]+:\s*(.+)$/;
+
+/** True when a needs-human result was stranded by infrastructure of any recorded shape. */
 export function isInfraStrandedResult(result: string | undefined): boolean {
   if (!result) return false;
-  return isInfrastructureOnlyExhaustion(result) || RECLAIM_STALL_STRANDING.test(result.trim());
+  const trimmed = result.trim();
+  if (isInfrastructureOnlyExhaustion(result) || RECLAIM_STALL_STRANDING.test(trimmed)) return true;
+  const single = SINGLE_PICKUP_STRANDING.exec(trimmed.split(/\r?\n/, 1)[0] ?? "");
+  return Boolean(single && isInfrastructurePickupFailure(single[1]));
 }
 
 const RESCUE_WINDOW_MS = 24 * 60 * 60 * 1000;

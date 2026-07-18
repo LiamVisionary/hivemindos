@@ -7,7 +7,9 @@
 // a hello probe and a READ-ONLY recall endpoint, both origin-locked via CORS
 // and gated by a dedicated bridge token the user copies from the app once
 // (never the dashboard device token — that would grant the whole /api
-// surface). Outbound hits are scrubbed: only title/type/date/excerpt leave
+// surface). The paired page may also send bounded artifacts into typed memory
+// or generated skills through the specialized audited skill writer. Outbound
+// hits are scrubbed: only title/type/date/excerpt leave
 // the machine; machine names, tailnet identity, collector URLs, vault paths,
 // and Operations/Secure notes never do.
 
@@ -149,7 +151,7 @@ export function takeResearchBridgeRecallToken(nowMs = Date.now()): boolean {
   return true;
 }
 
-// --- skill save (the one WRITE the bridge allows) -------------------------------
+// --- specialized skill save -----------------------------------------------------
 
 // Separate, tighter bucket than recall: writing a skill to the shared shelf is
 // heavier than a read, so 5/minute. Even a stolen-but-valid bridge token cannot
@@ -228,6 +230,117 @@ function firstBridgeSkillLine(markdown: string): string {
   const body = markdown.replace(/^---[\s\S]*?---/, "").trim();
   const line = body.split(/[\r\n]+/).map((entry) => entry.trim()).find((entry) => entry && !entry.startsWith("#") && !entry.startsWith(">"));
   return (line ?? "").slice(0, 280);
+}
+
+// --- generic Mini artifact save --------------------------------------------------
+
+const ARTIFACT_BUCKET_CAPACITY = 10;
+const ARTIFACT_REFILL_PER_MS = ARTIFACT_BUCKET_CAPACITY / 60_000;
+const artifactBucket = { tokens: ARTIFACT_BUCKET_CAPACITY, refilledAtMs: 0 };
+
+/** Takes one generic artifact-save token; false = rate-limited. */
+export function takeResearchBridgeArtifactToken(nowMs = Date.now()): boolean {
+  const elapsedMs = Math.max(0, nowMs - artifactBucket.refilledAtMs);
+  artifactBucket.tokens = Math.min(
+    ARTIFACT_BUCKET_CAPACITY,
+    artifactBucket.tokens + elapsedMs * ARTIFACT_REFILL_PER_MS,
+  );
+  artifactBucket.refilledAtMs = Math.max(artifactBucket.refilledAtMs, nowMs);
+  if (artifactBucket.tokens < 1) return false;
+  artifactBucket.tokens -= 1;
+  return true;
+}
+
+// Leaves enough room for the typed-memory envelope under its 128 KiB bound.
+export const MAX_BRIDGE_ARTIFACT_CHARS = 100_000;
+
+const BRIDGE_ARTIFACT_KINDS = new Set(["markdown", "plaintext", "image", "json", "file"]);
+
+export type ResearchBridgeArtifactInput = {
+  sourceApp: string;
+  sourceId: string;
+  path: string;
+  title: string;
+  kind: "markdown" | "plaintext" | "image" | "json" | "file";
+  mimeType?: string | null;
+  contentText?: string | null;
+  mediaUrl?: string | null;
+  links?: string[];
+};
+
+export type ResearchBridgeArtifactResult = {
+  title: string;
+  savedToBrain: boolean;
+};
+
+function requiredArtifactString(value: unknown, field: string, maxChars: number): string {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  if (!normalized) throw new Error(`${field} is required.`);
+  if (normalized.length > maxChars) throw new Error(`${field} is too large.`);
+  return normalized;
+}
+
+function optionalArtifactUrl(value: unknown): string | null {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  if (!normalized) return null;
+  if (normalized.length > 2_000) throw new Error("artifact URL is too large.");
+  const parsed = new URL(normalized);
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    throw new Error("artifact URLs must use http or https.");
+  }
+  return parsed.toString();
+}
+
+export function researchBridgeArtifactContent(input: ResearchBridgeArtifactInput): string {
+  const title = requiredArtifactString(input.title, "title", 160);
+  const sourceApp = requiredArtifactString(input.sourceApp, "sourceApp", 80);
+  const sourceId = requiredArtifactString(input.sourceId, "sourceId", 160);
+  const path = requiredArtifactString(input.path, "path", 360);
+  if (!BRIDGE_ARTIFACT_KINDS.has(input.kind)) throw new Error("kind is invalid.");
+  const contentText = typeof input.contentText === "string" ? input.contentText.trim() : "";
+  if (contentText.length > MAX_BRIDGE_ARTIFACT_CHARS) throw new Error("artifact content is too large.");
+  const mediaUrl = optionalArtifactUrl(input.mediaUrl);
+  const links = Array.isArray(input.links)
+    ? [...new Set(input.links.map(optionalArtifactUrl).filter((link): link is string => Boolean(link)))].slice(0, 40)
+    : [];
+  if (!contentText && !mediaUrl && !links.length) throw new Error("artifact content or a media link is required.");
+
+  return [
+    `# ${title}`,
+    "",
+    `- Source Mini app: ${sourceApp}`,
+    `- Source id: ${sourceId}`,
+    `- Hive Superbrain path: ${path}`,
+    `- Artifact kind: ${input.kind}`,
+    input.mimeType ? `- MIME type: ${String(input.mimeType).trim().slice(0, 120)}` : "",
+    contentText ? "\n## Artifact\n\n" + contentText : "",
+    mediaUrl ? `\n## Media\n\n${mediaUrl}` : "",
+    links.length ? `\n## Links\n\n${links.map((link) => `- ${link}`).join("\n")}` : "",
+  ].filter(Boolean).join("\n").trim();
+}
+
+/** Saves a non-skill Mini output as a durable typed artifact memory. */
+export async function saveResearchBridgeArtifact(
+  input: ResearchBridgeArtifactInput,
+): Promise<ResearchBridgeArtifactResult> {
+  const title = requiredArtifactString(input.title, "title", 160);
+  const sourceApp = requiredArtifactString(input.sourceApp, "sourceApp", 80);
+  const sourceId = requiredArtifactString(input.sourceId, "sourceId", 160);
+  const content = researchBridgeArtifactContent(input);
+  await rememberAgentMemory({
+    type: "artifact",
+    title: `Mini app artifact: ${title}`,
+    content,
+    memoryKey: `mini-app:${sourceApp}:${sourceId}`,
+    tags: ["mini-app", "web-artifact", sourceApp, input.kind],
+    source: "hivemindos-web",
+    memoryOrigin: "imported",
+    project: "mini-apps",
+    agentName: "HivemindOS Mini Artifact Bridge",
+    proof: "auto",
+    allowDuplicate: true,
+  });
+  return { title, savedToBrain: true };
 }
 
 // --- read-only recall ----------------------------------------------------------

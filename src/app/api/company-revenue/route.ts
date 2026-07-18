@@ -1,6 +1,11 @@
 import { NextRequest } from "next/server";
 
 import {
+  companyRevenueRailStatus,
+  opportunisticReceiptSweep,
+  syncPaidAgentReceiptsToCompanyRevenue,
+} from "@/lib/services/company-revenue-bridge";
+import {
   companyRevenueRollup,
   listCompanyRevenueRecords,
   quoteCompanyRevenueShare,
@@ -13,7 +18,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type CompanyRevenueBody = {
-  action?: "quote" | "record" | "collect-fee";
+  action?: "quote" | "record" | "collect-fee" | "sync-x402";
   companyId?: string;
   eventId?: string;
   amountUsd?: number;
@@ -33,9 +38,13 @@ export async function GET(request: NextRequest) {
   if (unauthorized) return unauthorized;
   const companyId = request.nextUrl.searchParams.get("companyId")?.trim() || "";
   if (!companyId) return errorJson("companyId is required", 400);
+  // Every read is a self-heal opportunity: sweep any settled seller receipts
+  // into the ledger (throttled + idempotent) before reporting it.
+  await opportunisticReceiptSweep();
   const records = await listCompanyRevenueRecords(companyId);
   const rollup = await companyRevenueRollup(companyId, records);
-  return okJson({ records: records.slice(0, 100), rollup });
+  const rail = await companyRevenueRailStatus(companyId).catch(() => undefined);
+  return okJson({ records: records.slice(0, 100), rollup, rail });
 }
 
 export async function POST(request: NextRequest) {
@@ -52,6 +61,12 @@ export async function POST(request: NextRequest) {
           network: body.network,
         }),
       });
+    }
+
+    if (action === "sync-x402") {
+      const sync = await syncPaidAgentReceiptsToCompanyRevenue({ companyId: body.companyId?.trim() || undefined });
+      const rollup = body.companyId?.trim() ? await companyRevenueRollup(body.companyId.trim()) : undefined;
+      return okJson({ sync, rollup });
     }
 
     if (action === "collect-fee") {

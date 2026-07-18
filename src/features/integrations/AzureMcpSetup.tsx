@@ -2,6 +2,7 @@
 
 import * as React from "react";
 
+import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 import { BBtn, BIcon, NiBadge } from "./integrations-primitives";
 import { readJson } from "./integrations-view-helpers";
 
@@ -83,16 +84,17 @@ export function AzureMcpSetup() {
 
   function enableManagement() {
     if (!status) return;
-    const confirmed = window.confirm(
+    void confirmUserAction(
       "Enable Azure MCP management mode? Agents may create, change, or delete Azure resources allowed by your Azure RBAC. Those resources can incur charges. HivemindOS cannot enforce a hard Azure spending cap.",
-    );
-    if (!confirmed) return;
-    void run("configure", { access: "manage", confirmation: status.managementConfirmation });
+    ).then((confirmed) => {
+      if (confirmed) void run("configure", { access: "manage", confirmation: status.managementConfirmation });
+    });
   }
 
   function remove() {
-    if (!window.confirm("Remove the local Azure MCP package and its HivemindOS-managed runtime entries from this machine?")) return;
-    void run("remove");
+    void confirmUserAction("Remove the local Azure MCP package and its HivemindOS-managed runtime entries from this machine?").then((confirmed) => {
+      if (confirmed) void run("remove");
+    });
   }
 
   return (

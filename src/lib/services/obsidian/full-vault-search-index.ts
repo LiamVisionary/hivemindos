@@ -5,7 +5,9 @@ import { constants } from "fs";
 import { access, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from "fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "path";
 import { morphologicalTermVariants } from "@/lib/services/obsidian/agent-memory/query";
+import { listBrainIndexGenerations, publishBrainIndexGeneration, readBrainIndexArtifact } from "@/lib/services/obsidian/brain-index-generations";
 import { bm25TermCounts, bm25Tokens, scoreBm25Terms } from "@/lib/services/search/bm25-lite";
+import { contentAddressForText } from "@/lib/services/obsidian/content-address";
 
 export const FULL_VAULT_SEARCH_INDEX_PATH = "Operations/Brain Services/Full Vault Search Index.jsonl";
 
@@ -21,6 +23,8 @@ const VAULT_EXCLUDE_PREFIXES = [
   "Operations/Brain Services/Agent Memory Retrievals.jsonl",
   "Operations/Brain Services/Agent Memory Proofs.jsonl",
   "Operations/Brain Services/Agent Memory Embeddings.jsonl",
+  "Operations/Brain Services/Agent Memory Transactions.jsonl",
+  "Operations/Brain Services/Index Generations/",
   FULL_VAULT_SEARCH_INDEX_PATH,
   "Operations/Vault Migrations/",
   "Archive/",
@@ -64,6 +68,7 @@ export type FullVaultSearchIndexRecord = {
   mtimeMs: number;
   size: number;
   hash: string;
+  contentHash: string;
   indexedByteLimit: number;
   documentLength: number;
   terms: Record<string, number>;
@@ -267,6 +272,7 @@ function recordFromMarkdown(root: string, file: string, markdown: string, mtimeM
     mtimeMs,
     size,
     hash: createHash("sha256").update(markdown).digest("hex"),
+    contentHash: contentAddressForText(body),
     indexedByteLimit: MAX_INDEXED_MARKDOWN_BYTES,
     documentLength: tokens.length,
     terms: termCounts(tokens),
@@ -279,14 +285,21 @@ function indexPath(root: string) {
 }
 
 async function readIndex(root: string) {
-  const file = indexPath(root);
+  const artifact = await readBrainIndexArtifact({
+    root,
+    kind: "full-vault",
+    artifact: "search",
+    legacyPath: FULL_VAULT_SEARCH_INDEX_PATH,
+  });
+  if (!artifact) return null;
+  const file = artifact.generation?.manifestPath ?? indexPath(root);
   const st = await stat(file).catch(() => null);
   if (!st?.isFile()) return null;
+  const contentSize = Buffer.byteLength(artifact.contents, "utf8");
   const cached = indexCache.get(root);
-  if (cached && cached.file === file && cached.mtimeMs === st.mtimeMs && cached.size === st.size) return cached.records;
-  const raw = await readFile(file, "utf8").catch(() => "");
+  if (cached && cached.file === file && cached.mtimeMs === st.mtimeMs && cached.size === contentSize) return cached.records;
   const records: FullVaultSearchIndexRecord[] = [];
-  for (const line of raw.split("\n")) {
+  for (const line of artifact.contents.split("\n")) {
     if (!line.trim()) continue;
     try {
       const parsed = JSON.parse(line) as FullVaultSearchIndexRecord;
@@ -300,7 +313,7 @@ async function readIndex(root: string) {
       // Ignore corrupt rows; rebuild can repair the generated index.
     }
   }
-  indexCache.set(root, { file, mtimeMs: st.mtimeMs, size: st.size, records });
+  indexCache.set(root, { file, mtimeMs: st.mtimeMs, size: contentSize, records });
   return records.length ? records : null;
 }
 
@@ -374,7 +387,17 @@ export async function rebuildFullVaultSearchIndex(input: { root: string }) {
   }
   const file = indexPath(root);
   const payload = records.map((record) => JSON.stringify(record)).join("\n") + (records.length ? "\n" : "");
-  await writeIndexFileAtomically(file, payload);
+  const generation = await publishBrainIndexGeneration({
+    root,
+    kind: "full-vault",
+    artifacts: [{ name: "search", contents: payload, records: records.length, legacyPath: FULL_VAULT_SEARCH_INDEX_PATH }],
+    sources: records.map((record) => ({ path: record.path, sha256: `sha256:${record.hash}` })),
+    metadata: {
+      searchMode: "bm25-lite",
+      schema: "hivemindos.full-vault-search.v1",
+      indexedByteLimit: MAX_INDEXED_MARKDOWN_BYTES,
+    },
+  });
   indexCache.delete(root);
   const st = await stat(file).catch(() => null);
   return {
@@ -383,6 +406,7 @@ export async function rebuildFullVaultSearchIndex(input: { root: string }) {
     scanned: files.length,
     indexed: records.length,
     bytes: st?.size ?? 0,
+    generation,
     rebuiltAt: new Date().toISOString(),
   };
 }
@@ -409,6 +433,7 @@ async function readOrBuildIndex(root: string) {
 export async function fullVaultSearchIndexStatus(root: string) {
   const st = await stat(indexPath(resolve(root))).catch(() => null);
   const records = st?.isFile() ? await readIndex(resolve(root)) : null;
+  const generations = await listBrainIndexGenerations({ root: resolve(root), kind: "full-vault" }).catch(() => null);
   return {
     exists: Boolean(st?.isFile()),
     indexPath: FULL_VAULT_SEARCH_INDEX_PATH,
@@ -418,6 +443,9 @@ export async function fullVaultSearchIndexStatus(root: string) {
     stale: Boolean(st?.isFile() && indexTtlMs() > 0 && Date.now() - st.mtimeMs > indexTtlMs()),
     indexed: records?.length ?? 0,
     syncConflictEntries: records?.filter((record) => record.path.includes(".sync-conflict-")).length ?? 0,
+    currentGenerationId: generations?.currentGenerationId,
+    generations: generations?.generations.length ?? 0,
+    replayCoverage: generations?.coverage,
   };
 }
 

@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - OAuth authorization redirect starter for the dashboard Google connect flow.
 import { NextRequest, NextResponse } from "next/server";
 import { createGitHubOAuthState, renderGitHubOAuthPage } from "@/lib/services/integrations/github-oauth";
 import { readGoogleOAuthConfig } from "@/lib/services/integrations/google-oauth";

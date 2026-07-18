@@ -39,6 +39,13 @@ export type HoneyTelegramLinkAction = (code: string) => Promise<{
   error?: string;
 } | null | undefined>;
 
+export type HoneyTelegramLinkIntentAction = () => Promise<{
+  ok?: boolean;
+  deepLink?: string;
+  expiresAt?: string;
+  error?: string;
+} | null | undefined>;
+
 type HoneyWalletLinkOption = {
   address: string;
   name: string | null;
@@ -69,6 +76,7 @@ export type HoneyContributionActions = {
   onLoadHoneyWalletLinkStatus?: HoneyWalletLinkStatusAction;
   onLinkHoneyWallet?: HoneyWalletLinkAction;
   onLinkTelegramHoney?: HoneyTelegramLinkAction;
+  onCreateTelegramHoneyLinkIntent?: HoneyTelegramLinkIntentAction;
 };
 
 export function HoneyContributionCard({
@@ -76,11 +84,13 @@ export function HoneyContributionCard({
   onLoadWalletLinkStatus,
   onLinkWallet,
   onLink,
+  onCreateLinkIntent,
 }: {
   onLoad?: HoneyContributionStatusAction;
   onLoadWalletLinkStatus?: HoneyWalletLinkStatusAction;
   onLinkWallet?: HoneyWalletLinkAction;
   onLink?: HoneyTelegramLinkAction;
+  onCreateLinkIntent?: HoneyTelegramLinkIntentAction;
 }) {
   const [status, setStatus] = useState<HoneyContributionStatus | null>(null);
   const [loading, setLoading] = useState(Boolean(onLoad));
@@ -93,6 +103,8 @@ export function HoneyContributionCard({
   const [walletError, setWalletError] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [tapBusy, setTapBusy] = useState(false);
+  const [tapWaiting, setTapWaiting] = useState(false);
 
   const loadStatus = useCallback(async () => {
     if (!onLoad) return;
@@ -187,6 +199,52 @@ export function HoneyContributionCard({
       setWalletBusy(false);
     }
   };
+
+  const startTapLink = async () => {
+    if (!onCreateLinkIntent || tapBusy || tapWaiting) return;
+    setTapBusy(true);
+    setMessage("");
+    setError("");
+    try {
+      const result = await onCreateLinkIntent();
+      if (!result?.ok || !result.deepLink) throw new Error(result?.error || "Telegram link could not be started.");
+      window.open(result.deepLink, "_blank", "noopener");
+      setTapWaiting(true);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Telegram link could not be started.");
+    } finally {
+      setTapBusy(false);
+    }
+  };
+
+  // While the member is over in Telegram pressing Start, poll the linked
+  // status so the card flips to connected the moment the bot completes it.
+  useEffect(() => {
+    if (!tapWaiting || !onLoad) return;
+    let cancelled = false;
+    const startedAt = Date.now();
+    const timer = setInterval(async () => {
+      if (cancelled) return;
+      if (Date.now() - startedAt > 3 * 60_000) {
+        setTapWaiting(false);
+        setError("Still not connected — tap Connect Telegram to try again, or use the /linkhoney code below.");
+        return;
+      }
+      try {
+        const next = statusFromResult(await onLoad());
+        if (cancelled || !next.linked) return;
+        setStatus(next);
+        setTapWaiting(false);
+        setMessage(`Connected ${next.publicLabel || "your Telegram account"} to this HONEY workspace.`);
+      } catch {
+        // Transient status failures shouldn't end the wait; keep polling.
+      }
+    }, 3_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [tapWaiting, onLoad]);
 
   const connect = async () => {
     if (!onLink || busy) return;
@@ -291,26 +349,45 @@ export function HoneyContributionCard({
           {walletVerified ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--line)", paddingTop: 12 }}>
               <div style={{ color: "var(--fg-2)", fontSize: 12.5, fontWeight: 600 }}>2. Connect Telegram</div>
-              <p style={{ margin: 0, maxWidth: 720, color: "var(--fg-3)", fontSize: 12.5, lineHeight: 1.55 }}>
-                Send <code>/linkhoney</code> to the HIVE Telegram bot, then enter its one-time code here.
-              </p>
-              <div style={{ display: "flex", gap: 9, alignItems: "center", flexWrap: "wrap" }}>
-                <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 250 }}>
-                  <span style={{ color: "var(--fg-3)", fontSize: 11 }}>One-time Telegram code</span>
-                  <input
-                    value={code}
-                    onChange={(event) => setCode(event.target.value.toUpperCase())}
-                    placeholder="HNY_XXXXXXXXXX"
-                    autoComplete="off"
-                    spellCheck={false}
-                    maxLength={14}
-                    style={{ border: "1px solid var(--line-2)", borderRadius: 9, background: "var(--panel-hi)", color: "var(--fg)", padding: "9px 11px", fontFamily: "var(--f-mono)", fontSize: 12.5 }}
-                  />
-                </label>
-                <button type="button" className="fb-btn primary" disabled={busy || !/^HNY_[A-F0-9]{10}$/.test(code.trim())} onClick={() => void connect()} style={{ alignSelf: "flex-end" }}>
-                  {busy ? <><Spinner size={13} /> Connecting</> : "Connect Telegram"}
-                </button>
-              </div>
+              {onCreateLinkIntent ? (
+                <>
+                  <p style={{ margin: 0, maxWidth: 720, color: "var(--fg-3)", fontSize: 12.5, lineHeight: 1.55 }}>
+                    Tap the button, then press <strong>Start</strong> in Telegram — that&apos;s it. Any HONEY already banked to your Telegram account transfers automatically.
+                  </p>
+                  {tapWaiting ? (
+                    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", color: "var(--fg-2)", fontSize: 12.5 }}>
+                      <Spinner size={13} /> Waiting for you to press Start in Telegram…
+                      <button type="button" className="fb-btn" onClick={() => setTapWaiting(false)}>Cancel</button>
+                    </div>
+                  ) : (
+                    <button type="button" className="fb-btn primary" disabled={tapBusy} onClick={() => void startTapLink()} style={{ alignSelf: "flex-start" }}>
+                      {tapBusy ? <><Spinner size={13} /> Starting</> : "Connect Telegram"}
+                    </button>
+                  )}
+                </>
+              ) : null}
+              <details>
+                <summary style={{ color: "var(--fg-3)", fontSize: 12, cursor: "pointer" }}>
+                  {onCreateLinkIntent ? "Prefer a code? Send /linkhoney to the bot and enter it here" : "Send /linkhoney to the HIVE Telegram bot, then enter its one-time code here"}
+                </summary>
+                <div style={{ display: "flex", gap: 9, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 250 }}>
+                    <span style={{ color: "var(--fg-3)", fontSize: 11 }}>One-time Telegram code</span>
+                    <input
+                      value={code}
+                      onChange={(event) => setCode(event.target.value.toUpperCase())}
+                      placeholder="HNY_XXXXXXXXXX"
+                      autoComplete="off"
+                      spellCheck={false}
+                      maxLength={14}
+                      style={{ border: "1px solid var(--line-2)", borderRadius: 9, background: "var(--panel-hi)", color: "var(--fg)", padding: "9px 11px", fontFamily: "var(--f-mono)", fontSize: 12.5 }}
+                    />
+                  </label>
+                  <button type="button" className="fb-btn primary" disabled={busy || !/^HNY_[A-F0-9]{10}$/.test(code.trim())} onClick={() => void connect()} style={{ alignSelf: "flex-end" }}>
+                    {busy ? <><Spinner size={13} /> Connecting</> : "Connect with code"}
+                  </button>
+                </div>
+              </details>
             </div>
           ) : null}
         </>

@@ -11,7 +11,7 @@ It is not one magic database. The real anchor is a normal Obsidian markdown vaul
 
 <section class="atlasHero">
   <strong>Short version:</strong>
-  <p>The vault is the durable shared brain. Shared Brain Memory gives agents private millisecond typed-memory recall first, entity-linked canonical memory heads, temporal history, memory evolution when reviewed facts replace stale ones, then broader full-vault context retrieval when distilled memory is not enough. High-volume operational events stay in a separate bounded local journal and can generate review-gated memory, skill, or job proposals without automatically applying them. Compiled Knowledge turns reviewed source material into searchable entity/concept/summary wiki pages with graph-native lookups. OKF export turns selected memory and conversation notes into a portable markdown bundle for outside agents and catalog tools. The Obsidian Native Brain Pack gives agents shared skills for Markdown, Bases, and Canvas, while optional brain services such as QMD, GBrain, and Neo4j can index, compile, visualize, or query the vault without replacing it.</p>
+  <p>The vault is the durable shared brain. Shared Brain Memory gives agents private millisecond typed-memory recall first, entity-linked canonical memory heads, verified checkpoint-and-delta index generations with visible replay coverage, temporal replay, and memory evolution when reviewed facts replace stale ones, then broader full-vault context retrieval when distilled memory is not enough. High-volume operational events stay in a separate bounded local journal and can generate review-gated memory, skill, or job proposals without automatically applying them. Scoped brain capsules package selected memory and compiled knowledge with checksums, optional encryption, expiry, and read-only search; imports remain review-gated. Compiled Knowledge turns reviewed source material into searchable entity/concept/summary wiki pages with graph-native lookups. OKF export turns selected memory and conversation notes into a portable markdown bundle for outside agents and catalog tools. The Obsidian Native Brain Pack gives agents shared skills for Markdown, Bases, and Canvas, while optional brain services such as QMD, GBrain, and Neo4j can index, compile, visualize, or query the vault without replacing it.</p>
 </section>
 
 ## Component Pages
@@ -24,7 +24,7 @@ It is not one magic database. The real anchor is a normal Obsidian markdown vaul
   </section>
   <section class="docCard">
     <h3>Brain Services</h3>
-    <p>Shared Brain Memory, Compiled Knowledge search, OKF exchange bundles, Neo4j, GBrain, Syntho, Trading Brain, the Brain Graph, the context index, and service notes.</p>
+    <p>Shared Brain Memory, verified generations and replay, portable brain capsules, Compiled Knowledge search, OKF exchange bundles, Neo4j, GBrain, Syntho, Trading Brain, the Brain Graph, the context index, and service notes.</p>
     <a href="brain-services.html">Open services</a>
   </section>
   <section class="docCard">
@@ -87,6 +87,8 @@ flowchart TD
   BrainMemory --> VaultMarkdown["Full vault markdown recall"]
   BrainMemory --> MemoryNotes["Memory/Distillations/Agent Memory"]
   BrainMemory --> MemoryIndex["Private memory index"]
+  BrainMemory --> Generations["Verified checkpoints, deltas, and replay coverage"]
+  BrainMemory --> Capsules["Scoped read-only capsules"]
   BrainMemory --> EntityIndex["Entity/alias index"]
   BrainMemory --> UsageLog["Retrieval telemetry"]
   BrainMemory --> Proofs["Hash-only GitLawb receipts"]
@@ -108,7 +110,8 @@ The important split is access path, not storage path:
 - HivemindOS-managed chats inject Shared Brain Memory through the dashboard runtime context.
 - Raw or non-managed runtimes use `hive-brain`, which tries `/api/brain/memory` first and falls back to local vault/index search.
 - Claude Code also gets `hive-brain-hook` as a `UserPromptSubmit` hook, so raw Claude prompts can receive relevant full-vault context before answering.
-- Durable memory writes go to typed Agent Memory notes with canonical `memoryKey` heads; `record-operation` keeps run receipts out of durable recall; `hive-brain evolve` preserves superseded memory history when reviewed context changes; temporal recall can include older chain entries; broad recall can read normal vault notes when the typed layer is not enough.
+- Durable memory writes go to typed Agent Memory notes with canonical `memoryKey` heads and cross-process transaction recovery; verified checkpoints plus content-addressed deltas make retained index state replayable and provide fallback when the current generation is damaged. Generated history is bounded by an explicit policy and reports the earliest complete replay point, while authoritative Markdown history is not pruned. `record-operation` keeps run receipts out of durable recall; `hive-brain evolve` preserves superseded memory history when reviewed context changes; broad recall can read normal vault notes when the typed layer is not enough.
+- Scoped brain capsules carry selected memory and optional compiled knowledge with provenance checksums, embedded read-only search, optional authenticated encryption and expiry, and review-only import.
 - OKF export writes selected memory and conversation concepts to `Operations/Brain Services/OKF Export/` for outside agents, catalogs, and graph tools without changing the native vault.
 - The Obsidian Native Brain Pack lets agents write durable notes, `.base` views, and `.canvas` maps in formats Obsidian can open directly.
 

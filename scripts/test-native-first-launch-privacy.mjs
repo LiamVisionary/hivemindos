@@ -159,8 +159,42 @@ if (collectorPs.includes(', 0, True)') || collectorPs.includes("bWaitOnReturn=Tr
   fail("Windows long-running launchers must not synchronously wait through WScript.Shell.Run, which can raise 80020009 on desktop Windows.");
 }
 
-if (!collectorPs.includes("System.Diagnostics.ProcessStartInfo") || !collectorPs.includes("CreateNoWindow = `$true") || !collectorPs.includes("WaitForExit()") || !collectorPs.includes("exit `$process.ExitCode")) {
+if (!collectorPs.includes("System.Diagnostics.ProcessStartInfo") || !collectorPs.includes("CreateNoWindow = `$true") || !collectorPs.includes("WaitForExit()") || !collectorPs.includes("`$exitCode = `$process.ExitCode")) {
   fail("Windows collector and Link launchers must use a hidden .NET process supervisor that preserves the child exit code.");
+}
+
+// Task Scheduler's restart-on-failure never relaunches a task whose process ran
+// and then exited (validated on a real Windows Server box), so the supervisor
+// itself must relaunch: immediately on the collector's self-reload exit code
+// (75), delayed on crashes, bounded against hot loops, ending clean on exit 0.
+if (!collectorPs.includes("-eq 75") || !collectorPs.includes("consecutiveFastExits") || !collectorPs.includes("if (`$exitCode -eq 0) { exit 0 }")) {
+  fail("The Windows supervisor must relaunch the collector on self-reload (exit 75) with bounded crash restarts, since Task Scheduler never restarts a ran-then-exited task.");
+}
+
+// Re-registering the task with -Force does not touch a running instance and
+// starting a running task is a no-op, so without an explicit stop, setup
+// re-runs verified "health" against the STALE collector and never applied
+// updates (confirmed live on a Windows PC). The stop must come BEFORE the port
+// scan or a listening stale collector drifts the recorded port.
+{
+  const stopIndex = collectorPs.indexOf("stop any previously-running collector BEFORE the port scan");
+  const scanIndex = collectorPs.indexOf("$chosenPort = 0");
+  if (
+    stopIndex < 0
+    || scanIndex < 0
+    || stopIndex > scanIndex
+    || !collectorPs.includes("agent-telemetry-collector\\.mjs")
+  ) {
+    fail("install-telemetry-collector.ps1 must stop the previously-running collector (own process only, command-line matched) before the port scan, so setup re-runs actually apply updates on a stable port.");
+  }
+}
+
+// A stale collector answering on 8787 must not satisfy the first-run wizard's
+// done-gate: "done" requires the hidden setup process to have actually exited
+// cleanly, not just any collector responding (a re-run previously jumped
+// straight to the completed screen while setup was still mid-download).
+if (!/setupSettled = demoMode \|\| setupEventlessFallback \|\| \(collectorReady && setupProcessDone && !setupExitError\)/.test(onboarding)) {
+  fail("The first-run wizard must gate 'done' on the setup process finishing AND collector health, so a stale collector cannot fake instant completion.");
 }
 
 if (!collectorPs.includes("Remove-HivemindStartupLauncher -Name $Name")) {

@@ -606,9 +606,22 @@ function money(value?: number): string {
   return `$${Math.max(0, Number(value) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+/** One inbound-rail chip: green dot when money can land through this source without a human. */
+function RevenueRailChip({ label, connected, detail }: { label: string; connected: boolean; detail: string }) {
+  const color = connected ? "var(--live)" : "var(--fg-4)";
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-3)", border: "1px solid var(--line)", borderRadius: 999, padding: "4px 10px" }}>
+      <span className={"dot" + (connected ? " live" : "")} style={{ color }} />
+      {label}
+      <span style={{ color: "var(--fg-4)" }}>· {detail}</span>
+    </span>
+  );
+}
+
 function RevenueSharePanel({ colony: c, handlers }: { colony: Colony; handlers: CockpitHandlers }) {
   const busy = handlers.busyId === c.id;
   const imported = Boolean(c.importedOperations || c.importedKnowledge);
+  const rail = c.revenueRail;
   const [amount, setAmount] = React.useState("");
   const [source, setSource] = React.useState<CompanyRevenueShareInput["source"]>("manual");
   const amountUsd = Number(amount);
@@ -632,6 +645,15 @@ function RevenueSharePanel({ colony: c, handlers }: { colony: Colony; handlers: 
         <MiniMetric label="external fee rate" value="0%" />
         <MiniMetric label="events" value={String(rollup?.eventCount ?? 0)} />
       </div>
+      {rail ? (
+        <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+          <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.06, color: rail.connected ? "var(--live)" : "var(--fg-4)" }}>
+            revenue rail: {rail.connected ? "connected" : "not connected"}
+          </span>
+          <RevenueRailChip label="x402 offers" connected={rail.x402.connected} detail={rail.x402.detail} />
+          <RevenueRailChip label="stripe" connected={rail.stripe.connected} detail={rail.stripe.detail} />
+        </div>
+      ) : null}
       <form onSubmit={submit} style={{ marginTop: 16, display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", alignItems: "center" }}>
         <input aria-label="Revenue amount USD" type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="$ amount received" style={field} />
         <select aria-label="Revenue source" value={source} onChange={(e) => setSource(e.target.value as CompanyRevenueShareInput["source"])} style={{ ...field, cursor: "pointer" }}>

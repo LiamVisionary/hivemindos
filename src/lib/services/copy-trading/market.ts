@@ -10,12 +10,14 @@ import type { CopyTradeNetwork } from "@/lib/types/copy-trading";
 type Cached<T> = { value: T; at: number };
 const NATIVE_TTL_MS = 60_000;
 const MARKET_TTL_MS = 60_000;
+const EMPTY_MARKET_TTL_MS = 5_000;
 
 const nativeCache = new Map<string, Cached<number | null>>();
 const marketCache = new Map<string, Cached<TokenMarket>>();
 
 /** Deepest-pool price/liquidity/symbol for a token (all best-effort, may be null). */
 export type TokenMarket = {
+  source: "dexscreener" | "geckoterminal" | null;
   priceUsd: number | null;
   liquidityUsd: number | null;
   symbol: string | null;
@@ -73,7 +75,8 @@ type DexPair = {
 export async function tokenMarket(network: CopyTradeNetwork, tokenAddress: string): Promise<TokenMarket> {
   const key = `${network}:${tokenAddress.toLowerCase()}`;
   const cached = marketCache.get(key);
-  if (cached && Date.now() - cached.at < MARKET_TTL_MS) return cached.value;
+  const cacheTtlMs = cached?.value.priceUsd == null ? EMPTY_MARKET_TTL_MS : MARKET_TTL_MS;
+  if (cached && Date.now() - cached.at < cacheTtlMs) return cached.value;
   let value: TokenMarket = emptyTokenMarket();
   try {
     const res = await fetch(`https://api.dexscreener.com/token-pairs/v1/${dexScreenerChain(network)}/${tokenAddress}`, {
@@ -91,6 +94,7 @@ export async function tokenMarket(network: CopyTradeNetwork, tokenAddress: strin
       const top = ownPairs[0];
       const price = top ? Number(top.priceUsd) : NaN;
       value = {
+        source: Number.isFinite(price) && price > 0 ? "dexscreener" : null,
         priceUsd: Number.isFinite(price) && price > 0 ? price : null,
         liquidityUsd,
         symbol: top?.baseToken?.symbol ?? null,
@@ -107,12 +111,64 @@ export async function tokenMarket(network: CopyTradeNetwork, tokenAddress: strin
   } catch {
     value = emptyTokenMarket();
   }
+  if (value.priceUsd == null) {
+    value = await geckoTerminalMarket(network, tokenAddress);
+  }
   marketCache.set(key, { value, at: Date.now() });
   return value;
 }
 
+type GeckoTokenResponse = {
+  data?: {
+    attributes?: {
+      address?: string;
+      symbol?: string;
+      price_usd?: string | number;
+      fdv_usd?: string | number;
+      market_cap_usd?: string | number | null;
+      total_reserve_in_usd?: string | number;
+      volume_usd?: { h24?: string | number };
+    };
+    relationships?: { top_pools?: { data?: Array<{ id?: string }> } };
+  };
+};
+
+async function geckoTerminalMarket(network: CopyTradeNetwork, tokenAddress: string): Promise<TokenMarket> {
+  try {
+    const chain = dexScreenerChain(network);
+    const response = await fetch(`https://api.geckoterminal.com/api/v2/networks/${chain}/tokens/${tokenAddress}`, {
+      headers: { accept: "application/json" },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!response.ok) return emptyTokenMarket();
+    const payload = (await response.json().catch(() => null)) as GeckoTokenResponse | null;
+    const attributes = payload?.data?.attributes;
+    const priceUsd = positiveFiniteOrNull(attributes?.price_usd);
+    if (priceUsd == null) return emptyTokenMarket();
+    const poolId = payload?.data?.relationships?.top_pools?.data?.[0]?.id;
+    const pairAddress = typeof poolId === "string" ? poolId.slice(poolId.indexOf("_") + 1) : null;
+    return {
+      source: "geckoterminal",
+      priceUsd,
+      liquidityUsd: positiveFiniteOrNull(attributes?.total_reserve_in_usd),
+      symbol: typeof attributes?.symbol === "string" ? attributes.symbol : null,
+      priceChange24hPct: null,
+      volume24hUsd: finiteOrNull(attributes?.volume_usd?.h24),
+      marketCapUsd: finiteOrNull(attributes?.market_cap_usd),
+      fdvUsd: finiteOrNull(attributes?.fdv_usd),
+      pairUrl: pairAddress ? `https://www.geckoterminal.com/${chain}/pools/${pairAddress}` : null,
+      pairCreatedAt: null,
+      buys24h: null,
+      sells24h: null,
+    };
+  } catch {
+    return emptyTokenMarket();
+  }
+}
+
 function emptyTokenMarket(): TokenMarket {
   return {
+    source: null,
     priceUsd: null,
     liquidityUsd: null,
     symbol: null,
@@ -128,8 +184,14 @@ function emptyTokenMarket(): TokenMarket {
 }
 
 function finiteOrNull(value: unknown): number | null {
+  if (value == null || value === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function positiveFiniteOrNull(value: unknown): number | null {
+  const parsed = finiteOrNull(value);
+  return parsed != null && parsed > 0 ? parsed : null;
 }
 
 /** Deepest-pool liquidity (USD) for a token via DexScreener, or null if unknown. */

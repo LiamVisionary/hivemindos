@@ -7,6 +7,7 @@ import {
   type AzureMarketplaceMachineCatalog,
   type AzureMarketplaceMachinePlan,
 } from "@/lib/services/hivemindos-machines-contract";
+import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 import styles from "./MachineInitModal.module.css";
 
 type Subscription = { subscriptionId: string; displayName: string; state?: string };
@@ -115,7 +116,7 @@ export function AzureMarketplaceMachineModal({ onBack, onClose }: { onBack: () =
   async function deploy() {
     if (!plan || !subscriptionId || !marketplaceReady) return;
     const monthlySoftware = plan.softwareUsdPerHour * 730;
-    const confirmed = window.confirm(
+    const confirmed = await confirmUserAction(
       `Deploy ${plan.label} to your Azure subscription?\n\nMicrosoft will bill your subscription for Azure infrastructure plus the HivemindOS software fee of $${plan.softwareUsdPerHour.toFixed(2)}/running hour (about $${monthlySoftware.toFixed(2)} for 730 running hours). Azure infrastructure, public IPv4, storage, bandwidth, tax, and regional pricing are separate and do not have a universal hard spending cap.\n\nThis also accepts the Microsoft Marketplace terms for this HivemindOS plan.`,
     );
     if (!confirmed) return;

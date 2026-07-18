@@ -57,6 +57,7 @@ export type ChatPromptUi = {
     label: string;
     value: string;
     permissionMode?: ChatPermissionMode;
+    suppressUserMessage?: boolean;
   }>;
   allowFreeText?: boolean;
   response?: {
@@ -194,6 +195,11 @@ export function messageText(message: ChatMessageLike, chatDisplayContent?: (mess
   return String(message?.content ?? message?.text ?? message?.body ?? "").trim();
 }
 
+export function isSilentCommandApprovalMessage(message: ChatMessageLike) {
+  if (message?.role !== "user") return false;
+  return /^Approved: run this pending local command now\.\s+Command:\s+\S[\s\S]*$/.test(messageText(message));
+}
+
 export function isChatScrollNearBottom(node: HTMLElement) {
   return node.scrollHeight - node.scrollTop - node.clientHeight <= CHAT_AUTO_SCROLL_THRESHOLD_PX;
 }
@@ -262,7 +268,7 @@ export function promptUiFromMessage(message: ChatMessageLike, content: string): 
         return value ? { label: promptOptionButtonLabel(value), value } : null;
       }
       if (!choice || typeof choice !== "object") return null;
-      const record = choice as { label?: unknown; value?: unknown; permissionMode?: unknown };
+      const record = choice as { label?: unknown; value?: unknown; permissionMode?: unknown; suppressUserMessage?: unknown };
       const value = plainPromptOptionText(String(record.value ?? record.label ?? ""));
       if (!value) return null;
       const label = promptOptionButtonLabel(String(record.label ?? value));
@@ -270,8 +276,9 @@ export function promptUiFromMessage(message: ChatMessageLike, content: string): 
         label,
         value,
         permissionMode: normalizeChatPermissionMode(record.permissionMode),
+        ...(record.suppressUserMessage === true ? { suppressUserMessage: true } : {}),
       };
-    }).filter((choice): choice is { label: string; value: string; permissionMode?: ChatPermissionMode } => Boolean(choice))
+    }).filter((choice): choice is { label: string; value: string; permissionMode?: ChatPermissionMode; suppressUserMessage?: boolean } => Boolean(choice))
     : [];
   if (structuredPrompt?.question && structuredChoices.length) {
     return {

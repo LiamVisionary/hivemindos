@@ -50,6 +50,16 @@ assert.match(
   /isAgentColdStartProcessEvent\(event\)/,
   "wake copy should require an explicit cold-start process event",
 );
+assert.match(
+  panel,
+  /\[\.\.\.events\]\.reverse\(\)\.find\(\(event\) => isAgentColdStartProcessEvent\(event\)\)/,
+  "cold-start loader state should follow the latest cold-start event rather than any stale running event",
+);
+assert.match(
+  panel,
+  /coldStartEvent && coldStartEvent\.status !== "completed"/,
+  "a completed latest cold-start event should switch immediately to the thinking loader",
+);
 assert.doesNotMatch(
   panel,
   /busy && !hasStreamingChunk && isFreeSwarmScoutAgent\(selectedAgent\)/,
@@ -74,6 +84,11 @@ assert.match(
   controller,
   /recordAgentRuntimeWarm\(selectedAgent\)/,
   "successful chat route responses should refresh the generic warm cache",
+);
+assert.match(
+  controller,
+  /recordAgentRuntimeWarm\(selectedAgent\);[\s\S]*appendRunChatProcess\(coldStartEvent\.label, coldStartEvent\.detail, "completed"\)/,
+  "a successful runtime response should complete the cold-start process event before streaming",
 );
 assert.match(
   coldStartStatus,
@@ -124,6 +139,21 @@ assert.match(
   modelsRoute,
   /x-hivemindos-free-model-container-state/,
   "local HivemindOS model route should forward the typed Scout container state header",
+);
+assert.match(
+  modelsRoute,
+  /fetchFreeModelCompletion[\s\S]*stream: body\.stream === true/,
+  "the local Scout proxy should preserve streaming requests",
+);
+assert.match(
+  modelsRoute,
+  /Accept: wantsStream \? "text\/event-stream" : "application\/json"/,
+  "the local Scout proxy should negotiate an SSE response for streaming requests",
+);
+assert.match(
+  modelsRoute,
+  /fetchFreeModelCompletion[\s\S]*new NextResponse\(response\.body/,
+  "the local Scout proxy should return the upstream stream without buffering it",
 );
 assert.match(
   panel,

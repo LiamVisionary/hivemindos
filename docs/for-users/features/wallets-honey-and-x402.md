@@ -81,9 +81,9 @@ Communities can publish bounded missions in Telegram for documentation, code, te
 
 To connect an account, first link and verify a wallet in HivemindOS. Then send `/linkhoney` to the community bot and enter its private one-time code in Wallets → Honey. `/missions` lists available work, `/honey` or `/honey balance` shows a private contribution summary, and `/honeyboard` shows the current seasonal leaderboard.
 
-Linked members can also recognize a specific useful contribution by replying with `/honey <why>`, using `/honey @name <why>`, or tapping a trophy. The bot places 🏆 beneath eligible group messages, so recognition is one tap instead of a manual reaction-menu action. The bot's seed reaction is only a “Give recognition” affordance and awards nothing by itself. Each accepted member recognition gives the recipient exactly 1 Honey. A linked giver can give up to three recognitions per UTC day—not 3 Honey of their own. Those recognitions reset daily and do not accumulate. The same pair can exchange only once per day in either direction, and a recipient can receive at most 5 Honey per day. Existing HIVE-tip participants can give immediately; other members wait seven days after linking a verified wallet.
+Any group member can recognize a specific useful contribution by replying with `/honey <why>`, using `/honey @name <why>`, or reacting to the message with 🏆 from Telegram's reaction menu. The bot never places the trophy itself, so a 🏆 on a message always means a member chose to give recognition. Each accepted member recognition gives the recipient exactly 1 Honey. No HivemindOS connection is needed to give or receive: Honey banks to the recipient's Telegram account right away, `/honey balance` shows it, and it transfers to their HivemindOS workspace automatically when they later connect. Connecting is one tap — Wallets → Honey → Connect Telegram opens the bot and pressing Start completes the link; sending `/linkhoney` for a one-time code remains available as a fallback. A giver can give up to three recognitions per UTC day—not 3 Honey of their own. Those recognitions reset daily and do not accumulate. The same pair can exchange only once per day in either direction, and a recipient can receive at most 5 Honey per day.
 
-The 🏆 reaction uses the same hosted identity, cooldown, daily quota, pair, recipient, and replay checks as the typed command. After a successful award, the bot removes its seed while the member's trophy remains. Removing a trophy, adding an ordinary reaction, reacting anonymously, or reacting to a message whose author the bot cannot identify awards nothing. The bot does not send the message text to the hosted service. To use this shortcut, the bot must be a group administrator, Group Privacy must be disabled, and the group's reaction settings must allow 🏆 (or all emoji). Telegram bots cannot change that group-wide reaction setting, so a group admin enables it once; `/honey <why>` remains the fallback.
+The 🏆 reaction uses the same hosted identity, cooldown, daily quota, pair, recipient, and replay checks as the typed command. Removing a trophy, adding an ordinary reaction, reacting anonymously, or reacting to a message whose author the bot cannot identify awards nothing. The bot does not send the message text to the hosted service. To use this shortcut, the bot must be a group administrator, Group Privacy must be disabled, and the group's reaction settings must allow 🏆 (or all emoji). Telegram bots cannot change that group-wide reaction setting, so a group admin enables it once; `/honey <why>` remains the fallback.
 
 The first seasonal leaderboard preserves historical HIVE-tip receiver rank at 1 Honey per 1,000,000 HIVE received. Mission, recognition, verified-work, and historical-seed labels show where Honey came from, but every Honey advances the same cumulative total and allowance levels. Telegram messages, ordinary reactions, invites, and raw activity do not earn Honey. Honey remains non-transferable and separate from HIVE tips, bounty escrow, and purchased Hivemind Cloud credits.
 
@@ -175,6 +175,17 @@ Optional accounting:
 - `HIVEMINDOS_PAID_AGENT_REWARD_HONEY_ENABLED=true` is a legacy-named compatibility flag that lets the trusted runtime submit signed Honey contribution observations for the agent's response.
 - `HIVEMINDOS_PAID_AGENT_MIRROR_MANAGED_HONEY=true` is a legacy-named compatibility flag that mirrors each settled x402 call into the internal Cloud-credit ledger as an equal credit/debit pair for operator reporting.
 - x402 remains an external per-call payment rail; Hivemind Cloud credits remain ordinary spend-only managed-service value.
+
+### Company Product Offers
+
+Self-hosted sellers can also publish a Zero Human Company catalog product as a one-shot x402 offer:
+
+- `GET /api/paid-agents/offers` lists published offers with prices and readiness (non-secret env names only).
+- `GET /api/paid-agents/offers/<slug>` serves one offer's public info; the price always comes from the company's server-side product catalog, never from the buyer's request.
+- `POST /api/paid-agents/offers/<slug>` requires x402 payment and returns an order acknowledgment; buyers can include a bounded `contact`/`note` for fulfillment.
+- A catalog entry (`HIVEMINDOS_PAID_AGENT_CATALOG_JSON`) or the default entry (`HIVEMINDOS_PAID_AGENT_COMPANY_ID`) can also name a `companyId` so per-call chat revenue attributes to a company.
+
+Offers reuse the paid-agent seller gate and payment env verbatim (`HIVEMINDOS_PAID_AGENT_SELLER_MODE`, `HIVEMINDOS_PAID_AGENT_PAY_TO`, facilitator settings). Settled purchases append the same local receipts and bridge into the company revenue ledger idempotently — see the Zero Human Companies doc's Automated Revenue Rail section.
 
 ## Wallet-Paid HivemindOS Models
 

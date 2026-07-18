@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Activity, AppWindow, Bell, Bot, Boxes, ChevronRight, Cloud, Coins, Cpu, FolderOpen, HeartHandshake, KeyRound, Kanban, LayoutGrid, List, Landmark, MessageSquare, Mic, Network, PhoneCall, Pin, PinOff, PlugZap, Search, ShieldCheck, Sparkles, TrendingUp, Wallet, Wrench, X } from "lucide-react";
+import { Activity, AppWindow, Bell, Bot, Boxes, ChevronRight, Cloud, Coins, Cpu, FolderOpen, HeartHandshake, KeyRound, Kanban, LayoutGrid, List, Landmark, MessageSquare, Mic, Network, PhoneCall, Pin, PinOff, PlugZap, Search, Share2, ShieldCheck, Sparkles, TrendingUp, Wallet, Wrench, X } from "lucide-react";
 
 import type { DashboardUtilityView } from "@/features/dashboard/dashboard-navigation";
 import { isPinnableView } from "@/features/dashboard/dashboard-navigation";
@@ -13,7 +13,7 @@ import styles from "./MorePanel.module.css";
 // The More menu's navigable set is the catalog's Utilities group plus the
 // removable Primary/Work rail views (Wallets, Trade, Swarm); "stake" is a
 // standalone route rather than a dashboard view.
-type MorePanelTarget = DashboardUtilityView | "wallet" | "trade" | "swarm";
+type MorePanelTarget = DashboardUtilityView | "wallet" | "trade" | "socials" | "swarm";
 type MoreItemId = MorePanelTarget | "stake";
 
 type BadgeTone = "honey" | "live" | "danger" | "neutral";
@@ -41,12 +41,12 @@ const MORE_GROUP_DEFS = [
   { name: "Build & automate", ids: ["mini-apps", "fusion", "aeon", "swarm", "podcast"] },
   { name: "Money & governance", ids: ["wallet", "trade", "governance", "cloud", "compute", "credit-admin", "stake"] },
   { name: "Fleet health", ids: ["maintenance", "memory", "sessions", "tools"] },
-  { name: "Connections", ids: ["integrations", "beeline", "my-apps", "messaging", "phone"] },
+  { name: "Connections", ids: ["socials", "integrations", "beeline", "my-apps", "messaging", "phone"] },
   { name: "Data & access", ids: ["env", "files", "notifications"] },
 ] as const satisfies ReadonlyArray<{ name: string; ids: readonly MoreItemId[] }>;
 
 type GroupedItemId = (typeof MORE_GROUP_DEFS)[number]["ids"][number];
-type RequiredMoreItemId = DashboardUtilityView | "wallet" | "trade" | "swarm";
+type RequiredMoreItemId = DashboardUtilityView | "wallet" | "trade" | "socials" | "swarm";
 type MissingFromMoreGroups = Exclude<RequiredMoreItemId, GroupedItemId>;
 // Compile-time proof the grouped cards cover every Utilities view + removable rail view.
 const _moreGroupsComplete: MissingFromMoreGroups extends never ? true : MissingFromMoreGroups = true;
@@ -177,6 +177,7 @@ export function MorePanel({
       podcast: { id: "podcast", icon: <Mic aria-hidden="true" />, eyebrow: "Deep dive audio", title: "Podcast", body: "Turn any source material into a grounded two-host podcast you can listen to.", keywords: "podcast audio deep dive notebooklm listen episode narration voice" },
       wallet: { id: "wallet", icon: <Wallet aria-hidden="true" />, eyebrow: "Agent money rails", title: "Wallets", body: "Manage agent wallets, balances, budgets, and usage.", keywords: "wallet wallets honey spend usage tokens balance budget" },
       trade: { id: "trade", icon: <TrendingUp aria-hidden="true" />, eyebrow: "Crypto & stocks", title: "Trade", body: "Buy, sell, and swap crypto and stocks with preview-and-confirm.", keywords: "trade trading buy sell swap crypto stocks perps polymarket" },
+      socials: { id: "socials", icon: <Share2 aria-hidden="true" />, eyebrow: "Social command center", title: "Socials", body: "Connect social accounts, manage posting voice and queue, and track performance.", keywords: "socials social x twitter telegram farcaster linkedin reddit post queue voice analytics" },
       governance: { id: "governance", icon: <Landmark aria-hidden="true" />, eyebrow: "Companies & budgets", title: "Zero Human Company", body: "Group agents into companies, set budgets and kill switches, and clear spend approvals.", keywords: "governance company companies budget approvals kill switch zhc", ...approvalBadge },
       cloud: { id: "cloud", icon: <Cloud aria-hidden="true" />, eyebrow: "Always-on Hermes", title: "Managed Cloud Agents", body: "Deploy dedicated pay-as-you-go agents with persistent workspaces that run while your computers are off.", keywords: "cloud managed hosted always on hermes pay as you go deploy", dot: "live" },
       compute: { id: "compute", icon: <Cpu aria-hidden="true" />, eyebrow: "GPU marketplace", title: "Hive Compute", body: "Route model calls through marketplace GPUs or install a worker to earn from spare local GPU capacity.", keywords: "compute gpu marketplace inference worker ollama earn rent models" },

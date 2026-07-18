@@ -49,6 +49,7 @@ const loadSchedulerPanel = () => import("@/features/dashboard/views/SchedulerPan
 const loadSwarmPanel = () => import("@/features/dashboard/views/SwarmPanel");
 const loadWalletPanel = () => import("@/features/dashboard/views/WalletPanel");
 const loadTradePanel = () => import("@/features/dashboard/views/trade/TradePanel");
+const loadSocialsPanel = () => import("@/features/dashboard/views/socials/SocialsPanel");
 const loadVaultPanel = () => import("@/features/dashboard/views/VaultPanel");
 const loadUtilityPanels = () => import("@/features/dashboard/views/UtilityPanels");
 const loadChatPanel = () => import("@/features/dashboard/views/ChatPanel");
@@ -71,6 +72,7 @@ export const SchedulerPanel = dynamic(() => loadSchedulerPanel().then((mod) => m
 export const SwarmPanel = dynamic(() => loadSwarmPanel().then((mod) => mod.SwarmPanel), { ssr: false, loading: routeLoadingFor("swarm") });
 export const WalletPanel = dynamic(() => loadWalletPanel().then((mod) => mod.WalletPanel), { ssr: false, loading: WalletPanelLoading });
 export const TradePanel = dynamic(() => loadTradePanel().then((mod) => mod.TradePanel), { ssr: false, loading: routeLoadingFor("trade") });
+export const SocialsPanel = dynamic(() => loadSocialsPanel().then((mod) => mod.SocialsPanel), { ssr: false, loading: routeLoadingFor("socials") });
 export const VaultPanel = dynamic(() => loadVaultPanel().then((mod) => mod.VaultPanel), { ssr: false, loading: routeLoadingFor("vault") });
 export const UtilityPanels = dynamic(() => loadUtilityPanels().then((mod) => mod.UtilityPanels), { ssr: false, loading: routeLoadingFromProps });
 export const ChatPanel = dynamic(() => loadChatPanel().then((mod) => mod.ChatPanel), { ssr: false, loading: routeLoadingFor("chat") });
@@ -115,6 +117,7 @@ export const DASHBOARD_VIEW_PRELOADERS: Partial<Record<DashboardView, () => Prom
   scheduler: loadSchedulerPanel,
   swarm: loadSwarmPanel,
   trade: loadTradePanel,
+  socials: loadSocialsPanel,
   phone: loadPhonePanel,
   fusion: loadFusionPanel,
   governance: loadGovernancePanel,

@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { appendFile, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { register } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 
 const root = process.cwd();
+register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 const tmp = await mkdtemp(join(tmpdir(), "hivemindos-full-vault-index-"));
 const vault = join(tmp, "vault");
 
@@ -56,6 +58,12 @@ assert.equal(existsSync(indexPath), true, "full-vault index should be generated"
 const index = await readFile(indexPath, "utf8");
 assert.match(index, /hivemindos\.full-vault-search\.v1/);
 assert.match(index, /"collection":"projects"/);
+const fullVaultIndex = await import("../src/lib/services/obsidian/full-vault-search-index.ts");
+await fullVaultIndex.rebuildFullVaultSearchIndex({ root: vault });
+const fullVaultStatus = await fullVaultIndex.fullVaultSearchIndexStatus(vault);
+assert.equal(fullVaultStatus.replayCoverage.policy.maxGenerations, 32, "full-vault status should expose its retention bound");
+assert.equal(fullVaultStatus.replayCoverage.policy.checkpointInterval, 4, "full-vault status should expose its checkpoint cadence");
+assert.equal(fullVaultStatus.replayCoverage.completeHistory, true, "a new full-vault index should have complete replay history");
 
 await appendFile(indexPath, `${JSON.stringify({
   schema: "hivemindos.full-vault-search.v1",

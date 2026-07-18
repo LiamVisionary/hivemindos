@@ -135,6 +135,21 @@
   stroke: currentColor;
 }
 
+.devSpeechButton {
+  display: inline-flex;
+  width: auto;
+  gap: 7px;
+  padding: 0 12px;
+  color: var(--brain-honey, #e7b45c);
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.devSpeechButton:disabled {
+  cursor: wait;
+}
+
 .visibleCount {
   flex: 0 0 auto;
   color: var(--brain-fg-3, #76726a);

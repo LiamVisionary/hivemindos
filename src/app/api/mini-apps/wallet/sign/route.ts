@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - mini-app host SIWE sign-in message signing pinned to the official domain; no transaction or fund movement.
 import { type NextRequest } from "next/server";
 
 import {

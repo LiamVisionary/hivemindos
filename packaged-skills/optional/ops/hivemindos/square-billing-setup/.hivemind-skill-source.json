@@ -1,0 +1,17 @@
+{
+  "upstreamName": "Square Billing Setup",
+  "upstreamSlug": "square-billing-setup",
+  "hiveSlug": "square-billing-setup",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/ops/hivemindos/square-billing-setup",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-16T23:02:02Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional operations skills",
+  "sourcePath": "packaged-skills/optional/ops/hivemindos/square-billing-setup",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Genericizes the originating storefront project: business name, local repo path, and real Square location IDs replaced with placeholders.",
+    "Keeps the credential taxonomy, Vercel scope traps, webhook rules, sandbox/production testing recipes, and the pre_populated_data retry fix pattern."
+  ]
+}

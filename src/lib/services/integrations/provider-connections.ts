@@ -61,6 +61,10 @@ const VERIFY_BY_PROVIDER: Record<ConnectionProviderKey, ProviderSpec["verify"]> 
   medusa: verifyMedusa,
   monid: verifyMonid,
   clawbank: verifyClawBank,
+  "telegram-social": verifyTelegramSocial,
+  farcaster: verifyFarcaster,
+  linkedin: verifyLinkedIn,
+  reddit: verifyReddit,
 };
 
 const PROVIDERS: ProviderSpec[] = CONNECTOR_MANIFESTS.map((manifest) => ({
@@ -182,6 +186,9 @@ function providerOAuthReady(key: ConnectionProviderKey, sharedEnv: Record<string
     return slackOAuthClientReady();
   }
   if (key === "azure") return azureOAuthClientReady();
+  if (key === "linkedin") {
+    return Boolean(sharedEnvValue("LINKEDIN_OAUTH_CLIENT_ID", sharedEnv) && sharedEnvValue("LINKEDIN_OAUTH_CLIENT_SECRET", sharedEnv));
+  }
   return false;
 }
 
@@ -477,6 +484,88 @@ async function verifyClawBank(token: string): Promise<VerifyResult> {
     if (!me.ok) return { ok: false, error: me.error || `ClawBank rejected the token (HTTP ${me.status}).` };
     const wallet = me.data?.wallet?.address;
     return { ok: true, account: me.data?.email || (wallet ? `wallet ${wallet.slice(0, 6)}…${wallet.slice(-4)}` : undefined) };
+  });
+}
+
+async function verifyTelegramSocial(token: string): Promise<VerifyResult> {
+  return apiCheck(async () => {
+    const response = await fetch(`https://api.telegram.org/bot${encodeURIComponent(token)}/getMe`, {
+      cache: "no-store",
+      headers: { "User-Agent": USER_AGENT },
+      signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
+    });
+    const payload = await response.json().catch(() => null) as { ok?: boolean; result?: { username?: string }; description?: string } | null;
+    if (!payload?.ok) return { ok: false, error: payload?.description || `Telegram rejected the bot token (HTTP ${response.status}).` };
+    return { ok: true, account: payload.result?.username ? `@${payload.result.username}` : undefined };
+  });
+}
+
+// Neynar has no dedicated "whoami" endpoint for API keys, so validity is proven
+// by a cheap read (user fid 1) — 200 means the key is live.
+async function verifyFarcaster(token: string): Promise<VerifyResult> {
+  return apiCheck(async () => {
+    const response = await fetch("https://api.neynar.com/v2/farcaster/user/bulk?fids=1", {
+      cache: "no-store",
+      headers: { "x-api-key": token, "User-Agent": USER_AGENT },
+      signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
+    });
+    if (!response.ok) return { ok: false, error: `Neynar rejected the key (HTTP ${response.status}).` };
+    return { ok: true, account: "Neynar key" };
+  });
+}
+
+async function verifyLinkedIn(token: string): Promise<VerifyResult> {
+  return apiCheck(async () => {
+    const response = await fetch("https://api.linkedin.com/v2/userinfo", {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${token}`, "User-Agent": USER_AGENT },
+      signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
+    });
+    if (!response.ok) return { ok: false, error: `LinkedIn rejected the access token (HTTP ${response.status}).` };
+    const payload = await response.json().catch(() => null) as { name?: string; email?: string } | null;
+    return { ok: true, account: payload?.name || payload?.email };
+  });
+}
+
+// Script-app password grant: mint an access token with the Basic client id/secret
+// pair, then prove it against /api/v1/me. The client id, username, and password
+// arrive as setup fields (shared env); the pasted "token" is the client secret.
+async function verifyReddit(clientSecret: string, sharedEnv: Record<string, string>): Promise<VerifyResult> {
+  const clientId = sharedEnvValue("REDDIT_CLIENT_ID", sharedEnv);
+  const username = sharedEnvValue("REDDIT_USERNAME", sharedEnv);
+  const password = sharedEnvValue("REDDIT_PASSWORD", sharedEnv);
+  if (!clientId || !username || !password) {
+    return { ok: false, error: "Reddit needs the client ID, username, and password setup fields." };
+  }
+  return apiCheck(async () => {
+    const tokenResponse = await fetch("https://www.reddit.com/api/v1/access_token", {
+      method: "POST",
+      cache: "no-store",
+      headers: {
+        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString("base64")}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": USER_AGENT,
+      },
+      body: new URLSearchParams({ grant_type: "password", username, password }),
+      signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
+    });
+    const tokenPayload = await tokenResponse.json().catch(() => null) as { access_token?: string; error?: string } | null;
+    if (!tokenResponse.ok || !tokenPayload?.access_token) {
+      return {
+        ok: false,
+        error: tokenPayload?.error
+          ? `Reddit rejected the credentials (${tokenPayload.error}).`
+          : `Reddit rejected the credentials (HTTP ${tokenResponse.status}).`,
+      };
+    }
+    const meResponse = await fetch("https://oauth.reddit.com/api/v1/me", {
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${tokenPayload.access_token}`, "User-Agent": USER_AGENT },
+      signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
+    });
+    if (!meResponse.ok) return { ok: false, error: `Reddit rejected the minted token (HTTP ${meResponse.status}).` };
+    const me = await meResponse.json().catch(() => null) as { name?: string } | null;
+    return { ok: true, account: me?.name ? `u/${me.name}` : undefined };
   });
 }
 

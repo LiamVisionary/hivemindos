@@ -35,6 +35,8 @@ Customers pay when HivemindOS operates an ongoing service on their behalf:
 - managed model and API access without customer-owned provider accounts
 - private deployment, identity controls, support, and service commitments
 
+Wherever agents run, official reputation, entitlement, settlement, and payout decisions remain server-controlled. Local environments, client configuration, and client-supplied claims cannot mint credit, entitlements, or payouts.
+
 ## Commercial Plans
 
 The managed service owns the official catalog. Launch packaging is intentionally small:
@@ -169,7 +171,7 @@ Honey is one cumulative, non-transferable, non-spendable record of verified ecos
 
 Staking HIVE is optional membership across six bee tiers: Honeybee, Bumblebee, Mason Bee, Orchid Bee, Carpenter Bee, and Queen Bee. The tiers preserve three benefits: higher Honey earning multipliers, higher free-agent usage multipliers, and member pricing advertised as up to 61% off on participating services. Exact service prices remain server-owned.
 
-HivemindOS allocates 15% of recognized platform revenue to HIVE buybacks and a separate 15% to the company treasury. The treasury does not fund the buybacks, the two allocations use separate accounting rails, and the tokenomics policy assigns no fixed use to the remaining 70%.
+HivemindOS allocates 15% to HIVE buybacks and a separate 15% to the company treasury, each computed on a server-owned per-service allocation basis published in the official commercial catalog — realized margin for most managed services, recognized platform revenue for others. The treasury does not fund the buybacks, the two allocations use separate accounting rails, and the tokenomics policy assigns no fixed use to the remainder.
 
 The live [HIVE Buyback Ledger](https://hivemindos.app/buybacks/) is the source of truth for execution status and completed purchases. It preserves Hive Research's first paid production run and confirmed HIVE purchase on Base as historical evidence. HivemindOS does not burn HIVE. Buybacks create no staking payout, ownership right, treasury claim, price promise, or Honey-to-HIVE conversion.
 

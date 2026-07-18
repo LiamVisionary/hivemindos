@@ -276,29 +276,80 @@ export const HALO_FRAGMENT = /* glsl */ `
   }
 `;
 
+// Pulsating spherical energy core at the organ's center: a fake-lit orb (no
+// angular rays — nothing star-like) with a defined limb, churning plasma
+// interior, hot nucleus, and a soft aura just outside the sphere. The
+// billboard scale and fragment brightness share vPulse so the orb visibly
+// enlarges/shrinks and brightens as one breath. uMotion freezes the pulse
+// mid-breath for reduced motion.
 export const CORE_GLOW_VERTEX = /* glsl */ `
   uniform float uSize;
+  uniform float uTime;
+  uniform float uMotion;
   varying vec2 vUv;
+  varying float vPulse;
   void main() {
     vUv = uv;
+    float slow = 0.5 + 0.5 * sin(uTime * 1.35);
+    float fast = 0.5 + 0.5 * sin(uTime * 2.3 + 1.7);
+    vPulse = mix(0.5, slow * 0.7 + fast * 0.3, uMotion);
     vec4 mv = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
-    mv.xy += position.xy * uSize;
+    mv.xy += position.xy * uSize * (0.86 + 0.24 * vPulse);
     gl_Position = projectionMatrix * mv;
   }
 `;
 
 export const CORE_GLOW_FRAGMENT = /* glsl */ `
+  uniform float uTime;
+  uniform float uMotion;
   varying vec2 vUv;
+  varying float vPulse;
+  float coreHash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+  }
+  float coreNoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(coreHash(i), coreHash(i + vec2(1.0, 0.0)), u.x),
+      mix(coreHash(i + vec2(0.0, 1.0)), coreHash(i + vec2(1.0, 1.0)), u.x),
+      u.y
+    );
+  }
   void main() {
-    float radius = length(vUv - 0.5) * 2.0;
+    vec2 p = (vUv - 0.5) * 2.0;
+    float radius = length(p);
     if (radius > 1.0) discard;
-    float outer = 1.0 - smoothstep(0.08, 1.0, radius);
-    float middle = 1.0 - smoothstep(0.02, 0.86, radius);
-    float core = 1.0 - smoothstep(0.0, 0.46, radius);
-    vec3 color = mix(vec3(0.05, 0.2, 0.88), vec3(0.35, 0.16, 0.95), middle);
-    color = mix(color, vec3(0.38, 0.66, 1.0), core);
-    float alpha = outer * 0.045 + middle * 0.07 + core * 0.095;
-    gl_FragColor = vec4(color, alpha);
+    float t = uTime * uMotion;
+    // Slow rotation churns the plasma; turbulence samples cartesian space so
+    // there is no seam at the atan wrap (no angular terms at all).
+    float spin = t * 0.1;
+    vec2 q = mat2(cos(spin), -sin(spin), sin(spin), cos(spin)) * p;
+    float turb = coreNoise(q * 3.4 + vec2(t * 0.36, -t * 0.28)) * 0.6
+      + coreNoise(q * 7.2 - vec2(t * 0.22, t * 0.34)) * 0.4;
+    const float orb = 0.62;
+    float rr = radius / orb;
+    vec3 color = vec3(0.16, 0.28, 0.9);
+    float alpha = 0.0;
+    if (rr < 1.0) {
+      // Fake sphere depth: h is 1 at the center, 0 at the limb. Rim glow plus
+      // a limb-accelerated interior swirl make the disk read as a volume.
+      float h = sqrt(1.0 - rr * rr);
+      float depthTurb = coreNoise(q * (3.0 + 2.6 * (1.0 - h)) + vec2(t * 0.45, -t * 0.3));
+      float rim = pow(1.0 - h, 2.4);
+      float nucleus = pow(h, 3.0);
+      color = mix(color, vec3(0.5, 0.24, 1.0), clamp(turb, 0.0, 1.0));
+      color = mix(color, vec3(0.55, 0.75, 1.0), depthTurb * 0.45);
+      color = mix(color, vec3(0.72, 0.78, 1.0), rim * 0.85);
+      color = mix(color, vec3(0.98, 0.99, 1.0), nucleus * 0.9);
+      alpha = (0.26 + 0.3 * depthTurb) * (1.0 - rim) + rim * 0.5 + nucleus * 0.55;
+    }
+    float aura = step(orb, radius) * (1.0 - smoothstep(orb, 1.0, radius));
+    color = mix(color, vec3(0.4, 0.45, 1.0), aura * 0.8);
+    alpha += aura * (0.1 + 0.08 * turb);
+    float breath = 0.78 + 0.22 * vPulse;
+    gl_FragColor = vec4(color, alpha * breath);
   }
 `;
 

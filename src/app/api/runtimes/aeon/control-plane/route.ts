@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - dashboard AEON runtime-management control plane, same operator family as the baselined runtime admin routes.
 import { NextRequest } from "next/server";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import { aeonWorkspaceRoot } from "@/lib/services/runtime-adapters/aeon";

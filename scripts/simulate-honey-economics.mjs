@@ -25,9 +25,12 @@ assert.deepEqual(standardRoute, {
   grossPlatformRevenueUsd: 25,
 });
 
-assert.match(investorPolicy, /Honey \| A non-transferable record of reviewed ecosystem contribution/);
+assert.match(investorPolicy, /Honey \| One cumulative, non-transferable, non-spendable record of verified ecosystem contribution/);
 assert.match(investorPolicy, /Hivemind Cloud credits \| Purchased, spend-only service value/);
-assert.match(investorPolicy, /does not promise a fixed revenue split/i);
+// The "does not promise a fixed revenue split" line was deliberately replaced
+// (2026-07-13, 0c1c3c3e6) by the fixed 15% buyback allocation policy; the
+// no-holder-rights commitment is the protection that must never regress.
+assert.match(investorPolicy, /creates no holder or staker ownership, redemption right, revenue share, governance right, or claim on treasury assets/i);
 assert.doesNotMatch(investorPolicy, /5% of (?:the )?creator/i);
 assert.match(honeyRoute, /HIVEMINDOS_HONEY_HIVE_CONVERSION_ENABLED/);
 assert.match(honeyRoute, /status: 403/);

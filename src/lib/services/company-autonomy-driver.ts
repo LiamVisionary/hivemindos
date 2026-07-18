@@ -14,6 +14,7 @@ import { readBoard, reclaimStaleTasks } from "@/lib/services/kanban/local-kanban
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import { notifyEscalation, resolveEscalationNotification, runEscalationSweep } from "@/lib/services/messaging/escalation-notify";
 import { syncCompanyTaskOutcomes } from "@/lib/services/company-memory";
+import { reconcileCompanyProposals } from "@/lib/services/company-needs-human-triage";
 import { companyExecutionCapability } from "@/lib/services/company-execution-capabilities";
 import { inspectCompanyAeonActivity } from "@/lib/services/company-aeon-binding";
 import { readSalesContentMachine } from "@/lib/services/sales-content";
@@ -174,6 +175,9 @@ const revenueNudgeMinAgeMs = () => envNum("HIVEMINDOS_COMPANY_REVENUE_NUDGE_MIN_
 // Auto-pause "you have N approvals waiting" re-notify cadence — a paused company
 // is otherwise silent, so remind at most this often (deduped by company key).
 const autonomyPauseNudgeTtlMs = () => envNum("HIVEMINDOS_COMPANY_PAUSE_NUDGE_TTL_MS", 6 * 3_600_000); // 6h
+// Backpressure default for companies with NO autonomyPause config. Explicit
+// per-company maxWaitingOnHuman (including 0 = off) always wins.
+const defaultMaxWaitingOnHuman = () => envNum("HIVEMINDOS_COMPANY_MAX_WAITING_DEFAULT", 12);
 // Standby instances (lease held elsewhere) re-check the lease this often — a
 // tiny file read — so a killed holder is replaced within about a minute.
 const standbyPollMs = () => envNum("HIVEMINDOS_COMPANY_DRIVER_STANDBY_POLL_MS", 60_000);
@@ -364,6 +368,11 @@ async function tickOnce(): Promise<void> {
     const board = await readBoard(null, {});
     const recorded = await syncCompanyTaskOutcomes(companies, board.tasks ?? []);
     if (recorded > 0) console.log(`[company-autonomy-driver] recorded ${recorded} task outcome(s) into company memory`);
+    // Then settle proposals whose source task moved on (completed, archived,
+    // rescued, re-queued, expired) — the proposal inbox must mirror the board,
+    // not accumulate every ask ever made (113 stale pending measured 2026-07-16).
+    const reconciled = await reconcileCompanyProposals(companies, board.tasks ?? []);
+    if (reconciled.settled > 0) console.log(`[company-autonomy-driver] settled ${reconciled.settled} stale company proposal(s)`);
   } catch (error) {
     console.warn("[company-autonomy-driver] memory sync failed:", error instanceof Error ? error.message : error);
   }
@@ -510,7 +519,11 @@ async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof r
       // auto-releases the moment the human clears enough to drop back under the
       // threshold — no Stop button, no permanent halt. A low-severity, in-app-only
       // nudge (deduped per company) tells the operator why the company went quiet.
-      const pauseThreshold = company.autonomyPause?.maxWaitingOnHuman ?? 0;
+      // Unconfigured companies get a non-zero DEFAULT: opt-in backpressure shipped
+      // off, and the one live company ballooned to 115 waiting items while the
+      // planner kept dispatching fresh waves (measured 2026-07-16). Explicit
+      // per-company config still wins; 0 disables only when set deliberately.
+      const pauseThreshold = company.autonomyPause?.maxWaitingOnHuman ?? defaultMaxWaitingOnHuman();
       if (pauseThreshold > 0) {
         const waiting = countCompanyWaitingOnHuman(tasks, company.id, company.autonomyPause);
         if (waiting >= pauseThreshold) {

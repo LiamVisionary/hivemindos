@@ -151,7 +151,14 @@ try {
   assert.doesNotMatch(projectMarkdown, /bad tag!/);
 
   await mkdir(join(vaultPath, "Inbox"), { recursive: true });
-  await writeFile(join(vaultPath, "Inbox", "Loose idea.md"), "# Idea\n\nWhat if we made onboarding visual?\n", "utf8");
+  // Routed filenames date from the note's `created:` frontmatter (falling back to
+  // file mtime, which is the real wall clock) — pin it so the assertion below
+  // stays deterministic on any day the suite runs.
+  await writeFile(
+    join(vaultPath, "Inbox", "Loose idea.md"),
+    "---\ncreated: 2026-07-16T16:59:00.000Z\n---\n# Idea\n\nWhat if we made onboarding visual?\n",
+    "utf8",
+  );
   const pending = await processPendingBrainDropInbox({
     vaultPath,
     now: new Date("2026-07-16T17:00:00.000Z"),

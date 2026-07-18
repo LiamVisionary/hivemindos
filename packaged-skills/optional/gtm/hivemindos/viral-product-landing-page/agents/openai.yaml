@@ -1,0 +1,4 @@
+interface:
+  display_name: "Viral Product Landing Page"
+  short_description: "Audit landing pages for memorable conversion."
+  default_prompt: "Use $viral-product-landing-page to critique this landing page and suggest sharper hero, CTA, pricing, proof, and share-preview changes."

@@ -21,6 +21,7 @@ import {
   agentMenuStatusLabel,
   isChatScrollNearBottom,
   isFixtureChatMachine,
+  isSilentCommandApprovalMessage,
   messageKey,
   messageText,
   normalizeSearchText,
@@ -39,14 +40,12 @@ import { evaluationOutputFingerprint } from "@/lib/services/evaluation/control-p
 import { selectChatPreviewTargets } from "@/lib/services/chat/chat-preview-targets";
 import {
   chatAppArtifactFromProject,
-  chatAppProjectDirectory,
-  chatAppProjectName,
-  chatAppTemplateForTask,
   chatWorkingDirectoryForThread,
   inferLegacyChatAppDirectory,
   latestChatAppArtifact,
   type ChatAppArtifact,
 } from "@/lib/services/chat/chat-app-artifact";
+import { capabilityAppProjectContext, prepareCapabilityAppProject } from "@/lib/services/chat/capability-app-project-client";
 import { APP_BUILDER_CONFIRMATIONS } from "@/lib/services/app-builder/contract";
 import { requestAppBuilderWithCollectorRecovery } from "@/lib/services/app-builder/collector-recovery";
 import { nativeOpenInAppSupported, openNativeInApp } from "@/lib/native/filesystem";
@@ -73,7 +72,10 @@ import {
 import { HexIco, ICON_PATHS, Ico, POP_STYLE, headerIconBtnStyle } from "./composer-primitives";
 
 function coldStartStatusText(events: any[], selectedAgent: any) {
-  return events.some((event) => isAgentColdStartProcessEvent(event)) ? agentWakeStatusText(selectedAgent) : undefined;
+  const coldStartEvent = [...events].reverse().find((event) => isAgentColdStartProcessEvent(event));
+  return coldStartEvent && coldStartEvent.status !== "completed"
+    ? agentWakeStatusText(selectedAgent)
+    : undefined;
 }
 
 function elapsedLabel(startedAt: number | undefined, nowMs: number) {
@@ -213,7 +215,7 @@ export function ChatExchangePanel(props: any) {
   } = props;
 
   const [capabilityPlanDrafts, setCapabilityPlanDrafts] = useState<Record<string, CapabilityApprovalPlan>>({});
-  const renderMessages = useMemo(() => collapseSameTurnGenerationMessages(visibleMessages).map((message) => {
+  const renderMessages = useMemo(() => collapseSameTurnGenerationMessages(visibleMessages).filter((message) => !isSilentCommandApprovalMessage(message)).map((message) => {
     const planId = message.capabilityApproval?.id;
     return planId && capabilityPlanDrafts[planId]
       ? { ...message, capabilityApproval: capabilityPlanDrafts[planId] }
@@ -353,40 +355,25 @@ export function ChatExchangePanel(props: any) {
     });
   }, [selectedChatStorageKey, setMessagesByAgent]);
 
-  function planUsesAppBuilder(plan: CapabilityApprovalPlan) {
-    return plan.items.some((item) => {
-      if (item.decision === "remove" || item.decision === "reject") return false;
-      const candidate = item.candidates.find((entry) => entry.id === item.selectedCapabilityId) ?? item.candidates[0];
-      return candidate?.id === "hive-action:apps.build" || candidate?.locator === "/api/app-builder";
+  async function prepareReviewedCapabilityAppProject(plan: CapabilityApprovalPlan) {
+    const prepared = await prepareCapabilityAppProject({
+      plan,
+      baseDirectory: chatWorkingDirectory,
+      machine: {
+        key: selectedChatMachine?.key,
+        name: machineLabel,
+        collectorUrl: collectorUrl || undefined,
+      },
     });
-  }
-
-  async function prepareCapabilityAppProject(plan: CapabilityApprovalPlan) {
-    if (!planUsesAppBuilder(plan)) return undefined;
-    const baseDirectory = chatWorkingDirectory;
-    const directory = chatAppProjectDirectory(baseDirectory, plan.task, plan.id);
-    const data = await requestAppBuilder({
-      action: "create",
-      backend: "local",
-      directory,
-      workspaceDirectory: baseDirectory,
-      name: chatAppProjectName(plan.task),
-      templateId: chatAppTemplateForTask(plan.task),
-      machineKey: selectedChatMachine?.key,
-      collectorUrl: collectorUrl || undefined,
-      confirmation: APP_BUILDER_CONFIRMATIONS.createProject,
-    });
-    const project = appBuilderProject(data);
-    if (!project) throw new Error("App Builder did not return the created project.");
-    setThreadAppProjectState({ storageKey: selectedChatStorageKey, project });
-    return chatAppArtifactFromProject(project, { key: selectedChatMachine?.key, name: machineLabel });
+    if (prepared) setThreadAppProjectState({ storageKey: selectedChatStorageKey, project: prepared.project });
+    return prepared?.artifact;
   }
 
   async function submitCapabilityPlan(plan: CapabilityApprovalPlan) {
     if (!sendPromptMessage || capabilityPlanSubmittingId) return;
     setCapabilityPlanSubmittingId(plan.id);
     try {
-      const appArtifact = await prepareCapabilityAppProject(plan);
+      const appArtifact = await prepareReviewedCapabilityAppProject(plan);
       const response = await fetch("/api/chat/capability-approval", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -407,14 +394,7 @@ export function ChatExchangePanel(props: any) {
       const approvalRequestAttachments = approvalMessageIndex > 0
         ? [...renderMessages.slice(0, approvalMessageIndex)].reverse().find((message) => message.role === "user")?.attachments ?? []
         : [];
-      const appProjectContext = appArtifact ? [
-        "",
-        "Assigned App Builder project:",
-        `- Project id: ${appArtifact.projectId}`,
-        `- Directory: ${appArtifact.directory}`,
-        `- Template: ${appArtifact.templateId}`,
-        "Implement the app in that exact directory. Do not create a second project or use an untracked background preview server. Chat Preview owns installation and the durable runtime after the build finishes.",
-      ].join("\n") : "";
+      const appProjectContext = capabilityAppProjectContext(appArtifact);
       await sendPromptMessage(`${data.continuationPrompt}${appProjectContext}`, {
         visiblePrompt: "Approved capability plan. Continue with the task.",
         promptResponse: { label: "Capability plan approved", value: `${data.continuationPrompt}${appProjectContext}` },

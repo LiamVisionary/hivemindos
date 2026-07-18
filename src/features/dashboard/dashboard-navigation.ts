@@ -8,6 +8,7 @@ export const DASHBOARD_VIEWS = [
   "history",
   "wallet",
   "trade",
+  "socials",
   "vault",
   "integrations",
   "beeline",
@@ -96,6 +97,7 @@ const DASHBOARD_ROUTE_CATALOG_BY_ID = {
   chat: { label: "Chat", routeLabel: "Agent Chat", detail: "Talk with an agent", group: "Primary", shortcut: "Cmd+4", keywords: ["chat", "agent chat", "conversation"], shelfGroup: 0 },
   wallet: { label: "Wallets", detail: "Agent wallets and usage", group: "Primary", shortcut: "Cmd+5", keywords: ["wallet", "honey", "spend", "usage", "tokens"], shelfGroup: 0 },
   trade: { label: "Trade", detail: "Crypto, stocks, and on-chain options", group: "Primary", keywords: ["trade", "trading", "buy", "sell", "swap", "stock", "stocks", "shares", "crypto", "perps", "options", "plume", "polymarket", "bridge", "xstocks", "alpaca", "robinhood"], shelfGroup: 0 },
+  socials: { label: "Socials", detail: "Social accounts, posting queue, voice, analytics", group: "Primary", keywords: ["socials", "social", "x", "twitter", "telegram", "farcaster", "linkedin", "reddit", "post", "posting", "queue", "voice", "soul", "analytics"], shelfGroup: 0 },
   governance: { label: "Companies", routeLabel: "Zero Human Company", detail: "Companies, budgets, spend approvals", group: "Utilities", keywords: ["zero human company", "zhc", "governance", "company", "companies", "budget", "approval", "approvals", "kill switch", "spend"], shelfGroup: 2 },
   cloud: { label: "Cloud Agents", detail: "Always-on managed Hermes agents", group: "Utilities", keywords: ["cloud", "managed agents", "hosted agents", "always on", "hermes", "pay as you go"], shelfGroup: 2 },
   more: { label: "More", detail: "Utility launcher", group: "Primary", shortcut: "Cmd+6", keywords: ["more", "utilities", "launcher"] },
@@ -130,6 +132,7 @@ const DASHBOARD_ROUTE_ORDER = [
   "chat",
   "wallet",
   "trade",
+  "socials",
   "governance",
   "cloud",
   "more",
@@ -203,7 +206,7 @@ const FIXED_FINAL_SHELF_VIEWS = ["notifications"] as const satisfies readonly Da
  * an older persisted pinned-utility list — written before they were removable —
  * doesn't mention them.
  */
-const REMOVABLE_RAIL_VIEWS = ["wallet", "trade", "swarm"] as const satisfies readonly DashboardView[];
+const REMOVABLE_RAIL_VIEWS = ["wallet", "trade", "socials", "swarm"] as const satisfies readonly DashboardView[];
 const REMOVABLE_RAIL_SET = new Set<DashboardView>(REMOVABLE_RAIL_VIEWS);
 
 export function isRemovableRailView(view: DashboardView): boolean {

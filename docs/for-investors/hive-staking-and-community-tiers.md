@@ -75,7 +75,7 @@ The universal public claim is “up to 61% off,” not a promise that every prod
 
 ## Revenue Policy Is Separate From Staking
 
-HivemindOS allocates 15% of recognized platform revenue to HIVE buybacks. A separate exact 15% goes to the company treasury. The treasury does not fund buybacks, and staked principal funds neither rail. The tokenomics policy assigns no fixed use to the remaining 70%.
+HivemindOS allocates 15% of each service's server-owned allocation basis — realized margin for most managed services, recognized platform revenue for others — to HIVE buybacks. A separate exact 15% goes to the company treasury. The treasury does not fund buybacks, and staked principal funds neither rail. The tokenomics policy assigns no fixed use to the remainder.
 
 Confirmed HIVE purchases are published in the [HIVE Buyback Ledger](https://hivemindos.app/buybacks/). HivemindOS does not burn HIVE. Buybacks and treasury allocations create no payout, ownership right, governance right, price promise, or claim for a holder or staker.
 

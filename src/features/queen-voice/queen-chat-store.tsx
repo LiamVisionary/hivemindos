@@ -78,6 +78,12 @@ type QueenChatSendOptions = {
   suppressWalletIntents?: boolean;
 };
 
+export type QueenVoiceScriptLine = {
+  text: string;
+  spokenText?: string;
+  pauseAfterMs: number;
+};
+
 type QueenChatContextValue = {
   turns: QueenChatTurn[];
   /** True when the chat history above the input is collapsed. Lifted here so
@@ -104,6 +110,9 @@ type QueenChatContextValue = {
   upsertTurn: (turn: QueenChatTurn) => void;
   removeTurn: (id: string) => void;
   clear: () => void;
+  /** Speak exact authored lines through Queen Bee's selected voice without
+   *  opening the microphone session or its perimeter glow. */
+  speakScript: (lines: readonly QueenVoiceScriptLine[]) => Promise<boolean>;
   /** Shared typed entry point: append the user turn, preserve screen context, and fill the reply. */
   sendText: (text: string, opts?: QueenChatSendOptions) => Promise<void>;
 };
@@ -121,6 +130,19 @@ function findAutoOpenDismissalTurnId(turns: QueenChatTurn[]): string | null {
     if (isAutoOpenAgentTurn(turn)) return turn.id;
   }
   return turns.at(-1)?.id ?? null;
+}
+
+function waitForQueenVoiceScriptPause(milliseconds: number, signal: AbortSignal) {
+  if (milliseconds <= 0 || signal.aborted) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    const finish = () => {
+      window.clearTimeout(timer);
+      signal.removeEventListener("abort", finish);
+      resolve();
+    };
+    const timer = window.setTimeout(finish, milliseconds);
+    signal.addEventListener("abort", finish, { once: true });
+  });
 }
 
 export function QueenChatProvider({
@@ -149,6 +171,7 @@ export function QueenChatProvider({
   const counterRef = React.useRef(0);
   const voiceChatActiveRef = React.useRef(false);
   const voiceTextAudioContextRef = React.useRef<AudioContext | null>(null);
+  const scriptedSpeechAbortRef = React.useRef<AbortController | null>(null);
   // Held in a ref so sendText's identity stays stable even though
   // beePilot.runVoiceCommand is recreated each render.
   const runRef = React.useRef<RunQueenCommand | undefined>(runQueenCommand);
@@ -157,6 +180,7 @@ export function QueenChatProvider({
   }, [runQueenCommand]);
 
   const setVoiceChatActive = React.useCallback((active: boolean) => {
+    if (active) scriptedSpeechAbortRef.current?.abort();
     voiceChatActiveRef.current = active;
     setVoiceChatActiveState(active);
   }, []);
@@ -182,6 +206,8 @@ export function QueenChatProvider({
   }, []);
 
   React.useEffect(() => () => {
+    scriptedSpeechAbortRef.current?.abort();
+    scriptedSpeechAbortRef.current = null;
     const context = voiceTextAudioContextRef.current;
     voiceTextAudioContextRef.current = null;
     void context?.close().catch(() => undefined);
@@ -255,6 +281,49 @@ export function QueenChatProvider({
     setDismissedAutoOpenTurnId(null);
     clearRecentMessageHold();
   }, [clearRecentMessageHold]);
+
+  const speakScript = React.useCallback(async (lines: readonly QueenVoiceScriptLine[]) => {
+    const playableLines = lines.filter((line) => line.text.trim());
+    if (!playableLines.length || voiceChatActiveRef.current) return false;
+
+    scriptedSpeechAbortRef.current?.abort();
+    const abort = new AbortController();
+    scriptedSpeechAbortRef.current = abort;
+    const audioContext = ensureVoiceTextAudioContext();
+    if (!audioContext) {
+      scriptedSpeechAbortRef.current = null;
+      return false;
+    }
+
+    setHistoryMinimized(false);
+    appendTurn({
+      who: "queen",
+      text: playableLines.map((line) => line.text.trim()).join("\n\n"),
+      source: "voice",
+    });
+
+    let playedEveryLine = true;
+    try {
+      for (const line of playableLines) {
+        const outcome = await playSpokenReply(
+          line.spokenText ?? line.text,
+          abort.signal,
+          audioContext,
+          true,
+        ).catch(() => "none" as const);
+        if (abort.signal.aborted) return false;
+        if (outcome === "none" || outcome === "muted") {
+          playedEveryLine = false;
+          break;
+        }
+        await waitForQueenVoiceScriptPause(line.pauseAfterMs, abort.signal);
+        if (abort.signal.aborted) return false;
+      }
+      return playedEveryLine;
+    } finally {
+      if (scriptedSpeechAbortRef.current === abort) scriptedSpeechAbortRef.current = null;
+    }
+  }, [appendTurn, ensureVoiceTextAudioContext, setHistoryMinimized]);
 
   const latestTurn = turns.at(-1);
   const recentActivitySignature = latestTurn
@@ -823,6 +892,7 @@ export function QueenChatProvider({
       upsertTurn,
       removeTurn,
       clear,
+      speakScript,
       sendText,
     }),
     [
@@ -834,6 +904,7 @@ export function QueenChatProvider({
       voiceChatActive,
       setVoiceChatActive,
       transcriptExpanded,
+      speakScript,
       appendTurn,
       updateTurn,
       upsertTurn,

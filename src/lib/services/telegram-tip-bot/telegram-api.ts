@@ -251,19 +251,6 @@ export class TelegramBotApi {
     return this.call<boolean>("setMyCommands", { commands });
   }
 
-  setMessageReaction(params: {
-    chatId: number | string;
-    messageId: number;
-    emoji?: string;
-  }): Promise<boolean> {
-    return this.call<boolean>("setMessageReaction", {
-      chat_id: params.chatId,
-      message_id: params.messageId,
-      reaction: params.emoji ? [{ type: "emoji", emoji: params.emoji }] : [],
-      is_big: false,
-    }, 5_000);
-  }
-
   getChatMember(params: { chatId: number | string; userId: number | string }): Promise<TgChatMember> {
     return this.call<TgChatMember>("getChatMember", { chat_id: params.chatId, user_id: params.userId });
   }

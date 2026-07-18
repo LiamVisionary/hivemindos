@@ -46,6 +46,8 @@ function FrNavIcon({ id }: { id: string }) {
       return (<svg {...p}><rect x="3" y="6" width="18" height="13" rx="2.2" /><path d="M3 9.5h18" /><circle cx="16.5" cy="13.5" r="1.1" fill="currentColor" stroke="none" /></svg>);
     case "trade":
       return (<svg {...p}><path d="M8 4v3M8 16v4" /><rect x="6" y="7" width="4" height="9" rx="1" /><path d="M16 4v4M16 17v3" /><rect x="14" y="8" width="4" height="9" rx="1" /></svg>);
+    case "socials":
+      return (<svg {...p}><circle cx="18" cy="5" r="2.5" /><circle cx="6" cy="12" r="2.5" /><circle cx="18" cy="19" r="2.5" /><path d="M8.3 10.8 15.7 6.2M8.3 13.2l7.4 4.6" /></svg>);
     case "governance":
       return <Building2 aria-hidden="true" width={20} height={20} strokeWidth={1.7} />;
     case "scheduler":

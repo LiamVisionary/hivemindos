@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - device-token mobile inbox reply surface for the human operator; agent outbound email rides the governed mailbox services instead.
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/utils/server-auth";
 import { replyToCompanyEmailThread } from "@/lib/services/agent-mailboxes";

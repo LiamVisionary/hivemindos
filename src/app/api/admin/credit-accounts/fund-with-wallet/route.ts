@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - operator-only admin surface for funding a service credit account; every payment stays behind the wallet approval gate's human confirmation.
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 

@@ -74,21 +74,21 @@ It writes typed memory notes under:
 Memory/Distillations/Agent Memory/
 ```
 
-It keeps a private append-only search index at:
+It keeps the established private search-index mirror at:
 
 ```text
 Operations/Brain Services/Agent Memory Index.jsonl
 ```
 
-The index is a materialized retrieval view for typed Agent Memory inside the private vault. It includes memory content so typed recall can avoid reopening every Agent Memory markdown note on the hot path. Markdown notes remain the durable human-readable source, and typed recall falls back to markdown when the index is absent or older sparse entries cannot be used.
+The index is a materialized retrieval view for typed Agent Memory inside the private vault. It includes memory content so typed recall can avoid reopening every Agent Memory markdown note on the hot path. Markdown notes remain the durable human-readable source. New writers publish a verified immutable generation first, update this JSONL compatibility mirror, and commit the current-generation pointer last. If an older client writes a newer compatibility mirror, readers honor it until the next rebuild.
 
-Entity-linked recall has a small append-only index at:
+Entity-linked recall has a small compatibility index at:
 
 ```text
 Operations/Brain Services/Agent Memory Entity Index.jsonl
 ```
 
-Each row links one typed Agent Memory record to a deterministic entity or alias extracted from wikilinks, tags, quoted phrases, acronyms, proper-name sequences, project/runtime/agent/machine fields, and known HivemindOS service names. The entity index is a local retrieval aid, not a second source of truth.
+Each row links one typed Agent Memory record to a deterministic entity or alias extracted from wikilinks, tags, quoted phrases, acronyms, proper-name sequences, project/runtime/agent/machine fields, and known HivemindOS service names. It is generated in the same memory generation as the typed index, so a recall snapshot never mixes memory rows and entity rows from different writes. The entity index is a local retrieval aid, not a second source of truth.
 
 Soft retrieval telemetry is appended at:
 
@@ -112,7 +112,55 @@ Full-vault recall has its own generated lexical index at:
 Operations/Brain Services/Full Vault Search Index.jsonl
 ```
 
-That index is inspired by QMD's useful non-embedding pieces: markdown collections, compact term-frequency records, and BM25-style lexical ranking before source notes are loaded. It maps normal vault folders to collections such as `memory`, `projects`, `synthesis`, `operations`, and `skills`, and supports lightweight query filters such as `collection:projects`, `path:Synthesis/`, quoted phrases, and `-excluded` terms. Index rebuilds replace the JSONL file atomically so concurrent recalls never read a partially written index. It does not store embeddings or call a model.
+That index is inspired by QMD's useful non-embedding pieces: markdown collections, compact term-frequency records, and BM25-style lexical ranking before source notes are loaded. It maps normal vault folders to collections such as `memory`, `projects`, `synthesis`, `operations`, and `skills`, and supports lightweight query filters such as `collection:projects`, `path:Synthesis/`, quoted phrases, and `-excluded` terms. Rebuilds publish a checksummed immutable generation and then replace the JSONL compatibility mirror, so concurrent recalls never read a partially written index. It does not store embeddings or call a model.
+
+### Durable writes, generations, and replay
+
+Memory writers coordinate through a cross-process lock. Each multi-note change is staged beside its destination and recorded in a recovery journal before any staged file is promoted:
+
+```text
+Operations/Brain Services/Agent Memory Transactions.jsonl
+```
+
+The source notes are promoted first. Typed index, entity index, source-note hashes, record counts, schema metadata, and checksums are then published under:
+
+```text
+Operations/Brain Services/Index Generations/agent-memory/<generation-id>/
+Operations/Brain Services/Index Generations/full-vault/<generation-id>/
+```
+
+The current pointer is replaced last. A crash after source promotion leaves a recoverable journal receipt; the next writer finishes any staged source files, rebuilds generated state from Markdown, and marks the transaction recovered. A corrupt current artifact fails checksum verification and readers try the verified parent generation, then scan older generations for the newest valid snapshot if more than one generation is damaged. Generation readers also fall back to legacy v1 full snapshots and the established JSONL paths, preserving older tools and manually managed vaults.
+
+Generations are complete logical snapshots without storing every snapshot as another complete physical copy. A checkpoint stores each artifact in full or gzip form. Generations between checkpoints store a content-addressed text delta when that is materially smaller than the best complete representation; otherwise that artifact stays full or compressed. Every stored payload and reconstructed artifact has its own SHA-256 receipt, and every delta binds the exact parent generation and parent content hash.
+
+History uses an explicit bounded retention policy:
+
+| Index | Maximum retained generations | Checkpoint interval |
+| --- | ---: | ---: |
+| Typed Agent Memory | 256 | 32 |
+| Full-vault lexical search | 32 | 4 |
+
+After the new pointer commits, retention advances only to a verified checkpoint, so it never leaves a retained delta without its base. This can retain fewer than the maximum when the safe boundary is later than the raw count boundary. Pruning removes generated index history only; it never removes the authoritative Markdown memory notes. Each index kind writes `coverage.json` after its first pruning pass with the cumulative number and final id pruned. `list-generations`, `hive-brain generations`, and memory health expose the active policy, retained/invalid counts, whether history is still complete, and the first generation from which replay is complete. A requested generation older than that visible boundary is unavailable rather than silently substituted. If the coverage receipt is damaged—or missing while retained manifests prove an earlier parent was removed—its status becomes invalid or missing and further pruning pauses instead of guessing how much history was already removed. A damaged store can therefore temporarily exceed its configured maximum until integrity is restored.
+
+Each durable memory, conversation mirror, compiled-knowledge page, generated full-vault row, and Brain Review proposal carries or derives a normalized SHA-256 content address. Typed memory blocks an exact active duplicate even when its title or memory key differs, unless a caller explicitly uses the existing duplicate override. Review proposals reuse an existing pending or approved proposal with the same kind and content hash.
+
+Use API action `list-generations` or `hive-brain generations` to inspect retained history and replay coverage. `generationId` on recall, or `hive-brain replay "<query>" --generation <id>`, answers from that verified retained snapshot only. Replay evaluates recency and relative-time language at the generation timestamp and excludes present-day usage telemetry and embeddings, so later activity cannot silently rerank history. API action `compare-generations`, or `hive-brain compare`, reports which recalled memories were added, removed, or changed rank between two retained snapshots. This generation replay is stricter than date-based temporal recall: it represents what the generated Agent Memory view actually contained at that point.
+
+Optional typed-memory embeddings remain a best-effort ranking signal. Every stored vector is bound to a configuration identity covering provider protocol, endpoint identity hash, model, requested dimensions, input limit, actual vector length, and source-content hash. Query-time scoring rejects mismatched or stale vectors instead of comparing truncated dimensions; a backfill produces new rows for the current identity.
+
+### Portable brain capsules
+
+A brain capsule is a single scoped file containing selected typed memories, optional compiled-knowledge domains, content hashes, provenance, checksums, and a small read-only lexical index. Export requires an explicit project or memory-id scope; it cannot silently package the entire vault. Capsules can have an expiry and can be encrypted with AES-256-GCM using a passphrase read from a named server environment variable. Plain capsule checksums detect corruption and inconsistent payload/index metadata, but they are not a sender signature: someone who can rewrite a plaintext capsule can also replace its checksums or expiry. Use encrypted capsules when recipients must detect tampering or trust the expiry, and exchange the passphrase separately.
+
+Capsules open and search read-only by default. Import preview removes exact content-hash duplicates. Import proposal mode creates deduplicated Brain Review proposals; it never writes Agent Memory directly, and normal Brain Review approval and apply gates still control durable changes.
+
+```bash
+hive-brain capsule-export --project atlas --compiled-domain atlas
+hive-brain capsule-export --memory-ids mem-... --passphrase-env HIVEMINDOS_CAPSULE_PASSPHRASE
+hive-brain capsule-open --capsule ~/.hivemindos/brain/capsules/example.hivebrain
+hive-brain capsule-search "launch decision" --capsule ~/.hivemindos/brain/capsules/example.hivebrain
+hive-brain capsule-import --capsule ~/.hivemindos/brain/capsules/example.hivebrain --enqueue
+```
 
 When the tiered path augments with full-vault recall, it includes normal vault markdown from `Memory/`, `Projects/`, `Synthesis/`, `Ideas/`, `Operations/`, `Skills/`, templates, and shared context notes. It intentionally includes `Operations/Secure/` reference/status notes so agents can know which credential names exist or are set. Plaintext secret values still belong only in shared env or encrypted artifacts and must not be printed, copied, summarized, or saved as memory.
 
@@ -169,7 +217,11 @@ The API supports:
 - `evolve`: save a new active memory while marking older Agent Memory notes as `superseded`.
 - `recall`: retrieve relevant shared-brain memories and vault notes by query, type, tags, project, optional `scope`, optional `temporalMode`, optional `asOf`, optional `includeOperational`, and optional usage tracking.
 - `answer`: return a grounded memory context pack from the matching memories and vault notes.
-- `rebuild-index`: scan existing markdown memory notes, append rich searchable entries to the private typed-memory index, and refresh the generated full-vault lexical index unless `includeFullVault: false` is passed.
+- `rebuild-index`: scan existing markdown memory notes, publish a compact verified typed-memory generation, and refresh the generated full-vault lexical index unless `includeFullVault: false` is passed.
+- `list-generations`: list retained verified and invalid typed-memory generations, identify the current pointer, and report retention policy and replay coverage.
+- `compare-generations`: replay one query across two typed-memory generations and return added, removed, unchanged, and rank-changed evidence.
+- `export-capsule`, `open-capsule`, and `search-capsule`: create or inspect a scoped, verified, read-only portable capsule.
+- `preview-capsule-import` and `propose-capsule-import`: dedupe import candidates and optionally place them in Brain Review without direct memory writes.
 - `record-usage`: append retrieved or final-answer usage telemetry for memory ids.
 - `proof: true`: attach a GitLawb memory receipt for this write.
 - `proof: "auto"`: attach receipts for durable memory types and high-confidence facts.
@@ -183,9 +235,12 @@ hive-brain remember --type preference --title "Short title" --content "Durable m
 hive-brain evolve --memory-id mem-... --content "Updated durable memory body"
 hive-brain record-operation --title "Provider request" --content "Request timed out" --operation-key "provider/request" --failure-key "provider/timeout" --outcome failure --task-id task-123
 hive-brain mine-patterns
+hive-brain generations
+hive-brain replay "what did we know about Atlas?" --generation <generation-id>
+hive-brain compare "Atlas launch" --from-generation <generation-id>
 ```
 
-Canonical heads and memory evolution keep agent memory from becoming a pile of contradictory notes. Every durable record carries a canonical `memoryKey`, derived from type, project, and title unless the caller supplies one. `remember` blocks a second active record with the same key and points the caller to the existing head. When a later reviewed fact, preference, instruction, or decision replaces an older one, callers use `action: "evolve"` with `memoryId` or `supersedes`. HivemindOS writes a new active note with the same key and `cognitiveStage: "system2"`, records `supersedes`, `supersededBy`, `evolutionRootId`, `evolutionType`, and optional `evolutionReason`, then appends replacement rows to `Agent Memory Index.jsonl` and entity rows to `Agent Memory Entity Index.jsonl`. Current recall returns the newest active canonical head by default, even for legacy records whose key is derived during indexing, and includes prior versions as `evolutionChain` evidence when relevant. `consolidate` reports an explicit-correction candidate when a newer active record says it corrects or replaces an older note but the two were never linked; this remains a reviewed `evolve` proposal and is never auto-applied.
+Canonical heads and memory evolution keep agent memory from becoming a pile of contradictory notes. Every durable record carries a canonical `memoryKey`, derived from type, project, and title unless the caller supplies one. `remember` blocks a second active record with the same key and points the caller to the existing head. When a later reviewed fact, preference, instruction, or decision replaces an older one, callers use `action: "evolve"` with `memoryId` or `supersedes`. HivemindOS stages the new active note and all superseded-note updates as one journaled source transaction, then publishes one replacement memory/entity generation. Current recall returns the newest active canonical head by default, even for legacy records whose key is derived during indexing, and includes prior versions as `evolutionChain` evidence when relevant. `consolidate` reports an explicit-correction candidate when a newer active record says it corrects or replaces an older note but the two were never linked; this remains a reviewed `evolve` proposal and is never auto-applied.
 
 Temporal intent is conservative. Phrases such as “used to,” “previously,” and “historical” request history; “as of <date>,” “before <date>,” and relative periods request an as-of cutoff. A bare date inside a memory title does not change current recall mode, the procedural word “before” does not imply history, explicit historical mode does not become an as-of filter, and a date-only “as of” includes the whole named day.
 

@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import http from "node:http";
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { canonicalMemoryKey, selectCanonicalMemoryHeads } from "./lib/hive-brain-canonical.mjs";
 import { atomicWriteFileSync } from "./lib/hive-brain-atomic.mjs";
@@ -67,6 +68,13 @@ function usage() {
   hive-brain health [--json]
   hive-brain consolidate [--apply-archives] [--json]
   hive-brain rebuild-index [--json]
+  hive-brain generations [--json]
+  hive-brain replay "query" --generation ID [--limit N] [--json]
+  hive-brain compare "query" --from-generation ID [--to-generation ID] [--json]
+  hive-brain capsule-export --project PROJECT [--memory-ids ID[,ID...]] [--compiled-domain DOMAIN] [--expires-at ISO] [--passphrase-env KEY]
+  hive-brain capsule-open --capsule PATH [--passphrase-env KEY] [--json]
+  hive-brain capsule-search "query" --capsule PATH [--passphrase-env KEY] [--limit N] [--json]
+  hive-brain capsule-import --capsule PATH [--passphrase-env KEY] [--enqueue] [--json]
   hive-brain flush-pending
 
 Examples:
@@ -168,6 +176,8 @@ function parseArgs(argv) {
       input.enqueueProposals = true;
     } else if (arg === "--include-operational") {
       input.includeOperational = true;
+    } else if (arg === "--include-superseded") {
+      input.includeSuperseded = true;
     } else if (arg === "--limit" || arg === "-n") {
       input.limit = Number(next || input.limit);
       index += 1;
@@ -216,6 +226,27 @@ function parseArgs(argv) {
       index += 1;
     } else if (arg === "--memory-ids") {
       input.memoryIds.push(...String(next || "").split(",").map((id) => id.trim()).filter(Boolean));
+      index += 1;
+    } else if (arg === "--generation") {
+      input.generationId = next;
+      index += 1;
+    } else if (arg === "--from-generation") {
+      input.fromGenerationId = next;
+      index += 1;
+    } else if (arg === "--to-generation") {
+      input.toGenerationId = next;
+      index += 1;
+    } else if (arg === "--capsule") {
+      input.capsulePath = expandHome(next);
+      index += 1;
+    } else if (arg === "--compiled-domain" || arg === "--compiled-domains") {
+      input.compiledDomains = [...(input.compiledDomains || []), ...String(next || "").split(",").map((item) => item.trim()).filter(Boolean)];
+      index += 1;
+    } else if (arg === "--expires-at") {
+      input.expiresAt = next;
+      index += 1;
+    } else if (arg === "--passphrase-env") {
+      input.passphraseEnv = next;
       index += 1;
     } else if (arg === "--usage-type") {
       input.usageType = next;
@@ -475,14 +506,50 @@ async function callApi(input) {
           });
         } else if (input.action === "rebuild-index") {
           result = await requestJson(base, "POST", { action: "rebuild-index", vaultPath: input.vaultPath });
+        } else if (input.action === "generations") {
+          result = await requestJson(base, "POST", { action: "list-generations", vaultPath: input.vaultPath });
+        } else if (input.action === "compare") {
+          result = await requestJson(base, "POST", {
+            action: "compare-generations",
+            vaultPath: input.vaultPath,
+            query: input.query,
+            limit: input.limit,
+            fromGenerationId: input.fromGenerationId,
+            toGenerationId: input.toGenerationId,
+          });
+        } else if (input.action === "capsule-export") {
+          result = await requestJson(base, "POST", {
+            action: "export-capsule",
+            vaultPath: input.vaultPath,
+            project: input.project,
+            memoryIds: input.memoryIds,
+            compiledDomains: input.compiledDomains,
+            includeSuperseded: Boolean(input.includeSuperseded),
+            expiresAt: input.expiresAt,
+            passphraseEnv: input.passphraseEnv,
+          });
+        } else if (["capsule-open", "capsule-search", "capsule-import"].includes(input.action)) {
+          result = await requestJson(base, "POST", {
+            action: input.action === "capsule-open"
+              ? "open-capsule"
+              : input.action === "capsule-search"
+                ? "search-capsule"
+                : input.enqueueProposals ? "propose-capsule-import" : "preview-capsule-import",
+            vaultPath: input.vaultPath,
+            capsulePath: input.capsulePath,
+            passphraseEnv: input.passphraseEnv,
+            query: input.query,
+            limit: input.limit,
+          });
         } else {
           result = await requestJson(base, "GET", null, {
-            mode: input.action === "recall" ? "recall" : "answer",
+            mode: input.action === "recall" || input.action === "replay" ? "recall" : "answer",
             q: input.query,
             limit: input.limit,
             minScore: input.minScore,
             scope: input.scope,
             includeOperational: input.includeOperational ? 1 : undefined,
+            generationId: input.generationId,
             vaultPath: input.vaultPath,
           });
         }
@@ -1008,7 +1075,7 @@ function readEmbeddingRows(root) {
       try {
         const parsed = JSON.parse(line);
         if (parsed.schema === "hivemindos.agent-memory-embedding.v1" && parsed.memoryId && Array.isArray(parsed.vector)) {
-          rows.set(parsed.memoryId, parsed.vector);
+          rows.set(parsed.memoryId, parsed);
         }
       } catch {
         // Ignore corrupt rows.
@@ -1018,6 +1085,28 @@ function readEmbeddingRows(root) {
     // Missing file -> no semantic layer locally.
   }
   return rows;
+}
+
+function embeddingIdentity(config = embeddingsConfig()) {
+  let endpointHash;
+  if (config.url) {
+    try {
+      const endpoint = /\/embeddings\/?$/.test(config.url) ? config.url : `${config.url.replace(/\/+$/, "")}/embeddings`;
+      const parsed = new URL(endpoint);
+      endpointHash = `sha256:${createHash("sha256").update(`${parsed.origin}${parsed.pathname}`).digest("hex")}`;
+    } catch {
+      endpointHash = `sha256:${createHash("sha256").update(config.url.split("?")[0]).digest("hex")}`;
+    }
+  }
+  const identity = {
+    schema: "hivemindos.embedding-identity.v1",
+    provider: "openai-compatible",
+    model: config.model,
+    requestedDimensions: config.dimensions,
+    maxInputCharacters: 6000,
+    endpointHash,
+  };
+  return { ...identity, configHash: `sha256:${createHash("sha256").update(JSON.stringify(identity)).digest("hex")}` };
 }
 
 async function embedQuery(query) {
@@ -1048,7 +1137,8 @@ async function embedQuery(query) {
 }
 
 function cosineSimilarity(left, right) {
-  const length = Math.min(left.length, right.length);
+  if (left.length !== right.length) return 0;
+  const length = left.length;
   if (!length) return 0;
   let dot = 0;
   let leftNorm = 0;
@@ -1062,15 +1152,23 @@ function cosineSimilarity(left, right) {
   return dot / (Math.sqrt(leftNorm) * Math.sqrt(rightNorm));
 }
 
-async function semanticScores(root, query) {
+async function semanticScores(root, query, records = []) {
   const scores = new Map();
   if (!embeddingsConfig().enabled || !query.trim()) return scores;
   const rows = readEmbeddingRows(root);
   if (!rows.size) return scores;
   const queryVector = await embedQuery(query);
   if (!queryVector) return scores;
-  for (const [memoryId, vector] of rows) {
-    const similarity = cosineSimilarity(queryVector, vector);
+  const identity = embeddingIdentity();
+  const recordsById = new Map(records.map((record) => [record.id, record]));
+  for (const [memoryId, row] of rows) {
+    if (row.configHash !== identity.configHash || row.model !== identity.model || row.dimensions !== queryVector.length) continue;
+    const record = recordsById.get(memoryId);
+    if (record) {
+      const contentHash = `sha256:${createHash("sha256").update(`${record.title}\n${record.content}`).digest("hex")}`;
+      if (row.contentHash !== contentHash) continue;
+    }
+    const similarity = cosineSimilarity(queryVector, row.vector);
     if (similarity > 0) scores.set(memoryId, Math.max(0, Math.min(1, similarity)));
   }
   return scores;
@@ -1095,7 +1193,7 @@ async function fallbackRecall(input) {
     const summary = usage.get(record.id);
     if (summary) record.usage = summary;
   }
-  const semantic = await semanticScores(root, effectiveQuery).catch(() => new Map());
+  const semantic = await semanticScores(root, effectiveQuery, memoryRecords).catch(() => new Map());
   const visibleMemoryRecords = memoryRecords.filter((record) => recordVisibleForRecall(record, scoringInput));
   const activeMemoryRecords = temporalRecallMode(scoringInput) === "current"
     ? selectCanonicalMemoryHeads(visibleMemoryRecords).records
@@ -1334,12 +1432,16 @@ function applyAnswerFloor(result, input) {
 
 async function main() {
   const input = parseArgs(process.argv);
-  const actions = ["answer", "recall", "remember", "evolve", "record-operation", "mine-patterns", "record-usage", "health", "consolidate", "rebuild-index", "flush-pending"];
+  const actions = ["answer", "recall", "remember", "evolve", "record-operation", "mine-patterns", "record-usage", "health", "consolidate", "rebuild-index", "generations", "replay", "compare", "capsule-export", "capsule-open", "capsule-search", "capsule-import", "flush-pending"];
   if (input.help || !actions.includes(input.action)) {
     usage();
     process.exit(input.help ? 0 : 2);
   }
-  if (["answer", "recall"].includes(input.action) && !input.query) throw new Error("A query is required.");
+  if (["answer", "recall", "replay", "compare", "capsule-search"].includes(input.action) && !input.query) throw new Error("A query is required.");
+  if (input.action === "replay" && !input.generationId) throw new Error("replay requires --generation.");
+  if (input.action === "compare" && !input.fromGenerationId) throw new Error("compare requires --from-generation.");
+  if (input.action === "capsule-export" && !input.project && !input.memoryIds.length) throw new Error("capsule-export requires --project or --memory-ids.");
+  if (["capsule-open", "capsule-search", "capsule-import"].includes(input.action) && !input.capsulePath) throw new Error(`${input.action} requires --capsule.`);
   if (input.action === "remember" && !input.content) throw new Error("remember requires --content.");
   if (input.action === "evolve" && !input.content) throw new Error("evolve requires --content.");
   if (input.action === "evolve" && !input.memoryId && !input.supersedes?.length) throw new Error("evolve requires --memory-id or --supersedes.");
@@ -1413,7 +1515,7 @@ async function main() {
       result = fallbackRecordUsage(applyProvenanceDefaults(input));
     } else if (input.action === "health") {
       result = fallbackHealth(input);
-    } else if (["mine-patterns", "consolidate", "rebuild-index"].includes(input.action)) {
+    } else if (["mine-patterns", "consolidate", "rebuild-index", "generations", "replay", "compare", "capsule-export", "capsule-open", "capsule-search", "capsule-import"].includes(input.action)) {
       throw new Error(`${input.action} needs the HivemindOS app API (start the app or set HIVEMINDOS_BRAIN_URL). ${error instanceof Error ? error.message : ""}`.trim());
     } else {
       result = await fallbackRecall(input);
@@ -1487,6 +1589,47 @@ async function main() {
   }
   if (input.action === "rebuild-index") {
     console.log(`Rebuilt memory index: ${result.scanned} memories, full-vault ${result.fullVaultIndex ? `${result.fullVaultIndex.indexed} notes` : "skipped"}.`);
+    return;
+  }
+  if (input.action === "generations") {
+    console.log(`Current Agent Memory generation: ${result.currentGenerationId || "none"}`);
+    if (result.coverage) {
+      const pruned = result.coverage.prunedGenerationCountKnown === false ? "unknown" : result.coverage.prunedGenerationCount;
+      console.log(`Replay coverage: ${result.coverage.completeHistory ? "complete history" : `complete from ${result.coverage.replayCompleteFrom || result.coverage.replayCompleteFromGenerationId || "unknown"}`}; retained=${result.coverage.retainedGenerationCount}; pruned=${pruned}; invalid=${result.coverage.invalidGenerationCount}`);
+      console.log(`Retention policy: at most ${result.coverage.policy?.maxGenerations ?? "?"} generations; checkpoint every ${result.coverage.policy?.checkpointInterval ?? "?"}.`);
+      if (result.coverage.coverageReceipt === "invalid") console.log("Warning: replay coverage receipt is invalid; retention is paused until its last valid copy is restored.");
+      if (result.coverage.coverageReceipt === "missing") console.log("Warning: replay coverage receipt is missing after earlier history removal; retention is paused until its last valid copy is restored.");
+      if (result.coverage.unexpectedMissingParentCount) console.log(`Warning: ${result.coverage.unexpectedMissingParentCount} retained generation parent(s) are unexpectedly missing; retention is paused.`);
+    }
+    for (const generation of (result.generations || []).slice(0, 30)) {
+      console.log(`- ${generation.generationId}${generation.current ? " (current)" : ""} — ${generation.createdAt || "invalid"}; verified=${generation.verified}; checkpoint=${generation.checkpoint ?? "unknown"}; sources=${generation.sourceCount}`);
+    }
+    return;
+  }
+  if (input.action === "compare") {
+    console.log(`Compared ${result.fromGenerationId} -> ${result.toGenerationId} for: ${result.query}`);
+    for (const change of result.changes || []) console.log(`- ${change.change}: ${change.title} (${change.beforeRank || "-"} -> ${change.afterRank || "-"})`);
+    return;
+  }
+  if (input.action === "capsule-export") {
+    console.log(`Brain capsule exported: ${result.capsulePath}`);
+    console.log(`Encrypted: ${result.encrypted ? "yes" : "no"}; memories: ${result.manifest?.counts?.memories ?? 0}; knowledge: ${result.manifest?.counts?.knowledge ?? 0}`);
+    return;
+  }
+  if (input.action === "capsule-open") {
+    console.log(`Brain capsule verified (read-only): ${result.capsulePath}`);
+    console.log(`Capsule: ${result.manifest?.capsuleId}; memories: ${result.manifest?.counts?.memories ?? 0}; knowledge: ${result.manifest?.counts?.knowledge ?? 0}`);
+    return;
+  }
+  if (input.action === "capsule-search") {
+    console.log(`Read-only capsule search: ${result.query}`);
+    for (const hit of result.hits || []) console.log(`- [${hit.kind}] ${hit.title} (score ${hit.score})`);
+    return;
+  }
+  if (input.action === "capsule-import") {
+    console.log(input.enqueueProposals
+      ? `Queued ${result.proposals?.length ?? 0} capsule memory proposal(s) for Brain Review.`
+      : `Capsule import preview: ${result.candidates?.length ?? 0} candidate(s), ${result.duplicateCount ?? 0} exact duplicate(s). Use --enqueue to create Brain Review proposals.`);
     return;
   }
   console.log(formatResult(result, input.action, input));

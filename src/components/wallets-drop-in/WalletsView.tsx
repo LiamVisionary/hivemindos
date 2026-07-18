@@ -2057,7 +2057,7 @@ function HoneyPanel({ actions }: { actions?: WalletDropInActions }) {
         onLoad={actions?.onLoadHoneyContributionStatus}
         onLoadWalletLinkStatus={actions?.onLoadHoneyWalletLinkStatus}
         onLinkWallet={actions?.onLinkHoneyWallet}
-        onLink={actions?.onLinkTelegramHoney}
+        onLink={actions?.onLinkTelegramHoney} onCreateLinkIntent={actions?.onCreateTelegramHoneyLinkIntent}
       />
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.55fr) minmax(280px,1fr)", gap: 16, alignItems: "start" }}>
         <div className="fb-card" style={{ overflow: "hidden", opacity: on ? 1 : 0.5 }}>

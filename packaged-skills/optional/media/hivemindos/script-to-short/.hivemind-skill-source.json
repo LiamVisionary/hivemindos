@@ -1,0 +1,16 @@
+{
+  "upstreamName": "Script To Short",
+  "upstreamSlug": "script-to-short",
+  "hiveSlug": "script-to-short",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/media/hivemindos/script-to-short",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-16T23:02:02Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional media skills",
+  "sourcePath": "packaged-skills/optional/media/hivemindos/script-to-short",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Packages the structured short-form script generator contract for renderer-friendly output."
+  ]
+}

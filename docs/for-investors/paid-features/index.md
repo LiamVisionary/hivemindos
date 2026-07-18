@@ -63,9 +63,9 @@ These rails are documented in the [Trading guide](../../for-users/trading/) and 
 | Agent/workflow marketplace | Defer until recurring buyer demand exists |
 | Compute marketplace expansion | Defer supply growth until providers can receive realistic utilization |
 | Stake-tier member usage pricing | Server-enforced consumption pricing on participating hive products; never a payout |
-| HIVE buyback allocation | 15% of recognized platform revenue funds a separate HIVE purchase rail; confirmed purchases remain publicly receipted and HIVE is not burned |
-| Company treasury allocation | A separate exact 15% of recognized platform revenue goes to company treasury; the treasury does not fund buybacks and creates no holder claim |
-| Outside tokenomics allocation | The remaining 70% has no fixed use assigned by the tokenomics policy |
+| HIVE buyback allocation | 15% of each service's server-owned allocation basis (realized margin for most managed services, recognized platform revenue for others) funds a separate HIVE purchase rail; confirmed purchases remain publicly receipted and HIVE is not burned |
+| Company treasury allocation | A separate exact 15% of the same server-owned allocation basis goes to company treasury; the treasury does not fund buybacks and creates no holder claim |
+| Outside tokenomics allocation | The remainder has no fixed use assigned by the tokenomics policy |
 
 ## Billing Principles
 

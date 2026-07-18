@@ -10,7 +10,7 @@ import {
 import { errorJson, okJson } from "@/lib/utils/api-response";
 import { verifyAuth } from "@/lib/utils/server-auth";
 
-// The one WRITE the local brain bridge allows: save a web-generated SKILL.md
+// Specialized local brain bridge write: save a web-generated SKILL.md
 // into the user's shared brain. Same gate as recall — the dedicated bridge
 // token (copied from the app) OR dashboard auth; neither → 401. writeBrainSkill
 // fail-closed audits the draft, so an embedded secret is rejected, never

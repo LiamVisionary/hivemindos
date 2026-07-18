@@ -59,13 +59,15 @@ HIVE should never be described as company ownership unless a legally valid instr
 
 Customer collections are not automatically recognized platform revenue. Recognized platform revenue excludes directly attributable pass-through costs, refunds, and reversals. Marketplace gross merchandise value is not platform revenue; only HivemindOS's earned platform fee is counted. Purchased credits are recognized only when consumed.
 
+Each paid service's allocation basis is server-owned and published in the official commercial catalog: realized margin for most managed services, recognized platform revenue for others. A client cannot choose or compute either basis.
+
 The tokenomics allocation is deliberately simple:
 
 ```text
-recognized platform revenue
+server-owned per-service allocation basis
 ├─ 15% -> HIVE buybacks
 ├─ 15% -> company treasury
-└─ 70% -> outside the tokenomics allocation, with no fixed use assigned here
+└─ remainder -> outside the tokenomics allocation, with no fixed use assigned here
 ```
 
 The two 15% allocations are separate. HIVE buybacks do not come from the company treasury, and the treasury does not fund buybacks. Each rail has its own accounting and receipts. A connected user wallet, staked principal, local environment value, or client-supplied revenue claim cannot choose either amount or recipient.
@@ -74,7 +76,7 @@ The buyback rule is enforced by HivemindOS-controlled infrastructure across supp
 
 Hive Research's first real paid production analysis produced one confirmed HIVE purchase on Base under its earlier app-specific policy. That historical receipt remains public while new Hive Research revenue follows the platform-wide 15% buyback allocation.
 
-The separate 15% treasury allocation remains company property. It creates no holder or staker ownership, redemption right, revenue share, governance right, or claim on treasury assets. This policy does not assign a fixed purpose to treasury funds or to the remaining 70% of recognized platform revenue.
+The separate 15% treasury allocation remains company property. It creates no holder or staker ownership, redemption right, revenue share, governance right, or claim on treasury assets. This policy does not assign a fixed purpose to treasury funds or to the remainder outside the two allocations.
 
 ## Tokenomics Policy Changes
 
@@ -93,10 +95,10 @@ Do say:
 - HIVE is optional ecosystem infrastructure.
 - Six optional staking tiers multiply qualifying Honey earned and free-agent usage.
 - Participating services advertise member pricing of up to 61% off while exact service prices remain server-owned.
-- HivemindOS allocates 15% of recognized platform revenue to HIVE buybacks.
-- A separate exact 15% of recognized platform revenue goes to the company treasury.
+- HivemindOS allocates 15% of each service's server-owned allocation basis — realized margin for most managed services, recognized platform revenue for others — to HIVE buybacks.
+- A separate exact 15% of the same server-owned allocation basis goes to the company treasury.
 - The treasury does not fund HIVE buybacks.
-- The tokenomics policy assigns no fixed use to the remaining 70%.
+- The tokenomics policy assigns no fixed use to the remainder.
 - The public ledger publishes confirmed HIVE purchases.
 - HivemindOS does not burn HIVE.
 - Staking produces no yield, revenue share, ownership, binding governance, or treasury claim.

@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - dashboard machine-policy proxy to the collector; operator governance surface, not an agent capability.
 import { NextRequest } from "next/server";
 import { assertFleetCollectorUrl } from "@/lib/services/local-collector-url";
 import { errorJson, okJson, upstreamErrorJson } from "@/lib/utils/api-response";

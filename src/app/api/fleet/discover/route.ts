@@ -96,6 +96,7 @@ type CollectorCapabilities = {
   syncthing?: boolean;
   defaultSyncPath?: string;
   machinePolicy?: boolean;
+  remoteShell?: boolean;
 };
 
 type CollectorEnvSync = {
@@ -1092,12 +1093,17 @@ async function probeCollectorViaTailscale(
  * agent currently lives.
  */
 async function overlayStoredAgentProfiles<
-  MachineLike extends { agents: AgentProfile[] },
+  MachineLike extends {
+    device: Device;
+    collector: string;
+    capabilities?: CollectorCapabilities;
+    agents: AgentProfile[];
+  },
 >(machines: MachineLike[]): Promise<MachineLike[]> {
   const stored = await readStoredAgentProfiles().catch(() => []);
   if (stored.length === 0) return machines;
   const storedById = new Map(stored.map((profile) => [profile.id, profile]));
-  return machines.map((machine) => ({
+  const overlaid = machines.map((machine) => ({
     ...machine,
     agents: machine.agents.map((agent) => {
       const edited = agent.id ? storedById.get(agent.id) : undefined;
@@ -1112,6 +1118,60 @@ async function overlayStoredAgentProfiles<
       };
     }),
   }));
+  return withStoredQueenAgent(overlaid, stored);
+}
+
+/**
+ * The crowned Queen must reach remote clients even when the collector bridge
+ * doesn't report her. The dashboard's own Queen surfaces (hive-center cell,
+ * queen chat FAB, call button) resolve her from STORED profiles and route
+ * turns through the hub's own runtime adapters, so she is fully messageable
+ * regardless of the bridge — but when her stored id has no live collector
+ * counterpart (stale bridge id after a rename/re-register), the overlay above
+ * lands her crown on nothing and remote clients (the phone's Queen Bee picker
+ * entry) see no Queen at all. Inject the stored Queen onto the hub's own
+ * machine so remote clients see and message the same Queen the dashboard
+ * does. Client-side machine merges dedupe agents by id, so a re-bridged live
+ * queen never shows twice.
+ */
+function withStoredQueenAgent<
+  MachineLike extends {
+    device: Device;
+    collector: string;
+    capabilities?: CollectorCapabilities;
+    agents: AgentProfile[];
+  },
+>(machines: MachineLike[], stored: AgentProfile[]): MachineLike[] {
+  const queen = stored.find((profile) => profile.beeRole === "queen");
+  if (!queen) return machines;
+  const alreadyPresent = machines.some((machine) =>
+    machine.agents.some(
+      (agent) => agent.beeRole === "queen" || agent.id === queen.id,
+    ),
+  );
+  if (alreadyPresent) return machines;
+  const host =
+    machines.find(
+      (machine) => machine.device.self && machine.collector === "ready",
+    ) ?? machines.find((machine) => machine.device.self);
+  if (!host) return machines;
+  return machines.map((machine) =>
+    machine === host
+      ? {
+          ...machine,
+          agents: [
+            {
+              ...queen,
+              machineName: host.device.name,
+              telemetryUrl: host.device.collectorUrl,
+              collectorCapabilities:
+                host.capabilities ?? queen.collectorCapabilities,
+            },
+            ...machine.agents,
+          ],
+        }
+      : machine,
+  );
 }
 
 async function readDiscovery(
@@ -1399,14 +1459,30 @@ export async function GET(request: Request) {
     }
   }
 
-  const payload = await refreshDiscovery(
-    cacheKey,
-    includeSnapshots,
-    foregroundProbeOptions(includeSnapshots, allowSshFallback),
-    discoveryInFlight,
-  );
-  refreshDiscoveryInBackground(cacheKey, includeSnapshots, allowSshFallback);
-  return Response.json(payload);
+  // Cold cache: no prior payload to fall back on. The foreground read can take
+  // up to DISCOVERY_REQUEST_TIMEOUT_MS (20s) — longer than the phone's 12s
+  // client timeout — and readDiscovery can reject. Without a guard that reject
+  // escaped as an uncaught 500 that the phone never usefully received. Catch it
+  // and return a clean empty payload (a background refresh is already warming
+  // the cache), so the phone gets a well-formed response and degrades to
+  // standalone instead of hanging or seeing a 500.
+  try {
+    const payload = await refreshDiscovery(
+      cacheKey,
+      includeSnapshots,
+      foregroundProbeOptions(includeSnapshots, allowSshFallback),
+      discoveryInFlight,
+    );
+    refreshDiscoveryInBackground(cacheKey, includeSnapshots, allowSshFallback);
+    return Response.json(payload);
+  } catch {
+    refreshDiscoveryInBackground(cacheKey, includeSnapshots, allowSshFallback);
+    return Response.json({
+      ok: true,
+      source: "discovery-unavailable",
+      machines: [],
+    } satisfies FleetDiscoverPayload);
+  }
 }
 
 function machineScore(machine: {

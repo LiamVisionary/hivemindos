@@ -254,8 +254,24 @@ export function AgentSettingsCallsVoiceSection(props: AgentSettingsCallsVoiceSec
   const selectedLocalTtsCandidate =
     localTtsCandidates.find((candidate) => candidate.id === agentCallSettings.voiceProviderId) ??
     (isLocalTts && okLocalTtsCandidates.length === 1 ? okLocalTtsCandidates[0] : undefined);
-  const selectedLocalTtsModel = agentCallSettings.voiceModelId || selectedLocalTtsCandidate?.model || "";
-  const selectedLocalTtsVoice = agentCallSettings.voiceId || selectedLocalTtsCandidate?.voice || "";
+  // voiceModelId/voiceId can hold foreign IDs carried over from another runtime
+  // (e.g. an ElevenLabs model or voice after switching to local-tts); only trust
+  // them when the candidate actually serves them, else fall back to the
+  // candidate's own model/voice.
+  const resolveLocalTtsModel = (candidate: LocalTtsCandidate | undefined, requested: string | undefined) => {
+    const model = requested || "";
+    if (!candidate) return model;
+    if (model && (candidate.model === model || candidate.availableModels.includes(model))) return model;
+    return candidate.model;
+  };
+  const resolveLocalTtsVoice = (candidate: LocalTtsCandidate | undefined, requested: string | undefined) => {
+    const voice = requested || "";
+    if (!candidate) return voice;
+    if (voice && (candidate.voice === voice || candidate.availableVoices.includes(voice))) return voice;
+    return candidate.voice;
+  };
+  const selectedLocalTtsModel = resolveLocalTtsModel(selectedLocalTtsCandidate, agentCallSettings.voiceModelId);
+  const selectedLocalTtsVoice = resolveLocalTtsVoice(selectedLocalTtsCandidate, agentCallSettings.voiceId);
 
   function selectFirstLocalTts() {
     const candidate = selectedLocalTtsCandidate ?? okLocalTtsCandidates[0];
@@ -263,8 +279,8 @@ export function AgentSettingsCallsVoiceSection(props: AgentSettingsCallsVoiceSec
       updateAgentCalls({
         voiceRuntime: "local-tts",
         voiceProviderId: candidate.id,
-        voiceModelId: agentCallSettings.voiceModelId || candidate.model,
-        voiceId: agentCallSettings.voiceId || candidate.voice,
+        voiceModelId: resolveLocalTtsModel(candidate, agentCallSettings.voiceModelId),
+        voiceId: resolveLocalTtsVoice(candidate, agentCallSettings.voiceId),
         voiceAuthMode: undefined,
       });
     } else {
@@ -286,13 +302,13 @@ export function AgentSettingsCallsVoiceSection(props: AgentSettingsCallsVoiceSec
       voiceRuntime: "local-tts",
       voiceProviderId: candidate?.id ?? agentCallSettings.voiceProviderId,
       voiceModelId: model,
-      voiceId: agentCallSettings.voiceId || candidate?.voice,
+      voiceId: resolveLocalTtsVoice(candidate, agentCallSettings.voiceId) || undefined,
     });
   const updateLocalTtsVoice = (voice: string, candidate = selectedLocalTtsCandidate) =>
     updateAgentCalls({
       voiceRuntime: "local-tts",
       voiceProviderId: candidate?.id ?? agentCallSettings.voiceProviderId,
-      voiceModelId: agentCallSettings.voiceModelId || candidate?.model,
+      voiceModelId: resolveLocalTtsModel(candidate, agentCallSettings.voiceModelId) || undefined,
       voiceId: voice,
     });
 

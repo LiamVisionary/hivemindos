@@ -179,19 +179,23 @@ export async function appendAgentMemoryEntityIndex(root: string, record: AgentMe
 // Rebuilds write the entity index fresh (one row per memory+entity, current
 // status only) instead of appending duplicate generations forever.
 export async function rewriteAgentMemoryEntityIndex(root: string, records: AgentMemoryRecord[]) {
-  const timestamp = new Date().toISOString();
+  const { contents, rows } = serializeAgentMemoryEntityIndex(records);
+  const file = join(root, AGENT_MEMORY_ENTITY_INDEX_PATH);
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, contents, "utf8");
+  return { rows };
+}
+
+export function serializeAgentMemoryEntityIndex(records: AgentMemoryRecord[]) {
   const seen = new Set<string>();
   const lines: string[] = [];
   for (const record of records) {
-    for (const row of entityRowsForRecord(record, timestamp)) {
+    for (const row of entityRowsForRecord(record, record.updatedAt)) {
       const key = `${row.memoryId}::${row.entityKey}`;
       if (seen.has(key)) continue;
       seen.add(key);
       lines.push(JSON.stringify(row));
     }
   }
-  const file = join(root, AGENT_MEMORY_ENTITY_INDEX_PATH);
-  await mkdir(dirname(file), { recursive: true });
-  await writeFile(file, lines.length ? `${lines.join("\n")}\n` : "", "utf8");
-  return { rows: lines.length };
+  return { contents: lines.length ? `${lines.join("\n")}\n` : "", rows: lines.length };
 }

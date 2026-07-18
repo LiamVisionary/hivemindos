@@ -4,6 +4,7 @@ import * as React from "react";
 import { CalendarDays, Cloud, Link2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/design-system/ui/button";
 import { openExternalUrl } from "@/lib/native/open-external-url";
+import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 import type {
   BeelineBrokerConnection,
   BeelineCapability,
@@ -181,7 +182,7 @@ export function BeelineConnectionsPanel({
   }, [bearerToken, capability, endpointUrl, label, onActivity, onError, onMessage, profile.displayName, profile.id, refresh]);
 
   const disconnect = React.useCallback(async (connection: BeelineBrokerConnection) => {
-    if (!window.confirm(`Disconnect ${connection.label} from ${profile.displayName}? The broker will revoke its stored credential.`)) return;
+    if (!(await confirmUserAction(`Disconnect ${connection.label} from ${profile.displayName}? The broker will revoke its stored credential.`))) return;
     setBusy(connection.id);
     onError("");
     try {

@@ -18,8 +18,11 @@ import type {
   FleetAgentCapabilityIcon,
 } from "@/components/fleet/fleet-data";
 import { simpleStableHash } from "@/features/dashboard/dashboard-light-helpers";
-import { filterSuppressedAgents } from "@/features/fleet/fleet-identity";
 import { machineNeedsAppBuilderRepair } from "@/features/fleet/app-builder-collector-capability";
+import {
+  filterSuppressedAgents,
+  machineRemoteShellAvailable,
+} from "@/features/fleet/fleet-identity";
 import {
   dedupeMachineGroups,
   isTailnetSelfShadowGroup,
@@ -1187,6 +1190,10 @@ export function useDashboardDerivedState(props: any) {
             "not connected",
           ip: machine.ip || machine.address || "—",
           collectorUrl: machine.collectorUrl,
+          remoteShell: machineRemoteShellAvailable(
+            machine.os || machine.system?.platform,
+            machine.capabilities?.remoteShell,
+          ),
           ping: machine.online ? fleetMetric(machine.key, 4, 68) : 0,
           cpu:
             machine.system?.cpuPct ??
@@ -2031,6 +2038,7 @@ export function useDashboardDerivedState(props: any) {
       history: { label: "Work", title: "What the hive finished recently" },
       wallet: { label: "Wallets", title: "How the agents spend" },
       trade: { label: "Trade", title: "Buy, sell, and swap crypto & stocks" },
+      socials: { label: "Socials", title: "Where the hive speaks in public" },
       vault: { label: "Brain Graph", title: "What the hive remembers" },
       integrations: { label: "Integrations", title: "What APIs connect" },
       maintenance: {

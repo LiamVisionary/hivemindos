@@ -90,6 +90,12 @@ agent_skill_roots() {
 }
 
 agent_primary_skill_roots() {
+  # Test/isolation escape hatch: when set, project every runtime's primary
+  # skill root into this single directory instead of the real $HOME locations.
+  if [[ -n "${HIVEMIND_SKILLS_RUNTIME_ROOT_OVERRIDE:-}" ]]; then
+    printf "%s\n" "$HIVEMIND_SKILLS_RUNTIME_ROOT_OVERRIDE"
+    return 0
+  fi
   case "$1" in
     codex)
       printf "%s\n" "$HOME/.codex/skills"
@@ -198,7 +204,18 @@ sync_shared_skills_to_runtime() {
   local agent="$1"
   local synced=0
   local skipped=0
+  local pruned=0
   local root_dir skill_md skill_dir slug destination
+  local existing_dir existing_slug existing_metadata existing_source shelf_has_skills
+
+  # Safety gate for the prune pass below: only prune when the vault shelf is a
+  # real, non-empty skills folder. An empty/unset/misconfigured vault path must
+  # never cause the prune to delete every managed projection.
+  shelf_has_skills=0
+  if [[ -n "$vault_path" && -n "$skills_folder" && -d "$skills_folder" ]] \
+    && [[ -n "$(find "$skills_folder" -mindepth 2 -maxdepth 2 -name SKILL.md -type f -print -quit 2>/dev/null)" ]]; then
+    shelf_has_skills=1
+  fi
 
   while IFS= read -r root_dir; do
     [[ -n "$root_dir" ]] || continue
@@ -217,6 +234,26 @@ sync_shared_skills_to_runtime() {
       write_shared_projection_metadata "$destination" "$skill_md" "$agent"
       synced=$((synced + 1))
     done < <(find "$skills_folder" -mindepth 2 -maxdepth 2 -name SKILL.md -type f 2>/dev/null | sort)
+
+    # Prune stale managed projections: a dir we projected from the vault shelf
+    # (marker file present, sourcePath under the shelf) whose vault source was
+    # deleted. Unmanaged dirs (no marker) are the user's own skills — never touched.
+    if (( shelf_has_skills )); then
+      while IFS= read -r existing_dir; do
+        [[ -d "$existing_dir" ]] || continue
+        is_hivemind_managed_skill_dir "$existing_dir" || continue
+        existing_metadata="$existing_dir/.hivemind-skill-source.json"
+        existing_source="$(sed -n 's/.*"sourcePath"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$existing_metadata" 2>/dev/null | head -n 1)"
+        [[ -n "$existing_source" && "$existing_source" == "$skills_folder/"* ]] || continue
+        existing_slug="$(basename "$existing_dir")"
+        [[ -n "$existing_slug" ]] || continue
+        if [[ ! -f "$skills_folder/$existing_slug/SKILL.md" ]]; then
+          rm -rf "$existing_dir"
+          pruned=$((pruned + 1))
+          warn "Pruned stale managed skill projection $existing_dir (vault source removed)"
+        fi
+      done < <(find "$root_dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)
+    fi
   done < <(agent_primary_skill_roots "$agent")
 
   if (( skipped > 0 )); then
@@ -358,7 +395,7 @@ write_managed_block() {
     printf "Delegate independent subtasks through HivemindOS routes when that reduces wall-clock time, keep working while they run when the runtime allows it, and verify subagent reports before relying on them. Do not stop or suggest a new session solely because the context is long.\n\n"
     printf "## Shared Brain Memory\n\n"
     printf "Use \`hive-brain answer \"<query>\"\` before relying on prior preferences, decisions, instructions, goals, commitments, artifacts, lessons, credential status, or project context. The CLI tries the running HivemindOS \`/api/brain/memory\` route first, then falls back to local vault/index search, so raw/non-managed agents can recall shared memory without being app-routed. Setup also installs \`hive-brain-hook\` as a Claude Code \`UserPromptSubmit\` hook when Claude is targeted, so raw Claude prompts receive relevant shared-brain context automatically. Default recall/answer is tiered: check typed Agent Memory first, return it when the distilled hit is strong, and otherwise augment with relevant markdown from the full shared vault through the generated full-vault lexical index. Pass \`--scope agent-memory\` for typed/proven memory only, or \`--scope full-vault\` to force broad vault recall. Load the \`hive-brain-memory\` skill when recalling, writing, correcting, or evolving typed Shared Brain Memory. For durable writes, use \`hive-brain remember --type <type> --title <title> --content <content>\` or POST \`/api/brain/memory\`; use \`hive-brain evolve --memory-id <id> --content <content>\` or POST action \`evolve\` when reviewed context replaces an older memory; remember only durable reviewed facts, decisions, preferences, goals, instructions, commitments, artifacts, errors, learnings, or reusable context.\n\n"
-    printf "Memory writes live under \`Memory/Distillations/Agent Memory/\`; the private typed-memory search index lives at \`Operations/Brain Services/Agent Memory Index.jsonl\`; entity links live at \`Operations/Brain Services/Agent Memory Entity Index.jsonl\`; retrieval telemetry lives at \`Operations/Brain Services/Agent Memory Retrievals.jsonl\`; the generated full-vault lexical index lives at \`Operations/Brain Services/Full Vault Search Index.jsonl\`; optional GitLawb receipts live at \`Operations/Brain Services/Agent Memory Proofs.jsonl\` and store hashes/provenance instead of memory bodies. Record run receipts and other high-volume events with \`record-operation\`; they go to the bounded local journal at \`~/.hivemindos/brain/operational-events.jsonl\`, not Agent Memory. \`remember-action\` is a compatibility alias and does not write durable memory. Use \`record-usage\` for retrieval/final-answer telemetry. Durable records carry a canonical \`memoryKey\`; evolve the current head when reviewed truth changes. Pattern mining is dry-run/review-gated through \`hive-brain mine-patterns\`; \`--enqueue\` creates Brain Review proposals but does not auto-apply memories, skills, or jobs. Evolution records use \`supersedes\`, \`supersededBy\`, \`evolutionRootId\`, \`cognitiveStage\`, \`sourceType\`, and related chain metadata; treat the latest active chain item as current truth and superseded entries as history/evidence. Include available \`agentName\`, \`agentId\`, \`runtime\`, \`machineName\`, \`machineId\`, \`tailnetId\`, \`tailnetName\`, \`tailnetDnsName\`, \`collectorUrl\`, \`sessionId\`, and \`project\` fields when writing. Use \`proof: \"auto\"\` unless explicit proof is requested. Do not store raw Tailnet IPs or secrets in shared memory. \`Operations/Secure/\` reference/status notes are searchable during full-vault recall so agents can know which credential names exist or are set, but plaintext secret values must stay out of notes and responses.\n\n"
+    printf "Memory writes live under \`Memory/Distillations/Agent Memory/\`; the private typed-memory search index lives at \`Operations/Brain Services/Agent Memory Index.jsonl\`; entity links live at \`Operations/Brain Services/Agent Memory Entity Index.jsonl\`; retrieval telemetry lives at \`Operations/Brain Services/Agent Memory Retrievals.jsonl\`; the generated full-vault lexical index lives at \`Operations/Brain Services/Full Vault Search Index.jsonl\`; optional GitLawb receipts live at \`Operations/Brain Services/Agent Memory Proofs.jsonl\` and store hashes/provenance instead of memory bodies. Generated replay history uses verified compressed checkpoints and content-addressed deltas under \`Operations/Brain Services/Index Generations/\`; Agent Memory retains at most 256 generations with a checkpoint every 32, full-vault search retains 32 with a checkpoint every 4, and \`hive-brain generations\` plus memory health expose the retained replay boundary after pruning. Record run receipts and other high-volume events with \`record-operation\`; they go to the bounded local journal at \`~/.hivemindos/brain/operational-events.jsonl\`, not Agent Memory. \`remember-action\` is a compatibility alias and does not write durable memory. Use \`record-usage\` for retrieval/final-answer telemetry. Durable records carry a canonical \`memoryKey\`; evolve the current head when reviewed truth changes. Pattern mining is dry-run/review-gated through \`hive-brain mine-patterns\`; \`--enqueue\` creates Brain Review proposals but does not auto-apply memories, skills, or jobs. Evolution records use \`supersedes\`, \`supersededBy\`, \`evolutionRootId\`, \`cognitiveStage\`, \`sourceType\`, and related chain metadata; treat the latest active chain item as current truth and superseded entries as history/evidence. Include available \`agentName\`, \`agentId\`, \`runtime\`, \`machineName\`, \`machineId\`, \`tailnetId\`, \`tailnetName\`, \`tailnetDnsName\`, \`collectorUrl\`, \`sessionId\`, and \`project\` fields when writing. Use \`proof: \"auto\"\` unless explicit proof is requested. Do not store raw Tailnet IPs or secrets in shared memory. \`Operations/Secure/\` reference/status notes are searchable during full-vault recall so agents can know which credential names exist or are set, but plaintext secret values must stay out of notes and responses.\n\n"
     printf "## Compiled Brain Wiki\n\n"
     printf "For synthesized entity/concept/summary knowledge under \`Synthesis/Compiled Knowledge/<domain>/\`, load the \`hive-brain-compiled-wiki\` skill. Prefer \`brain_search_knowledge\` or POST \`/api/brain/knowledge\` with \`action: \"search\"\` when looking up compiled wiki topics, then use \`brain_get_node\`, \`brain_get_backlinks\`, or \`brain_graph_overview\` for graph-native follow-up. This complements \`hive-brain answer\`; it does not replace typed Shared Brain Memory for preferences, decisions, instructions, commitments, or project context.\n\n"
     printf "## Shared Hive Env\n\n"
@@ -432,15 +469,30 @@ EOF
     local slug description
     slug="$(basename "$(dirname "$skill_md")")"
     description="$(awk '
-      BEGIN { in_fm=0 }
+      BEGIN { in_fm=0; in_block=0; folded="" }
       NR == 1 && $0 == "---" { in_fm=1; next }
       in_fm && $0 == "---" { exit }
-      in_fm && /^description:/ {
-        sub(/^description:[[:space:]]*/, "")
-        gsub(/^["'\'']|["'\'']$/, "")
-        print
+      in_block {
+        # Fold the indented body of a YAML block scalar (description: > or |)
+        # into a single line; the first non-indented line ends the block.
+        if ($0 ~ /^[[:space:]]*$/) next
+        if ($0 ~ /^[[:space:]]/) {
+          line = $0
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+          if (line != "") folded = (folded == "" ? line : folded " " line)
+          next
+        }
         exit
       }
+      in_fm && /^description:/ {
+        rest = $0
+        sub(/^description:[[:space:]]*/, "", rest)
+        if (rest ~ /^[>|][0-9+-]*[[:space:]]*$/) { in_block=1; next }
+        gsub(/^["'\'']|["'\'']$/, "", rest)
+        print rest
+        exit
+      }
+      END { if (folded != "") print substr(folded, 1, 200) }
     ' "$skill_md")"
     [[ -n "$description" ]] || description="Shared agent skill."
     printf -- "- [[%s/SKILL]] - %s\n" "$slug" "$description" >> "$tmp_file"

@@ -11,9 +11,9 @@ This page keeps its existing filename for link compatibility. The current policy
 
 | Revenue rail | Allocation | Boundary |
 | --- | ---: | --- |
-| HIVE buybacks | 15% of recognized platform revenue | Separate purchase rail; not funded by the company treasury |
-| Company treasury | 15% of recognized platform revenue | Company property; does not fund HIVE buybacks |
-| Outside tokenomics allocation | 70% of recognized platform revenue | This policy assigns no fixed use |
+| HIVE buybacks | 15% of the per-service allocation basis | Separate purchase rail; not funded by the company treasury |
+| Company treasury | 15% of the per-service allocation basis | Company property; does not fund HIVE buybacks |
+| Outside tokenomics allocation | Remainder of the per-service allocation basis | This policy assigns no fixed use |
 
 The two 15% allocations are exact and separate. They do not form one discretionary treasury bucket, and the treasury is not the source of HIVE purchases.
 
@@ -21,11 +21,13 @@ The two 15% allocations are exact and separate. They do not form one discretiona
 
 Recognized platform revenue is narrower than customer collections or transaction volume. It excludes directly attributable pass-through costs, refunds, and reversals. Marketplace gross merchandise value is not recognized platform revenue; only HivemindOS's earned platform fee is counted. Purchased credits are recognized only when consumed.
 
+The allocation basis is server-owned and published per service in the official commercial catalog: realized margin for most managed services, recognized platform revenue for others.
+
 Official hosted infrastructure calculates and records both allocations. A downloadable client, local environment value, connected user wallet, or client-supplied revenue claim cannot choose the allocation basis, amount, or recipient.
 
 ## HIVE Buyback Rail
 
-The buyback rail purchases HIVE from its own 15% recognized-revenue allocation. Confirmed purchases are published in the [HIVE Buyback Ledger](https://hivemindos.app/buybacks/); pending allocations, failed batches, and unconfirmed transactions do not count as HIVE bought.
+The buyback rail purchases HIVE from its own separate 15% allocation. Confirmed purchases are published in the [HIVE Buyback Ledger](https://hivemindos.app/buybacks/); pending allocations, failed batches, and unconfirmed transactions do not count as HIVE bought.
 
 HivemindOS does not burn HIVE. A buyback is not a distribution, staking payment, price floor, liquidity guarantee, or promise of token appreciation.
 

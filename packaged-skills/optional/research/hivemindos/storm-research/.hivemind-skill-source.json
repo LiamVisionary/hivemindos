@@ -1,0 +1,16 @@
+{
+  "upstreamName": "STORM Research",
+  "upstreamSlug": "storm-research",
+  "hiveSlug": "storm-research",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/research/hivemindos/storm-research",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-16T23:02:02Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional research skills",
+  "sourcePath": "packaged-skills/optional/research/hivemindos/storm-research",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Packages the STORM-style multi-perspective research workflow with its HivemindOS tabbed output contract."
+  ]
+}

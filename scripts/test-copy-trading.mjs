@@ -9,8 +9,9 @@ import { register } from "node:module";
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
 const { classifyEvmSwaps, classifyEnrichedEvmSwap, classifySolanaSwap } = await import("../src/lib/services/copy-trading/watcher.ts");
+const { tokenMarket } = await import("../src/lib/services/copy-trading/market.ts");
 const { selectBuyFunding, fundingAssetsFromBalance, fundableSummary } = await import("../src/lib/services/copy-trading/funding.ts");
-const { normalizeConfig } = await import("../src/lib/services/copy-trading/store.ts");
+const { emptyRuntimeState, normalizeConfig } = await import("../src/lib/services/copy-trading/store.ts");
 const { emptyPaperLedger, applyPaperBuy, applyPaperSell, paperPositionValue, paperEquityUsd, paperPortfolioSummary } = await import("../src/lib/services/copy-trading/paper.ts");
 const { compareCopyTradeEvolution, evaluateEvolutionPromotion, startAgentAnalysisState } = await import("../src/lib/services/copy-trading/evolution.ts");
 const { buildAgentAnalysisRequest, parseReviewPayload, readOAuthAgentAnalysisResponse } = await import("../src/lib/services/copy-trading/agent-analysis.ts");
@@ -70,6 +71,114 @@ test("zero-review evolved cards place the waiting status below learning evidence
 function transfer(txHash, token, from, to, valueRaw) {
   return { txHash, blockNumber: "100", token, from, to, valueRaw };
 }
+
+test("market: GeckoTerminal prices a token when DexScreener has no indexed pair", async () => {
+  const token = "0xadf9e8b63a82e27c60aefaa19d1bc3ef425bb445";
+  const originalFetch = globalThis.fetch;
+  const requested = [];
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    requested.push(url);
+    if (url.includes("api.dexscreener.com")) {
+      return new Response("[]", { status: 200, headers: { "content-type": "application/json" } });
+    }
+    if (url.includes("api.geckoterminal.com")) {
+      return Response.json({
+        data: {
+          attributes: {
+            address: token,
+            symbol: "LAGO",
+            price_usd: "0.000003674718793",
+            fdv_usd: "3674.7187927932",
+            market_cap_usd: null,
+            total_reserve_in_usd: "2878.641757644555",
+            volume_usd: { h24: "370.8182758729" },
+          },
+        },
+      });
+    }
+    throw new Error(`Unexpected market URL: ${url}`);
+  };
+
+  try {
+    const market = await tokenMarket("eip155:8453", token);
+    assert.equal(market.priceUsd, 0.000003674718793);
+    assert.equal(market.symbol, "LAGO");
+    assert.equal(market.liquidityUsd, 2878.641757644555);
+    assert.equal(market.volume24hUsd, 370.8182758729);
+    assert.equal(market.fdvUsd, 3674.7187927932);
+    assert.equal(market.marketCapUsd, null);
+    assert.equal(market.source, "geckoterminal");
+    assert.deepEqual(requested, [
+      `https://api.dexscreener.com/token-pairs/v1/base/${token}`,
+      `https://api.geckoterminal.com/api/v2/networks/base/tokens/${token}`,
+    ]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("market: an unpriced result expires quickly so a newly available quote is retried", async () => {
+  const token = "0xadf9e8b63a82e27c60aefaa19d1bc3ef425bb446";
+  const originalFetch = globalThis.fetch;
+  const originalNow = Date.now;
+  let now = 1_000;
+  let priceAvailable = false;
+  let geckoRequests = 0;
+  Date.now = () => now;
+  globalThis.fetch = async (input) => {
+    const url = String(input);
+    if (url.includes("api.dexscreener.com")) return Response.json([]);
+    geckoRequests += 1;
+    return Response.json(priceAvailable
+      ? { data: { attributes: { address: token, symbol: "LATER", price_usd: "0.25" } } }
+      : { data: null });
+  };
+
+  try {
+    assert.equal((await tokenMarket("eip155:8453", token)).priceUsd, null);
+    priceAvailable = true;
+    now += 5_001;
+    assert.equal((await tokenMarket("eip155:8453", token)).priceUsd, 0.25);
+    assert.equal(geckoRequests, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+    Date.now = originalNow;
+  }
+});
+
+test("pending signals: a retryable price miss stays durable and unconsumed until success", async () => {
+  const {
+    completePendingSignal,
+    duePendingSignals,
+    queuePendingSignal,
+  } = await import("../src/lib/services/copy-trading/pending-signals.ts");
+  const state = emptyRuntimeState("config-1");
+  const signal = {
+    targetTxRef: "0xprice-later",
+    direction: "buy",
+    token: TOKEN,
+    quoteSymbol: "TOKEN",
+    quoteUsd: null,
+    blockOrSlot: "100",
+  };
+
+  const first = queuePendingSignal(state, signal, "market price unavailable", 1_000);
+  assert.equal(first.attempts, 1);
+  assert.equal(first.nextAttemptAt, 6_000);
+  assert.deepEqual(state.consumedTxRefs, []);
+  assert.deepEqual(duePendingSignals(state, 5_999), []);
+  assert.equal(duePendingSignals(state, 6_000)[0]?.targetTxRef, signal.targetTxRef);
+
+  const second = queuePendingSignal(state, signal, "market price unavailable", 6_000);
+  assert.equal(second.attempts, 2);
+  assert.equal(second.nextAttemptAt, 16_000);
+  assert.equal(state.pendingSignals?.length, 1);
+
+  completePendingSignal(state, signal.targetTxRef);
+  assert.deepEqual(state.pendingSignals, []);
+  assert.deepEqual(state.consumedTxRefs, [signal.targetTxRef]);
+});
 
 // ── Base / EVM classification ────────────────────────────────────────────────
 test("EVM: USDC out + token in (same tx) → BUY with USD quote", () => {
@@ -616,6 +725,23 @@ test("engine wires precomputed evidence through the fast gate, calibrated Sol re
   assert.match(engineSource, /createCounterfactualRecord/);
   assert.match(engineSource, /dueCounterfactualHorizons/);
   assert.match(engineSource, /observeCounterfactualHorizon/);
+});
+
+test("engine persists retryable price misses without consuming the target transaction", async () => {
+  const [engineSource, storeSource] = await Promise.all([
+    readFile(new URL("../src/lib/services/copy-trading/engine.ts", import.meta.url), "utf8"),
+    readFile(new URL("../src/lib/services/copy-trading/store.ts", import.meta.url), "utf8"),
+  ]);
+  const handleSignalSource = engineSource.slice(
+    engineSource.indexOf("async function handleSignal"),
+    engineSource.indexOf("async function handleBuy"),
+  );
+  assert.doesNotMatch(handleSignalSource, /consumedTxRefs\.push/);
+  assert.match(engineSource, /duePendingSignals\(state,/);
+  assert.match(engineSource, /queuePendingSignal\(state, signal,/);
+  assert.match(engineSource, /completePendingSignal\(state, signal\.targetTxRef\)/);
+  assert.match(engineSource, /status: "retry"/);
+  assert.match(storeSource, /pendingSignals: state\.pendingSignals/);
 });
 
 test("EVO and the dashboard expose the conservative statistical promotion gate", async () => {

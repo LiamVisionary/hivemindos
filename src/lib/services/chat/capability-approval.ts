@@ -36,8 +36,7 @@ type CapabilityRequestContext = {
   workingDirectory?: string;
 };
 
-const SOFTWARE_TARGET_PATTERN = /\b(app|application|website|web\s*app|page|dashboard|service|server|software|workflow|automation|integration|api|feature|system|tool|scraper|code|codebase|bug|frontend|backend|mcp|tts|component|extension|script|cli|command[-\s]line|library|package)\b/i;
-const STRONG_IMPLEMENTATION_ACTION_PATTERN = /\b(add|build|develop|implement|code|modify|repair|refactor|ship|update)\b/i;
+const SOFTWARE_TARGET_PATTERN = /\b(app|application|website|web\s*app|page|dashboard|service|server|software|workflow|automation|integration|api|feature|system|tool|scraper|code|codebase|bug|frontend|backend|mcp|tts|checkout|component|extension|script|cli|command[-\s]line|library|package)\b/i;
 const HIVEMINDOS_FEATURE_CAPABILITY_PATTERN = /\bhivemindos-feature-development\b/i;
 const HIVEMINDOS_CHECKOUT_PATTERN = /(?:^|[\\/])hivemind-os(?:[\\/]|$)/i;
 const HIVEMINDOS_PRODUCT_TARGET_PATTERN = /\b(?:hivemind\s*os|hivemindos)\s+(?:app(?!\s+builder)|chat|codebase|dashboard|desktop\s+app|feature|fleet|repo(?:sitory)?|runtime)\b/i;
@@ -45,7 +44,10 @@ const APP_WORKSPACE_ACTION_PATTERN = /\b(build|create|make|prototype|develop|cod
 const APP_WORKSPACE_TARGET_PATTERN = /\b(web\s*app|website|landing\s+page|web\s+page|dashboard|game|clone|application|app)\b/i;
 const APP_WORKSPACE_CONTEXTUAL_OUTPUT_PATTERN = /\b(api|automation|bug|checkout|cli|command[-\s]line|component|document|email|extension|feature|graphic|icon|image|integration|library|logo|mockup|package|pdf|photo|picture|plan|plugin|report|script|server|service|slides?|spreadsheet|tool|video|wireframe|workflow|workbook)\b[\s\S]{0,80}\b(?:for|inside|into|on|to|within)\b(?:\s+[a-z0-9'-]+){0,4}\s*$/i;
 const APP_WORKSPACE_SUBJECT_OUTPUT_PATTERN = /^\s*(?:(?:['’]s|for)\s+(?:[a-z0-9-]+\s+){0,2})?(?:api|bug|checkout|component|design\s+document|document|engine|extension|feature|graphic|icon|image|integration|logo|mockup|outline|plan|plugin|screenshot|wireframe)\b/i;
-const APP_WORKSPACE_UNSUPPORTED_TARGET_PATTERN = /\b(android|desktop\s+app|excel|flutter|ios|kotlin|macos|mobile\s+app|native\s+app|notion\s+page|power\s*bi|react\s+native|spreadsheet|swiftui?|tableau|windows\s+(?:desktop\s+)?app|workbook)\b/i;
+const APP_WORKSPACE_UNSUPPORTED_TARGET_PATTERN = /\b(android|desktop\s+app|flutter|ios|kotlin|macos|mobile\s+app|native\s+app|notion\s+page|react\s+native|swiftui?|windows\s+(?:desktop\s+)?app)\b/i;
+const PRIMARY_ARTIFACT_ACTION_PATTERN = /\b(build|create|design|draw|generate|make|produce|record|render)\b/i;
+const PRIMARY_NON_SOFTWARE_ARTIFACT_PATTERN = /\b(excel|graphic|icon|image|logo|mockup|pdf|photo|picture|power\s*bi|slides?|spreadsheet|tableau|video|wireframe|workbook)\b/i;
+const NON_SOFTWARE_SUBJECT_OUTPUT_PATTERN = /^\s*(?:(?:['’]s|for)\s+(?:[a-z0-9-]+\s+){0,2})?(?:graphic|icon|image|logo|mockup|photo|picture|screenshot|wireframe)\b/i;
 
 function explicitHivemindosRepositoryRequest(task: string) {
   return HIVEMINDOS_PRODUCT_TARGET_PATTERN.test(task)
@@ -58,9 +60,25 @@ function hivemindosRepositoryContext(task: string, workingDirectory?: string) {
   return explicitHivemindosRepositoryRequest(task) || HIVEMINDOS_CHECKOUT_PATTERN.test(workingDirectory ?? "");
 }
 
+function dataDashboardRequest(task: string) {
+  return /\b(excel|power\s*bi|spreadsheet|tableau|workbook)\b[\s\S]{0,80}\bdashboard\b/i.test(task);
+}
+
+function primaryNonSoftwareArtifactRequest(task: string) {
+  if (dataDashboardRequest(task)) return true;
+  const action = PRIMARY_ARTIFACT_ACTION_PATTERN.exec(task);
+  if (!action) return false;
+  const actionBody = task.slice((action.index ?? 0) + action[0].length, (action.index ?? 0) + action[0].length + 180);
+  const artifact = PRIMARY_NON_SOFTWARE_ARTIFACT_PATTERN.exec(actionBody);
+  if (!artifact) return false;
+  const softwareTarget = SOFTWARE_TARGET_PATTERN.exec(actionBody);
+  if (!softwareTarget || artifact.index < softwareTarget.index) return true;
+  return NON_SOFTWARE_SUBJECT_OUTPUT_PATTERN.test(actionBody.slice(softwareTarget.index + softwareTarget[0].length));
+}
+
 function appWorkspaceRequest(task: string) {
   if (/\b(?:this|current|existing)\s+(?:repo|repository|codebase|project)\b/i.test(task)) return false;
-  if (APP_WORKSPACE_UNSUPPORTED_TARGET_PATTERN.test(task)) return false;
+  if (APP_WORKSPACE_UNSUPPORTED_TARGET_PATTERN.test(task) || dataDashboardRequest(task)) return false;
   const action = APP_WORKSPACE_ACTION_PATTERN.exec(task);
   if (!action) return false;
   const actionBody = task.slice((action.index ?? 0) + action[0].length, (action.index ?? 0) + action[0].length + 180);
@@ -89,6 +107,7 @@ function nonExecutingRequest(task: string) {
 }
 
 function softwareImplementationRequest(task: string) {
+  if (primaryNonSoftwareArtifactRequest(task)) return false;
   return explicitHivemindosRepositoryRequest(task)
     || /\b(add|build|develop|implement|code|modify|repair|refactor|ship|update|set\s*up|install|design|prototype|create|make)\b[\s\S]{0,180}/i.test(task) && SOFTWARE_TARGET_PATTERN.test(task)
     || /\bwrite\b[\s\S]{0,120}\b(code|script|cli|command[-\s]line|tool|library|package)\b/i.test(task)
@@ -140,7 +159,8 @@ export const CAPABILITY_APPROVAL_INTENTS: CapabilityIntent[] = [
     label: "Interface design",
     reason: "Design and implement the user-facing experience requested by the task.",
     query: "frontend design ui ux interface web app dashboard landing page design system",
-    matches: (task) => !/^\s*(?:connect|install|set\s*up)\b/i.test(task)
+    matches: (task) => !dataDashboardRequest(task)
+      && !/^\s*(?:connect|install|set\s*up)\b/i.test(task)
       && /\b(ui|ux|interface|frontend|dashboard|landing\s+page|web\s*app|website|design\s+system|react|component|mobile\s+app)\b/i.test(task),
     candidatePattern: /\b(frontend|ui|ux|interface|landing\s+page|web\s+design|design\s+system|react|component)\b/i,
     preferredCandidatePattern: /\b(frontend-design|landing-page|ui-ux-pro-max)\b/i,
@@ -258,10 +278,10 @@ export const CAPABILITY_APPROVAL_INTENTS: CapabilityIntent[] = [
     id: "data-work",
     label: "Data work",
     reason: "Read, transform, or produce the structured data required by the task.",
-    query: "spreadsheet Excel CSV workbook database analytics data analysis charts tables",
-    matches: (task) => /\b(spreadsheets?|excel|csv|tsv|workbooks?|database|datasets?|data\s+analysis|analy[sz](?:e|es|ed|ing)\s+(?:a\s+)?(?:csv|dataset|spreadsheet|workbook))\b/i.test(task),
-    candidatePattern: /\b(spreadsheets?|excel|csv|tsv|workbook|database|data\s+analysis|google\s+sheets)\b/i,
-    preferredCandidatePattern: /\b(spreadsheets?|excel|google\s+sheets)\b/i,
+    query: "spreadsheet Excel CSV workbook Power BI Tableau database analytics data analysis charts tables",
+    matches: (task) => /\b(spreadsheets?|excel|csv|tsv|workbooks?|power\s*bi|tableau|database|datasets?|data\s+analysis|analy[sz](?:e|es|ed|ing)\s+(?:a\s+)?(?:csv|dataset|spreadsheet|workbook))\b/i.test(task),
+    candidatePattern: /\b(spreadsheets?|excel|csv|tsv|workbook|power\s*bi|tableau|database|data\s+analysis|google\s+sheets)\b/i,
+    preferredCandidatePattern: /\b(spreadsheets?|excel|power\s*bi|tableau|google\s+sheets)\b/i,
   },
   {
     id: "payments",
@@ -424,6 +444,34 @@ async function resolveInstalledCandidates(candidates: CapabilityCandidate[]) {
   }));
 }
 
+function candidateImplementationKey(candidate: CapabilityCandidate) {
+  const locator = candidate.locator?.trim().replace(/\/+$/, "").toLowerCase();
+  return locator ? `locator:${locator}` : `id:${candidate.id}`;
+}
+
+function preferredEquivalentCandidate(current: CapabilityCandidate, candidate: CapabilityCandidate) {
+  if (current.availability !== candidate.availability) {
+    return candidate.availability === "ready" ? candidate : current;
+  }
+  if (current.kind !== candidate.kind) {
+    if (candidate.kind === "hive-action") return candidate;
+    if (current.kind === "hive-action") return current;
+    if (current.kind === "api-route") return candidate;
+    if (candidate.kind === "api-route") return current;
+  }
+  return current;
+}
+
+function dedupeCandidateImplementations(candidates: CapabilityCandidate[]) {
+  const implementations = new Map<string, CapabilityCandidate>();
+  for (const candidate of candidates) {
+    const key = candidateImplementationKey(candidate);
+    const current = implementations.get(key);
+    implementations.set(key, current ? preferredEquivalentCandidate(current, candidate) : candidate);
+  }
+  return [...implementations.values()];
+}
+
 function normalizedCapabilityName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
@@ -524,11 +572,20 @@ function selectedIntents(task: string) {
     return hasIndependentImplementation ? matched : matched.filter((intent) => intent.id !== implementation.id);
   }
   if (matched.some((intent) => intent.id === implementation.id)) return matched;
-  return STRONG_IMPLEMENTATION_ACTION_PATTERN.test(task) && matched.length ? [implementation, ...matched] : matched;
+  return matched;
 }
 
 function taskClauses(task: string) {
   return task.split(/\s*(?:[,;]|\bthen\b|\band\b|\bafter\b)\s*/i).map((clause) => clause.trim()).filter(Boolean);
+}
+
+function capabilityPlanReviewMode(items: CapabilityApprovalItem[]) {
+  if (items.length !== 1) return "ask" as const;
+  const item = items[0];
+  const candidate = selectedCapability(item);
+  return item.candidates.length === 1 && candidate?.availability === "ready" && item.decision === "use"
+    ? "automatic" as const
+    : "ask" as const;
 }
 
 function intentTaskContext(task: string, intent: CapabilityIntent) {
@@ -572,9 +629,9 @@ export async function buildCapabilityApprovalPlan(input: {
       intentTaskContext: intentTaskContext(task, intent),
       workingDirectory: input.workingDirectory,
     });
-    const candidates = await resolveInstalledCandidates(builtIn
+    const candidates = await resolveInstalledCandidates(dedupeCandidateImplementations(builtIn
       ? [builtIn, ...ranked.filter((candidate) => candidate.id !== builtIn.id)]
-      : ranked);
+      : ranked));
     const availableCandidates = candidates.length ? candidates : [unavailableCandidate(intent)];
     const selected = availableCandidates[0];
     return {
@@ -590,6 +647,7 @@ export async function buildCapabilityApprovalPlan(input: {
   const createdAt = input.now ?? Date.now();
   return {
     version: 1,
+    reviewMode: capabilityPlanReviewMode(items),
     id: stableId(`${input.agentId}:${input.chatStorageKey}:${task}:${createdAt}`),
     task,
     agentId: input.agentId,
@@ -655,6 +713,7 @@ export function normalizeCapabilityApprovalPlan(value: unknown): CapabilityAppro
   if (!items.length) return null;
   return {
     version: 1,
+    reviewMode: raw.reviewMode === "automatic" ? "automatic" : "ask",
     id: cleanInstruction(raw.id, 120),
     task: cleanInstruction(raw.task, 8_000),
     agentId: cleanInstruction(raw.agentId, 200),
@@ -669,16 +728,19 @@ export function normalizeCapabilityApprovalPlan(value: unknown): CapabilityAppro
 }
 
 export function capabilityApprovalContinuationPrompt(plan: CapabilityApprovalPlan) {
+  const automatic = plan.reviewMode === "automatic";
   const included = plan.items.filter((item) => item.decision !== "remove" && item.decision !== "reject");
   const rejected = plan.items.filter((item) => item.decision === "reject");
   const omitted = plan.items.filter((item) => item.decision === "remove");
   const lines = [
     CAPABILITY_APPROVAL_CONTINUATION_MARKER,
-    "The user approved this capability plan. Continue the original task now and treat this approval as authorization only for the capability setup described below; existing spend, secret, deploy, and destructive-action gates still apply.",
+    automatic
+      ? "HivemindOS selected the only ready capability automatically. Continue the original task now; this capability choice does not bypass spend, secret, deploy, destructive-action, external-send, or runtime permission gates."
+      : "The user approved this capability plan. Continue the original task now and treat this approval as authorization only for the capability setup described below; existing spend, secret, deploy, and destructive-action gates still apply.",
     "",
     `Original task: ${plan.task}`,
     "",
-    "Approved capability map:",
+    automatic ? "Selected capability map:" : "Approved capability map:",
   ];
   for (const item of included) {
     const capability = selectedCapability(item);
@@ -686,7 +748,7 @@ export function capabilityApprovalContinuationPrompt(plan: CapabilityApprovalPla
     if (capability?.id) lines.push(`  Capability id: ${capability.id}`);
     if (capability?.locator) lines.push(`  Capability locator: ${capability.locator}`);
     if (capability?.id === "hive-action:apps.build") {
-      lines.push("  Use the app_builder tool for project lifecycle operations. Keep all implementation inside the assigned App Builder directory and do not substitute an untracked background preview server.");
+      lines.push('  Use the available invoke_hive_capability tool with surface="hive_action", operation="invoke", capabilityId="apps.build", method="POST", and App Builder request fields inside arguments. Keep all implementation inside the assigned App Builder directory and do not substitute an untracked background preview server.');
     }
     if (item.githubUrl) lines.push(`  Alternative GitHub source to inspect: ${item.githubUrl}`);
     if (item.instructions) lines.push(`  User instruction: ${item.instructions}`);

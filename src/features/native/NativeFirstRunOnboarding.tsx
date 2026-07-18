@@ -40,7 +40,7 @@ const EMBLEM_CELLS = 7;
 // to how many of the EMBLEM_CELLS are filled once a matching line has streamed, and to a
 // human phase label. Order matters: the highest matched cell wins.
 const SETUP_MILESTONES: Array<{ re: RegExp; cell: number; label: string }> = [
-  { re: /Downloading HivemindOS setup files|Unpacking setup files/i, cell: 1, label: "Downloading setup files…" },
+  { re: /Downloading HivemindOS setup files|Unpacking setup files/i, cell: 1, label: "Downloading setup files… this can take a few minutes." },
   { re: /HivemindOS (Windows )?setup\b|Node (found|is missing)|Downloading Node/i, cell: 2, label: "Checking dependencies…" },
   { re: /Python (found|ready)|hive-env-add installed|hive-pulse installed/i, cell: 3, label: "Installing hive tools…" },
   { re: /shared skill projection|hive-brain-sync|shared skills/i, cell: 4, label: "Syncing shared brain + skills…" },
@@ -161,6 +161,11 @@ export function NativeFirstRunOnboarding() {
   const [setupLines, setSetupLines] = useState<string[]>([]);
   const [setupProcessDone, setSetupProcessDone] = useState(false);
   const [setupExitError, setSetupExitError] = useState("");
+  // Safety valve for the process-done gate below: if the collector is healthy
+  // but NO setup output has streamed at all for a sustained stretch (a broken
+  // event bridge or an older hidden launcher), fall back to the old
+  // collector-only gate instead of spinning forever.
+  const [setupEventlessFallback, setSetupEventlessFallback] = useState(false);
   // ClawBank may already be configured (re-run setup, credential replicated from
   // another machine). When it is, the final button finishes instead of opening
   // the ClawBank registration modal.
@@ -180,11 +185,15 @@ export function NativeFirstRunOnboarding() {
   const step = wizardSteps.includes(rawStep) ? rawStep : wizardSteps[0];
   const stepIndex = wizardSteps.indexOf(step);
   // The local collector starts only near the END of setup, so its check flips to
-  // installed once setup has actually finished. Gate "done" on it — otherwise the
-  // success screen would appear the instant setup is *launched* (terminal still
-  // mid-install), which reads as "done" when it is not.
+  // installed once setup has actually finished. But a machine RE-RUNNING setup
+  // already has a collector listening — often a stale process serving old code —
+  // so the collector answering is not proof this setup run did anything: gated on
+  // the collector alone, re-run setup showed the completed screen in under a
+  // second while the hidden script was still mid-download (seen live on a
+  // Windows PC). "Done" therefore requires the hidden setup process to have
+  // actually exited cleanly AND the collector to be up.
   const collectorReady = Boolean(status?.checks?.find((check) => check.id === "collector")?.installed);
-  const setupSettled = demoMode || collectorReady;
+  const setupSettled = demoMode || setupEventlessFallback || (collectorReady && setupProcessDone && !setupExitError);
 
   const refreshStatus = useCallback(async () => {
     if (!demoMode && !isTauriDesktopRuntime()) return;
@@ -283,12 +292,21 @@ export function NativeFirstRunOnboarding() {
     return () => window.clearTimeout(id);
   }, [step, setupSettled, setupExitError, setupProcessDone]);
 
-  // Once the collector is up, briefly hold the full emblem, then reveal "done".
+  // Once setup has settled, briefly hold the full emblem, then reveal "done".
   useEffect(() => {
     if (step !== "running" || !setupSettled) return;
     const id = window.setTimeout(() => setStep("done"), 720);
     return () => window.clearTimeout(id);
   }, [step, setupSettled]);
+
+  // Arm the eventless fallback: collector healthy, zero streamed output, no
+  // exit signal — after a sustained minute of that, trust the collector check
+  // alone rather than spinning forever on a silent event bridge.
+  useEffect(() => {
+    if (step !== "running" || !collectorReady || setupProcessDone || setupExitError || setupLines.length > 0) return;
+    const id = window.setTimeout(() => setSetupEventlessFallback(true), 60_000);
+    return () => window.clearTimeout(id);
+  }, [step, collectorReady, setupProcessDone, setupExitError, setupLines.length]);
 
   // Stream the hidden setup launcher's output into the wizard: live activity
   // lines + a captured non-zero exit (so a failed setup shows an error instead
@@ -299,7 +317,7 @@ export function NativeFirstRunOnboarding() {
     let cleanup: (() => void) | undefined;
     void import("@tauri-apps/api/event").then(({ listen }) => listen<{ kind?: string; line?: string; exitCode?: number | null }>(NATIVE_SETUP_PROGRESS_EVENT, (event) => {
       const p = event.payload ?? {};
-      if (p.kind === "start") { setSetupLines([]); setSetupProcessDone(false); setSetupExitError(""); return; }
+      if (p.kind === "start") { setSetupLines([]); setSetupProcessDone(false); setSetupExitError(""); setSetupEventlessFallback(false); return; }
       if (p.kind === "line" && typeof p.line === "string") {
         const line = p.line;
         setSetupLines((current) => [...current.slice(-149), line]);
@@ -719,7 +737,7 @@ function RunningStep({ filled, meterPct, settled, phaseLabel, runLog, runStatus,
         ))}
       </div>
       <p className={styles.lede} style={{ fontSize: 12.5, textAlign: "center" }}>
-        {runStatus || "Setting up your machine in the background — progress shows above and this screen updates on its own when it finishes."}
+        {runStatus || "Setting up your machine in the background — this usually takes several minutes, and the first download can be the slowest stretch. Progress shows above and this screen updates on its own when it finishes, so feel free to do something else and check back."}
       </p>
       <details className={styles.detail}>
         <summary className={styles.detailSummary}>Setup didn&rsquo;t start? Run it yourself</summary>

@@ -3,11 +3,14 @@ import { okJson, errorJson, upstreamErrorJson } from "@/lib/utils/api-response";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import { probeUrlLiveness } from "@/lib/net/probe-url";
 import {
-  
   selectChatPreviewTargets,
   type ChatPreviewHostedApp,
 } from "@/lib/services/chat/chat-preview-targets";
-import { isAllowedChatPreviewUrl, isAllowedThreadAppPreviewUrl } from "@/lib/services/chat/chat-preview-guard";
+import {
+  describeThreadAppPreviewOutage,
+  isAllowedChatPreviewUrl,
+  isAllowedThreadAppPreviewUrl,
+} from "@/lib/services/chat/chat-preview-guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -104,6 +107,20 @@ export async function GET(request: NextRequest) {
   // on the trusted fleet host surface may be probed. On reject, hand back the
   // real previewable targets so the pane can offer live apps instead of a mock.
   if (!isAllowedChatPreviewUrl(url, hostedApps) && !isAllowedThreadAppPreviewUrl(url, threadAppIdentity, threadAppProject)) {
+    // When the URL belongs to this thread's registered app project but the
+    // runtime is down (or moved after a restart), report that real state so
+    // the pane can say "press Preview to restart it" instead of a generic
+    // refusal. The URL is still never probed on this path.
+    const outage = describeThreadAppPreviewOutage(url, threadAppIdentity, threadAppProject);
+    if (outage) {
+      return okJson({
+        url,
+        live: false,
+        dead: true,
+        projectStatus: outage.projectStatus,
+        reason: outage.reason,
+      });
+    }
     return errorJson(
       "Refusing to preview a URL that is not a known fleet-hosted app.",
       403,

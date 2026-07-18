@@ -58,7 +58,7 @@ description: Learn how to run private agent teams, shared memory, autonomous wor
   </section>
   <section class="docCard">
     <h3>Whole Brain</h3>
-    <p>Give every agent a shared Obsidian vault, durable memory, compiled knowledge, reusable skills, and healthy synchronization.</p>
+    <p>Give every agent a shared Obsidian vault, durable memory, Compiled brain search, reusable skills, healthy synchronization, OKF brain export, and scoped encrypted memory capsules.</p>
     <a href="./for-users/whole-brain/">Explore shared memory</a>
   </section>
   <section class="docCard">
@@ -82,6 +82,14 @@ description: Learn how to run private agent teams, shared memory, autonomous wor
     <a href="./for-users/integrations/">Explore integrations</a>
   </section>
 </div>
+
+## Popular guides
+
+- [Sync the shared brain](./for-users/features/hivemind-sync.html)
+- [Browse packaged skills](./for-users/packaged-skills/)
+- [Use slash commands](./for-users/slash-commands.html)
+- [Reduce token and context costs](./for-users/features/token-and-cost-savings.html)
+- [Review Shared Brain benchmarks](./for-users/features/shared-brain-benchmarks.html)
 
 ## See how the pieces connect
 

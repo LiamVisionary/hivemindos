@@ -491,6 +491,12 @@ async function ownedProcessCommand(project) {
   return command.includes(expected) ? command : "";
 }
 
+// Stamped by the status reconcile when the runtime process died underneath a
+// "running" manifest (collector restart, crash). Distinguishes an interrupted
+// runtime from a user-requested stop (stop clears lastError), so the boot
+// reconcile knows which stopped projects it may restart.
+export const APP_BUILDER_RUNTIME_EXITED_MESSAGE = "The app preview process exited and can be restarted.";
+
 async function reconcileLocalAppRuntimeState(directory, project) {
   if (project.status !== "running") return project;
   if (await ownedProcessCommand(project)) return project;
@@ -500,10 +506,41 @@ async function reconcileLocalAppRuntimeState(directory, project) {
     pid: null,
     port: null,
     previewUrl: null,
-    lastError: "The app preview process exited and can be restarted.",
+    lastError: APP_BUILDER_RUNTIME_EXITED_MESSAGE,
   });
 }
 
+/**
+ * Boot-time reconcile for one project: restart its preview runtime when the
+ * manifest says it should be running but the process is gone — either a stale
+ * "running" manifest with a dead pid (the collector that owned the child was
+ * restarted before any status poll noticed), or a reconcile-stamped exited
+ * stop. A user-requested stop (status "stopped", lastError null) is never
+ * restarted. The start goes through startLocalAppProject with the standard
+ * CONFIRM_APP_RUNTIME contract — the runtime was originally started under an
+ * explicit confirmation, and this only restores that already-confirmed state.
+ * Prefers the previous port so stale preview URLs keep working; falls back to
+ * a fresh port when the old one is taken.
+ */
+export async function restartInterruptedLocalAppProject(directoryValue) {
+  const { directory, project } = await requiredProject(directoryValue);
+  const exitedWhileRunning = project.status === "running" && !(await ownedProcessCommand(project));
+  const reconciledExit = project.status === "stopped" && project.lastError === APP_BUILDER_RUNTIME_EXITED_MESSAGE;
+  if (!exitedWhileRunning && !reconciledExit) return { restarted: false, project };
+  const preferredPort = Number.isInteger(project.port) && project.port > 0 ? project.port : undefined;
+  // Stamp the exited state before starting: a foreign process that grabbed the
+  // dead runtime's port must not satisfy start's running-short-circuit and get
+  // blessed as the preview (port reservation then routes it to a fresh port).
+  if (exitedWhileRunning) await reconcileLocalAppRuntimeState(directory, project);
+  try {
+    const started = await startLocalAppProject({ directory, port: preferredPort, confirmation: APP_BUILDER_CONFIRMATIONS.startRuntime });
+    return { restarted: true, project: started.project };
+  } catch (error) {
+    if (!preferredPort || error?.code !== "EADDRINUSE") throw error;
+    const started = await startLocalAppProject({ directory, confirmation: APP_BUILDER_CONFIRMATIONS.startRuntime });
+    return { restarted: true, project: started.project };
+  }
+}
 async function stopOwnedProcess(project) {
   const pid = Number(project.pid);
   if (!Number.isInteger(pid) || pid <= 0) return;

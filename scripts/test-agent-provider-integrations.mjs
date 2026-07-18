@@ -53,7 +53,11 @@ assert.match(cliRuntimeSource, /aider[\s\S]*"--message"[\s\S]*"--no-auto-commits
 assert.match(cliRuntimeSource, /action !== "run-task"/);
 assert.match(cliRuntimeSource, /\.local", "bin"/);
 const cliTaskRunsSource = readFileSync("src/lib/services/runtime-adapters/cli-task-runs.ts", "utf8");
-assert.match(cliTaskRunsSource, /PATH: cliRuntimePath\(\)/);
+// Spawned CLI runtimes must keep the augmented PATH (GUI-launched apps miss
+// ~/.local/bin etc.) — now via the shared runtime-command-env helper.
+assert.match(cliTaskRunsSource, /runtimeCommandEnv\(\{ \.\.\.sharedEnv, \.\.\.process\.env \}\)/);
+const runtimeCommandEnvSource = readFileSync("src/lib/services/runtime-command-env.ts", "utf8");
+assert.match(runtimeCommandEnvSource, /PATH: runtimeCommandPath\(/);
 assert.match(cliTaskRunsSource, /LLM_API_KEY[\s\S]*OPENAI_API_KEY/);
 assert.match(cliTaskRunsSource, /LLM_MODEL[\s\S]*profile\?\.model/);
 
@@ -85,7 +89,7 @@ assert.match(rentAHumanService, /sideEffect !== "none"[\s\S]*input\.confirmation
 
 const installableServices = readFileSync("src/lib/services/installable-services.ts", "utf8");
 const palmierProInstallable = readFileSync("src/lib/services/palmier-pro-installable.ts", "utf8");
-assert.match(installableServices, /InstallableServiceId = "n8n" \| "browser-use" \| "agentic-inbox" \| "mcp-email-server" \| "openhands" \| "aider"/);
+assert.match(installableServices, /InstallableServiceId = "n8n" \| "listmonk" \| "browser-use" \| "agentic-inbox" \| "mcp-email-server" \| "openhands" \| "aider"/);
 assert.match(installableServices, /uv"[\s\S]*"tool"[\s\S]*"install"[\s\S]*"browser-use\[cli\]"/);
 assert.match(installableServices, /"tool", "install", "openhands", "--python", "3\.12"/);
 assert.match(installableServices, /"tool", "install", "aider-chat"/);

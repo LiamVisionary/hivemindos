@@ -26,6 +26,7 @@ import { z } from "zod";
 // code. The runtime import stays dynamic and client-only in the effect.
 import type { PageAgent } from "page-agent";
 import { proxyInput } from "@/lib/services/agent-security-proxy";
+import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 
 import styles from "./page-agent-lab.module.css";
 
@@ -210,7 +211,7 @@ export function PageAgentPanel({
                 const state = await this.pageController.getBrowserState();
                 assertSafePageContent(state.content);
                 const target = indexedTarget(state.content, input.index);
-                if (CONSEQUENCE_TARGET.test(target) && !window.confirm(`Page Agent wants to activate: ${target}\n\nAllow this one action?`)) {
+                if (CONSEQUENCE_TARGET.test(target) && !(await confirmUserAction(`Page Agent wants to activate: ${target}\n\nAllow this one action?`))) {
                   return `${HUMAN_DECLINED_ACTION} It was not executed; do not retry it.`;
                 }
                 return (await this.pageController.clickElement(input.index)).message;

@@ -9,6 +9,7 @@ import { randomUUID } from "crypto";
 import { homedir } from "@/lib/home-dir";
 import { sameMachineIdentity } from "@/features/fleet/fleet-identity";
 import { recordCompanyConfigChange, type CompanyConfigAction } from "@/lib/services/company-governance";
+import { titlesSimilar } from "@/lib/services/company-task-dedup";
 import {
   createCompanyProposal,
   settleCompanyProposal,
@@ -315,6 +316,7 @@ function companyDefinitionOf(record: Company): Company {
     directives: record.directives,
     apiBudgets: record.apiBudgets,
     integrationLimits: record.integrationLimits,
+    setupEnvKeys: record.setupEnvKeys,
   };
 }
 
@@ -570,6 +572,38 @@ function normalizeAutonomyPause(value: unknown): CompanyAutonomyPause | undefine
 function trimmed(value: unknown): string | undefined {
   const text = typeof value === "string" ? value.trim() : "";
   return text || undefined;
+}
+
+/** Names + operator copy only; a value-looking entry is dropped rather than stored. */
+function normalizeSetupEnvKeys(value: unknown): Company["setupEnvKeys"] {
+  if (!Array.isArray(value)) return undefined;
+  const keys = value
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const raw = entry as Record<string, unknown>;
+      const envKey = trimmed(raw.envKey);
+      if (!envKey || !/^[A-Z][A-Z0-9_]{1,80}$/.test(envKey)) return null;
+      return {
+        envKey,
+        title: trimmed(raw.title),
+        explanation: trimmed(raw.explanation),
+        kind: raw.kind === "text" ? ("text" as const) : raw.kind === "secret" ? ("secret" as const) : undefined,
+        placeholder: trimmed(raw.placeholder),
+        links: Array.isArray(raw.links)
+          ? raw.links
+              .map((link) => {
+                const item = link as Record<string, unknown>;
+                const label = trimmed(item?.label);
+                const url = trimmed(item?.url);
+                return label && url && /^https?:\/\//.test(url) ? { label, url } : null;
+              })
+              .filter((link): link is { label: string; url: string } => Boolean(link))
+          : undefined,
+        requiredForLaunch: raw.requiredForLaunch === true ? true : undefined,
+      };
+    })
+    .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+  return keys.length ? keys : undefined;
 }
 
 function normalizeAlignment(value: unknown): number | undefined {
@@ -1111,6 +1145,8 @@ export type UpsertCompanyInput = {
   importedKnowledge?: Company["importedKnowledge"];
   /** Standing directives (Learning-tab injections + deliverable-rejection feedback). */
   directives?: Company["directives"];
+  /** Declared shared-env setup keys (template manifest); names + copy only, never values. */
+  setupEnvKeys?: Company["setupEnvKeys"];
 };
 
 export async function upsertCompany(input: UpsertCompanyInput): Promise<Company> {
@@ -1174,6 +1210,7 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<Company>
     importedOperations: input.importedOperations !== undefined ? normalizeImportedOperations(input.importedOperations) : existing?.importedOperations,
     importedKnowledge: input.importedKnowledge !== undefined ? normalizeImportedKnowledge(input.importedKnowledge) : existing?.importedKnowledge,
     directives: input.directives !== undefined ? input.directives : existing?.directives,
+    setupEnvKeys: input.setupEnvKeys !== undefined ? normalizeSetupEnvKeys(input.setupEnvKeys) : existing?.setupEnvKeys,
     // Guardrails have dedicated merge-safe mutation paths and are never writable
     // through generic company edits, but they must survive those edits.
     apiBudgets: existing?.apiBudgets,
@@ -1209,6 +1246,13 @@ export async function addCompanyDirective(
   const records = await readRaw();
   const existing = records.find((record) => record.id === companyId);
   if (!existing) return null;
+  // Evolve, don't append: repeated lessons ("use a softer CTA…" was captured
+  // FIVE times as separate WEBS directives) dilute the standing context and
+  // burn the planner's directive budget. A near-duplicate replaces its older
+  // sibling in place — the newest wording wins, the list stays short. High
+  // similarity bar (0.75): dropping a genuinely-new instruction is worse than
+  // keeping an occasional near-dupe.
+  const duplicateOf = (existing.directives ?? []).find((directive) => titlesSimilar(directive.text, text, 0.75));
   const skills = normalizeDirectiveSkillSlugs(input);
   const entry: CompanyDirective = {
     id: `dir_${randomUUID()}`,
@@ -1219,7 +1263,10 @@ export async function addCompanyDirective(
     ...(input.deliverableRef?.trim() ? { deliverableRef: input.deliverableRef.trim() } : {}),
     ...(input.attachments?.length ? { attachments: input.attachments } : {}),
   };
-  const company: Company = { ...existing, directives: [...(existing.directives ?? []), entry], updatedAt: new Date().toISOString() };
+  const nextDirectives = duplicateOf
+    ? (existing.directives ?? []).map((directive) => (directive.id === duplicateOf.id ? entry : directive))
+    : [...(existing.directives ?? []), entry];
+  const company: Company = { ...existing, directives: nextDirectives, updatedAt: new Date().toISOString() };
   await writeRaw(records.map((record) => (record.id === companyId ? company : record)));
   await recordConfigChange("updated", existing, company, "companies-store:add-directive");
   if (entry.source === "reject") {

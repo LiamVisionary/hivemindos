@@ -609,14 +609,19 @@ function parseStoredApplicationGeneration(message: ChatMessage): ChatApplication
 function parseStoredAgentPromptChoice(choice: unknown): StoredAgentPromptChoice | null {
   if (typeof choice === "string") return choice;
   if (!choice || typeof choice !== "object") return null;
-  const record = choice as { label?: unknown; value?: unknown; permissionMode?: unknown };
+  const record = choice as { label?: unknown; value?: unknown; permissionMode?: unknown; suppressUserMessage?: unknown };
   const label = typeof record.label === "string" ? record.label.trim() : "";
   const value = typeof record.value === "string" ? record.value.trim() : "";
   if (!label && !value) return null;
   const permissionMode = ["manual", "accept-edits", "plan", "auto", "bypass"].includes(String(record.permissionMode))
     ? record.permissionMode as ChatPermissionMode
     : undefined;
-  return { label: label || value, value: value || label, permissionMode };
+  return {
+    label: label || value,
+    value: value || label,
+    permissionMode,
+    ...(record.suppressUserMessage === true ? { suppressUserMessage: true } : {}),
+  };
 }
 
 function parseStoredAgentPrompt(message: ChatMessage, agentId: string): ChatMessage["agentPrompt"] {
@@ -677,6 +682,7 @@ function parseStoredCapabilityApproval(message: ChatMessage): CapabilityApproval
   if (!items.length || typeof raw.agentId !== "string" || typeof raw.chatStorageKey !== "string") return undefined;
   return {
     version: 1,
+    reviewMode: raw.status === "approved" && raw.reviewMode === "automatic" ? "automatic" : "ask",
     id: raw.id,
     task: raw.task,
     agentId: raw.agentId,

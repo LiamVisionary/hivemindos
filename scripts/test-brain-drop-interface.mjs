@@ -89,6 +89,7 @@ assert.match(fab, /aria-label="Feed text to the brain"/);
 assert.match(fab, /aria-label="Feed files to the brain"/);
 assert.match(fab, /aria-label="Feed folders to the brain"/);
 assert.match(fab, /onClick=\{\(\) => setMenuOpen\(true\)\}/, "the focused plus button should open instead of immediately toggling the menu closed");
+assert.match(fab, /className=\{styles\.dock\} data-mode=\{mode\}/, "the dock should expose its active mode for collision-safe positioning");
 assert.match(fab, /action: "capture"/);
 assert.match(fab, /\/api\/brain\/imported-sources/);
 assert.match(fab, /webkitdirectory/);
@@ -99,6 +100,7 @@ assert.match(fab, /Drop to feed the brain/);
 assert.match(styles, /backdrop-filter:\s*blur/);
 assert.match(styles, /prefers-reduced-motion/);
 assert.match(styles, /\.dropOverlay/);
+assert.match(styles, /\.dock\[data-mode="text"\][\s\S]*?bottom:\s*96px/, "the text composer should rise above the persistent hive composer");
 
 assert.match(nativeClient, /openNativeBrainDropPaths/);
 assert.match(nativeClient, /readNativeBrainDropDocuments/);

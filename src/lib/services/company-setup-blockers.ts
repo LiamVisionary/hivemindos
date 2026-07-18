@@ -70,16 +70,36 @@ function genericBlocker(envKey: string): Omit<CompanySetupBlocker, "envKey"> {
 }
 
 /**
- * Required shared-env keys blocking this company that are STILL missing. Derived
- * from the outreach engine's own "<KEY> is not configured/set" blocker messages,
- * then filtered to keys absent from the shared hive env — so a key that's since
- * been set self-resolves and never appears. Returns [] when nothing is blocked or
- * the engine isn't on this machine.
+ * Required shared-env keys blocking this company that are STILL missing, from
+ * two sources merged:
+ * 1. DECLARED keys (company.setupEnvKeys, seeded by its template): proactive —
+ *    they surface the moment the company exists, so the operator sets up once
+ *    instead of discovering keys one stall at a time.
+ * 2. ENGINE-derived keys: the outreach engine's own "<KEY> is not configured"
+ *    blocker messages (reactive, machine-local).
+ * Both are filtered to keys absent from the shared hive env — a key that's
+ * since been set self-resolves and never appears.
  */
-export async function readCompanySetupBlockers(company: { id: string; projectId?: string }): Promise<CompanySetupBlocker[]> {
-  const namedKeys = await readMapsAgencyOutboxSendBlockerKeys({ companyId: company.id, projectId: company.projectId });
-  if (namedKeys.length === 0) return [];
-  const presence = await hiveEnvPresence(namedKeys);
+export async function readCompanySetupBlockers(
+  company: { id: string; projectId?: string; setupEnvKeys?: Array<{ envKey: string; title?: string; explanation?: string; kind?: CompanySetupBlockerKind; placeholder?: string; links?: CompanySetupBlockerLink[] }> },
+): Promise<CompanySetupBlocker[]> {
+  const declared = (company.setupEnvKeys ?? []).filter((entry) => entry.envKey?.trim());
+  const declaredByKey = new Map(declared.map((entry) => [entry.envKey.trim(), entry]));
+  const engineKeys = await readMapsAgencyOutboxSendBlockerKeys({ companyId: company.id, projectId: company.projectId });
+  const allKeys = [...new Set([...declaredByKey.keys(), ...engineKeys])];
+  if (allKeys.length === 0) return [];
+  const presence = await hiveEnvPresence(allKeys);
   const absent = presence.filter((entry) => !entry.present).map((entry) => entry.key);
-  return absent.map((envKey) => ({ envKey, ...(SETUP_KEY_REGISTRY[envKey] ?? genericBlocker(envKey)) }));
+  return absent.map((envKey) => {
+    const base = SETUP_KEY_REGISTRY[envKey] ?? genericBlocker(envKey);
+    const custom = declaredByKey.get(envKey);
+    return {
+      envKey,
+      title: custom?.title?.trim() || base.title,
+      explanation: custom?.explanation?.trim() || base.explanation,
+      kind: custom?.kind ?? base.kind,
+      placeholder: custom?.placeholder?.trim() || base.placeholder,
+      links: custom?.links?.length ? custom.links : base.links,
+    };
+  });
 }

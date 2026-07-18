@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - company Labs wrapper over the registered agent-challenge.arena action (/api/agent-challenges); fusion publish requires explicit operator confirmation.
 import { NextRequest } from "next/server";
 import {
   createAgentChallenge,

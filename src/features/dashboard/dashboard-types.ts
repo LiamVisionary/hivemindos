@@ -333,7 +333,7 @@ export type ChatMessage = {
     id: string;
     type: "clarify" | "approval" | "sudo" | "secret" | "prompt";
     question: string;
-    choices?: Array<string | { label: string; value: string; permissionMode?: ChatPermissionMode }>;
+    choices?: Array<string | { label: string; value: string; permissionMode?: ChatPermissionMode; suppressUserMessage?: boolean }>;
     allowFreeText?: boolean;
     response?: {
       label: string;
@@ -1101,7 +1101,7 @@ export type MiroSharkSurfaceView = "x" | "reddit" | "polymarket" | "timeline";
 
 export type MiroSharkWorkspaceMode = "new" | "run";
 
-export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "trade" | "vault" | "integrations" | "beeline" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "messaging" | "chat" | "more" | "env" | "my-apps" | "mini-apps" | "phone" | "aeon" | "fusion" | "governance" | "cloud" | "compute" | "podcast" | "credit-admin";
+export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "trade" | "socials" | "vault" | "integrations" | "beeline" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "messaging" | "chat" | "more" | "env" | "my-apps" | "mini-apps" | "phone" | "aeon" | "fusion" | "governance" | "cloud" | "compute" | "podcast" | "credit-admin";
 
 export type WorkView = Extract<DashboardView, "kanban" | "scheduler" | "swarm" | "history">;
 

@@ -407,10 +407,22 @@ export function HivePanel({
               </button>
             ) : null}
             {handlers.onOpenShell ? (
-              <button type="button" className="fr-chip" onClick={() => handlers.onOpenShell?.(m)}>
-                <ActionIcon icon={SquareTerminal} />
-                Shell
-              </button>
+              m.source.remoteShell === false ? (
+                <button
+                  type="button"
+                  className="fr-chip"
+                  disabled
+                  title={`Remote shell isn't available on ${m.name} yet — Windows machines don't support it.`}
+                >
+                  <ActionIcon icon={SquareTerminal} />
+                  Shell
+                </button>
+              ) : (
+                <button type="button" className="fr-chip" onClick={() => handlers.onOpenShell?.(m)}>
+                  <ActionIcon icon={SquareTerminal} />
+                  Shell
+                </button>
+              )
             ) : null}
             {handlers.onSendFile ? (
               <button type="button" className="fr-chip" onClick={() => handlers.onSendFile?.(m)}>

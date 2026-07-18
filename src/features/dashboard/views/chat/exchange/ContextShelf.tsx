@@ -241,9 +241,10 @@ function EmptyState({ title, body }: { title: string; body: string }) {
 /** Probes the target through the SSRF-gated route before embedding it. */
 export function PreviewFrame({ target, tall }: { target: ChatPreviewTarget; tall?: boolean }) {
   const targetKey = [target.url, target.machine, target.projectId, target.directory].join("\u001f");
-  const [result, setResult] = useState<{ key: string; state: "live" | "dead"; reason: string } | null>(null);
+  const [result, setResult] = useState<{ key: string; state: "live" | "dead"; reason: string; projectStatus: string } | null>(null);
   const state = result?.key === targetKey ? result.state : "probing";
   const reason = result?.key === targetKey ? result.reason : "";
+  const projectStatus = result?.key === targetKey ? result.projectStatus : "";
 
   useEffect(() => {
     let cancelled = false;
@@ -257,11 +258,16 @@ export function PreviewFrame({ target, tall }: { target: ChatPreviewTarget; tall
       .then((payload) => {
         if (cancelled) return;
         const live = Boolean(payload?.live ?? payload?.data?.live);
-        setResult({ key: targetKey, state: live ? "live" : "dead", reason: String(payload?.reason ?? payload?.data?.reason ?? "") });
+        setResult({
+          key: targetKey,
+          state: live ? "live" : "dead",
+          reason: String(payload?.reason ?? payload?.data?.reason ?? ""),
+          projectStatus: String(payload?.projectStatus ?? payload?.data?.projectStatus ?? ""),
+        });
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        setResult({ key: targetKey, state: "dead", reason: error instanceof Error ? error.message : "probe failed" });
+        setResult({ key: targetKey, state: "dead", reason: error instanceof Error ? error.message : "probe failed", projectStatus: "" });
       });
     return () => { cancelled = true; };
   }, [target.collectorUrl, target.directory, target.machine, target.machineKey, target.projectId, target.url, targetKey]);
@@ -282,9 +288,19 @@ export function PreviewFrame({ target, tall }: { target: ChatPreviewTarget; tall
     );
   }
   if (state === "dead") {
+    // projectStatus is the thread app project's real manifest state from the
+    // status re-fetch (stopped / error / running-elsewhere) — render the honest
+    // "press Preview to restart it" story instead of a generic no-response.
+    const title = projectStatus === "stopped"
+      ? `${target.name} is not running`
+      : projectStatus === "error"
+        ? `${target.name} could not start`
+        : projectStatus === "running"
+          ? `${target.name} restarted`
+          : `${target.name} is not reachable`;
     return (
       <div style={{ ...frameStyle, display: "grid", placeItems: "center", padding: 20 }}>
-        <EmptyState title={`${target.name} is not reachable`} body={reason || "The hosted app did not respond."} />
+        <EmptyState title={title} body={reason || "The hosted app did not respond."} />
       </div>
     );
   }

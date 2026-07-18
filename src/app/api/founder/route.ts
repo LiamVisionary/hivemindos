@@ -1,13 +1,15 @@
+// guard:allow-hive-action-route - dashboard Founder Mode flow; founding a company is an operator decision made in the UI, not an agent-invocable action.
 import { NextRequest } from "next/server";
 import { readStoredAgentProfiles } from "@/lib/services/agent-profile-store";
 import { createAgentChallenge, postAgentChallengeEntry } from "@/lib/services/agent-challenges";
-import { readCompanies, upsertCompany } from "@/lib/services/companies-store";
+import { addCompanyDirective, readCompanies, upsertCompany } from "@/lib/services/companies-store";
 import { companyMembershipOwners, CompanyMembershipConflictError } from "@/lib/services/company-membership";
+import { companyTemplateById, companyTemplateCatalog } from "@/lib/services/company-templates";
 import { searchContextIndex } from "@/lib/services/context-index";
 import { compileFounderBlueprint } from "@/lib/services/founder-blueprint";
 import { recommendModelFit, type ModelFitMachine } from "@/lib/services/system/model-fit";
 import type { FounderConstraints } from "@/lib/types/founder-blueprint";
-import type { CompanyMember } from "@/lib/types/company";
+import type { CompanyApprovalPolicy, CompanyMember } from "@/lib/types/company";
 import { errorJson, okJson } from "@/lib/utils/api-response";
 import { localAdminPrincipal } from "@/lib/types/principal";
 import { verifyAuth } from "@/lib/utils/server-auth";
@@ -20,7 +22,19 @@ type FounderBody = {
   goal?: string;
   constraints?: Partial<FounderConstraints>;
   machines?: ModelFitMachine[];
+  /** Company template id from GET's catalog; seeds archetype/products/playbooks/setup keys. */
+  templateId?: string;
 };
+
+/** The template catalog for pickers (no auth-sensitive content). */
+export async function GET(request: NextRequest) {
+  try {
+    await verifyAuth(request);
+    return okJson({ templates: companyTemplateCatalog() });
+  } catch (error) {
+    return errorJson(error instanceof Error ? error.message : "Could not list company templates.", 400);
+  }
+}
 
 function normalizeConstraints(input?: Partial<FounderConstraints>): FounderConstraints {
   return {
@@ -37,6 +51,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({})) as FounderBody;
     const goal = body.goal?.replace(/\s+/g, " ").trim() ?? "";
     if (goal.length < 12) return errorJson("Describe the outcome in at least a short sentence.");
+    const template = companyTemplateById(body.templateId);
+    if (body.templateId && !template) return errorJson(`Unknown company template: ${body.templateId}`);
     const constraints = normalizeConstraints(body.constraints);
     const [profiles, companies] = await Promise.all([
       readStoredAgentProfiles().catch(() => []),
@@ -54,6 +70,7 @@ export async function POST(request: NextRequest) {
     const blueprint = compileFounderBlueprint({
       goal,
       constraints,
+      template,
       agents: unassignedProfiles.map((profile) => ({
         id: profile.id,
         name: profile.name,
@@ -75,6 +92,19 @@ export async function POST(request: NextRequest) {
         reportsTo: role.role === "Queen" ? null : blueprint.crew.find((candidate) => candidate.role === "Queen")?.candidateAgentId ?? null,
         task: role.responsibility,
       }));
+    // Founder defaults first; a template may add domain gates but can never
+    // remove the base four (merge by id, template rows win only on their own ids).
+    const approvalPolicies: CompanyApprovalPolicy[] = [
+      { id: "founder-public-publishing", subject: "publishing customer-facing or public work", mode: "ask", source: "default" },
+      { id: "founder-customer-contact", subject: "contacting customers or prospects", mode: "ask", source: "default" },
+      { id: "founder-money-movement", subject: "moving money or committing paid spend", mode: "ask", source: "default" },
+      { id: "founder-destructive-actions", subject: "running destructive or irreversible actions", mode: "ask", source: "default" },
+    ];
+    for (const policy of template?.approvalPolicies ?? []) {
+      const index = approvalPolicies.findIndex((existing) => existing.id === policy.id);
+      if (index >= 0) approvalPolicies[index] = policy;
+      else approvalPolicies.push(policy);
+    }
     const company = await upsertCompany({
       name: blueprint.identity.name,
       ticker: blueprint.identity.ticker,
@@ -89,13 +119,34 @@ export async function POST(request: NextRequest) {
       frozen: false,
       apexGoal: { ...blueprint.apexGoal, current: "0", progress: 0 },
       status: members.length ? "setup" : "paused",
-      approvalPolicies: [
-        { id: "founder-public-publishing", subject: "publishing customer-facing or public work", mode: "ask", source: "default" },
-        { id: "founder-customer-contact", subject: "contacting customers or prospects", mode: "ask", source: "default" },
-        { id: "founder-money-movement", subject: "moving money or committing paid spend", mode: "ask", source: "default" },
-        { id: "founder-destructive-actions", subject: "running destructive or irreversible actions", mode: "ask", source: "default" },
-      ],
+      approvalPolicies,
+      // Backpressure ships ON and visible (the driver default also covers the
+      // unconfigured case, but explicit config is inspectable in the UI).
+      autonomyPause: template?.autonomyPause ?? { maxWaitingOnHuman: 12 },
+      // Template extras: sellable catalog + the credential manifest that powers
+      // the proactive setup checklist. Products stay operator-editable defaults.
+      products: template?.products?.length
+        ? { items: template.products, seededFrom: `template:${template.id}` }
+        : undefined,
+      setupEnvKeys: template?.setupKeys.map((key) => ({
+        envKey: key.envKey,
+        title: key.title,
+        explanation: key.explanation,
+        kind: key.kind,
+        placeholder: key.placeholder,
+        links: key.links,
+        requiredForLaunch: key.requiredForLaunch,
+      })),
     });
+    // Playbook directives ride the normal directive rail (deduped on write) so
+    // they land in every dispatched task's standing context, skills included.
+    for (const directive of template?.directives ?? []) {
+      await addCompanyDirective(company.id, {
+        text: directive.text,
+        skills: directive.skills,
+        source: "inject",
+      }).catch(() => undefined);
+    }
     const labResult = await createAgentChallenge({
       title: blueprint.lab.title,
       objective: blueprint.lab.objective,

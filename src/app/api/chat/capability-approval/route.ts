@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - chat approval-plan plumbing: this route IS the human approval flow, not an agent-invocable capability.
 import { NextRequest } from "next/server";
 import {
   buildCapabilityApprovalPlan,
@@ -6,6 +7,7 @@ import {
   requiresCapabilityApproval,
 } from "@/lib/services/chat/capability-approval";
 import { createAgentNotification, setAgentNotificationResolution } from "@/lib/services/obsidian/agent-notifications";
+import { capabilityPlanRequiresReview } from "@/lib/types/capability-approval";
 import { errorJson, okJson } from "@/lib/utils/api-response";
 
 export const runtime = "nodejs";
@@ -72,7 +74,7 @@ export async function POST(request: NextRequest) {
       workingDirectory: typeof body.workingDirectory === "string" ? body.workingDirectory : undefined,
       origin: request.nextUrl.origin,
     });
-    const notificationCreated = await createAgentNotification({
+    const notificationCreated = capabilityPlanRequiresReview(plan) ? await createAgentNotification({
       id: notificationId(plan.id),
       title: `Capability plan waiting: ${task.replace(/\s+/g, " ").slice(0, 100)}`,
       body: notificationBody(plan),
@@ -82,8 +84,8 @@ export async function POST(request: NextRequest) {
       agentId: plan.agentId,
       source: notificationSource(plan.agentId, plan.chatLeaf),
       tags: ["approval", "capability-approval", "chat"],
-    }, { vaultPath, notificationsFolder }).then(() => true, () => false);
-    return okJson({ required: true, plan, notificationCreated });
+    }, { vaultPath, notificationsFolder }).then(() => true, () => false) : false;
+    return okJson({ required: capabilityPlanRequiresReview(plan), plan, notificationCreated });
   } catch (error) {
     return errorJson(error instanceof Error ? error.message : "Could not prepare the capability plan.", 500);
   }

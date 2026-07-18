@@ -36,7 +36,7 @@ new dependencies (raw Telegram Bot API over fetch, viem for Base).
 | `/linkhoney` | DM preferred | create a private one-time code that connects Telegram to a verified HivemindOS HONEY workspace |
 | `/honey` or `/honey balance` | anywhere; result is private | show one lifetime HONEY total, its source provenance, and today's recognition allowance |
 | `/honey @name <why>` or reply with `/honey <why>` | group/DM | give exactly 1 peer-recognition HONEY with a meaningful reason |
-| Tap the bot-seeded 🏆 under a member message | group | give the message author the same bounded 1-HONEY recognition without typing a command |
+| React to a member message with 🏆 | group | give the message author the same bounded 1-HONEY recognition without typing a command |
 | `/missions` | group/DM | show open contribution missions and evidence requirements |
 | `/submit <hm_id> <evidence>` | group/DM | submit evidence for a HONEY mission |
 | `/honeyboard` | group/DM | current seasonal HONEY leaderboard with reviewed, peer, and legacy totals |
@@ -114,29 +114,33 @@ auditability; they are not separate balances or classes of HONEY. Ordinary
 messages, ordinary reactions, referrals, and raw chat volume never earn HONEY.
 
 The `/honey` tip is a bounded recognition, not a transfer from the
-giver's balance. A linked member can recognize useful work with
+giver's balance. Any group member can recognize useful work with
 `/honey @name <why>`; the recipient earns exactly 1 HONEY and the reason must
-be 8–160 characters. The hosted gateway lets each eligible member give three
-recognitions per UTC day, permits only one recognition per pair per day in
-either direction, and caps each recipient at 5 HONEY per day. The three daily
-recognitions reset and never become HONEY owned by the giver. Existing HIVE-tip
-participants can give immediately. Other members wait seven days after linking
-a signature-verified wallet, which adds friction against new-wallet Sybil rings.
+be 8–160 characters. No HivemindOS link is required on either side: the hosted
+ledger is keyed by hashed Telegram identity, so HONEY banks to the recipient's
+Telegram account immediately and transfers to their HivemindOS workspace
+automatically the moment they later connect with `/linkhoney` (the app-side
+link still requires a signature-verified wallet). `/honey balance` shows the
+banked amount even before linking. The hosted gateway lets each member give
+three recognitions per UTC day, permits only one recognition per pair per day
+in either direction, caps each recipient at 5 HONEY per day, and enforces a
+bounded season budget — these caps are the Sybil bound now that no wallet-link
+cooldown gates the giving side.
 
-The fast path is a native Telegram reaction: the bot places 🏆 under eligible
-group messages so members can tap it directly. The bot's seed is only the
-one-tap affordance and awards nothing by itself. A member's tap is the explicit
-recognition action; it sends the same identities and Telegram update id to the
-hosted gateway and posts a short confirmation only after the award succeeds.
-The bot then removes its own seed, leaving the successful member reaction in
-place. Removing the reaction, adding another emoji, or reacting anonymously
-awards nothing. Message text is not sent to the gateway. The bot keeps only a
-bounded, in-memory index of recent message authors, so an older message that
-predates a bot restart falls back to replying with `/honey <why>`.
+The fast path is a native Telegram reaction: a member adds 🏆 to a message from
+the reaction menu. That reaction is the explicit recognition action; it sends
+the same identities and Telegram update id to the hosted gateway and posts a
+short confirmation only after the award succeeds. Removing the reaction, adding
+another emoji, or reacting anonymously awards nothing. Message text is not sent
+to the gateway. The bot keeps only a bounded, in-memory index of recent message
+authors, so an older message that predates a bot restart falls back to replying
+with `/honey <why>`.
 
-Telegram does not let bots add custom items to the native message long-press
-menu, but it does let the bot seed this built-in reaction on each message. The
-bot must be a group administrator to receive member reaction updates, group
+The bot must never place the 🏆 reaction itself. Telegram clients animate every
+reaction placement, so a bot-seeded trophy plays the award animation under
+every comment and reads as an award that never happened — the trophy may only
+appear when a member actually gives one (guarded by the test suite). The bot
+must be a group administrator to receive member reaction updates, group
 reactions must allow 🏆 (or all emoji), Group Privacy must be disabled so it can
 observe message authors, and `message_reaction` must remain in the poller's
 `allowed_updates` list. Telegram's Bot API cannot change the group's allowed
@@ -153,7 +157,11 @@ transfers into spendable value.
 The flow is:
 
 1. A member links a wallet to HivemindOS with the existing signature-verification flow.
-2. They send `/linkhoney` to the bot and enter the private one-time code in Wallets → Honey.
+2. They connect Telegram from Wallets → Honey with tap-to-link: the app mints a
+   one-time intent and opens `t.me/<bot>?start=link_<intent>`; pressing Start
+   lets the bot redeem it with the Telegram-attested user id — no typed code.
+   Sending `/linkhoney` to the bot and entering its one-time code in
+   Wallets → Honey remains the fallback path.
 3. An admin creates a mission with a category, fixed HONEY amount, evidence type, deadline, and one or two required approvals.
 4. The member submits a URL, note, or allowlisted GitHub pull request with `/submit hm_…`.
 5. An admin who is not the contributor approves or rejects it. GitHub missions cannot be approved until a signed GitHub webhook confirms that the pull request merged.

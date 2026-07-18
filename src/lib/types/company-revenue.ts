@@ -35,6 +35,24 @@ export type CompanyRevenueRecord = {
   collectingAgentId?: string;
 };
 
+/** One inbound revenue source's connection state for the Cockpit rail line. */
+export type CompanyRevenueRailSourceStatus = {
+  connected: boolean;
+  /** Short human-readable reason/summary, e.g. "2 offers live" or "seller gateway disabled". */
+  detail: string;
+};
+
+/**
+ * Whether money can actually LAND in this company's ledger without a human
+ * typing it in: the x402 seller gateway (published catalog offers) and the
+ * Stripe checkout webhook. Computed server-side from env + catalog state.
+ */
+export type CompanyRevenueRailStatus = {
+  connected: boolean;
+  x402: CompanyRevenueRailSourceStatus & { publishedOffers: number };
+  stripe: CompanyRevenueRailSourceStatus;
+};
+
 export type CompanyRevenueRollup = {
   companyId: string;
   eventCount: number;

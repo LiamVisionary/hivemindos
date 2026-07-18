@@ -41,6 +41,7 @@ includes(files.commandTool, "chatPermissionModeAllowsUnlistedCommands(permission
 includes(files.commandTool, "blockedByPolicy: true", "command tool policy block");
 includes(files.commandTool, "Switch the chat composer to Bypass permissions or approve this command", "command tool user hint");
 includes(files.commandTool, "execFileAsync(executable, executionArgs", "command tool still avoids shell execution");
+assert.ok(!/shell\s*:\s*true/i.test(files.commandTool), "command tool must never opt into shell execution");
 
 includes(files.runtimeEvents, 'APPROVAL: "chat.approval"', "runtime stream events");
 includes(files.route, "permissionMode = normalizeChatPermissionMode(body.permissionMode)", "route request parsing");

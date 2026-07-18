@@ -1,4 +1,4 @@
-export type ConnectionProviderKey = "github" | "linear" | "slack" | "notion" | "google" | "google-cloud" | "azure" | "posthog" | "plausible" | "calcom" | "shopify" | "medusa" | "monid" | "clawbank";
+export type ConnectionProviderKey = "github" | "linear" | "slack" | "notion" | "google" | "google-cloud" | "azure" | "posthog" | "plausible" | "calcom" | "shopify" | "medusa" | "monid" | "clawbank" | "telegram-social" | "farcaster" | "linkedin" | "reddit";
 
 export type ConnectionSetupField = {
   id: string;

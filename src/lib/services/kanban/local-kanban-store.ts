@@ -1211,6 +1211,13 @@ export async function completeTask(
       ...task,
       status: "needs-human",
       result: preservedResult,
+      // The owner reviewing this parked card needs the actual work product on the
+      // shelf — per-lead preview URLs especially (live 2026-07-06: a send batch's
+      // customer-facing URLs vanished and the Deliverables shelf showed empty).
+      deliverables: mergeDeliverables(
+        task.deliverables,
+        extractTaskDeliverables(task, result, now),
+      ),
       claimLock: undefined,
       claimExpiresAt: undefined,
       currentRunId: undefined,

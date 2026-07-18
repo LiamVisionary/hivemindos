@@ -1322,13 +1322,33 @@ def tailnet_node_identity(host: str) -> str:
     return label
 
 
+def normalized_tailnet_dns(host: str) -> str:
+    return host.strip().rstrip(".").lower()
+
+
 def drop_reachable_machine_duplicates(targets: list[dict[str, str]], unreachable: list[str]) -> list[str]:
     """A machine appears as two tailnet nodes (system tailscaled + embedded
     hivemind-linkd). When the collector is loopback-bound behind linkd, only
     the linkd node answers; the system node must not count as an unreachable
-    peer or queued env updates are stranded forever."""
+    peer or queued env updates are stranded forever.
+
+    The name heuristic alone goes blind after an OS hostname rename: the linkd
+    tsnet node re-registers under the NEW name while the system node keeps its
+    sticky MagicDNS name, so the two labels no longer share an identity. Ready
+    collectors self-report their system node in /health (tailnetSelf), so also
+    fold any unreachable node whose MagicDNS name a ready collector claims as
+    its own. Match the unique sticky dnsName only — never tailnetSelf.name,
+    which is the OS ComputerName and can be shared by distinct machines."""
     ready_identities = {tailnet_node_identity(target["host"]) for target in targets}
-    return [host for host in unreachable if tailnet_node_identity(host) not in ready_identities]
+    ready_self_nodes = {
+        normalized_tailnet_dns(target.get("tailnetSelfDnsName") or "") for target in targets
+    } - {""}
+    return [
+        host
+        for host in unreachable
+        if tailnet_node_identity(host) not in ready_identities
+        and normalized_tailnet_dns(host) not in ready_self_nodes
+    ]
 
 
 def tailscale_peer_targets() -> list[dict[str, str]]:
@@ -1380,7 +1400,17 @@ def env_sync_from_collector(ip: str) -> dict[str, str] | None:
         user = str(env_sync.get("user") or "").strip()
         if KEY_RE.match(user.replace("-", "_")) or re.match(r"^[A-Za-z0-9._-]+$", user):
             remember_peer_port(ip, port)
-            return {"user": user, "port": port, "machineId": str(data.get("machineId") or "")}
+            tailnet_self = data.get("tailnetSelf")
+            return {
+                "user": user,
+                "port": port,
+                "machineId": str(data.get("machineId") or ""),
+                # The collector's system tailscaled node (sticky MagicDNS name);
+                # lets peer dedup fold a renamed machine's two tailnet nodes.
+                "tailnetSelfDnsName": str(tailnet_self.get("dnsName") or "").strip()
+                if isinstance(tailnet_self, dict)
+                else "",
+            }
     return None
 
 

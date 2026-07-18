@@ -246,6 +246,15 @@ The Treasury tab shows recorded revenue and any hosted-policy fee attached to a 
 
 A future marketplace-sourced or managed commercial transaction may carry a disclosed server-authoritative fee when HivemindOS supplies the buyer, billing, hosting, execution, or protection. The downloaded app and a manually recorded event cannot invent that obligation.
 
+## Automated Revenue Rail (x402 Offers And Stripe)
+
+Beyond manual recording, revenue can land in a company's ledger automatically from two sources:
+
+- **x402 product offers.** A product in the company catalog can be published as a public x402 seller endpoint at `POST /api/paid-agents/offers/<slug>` (publish/unpublish through the company products API). Payment is the auth, the 402 challenge always serves the catalog price from the server, and each settled purchase writes a seller receipt attributed to the company. Settled receipts bridge into the company revenue ledger with the receipt id as the idempotency key, so replays and re-syncs never double-count. The local seller gateway follows the same explicit `HIVEMINDOS_PAID_AGENT_SELLER_MODE=self-hosted` opt-in and payment configuration as the paid-agent gateway.
+- **Stripe checkout webhook.** Point a Stripe webhook at `POST /api/company-revenue/stripe-webhook` and map a payment link or checkout session to a company with `metadata.companyId` (or `client_reference_id`). The route verifies the Stripe signature, honors only the settled `amount_total`, and dedupes on the checkout session id. Set `HIVEMINDOS_COMPANY_STRIPE_WEBHOOK_SECRET` (or share `STRIPE_WEBHOOK_SECRET`).
+
+Bridged revenue moves the company's apex-goal metric automatically for currency goals, so autonomy progress tracking runs off real recorded money. The Treasury tab's **revenue rail** line shows whether each source is connected and why not when it isn't.
+
 ## Related Docs
 
 - [Work Board And Scheduler](work-and-scheduler.html) covers task storage, dispatch, loop contracts, eval gates, deliverables, scheduler work, and work history.

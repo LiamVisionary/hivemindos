@@ -10,7 +10,7 @@ const { selectChatPreviewTargets } = await import(
 );
 // The SSRF gate is server-only (it pulls in `local-collector-url`, which needs
 // `fs/promises`), so it lives in a sibling module the client never imports.
-const { isAllowedChatPreviewUrl, isAllowedThreadAppPreviewUrl } = await import(
+const { describeThreadAppPreviewOutage, isAllowedChatPreviewUrl, isAllowedThreadAppPreviewUrl } = await import(
   "../src/lib/services/chat/chat-preview-guard.ts"
 );
 
@@ -216,5 +216,71 @@ assert.equal(isAllowedThreadAppPreviewUrl(
   { projectId: "local_thread_app", directory: "/workspace/scratchpad/flappy-bird" },
   { ...runningThreadProject, status: "stopped" },
 ), false, "stopped projects are not previewable");
+
+// --- describeThreadAppPreviewOutage (honest down-state reporting) ------------
+// When the gate rejects, the route uses this to tell the pane WHY, so the
+// frame can say "press Preview to restart it" instead of a generic refusal.
+const threadIdentity = { projectId: "local_thread_app", directory: "/workspace/scratchpad/flappy-bird" };
+const exitedMessage = "The app preview process exited and can be restarted.";
+
+const stoppedOutage = describeThreadAppPreviewOutage(
+  "http://127.0.0.1:4173",
+  threadIdentity,
+  { ...runningThreadProject, status: "stopped", previewUrl: null, lastError: exitedMessage },
+);
+assert.equal(stoppedOutage?.projectStatus, "stopped");
+assert.match(stoppedOutage?.reason ?? "", /stopped — press Preview to restart it/);
+
+const cleanStopOutage = describeThreadAppPreviewOutage(
+  "http://127.0.0.1:4173",
+  threadIdentity,
+  { ...runningThreadProject, status: "stopped", previewUrl: null, lastError: null },
+);
+assert.match(cleanStopOutage?.reason ?? "", /press Preview to start it/i, "a user-requested stop reads as stopped, not crashed");
+
+const errorOutage = describeThreadAppPreviewOutage(
+  "http://127.0.0.1:4173",
+  threadIdentity,
+  { ...runningThreadProject, status: "error", previewUrl: null, lastError: "App runtime exited with status 1." },
+);
+assert.equal(errorOutage?.projectStatus, "error");
+assert.match(errorOutage?.reason ?? "", /App runtime exited with status 1\./, "the real failure must surface, not a generic line");
+
+const movedOutage = describeThreadAppPreviewOutage(
+  "http://127.0.0.1:4173",
+  threadIdentity,
+  { ...runningThreadProject, previewUrl: "http://127.0.0.1:4999" },
+);
+assert.equal(movedOutage?.projectStatus, "running");
+assert.match(movedOutage?.reason ?? "", /restarted on a new address/, "a restart onto a new port must not read as the app being down");
+
+assert.equal(
+  describeThreadAppPreviewOutage("http://127.0.0.1:4173", threadIdentity, runningThreadProject),
+  null,
+  "a running project on the probed URL is not an outage",
+);
+assert.equal(
+  describeThreadAppPreviewOutage(
+    "http://127.0.0.1:4173",
+    { projectId: "different-project", directory: threadIdentity.directory },
+    { ...runningThreadProject, status: "stopped", lastError: exitedMessage },
+  ),
+  null,
+  "identity mismatch must fall back to the generic refusal",
+);
+assert.equal(
+  describeThreadAppPreviewOutage("http://127.0.0.1:4173", threadIdentity, null),
+  null,
+  "no resolvable project must fall back to the generic refusal",
+);
+assert.equal(
+  describeThreadAppPreviewOutage(
+    "http://evil.example.com:4173",
+    threadIdentity,
+    { ...runningThreadProject, status: "stopped", previewUrl: null, lastError: exitedMessage },
+  ),
+  null,
+  "an off-fleet URL never earns a project status report, even with a matching identity",
+);
 
 console.log("chat-preview-targets: all assertions passed");

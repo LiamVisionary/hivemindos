@@ -24,6 +24,7 @@ This rule applies to changes in:
 - brain service defaults
 - shared memory access paths, including API, CLI, runtime prompt injection, and hooks
 - shared memory indexes, proof receipts, and full-vault fallback behavior
+- memory transaction journals, generation/checkpoint/delta manifests, retention and replay-coverage policy, temporal replay, and portable capsule contracts
 - runtime mirror placement
 - vault doctor cleanup behavior
 - agent-facing write policy
@@ -53,6 +54,9 @@ For Shared Brain Memory specifically, the required set also includes:
 
 - `/api/brain/memory`
 - `src/lib/services/obsidian/agent-memory.ts`
+- `src/lib/services/obsidian/agent-memory/write-transactions.ts`
+- `src/lib/services/obsidian/brain-index-generations.ts`
+- `src/lib/services/obsidian/brain-capsules.ts`
 - `src/lib/services/chat/shared-brain-memory-context.ts`
 - `src/lib/services/chat/shared-vault-context.ts`
 - `src/lib/services/context-index.ts`

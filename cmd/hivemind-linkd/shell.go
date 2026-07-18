@@ -509,6 +509,18 @@ func shellJSON(w http.ResponseWriter, status int, payload any) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
+// serveShellUnavailable answers shell API requests on hosts where the shell
+// service is not running (Windows builds compile the unix shell spawn out;
+// -shell=false disables it). A JSON envelope — never the collector-proxy
+// fall-through, whose plain-text "hivemind-linkd proxy error: dial tcp ..."
+// body used to crash the dashboard terminal's JSON parsing.
+func serveShellUnavailable(w http.ResponseWriter, _ *http.Request) {
+	shellJSON(w, http.StatusNotImplemented, map[string]any{
+		"ok":    false,
+		"error": "remote shell is not available on this machine — its hivemind-linkd runs without the shell service (not yet supported on Windows, or disabled with -shell=false)",
+	})
+}
+
 func (m *shellManager) handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rest := strings.TrimPrefix(r.URL.Path, shellPathPrefix)

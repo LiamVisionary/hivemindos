@@ -92,10 +92,15 @@ export function userPrompt(company: Company, history?: string, completedTitles?:
   // durable directions + active approval policies in so the plan respects them.
   const directives = (company.directives ?? []).map((directive) => directive.text?.trim()).filter(Boolean);
   if (directives.length) {
+    // Newest last in storage; the planner budget takes the NEWEST 12 (older
+    // lessons age out of planning first). The old head-slice silently dropped
+    // the newest teachings once a company accreted >12 — the human "taught"
+    // and the planner never heard it (WEBS had 25, so 13 were invisible).
+    const budget = directives.slice(-12);
     lines.push(
       "",
-      "Standing operator directions (plan consistent with these — they override the goal's default approach):",
-      ...directives.slice(0, 12).map((text) => `- ${text}`),
+      `Standing operator directions (plan consistent with these — they override the goal's default approach)${directives.length > budget.length ? ` — newest ${budget.length} of ${directives.length}` : ""}:`,
+      ...budget.map((text) => `- ${text}`),
     );
   }
   const activePolicies = activeCompanyApprovalPolicies(company);

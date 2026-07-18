@@ -15,6 +15,11 @@
   gap: 10px;
   max-width: calc(100% - 32px);
   pointer-events: auto;
+  transition: bottom 220ms cubic-bezier(0.2, 0.82, 0.2, 1);
+}
+
+.dock[data-mode="text"] {
+  bottom: 96px;
 }
 
 .shell {
@@ -268,6 +273,10 @@
     bottom: 16px;
   }
 
+  .dock[data-mode="text"] {
+    bottom: 96px;
+  }
+
   .shell[data-expanded="true"] {
     width: min(318px, calc(100vw - 48px));
   }
@@ -279,6 +288,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .shell,
+  .dock,
   .title,
   .actions,
   .collapsedButton,

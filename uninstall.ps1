@@ -223,14 +223,17 @@ if (Ask-YesNo "Stop HivemindOS Link sidecar processes?" $true) {
   Ok "Stopped HivemindOS Link sidecar processes"
 }
 
-if (Ask-YesNo "Remove the 'HivemindOS Telemetry Collector' scheduled task, Startup launcher, and run-collector launcher files?" $true) {
+if (Ask-YesNo "Remove the 'HivemindOS Telemetry Collector' and 'HivemindOS Update' scheduled tasks, Startup launcher, and run-collector launcher files?" $true) {
   Unregister-ScheduledTask -TaskName "HivemindOS Telemetry Collector" -Confirm:$false -ErrorAction SilentlyContinue
+  # One-shot task registered by scripts/start-hivemindos-update-task.ps1 when a
+  # remote/self update runs; not created by setup, but ours to remove.
+  Unregister-ScheduledTask -TaskName "HivemindOS Update" -Confirm:$false -ErrorAction SilentlyContinue
   Remove-HivemindStartupLauncher "HivemindOS Telemetry Collector"
   $hiveHome = Join-Path $UserHome ".hivemindos"
   Remove-Item (Join-Path $hiveHome "run-collector.cmd") -Force -ErrorAction SilentlyContinue
   Remove-Item (Join-Path $hiveHome "run-collector-hidden.ps1") -Force -ErrorAction SilentlyContinue
   Remove-Item (Join-Path $hiveHome "run-collector-hidden.vbs") -Force -ErrorAction SilentlyContinue
-  Ok "Removed the HivemindOS collector task/startup launcher and launcher files"
+  Ok "Removed the HivemindOS collector/update tasks, startup launcher, and launcher files"
 }
 
 if (Ask-YesNo "Remove the 'HivemindOS Link' scheduled task, Startup launcher, run-linkd launcher files, and installed sidecar binary?" $true) {
@@ -557,6 +560,9 @@ if (Ask-YesNo "Remove empty canonical HivemindOS vault folders created by setup?
     "$brainServicesFolder/Queen Bee/inbox",
     "$brainServicesFolder/Queen Bee/nodes",
     "$brainServicesFolder/Queen Bee",
+    "$brainServicesFolder/Index Generations/agent-memory",
+    "$brainServicesFolder/Index Generations/full-vault",
+    "$brainServicesFolder/Index Generations",
     "Operations/Brain Services/Queen Bee",
     $brainServicesFolder,
     "$synthesisFolder/pack",

@@ -564,6 +564,7 @@ export interface AgentProfile {
     runtimeStateSync?: boolean;
     syncthing?: boolean;
     defaultSyncPath?: string;
+    remoteShell?: boolean;
   };
   runtimeKind?: AgentRuntimeKind;
   runtimeCapabilities?: RuntimeCapabilities;

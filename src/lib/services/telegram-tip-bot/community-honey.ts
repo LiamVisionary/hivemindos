@@ -56,6 +56,12 @@ export class CommunityHoneyClient {
   profile(telegramUserId: string) {
     return this.request<{
       linked: boolean;
+      // HONEY banked to the Telegram identity before any HivemindOS link;
+      // it transfers to the workspace automatically when the member links.
+      pendingHoney?: {
+        total: number;
+        sources: { peerRecognition: number; historicalTipSeed: number };
+      };
       publicLabel?: string;
       honey?: {
         total: number;
@@ -79,6 +85,15 @@ export class CommunityHoneyClient {
     }>(`/community/profile?telegramUserId=${encodeURIComponent(telegramUserId)}`);
   }
 
+  // Tap-to-link: the app minted this intent and Telegram delivered it via the
+  // /start deep link, so the user id we pass is Telegram-attested.
+  redeemLinkIntent(intent: string, telegramUserId: string, publicLabel: string) {
+    return this.request<{ linked: boolean; publicLabel: string; claimedHoney: number }>(
+      "/community/link-intents/redeem",
+      { method: "POST", body: JSON.stringify({ intent, telegramUserId, publicLabel }) },
+    );
+  }
+
   givePeerHoney(input: {
     giverTelegramUserId: string;
     recipientTelegramUserId: string;
@@ -89,6 +104,9 @@ export class CommunityHoneyClient {
       duplicate: boolean;
       honeyGiven: number;
       recipientPublicLabel: string;
+      // Absent on gateways that predate link-free recognition; only an
+      // explicit false should trigger the "link to claim" nudge.
+      recipientLinked?: boolean;
       dailyRecognitionLimit: number;
       recognitionsUsedToday: number;
       recognitionsRemainingToday: number;

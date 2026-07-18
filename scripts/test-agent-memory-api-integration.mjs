@@ -220,6 +220,11 @@ const usageRecall = await postMemory({
 const usageHit = usageRecall.hits.find((hit) => hit.id === aliasWrite.record.id);
 assert.equal(usageHit?.usage?.finalAnswerCount, 1, "record-usage should surface final-answer count");
 assert.ok((usageHit?.scoreDetails?.usage ?? 0) > 0, "usage should gently contribute to score details");
+const generationList = await postMemory({ action: "list-generations", vaultPath });
+assert.equal(generationList.coverage?.policy?.maxGenerations, 256, "generation API should expose the active retention bound");
+assert.equal(generationList.coverage?.completeHistory, true, "a new vault should report complete replay history");
+const health = await postMemory({ action: "health", vaultPath });
+assert.equal(health.indexes?.generations?.replayCoverage?.policy?.checkpointInterval, 32, "health API should expose checkpoint cadence");
 
 console.log(JSON.stringify({
   ok: true,
@@ -232,5 +237,6 @@ console.log(JSON.stringify({
     temporalCurrentHistoricalAsOf: true,
     usageTelemetry: true,
     scoreDetails: true,
+    replayCoverage: true,
   },
 }, null, 2));

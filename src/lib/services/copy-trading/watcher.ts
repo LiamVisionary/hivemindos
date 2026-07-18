@@ -26,22 +26,10 @@ import "server-only";
 import { createPublicClient, fallback, http, parseAbiItem, type Log } from "viem";
 import { base } from "viem/chains";
 import { Connection, PublicKey } from "@solana/web3.js";
-import type { CopyTradeNetwork } from "@/lib/types/copy-trading";
+import type { CopyTradeNetwork, CopyTradeSignal } from "@/lib/types/copy-trading";
 import { nativeUsdPrice, tokenLiquidityUsd } from "./market";
 
-export type CopyTradeSignal = {
-  /** Target's tx hash / signature that triggered this. */
-  targetTxRef: string;
-  direction: "buy" | "sell";
-  /** The non-quote token: 0x address (Base, lowercased) or mint (Solana). */
-  token: string;
-  /** Quote leg symbol — what the target paid with (buy) or received (sell). */
-  quoteSymbol: string;
-  /** Target's quote-leg size in USD, when resolvable (for proportional sizing). */
-  quoteUsd: number | null;
-  /** Block number (Base) or slot (Solana), stringified. */
-  blockOrSlot: string;
-};
+export type { CopyTradeSignal } from "@/lib/types/copy-trading";
 
 export type WatchResult = {
   signals: CopyTradeSignal[];

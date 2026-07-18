@@ -1,0 +1,16 @@
+{
+  "upstreamName": "Viral Startup Launch Video",
+  "upstreamSlug": "viral-startup-launch-video",
+  "hiveSlug": "viral-startup-launch-video",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/media/hivemindos/viral-startup-launch-video",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-16T23:02:02Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional media skills",
+  "sourcePath": "packaged-skills/optional/media/hivemindos/viral-startup-launch-video",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Packages the launch-video retention/conversion playbook, scorecard, and output formats with truthfulness and proof-gap rules."
+  ]
+}

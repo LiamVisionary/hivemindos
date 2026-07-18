@@ -7,6 +7,7 @@ import { redactSecretText } from "@/lib/services/agent-security-proxy";
 import { listAgentMemoryRecords } from "@/lib/services/obsidian/agent-memory";
 import { appendAgentMemoryUsage } from "@/lib/services/obsidian/agent-memory/usage";
 import { removeFullVaultSearchIndexPaths } from "@/lib/services/obsidian/full-vault-search-index";
+import { contentAddressForText } from "@/lib/services/obsidian/content-address";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { isAutomationTranscriptText } from "@/lib/utils/automation-transcript";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
@@ -57,6 +58,7 @@ export type ConversationIndexEntry = {
   startedAt: string;
   endedAt?: string;
   endReason?: string;
+  contentHash: string;
 };
 
 function safeSlug(value: string) {
@@ -125,22 +127,6 @@ export function conversationNoteRelativePath(session: RuntimeChatSessionRecord, 
 function conversationMarkdown(session: RuntimeChatSessionRecord, messages: RuntimeChatSessionMessage[], title: string, keywords: string[]) {
   const asked = firstUserMessage(messages);
   const replied = lastAssistantMessage(messages);
-  const frontmatterLines = [
-    "---",
-    "type: conversation",
-    `sessionId: ${yamlValue(session.sessionId)}`,
-    `agentId: ${yamlValue(session.agentId)}`,
-    `agentName: ${yamlValue(session.agentName)}`,
-    `runtime: ${yamlValue(session.runtime)}`,
-    session.chatStorageKey ? `chatStorageKey: ${yamlValue(session.chatStorageKey)}` : "",
-    `title: ${yamlValue(title)}`,
-    `startedAt: ${yamlValue(new Date(session.startedAt).toISOString())}`,
-    session.endedAt ? `endedAt: ${yamlValue(new Date(session.endedAt).toISOString())}` : "",
-    session.endReason ? `endReason: ${yamlValue(session.endReason)}` : "",
-    `messageCount: ${messages.length}`,
-    `tags: [conversation${keywords.length ? `, ${keywords.join(", ")}` : ""}]`,
-    "---",
-  ].filter(Boolean);
   const summaryLines = [
     `# [[${session.agentName}]] conversation — ${title}`,
     "",
@@ -155,10 +141,29 @@ function conversationMarkdown(session: RuntimeChatSessionRecord, messages: Runti
     .map((message) => transcriptLine(session, message))
     .filter(Boolean)
     .join("\n\n");
-  return `${[...frontmatterLines, "", ...summaryLines, transcript].join("\n")}\n`;
+  const body = [...summaryLines, transcript].join("\n");
+  const contentHash = contentAddressForText(body);
+  const frontmatterLines = [
+    "---",
+    "type: conversation",
+    `sessionId: ${yamlValue(session.sessionId)}`,
+    `agentId: ${yamlValue(session.agentId)}`,
+    `agentName: ${yamlValue(session.agentName)}`,
+    `runtime: ${yamlValue(session.runtime)}`,
+    session.chatStorageKey ? `chatStorageKey: ${yamlValue(session.chatStorageKey)}` : "",
+    `title: ${yamlValue(title)}`,
+    `contentHash: ${yamlValue(contentHash)}`,
+    `startedAt: ${yamlValue(new Date(session.startedAt).toISOString())}`,
+    session.endedAt ? `endedAt: ${yamlValue(new Date(session.endedAt).toISOString())}` : "",
+    session.endReason ? `endReason: ${yamlValue(session.endReason)}` : "",
+    `messageCount: ${messages.length}`,
+    `tags: [conversation${keywords.length ? `, ${keywords.join(", ")}` : ""}]`,
+    "---",
+  ].filter(Boolean);
+  return { markdown: `${[...frontmatterLines, "", body].join("\n")}\n`, contentHash };
 }
 
-function indexEntry(session: RuntimeChatSessionRecord, notePath: string, title: string, keywords: string[], messageCount: number): ConversationIndexEntry {
+function indexEntry(session: RuntimeChatSessionRecord, notePath: string, title: string, keywords: string[], messageCount: number, contentHash: string): ConversationIndexEntry {
   return {
     timestamp: new Date().toISOString(),
     action: "conversation",
@@ -174,6 +179,7 @@ function indexEntry(session: RuntimeChatSessionRecord, notePath: string, title: 
     startedAt: new Date(session.startedAt).toISOString(),
     endedAt: isoOrUndefined(session.endedAt),
     endReason: session.endReason,
+    contentHash,
   };
 }
 
@@ -197,12 +203,13 @@ export async function syncConversationNoteForSession(session: RuntimeChatSession
   const notePath = conversationNoteRelativePath(session, title);
   const absoluteNotePath = join(root, notePath);
 
+  const rendered = conversationMarkdown(session, messages, title, keywords);
   await mkdir(dirname(absoluteNotePath), { recursive: true });
-  await writeFile(absoluteNotePath, conversationMarkdown(session, messages, title, keywords), { encoding: "utf8", mode: 0o600 });
+  await writeFile(absoluteNotePath, rendered.markdown, { encoding: "utf8", mode: 0o600 });
 
   const indexFile = join(root, CONVERSATIONS_INDEX_PATH);
   await mkdir(dirname(indexFile), { recursive: true });
-  const entry = indexEntry(session, notePath, title, keywords, messages.length);
+  const entry = indexEntry(session, notePath, title, keywords, messages.length, rendered.contentHash);
   await serializeConversationIndexWrite(() => appendFile(indexFile, `${JSON.stringify(entry)}\n`, "utf8"));
   await recordCitedMemoryUsage(root, session, messages).catch(() => undefined);
   return { notePath, entry };

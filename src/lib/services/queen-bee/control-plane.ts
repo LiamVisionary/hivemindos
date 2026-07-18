@@ -228,7 +228,10 @@ export function isRedispatchableReadyTask(
   const assignee = task.assignee?.trim();
   if (!collectorUrl || !assignee || assignee === "queen-bee") return false;
   const source = task.source ?? "";
-  const autonomous = Boolean(task.loop) || source.startsWith("queen-bee") || source.startsWith("loop") || source.startsWith("company:");
+  // "flow:" is load-bearing: without it, sequential/graph company tasks were
+  // invisible to every recovery sweep — a stalled flow just stopped forever
+  // with zero signal (confirmed open in the 2026-07-11 and 07-16 audits).
+  const autonomous = Boolean(task.loop) || source.startsWith("queen-bee") || source.startsWith("loop") || source.startsWith("company:") || source.startsWith("flow:");
   if (!autonomous) return false;
   // Idle a beat so we never race the original setTimeout pickup of a just-submitted task.
   return now - (task.updatedAt ?? 0) >= REDISPATCH_MIN_READY_AGE_MS;
@@ -277,7 +280,10 @@ export function isRoutablePendingQueenBeeTask(
   if (task.status !== "ready") return false;
   if ((task.assignee?.trim() || "queen-bee") !== "queen-bee") return false;
   const source = task.source ?? "";
-  const autonomous = Boolean(task.loop) || source.startsWith("queen-bee") || source.startsWith("loop") || source.startsWith("company:");
+  // "flow:" is load-bearing: without it, sequential/graph company tasks were
+  // invisible to every recovery sweep — a stalled flow just stopped forever
+  // with zero signal (confirmed open in the 2026-07-11 and 07-16 audits).
+  const autonomous = Boolean(task.loop) || source.startsWith("queen-bee") || source.startsWith("loop") || source.startsWith("company:") || source.startsWith("flow:");
   if (!autonomous) return false;
   // Idle a beat so we never race the submit path that just created the task.
   return now - (task.updatedAt ?? 0) >= REDISPATCH_MIN_READY_AGE_MS;

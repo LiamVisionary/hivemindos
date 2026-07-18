@@ -2,6 +2,7 @@
 
 import * as React from "react";
 
+import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 import { BBtn, BIcon, NiBadge, ServiceGlyph } from "./integrations-primitives";
 import { readJson } from "./integrations-view-helpers";
 
@@ -85,13 +86,15 @@ export function NotebookLmIntegrationCard() {
   }
 
   function signOut() {
-    if (!window.confirm("Sign out of NotebookLM on this machine? This clears the active local NotebookLM browser session.")) return;
-    void run("logout", { confirmation: "SIGN_OUT_NOTEBOOKLM" });
+    void confirmUserAction("Sign out of NotebookLM on this machine? This clears the active local NotebookLM browser session.").then((confirmed) => {
+      if (confirmed) void run("logout", { confirmation: "SIGN_OUT_NOTEBOOKLM" });
+    });
   }
 
   function remove() {
-    if (!window.confirm("Remove the local NotebookLM package and HivemindOS-managed runtime entries? The separate NotebookLM authentication profile will be preserved.")) return;
-    void run("remove", { confirmation: "REMOVE_NOTEBOOKLM_PACKAGE" });
+    void confirmUserAction("Remove the local NotebookLM package and HivemindOS-managed runtime entries? The separate NotebookLM authentication profile will be preserved.").then((confirmed) => {
+      if (confirmed) void run("remove", { confirmation: "REMOVE_NOTEBOOKLM_PACKAGE" });
+    });
   }
 
   const activeRuntimes = status?.runtimeTargets.filter((target) => target.installed) ?? [];

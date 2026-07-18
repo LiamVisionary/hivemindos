@@ -19,6 +19,7 @@ import {
 import { Button } from "@/design-system/ui/button";
 import { deleteNativeBeelineProfileCredentials } from "@/lib/native/beeline-credentials";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 import {
   BEELINE_CAPABILITIES,
   BEELINE_RELATIONSHIPS,
@@ -404,7 +405,7 @@ export function BeelineView({ agentName = "your agent" }: { agentName?: string }
 
   const openBrowser = React.useCallback(async () => {
     if (!selected) return;
-    const approved = window.confirm(
+    const approved = await confirmUserAction(
       `Open ${selected.displayName}'s authenticated Chrome profile? This can expose private account state. It does not approve bookings, messages, purchases, or healthcare actions.`,
     );
     if (!approved) return;
@@ -426,7 +427,7 @@ export function BeelineView({ agentName = "your agent" }: { agentName?: string }
   }, [addActivity, selected]);
 
   const deleteProfile = React.useCallback(async () => {
-    if (!selected || !window.confirm(`Remove ${selected.displayName} from Beeline? This deletes their local credentials, revokes hosted connections, and removes the card and browser binding.`)) return;
+    if (!selected || !(await confirmUserAction(`Remove ${selected.displayName} from Beeline? This deletes their local credentials, revokes hosted connections, and removes the card and browser binding.`))) return;
     setBusy("delete");
     setError("");
     try {

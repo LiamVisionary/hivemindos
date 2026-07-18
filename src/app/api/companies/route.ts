@@ -28,6 +28,11 @@ import {
   getCompanyAutonomyDriverStatus,
   rememberCompanyDriverSelfBase,
 } from "@/lib/services/company-autonomy-driver";
+import {
+  companyRevenueRailContext,
+  companyRevenueRailStatusFromContext,
+  opportunisticReceiptSweep,
+} from "@/lib/services/company-revenue-bridge";
 import { companyRevenueRollup, readCompanyRevenueLedger } from "@/lib/services/company-revenue-share";
 import { appendSpend, appendSpendIdempotent, shortTarget } from "@/lib/services/wallet/spend-ledger";
 import {
@@ -92,12 +97,18 @@ export async function GET(request: NextRequest) {
     for (const company of companies) seeded.push(await ensureCompanyProductsSeeded(company).catch(() => company));
     return seeded;
   })();
+  // Same self-heal stance as the driver revive above: any settled x402 seller
+  // receipts sweep into the revenue ledger (throttled + idempotent) before the
+  // rollups are computed, so revenue and apex progress never wait on a human.
+  await opportunisticReceiptSweep();
   const revenueRecords = await readCompanyRevenueLedger().catch(() => []);
+  const railContext = await companyRevenueRailContext().catch(() => null);
   const withRollups = await Promise.all(
     companies.map(async (company) => ({
       company,
       rollup: await companySpendRollup(company, company.agentIds?.length ?? 0),
       revenueShare: await companyRevenueRollup(company.id, revenueRecords),
+      revenueRail: railContext ? companyRevenueRailStatusFromContext(railContext, company.id) : undefined,
     })),
   );
   // Driver health rides along so the UI can say "stalled" instead of showing a

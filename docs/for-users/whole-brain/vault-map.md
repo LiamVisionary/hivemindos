@@ -55,9 +55,17 @@ hivemindos-vault/
 |   |   |-- Agent Memory Entity Index.jsonl
 |   |   |-- Agent Memory Index.jsonl
 |   |   |-- Agent Memory Retrievals.jsonl
+|   |   |-- Agent Memory Transactions.jsonl
 |   |   |-- Full Vault Search Index.md
 |   |   |-- Full Vault Search Index.jsonl
 |   |   |-- GBrain.md
+|   |   |-- Index Generations/
+|   |   |   |-- agent-memory/
+|   |   |   |   |-- coverage.json (after history is pruned)
+|   |   |   |   `-- <generation-id>/
+|   |   |   `-- full-vault/
+|   |   |       |-- coverage.json (after history is pruned)
+|   |   |       `-- <generation-id>/
 |   |   |-- Neo4j.md
 |   |   |-- Obsidian CLI.md
 |   |   |-- Obsidian Native Brain Pack.md
@@ -157,6 +165,8 @@ Shared Brain Memory has two recall layers:
 
 - Typed durable memories live in `Memory/Distillations/Agent Memory/`.
 - The private hot-path index lives in `Operations/Brain Services/Agent Memory Index.jsonl`.
+- Verified typed-memory and full-vault snapshots live under `Operations/Brain Services/Index Generations/`; bounded checkpoints, content-addressed deltas, and compressed artifacts reduce generated history while the hot-path JSONL files remain complete compatibility mirrors. Each kind's `coverage.json` appears after pruning and records the visible replay boundary.
+- Incomplete multi-note memory writes recover from `Operations/Brain Services/Agent Memory Transactions.jsonl` before the next mutation.
 - Entity and alias links live in `Operations/Brain Services/Agent Memory Entity Index.jsonl`.
 - Retrieval/final-answer telemetry lives in `Operations/Brain Services/Agent Memory Retrievals.jsonl` and only nudges ranking.
 - High-volume run receipts and operational events do not live in the vault. They use the bounded local journal at `~/.hivemindos/brain/operational-events.jsonl`; reviewed outcomes can later be promoted through Brain Review.
@@ -169,6 +179,7 @@ Shared Brain Memory has two recall layers:
 - Optional derived Neo4j status lives in `Operations/Brain Services/Neo4j.md`. Neo4j connection values stay in env keys only, and sync must not replace Obsidian as canonical memory.
 - Broad recall can search regular markdown notes across the vault when the typed memory layer is weak or when callers force `--scope full-vault`.
 - Conversation mirrors live in `Memory/Conversations/<agent>/` with a deduped index at `Operations/Brain Services/Conversations Index.jsonl`. They are included in full-vault recall, making cross-session queries like "check our conversations about x" work for every agent type without per-agent changes.
+- Portable brain capsules live outside the vault under `~/.hivemindos/brain/capsules/` so a user can copy a deliberately scoped file without turning generated exchange artifacts into canonical vault knowledge.
 - Obsidian-native views live at `Operations/Brain Services/Agent Memory.base`, `Project Brain.base`, `Secure References.base`, and `Whole Brain.canvas` so humans can inspect memory, projects, credential status references, and recall topology in Obsidian.
 
 Agents should use `/api/brain/memory` when they are app-routed and `hive-brain answer "<query>"` when they are raw/non-managed. Claude Code also gets a `hive-brain-hook` prompt hook during setup so raw Claude prompts can receive relevant shared-brain context automatically.

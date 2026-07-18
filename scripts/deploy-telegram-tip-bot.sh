@@ -36,9 +36,13 @@ if [[ "$skip_tests" -eq 0 ]]; then
 fi
 
 say "Syncing code to $HOST:$REMOTE_DIR (secrets excluded)"
+# /var/folders: gitignored scratch a passkeys dev harness writes INSIDE the repo
+# (mis-joined macOS $TMPDIR). It churns while rsync runs, so vanished files
+# abort the deploy unless excluded.
 rsync -az --delete \
   --exclude .git --exclude node_modules --exclude .next --exclude src-tauri/target \
   --exclude out --exclude coverage --exclude "*.log" --exclude ".env*" \
+  --exclude /var/folders \
   -e "ssh ${SSH_OPTS[*]}" \
   "$REPO_DIR/" "$HOST:$REMOTE_DIR/" || die "rsync failed."
 

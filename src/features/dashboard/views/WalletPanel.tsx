@@ -7,7 +7,6 @@ import { HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER } from "@/lib/config/hivemindos-
 import { MULTI_CHAIN_WALLET_LABEL, personalWalletNetworkForChainLabel } from "@/lib/config/personal-wallet-chains";
 import { fetchPersonalWalletRecords } from "@/lib/native/personal-wallets";
 import { loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
-import { switchBrowserWalletToBase } from "@/lib/services/hive-staking-client";
 import { sendApprovedPersonalWalletAsset, sendApprovedWalletUsdc, type WalletSendUsdcRequest } from "@/lib/services/wallet/send-usdc-client";
 import { refreshWalletUntilAssetBalance } from "@/lib/services/wallet/post-send-balance-refresh";
 import { getSurvivalSnapshot, hasConfiguredAgentWallet, resolveAgentWallet } from "@/lib/utils/agent-wallet";
@@ -1034,26 +1033,6 @@ function WalletPanelComponent(props: any) {
     bankrRecipientAddress,
     walletVaultBackup: { status: props.walletVaultBackupStatus, busy: props.walletVaultBackupBusy, message: props.walletVaultBackupMessage },
     formatHiveAmount: props.formatHiveAmount,
-    onConnectBankrWallet: async () => {
-      const provider = (window as any).ethereum;
-      if (!provider) throw new Error("No browser wallet found. Paste your Bankr receiving address instead.");
-      const accounts = await provider.request({ method: "eth_requestAccounts" }) as string[];
-      const address = accounts.find((account) => /^0x[a-fA-F0-9]{40}$/.test(account));
-      if (!address) throw new Error("Wallet connected, but no EVM address was returned.");
-      await switchBrowserWalletToBase(provider);
-      setBankrRecipientAddress(address);
-      await saveDashboardStateValue(BANKR_RECIPIENT_STORAGE_KEY, address);
-      return address;
-    },
-    onClaimBankrHive: async (recipientAddress: string) => {
-      const address = recipientAddress.trim();
-      if (!/^0x[a-fA-F0-9]{40}$/.test(address)) return { ok: false, error: "Enter a valid Bankr EVM receiving address first." };
-      setBankrRecipientAddress(address);
-      await saveDashboardStateValue(BANKR_RECIPIENT_STORAGE_KEY, address);
-      const result = await props.claimAllHoneyToBankrHive?.(address);
-      await loadHoneyLedger();
-      return result;
-    },
     onReturnAllHiveToHoney: async () => {
       const result = await props.returnAllHiveToHoney?.();
       await loadHoneyLedger();
@@ -1082,6 +1061,14 @@ function WalletPanelComponent(props: any) {
         body: JSON.stringify({ action: "link-telegram", code }),
       });
       return response.json().catch(() => ({ ok: false, error: `Telegram HONEY link failed (${response.status}).` }));
+    },
+    onCreateTelegramHoneyLinkIntent: async () => {
+      const response = await fetch("/api/honey-community", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "link-telegram-intent" }),
+      });
+      return response.json().catch(() => ({ ok: false, error: `Telegram link request failed (${response.status}).` }));
     },
     onLoadHoneyContributionStatus: async () => {
       const response = await fetch("/api/honey-community", { cache: "no-store" });

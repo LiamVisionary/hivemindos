@@ -99,7 +99,9 @@ const dropInSources = readdirSync(dropInDir)
   .join("\n");
 const actionRefs = new Set([...dropInSources.matchAll(/actions\?\.([a-zA-Z0-9_]+)/g)].map((match) => match[1]));
 const walletActionsBody = panelSource.match(/const walletActions = useMemo\(\(\) => \(\{([\s\S]*?)\n\s*\}\), \[/)?.[1] ?? "";
-const providedActions = new Set([...walletActionsBody.matchAll(/\n\s*([a-zA-Z0-9_]+)\s*:/g)].map((match) => match[1]));
+// Top-level memo keys only (4-space indent) — a looser \s* also captures keys of
+// nested object literals inside handler bodies (fetch options, result shapes).
+const providedActions = new Set([...walletActionsBody.matchAll(/\n {4}([a-zA-Z0-9_]+)\s*:/g)].map((match) => match[1]));
 const dataProps = new Set(["bankrRecipientAddress", "bankrRewards", "formatHiveAmount", "walletVaultBackup"]);
 // Keys of nested result objects inside the memo body that the line-based
 // extractor picks up but that are not actions (e.g. the fund-result field).

@@ -63,6 +63,8 @@ export type FounderBlueprint = {
   generatedAt: string;
   goal: string;
   archetype: string;
+  /** Company template this blueprint was compiled from, when one was picked. */
+  templateId?: string;
   identity: {
     name: string;
     ticker: string;

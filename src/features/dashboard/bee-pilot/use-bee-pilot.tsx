@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentProfile, AgentRuntime } from "@/lib/types/agent-runtime";
 import type { KanbanStatus } from "@/lib/types/kanban";
 import { KANBAN_STATUSES } from "@/lib/types/kanban";
+import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 import type { MachineGroup } from "@/features/dashboard/dashboard-types";
 import { isMobileMachineOs } from "@/features/fleet/fleet-identity";
 import type { DashboardRouteTarget } from "@/features/dashboard/dashboard-navigation";
@@ -300,7 +301,7 @@ export function useBeePilot(deps: BeePilotDeps) {
           if (params.send === "true") {
             const send = await waitForElement('[data-bee-send][aria-label="Send"]', 2_000);
             if (send) {
-              if (!window.confirm(`Bee Pilot is ready to send this message to ${agent.name}.\n\nAllow this one action?`)) {
+              if (!(await confirmUserAction(`Bee Pilot is ready to send this message to ${agent.name}.\n\nAllow this one action?`))) {
                 return "The message is drafted, but it was not sent.";
               }
               setStatus(`Sending the message to ${agent.name}...`);
@@ -337,7 +338,7 @@ export function useBeePilot(deps: BeePilotDeps) {
         await wait(380);
         const confirm = await waitForElement(dataBeeSelector(`wallet-create-${agent.id}`), 2_000);
         if (!confirm) return `${agent.name} already has a wallet, so I opened it instead.`;
-        if (!window.confirm(`Bee Pilot is ready to create a wallet for ${agent.name}.\n\nAllow this one action?`)) {
+        if (!(await confirmUserAction(`Bee Pilot is ready to create a wallet for ${agent.name}.\n\nAllow this one action?`))) {
           return "The wallet card is open, but no wallet was created.";
         }
         setStatus(`Confirming ${agent.name}'s new wallet...`);
@@ -404,7 +405,7 @@ export function useBeePilot(deps: BeePilotDeps) {
       case "queen-task": {
         const message = params.message?.trim() || params.title?.trim();
         if (!message) return "There was no work request to delegate.";
-        if (!window.confirm(`Bee Pilot is ready to delegate “${params.title || message}” to the hive.\n\nAllow this one action?`)) {
+        if (!(await confirmUserAction(`Bee Pilot is ready to delegate “${params.title || message}” to the hive.\n\nAllow this one action?`))) {
           return "The work request was not delegated.";
         }
         setStatus("Delegating to the hive...");

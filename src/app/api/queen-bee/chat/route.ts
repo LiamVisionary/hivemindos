@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - dashboard chat-surface turn plumbing; agent-facing Queen access is modeled by queen-bee.orchestration.
 import { NextRequest, NextResponse } from "next/server";
 
 import {

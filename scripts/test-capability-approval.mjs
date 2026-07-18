@@ -11,7 +11,7 @@ const {
   normalizeCapabilityApprovalPlan,
   requiresCapabilityApproval,
 } = await import("../src/lib/services/chat/capability-approval.ts");
-const { CAPABILITY_APPROVAL_CONTINUATION_MARKER } = await import("../src/lib/types/capability-approval.ts");
+const { CAPABILITY_APPROVAL_CONTINUATION_MARKER, capabilityPlanRequiresReview } = await import("../src/lib/types/capability-approval.ts");
 const { compactChatMessagesForStorage, parseStoredChatMessages } = await import("../src/features/dashboard/dashboard-storage.ts");
 
 const ready = (id, title, summary = `${title} is ready`) => ({
@@ -49,6 +49,8 @@ const plan = await buildCapabilityApprovalPlan({
 });
 
 assert.equal(plan.status, "pending");
+assert.equal(plan.reviewMode, "ask", "multi-capability builds still require review");
+assert.equal(capabilityPlanRequiresReview(plan), true);
 assert.ok(plan.items.length >= 4, "multi-part build maps to multiple capability families");
 const image = plan.items.find((item) => item.intent === "image-generation");
 assert.equal(image?.decision, "approve-setup", "missing capability setup defaults to approve");
@@ -59,19 +61,89 @@ const appWorkspace = plan.items.find((item) => item.intent === "app-builder");
 assert.equal(appWorkspace?.candidates[0]?.id, "hive-action:apps.build", "standalone app requests always use the built-in durable App Builder workspace");
 assert.equal(appWorkspace?.candidates[0]?.locator, "/api/app-builder");
 
+const appBuilderContextItems = [
+  {
+    id: "hive-action:apps.build",
+    kind: "tool-schema",
+    title: "Create app workspace",
+    summary: "Build and run a durable app project.",
+    tags: ["app-builder", "capability"],
+    aliases: ["apps.build", "app_builder"],
+    route: "/api/app-builder",
+    load: { type: "api", target: "/api/app-builder" },
+    score: 220,
+  },
+  {
+    id: "api:/api/app-builder",
+    kind: "api-route",
+    title: "/api/app-builder",
+    summary: "GET, POST endpoint for /api/app-builder.",
+    tags: ["api", "app-builder"],
+    route: "/api/app-builder",
+    load: { type: "file", target: "/fixture/src/app/api/app-builder/route.ts" },
+    score: 180,
+  },
+];
+
 const flappyPlan = await buildCapabilityApprovalPlan({
   task: "build me a flappy bird clone in html and css",
   agentId: "hermes",
   chatStorageKey: "hermes::flappy",
   origin: "http://localhost:5021",
   connectedApps: [],
-  search: async (_options, queries) => queries.map(() => ({ items: [], totals: {} })),
+  search: async (_options, queries) => queries.map(() => ({ items: appBuilderContextItems, totals: {} })),
   now: 1_700_000_000_050,
 });
 assert.deepEqual(flappyPlan.items.map((item) => item.intent), ["app-builder"], "a standalone game uses one coherent App workspace capability instead of a repo-development workflow");
 assert.equal(flappyPlan.items[0]?.selectedCapabilityId, "hive-action:apps.build");
 assert.equal(flappyPlan.items[0]?.candidates[0]?.name, "Create app workspace", "the App Builder label cannot imply that the HivemindOS product itself will be modified");
-assert.doesNotMatch(capabilityApprovalContinuationPrompt(flappyPlan), /hivemindos-feature-development/i, "a standalone game continuation cannot load the HivemindOS repo-development skill");
+assert.deepEqual(flappyPlan.items[0]?.candidates.map((candidate) => candidate.id), ["hive-action:apps.build"], "the raw App Builder API route is not presented as a second capability");
+assert.equal(flappyPlan.reviewMode, "automatic", "one ready unambiguous capability continues without asking for approval");
+assert.equal(capabilityPlanRequiresReview(flappyPlan), false);
+const flappyContinuation = capabilityApprovalContinuationPrompt(flappyPlan);
+assert.doesNotMatch(flappyContinuation, /hivemindos-feature-development/i, "a standalone game continuation cannot load the HivemindOS repo-development skill");
+assert.doesNotMatch(flappyContinuation, /the user approved/i, "an automatic capability selection cannot claim the user approved it");
+assert.match(flappyContinuation, /selected the only ready capability/i, "the automatic continuation explains why no review was needed");
+assert.match(flappyContinuation, /invoke_hive_capability/, "the App Builder continuation names the capability tool actually exposed by this chat runtime");
+assert.doesNotMatch(flappyContinuation, /Use the app_builder tool/, "the App Builder continuation cannot direct the model to an unavailable direct tool");
+
+const { capabilityAppProjectContext, prepareCapabilityAppProject } = await import("../src/lib/services/chat/capability-app-project-client.ts");
+const preparedAppProject = await prepareCapabilityAppProject({
+  plan: flappyPlan,
+  baseDirectory: "/fixture/workspace",
+  machine: { key: "local", name: "This Mac" },
+  request: async (body) => ({
+    ok: true,
+    project: {
+      id: "project-e2e",
+      name: body.name,
+      directory: body.directory,
+      templateId: body.templateId,
+      status: "stopped",
+      dependenciesReady: false,
+      createdAt: 1_700_000_000_050,
+      updatedAt: 1_700_000_000_050,
+    },
+  }),
+});
+assert.equal(preparedAppProject?.artifact.projectId, "project-e2e", "automatic selection prepares the same durable App Builder artifact as manual approval");
+assert.match(preparedAppProject?.artifact.directory ?? "", /scratchpad\/a-flappy-bird-clone-in-html-and-css-/);
+const preparedAppProjectContext = capabilityAppProjectContext(preparedAppProject?.artifact);
+assert.match(preparedAppProjectContext, /Assigned App Builder project:/);
+assert.match(preparedAppProjectContext, /invoke_hive_capability/, "assigned projects name the executable capability wrapper");
+assert.match(preparedAppProjectContext, /action=\"files_write\"/, "assigned projects tell the agent to use App Builder file writes");
+assert.match(preparedAppProjectContext, /index\.html, styles\.css, and script\.js/, "static projects identify their existing root files");
+assert.match(preparedAppProjectContext, /Do not run pnpm or npm/i, "static projects do not invent a package build pipeline");
+const restoredInterruptedAutomaticPlan = parseStoredChatMessages({
+  "hivemindos.chatMessages.v1": JSON.stringify(compactChatMessagesForStorage({
+    "hermes::flappy": [{ role: "assistant", content: "", capabilityApproval: flappyPlan }],
+  })),
+});
+assert.equal(
+  restoredInterruptedAutomaticPlan["hermes::flappy"][0].capabilityApproval?.reviewMode,
+  "ask",
+  "an interrupted automatic continuation recovers as a visible review card after reload",
+);
 
 const redesigned = {
   ...plan,
@@ -147,7 +219,8 @@ const expectedPromptMappings = [
   ["Build a browser scraper that fills forms", ["implementation", "browser-automation"]],
   ["Build an automation that emails a report weekly", ["implementation", "communications", "scheduling"]],
   ["Build an MCP server for our internal API", ["implementation", "mcp-development"]],
-  ["Build an Excel dashboard from this CSV", ["implementation", "interface-design", "data-work"]],
+  ["Build an Excel dashboard from this CSV", ["data-work"]],
+  ["Build a Power BI dashboard", ["data-work"]],
   ["Create a PowerPoint presentation for the launch", ["presentation"]],
   ["Create a PDF brochure", ["document"]],
   ["Generate a narrated podcast audio episode", ["audio-generation"]],
@@ -173,6 +246,8 @@ const expectedPromptMappings = [
   ["Prototype a React component", ["implementation", "interface-design"]],
   ["Write a Python CLI tool", ["implementation"]],
   ["Create a logo for the launch", ["image-generation"]],
+  ["Create a logo for the app", ["image-generation"]],
+  ["Create an app icon", ["image-generation"]],
   ["Design a mobile app interface", ["implementation", "interface-design"]],
   ["Make a Chrome extension that scrapes pages", ["implementation", "browser-automation"]],
   ["Build and deploy a dashboard that researches the latest news, analyzes a CSV, generates an image and video, emails Slack, charges a USDC payment, and schedules daily updates", ["app-builder", "research", "interface-design", "image-generation", "video-generation", "deployment", "communications", "data-work", "payments", "scheduling"]],
@@ -263,6 +338,7 @@ const appWorkspaceCases = [
   ["Build a feature-rich web app", true],
   ["Build a productivity tool web app", true],
   ["Build an AI image generation web app", true],
+  ["Build an Excel import web app", true],
   ["Create a photo editing website", true],
   ["Build an automation monitoring dashboard", true],
   ["Build Stripe checkout for the app", false],
@@ -438,6 +514,8 @@ const appBuilderActionSource = await readFile(new URL("../src/lib/services/hive-
 const chatTreeControllerSource = await readFile(new URL("../src/features/dashboard/hooks/use-chat-tree-controller.tsx", import.meta.url), "utf8");
 const exchangePanelSource = await readFile(new URL("../src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx", import.meta.url), "utf8");
 const threadSource = await readFile(new URL("../src/features/dashboard/views/chat/exchange/MessageThread.tsx", import.meta.url), "utf8");
+const approvalCardSource = await readFile(new URL("../src/features/dashboard/views/chat/exchange/CapabilityApprovalCard.tsx", import.meta.url), "utf8");
+const approvalCardStyles = await readFile(new URL("../src/features/dashboard/views/chat/exchange/capability-approval-card.module.css", import.meta.url), "utf8");
 const sidebarSource = await readFile(new URL("../src/features/dashboard/views/chat/exchange/ChatSidebar.tsx", import.meta.url), "utf8");
 const dispatchSource = await readFile(new URL("../src/features/dashboard/dashboard-light-helpers.tsx", import.meta.url), "utf8");
 const capabilitySearchSkillSource = await readFile(new URL("../packaged-skills/auto-install/hive-capability-search/SKILL.md", import.meta.url), "utf8");
@@ -445,7 +523,9 @@ const companyPolicySource = await readFile(new URL("../src/lib/services/company-
 const companyPolicyPanelSource = await readFile(new URL("../src/features/dashboard/views/zero-human-companies/ApprovalPoliciesPanel.tsx", import.meta.url), "utf8");
 assert.match(controllerSource, /\/api\/chat\/capability-approval/, "chat route drafts the plan before runtime dispatch");
 assert.match(controllerSource, /workingDirectory:\s*selectedChatDirectoryPath/, "chat preflight sends the attached project directory as repository context");
+assert.match(controllerSource, /!capabilityData\.required[\s\S]+prepareCapabilityAppProject[\s\S]+runChatMessage/, "the send controller continues an automatic plan without relying on a rendered approval card");
 assert.match(capabilityRouteSource, /workingDirectory:\s*typeof body\.workingDirectory/, "the capability API forwards bounded repository context to the ranker");
+assert.match(capabilityRouteSource, /required:\s*capabilityPlanRequiresReview\(plan\)/, "the API distinguishes an automatic single choice from a plan that needs review");
 assert.match(appBuilderActionSource, /title:\s*"Create app workspace"/, "the stable apps.build action uses an unambiguous user-facing name");
 assert.doesNotMatch(appBuilderActionSource, /title:\s*"Build HivemindOS app"/, "the action title cannot imply that a standalone project edits HivemindOS");
 assert.match(chatTreeControllerSource, /mergeRuntimeHydratedChatMessages\(existing, hydratedMessages\)/, "runtime hydration preserves local capability cards instead of replacing the thread wholesale");
@@ -453,6 +533,14 @@ assert.match(controllerSource, /attachments:\s*options\.attachments\s*\?\?\s*\[\
 assert.match(exchangePanelSource, /attachments:\s*approvalRequestAttachments/, "capability submission forwards the request attachments to the runtime continuation");
 assert.match(controllerSource, /if\s*\(\s*!capabilityResponse\?\.ok\s*\|\|\s*!capabilityData\?\.ok\s*\)/, "a failed capability preflight cannot silently dispatch an unapproved build");
 assert.match(threadSource, /CapabilityApprovalCard/, "chat renders the structured approval card");
+assert.doesNotMatch(threadSource, /AutomaticCapabilityPlanRunner/, "automatic continuation is not coupled to rendering a hidden approval card");
+assert.match(approvalCardSource, /<details className=\{styles\.advanced\}/, "rare capability controls are collapsed by default");
+assert.match(approvalCardSource, /<summary[\s\S]+Advanced[\s\S]+Change tools or add instructions/, "the advanced disclosure explains its purpose in plain language");
+assert.match(approvalCardSource, /<details[\s\S]+Choose an alternative[\s\S]+Use another GitHub repository[\s\S]+Instructions for this capability/, "alternatives and manual inputs live inside Advanced");
+assert.doesNotMatch(approvalCardSource, />\s*Browse\s*</, "the default card has no competing Browse action");
+assert.match(approvalCardSource, />\s*Continue\s*</, "the primary action uses a short concrete label");
+assert.doesNotMatch(approvalCardSource, /I’ve drafted the capability list/, "the footer does not repeat what the card already communicates");
+assert.match(approvalCardStyles, /\.advanced\s*\{/, "the compact disclosure has a dedicated visual treatment");
 assert.match(sidebarSource, /Capability approval waiting/, "chat history marks pending capability approvals");
 assert.match(dispatchSource, /Capability approval mode: AUTOMATIC/, "Work Board autonomy defaults to automatic capability setup");
 assert.match(dispatchSource, /Capability approval mode: ASK FIRST/, "Work Board task can opt into capability approval");

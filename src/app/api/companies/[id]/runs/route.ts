@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - per-company run/proposal ledger written by company services and the dashboard; the dynamic [id] segment is not addressable by the Hive action invoke surface.
 import { NextRequest } from "next/server";
 
 import {

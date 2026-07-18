@@ -2006,6 +2006,9 @@ mkdir -p \
   "$shared_vault_path/$kanban_folder" \
   "$shared_vault_path/$notifications_folder" \
   "$shared_vault_path/$brain_services_folder" \
+  "$shared_vault_path/$brain_services_folder/Index Generations" \
+  "$shared_vault_path/$brain_services_folder/Index Generations/agent-memory" \
+  "$shared_vault_path/$brain_services_folder/Index Generations/full-vault" \
   "$shared_vault_path/$brain_services_folder/Queen Bee" \
   "$shared_vault_path/$brain_services_folder/Queen Bee/nodes" \
   "$shared_vault_path/$brain_services_folder/Queen Bee/inbox" \
@@ -2040,7 +2043,7 @@ if [[ ! -f "$shared_vault_path/$brain_services_folder/README.md" ]]; then
   cat > "$shared_vault_path/$brain_services_folder/README.md" <<'EOF'
 # Brain Services
 
-Status notes for HivemindOS brain services. Shared Brain Memory uses a generated full-vault lexical index by default at \`Operations/Brain Services/Full Vault Search Index.jsonl\`; QMD, GBrain, Neo4j, and Syntho can be connected from the dashboard without storing provider secrets in the vault.
+Status notes for HivemindOS brain services. Shared Brain Memory keeps Markdown authoritative while bounded verified checkpoints, compressed artifacts, content-addressed deltas, and visible replay coverage under \`Operations/Brain Services/Index Generations/\` back the complete typed-memory and full-vault JSONL mirrors. QMD, GBrain, Neo4j, and Syntho can be connected from the dashboard without storing provider secrets in the vault.
 EOF
 fi
 

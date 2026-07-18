@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - report-only brain-service driver control surface, driven by the boot loopback self-POST and the dashboard card.
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/utils/server-auth";
 import {

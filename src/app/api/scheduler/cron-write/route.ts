@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - dashboard scheduler plumbing that writes a machine's Hermes cron doc through its collector.
 import { NextRequest } from "next/server";
 
 import { okJson, errorJson } from "@/lib/utils/api-response";

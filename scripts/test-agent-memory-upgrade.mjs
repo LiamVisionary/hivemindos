@@ -52,8 +52,8 @@ for (const token of [
 }
 
 for (const token of [
-  "appendAgentMemoryEntityIndex(root, record)",
-  "await rewriteAgentMemoryEntityIndex(root, records)",
+  "serializeAgentMemoryEntityIndex(records)",
+  "publishAgentMemoryGeneration(root, records",
   "entities: record.entities",
   "aliases: record.aliases",
   "actorRole: record.actorRole",

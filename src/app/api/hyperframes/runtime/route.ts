@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - dashboard-only local renderer install/uninstall setup surface with an explicit confirm gate.
 import { NextRequest } from "next/server";
 import {
   installHyperframesRuntime,

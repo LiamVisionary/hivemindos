@@ -56,7 +56,6 @@ import {
   HoneyReactionMessageIndex,
   honeyRecognitionReactionWasAdded,
   parseHoneyCommandArgs,
-  shouldSeedHoneyRecognitionReaction,
 } from "./honey-recognition";
 
 export type TipBotConfig = {
@@ -310,10 +309,11 @@ function parseIdAndAmount(args: string, decimals: number, usage: string): { id: 
 
 export async function handleTipBotUpdate(runtime: TipBotRuntime, update: TgUpdate) {
   const message = update.message;
-  if (message) {
-    honeyReactionMessages.remember(message);
-    await seedHoneyRecognitionReaction(runtime, message);
-  }
+  // Remember authors so a later member 🏆 reaction can resolve its recipient.
+  // Never react to the message itself here: Telegram animates every reaction
+  // placement, so a bot-seeded trophy plays the award animation on every
+  // comment. The trophy must appear only when a member adds it.
+  if (message) honeyReactionMessages.remember(message);
   if (update.message_reaction) return handleHoneyReaction(runtime, update);
   if (!message?.from || message.from.is_bot || !message.text) return;
 
@@ -416,25 +416,6 @@ export async function handleTipBotUpdate(runtime: TipBotRuntime, update: TgUpdat
   }
 }
 
-async function seedHoneyRecognitionReaction(runtime: TipBotRuntime, message: TgMessage) {
-  if (!shouldSeedHoneyRecognitionReaction(message)) return;
-  await runtime.api.setMessageReaction({
-    chatId: message.chat.id,
-    messageId: message.message_id,
-    emoji: HONEY_RECOGNITION_REACTION_EMOJI,
-  }).catch(() => undefined);
-}
-
-async function clearHoneyRecognitionReactionSeed(
-  runtime: TipBotRuntime,
-  reaction: NonNullable<TgUpdate["message_reaction"]>,
-) {
-  await runtime.api.setMessageReaction({
-    chatId: reaction.chat.id,
-    messageId: reaction.message_id,
-  }).catch(() => undefined);
-}
-
 async function handleHoneyReaction(runtime: TipBotRuntime, update: TgUpdate) {
   const reaction = update.message_reaction;
   if (
@@ -463,7 +444,6 @@ async function handleHoneyReaction(runtime: TipBotRuntime, update: TgUpdate) {
       telegramUpdateId: String(update.update_id),
       reason: HONEY_REACTION_REASON,
     });
-    await clearHoneyRecognitionReactionSeed(runtime, reaction);
     if (result.duplicate) return;
     await runtime.api.sendMessage({
       chatId: reaction.chat.id,
@@ -471,6 +451,9 @@ async function handleHoneyReaction(runtime: TipBotRuntime, update: TgUpdate) {
       text: [
         `${HONEY_RECOGNITION_REACTION_EMOJI} <b>${escapeHtml(telegramPublicLabel(giver))} recognized ${escapeHtml(result.recipientPublicLabel || telegramPublicLabel(recipient))}</b>`,
         `🍯 +${Number(result.honeyGiven || 1).toLocaleString()} HONEY · ${Number(result.recognitionsRemainingToday || 0).toLocaleString()} of ${Number(result.dailyRecognitionLimit || 0).toLocaleString()} recognitions left today.`,
+        ...(result.recipientLinked === false
+          ? ["Banked to their Telegram account — <code>/linkhoney</code> transfers it to HivemindOS anytime."]
+          : []),
       ].join("\n"),
     });
   } catch (error) {
@@ -494,6 +477,26 @@ type ReplyFn = (text: string, extra?: ReplyExtra) => Promise<TgMessage>;
 
 async function handleStart(runtime: TipBotRuntime, message: TgMessage, args: string, reply: ReplyFn) {
   const from = message.from as TgUser;
+  if (args.startsWith("link_")) {
+    // Tap-to-link from HivemindOS → Wallets → Honey: the deep-link payload
+    // carries the app-minted intent and this /start update carries the real
+    // Telegram identity, so no code is ever typed.
+    const intent = args.slice("link_".length);
+    try {
+      const result = await communityHoney(runtime).redeemLinkIntent(intent, String(from.id), telegramPublicLabel(from));
+      await reply([
+        "🔗 <b>Telegram connected to HivemindOS</b>",
+        result.claimedHoney > 0
+          ? `🍯 ${Number(result.claimedHoney).toLocaleString()} HONEY banked to this Telegram account now counts toward your workspace benefits.`
+          : "🍯 HONEY you earn here now counts toward your workspace benefits automatically.",
+        "If you didn't start this from HivemindOS → Wallets → Honey, ignore this message.",
+      ].join("\n"));
+    } catch (error) {
+      const text = error instanceof Error ? error.message : "The link could not be completed.";
+      await reply(`⚠️ ${escapeHtml(text)}\nOpen HivemindOS → Wallets → Honey and tap Connect Telegram again.`);
+    }
+    return;
+  }
   if (args.startsWith("claim_")) {
     const token = args.slice("claim_".length);
     const createdAt = new Date().toISOString();
@@ -964,8 +967,15 @@ async function handleLinkHoney(runtime: TipBotRuntime, message: TgMessage, reply
 async function handleHoneyProfile(runtime: TipBotRuntime, message: TgMessage, reply: ReplyFn) {
   const from = message.from as TgUser;
   const profile = await communityHoney(runtime).profile(String(from.id));
+  const pending = profile.pendingHoney;
   const text = !profile.linked
-    ? "🍯 Telegram is not linked to your HivemindOS HONEY workspace yet. Run <code>/linkhoney</code> to connect it privately."
+    ? (pending?.total
+        ? [
+            `🍯 <b>${Number(pending.total).toLocaleString()} HONEY</b> is banked to your Telegram account`,
+            `Sources: peer recognition ${Number(pending.sources?.peerRecognition || 0).toLocaleString()} · historical seed ${Number(pending.sources?.historicalTipSeed || 0).toLocaleString()}`,
+            "It transfers to your HivemindOS workspace automatically when you connect — run <code>/linkhoney</code> for your one-time code.",
+          ].join("\n")
+        : "🍯 No HONEY is banked to this Telegram account yet. Recognition lands here automatically — run <code>/linkhoney</code> anytime to connect HivemindOS so it counts toward app benefits.")
     : [
         `🍯 <b>${escapeHtml(profile.publicLabel || telegramPublicLabel(from))} · HONEY</b>`,
         `Lifetime HONEY: <b>${Number(profile.honey?.total || 0).toLocaleString()}</b>`,
@@ -1017,7 +1027,7 @@ async function handleHoneyCommand(
 
   const recipient = resolveHoneyRecipient(state, message, runtime.config.botUsername, promptedTargetUserId);
   if (!recipient) {
-    throw new Error("Reply to a member or use /honey @name <why>. The recipient must have interacted with the bot and linked HONEY.");
+    throw new Error("Reply to a member's message or use /honey @name <why> for a member I've seen chat before. No HivemindOS link is needed to receive HONEY.");
   }
   const from = message.from as TgUser;
   const result = await communityHoney(runtime).givePeerHoney({
@@ -1030,7 +1040,9 @@ async function handleHoneyCommand(
     `🍯 <b>+${Number(result.honeyGiven || 1).toLocaleString()} HONEY</b> to ${escapeHtml(result.recipientPublicLabel || recipient.publicLabel)}`,
     escapeHtml(action.reason),
     `You have ${Number(result.recognitionsRemainingToday || 0).toLocaleString()} of ${Number(result.dailyRecognitionLimit || 0).toLocaleString()} recognitions left today.`,
-    "This HONEY adds to the recipient's lifetime total and tier progress.",
+    result.recipientLinked === false
+      ? "Banked to their Telegram account — <code>/linkhoney</code> transfers it to HivemindOS anytime."
+      : "This HONEY adds to the recipient's lifetime total and tier progress.",
   ].join("\n"));
 }
 

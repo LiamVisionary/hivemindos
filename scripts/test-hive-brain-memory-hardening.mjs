@@ -476,7 +476,9 @@ assert.ok(health.indexes.memoryIndex.bloatFactor <= 1.5, `index bloat should sta
 assert.ok(health.usage.finalAnswerTotal >= 3, "health should aggregate final-answer usage");
 assert.ok(health.duplicatePressure.groups >= 1, "health should report duplicate pressure");
 assert.equal(health.proofs.mode, "off", "proofs kill-switch should be visible in health");
-ok("health reports counts, bloat, usage, duplicate pressure");
+assert.equal(health.indexes.generations.replayCoverage.completeHistory, true, "health should expose retained replay coverage");
+assert.equal(health.indexes.generations.replayCoverage.policy.maxGenerations, 256, "health should expose the active retention bound");
+ok("health reports counts, bloat, usage, duplicate pressure, and replay coverage");
 
 // --- CLI: pending queue + blocked handling ------------------------------------------
 

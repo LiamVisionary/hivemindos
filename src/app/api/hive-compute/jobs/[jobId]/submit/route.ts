@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - Hive Compute encrypted job-submission relay to the hosted gateway; marketplace plumbing with a dynamic [jobId] segment.
 import { NextRequest } from "next/server";
 
 import { submitHiveComputeJob } from "@/lib/services/hive-compute-marketplace/gateway-client";

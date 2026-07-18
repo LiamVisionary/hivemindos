@@ -94,17 +94,17 @@ async function normalizeCwd(input: Record<string, unknown>) {
   return resolved;
 }
 
-async function refreshedRun(runtime: AgentRuntime, run: StoredCliRun): Promise<StoredCliRun> {
+function refreshedRun(run: StoredCliRun): StoredCliRun {
   if (run.status !== "active") return run;
   if (processIsRunning(run.pid)) return run;
-  const next: StoredCliRun = {
+  // Derive the demotion at read time only. The child's close handler attaches the
+  // evaluation and final status asynchronously after exit; persisting this stale
+  // read-modify-write here can land after that write and permanently clobber it.
+  return {
     ...run,
     status: "unknown",
-    updatedAt: new Date().toISOString(),
     conclusion: run.conclusion ?? "Process is no longer running; final exit was not captured.",
   };
-  await writeRun(next).catch(() => undefined);
-  return next;
 }
 
 export async function startCliTaskRun(config: CliTaskConfig, input: Record<string, unknown>, profile?: AgentProfile) {
@@ -205,7 +205,7 @@ export async function listCliTaskRuns(runtime: AgentRuntime): Promise<RuntimeRun
   const files = await readdir(dir).catch(() => []);
   const runs = await Promise.all(files.filter((file) => file.endsWith(".json")).map(async (file) => {
     const run = await readStoredRun(runtime, file.replace(/\.json$/, ""));
-    return run ? refreshedRun(runtime, run) : null;
+    return run ? refreshedRun(run) : null;
   }));
   return runs
     .filter((run): run is StoredCliRun => Boolean(run))

@@ -258,7 +258,7 @@ includes(modelsRoute, "customHivemindosWalletPaidModelId", "models list route ex
 includes(modelsRoute, "computeFirstRows", "models list route orders GPU-first SALE routes before other HivemindOS models");
 includes(modelsRoute, "readHiveComputeMarketplaceStatus", "models list route pulls live Hive Compute marketplace inventory");
 includes(modelsRoute, "hiveComputeHostedModelId(id)", "models list route exposes live compute marketplace models as direct route ids");
-includes(modelsRoute, "...computeMarketplaceRows", "models list route places live compute marketplace rows before hosted fallbacks");
+includes(modelsRoute, "...confidentialMarketplaceRows,\n      ...computeFirstRows,\n      ...standardMarketplaceRows,\n      ...remainingStaticRows", "models list route places live compute marketplace rows before hosted fallbacks");
 includes(modelsRoute, "preferredRoute", "models list route marks the preferred model route");
 includes(modelsRoute, "fallbackRoute", "models list route marks the OpenRouter fallback route");
 includes(walletPaidModelsConfig, "upstreamHivemindosWalletPaidModel", "wallet-paid model upstream alias mapping");
@@ -635,7 +635,7 @@ assert.ok(!setupComponent.includes("pillBalanceUsd"), "guided setup balance pill
 includes(setupComponent, "const staticCatalogModels = HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS", "guided setup derives static HivemindOS models for the unified catalog");
 includes(setupComponent, ".sort((a, b) => Number(isComputeFirstHivemindosModel(b.id)) - Number(isComputeFirstHivemindosModel(a.id)))", "guided setup keeps GPU-first SALE routes pinned before hosted routes in All models");
 includes(setupComponent, "const hiveComputeMarketplaceModels = gatewayModelOptions.filter((option) => isHiveComputeHostedModelId(option.id))", "guided setup includes direct Hive Compute marketplace models in All models");
-includes(setupComponent, "const matchingAllModels = [...matchingRouteModels, ...matchingComputeMarketplaceModels, ...matchingFallbackStaticModels, ...matchingGatewayModels]", "guided setup orders routes, then live compute models, then hosted fallbacks in All models");
+includes(setupComponent, "const matchingAllModels = pinConfidentialVerifiedFirst([...matchingRouteModels, ...matchingComputeMarketplaceModels, ...matchingFallbackStaticModels, ...matchingGatewayModels])", "guided setup orders routes, then live compute models, then hosted fallbacks in All models");
 includes(setupComponent, "allModelCount", "guided setup counts the unified All models catalog");
 includes(setupComponent, "sale: computeFirst || computeHosted", "guided setup marks GPU-first routes and direct compute models as sale chips inside All models");
 assert.ok(!setupComponent.includes("GPU-first routes"), "guided setup should not split GPU-first routes into their own section");

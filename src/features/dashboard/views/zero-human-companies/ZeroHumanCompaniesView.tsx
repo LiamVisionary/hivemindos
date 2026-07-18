@@ -23,11 +23,11 @@ import { issuePreviewUrl, previewReviewAnswer, type PreviewDecision } from "./pr
 import { workApprovalDecisionAnswer } from "./work-approval-issues";
 import type { Agent, Colony, CompanyEditForm, CompanyImportForm, CompanyMemberEdit, CompanyRevenueShareInput, CreateForm, GovEvent, Issue, PoolAgent } from "./types";
 import type { ApprovalDecision } from "@/features/approvals/spend-approval-model";
-import type { CompanyRevenueRollup } from "@/lib/types/company-revenue";
+import type { CompanyRevenueRailStatus, CompanyRevenueRollup } from "@/lib/types/company-revenue";
 import type { SkillBrowserAttachmentTarget } from "@/features/dashboard/dashboard-types";
 import type { KanbanLinkedDirectory, KanbanMachineTarget } from "@/lib/types/kanban";
 
-type CompanyEntry = { company: Company; rollup: CompanySpendRollup; revenueShare?: CompanyRevenueRollup };
+type CompanyEntry = { company: Company; rollup: CompanySpendRollup; revenueShare?: CompanyRevenueRollup; revenueRail?: CompanyRevenueRailStatus };
 type SkillAttachmentBrowserOpener = (target: SkillBrowserAttachmentTarget) => void | Promise<void>;
 type DirectoryPicker = (machine: KanbanMachineTarget | null, onChoose: (directory: KanbanLinkedDirectory) => void) => void | Promise<void>;
 type ImportCompanyResponse = { ok?: boolean; error?: string; company?: Company; updatedExisting?: boolean };
@@ -219,7 +219,7 @@ function ZeroHumanCompaniesDemoView({
     replaceColony(companyId, (colony) => ({
       ...colony,
       frozen,
-      status: frozen ? "paused" : colony.status === "paused" ? "shipping" : colony.status,
+      status: frozen ? "paused" : colony.status === "paused" ? (colony.autonomy ? "shipping" : "paused") : colony.status,
       agents: colony.agents.map((agent) => ({ ...agent, state: frozen ? "blocked" : agent.state })),
       edit: { ...colony.edit, frozen, status: frozen ? "paused" : colony.edit.status },
     }));
@@ -231,6 +231,7 @@ function ZeroHumanCompaniesDemoView({
     replaceColony(companyId, (colony) => ({
       ...colony,
       autonomy: true,
+      status: colony.status === "paused" && !colony.frozen ? "shipping" : colony.status,
       lastDispatchedAt: Date.now(),
       workBlock: { ...colony.workBlock, state: "active" },
       governance: [
@@ -243,7 +244,11 @@ function ZeroHumanCompaniesDemoView({
 
   const handleStopAutonomy = React.useCallback((companyId: string) => {
     setBusyId(companyId);
-    replaceColony(companyId, (colony) => ({ ...colony, autonomy: false }));
+    replaceColony(companyId, (colony) => ({
+      ...colony,
+      autonomy: false,
+      status: colony.status === "shipping" || colony.status === "review" || colony.status === "drift" ? "paused" : colony.status,
+    }));
     setBusyId(null);
   }, [replaceColony]);
 
@@ -586,6 +591,7 @@ function ZeroHumanCompaniesLiveView({
           agentsById,
           tasks: companyTasks,
           revenueShare: entry.revenueShare,
+          revenueRail: entry.revenueRail,
         });
         // Drop issues the human hid locally (dismisses with no task to archive).
         out.push(

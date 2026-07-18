@@ -66,8 +66,8 @@ function temporalTopicPhrase(query: string) {
   );
 }
 
-function recencyScore(createdAt: string) {
-  const ageDays = (Date.now() - Date.parse(createdAt)) / 86_400_000;
+function recencyScore(createdAt: string, referenceNow = Date.now()) {
+  const ageDays = (referenceNow - Date.parse(createdAt)) / 86_400_000;
   if (!Number.isFinite(ageDays) || ageDays < 0) return 4;
   if (ageDays <= 1) return 10;
   if (ageDays <= 7) return 7;
@@ -151,7 +151,7 @@ function parseAsOfValue(value: string) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function temporalAsOfMs(input: RecallAgentMemoryInput) {
+function temporalAsOfMs(input: RecallAgentMemoryInput, referenceNow = Date.now()) {
   if (input.asOf?.trim()) {
     return parseAsOfValue(input.asOf);
   }
@@ -159,15 +159,14 @@ function temporalAsOfMs(input: RecallAgentMemoryInput) {
   const iso = query.match(/\b\d{4}-\d{2}-\d{2}\b/)?.[0];
   if (iso && new RegExp(`\\bbefore\\s+${iso.replace(/-/g, "\\-")}\\b`).test(query)) return Date.parse(iso) - 1;
   if (iso && new RegExp(`\\bas of(?:\\s+the end of)?\\s+${iso.replace(/-/g, "\\-")}\\b`).test(query)) return parseAsOfValue(iso);
-  const now = Date.now();
-  if (query.includes("yesterday")) return now - 86_400_000;
-  if (query.includes("last week")) return now - 7 * 86_400_000;
-  if (query.includes("last month")) return now - 30 * 86_400_000;
-  if (query.includes("last year")) return now - 365 * 86_400_000;
+  if (query.includes("yesterday")) return referenceNow - 86_400_000;
+  if (query.includes("last week")) return referenceNow - 7 * 86_400_000;
+  if (query.includes("last month")) return referenceNow - 30 * 86_400_000;
+  if (query.includes("last year")) return referenceNow - 365 * 86_400_000;
   return undefined;
 }
 
-export function recordVisibleForRecall(record: AgentMemoryRecord, input: RecallAgentMemoryInput) {
+export function recordVisibleForRecall(record: AgentMemoryRecord, input: RecallAgentMemoryInput, referenceNow = Date.now()) {
   const explicitlyRequestsActions = input.type?.trim().toLowerCase() === "action";
   if (record.type === "action" && !explicitlyRequestsActions && !input.includeOperational) return false;
   if (input.includeArchived) return true;
@@ -175,7 +174,7 @@ export function recordVisibleForRecall(record: AgentMemoryRecord, input: RecallA
   const mode = temporalRecallMode(input);
   if (mode === "current") return record.status === "active";
   if (mode === "historical") return true;
-  const asOf = temporalAsOfMs(input);
+  const asOf = temporalAsOfMs(input, referenceNow);
   if (asOf === undefined) return true;
   return Date.parse(record.createdAt) <= asOf;
 }
@@ -219,11 +218,11 @@ function usageScore(record: AgentMemoryRecord) {
   return Math.min(2, Math.log2(1 + retrievals) * 0.5) + Math.min(6, finals * 2);
 }
 
-function temporalScore(record: AgentMemoryRecord, input: RecallAgentMemoryInput) {
+function temporalScore(record: AgentMemoryRecord, input: RecallAgentMemoryInput, referenceNow = Date.now()) {
   const mode = temporalRecallMode(input);
   if (mode === "current") return record.status === "active" ? 1 : -12;
   if (mode === "historical") return record.status === "superseded" ? 7 : 2;
-  const asOf = temporalAsOfMs(input);
+  const asOf = temporalAsOfMs(input, referenceNow);
   if (asOf === undefined) return 2;
   const created = Date.parse(record.createdAt);
   if (!Number.isFinite(created) || created > asOf) return -20;
@@ -237,6 +236,7 @@ export function scoreAgentMemory(
   input: RecallAgentMemoryInput,
   lexical?: { score: number; matched: string[] },
   semantic?: number,
+  referenceNow = Date.now(),
 ) {
   const query = input.query?.trim() ?? "";
   const queryWords = textWords(query);
@@ -310,9 +310,9 @@ export function scoreAgentMemory(
     scoreDetails.search = Math.min(30, Math.max(0, Math.round(record.searchScore)));
   }
   scoreDetails.confidence = Math.round(record.confidence * 10);
-  scoreDetails.temporal = temporalScore(record, input);
+  scoreDetails.temporal = temporalScore(record, input, referenceNow);
   scoreDetails.usage = usageScore(record);
-  scoreDetails.recency = recencyScore(record.createdAt);
+  scoreDetails.recency = recencyScore(record.createdAt, referenceNow);
   scoreDetails.status = record.tags.includes("agent-memory") || record.notePath.startsWith(`${MEMORY_FOLDER}/`) ? 4 : record.tags.includes("vault-note") ? 1 : 0;
   const score = Math.round(Object.values(scoreDetails).reduce((sum, value) => sum + (value ?? 0), 0) * 10) / 10;
   return { score, matched: [...matched], scoreDetails };

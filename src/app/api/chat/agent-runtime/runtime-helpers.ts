@@ -63,6 +63,7 @@ export function commandApprovalEvent(input: {
           `Command: ${input.commandLine || input.command || "(empty command)"}`,
         ].join("\n"),
         permissionMode: "bypass",
+        suppressUserMessage: true,
       },
       {
         label: "Reject",

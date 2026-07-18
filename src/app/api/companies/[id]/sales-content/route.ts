@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - local-only analysis snapshot and signal-event append with a dynamic [id] segment; outward delivery stays behind provider approval gates.
 import { NextRequest } from "next/server";
 
 import { getCompany } from "@/lib/services/companies-store";

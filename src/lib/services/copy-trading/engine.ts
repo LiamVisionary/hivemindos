@@ -47,6 +47,12 @@ import {
   type BuyFunding,
 } from "./funding";
 import { applyPaperBuy, applyPaperSell, emptyPaperLedger, paperPositionValue } from "./paper";
+import {
+  completePendingSignal,
+  duePendingSignals,
+  isPendingSignal,
+  queuePendingSignal,
+} from "./pending-signals";
 import { detectNewSwaps, type CopyTradeSignal } from "./watcher";
 import { reviewCopiedTrade } from "./agent-analysis";
 import { calibrateAgentDecision } from "./calibration";
@@ -88,6 +94,12 @@ type Engine = {
   heartbeatTimer: NodeJS.Timeout | null;
   starting: boolean;
 };
+
+type SignalHandlingResult =
+  | { status: "complete"; acted?: boolean }
+  | { status: "retry"; reason: string };
+
+const COMPLETE_SIGNAL: SignalHandlingResult = { status: "complete" };
 
 function engineSlot(): { engine: Engine | null } {
   const slot = globalThis as typeof globalThis & { __hivemindCopyTradeEngine?: { engine: Engine | null } };
@@ -242,6 +254,11 @@ async function tick(engine: Engine, loop: Loop): Promise<void> {
       await matureEvolvedCounterfactuals(loop);
     }
 
+    for (const pending of duePendingSignals(state, Date.now())) {
+      if (loop.stop) break;
+      await processSignal(loop, pending);
+    }
+
     const { signals, cursor } = await detectNewSwaps({
       network: config.network,
       targetAddress: config.targetAddress,
@@ -253,8 +270,8 @@ async function tick(engine: Engine, loop: Loop): Promise<void> {
 
     for (const signal of signals) {
       if (loop.stop) break;
-      if (state.consumedTxRefs.includes(signal.targetTxRef)) continue;
-      await handleSignal(loop, signal);
+      if (state.consumedTxRefs.includes(signal.targetTxRef) || isPendingSignal(state, signal.targetTxRef)) continue;
+      await processSignal(loop, signal);
     }
 
     await runExits(loop);
@@ -274,37 +291,71 @@ function record(state: CopyTradeRuntimeState, kind: CopyTradeEventKind, detail: 
   if (state.events.length > 50) state.events = state.events.slice(-50);
 }
 
-async function handleSignal(loop: Loop, signal: CopyTradeSignal): Promise<void> {
+async function processSignal(loop: Loop, signal: CopyTradeSignal): Promise<void> {
+  const { state } = loop;
+  try {
+    const result = await handleSignal(loop, signal);
+    if (result.status === "retry") {
+      const pending = queuePendingSignal(state, signal, result.reason, Date.now());
+      if (pending.attempts <= 3 || pending.attempts % 10 === 0) {
+        const retrySeconds = Math.max(1, Math.ceil((pending.nextAttemptAt - pending.lastAttemptAt) / 1_000));
+        record(state, "pending", `[paper] waiting for a verified price for ${short(signal.token)} — retry ${pending.attempts} in ${retrySeconds}s.`, {
+          token: signal.token,
+          dryRun: loop.config.dryRun,
+          targetTxRef: signal.targetTxRef,
+        });
+      }
+      return;
+    }
+    completePendingSignal(state, signal.targetTxRef);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (state.consumedTxRefs.includes(signal.targetTxRef)) {
+      state.stats.errors += 1;
+      state.lastError = message;
+      record(state, "error", `Post-commit processing failed for ${short(signal.token)}: ${message}`, {
+        token: signal.token,
+        targetTxRef: signal.targetTxRef,
+      });
+      return;
+    }
+    const pending = queuePendingSignal(state, signal, message, Date.now());
+    state.stats.errors += 1;
+    state.lastError = message;
+    record(state, "pending", `Temporary pre-execution failure for ${short(signal.token)} — retry ${pending.attempts} scheduled.`, {
+      token: signal.token,
+      dryRun: loop.config.dryRun,
+      targetTxRef: signal.targetTxRef,
+    });
+  }
+}
+
+async function handleSignal(loop: Loop, signal: CopyTradeSignal): Promise<SignalHandlingResult> {
   const { config, state } = loop;
   // Preserve case — Solana mints are case-sensitive base58 (lowercasing would
   // corrupt the mint and break the swap). EVM addresses are case-insensitive.
   const token = signal.token;
 
-  // Mark consumed BEFORE acting — restart-safe idempotency (a crash mid-trade
-  // must not re-fire the same target tx on the next boot).
-  state.consumedTxRefs.push(signal.targetTxRef);
-
   if (isBlacklisted(config, token)) {
     state.stats.skipped += 1;
     record(state, "skip", `Blacklisted ${short(token)} — skipped ${signal.direction}.`, { token, targetTxRef: signal.targetTxRef });
-    return;
+    return COMPLETE_SIGNAL;
   }
 
   const sinceLast = Date.now() - lastActionAt(activePositions(loop));
-  if (sinceLast < config.cooldownMs) {
+  if (!isPendingSignal(state, signal.targetTxRef) && sinceLast < config.cooldownMs) {
     state.stats.skipped += 1;
     record(state, "skip", `Cooldown active — skipped ${signal.direction} ${short(token)}.`, { token, targetTxRef: signal.targetTxRef });
-    return;
+    return COMPLETE_SIGNAL;
   }
 
   if (signal.direction === "buy") {
-    await handleBuy(loop, signal, token);
-  } else {
-    await handleSell(loop, signal, token, "sell");
+    return handleBuy(loop, signal, token);
   }
+  return handleSell(loop, signal, token, "sell");
 }
 
-async function handleBuy(loop: Loop, signal: CopyTradeSignal, token: string): Promise<void> {
+async function handleBuy(loop: Loop, signal: CopyTradeSignal, token: string): Promise<SignalHandlingResult> {
   const { config, state } = loop;
   // Paper positions live in their own ledger so a dry-run walks the SAME gating
   // (max-open, per-token cap, liquidity floor) as a live run.
@@ -314,7 +365,7 @@ async function handleBuy(loop: Loop, signal: CopyTradeSignal, token: string): Pr
   if (!existing && Object.keys(positions).length >= config.maxOpenPositions) {
     state.stats.skipped += 1;
     record(state, "skip", `Max ${config.maxOpenPositions} open positions — skipped buy ${short(token)}.`, { token });
-    return;
+    return COMPLETE_SIGNAL;
   }
 
   // Size: fixed USD, or a percent of the target's quote-leg USD when known.
@@ -328,7 +379,7 @@ async function handleBuy(loop: Loop, signal: CopyTradeSignal, token: string): Pr
   if (remaining < config.minCopyUsd) {
     state.stats.skipped += 1;
     record(state, "skip", `Per-token cap ($${config.maxPerTokenUsd}) reached for ${short(token)}.`, { token });
-    return;
+    return COMPLETE_SIGNAL;
   }
   usd = Math.min(usd, remaining);
 
@@ -337,16 +388,20 @@ async function handleBuy(loop: Loop, signal: CopyTradeSignal, token: string): Pr
     if (liq != null && liq < config.minLiquidityUsd) {
       state.stats.skipped += 1;
       record(state, "skip", `Liquidity $${Math.round(liq)} < min $${config.minLiquidityUsd} — skipped ${short(token)}.`, { token });
-      return;
+      return COMPLETE_SIGNAL;
     }
   }
 
   const prepared = config.evolution ? prepareEvolvedBuy(loop, token) : null;
 
   if (config.dryRun) {
-    const fill = await paperBuy(loop, signal, token, usd, prepared?.market);
-    if (fill && prepared) await analyzeEvolvedBuy(loop, signal, fill, prepared.intelligence);
-    return;
+    const attempt = await paperBuy(loop, signal, token, usd, prepared?.market);
+    if (attempt.status === "retry") return attempt;
+    if (attempt.fill) {
+      await commitSignalState(loop, signal.targetTxRef);
+      if (prepared) await analyzeEvolvedBuy(loop, signal, attempt.fill, prepared.intelligence);
+    }
+    return COMPLETE_SIGNAL;
   }
 
   const signer = await resolveSigner(config);
@@ -356,8 +411,9 @@ async function handleBuy(loop: Loop, signal: CopyTradeSignal, token: string): Pr
   if (!funding) {
     state.stats.skipped += 1;
     record(state, "skip", `No spendable USDC/${copyTradeNativeSymbol(config.network)} balance to fund buy of ${short(token)}.`, { token, targetTxRef: signal.targetTxRef });
-    return;
+    return COMPLETE_SIGNAL;
   }
+  await commitSignalState(loop, signal.targetTxRef);
   try {
     const result = await executeDexSwap({
       agentId: config.agentId,
@@ -400,27 +456,33 @@ async function handleBuy(loop: Loop, signal: CopyTradeSignal, token: string): Pr
   } catch (error) {
     recordSwapError(state, error, "buy", token, signal.targetTxRef);
   }
+  return COMPLETE_SIGNAL;
 }
 
 type SellReason = "sell" | "take-profit" | "stop-loss" | "agent-close";
 
-async function handleSell(loop: Loop, signal: CopyTradeSignal | null, token: string, reason: SellReason): Promise<boolean> {
+async function handleSell(loop: Loop, signal: CopyTradeSignal | null, token: string, reason: SellReason): Promise<SignalHandlingResult> {
   const { config, state } = loop;
-  if (reason === "sell" && !config.copySells) return false;
+  if (reason === "sell" && !config.copySells) return COMPLETE_SIGNAL;
   const position = activePositions(loop)[token];
   if (!position || !(position.amount > 0)) {
     if (reason === "sell") {
       state.stats.skipped += 1;
       record(state, "skip", `No copied position in ${short(token)} to sell.`, { token, targetTxRef: signal?.targetTxRef });
     }
-    return false;
+    return COMPLETE_SIGNAL;
   }
 
   if (config.dryRun) {
-    return paperSell(loop, signal, token, reason);
+    const result = await paperSell(loop, signal, token, reason);
+    if (result.status === "complete" && result.acted && signal) {
+      await commitSignalState(loop, signal.targetTxRef);
+    }
+    return result;
   }
 
   const signer = await resolveSigner(config);
+  if (signal) await commitSignalState(loop, signal.targetTxRef);
   try {
     const result = await executeDexSwap({
       agentId: config.agentId,
@@ -438,10 +500,10 @@ async function handleSell(loop: Loop, signal: CopyTradeSignal | null, token: str
       token, symbol: position.symbol, usd: result.valueUsd, txRef: result.reference, targetTxRef: signal?.targetTxRef,
     });
     delete state.openPositions[token];
-    return true;
+    return { status: "complete", acted: true };
   } catch (error) {
     recordSwapError(state, error, "sell", token, signal?.targetTxRef);
-    return false;
+    return COMPLETE_SIGNAL;
   }
 }
 
@@ -537,6 +599,10 @@ type EvolvedBuyFill = {
   market: TokenMarket;
   buyCost: CopyTradeExecutionCost;
 };
+
+type PaperBuyAttempt =
+  | { status: "complete"; fill: EvolvedBuyFill | null }
+  | { status: "retry"; reason: string };
 
 function prepareEvolvedBuy(loop: Loop, token: string): {
   market: Promise<TokenMarket>;
@@ -656,7 +722,8 @@ async function analyzeEvolvedBuy(
       dryRun: config.dryRun,
       targetTxRef: signal.targetTxRef,
     });
-    review.closeExecuted = await handleSell(loop, signal, fill.token, "agent-close");
+    const closeResult = await handleSell(loop, signal, fill.token, "agent-close");
+    review.closeExecuted = closeResult.status === "complete" && closeResult.acted === true;
   } else {
     const detail = review.decision === "close"
       ? `GPT-5.6 Sol close confidence ${fmtPct(review.confidence)} was below calibrated ${fmtPct(closeThreshold)}; kept ${fill.symbol}. ${review.summary}`
@@ -742,10 +809,13 @@ async function paperBuy(
   token: string,
   wantUsd: number,
   marketPromise?: Promise<TokenMarket>,
-): Promise<EvolvedBuyFill | null> {
+): Promise<PaperBuyAttempt> {
   const { config, state } = loop;
   const ledger = ensurePaperLedger(state);
   const market = await (marketPromise ?? tokenMarket(config.network, token));
+  if (market.priceUsd == null || !(market.priceUsd > 0)) {
+    return { status: "retry", reason: "verified market price unavailable" };
+  }
   const buyCost = executionCostFor(config, wantUsd, market.liquidityUsd);
   const res = applyPaperBuy(ledger, {
     token,
@@ -759,19 +829,22 @@ async function paperBuy(
   if (!res.ok) {
     state.stats.skipped += 1;
     record(state, "skip", `[paper] skipped buy ${short(token)} — ${res.reason}.`, { token, dryRun: true, targetTxRef: signal.targetTxRef });
-    return null;
+    return { status: "complete", fill: null };
   }
   const sym = market.symbol || short(token);
   record(state, "buy", `[paper] bought ~$${res.spentUsd.toFixed(2)} of ${sym} @ ${fmtPrice(res.priceUsd)} — sim cash ${fmtUsd(ledger.cashUsd)} (target ${short(signal.targetTxRef)}).`, {
     token, symbol: sym, usd: res.spentUsd, dryRun: true, targetTxRef: signal.targetTxRef,
   });
   return {
-    token,
-    symbol: sym,
-    spentUsd: res.notionalUsd,
-    entryPriceUsd: res.priceUsd,
-    market,
-    buyCost,
+    status: "complete",
+    fill: {
+      token,
+      symbol: sym,
+      spentUsd: res.notionalUsd,
+      entryPriceUsd: res.priceUsd,
+      market,
+      buyCost,
+    },
   };
 }
 
@@ -781,7 +854,7 @@ async function paperSell(
   token: string,
   reason: SellReason,
   priceHint?: number,
-): Promise<boolean> {
+): Promise<SignalHandlingResult> {
   const { config, state } = loop;
   const ledger = ensurePaperLedger(state);
   const market = await tokenMarket(config.network, token);
@@ -791,18 +864,21 @@ async function paperSell(
   const sellCost = executionCostFor(config, grossProceedsUsd, market.liquidityUsd);
   const res = applyPaperSell(ledger, token, price, Date.now(), sellCost);
   if (!res.ok) {
+    if (res.reason === "no market price" && signal) {
+      return { status: "retry", reason: "verified market price unavailable" };
+    }
     // Can't value the exit this tick — leave the position and retry next poll.
     if (reason === "sell") {
       state.stats.skipped += 1;
       record(state, "skip", `[paper] can't value ${short(token)} to sell — ${res.reason}; will retry.`, { token, dryRun: true, targetTxRef: signal?.targetTxRef });
     }
-    return false;
+    return COMPLETE_SIGNAL;
   }
   const kind: CopyTradeEventKind = reason === "sell" ? "sell" : reason;
   record(state, kind, `[paper] sold ${res.symbol} → ~$${res.proceedsUsd.toFixed(2)} (${reason}, P&L ${fmtSigned(res.pnlUsd)}) — sim cash ${fmtUsd(ledger.cashUsd)}.`, {
     token, symbol: res.symbol, usd: res.proceedsUsd, dryRun: true, targetTxRef: signal?.targetTxRef,
   });
-  return true;
+  return { status: "complete", acted: true };
 }
 
 /** Revalue every paper position to market each tick (updates the display mark) and
@@ -829,6 +905,11 @@ async function runPaperExits(loop: Loop): Promise<void> {
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
+async function commitSignalState(loop: Loop, targetTxRef: string): Promise<void> {
+  completePendingSignal(loop.state, targetTxRef);
+  await writeRuntimeState(loop.state);
+}
+
 /** Read the acting wallet's balance and choose which held asset funds this buy. */
 async function resolveBuyFunding(config: CopyTradingConfig, usd: number): Promise<BuyFunding | null> {
   let balance;

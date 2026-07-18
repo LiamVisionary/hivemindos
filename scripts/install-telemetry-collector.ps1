@@ -78,6 +78,27 @@ function Test-PortFree([int]$p) {
 if ($Port -le 0) {
   if ($env:AGENT_TELEMETRY_PORT) { $Port = [int]$env:AGENT_TELEMETRY_PORT } else { $Port = 8787 }
 }
+
+# --- stop any previously-running collector BEFORE the port scan --------------
+# Re-registering the task with -Force does not touch a running instance,
+# starting an already-running task is a no-op, and the health check below would
+# immediately pass against the STALE process — so setup re-runs never actually
+# applied updates (confirmed live: a Windows PC kept serving pre-fix collector
+# code through multiple full setup re-runs and an app reinstall). Stopping
+# before the scan also keeps the recorded port stable: a still-listening stale
+# collector would drift the scan to the next port. This only ever stops our
+# own collector (node running agent-telemetry-collector.mjs), like the linkd
+# stop in the Link section — never a foreign port owner. The Unix installer
+# restarts its service on every run; this is the Windows analog.
+try { Stop-ScheduledTask -TaskName "HivemindOS Telemetry Collector" -ErrorAction SilentlyContinue } catch {}
+Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue |
+  Where-Object { $_.CommandLine -and $_.CommandLine -match 'agent-telemetry-collector\.mjs' } |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+for ($waited = 0; $waited -lt 10; $waited++) {
+  if (Test-PortFree $Port) { break }
+  Start-Sleep -Milliseconds 500
+}
+
 $chosenPort = 0
 for ($p = $Port; $p -le ($Port + 23); $p++) {
   if (Test-PortFree $p) { $chosenPort = $p; break }
@@ -310,6 +331,16 @@ Set-Content -Path $cmdFile -Encoding ASCII -Value @(
 # Windows with 80020009 "Unable to wait for process" and show a blocking Script
 # Host dialog. A .NET Process handle keeps the task action attached and preserves
 # the child exit code without Windows Script Host's synchronous wait path.
+#
+# The supervisor is also the RELAUNCHER (the Windows analog of launchd
+# KeepAlive). Task Scheduler's -RestartCount/-RestartInterval only restarts a
+# task that failed to LAUNCH — validated on a real Windows Server box: a task
+# whose process ran and then exited nonzero stays "Ready" with the failure
+# recorded and is never restarted. So the supervisor loops: exit 75 (the
+# collector's self-reload code after its source changed on disk) restarts
+# immediately; other failures restart after 60s; three consecutive sub-30s
+# failures give up (a persistent crash or a port already re-owned after an
+# update); a clean exit 0 ends the service.
 function Write-HivemindProcessSupervisor {
   param(
     [string]$Path,
@@ -319,19 +350,35 @@ function Write-HivemindProcessSupervisor {
   $escapedCommandFile = $CommandFile.Replace("'", "''")
   $supervisorContent = @"
 `$ErrorActionPreference = "Stop"
-try {
-  `$startInfo = New-Object System.Diagnostics.ProcessStartInfo
-  `$startInfo.FileName = `$env:ComSpec
-  `$startInfo.Arguments = '/d /s /c ""$escapedCommandFile""'
-  `$startInfo.UseShellExecute = `$false
-  `$startInfo.CreateNoWindow = `$true
-  `$process = [System.Diagnostics.Process]::Start(`$startInfo)
-  if (-not `$process) { throw "Windows did not return a process handle." }
-  `$process.WaitForExit()
-  exit `$process.ExitCode
-} catch {
-  [Console]::Error.WriteLine("HivemindOS launcher failed: " + `$_.Exception.Message)
-  exit 1
+`$consecutiveFastExits = 0
+while (`$true) {
+  `$childStartedAt = Get-Date
+  try {
+    `$startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    `$startInfo.FileName = `$env:ComSpec
+    `$startInfo.Arguments = '/d /s /c ""$escapedCommandFile""'
+    `$startInfo.UseShellExecute = `$false
+    `$startInfo.CreateNoWindow = `$true
+    `$process = [System.Diagnostics.Process]::Start(`$startInfo)
+    if (-not `$process) { throw "Windows did not return a process handle." }
+    `$process.WaitForExit()
+    `$exitCode = `$process.ExitCode
+  } catch {
+    [Console]::Error.WriteLine("HivemindOS launcher failed: " + `$_.Exception.Message)
+    exit 1
+  }
+  if (`$exitCode -eq 0) { exit 0 }
+  if (`$exitCode -eq 75) {
+    `$consecutiveFastExits = 0
+    continue
+  }
+  if (((Get-Date) - `$childStartedAt).TotalSeconds -lt 30) {
+    `$consecutiveFastExits++
+    if (`$consecutiveFastExits -ge 3) { exit `$exitCode }
+  } else {
+    `$consecutiveFastExits = 0
+  }
+  Start-Sleep -Seconds 60
 }
 "@
   Set-Content -Path $Path -Encoding UTF8 -Value $supervisorContent

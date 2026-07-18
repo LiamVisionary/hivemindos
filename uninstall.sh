@@ -657,6 +657,9 @@ if ask "Remove empty canonical HivemindOS vault folders created by setup?" "no";
     "$vault_path/$brain_services_folder/Queen Bee/inbox" \
     "$vault_path/$brain_services_folder/Queen Bee/nodes" \
     "$vault_path/$brain_services_folder/Queen Bee" \
+    "$vault_path/$brain_services_folder/Index Generations/agent-memory" \
+    "$vault_path/$brain_services_folder/Index Generations/full-vault" \
+    "$vault_path/$brain_services_folder/Index Generations" \
     "$vault_path/Operations/Brain Services/Queen Bee" \
     "$vault_path/$brain_services_folder" \
     "$vault_path/$synthesis_folder/pack" \
