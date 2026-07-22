@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - dashboard and loopback boot control for the local marketplace monitor, not an agent-invocable marketplace action.
 // Control surface for the marketplace monitor driver (company-driver pattern):
 // the boot autostart (instrumentation.ts) self-POSTs action=start over loopback
 // unauthenticated; everything else requires auth.

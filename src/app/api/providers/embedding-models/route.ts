@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - dashboard-only shared-brain embedding provider settings; not an agent-invocable capability.
 import { NextRequest } from "next/server";
 import { errorJson, okJson } from "@/lib/utils/api-response";
 import {

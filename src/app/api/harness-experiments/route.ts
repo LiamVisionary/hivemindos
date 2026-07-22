@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - authenticated dashboard experiment ledger; agent evaluation actions use the governed evaluation services instead.
 import { NextRequest } from "next/server";
 
 import {
