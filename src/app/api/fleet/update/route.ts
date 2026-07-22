@@ -151,9 +151,15 @@ function hasPostUpdateCollector(
   return true;
 }
 
+// Local changes alone (version.dirty) must NOT trigger an update run. Agent
+// work is dropped into fleet checkouts (chat App Builder projects under
+// scratchpad/), the update script never deletes it, and the reinstall restarts
+// the collector — killing its preview-server children. Treating dirty-only as
+// update-needed therefore looped restarts forever without ever converging
+// (six collector restarts on one box, 2026-07-18). A dirty checkout that is
+// also behind still updates via the commit comparison below.
 function updateNeededBefore(body: UpdateBody, health: CollectorHealth | null) {
   return Boolean(
-    health?.version?.dirty ||
     !hasExpectedVersion(health, body.expectedCommit) ||
     !hasRequiredCapabilities(health, body.requiredCapabilities),
   );
@@ -913,6 +919,10 @@ export async function POST(request: Request) {
       accepted: false,
       method: "already-current",
       verified: true,
+      localChanges: preUpdateHealth.version?.dirty === true,
+      message: preUpdateHealth.version?.dirty
+        ? "This machine is up to date with local changes present in its checkout, so no update run was needed. Agent work in the checkout is left alone."
+        : undefined,
       health: preUpdateHealth,
     });
   }

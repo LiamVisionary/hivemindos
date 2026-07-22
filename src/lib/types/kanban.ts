@@ -171,6 +171,15 @@ export type KanbanTask = {
   linkedDirectories?: KanbanLinkedDirectory[];
   deliverables?: KanbanDeliverable[];
   targetMachine?: KanbanMachineTarget | null;
+  /**
+   * Hard machine pin recorded at submit (queen dispatch `machineId`). Recovery
+   * re-routing must only delegate to a machine matching this identifier and
+   * leave the task pending when none is online — never route it elsewhere
+   * (a pinned marketplace browser task ran on the wrong Mac, 2026-07-18).
+   */
+  requestedMachine?: string;
+  /** Hard agent pin (queen dispatch `agentId`): recovery re-routing must only ever delegate to this agent. */
+  requestedAgent?: string;
   projectId?: string;
   proofs?: GitLawbProof[];
   loop?: KanbanLoopSpec;

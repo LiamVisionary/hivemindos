@@ -109,6 +109,9 @@ export function normalizeAgentProfile(agent: AgentProfile): AgentProfile {
     ...agent,
     name,
     runtime,
+    statusPath: runtime === "hermes" && agent.statusPath?.trim() === "/status"
+      ? "/health"
+      : agent.statusPath,
     localDataDir: runtime === "hermes" && agent.id === "hermes-orchestrator" && !localDataDir
       ? "~/.hermes"
       : localDataDir,

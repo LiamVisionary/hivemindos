@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-07-18T23:42:52.656101+00:00",
+  "request": "Implement the full bounded OpenSRE integration for HivemindOS: durable incident bundles, SRE provider capability, pinned read-only sidecar contract, watchdog escalation wiring, approvals-safe report handling, and synthetic incident evaluation.",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "https",
+      "source_path": "//github.com/Tracer-Cloud/opensre@git:d3a770c365644bb369b9490588333b0e0309c11c:gateway/http/webapp.py",
+      "target_path": "src/lib/services/sre/opensre-client.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the reviewed loopback health and POST /investigate request-response contract behind HivemindOS validation, timeouts, authentication, redaction, and provider policy."
+    },
+    {
+      "source_repo": "https",
+      "source_path": "//github.com/Tracer-Cloud/opensre@git:d3a770c365644bb369b9490588333b0e0309c11c:core/domain/diagnosis/result.py",
+      "target_path": "src/lib/services/sre/types.ts",
+      "reuse_type": "style_adapted",
+      "note": "Mapped structured RCA concepts into the smaller HivemindOS diagnosis record while adding explicit recommendation-only and HivemindOS execution-authority fields."
+    },
+    {
+      "source_repo": "https",
+      "source_path": "//github.com/Tracer-Cloud/opensre@git:d3a770c365644bb369b9490588333b0e0309c11c:docs/investigation-pipeline-architecture.md",
+      "target_path": "src/lib/services/sre/service.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted bounded investigation and terminal-result concepts into a durable single-concurrency local queue without importing OpenSRE orchestration or remediation."
+    },
+    {
+      "source_repo": "https",
+      "source_path": "//github.com/Tracer-Cloud/opensre@git:d3a770c365644bb369b9490588333b0e0309c11c:docs/interactive-shell-privacy.mdx",
+      "target_path": "scripts/install-opensre-sidecar.sh",
+      "reuse_type": "config_adapted",
+      "note": "Converted documented privacy controls into enforced managed-service defaults with a minimal environment; the interactive shell is rejected."
+    },
+    {
+      "source_repo": "https",
+      "source_path": "//github.com/Tracer-Cloud/opensre@git:d3a770c365644bb369b9490588333b0e0309c11c:tests/synthetic/hermes_rca",
+      "target_path": "src/lib/services/sre/synthetic-evaluation.ts",
+      "reuse_type": "test_adapted",
+      "note": "Adapted required/forbidden keyword and evidence-based RCA scoring to hermetic HivemindOS golden incidents."
+    }
+  ]
+}

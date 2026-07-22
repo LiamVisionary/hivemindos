@@ -11,7 +11,7 @@ import { HiveBridgeControls } from "./HiveBridgeControls.sol";
 ///         when the Base adapter locks the matching HIVE and LayerZero delivers
 ///         the message (lzReceive), and BURNED here when a holder bridges out.
 ///         On top of the stock OFT it adds HiveBridgeControls: bidirectional
-///         rate limits, a hard-capped (≤1%) bridge fee defaulting to 0, and
+///         rate limits, a hard-capped (≤0.25%) bridge fee defaulting to 0, and
 ///         pause with a guardian pauser.
 /// @dev    There is intentionally NO owner mint function. The only mint path is
 ///         OFTCore._credit (called from lzReceive); the only burn path is the

@@ -109,6 +109,7 @@ export async function runNonStreamToolConversation(
     }
     conversation.push({ role: "assistant", content: "", tool_calls: toolRun.assistantToolCalls });
     conversation.push(...toolRun.toolResultMessages);
+    if (toolRun.steeringMessages?.length) conversation.push(...toolRun.steeringMessages);
     const continuationMessages = [...conversation];
     const continuationBody: Record<string, unknown> = {
       model: input.request.model,

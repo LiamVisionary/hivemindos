@@ -10,6 +10,9 @@ export const DEFAULT_MANAGED_X_OAUTH_SCOPES = "tweet.read users.read tweet.write
 
 const STATUS_TIMEOUT_MS = 8_000;
 const PROXY_TIMEOUT_MS = 120_000;
+const RETRYABLE_GATEWAY_ATTEMPTS = 5;
+const STATUS_GATEWAY_ATTEMPTS = 3;
+const GATEWAY_RETRY_DELAY_MS = 500;
 
 type ManagedXBaseResolution = {
   raw: string;
@@ -38,17 +41,57 @@ export type ManagedXProxyInput = {
   confirmation?: string;
 };
 
+type ManagedXGatewayFetchOptions = {
+  retryable: boolean;
+  timeoutMs: number;
+  attempts?: number;
+  retryDelayMs?: number;
+  fetchImpl?: typeof fetch;
+};
+
+/**
+ * Cloudflare edge connects can fail before a Response exists. Safe reads and
+ * idempotency-keyed writes retry across a fresh fetch/timeout signal; writes
+ * without replay protection remain single-attempt so they cannot duplicate.
+ */
+export async function fetchManagedXGatewayWithRetry(
+  target: URL,
+  init: Omit<RequestInit, "signal">,
+  options: ManagedXGatewayFetchOptions,
+): Promise<Response> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const attempts = options.retryable ? Math.max(1, options.attempts ?? RETRYABLE_GATEWAY_ATTEMPTS) : 1;
+  const deadline = Date.now() + options.timeoutMs;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const remainingMs = Math.max(1, deadline - Date.now());
+    try {
+      return await fetchImpl(target, { ...init, signal: AbortSignal.timeout(remainingMs) });
+    } catch (error) {
+      lastError = error;
+      if (attempt >= attempts || Date.now() >= deadline) break;
+      const delayMs = Math.max(0, options.retryDelayMs ?? GATEWAY_RETRY_DELAY_MS) * attempt;
+      const boundedDelayMs = Math.min(delayMs, Math.max(0, deadline - Date.now()));
+      if (boundedDelayMs) await new Promise((resolve) => setTimeout(resolve, boundedDelayMs));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Managed X gateway fetch failed.");
+}
+
 export async function getManagedXGatewayStatus(): Promise<ManagedXGatewayStatus> {
   const resolution = resolveManagedXBaseUrl();
   const baseStatus = managedXStatusBase(resolution);
   if (!resolution.url) return baseStatus;
 
   try {
-    const response = await fetch(new URL("/health", resolution.url), {
+    const response = await fetchManagedXGatewayWithRetry(new URL("/health", resolution.url), {
       method: "GET",
       headers: { Accept: "application/json", "X-HivemindOS-Managed-X-Client": "status" },
       cache: "no-store",
-      signal: AbortSignal.timeout(STATUS_TIMEOUT_MS),
+    }, {
+      retryable: true,
+      timeoutMs: STATUS_TIMEOUT_MS,
+      attempts: STATUS_GATEWAY_ATTEMPTS,
     });
     return {
       ...baseStatus,
@@ -108,6 +151,30 @@ export async function proxyManagedXApiCall(input: {
   });
 }
 
+/** Request-free server helper for durable queue workers. */
+export async function proxyManagedXServerCall(input: {
+  creditToken: string;
+  slug?: string;
+  connectionId?: string;
+  method: string;
+  path: string;
+  query?: Record<string, unknown>;
+  json?: unknown;
+  idempotencyKey?: string;
+}): Promise<Response> {
+  return managedXRequest("POST", "/api/x/proxy", input.creditToken, {
+    slug: input.slug,
+    body: {
+      connectionId: input.connectionId,
+      method: input.method,
+      path: input.path,
+      query: input.query,
+      json: input.json,
+    },
+    idempotencyKey: input.idempotencyKey,
+  });
+}
+
 export async function proxyManagedXMcpRequest(input: {
   request: NextRequest;
   creditToken: string;
@@ -128,12 +195,14 @@ export async function proxyManagedXMcpRequest(input: {
   const idempotencyKey = input.request.headers.get("idempotency-key") || input.request.headers.get("x-idempotency-key");
   if (idempotencyKey) headers.set("Idempotency-Key", idempotencyKey);
   try {
-    const response = await fetch(target, {
+    const response = await fetchManagedXGatewayWithRetry(target, {
       method: "POST",
       headers,
       body: await input.request.arrayBuffer(),
       cache: "no-store",
-      signal: AbortSignal.timeout(PROXY_TIMEOUT_MS),
+    }, {
+      retryable: Boolean(idempotencyKey),
+      timeoutMs: PROXY_TIMEOUT_MS,
     });
     return forwardManagedXResponse(response);
   } catch (error) {
@@ -141,7 +210,7 @@ export async function proxyManagedXMcpRequest(input: {
   }
 }
 
-function managedXRequest(
+async function managedXRequest(
   method: "GET" | "POST",
   path: string,
   creditToken: string,
@@ -160,15 +229,20 @@ function managedXRequest(
   if (body) headers.set("Content-Type", "application/json");
   if (options.idempotencyKey) headers.set("Idempotency-Key", options.idempotencyKey);
 
-  return fetch(target, {
-    method,
-    headers,
-    body,
-    cache: "no-store",
-    signal: AbortSignal.timeout(PROXY_TIMEOUT_MS),
-  }).then(forwardManagedXResponse, (error: unknown) => (
-    jsonResponse({ ok: false, error: errorMessage(error, "Managed X gateway request failed.") }, 502)
-  ));
+  try {
+    const response = await fetchManagedXGatewayWithRetry(target, {
+      method,
+      headers,
+      body,
+      cache: "no-store",
+    }, {
+      retryable: method === "GET" || Boolean(options.idempotencyKey),
+      timeoutMs: PROXY_TIMEOUT_MS,
+    });
+    return forwardManagedXResponse(response);
+  } catch (error) {
+    return jsonResponse({ ok: false, error: errorMessage(error, "Managed X gateway request failed.") }, 502);
+  }
 }
 
 function forwardManagedXResponse(response: Response): Response {

@@ -37,6 +37,7 @@ export function AwakeHoursCard({ account }: { account: SocialsAccountView }) {
   }
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(account.awakeHours);
+  const windowValid = Boolean(draft.start && draft.end && draft.timezone && draft.days.length);
   const timezones = COMMON_TIMEZONES.includes(draft.timezone) ? COMMON_TIMEZONES : [draft.timezone, ...COMMON_TIMEZONES];
 
   const save = async () => {
@@ -108,7 +109,8 @@ export function AwakeHoursCard({ account }: { account: SocialsAccountView }) {
         ) : null}
         {dirty ? (
           <div>
-            <button type="button" className="sc-btn" data-tone="primary" disabled={saving} onClick={() => void save()}>
+            {!windowValid ? <div className="sc-error" style={{ marginBottom: 8 }}>Select at least one posting day.</div> : null}
+            <button type="button" className="sc-btn" data-tone="primary" disabled={saving || !windowValid} onClick={() => void save()}>
               {saving ? <SocialsSpinner /> : null} Save window
             </button>
           </div>

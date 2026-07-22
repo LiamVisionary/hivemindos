@@ -14,7 +14,7 @@ import { HiveBridgeControls } from "./HiveBridgeControls.sol";
 ///         RELEASES from this balance. Every remote HIVE is backed 1:1 by HIVE
 ///         locked here. Adds HiveBridgeControls: bidirectional rate limits
 ///         (the inbound one caps lockbox drain even under DVN compromise), a
-///         hard-capped (≤1%) bridge fee defaulting to 0, and pause.
+///         hard-capped (≤0.25%) bridge fee defaulting to 0, and pause.
 /// @dev    Deploy EXACTLY ONE adapter across the entire mesh. A second lockbox
 ///         for the same underlying token would let the same locked HIVE back
 ///         two independent mints — the classic double-spend break. New chains

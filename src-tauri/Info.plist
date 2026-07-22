@@ -2,6 +2,19 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>CFBundleURLName</key>
+      <string>com.hivemindos.desktop.hivemindos</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>hivemindos</string>
+      </array>
+    </dict>
+  </array>
   <key>NSMicrophoneUsageDescription</key>
   <string>HivemindOS uses the microphone so you can talk with your local agents during voice calls.</string>
   <key>NSSpeechRecognitionUsageDescription</key>

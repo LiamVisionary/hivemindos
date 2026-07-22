@@ -84,8 +84,9 @@ assert.match(managedRoute, /CONFIRM_X_API_CALL/);
 const managedDesktopReturnRoute = readFileSync("src/app/api/integrations/x-managed/desktop-return/route.ts", "utf8");
 assert.match(managedDesktopReturnRoute, /storeManagedXDesktopReturn/);
 assert.match(managedDesktopReturnRoute, /Return received/);
-assert.doesNotMatch(managedDesktopReturnRoute, /managedXDeepLinkFromSearchParams/);
-assert.doesNotMatch(managedDesktopReturnRoute, /hivemindos:\/\//);
+assert.match(managedDesktopReturnRoute, /managedXDeepLinkFromSearchParams/);
+assert.match(managedDesktopReturnRoute, /window\.location\.replace/);
+assert.match(managedDesktopReturnRoute, /Open HivemindOS/);
 
 const managedDesktopReturnPendingRoute = readFileSync("src/app/api/integrations/x-managed/desktop-return-pending/route.ts", "utf8");
 assert.match(managedDesktopReturnPendingRoute, /latestManagedXDesktopReturn/);

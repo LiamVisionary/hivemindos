@@ -29,6 +29,14 @@ promo-videos/
 .codex-nango-*.png
 .hivemindos-dogfood/
 
+# Chat App Builder projects land under <working-directory>/scratchpad/ (see
+# chatAppProjectDirectory in src/lib/services/chat/chat-app-artifact.ts). On
+# fleet machines the chat working directory is often the collector checkout
+# itself; untracked scratchpad projects kept /health reporting dirty=true
+# forever and looped full fleet-update reinstalls (2026-07-18). Unanchored on
+# purpose so nested working directories inside the checkout are covered too.
+scratchpad/
+
 *.tsbuildinfo
 *.log
 npm-debug.log*
@@ -92,3 +100,6 @@ workers/*
 # Local-only operator reference to the private Cloudflare Workers repo. Points at
 # machine-local paths / infra; never committed.
 WORKERS.local.md
+
+# Local internal HIVE bridge mechanism/build record. Intentionally untracked.
+/contracts/HIVE_BRIDGE_INTERNAL_MECHANISM_AND_BUILD.md

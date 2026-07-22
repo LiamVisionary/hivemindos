@@ -60,6 +60,24 @@ const missingArtifact = await evaluateCompletionEvent(completion({
 assert.equal(missingArtifact.verdict, "needs-evidence");
 assert.ok(missingArtifact.checks.some((check) => check.id === "artifact" && check.status === "failed"));
 
+// An accepted outcome is a trusted domain boundary, not a phrase in the worker output.
+const outcomeContract = {
+  id: "repository-paths-v1",
+  acceptedOutcome: "Every claimed implementation path exists in the target revision.",
+  proofRequired: ["Repository path grader receipt"],
+};
+const uncheckedOutcome = await evaluateCompletionEvent(completion({ outcomeContract }));
+assert.equal(uncheckedOutcome.verdict, "needs-evidence");
+const rejectedOutcome = await evaluateCompletionEvent(completion({ outcomeContract }), {
+  verifyOutcome: async () => ({ ok: false, evidence: ["2 of 5 claimed paths exist"], error: "Repository outcome failed." }),
+});
+assert.equal(rejectedOutcome.verdict, "rejected");
+assert.ok(rejectedOutcome.checks.some((check) => check.id === "outcome" && check.status === "failed"));
+const acceptedOutcome = await evaluateCompletionEvent(completion({ outcomeContract }), {
+  verifyOutcome: async () => ({ ok: true, evidence: ["5 of 5 claimed paths exist"] }),
+});
+assert.equal(acceptedOutcome.verdict, "accepted");
+
 // A structured independent judge produces real axis scores instead of unused rubric metadata.
 const judged = await evaluateCompletionEvent(completion({
   risk: "high",

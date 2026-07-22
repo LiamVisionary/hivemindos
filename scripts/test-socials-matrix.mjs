@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Completeness contract for the social platform matrix + adapter registry:
-// five platforms, every method reachable (env keys or an OAuth start path),
+// Every platform, every method reachable (env keys or an OAuth start path),
 // every capability declared, posting always gated on queue approval, adapters
 // registered for every platform, and connector manifests present for every
 // non-managed method's credentials.
@@ -19,7 +19,7 @@ const { CONNECTOR_MANIFESTS } = await import("../src/lib/services/integrations/c
 
 const SUPPORT_VALUES = new Set(["supported", "limited", "unsupported"]);
 
-assert.deepEqual([...SOCIAL_PLATFORMS].sort(), ["farcaster", "linkedin", "reddit", "telegram", "x"], "five v1 platforms");
+assert.deepEqual([...SOCIAL_PLATFORMS].sort(), ["facebook", "farcaster", "linkedin", "reddit", "telegram", "x"], "six platforms (facebook = browser-profile connection rail)");
 
 for (const platform of SOCIAL_PLATFORMS) {
   const row = SOCIAL_PLATFORM_MATRIX[platform];
@@ -28,9 +28,13 @@ for (const platform of SOCIAL_PLATFORMS) {
   assert.ok(row.methods.length >= 1, `at least one connect method: ${platform}`);
   for (const method of row.methods) {
     assert.ok(
-      method.envKeys.length > 0 || method.oauthStartPath,
-      `${platform}/${method.method} declares env keys or an OAuth start path`,
+      method.envKeys.length > 0 || method.oauthStartPath || method.browserProfile,
+      `${platform}/${method.method} declares env keys, an OAuth start path, or a managed browser profile`,
     );
+    if (method.method === "browser-profile") {
+      assert.ok(method.browserProfile?.namePrefix && method.browserProfile?.loginUrl && method.browserProfile?.probeUrl,
+        `${platform} browser-profile method carries a complete profile spec`);
+    }
     for (const aliasedKey of Object.keys(method.envKeyAliases ?? {})) {
       assert.ok(method.envKeys.includes(aliasedKey), `${platform}/${method.method} alias references declared key: ${aliasedKey}`);
     }
@@ -44,6 +48,19 @@ for (const platform of SOCIAL_PLATFORMS) {
       `${platform} gates posting on ${SOCIAL_POST_APPROVAL_GATE}`,
     );
   }
+  assert.equal(row.drafting.supported, row.capabilities.post !== "unsupported", `${platform} drafting follows dashboard post capability`);
+  assert.ok(row.drafting.maxCharacters >= 0, `${platform} declares a drafting character limit`);
+  assert.equal(
+    row.drafting.engagement.supported,
+    platform === "x",
+    `${platform} truthfully declares whether the live relevant-post producer is implemented`,
+  );
+  if (row.drafting.engagement.supported) {
+    assert.notEqual(row.capabilities.search, "unsupported", `${platform} engagement needs search capability`);
+    assert.notEqual(row.capabilities.reply, "unsupported", `${platform} engagement needs reply capability`);
+  } else {
+    assert.equal(row.drafting.engagement.defaultEnabled, false, `${platform} cannot default-enable an unimplemented producer`);
+  }
   const adapter = SOCIAL_ADAPTERS[platform];
   assert.ok(adapter, `adapter registered: ${platform}`);
   assert.equal(adapter.platform, platform, `adapter self-identifies: ${platform}`);
@@ -55,10 +72,17 @@ for (const platform of SOCIAL_PLATFORMS) {
 // The X row keeps its documented reply/quote access-level limitation visible.
 assert.equal(SOCIAL_PLATFORM_MATRIX.x.capabilities.reply, "limited");
 assert.equal(SOCIAL_PLATFORM_MATRIX.x.capabilities.quote, "limited");
-assert.ok(
-  SOCIAL_PLATFORM_MATRIX.x.limits.some((limit) => /403|access level/i.test(limit)),
-  "X row documents the reply/quote 403 access-level limit",
+assert.deepEqual(
+  SOCIAL_PLATFORM_MATRIX.x.drafting.engagement,
+  { supported: true, defaultEnabled: true, defaultReplyDraftsPerRun: 3, defaultQuoteDraftsPerRun: 0, defaultLookbackHours: 48 },
+  "X defaults to three reply suggestions, opt-in standalone quotes, and fresh two-day targets",
 );
+assert.ok(
+  SOCIAL_PLATFORM_MATRIX.x.limits.some((limit) => /access-limited|Enterprise/i.test(limit)),
+  "X row documents why engagement uses the authenticated Agent Reach session",
+);
+assert.equal(SOCIAL_PLATFORM_MATRIX.telegram.capabilities.reply, "limited", "Telegram message replies are exposed as limited");
+assert.equal(SOCIAL_PLATFORM_MATRIX.linkedin.capabilities.reply, "unsupported", "LinkedIn adapter does not expose reply posting");
 
 // Client projection covers every platform with copied (not shared) rows.
 const dtos = socialPlatformCapabilityDtos();
@@ -92,6 +116,17 @@ const dummy = {
   method: "api-token",
   status: "disconnected",
   postingMode: "manual",
+  drafting: {
+    enabled: true,
+    cadenceHours: 24,
+    draftsPerRun: 3,
+    engagementEnabled: false,
+    replyDraftsPerRun: 0,
+    quoteDraftsPerRun: 0,
+    engagementLookbackHours: 48,
+    updatedAt: "2026-07-17T00:00:00.000Z",
+    updatedBy: "system",
+  },
   awakeHours: { enabled: false, start: "09:00", end: "22:00", timezone: "UTC", days: [1] },
   contextSources: [],
   maxDailyReadOps: 0,

@@ -2,7 +2,7 @@ import { execFile } from "child_process";
 import { stat } from "fs/promises";
 import { resolve } from "path";
 import { promisify } from "util";
-import { HIVEMIND_OS_RUNTIME, type AgentProfile, type SharedVaultConfig } from "@/lib/types/agent-runtime";
+import type { AgentProfile, SharedVaultConfig } from "@/lib/types/agent-runtime";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { agentPaymentProviderFeatures } from "@/lib/config/agent-payments";
 import { recordHoneyUsage } from "@/lib/services/wallet/honey-ledger";
@@ -77,9 +77,7 @@ export function commandApprovalEvent(input: {
   };
 }
 
-const INTERACTIVE_RUNTIME_LOCK_MS = 130_000;
 export const RUNTIME_FETCH_TIMEOUT_MS = 10 * 60 * 1000;
-const interactiveRuntimeLocks = new Map<string, number>();
 export const execFileAsync = promisify(execFile);
 
 export type WorkspaceSnapshot = {
@@ -93,27 +91,6 @@ export function userFacingMachineName(profile: AgentProfile) {
   const name = profile.machineName?.trim();
   if (!name || /^this machine$/i.test(name)) return "This Mac";
   return name;
-}
-
-export function interactiveRuntimeLockKey(profile: AgentProfile, url: string, conversationId = "") {
-  if (profile.runtime !== "hermes" && profile.runtime !== HIVEMIND_OS_RUNTIME) return "";
-  if ((profile.runtimeKind ?? "interactive") !== "interactive") return "";
-  const scope = conversationId.trim();
-  return scope ? `${url}::${scope}` : url;
-}
-
-export function reserveInteractiveRuntime(key: string) {
-  if (!key) return true;
-  const now = Date.now();
-  const lockedAt = interactiveRuntimeLocks.get(key) ?? 0;
-  if (lockedAt && now - lockedAt < INTERACTIVE_RUNTIME_LOCK_MS) return false;
-  interactiveRuntimeLocks.set(key, now);
-  return true;
-}
-
-export function releaseInteractiveRuntime(key: string) {
-  if (!key) return;
-  interactiveRuntimeLocks.delete(key);
 }
 
 function promptNeedsFullVaultContext(prompt: string) {

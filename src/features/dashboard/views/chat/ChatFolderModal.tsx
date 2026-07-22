@@ -42,9 +42,9 @@ export function ChatFolderModal(props: ChatFolderModalProps) {
           <section className={fleetClass("setupModal", "agentSettingsModal")} role="dialog" aria-modal="true" aria-labelledby="chat-folder-title">
             <div className={fleetClass("setupModalHeader")}>
               <div>
-                <p className="eyebrow">New folder</p>
+                <p className="eyebrow">New project</p>
                 <h2 id="chat-folder-title">{chatFolderCreatorMachine.name}</h2>
-                <p>Create a workspace folder, select it, and start a fresh chat there.</p>
+                <p>Create a project folder and start a fresh chat there.</p>
               </div>
               <CloseIconButton aria-label="Close" onClick={closeChatFolderCreator} />
             </div>
@@ -70,7 +70,7 @@ export function ChatFolderModal(props: ChatFolderModalProps) {
                 </datalist>
               </label>
               <label>
-                <span>Folder name</span>
+                <span>Project name</span>
                 <input
                   value={chatFolderDraft.name}
                   onChange={(event) => setChatFolderDraft((current) => ({ ...current, name: event.target.value, error: "" }))}
@@ -84,7 +84,7 @@ export function ChatFolderModal(props: ChatFolderModalProps) {
                   Cancel
                 </Button>
                 <Button type="submit" disabled={chatFolderDraft.busy}>
-                  {chatFolderDraft.busy ? "Creating..." : "Create and open chat"}
+                  {chatFolderDraft.busy ? "Creating..." : "Create project and open chat"}
                 </Button>
               </div>
             </form>

@@ -7,7 +7,9 @@ import type { ApprovalDecision, SpendApprovalView } from "@/features/approvals/s
 export type ApprovalReviewCardProps = {
   approval: SpendApprovalView;
   /** Record the decision (with optional note); return true to close the modal. */
-  onDecide: (decision: ApprovalDecision, note: string) => boolean | Promise<boolean>;
+  onDecide: (decision: ApprovalDecision, note: string, makeStanding?: boolean) => boolean | Promise<boolean>;
+  /** Optional standing-rule capture in the note modal (see ApproveRejectModal). */
+  noteMode?: { standingLabel: string; standingHint: string };
   /** Optional "talk it over with the Queen" affordance. */
   onDiscuss?: () => void;
   /** Optional deep context affordance, e.g. open the backing Work Board task. */
@@ -23,7 +25,7 @@ export type ApprovalReviewCardProps = {
  * approvals section and the Alerts "Review first" queue both use this, so the
  * card, the modal, and the note flow stay identical (DRY).
  */
-export function ApprovalReviewCard({ approval, onDecide, onDiscuss, onOpenDetails, busy = false, error }: ApprovalReviewCardProps) {
+export function ApprovalReviewCard({ approval, onDecide, noteMode, onDiscuss, onOpenDetails, busy = false, error }: ApprovalReviewCardProps) {
   const [review, setReview] = useState<{ decision: ApprovalDecision; seed: string } | null>(null);
   return (
     <>
@@ -40,10 +42,11 @@ export function ApprovalReviewCard({ approval, onDecide, onDiscuss, onOpenDetail
           approval={approval}
           initialDecision={review.decision}
           initialNote={review.seed}
+          noteMode={noteMode}
           busy={busy}
           error={error}
-          onConfirm={async (nextDecision, note) => {
-            const ok = await onDecide(nextDecision, note);
+          onConfirm={async (nextDecision, note, makeStanding) => {
+            const ok = await onDecide(nextDecision, note, makeStanding);
             if (ok) setReview(null);
           }}
           onClose={() => setReview(null)}

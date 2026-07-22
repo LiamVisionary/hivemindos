@@ -14,9 +14,15 @@ export type ApproveRejectModalProps = {
   initialDecision?: ApprovalDecision;
   /** Pre-fill the note (e.g. a spending-cap template from the caret menu). */
   initialNote?: string;
+  /**
+   * Optional standing-rule capture (Marketplace): renders a "This time only /
+   * Save as standing rule" choice under the note; the pick rides back as the
+   * third onConfirm argument. Absent ⇒ today's UI, untouched.
+   */
+  noteMode?: { standingLabel: string; standingHint: string };
   busy?: boolean;
   error?: string;
-  onConfirm: (decision: ApprovalDecision, note: string) => void;
+  onConfirm: (decision: ApprovalDecision, note: string, makeStanding?: boolean) => void;
   onClose: () => void;
 };
 
@@ -26,8 +32,9 @@ export type ApproveRejectModalProps = {
  * gets the same human-in-the-loop decision surface — with an optional note that
  * rides along (a change request on reject, a caveat/condition on approve).
  */
-export function ApproveRejectModal({ approval, initialDecision = "approved", initialNote = "", busy = false, error, onConfirm, onClose }: ApproveRejectModalProps) {
+export function ApproveRejectModal({ approval, initialDecision = "approved", initialNote = "", noteMode, busy = false, error, onConfirm, onClose }: ApproveRejectModalProps) {
   const [note, setNote] = useState(initialNote);
+  const [makeStanding, setMakeStanding] = useState(false);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -77,6 +84,32 @@ export function ApproveRejectModal({ approval, initialDecision = "approved", ini
             disabled={busy}
           />
           <p className={cls("noteHint")}>The note is sent back to {approval.agent} with your decision.</p>
+          {noteMode ? (
+            <div role="radiogroup" aria-label="How the note applies" style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+              {[
+                { standing: false, label: "This time only", hint: "Applies to this decision alone." },
+                { standing: true, label: noteMode.standingLabel, hint: noteMode.standingHint },
+              ].map((option) => (
+                <button
+                  key={String(option.standing)}
+                  type="button"
+                  role="radio"
+                  aria-checked={makeStanding === option.standing}
+                  disabled={busy || (option.standing && !note.trim())}
+                  title={option.standing && !note.trim() ? "Write the rule in the note first." : option.hint}
+                  onClick={() => setMakeStanding(option.standing)}
+                  style={{
+                    padding: "6px 12px", borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: "pointer",
+                    border: `1px solid ${makeStanding === option.standing ? "currentColor" : "color-mix(in srgb, currentColor 25%, transparent)"}`,
+                    background: makeStanding === option.standing ? "color-mix(in srgb, currentColor 12%, transparent)" : "transparent",
+                    color: "inherit", opacity: option.standing && !note.trim() ? 0.5 : 1,
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         {error ? <p className={cls("modalError")}>{error}</p> : null}
@@ -85,7 +118,7 @@ export function ApproveRejectModal({ approval, initialDecision = "approved", ini
           <button
             type="button"
             className={cls("btn", "btnDanger")}
-            onClick={() => onConfirm("denied", note)}
+            onClick={() => onConfirm("denied", note, noteMode ? makeStanding && Boolean(note.trim()) : undefined)}
             disabled={busy}
           >
             {busy ? <span className={cls("spinner")} aria-hidden="true" /> : <X aria-hidden="true" />}
@@ -94,7 +127,7 @@ export function ApproveRejectModal({ approval, initialDecision = "approved", ini
           <button
             type="button"
             className={cls("btn", "btnPrimary")}
-            onClick={() => onConfirm("approved", note)}
+            onClick={() => onConfirm("approved", note, noteMode ? makeStanding && Boolean(note.trim()) : undefined)}
             disabled={busy}
           >
             {busy ? <span className={cls("spinner")} aria-hidden="true" /> : <Check aria-hidden="true" />}

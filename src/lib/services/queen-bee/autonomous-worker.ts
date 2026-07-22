@@ -11,6 +11,7 @@ import { makeDeliverableContentFetcher } from "@/lib/services/deliverables/conte
 import { classifyKanbanFailure } from "../kanban/kanban-failure-classification";
 import { classifyRuntimeFailureOutput } from "./worker-output-failure";
 import { execFile } from "node:child_process";
+import { request as httpRequest } from "node:http";
 import { stat } from "node:fs/promises";
 import { isAbsolute } from "node:path";
 import { promisify } from "node:util";
@@ -487,7 +488,10 @@ export async function runQueenBeeAutonomousPickup(
       const next = nextPickupDelegation(chain, index + 1, currentTask);
       if (!next) {
         const finalMessage = exhaustedMessage(failures);
-        const { retried } = await finalizeExhaustedPickup(fail, block, input.task.id, failures, finalMessage, storageOptions);
+        const { retried } = await finalizeExhaustedPickup(fail, block, input.task.id, failures, finalMessage, storageOptions, {
+          reroute,
+          delegation: preferredExhaustionRetryDelegation(chain, failures),
+        });
         // A transient-only chain that auto-retried is not a flow failure — the task
         // is back on the queue, so leave the flow untouched until it truly resolves.
         if (!retried) await advanceFlowIfTagged(input.task, "failed", finalMessage, input.vaultPath);
@@ -520,7 +524,10 @@ export async function runQueenBeeAutonomousPickup(
   }
 
   const finalMessage = exhaustedMessage(failures.length ? failures : ["No eligible autonomous delegates were available."]);
-  const { retried } = await finalizeExhaustedPickup(fail, block, input.task.id, failures, finalMessage, storageOptions);
+  const { retried } = await finalizeExhaustedPickup(fail, block, input.task.id, failures, finalMessage, storageOptions, {
+    reroute,
+    delegation: preferredExhaustionRetryDelegation(chain, failures),
+  });
   if (!retried) await advanceFlowIfTagged(input.task, "failed", finalMessage, input.vaultPath);
   return { ok: false, status: retried ? "skipped" : "blocked", taskId: input.task.id, claimLock: lastClaimLock, collectorUrl: lastCollectorUrl, agentName: lastAgentName, error: finalMessage };
 }
@@ -757,25 +764,55 @@ export function isInfrastructurePickupFailure(line: string): boolean {
 }
 
 /**
- * The retry failure-reason for an exhausted pickup whose delegates ALL failed on
- * infrastructure (transient transport, machine capacity, machine offline), or
- * `undefined` when at least one failure was real — no output, a runtime/model
- * error, a rejected gate — so the caller escalates to needs-human as before.
- * Routed through `failTask`, "timeout" is auto-retried up to the task's
- * maxAttempts, then blocked to a human (where the driver's infra-rescue sweep
- * can still recover it once the machine is confirmed healthy).
+ * The retry failure-reason for an exhausted pickup, or `undefined` to escalate
+ * to needs-human. Queen-takeover rule (Liam, 2026-07-18): a chain retries when
+ * ANY delegate failed on infrastructure — not only when every failure was.
+ * Live case: 13 delegates failed deterministically on broken model/provider
+ * configs, which saturated the machine, so the healthy agents at the chain's
+ * tail (including the one that had completed a task an hour earlier) died on
+ * "fetch failed" — and the old every() rule handed the whole thing to a human
+ * even though a targeted retry on a calm machine plausibly succeeds. Routed
+ * through `failTask`, "timeout" is auto-retried up to the task's maxAttempts,
+ * then still blocked to a human — the attempts budget bounds the takeover.
  */
-function pickupExhaustionRetryReason(failures: string[]): KanbanFailureReason | undefined {
+export function pickupExhaustionRetryReason(failures: string[]): KanbanFailureReason | undefined {
   if (failures.length === 0) return undefined;
   if (failures.every((failure) => classifyKanbanFailure(failure) === "rate-limit")) return "rate-limit";
-  if (!failures.every((failure) => isInfrastructurePickupFailure(failure))) return undefined;
+  if (!failures.some((failure) => isInfrastructurePickupFailure(failure))) return undefined;
   return "timeout";
 }
 
 /**
- * Terminal outcome for an exhausted delegate chain: auto-retry via `failTask` when
- * every failure was transient transport (returns retried=true → task back to Ready
- * for the next dispatch sweep), otherwise block the card to needs-human as before.
+ * The delegate a queen-takeover retry should target: the first (chain-ranked)
+ * delegate whose failure was pure TRANSPORT — it never got to run, so it is
+ * the best candidate once the machine calms — falling back to the first
+ * broader infrastructure failure. Retrying the whole chain would re-burn the
+ * deterministically-broken delegates and saturate the machine again.
+ */
+export function preferredExhaustionRetryDelegation(
+  chain: QueenBeeAutonomousDelegation[],
+  failures: string[],
+): QueenBeeAutonomousDelegation | undefined {
+  const failureFor = (name: string) => failures.find((line) => line.startsWith(`${name} [`) || line.startsWith(`${name}:`));
+  let infraFallback: QueenBeeAutonomousDelegation | undefined;
+  for (const delegation of chain) {
+    const name = delegationAgentName(delegation);
+    if (!name) continue;
+    const failure = failureFor(name);
+    if (!failure) continue;
+    if (TRANSIENT_PICKUP_FAILURE.test(failure)) return delegation;
+    if (!infraFallback && isInfrastructurePickupFailure(failure)) infraFallback = delegation;
+  }
+  return infraFallback;
+}
+
+/**
+ * Terminal outcome for an exhausted delegate chain: auto-retry via `failTask`
+ * when the failures qualify (see pickupExhaustionRetryReason — queen takeover:
+ * ANY infrastructure failure retries), otherwise block the card to needs-human.
+ * On retry, when a preferred takeover delegate is known (the transient-failed
+ * healthy agent), the task is re-pointed at it so the next sweep runs THAT
+ * agent directly instead of re-burning the broken front of the chain.
  */
 async function finalizeExhaustedPickup(
   fail: KanbanMutations["fail"],
@@ -784,6 +821,7 @@ async function finalizeExhaustedPickup(
   failures: string[],
   finalMessage: string,
   storageOptions: KanbanStorageOptions,
+  takeover?: { reroute: KanbanMutations["reroute"]; delegation: QueenBeeAutonomousDelegation | undefined },
 ): Promise<{ retried: boolean }> {
   const retryReason = pickupExhaustionRetryReason(failures);
   if (retryReason) {
@@ -791,7 +829,15 @@ async function finalizeExhaustedPickup(
       const result = await fail(null, taskId, { failureReason: retryReason, summary: finalMessage, error: finalMessage }, storageOptions);
       // retried → status is back to "ready" (attempt++), the driver re-routes it.
       // not retried → failTask already moved it to needs-human (attempts exhausted).
-      return { retried: result?.retried === true };
+      const retried = result?.retried === true;
+      if (retried && takeover?.delegation) {
+        await takeover.reroute(null, taskId, rerouteInput(
+          "Queen takeover: retrying with the delegate that only failed on infrastructure.",
+          "exhausted chain",
+          takeover.delegation,
+        ), storageOptions).catch(() => undefined);
+      }
+      return { retried };
     } catch {
       // fall through to a plain block on any failTask error
     }
@@ -987,9 +1033,45 @@ function cleanCollectorUrl(value?: string) {
   return String(value || "").trim().replace(/\/+$/, "");
 }
 
+/**
+ * Long-session-safe transport for http:// collector calls. A non-streaming
+ * `/chat` responds only when the WHOLE agent session finishes — routinely far
+ * past undici's default 300s headers timeout, so bare fetch executed every
+ * long delegate session at the 5-minute wall as a bare "fetch failed"
+ * (2026-07-19: two real posting sessions died at 5:23 and 5:02). node:http
+ * applies no response deadline. https/other schemes keep fetch below.
+ */
+function httpTextRequest(url: string, init: RequestInit): Promise<{ ok: boolean; status: number; statusText: string; text: string }> {
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(url, {
+      method: init.method ?? "GET",
+      headers: (init.headers as Record<string, string> | undefined) ?? {},
+    }, (response) => {
+      const chunks: Uint8Array[] = [];
+      response.on("data", (chunk: Uint8Array) => chunks.push(chunk));
+      response.on("end", () => resolve({
+        ok: (response.statusCode ?? 500) < 400,
+        status: response.statusCode ?? 0,
+        statusText: response.statusMessage ?? "",
+        text: Buffer.concat(chunks).toString("utf8"),
+      }));
+      response.on("error", reject);
+    });
+    request.on("error", reject);
+    if (typeof init.body === "string") request.write(init.body);
+    request.end();
+  });
+}
+
 async function defaultFetchJson(url: string, init: RequestInit) {
-  const response = await fetch(url, init);
-  const text = await response.text();
+  let response: { ok: boolean; status: number; statusText: string; text: string };
+  if (url.startsWith("http://")) {
+    response = await httpTextRequest(url, init);
+  } else {
+    const fetched = await fetch(url, init);
+    response = { ok: fetched.ok, status: fetched.status, statusText: fetched.statusText, text: await fetched.text() };
+  }
+  const text = response.text;
   let data: unknown = text;
   try {
     data = text ? JSON.parse(text) : {};

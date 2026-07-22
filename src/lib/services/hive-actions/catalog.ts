@@ -14,9 +14,18 @@ import { INTEGRATION_HIVE_ACTIONS } from "./integrations/catalog-actions";
 import { computerInteractionAction } from "./computer-interaction";
 import { plumeOptionsAction } from "./plume-options-action";
 import { sharedBrainPortabilityAction } from "./brain-portability-action";
+import { sreInvestigationsAction } from "./sre-investigations-action";
 import { walletX402FetchAction } from "./wallet-x402-action";
 import { bankrCopyTradingAction } from "./bankr-copy-action";
 import { companyRevenueLedgerAction } from "./company-revenue-action";
+import { socialQueueAccountPolicyAction, socialQueueSuggestionAction } from "./social-queue-action";
+import {
+  WEB_RESEARCH_HIVE_ACTIONS,
+  webCrawlAction,
+  webFetchAction,
+  webScreenshotAction,
+  webSearchAction,
+} from "./web-research";
 import {
   beelineCalendarCreateAction,
   beelineCalendarListAction,
@@ -35,6 +44,9 @@ export { appBuilderAction } from "./app-builder";
 export { robinhoodAgenticReadAction } from "./robinhood-agentic";
 export { googleSlidesEditAction, googleSlidesReadAction } from "./integrations/google-slides";
 export { computerInteractionAction } from "./computer-interaction";
+export { sreInvestigationsAction } from "./sre-investigations-action";
+export { socialQueueAccountPolicyAction, socialQueueSuggestionAction } from "./social-queue-action";
+export { webCrawlAction, webFetchAction, webScreenshotAction, webSearchAction } from "./web-research";
 export {
   beelineCalendarCreateAction,
   beelineCalendarListAction,
@@ -1705,6 +1717,7 @@ export const phoneLocalTtsAction = defineHiveAction({
 });
 
 export const HIVE_ACTIONS = [
+  ...WEB_RESEARCH_HIVE_ACTIONS,
   computerInteractionAction,
   beelineProfilesAction,
   beelineOpenBrowserAction,
@@ -1731,9 +1744,12 @@ export const HIVE_ACTIONS = [
   skillAutoresearchAction,
   queenBeeAction,
   workEventAction,
+  socialQueueSuggestionAction,
+  socialQueueAccountPolicyAction,
   agentChallengeAction,
   companyRevenueLedgerAction,
   requestHumanApprovalAction,
+  sreInvestigationsAction,
   cryptoCapabilitiesAction,
   reviewCryptoAction,
   prepareCryptoAction,

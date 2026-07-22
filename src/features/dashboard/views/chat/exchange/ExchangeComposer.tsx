@@ -35,7 +35,6 @@ import {
   PILL_STYLE,
   POP_STYLE,
   SearchIco,
-  SpinnerIco,
   SwarmIco,
   iconBtnStyle,
 } from "./composer-primitives";
@@ -90,7 +89,6 @@ export type ExchangeComposerProps = {
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
-  busy?: boolean;
   canSend: boolean;
   onSubmit: () => void;
 
@@ -126,6 +124,7 @@ export type ExchangeComposerProps = {
   selectedMachineName: string;
   workingDirectoryLabel: string;
   onChangeWorkingDirectory?: () => void;
+  onClearWorkingDirectory?: () => void;
 
   recording?: boolean;
   onToggleRecording?: () => void;
@@ -141,13 +140,13 @@ const COMPOSER_MAX_HEIGHT = COMPOSER_MIN_HEIGHT * 3;
 
 export function ExchangeComposer(props: ExchangeComposerProps) {
   const {
-    value, onChange, placeholder, busy, canSend, onSubmit,
+    value, onChange, placeholder, canSend, onSubmit,
     agentMode, permissionMode, onPermissionModeChange,
     reasoningEffort, onReasoningEffortChange,
     modelProviders, currentProvider, currentModel, onSelectModel, onOpenModelMenu, modelPickerEnabled,
     attachments, onRemoveAttachment, fileInputRef, imageInputRef, onFileChange, onImageChange, onDropFileReferences,
     onAttachDirectory, directories, onRemoveDirectory, recentDirectories, onAttachRecentDirectory,
-    machines, selectedMachineName, workingDirectoryLabel, onChangeWorkingDirectory,
+    machines, selectedMachineName, workingDirectoryLabel, onChangeWorkingDirectory, onClearWorkingDirectory,
     recording, onToggleRecording, onSwarmCommand,
   } = props;
 
@@ -262,7 +261,7 @@ export function ExchangeComposer(props: ExchangeComposerProps) {
     }
     if (event.key === "Enter" && !event.shiftKey && (event.metaKey || event.ctrlKey || !event.nativeEvent.isComposing)) {
       event.preventDefault();
-      if (canSend && !busy) onSubmit();
+      if (canSend) onSubmit();
     }
   }
 
@@ -642,10 +641,30 @@ export function ExchangeComposer(props: ExchangeComposerProps) {
                     <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--fg-4)" }}>Working directory</p>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: 9, borderRadius: 8, background: workingDirectoryLabel ? "var(--honey-soft)" : "transparent", color: workingDirectoryLabel ? "var(--honey)" : "var(--fg-2)", padding: "9px 10px", fontSize: 12 }}>
-                      <Ico d={ICON_PATHS.folder} size={15} sw={1.7} />
-                      <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{workingDirectoryLabel || "No folder"}</span>
-                    </span>
+                    {workingDirectoryLabel ? (
+                      <span style={{ display: "flex", alignItems: "center", gap: 9, borderRadius: 8, background: "var(--honey-soft)", color: "var(--honey)", padding: "9px 10px", fontSize: 12 }}>
+                        <Ico d={ICON_PATHS.folder} size={15} sw={1.7} />
+                        <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{workingDirectoryLabel}</span>
+                      </span>
+                    ) : null}
+                    {onClearWorkingDirectory ? (
+                      <button
+                        type="button"
+                        className={workingDirectoryLabel ? "cx-diritem" : undefined}
+                        aria-pressed={!workingDirectoryLabel}
+                        title="Chat without a working directory"
+                        onClick={() => { setMenu(""); if (workingDirectoryLabel) onClearWorkingDirectory(); }}
+                        style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", border: 0, borderRadius: 8, background: workingDirectoryLabel ? "transparent" : "var(--honey-soft)", color: workingDirectoryLabel ? "var(--fg-3)" : "var(--honey)", cursor: workingDirectoryLabel ? "pointer" : "default", padding: "9px 10px", textAlign: "left", fontSize: 12 }}
+                      >
+                        <Ico d={ICON_PATHS.chat} size={15} sw={1.7} />
+                        <span style={{ flex: 1 }}>No folder</span>
+                      </button>
+                    ) : !workingDirectoryLabel ? (
+                      <span style={{ display: "flex", alignItems: "center", gap: 9, borderRadius: 8, background: "var(--honey-soft)", color: "var(--honey)", padding: "9px 10px", fontSize: 12 }}>
+                        <Ico d={ICON_PATHS.chat} size={15} sw={1.7} />
+                        <span style={{ flex: 1 }}>No folder</span>
+                      </span>
+                    ) : null}
                     {onChangeWorkingDirectory ? (
                       <button type="button" className="cx-diritem" onClick={() => { setMenu(""); onChangeWorkingDirectory(); }} style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", border: 0, borderRadius: 8, background: "transparent", color: "var(--fg-3)", cursor: "pointer", padding: "9px 10px", textAlign: "left", fontSize: 12 }}>
                         <Ico d={ICON_PATHS.folderPlus} size={15} sw={1.7} />
@@ -681,12 +700,12 @@ export function ExchangeComposer(props: ExchangeComposerProps) {
             <button
               type="submit"
               className="cx-send"
-              disabled={!canSend || busy}
-              title={busy ? "Waiting for the agent" : "Send"}
+              disabled={!canSend}
+              title="Send"
               aria-label="Send"
-              style={{ display: "grid", placeItems: "center", width: 34, height: 34, border: 0, borderRadius: 999, background: canSend && !busy ? "var(--honey)" : "var(--panel-hi)", color: canSend && !busy ? "#1a1305" : "var(--fg-4)", cursor: canSend && !busy ? "pointer" : "default" }}
+              style={{ display: "grid", placeItems: "center", width: 34, height: 34, border: 0, borderRadius: 999, background: canSend ? "var(--honey)" : "var(--panel-hi)", color: canSend ? "#1a1305" : "var(--fg-4)", cursor: canSend ? "pointer" : "default" }}
             >
-              {busy ? <SpinnerIco size={17} /> : <Ico d={ICON_PATHS.sendUp} size={17} sw={2.2} />}
+              <Ico d={ICON_PATHS.sendUp} size={17} sw={2.2} />
             </button>
           </div>
         </div>

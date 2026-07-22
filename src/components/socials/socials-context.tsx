@@ -9,6 +9,12 @@ import type {
   SocialCapabilitySupport,
   SocialContextSourceKind,
   SocialPlatformCapabilityDto,
+  SocialDraftingPolicy,
+  SocialDraftingRuntime,
+  SocialQueueEngineMeta,
+  SocialQueueItem,
+  SocialMetricSnapshot,
+  SocialXDiscoveryStatus,
 } from "@/lib/services/socials/socials-types";
 
 /** Account as the desk renders it: definition + live probe + capability projection. */
@@ -34,7 +40,33 @@ export type SocialsDeskData = {
   accounts: SocialsAccountView[];
   platforms: SocialPlatformCapabilityDto[];
   souls: SocialsSoulOption[];
-  queueMeta: { lastTickAt?: string };
+  queueMeta: SocialQueueEngineMeta;
+  queueItems: SocialQueueItem[];
+  queueLoading: boolean;
+  queueBusy: string | null;
+  engine: {
+    running: boolean;
+    disabled: boolean;
+    enabled: boolean;
+    startedAt?: string;
+    lastWakeAt?: string;
+    lastTickAt?: string;
+    lastPostedAt?: string;
+    lastError?: string;
+    leaseHeld: boolean;
+  };
+  socialAnalytics: {
+    posted: number;
+    failed: number;
+    canceled: number;
+    automated: number;
+    manual: number;
+    metricTotals: Record<string, number>;
+  };
+  metricSnapshots: SocialMetricSnapshot[];
+  managedReadBudget: { limit: number; used: number; remaining: number } | null;
+  draftingRuntime: SocialDraftingRuntime | null;
+  xDiscovery: SocialXDiscoveryStatus | null;
   activeAccountId: string;
   activeAccount: SocialsAccountView | null;
   connectOpen: boolean;
@@ -53,6 +85,12 @@ export type SocialsDeskData = {
   setSoulPath: (id: string, soulPath: string) => Promise<void>;
   addContextSources: (id: string, sources: SocialsNewContextSource[]) => Promise<void>;
   removeContextSource: (id: string, sourceId: string) => Promise<void>;
+  setPostingMode: (id: string, mode: "manual" | "auto") => Promise<{ ok: boolean; error?: string }>;
+  setMaxDailyReadOps: (id: string, maxDailyReadOps: number) => Promise<void>;
+  setDraftingPolicy: (id: string, drafting: Partial<Pick<SocialDraftingPolicy,
+    "enabled" | "cadenceHours" | "draftsPerRun" | "engagementEnabled" | "replyDraftsPerRun" | "quoteDraftsPerRun" | "engagementLookbackHours">>) => Promise<void>;
+  queueAction: (body: Record<string, unknown>) => Promise<{ ok: boolean; error?: string; item?: SocialQueueItem }>;
+  refreshQueue: () => Promise<void>;
 };
 
 const SocialsDeskContext = createContext<SocialsDeskData | null>(null);

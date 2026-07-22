@@ -31,6 +31,7 @@ Keep this folder small and foundational. These skills become part of the default
 
 Current auto-install set:
 
+- `harness-engineering`, an attributed HivemindOS adaptation of Ryan Lopopolo's CC BY 4.0 method for fixed-worker baseline/treatment experiments, context lifecycle evidence, outcome-and-proof grading, and explicit retain/revise/remove decisions.
 - `engineering-discipline` for a risk-scoped HivemindOS engineering workflow: design when needed, real baselines, red/green evidence, systematic implementation, verification, independent review, and safe handoff. It is the canonical orchestrator for the optional Engineering Discipline pack.
 - `bankr-skill-deployment` for choosing between a Bankr skill, app, x402 Cloud endpoint, direct Wallet/Agent API integration, and an external always-on backend; then packaging, publishing, installing, updating, and verifying the result without leaking wallet credentials or commercial authority into the client.
 - `create-zero-human-company` for turning a business goal or existing repository into a durable, approval-gated HivemindOS company with a verified crew, apex metric, products, budgets, and setup state—without silently launching autonomy.

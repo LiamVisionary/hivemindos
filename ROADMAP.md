@@ -17,6 +17,7 @@ HivemindOS is a local-first control room for private agent fleets. It connects a
 - Work board with vault-backed Kanban state, Queen/worker routing, task edit/delete, same-agent interrupt steering, mobile move controls, stale session recovery, tool-output stall detection, markdown rendering, event history, and regression coverage.
 - Scheduler studio for reusable prompt/step runs, runtime schedule import/actions, skill/path attachments, and runtime-neutral schedule metadata.
 - Alerts inbox for agent notifications, auth failures, task decisions, and markdown-rendered alert bodies.
+- Durable redacted incident capture with Fleet Watchdog escalation, an optional pinned loopback OpenSRE root-cause provider, and approval-gated follow-up actions.
 - Chat bridge for supported runtimes, including collector-backed Hermes chat and persisted remote session polling.
 - Agent security proxy and OpenClaw security proxy for local prompt guardrails and secret redaction.
 - Controlled agent wallet surfaces for local wallets, x402 mock paid endpoints, and spend logging.

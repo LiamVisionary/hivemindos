@@ -64,6 +64,9 @@ assert.equal(plan.applyPolicy, "review-gated");
 assert.equal(plan.variants.length, 4);
 assert.equal(plan.rubric.axes.find((axis) => axis.id === "improvement")?.weight, 0.3);
 assert(plan.rubric.axes.every((axis) => typeof axis.scoreFloor === "number"), "each scoring axis should have a regression floor");
+assert.equal(plan.harnessContract.worker.model, "fixed-worker-selected-at-dispatch");
+assert.equal(plan.harnessContract.targetRevision, "Skills/research-brief/SKILL.md");
+assert.match(plan.harnessIntervention.mechanism, /baseline and treatment/i);
 
 const loop = buildSkillAutoresearchLoop(plan, now);
 assert.equal(loop.mode, "optimizer");
@@ -72,6 +75,7 @@ assert.equal(loop.experiments?.length, 4);
 assert(loop.evalGates.some((gate) => gate.verifier === "evo:score" && gate.required), "the winner requires a server-authoritative score receipt");
 assert(loop.evalGates.some((gate) => gate.verifier === "agent:judge" && gate.required), "the winner requires an independent review");
 assert(loop.handoffRules?.some((rule) => /do not overwrite/i.test(rule)), "the target should remain unchanged until review");
+assert(loop.handoffRules?.some((rule) => /harness experiment ledger/i.test(rule)), "skill autoresearch should produce reusable harness evidence");
 
 const baseEvent = {
   runtime: "codex",
@@ -160,8 +164,9 @@ const companyLoop = buildOperatingUnitLearningLoop({
 assert(companyLoop.handoffRules?.some((rule) => /skill autoresearch/i.test(rule)), "company work should feed the app-wide skill autoresearch mechanism");
 assert(companyLoop.evidenceRequired?.some((rule) => /skill performance/i.test(rule)), "company work should retain skill-performance evidence");
 
-const [packagedSkill, apiRoute, hiveActions, reviewPanel, packageJson] = await Promise.all([
+const [packagedSkill, harnessSkill, apiRoute, hiveActions, reviewPanel, packageJson] = await Promise.all([
   readFile(new URL("../packaged-skills/auto-install/hive-skill-autoresearch/SKILL.md", import.meta.url), "utf8"),
+  readFile(new URL("../packaged-skills/auto-install/harness-engineering/SKILL.md", import.meta.url), "utf8"),
   readFile(new URL("../src/app/api/skills/autoresearch/route.ts", import.meta.url), "utf8"),
   readFile(new URL("../src/lib/services/hive-actions/catalog.ts", import.meta.url), "utf8"),
   readFile(new URL("../src/features/dashboard/views/AgentNativeInsightsPanel.tsx", import.meta.url), "utf8"),
@@ -169,6 +174,9 @@ const [packagedSkill, apiRoute, hiveActions, reviewPanel, packageJson] = await P
 ]);
 assert.match(packagedSkill, /four independent variants/i);
 assert.match(packagedSkill, /HivemindOS-native/i);
+assert.match(harnessSkill, /available.*retrieved.*invoked.*relevant/i);
+assert.match(harnessSkill, /lopopolo\/harness-engineering/);
+assert.match(harnessSkill, /CC BY 4\.0/);
 assert.match(apiRoute, /maybeEnqueueSkillAutoresearch/);
 assert.match(hiveActions, /skillAutoresearchAction/);
 assert.match(reviewPanel, /Autoresearch task queued on the Work Board/);

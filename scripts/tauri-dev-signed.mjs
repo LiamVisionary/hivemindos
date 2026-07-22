@@ -17,8 +17,9 @@ import { resolveTauriDevEnvironment } from './lib/tauri-dev-environment.mjs';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const runner = join(root, 'scripts', 'dev-codesign-runner.sh');
 const tauriBin = join(root, 'node_modules', '.bin', 'tauri');
+const devConfig = join(root, 'src-tauri', 'tauri.dev.conf.json');
 
-const child = spawn(tauriBin, ['dev', '--runner', runner, ...process.argv.slice(2)], {
+const child = spawn(tauriBin, ['dev', '--config', devConfig, '--runner', runner, ...process.argv.slice(2)], {
   stdio: 'inherit',
   cwd: root,
   env: resolveTauriDevEnvironment({ projectRoot: root }),

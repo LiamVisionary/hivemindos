@@ -6,6 +6,7 @@ import { homedir } from "@/lib/home-dir";
 import { runtimeCommandEnv } from "@/lib/services/runtime-command-env";
 import { installRuntimeBinary } from "@/lib/services/runtime-installer";
 import type { AgentProfile, KnownAgentRuntime } from "@/lib/types/agent-runtime";
+import { buildCodexRuntimeModelSelection, discoverCodexAppServerModels, type CodexAppServerModelDiscovery } from "../../../../scripts/lib/codex-app-server-models.mjs";
 import type { RuntimeAdapter } from "./types";
 import { listCliTaskRuns, readCliTaskRunLog, startCliTaskRun } from "./cli-task-runs";
 
@@ -21,6 +22,7 @@ type CliRuntimeConfig = {
   model: string;
   dataDir: string;
   installArgs?: string[];
+  discoverModels?: (command: string) => Promise<CodexAppServerModelDiscovery>;
   buildTaskArgs?: (task: string, input: Record<string, unknown>, profile?: AgentProfile) => string[];
 };
 
@@ -43,6 +45,7 @@ const CLI_RUNTIMES: CliRuntimeConfig[] = [
     provider: "openai-codex",
     model: "",
     dataDir: "~/.codex",
+    discoverModels: (command) => discoverCodexAppServerModels({ command, env: runtimeCommandEnv() }),
     buildTaskArgs: (task, _input, profile) => [
       "exec",
       "--color",
@@ -119,18 +122,26 @@ function providerName(slug: string) {
   return known[slug] ?? slug;
 }
 
-function modelSelection(profile: AgentProfile, config: CliRuntimeConfig) {
+function modelSelection(profile: AgentProfile, config: CliRuntimeConfig, discovery?: CodexAppServerModelDiscovery) {
   const provider = profile.provider?.trim() || config.provider;
-  const model = profile.model?.trim() || config.model;
+  const configuredModel = profile.model?.trim() || config.model;
+  if (config.runtime === "codex" && provider === config.provider) {
+    return buildCodexRuntimeModelSelection({
+      configuredModel,
+      discovery,
+      source: discovery ? `${config.label} app-server` : `${config.label} profile`,
+    });
+  }
+  const models = configuredModel ? [{ id: configuredModel }] : [];
   return {
     provider,
-    model,
+    model: configuredModel,
     providers: provider
       ? [{
         slug: provider,
         name: providerName(provider),
-        models: model ? [{ id: model }] : [],
-        totalModels: model ? 1 : 0,
+        models,
+        totalModels: models.length,
         isCurrent: true,
         isUserDefined: true,
         source: `${config.label} profile`,
@@ -146,6 +157,15 @@ async function cliStatus(config: CliRuntimeConfig, profile: AgentProfile) {
     : undefined;
   const version = result?.stdout.trim().split(/\r?\n/)[0] || result?.stderr.trim().split(/\r?\n/)[0] || "";
   const authReady = auth !== null;
+  const diagnostics: string[] = [];
+  let discovery: CodexAppServerModelDiscovery | undefined;
+  if (result && authReady && config.discoverModels) {
+    try {
+      discovery = await config.discoverModels(config.command);
+    } catch (error) {
+      diagnostics.push(error instanceof Error ? `Codex model discovery failed: ${error.message}` : "Codex model discovery failed.");
+    }
+  }
   return {
     ok: Boolean(result) && authReady,
     runtime: config.runtime,
@@ -154,7 +174,8 @@ async function cliStatus(config: CliRuntimeConfig, profile: AgentProfile) {
       : authReady
         ? (version ? `${config.label} is installed and authenticated. ${version}` : `${config.label} is installed and authenticated.`)
         : `${config.label} is installed but not authenticated. Log in before starting a managed task.`,
-    modelSelection: modelSelection(profile, config),
+    modelSelection: modelSelection(profile, config, discovery),
+    diagnostics,
   };
 }
 

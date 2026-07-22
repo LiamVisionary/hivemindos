@@ -1155,6 +1155,19 @@ if ($SkipDeps) {
   Ok "Dependencies installed"
 }
 
+if (-not $CollectorOnly -and $env:HIVEMINDOS_SKIP_WEB_RESEARCH -ne "1") {
+  $installWebResearch = $NonInteractive -or (Ask-YesNo "Install the local keyless web research engine for search, fetch, crawl, screenshots, and PDF OCR?" $true)
+  if ($installWebResearch) {
+    Info "Installing the pinned local web research engine"
+    & node (Join-Path $Root "scripts\install-web-research.mjs")
+    if ($LASTEXITCODE -eq 0) {
+      Ok "Local web research is ready for every registered agent runtime"
+    } else {
+      Warn "Local web research installation failed; other HivemindOS capabilities remain available"
+    }
+  }
+}
+
 $buildStamp = Join-Path $setupCache "build-windows.sha"
 $buildHash = Get-HashForFiles @("package.json", "pnpm-lock.yaml", "next.config.ts", "tsconfig.json")
 if ($SkipBuild) {
@@ -1233,6 +1246,14 @@ try {
   $collectorInstallFailed = $true
   Warn "Collector install did not complete: $_"
   Write-Host "  Re-run later: powershell -ExecutionPolicy Bypass -File scripts\install-telemetry-collector.ps1"
+}
+if (-not $collectorOnlyMode -and (Ask-YesNo "Install the optional pinned OpenSRE sidecar for read-only root-cause investigations? (Uses local Ollama by default.)" $false)) {
+  try {
+    & (Join-Path $Root "scripts\install-opensre-sidecar.ps1")
+    Ok "OpenSRE sidecar installed with telemetry, prompt logging, and history disabled"
+  } catch {
+    Warn "OpenSRE sidecar install did not complete; HivemindOS will keep capturing incidents locally: $_"
+  }
 }
 Write-Host ""
 Write-Host "Code Proof:"

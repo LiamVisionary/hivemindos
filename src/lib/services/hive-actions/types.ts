@@ -88,6 +88,7 @@ export type HiveActionDefinition<
 
 export type HiveMcpToolDescriptor = {
   name: string;
+  title: string;
   description: string;
   inputSchema: Record<string, unknown>;
   annotations: {

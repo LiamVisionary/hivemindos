@@ -139,6 +139,11 @@ try {
     false,
     "non-autonomous sources are not swept",
   );
+  assert.equal(
+    isRoutablePendingQueenBeeTask({ status: "ready", assignee: "queen-bee", source: "marketplace", loop: undefined, updatedAt: oldEnough }, Date.now()),
+    true,
+    "pending marketplace dispatch is routable (a live sync-catalog task sat pending 90+ min with zero recovery, 2026-07-18)",
+  );
 
   // ── routePendingQueenBeeTasks: pending task gets delegated when fleet returns ──
   const created = await createTask(null, {
@@ -175,6 +180,28 @@ try {
     true,
     "a routed pending task becomes re-dispatchable by the stranded-task recovery",
   );
+  assert.equal(
+    isRedispatchableReadyTask({ ...routedTask, source: "marketplace", updatedAt: Date.now() - 10 * 60_000 }, Date.now()),
+    true,
+    "a stranded delegated marketplace task is also re-dispatchable",
+  );
+
+  // An agent-pinned pending task routes ONLY to its pinned agent; a pin naming
+  // an absent agent stays pending (routing kept picking a fabricating delegate
+  // over the caller's proven one before agentId was honored, 2026-07-19).
+  const agentPinned = await createTask(null, {
+    title: "Post the marketplace listing", body: "pinned work", status: "ready", priority: "normal",
+    workspace: "scratch", assignee: "queen-bee", source: "marketplace", requestedAgent: "hermes-alpha", targetMachine: null,
+  }, kanbanOptions);
+  const ghostPinned = await createTask(null, {
+    title: "Sync the marketplace catalog", body: "pinned to a missing agent", status: "ready", priority: "normal",
+    workspace: "scratch", assignee: "queen-bee", source: "marketplace", requestedAgent: "not-in-fleet", targetMachine: null,
+  }, kanbanOptions);
+  await routePendingQueenBeeTasks(fleet, { ...kanbanOptions, now: Date.now() + 10 * 60_000, companyMembers });
+  const agentPinnedAfter = (await readBoard(null, kanbanOptions)).tasks.find((t) => t.id === agentPinned.task.id);
+  assert.equal(agentPinnedAfter.assignee, "hermes-alpha", "agent-pinned task routes ONLY to its pinned agent");
+  const ghostPinnedAfter = (await readBoard(null, kanbanOptions)).tasks.find((t) => t.id === ghostPinned.task.id);
+  assert.equal(ghostPinnedAfter.assignee, "queen-bee", "a pin naming an absent agent stays pending, never falls back");
 
   // A company with NO online members must NOT leak its task to an outsider — it stays pending.
   const orphan = await createTask(null, {

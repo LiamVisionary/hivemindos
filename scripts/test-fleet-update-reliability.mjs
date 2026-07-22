@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { register } from "node:module";
+
+register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
 const {
   HivemindLinkUpdateError,
@@ -22,7 +25,9 @@ function jsonResponse(payload, status = 200) {
     requests.push({ url: String(url), init });
     if (init.method === "POST") {
       const command = JSON.parse(String(init.body ?? "{}")).command ?? "";
-      remoteLines = execFileSync("/bin/zsh", ["-c", command], {
+      // /bin/sh (not zsh): the wrapper must be POSIX-portable, and CI's
+      // ubuntu-latest has no zsh on the launchd-like PATH this simulates.
+      remoteLines = execFileSync("/bin/sh", ["-c", command], {
         encoding: "utf8",
         env: { PATH: "/usr/bin:/bin", TMPDIR: "/tmp" },
       })

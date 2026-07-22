@@ -21,6 +21,7 @@ export type {
   EvaluationJudgeVerdict,
   EvaluationHumanFeedback,
   EvaluationHumanFeedbackRating,
+  EvaluationOutcomeContract,
   EvaluationPolicy,
   EvaluationResult,
   EvaluationSurface,
@@ -93,6 +94,23 @@ export async function evaluateCompletionEvent(
     return base("rejected", 0);
   }
   checks.push({ id: "output", status: "passed", summary: "Completion output is substantive enough for evaluation.", evidence: [output.slice(0, 240)] });
+
+  if (event.outcomeContract) {
+    if (!dependencies.verifyOutcome) {
+      checks.push({ id: "outcome", status: "failed", summary: "The accepted outcome was not checked by a trusted outcome verifier.", evidence: [] });
+      return base("needs-evidence", null);
+    }
+    const verified = await dependencies.verifyOutcome(event, event.outcomeContract).catch((error: unknown) => ({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    }));
+    const evidence = "evidence" in verified ? verified.evidence ?? [] : [];
+    if (!verified.ok) {
+      checks.push({ id: "outcome", status: "failed", summary: verified.error || "The completion did not satisfy its accepted outcome.", evidence });
+      return base("rejected", 0);
+    }
+    checks.push({ id: "outcome", status: "passed", summary: "The completion satisfied its accepted outcome.", evidence });
+  }
 
   if (event.artifacts?.length) {
     if (!dependencies.verifyArtifact) {

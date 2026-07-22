@@ -124,6 +124,19 @@ check("escalations land in the dashboard notifications feed as urgent alerts", (
   assert.match(watchdog, /source: "fleet-health-watchdog"/);
 });
 
+check("escalations queue a bounded SRE incident after deterministic remediation fails", () => {
+  assert.match(watchdog, /\/api\/ops\/investigations/);
+  assert.match(watchdog, /source: "fleet-watchdog"/);
+  assert.match(watchdog, /consecutiveDeepFailures: due\.streak/);
+  assert.match(watchdog, /remediationAttempts: due\.remediations/);
+  assert.match(watchdog, /const investigationPosted = await postSreInvestigation\(target, due, message\)/);
+});
+
+check("the watchdog never executes SRE recommendations", () => {
+  assert.match(watchdog, /No recommendation is executed here/);
+  assert.doesNotMatch(watchdog, /diagnosis\.recommendations/);
+});
+
 check("local dashboard calls carry the device token so auth-enabled dashboards accept them", () => {
   assert.match(watchdog, /x-hivemindos-device-token/);
   assert.match(watchdog, /HIVEMINDOS_DASHBOARD_DEVICE_TOKEN/);

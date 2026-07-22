@@ -373,7 +373,8 @@ export function useFleetNotificationsController(props: any) {
     const verified = Boolean(data?.ok && data.verified);
     const detail = verified
       ? data?.method === "already-current"
-        ? "This machine already reports the latest dashboard tools, so no update run was needed."
+        ? data?.message ||
+          "This machine already reports the latest dashboard tools, so no update run was needed."
         : machine.self
           ? "The local checkout update finished, dependencies were installed, and the local agent bridge was restarted."
           : "The update command finished. The machine pulled the latest changes, installed dependencies, and restarted the agent bridge."

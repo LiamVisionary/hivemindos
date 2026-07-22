@@ -1,10 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
 import {
   createContextXrayManifest,
   getContextXrayManifest,
   listContextXrayManifests,
+  recordContextXrayEvidence,
 } from "@/lib/services/context-xray";
+import { errorJson, okJson } from "@/lib/utils/api-response";
 import { requireAuth } from "@/lib/utils/server-auth";
 
 export const runtime = "nodejs";
@@ -18,14 +20,14 @@ export async function GET(request: NextRequest) {
     const id = request.nextUrl.searchParams.get("id");
     if (id) {
       const manifest = await getContextXrayManifest(id);
-      return NextResponse.json({ ok: true, manifest });
+      return okJson({ manifest });
     }
     const result = await listContextXrayManifests({
       limit: request.nextUrl.searchParams.get("limit"),
       runId: request.nextUrl.searchParams.get("runId"),
       threadId: request.nextUrl.searchParams.get("threadId"),
     });
-    return NextResponse.json({ ok: true, ...result });
+    return okJson(result);
   } catch (error) {
     return errorResponse(error);
   }
@@ -40,20 +42,21 @@ export async function POST(request: NextRequest) {
     const action = typeof body.action === "string" ? body.action : "create";
     if (action === "create") {
       const manifest = await createContextXrayManifest(body);
-      return NextResponse.json({ ok: true, manifest });
+      return okJson({ manifest });
     }
     if (action === "list") {
       const result = await listContextXrayManifests(body);
-      return NextResponse.json({ ok: true, ...result });
+      return okJson(result);
     }
     if (action === "get") {
       const manifest = await getContextXrayManifest(typeof body.id === "string" ? body.id : "");
-      return NextResponse.json({ ok: true, manifest });
+      return okJson({ manifest });
     }
-    return NextResponse.json({
-      ok: false,
-      error: `Unsupported Context X-Ray action: ${action}`,
-    }, { status: 400 });
+    if (action === "record-evidence") {
+      const evidence = await recordContextXrayEvidence(body);
+      return okJson({ evidence });
+    }
+    return errorJson(`Unsupported Context X-Ray action: ${action}`, 400);
   } catch (error) {
     return errorResponse(error);
   }
@@ -65,5 +68,5 @@ function normalizeBody(value: unknown): Record<string, unknown> {
 
 function errorResponse(error: unknown) {
   const message = error instanceof Error ? error.message : "Context X-Ray request failed.";
-  return NextResponse.json({ ok: false, error: message }, { status: 400 });
+  return errorJson(message, 400);
 }

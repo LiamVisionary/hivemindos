@@ -1,5 +1,22 @@
 import { AGENT_COLD_START_EVENT_LABEL, AGENT_COLD_START_EVENT_TYPE } from "@/lib/services/chat/agent-cold-start";
 
+// Chats on a machine-level leaf ("Unsorted chats") are general chats with no
+// working directory; they must never inherit the machine's appDir or the
+// agent's data dir as an implicit project folder.
+export function isUnsortedChatLeafKey(leafKey?: string) {
+  return Boolean(leafKey?.startsWith("machine-"));
+}
+
+// Working-directory pair for one chat send. `record` is what the dashboard
+// stores and displays ("" = no folder); `request` is what the runtime host
+// receives — "~" so a no-folder chat runs in the OS home directory (every
+// chat runtime host expands it) instead of a project checkout.
+export function chatWorkingDirectoryTargets(directoryPath: string, leafKey: string, agentDataDir?: string) {
+  if (!directoryPath && isUnsortedChatLeafKey(leafKey)) return { record: "", request: "~" };
+  const record = directoryPath || agentDataDir || "";
+  return { record, request: record };
+}
+
 export function runtimePromptFromPayload(parsed: any) {
   const event = parsed?.event && typeof parsed.event === "object" ? parsed.event : null;
   const source = parsed?.clarify ?? parsed?.prompt ?? event ?? parsed;

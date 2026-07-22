@@ -400,7 +400,7 @@
   --fr-agent-setup-border: var(--honey-line);
   --fr-agent-failed-fill: color-mix(in srgb, var(--danger) 16%, var(--panel-2));
 }
-:global([data-theme="hive-light"]) .fr-legacy-stage {
+:root[data-theme="hive-light"] .fr-legacy-stage {
   --fr-legacy-label: #435145;
   --fr-legacy-label-selected: #805806;
   --fr-legacy-label-halo: rgba(255, 253, 248, 0.74);

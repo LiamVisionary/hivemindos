@@ -13,6 +13,7 @@ import { BrainSkillsPanel } from "./BrainSkillsPanel";
 import { BrainAtlasPanel, BrainDreamInboxPanel, BrainSkillRoiPanel } from "./BrainAugmentationPanels";
 import { BrainServiceOverview, BrainServiceRunResult, BrainServiceSegmentedNav, BrainServiceSettingsDeck } from "./brain-services-ui";
 import { AgentMemoryHealthCard } from "./AgentMemoryHealthCard";
+import { EmbeddingsProviderCard } from "./EmbeddingsProviderCard";
 import { InboxTriageServiceCard } from "./InboxTriageServiceCard";
 import { SkillSecurityCard } from "./SkillSecurityCard";
 import { SyntoModelTierSettings } from "./SyntoModelTierSettings";
@@ -1291,6 +1292,7 @@ function VaultPanelComponent(props: any) {
                 <BrainServiceOverview Button={Button} brainClass={brainClass} cards={brainServiceOverviewCards} setActiveSection={setBrainServiceSection} />
                 <div className={brainClass("brainServiceOverviewGrid")} style={{ marginTop: 16 }}>
                   <AgentMemoryHealthCard />
+                  <EmbeddingsProviderCard />
                   <SkillSecurityCard />
                   <InboxTriageServiceCard />
                 </div>

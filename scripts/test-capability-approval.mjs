@@ -508,6 +508,41 @@ assert.equal(mergedHydration[2]?.attachments?.[0]?.name, "brief.pdf", "runtime h
 assert.equal(mergedHydration[3]?.capabilityApproval?.id, plan.id);
 assert.equal(mergeRuntimeHydratedChatMessages(mergedHydration, hydratedTranscript).length, 4, "repeated hydration does not duplicate the request or card");
 
+// Hydrated runtime transcripts carry no appArtifact; the merge must restamp the
+// thread's latest local artifact so Chat Preview keeps its app binding
+// (regression: adaptive multi-step hydration wiped the artifact and the preview
+// pane reported "no runnable app" for a successfully built project).
+const localArtifact = { protocol: "hivemindos.chat-app/v1", projectId: "local_artifact_1", name: "a flappy bird clone", directory: "/tmp/a-flappy-bird-clone", templateId: "static" };
+const artifactLocalMessages = [
+  { role: "user", content: "create a flappy bird clone", createdAt: 100 },
+  { role: "assistant", content: "", createdAt: 101, appArtifact: localArtifact },
+];
+const artifactHydratedTranscript = [
+  { role: "user", content: "create a flappy bird clone", createdAt: 100, sourceSessionId: "session-2" },
+  { role: "assistant", content: "I'll build it.", createdAt: 102, sourceSessionId: "session-2" },
+  { role: "assistant", content: "Done.", createdAt: 103, sourceSessionId: "session-2" },
+];
+const artifactMerged = mergeRuntimeHydratedChatMessages(artifactLocalMessages, artifactHydratedTranscript);
+assert.equal(artifactMerged.length, 3, "artifact-bearing local messages are still replaced by the runtime transcript");
+assert.equal(artifactMerged[2]?.appArtifact?.projectId, "local_artifact_1", "hydration restamps the latest local appArtifact onto the newest hydrated assistant message");
+assert.equal(artifactMerged[1]?.appArtifact, undefined, "only the newest hydrated assistant message carries the restamped artifact");
+const hydratedArtifact = { ...localArtifact, projectId: "local_artifact_2" };
+const artifactAuthoritativeMerge = mergeRuntimeHydratedChatMessages(artifactLocalMessages, [
+  ...artifactHydratedTranscript.slice(0, 2),
+  { ...artifactHydratedTranscript[2], appArtifact: hydratedArtifact },
+]);
+assert.equal(artifactAuthoritativeMerge[2]?.appArtifact?.projectId, "local_artifact_2", "a hydrated appArtifact stays authoritative over the local one");
+assert.equal(
+  mergeRuntimeHydratedChatMessages([artifactLocalMessages[0]], artifactHydratedTranscript).some((message) => message.appArtifact),
+  false,
+  "hydration does not invent an appArtifact when the thread never had one",
+);
+const artifactWithCardMerge = mergeRuntimeHydratedChatMessages(
+  [...artifactLocalMessages, pendingRequestMessage, pendingCardMessage],
+  artifactHydratedTranscript,
+);
+assert.equal(artifactWithCardMerge.some((message) => message.appArtifact?.projectId === "local_artifact_1"), true, "artifact restamping also survives merges that preserve local approval exchanges");
+
 const controllerSource = await readFile(new URL("../src/features/dashboard/hooks/use-status-chat-input-controller.tsx", import.meta.url), "utf8");
 const capabilityRouteSource = await readFile(new URL("../src/app/api/chat/capability-approval/route.ts", import.meta.url), "utf8");
 const appBuilderActionSource = await readFile(new URL("../src/lib/services/hive-actions/app-builder.ts", import.meta.url), "utf8");
@@ -522,6 +557,19 @@ const capabilitySearchSkillSource = await readFile(new URL("../packaged-skills/a
 const companyPolicySource = await readFile(new URL("../src/lib/services/company-approval-policies.ts", import.meta.url), "utf8");
 const companyPolicyPanelSource = await readFile(new URL("../src/features/dashboard/views/zero-human-companies/ApprovalPoliciesPanel.tsx", import.meta.url), "utf8");
 assert.match(controllerSource, /\/api\/chat\/capability-approval/, "chat route drafts the plan before runtime dispatch");
+const publishOutgoingUserMessageIndex = controllerSource.indexOf("publishOutgoingUserMessage();");
+const capabilityPreflightFetchIndex = controllerSource.indexOf('fetch("/api/chat/capability-approval"');
+assert.ok(publishOutgoingUserMessageIndex >= 0, "chat submission publishes the outgoing message immediately");
+assert.ok(
+  capabilityPreflightFetchIndex >= 0 && publishOutgoingUserMessageIndex < capabilityPreflightFetchIndex,
+  "chat publishes and clears the outgoing message before awaiting capability planning",
+);
+assert.match(controllerSource, /startCapabilityPreflightUi\([\s\S]+Checking capabilities/, "slow capability planning has a visible preflight state");
+assert.equal(
+  (controllerSource.match(/appendMessage\(selectedAgent\.id, outgoingUserMessage, selectedStorageKey\)/g) ?? []).length,
+  1,
+  "the optimistic user message is appended exactly once across capability and runtime branches",
+);
 assert.match(controllerSource, /workingDirectory:\s*selectedChatDirectoryPath/, "chat preflight sends the attached project directory as repository context");
 assert.match(controllerSource, /!capabilityData\.required[\s\S]+prepareCapabilityAppProject[\s\S]+runChatMessage/, "the send controller continues an automatic plan without relying on a rendered approval card");
 assert.match(capabilityRouteSource, /workingDirectory:\s*typeof body\.workingDirectory/, "the capability API forwards bounded repository context to the ranker");

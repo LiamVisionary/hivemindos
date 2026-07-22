@@ -1,5 +1,5 @@
 import { managedXReturnMessage, managedXReturnPayloadFromSearchParams } from "@/lib/services/managed-x-return";
-import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+export { managedXReturnUrl } from "@/lib/services/managed-x-oauth-return";
 
 export function summarizeRegistrarOutput(output?: string) {
   if (!output) return "";
@@ -24,19 +24,6 @@ export function managedXStatusUrl(creditAccountId?: string, slug?: string) {
   if (cleanSlug) params.set("slug", cleanSlug);
   const search = params.toString();
   return search ? `/api/integrations/x-managed?${search}` : "/api/integrations/x-managed";
-}
-
-export function managedXReturnUrl(creditAccountId: string, slug: string) {
-  const url = isTauriDesktopRuntime()
-    ? new URL("/api/integrations/x-managed/desktop-return", window.location.origin)
-    : new URL("/", window.location.origin);
-  if (!isTauriDesktopRuntime()) {
-    url.searchParams.set("view", "integrations");
-    url.searchParams.set("tab", "mcp");
-  }
-  url.searchParams.set("x_credit_account_id", creditAccountId);
-  url.searchParams.set("x_slug", slug);
-  return url.toString();
 }
 
 export function showManagedXReturnMessage(setMessage: (message: string) => void) {

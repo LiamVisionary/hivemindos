@@ -1,31 +1,39 @@
 // guard:allow-hive-action-route - dashboard-only Socials account management; not an agent-invokable
-// Hive action. Posting is not reachable here: queue/posting routes land in Phase 2 with their own
-// approval gates, and auto mode is only writable with an explicit human opt-in trail (policy:
-// nothing posts without explicit permission).
+// Hive action. Posting lives behind the separate queue route's durable approval gates, and auto
+// mode is only writable with an explicit human opt-in trail.
 import { NextRequest } from "next/server";
 
 import { errorJson, okJson } from "@/lib/utils/api-response";
 import { readSharedAgentEnv } from "@/lib/services/integrations/shared-env";
 import { socialAdapter } from "@/lib/services/socials/adapters";
-import { socialPlatformCapabilityDtos } from "@/lib/services/socials/social-platform-matrix";
+import { socialPlatformCapabilityDtos, socialPlatformRow } from "@/lib/services/socials/social-platform-matrix";
 import {
-  createSocialAccount,
+  connectSocialAccount,
   deleteSocialAccount,
   getSocialAccount,
   listSocialSoulOptions,
+  mutateSocialDraftingRuntime,
   newContextSource,
   readSocialAccounts,
   readSocialQueueMeta,
+  mutateSocialQueue,
   updateSocialAccount,
   type CreateSocialAccountInput,
 } from "@/lib/services/socials/socials-store";
 import {
   SOCIAL_CONNECT_METHODS,
+  SOCIAL_DRAFT_CADENCE_HOURS,
+  SOCIAL_DRAFTS_PER_RUN,
+  SOCIAL_ENGAGEMENT_DRAFTS_PER_RUN,
+  SOCIAL_ENGAGEMENT_LOOKBACK_HOURS,
   SOCIAL_PLATFORMS,
+  SOCIAL_QUOTE_DRAFTS_PER_RUN,
   type SocialAccount,
   type SocialAwakeHours,
   type SocialContextSourceKind,
+  type SocialDraftingPolicy,
 } from "@/lib/services/socials/socials-types";
+import { transitionQueueItem, validAwakeHoursConfiguration } from "@/lib/services/socials/social-queue-domain";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -72,6 +80,8 @@ type PostBody = {
   awakeHours?: Partial<SocialAwakeHours>;
   sources?: Array<{ kind?: string; ref?: string; note?: string }>;
   sourceId?: string;
+  drafting?: Partial<Pick<SocialDraftingPolicy,
+    "enabled" | "cadenceHours" | "draftsPerRun" | "engagementEnabled" | "replyDraftsPerRun" | "quoteDraftsPerRun" | "engagementLookbackHours">>;
 };
 
 export async function POST(request: NextRequest) {
@@ -96,7 +106,7 @@ export async function POST(request: NextRequest) {
           // can never post and probes as "finish the sign-in" forever.
           return errorJson("Managed X accounts need a gateway connection — pick one or finish the managed sign-in first.");
         }
-        const account = await createSocialAccount({
+        const account = await connectSocialAccount({
           platform: platform as CreateSocialAccountInput["platform"],
           handle,
           method: method as CreateSocialAccountInput["method"],
@@ -142,15 +152,98 @@ export async function POST(request: NextRequest) {
             ? { autoOptIn: { enabledAt: new Date().toISOString(), enabledBy: "human" as const, ...(body.optInNote ? { note: body.optInNote } : {}) } }
             : { autoOptIn: undefined }),
         }));
+        if (mode === "manual") {
+          await mutateSocialQueue((queue) => queue.map((item) => {
+            if (item.accountId !== body.id || item.approval?.by !== "auto-mode" || item.state !== "scheduled") return item;
+            const reviewed = transitionQueueItem(item, "suggested", { by: "human" });
+            return {
+              ...reviewed,
+              automated: false,
+              approval: undefined,
+              scheduledFor: undefined,
+              cancelWindowEndsAt: undefined,
+            };
+          }));
+        }
         return okJson({ account });
       }
       case "set-awake-hours": {
         if (!body.id) return errorJson("Account id is required");
         if (!body.awakeHours) return errorJson("awakeHours is required");
-        const account = await updateSocialAccount(body.id, (current) => ({
-          ...current,
-          awakeHours: { ...current.awakeHours, ...body.awakeHours },
-        }));
+        const account = await updateSocialAccount(body.id, (current) => {
+          const awakeHours = { ...current.awakeHours, ...body.awakeHours };
+          if (!validAwakeHoursConfiguration(awakeHours)) {
+            throw new Error("Awake hours need valid HH:MM start/end times, an IANA timezone, and one or more unique weekdays.");
+          }
+          return { ...current, awakeHours };
+        });
+        return okJson({ account });
+      }
+      case "set-drafting": {
+        if (!body.id) return errorJson("Account id is required");
+        if (!body.drafting) return errorJson("drafting is required");
+        const cadenceHours = Number(body.drafting.cadenceHours);
+        const draftsPerRun = Number(body.drafting.draftsPerRun);
+        const replyDraftsPerRun = Number(body.drafting.replyDraftsPerRun);
+        const quoteDraftsPerRun = Number(body.drafting.quoteDraftsPerRun);
+        const engagementLookbackHours = Number(body.drafting.engagementLookbackHours);
+        if (body.drafting.enabled !== undefined && typeof body.drafting.enabled !== "boolean") return errorJson("drafting.enabled must be a boolean");
+        if (body.drafting.engagementEnabled !== undefined && typeof body.drafting.engagementEnabled !== "boolean") return errorJson("drafting.engagementEnabled must be a boolean");
+        if (body.drafting.cadenceHours !== undefined && !(SOCIAL_DRAFT_CADENCE_HOURS as readonly number[]).includes(cadenceHours)) {
+          return errorJson(`drafting.cadenceHours must be one of: ${SOCIAL_DRAFT_CADENCE_HOURS.join(", ")}`);
+        }
+        if (body.drafting.draftsPerRun !== undefined && !(SOCIAL_DRAFTS_PER_RUN as readonly number[]).includes(draftsPerRun)) {
+          return errorJson(`drafting.draftsPerRun must be one of: ${SOCIAL_DRAFTS_PER_RUN.join(", ")}`);
+        }
+        if (body.drafting.replyDraftsPerRun !== undefined && !(SOCIAL_ENGAGEMENT_DRAFTS_PER_RUN as readonly number[]).includes(replyDraftsPerRun)) {
+          return errorJson(`drafting.replyDraftsPerRun must be one of: ${SOCIAL_ENGAGEMENT_DRAFTS_PER_RUN.join(", ")}`);
+        }
+        if (body.drafting.quoteDraftsPerRun !== undefined && !(SOCIAL_QUOTE_DRAFTS_PER_RUN as readonly number[]).includes(quoteDraftsPerRun)) {
+          return errorJson(`drafting.quoteDraftsPerRun must be one of: ${SOCIAL_QUOTE_DRAFTS_PER_RUN.join(", ")}`);
+        }
+        if (body.drafting.engagementLookbackHours !== undefined && !(SOCIAL_ENGAGEMENT_LOOKBACK_HOURS as readonly number[]).includes(engagementLookbackHours)) {
+          return errorJson(`drafting.engagementLookbackHours must be one of: ${SOCIAL_ENGAGEMENT_LOOKBACK_HOURS.join(", ")}`);
+        }
+        const account = await updateSocialAccount(body.id, (current) => {
+          if (!socialPlatformRow(current.platform).drafting.supported && body.drafting?.enabled) {
+            throw new Error(`${current.platform} does not support automated drafting.`);
+          }
+          if (!socialPlatformRow(current.platform).drafting.engagement.supported && body.drafting?.engagementEnabled) {
+            throw new Error(`${current.platform} does not support relevant-post discovery.`);
+          }
+          return {
+            ...current,
+            drafting: {
+              ...current.drafting,
+              ...(typeof body.drafting?.enabled === "boolean" ? { enabled: body.drafting.enabled } : {}),
+              ...(body.drafting?.cadenceHours !== undefined ? { cadenceHours: cadenceHours as SocialDraftingPolicy["cadenceHours"] } : {}),
+              ...(body.drafting?.draftsPerRun !== undefined ? { draftsPerRun: draftsPerRun as SocialDraftingPolicy["draftsPerRun"] } : {}),
+              ...(typeof body.drafting?.engagementEnabled === "boolean" ? { engagementEnabled: body.drafting.engagementEnabled } : {}),
+              ...(body.drafting?.replyDraftsPerRun !== undefined ? { replyDraftsPerRun: replyDraftsPerRun as SocialDraftingPolicy["replyDraftsPerRun"] } : {}),
+              ...(body.drafting?.quoteDraftsPerRun !== undefined ? { quoteDraftsPerRun: quoteDraftsPerRun as SocialDraftingPolicy["quoteDraftsPerRun"] } : {}),
+              ...(body.drafting?.engagementLookbackHours !== undefined ? { engagementLookbackHours: engagementLookbackHours as SocialDraftingPolicy["engagementLookbackHours"] } : {}),
+              updatedAt: new Date().toISOString(),
+              updatedBy: "human",
+            },
+          };
+        });
+        await mutateSocialDraftingRuntime(body.id, (runtime) => {
+          const lastSuccess = Date.parse(runtime.lastSuccessAt ?? "");
+          const producerEnabled = account.drafting.enabled || (
+            socialPlatformRow(account.platform).drafting.engagement.supported && account.drafting.engagementEnabled
+          );
+          const nextRunAt = producerEnabled
+            ? Number.isFinite(lastSuccess)
+              ? new Date(lastSuccess + account.drafting.cadenceHours * 60 * 60_000).toISOString()
+              : new Date().toISOString()
+            : undefined;
+          return {
+            ...runtime,
+            nextRunAt,
+            ...(!producerEnabled ? { inFlightSince: undefined } : {}),
+            lastError: undefined,
+          };
+        });
         return okJson({ account });
       }
       case "add-context-sources": {

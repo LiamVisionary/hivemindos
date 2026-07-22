@@ -257,11 +257,16 @@ export function chooseQueenBeeDelegate(task: QueenBeeTaskIntent, machines: Queen
   };
 }
 
-export function queenBeeMachineRoutingEligibility(machine: QueenBeeMachine): { eligible: boolean; reason: string } {
+export function queenBeeMachineRoutingEligibility(machine: QueenBeeMachine): { eligible: boolean; reason: string; mandatory?: boolean } {
   const policy = machine.fleetPolicy;
   const performance = policy?.performance;
   if (!policy?.configured || !performance) return { eligible: true, reason: "No Fleet performance policy is configured." };
-  if (performance.ignore) return { eligible: false, reason: "the machine is manually ignored" };
+  // `mandatory` distinguishes the human's explicit exclusion (always honored)
+  // from live-usage limits, which a HARD MACHINE PIN overrides: a pinned task
+  // has no alternative machine, so blocking on a busy-desktop CPU spike parks
+  // it indefinitely (live 2026-07-18: a marketplace task pinned to the only
+  // machine with the signed-in browser sat pending at "CPU is 100%").
+  if (performance.ignore) return { eligible: false, reason: "the machine is manually ignored", mandatory: true };
   if (performance.enabled === false) return { eligible: true, reason: "Automatic performance limits are off." };
 
   const checks: Array<{ label: string; value?: number | null; limit?: number }> = [
@@ -328,7 +333,13 @@ export function rankQueenBeeDelegates(task: QueenBeeTaskIntent, machines: QueenB
 function candidateAgents(machine: QueenBeeMachine, workerClass: QueenBeeWorkerClass, task: QueenBeeTaskIntent, options: QueenBeeRouterOptions): ScoredCandidate[] {
   if (!isCollectorUsable(machine.collector)) return [];
   if (machine.device?.online === false) return [];
-  if (!queenBeeMachineRoutingEligibility(machine).eligible) return [];
+  const eligibility = queenBeeMachineRoutingEligibility(machine);
+  if (!eligibility.eligible) {
+    // A live-usage limit (CPU/RAM/disk) yields to a hard machine pin — the
+    // pinned work cannot run anywhere else. Manual ignore is always honored.
+    const pinnedHere = Boolean(options.targetMachineKey) && machineMatchesTarget(machine, options.targetMachineKey);
+    if (eligibility.mandatory || !pinnedHere) return [];
+  }
   return (machine.agents ?? [])
     .filter((agent) => agent.beeRole !== "observer" && agent.beeRole !== "human")
     .filter((agent) => isChatCapable(agent, machine))

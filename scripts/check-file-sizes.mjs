@@ -81,7 +81,13 @@ const legacyOversizedAllowances = new Map([
   // 2026-07-04: +14 for the notification→task deep-link reveal wiring (ref
   // bridge to the nav controller + openKanbanTaskConversation bee-pilot dep;
   // the flight logic lives in bee-pilot/reveal-kanban-task.ts).
-  ["src/features/dashboard/DashboardApp.tsx", 4853],
+  // 2026-07-18: −80 vs origin/main, chat transcript identity/split helpers to
+  // features/dashboard/chat-transcript-helpers.ts. (Near-copies of some of them
+  // still live in dashboard-storage.ts and use-dashboard-derived-state.tsx and
+  // have already drifted — collapsing those is a behavior call, left as
+  // follow-up.) Watermark carries ~2 lines of slack over clean HEAD because it
+  // was measured in a working tree with concurrent uncommitted edits.
+  ["src/features/dashboard/DashboardApp.tsx", 4777],
   ["src/lib/services/hive-actions/catalog.ts", 1817],
   ["src/features/dashboard/views/AeonAutopilotPanel.tsx", 3857],
   // Ratchet re-baselined 2026-07-02: watermarks set to then-current line counts
@@ -95,7 +101,10 @@ const legacyOversizedAllowances = new Map([
   // 2026-07-03: +35 for startSyncthingViaServiceManager — syncthing recovery
   // now starts the installer-managed unit instead of racing it with a detached
   // spawn (hel1-2 DB-lock crash-loop, 400k+ restarts).
-  ["scripts/agent-telemetry-collector.mjs", 9748],
+  // 2026-07-18: −59, the self-reload watcher moved to lib/collector-self-reload.mjs
+  // with injectable deps; the Windows exit-75 contract that used to be pinned by
+  // a source-text regex is now a behavioral unit test.
+  ["scripts/agent-telemetry-collector.mjs", 9692],
   // 2026-07-02: +18 for the non-string task.result/body read+write coercion fix
   // (one poisoned task was 400ing every /api/kanban read).
   // 2026-07-04: +57 for answerHumanTask — the needs-human answer mutation
@@ -103,7 +112,10 @@ const legacyOversizedAllowances = new Map([
   // the store's private withBoardMutation/event/touch internals, so it lives here.
   // 2026-07-07: +48 for outreach revenue completion fail-closed wiring; the
   // reusable policy parser lives in kanban/outreach-safeguards.ts.
-  ["src/lib/services/kanban/local-kanban-store.ts", 2585],
+  // 2026-07-18: −127, deliverable extraction helpers moved to
+  // kanban/deliverable-extraction.ts. The cut stops before mergeDeliverables /
+  // sourceDeliverableKeys, which still reach back into store internals.
+  ["src/lib/services/kanban/local-kanban-store.ts", 2465],
   ["src/features/dashboard/hooks/use-dashboard-derived-state.tsx", 2244],
   ["src/features/dashboard/views/chat/HiveChatView.module.css", 1802],
   ["src/lib/services/obsidian/agent-memory/core.ts", 1901],
@@ -113,7 +125,11 @@ const legacyOversizedAllowances = new Map([
   // all-roots mirror guard, vault->aeon GC) with incident comments in place.
   ["src/lib/services/obsidian/brain-skills.ts", 1675],
   ["src/lib/services/context-index.ts", 1680],
-  ["src/features/dashboard/hooks/use-status-chat-input-controller.tsx", 1840],
+  // 2026-07-18: −169, the composer/quick-add/steer attachment + linked-directory
+  // handlers moved to hooks/status-chat-composer-attachments.ts (a plain factory
+  // — the block touched no hook state and no React hooks). The controller's
+  // return shape is unchanged; DashboardApp still destructures all 23 names.
+  ["src/features/dashboard/hooks/use-status-chat-input-controller.tsx", 1751],
   ["src/features/dashboard/views/chat/AgentSettingsModal.tsx", 1640],
   ["src/components/fleet/fleet-tokens.module.css", 1541],
   ["src/features/dashboard/views/chat/UsePodSetup.module.css", 1540],
@@ -121,13 +137,21 @@ const legacyOversizedAllowances = new Map([
   // 2026-07-17 (fd4581152): first crossed 1500 in that commit. The barely-over
   // three (dashboard-display-helpers, stream-openai-compatible, fleet-hive.css)
   // are the cheapest split candidates — extract, then delete their entries.
-  ["src/app/api/chat/agent-runtime/stream-openai-compatible.ts", 1517],
-  ["src/app/api/fleet/discover/route.ts", 1537],
+  // 2026-07-18: src/app/api/fleet/discover/route.ts dropped off this map — its
+  // tailnet device identity/dedupe helpers moved to fleet/discover-devices.ts,
+  // taking it from 1613 to 1365, back under the 1500 cap outright.
+  // 2026-07-18: LM Studio server autostart moved to lm-studio-autostart.ts and
+  // the capability-tool health tracker to invoke-hive-capability-tool.ts,
+  // holding the file under its watermark after the capability-rail hardening.
+  ["src/app/api/chat/agent-runtime/stream-openai-compatible.ts", 1506],
   ["src/app/api/phone/route.ts", 1544],
   ["src/components/fleet-hive/fleet-hive.css", 1516],
   ["src/features/dashboard/dashboard-display-helpers.tsx", 1519],
   ["src/lib/services/nansen.ts", 1640],
-  ["src/lib/types/agent-runtime.ts", 1555],
+  // 2026-07-18: src/lib/types/agent-runtime.ts dropped off this map — the voice/
+  // calls + ministry preference types moved to types/agent-call-preferences.ts,
+  // taking it from 1556 to 1397. agent-runtime.ts re-exports them so none of the
+  // 13 existing consumers had to change.
 ]);
 
 function isIgnoredDirectory(directory) {

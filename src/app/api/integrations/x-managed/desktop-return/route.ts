@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 
 import {
+  managedXDeepLinkFromSearchParams,
   managedXReturnMessage,
   managedXReturnPayloadFromSearchParams,
 } from "@/lib/services/managed-x-return";
@@ -13,18 +14,20 @@ export async function GET(request: NextRequest) {
   const payload = managedXReturnPayloadFromSearchParams(request.nextUrl.searchParams, request.nextUrl.toString());
   storeManagedXDesktopReturn(payload);
   const message = managedXReturnMessage(payload) || "X sign-in returned to HivemindOS.";
+  const deepLink = managedXDeepLinkFromSearchParams(request.nextUrl.searchParams);
 
-  return new Response(returnPageHtml({ message }), {
+  return new Response(returnPageHtml({ deepLink, message }), {
     status: 200,
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "no-store",
-      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'",
+      "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; base-uri 'none'; form-action 'none'",
     },
   });
 }
 
-function returnPageHtml(input: { message: string }) {
+function returnPageHtml(input: { deepLink: string; message: string }) {
+  const deepLinkScriptValue = JSON.stringify(input.deepLink).replace(/</g, "\\u003c");
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -38,6 +41,7 @@ function returnPageHtml(input: { message: string }) {
       .eyebrow { margin: 0 0 10px; color: #5eead4; font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
       h1 { margin: 0; font-size: 28px; line-height: 1.1; }
       p { margin: 14px 0 0; color: #b9c5ce; line-height: 1.55; }
+      a { display: inline-flex; margin-top: 22px; border-radius: 10px; padding: 11px 16px; background: #5eead4; color: #07100e; font-weight: 700; text-decoration: none; }
       .receipt { display: inline-flex; align-items: center; gap: 10px; margin-top: 22px; color: #5eead4; font-weight: 800; }
       .pulse { width: 10px; height: 10px; border-radius: 999px; background: #5eead4; box-shadow: 0 0 0 0 rgba(94, 234, 212, 0.4); animation: pulse 1.4s ease-out infinite; }
       @keyframes pulse { to { box-shadow: 0 0 0 14px rgba(94, 234, 212, 0); } }
@@ -49,9 +53,11 @@ function returnPageHtml(input: { message: string }) {
       <p class="eyebrow">HivemindOS</p>
       <h1>Return received</h1>
       <p>${escapeHtml(input.message)}</p>
-      <p>Return to the HivemindOS desktop window. It will refresh the managed X account automatically.</p>
-      <div class="receipt"><span class="pulse" aria-hidden="true"></span>Ready in HivemindOS</div>
+      <p>Opening the HivemindOS desktop app now. If your browser asks for permission, allow it to open HivemindOS.</p>
+      <a href="${escapeHtml(input.deepLink)}">Open HivemindOS</a>
+      <div class="receipt"><span class="pulse" aria-hidden="true"></span>Returning to HivemindOS</div>
     </main>
+    <script>window.location.replace(${deepLinkScriptValue});</script>
   </body>
 </html>`;
 }

@@ -1,5 +1,6 @@
 import type { SocialPlatform } from "@/lib/services/socials/socials-types";
 import type { SocialPlatformAdapter } from "@/lib/services/socials/adapters/types";
+import { facebookSocialAdapter } from "@/lib/services/socials/adapters/facebook";
 import { farcasterAdapter } from "@/lib/services/socials/adapters/farcaster";
 import { linkedinAdapter } from "@/lib/services/socials/adapters/linkedin";
 import { redditAdapter } from "@/lib/services/socials/adapters/reddit";
@@ -13,6 +14,7 @@ export const SOCIAL_ADAPTERS: Record<SocialPlatform, SocialPlatformAdapter> = {
   farcaster: farcasterAdapter,
   linkedin: linkedinAdapter,
   reddit: redditAdapter,
+  facebook: facebookSocialAdapter,
 };
 
 export function socialAdapter(platform: SocialPlatform): SocialPlatformAdapter {

@@ -6,7 +6,7 @@ import { register } from "node:module";
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
 const taskRetrievalModule = await import("../src/lib/services/chat/task-retrieval-context.ts");
-const { requiresCapabilityRouting } = taskRetrievalModule;
+const { requiresCapabilityRouting, shouldRunTaskRetrieval } = taskRetrievalModule;
 const contextIndexModule = await import("../src/lib/services/context-index.ts");
 const routeSource = await readFile(new URL("../src/app/api/chat/agent-runtime/route.ts", import.meta.url), "utf8");
 const taskRetrievalSource = await readFile(new URL("../src/lib/services/chat/task-retrieval-context.ts", import.meta.url), "utf8");
@@ -16,6 +16,11 @@ assert.equal(
   true,
   "website/app builds need the larger capability-routing preflight budget",
 );
+assert.equal(shouldRunTaskRetrieval("hello, how are you?"), false, "ordinary conversation must not load the capability corpus");
+assert.equal(shouldRunTaskRetrieval("thanks, that makes sense"), false, "short acknowledgements must not load the capability corpus");
+assert.equal(shouldRunTaskRetrieval("review src/app/api/chat/agent-runtime/route.ts and run its focused test"), true, "repository work must retrieve task context");
+assert.equal(shouldRunTaskRetrieval("search the latest agent harness research and cite sources"), true, "fresh research must retrieve browser and research capabilities");
+assert.equal(shouldRunTaskRetrieval("send 5 USDC privately"), true, "consequential capability requests must retrieve their policy and provider evidence");
 assert.match(
   routeSource,
   /CHAT_PREFLIGHT_CAPABILITY_SEARCH_TIMEOUT_MS = (?:1_[5-9]\d{2}|[2-9]_?\d{3,})/,

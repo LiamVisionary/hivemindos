@@ -4,6 +4,7 @@ import { proxyOutput } from "@/lib/services/agent-security-proxy";
 import { RUNTIME_STREAM_EVENT_TYPES } from "@/lib/services/runtime-stream-events";
 import { resolveAdaptiveOpenRouterModels } from "@/lib/services/chat/adaptive-openrouter-models";
 import { flushChannelMarkup } from "@/lib/services/chat/channel-markup";
+import { stripHermesInternalToolNarration } from "@/lib/services/chat/hermes-cli-output";
 import { assessAdaptiveResponseQuality, classifyAdaptiveModelFailure, recordAdaptiveModelOutcome } from "@/lib/services/chat/adaptive-model-reliability";
 import {
   buildHivemindPromptEnvelope,
@@ -13,6 +14,7 @@ import {
   appendRuntimeChatSessionEvent,
   appendRuntimeChatSessionText,
   finishRuntimeChatSession,
+  replaceRuntimeChatSessionAssistantText,
 } from "@/lib/services/chat/runtime-session-store";
 import {
   createChannelMarkupState,
@@ -28,7 +30,6 @@ import { recordRuntimeTelemetry, telemetryPayloadForProfile, type RuntimeRouteTe
 import {
   buildWalletTools,
   recordChatHoney,
-  releaseInteractiveRuntime,
   runtimeFetchError,
   runtimeStreamErrorMessage,
   type AgentMode,
@@ -36,9 +37,12 @@ import {
 import {
   buildAdaptiveOpenRouterResolvedModelContext,
   finalAdaptiveHermesOpenRouterError,
+  isFleetSharedEnvAccessErrorBody,
   isHermesCliFailureText,
+  isPotentialHermesCliFailureText,
   openRouterApiKey,
   profileWithResolvedModel,
+  providerErrorMessage,
 } from "./openai-compat";
 
 const ADAPTIVE_HERMES_OPENROUTER_FREE_ATTEMPTS = 5;
@@ -58,7 +62,6 @@ export async function streamAdaptiveHermesOpenRouterRuntime(
   sharedVault: SharedVaultConfig | null,
   agentMode: AgentMode,
   url: string,
-  lockKey: string,
   workingDirectory?: string,
   wallet?: AgentWalletConfig,
   honeyLedgerEnabled = false,
@@ -72,7 +75,6 @@ export async function streamAdaptiveHermesOpenRouterRuntime(
   try {
     candidateModels = await resolveAdaptiveOpenRouterModels(profile, messages);
   } catch (error) {
-    releaseInteractiveRuntime(lockKey);
     return Response.json({ error: error instanceof Error ? error.message : "Adaptive OpenRouter model selection failed." }, { status: 502 });
   }
   const fallbackModel = profile.adaptiveOpenRouter?.fallbackModel?.trim()
@@ -124,6 +126,7 @@ export async function streamAdaptiveHermesOpenRouterRuntime(
 
       const attemptedModels: string[] = [];
       let lastError = "";
+      let terminalError = "";
       let hermesCliSessionId = "";
       try {
         for (const candidateModel of candidateModels) {
@@ -223,7 +226,10 @@ export async function streamAdaptiveHermesOpenRouterRuntime(
           if (!upstream.ok || !upstream.body) {
             clearTimeout(attemptTimer);
             const errorText = await upstream.text().catch(() => "");
-            lastError = errorText || `Hermes returned ${upstream.status || 502} for ${candidateModel}.`;
+            const sharedEnvAccessBlocked = isFleetSharedEnvAccessErrorBody(errorText);
+            lastError = errorText
+              ? providerErrorMessage(errorText, upstream.status || 502, candidateModel)
+              : `Hermes returned ${upstream.status || 502} for ${candidateModel}.`;
             recordRuntimeTelemetry(telemetry, "agent_runtime.hermes_adaptive_openrouter.upstream_error", {
               ...telemetryPayloadForProfile(candidateProfile),
               url,
@@ -236,7 +242,15 @@ export async function streamAdaptiveHermesOpenRouterRuntime(
               elapsedMs: Date.now() - fetchStartedAt,
             });
             void recordAdaptiveModelOutcome(candidateModel, classifyAdaptiveModelFailure(`${upstream.status} ${lastError}`), lastError);
-            queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive retry", lastError));
+            queueSessionWrite(() => appendRuntimeChatSessionEvent(
+              runtimeSessionId,
+              sharedEnvAccessBlocked ? "Hermes Adaptive access blocked" : "Hermes Adaptive retry",
+              lastError,
+            ));
+            if (sharedEnvAccessBlocked) {
+              terminalError = lastError;
+              break;
+            }
             continue;
           }
 
@@ -247,7 +261,57 @@ export async function streamAdaptiveHermesOpenRouterRuntime(
           let textDeltaCount = 0;
           let processEventCount = 0;
           let commentEventCount = 0;
-          const channelMarkupState = createChannelMarkupState();
+          let channelMarkupState = createChannelMarkupState();
+          let pendingAssistantText = "";
+          let sawHermesCliFailure = false;
+          const emitAssistantText = (content: string, raw?: unknown) => {
+            if (!content) return;
+            fullText += content;
+            textDeltaCount += 1;
+            queueSessionWrite(() => appendRuntimeChatSessionText(runtimeSessionId, "assistant", content, raw));
+            if (textDeltaCount === 1 || textDeltaCount % 20 === 0) {
+              recordRuntimeTelemetry(telemetry, "agent_runtime.hermes_adaptive_openrouter.stream.text_delta", {
+                ...telemetryPayloadForProfile(candidateProfile),
+                url,
+                model: candidateModel,
+                adaptiveOpenRouter: true,
+                attempt: attemptedModels.length,
+                textDeltaCount,
+                outputLength: fullText.length,
+                streamElapsedMs: Date.now() - fetchStartedAt,
+              });
+            }
+            safeEnqueue(ssePayload({ choices: [{ delta: { content } }] }));
+          };
+          const bufferAssistantText = (content: string, raw?: unknown) => {
+            if (!content || sawHermesCliFailure) return;
+            pendingAssistantText += content;
+            if (isHermesCliFailureText(pendingAssistantText)) {
+              lastError = pendingAssistantText.trim();
+              pendingAssistantText = "";
+              sawHermesCliFailure = true;
+              queueSessionWrite(() => appendRuntimeChatSessionEvent(
+                runtimeSessionId,
+                "Hermes Adaptive model failed",
+                `${candidateModel}: ${lastError}`,
+                raw,
+              ));
+              return;
+            }
+            if (isPotentialHermesCliFailureText(pendingAssistantText)) return;
+            const accepted = pendingAssistantText;
+            pendingAssistantText = "";
+            emitAssistantText(accepted, raw);
+          };
+          const flushPendingAssistantText = () => {
+            if (sawHermesCliFailure || !pendingAssistantText.trim()) {
+              pendingAssistantText = "";
+              return;
+            }
+            const accepted = pendingAssistantText;
+            pendingAssistantText = "";
+            emitAssistantText(accepted);
+          };
           const recordStreamComment = (commentText: string) => {
             const cleanComment = commentText.trim();
             if (!cleanComment) return;
@@ -312,8 +376,22 @@ export async function streamAdaptiveHermesOpenRouterRuntime(
                       ? parsed.error.message
                       : "";
                   if (errorMessage.trim()) {
-                    lastError = errorMessage.trim();
-                    queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive model failed", `${candidateModel}: ${lastError}`, parsed));
+                    const reportedError = errorMessage.trim();
+                    if (!lastError || !/^Hermes exited\b/i.test(reportedError)) lastError = reportedError;
+                    queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive model failed", `${candidateModel}: ${reportedError}`, parsed));
+                    continue;
+                  }
+                  if (parsed?.type === RUNTIME_STREAM_EVENT_TYPES.TEXT_RESET || parsed?.type === "assistant.reset") {
+                    flushPendingAssistantText();
+                    const interimText = String(parsed?.content ?? fullText).trim();
+                    fullText = "";
+                    pendingAssistantText = "";
+                    channelMarkupState = createChannelMarkupState();
+                    queueSessionWrite(() => replaceRuntimeChatSessionAssistantText(runtimeSessionId, "", parsed));
+                    if (interimText) {
+                      queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes progress", interimText.slice(0, 600), parsed));
+                    }
+                    safeEnqueue(ssePayload({ type: RUNTIME_STREAM_EVENT_TYPES.TEXT_RESET, content: interimText }));
                     continue;
                   }
                   const outputCheck = proxyOutput(extractChunk(parsed));
@@ -336,33 +414,16 @@ export async function streamAdaptiveHermesOpenRouterRuntime(
                     safeEnqueue(ssePayload({ type: RUNTIME_STREAM_EVENT_TYPES.THINKING, delta: thinking }));
                   }
                   if (routed.content) {
-                    if (isHermesCliFailureText(routed.content)) {
-                      lastError = routed.content.trim();
-                      queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive model failed", `${candidateModel}: ${lastError}`, parsed));
-                    } else {
-                      fullText += routed.content;
-                      textDeltaCount += 1;
-                      queueSessionWrite(() => appendRuntimeChatSessionText(runtimeSessionId, "assistant", routed.content, parsed));
-                      if (textDeltaCount === 1 || textDeltaCount % 20 === 0) {
-                        recordRuntimeTelemetry(telemetry, "agent_runtime.hermes_adaptive_openrouter.stream.text_delta", {
-                          ...telemetryPayloadForProfile(candidateProfile),
-                          url,
-                          model: candidateModel,
-                          adaptiveOpenRouter: true,
-                          attempt: attemptedModels.length,
-                          textDeltaCount,
-                          outputLength: fullText.length,
-                          streamElapsedMs: Date.now() - fetchStartedAt,
-                        });
-                      }
-                      safeEnqueue(ssePayload({ choices: [{ delta: { content: routed.content } }] }));
-                    }
+                    bufferAssistantText(routed.content, parsed);
                   } else if (!thinking && isTerminalOpenAiStreamMetadata(parsed)) {
                     continue;
                   } else if (!thinking && parsed?.session) {
                     const cliSessionId = String(parsed.session?.id ?? parsed.session?.sessionId ?? "").trim();
                     if (cliSessionId) hermesCliSessionId = cliSessionId;
-                    safeEnqueue(ssePayload(parsed));
+                    // The browser already owns the HivemindOS chat-turn session
+                    // emitted above. This nested id belongs only to the spawned
+                    // Hermes CLI and is retained locally for provider retries.
+                    continue;
                   } else if (!thinking) {
                     processEventCount += 1;
                     const eventDetail = typeof parsed?.message === "string"
@@ -404,27 +465,7 @@ export async function streamAdaptiveHermesOpenRouterRuntime(
                       safeEnqueue(ssePayload({ type: RUNTIME_STREAM_EVENT_TYPES.THINKING, delta: routed.thinking }));
                     }
                     if (routed.content) {
-                      if (isHermesCliFailureText(routed.content)) {
-                        lastError = routed.content.trim();
-                        queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive model failed", lastError));
-                      } else {
-                        fullText += routed.content;
-                        textDeltaCount += 1;
-                        queueSessionWrite(() => appendRuntimeChatSessionText(runtimeSessionId, "assistant", routed.content));
-                        if (textDeltaCount === 1 || textDeltaCount % 20 === 0) {
-                          recordRuntimeTelemetry(telemetry, "agent_runtime.hermes_adaptive_openrouter.stream.text_delta", {
-                            ...telemetryPayloadForProfile(candidateProfile),
-                            url,
-                            model: candidateModel,
-                            adaptiveOpenRouter: true,
-                            attempt: attemptedModels.length,
-                            textDeltaCount,
-                            outputLength: fullText.length,
-                            streamElapsedMs: Date.now() - fetchStartedAt,
-                          });
-                        }
-                        safeEnqueue(ssePayload({ choices: [{ delta: { content: routed.content } }] }));
-                      }
+                      bufferAssistantText(routed.content);
                     }
                   }
                 }
@@ -437,23 +478,9 @@ export async function streamAdaptiveHermesOpenRouterRuntime(
               safeEnqueue(ssePayload({ type: RUNTIME_STREAM_EVENT_TYPES.THINKING, delta: flushedTail.thinking }));
             }
             if (flushedTail.content) {
-              fullText += flushedTail.content;
-              textDeltaCount += 1;
-              queueSessionWrite(() => appendRuntimeChatSessionText(runtimeSessionId, "assistant", flushedTail.content));
-              if (textDeltaCount === 1 || textDeltaCount % 20 === 0) {
-                recordRuntimeTelemetry(telemetry, "agent_runtime.hermes_adaptive_openrouter.stream.text_delta", {
-                  ...telemetryPayloadForProfile(candidateProfile),
-                  url,
-                  model: candidateModel,
-                  adaptiveOpenRouter: true,
-                  attempt: attemptedModels.length,
-                  textDeltaCount,
-                  outputLength: fullText.length,
-                  streamElapsedMs: Date.now() - fetchStartedAt,
-                });
-              }
-              safeEnqueue(ssePayload({ choices: [{ delta: { content: flushedTail.content } }] }));
+              bufferAssistantText(flushedTail.content);
             }
+            flushPendingAssistantText();
           } catch (error) {
             lastError = runtimeStreamErrorMessage(candidateProfile, error);
             recordRuntimeTelemetry(telemetry, "agent_runtime.hermes_adaptive_openrouter.stream.failed", {
@@ -472,6 +499,14 @@ export async function streamAdaptiveHermesOpenRouterRuntime(
           } finally {
             clearTimeout(attemptTimer);
             clearInterval(keepaliveTimer);
+          }
+
+          const cleanedFullText = stripHermesInternalToolNarration(fullText);
+          if (cleanedFullText && cleanedFullText !== fullText.trim()) {
+            fullText = cleanedFullText;
+            queueSessionWrite(() => replaceRuntimeChatSessionAssistantText(runtimeSessionId, cleanedFullText, { type: "assistant.presentation_cleanup" }));
+            safeEnqueue(ssePayload({ type: RUNTIME_STREAM_EVENT_TYPES.TEXT_RESET, content: "" }));
+            safeEnqueue(ssePayload({ choices: [{ delta: { content: cleanedFullText } }] }));
           }
 
           if (fullText.trim()) {
@@ -501,7 +536,6 @@ export async function streamAdaptiveHermesOpenRouterRuntime(
             });
             queueSessionWrite(() => finishRuntimeChatSession(runtimeSessionId, "completed"));
             await sessionWrite.catch(() => undefined);
-            releaseInteractiveRuntime(lockKey);
             safeClose();
             return;
           }
@@ -523,7 +557,7 @@ export async function streamAdaptiveHermesOpenRouterRuntime(
           queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes Adaptive retry", `${candidateModel}: ${lastError}`));
         }
 
-        const message = finalAdaptiveHermesOpenRouterError(attemptedModels, lastError);
+        const message = terminalError || finalAdaptiveHermesOpenRouterError(attemptedModels, lastError);
         safeEnqueue(ssePayload({ error: message }));
         safeEnqueue("data: [DONE]\n\n");
         recordRuntimeTelemetry(telemetry, "agent_runtime.hermes_adaptive_openrouter.failed", {
@@ -544,7 +578,6 @@ export async function streamAdaptiveHermesOpenRouterRuntime(
         queueSessionWrite(() => finishRuntimeChatSession(runtimeSessionId, "failed"));
       } finally {
         await sessionWrite.catch(() => undefined);
-        releaseInteractiveRuntime(lockKey);
         safeClose();
       }
     },

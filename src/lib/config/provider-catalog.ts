@@ -32,6 +32,12 @@ export type ProviderCatalogEntry = {
   modelsAuth?: "bearer" | "x-api-key";
   /** Extra headers for the `/models` fetch (e.g. anthropic-version). */
   modelsHeaders?: Record<string, string>;
+  /**
+   * Embedding models servable from this provider's OpenAI-compatible
+   * `/embeddings` endpoint (shared-brain semantic recall). Curated, not
+   * live-fetched: hosted embedding lineups are small and stable.
+   */
+  embeddingModels?: Array<{ id: string; label?: string; supportsDimensions?: boolean }>;
 };
 
 // Gateways that carry their key outside a `hermes` block need their keyEnv here.
@@ -66,7 +72,20 @@ function gatewayCatalogEntry(slug: string): ProviderCatalogEntry | null {
 
 // Key-based providers not represented as MODEL_PROVIDER_GATEWAYS gateways today.
 const EXTRA_PROVIDERS: ProviderCatalogEntry[] = [
-  { slug: "openai-api", name: "OpenAI", keyEnv: "OPENAI_API_KEY", iconPath: "/icons/runtimes/openai.svg", iconMode: "mask", fallback: "AI", baseUrl: "https://api.openai.com/v1" },
+  {
+    slug: "openai-api",
+    name: "OpenAI",
+    keyEnv: "OPENAI_API_KEY",
+    iconPath: "/icons/runtimes/openai.svg",
+    iconMode: "mask",
+    fallback: "AI",
+    baseUrl: "https://api.openai.com/v1",
+    embeddingModels: [
+      { id: "text-embedding-3-small", label: "Embedding 3 Small", supportsDimensions: true },
+      { id: "text-embedding-3-large", label: "Embedding 3 Large", supportsDimensions: true },
+      { id: "text-embedding-ada-002", label: "Ada 002 (legacy)" },
+    ],
+  },
   { slug: "anthropic", name: "Anthropic", keyEnv: "ANTHROPIC_API_KEY", fallback: "AN", baseUrl: "https://api.anthropic.com/v1", modelsAuth: "x-api-key", modelsHeaders: { "anthropic-version": "2023-06-01" } },
   { slug: "groq", name: "Groq", keyEnv: "GROQ_API_KEY", fallback: "GQ", baseUrl: "https://api.groq.com/openai/v1" },
   { slug: "gemini", name: "Gemini", keyEnv: "GEMINI_API_KEY", fallback: "GM", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai" },

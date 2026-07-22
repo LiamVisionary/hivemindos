@@ -378,6 +378,9 @@ has("packaged-skills/auto-install/create-zero-human-company/SKILL.md", "Do not c
 assert.ok(existsSync(join(root, "packaged-skills/auto-install/create-zero-human-company/references/company-api.md")), "missing create-zero-human-company API reference");
 assert.ok(existsSync(join(root, "packaged-skills/auto-install/hive-assimilate/SKILL.md")), "missing hive-assimilate packaged skill");
 assert.ok(existsSync(join(root, "packaged-skills/auto-install/engineering-discipline/SKILL.md")), "missing engineering-discipline packaged skill");
+assert.ok(existsSync(join(root, "packaged-skills/auto-install/harness-engineering/SKILL.md")), "missing harness-engineering packaged skill");
+has("packaged-skills/auto-install/harness-engineering/SKILL.md", "lopopolo/harness-engineering");
+has("packaged-skills/auto-install/harness-engineering/SKILL.md", "CC BY 4.0");
 assert.ok(existsSync(join(root, "packaged-skills/packs/hivemind-engineering-discipline.json")), "missing Engineering Discipline pack manifest");
 assert.ok(existsSync(join(root, "packaged-skills/optional/engineering/obra-superpowers/verification-before-completion/SKILL.md")), "missing packaged verification-before-completion donor skill");
 assert.ok(existsSync(join(root, "packaged-skills/auto-install/hive-pulse/SKILL.md")), "missing hive-pulse packaged skill");

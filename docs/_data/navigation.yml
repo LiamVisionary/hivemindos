@@ -42,18 +42,26 @@ sections:
         children:
           - title: Fleet
             url: /for-users/features/fleet.html
+          - title: SRE Incident Investigations
+            url: /for-users/features/sre-investigations.html
           - title: Agents And Chat
             url: /for-users/features/runtimes-and-chat.html
           - title: Local Document Reader
             url: /for-users/features/local-document-reader.html
+          - title: Local Web Research
+            url: /for-users/features/web-research.html
           - title: Calling
             url: /for-users/features/calling.html
+          - title: Socials
+            url: /for-users/features/socials.html
           - title: Work And Scheduler
             url: /for-users/features/work-and-scheduler.html
           - title: Loop Engineering
             url: /for-users/features/loop-engineering.html
           - title: Agent Evaluations
             url: /for-users/features/agent-evaluations.html
+          - title: Harness Experiments
+            url: /for-users/features/harness-experiments.html
           - title: Agent Challenges
             url: /for-users/features/agent-challenges.html
           - title: Zero Human Companies

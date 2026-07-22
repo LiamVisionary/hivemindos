@@ -65,6 +65,34 @@ export function resetLatestMainCommitCacheForTests() {
   latestMainCommitCache = null;
 }
 
+// Untracked agent droppings must not mark the checkout dirty. Chat App
+// Builder projects are created under <working-directory>/scratchpad/, and on
+// fleet machines the working directory is often this checkout — dirty=true
+// from those files made every fleet Update run a full reinstall that
+// restarted the collector (killing app-preview children) without ever
+// cleaning the files, looping forever (2026-07-18). scratchpad/ is gitignored
+// now, but deployed checkouts only pick that up after their next pull, so the
+// dirty computation excludes untracked scratchpad entries directly. Tracked
+// files still count regardless of path: a modified tracked file is real local
+// divergence the fleet should see.
+const IGNORED_UNTRACKED_SEGMENTS = new Set(["scratchpad"]);
+
+export function collectorCheckoutDirty(statusText) {
+  return String(statusText || "")
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0)
+    .some((line) => {
+      // Porcelain untracked entries are `?? <path>`; the collector trims the
+      // whole output, so other status codes may have lost their leading space
+      // on the first line — anything not untracked counts as dirty.
+      if (!line.startsWith("?? ")) return true;
+      const path = line.slice(3).trim().replace(/^"|"$/g, "");
+      return !path
+        .split("/")
+        .some((segment) => IGNORED_UNTRACKED_SEGMENTS.has(segment));
+    });
+}
+
 // The collector's /health version payload. Git checkouts read git directly;
 // git-free checkouts (the desktop app bootstraps app-source from the GitHub
 // archive, and stock Windows has no git) fall back to the commit recorded by
@@ -77,7 +105,7 @@ export async function readCollectorAppVersion(
   const readMarker = dependencies.readMarker ?? readSourceCommitMarker;
   const fetchLatest = dependencies.fetchLatest ?? fetchLatestMainCommit;
   const platform = dependencies.platform ?? process.platform;
-  const [gitCommit, gitBranch, dirty, remoteCommit, projects] = await Promise.all([
+  const [gitCommit, gitBranch, statusText, remoteCommit, projects] = await Promise.all([
     execText("git", ["rev-parse", "HEAD"]),
     execText("git", ["rev-parse", "--abbrev-ref", "HEAD"]),
     execText("git", ["status", "--porcelain"]),
@@ -96,7 +124,7 @@ export async function readCollectorAppVersion(
     commit,
     shortCommit: commit.slice(0, 7),
     branch,
-    dirty: dirty.length > 0,
+    dirty: collectorCheckoutDirty(statusText),
     latestCommit,
     latestShortCommit: latestCommit.slice(0, 7),
     updateCommand: collectorManualUpdateCommand({ appDir, collectorOnly, platform }),

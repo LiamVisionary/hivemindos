@@ -115,7 +115,9 @@ async function generateImagePreviewDataUrl(file: File) {
 
 // Build a preview from a full-resolution data URL (e.g. a desktop native
 // local-file read of a path-only drop), classifying transparency by source.
-async function generateImagePreviewFromDataUrl(dataUrl: string, nameOrPath: string) {
+// Exported for surfaces that keep the full bytes AND need a display preview
+// (the Marketplace listing modal).
+export async function generateImagePreviewFromDataUrl(dataUrl: string, nameOrPath: string) {
   if (!dataUrl) return "";
   if (/^data:image\/svg\+xml/i.test(dataUrl) || /\.svg$/i.test(nameOrPath)) return dataUrl;
   const keepsAlpha = /^data:image\/(png|webp|gif|avif)/i.test(dataUrl) || /\.(png|webp|gif|avif)$/i.test(nameOrPath);

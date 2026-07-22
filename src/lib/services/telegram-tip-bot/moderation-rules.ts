@@ -146,12 +146,24 @@ export function moderationActionFor(decision: ModerationDecision, priorStrikes: 
 }
 
 export type ParsedModerationCommand = {
-  command: "warn" | "mute" | "ban" | "unban" | "trust" | "untrust" | "modstats" | "modmode" | "modhelp";
+  command:
+    | "warn"
+    | "mute"
+    | "ban"
+    | "unban"
+    | "trust"
+    | "untrust"
+    | "modaudit"
+    | "modstats"
+    | "modmode"
+    | "modhelp";
   args: string;
 };
 
 export function parseModerationCommand(text: string, botUsername: string): ParsedModerationCommand | null {
-  const match = text.trim().match(/^\/(warn|mute|ban|unban|trust|untrust|modstats|modmode|modhelp)(?:@([A-Za-z0-9_]+))?(?:\s+([\s\S]*))?$/i);
+  const match = text
+    .trim()
+    .match(/^\/(warn|mute|ban|unban|trust|untrust|modaudit|modstats|modmode|modhelp)(?:@([A-Za-z0-9_]+))?(?:\s+([\s\S]*))?$/i);
   if (!match) return null;
   if (match[2] && match[2].toLowerCase() !== botUsername.toLowerCase()) return null;
   return {

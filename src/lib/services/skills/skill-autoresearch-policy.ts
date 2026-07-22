@@ -1,4 +1,5 @@
 import type { LoopEvaluationRubric, LoopSpec } from "@/lib/types/loops";
+import type { HarnessIntervention, HarnessJobContract, HarnessWorker } from "@/lib/types/harness-experiments";
 import { withObservation } from "@/lib/services/loops/loop-engine";
 import { loopGateFromVerifier } from "@/lib/services/loops/verifier-registry";
 
@@ -47,6 +48,8 @@ export type SkillAutoresearchPlan = {
   benchmarkCommand?: string;
   variants: SkillAutoresearchVariant[];
   rubric: LoopEvaluationRubric;
+  harnessContract: HarnessJobContract;
+  harnessIntervention: HarnessIntervention;
   applyPolicy: "review-gated";
   createdAt: number;
 };
@@ -143,15 +146,46 @@ export function buildSkillAutoresearchPlan(input: {
   symptom?: string;
   backend: SkillAutoresearchBackendSelection;
   benchmarkCommand?: string;
+  targetRevision?: string;
+  worker?: HarnessWorker;
   now?: number;
 }): SkillAutoresearchPlan {
   const skillSlug = cleanSkillSlug(input.skillSlug);
   if (!skillSlug) throw new Error("A valid target skill slug is required.");
   if (!input.backend.ready) throw new Error(input.backend.reason);
+  const targetPath = cleanOptional(input.targetPath);
+  const symptom = cleanOptional(input.symptom) ?? "The skill has repeated failures or reviewed low-quality outcomes.";
+  const harnessContract: HarnessJobContract = {
+    title: `${skillSlug} skill autoresearch`,
+    targetRevision: cleanOptional(input.targetRevision) ?? targetPath ?? skillSlug,
+    externalState: symptom,
+    worker: input.worker ?? { runtime: input.backend.id, model: "fixed-worker-selected-at-dispatch" },
+    representativeJob: `Run the same representative cases against the unchanged ${skillSlug} skill and every candidate.`,
+    acceptedOutcome: "The candidate improves the measured baseline without regressing any rubric floor, safety gate, credential contract, or proof requirement.",
+    evaluatorId: "skill-autoresearch-rubric-v1",
+    proofRequired: ["Baseline and candidate score receipts", "Independent reviewer verdict", "Winning diff or explicit no-improvement receipt"],
+    authority: {
+      mode: "workspace-write",
+      approvalBoundary: "Candidates may be written only to an isolated worktree or candidate directory; installation, merge, publish, and scheduling require review.",
+      recoveryPath: "Remove the isolated candidate directory or worktree; the installed skill remains unchanged.",
+      permissions: ["read target skill", "write isolated candidates", "run approved benchmark"],
+    },
+    budget: { maxRunsPerCondition: 4, maxRuntimeMs: 2 * 60 * 60 * 1_000 },
+    suspectedGap: symptom,
+  };
+  const harnessIntervention: HarnessIntervention = {
+    owner: targetPath ?? skillSlug,
+    change: "Apply one complete candidate skill variant while holding the worker, cases, target revision, authority, and environment steady.",
+    expectedBehavior: "The treatment improves accepted outcomes or proof quality without a regression, or the experiment records no improvement and retains the baseline.",
+    mechanism: "Compare baseline and treatment runs with context lifecycle evidence and worker-produced proof, then retain, revise, or remove the candidate.",
+    supportingEvidence: ["Repeated failures identify a candidate gap", "A fixed-worker benchmark can isolate the intervention"],
+    weakeningEvidence: ["Worker or environment parity changes", "The intervention is unavailable or not exercised", "Outcome, proof, safety, or rubric floors regress"],
+    carryingCost: "Four candidate variants, repeat runs, independent review, and an append-only experiment record.",
+  };
   return {
     skillSlug,
-    targetPath: cleanOptional(input.targetPath),
-    symptom: cleanOptional(input.symptom) ?? "The skill has repeated failures or reviewed low-quality outcomes.",
+    targetPath,
+    symptom,
     backend: input.backend,
     benchmarkCommand: cleanOptional(input.benchmarkCommand),
     variants: SKILL_AUTORESEARCH_VARIANTS.map((variant) => ({ ...variant })),
@@ -160,6 +194,8 @@ export function buildSkillAutoresearchPlan(input: {
       axes: SKILL_AUTORESEARCH_RUBRIC.axes.map((axis) => ({ ...axis })),
       notes: [...(SKILL_AUTORESEARCH_RUBRIC.notes ?? [])],
     },
+    harnessContract,
+    harnessIntervention,
     applyPolicy: "review-gated",
     createdAt: input.now ?? Date.now(),
   };
@@ -188,6 +224,7 @@ export function buildSkillAutoresearchLoop(plan: SkillAutoresearchPlan, now = Da
         `The observed symptom is: ${plan.symptom}`,
         `The target is ${plan.targetPath ?? plan.skillSlug}.`,
         `The execution backend is ${plan.backend.id}.`,
+        `The harness target revision is ${plan.harnessContract.targetRevision}; the fixed worker is ${plan.harnessContract.worker.runtime}/${plan.harnessContract.worker.model}.`,
       ],
       evaluatorPushback: [
         "Was the unchanged original measured on the exact same cases?",
@@ -236,6 +273,7 @@ export function buildSkillAutoresearchLoop(plan: SkillAutoresearchPlan, now = Da
       "Preserve the target skill's purpose, frontmatter shape, declared credential names, and explicit safety gates.",
       "Treat generated candidates and their self-scores as hypotheses until benchmark and independent-review receipts pass.",
       "Return the winning diff for Brain Review; do not merge, install, publish, or schedule it automatically.",
+      "Record baseline and treatment runs in the harness experiment ledger; do not make a comparative claim until fixed-worker parity and minimum repeat evidence pass.",
     ],
     evidenceRequired: [
       "The unchanged baseline and its score.",

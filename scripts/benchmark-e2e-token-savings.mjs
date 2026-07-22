@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 
 import { buildContextPack, estimateTokens, formatNumber, scenarios } from "./benchmark-context-savings.mjs";
+import { gradeBenchmarkOutcome } from "./lib/repository-plan-outcome.mjs";
 
 const ROOT = process.cwd();
 const DEFAULT_PROVIDER = process.env.HIVE_E2E_BENCH_PROVIDER || "openai";
@@ -279,6 +280,10 @@ function summarizePair(scenario, records, args) {
   const totalSaved = Math.max(0, baselineTotal - hiveTotal);
   const baselineCost = sum(baseline, (record) => tokenCost(record, args)) / Math.max(1, baseline.length);
   const hiveCost = sum(hive, (record) => tokenCost(record, args)) / Math.max(1, hive.length);
+  const baselineOutcomePassRate = average(baseline, (record) => Number(record.outcome.ok));
+  const hiveOutcomePassRate = average(hive, (record) => Number(record.outcome.ok));
+  const qualityComparable = hiveOutcomePassRate >= baselineOutcomePassRate && hiveOutcomePassRate >= 0.8;
+  const claimReady = args.repeats >= 3 && qualityComparable;
   return {
     id: scenario.id,
     title: scenario.title,
@@ -293,6 +298,15 @@ function summarizePair(scenario, records, args) {
     baselineCost,
     hiveCost,
     costSaved: Math.max(0, baselineCost - hiveCost),
+    baselineOutcomePassRate,
+    hiveOutcomePassRate,
+    qualityComparable,
+    claimReady,
+    validatedPromptTokensSaved: claimReady ? Math.round(promptSaved) : 0,
+    claimLimits: [
+      args.repeats < 3 ? "Run at least three repeats per condition before making a comparative claim." : "",
+      qualityComparable ? "" : "The targeted condition did not preserve the accepted-outcome floor.",
+    ].filter(Boolean),
     baselineTruncated: baseline.some((record) => record.context.truncated),
     hiveTruncated: hive.some((record) => record.context.truncated),
     records: {
@@ -303,19 +317,19 @@ function summarizePair(scenario, records, args) {
 }
 
 function printTable(artifact) {
-  console.log("HivemindOS live E2E token benchmark");
+  console.log("HivemindOS live E2E harness comparison");
   console.log(`Provider: ${artifact.providerLabel}`);
   console.log(`Model: ${artifact.model}`);
   console.log(`Runs: ${artifact.repeats} per scenario/mode`);
   console.log(`Artifact: ${artifact.artifactPath}\n`);
-  const header = ["Scenario", "Baseline prompt", "Hive prompt", "Prompt saved", "Total saved", "Truncated"];
+  const header = ["Scenario", "Baseline prompt", "Hive prompt", "Outcome B/H", "Observed saved", "Claim ready"];
   const rows = artifact.summary.map((result) => [
     result.id,
     formatNumber(result.baselinePromptTokens),
     formatNumber(result.hivePromptTokens),
+    `${(result.baselineOutcomePassRate * 100).toFixed(0)}%/${(result.hiveOutcomePassRate * 100).toFixed(0)}%`,
     `${formatNumber(result.promptTokensSaved)} (${result.promptTokensSavedPercent.toFixed(1)}%)`,
-    `${formatNumber(result.totalTokensSaved)} (${result.totalTokensSavedPercent.toFixed(1)}%)`,
-    result.baselineTruncated || result.hiveTruncated ? "yes" : "no",
+    result.claimReady ? "yes" : "no",
   ]);
   const widths = header.map((cell, index) => Math.max(cell.length, ...rows.map((row) => row[index].length)));
   const line = (row) => row.map((cell, index) => cell.padEnd(widths[index])).join("  ");
@@ -326,8 +340,11 @@ function printTable(artifact) {
   console.log("");
   console.log(`Total baseline prompt tokens: ${formatNumber(totals.baselinePromptTokens)}`);
   console.log(`Total hive prompt tokens:     ${formatNumber(totals.hivePromptTokens)}`);
-  console.log(`Prompt tokens saved:          ${formatNumber(totals.promptTokensSaved)} (${totals.promptTokensSavedPercent.toFixed(1)}%)`);
+  console.log(`Observed prompt reduction:    ${formatNumber(totals.promptTokensSaved)} (${totals.promptTokensSavedPercent.toFixed(1)}%)`);
+  console.log(`Validated prompt reduction:   ${formatNumber(totals.validatedPromptTokensSaved)}`);
   console.log(`Total tokens saved:           ${formatNumber(totals.totalTokensSaved)} (${totals.totalTokensSavedPercent.toFixed(1)}%)`);
+  const unready = artifact.summary.filter((result) => !result.claimReady);
+  if (unready.length) console.log(`Unvalidated comparisons:      ${unready.map((result) => result.id).join(", ")}`);
   if (artifact.pricing.inputPricePerMillion > 0 || artifact.pricing.outputPricePerMillion > 0) {
     console.log(`Estimated cost saved:         $${totals.costSaved.toFixed(6)}`);
   }
@@ -343,10 +360,17 @@ async function runBenchmark(args) {
   }
   const records = [];
   for (const scenario of selected) {
-    for (const mode of ["baseline", "hive"]) {
+    const packs = Object.fromEntries(["baseline", "hive"].map((mode) => {
       const pack = buildContextPack(scenario[mode], scenario.task);
       const capped = capContext(pack.text, args.maxContextChars);
-      for (let repeat = 1; repeat <= args.repeats; repeat += 1) {
+      return [mode, { pack, capped }];
+    }));
+    for (let repeat = 1; repeat <= args.repeats; repeat += 1) {
+      // Counterbalance condition order so provider drift does not always favor the
+      // second condition while keeping the schedule reproducible in the artifact.
+      const conditionOrder = repeat % 2 === 1 ? ["baseline", "hive"] : ["hive", "baseline"];
+      for (const [orderIndex, mode] of conditionOrder.entries()) {
+        const { pack, capped } = packs[mode];
         const messages = buildMessages({
           scenario,
           mode,
@@ -362,12 +386,14 @@ async function runBenchmark(args) {
         });
         const content = data?.choices?.[0]?.message?.content || "";
         const parsed = parseJsonResult(content);
+        const outcome = gradeBenchmarkOutcome({ scenario, content, root: ROOT });
         const usage = data?.usage || {};
         records.push({
           scenarioId: scenario.id,
           mode,
           label: scenario[mode].label,
           repeat,
+          orderIndex,
           durationMs,
           providerResponseId: data?.id || "",
           finishReason: data?.choices?.[0]?.finish_reason || "",
@@ -382,6 +408,19 @@ async function runBenchmark(args) {
             jsonKeys: parsed.keys,
             outputChars: content.length,
             ...(args.includeResponseContent ? { content } : {}),
+          },
+          outcome,
+          trajectory: {
+            freshSession: true,
+            isolatedTarget: true,
+            interventionAvailable: mode === "hive",
+            interventionExercised: mode === "hive",
+            context: {
+              available: [scenario[mode].label],
+              retrieved: [scenario[mode].label],
+              invoked: [],
+              relevant: outcome.ok ? outcome.evidence : [],
+            },
           },
           context: {
             files: pack.files.length,
@@ -403,6 +442,7 @@ async function runBenchmark(args) {
     acc.baselinePromptTokens += result.baselinePromptTokens;
     acc.hivePromptTokens += result.hivePromptTokens;
     acc.promptTokensSaved += result.promptTokensSaved;
+    acc.validatedPromptTokensSaved += result.validatedPromptTokensSaved;
     acc.baselineTotalTokens += result.baselineTotalTokens;
     acc.hiveTotalTokens += result.hiveTotalTokens;
     acc.totalTokensSaved += result.totalTokensSaved;
@@ -412,6 +452,7 @@ async function runBenchmark(args) {
     baselinePromptTokens: 0,
     hivePromptTokens: 0,
     promptTokensSaved: 0,
+    validatedPromptTokensSaved: 0,
     baselineTotalTokens: 0,
     hiveTotalTokens: 0,
     totalTokensSaved: 0,
@@ -425,10 +466,13 @@ async function runBenchmark(args) {
   const artifactPath = join(outputDir, artifactName);
   const artifact = {
     generatedAt,
-    benchmarkType: "live-e2e-provider-token-usage",
+    benchmarkType: "live-e2e-harness-comparison",
     isLiveE2EAgentRun: true,
     usesProviderReportedUsage: true,
     usesProviderBillingInvoice: false,
+    acceptedOutcomeGraded: true,
+    comparativeClaimRequiresThreeRuns: true,
+    conditionOrder: "counterbalanced",
     provider: config.provider,
     providerLabel: config.label,
     model: args.model,

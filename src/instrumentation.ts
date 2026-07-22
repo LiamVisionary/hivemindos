@@ -162,6 +162,74 @@ export async function register() {
     }
   })();
 
+  // Start the marketplace monitor driver (Facebook Marketplace selling agent):
+  // lease-elected per machine, so starting on every server is safe. Same
+  // no-app-imports + both-loopback-families constraints as the company driver
+  // block above. Disable with HIVEMINDOS_MARKETPLACE_MONITOR=0.
+  void (async () => {
+    try {
+      const flag = (process.env.HIVEMINDOS_MARKETPLACE_MONITOR || "").trim().toLowerCase();
+      if (flag === "0" || flag === "false") return; // default ON
+      const port = process.env.PORT?.trim() ?? "";
+      if (!port) return; // the dashboard's first driver-status fetch also starts it
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 4_000));
+        let started = false;
+        for (const host of ["127.0.0.1", "[::1]"]) {
+          started = await fetch(`http://${host}:${port}/api/marketplace/monitor-driver`, {
+            method: "POST",
+            headers: { "content-type": "application/json", ...selfApiAuthHeaders() },
+            body: JSON.stringify({ action: "start" }),
+          })
+            .then((response) => response.ok)
+            .catch(() => false);
+          if (started) break;
+        }
+        if (started) {
+          console.log("[marketplace-monitor] auto-started");
+          return;
+        }
+      }
+      console.error("[marketplace-monitor] autostart gave up after 5 attempts (the dashboard's driver-status fetch will start it on first contact)");
+    } catch (error) {
+      console.error("[marketplace-monitor] autostart failed:", error instanceof Error ? error.message : error);
+    }
+  })();
+
+  // Start the approval-gated Socials queue worker. It is lease-elected per
+  // machine and persists its enabled/paused setting, so starting every server
+  // is safe; a paused engine starts its loop but refuses every send. Disable
+  // process startup entirely with HIVEMINDOS_SOCIAL_QUEUE_ENGINE=0.
+  void (async () => {
+    try {
+      const flag = (process.env.HIVEMINDOS_SOCIAL_QUEUE_ENGINE || "").trim().toLowerCase();
+      if (flag === "0" || flag === "false") return;
+      const port = process.env.PORT?.trim() ?? "";
+      if (!port) return; // the Socials route starts it on first contact too
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 4_000));
+        let started = false;
+        for (const host of ["127.0.0.1", "[::1]"]) {
+          started = await fetch(`http://${host}:${port}/api/socials/queue`, {
+            method: "POST",
+            headers: { "content-type": "application/json", ...selfApiAuthHeaders() },
+            body: JSON.stringify({ action: "start-engine" }),
+          })
+            .then((response) => response.ok)
+            .catch(() => false);
+          if (started) break;
+        }
+        if (started) {
+          console.log("[social-queue] auto-started");
+          return;
+        }
+      }
+      console.error("[social-queue] autostart gave up after 5 attempts (opening Socials will retry)");
+    } catch (error) {
+      console.error("[social-queue] autostart failed:", error instanceof Error ? error.message : error);
+    }
+  })();
+
   // Resume Hive Compute hosting after an app-server restart. The worker child
   // process dies with this server, so without this hook a dev-server recycle
   // silently ended hosting while the fleet still believed the machine was live.

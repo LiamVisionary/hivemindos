@@ -48,6 +48,14 @@
   .amt input{flex:1;background:none;border:none;outline:none;color:var(--text);font-family:var(--mono);font-size:24px;min-width:0}
   .amt .sym{color:var(--dim);font-size:13px}
   .amt .max{background:var(--card);border:1px solid var(--line);color:var(--gold);border-radius:8px;padding:5px 10px;font-size:12px}
+  .route-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .route-field{display:flex;flex-direction:column;gap:6px;color:var(--dim);font-size:11px;letter-spacing:1px}
+  .route-field select{width:100%;border:1px solid var(--line);border-radius:10px;background:var(--card2);color:var(--text);padding:12px;font:14px var(--mono)}
+  .route-actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+  .route-actions button{flex:1;min-width:140px}
+  .route-note{margin:0 0 16px;color:var(--dim);font-size:13px}
+  .route-note.good{color:var(--green)} .route-note.warn-text{color:var(--gold)}
+  .recovery{margin-top:12px;color:var(--dim);font-size:12px;word-break:break-word}
   .quote{margin-top:14px;font-size:13px}
   .quote .row{display:flex;justify-content:space-between;padding:4px 0;color:var(--dim)}
   .quote .row b{color:var(--text);font-weight:400}
@@ -84,6 +92,7 @@
   .contracts td:first-child{color:var(--dim);white-space:nowrap}
   .disclaimer{margin-top:20px;font-size:12px;color:var(--dim);border-top:1px solid var(--line);padding-top:16px}
   footer{margin-top:40px;text-align:center;color:var(--dim);font-size:12px}
+  @media (max-width:560px){.route-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -97,6 +106,9 @@
     <div id="deployBanner" class="banner" hidden>
       ⚠ Bridge contracts are not deployed yet — this page is staged and the widget is disabled.
     </div>
+    <div id="testnetBanner" class="banner" hidden>
+      TESTNET ONLY — these contracts and tokens have no monetary value.
+    </div>
     <div id="verifyBanner" class="banner err" hidden>
       ⚠ Unable to verify backing right now — do not bridge until this clears.
     </div>
@@ -109,11 +121,11 @@
   <button class="manual" id="detailsToggle">PREFER TO ADD THEM MANUALLY? SHOW NETWORK &amp; TOKEN DETAILS ▾</button>
   <div class="details" id="details">
     <table>
-      <tr><td>Network name</td><td>Robinhood Chain</td></tr>
-      <tr><td>Chain ID</td><td>4663 (0x1237)</td></tr>
-      <tr><td>RPC URL</td><td>https://rpc.mainnet.chain.robinhood.com/</td></tr>
+      <tr><td>Network name</td><td id="dNetworkName">Robinhood Chain</td></tr>
+      <tr><td>Chain ID</td><td id="dChainId"></td></tr>
+      <tr><td>RPC URL</td><td id="dRpc"></td></tr>
       <tr><td>Currency</td><td>ETH (18 decimals)</td></tr>
-      <tr><td>Explorer</td><td>https://robinhoodchain.blockscout.com</td></tr>
+      <tr><td>Explorer</td><td id="dExplorer"></td></tr>
       <tr><td>HIVE on Base</td><td id="dHiveBase"></td></tr>
       <tr><td>HIVE on Robinhood</td><td id="dHiveRh">not deployed yet</td></tr>
     </table>
@@ -161,10 +173,46 @@
     <div class="txlinks" id="txlinks"></div>
   </div>
 
+  <div class="card">
+    <div class="cardhead">
+      <h2>Buy or sell via Base</h2>
+      <button class="pill" id="routeConnectBtn">Connect wallet</button>
+    </div>
+    <p class="route-note" id="routeCapability">Checking routed-trade support…</p>
+    <p class="route-note">No Robinhood HIVE pool is required. A buy moves your Robinhood payment asset to Base, buys from the existing canonical Base HIVE market, then bridges that HIVE back. A sell performs the reverse.</p>
+    <div class="route-grid">
+      <label class="route-field">DIRECTION
+        <select id="routeDirection">
+          <option value="buy">Buy HIVE on Robinhood</option>
+          <option value="sell">Sell Robinhood HIVE</option>
+        </select>
+      </label>
+      <label class="route-field">PAY / RECEIVE
+        <select id="routeCurrency">
+          <option value="native">ETH</option>
+          <option value="usdg">USDG</option>
+        </select>
+      </label>
+    </div>
+    <label class="route-field" id="routeAmountLabel" for="routeAmount" style="margin-top:12px">PAYMENT AMOUNT</label>
+    <div class="amt">
+      <input id="routeAmount" inputmode="decimal" placeholder="0.0" autocomplete="off">
+      <span class="sym" id="routeAmountSymbol">ETH</span>
+    </div>
+    <div class="quote" id="routeQuoteSummary">Quote details will appear here.</div>
+    <div class="route-actions">
+      <button id="routeQuoteBtn" disabled>Preview route</button>
+      <button class="primary" id="routeRunBtn" disabled>Run route</button>
+      <button id="routeClearBtn" hidden>Clear receipt</button>
+    </div>
+    <div class="recovery" id="routeRecovery"></div>
+    <div class="status" id="routeStatus"></div>
+  </div>
+
   <section class="text">
     <h2>Don't trust — verify, live</h2>
-    <p>These numbers are read from both chains by your browser right now, across two independent
-    RPC providers per chain. If any read fails, this shows <b>“unable to verify”</b> and the bridge
+    <p>These numbers are read from both chains by your browser right now, across every configured
+    RPC provider. If any read fails, this shows <b>“unable to verify”</b> and the bridge
     button locks — it never assumes you're safe. The bridge is honest exactly when
     <b>locked − fees ≥ minted</b>.</p>
     <div class="stats">
@@ -196,12 +244,9 @@
     <h2>Getting started</h2>
     <ol>
       <li><b>Add the network</b> with the button above (MetaMask, Rabby, Coinbase Wallet, any EVM wallet).</li>
-      <li><b>Get ETH for gas on Robinhood.</b> Bridge a little ETH from Base with
-      <a href="https://app.across.to" target="_blank" rel="noopener">Across</a>. Without it you
-      can't swap or bridge back — this page warns you before you get stranded.</li>
+      <li><b>Get ETH for gas on Robinhood.</b> On testnet, use Robinhood's official faucet. On mainnet, use a supported canonical bridge or exchange withdrawal. Without gas you cannot bridge back.</li>
       <li><b>Bridge your HIVE</b> with the widget above.</li>
-      <li><b>Trade on Uniswap.</b> <span id="swapLinkWrap">Official swap link coming with the
-      liquidity pool launch.</span></li>
+      <li><b>Buy or sell with Base liquidity.</b> <span id="swapLinkWrap">The routed widget uses the canonical Base HIVE market when its provider supports both chains; no Robinhood HIVE pool is required.</span></li>
     </ol>
   </section>
 
@@ -227,23 +272,50 @@
 <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.2/dist/ethers.umd.min.js"></script>
 <script>
 "use strict";
-/* ---- deploy-time config: fill ADAPTER + OFT after mainnet deploy ---- */
-const CONFIG = {
-  hiveBase: "0xA382c83e2a3B79368f372c2EB9b6925ffAf45bA3",
-  adapter: null,           // HiveOFTAdapter on Base  (fill after deploy)
-  oft: null,               // HiveOFT on Robinhood    (fill after deploy)
-  swapLink: null,          // official Uniswap link   (fill after pool seed)
-  base:      { chainIdHex: "0x2105", chainId: 8453, eid: 30184, name: "Base",
-               rpcs: ["https://mainnet.base.org", "https://base-rpc.publicnode.com"],
-               explorer: "https://basescan.org" },
-  robinhood: { chainIdHex: "0x1237", chainId: 4663, eid: 30416, name: "Robinhood",
-               rpcs: ["https://rpc.mainnet.chain.robinhood.com/", "https://robinhoodchain.blockscout.com/api/eth-rpc"],
-               explorer: "https://robinhoodchain.blockscout.com" },
-  lzScanApi: "https://scan.layerzero-api.com/v1/messages/tx/",
-  lzScanTx:  (h) => `https://layerzeroscan.com/tx/${h}`,
-  dust: 10n ** 12n,        // 18 local − 6 shared decimals
-  OUTBOUND_LONG_FLAG: 0x40000000n,
+const NETWORK_PROFILES = {
+  mainnet: {
+    network: "mainnet",
+    deployed: true,
+    hiveBase: "0xA382c83e2a3B79368f372c2EB9b6925ffAf45bA3",
+    adapter: "0x9e365A3aA8A6Dc4Be95A6900E1dB8Fadd2f221Ce",
+    oft: "0x26c7121e41e779327Adbd5682646dC5deb764539",
+    usdg: "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
+    swapLink: null,
+    gateway: "https://hivemindos-hive-bridge-gateway.hivemindos.workers.dev",
+    base: { chainIdHex: "0x2105", chainId: 8453, eid: 30184, name: "Base",
+      rpcs: ["https://mainnet.base.org", "https://base-rpc.publicnode.com"],
+      explorer: "https://basescan.org" },
+    robinhood: { chainIdHex: "0x1237", chainId: 4663, eid: 30416, name: "Robinhood",
+      rpcs: ["https://rpc.mainnet.chain.robinhood.com/", "https://robinhoodchain.blockscout.com/api/eth-rpc"],
+      explorer: "https://robinhoodchain.blockscout.com" },
+    lzScanApi: "https://scan.layerzero-api.com/v1/messages/tx/",
+    lzScanTx: (hash) => `https://layerzeroscan.com/tx/${hash}`,
+  },
+  testnet: {
+    network: "testnet",
+    deployed: true,
+    hiveBase: "0x827781443C4B19c317bbA59b441EdEcCFa2cD23b",
+    adapter: "0xA131dB107711D5DC6743DFF002eACdDCA1f0946d",
+    oft: "0xA131dB107711D5DC6743DFF002eACdDCA1f0946d",
+    usdg: null,
+    swapLink: null,
+    gateway: "https://hivemindos-hive-bridge-gateway-testnet.hivemindos.workers.dev",
+    base: { chainIdHex: "0x14a34", chainId: 84532, eid: 40245, name: "Base Sepolia",
+      rpcs: ["https://sepolia.base.org", "https://base-sepolia-rpc.publicnode.com"],
+      explorer: "https://sepolia.basescan.org" },
+    robinhood: { chainIdHex: "0xb626", chainId: 46630, eid: 40451, name: "Robinhood Testnet",
+      rpcs: ["https://rpc.testnet.chain.robinhood.com"],
+      explorer: "https://explorer.testnet.chain.robinhood.com" },
+    lzScanApi: "https://scan-testnet.layerzero-api.com/v1/messages/tx/",
+    lzScanTx: (hash) => `https://testnet.layerzeroscan.com/tx/${hash}`,
+  },
 };
+const requestedNetwork = new URLSearchParams(globalThis.location.search).get("network");
+const defaultNetwork = globalThis.location.hostname.includes("testnet") ? "testnet" : "mainnet";
+const CONFIG = NETWORK_PROFILES[requestedNetwork === "mainnet" || requestedNetwork === "testnet" ? requestedNetwork : defaultNetwork];
+CONFIG.dust = 10n ** 12n;
+CONFIG.OUTBOUND_LONG_FLAG = 0x40000000n;
+globalThis.HIVE_BRIDGE_CONFIG = CONFIG;
 
 const ERC20_ABI = [
   "function balanceOf(address) view returns (uint256)",
@@ -266,7 +338,7 @@ const fmt = (wei, digits = 2) => {
   if (wei === null || wei === undefined) return "—";
   return Number(ethers.formatEther(wei)).toLocaleString(undefined, { maximumFractionDigits: digits });
 };
-const deployed = Boolean(CONFIG.adapter && CONFIG.oft);
+const deployed = Boolean(CONFIG.deployed && CONFIG.adapter && CONFIG.oft);
 
 /* Fallback JSON-RPC provider that only trusts a value when every backend agrees. */
 function agreeingProvider(rpcs) {
@@ -295,8 +367,13 @@ let statsHealthy = false;
 let quoted = null;
 
 /* ---------- static rendering ---------- */
+$('dNetworkName').textContent = CONFIG.robinhood.name;
+$('dChainId').textContent = `${CONFIG.robinhood.chainId} (${CONFIG.robinhood.chainIdHex})`;
+$('dRpc').textContent = CONFIG.robinhood.rpcs[0];
+$('dExplorer').textContent = CONFIG.robinhood.explorer;
 $("dHiveBase").textContent = CONFIG.hiveBase;
 $("cHiveBase").textContent = CONFIG.hiveBase;
+$('testnetBanner').hidden = CONFIG.network !== "testnet";
 if (deployed) {
   $("cAdapter").textContent = CONFIG.adapter;
   $("cOft").textContent = CONFIG.oft;
@@ -409,7 +486,7 @@ $("maxBtn").onclick = async () => {
 $("addChainBtn").onclick = async () => {
   if (!window.ethereum) { setStatus("No wallet found.", "err"); return; }
   await window.ethereum.request({ method: "wallet_addEthereumChain", params: [{
-    chainId: CONFIG.robinhood.chainIdHex, chainName: "Robinhood Chain",
+    chainId: CONFIG.robinhood.chainIdHex, chainName: CONFIG.robinhood.name,
     nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
     rpcUrls: [CONFIG.robinhood.rpcs[0]], blockExplorerUrls: [CONFIG.robinhood.explorer],
   }]}).catch(() => {});
@@ -492,7 +569,7 @@ async function ensureChain(cfg) {
     await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: cfg.chainIdHex }] });
   } catch {
     await window.ethereum.request({ method: "wallet_addEthereumChain", params: [{
-      chainId: cfg.chainIdHex, chainName: cfg.name === "Base" ? "Base" : "Robinhood Chain",
+      chainId: cfg.chainIdHex, chainName: cfg.name,
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
       rpcUrls: [cfg.rpcs[0]], blockExplorerUrls: [cfg.explorer],
     }]});
@@ -578,5 +655,6 @@ renderDirection();
 refreshStats();
 setInterval(refreshStats, 30000);
 </script>
+<script type="module" src="./hive-route-app.mjs"></script>
 </body>
 </html>

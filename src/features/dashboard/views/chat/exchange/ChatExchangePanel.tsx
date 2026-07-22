@@ -148,6 +148,7 @@ export function ChatExchangePanel(props: any) {
     beeRoleIconPath,
     busy,
     changeChatWorkingDirectory,
+    clearChatWorkingDirectory,
     chatAttachments = [],
     chatAutoScrollRef,
     chatDirectories = [],
@@ -162,7 +163,6 @@ export function ChatExchangePanel(props: any) {
     dismissChatKanbanGeneration,
     displayAgents = [],
     fleetHostedApps = [],
-    flushingChatQueueId,
     formatRelativeTime,
     generateKanbanTaskFromChat,
     handleChatFileChange,
@@ -173,7 +173,6 @@ export function ChatExchangePanel(props: any) {
     messagesByAgent = {},
     messagesEndRef,
     messagesScrollRef,
-    queuedChatMessages = [],
     recentDirectories = [],
     recording,
     refreshRuntimeIntegrations,
@@ -181,7 +180,6 @@ export function ChatExchangePanel(props: any) {
     refreshNotifications,
     removeChatAttachment,
     removeChatDirectory,
-    removeQueuedChatMessage,
     runRuntimeIntegrationAction,
     runtimeModelSelectionsByRuntime,
     selectedAgent,
@@ -193,7 +191,6 @@ export function ChatExchangePanel(props: any) {
     selectedChatStorageKey,
     sendMessage,
     sendPromptMessage,
-    sendQueuedChatMessageNow,
     sharedVault,
     setChatThreadTitle,
     setMessagesByAgent,
@@ -695,6 +692,7 @@ export function ChatExchangePanel(props: any) {
             running,
             capabilityApprovalPending: hasPendingCapabilityApproval(messagesByAgent[storageKey] ?? []),
             onOpen: chat.onOpen,
+            onStartChat: folder.onStartChat,
           });
         }
       }
@@ -722,6 +720,17 @@ export function ChatExchangePanel(props: any) {
     const fallback = machinesWithChats.find((machine: any) => machine.onStartChat);
     return fallback?.onStartChat ? { label: fallback.name, onStartChat: fallback.onStartChat } : null;
   })();
+
+  const generalChatTarget = chatSidebarTree.find((machine: any) => machine.key === "unassigned" && machine.onStartChat);
+  const activeProjectMachine = machinesWithChats.find((machine: any) => (
+    machine.folders?.some((folder: any) => folder.active || folder.chats?.some((chat: any) => chat.active))
+  ));
+  const importProjectTarget = activeProjectMachine?.onImportProject
+    ? activeProjectMachine
+    : machinesWithChats.find((machine: any) => machine.onImportProject);
+  const createProjectTarget = activeProjectMachine?.onCreateProject
+    ? activeProjectMachine
+    : machinesWithChats.find((machine: any) => machine.onCreateProject);
 
   // ---- agent menu ----------------------------------------------------------
   const normalizedAgentMenuSearchQuery = normalizeSearchText(agentMenuSearchQuery);
@@ -936,8 +945,11 @@ export function ChatExchangePanel(props: any) {
 
   const threadTitle = (selectedChatStorageKey && chatThreadTitles[selectedChatStorageKey]?.title) || selectedChatDirectory || "agent chat";
   const agentSubline = [selectedAgent?.workerClass ?? selectedAgent?.beeRole, machineLabel].filter(Boolean).join(" · ");
+  // The working directory is deliberately absent here — the composer's context
+  // pill already shows it, and duplicating it in the agent picker reads as two
+  // sources of truth.
   const headerSubline = selectedAgent
-    ? `${runtimeLabel} · ${machineLabel}${selectedChatDirectory ? ` · ${selectedChatDirectory}` : ""}`
+    ? `${runtimeLabel} · ${machineLabel}`
     : "Pick a chat from the rail.";
 
   const iconProps = { Activity, Check, ChevronDown, ChevronUp, CircleAlert, Copy, FileText, GitBranch, Hammer, KanbanSquare, LoaderCircle, Pencil, Search, Sparkles, Terminal };
@@ -957,6 +969,9 @@ export function ChatExchangePanel(props: any) {
             search={sidebarSearch}
             onSearchChange={setSidebarSearch}
             onNewChat={newChatTarget ? () => newChatTarget.onStartChat?.() : undefined}
+            onNewGeneralChat={generalChatTarget ? () => generalChatTarget.onStartChat?.() : undefined}
+            onCreateProject={createProjectTarget ? () => createProjectTarget.onCreateProject?.() : undefined}
+            onImportProject={importProjectTarget ? () => importProjectTarget.onImportProject?.() : undefined}
             newChatLabel={newChatTarget ? `New chat in ${newChatTarget.label}` : undefined}
             onDuplicate={handleDuplicateThread}
             onDelete={handleDeleteThread}
@@ -1113,20 +1128,6 @@ export function ChatExchangePanel(props: any) {
 
             <section ref={composerDockRef} className="fr-chat-composer-dock" aria-label="Message composer">
               <div className="fr-chat-content-rail fr-chat-composer-rail">
-                {queuedChatMessages.length ? (
-                  <div className="cx-fade" style={{ display: "grid", gap: 8, border: "1px solid var(--line)", borderRadius: 14, background: "var(--panel-2)", color: "var(--fg-3)", fontFamily: "var(--f-mono)", fontSize: 11, padding: "9px 11px", marginBottom: 8 }} aria-label="Queued messages">
-                    <strong style={{ color: "var(--fg)" }}>{queuedChatMessages.length} queued</strong>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-                      {queuedChatMessages.slice(0, 3).map((item: any, index: number) => (
-                        <span key={item.id} style={{ display: "inline-flex", alignItems: "center", gap: 7, border: "1px solid var(--line-2)", borderRadius: 999, background: "var(--panel)", padding: "5px 8px" }}>
-                          <span>{item.label || `Queued ${index + 1}`}</span>
-                          <button type="button" className="fr-chat-mini-button" onClick={() => sendQueuedChatMessageNow?.(item.id)} disabled={busy || Boolean(flushingChatQueueId)} aria-label="Send now">↑</button>
-                          <button type="button" className="fr-chat-mini-button" onClick={() => removeQueuedChatMessage?.(item.id)} disabled={flushingChatQueueId === item.id} aria-label="Remove">×</button>
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
                 {chatDiscussContext ? (
                   <div className="cx-fade" style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 8 }} aria-label="Discussion context">
                     <span
@@ -1164,7 +1165,6 @@ export function ChatExchangePanel(props: any) {
                     value={text ?? ""}
                     onChange={setText}
                     placeholder={selectedAgent ? `Message ${selectedAgent.name}…  ⌘↵ to send` : "Pick an agent to start"}
-                    busy={busy && !hasStreamingChunk}
                     canSend={canSend}
                     onSubmit={() => composerFormRef.current?.requestSubmit()}
                     agentMode={agentMode}
@@ -1198,6 +1198,7 @@ export function ChatExchangePanel(props: any) {
                     selectedMachineName={selectedChatMachine?.name ?? ""}
                     workingDirectoryLabel={selectedChatDirectory ?? ""}
                     onChangeWorkingDirectory={changeChatWorkingDirectory ? () => void changeChatWorkingDirectory() : undefined}
+                    onClearWorkingDirectory={clearChatWorkingDirectory ? () => void clearChatWorkingDirectory() : undefined}
                     recording={recording && voiceTarget === "chat"}
                     onToggleRecording={() => (recording ? stopAudioRecording?.() : void startAudioRecording?.("chat"))}
                     onSwarmCommand={() => {

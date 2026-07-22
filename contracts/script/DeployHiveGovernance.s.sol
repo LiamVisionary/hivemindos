@@ -3,6 +3,7 @@ pragma solidity 0.8.30;
 
 import { Script, console2 } from "forge-std/Script.sol";
 import { TimelockController } from "@openzeppelin/contracts/governance/TimelockController.sol";
+import { HiveOftDeploymentPolicy } from "./HiveOftDeploymentPolicy.sol";
 
 /// @notice Phase A — deploy the governance timelock for one chain. Run once
 ///         per chain BEFORE deploying the bridge contracts, then pass the
@@ -15,20 +16,26 @@ import { TimelockController } from "@openzeppelin/contracts/governance/TimelockC
 ///   - anyone                      → EXECUTOR after the delay (open execution)
 ///   - deployer                    → temporary admin, RENOUNCED in this script
 ///
-/// Delay: HIVE_TIMELOCK_DELAY seconds (default 72h). This gates every
-/// risk-increasing action including unpause — a false-alarm pause therefore
-/// costs a full delay to reopen. Choose consciously at the ceremony; the
-/// tradeoff is documented in the runbook.
+/// Delay: HIVE_TIMELOCK_DELAY seconds (default 72h). Mainnet rejects anything
+/// below 72h in executable policy. The paired testnets permit zero delay so a
+/// complete rehearsal can finish in one session. Unpause may be delegated to
+/// the Safe separately without granting it any other owner power.
 ///
 ///   HIVE_SAFE=0x<safe> [HIVE_GUARDIAN=0x<hot>] [HIVE_TIMELOCK_DELAY=259200] \
 ///   forge script script/DeployHiveGovernance.s.sol --rpc-url "$RPC_URL" \
 ///     [--account <deployer> --broadcast]
+///
+/// Robinhood's testnet RPC has under-estimated the final AccessControl
+/// renounce call in practice. Use `--gas-estimate-multiplier 300` for every
+/// Robinhood-chain ceremony broadcast and verify that the deployer's
+/// DEFAULT_ADMIN_ROLE is false before continuing.
 contract DeployHiveGovernance is Script {
     function run() external returns (address timelock) {
         address safe = vm.envAddress("HIVE_SAFE");
         require(safe != address(0), "HIVE_SAFE unset");
         address guardian = vm.envOr("HIVE_GUARDIAN", address(0));
         uint256 delay = vm.envOr("HIVE_TIMELOCK_DELAY", uint256(72 hours));
+        HiveOftDeploymentPolicy.requireGovernanceDelay(block.chainid, delay);
         (, address deployer, ) = vm.readCallers();
 
         address[] memory proposers = new address[](1);

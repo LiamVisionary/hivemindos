@@ -35,6 +35,13 @@ export type SocialMethodSpec = {
   setupFields?: string[];
   /** For oauth/managed-oauth methods: the dashboard route that starts the flow. */
   oauthStartPath?: string;
+  /**
+   * For browser-profile methods: the managed browser-use profile naming scheme
+   * plus login/probe URLs. The signed-in session lives in the persistent
+   * profile on the machine the user connected from — no env keys, no secrets
+   * in records (see src/lib/services/browser-profile-connect.ts).
+   */
+  browserProfile?: { namePrefix: string; loginUrl: string; probeUrl: string; signedInCookie?: string };
   notes?: string;
 };
 
@@ -48,6 +55,20 @@ export type SocialPlatformMatrixRow = {
   /** Human-readable platform quirks, surfaced as UI tooltips. */
   limits: string[];
   analytics: { postMetrics: string[]; accountMetrics: string[]; note: string };
+  drafting: {
+    supported: boolean;
+    defaultEnabled: boolean;
+    defaultCadenceHours: 6 | 12 | 24 | 48 | 168;
+    defaultDraftsPerRun: 1 | 2 | 3 | 4 | 5;
+    maxCharacters: number;
+    engagement: {
+      supported: boolean;
+      defaultEnabled: boolean;
+      defaultReplyDraftsPerRun: 0 | 1 | 2 | 3 | 4 | 5;
+      defaultQuoteDraftsPerRun: 0 | 1 | 2;
+      defaultLookbackHours: 12 | 24 | 48 | 72 | 168;
+    };
+  };
 };
 
 /** Approval gate label shared by every posting op: the queue engine refuses to fire without it. */
@@ -91,13 +112,23 @@ export const SOCIAL_PLATFORM_MATRIX = {
       { op: "quote", gate: SOCIAL_POST_APPROVAL_GATE },
     ],
     limits: [
-      "Replies and quote posts targeting accounts that do not mention you return 403 at the current API access level; quote posts fall back to appending the target URL.",
+      "Reviewed replies and standalone quote posts use the authenticated same-account Agent Reach X session; they fail closed if that session is unavailable or signed into a different account.",
+      "Standalone quote posts are not replies or comments. They publish on your profile with the source post attached and are opt-in in Comment finder.",
+      "The direct X API rail cannot substitute here: self-serve replies are access-limited and native quote_tweet_id delivery requires Enterprise, so HivemindOS never falls back to a standalone URL post.",
       "Managed reads and writes debit HivemindOS credits; per-account daily read budget applies.",
     ],
     analytics: {
       postMetrics: ["likes", "reposts", "replies", "quotes", "bookmarks", "impressions"],
       accountMetrics: ["followers", "following", "posts"],
       note: "Public engagement metrics via the existing X read rails; impressions only where the API exposes them.",
+    },
+    drafting: {
+      supported: true,
+      defaultEnabled: true,
+      defaultCadenceHours: 24,
+      defaultDraftsPerRun: 3,
+      maxCharacters: 280,
+      engagement: { supported: true, defaultEnabled: true, defaultReplyDraftsPerRun: 3, defaultQuoteDraftsPerRun: 0, defaultLookbackHours: 48 },
     },
   },
   telegram: {
@@ -113,7 +144,10 @@ export const SOCIAL_PLATFORM_MATRIX = {
       },
     ],
     capabilities: { read: "limited", post: "supported", search: "unsupported", reply: "limited", quote: "unsupported" },
-    gatedOps: [{ op: "post", gate: SOCIAL_POST_APPROVAL_GATE }],
+    gatedOps: [
+      { op: "post", gate: SOCIAL_POST_APPROVAL_GATE },
+      { op: "reply", gate: SOCIAL_POST_APPROVAL_GATE },
+    ],
     limits: [
       "Bot API exposes no per-post view counts; per-post analytics are unavailable by design.",
       "Replies only work as comment threads when the channel has a linked discussion group.",
@@ -122,6 +156,14 @@ export const SOCIAL_PLATFORM_MATRIX = {
       postMetrics: [],
       accountMetrics: ["members"],
       note: "Member-count time series only; the Bot API does not expose message views.",
+    },
+    drafting: {
+      supported: true,
+      defaultEnabled: true,
+      defaultCadenceHours: 24,
+      defaultDraftsPerRun: 3,
+      maxCharacters: 4096,
+      engagement: { supported: false, defaultEnabled: false, defaultReplyDraftsPerRun: 0, defaultQuoteDraftsPerRun: 0, defaultLookbackHours: 48 },
     },
   },
   farcaster: {
@@ -148,6 +190,14 @@ export const SOCIAL_PLATFORM_MATRIX = {
       accountMetrics: ["followers", "following"],
       note: "Per-cast reactions via cast lookup; follower counts via user lookup.",
     },
+    drafting: {
+      supported: true,
+      defaultEnabled: true,
+      defaultCadenceHours: 24,
+      defaultDraftsPerRun: 3,
+      maxCharacters: 1024,
+      engagement: { supported: false, defaultEnabled: false, defaultReplyDraftsPerRun: 0, defaultQuoteDraftsPerRun: 0, defaultLookbackHours: 48 },
+    },
   },
   linkedin: {
     platform: "linkedin",
@@ -161,16 +211,24 @@ export const SOCIAL_PLATFORM_MATRIX = {
         notes: "Posting needs the w_member_social product on your LinkedIn developer app (app review). Tokens expire after ~60 days; re-verify surfaces needs-attention.",
       },
     ],
-    capabilities: { read: "limited", post: "supported", search: "unsupported", reply: "limited", quote: "unsupported" },
+    capabilities: { read: "limited", post: "supported", search: "unsupported", reply: "unsupported", quote: "unsupported" },
     gatedOps: [{ op: "post", gate: SOCIAL_POST_APPROVAL_GATE }],
     limits: [
-      "Connect-only until the LinkedIn app review grants w_member_social; posting 403s before that.",
+      "Posting returns 403 until LinkedIn app review grants w_member_social.",
       "Engagement counts only on your own posts; impressions require the Marketing tier.",
     ],
     analytics: {
       postMetrics: ["likes", "comments"],
       accountMetrics: [],
       note: "Own-post social actions only; no impressions without Marketing API access.",
+    },
+    drafting: {
+      supported: true,
+      defaultEnabled: true,
+      defaultCadenceHours: 24,
+      defaultDraftsPerRun: 3,
+      maxCharacters: 3000,
+      engagement: { supported: false, defaultEnabled: false, defaultReplyDraftsPerRun: 0, defaultQuoteDraftsPerRun: 0, defaultLookbackHours: 48 },
     },
   },
   reddit: {
@@ -185,16 +243,62 @@ export const SOCIAL_PLATFORM_MATRIX = {
         notes: "Script-app password grant; tokens are re-minted per call (10-minute TTL).",
       },
     ],
-    capabilities: { read: "supported", post: "supported", search: "supported", reply: "supported", quote: "limited" },
+    capabilities: { read: "supported", post: "supported", search: "supported", reply: "supported", quote: "unsupported" },
     gatedOps: [
       { op: "post", gate: SOCIAL_POST_APPROVAL_GATE },
       { op: "reply", gate: SOCIAL_POST_APPROVAL_GATE },
     ],
-    limits: ["Each subreddit enforces its own rules and rate limits; crossposting stands in for quoting."],
+    limits: ["Each subreddit enforces its own rules and rate limits; queued publishing supports self posts and comment replies."],
     analytics: {
       postMetrics: ["score", "upvoteRatio", "comments"],
       accountMetrics: ["linkKarma", "commentKarma"],
       note: "Post score/ratio/comment counts via post info; karma via the identity endpoint.",
+    },
+    drafting: {
+      supported: true,
+      defaultEnabled: true,
+      defaultCadenceHours: 24,
+      defaultDraftsPerRun: 3,
+      maxCharacters: 40_000,
+      engagement: { supported: false, defaultEnabled: false, defaultReplyDraftsPerRun: 0, defaultQuoteDraftsPerRun: 0, defaultLookbackHours: 48 },
+    },
+  },
+  facebook: {
+    platform: "facebook",
+    label: "Facebook",
+    methods: [
+      {
+        method: "browser-profile",
+        label: "Managed browser sign-in",
+        envKeys: [],
+        browserProfile: {
+          namePrefix: "marketplace-facebook",
+          loginUrl: "https://www.facebook.com/",
+          probeUrl: "https://www.facebook.com/marketplace/you/selling",
+          signedInCookie: "c_user",
+        },
+        notes:
+          "Sign in once in a dedicated managed browser window on the machine you connect from; agents reuse that persistent profile. Powers the Marketplace selling agent — feed posting is not wired.",
+      },
+    ],
+    capabilities: { read: "limited", post: "unsupported", search: "unsupported", reply: "unsupported", quote: "unsupported" },
+    gatedOps: [],
+    limits: [
+      "Connection-only on the Socials surface: Facebook's Graph API does not cover personal profiles or Marketplace, so everything rides the signed-in browser session.",
+      "The session lives on the machine you connected from; that machine must be on for Marketplace agent work.",
+    ],
+    analytics: {
+      postMetrics: [],
+      accountMetrics: [],
+      note: "No analytics — the browser-session rail exposes no metrics API.",
+    },
+    drafting: {
+      supported: false,
+      defaultEnabled: false,
+      defaultCadenceHours: 24,
+      defaultDraftsPerRun: 3,
+      maxCharacters: 0,
+      engagement: { supported: false, defaultEnabled: false, defaultReplyDraftsPerRun: 0, defaultQuoteDraftsPerRun: 0, defaultLookbackHours: 48 },
     },
   },
 } as const satisfies Record<SocialPlatform, SocialPlatformMatrixRow>;
@@ -210,8 +314,11 @@ for (const platform of SOCIAL_PLATFORMS) {
   if (!row || row.platform !== platform) throw new Error(`SOCIAL_PLATFORM_MATRIX missing or mislabeled row: ${platform}`);
   if (!row.methods.length) throw new Error(`SOCIAL_PLATFORM_MATRIX[${platform}] declares no connect methods`);
   for (const method of row.methods) {
-    if (!method.envKeys.length && !method.oauthStartPath) {
-      throw new Error(`SOCIAL_PLATFORM_MATRIX[${platform}] method ${method.method} has neither envKeys nor oauthStartPath`);
+    if (!method.envKeys.length && !method.oauthStartPath && !method.browserProfile) {
+      throw new Error(`SOCIAL_PLATFORM_MATRIX[${platform}] method ${method.method} has no credential rail (envKeys, oauthStartPath, or browserProfile)`);
+    }
+    if (method.method === "browser-profile" && !method.browserProfile) {
+      throw new Error(`SOCIAL_PLATFORM_MATRIX[${platform}] browser-profile method is missing its browserProfile spec`);
     }
     for (const aliasedKey of Object.keys(method.envKeyAliases ?? {})) {
       if (!method.envKeys.includes(aliasedKey)) {
@@ -223,6 +330,13 @@ for (const platform of SOCIAL_PLATFORMS) {
     if (!row.capabilities[capability]) {
       throw new Error(`SOCIAL_PLATFORM_MATRIX[${platform}] missing capability entry: ${capability}`);
     }
+  }
+  if (row.drafting.supported !== (row.capabilities.post !== "unsupported")) {
+    throw new Error(`SOCIAL_PLATFORM_MATRIX[${platform}] drafting support must match post capability`);
+  }
+  if (row.drafting.engagement.supported
+    && (row.capabilities.search === "unsupported" || row.capabilities.reply === "unsupported")) {
+    throw new Error(`SOCIAL_PLATFORM_MATRIX[${platform}] engagement drafting needs search and reply capabilities`);
   }
   if (row.capabilities.post !== "unsupported" && !row.gatedOps.some((gated) => gated.op === "post" && gated.gate === SOCIAL_POST_APPROVAL_GATE)) {
     throw new Error(`SOCIAL_PLATFORM_MATRIX[${platform}] supports posting but does not gate it on ${SOCIAL_POST_APPROVAL_GATE}`);
@@ -249,6 +363,7 @@ export function socialPlatformCapabilityDtos(): SocialPlatformCapabilityDto[] {
           : {}),
         ...(method.setupFields ? { setupFields: [...method.setupFields] } : {}),
         ...(method.oauthStartPath ? { oauthStartPath: method.oauthStartPath } : {}),
+        ...(method.browserProfile ? { browserProfile: { ...method.browserProfile } } : {}),
         ...(method.notes ? { notes: method.notes } : {}),
       })),
       capabilities: { ...row.capabilities },

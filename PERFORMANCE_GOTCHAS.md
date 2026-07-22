@@ -286,3 +286,91 @@ For access-history questions, let `read_hivemind_context` retrieve the complete 
 ### Fixed evidence
 
 The reported turn took 37.672 seconds, with no visible text until 37.548 seconds, a 20.003-second xAI timeout, and a 16.284-second OpenRouter fallback. After separating typed routing and grounding the configured model with a local evidence tool, the final real Brain FAB took about 7.1 seconds. The configured `grok-4.5 · xai-oauth` first round called `read_hivemind_context` in 1.263 seconds, the evidence-only local API took 79 ms, and the configured-model prose round took 1.534 seconds. The visible answer was model-authored, correct, and contained no permission request. The fleet `sharedBrain: ask` policy remains unchanged for genuine remote access. Fixed 2026-07-15.
+
+## G6 - Hermes looks busy for minutes, then the whole answer appears at once
+
+### Symptom
+
+Adaptive chat shows capability search and periodic “still working” keepalives, but no model text or tool updates. When Hermes exits, the complete answer appears in one batch. Relaying stdout directly may instead expose `review diff` frames as assistant messages.
+
+### Why it fools you
+
+- A healthy SSE connection and keepalives prove only that the HTTP route is alive; they do not prove model deltas are reaching it.
+- `hermes chat -Q` sounds like “quiet decorations,” but Hermes's quiet single-query path explicitly sets `stream_delta_callback = None` and prints the final response once.
+- A scoped Hermes profile can omit `display.streaming`, even when the global profile enables it.
+- Normal CLI stdout is not an assistant channel: it mixes banners, status, terminal boxes, inline diffs, and final prose.
+
+### Root cause and fix
+
+Do not choose between raw stdout streaming and exit-only buffering. Launch scoped Hermes through the HivemindOS stream bridge, which enables Hermes's native model callback, disables inline diffs, preserves Markdown, and emits prefixed JSON lines for assistant deltas, response boundaries, and safe tool lifecycle names. The collector must ignore every unmarked stdout line and reconcile the active final segment with Hermes `state.db` only at exit. When a later model response follows tools, reset the earlier draft into process history before streaming the final segment.
+
+### Diagnosis recipe
+
+1. Confirm whether the collector chose gateway or scoped CLI (`X-Hermes-Stream-Source`).
+2. Inspect the exact CLI invocation. If it includes `-Q`, native model streaming is disabled regardless of the profile's display config.
+3. Compare first SSE byte, first assistant delta, first tool event, and process exit time. Keepalives are a separate measurement.
+4. Run the hermetic collector regression; it deliberately delays segments and prints a fake diff so timing and output separation are both observable.
+5. Run a live short model marker and a forced safe tool call through the collector. Require multiple deltas or an early tool event before completion, not merely a correct final DB message.
+
+### Fixed evidence
+
+The live Adaptive profile emitted `STREAM_BRIDGE_OK` in three deltas. The running collector emitted `COLLECTOR_STREAM_OK` in three deltas; a real terminal-tool turn emitted `generating`, `started`, and `completed` before the final `TOOL_STREAM_OK`. The hermetic entry-path regression proves interim text precedes the delayed final segment and unmarked diff/noisy stdout never enters chat. Fixed 2026-07-18.
+
+## G7 - A fast queue poll can become continuous durable-state churn
+
+### Symptom
+
+An idle background queue appears cheap in CPU profiles, but its runtime JSON and rotated backups receive writes every few seconds. Disk activity grows with queue/history size, and a far-future scheduled item still produces provider authentication traffic long before it can run.
+
+### Why it fools you
+
+- The poll body does “nothing” functionally, but entering a generic read-modify-write helper still commits the unchanged array.
+- Updating a heartbeat looks like a tiny write, while the store atomically serializes and rotates the complete durable overlay.
+- A final readiness check is correctly fail-closed, but calling it before every provider probe can perform expensive next-awake-time searches even when only a boolean is needed.
+- Unit tests usually assert that nothing posted; they do not assert that the file or provider call count stayed unchanged.
+
+### Root cause and fix
+
+Split read-only preflight from mutation. Mutate only when a stale delivery actually exists, coalesce non-consequential durable heartbeats, and keep post/recovery/error writes immediate. Apply schedule, cancel-window, auto-opt-in, and awake-hours gates before live provider probes. Let the engine request boolean readiness without calculating the next awake instant; keep the detailed calculation for surfaces that display it.
+
+### Diagnosis recipe
+
+1. Snapshot the runtime file bytes and backup mtimes, run an idle tick, and compare them.
+2. Count provider probe calls for a post scheduled well in the future and for one outside awake hours.
+3. Distinguish the in-memory wake interval from the durable heartbeat interval; cancellation responsiveness depends on the former, not continuous disk writes.
+4. Re-run the stale-`posting` crash-recovery test to ensure write suppression did not suppress consequential recovery.
+
+### Fixed evidence
+
+The Socials regression schedules future work, proves zero early connection probes and sends, then runs a second sub-minute idle tick and verifies `socials-runtime.json` is byte-for-byte unchanged. The worker still wakes every five seconds, persists idle liveness at most once per minute, and immediately writes every delivery, recovery, and error transition. Fixed 2026-07-20.
+
+For producers attached to the same loop, gate on a small durable next-run receipt before loading queues, shared credentials, source webpages/files, or models. Persist bounded failure backoff and capacity deferral. In development, version the `globalThis` runner itself: Next HMR retains old loop closures, and an old writer can otherwise keep serializing a stale store schema after new code loads. The Socials drafter now retires mismatched runner versions and reconstructs a missing drafting receipt from queue-item provenance, preventing duplicate packs after HMR. Fixed 2026-07-20.
+
+## G8 - Social search is marked supported, but the drafting queue never contains comments
+
+### Symptom
+
+The Socials account shows `search: supported`, `reply: limited`, and a healthy drafting worker. Standalone suggestions appear, but hours of ticks produce no reply or quote suggestions and there is no source post to review.
+
+### Why it fools you
+
+- A capability matrix can accurately describe what the provider or installed tools can do without proving that the autonomous producer actually invokes that capability.
+- An `x-account` context source can look like live discovery even when the drafting context deliberately treats it as an identity cue and performs no read.
+- The selected voice may name reviewed engagement targets in `MEMORY.md`, but a single total character budget can be exhausted by earlier `SKILL`, `SOUL`, `STYLE`, and example files before memory is loaded.
+- A hot-reloaded development runner can retain the old producer closure after the source and durable schema have changed.
+
+### Root cause and fix
+
+Trace the actual producer call chain from delivery tick or button through policy selection, context load, search execution, ranking, model drafting, queue validation, and rendered target preview. Capability labels are not executable adapters. Give live discovery a concrete read-only backend, keep its request and candidate set bounded, store exact public target provenance, deduplicate by target and kind across all queue history, and force replies/quotes through per-item review even if standalone posts use auto mode. Budget layered voice files fairly so reviewed memory targets remain present, and bump both the durable overlay and retained runner schema when the producer contract changes.
+
+### Diagnosis recipe
+
+1. Inspect the generated queue records. If they have only `kind: post`, the producer never reached engagement generation.
+2. Call the local X backend's status and one search through the same process entry path the app uses; a UI capability badge is not evidence of authentication.
+3. Inspect the final bounded drafting context and confirm `MEMORY.md` plus its engagement-target line survived.
+4. Run a forced engagement-only cycle and require source-linked `replyTo` or `quoteOf` records, not just model prose.
+5. Verify the browser renders the full target and an exact `x.com/<author>/status/<id>` link, then verify no item has an approval record until the reviewer acts.
+
+### Fixed evidence
+
+The focused regression starts red with no discovery module, then proves explicit context targets precede voice-memory targets; self, stale, reposted, previously seen, and duplicate posts are rejected; Luna receives bounded live candidates; and two replies plus one quote retain exact target snapshots. Store/service tests prove target tampering fails closed, repeated targets are suppressed across queue history, editing cannot silently retarget copy, and auto-mode accounts still receive engagement as unapproved suggestions. Fixed 2026-07-20.

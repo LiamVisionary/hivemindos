@@ -153,11 +153,10 @@ function appRosterInterest(app: ContextConnectedApp): number {
 }
 
 /**
- * Always-on roster of every connected app and what it does, so an agent knows
- * its fleet's capabilities regardless of whether the prompt happened to
- * text-match a retrieval query. Previously only a bare count was injected, so an
- * app's real capability (e.g. video generation) stayed invisible unless the
- * prompt used its words.
+ * Task-routed roster of connected apps and their concrete capabilities. The
+ * outer retrieval gate keeps this inventory out of conversational turns; once
+ * a task needs capability discovery, the roster prevents a text-match miss from
+ * hiding a useful connected app.
  */
 function connectedAppsRosterContext(apps: ContextConnectedApp[] | undefined): string {
   const list = (apps ?? []).filter((app) => app.name || app.id);
@@ -343,8 +342,13 @@ export function loopEngineeringRequest(query: string) {
   return false;
 }
 
-function shouldRunTaskRetrieval(query: string) {
-  return Boolean(query.trim());
+export function shouldRunTaskRetrieval(query: string) {
+  const normalized = query.trim();
+  if (!normalized) return false;
+  if (requiresCapabilityRouting(normalized)) return true;
+  return /\b(?:analy[sz]e|audit|benchmark|browse|check|compare|debug|diagnose|edit|evaluate|explain\s+(?:this|the\s+(?:file|repo|code|document))|fetch|find|fix|grade|implement|inspect|investigate|look\s*up|monitor|open|optimi[sz]e|plan|publish|read|refactor|research|review|run|search|summari[sz]e|test|trace|update|verify|write)\b/i.test(normalized)
+    || /(?:^|\s)(?:https?:\/\/|\.?\/?[A-Za-z0-9_.-]+\/(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+|[A-Za-z0-9_-]+\.(?:ts|tsx|js|jsx|mjs|py|rs|go|sol|md|json|ya?ml))(?:\s|$)/i.test(normalized)
+    || /\b(?:latest|current|today|news|source|citation|repo(?:sitory)?|codebase|pull request|issue|commit|branch|test suite|typecheck|lint|terminal|shell|file|folder|document|spreadsheet|slides?|notes?|calendar|email|browser)\b/i.test(normalized);
 }
 
 const IMAGE_APP_HAYSTACK_PATTERN = /\b(?:image[-\s]?gen|image generation|txt2img|text to image|comfyui|diffusion|stable diffusion|open generative ai|local-?ai|z[-\s]?image|zimage|gpt-image|dall-?e)\b/;

@@ -9,6 +9,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { ChatRouteMarkdown } from "../src/features/dashboard/ChatRouteMarkdown.tsx";
 import { parseChatCompletionPresentation } from "../src/features/dashboard/chat-completion-presentation.ts";
+import {
+  isAssistantColonSectionHeading,
+  stripHermesInlineDiffPreviews,
+  stripHermesInternalToolNarration,
+} from "../src/lib/services/chat/hermes-cli-output.ts";
 import { normalizeMacOpenApplications } from "../src/lib/services/deliverable-open-apps.ts";
 import { downloadRemoteDeliverable } from "../src/lib/services/deliverable-download.ts";
 import {
@@ -34,6 +39,7 @@ const artifactMenuStyles = readFileSync(
   join(root, "src/features/dashboard/views/chat/exchange/chat-exchange-markdown.css"),
   "utf8",
 );
+const chatComposerSource = readFileSync(join(root, "src/features/chat/chat-composer.tsx"), "utf8");
 const deliverableRouteSource = readFileSync(
   join(root, "src/app/api/kanban/deliverable/route.ts"),
   "utf8",
@@ -55,6 +61,35 @@ assert.match(processPanelSource, /worked · \{stepCount\} step/);
 assert.match(processPanelSource, /className="cx-tl-line"/);
 assert.match(processPanelSource, /className="cx-tl-step"/);
 assert.doesNotMatch(processPanelSource, /HiveChatView\.module\.css/);
+assert.match(chatComposerSource, /stripHermesInlineDiffPreviews/);
+
+const hermesDiffPreview = [
+  "  ┊ review diff",
+  "a/index.html → b/index.html",
+  "@@ -1,2 +1,2 @@",
+  "-<title>Starter</title>",
+  "+<title>Flappy Bird</title>",
+  "… omitted 12 diff line(s)",
+].join("\n");
+assert.equal(
+  stripHermesInlineDiffPreviews(hermesDiffPreview),
+  "",
+  "Hermes inline edit previews are live tool progress, not assistant chat text",
+);
+const completedHermesOutput = stripHermesInlineDiffPreviews(`${hermesDiffPreview}\nDone. The Flappy Bird clone is ready.\n\nVerification\n- Syntax check passed.`);
+assert.match(completedHermesOutput, /^Done\. The Flappy Bird clone is ready\./);
+assert.match(completedHermesOutput, /Syntax check passed/);
+assert.doesNotMatch(completedHermesOutput, /review diff|a\/index\.html|@@ -1,2/);
+
+const internalHermesPreamble = "That subagent only had web_search (I scoped it too narrowly), so its negative result is meaningless — it couldn't see my actual tool list. I can confirm directly: my own schema has `patch`, `write_file`, `terminal`, and `browser` available, and `invoke_hive_capability` is NOT among them. So writing directly to the assigned directory with `write_file` (which succeeded) is the correct path here. The Chat Preview runtime will pick up the files in that directory.";
+const cleanedHermesNarration = stripHermesInternalToolNarration(`${internalHermesPreamble}\n\nThe build is complete and verified.\n\nNotes:\n- \`invoke_hive_capability\` is not exposed as a callable tool; I wrote the files directly.`);
+assert.match(cleanedHermesNarration, /^The build is complete and verified\./);
+assert.doesNotMatch(cleanedHermesNarration, /subagent|tool list|invoke_hive_capability|callable tool/i);
+assert.equal(isAssistantColonSectionHeading("What it does:", "- Canvas game"), true);
+assert.equal(isAssistantColonSectionHeading("Verification performed (real tool output, not claimed):", "- Syntax passed"), true);
+assert.equal(isAssistantColonSectionHeading("Location:", "/tmp/example"), false);
+assert.match(chatComposerSource, /isAssistantColonSectionHeading/);
+assert.match(chatComposerSource, /### \$\{trimmed\.slice\(0, -1\)\.trim\(\)\}/);
 
 assert.match(presentationStyles, /\.root\s+\.heading/);
 assert.match(presentationStyles, /\.root\s+\.listItem/);

@@ -209,8 +209,42 @@ export function finalAdaptiveHermesOpenRouterError(attempts: string[], lastError
   return `Hermes Adaptive OpenRouter could not produce assistant text.${attempted}${lastError ? ` Last error: ${lastError}` : ""}`;
 }
 
+const HERMES_CLI_FAILURE_PREFIXES = [
+  "api call failed",
+  "provider resolver returned",
+  "unknown provider",
+  "session not found",
+  "hermes exited",
+] as const;
+
+function normalizeHermesCliFailureCandidate(value: string) {
+  return stripTerminalControls(value)
+    .replace(/^(?:(?:⚠️?|❌|🚫|⛔)\s*)+/u, "")
+    .replace(/^(?:warning|error)\s*:\s*/i, "")
+    .trimStart()
+    .toLowerCase();
+}
+
 export function isHermesCliFailureText(value: string) {
-  return /^(?:api call failed|provider resolver returned|unknown provider|session not found|hermes exited)\b/i.test(value.trim());
+  const normalized = normalizeHermesCliFailureCandidate(value);
+  return HERMES_CLI_FAILURE_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+}
+
+export function isPotentialHermesCliFailureText(value: string) {
+  const normalized = normalizeHermesCliFailureCandidate(value);
+  if (!normalized) return true;
+  return HERMES_CLI_FAILURE_PREFIXES.some(
+    (prefix) => prefix.startsWith(normalized) || normalized.startsWith(prefix),
+  );
+}
+
+export function isFleetSharedEnvAccessErrorBody(value: string) {
+  try {
+    const parsed = JSON.parse(value) as { code?: unknown };
+    return parsed?.code === "fleet_shared_env_access_blocked";
+  } catch {
+    return false;
+  }
 }
 
 export function finalAdaptiveProviderError(status: number, attempts: string[]) {

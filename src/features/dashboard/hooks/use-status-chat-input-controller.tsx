@@ -1,21 +1,20 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
 "use client";
-/* eslint-disable react-hooks/immutability */
+/* eslint-disable react-hooks/purity */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { resolveDashboardSlashCommand } from "@/features/chat/dashboard-slash-commands";
-import { createFileReferenceAttachments, hydrateImageReferencePreviews } from "@/features/chat/chat-file-references";
-import { readLocalImagePreview } from "@/lib/native/local-image";
 import { messageVisibleAttachments } from "@/features/chat/chat-message-attachments";
 import { runtimeChatFeature } from "@/lib/types/agent-runtime";
 import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } from "./runtime-stream-errors";
 import { agentColdStartProcessEvent, recordAgentRuntimeWarm } from "./agent-cold-start-status";
 import { handleStatusChatDashboardCommand } from "./status-chat-dashboard-command-router";
-import { compactRepeatedAssistantText, extractGeneratedKanbanTask, isChatTransportInterruption, kanbanBodyWithFullSource, nextChatTextDelta, processLabelFromComment, processLabelFromRuntimeEvent, processLabelFromSessionMessage, runtimePromptFromPayload, runtimePromptFromSessionMessage, yieldChatPaint } from "./status-chat-input-helpers";
+import { createComposerAttachmentHandlers } from "./status-chat-composer-attachments";
+import { chatWorkingDirectoryTargets, compactRepeatedAssistantText, extractGeneratedKanbanTask, isChatTransportInterruption, kanbanBodyWithFullSource, nextChatTextDelta, processLabelFromComment, processLabelFromRuntimeEvent, processLabelFromSessionMessage, runtimePromptFromPayload, runtimePromptFromSessionMessage, yieldChatPaint } from "./status-chat-input-helpers";
 import { handleNativeImageGenerationCommand } from "./status-chat-image-generation";
 import { handleTranscriptCommand } from "./status-chat-transcript";
 import { appendPreviewMessagesForActiveChat, applicationGenerationSignature, buildActiveImageGenerationCard, cloneApplicationGenerationCard, findLatestAssistantIndexAfterLastUser, imageGenerationCardContent, imageGenerationCompletionPatchFromText, processEventSignature, shouldStartImageGenerationCard } from "./status-chat-process-image-generation";
-import { appendChatProcessState, finishChatStreamState, markChatStreamChunkState, startChatStreamState } from "./status-chat-stream-state";
+import { appendChatProcessState, findChatRunAssistantIndex, finishChatStreamState, markChatStreamChunkState, startChatStreamState } from "./status-chat-stream-state";
 import { pushVoiceBands, resetVoiceBands } from "@/lib/stores/voice-bands-store";
 import { normalizeChatResponseBilling } from "@/lib/types/chat-billing";
 import { normalizeChatPermissionMode } from "@/lib/types/chat-permissions";
@@ -26,35 +25,31 @@ import { formatDiscussContextForPrompt } from "@/features/dashboard/chat-discuss
 import { CAPABILITY_APPROVAL_CONTINUATION_MARKER, type CapabilityApprovalPlan } from "@/lib/types/capability-approval";
 import { latestChatAppArtifact, type ChatAppArtifact } from "@/lib/services/chat/chat-app-artifact";
 import { capabilityAppProjectContext, prepareCapabilityAppProject } from "@/lib/services/chat/capability-app-project-client";
+import { RUNTIME_STREAM_EVENT_TYPES } from "@/lib/services/runtime-stream-events";
 
 export function useStatusChatInputController(props: any) {
-  const { AbortController, CHAT_RESPONSE_STALL_TIMEOUT_MS, Uint8Array, agents, appendMessage, attachmentSummary, brainDragMovedRef, brainDragRef, brainGraph, brainPan, busy, chatAttachments, chatAutoScrollRef, chatDirectories, chatMessageStorageKey, chatRuntimeSessionIdsByKey, chatSetupIssue, chooseDirectoryForMachine, clearActiveChatRun, collectorKey, createDefaultAgentWallet, discoveredMachines, honeyLedgerEnabled, hydrated, isManualAgentChatMessage, kanbanBoardSlug, kanbanReadyPickupInFlightRef, kanbanStorageBody, linkedDirectoryLabel, localKanbanMachineTarget, machineGroups, messageContentParts, messages, orchestrateReadyKanbanTask, quickAddMachineTarget, quickAddMachineTargets, readComposerFiles, recordActiveChatRun, recordRecentDirectory, recording, refreshHoneyLedger, refreshKanbanOnce, refreshMaintenanceReport, refreshNotifications, refreshRuntimeUsage, searchAllRuntimeSessions, selectedAgent, selectedBrainNodeId, selectedChatDirectoryPath, selectedChatLeafKey, selectedChatRuntimeSessionId, selectedChatTargetRef, selectedKanbanAgent, selectedKanbanTask, setActiveView, setAttachmentError, setAttachmentMenuOpen, setBrainGraph, setBrainGraphStatus, setBrainPan, setChatAttachments, setChatDirectories, setChatProcessByKey, setControlRoomStatus, setChatRuntimeSessionIdsByKey, setChatStreamingByKey, setKanbanBoard, setKanbanError, setKanbanSteerAttachmentError, setKanbanSteerAttachmentMenuOpen, setKanbanSteerAttachments, setKanbanSteerDirectories, setKanbanSteerDraft, setKanbanStorage, setMessagesByAgent, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setRecentDirectoriesExpanded, setRecording, setSelectedBrainNodeId, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setStatus, setStatusAgentId, setText, setVaultStatus, chatDiscussContext, clearChatDiscussContext, setVaultSyncPending, setVaultSyncStatus, setVoiceTarget, setVoiceTranscript, sharedVault, speechRecognitionConstructor, syncthingAutoPairRef, tailscaleDevices, text, updateAgentProfile, updateSharedVault, updateTask, upsertTask, voiceAnimationRef, voiceAudioContextRef, voiceRecognitionRef, voiceStreamRef, voiceTarget, voiceTranscriptRef, walletsByAgent } = props;
+  const { AbortController, CHAT_RESPONSE_STALL_TIMEOUT_MS, Uint8Array, agents, appendMessage, attachmentSummary, brainDragMovedRef, brainDragRef, brainGraph, brainPan, chatAttachments, chatAutoScrollRef, chatDirectories, chatMessageStorageKey, chatRuntimeSessionIdsByKey, chatSetupIssue, chooseDirectoryForMachine, clearActiveChatRun, collectorKey, createDefaultAgentWallet, discoveredMachines, honeyLedgerEnabled, hydrated, isManualAgentChatMessage, kanbanBoardSlug, kanbanReadyPickupInFlightRef, kanbanStorageBody, linkedDirectoryLabel, localKanbanMachineTarget, machineGroups, messageContentParts, messages, orchestrateReadyKanbanTask, quickAddMachineTarget, quickAddMachineTargets, readComposerFiles, recordActiveChatRun, recordRecentDirectory, recording, refreshHoneyLedger, refreshKanbanOnce, refreshMaintenanceReport, refreshNotifications, refreshRuntimeUsage, searchAllRuntimeSessions, selectedAgent, selectedBrainNodeId, selectedChatDirectoryPath, selectedChatLeafKey, selectedChatRuntimeSessionId, selectedChatTargetRef, selectedKanbanAgent, selectedKanbanTask, setActiveView, setAttachmentError, setAttachmentMenuOpen, setBrainGraph, setBrainGraphStatus, setBrainPan, setChatAttachments, setChatDirectories, setChatProcessByKey, setControlRoomStatus, setChatRuntimeSessionIdsByKey, setChatStreamingByKey, setKanbanBoard, setKanbanError, setKanbanSteerAttachmentError, setKanbanSteerAttachmentMenuOpen, setKanbanSteerAttachments, setKanbanSteerDirectories, setKanbanSteerDraft, setKanbanStorage, setMessagesByAgent, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setRecentDirectoriesExpanded, setRecording, setSelectedBrainNodeId, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setStatus, setStatusAgentId, setText, setVaultStatus, chatDiscussContext, clearChatDiscussContext, setVaultSyncPending, setVaultSyncStatus, setVoiceTarget, setVoiceTranscript, sharedVault, speechRecognitionConstructor, syncthingAutoPairRef, tailscaleDevices, text, updateAgentProfile, updateSharedVault, updateTask, upsertTask, voiceAnimationRef, voiceAudioContextRef, voiceRecognitionRef, voiceStreamRef, voiceTarget, voiceTranscriptRef, walletsByAgent } = props;
   const [chatKanbanGeneration, setChatKanbanGeneration] = useState(null);
-  const [chatQueue, setChatQueue] = useState([]);
-  const [flushingChatQueueId, setFlushingChatQueueId] = useState("");
   const chatSubmitGuardRef = useRef({ signature: "", at: 0 });
-  const queuedChatMessages = selectedAgent
-    ? chatQueue.filter((item: any) => item.agentId === selectedAgent.id && item.leafKey === selectedChatLeafKey)
-    : [];
 
   function startChatStream(storageKey: string, agentId: string, leafKey: string, requestLabel?: string, runId?: string, startedAt = Date.now(), sessionId?: string) {
     startChatStreamState({ agentId, leafKey, recordActiveChatRun, requestLabel, runId, sessionId, setChatProcessByKey, setChatStreamingByKey, startedAt, storageKey });
   }
-  function markChatStreamChunk(storageKey: string) {
-    markChatStreamChunkState(setChatStreamingByKey, storageKey);
+  function markChatStreamChunk(storageKey: string, runId: string) {
+    markChatStreamChunkState(setChatStreamingByKey, storageKey, runId);
   }
-  function finishChatStream(storageKey: string) {
-    finishChatStreamState(setChatStreamingByKey, storageKey);
+  function finishChatStream(storageKey: string, runId: string) {
+    finishChatStreamState(setChatStreamingByKey, storageKey, runId);
   }
   function appendChatProcess(storageKey: string, label: string, detail?: string, status?: string, runId?: string) {
     appendChatProcessState({ detail, label, runId, setChatProcessByKey, status, storageKey });
   }
 
-  function chatQueueLabel(prompt: string, attachments: any[], directories: any[]) {
+  function chatMessageLabel(prompt: string, attachments: any[], directories: any[]) {
     if (prompt) return prompt;
     if (attachments.length) return attachmentSummary(attachments);
     if (directories.length) return `Linked ${directories.length} director${directories.length === 1 ? "y" : "ies"}`;
-    return "Queued message";
+    return "Message";
   }
 
   function historicalMessageContent(message: any) {
@@ -91,26 +86,6 @@ export function useStatusChatInputController(props: any) {
     setChatDirectories([]);
     setAttachmentError("");
     setAttachmentMenuOpen(false);
-  }
-
-  function queueChatMessage(item: any) {
-    setChatQueue((current: any[]) => [...current, item]);
-    clearChatComposerDraft();
-    setStatus("Message queued for after the current task finishes.");
-    setStatusAgentId(item.agentId);
-  }
-
-  function removeQueuedChatMessage(id: string) {
-    setChatQueue((current: any[]) => current.filter((item) => item.id !== id));
-  }
-
-  function sendQueuedChatMessageNow(id: string) {
-    if (busy || flushingChatQueueId) return;
-    const queuedMessage = chatQueue.find((item: any) => item.id === id);
-    if (!queuedMessage) return;
-    setFlushingChatQueueId(id);
-    setChatQueue((current: any[]) => current.filter((item) => item.id !== id));
-    void runChatMessage(queuedMessage).finally(() => setFlushingChatQueueId(""));
   }
 
   function settledPromptResponseLabel(label: unknown, value: unknown) {
@@ -161,19 +136,6 @@ export function useStatusChatInputController(props: any) {
       return next === existing ? current : { ...current, messages: next };
     });
   }
-
-  useEffect(() => {
-    if (busy || flushingChatQueueId || !selectedAgent) return;
-    const nextQueuedMessage = chatQueue.find((item: any) => item.agentId === selectedAgent.id && item.leafKey === selectedChatLeafKey);
-    if (!nextQueuedMessage) return;
-    const flushTimer = window.setTimeout(() => {
-      setFlushingChatQueueId(nextQueuedMessage.id);
-      setChatQueue((current: any[]) => current.filter((item) => item.id !== nextQueuedMessage.id));
-      void runChatMessage(nextQueuedMessage).finally(() => setFlushingChatQueueId(""));
-    }, 0);
-    return () => window.clearTimeout(flushTimer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busy, chatQueue, flushingChatQueueId, selectedAgent?.id, selectedChatLeafKey]);
 
   async function checkStatus() {
     if (!selectedAgent) return;
@@ -231,6 +193,8 @@ export function useStatusChatInputController(props: any) {
     setVaultSyncPending("");
     setVaultSyncStatus(data ?? { ok: false, error: "Hivemind Sync repair request failed." });
   }, [
+    setVaultSyncPending,
+    setVaultSyncStatus,
     sharedVault.tailnetSyncDirection,
     sharedVault.tailnetSyncHost,
     sharedVault.tailnetSyncPath,
@@ -303,6 +267,8 @@ export function useStatusChatInputController(props: any) {
       : { ok: false, method: "syncthing", error: data?.error ?? "Syncthing pairing failed." });
   }, [
     pairSyncthingCollector,
+    setVaultSyncPending,
+    setVaultSyncStatus,
     sharedVault.tailnetSyncHost,
     sharedVault.tailnetSyncPath,
     tailscaleDevices,
@@ -354,14 +320,17 @@ export function useStatusChatInputController(props: any) {
       });
     });
   }, [
+    collectorKey,
     discoveredMachines,
     hydrated,
     pairSyncthingCollector,
+    setVaultSyncStatus,
     sharedVault.enabled,
     sharedVault.syncthingAutoPairEnabled,
     sharedVault.tailnetSyncPath,
     sharedVault.syncProvider,
     sharedVault.vaultPath,
+    syncthingAutoPairRef,
   ]);
 
   // Runtime-state sync (Mechanism C). When the off-by-default toggle is on, turn
@@ -544,223 +513,55 @@ export function useStatusChatInputController(props: any) {
     }
   }
 
-  async function addChatFiles(files: FileList | File[], kind: "image" | "file") {
-    try {
-      const next = await readComposerFiles(files, kind);
-      setChatAttachments((current) => [...current, ...next]);
-      setAttachmentError("");
-      setAttachmentMenuOpen(false);
-    } catch (error) {
-      setAttachmentError(error instanceof Error ? error.message : "Could not attach that file.");
-    }
-  }
-
-  function addChatFileReferences(files: FileList | File[]) {
-    const incoming = Array.from(files);
-    if (!incoming.length) {
-      setAttachmentError("Drop at least one file.");
-      return;
-    }
-    const created = createFileReferenceAttachments(incoming);
-    setChatAttachments((current) => [...current, ...created]);
-    setAttachmentError("");
-    setAttachmentMenuOpen(false);
-    // Progressively swap image references to thumbnails once their preview
-    // renders — from the dropped bytes (browser) or, on the desktop where a
-    // native drop is path-only, by reading the file via the native command.
-    void hydrateImageReferencePreviews(incoming, created, (id, previewUrl) => {
-      setChatAttachments((current) => current.map((attachment) => (
-        attachment.id === id ? { ...attachment, previewUrl } : attachment
-      )));
-    }, readLocalImagePreview);
-  }
-
-  function handleChatFileChange(event: ChangeEvent<HTMLInputElement>) {
-    if (event.target.files?.length) void addChatFiles(event.target.files, "file");
-    event.target.value = "";
-  }
-
-  function handleChatFileReferenceDrop(files: FileList | File[]) {
-    addChatFileReferences(files);
-  }
-
-  function handleChatImageChange(event: ChangeEvent<HTMLInputElement>) {
-    if (event.target.files?.length) void addChatFiles(event.target.files, "image");
-    event.target.value = "";
-  }
-
-  function removeChatAttachment(id: string) {
-    setChatAttachments((current) => current.filter((attachment) => attachment.id !== id));
-  }
-
-  async function attachChatDirectory() {
-    try {
-      const machine = selectedAgent
-        ? machineGroups.find((group) => group.agents.some((agent) => agent.id === selectedAgent.id))
-        : null;
-      const target = machine ? { key: machine.key, name: machine.name, collectorUrl: machine.collectorUrl } : localKanbanMachineTarget;
-      await chooseDirectoryForMachine(target, (directory) => {
-        setChatDirectories((current) => [...current, directory]);
-        setAttachmentError("");
-        setAttachmentMenuOpen(false);
-        void recordRecentDirectory(directory, {
-          machineName: target?.name ?? selectedAgent?.machineName,
-          machineKey: target?.key ?? (selectedAgent ? collectorKey(selectedAgent.telemetryUrl) || selectedAgent.id : undefined),
-          source: "chat",
-        });
-      });
-    } catch (error) {
-      setAttachmentError(error instanceof Error ? error.message : "Could not link that directory.");
-    }
-  }
-
-  function attachChatRecentDirectory(directory: LinkedDirectory) {
-    setChatDirectories((current) => [...current, directory]);
-    setAttachmentError("");
-    setAttachmentMenuOpen(false);
-    setRecentDirectoriesExpanded(false);
-    void recordRecentDirectory(directory, {
-      machineName: selectedAgent?.machineName ?? directory.machineName,
-      machineKey: selectedAgent ? collectorKey(selectedAgent.telemetryUrl) || selectedAgent.id : directory.machineKey,
-      source: "recent",
-    });
-  }
-
-  function removeChatDirectory(id: string) {
-    setChatDirectories((current) => current.filter((directory) => directory.id !== id));
-  }
-
-  async function addQuickAddFiles(status: KanbanStatus, files: FileList | File[], kind: "image" | "file") {
-    try {
-      const next = await readComposerFiles(files, kind);
-      setQuickAddAttachments((current) => ({
-        ...current,
-        [status]: [...(current[status] ?? []), ...next],
-      }));
-      setQuickAddAttachmentError("");
-      setQuickAddAttachmentMenuOpen(false);
-    } catch (error) {
-      setQuickAddAttachmentError(error instanceof Error ? error.message : "Could not attach that file.");
-    }
-  }
-
-  function handleQuickAddFileChange(status: KanbanStatus, event: ChangeEvent<HTMLInputElement>) {
-    if (event.target.files?.length) void addQuickAddFiles(status, event.target.files, "file");
-    event.target.value = "";
-  }
-
-  function handleQuickAddImageChange(status: KanbanStatus, event: ChangeEvent<HTMLInputElement>) {
-    if (event.target.files?.length) void addQuickAddFiles(status, event.target.files, "image");
-    event.target.value = "";
-  }
-
-  function removeQuickAddAttachment(status: KanbanStatus, id: string) {
-    setQuickAddAttachments((current) => ({ ...current, [status]: (current[status] ?? []).filter((attachment) => attachment.id !== id) }));
-  }
-
-  async function attachQuickAddDirectory(status: KanbanStatus) {
-    try {
-      const targetMachine = quickAddMachineTarget(status);
-      await chooseDirectoryForMachine(targetMachine, (directory) => {
-        setQuickAddDirectories((current) => ({
-          ...current,
-          [status]: [...(current[status] ?? []), directory],
-        }));
-        setQuickAddAttachmentError("");
-        setQuickAddAttachmentMenuOpen(false);
-        void recordRecentDirectory(directory, {
-          machineName: targetMachine?.name,
-          machineKey: targetMachine?.key,
-          source: "kanban",
-        });
-      });
-    } catch (error) {
-      setQuickAddAttachmentError(error instanceof Error ? error.message : "Could not link that directory.");
-    }
-  }
-
-  function attachQuickAddRecentDirectory(status: KanbanStatus, directory: LinkedDirectory) {
-    setQuickAddDirectories((current) => ({
-      ...current,
-      [status]: [...(current[status] ?? []), directory],
-    }));
-    setQuickAddAttachmentError("");
-    setQuickAddAttachmentMenuOpen(false);
-    setRecentDirectoriesExpanded(false);
-    const targetMachine = quickAddMachineTargets[status] ?? null;
-    void recordRecentDirectory(directory, {
-      machineName: targetMachine?.name ?? directory.machineName,
-      machineKey: targetMachine?.key ?? directory.machineKey,
-      source: "recent",
-    });
-  }
-
-  function removeQuickAddDirectory(status: KanbanStatus, id: string) {
-    setQuickAddDirectories((current) => ({ ...current, [status]: (current[status] ?? []).filter((directory) => directory.id !== id) }));
-  }
-
-  async function addKanbanSteerFiles(files: FileList | File[], kind: "image" | "file") {
-    try {
-      const next = await readComposerFiles(files, kind);
-      setKanbanSteerAttachments((current) => [...current, ...next]);
-      setKanbanSteerAttachmentError("");
-      setKanbanSteerAttachmentMenuOpen(false);
-    } catch (error) {
-      setKanbanSteerAttachmentError(error instanceof Error ? error.message : "Could not attach that file.");
-    }
-  }
-
-  function handleKanbanSteerFileChange(event: ChangeEvent<HTMLInputElement>) {
-    if (event.target.files?.length) void addKanbanSteerFiles(event.target.files, "file");
-    event.target.value = "";
-  }
-
-  function handleKanbanSteerImageChange(event: ChangeEvent<HTMLInputElement>) {
-    if (event.target.files?.length) void addKanbanSteerFiles(event.target.files, "image");
-    event.target.value = "";
-  }
-
-  function removeKanbanSteerAttachment(id: string) {
-    setKanbanSteerAttachments((current) => current.filter((attachment) => attachment.id !== id));
-  }
-
-  async function attachKanbanSteerDirectory() {
-    try {
-      const agentMachine = selectedKanbanAgent
-        ? machineGroups.find((group) => group.agents.some((agent) => agent.id === selectedKanbanAgent.id))
-        : null;
-      const target = selectedKanbanTask?.targetMachine
-        ?? (agentMachine ? { key: agentMachine.key, name: agentMachine.name, collectorUrl: agentMachine.collectorUrl } : localKanbanMachineTarget);
-      await chooseDirectoryForMachine(target, (directory) => {
-        setKanbanSteerDirectories((current) => [...current, directory]);
-        setKanbanSteerAttachmentError("");
-        setKanbanSteerAttachmentMenuOpen(false);
-        void recordRecentDirectory(directory, {
-          machineName: target?.name ?? selectedKanbanAgent?.machineName,
-          machineKey: target?.key ?? (selectedKanbanAgent ? collectorKey(selectedKanbanAgent.telemetryUrl) || selectedKanbanAgent.id : undefined),
-          source: "kanban",
-        });
-      });
-    } catch (error) {
-      setKanbanSteerAttachmentError(error instanceof Error ? error.message : "Could not link that directory.");
-    }
-  }
-
-  function attachKanbanSteerRecentDirectory(directory: LinkedDirectory) {
-    setKanbanSteerDirectories((current) => [...current, directory]);
-    setKanbanSteerAttachmentError("");
-    setKanbanSteerAttachmentMenuOpen(false);
-    setRecentDirectoriesExpanded(false);
-    void recordRecentDirectory(directory, {
-      machineName: selectedKanbanTask?.targetMachine?.name ?? selectedKanbanAgent?.machineName ?? directory.machineName,
-      machineKey: selectedKanbanTask?.targetMachine?.key ?? (selectedKanbanAgent ? collectorKey(selectedKanbanAgent.telemetryUrl) || selectedKanbanAgent.id : directory.machineKey),
-      source: "recent",
-    });
-  }
-
-  function removeKanbanSteerDirectory(id: string) {
-    setKanbanSteerDirectories((current) => current.filter((directory) => directory.id !== id));
-  }
+  const {
+    addChatFiles,
+    handleChatFileChange,
+    handleChatFileReferenceDrop,
+    handleChatImageChange,
+    removeChatAttachment,
+    attachChatDirectory,
+    attachChatRecentDirectory,
+    removeChatDirectory,
+    addQuickAddFiles,
+    handleQuickAddFileChange,
+    handleQuickAddImageChange,
+    removeQuickAddAttachment,
+    attachQuickAddDirectory,
+    attachQuickAddRecentDirectory,
+    removeQuickAddDirectory,
+    addKanbanSteerFiles,
+    handleKanbanSteerFileChange,
+    handleKanbanSteerImageChange,
+    removeKanbanSteerAttachment,
+    attachKanbanSteerDirectory,
+    attachKanbanSteerRecentDirectory,
+    removeKanbanSteerDirectory,
+  } = createComposerAttachmentHandlers({
+    readComposerFiles,
+    chooseDirectoryForMachine,
+    recordRecentDirectory,
+    collectorKey,
+    selectedAgent,
+    machineGroups,
+    localKanbanMachineTarget,
+    quickAddMachineTarget,
+    quickAddMachineTargets,
+    selectedKanbanAgent,
+    selectedKanbanTask,
+    setChatAttachments,
+    setChatDirectories,
+    setAttachmentError,
+    setAttachmentMenuOpen,
+    setRecentDirectoriesExpanded,
+    setQuickAddAttachments,
+    setQuickAddDirectories,
+    setQuickAddAttachmentError,
+    setQuickAddAttachmentMenuOpen,
+    setKanbanSteerAttachments,
+    setKanbanSteerDirectories,
+    setKanbanSteerAttachmentError,
+    setKanbanSteerAttachmentMenuOpen,
+  });
 
   function updateVoiceTranscript(value: string) {
     voiceTranscriptRef.current = value;
@@ -833,7 +634,7 @@ export function useStatusChatInputController(props: any) {
   }
 
   async function startAudioRecording(target: "chat" | "kanban-steer" | KanbanStatus = "chat") {
-    if (recording || busy) return;
+    if (recording) return;
     const setTargetAttachmentError = (message: string) => {
       if (target === "chat") setAttachmentError(message);
       else if (target === "kanban-steer") setKanbanSteerAttachmentError(message);
@@ -929,8 +730,8 @@ export function useStatusChatInputController(props: any) {
       return;
     }
     chatSubmitGuardRef.current = { signature: submitSignature, at: now };
-    const queuedMessage = {
-      id: `chat-queue-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    const chatTurn = {
+      id: `chat-turn-${now.toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
       agent: selectedAgent,
       agentId: selectedAgent.id,
       agentMode,
@@ -940,19 +741,15 @@ export function useStatusChatInputController(props: any) {
       directories: outgoingDirectories,
       directoryPath: input.workingDirectory || latestChatAppArtifact(messages)?.directory || selectedChatDirectoryPath,
       appArtifact: input.appArtifact || latestChatAppArtifact(messages),
-      label: input.visiblePrompt?.trim() || chatQueueLabel(prompt, outgoingAttachments, outgoingDirectories),
+      label: input.visiblePrompt?.trim() || chatMessageLabel(prompt, outgoingAttachments, outgoingDirectories),
       leafKey: selectedChatLeafKey,
       prompt,
       suppressOutgoingUserMessage: input.suppressUserMessage === true,
       visiblePrompt: input.visiblePrompt?.trim(),
       clearComposer: input.clearComposer !== false,
-      queuedAt: Date.now(),
+      submittedAt: now,
     };
-    if (busy) {
-      queueChatMessage(queuedMessage);
-      return;
-    }
-    await runChatMessage(queuedMessage);
+    await runChatMessage(chatTurn);
   }
 
   async function sendPromptMessage(prompt: string, options: { permissionMode?: unknown; reasoningEffort?: unknown; agentMode?: "act" | "plan"; suppressUserMessage?: boolean; visiblePrompt?: string; attachments?: any[]; promptResponse?: { label: string; value?: string }; workingDirectory?: string; appArtifact?: ChatAppArtifact } = {}) {
@@ -1005,18 +802,18 @@ export function useStatusChatInputController(props: any) {
     if (discussContext) clearChatDiscussContext?.();
   }
 
-  async function runChatMessage(queuedMessage: any) {
-    const selectedAgent = queuedMessage.agent;
-    const selectedChatLeafKey = queuedMessage.leafKey;
-    const selectedChatDirectoryPath = queuedMessage.directoryPath;
-    const prompt = queuedMessage.prompt;
+  async function runChatMessage(chatTurn: any) {
+    const selectedAgent = chatTurn.agent;
+    const selectedChatLeafKey = chatTurn.leafKey;
+    const selectedChatDirectoryPath = chatTurn.directoryPath;
+    const prompt = chatTurn.prompt;
     const capabilityPlanContinuation = prompt.includes(CAPABILITY_APPROVAL_CONTINUATION_MARKER);
-    const agentMode = queuedMessage.agentMode === "plan" ? "plan" : "act";
-    const permissionMode = normalizeChatPermissionMode(queuedMessage.permissionMode);
-    const reasoningEffort = normalizeChatReasoningEffort(queuedMessage.reasoningEffort);
-    const outgoingAttachments = queuedMessage.attachments ?? [];
-    const outgoingDirectories = queuedMessage.directories ?? [];
-    const activeAppArtifact = queuedMessage.appArtifact || latestChatAppArtifact(messages);
+    const agentMode = chatTurn.agentMode === "plan" ? "plan" : "act";
+    const permissionMode = normalizeChatPermissionMode(chatTurn.permissionMode);
+    const reasoningEffort = normalizeChatReasoningEffort(chatTurn.reasoningEffort);
+    const outgoingAttachments = chatTurn.attachments ?? [];
+    const outgoingDirectories = chatTurn.directories ?? [];
+    const activeAppArtifact = chatTurn.appArtifact || latestChatAppArtifact(messages);
     let chatIssueReported = false;
     const notifyChatIssue = (issue: string, runId: string) => {
       if (chatIssueReported || !issue.trim()) return;
@@ -1034,7 +831,12 @@ export function useStatusChatInputController(props: any) {
     const appendPreviewMessages = (agentId: string, leafKey: string, appendedMessages: ChatMessage[]) => {
       setSelectedChatPreview((current) => appendPreviewMessagesForActiveChat(current, agentId, leafKey, appendedMessages));
     };
-    const findActiveAssistantIndex = findLatestAssistantIndexAfterLastUser;
+    let activeAssistantSessionId = "";
+    const findActiveAssistantIndex = (items: ChatMessage[]) => {
+      const runIndex = findChatRunAssistantIndex(items, activeAssistantSessionId);
+      if (runIndex >= 0) return runIndex;
+      return findLatestAssistantIndexAfterLastUser(items);
+    };
     const activeProcessEventsForMessage = () => activeRunProcessEvents.map((event) => ({ ...event }));
     const activeApplicationGenerationForMessage = () => cloneApplicationGenerationCard(activeApplicationGenerationCard);
     const withActiveProcessEvents = (message: ChatMessage): ChatMessage => {
@@ -1107,27 +909,78 @@ export function useStatusChatInputController(props: any) {
     if (!capabilityPlanContinuation && outgoingAttachments.length === 0 && outgoingDirectories.length === 0 && await handleTranscriptCommand({ rawPrompt: prompt, selectedAgent, selectedChatLeafKey, selectedStorageKey: chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey), chatAutoScrollRef, clearChatComposerDraft, appendMessage, appendPreviewMessages, setMessagesByAgent, setSelectedChatPreview })) return;
     if (dashboardCommand) {
       const selectedStorageKey = chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey);
-      await handleStatusChatDashboardCommand({ dashboardCommand, prompt, selectedAgent, selectedChatLeafKey, selectedStorageKey, appendMessage, appendPreviewMessages, setText, setAttachmentError, setAttachmentMenuOpen, setMessagesByAgent, setSelectedChatPreview, agents, chatSetupIssue, sharedVault, selectedChatDirectoryPath, walletsByAgent, createDefaultAgentWallet, honeyLedgerEnabled, queuedMessage, setActiveView, refreshMaintenanceReport, searchAllRuntimeSessions, refreshRuntimeUsage, refreshNotifications });
+      await handleStatusChatDashboardCommand({ dashboardCommand, prompt, selectedAgent, selectedChatLeafKey, selectedStorageKey, appendMessage, appendPreviewMessages, setText, setAttachmentError, setAttachmentMenuOpen, setMessagesByAgent, setSelectedChatPreview, agents, chatSetupIssue, sharedVault, selectedChatDirectoryPath, walletsByAgent, createDefaultAgentWallet, honeyLedgerEnabled, chatTurn, setActiveView, refreshMaintenanceReport, searchAllRuntimeSessions, refreshRuntimeUsage, refreshNotifications });
       return;
     }
     const outgoingDirectorySummary = outgoingDirectories.length
       ? `Linked directories:\n${outgoingDirectories.map((directory) => `- ${linkedDirectoryLabel(directory)}`).join("\n")}`
       : "";
-    const outgoingLabel = queuedMessage.visiblePrompt || prompt || attachmentSummary(outgoingAttachments) || (outgoingDirectories.length ? `Linked ${outgoingDirectories.length} director${outgoingDirectories.length === 1 ? "y" : "ies"}` : "Media message");
+    const outgoingLabel = chatTurn.visiblePrompt || prompt || attachmentSummary(outgoingAttachments) || (outgoingDirectories.length ? `Linked ${outgoingDirectories.length} director${outgoingDirectories.length === 1 ? "y" : "ies"}` : "Media message");
     const outgoingVisibleAttachments = messageVisibleAttachments(outgoingAttachments, outgoingDirectories);
     const selectedStorageKey = chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey);
-    const suppressOutgoingUserMessage = queuedMessage.suppressOutgoingUserMessage === true;
+    const suppressOutgoingUserMessage = chatTurn.suppressOutgoingUserMessage === true;
+    const outgoingUserMessage: ChatMessage = {
+      role: "user",
+      content: outgoingLabel,
+      attachments: outgoingVisibleAttachments,
+      surface: "chat",
+      createdAt: Number(chatTurn.submittedAt),
+    };
+    let outgoingUserMessagePublished = suppressOutgoingUserMessage;
+    const publishOutgoingUserMessage = () => {
+      if (outgoingUserMessagePublished) return;
+      outgoingUserMessagePublished = true;
+      chatAutoScrollRef.current = true;
+      if (chatTurn.clearComposer !== false) clearChatComposerDraft();
+      appendMessage(selectedAgent.id, outgoingUserMessage, selectedStorageKey);
+      appendPreviewMessages(selectedAgent.id, selectedChatLeafKey, [outgoingUserMessage]);
+      props.requestChatThreadTitle?.({
+        storageKey: selectedStorageKey,
+        messages: [...messages.filter(isManualAgentChatMessage), outgoingUserMessage],
+      });
+    };
+
+    const capabilityPreflightRunId = `${chatTurn.id}:capability-preflight`;
+    let capabilityPreflightUiActive = false;
+    const startCapabilityPreflightUi = (label: string) => {
+      if (capabilityPreflightUiActive) return;
+      capabilityPreflightUiActive = true;
+      const startedAt = Date.now();
+      startChatStreamState({
+        agentId: selectedAgent.id,
+        leafKey: selectedChatLeafKey,
+        runId: capabilityPreflightRunId,
+        setChatProcessByKey,
+        setChatStreamingByKey,
+        startedAt,
+        storageKey: selectedStorageKey,
+      });
+      appendChatProcess(selectedStorageKey, label, undefined, "active", capabilityPreflightRunId);
+    };
+    const updateCapabilityPreflightUi = (label: string) => {
+      if (!capabilityPreflightUiActive) return;
+      appendChatProcess(selectedStorageKey, label, undefined, "active", capabilityPreflightRunId);
+    };
+    const finishCapabilityPreflightUi = (label: string, status: "completed" | "failed") => {
+      if (!capabilityPreflightUiActive) return;
+      appendChatProcess(selectedStorageKey, label, undefined, status, capabilityPreflightRunId);
+      finishChatStream(selectedStorageKey, capabilityPreflightRunId);
+      capabilityPreflightUiActive = false;
+    };
+
     const setupIssue = chatSetupIssue(selectedAgent);
     if (setupIssue) {
-      if (!suppressOutgoingUserMessage) {
-        appendMessage(selectedAgent.id, { role: "user", content: outgoingLabel, attachments: outgoingVisibleAttachments, surface: "chat" });
-      }
-      appendMessage(selectedAgent.id, { role: "assistant", content: `Error: ${setupIssue}`, surface: "chat" });
+      publishOutgoingUserMessage();
+      const setupErrorMessage: ChatMessage = { role: "assistant", content: `Error: ${setupIssue}`, surface: "chat" };
+      appendMessage(selectedAgent.id, setupErrorMessage, selectedStorageKey);
+      appendPreviewMessages(selectedAgent.id, selectedChatLeafKey, [setupErrorMessage]);
       notifyChatIssue(setupIssue, `setup-${selectedAgent.id}-${Date.now()}`);
       return;
     }
 
+    publishOutgoingUserMessage();
     if (!capabilityPlanContinuation && !suppressOutgoingUserMessage && prompt.trim()) {
+      startCapabilityPreflightUi("Checking capabilities…");
       const capabilityResponse = await fetch("/api/chat/capability-approval", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1146,28 +999,17 @@ export function useStatusChatInputController(props: any) {
       const capabilityData = await capabilityResponse?.json().catch(() => null) as { ok?: boolean; required?: boolean; plan?: CapabilityApprovalPlan; error?: string } | null;
       if (!capabilityResponse?.ok || !capabilityData?.ok) {
         const issue = capabilityData?.error || "Capability planning is unavailable, so the task was not sent. Retry when planning is available.";
-        chatAutoScrollRef.current = true;
-        if (queuedMessage.clearComposer !== false) clearChatComposerDraft();
+        finishCapabilityPreflightUi("Capability check failed", "failed");
         const createdAt = Date.now();
-        const outgoingUserMessage: ChatMessage = { role: "user", content: outgoingLabel, attachments: outgoingVisibleAttachments, surface: "chat", createdAt };
         const capabilityErrorMessage: ChatMessage = { role: "assistant", content: `Error: ${issue}`, surface: "chat", createdAt: createdAt + 1 };
-        appendMessage(selectedAgent.id, outgoingUserMessage, selectedStorageKey);
         appendMessage(selectedAgent.id, capabilityErrorMessage, selectedStorageKey);
-        appendPreviewMessages(selectedAgent.id, selectedChatLeafKey, [outgoingUserMessage, capabilityErrorMessage]);
+        appendPreviewMessages(selectedAgent.id, selectedChatLeafKey, [capabilityErrorMessage]);
         notifyChatIssue(issue, `capability-plan-${selectedAgent.id}-${createdAt}`);
         return;
       }
       if (capabilityData.plan && !capabilityData.required) {
-        chatAutoScrollRef.current = true;
-        if (queuedMessage.clearComposer !== false) clearChatComposerDraft();
         const createdAt = Date.now();
-        const outgoingUserMessage: ChatMessage = { role: "user", content: outgoingLabel, attachments: outgoingVisibleAttachments, surface: "chat", createdAt };
-        appendMessage(selectedAgent.id, outgoingUserMessage, selectedStorageKey);
-        appendPreviewMessages(selectedAgent.id, selectedChatLeafKey, [outgoingUserMessage]);
-        props.requestChatThreadTitle?.({
-          storageKey: selectedStorageKey,
-          messages: [...messages.filter(isManualAgentChatMessage), outgoingUserMessage],
-        });
+        updateCapabilityPreflightUi("Preparing the selected capability…");
 
         let preparedAppProject;
         try {
@@ -1197,17 +1039,19 @@ export function useStatusChatInputController(props: any) {
           }
           await Promise.resolve(refreshNotifications?.()).catch(() => undefined);
           const continuationPrompt = `${resolutionData.continuationPrompt}${capabilityAppProjectContext(preparedAppProject?.artifact)}`;
+          finishCapabilityPreflightUi("Capabilities ready", "completed");
           return runChatMessage({
-            ...queuedMessage,
+            ...chatTurn,
             prompt: continuationPrompt,
             visiblePrompt: outgoingLabel,
             directoryPath: preparedAppProject?.artifact.directory ?? selectedChatDirectoryPath,
-            appArtifact: preparedAppProject?.artifact ?? queuedMessage.appArtifact,
+            appArtifact: preparedAppProject?.artifact ?? chatTurn.appArtifact,
             clearComposer: false,
             suppressOutgoingUserMessage: true,
           });
         } catch (error) {
           const issue = error instanceof Error ? error.message : "Could not continue with the selected capability.";
+          finishCapabilityPreflightUi("Capability setup needs review", "failed");
           const reviewPlan = { ...capabilityData.plan, reviewMode: "ask" as const };
           const capabilityMessage: ChatMessage = {
             role: "assistant",
@@ -1225,10 +1069,8 @@ export function useStatusChatInputController(props: any) {
         }
       }
       if (capabilityData.plan) {
-        chatAutoScrollRef.current = true;
-        if (queuedMessage.clearComposer !== false) clearChatComposerDraft();
+        finishCapabilityPreflightUi("Capabilities ready", "completed");
         const createdAt = Date.now();
-        const outgoingUserMessage: ChatMessage = { role: "user", content: outgoingLabel, attachments: outgoingVisibleAttachments, surface: "chat", createdAt };
         const capabilityMessage: ChatMessage = {
           role: "assistant",
           content: capabilityData.required
@@ -1238,31 +1080,19 @@ export function useStatusChatInputController(props: any) {
           surface: "chat",
           createdAt: createdAt + 1,
         };
-        appendMessage(selectedAgent.id, outgoingUserMessage, selectedStorageKey);
         appendMessage(selectedAgent.id, capabilityMessage, selectedStorageKey);
-        appendPreviewMessages(selectedAgent.id, selectedChatLeafKey, [outgoingUserMessage, capabilityMessage]);
-        props.requestChatThreadTitle?.({
-          storageKey: selectedStorageKey,
-          messages: [...messages.filter(isManualAgentChatMessage), outgoingUserMessage],
-        });
+        appendPreviewMessages(selectedAgent.id, selectedChatLeafKey, [capabilityMessage]);
         await Promise.resolve(refreshNotifications?.()).catch(() => undefined);
         return;
       }
     }
 
-    chatAutoScrollRef.current = true;
-    if (queuedMessage.clearComposer !== false) {
-      setText("");
-      setChatAttachments([]);
-      setChatDirectories([]);
-      setAttachmentError("");
-      setAttachmentMenuOpen(false);
-    }
+    finishCapabilityPreflightUi("Capabilities checked", "completed");
     const requestStartedAt = Date.now();
-    const taskId = `${selectedAgent.id}-${requestStartedAt}`;
-    const workingDirectory = selectedChatDirectoryPath || selectedAgent.localDataDir || "";
-    const requestRuntimeSessionId = chatRuntimeSessionIdsByKey?.[selectedStorageKey] || selectedChatRuntimeSessionId;
-    const localRuntimeSessionId = requestRuntimeSessionId || taskId;
+    const taskId = `${selectedAgent.id}-${chatTurn.id || requestStartedAt}`;
+    const { record: workingDirectory, request: runtimeWorkingDirectory } = chatWorkingDirectoryTargets(selectedChatDirectoryPath, selectedChatLeafKey, selectedAgent.localDataDir);
+    const localRuntimeSessionId = taskId;
+    activeAssistantSessionId = localRuntimeSessionId;
     activeRunProcessEvents = [];
     startChatStream(selectedStorageKey, selectedAgent.id, selectedChatLeafKey, outgoingLabel, taskId, requestStartedAt, localRuntimeSessionId);
     const requestAgentId = selectedAgent.id;
@@ -1321,17 +1151,9 @@ export function useStatusChatInputController(props: any) {
       updatedAt: Date.now(),
       workingDirectory,
     });
-    const outgoingUserMessage: ChatMessage = { role: "user", content: outgoingLabel, attachments: outgoingVisibleAttachments, surface: "chat", createdAt: requestStartedAt };
     const pendingAssistantMessage: ChatMessage = withActiveProcessEvents({ role: "assistant", content: "", surface: "chat", sourceSessionId: localRuntimeSessionId, createdAt: requestStartedAt + 1, appArtifact: activeAppArtifact });
-    if (!suppressOutgoingUserMessage) appendMessage(selectedAgent.id, outgoingUserMessage, selectedStorageKey);
     appendMessage(selectedAgent.id, pendingAssistantMessage, selectedStorageKey);
-    appendPreviewMessages(selectedAgent.id, selectedChatLeafKey, suppressOutgoingUserMessage ? [pendingAssistantMessage] : [outgoingUserMessage, pendingAssistantMessage]);
-    if (!suppressOutgoingUserMessage) {
-      props.requestChatThreadTitle?.({
-        storageKey: selectedStorageKey,
-        messages: [...messages.filter(isManualAgentChatMessage), outgoingUserMessage],
-      });
-    }
+    appendPreviewMessages(selectedAgent.id, selectedChatLeafKey, [pendingAssistantMessage]);
 
     const persistActiveProcessEventsToAssistant = () => {
       setMessagesByAgent((current) => {
@@ -1407,7 +1229,7 @@ export function useStatusChatInputController(props: any) {
       streamedAssistantText = nextText;
       sawAssistantContent = true;
       if (agentPrompt) { sawAgentPrompt = true; sawDone = true; }
-      markChatStreamChunk(selectedStorageKey);
+      markChatStreamChunk(selectedStorageKey, taskId);
       replacePendingAssistant({ role: "assistant", content: nextText, surface: "chat", sourceSessionId: localRuntimeSessionId, createdAt, agentPrompt });
       updateTask(taskId, agentPrompt ? { status: "active", lastMessage: `Waiting for reply: ${nextText}` } : { lastMessage: nextText });
     };
@@ -1511,9 +1333,8 @@ export function useStatusChatInputController(props: any) {
         body: JSON.stringify({
           agent: selectedAgent,
           sharedVault,
-          workingDirectory,
-          runtimeSessionId: requestRuntimeSessionId || undefined,
-          hermesSessionId: requestRuntimeSessionId || undefined,
+          workingDirectory: runtimeWorkingDirectory,
+          runtimeSessionId: localRuntimeSessionId,
           chatStorageKey: selectedStorageKey,
           clientRunId: taskId,
           wallet: walletsByAgent[selectedAgent.id] ?? createDefaultAgentWallet(selectedAgent.id),
@@ -1605,6 +1426,14 @@ export function useStatusChatInputController(props: any) {
             updateActiveImageGenerationCard(parsed.applicationGeneration);
             continue;
           }
+          if (parsed.type === RUNTIME_STREAM_EVENT_TYPES.TEXT_RESET) {
+            const interimText = String((parsed as any).content ?? "").trim();
+            if (interimText) appendRunChatProcess("Hermes progress", interimText.slice(0, 600), "completed");
+            streamedAssistantText = "";
+            sawAssistantContent = false;
+            replacePendingAssistant({ role: "assistant", content: "", surface: "chat", sourceSessionId: localRuntimeSessionId });
+            continue;
+          }
           const responseBilling = normalizeChatResponseBilling(parsed.billing);
           if (responseBilling) {
             setMessagesByAgent((current) => {
@@ -1626,9 +1455,10 @@ export function useStatusChatInputController(props: any) {
           }
           if (parsed.session?.id) {
             const sessionId = parsed.session.id;
-            currentRuntimeSessionId = sessionId;
-            setChatRuntimeSessionIdsByKey((current) => ({ ...current, [selectedStorageKey]: sessionId }));
-            if (requestStillSelected()) setSelectedChatRuntimeSessionId(sessionId);
+            if (!currentRuntimeSessionId || sessionId === localRuntimeSessionId) currentRuntimeSessionId = sessionId;
+            const activeSessionId = currentRuntimeSessionId || localRuntimeSessionId;
+            setChatRuntimeSessionIdsByKey((current) => ({ ...current, [selectedStorageKey]: activeSessionId }));
+            if (requestStillSelected()) setSelectedChatRuntimeSessionId(activeSessionId);
             recordActiveChatRun?.({
               storageKey: selectedStorageKey,
               agentId: selectedAgent.id,
@@ -1636,7 +1466,7 @@ export function useStatusChatInputController(props: any) {
               startedAt: requestStartedAt,
               updatedAt: Date.now(),
               requestLabel: outgoingLabel,
-              sessionId,
+              sessionId: activeSessionId,
               runId: taskId,
               status: "active",
             });
@@ -1653,7 +1483,7 @@ export function useStatusChatInputController(props: any) {
             if (!textDelta) continue;
             streamedAssistantText += textDelta;
             maybeCompleteImageGenerationCardFromText(streamedAssistantText);
-            markChatStreamChunk(selectedStorageKey);
+            markChatStreamChunk(selectedStorageKey, taskId);
             sawAssistantContent = true;
             let nextTaskMessage = "";
             setMessagesByAgent((current) => {
@@ -1742,8 +1572,8 @@ export function useStatusChatInputController(props: any) {
       notifyChatIssue(message, taskId);
     } finally {
       window.clearTimeout(stallTimer);
-      if (!preserveActiveRun && (sawDone || !abortController.signal.aborted || recoveredAssistantText.trim())) clearActiveChatRun?.(selectedStorageKey);
-      finishChatStream(selectedStorageKey);
+      if (!preserveActiveRun && (sawDone || !abortController.signal.aborted || recoveredAssistantText.trim())) clearActiveChatRun?.(selectedStorageKey, taskId);
+      finishChatStream(selectedStorageKey, taskId);
     }
   }
 
@@ -1754,7 +1584,7 @@ export function useStatusChatInputController(props: any) {
       setChatKanbanGeneration({ key: source.key, status: targetStatus, phase: "error", message: setupIssue });
       return;
     }
-    const workingDirectory = selectedChatDirectoryPath || selectedAgent.localDataDir || "";
+    const workingDirectory = chatWorkingDirectoryTargets(selectedChatDirectoryPath, selectedChatLeafKey, selectedAgent.localDataDir).request;
     const selectedStorageKey = chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey);
     const requestRuntimeSessionId = chatRuntimeSessionIdsByKey?.[selectedStorageKey] || selectedChatRuntimeSessionId;
     const requestAgentId = selectedAgent.id;
@@ -1915,5 +1745,5 @@ export function useStatusChatInputController(props: any) {
       return null;
     });
   }
-  return { checkStatus, checkVaultStatus, checkControlRoomStatus, runVaultTailnetSync, pairSyncthingCollector, pairSyncthingVaultSync, inspectBrainNode, startBrainPan, moveBrainPan, endBrainPan, addChatFiles, handleChatFileChange, handleChatFileReferenceDrop, handleChatImageChange, removeChatAttachment, attachChatDirectory, attachChatRecentDirectory, removeChatDirectory, addQuickAddFiles, handleQuickAddFileChange, handleQuickAddImageChange, removeQuickAddAttachment, attachQuickAddDirectory, attachQuickAddRecentDirectory, removeQuickAddDirectory, addKanbanSteerFiles, handleKanbanSteerFileChange, handleKanbanSteerImageChange, removeKanbanSteerAttachment, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, removeKanbanSteerDirectory, updateVoiceTranscript, appendVoiceTranscriptToInput, cleanupVoiceCapture, startVoiceWaveform, startAudioRecording, stopAudioRecording, sendMessage, sendPromptMessage, queuedChatMessages, flushingChatQueueId, removeQueuedChatMessage, sendQueuedChatMessageNow, generateKanbanTaskFromChat, dismissChatKanbanGeneration, chatKanbanGeneration };
+  return { checkStatus, checkVaultStatus, checkControlRoomStatus, runVaultTailnetSync, pairSyncthingCollector, pairSyncthingVaultSync, inspectBrainNode, startBrainPan, moveBrainPan, endBrainPan, addChatFiles, handleChatFileChange, handleChatFileReferenceDrop, handleChatImageChange, removeChatAttachment, attachChatDirectory, attachChatRecentDirectory, removeChatDirectory, addQuickAddFiles, handleQuickAddFileChange, handleQuickAddImageChange, removeQuickAddAttachment, attachQuickAddDirectory, attachQuickAddRecentDirectory, removeQuickAddDirectory, addKanbanSteerFiles, handleKanbanSteerFileChange, handleKanbanSteerImageChange, removeKanbanSteerAttachment, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, removeKanbanSteerDirectory, updateVoiceTranscript, appendVoiceTranscriptToInput, cleanupVoiceCapture, startVoiceWaveform, startAudioRecording, stopAudioRecording, sendMessage, sendPromptMessage, generateKanbanTaskFromChat, dismissChatKanbanGeneration, chatKanbanGeneration };
 }

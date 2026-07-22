@@ -1,3 +1,4 @@
+import { CAPABILITY_APPROVAL_CONTINUATION_MARKER } from "@/lib/types/capability-approval";
 import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 import { chatPermissionModeAllowsUnlistedCommands } from "@/lib/types/chat-permissions";
 import {
@@ -43,6 +44,12 @@ type CapabilityToolContext = {
   origin: string;
   permissionMode: ChatPermissionMode;
   userText: string;
+  /**
+   * Bare Hive Action ids (e.g. "apps.build") already selected by the approved
+   * capability plan for this turn. When omitted, they are recovered from the
+   * approved-plan continuation block inside userText.
+   */
+  plannedCapabilities?: string[];
 };
 
 type CapabilityToolDependencies = {
@@ -60,11 +67,16 @@ export type CapabilityToolOutcome = {
   operation?: CapabilityOperation;
   target?: string;
   approvalRequired?: boolean;
+  /** The model produced a malformed or misaddressed call; nothing was run. */
+  invalidRequest?: boolean;
 };
 
 function capabilityRuntimeDetail(outcome: CapabilityToolOutcome) {
-  if (!outcome.ok && /^Capability (?:surface|operation) must\b/i.test(outcome.fallbackText)) {
-    return "The agent produced an invalid capability request. Nothing was run.";
+  if (!outcome.ok) {
+    const clarifier = outcome.invalidRequest && !outcome.approvalRequired
+      ? " The agent produced an invalid capability request; nothing was run."
+      : "";
+    return `${outcome.fallbackText}${clarifier}`.trim() || outcome.target || "";
   }
   return outcome.target || outcome.fallbackText;
 }
@@ -131,6 +143,119 @@ export function invokeHiveCapabilityToolDefinition() {
   };
 }
 
+const PLANNED_CAPABILITY_LINE_PATTERN = /\bCapability id:\s*hive-action:([\w.-]+)/gi;
+
+/**
+ * Recover the Hive Action ids the approved capability plan already selected
+ * from the plan-continuation block in the latest user message. Only the
+ * canonical `Capability id: hive-action:<id>` lines under the approval marker
+ * are trusted — a plain user message (or pasted content echoed into the
+ * continuation's "Original task" line) that merely mentions an action id
+ * never produces defaults.
+ */
+export function plannedHiveActionIds(userText: string): string[] {
+  if (!userText || !userText.includes(CAPABILITY_APPROVAL_CONTINUATION_MARKER)) return [];
+  const ids = new Set<string>();
+  for (const match of userText.matchAll(PLANNED_CAPABILITY_LINE_PATTERN)) ids.add(match[1].toLowerCase());
+  return [...ids];
+}
+
+function normalizedSurface(value: unknown): CapabilitySurface | undefined {
+  if (typeof value !== "string") return undefined;
+  const compact = value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  if (compact === "mcp" || compact.startsWith("mcp_")) return "mcp";
+  if (compact.startsWith("connected_app")) return "connected_app";
+  if (compact.startsWith("hive_action")) return "hive_action";
+  return undefined;
+}
+
+function plannedCorrectionFields(planned: string[]) {
+  if (!planned.length) return {};
+  const target = planned.length === 1 ? planned[0] : "<planned id>";
+  return {
+    plannedCapabilities: planned.map((id) => `hive-action:${id}`),
+    correction: `Retry ${INVOKE_HIVE_CAPABILITY_TOOL_NAME} with exactly this JSON shape: {"surface":"hive_action","operation":"invoke","capabilityId":"${target}","arguments":{<action request fields>}}. Put every action request field inside "arguments"${planned.length === 1 ? "" : `; planned ids: ${planned.join(", ")}`}. Do not invent other capability names.`,
+  };
+}
+
+function withPlannedCorrection(outcome: CapabilityToolOutcome, planned: string[]): CapabilityToolOutcome {
+  if (outcome.ok || !outcome.invalidRequest || !planned.length) return outcome;
+  try {
+    const payload = JSON.parse(outcome.toolResultContent) as Record<string, unknown>;
+    if (payload.correction) return outcome;
+    return { ...outcome, toolResultContent: JSON.stringify({ ...payload, ...plannedCorrectionFields(planned) }) };
+  } catch {
+    return outcome;
+  }
+}
+
+/**
+ * System nudge injected after repeated malformed calls so a weak tool-calling
+ * model sees the exact required JSON once more instead of freestyling.
+ */
+export function capabilityInvocationCorrectiveSystemPrompt(planned: string[]) {
+  const plannedLine = planned.length
+    ? `The approved capability plan already selected ${planned.map((id) => `hive-action:${id}`).join(", ")}; reuse ${planned.length === 1 ? `capabilityId "${planned[0]}"` : "one of those ids"} exactly as written.`
+    : 'If no exact id is in context, call it with operation="list" first to discover ids.';
+  return [
+    `Your ${INVOKE_HIVE_CAPABILITY_TOOL_NAME} calls are failing validation before anything runs.`,
+    'Every call must be one JSON object with required string fields "surface" (exactly "mcp", "connected_app", or "hive_action") and "operation" (exactly "list" or "invoke").',
+    'To invoke a Hive Action send: {"surface":"hive_action","operation":"invoke","capabilityId":"<id>","arguments":{...}} with every action request field inside "arguments".',
+    plannedLine,
+    "If you cannot produce this tool call, tell the user plainly that the capability did not run — do not invent a different explanation.",
+  ].join(" ");
+}
+
+/**
+ * Honest terminal note appended when a run ends with repeated malformed
+ * capability calls and zero executed capabilities, so the model's own closing
+ * text cannot silently misreport what happened.
+ */
+export function capabilityInoperableNotice(invalidCalls: number) {
+  return `> HivemindOS: this model produced ${invalidCalls} invalid capability tool call${invalidCalls === 1 ? "" : "s"} and no capability ran, so the reply above may misstate what happened. Nothing was changed. Switching this agent to a stronger tool-calling model is recommended.`;
+}
+
+/**
+ * Per-request health tracker for the capability tool. `correctiveSystemMessage`
+ * fires once per streak of ≥2 consecutive malformed calls (reset by any
+ * well-formed call); `inoperableFinalNotice` returns the honest terminal note
+ * only when a run made ≥2 invalid calls and executed nothing.
+ */
+export function createCapabilityToolHealth(input: {
+  plannedCapabilityIds: string[];
+  onCorrectiveNudge?: (invalidCalls: number) => void;
+  onInoperable?: (invalidCalls: number) => void;
+}) {
+  const state = { invalidCalls: 0, consecutiveInvalid: 0, successes: 0, nudged: false };
+  return {
+    track(outcome: CapabilityToolOutcome) {
+      if (outcome.ok) {
+        state.successes += 1;
+        state.consecutiveInvalid = 0;
+        state.nudged = false;
+        return;
+      }
+      if (outcome.invalidRequest && !outcome.approvalRequired) {
+        state.invalidCalls += 1;
+        state.consecutiveInvalid += 1;
+        return;
+      }
+      state.consecutiveInvalid = 0;
+    },
+    correctiveSystemMessage(): Record<string, unknown> | null {
+      if (state.consecutiveInvalid < 2 || state.nudged) return null;
+      state.nudged = true;
+      input.onCorrectiveNudge?.(state.invalidCalls);
+      return { role: "system", content: capabilityInvocationCorrectiveSystemPrompt(input.plannedCapabilityIds) };
+    },
+    inoperableFinalNotice(): string {
+      if (state.invalidCalls < 2 || state.successes > 0) return "";
+      input.onInoperable?.(state.invalidCalls);
+      return capabilityInoperableNotice(state.invalidCalls);
+    },
+  };
+}
+
 function parseInput(raw: string | Record<string, unknown>): CapabilityToolInput {
   if (typeof raw !== "string") return raw as CapabilityToolInput;
   try {
@@ -149,6 +274,7 @@ function jsonOutcome(payload: Record<string, unknown>, fallbackText: string): Ca
     operation: payload.operation === "list" || payload.operation === "invoke" ? payload.operation : undefined,
     target: typeof payload.target === "string" ? payload.target : typeof payload.surface === "string" ? payload.surface : undefined,
     approvalRequired: payload.approvalRequired === true,
+    invalidRequest: payload.invalidRequest === true,
   };
 }
 
@@ -316,7 +442,7 @@ async function invokeMcp(
   const toolName = input.toolName?.trim() || "";
   const server = dependencies.mcpStatus().servers.find((candidate) => candidate.id === serverId);
   const tool = server?.tools.find((candidate) => candidate.name === toolName);
-  if (!server || !tool) return failure(`Connected MCP tool ${serverId || "(missing server)"}/${toolName || "(missing tool)"} was not found.`);
+  if (!server || !tool) return failure(`Connected MCP tool ${serverId || "(missing server)"}/${toolName || "(missing tool)"} was not found.`, { invalidRequest: true });
   const args = { ...(input.arguments ?? {}) };
   if (!safeMcpRead(tool.annotations)) {
     const tokens = confirmationTokens(tool.annotations?.["hivemindos/confirmation"]);
@@ -363,9 +489,9 @@ async function invokeConnectedApp(
 ) {
   const method = (input.method || "GET").trim().toUpperCase();
   const path = input.path?.trim() || "";
-  if (method !== "GET" && method !== "POST") return failure("Connected app method must be GET or POST.");
-  if (!path.startsWith("/") || path.startsWith("//") || /^https?:\/\//i.test(path)) return failure("Connected app path must be a relative path beginning with /.");
-  if (!input.appId?.trim() && !input.serviceKind?.trim()) return failure("Connected app invocation needs appId or serviceKind.");
+  if (method !== "GET" && method !== "POST") return failure("Connected app method must be GET or POST.", { invalidRequest: true });
+  if (!path.startsWith("/") || path.startsWith("//") || /^https?:\/\//i.test(path)) return failure("Connected app path must be a relative path beginning with /.", { invalidRequest: true });
+  if (!input.appId?.trim() && !input.serviceKind?.trim()) return failure("Connected app invocation needs appId or serviceKind.", { invalidRequest: true });
   if (method === "POST" && !chatPermissionModeAllowsUnlistedCommands(context.permissionMode)) {
     return approvalRequired(`connected app ${input.appId || input.serviceKind}${path}`, "Raw connected-app POST requests may mutate external state. Register a confirmed Hive Action for normal automatic routing, or grant Bypass permission for this exact request.");
   }
@@ -397,12 +523,12 @@ async function invokeHiveAction(
 ) {
   const capabilityId = input.capabilityId?.trim() || "";
   const action = selectedAction(actions, capabilityId);
-  if (!action) return failure(`Hive Action ${capabilityId || "(missing id)"} was not found or its integration is not connected.`);
+  if (!action) return failure(`Hive Action ${capabilityId || "(missing id)"} was not found or its integration is not connected.`, { invalidRequest: true });
   const route = action.contextIndex?.route;
   if (!route?.startsWith("/api/")) return failure(`Hive Action ${action.id} has no executable dashboard API route.`);
   const methods = (action.contextIndex?.methods ?? []).map((method) => method.toUpperCase());
   const method = (input.method || (safeHiveActionRead(action) && methods.includes("GET") ? "GET" : methods[0] || "POST")).toUpperCase();
-  if (!methods.includes(method)) return failure(`Hive Action ${action.id} does not declare ${method}; allowed methods: ${methods.join(", ") || "none"}.`);
+  if (!methods.includes(method)) return failure(`Hive Action ${action.id} does not declare ${method}; allowed methods: ${methods.join(", ") || "none"}.`, { invalidRequest: true });
   const args = { ...(input.arguments ?? {}) };
   const tokens = confirmationTokens(action.confirmation as HiveActionConfirmation);
   const confirmed = exactUserConfirmation(context.userText, tokens);
@@ -411,7 +537,7 @@ async function invokeHiveAction(
     return approvalRequired(`Hive Action ${action.id}`, action.confirmation && typeof action.confirmation === "object" ? action.confirmation.reason : "This Hive Action may mutate state.", tokens);
   }
   const parsed = action.schema.safeParse(args);
-  if (!parsed.success) return failure(`Hive Action ${action.id} arguments are invalid: ${parsed.error.issues.map((issue) => `${issue.path.join(".") || "input"}: ${issue.message}`).join("; ")}`);
+  if (!parsed.success) return failure(`Hive Action ${action.id} arguments are invalid: ${parsed.error.issues.map((issue) => `${issue.path.join(".") || "input"}: ${issue.message}`).join("; ")}`, { invalidRequest: true });
   const url = method === "GET" ? queryUrl(context.origin, route, parsed.data as Record<string, unknown>) : new URL(route, context.origin);
   const response = await dependencies.fetcher(url, {
     method,
@@ -427,11 +553,29 @@ export async function runInvokeHiveCapabilityTool(
   context: CapabilityToolContext,
   overrides: CapabilityToolDependencies = {},
 ): Promise<CapabilityToolOutcome> {
-  const input = parseInput(raw);
-  const surface = input.surface;
-  const operation = input.operation;
-  if (!surface || !["mcp", "connected_app", "hive_action"].includes(surface)) return failure("Capability surface must be mcp, connected_app, or hive_action.");
-  if (operation !== "list" && operation !== "invoke") return failure("Capability operation must be list or invoke.");
+  const rawInput = parseInput(raw);
+  const planned = context.plannedCapabilities ?? plannedHiveActionIds(context.userText);
+  const plannedActionId = planned.length === 1 ? planned[0] : undefined;
+  // Weak tool-calling models drop the addressing fields the approved
+  // capability plan already fixed (confirmed 2026-07-18: five Scout calls
+  // failed on missing surface/capabilityId for the planned apps.build action,
+  // then confabulated a diagnosis). Default ONLY the addressing fields from
+  // the plan; every downstream permission, confirmation-token, and schema
+  // gate still runs against the resolved action exactly as for an explicit
+  // call, so defaulting cannot widen what is allowed to execute.
+  let surface = normalizedSurface(rawInput.surface);
+  if (!surface && plannedActionId) surface = "hive_action";
+  let operation: CapabilityOperation | undefined = rawInput.operation === "list" || rawInput.operation === "invoke" ? rawInput.operation : undefined;
+  let capabilityId = typeof rawInput.capabilityId === "string" ? rawInput.capabilityId.trim() : "";
+  if (surface === "hive_action" && plannedActionId && !capabilityId) capabilityId = plannedActionId;
+  if (!operation && surface === "hive_action" && plannedActionId) {
+    const hasArguments = Boolean(rawInput.arguments && typeof rawInput.arguments === "object" && Object.keys(rawInput.arguments).length);
+    operation = hasArguments ? "invoke" : "list";
+  }
+  const input: CapabilityToolInput = { ...rawInput, surface, operation, capabilityId };
+  const finish = (outcome: CapabilityToolOutcome) => withPlannedCorrection(outcome, planned);
+  if (!surface) return finish(failure("Capability surface must be mcp, connected_app, or hive_action.", { invalidRequest: true }));
+  if (operation !== "list" && operation !== "invoke") return finish(failure("Capability operation must be list or invoke.", { invalidRequest: true }));
   const dependencies = {
     authHeaders: overrides.authHeaders ?? internalApiAuthHeaders,
     fetcher: overrides.fetcher ?? fetch,
@@ -442,16 +586,16 @@ export async function runInvokeHiveCapabilityTool(
   try {
     if (surface === "mcp") {
       if (operation === "list") return mcpList(dependencies.mcpStatus(), input.query?.trim() || "");
-      return invokeMcp(input, context, dependencies);
+      return finish(await invokeMcp(input, context, dependencies));
     }
     if (surface === "connected_app") {
       if (operation === "list") return connectedAppsList(context, dependencies);
-      return invokeConnectedApp(input, context, dependencies);
+      return finish(await invokeConnectedApp(input, context, dependencies));
     }
     const sharedEnv = await dependencies.readSharedEnv();
     const actions = dependencies.listActions().filter((action) => actionIntegrationConnected(action, sharedEnv));
     if (operation === "list") return actionList(actions, input.query?.trim() || "");
-    return invokeHiveAction(input, context, actions, dependencies);
+    return finish(await invokeHiveAction(input, context, actions, dependencies));
   } catch (error) {
     return failure(error instanceof Error ? error.message : "Registered capability invocation failed.", { surface });
   }

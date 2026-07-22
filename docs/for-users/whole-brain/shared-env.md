@@ -17,6 +17,8 @@ The canonical file is:
 
 Agents, scripts, and app services should load from that file at runtime when they need shared credentials.
 
+Agent runtimes have Shared env permission by default. Fleet operators can restrict an individual machine to `Ask` or `Deny`; when restricted, HivemindOS leaves the stored values untouched and stops before starting a runtime that requested them.
+
 ## Why It Exists
 
 The whole brain has two different kinds of memory:

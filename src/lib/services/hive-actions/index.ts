@@ -39,9 +39,16 @@ export {
   queenBeeAction,
   reviewCryptoAction,
   requestHumanApprovalAction,
+  sreInvestigationsAction,
+  socialQueueSuggestionAction,
+  socialQueueAccountPolicyAction,
   sharedBrainContractAction,
   workBoardAction,
   workEventAction,
+  webCrawlAction,
+  webFetchAction,
+  webScreenshotAction,
+  webSearchAction,
 } from "./catalog";
 export {
   hiveActionContextIndexItems,

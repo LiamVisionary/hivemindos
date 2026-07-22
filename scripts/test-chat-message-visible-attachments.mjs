@@ -54,7 +54,7 @@ assert.match(
 );
 assert.match(
   controller,
-  /attachments: outgoingVisibleAttachments, surface: "chat"/,
+  /attachments:\s*outgoingVisibleAttachments,\s*surface:\s*"chat"/s,
   "optimistic user messages should carry visible attachments into the thread",
 );
 

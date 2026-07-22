@@ -422,6 +422,52 @@ async function postDashboardNotification(title, body) {
   return false;
 }
 
+// Root-cause analysis is deliberately downstream of the watchdog's fixed,
+// deterministic remediation policy. The watchdog supplies only a bounded
+// incident bundle; the dashboard redacts it, persists it, and decides whether
+// the pinned loopback SRE provider is ready. No recommendation is executed here.
+async function postSreInvestigation(target, due, message) {
+  for (const port of APP_PORTS) {
+    try {
+      const { ok, status, data } = await fetchJson(`http://127.0.0.1:${port}/api/ops/investigations`, {
+        method: "POST",
+        headers: dashboardHeaders({ "content-type": "application/json" }),
+        body: JSON.stringify({
+          action: "investigate",
+          enqueue: true,
+          incident: {
+            summary: `${target.kind} remained unhealthy after deterministic remediation`,
+            description: message,
+            severity: "critical",
+            source: "fleet-watchdog",
+            target: { key: target.key, name: target.name, kind: target.kind },
+            symptoms: [due.reason],
+            evidence: {
+              consecutiveDeepFailures: due.streak,
+              remediationAttempts: due.remediations,
+              lastProbeError: due.reason,
+              watchdogSource: WATCHDOG_SOURCE,
+            },
+            remediationAttempts: [{
+              action: `restart ${target.kind}`,
+              outcome: `${due.remediations} attempts did not restore a passing deep probe`,
+            }],
+            correlationId: `fleet-watchdog:${target.key}`,
+          },
+        }),
+      }, 8_000);
+      if (ok) {
+        await log(`  SRE incident ${data?.incident?.id || "captured"} queued via dashboard :${port}`);
+        return true;
+      }
+      await log(`  SRE investigation POST :${port} returned HTTP ${status}`);
+    } catch {
+      // no dashboard on this port — try the next
+    }
+  }
+  return false;
+}
+
 const escalations = createEscalationTracker({ threshold: ESCALATE_AFTER, repeatMs: ESCALATE_REPEAT_MS });
 
 // Remediation has demonstrably not fixed this target: make it loud. Telegram
@@ -432,6 +478,8 @@ async function escalate(target, due) {
   await alert(`escalate:${target.key}`, message);
   const posted = await postDashboardNotification(`${target.name}: ${target.kind} needs human attention`, message);
   if (!posted) await log("  escalation dashboard notification undelivered (no local dashboard reachable)");
+  const investigationPosted = await postSreInvestigation(target, due, message);
+  if (!investigationPosted) await log("  SRE incident capture undelivered (no local dashboard reachable)");
 }
 
 let portsByHost = {};

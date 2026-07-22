@@ -25,6 +25,15 @@ const ACCESS_CAPABILITY_LABELS = {
 
 const DEFAULT_ACCESS = {
   sharedBrain: "ask",
+  sharedEnv: "allow",
+  chatHistory: "ask",
+  connectedApps: "ask",
+  messagingChannels: "ask",
+  fileTransfers: "ask",
+};
+
+const LEGACY_DEFAULT_ACCESS = {
+  sharedBrain: "ask",
   sharedEnv: "ask",
   chatHistory: "ask",
   connectedApps: "ask",
@@ -71,13 +80,23 @@ function threshold(value, fallback) {
   return Math.max(1, Math.min(100, Math.round(number)));
 }
 
-function normalizeAccess(value) {
+function normalizeAccess(value, fallback = DEFAULT_ACCESS) {
   const record = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   return Object.fromEntries(
     FLEET_ACCESS_CAPABILITIES.map((capability) => [
       capability,
-      accessDecision(record[capability], DEFAULT_ACCESS[capability]),
+      accessDecision(record[capability], fallback[capability]),
     ]),
+  );
+}
+
+function isUntouchedLegacyDefaultPolicy(record, authority, updatedAt, temporaryGrants) {
+  if (Number(record.version || 1) !== 1 || !authority) return false;
+  if (!authority.claimedAt || updatedAt !== authority.claimedAt) return false;
+  if (Object.keys(temporaryGrants).length) return false;
+  const legacyAccess = normalizeAccess(record.access, LEGACY_DEFAULT_ACCESS);
+  return FLEET_ACCESS_CAPABILITIES.every(
+    (capability) => legacyAccess[capability] === LEGACY_DEFAULT_ACCESS[capability],
   );
 }
 
@@ -134,14 +153,25 @@ export function defaultFleetMachinePolicy({ machineId = "", now = Date.now() } =
 
 export function normalizeFleetMachinePolicy(value, { machineId = "", now = Date.now() } = {}) {
   const record = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const authority = normalizeAuthority(record.authority);
+  const temporaryGrants = normalizeTemporaryGrants(record.temporaryGrants, now);
+  const updatedAt = cleanText(record.updatedAt, 60) || new Date(now).toISOString();
+  const migrateLegacySharedEnvDefault = isUntouchedLegacyDefaultPolicy(
+    record,
+    authority,
+    updatedAt,
+    temporaryGrants,
+  );
+  const access = normalizeAccess(record.access);
+  if (migrateLegacySharedEnvDefault) access.sharedEnv = DEFAULT_ACCESS.sharedEnv;
   return {
     version: 1,
     machineId: cleanText(record.machineId || machineId, 220),
-    authority: normalizeAuthority(record.authority),
-    access: normalizeAccess(record.access),
+    authority,
+    access,
     performance: normalizePerformance(record.performance),
-    temporaryGrants: normalizeTemporaryGrants(record.temporaryGrants, now),
-    updatedAt: cleanText(record.updatedAt, 60) || new Date(now).toISOString(),
+    temporaryGrants,
+    updatedAt,
   };
 }
 

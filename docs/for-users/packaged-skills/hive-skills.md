@@ -11,6 +11,7 @@ These skills are auto-installed into the shared brain because they are foundatio
 
 | Skill | Purpose |
 | --- | --- |
+| `harness-engineering` | Runs controlled fixed-worker comparisons across context, tools, instructions, authority, and proof, then records an evidence-backed retain, revise, or remove decision. Adapted from Ryan Lopopolo's CC BY 4.0 harness-engineering project. |
 | `engineering-discipline` | Selects a proportionate engineering path and anchors Work Board evidence: design only when needed, real baselines, red/green or non-applicability receipts, focused verification, independent review, rollback, and repository state. |
 | `bankr-skill-deployment` | Chooses the correct Bankr skill, app, x402, Wallet/Agent API, and always-on hosting boundaries, then packages, publishes, installs, updates, and verifies the capability end to end. |
 | `create-zero-human-company` | Creates a durable company from a business goal or existing repository, adds an available crew, measurable apex goal, products, budgets, and approval policies, verifies the saved record, and leaves autonomy stopped until the operator explicitly launches it. |

@@ -143,9 +143,12 @@ assertRouteKeepsDesktops(
   "../src/app/api/tailscale/devices/route.ts",
   "tailscale/devices route",
 );
+// fleet/discover's device helpers (dedupeDevices and friends) were extracted
+// out of the route into this sibling module to get the route back under the
+// file-size ratchet; the visibility filter moved with them.
 assertRouteKeepsDesktops(
-  "../src/app/api/fleet/discover/route.ts",
-  "fleet/discover route",
+  "../src/app/api/fleet/discover-devices.ts",
+  "fleet/discover device helpers",
 );
 
 // --- v0.2.16 Windows desktop UX drift guards. A fresh Windows user was shown a

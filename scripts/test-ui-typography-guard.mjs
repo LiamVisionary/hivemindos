@@ -9,7 +9,7 @@ import path from "node:path";
 const repoRoot = new URL("..", import.meta.url).pathname;
 const guardScript = path.join(repoRoot, "scripts/guard-ui-typography.mjs");
 const designContract = readFileSync(path.join(repoRoot, "DESIGN.md"), "utf8");
-const agentInstructions = readFileSync(path.join(repoRoot, "AGENTS.md"), "utf8");
+const agentInstructions = readFileSync(path.join(repoRoot, "src/AGENTS.md"), "utf8");
 const designSystemButton = readFileSync(
   path.join(repoRoot, "public/design-system/components/core/Button.jsx"),
   "utf8",

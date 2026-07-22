@@ -5,7 +5,7 @@ import { dirname, join, sep } from "node:path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { createTask, patchTask, readBoard } from "@/lib/services/kanban/local-kanban-store";
 import { scheduleQueenBeeAutonomousPickup } from "@/lib/services/queen-bee/autonomous-worker";
-import { chooseQueenBeeDelegate, rankQueenBeeDelegates, type QueenBeeWorkerClass } from "@/lib/services/queen-bee/router";
+import { chooseQueenBeeDelegate, machineMatchesTarget, rankQueenBeeDelegates, type QueenBeeWorkerClass } from "@/lib/services/queen-bee/router";
 import { companyIdFromSource } from "@/lib/services/queen-bee/company-task-context";
 import { readQueenBeeOutcomeStats } from "@/lib/services/queen-bee/outcome-stats";
 import { readProjectRegistry } from "@/lib/services/projects/project-registry";
@@ -231,7 +231,10 @@ export function isRedispatchableReadyTask(
   // "flow:" is load-bearing: without it, sequential/graph company tasks were
   // invisible to every recovery sweep — a stalled flow just stopped forever
   // with zero signal (confirmed open in the 2026-07-11 and 07-16 audits).
-  const autonomous = Boolean(task.loop) || source.startsWith("queen-bee") || source.startsWith("loop") || source.startsWith("company:") || source.startsWith("flow:");
+  // "marketplace" likewise: its monitor/research dispatches are unattended, and
+  // one that missed submit-time routing sat pending 90+ minutes with zero
+  // recovery (seen live 2026-07-18, sync-catalog task t_mrqsxtpy_nn9cg).
+  const autonomous = Boolean(task.loop) || source.startsWith("queen-bee") || source.startsWith("loop") || source.startsWith("company:") || source.startsWith("flow:") || source.startsWith("marketplace");
   if (!autonomous) return false;
   // Idle a beat so we never race the original setTimeout pickup of a just-submitted task.
   return now - (task.updatedAt ?? 0) >= REDISPATCH_MIN_READY_AGE_MS;
@@ -283,7 +286,10 @@ export function isRoutablePendingQueenBeeTask(
   // "flow:" is load-bearing: without it, sequential/graph company tasks were
   // invisible to every recovery sweep — a stalled flow just stopped forever
   // with zero signal (confirmed open in the 2026-07-11 and 07-16 audits).
-  const autonomous = Boolean(task.loop) || source.startsWith("queen-bee") || source.startsWith("loop") || source.startsWith("company:") || source.startsWith("flow:");
+  // "marketplace" likewise: its monitor/research dispatches are unattended, and
+  // one that missed submit-time routing sat pending 90+ minutes with zero
+  // recovery (seen live 2026-07-18, sync-catalog task t_mrqsxtpy_nn9cg).
+  const autonomous = Boolean(task.loop) || source.startsWith("queen-bee") || source.startsWith("loop") || source.startsWith("company:") || source.startsWith("flow:") || source.startsWith("marketplace");
   if (!autonomous) return false;
   // Idle a beat so we never race the submit path that just created the task.
   return now - (task.updatedAt ?? 0) >= REDISPATCH_MIN_READY_AGE_MS;
@@ -355,8 +361,26 @@ export async function routePendingQueenBeeTasks(
         candidateFleet = scopeFleetToMemberIds(fleetSnapshot, memberIds);
         if (candidateFleet.length === 0) continue;
       }
+      // A machine-pinned task may ONLY run on its pinned machine. When it is
+      // offline, leave the task pending — routing "somewhere" ran a marketplace
+      // browser task on a Mac without the signed-in browser (2026-07-18).
+      const requestedMachine = task.requestedMachine?.trim();
+      if (requestedMachine) {
+        candidateFleet = candidateFleet.filter((machine) => machineMatchesTarget(machine, requestedMachine));
+        if (candidateFleet.length === 0) continue;
+      }
+      // An agent-pinned task likewise only ever runs as its pinned agent.
+      const requestedAgent = task.requestedAgent?.trim();
+      if (requestedAgent) {
+        candidateFleet = scopeFleetToMemberIds(candidateFleet, new Set([requestedAgent]));
+        if (candidateFleet.length === 0) continue;
+      }
       const intent = { title: task.title, body: task.body ?? "", skills: task.skills ?? [], projectRegistry };
-      const chain = rankQueenBeeDelegates(intent, candidateFleet, routerOptions);
+      const chain = rankQueenBeeDelegates(
+        intent,
+        candidateFleet,
+        requestedMachine ? { ...routerOptions, targetMachineKey: requestedMachine } : routerOptions,
+      );
       const delegation = chain[0];
       if (!delegation || delegation.status !== "delegated") continue;
       const agentName = delegation.agent?.name || delegation.agent?.id || delegation.agent?.agentId;
@@ -477,10 +501,18 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
   // history (so routing learns from remote agents, not just this machine's chat sessions).
   const { assignments, boardOutcomes } = await readQueenBeeBoardSignals(input);
   const outcomes = mergeQueenBeeOutcomes(sessionOutcomes, boardOutcomes);
-  const targetMachineKey = resolveQueenBeeTargetMachine(input.machineId, message, input.fleetSnapshot ?? []);
+  // An explicit agentId hard-scopes routing to that agent (previously declared
+  // on the input but never honored). An absent agent leaves the task pending —
+  // never a silent fallback to whoever ranks best (routing kept selecting a
+  // fabricating delegate over the caller's proven one, 2026-07-19).
+  const requestedAgent = input.agentId?.trim() || undefined;
+  const routableFleet = requestedAgent
+    ? scopeFleetToMemberIds(input.fleetSnapshot ?? [], new Set([requestedAgent]))
+    : input.fleetSnapshot ?? [];
+  const targetMachineKey = resolveQueenBeeTargetMachine(input.machineId, message, routableFleet);
   const routerOptions = { outcomes, assignments, targetMachineKey };
-  const delegationChain = rankQueenBeeDelegates({ title, body: message, skills: input.skills ?? [], projectRegistry }, input.fleetSnapshot ?? [], routerOptions);
-  const delegation = delegationChain[0] ?? chooseQueenBeeDelegate({ title, body: message, skills: input.skills ?? [], projectRegistry }, input.fleetSnapshot ?? [], routerOptions);
+  const delegationChain = rankQueenBeeDelegates({ title, body: message, skills: input.skills ?? [], projectRegistry }, routableFleet, routerOptions);
+  const delegation = delegationChain[0] ?? chooseQueenBeeDelegate({ title, body: message, skills: input.skills ?? [], projectRegistry }, routableFleet, routerOptions);
   const selectedAgentName = delegation.agent?.name || delegation.agent?.id || delegation.agent?.agentId;
   const selectedMachineName = delegation.machine?.device?.name || delegation.machine?.key;
   const selectedCollectorUrl = queenBeeDelegationCollectorUrl(delegation);
@@ -499,6 +531,10 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
       name: selectedMachineName || "Unknown machine",
       collectorUrl: selectedCollectorUrl,
     } : null,
+    // Persist the pins so recovery re-routing (a pending task delegated later)
+    // can never send this task to a different machine or agent than demanded.
+    requestedMachine: targetMachineKey || undefined,
+    requestedAgent,
     loop: input.loop ?? undefined,
     projectId: input.projectId?.trim() || undefined,
     idempotencyKey,

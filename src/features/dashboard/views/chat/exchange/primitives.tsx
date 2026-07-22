@@ -7,7 +7,7 @@ export const FR_CHAT_STATE: Record<string, { dot: string; text: string; label: s
   ready: { dot: "var(--fg-3)", text: "var(--fg-3)", label: "ready" },
   scheduled: { dot: "var(--honey)", text: "var(--honey)", label: "scheduled" },
   setup: { dot: "var(--honey)", text: "var(--honey)", label: "setup" },
-  failed: { dot: "var(--danger)", text: "var(--danger)", label: "blocked" },
+  failed: { dot: "var(--danger)", text: "var(--danger)", label: "status check failed" },
 };
 
 export const FR_COL_TONE: Record<string, { c: string; bg: string; br: string }> = {

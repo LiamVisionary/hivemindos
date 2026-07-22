@@ -50,6 +50,8 @@ function FrNavIcon({ id }: { id: string }) {
       return (<svg {...p}><circle cx="18" cy="5" r="2.5" /><circle cx="6" cy="12" r="2.5" /><circle cx="18" cy="19" r="2.5" /><path d="M8.3 10.8 15.7 6.2M8.3 13.2l7.4 4.6" /></svg>);
     case "governance":
       return <Building2 aria-hidden="true" width={20} height={20} strokeWidth={1.7} />;
+    case "marketplace":
+      return (<svg {...p}><path d="M3 9.5 4.5 4h15L21 9.5" /><path d="M4 9.5V20h16V9.5" /><path d="M9 20v-6h6v6" /><path d="M3 9.5h18" /></svg>);
     case "scheduler":
       return (<svg {...p}><rect x="3.5" y="4.5" width="17" height="16" rx="2.2" /><path d="M3.5 9h17M8 3v3M16 3v3" /><path d="M12 12v2.5l1.6 1" /></svg>);
     case "notifications":

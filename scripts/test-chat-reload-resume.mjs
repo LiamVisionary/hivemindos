@@ -30,24 +30,24 @@ assertIncludes(streamState, "sessionId: input.sessionId", "active run stream sta
 
 assertIncludes(inputHelpers, "function isChatTransportInterruption(error: unknown)", "transport interruption classifier");
 assertIncludes(controller, "isChatTransportInterruption(error)", "chat controller uses transport interruption classifier");
-assertIncludes(controller, "const localRuntimeSessionId = requestRuntimeSessionId || taskId;", "local runtime session fallback");
+assertIncludes(controller, "const localRuntimeSessionId = taskId;", "each chat turn receives an isolated local runtime session id");
 assertMatch(
   controller,
   /startChatStream\(\s*selectedStorageKey,\s*selectedAgent\.id,\s*selectedChatLeafKey,\s*outgoingLabel,\s*taskId,\s*requestStartedAt,\s*localRuntimeSessionId\s*\)/s,
   "chat stream starts with the known local runtime session id",
 );
 assertIncludes(controller, "let currentRuntimeSessionId = localRuntimeSessionId || \"\";", "polling starts from local runtime session id");
-assertIncludes(controller, "runtimeSessionId: requestRuntimeSessionId || undefined", "request still lets the route derive new session id from clientRunId");
+assertIncludes(controller, "runtimeSessionId: localRuntimeSessionId", "request sends the isolated local runtime session id");
 assertIncludes(controller, "clientRunId: taskId", "request sends client run id used by runtime-session fallback");
 
 assertMatch(
   controller,
-  /if \(parsed\.session\?\.id\) \{\s*const sessionId = parsed\.session\.id;\s*currentRuntimeSessionId = sessionId;/s,
-  "stream session events refresh the current runtime session id",
+  /if \(parsed\.session\?\.id\) \{\s*const sessionId = parsed\.session\.id;\s*if \(!currentRuntimeSessionId \|\| sessionId === localRuntimeSessionId\) currentRuntimeSessionId = sessionId;/s,
+  "nested runtime session events cannot replace the turn-owned local session id",
 );
 assertMatch(
   controller,
-  /recordActiveChatRun\?\.\(\{\s*storageKey: selectedStorageKey,[\s\S]*?sessionId,[\s\S]*?status: "active",\s*\}\);/s,
+  /recordActiveChatRun\?\.\(\{\s*storageKey: selectedStorageKey,[\s\S]*?sessionId: activeSessionId,[\s\S]*?status: "active",\s*\}\);/s,
   "stream session events keep the active run resumable",
 );
 
@@ -56,11 +56,12 @@ assertIncludes(controller, "preserveActiveRun = transportInterrupted;", "transpo
 assertIncludes(controller, "sessionId: currentRuntimeSessionId || localRuntimeSessionId || undefined", "interruption records fallback session id");
 assertIncludes(controller, "status: aborted ? \"stalled\" : \"active\"", "transport interruption stays active for reload polling");
 assertIncludes(controller, "if (transportInterrupted) {", "transport interruption returns without final error bubble");
-assertIncludes(controller, "if (!preserveActiveRun && (sawDone || !abortController.signal.aborted || recoveredAssistantText.trim())) clearActiveChatRun?.(selectedStorageKey);", "finally does not clear preserved active run");
+assertIncludes(controller, "if (!preserveActiveRun && (sawDone || !abortController.signal.aborted || recoveredAssistantText.trim())) clearActiveChatRun?.(selectedStorageKey, taskId);", "finally clears only the completed active run");
 
 assertIncludes(processPanel, "cancelled|canceled|error", "process panel treats error events as terminal");
 assertIncludes(dashboard, "if (message?.type === \"process\")", "dashboard preserves runtime-session process event labels");
 assertIncludes(inputHelpers, "if (message?.type === \"process\")", "live session recovery preserves runtime-session process event labels");
-assertIncludes(dashboard, "? !endedAt && !hasAssistantReply", "runtime poller does not keep ended active runs marked running");
+assertIncludes(dashboard, "? !endedAt", "runtime poller uses the explicit session end marker rather than partial assistant text");
+assertIncludes(dashboard, "reconcilePolledChatStreamState", "runtime poll reconciliation is monotonic and run-scoped");
 
 console.log("chat reload resume regression passed");

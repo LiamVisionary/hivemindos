@@ -51,12 +51,22 @@ import {
   telegramPublicLabel,
 } from "./community-honey-logic";
 import {
-  HONEY_REACTION_REASON,
-  HONEY_RECOGNITION_REACTION_EMOJI,
   HoneyReactionMessageIndex,
   honeyRecognitionReactionWasAdded,
   parseHoneyCommandArgs,
 } from "./honey-recognition";
+import { handleHoneyReactionWithAudit } from "./honey-reaction-handler";
+import {
+  honeyAuditDetail,
+  honeyRecognitionAuditId,
+  listHoneyRecognitionAudit,
+  type HoneyRecognitionAuditEntry,
+} from "./honey-audit-state";
+import {
+  finishHoneyRecognitionAudit,
+  readTipBotHoneyAuditState,
+  startHoneyRecognitionAudit,
+} from "./honey-audit-store";
 
 export type TipBotConfig = {
   botUsername: string;
@@ -89,6 +99,13 @@ export type TipBotRuntime = {
 const MAX_LINKED_WALLETS = 5;
 const honeyReactionMessages = new HoneyReactionMessageIndex();
 
+class HoneyRecognitionCommandError extends Error {
+  constructor(message: string, readonly auditId: string, readonly recorded = false) {
+    super(message);
+    this.name = "HoneyRecognitionCommandError";
+  }
+}
+
 function fmt(config: TipBotConfig, amountRaw: bigint | string): string {
   return `${formatTokenAmount(amountRaw, config.token.decimals)} ${config.token.symbol}`;
 }
@@ -109,15 +126,42 @@ function communityHoney(runtime: TipBotRuntime) {
   return new CommunityHoneyClient(runtime.config.communityHoney);
 }
 
+function newHoneyAuditEntry(input: {
+  source: HoneyRecognitionAuditEntry["source"];
+  updateId: number;
+  message: Pick<TgMessage, "message_id" | "chat" | "from">;
+  recipientUserId?: string;
+}): HoneyRecognitionAuditEntry {
+  const now = new Date().toISOString();
+  return {
+    id: honeyRecognitionAuditId(input.source, input.updateId),
+    source: input.source,
+    updateId: input.updateId,
+    chatId: String(input.message.chat.id),
+    messageId: input.message.message_id,
+    giverUserId: String((input.message.from as TgUser).id),
+    recipientUserId: input.recipientUserId,
+    outcome: "received",
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 export async function notifyAdmins(runtime: TipBotRuntime, text: string) {
   for (const adminId of runtime.config.adminIds) {
     await runtime.api.sendMessage({ chatId: adminId, text }).catch(() => undefined);
   }
 }
 
-// DM a user; fails silently when they haven't started the bot (Telegram 403).
+// DM a user and report whether Telegram accepted the notification. Callers
+// that need a user-visible failure path must not mistake a 403 for delivery.
 export async function notifyUser(runtime: TipBotRuntime, userId: string, text: string) {
-  await runtime.api.sendMessage({ chatId: userId, text }).catch(() => undefined);
+  try {
+    await runtime.api.sendMessage({ chatId: userId, text });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function helpText(config: TipBotConfig): string {
@@ -141,8 +185,9 @@ function helpText(config: TipBotConfig): string {
     "🍯 <b>HONEY</b> — one cumulative record of useful contribution, not message volume.",
     "/linkhoney — privately connect Telegram to your verified HivemindOS wallet workspace",
     "/honey — your HONEY profile",
-    "/honey @name &lt;why&gt; — give 1 HONEY (up to 3 recognitions/day after identity checks)",
-    "I place 🏆 under eligible group messages—tap it to give the same bounded recognition.",
+    "/honey @name &lt;why&gt; — give 1 HONEY (up to 3 recognitions per giver each UTC day)",
+    "Add 🏆 to a member's group message to give the same bounded recognition.",
+    "/honeyaudit [@name] — inspect HONEY attempts and outcomes (admins)",
     "/missions — open contribution missions",
     "/submit &lt;hm_id&gt; &lt;evidence&gt; — submit mission evidence",
     "/honeyboard — current season leaderboard",
@@ -383,6 +428,8 @@ export async function handleTipBotUpdate(runtime: TipBotRuntime, update: TgUpdat
         return await handleLinkHoney(runtime, message, reply);
       case "honey":
         return await handleHoneyCommand(runtime, state, message, parsed.args, reply, update.update_id, parsed.targetUserId);
+      case "honeyaudit":
+        return await handleHoneyAuditCommand(runtime, state, message, parsed.args, reply);
       case "missions":
         return await handleCommunityMissions(runtime, message, reply);
       case "mission":
@@ -412,7 +459,20 @@ export async function handleTipBotUpdate(runtime: TipBotRuntime, update: TgUpdat
     }
   } catch (error) {
     const text = error instanceof Error ? error.message : "Something went wrong.";
-    await reply(`⚠️ ${escapeHtml(text)}`).catch(() => undefined);
+    const receipt = error instanceof HoneyRecognitionCommandError
+      ? `\nReceipt: <code>${escapeHtml(error.auditId)}</code>`
+      : "";
+    try {
+      await reply(`⚠️ ${escapeHtml(text)}${receipt}`);
+    } catch (replyError) {
+      if (error instanceof HoneyRecognitionCommandError && !error.recorded) {
+        await finishHoneyRecognitionAudit(error.auditId, {
+          outcome: "rejected-reply-failed",
+          detail: `${honeyAuditDetail(error)} Reply delivery failed: ${honeyAuditDetail(replyError)}`,
+        }).catch(() => undefined);
+      }
+      throw new Error(`Telegram command failed and its error reply was not delivered: ${honeyAuditDetail(replyError)}`);
+    }
   }
 }
 
@@ -425,45 +485,13 @@ async function handleHoneyReaction(runtime: TipBotRuntime, update: TgUpdate) {
   ) {
     return;
   }
-
-  const giver = reaction.user;
-  const recipient = honeyReactionMessages.resolve(reaction.chat.id, reaction.message_id);
-  if (!recipient) {
-    await notifyUser(
-      runtime,
-      String(giver.id),
-      `${HONEY_RECOGNITION_REACTION_EMOJI} I couldn't match that message to a recent member. Reply to it with <code>/honey &lt;why&gt;</code> instead.`,
-    );
-    return;
-  }
-
-  try {
-    const result = await communityHoney(runtime).givePeerHoney({
-      giverTelegramUserId: String(giver.id),
-      recipientTelegramUserId: String(recipient.id),
-      telegramUpdateId: String(update.update_id),
-      reason: HONEY_REACTION_REASON,
-    });
-    if (result.duplicate) return;
-    await runtime.api.sendMessage({
-      chatId: reaction.chat.id,
-      replyToMessageId: reaction.message_id,
-      text: [
-        `${HONEY_RECOGNITION_REACTION_EMOJI} <b>${escapeHtml(telegramPublicLabel(giver))} recognized ${escapeHtml(result.recipientPublicLabel || telegramPublicLabel(recipient))}</b>`,
-        `🍯 +${Number(result.honeyGiven || 1).toLocaleString()} HONEY · ${Number(result.recognitionsRemainingToday || 0).toLocaleString()} of ${Number(result.dailyRecognitionLimit || 0).toLocaleString()} recognitions left today.`,
-        ...(result.recipientLinked === false
-          ? ["Banked to their Telegram account — <code>/linkhoney</code> transfers it to HivemindOS anytime."]
-          : []),
-      ].join("\n"),
-    });
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : "The recognition could not be recorded.";
-    await notifyUser(
-      runtime,
-      String(giver.id),
-      `${HONEY_RECOGNITION_REACTION_EMOJI} Recognition not recorded: ${escapeHtml(reason)}`,
-    );
-  }
+  return handleHoneyReactionWithAudit({
+    api: runtime.api,
+    client: communityHoney(runtime),
+    update,
+    recipient: honeyReactionMessages.resolve(reaction.chat.id, reaction.message_id),
+    notifyGiver: (userId, text) => notifyUser(runtime, userId, text),
+  });
 }
 
 type ReplyExtra = {
@@ -1006,44 +1034,93 @@ async function handleHoneyCommand(
   telegramUpdateId: number,
   promptedTargetUserId?: string,
 ) {
+  const from = message.from as TgUser;
+  const resolvedRecipient = resolveHoneyRecipient(state, message, runtime.config.botUsername, promptedTargetUserId);
   let action;
   try {
     action = parseHoneyCommandArgs(args);
   } catch (error) {
-    const recipient = resolveHoneyRecipient(state, message, runtime.config.botUsername, promptedTargetUserId);
-    if (recipient && /at least 8 characters/i.test(error instanceof Error ? error.message : "")) {
-      await promptForReply(reply, {
-        chatId: message.chat.id,
-        text: "What useful contribution are you recognizing? Reply with 8–160 characters.",
-        command: "honey",
-        userId: String((message.from as TgUser).id),
-        targetUserId: recipient.userId,
-      });
-      return;
+    const audit = newHoneyAuditEntry({
+      source: "command",
+      updateId: telegramUpdateId,
+      message,
+      recipientUserId: resolvedRecipient?.userId,
+    });
+    await startHoneyRecognitionAudit(audit);
+    if (resolvedRecipient && /at least 8 characters/i.test(error instanceof Error ? error.message : "")) {
+      await finishHoneyRecognitionAudit(audit.id, { outcome: "awaiting-reason", detail: honeyAuditDetail(error) });
+      try {
+        await promptForReply(reply, {
+          chatId: message.chat.id,
+          text: "What useful contribution are you recognizing? Reply with 8–160 characters.",
+          command: "honey",
+          userId: String(from.id),
+          targetUserId: resolvedRecipient.userId,
+        });
+        return;
+      } catch (replyError) {
+        await finishHoneyRecognitionAudit(audit.id, { outcome: "rejected-reply-failed", detail: `Reason prompt delivery failed: ${honeyAuditDetail(replyError)}` });
+        throw new HoneyRecognitionCommandError("I couldn't deliver the follow-up question, so no HONEY was recorded.", audit.id);
+      }
     }
-    throw error;
+    await finishHoneyRecognitionAudit(audit.id, { outcome: "rejected", detail: honeyAuditDetail(error) });
+    throw new HoneyRecognitionCommandError(honeyAuditDetail(error), audit.id);
   }
   if (action.kind === "profile") return handleHoneyProfile(runtime, message, reply);
 
-  const recipient = resolveHoneyRecipient(state, message, runtime.config.botUsername, promptedTargetUserId);
-  if (!recipient) {
-    throw new Error("Reply to a member's message or use /honey @name <why> for a member I've seen chat before. No HivemindOS link is needed to receive HONEY.");
-  }
-  const from = message.from as TgUser;
-  const result = await communityHoney(runtime).givePeerHoney({
-    giverTelegramUserId: String(from.id),
-    recipientTelegramUserId: recipient.userId,
-    telegramUpdateId: String(telegramUpdateId),
-    reason: action.reason,
+  const audit = newHoneyAuditEntry({
+    source: "command",
+    updateId: telegramUpdateId,
+    message,
+    recipientUserId: resolvedRecipient?.userId,
   });
-  await reply([
-    `🍯 <b>+${Number(result.honeyGiven || 1).toLocaleString()} HONEY</b> to ${escapeHtml(result.recipientPublicLabel || recipient.publicLabel)}`,
-    escapeHtml(action.reason),
-    `You have ${Number(result.recognitionsRemainingToday || 0).toLocaleString()} of ${Number(result.dailyRecognitionLimit || 0).toLocaleString()} recognitions left today.`,
-    result.recipientLinked === false
-      ? "Banked to their Telegram account — <code>/linkhoney</code> transfers it to HivemindOS anytime."
-      : "This HONEY adds to the recipient's lifetime total and tier progress.",
-  ].join("\n"));
+  await startHoneyRecognitionAudit(audit);
+  if (!resolvedRecipient) {
+    const detail = "Recipient could not be resolved from a known username, text mention, or replied-to member.";
+    await finishHoneyRecognitionAudit(audit.id, { outcome: "rejected", detail });
+    throw new HoneyRecognitionCommandError("Reply to a member's message or use /honey @name <why> for a member I've seen chat before. No HivemindOS link is needed to receive HONEY.", audit.id);
+  }
+  let result;
+  try {
+    result = await communityHoney(runtime).givePeerHoney({
+      giverTelegramUserId: String(from.id),
+      recipientTelegramUserId: resolvedRecipient.userId,
+      telegramUpdateId: String(telegramUpdateId),
+      reason: action.reason,
+    });
+  } catch (error) {
+    await finishHoneyRecognitionAudit(audit.id, { outcome: "rejected", detail: honeyAuditDetail(error) });
+    throw new HoneyRecognitionCommandError(honeyAuditDetail(error), audit.id);
+  }
+  try {
+    await finishHoneyRecognitionAudit(audit.id, {
+      outcome: result.duplicate ? "duplicate" : "recorded",
+      recognitionsRemainingToday: result.recognitionsRemainingToday,
+      dailyRecognitionLimit: result.dailyRecognitionLimit,
+      detail: result.duplicate
+        ? "The hosted ledger had already processed this Telegram update."
+        : "The hosted ledger recorded the recognition.",
+    });
+  } catch (auditError) {
+    const message = result.duplicate
+      ? "This Telegram update was already processed, but I couldn't finalize its local audit receipt."
+      : "HONEY was recorded, but I couldn't finalize its local audit receipt.";
+    throw new HoneyRecognitionCommandError(`${message} ${honeyAuditDetail(auditError)}`, audit.id, true);
+  }
+  try {
+    await reply([
+      `🍯 <b>+${Number(result.honeyGiven || 1).toLocaleString()} HONEY</b> to ${escapeHtml(result.recipientPublicLabel || resolvedRecipient.publicLabel)}`,
+      escapeHtml(action.reason),
+      `Your quota: ${Number(result.recognitionsRemainingToday || 0).toLocaleString()} of ${Number(result.dailyRecognitionLimit || 0).toLocaleString()} recognitions left this UTC day.`,
+      result.recipientLinked === false
+        ? "Banked to their Telegram account — <code>/linkhoney</code> transfers it to HivemindOS anytime."
+        : "This HONEY adds to the recipient's lifetime total and tier progress.",
+      `Receipt: <code>${escapeHtml(audit.id)}</code>`,
+    ].join("\n"));
+  } catch (replyError) {
+    await finishHoneyRecognitionAudit(audit.id, { outcome: "recorded-reply-failed", detail: `Success receipt delivery failed: ${honeyAuditDetail(replyError)}` });
+    throw new HoneyRecognitionCommandError(`HONEY was recorded, but I couldn't deliver its receipt. An admin can verify ${audit.id} with /honeyaudit.`, audit.id, true);
+  }
 }
 
 function resolveHoneyRecipient(
@@ -1062,6 +1139,42 @@ function resolveHoneyRecipient(
     return { userId: recipient.user.id, publicLabel: displayName(recipient.user) };
   }
   return { userId: String(recipient.user.id), publicLabel: telegramPublicLabel(recipient.user) };
+}
+
+async function handleHoneyAuditCommand(
+  runtime: TipBotRuntime,
+  state: TipBotState,
+  message: TgMessage,
+  args: string,
+  reply: ReplyFn,
+) {
+  const from = message.from as TgUser;
+  if (!isAdmin(runtime.config, from)) throw new Error("HONEY audit is restricted to configured bot admins.");
+  const wantsTarget = Boolean(args.trim() || message.reply_to_message?.from);
+  const target = wantsTarget ? resolveHoneyRecipient(state, message, runtime.config.botUsername) : null;
+  if (wantsTarget && !target) throw new Error("Use /honeyaudit @name or reply to a member's message with /honeyaudit.");
+
+  const auditState = await readTipBotHoneyAuditState();
+  const entries = listHoneyRecognitionAudit(auditState, {
+    chatId: String(message.chat.id),
+    userId: target?.userId,
+    limit: 10,
+  });
+  if (!entries.length) {
+    await reply(`🍯 No HONEY recognition attempts are recorded here${target ? ` for ${escapeHtml(target.publicLabel)}` : ""}.`);
+    return;
+  }
+  const label = (userId?: string) => userId && state.users[userId] ? displayName(state.users[userId]) : "member";
+  const rows = entries.flatMap((entry) => [
+    `• <code>${escapeHtml(entry.createdAt)}</code> · ${entry.source} · ${escapeHtml(label(entry.giverUserId))} → ${escapeHtml(label(entry.recipientUserId))}`,
+    `  <b>${escapeHtml(entry.outcome)}</b>${entry.recognitionsRemainingToday !== undefined ? ` · giver quota ${entry.recognitionsRemainingToday}/${entry.dailyRecognitionLimit}` : ""} · receipt <code>${escapeHtml(entry.id)}</code> · message ${entry.messageId} / update ${entry.updateId}`,
+    ...(entry.detail ? [`  ${escapeHtml(entry.detail)}`] : []),
+  ]);
+  await reply([
+    `🍯 <b>HONEY recognition audit${target ? ` — ${escapeHtml(target.publicLabel)}` : ""}</b>`,
+    "No message bodies or recognition reasons are retained in this audit.",
+    ...rows,
+  ].join("\n"));
 }
 
 async function handleCommunityMissions(runtime: TipBotRuntime, _message: TgMessage, reply: ReplyFn) {

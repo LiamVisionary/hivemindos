@@ -43,11 +43,8 @@ import type { ChatMediaArtifact } from "./media-artifacts";
 import { recordRuntimeTelemetry, telemetryPayloadForProfile, type RuntimeRouteTelemetry } from "./route-telemetry";
 import {
   buildWalletTools,
-  interactiveRuntimeLockKey,
   readWorkspaceSnapshot,
   recordChatHoney,
-  releaseInteractiveRuntime,
-  reserveInteractiveRuntime,
   RUNTIME_FETCH_TIMEOUT_MS,
   runtimeFetchError,
   runtimeStreamErrorMessage,
@@ -155,17 +152,8 @@ export async function streamHttpRuntime(
     }
   }
   const url = getRuntimeUrl(profile, profile.chatPath || "/chat");
-  const lockKey = interactiveRuntimeLockKey(profile, url, telemetry?.chatStorageKey || runtimeSessionId);
-  if (!reserveInteractiveRuntime(lockKey)) {
-    const message = `${profile.name || profile.runtime} is already running another interactive request at ${url}. Wait for that run to finish before sending another chat, scheduler run, or Kanban assignment.`;
-    recordRuntimeTelemetry(telemetry, "agent_runtime.http.busy", {
-      ...telemetryPayloadForProfile(runtimeProfile),
-      url,
-    });
-    return runtimeSessionErrorResponse(runtimeSessionId, message, 409, "blocked");
-  }
   if (isAdaptiveOpenRouterProfile(profile) && profile.runtime === "hermes") {
-    return streamAdaptiveHermesOpenRouterRuntime(profile, messages, userText, sharedVault, agentMode, url, lockKey, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, vaultPromptContext);
+    return streamAdaptiveHermesOpenRouterRuntime(profile, messages, userText, sharedVault, agentMode, url, workingDirectory, wallet, honeyLedgerEnabled, runtimeSessionId, telemetry, taskRetrievalContext, sharedBrainMemoryContext, vaultPromptContext);
   }
   const vaultContext = vaultPromptContext;
   const promptEnvelope = buildHivemindPromptEnvelope({
@@ -276,7 +264,6 @@ export async function streamHttpRuntime(
     });
     if (upstream.ok) recordAgentRuntimeWarm(runtimeProfile);
   } catch (error) {
-    releaseInteractiveRuntime(lockKey);
     recordRuntimeTelemetry(telemetry, "agent_runtime.http.fetch.failed", {
       ...telemetryPayloadForProfile(runtimeProfile),
       url,
@@ -313,7 +300,6 @@ export async function streamHttpRuntime(
       bodyPreview: message.slice(0, 500),
       fetchElapsedMs: Date.now() - fetchStartedAt,
     });
-    releaseInteractiveRuntime(lockKey);
     await appendRuntimeChatSessionEvent(runtimeSessionId, "Runtime upstream error", message).catch(() => undefined);
     await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
     return new Response(
@@ -335,7 +321,6 @@ export async function streamHttpRuntime(
     const json = await upstream.json().catch(async () => ({ text: await upstream.text().catch(() => "") }));
     const outputCheck = proxyOutput(extractChunk(json));
     if (outputCheck.verdict === "block") {
-      releaseInteractiveRuntime(lockKey);
       await appendRuntimeChatSessionEvent(runtimeSessionId, "Runtime output blocked", outputCheck.reason).catch(() => undefined);
       await finishRuntimeChatSession(runtimeSessionId, "blocked").catch(() => undefined);
       return new Response(
@@ -347,7 +332,6 @@ export async function streamHttpRuntime(
     const event = await recordChatHoney(runtimeProfile, userText, chunk, honeyLedgerEnabled);
     await appendRuntimeChatSessionText(runtimeSessionId, "assistant", chunk || JSON.stringify(json), json).catch(() => undefined);
     await finishRuntimeChatSession(runtimeSessionId, "completed").catch(() => undefined);
-    releaseInteractiveRuntime(lockKey);
     return new Response(
       ssePayload({ choices: [{ delta: { content: chunk || JSON.stringify(json) } }] })
       + (event ? ssePayload({ honey: event }) : "")
@@ -399,7 +383,6 @@ export async function streamHttpRuntime(
         queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Runtime response body is empty"));
         queueSessionWrite(() => finishRuntimeChatSession(runtimeSessionId, "failed"));
         await sessionWrite.catch(() => undefined);
-        releaseInteractiveRuntime(lockKey);
         safeClose();
         return;
       }
@@ -672,7 +655,6 @@ export async function streamHttpRuntime(
         safeEnqueue("data: [DONE]\n\n");
       } finally {
         await sessionWrite.catch(() => undefined);
-        releaseInteractiveRuntime(lockKey);
         safeClose();
       }
     },

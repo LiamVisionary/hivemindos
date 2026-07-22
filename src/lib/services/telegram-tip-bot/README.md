@@ -37,6 +37,7 @@ new dependencies (raw Telegram Bot API over fetch, viem for Base).
 | `/honey` or `/honey balance` | anywhere; result is private | show one lifetime HONEY total, its source provenance, and today's recognition allowance |
 | `/honey @name <why>` or reply with `/honey <why>` | group/DM | give exactly 1 peer-recognition HONEY with a meaningful reason |
 | React to a member message with 🏆 | group | give the message author the same bounded 1-HONEY recognition without typing a command |
+| `/honeyaudit [@name]` or reply with `/honeyaudit` | admin | show recent typed-command/reaction attempts, outcomes, quota owner, and receipt ids |
 | `/missions` | group/DM | show open contribution missions and evidence requirements |
 | `/submit <hm_id> <evidence>` | group/DM | submit evidence for a HONEY mission |
 | `/honeyboard` | group/DM | current seasonal HONEY leaderboard with reviewed, peer, and legacy totals |
@@ -46,6 +47,7 @@ new dependencies (raw Telegram Bot API over fetch, viem for Base).
 | `/pause` `/resume` `/approve <id>` `/reject <id>` `/botstats` `/bountystats` | admin | controls + solvency/checks |
 | `/warn` `/mute` `/ban` `/unban` (as replies) | admin, group | manual moderation actions |
 | `/trust` `/untrust` (as replies) | admin, group | manage the group's trusted-user allowlist |
+| `/modaudit @name` or reply with `/modaudit` | admin, group | show a member's recent moderation actions and privacy-safe rule evidence |
 | `/modmode audit\|enforce\|off` `/modstats` `/modhelp` | admin, group | moderation mode, metrics, and help |
 
 ## Custody modes (withdrawals)
@@ -130,11 +132,23 @@ cooldown gates the giving side.
 The fast path is a native Telegram reaction: a member adds 🏆 to a message from
 the reaction menu. That reaction is the explicit recognition action; it sends
 the same identities and Telegram update id to the hosted gateway and posts a
-short confirmation only after the award succeeds. Removing the reaction, adding
-another emoji, or reacting anonymously awards nothing. Message text is not sent
-to the gateway. The bot keeps only a bounded, in-memory index of recent message
-authors, so an older message that predates a bot restart falls back to replying
-with `/honey <why>`.
+short confirmation only after the award succeeds. The confirmation names the
+giver whose daily quota changed, says whether the award came from a 🏆 reaction,
+and includes a receipt id. Removing the reaction, adding another emoji, or
+reacting anonymously awards nothing. Message text is not sent to the gateway.
+The bot keeps only a bounded, in-memory index of recent message authors, so an
+older message that predates a bot restart falls back to replying with
+`/honey <why>`.
+
+Every typed recognition and 🏆 attempt first creates a bounded durable receipt
+at `~/.hivemindos/telegram-tip-bot-honey-audit.json`. Admins can inspect the ten
+most recent attempts in a chat with `/honeyaudit`, narrow it with
+`/honeyaudit @name`, or reply to a member with `/honeyaudit`. Each receipt shows
+command vs reaction, recorded/rejected/delivery-failed outcome, giver quota,
+Telegram message/update ids, and a privacy-safe error summary. It stores no
+message body or recognition reason. Command text tolerates accidental leading
+or trailing whitespace, and a failed Telegram error reply is surfaced to the
+runner instead of disappearing silently.
 
 The bot must never place the 🏆 reaction itself. Telegram clients animate every
 reaction placement, so a bot-seeded trophy plays the award animation under
@@ -295,16 +309,27 @@ Optional thresholds:
 - `TELEGRAM_TIP_BOT_MODERATION_NEW_MEMBER_MESSAGE_LIMIT=3`
 - `TELEGRAM_TIP_BOT_MODERATION_FLOOD_MAX_MESSAGES=5`
 - `TELEGRAM_TIP_BOT_MODERATION_FLOOD_WINDOW_SECONDS=10`
+- `TELEGRAM_TIP_BOT_MODERATION_DUPLICATE_MIN_CHARACTERS=32`
+- `TELEGRAM_TIP_BOT_MODERATION_DUPLICATE_MIN_OCCURRENCES=3`
 - `TELEGRAM_TIP_BOT_MODERATION_DUPLICATE_WINDOW_MINUTES=10`
 - `TELEGRAM_TIP_BOT_MODERATION_MUTE_MINUTES=60`
 - `TELEGRAM_TIP_BOT_MODERATION_BAN_AFTER_STRIKES=3`
 
 Automatic sales solicitations are routed and removed without banning the
 sender. Credential scams and blocked domains are high severity and plan an
-immediate ban. Other violations escalate from warning/deletion to temporary
-mute and then ban. Before any destructive action, the bot asks Telegram for
-the target's current membership and refuses to act on creators,
-administrators, the bot itself, or trusted users.
+immediate ban. Repeated-message enforcement requires three distinct Telegram
+messages with at least 32 normalized characters inside the duplicate window;
+short conversational replies, update replays, and edits do not count toward
+duplicate or flood activity. Edits still pass through the content rules so an
+edited-in scam or blocked link remains enforceable. Other violations escalate
+from warning/deletion to temporary mute and then ban. Before any destructive
+action, the bot asks Telegram for the target's current membership and refuses
+to act on creators, administrators, the bot itself, or trusted users.
+
+Admins can run `/modaudit @name` (or reply to a member with `/modaudit`) to see
+the last five actions, current strikes/mute state, Telegram message/update ids,
+and privacy-safe duplicate/flood evidence. Message bodies and reversible
+message hashes are not retained.
 
 ## Guardrails
 

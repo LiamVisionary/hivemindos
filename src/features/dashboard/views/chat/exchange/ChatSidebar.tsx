@@ -36,6 +36,7 @@ export type SidebarRow = ChatThreadRow & {
   capabilityApprovalPending?: boolean;
   subtitle?: string;
   onOpen?: () => void;
+  onStartChat?: () => void;
 };
 
 type MenuAnchor = { key: string; x: number; y: number };
@@ -73,6 +74,9 @@ export type ChatSidebarProps = {
   search: string;
   onSearchChange: (value: string) => void;
   onNewChat?: () => void;
+  onNewGeneralChat?: () => void;
+  onCreateProject?: () => void;
+  onImportProject?: () => void;
   newChatLabel?: string;
   onDuplicate: (storageKey: string) => void;
   onDelete: (storageKey: string) => void;
@@ -83,41 +87,45 @@ export type ChatSidebarProps = {
 export function ChatSidebar(props: ChatSidebarProps) {
   const {
     rows, machineNames, prefs, search, onSearchChange,
-    onNewChat, newChatLabel, onDuplicate, onDelete, footerLabel, loading,
+    onNewChat, onNewGeneralChat, onCreateProject, onImportProject,
+    newChatLabel, onDuplicate, onDelete, footerLabel, loading,
   } = props;
 
   const [viewsOpen, setViewsOpen] = useState(false);
   const [viewsSub, setViewsSub] = useState<"" | "status" | "machine" | "activity" | "group" | "sort">("");
   const [viewsAnchor, setViewsAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [projectMenuAnchor, setProjectMenuAnchor] = useState<{ x: number; y: number } | null>(null);
   const [rowMenu, setRowMenu] = useState<MenuAnchor | null>(null);
   const [visibleChatsByGroup, setVisibleChatsByGroup] = useState<Record<string, number>>({});
   const popRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (!viewsOpen && !rowMenu) return undefined;
+    if (!viewsOpen && !projectMenuAnchor && !rowMenu) return undefined;
     function closeOnOutside(event: PointerEvent) {
       const target = event.target;
       if (target instanceof Element && target.closest("[data-cx-pop]")) return;
       setViewsOpen(false);
       setViewsSub("");
+      setProjectMenuAnchor(null);
       setRowMenu(null);
     }
     window.addEventListener("pointerdown", closeOnOutside);
     return () => window.removeEventListener("pointerdown", closeOnOutside);
-  }, [viewsOpen, rowMenu]);
+  }, [projectMenuAnchor, viewsOpen, rowMenu]);
 
   // Escape closes whichever popover is open.
   useEffect(() => {
-    if (!viewsOpen && !rowMenu) return undefined;
+    if (!viewsOpen && !projectMenuAnchor && !rowMenu) return undefined;
     function onKey(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
       setViewsOpen(false);
       setViewsSub("");
+      setProjectMenuAnchor(null);
       setRowMenu(null);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [viewsOpen, rowMenu]);
+  }, [projectMenuAnchor, viewsOpen, rowMenu]);
 
   const [nowMs] = useState(() => Date.now());
 
@@ -214,7 +222,21 @@ export function ChatSidebar(props: ChatSidebarProps) {
 
         {!loading && generalRows.length ? (
           <section style={{ marginBottom: 12 }}>
-            <div style={eyebrow}><Ico d={ICON_PATHS.chat} size={12} sw={2} /><span>General</span></div>
+            <div className="cx-rowwrap" style={{ display: "flex", alignItems: "center" }}>
+              <div style={{ ...eyebrow, flex: 1 }}><Ico d={ICON_PATHS.chat} size={12} sw={2} /><span>General</span></div>
+              {onNewGeneralChat ? (
+                <button
+                  type="button"
+                  className="cx-iconbtn"
+                  onClick={onNewGeneralChat}
+                  title="New general chat"
+                  aria-label="New general chat"
+                  style={{ display: "grid", placeItems: "center", width: 22, height: 22, margin: "7px 8px 0 0", border: 0, borderRadius: 7, background: "transparent", color: "var(--fg-3)", cursor: "pointer" }}
+                >
+                  <Ico d={ICON_PATHS.chat} size={14} sw={1.9} />
+                </button>
+              ) : null}
+            </div>
             <RowList rows={generalRows} prefs={prefs} onOpenMenu={setRowMenu} activeMenuKey={rowMenu?.key} />
           </section>
         ) : null}
@@ -225,7 +247,26 @@ export function ChatSidebar(props: ChatSidebarProps) {
         {!loading ? (
           <div className="cx-rowwrap" style={{ position: "relative", minHeight: 24 }}>
             <div style={{ padding: "4px 12px 2px", fontFamily: "var(--f-body)", fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", color: "var(--fg-4)", textTransform: "uppercase" }}>{sectionLabel}</div>
-            <div data-cx-pop style={{ position: "absolute", right: 8, top: 2 }}>
+            <div data-cx-pop style={{ position: "absolute", right: 8, top: 2, display: "flex", alignItems: "center", gap: 2 }}>
+              {prefs.groupBy === "project" && (onCreateProject || onImportProject) ? (
+                <button
+                  type="button"
+                  className="cx-iconbtn"
+                  onClick={(event) => {
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    setProjectMenuAnchor((current) => current ? null : { x: rect.right, y: rect.bottom + 8 });
+                    setViewsOpen(false);
+                    setViewsSub("");
+                  }}
+                  aria-expanded={Boolean(projectMenuAnchor)}
+                  aria-haspopup="menu"
+                  title="Add a project"
+                  aria-label="Add a project"
+                  style={{ display: "grid", placeItems: "center", width: 22, height: 22, border: 0, borderRadius: 7, background: "transparent", color: projectMenuAnchor ? "var(--honey)" : "var(--fg-3)", cursor: "pointer" }}
+                >
+                  <Ico d={ICON_PATHS.plus} size={15} sw={2.1} />
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="cx-iconbtn"
@@ -234,6 +275,7 @@ export function ChatSidebar(props: ChatSidebarProps) {
                   setViewsAnchor({ x: rect.left, y: rect.bottom + 8 });
                   setViewsSub("");
                   setViewsOpen((open) => !open);
+                  setProjectMenuAnchor(null);
                 }}
                 aria-expanded={viewsOpen}
                 title="Filter & group chats"
@@ -248,6 +290,10 @@ export function ChatSidebar(props: ChatSidebarProps) {
 
         {!loading && groups.map((group) => {
           const open = !prefs.collapsed[group.label];
+          const folderChatAction = prefs.groupBy === "project"
+            ? group.chats.find((chat) => chat.active && chat.onStartChat)?.onStartChat
+              ?? group.chats.find((chat) => chat.onStartChat)?.onStartChat
+            : undefined;
           const visibilityKey = `${prefs.groupBy}:${group.key}`;
           const visibleCount = visibleChatsByGroup[visibilityKey] ?? CHAT_HISTORY_PAGE_SIZE;
           const visibleChats = group.chats.slice(0, visibleCount) as SidebarRow[];
@@ -261,7 +307,7 @@ export function ChatSidebar(props: ChatSidebarProps) {
                   className="cx-grouphead"
                   onClick={() => prefs.toggleCollapsed(group.label)}
                   aria-expanded={open}
-                  style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", border: 0, borderRadius: 8, background: "transparent", cursor: "pointer", padding: "15px 42px 7px 12px", textAlign: "left" }}
+                  style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", border: 0, borderRadius: 8, background: "transparent", cursor: "pointer", padding: `15px ${folderChatAction ? 72 : 42}px 7px 12px`, textAlign: "left" }}
                 >
                   <span className="cx-grouphead-ico" style={{ display: "inline-flex", color: "var(--fg-4)", flexShrink: 0 }}>
                     <Ico d={groupIconPath(prefs.groupBy, open)} size={16} sw={1.7} />
@@ -269,6 +315,18 @@ export function ChatSidebar(props: ChatSidebarProps) {
                   <span className="cx-grouphead-label" style={{ flex: 1, fontFamily: "var(--f-body)", fontSize: 15, fontWeight: 600, color: "var(--fg)", letterSpacing: "-0.01em", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{group.label}</span>
                   <span style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)" }}>{group.chats.length}</span>
                 </button>
+                {folderChatAction ? (
+                  <button
+                    type="button"
+                    className="cx-iconbtn cx-hoverbtn"
+                    onClick={(event) => { event.stopPropagation(); folderChatAction(); }}
+                    title={`New chat in ${group.label}`}
+                    aria-label={`New chat in ${group.label}`}
+                    style={{ position: "absolute", right: 9, top: 14, display: "grid", placeItems: "center", width: 24, height: 24, border: 0, borderRadius: 7, background: "transparent", color: "var(--fg-3)", cursor: "pointer", zIndex: 2 }}
+                  >
+                    <Ico d={ICON_PATHS.chat} size={14} sw={1.9} />
+                  </button>
+                ) : null}
               </div>
               {open ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 1, marginLeft: 14, paddingLeft: 10, borderLeft: "1px solid var(--line)" }}>
@@ -303,6 +361,46 @@ export function ChatSidebar(props: ChatSidebarProps) {
         <span className="cx-dot-live" style={{ width: 6, height: 6, borderRadius: 99, background: "currentColor", color: "var(--live)" }} />
         <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{footerLabel}</span>
       </footer>
+
+      {projectMenuAnchor ? (
+        <div
+          data-cx-pop
+          className="cx-pop"
+          role="menu"
+          aria-label="Add a project"
+          style={{
+            position: "fixed",
+            left: Math.max(8, Math.min(projectMenuAnchor.x - 216, (typeof window === "undefined" ? 1200 : window.innerWidth) - 224)),
+            top: projectMenuAnchor.y,
+            zIndex: 200,
+            width: 216,
+            ...POP_STYLE,
+          }}
+        >
+          <button
+            type="button"
+            className="cx-menuitem"
+            role="menuitem"
+            disabled={!onCreateProject}
+            onClick={() => { onCreateProject?.(); setProjectMenuAnchor(null); }}
+            style={{ ...rowMenuItem, color: onCreateProject ? "var(--fg)" : "var(--fg-4)", cursor: onCreateProject ? "pointer" : "default" }}
+          >
+            <Ico d={ICON_PATHS.folderPlus} size={16} sw={1.7} />
+            <span>Create new project</span>
+          </button>
+          <button
+            type="button"
+            className="cx-menuitem"
+            role="menuitem"
+            disabled={!onImportProject}
+            onClick={() => { onImportProject?.(); setProjectMenuAnchor(null); }}
+            style={{ ...rowMenuItem, color: onImportProject ? "var(--fg)" : "var(--fg-4)", cursor: onImportProject ? "pointer" : "default" }}
+          >
+            <Ico d={ICON_PATHS.folder} size={16} sw={1.7} />
+            <span>Import project</span>
+          </button>
+        </div>
+      ) : null}
 
       {/* views menu */}
       {viewsOpen && viewsAnchor ? (

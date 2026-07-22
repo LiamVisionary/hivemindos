@@ -3,6 +3,7 @@ import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { normalizeChatResponseBilling } from "@/lib/types/chat-billing";
 import { chatPermissionModeAllowsUnlistedCommands, type ChatPermissionMode } from "@/lib/types/chat-permissions";
 import { proxyInput, proxyOutput } from "@/lib/services/agent-security-proxy";
+import { recordContextXrayCapabilityUse } from "@/lib/services/context-xray";
 import { RUNTIME_STREAM_EVENT_TYPES } from "@/lib/services/runtime-stream-events";
 import { summarizeUsePodResponseHeaders } from "@/lib/services/usepod";
 import { interpretVeniceError, isVeniceProfile, summarizeVeniceResponseHeaders } from "@/lib/services/venice";
@@ -54,11 +55,7 @@ import {
 import {
   commandApprovalEvent,
   commandSuccessText,
-  execFileAsync,
-  interactiveRuntimeLockKey,
   recordChatHoney,
-  releaseInteractiveRuntime,
-  reserveInteractiveRuntime,
   RUNTIME_FETCH_TIMEOUT_MS,
   runtimeFetchError,
   type AgentMode,
@@ -71,15 +68,12 @@ import {
   isLocalLmStudioProfile,
   isModelUnavailableErrorBody,
   isOpenRouterProvider,
-  lmStudioCliEnv,
   lmStudioModelLoadNotice,
   lmStudioModelLoadState,
   lmStudioModelUnavailableMessage,
   openAICompatibleModel,
   providerErrorMessage,
-  resolveLmStudioCliBin,
   retryableAdaptiveOpenRouterStatus,
-  stripTerminalControls,
 } from "./openai-compat";
 import {
   commandFailureFallbackText,
@@ -105,7 +99,8 @@ import {
   resolveOpenAICompatibleProfile,
 } from "./openai-compatible-profile";
 import { createOpenAICompatibleModelMessagesBuilder } from "./openai-compatible-prompt";
-import { INVOKE_HIVE_CAPABILITY_TOOL_NAME, invokeHiveCapabilityRuntimeEvent, invokeHiveCapabilityToolDefinition, runInvokeHiveCapabilityTool } from "./invoke-hive-capability-tool";
+import { INVOKE_HIVE_CAPABILITY_TOOL_NAME, createCapabilityToolHealth, invokeHiveCapabilityRuntimeEvent, invokeHiveCapabilityToolDefinition, plannedHiveActionIds, runInvokeHiveCapabilityTool } from "./invoke-hive-capability-tool";
+import { startLmStudioServer } from "./lm-studio-autostart";
 import { runNonStreamToolConversation, type NonStreamWinningRequest } from "./non-stream-tool-conversation";
 import { streamSemanticVideoClarification } from "./stream-semantic-video-clarification";
 import { streamHyperframesPromptBuilder } from "./stream-hyperframes-prompt-builder";
@@ -152,6 +147,22 @@ export async function streamOpenAICompatibleRuntime(
     walletPaidModelsEnabled,
   } = resolvedProfile;
   const intentText = extractUserText(unwrapLatestUserRequest(messages)).trim() || userText;
+  // Capability-plan invocation context: the approved-plan continuation block in
+  // the latest user message names the exact Hive Action the planner selected;
+  // threading it into every invoke_hive_capability call lets missing
+  // surface/capabilityId fields default to the plan instead of hard-failing on
+  // weak tool-calling models.
+  const plannedCapabilityIds = plannedHiveActionIds(intentText);
+  const capabilityHealthTelemetry = (event: string) => (invalidCalls: number) => recordRuntimeTelemetry(telemetry, event, {
+    ...telemetryPayloadForProfile(profile),
+    invalidCalls,
+    plannedCapabilities: plannedCapabilityIds,
+  });
+  const capabilityHealth = createCapabilityToolHealth({
+    plannedCapabilityIds,
+    onCorrectiveNudge: capabilityHealthTelemetry("agent_runtime.hive_capability.corrective_nudge"),
+    onInoperable: capabilityHealthTelemetry("agent_runtime.hive_capability.inoperable"),
+  });
   const offerImageTool = Boolean(requestOrigin) && imageGenerationRequest(intentText);
   const offerVideoTool = Boolean(requestOrigin) && videoGenerationRequest(intentText);
   const freeScoutModel = walletPaidModelsEnabled && isFreeHivemindosWalletPaidModel(runtimeProfile.model);
@@ -161,10 +172,6 @@ export async function streamOpenAICompatibleRuntime(
     ? textOnlyMessagesForTextModel(messages, mediaArtifacts)
     : multimodalModelMessages;
   const url = buildOpenAICompatibleUrl(runtimeProfile);
-  const lockKey = interactiveRuntimeLockKey(runtimeProfile, url, telemetry?.chatStorageKey || runtimeSessionId);
-  if (!reserveInteractiveRuntime(lockKey)) {
-    return runtimeSessionErrorResponse(runtimeSessionId, `${runtimeProfile.name || runtimeProfile.runtime} is already running another interactive request at ${url}.`, 409, "blocked");
-  }
   const adaptiveProvider = Boolean(adaptiveRoutePlan);
   const adaptiveOpenRouter = isAdaptiveOpenRouterProfile(runtimeProfile) || (isOpenRouterProvider(runtimeProfile) && Boolean(runtimeProfile.adaptiveOpenRouter));
   if (usePodEnabled) {
@@ -197,7 +204,6 @@ export async function streamOpenAICompatibleRuntime(
         ? await resolveAdaptiveBankrLlmModels(profile, messages)
         : [openAICompatibleModel(runtimeProfile)];
   } catch (error) {
-    releaseInteractiveRuntime(lockKey);
     return runtimeSessionErrorResponse(runtimeSessionId, error instanceof Error ? error.message : "Adaptive OpenRouter model selection failed.", 502);
   }
   const suppressCommandToolForNativeMedia = shouldSuppressCommandToolForNativeMedia({
@@ -239,7 +245,15 @@ export async function streamOpenAICompatibleRuntime(
         continue;
       }
       if (call.name === INVOKE_HIVE_CAPABILITY_TOOL_NAME) {
-        const outcome = await runInvokeHiveCapabilityTool(call.arguments, { origin: requestOrigin, permissionMode: permissionMode, userText: intentText });
+        const outcome = await runInvokeHiveCapabilityTool(call.arguments, { origin: requestOrigin, permissionMode: permissionMode, userText: intentText, plannedCapabilities: plannedCapabilityIds });
+        await recordContextXrayCapabilityUse({
+          runId: runtimeSessionId,
+          rawArguments: call.arguments,
+          invoked: outcome.ok || (!outcome.approvalRequired && !outcome.invalidRequest),
+          ok: outcome.ok,
+          target: outcome.target,
+        }).catch(() => undefined);
+        capabilityHealth.track(outcome);
         const runtimeEvent = invokeHiveCapabilityRuntimeEvent(outcome);
         events.push(ssePayload(runtimeEvent));
         await appendRuntimeChatSessionEvent(runtimeSessionId, runtimeEvent.message, runtimeEvent.detail).catch(() => undefined);
@@ -419,7 +433,8 @@ export async function streamOpenAICompatibleRuntime(
         : commandFailureFallbackText(commandLine, result));
       if (!result.ok) failures.push(result.error || result.stderr || "Command failed.");
     }
-    return { events, assistantToolCalls, toolResultMessages, fallbacks, finalTexts, failures, prompted: false };
+    const corrective = capabilityHealth.correctiveSystemMessage();
+    return { events, assistantToolCalls, toolResultMessages, fallbacks, finalTexts, failures, prompted: false, ...(corrective ? { steeringMessages: [corrective] } : {}) };
   };
   const fetchStartedAt = Date.now();
   const preflightProcessPayload = runtimeProcessEventsSsePayload(telemetry?.preflightProcessEvents ?? []);
@@ -441,58 +456,8 @@ export async function streamOpenAICompatibleRuntime(
       headers: {} as Record<string, string>,
     }));
   let semanticVideoClassified = false;
-  const startLmStudioServerForProfile = async (candidateProfile: AgentProfile, failedUrl: string, error: unknown) => {
-    if (!isLocalLmStudioProfile(candidateProfile) || adaptiveProvider || adaptiveOpenRouter || usePodEnabled || isBankrLlmProfile(candidateProfile)) return false;
-    let port = "1234";
-    try {
-      const parsed = new URL(candidateProfile.gatewayUrl);
-      port = parsed.port || (parsed.protocol === "https:" ? "443" : "80");
-    } catch {
-      return false;
-    }
-    if (!/^\d+$/.test(port)) return false;
-    recordRuntimeTelemetry(telemetry, "agent_runtime.lm_studio_server.start", {
-      ...telemetryPayloadForProfile(candidateProfile),
-      failedUrl,
-      port,
-      originalError: error instanceof Error ? error.message : String(error),
-    });
-    await appendRuntimeChatSessionEvent(
-      runtimeSessionId,
-      "Starting LM Studio server",
-      `LM Studio has the model loaded, but ${failedUrl} is not listening. Starting the local LM Studio OpenAI-compatible server on port ${port}.`,
-    ).catch(() => undefined);
-    try {
-      const { stdout, stderr } = await execFileAsync(await resolveLmStudioCliBin(), ["server", "start", "--port", port, "--bind", "127.0.0.1"], {
-        timeout: 20_000,
-        maxBuffer: 1_000_000,
-        env: lmStudioCliEnv(),
-        signal: telemetry?.request.signal,
-      });
-      const detail = stripTerminalControls([stdout, stderr].filter(Boolean).join("\n"));
-      recordRuntimeTelemetry(telemetry, "agent_runtime.lm_studio_server.started", {
-        ...telemetryPayloadForProfile(candidateProfile),
-        port,
-        detail: detail.slice(0, 500),
-        elapsedMs: Date.now() - fetchStartedAt,
-      });
-      return true;
-    } catch (serverError) {
-      recordRuntimeTelemetry(telemetry, "agent_runtime.lm_studio_server.start_failed", {
-        ...telemetryPayloadForProfile(candidateProfile),
-        port,
-        errorName: serverError instanceof Error ? serverError.name : null,
-        errorMessage: serverError instanceof Error ? serverError.message : String(serverError),
-        elapsedMs: Date.now() - fetchStartedAt,
-      });
-      await appendRuntimeChatSessionEvent(
-        runtimeSessionId,
-        "LM Studio server start failed",
-        serverError instanceof Error ? serverError.message : "Could not start LM Studio server.",
-      ).catch(() => undefined);
-      return false;
-    }
-  };
+  const startLmStudioServerForProfile = (candidateProfile: AgentProfile, failedUrl: string, error: unknown) =>
+    startLmStudioServer({ candidateProfile, failedUrl, error, adaptiveRouting: adaptiveProvider || adaptiveOpenRouter, usePodEnabled, telemetry, runtimeSessionId, fetchStartedAt });
   let verifiedComputeActive = false;
   for (const routeAttempt of routeAttempts) {
     const candidateModel = routeAttempt.model;
@@ -556,11 +521,9 @@ export async function streamOpenAICompatibleRuntime(
       activeToolDefinitions = semanticRoute.toolDefinitions;
       if (semanticRoute.modelContext) modelMessages.splice(Math.max(0, modelMessages.length - 1), 0, { role: "system", content: semanticRoute.modelContext });
       if (semanticRoute.clarifyMethod) {
-        releaseInteractiveRuntime(lockKey);
         return streamSemanticVideoClarification({ requestText: intentText, runtimeSessionId, runtime: profile.runtime, startedAt: fetchStartedAt, preflightProcessPayload });
       }
       if (semanticRoute.guideHyperframesPrompt) {
-        releaseInteractiveRuntime(lockKey);
         return streamHyperframesPromptBuilder({ requestText: intentText, runtimeSessionId, runtime: profile.runtime, startedAt: fetchStartedAt, preflightProcessPayload });
       }
     }
@@ -705,7 +668,6 @@ export async function streamOpenAICompatibleRuntime(
       }
       await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible fetch failed", runtimeFetchError(candidateProfile, candidateUrl, error)).catch(() => undefined);
       await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
-      releaseInteractiveRuntime(lockKey);
       return Response.json({ error: runtimeFetchError(candidateProfile, candidateUrl, error) }, { status: 502 });
     }
     if (upstream.ok) {
@@ -745,7 +707,6 @@ export async function streamOpenAICompatibleRuntime(
         : providerErrorMessage(errorText, upstream.status, model);
     await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible upstream error", upstreamErrorMessage).catch(() => undefined);
     await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
-    releaseInteractiveRuntime(lockKey);
     return new Response(
       ssePayload({ error: adaptiveOpenRouter && retryableAdaptiveOpenRouterStatus(upstream.status)
         ? finalAdaptiveOpenRouterError(upstream.status, attemptedModels)
@@ -759,7 +720,6 @@ export async function streamOpenAICompatibleRuntime(
   if (!upstream?.ok) {
     await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible upstream error", lastFetchError ? "Network issue while trying provider models." : finalAdaptiveOpenRouterError(lastStatus || 502, attemptedModels)).catch(() => undefined);
     await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
-    releaseInteractiveRuntime(lockKey);
     return new Response(
       ssePayload({ error: lastFetchError
         ? `${adaptiveProvider ? "Adaptive" : "OpenRouter"} had a network issue while trying configured models. Adaptive tried ${attemptedModels.length || 1} route${attemptedModels.length === 1 ? "" : "s"}. Try again shortly or disable the failing provider in Adaptive settings.`
@@ -808,7 +768,6 @@ export async function streamOpenAICompatibleRuntime(
   if (!upstream.body) {
     await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible response body is empty").catch(() => undefined);
     await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
-    releaseInteractiveRuntime(lockKey);
     return new Response(
       ssePayload({ error: "OpenAI-compatible runtime response body is empty" }) + "data: [DONE]\n\n",
       { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" } },
@@ -832,7 +791,6 @@ export async function streamOpenAICompatibleRuntime(
       });
       if (toolRun.prompted) {
         await finishRuntimeChatSession(runtimeSessionId, toolRun.failed ? "failed" : "completed").catch(() => undefined);
-        releaseInteractiveRuntime(lockKey);
         return new Response(
           preflightProcessPayload
           + toolRun.events.join("")
@@ -848,7 +806,14 @@ export async function streamOpenAICompatibleRuntime(
           },
         );
       }
-      const outputCheck = proxyOutput(toolRun.text);
+      const inoperableNotice = capabilityHealth.inoperableFinalNotice();
+      if (inoperableNotice) {
+        await appendRuntimeChatSessionEvent(runtimeSessionId, "Capability tool inoperable", inoperableNotice).catch(() => undefined);
+      }
+      const toolRunText = inoperableNotice
+        ? `${toolRun.text.trim() ? `${toolRun.text}\n\n` : ""}${inoperableNotice}`
+        : toolRun.text;
+      const outputCheck = proxyOutput(toolRunText);
       const routed = outputCheck.verdict === "block"
         ? { content: "", thinking: "" }
         : routeChannelMarkupText(outputCheck.text);
@@ -861,7 +826,6 @@ export async function streamOpenAICompatibleRuntime(
         await appendRuntimeChatSessionText(runtimeSessionId, "assistant", chunk, toolRun.raw ?? json, responseBilling ? { billing: responseBilling } : undefined).catch(() => undefined);
         await finishRuntimeChatSession(runtimeSessionId, "completed").catch(() => undefined);
       }
-      releaseInteractiveRuntime(lockKey);
       return new Response(
         preflightProcessPayload
         + toolRun.events.join("")
@@ -893,7 +857,6 @@ export async function streamOpenAICompatibleRuntime(
       await appendRuntimeChatSessionText(runtimeSessionId, "assistant", chunk, json, responseBilling ? { billing: responseBilling } : undefined).catch(() => undefined);
       await finishRuntimeChatSession(runtimeSessionId, "completed").catch(() => undefined);
     }
-    releaseInteractiveRuntime(lockKey);
     return new Response(
       preflightProcessPayload
       + (routed.thinking ? ssePayload({ type: RUNTIME_STREAM_EVENT_TYPES.THINKING, delta: routed.thinking }) : "")
@@ -1367,7 +1330,15 @@ export async function streamOpenAICompatibleRuntime(
         if (call.name === BANKR_ACTION_TOOL_NAME) return runBankrToolCall(call);
         if (call.name === X_ACCOUNT_RUNTIME_TOOL_NAME) return runXAccountRuntimeTool(call.arguments);
         if (call.name === INVOKE_HIVE_CAPABILITY_TOOL_NAME) {
-          const outcome = await runInvokeHiveCapabilityTool(call.arguments, { origin: requestOrigin, permissionMode: permissionMode, userText: intentText });
+          const outcome = await runInvokeHiveCapabilityTool(call.arguments, { origin: requestOrigin, permissionMode: permissionMode, userText: intentText, plannedCapabilities: plannedCapabilityIds });
+          await recordContextXrayCapabilityUse({
+            runId: runtimeSessionId,
+            rawArguments: call.arguments,
+            invoked: outcome.ok || (!outcome.approvalRequired && !outcome.invalidRequest),
+            ok: outcome.ok,
+            target: outcome.target,
+          }).catch(() => undefined);
+          capabilityHealth.track(outcome);
           const runtimeEvent = invokeHiveCapabilityRuntimeEvent(outcome);
           controller.enqueue(encoder.encode(ssePayload(runtimeEvent)));
           queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, runtimeEvent.message, runtimeEvent.detail));
@@ -1399,6 +1370,7 @@ export async function streamOpenAICompatibleRuntime(
         const conversation: Array<Record<string, unknown>> = winningRequest
           ? [...(winningRequest.messages as unknown as Array<Record<string, unknown>>)]
           : [];
+        let toolApprovalPrompted = false;
         while (true) {
           const { toolCalls: returnedToolCalls } = await consume(active, toolRoundsLeft > 0);
           const toolCalls = returnedToolCalls;
@@ -1423,7 +1395,10 @@ export async function streamOpenAICompatibleRuntime(
             if (outcome.fallbackText) fallbacks.push(outcome.fallbackText);
             if (outcome.finalText) finalTexts.push(outcome.finalText);
           }
-          if (toolPrompted) break;
+          if (toolPrompted) {
+            toolApprovalPrompted = true;
+            break;
+          }
           if (finalTexts.length) {
             const finalText = finalTexts.join("\n\n");
             controller.enqueue(encoder.encode(ssePayload({ choices: [{ delta: { content: finalText } }] })));
@@ -1433,6 +1408,8 @@ export async function streamOpenAICompatibleRuntime(
           }
           conversation.push({ role: "assistant", content: "", tool_calls: assistantToolCalls });
           conversation.push(...toolResultMessages);
+          const capabilityCorrective = capabilityHealth.correctiveSystemMessage();
+          if (capabilityCorrective) conversation.push(capabilityCorrective);
           // Keep offering tools on the continuation so the model can chain
           // another command; stop offering once the round budget is spent.
           const continuationBody: Record<string, unknown> = {
@@ -1462,6 +1439,16 @@ export async function streamOpenAICompatibleRuntime(
             break;
           }
           active = continuation;
+        }
+        if (!toolApprovalPrompted) {
+          const inoperableNotice = capabilityHealth.inoperableFinalNotice();
+          if (inoperableNotice) {
+            const noticeText = `${fullText.trim() ? "\n\n" : ""}${inoperableNotice}`;
+            controller.enqueue(encoder.encode(ssePayload({ choices: [{ delta: { content: noticeText } }] })));
+            fullText += noticeText;
+            queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Capability tool inoperable", inoperableNotice));
+            queueSessionWrite(() => appendRuntimeChatSessionText(runtimeSessionId, "assistant", noticeText));
+          }
         }
         if ((adaptiveOpenRouter || adaptiveProvider) && winningRequest && fullText.trim()) {
           // Same quality gate as the Hermes adaptive loop: success only counts
@@ -1499,7 +1486,6 @@ export async function streamOpenAICompatibleRuntime(
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       } finally {
         await sessionWrite.catch(() => undefined);
-        releaseInteractiveRuntime(lockKey);
         controller.close();
       }
     },

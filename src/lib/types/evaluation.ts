@@ -19,6 +19,12 @@ export type EvaluationArtifact = {
   label?: string;
 };
 
+export type EvaluationOutcomeContract = {
+  id: string;
+  acceptedOutcome: string;
+  proofRequired: string[];
+};
+
 export type CompletionEvent = {
   id: string;
   surface: EvaluationSurface;
@@ -29,6 +35,7 @@ export type CompletionEvent = {
   completedAt: number;
   risk?: "low" | "medium" | "high";
   artifacts?: EvaluationArtifact[];
+  outcomeContract?: EvaluationOutcomeContract;
   rubric?: LoopEvaluationRubric;
   metadata?: Record<string, unknown>;
 };
@@ -41,7 +48,7 @@ export type EvaluationPolicy = {
 };
 
 export type EvaluationCheck = {
-  id: "completion" | "output" | "artifact" | "judge" | "human-feedback";
+  id: "completion" | "output" | "outcome" | "artifact" | "judge" | "human-feedback";
   status: EvaluationCheckStatus;
   summary: string;
   evidence: string[];
@@ -81,6 +88,7 @@ export type EvaluationResult = {
 };
 
 export type EvaluationDependencies = {
+  verifyOutcome?: (event: CompletionEvent, contract: EvaluationOutcomeContract) => Promise<{ ok: boolean; evidence?: string[]; error?: string }>;
   verifyArtifact?: (artifact: EvaluationArtifact, event: CompletionEvent) => Promise<{ ok: boolean; evidence?: string[]; error?: string }>;
   judge?: (event: CompletionEvent, policy: EvaluationPolicy) => Promise<EvaluationJudgeVerdict>;
   now?: () => number;

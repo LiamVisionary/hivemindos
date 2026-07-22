@@ -18,6 +18,11 @@ import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 import type { KanbanLinkedDirectory, KanbanTaskAttachment } from "@/lib/types/kanban";
 import type { RecentDirectory } from "@/lib/types/recent-directories";
 import { visibleChannelMarkupText } from "@/lib/services/chat/channel-markup";
+import {
+  isAssistantColonSectionHeading,
+  stripHermesInlineDiffPreviews,
+  stripHermesInternalToolNarration,
+} from "@/lib/services/chat/hermes-cli-output";
 
 export { attachmentSizeLabel, linkedDirectoryLabel } from "@/features/chat/chat-formatters";
 export { MessageAttachments } from "@/features/chat/chat-attachment-view";
@@ -181,12 +186,16 @@ export function structureAssistantPlainText(lines: string[]) {
       output.push("");
       continue;
     }
+    const next = lines[index + 1]?.trim() ?? "";
+    if (isAssistantColonSectionHeading(trimmed, next)) {
+      output.push(`### ${trimmed.slice(0, -1).trim()}`);
+      continue;
+    }
     if (/^#{1,3}\s+/.test(trimmed) || /^[-*]\s+/.test(trimmed) || /^\d+[.)]\s+/.test(trimmed)) {
       output.push(line);
       continue;
     }
     const previous = output.at(-1)?.trim() ?? "";
-    const next = lines[index + 1]?.trim() ?? "";
     const afterColonList = previous.endsWith(":") && plainBulletRunLength(lines, index) >= 2;
     const continuingList = /^[-*]\s+/.test(previous) && shouldPromotePlainLineToBullet(trimmed) && !looksLikeAssistantHeading(next);
     if (afterColonList || continuingList) {
@@ -203,7 +212,9 @@ export function structureAssistantPlainText(lines: string[]) {
 }
 
 export function normalizeAssistantChatText(value: string) {
-  const text = stripAnsiSequences(value || "").replace(/\r\n/g, "\n").trim();
+  const text = stripHermesInternalToolNarration(
+    stripHermesInlineDiffPreviews(stripAnsiSequences(value || "")),
+  ).replace(/\r\n/g, "\n").trim();
   if (!text) return "";
   if (isHermesInventoryText(text)) return "";
   const lines = text.split("\n");

@@ -312,16 +312,23 @@ const urlBackedMachine = {
   assert.equal(routed.status, "delegated");
   assert.equal(routed.machine?.key, "idle-gpu");
 
+  // CONTRACT CHANGE 2026-07-18: a HARD machine pin overrides live-usage limits
+  // (CPU/RAM/disk) — pinned work has no alternative machine, and blocking it
+  // parked a marketplace task pinned to the only machine with its signed-in
+  // browser at "CPU is 100%" indefinitely. Limits still exclude the machine
+  // from all UNPINNED routing (asserted above); manual ignore stays absolute.
   const pinned = chooseQueenBeeDelegate(codeTask, [busyGpu, idleGpu], { targetMachineKey: "borrowed-gpu" });
-  assert.equal(pinned.status, "pending");
-  assert.match(pinned.reason, /excluded by its Fleet performance policy/);
-  assert.match(pinned.reason, /CPU is 91%/);
+  assert.equal(pinned.status, "delegated");
+  assert.equal(pinned.machine?.key, "borrowed-gpu");
 
   const manuallyIgnored = {
     ...idleGpu,
     fleetPolicy: { ...idleGpu.fleetPolicy, performance: { ...idleGpu.fleetPolicy.performance, ignore: true } },
   };
   assert.equal(queenBeeMachineRoutingEligibility(manuallyIgnored).eligible, false);
+  assert.equal(queenBeeMachineRoutingEligibility(manuallyIgnored).mandatory, true, "manual ignore is a mandatory exclusion");
+  const pinnedToIgnored = chooseQueenBeeDelegate(codeTask, [manuallyIgnored], { targetMachineKey: "idle-gpu" });
+  assert.equal(pinnedToIgnored.status, "pending", "a pin never overrides the human's manual machine exclusion");
 }
 
 console.log("Queen Bee router delegation tests passed.");

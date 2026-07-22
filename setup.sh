@@ -2220,6 +2220,22 @@ else
   ok "Dependencies installed"
 fi
 
+if [[ "$CLI_COLLECTOR_ONLY" != "true" && "${HIVEMINDOS_SKIP_WEB_RESEARCH:-0}" != "1" ]]; then
+  install_web_research="true"
+  if setup_is_interactive && ! prompt_yes_no "Install the local keyless web research engine for search, fetch, crawl, screenshots, and PDF OCR?" "yes"; then
+    install_web_research="false"
+  fi
+  if [[ "$install_web_research" == "true" ]]; then
+    info "Installing the pinned local web research engine"
+    if node "$ROOT/scripts/install-web-research.mjs"; then
+      ok "Local web research is ready for every registered agent runtime"
+    else
+      warn "Local web research installation failed; other HivemindOS capabilities remain available"
+      optional_setup_issue "Web research: the pinned local Hound runtime or Chromium engine did not install."
+    fi
+  fi
+fi
+
 if [[ "$CLI_SKIP_COLLECTOR" == "true" ]]; then
   warn "Skipping local telemetry collector because --skip-collector was provided"
 else
@@ -2257,6 +2273,16 @@ else
   else
     warn "Collector service was installed, but local health is not responding yet"
     warn "Local collector did not respond yet; skipping setup-time env and Syncthing reconciliation prompts"
+  fi
+fi
+
+if [[ "$CLI_COLLECTOR_ONLY" != "true" ]] && setup_is_interactive && prompt_yes_no "Install the optional pinned OpenSRE sidecar for read-only root-cause investigations? (Uses local Ollama by default.)" "no"; then
+  info "Installing optional OpenSRE root-cause sidecar"
+  if ./scripts/install-opensre-sidecar.sh; then
+    ok "OpenSRE sidecar installed with telemetry, prompt logging, and history disabled"
+  else
+    warn "OpenSRE sidecar install did not complete; HivemindOS will keep capturing incidents locally"
+    optional_setup_issue "OpenSRE sidecar: installation or health check failed; local incident capture remains available."
   fi
 fi
 

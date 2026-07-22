@@ -8,9 +8,12 @@ import { AccountRail } from "@/components/socials/AccountRail";
 import { AwakeHoursCard } from "@/components/socials/AwakeHoursCard";
 import { ConnectAccountModal } from "@/components/socials/ConnectAccountModal";
 import { ContextSourcesCard } from "@/components/socials/ContextSourcesCard";
+import { DraftingAutomationCard } from "@/components/socials/DraftingAutomationCard";
+import { EngagementDiscoveryCard } from "@/components/socials/EngagementDiscoveryCard";
 import { useSocialsDesk } from "@/components/socials/socials-context";
 import { SocialsDeskSkeleton, SocialsSpinner } from "@/components/socials/skeletons";
 import { VoiceCard } from "@/components/socials/VoiceCard";
+import { SocialQueueWorkspace } from "@/components/socials/SocialQueueWorkspace";
 import { SOCIAL_CAPABILITIES } from "@/lib/services/socials/socials-types";
 import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 
@@ -29,7 +32,7 @@ export function SocialsView() {
               <div>
                 <div style={{ fontSize: 19, fontWeight: 700, color: "var(--fg)" }}>Socials</div>
                 <div style={{ fontSize: 12.5, color: "var(--fg-3)", marginTop: 2 }}>
-                  Accounts, posting voice, awake hours, and drafting context. Posting queue, history, and analytics arrive in the next phases — nothing posts without your say-so, ever.
+                  Find timely conversations, draft original posts and contextual replies, review, schedule, publish, and measure every connected account. Posting stays approval-gated unless you explicitly opt an account into auto mode.
                 </div>
               </div>
               <button type="button" className="sc-btn" onClick={() => void desk.refresh()} disabled={desk.refreshing}>
@@ -65,7 +68,25 @@ export function SocialsView() {
                           </span>
                         ))}
                       </div>
-                      <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
+                      <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          className="sc-btn"
+                          onClick={() => {
+                            const account = desk.activeAccount!;
+                            if (account.postingMode === "auto") {
+                              void desk.setPostingMode(account.id, "manual");
+                              return;
+                            }
+                            void confirmUserAction(
+                              `Enable auto mode for @${account.handle}? Agent automations may schedule approved-by-policy posts after a visible five-minute cancellation window, and awake hours still apply.`,
+                            ).then((confirmed) => {
+                              if (confirmed) void desk.setPostingMode(account.id, "auto");
+                            });
+                          }}
+                        >
+                          {desk.activeAccount.postingMode === "auto" ? "Switch to manual mode" : "Enable auto mode"}
+                        </button>
                         <button
                           type="button"
                           className="sc-btn"
@@ -87,24 +108,16 @@ export function SocialsView() {
                     <VoiceCard account={desk.activeAccount} />
                     <AwakeHoursCard account={desk.activeAccount} />
                     <ContextSourcesCard account={desk.activeAccount} />
+                    <DraftingAutomationCard account={desk.activeAccount} />
+                    <EngagementDiscoveryCard account={desk.activeAccount} />
 
-                    <section className="sc-card">
-                      <div className="sc-card-head">
-                        <span className="sc-card-title">Posting queue</span>
-                        <span className="sc-card-hint">
-                          {desk.queueMeta.lastTickAt ? `Last tick ${desk.queueMeta.lastTickAt}` : "No queue engine running yet"}
-                        </span>
-                      </div>
-                      <div className="sc-note">
-                        The queued-post timeline (suggested times, send now, auto-mode with a visible cancel window) lands in Phase 2. Until then all posting stays exactly where it is today: drafts you explicitly approve.
-                      </div>
-                    </section>
+                    <SocialQueueWorkspace />
                   </>
                 ) : (
                   <section className="sc-card">
                     <div className="sc-card-title" style={{ marginBottom: 6 }}>No accounts connected yet</div>
                     <div className="sc-note">
-                      Connect X, Telegram, Farcaster, LinkedIn, or Reddit. Each account gets its own posting voice, awake hours, drafting context, and (soon) queue and analytics.
+                      Connect X, Telegram, Farcaster, LinkedIn, or Reddit. Each account gets its own posting voice, awake hours, drafting context, durable queue, history, and analytics.
                     </div>
                   </section>
                 )}

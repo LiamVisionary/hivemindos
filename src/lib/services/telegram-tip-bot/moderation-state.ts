@@ -21,10 +21,18 @@ export type ModerationAuditEntry = {
   chatId: string;
   userId: string;
   messageId?: number;
+  updateId?: number;
+  updateKind?: "message" | "edited_message";
   reason: string;
   action: string;
   mode: ModerationMode;
   createdAt: string;
+  evidence?: {
+    duplicateOccurrences?: number;
+    floodMessageCount?: number;
+    matchedMessageIds?: number[];
+    normalizedTextLength?: number;
+  };
 };
 
 export type TipBotModerationState = {

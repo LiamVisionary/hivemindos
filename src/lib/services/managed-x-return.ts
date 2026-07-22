@@ -7,6 +7,7 @@ export type ManagedXReturnPayload = {
   error?: string;
   creditAccountId?: string;
   slug?: string;
+  returnView?: "integrations" | "socials";
   url?: string;
 };
 
@@ -20,7 +21,9 @@ const MANAGED_X_RETURN_QUERY_KEYS = [
 ] as const;
 
 export function managedXDeepLinkFromSearchParams(params: URLSearchParams): string {
-  const url = new URL("hivemindos://integrations/x-managed");
+  const returnView = params.get("x_return_view") === "socials" ? "socials" : "integrations";
+  const scheme = params.get("x_return_scheme") === "hivemindos-dev" ? "hivemindos-dev" : "hivemindos";
+  const url = new URL(`${scheme}://${returnView}/x-managed`);
   for (const key of MANAGED_X_RETURN_QUERY_KEYS) {
     const value = params.get(key)?.trim();
     if (value) url.searchParams.set(key, value);
@@ -36,6 +39,7 @@ export function managedXReturnPayloadFromSearchParams(params: URLSearchParams, s
     error: params.get("error")?.trim() || undefined,
     creditAccountId: params.get("x_credit_account_id")?.trim() || undefined,
     slug: params.get("x_slug")?.trim() || undefined,
+    returnView: params.get("x_return_view") === "socials" ? "socials" : "integrations",
     url: sourceUrl || undefined,
   };
 }

@@ -17,6 +17,8 @@ export type NonStreamToolRun = {
   finalTexts: string[];
   failures: string[];
   prompted: boolean;
+  /** Corrective system messages appended to the conversation after this round's tool results. */
+  steeringMessages?: Array<Record<string, unknown>>;
 };
 
 function numericHeader(headers: Headers, name: string) {

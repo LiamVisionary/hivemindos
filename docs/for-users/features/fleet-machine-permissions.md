@@ -43,6 +43,8 @@ Each collector has separate `Allow`, `Ask`, and `Deny` choices for:
 
 `Allow` makes the capability available to agent work on that collector. `Deny` tells the runtime not to use it. `Ask` treats the capability as denied until a human grants it.
 
+Shared env defaults to `Allow`, so agents can use configured credentials without interrupting ordinary work for permission. The other machine capabilities default to `Ask`. An operator can still change Shared env to `Ask` or `Deny` for a borrowed or restricted machine; HivemindOS then stops before launching a runtime that requested a shared credential and reports the machine-policy decision instead of claiming that the credential is missing.
+
 When an agent reaches an `Ask` capability, its Work Board card moves to **Needs You** with three choices:
 
 - **Allow 15 min** grants temporary access and then expires automatically.

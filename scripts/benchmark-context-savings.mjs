@@ -13,16 +13,23 @@ export const scenarios = [
     id: "brain-recall",
     title: "Recall project context before answering",
     task: "Explain how HivemindOS shared brain memory works and which command a raw agent should use before relying on prior context.",
+    e2e: {
+      outcome: {
+        kind: "required-patterns",
+        patterns: ["hive-brain answer", "typed agent memory", "full-vault"],
+        minimumRatio: 1,
+      },
+    },
     baseline: {
       label: "Naive broad docs and source read",
       paths: [
         "AGENTS.md",
         "README.md",
-        "docs/features/brain-vault-and-skills.md",
-        "docs/whole-brain",
+        "docs/for-users/features/brain-vault-and-skills.md",
+        "docs/for-users/whole-brain",
         "scripts/hive-brain",
-        "src/lib/services/obsidian/agent-memory.ts",
-        "src/lib/services/chat/shared-vault-context.ts",
+        "src/lib/services/obsidian/agent-memory",
+        "src/lib/services/chat/shared-brain-memory-context.ts",
         "src/lib/services/context-index.ts",
       ],
     },
@@ -34,8 +41,8 @@ export const scenarios = [
         "Default recall is tiered: typed Agent Memory first, then full-vault augmentation only when needed.",
       ],
       sections: [
-        { path: "docs/features/brain-vault-and-skills.md", heading: "Shared Brain Memory Summary" },
-        { path: "docs/packaged-skills/hive-skills.md", heading: "Supporting Hive Search Commands" },
+        { path: "docs/for-users/features/brain-vault-and-skills.md", heading: "Shared Brain Memory Summary" },
+        { path: "docs/for-users/packaged-skills/hive-skills.md", heading: "Supporting Hive Search Commands" },
       ],
       paths: ["scripts/hive-brain"],
       pathMaxChars: 5000,
@@ -45,6 +52,13 @@ export const scenarios = [
     id: "software-build",
     title: "Start a software build request",
     task: "Build a new HivemindOS feature without starting from a blank page.",
+    e2e: {
+      outcome: {
+        kind: "required-patterns",
+        patterns: ["hive-assimilate", "hive-capability-search", "existing"],
+        minimumRatio: 2 / 3,
+      },
+    },
     baseline: {
       label: "Naive current-project sweep",
       paths: [
@@ -65,8 +79,8 @@ export const scenarios = [
         "Use concrete copied/adapted files, tests, configs, schemas, assets, or workflows before writing glue code.",
       ],
       sections: [
-        { path: "AGENTS.md", heading: "Shared Skills" },
-        { path: "docs/features/token-and-cost-savings.md", heading: "Practical Rule" },
+        { path: "AGENTS.md", heading: "Shared Brain And Skills" },
+        { path: "docs/for-users/features/token-and-cost-savings.md", heading: "Practical Rule" },
       ],
       paths: [
         "packaged-skills/auto-install/hive-assimilate/SKILL.md",
@@ -83,6 +97,17 @@ export const scenarios = [
     e2e: {
       responseKeys: ["answer", "files", "tests", "safety", "confidence"],
       responseExample: '{"answer":"short implementation plan","files":["path"],"tests":["command"],"safety":["gate"],"confidence":0.5}',
+      outcome: {
+        kind: "repository-paths",
+        minimumPaths: 4,
+        minimumExistingRatio: 0.8,
+        requiredOwners: [
+          "src/app/api/chat/agent-runtime",
+          "src/lib/services/chat",
+          "src/lib/services/runtime-adapters",
+          "src/features/dashboard",
+        ],
+      },
     },
     baseline: {
       label: "Naive current-project sweep",
@@ -104,8 +129,8 @@ export const scenarios = [
         "Reuse concrete files, tests, API routes, schemas, and UI conventions from the current project before adding new glue.",
       ],
       sections: [
-        { path: "AGENTS.md", heading: "Shared Skills" },
-        { path: "docs/features/token-and-cost-savings.md", heading: "Practical Rule" },
+        { path: "AGENTS.md", heading: "Shared Brain And Skills" },
+        { path: "docs/for-users/features/token-and-cost-savings.md", heading: "Practical Rule" },
       ],
       paths: [
         "packaged-skills/auto-install/hive-assimilate/SKILL.md",
@@ -119,12 +144,19 @@ export const scenarios = [
     id: "workflow-reuse",
     title: "Turn repeated work into a reusable workflow",
     task: "Convert a repeated multi-step HivemindOS task into reusable agent knowledge.",
+    e2e: {
+      outcome: {
+        kind: "required-patterns",
+        patterns: ["hive-capability-search", "hive-skill-fusion", "Skills/"],
+        minimumRatio: 1,
+      },
+    },
     baseline: {
       label: "Naive packaged-skill catalog dump",
       paths: [
-        "docs/features/hive-fusion.md",
-        "docs/features/brain-vault-and-skills.md",
-        "docs/packaged-skills",
+        "docs/for-users/features/hive-fusion.md",
+        "docs/for-users/features/brain-vault-and-skills.md",
+        "docs/for-users/packaged-skills",
         "packaged-skills/auto-install",
       ],
     },

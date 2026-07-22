@@ -13021,3 +13021,213 @@ also can we add long actions in telegram? like in the menu that appears when i h
 - Source: verify-assimilation-manifest
 - Decision: passed
 - Reason: ASSIMILATION.json: 3 concrete reuse entries, 3 substantive
+## 2026-07-18T22:52:51.832911+00:00 - shared-brain
+
+- Request: Auto-fix expired Hermes profile Codex OAuth tokens in HivemindOS
+- Source: shared-brain
+- Decision: selected
+- Selected backbone: local-project:hivemind-os+hermes-agent
+
+### Candidates
+- Agent Memory: ChatGPT OAuth first-class HivemindOS provider
+  - Decision: selected
+  - Reason: confirms HivemindOS OPENAI_OAUTH_* is an independent fleet-shared credential authority, not ~/.codex/auth.json
+- Skills/hermes-agent/SKILL.md
+  - Decision: inspected
+  - Reason: confirms profile-scoped auth.json and credential pools
+## 2026-07-18T22:52:51.885207+00:00 - local-search
+
+- Request: Auto-fix expired Hermes profile Codex OAuth tokens in HivemindOS
+- Source: local-projects
+- Decision: selected
+- Selected backbone: local-project:NousResearch/hermes-agent
+
+### Candidates
+- /Users/liam/.hermes/hermes-agent/agent/credential_pool.py
+  - Decision: selected
+  - Reason: existing proactive OAuth refresh, token quarantine, and pool rotation are the implementation backbone
+- /Users/liam/.hermes/hermes-agent/hermes_cli/auth.py
+  - Decision: selected-donor
+  - Reason: existing pure Codex refresh and runtime credential resolver expose the stale fallback bug
+- scripts/agent-telemetry-collector.mjs
+  - Decision: selected-donor
+  - Reason: established HERMES_HOME-scoped dashboard-to-Hermes runtime path
+## 2026-07-18T22:52:51.961892+00:00 - local-search
+
+- Request: Auto-fix expired Hermes profile Codex OAuth tokens in HivemindOS
+- Source: assimilation-index
+- Decision: inspected
+- Selected backbone: local-project:NousResearch/hermes-agent
+- Note: Index at ~/.codex/hive-assimilate/index/chunks.jsonl dated 2026-07-13; legacy index was stale and not trusted.
+
+### Candidates
+- LiamVisionary/hivemindos
+  - Decision: inspected
+  - Reason: fresh local index found current project but no stronger external donor
+## 2026-07-18T22:53:10.269878+00:00 - public-search
+
+- Request: NousResearch hermes-agent openai-codex refresh_token_reused credential pool expired token
+- Source: public-github
+- Query: `NousResearch hermes-agent openai-codex refresh_token_reused credential pool expired token`
+- Decision: retrieved
+- Reason: Retrieved 5 public candidates from GitHub search.
+
+### Candidates
+- DEEP13-2-5/Wallet (1 stars, TypeScript)
+  - URL: https://github.com/DEEP13-2-5/Wallet
+  - Description: Web3 Wallet Dashboard is a React-based dApp that connects to MetaMask, displays the user's wallet address, ETH balance, and network info. Built with ethers.js and hooks, it includes optional features like DAI token balance, ENS name, dark/l
+- aikonre/token-balance-dashboard (0 stars, JavaScript)
+  - URL: https://github.com/aikonre/token-balance-dashboard
+  - Description: A simple token balance checker built with React. Simulates checking token balances for a given wallet address
+- mohammedazfersheikh/fullstack-web3-token-dashboard (0 stars, JavaScript)
+  - URL: https://github.com/mohammedazfersheikh/fullstack-web3-token-dashboard
+  - Description: A complete end-to-end Web3 application built with React (Vite), Node.js/Express, and Ethers.js that demonstrates real-world decentralized application architecture. This project includes a backend API for blockchain data fetching and a moder
+- prakarsh-spheron/Wallet-Dashboard-Demo (1 stars, MIT License)
+  - URL: https://github.com/prakarsh-spheron/Wallet-Dashboard-Demo
+  - Description: Demo using the token balances react component to create a Wallet Dashboard
+- shubhbatra1991/OpenDeFi-Analytics- (0 stars, MIT License)
+  - URL: https://github.com/shubhbatra1991/OpenDeFi-Analytics-
+  - Description: Building a analytics dashboard where users connect a wallet and see token balances, portfolio value, and recent transactions in real time, using Next.js/React on the frontend and a .NET/Azure API backend.
+## 2026-07-18T23:00:42.959281+00:00 - public-search
+
+- Request: Auto-fix expired Hermes profile Codex OAuth tokens in HivemindOS
+- Source: github
+- Query: `Hermes Codex OAuth refresh token recovery`
+- Decision: selected
+- Reason: NousResearch/hermes-agent main contains the accepted self-heal for a rejected profile refresh grant: recover a still-valid Codex CLI token pair and persist it through the locked Hermes auth writer.
+- Selected backbone: NousResearch/hermes-agent@1310ceb07ba43be6ea5466a7c9895d7398af6e4f
+- Assimilated: hermes_cli/auth.py::_recover_codex_tokens_from_cli and _refresh_codex_auth_tokens recovery branch
+- Not assimilated: Whole-repository update; the installed Hermes checkout has unrelated local changes and HivemindOS only needs the narrow auth recovery behavior.
+- Verification: Inspected current upstream main and compared the exact call chain with installed commit 0a7a8183.
+
+### Candidates
+- NousResearch/hermes-agent@1310ceb07ba43be6ea5466a7c9895d7398af6e4f
+  - Decision: selected
+  - Reason: _recover_codex_tokens_from_cli is the direct upstream donor
+  - Path: `hermes_cli/auth.py`
+- cathyplendloco/wallets-oauth-fix-for-chatgpt-falcon-complete
+  - Decision: rejected
+  - Reason: Unrelated wallet example surfaced by broad search; no Hermes runtime call chain.
+- rgalyeon/supabase-token-issue
+  - Decision: rejected
+  - Reason: Unrelated Supabase token reproduction; no applicable credential authority or Hermes integration.
+## 2026-07-18T23:07:55.626399+00:00 - assimilation-manifest
+
+- Request: Auto-fix expired Hermes profile Codex OAuth tokens in HivemindOS
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: NousResearch/hermes-agent@1310ceb07ba43be6ea5466a7c9895d7398af6e4f:hermes_cli/auth.py => scripts/lib/hermes-codex-auth-recovery.mjs, NousResearch/hermes-agent@1310ceb07ba43be6ea5466a7c9895d7398af6e4f:tests/hermes_cli/test_auth_codex_provider.py => scripts/test-hermes-codex-auth-recovery.mjs, LiamVisionary/hivemindos:scripts/lib/hermes-model-settings.mjs => scripts/lib/hermes-codex-auth-recovery.mjs, LiamVisionary/hivemindos:scripts/agent-telemetry-collector.mjs => scripts/agent-telemetry-collector.mjs
+- Verification: Wrote ASSIMILATION.hermes-codex-auth-recovery.json with 4 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-18T23:07:55.761232+00:00 - verification
+
+- Request: Auto-fix expired Hermes profile Codex OAuth tokens in HivemindOS
+- Source: verify-assimilation-manifest
+- Decision: below-threshold
+- Reason: ASSIMILATION.hermes-codex-auth-recovery.json: below-threshold: need at least 3 substantive code/config reuse entries; found 2. Search for stronger donors before finalizing.
+## 2026-07-18T23:08:15.050593+00:00 - assimilation-manifest
+
+- Request: Auto-fix expired Hermes profile Codex OAuth tokens in HivemindOS
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: NousResearch/hermes-agent@1310ceb07ba43be6ea5466a7c9895d7398af6e4f:hermes_cli/auth.py => scripts/lib/hermes-codex-auth-recovery.mjs, NousResearch/hermes-agent@1310ceb07ba43be6ea5466a7c9895d7398af6e4f:agent/credential_pool.py => scripts/lib/hermes-codex-auth-recovery.mjs, NousResearch/hermes-agent@1310ceb07ba43be6ea5466a7c9895d7398af6e4f:tests/hermes_cli/test_auth_codex_provider.py => scripts/test-hermes-codex-auth-recovery.mjs, LiamVisionary/hivemindos:scripts/lib/hermes-model-settings.mjs => scripts/lib/hermes-codex-auth-recovery.mjs, LiamVisionary/hivemindos:scripts/agent-telemetry-collector.mjs => scripts/agent-telemetry-collector.mjs
+- Verification: Wrote ASSIMILATION.hermes-codex-auth-recovery.json with 5 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-18T23:08:15.184700+00:00 - verification
+
+- Request: Auto-fix expired Hermes profile Codex OAuth tokens in HivemindOS
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.hermes-codex-auth-recovery.json: 5 concrete reuse entries, 3 substantive
+## 2026-07-18T23:09:58.282384+00:00 - triage
+
+- Request: Implement the full bounded OpenSRE integration for HivemindOS: durable incident bundles, SRE provider capability, pinned read-only sidecar contract, watchdog escalation wiring, approvals-safe report handling, and synthetic incident evaluation.
+- Source: pinned-source
+- Selected backbone: local-project:hivemind-os
+- Note: HivemindOS remains the backbone; OpenSRE is assimilated as a bounded optional provider and test donor, not merged wholesale.
+
+### Candidates
+- Tracer-Cloud/opensre@d3a770c365644bb369b9490588333b0e0309c11c
+  - Decision: selected-donor
+  - Reason: User-pinned Apache-2.0 source supplies investigation pipeline, HTTP contract, structured RCA schema, and synthetic scenario format
+  - Path: `docs/investigation-pipeline-architecture.md,gateway/http/webapp.py,core/domain/diagnosis/result.py,tests/synthetic`
+## 2026-07-18T23:12:48.319994+00:00 - implementation
+
+- Request: Auto-fix expired Hermes profile Codex OAuth tokens in HivemindOS
+- Source: local
+- Decision: assimilated
+- Reason: Backported upstream rejected-refresh recovery at the HivemindOS collector launch boundary while preserving Hermes profile scoping, fleet permission checks, locked persistence, and no task replay.
+- Selected backbone: NousResearch/hermes-agent@1310ceb07ba43be6ea5466a7c9895d7398af6e4f + existing HivemindOS Hermes Python bridge
+- Assimilated: scripts/lib/hermes-codex-auth-recovery.mjs; scripts/agent-telemetry-collector.mjs; scripts/test-hermes-codex-auth-recovery.mjs; package.json; scripts/test-gate.mjs
+- Not assimilated: Blind task replay after a 401; automatic runtime update; raw OAuth tokens in process output; importing credentials for non-Codex agents.
+- Verification: Hermetic recovery suite passed against installed Hermes; HermesMain repaired; direct real call AUTH_OK; live collector path COLLECTOR_AUTH_OK.
+## 2026-07-18T23:12:48.419302+00:00 - verification
+
+- Request: Auto-fix expired Hermes profile Codex OAuth tokens in HivemindOS
+- Source: local
+- Decision: passed
+- Reason: Repository gate and live runtime entry path both passed.
+- Verification: pnpm test: 235/235 passed in 160.0s; focused eslint clean on new files; typecheck and size ratchet green; ASSIMILATION manifest valid with 5 entries/3 substantive.
+- Note: Collector-wide eslint reported five unrelated unused-symbol warnings from a concurrent extraction; no errors, and the full gate passed.
+## 2026-07-18T23:17:47.996147+00:00 - shared-brain-retrieval
+
+- Request: Implement the full bounded OpenSRE integration for HivemindOS: durable incident bundles, SRE provider capability, pinned read-only sidecar contract, watchdog escalation wiring, approvals-safe report handling, and synthetic incident evaluation.
+- Source: hive-brain
+- Query: `HivemindOS prior decisions and patterns for provider integrations, durable operational storage, optional local sidecars, incident escalation, approvals, and synthetic evaluations`
+- Decision: reuse-local-patterns
+- Reason: Shared Brain results confirmed existing provider-integration, API/storage, and optional-service patterns; no reviewed prior decision conflicts with a bounded OpenSRE adapter.
+- Assimilated: Provider capability discovery, dashboard-owned durable state, optional-service health/status surfaces, Hivemind-controlled approvals.
+- Not assimilated: No prior memory was treated as executable instruction or commercial authority.
+- Note: Load-bearing implementation details will still be verified against current code.
+## 2026-07-18T23:17:48.115016+00:00 - local-search
+
+- Request: Implement the full bounded OpenSRE integration for HivemindOS: durable incident bundles, SRE provider capability, pinned read-only sidecar contract, watchdog escalation wiring, approvals-safe report handling, and synthetic incident evaluation.
+- Source: hivemind-os
+- Query: `computer-interaction store, fleet watchdog escalation, Hive action catalog, MCP route dispatch, setup/uninstall service lifecycle`
+- Decision: select-local-backbone
+- Reason: Current HivemindOS code already supplies atomic JSON/event storage, deterministic watchdog escalation, typed action discovery, and service lifecycle conventions.
+- Selected backbone: HivemindOS current working tree
+- Assimilated: Atomic per-incident storage and event journaling pattern; watchdog escalation hook; Hive action/context-index discovery; mirrored setup/uninstall lifecycle.
+- Not assimilated: No parallel state store, action registry, or autonomous remediation authority will be introduced.
+## 2026-07-18T23:17:48.233700+00:00 - external-audit
+
+- Request: Implement the full bounded OpenSRE integration for HivemindOS: durable incident bundles, SRE provider capability, pinned read-only sidecar contract, watchdog escalation wiring, approvals-safe report handling, and synthetic incident evaluation.
+- Source: Tracer-Cloud/opensre
+- Query: `Pinned OpenSRE commit d3a770c365644bb369b9490588333b0e0309c11c architecture, HTTP contract, structured result schema, privacy settings, shell policy, synthetic RCA fixtures`
+- Decision: bounded-assimilation
+- Reason: The pinned source passed the heuristic audit and offers useful structured RCA and evaluation patterns, but its alpha REPL shell and opt-out telemetry/history are incompatible with the intended safety boundary.
+- Selected backbone: HivemindOS provider adapter with OpenSRE as optional loopback sidecar
+- Assimilated: POST /investigate response contract; structured diagnosis fields; bounded evidence-first investigation concepts; synthetic required/forbidden keyword and evidence scoring.
+- Not assimilated: Wholesale dependency merge, interactive shell, autonomous remediation, default telemetry, prompt logging, history retention, or direct access to HivemindOS credentials.
+- Verification: audit_candidate_repo.py PASS at pinned commit; manually read gateway/http/webapp.py, core/domain/diagnosis/result.py, privacy/shell docs, and synthetic fixtures.
+## 2026-07-18T23:42:52.699970+00:00 - assimilation-manifest
+
+- Request: Implement the full bounded OpenSRE integration for HivemindOS: durable incident bundles, SRE provider capability, pinned read-only sidecar contract, watchdog escalation wiring, approvals-safe report handling, and synthetic incident evaluation.
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: https://github.com/Tracer-Cloud/opensre@git:d3a770c365644bb369b9490588333b0e0309c11c:gateway/http/webapp.py => src/lib/services/sre/opensre-client.ts, https://github.com/Tracer-Cloud/opensre@git:d3a770c365644bb369b9490588333b0e0309c11c:core/domain/diagnosis/result.py => src/lib/services/sre/types.ts, https://github.com/Tracer-Cloud/opensre@git:d3a770c365644bb369b9490588333b0e0309c11c:docs/investigation-pipeline-architecture.md => src/lib/services/sre/service.ts, https://github.com/Tracer-Cloud/opensre@git:d3a770c365644bb369b9490588333b0e0309c11c:docs/interactive-shell-privacy.mdx => scripts/install-opensre-sidecar.sh, https://github.com/Tracer-Cloud/opensre@git:d3a770c365644bb369b9490588333b0e0309c11c:tests/synthetic/hermes_rca => src/lib/services/sre/synthetic-evaluation.ts
+- Verification: Wrote ASSIMILATION.opensre-integration.json with 5 entries and custom_code_assessment=balanced.
+## 2026-07-18T23:43:06.542055+00:00 - verification
+
+- Request: Implement the full bounded OpenSRE integration for HivemindOS: durable incident bundles, SRE provider capability, pinned read-only sidecar contract, watchdog escalation wiring, approvals-safe report handling, and synthetic incident evaluation.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.opensre-integration.json: 5 concrete reuse entries, 3 substantive
+## 2026-07-18T23:49:37.442150+00:00 - implementation
+
+- Request: Implement the full bounded OpenSRE integration for HivemindOS: durable incident bundles, SRE provider capability, pinned read-only sidecar contract, watchdog escalation wiring, approvals-safe report handling, and synthetic incident evaluation.
+- Source: HivemindOS + pinned Tracer-Cloud/opensre
+- Decision: implemented-bounded-adapter
+- Reason: HivemindOS now owns redaction, durable incident state, queueing, provider selection, authentication, notification handling, approvals, and watchdog sequencing; OpenSRE remains an optional pinned loopback diagnosis sidecar.
+- Selected backbone: HivemindOS current service/API/action/watchdog/setup architecture
+- Assimilated: Reviewed /health and /investigate contract, structured RCA concepts, bounded investigation pattern, privacy defaults, and synthetic RCA scoring.
+- Not assimilated: Interactive shell, unrestricted commands, autonomous remediation, implicit credential access, default telemetry/prompt/history collection, wholesale dependency merge.
+- Verification: Focused SRE, synthetic evaluation, watchdog, Hive Action/MCP/catalog/route, TypeScript, ESLint, shell/Node/PowerShell syntax, scoped diff hygiene, and authenticated live status GET passed.
+## 2026-07-18T23:49:37.724764+00:00 - final
+
+- Request: Implement the full bounded OpenSRE integration for HivemindOS: durable incident bundles, SRE provider capability, pinned read-only sidecar contract, watchdog escalation wiring, approvals-safe report handling, and synthetic incident evaluation.
+- Source: verification
+- Decision: complete-uncommitted
+- Reason: All requested OpenSRE integration surfaces are implemented and feature-specific gates are green; optional runtime installation was intentionally not performed on this machine.
+- Selected backbone: HivemindOS
+- Assimilated: 5 concrete donor mappings recorded in ASSIMILATION.opensre-integration.json.
+- Not assimilated: No user machine sidecar installation, no external OpenSRE model call, no automatic Work Board task or Shared Brain memory from unreviewed diagnosis.
+- Verification: Manifest valid with 5 concrete/3 substantive entries. Full gate 233/237: both new SRE suites green; four unrelated concurrent reds were DashboardApp size allowance plus three chat source-contract suites. Original baseline collector-abort and quant-research reds passed in the final run.

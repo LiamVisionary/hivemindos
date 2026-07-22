@@ -122,7 +122,11 @@ const cloudVoiceTransports = read("src/lib/services/phone/cloud-voice-transports
 const callProviderMatrix = read("src/lib/config/voice-call-providers.ts");
 const callGateway = read("src/lib/services/phone/call-gateway.ts");
 const turn = read("src/lib/services/queen-bee/voice-turn.ts");
-const agentRuntimeTypes = read("src/lib/types/agent-runtime.ts");
+// The voice/calls + ministry preference types were extracted out of
+// agent-runtime.ts (file-size ratchet) into their own module — agent-runtime.ts
+// re-exports them, so consumers are unchanged, but the source-text pins below
+// have to follow the declarations to their new home.
+const agentCallPreferenceTypes = read("src/lib/types/agent-call-preferences.ts");
 const callsVoiceSection = read("src/features/dashboard/views/chat/AgentSettingsCallsVoiceSection.tsx");
 const cloudVoiceRoute = read("src/app/api/phone/cloud-voice/route.ts");
 const pcmStreamPlayer = read("src/lib/audio/realtime-pcm-stream-player.ts");
@@ -178,7 +182,7 @@ check("BRAIN: legacy fleet-agent prefs do not silently override the Queen model"
     voiceChatBrain: { source: "fleet-agent", explicit: true },
   });
   assert.equal(explicitFleet.voiceChatBrain?.explicit, true);
-  assert.match(agentRuntimeTypes, /explicit\?: boolean/, "voice brain preference must persist an explicit user choice");
+  assert.match(agentCallPreferenceTypes, /explicit\?: boolean/, "voice brain preference must persist an explicit user choice");
   assert.match(callsVoiceSection, /explicit:\s*true/, "Calls voice selector must mark new brain choices explicit");
   assert.match(route, /const explicitFleetAgent = pref\?\.source === "fleet-agent" && pref\.explicit === true/, "resolver must only honor explicit fleet-agent overrides");
   assert.match(route, /if \(explicitFleetAgent\) return \{ kind: "fleet-agent" \}/, "resolver must keep explicit fleet-agent selectable");

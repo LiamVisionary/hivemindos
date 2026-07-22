@@ -42,6 +42,44 @@ assert.match(fleetUpdateSource, /reserveCollectorUpdate/, "fleet updates reserve
 assert.match(fleetUpdateSource, /releaseCollectorUpdateReservation/, "failed update starts release their reservation");
 assert.match(fleetUpdateSource, /maintenanceReservationToken/, "collector fallback carries the reservation token");
 
+// A dirty-but-current checkout must be a no-op, not a reinstall. Agent work
+// (chat App Builder projects under scratchpad/) dirties fleet checkouts, the
+// update never deletes it, and each reinstall restarts the collector — killing
+// app-preview children — so dirty-as-update-needed looped restarts forever
+// (six on one box, 2026-07-18).
+const updateNeededSource = fleetUpdateSource.match(
+  /function updateNeededBefore[\s\S]*?\n\}/,
+)?.[0];
+assert.ok(updateNeededSource, "updateNeededBefore must exist in the fleet update route");
+assert.doesNotMatch(
+  updateNeededSource,
+  /dirty/,
+  "local changes alone must never trigger an update run — that loop restarts the collector and kills app previews without ever converging",
+);
+assert.match(
+  fleetUpdateSource,
+  /already-current[\s\S]*?up to date with local changes/i,
+  "a dirty-but-current machine should report an explicit up-to-date-with-local-changes result",
+);
+const collectorVersionSource = await readFile(
+  new URL("./lib/collector-source-version.mjs", import.meta.url),
+  "utf8",
+);
+assert.match(
+  collectorVersionSource,
+  /dirty:\s*collectorCheckoutDirty\(/,
+  "the collector /health dirty flag must exclude untracked agent droppings (scratchpad/)",
+);
+const rootGitignore = await readFile(
+  new URL("../.gitignore", import.meta.url),
+  "utf8",
+);
+assert.match(
+  rootGitignore,
+  /^scratchpad\/$/m,
+  "chat App Builder scratchpad projects must be gitignored so fleet checkouts stop reporting dirty forever",
+);
+
 assert.match(autoUpdateSource, /activeAgentIds/, "automatic fleet updates receive the active-chat agent set");
 assert.match(autoUpdateSource, /candidate\.agents\.some/, "automatic fleet updates skip a machine running an active chat");
 assert.match(dashboardSource, /activeChatAgentIds/, "the dashboard supplies live chat activity to automatic updates");

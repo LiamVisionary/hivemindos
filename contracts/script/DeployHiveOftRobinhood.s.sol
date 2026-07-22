@@ -21,7 +21,9 @@ import { HiveOftAddresses } from "./HiveOftAddresses.sol";
 ///                   testnet = https://rpc.testnet.chain.robinhood.com/
 ///
 /// Required env:
-///   HIVE_OFT_OWNER — the same multisig used for the Base adapter.
+///   HIVE_OFT_OWNER — the Robinhood chain-local TimelockController. It may have
+///                    the same Safe proposer as Base, but it is a distinct
+///                    deployed owner contract on this chain.
 contract DeployHiveOftRobinhood is Script {
     function run() external returns (address oft) {
         address owner = vm.envAddress("HIVE_OFT_OWNER");
@@ -44,6 +46,6 @@ contract DeployHiveOftRobinhood is Script {
         console2.log("HiveOFT:", oft);
         console2.log("  endpoint:", lzEndpoint);
         console2.log("  owner:   ", owner);
-        console2.log("NOTE: deploys CLOSED (rate limits 0) - WireHiveOft opens the valve");
+        console2.log("NOTE: deploys CLOSED (rate limits 0) - configuration is a separate governed action");
     }
 }

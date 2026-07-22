@@ -6,6 +6,7 @@ const root = process.cwd();
 const promptSource = readFileSync(join(root, "src/lib/services/chat/hivemind-system-prompt.ts"), "utf8");
 const sharedVaultSource = readFileSync(join(root, "src/lib/services/chat/shared-vault-context.ts"), "utf8");
 const routeSource = readFileSync(join(root, "src/app/api/chat/agent-runtime/route.ts"), "utf8");
+const httpRuntimeSource = readFileSync(join(root, "src/app/api/chat/agent-runtime/stream-http-runtime.ts"), "utf8");
 const typesSource = readFileSync(join(root, "src/lib/types/agent-runtime.ts"), "utf8");
 const adapterSource = readFileSync(join(root, "src/lib/services/runtime-adapters/openai-compatible.ts"), "utf8");
 const settingsSource = readFileSync(join(root, "src/features/dashboard/views/chat/AgentSettingsModal.tsx"), "utf8");
@@ -29,8 +30,9 @@ assert.match(promptSource, /Delegate independent subtasks/, "prompt should allow
 assert.match(promptSource, /Do not stop, summarize, or suggest a new session solely because the context is long/, "prompt should not stop early for context-budget concern");
 assert.match(promptSource, /do not expose hidden reasoning or chain-of-thought/i, "prompt should avoid reasoning extraction instructions");
 assert.match(sharedVaultSource, /Audit progress\/final claims against tool results/, "shared-vault context should carry evidence-backed progress guidance");
-assert.match(routeSource, /const promptEnvelope = buildHivemindPromptEnvelope\([\s\S]*?const runtimeMessages = hermesSlashCommand \? messages : prependHivemindSystemMessage\(messages, promptEnvelope\)/, "OpenAI-compatible send loop must prepend the HivemindOS system message");
-assert.match(routeSource, /messages: runtimeMessages/, "OpenAI-compatible fetch should use the prompt-wrapped message body");
-assert.match(routeSource, /context: hermesSlashCommand \? undefined : promptEnvelope\.systemContext \|\| undefined/, "OpenAI-compatible fetch should pass the HivemindOS system context");
+assert.match(httpRuntimeSource, /const promptEnvelope = buildHivemindPromptEnvelope\([\s\S]*?const runtimeMessages = hermesSlashCommand \? messages : prependHivemindSystemMessage\(messages, promptEnvelope\)/, "OpenAI-compatible send loop must prepend the HivemindOS system message");
+assert.match(httpRuntimeSource, /messages: runtimeMessages/, "OpenAI-compatible fetch should use the prompt-wrapped message body");
+assert.match(httpRuntimeSource, /context: hermesSlashCommand \? undefined : promptEnvelope\.systemContext \|\| undefined/, "OpenAI-compatible fetch should pass the HivemindOS system context");
+assert.match(routeSource, /return streamHttpRuntime\(/, "the dashboard route should hand HTTP runtimes to the prompt-owning stream layer");
 
 console.log("HivemindOS managed runtime prompt wiring verified.");

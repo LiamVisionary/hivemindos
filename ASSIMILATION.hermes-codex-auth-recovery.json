@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-07-18T23:08:15.003771+00:00",
+  "request": "Auto-fix expired Hermes profile Codex OAuth tokens in HivemindOS",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "NousResearch/hermes-agent@1310ceb07ba43be6ea5466a7c9895d7398af6e4f",
+      "source_path": "hermes_cli/auth.py",
+      "target_path": "scripts/lib/hermes-codex-auth-recovery.mjs",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the accepted rejected-refresh self-heal: require a current access+refresh pair from Codex CLI, persist via Hermes locked auth writer, and re-resolve before chat."
+    },
+    {
+      "source_repo": "NousResearch/hermes-agent@1310ceb07ba43be6ea5466a7c9895d7398af6e4f",
+      "source_path": "agent/credential_pool.py",
+      "target_path": "scripts/lib/hermes-codex-auth-recovery.mjs",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the pool health contract by accepting only a non-expiring selected runtime access token and recovering an expired pool fallback before the model request."
+    },
+    {
+      "source_repo": "NousResearch/hermes-agent@1310ceb07ba43be6ea5466a7c9895d7398af6e4f",
+      "source_path": "tests/hermes_cli/test_auth_codex_provider.py",
+      "target_path": "scripts/test-hermes-codex-auth-recovery.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Adapted the upstream temporary HERMES_HOME/CODEX_HOME auth-store fixtures to prove expired recovery, healthy no-op behavior, and unavailable fallback against the installed Hermes package."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/lib/hermes-model-settings.mjs",
+      "target_path": "scripts/lib/hermes-codex-auth-recovery.mjs",
+      "reuse_type": "style_adapted",
+      "note": "Reused the established scoped Hermes Python bridge pattern with HERMES_HOME, PYTHONPATH, bounded execution, and JSON-only output."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/agent-telemetry-collector.mjs",
+      "target_path": "scripts/agent-telemetry-collector.mjs",
+      "reuse_type": "config_adapted",
+      "note": "Extended the existing per-profile pre-launch Hermes bridge at both streaming and non-streaming chat entry points after fleet permission checks."
+    }
+  ]
+}

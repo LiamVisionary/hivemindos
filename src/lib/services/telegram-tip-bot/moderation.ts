@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "crypto";
 
+import { ModerationActivityTracker, type ModerationActivityResult } from "./moderation-activity";
 import {
   classifyModerationMessage,
   moderationActionFor,
@@ -19,9 +20,11 @@ import {
   resolveModerationMode,
   setModerationMode,
   setModerationTrust,
+  type ModerationAuditEntry,
   type ModerationMode,
 } from "./moderation-state";
 import { mutateTipBotModerationState, readTipBotModerationState } from "./moderation-store";
+import { readTipBotState } from "./store";
 import {
   escapeHtml,
   mentionHtml,
@@ -43,6 +46,8 @@ export type TipBotModerationConfig = {
   newMemberMessageLimit: number;
   floodMaxMessages: number;
   floodWindowMs: number;
+  duplicateMinCharacters: number;
+  duplicateMinOccurrences: number;
   duplicateWindowMs: number;
   muteMinutes: number;
   banAfterStrikes: number;
@@ -56,14 +61,15 @@ export type TipBotModerationRuntime = {
   config: TipBotModerationConfig;
 };
 
-type RecentActivity = {
-  lastSeenAt: number;
-  timestamps: number[];
-  fingerprints: Map<string, number>;
+type ModerationUpdateKind = "message" | "edited_message";
+
+type ModerationDecisionAudit = {
+  activity?: ModerationActivityResult;
+  updateId: number;
+  updateKind: ModerationUpdateKind;
 };
 
-const recentActivity = new Map<string, RecentActivity>();
-const MAX_ACTIVITY_KEYS = 10_000;
+const activityTracker = new ModerationActivityTracker();
 
 const MUTED_PERMISSIONS: TgChatPermissions = {
   can_send_messages: false,
@@ -92,41 +98,6 @@ function isManagedChat(config: TipBotModerationConfig, chatId: number): boolean 
 
 function messageText(message: TgMessage): string {
   return (message.text ?? message.caption ?? "").trim();
-}
-
-function duplicateFingerprint(text: string): string {
-  return text.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim().slice(0, 2_000);
-}
-
-function recordRecentActivity(
-  chatId: string,
-  userId: string,
-  text: string,
-  config: TipBotModerationConfig,
-  now = Date.now(),
-): { duplicate: boolean; flood: boolean } {
-  const key = `${chatId}:${userId}`;
-  const activity = recentActivity.get(key) ?? { lastSeenAt: now, timestamps: [], fingerprints: new Map() };
-  activity.lastSeenAt = now;
-  activity.timestamps = activity.timestamps.filter((timestamp) => now - timestamp <= config.floodWindowMs);
-  activity.timestamps.push(now);
-
-  for (const [fingerprint, timestamp] of activity.fingerprints) {
-    if (now - timestamp > config.duplicateWindowMs) activity.fingerprints.delete(fingerprint);
-  }
-  const fingerprint = duplicateFingerprint(text);
-  const duplicate = Boolean(fingerprint && activity.fingerprints.has(fingerprint));
-  if (fingerprint) activity.fingerprints.set(fingerprint, now);
-  recentActivity.set(key, activity);
-
-  if (recentActivity.size > MAX_ACTIVITY_KEYS) {
-    const oldest = [...recentActivity.entries()]
-      .sort((left, right) => left[1].lastSeenAt - right[1].lastSeenAt)
-      .slice(0, Math.ceil(MAX_ACTIVITY_KEYS / 10));
-    for (const [oldestKey] of oldest) recentActivity.delete(oldestKey);
-  }
-
-  return { duplicate, flood: activity.timestamps.length > config.floodMaxMessages };
 }
 
 async function notifyAdmins(runtime: TipBotModerationRuntime, text: string) {
@@ -192,11 +163,30 @@ function plannedActionLabel(mode: ModerationMode, action: ModerationAction): str
   return mode === "audit" ? `audit:${action}` : action;
 }
 
+function decisionAuditFields(audit: ModerationDecisionAudit) {
+  const activity = audit.activity;
+  return {
+    updateId: audit.updateId,
+    updateKind: audit.updateKind,
+    ...(activity
+      ? {
+          evidence: {
+            duplicateOccurrences: activity.duplicateOccurrences,
+            floodMessageCount: activity.floodMessageCount,
+            matchedMessageIds: activity.matchedMessageIds,
+            normalizedTextLength: activity.normalizedTextLength,
+          },
+        }
+      : {}),
+  };
+}
+
 async function recordDecision(
   message: TgMessage,
   decision: ModerationDecision,
   action: string,
   mode: ModerationMode,
+  audit: ModerationDecisionAudit,
 ) {
   await mutateTipBotModerationState((state) => {
     appendModerationAudit(state, {
@@ -208,6 +198,7 @@ async function recordDecision(
       action,
       mode,
       createdAt: new Date().toISOString(),
+      ...decisionAuditFields(audit),
     });
   });
 }
@@ -218,6 +209,7 @@ async function executeAutomaticDecision(
   decision: ModerationDecision,
   mode: ModerationMode,
   priorStrikes: number,
+  audit: ModerationDecisionAudit,
 ): Promise<boolean> {
   const user = message.from as TgUser;
   const chatId = String(message.chat.id);
@@ -227,7 +219,7 @@ async function executeAutomaticDecision(
   if (decision.routeToSales) {
     const delivered = await routeSalesInquiry(runtime, message, mode);
     if (!delivered) {
-      await recordDecision(message, decision, `${plannedActionLabel(mode, action)}:delivery-failed`, mode);
+      await recordDecision(message, decision, `${plannedActionLabel(mode, action)}:delivery-failed`, mode, audit);
       await notifyAdmins(
         runtime,
         `⚠️ Could not route a detected sales inquiry from ${userLabel(user)} in ${escapeHtml(message.chat.title ?? "a group")}; the original was left in place.`,
@@ -235,11 +227,11 @@ async function executeAutomaticDecision(
       return false;
     }
     if (mode === "audit") {
-      await recordDecision(message, decision, plannedActionLabel(mode, action), mode);
+      await recordDecision(message, decision, plannedActionLabel(mode, action), mode, audit);
       return false;
     }
     const deleted = await deleteSourceMessage(runtime, message);
-    await recordDecision(message, decision, deleted ? action : `${action}:delete-failed`, mode);
+    await recordDecision(message, decision, deleted ? action : `${action}:delete-failed`, mode, audit);
     if (!deleted) {
       await notifyAdmins(runtime, `⚠️ Sales inquiry was routed but could not be deleted from ${escapeHtml(message.chat.title ?? "the group")}.`);
     }
@@ -247,7 +239,7 @@ async function executeAutomaticDecision(
   }
 
   if (mode === "audit") {
-    await recordDecision(message, decision, plannedActionLabel(mode, action), mode);
+    await recordDecision(message, decision, plannedActionLabel(mode, action), mode, audit);
     await notifyAdmins(
       runtime,
       `🛡️ <b>Moderation audit</b>\n${userLabel(user)} in ${escapeHtml(message.chat.title ?? "a group")}\nReason: ${escapeHtml(decision.explanation)}\nPlanned action: <code>${action}</code>`,
@@ -256,7 +248,7 @@ async function executeAutomaticDecision(
   }
 
   if (!(await targetCanBeModerated(runtime, chatId, userId))) {
-    await recordDecision(message, decision, `${action}:protected-user`, mode);
+    await recordDecision(message, decision, `${action}:protected-user`, mode, audit);
     await notifyAdmins(runtime, `⚠️ Skipped moderation of protected/admin user ${userLabel(user)}.`);
     return false;
   }
@@ -300,6 +292,7 @@ async function executeAutomaticDecision(
       action: `${action}${deleted ? "" : ":delete-failed"}${enforcementSucceeded ? "" : ":enforcement-failed"}`,
       mode,
       createdAt: now.toISOString(),
+      ...decisionAuditFields(audit),
     });
   });
 
@@ -339,6 +332,79 @@ async function replyToCommand(runtime: TipBotModerationRuntime, message: TgMessa
   await runtime.api.sendMessage({ chatId: message.chat.id, text, replyToMessageId: message.message_id });
 }
 
+type ModerationAuditTarget = {
+  firstName?: string;
+  id: string;
+  username?: string;
+};
+
+async function resolveModerationAuditTarget(message: TgMessage, args: string): Promise<ModerationAuditTarget | null> {
+  const repliedUser = message.reply_to_message?.from;
+  if (repliedUser && !repliedUser.is_bot) {
+    return { id: String(repliedUser.id), username: repliedUser.username, firstName: repliedUser.first_name };
+  }
+
+  const token = args.trim();
+  if (/^\d{1,16}$/.test(token)) return { id: token };
+  const username = token.match(/^@([A-Za-z0-9_]{3,})$/)?.[1];
+  if (!username) return null;
+  const state = await readTipBotState();
+  const id = state.usernameIndex[username.toLowerCase()];
+  if (!id) return null;
+  const user = state.users[id];
+  return { id, username: user?.username ?? username, firstName: user?.firstName };
+}
+
+function moderationAuditTargetLabel(target: ModerationAuditTarget): string {
+  return mentionHtml({ id: target.id, username: target.username, firstName: target.firstName });
+}
+
+function moderationAuditEvidenceLine(entry: ModerationAuditEntry) {
+  const evidence = entry.evidence;
+  if (!evidence) return "legacy entry; match evidence was not stored";
+  const details: string[] = [];
+  if (entry.updateKind) details.push(entry.updateKind.replace("_", " "));
+  if (entry.updateId !== undefined) details.push(`update ${entry.updateId}`);
+  if (evidence.matchedMessageIds?.length) details.push(`matched messages ${evidence.matchedMessageIds.join(", ")}`);
+  if (evidence.duplicateOccurrences !== undefined) details.push(`occurrence ${evidence.duplicateOccurrences}`);
+  if (evidence.normalizedTextLength !== undefined) details.push(`${evidence.normalizedTextLength} normalized chars`);
+  if (evidence.floodMessageCount !== undefined) details.push(`${evidence.floodMessageCount} messages in flood window`);
+  return details.join("; ") || "no rule-specific evidence";
+}
+
+async function handleModerationAuditCommand(runtime: TipBotModerationRuntime, message: TgMessage, args: string) {
+  const target = await resolveModerationAuditTarget(message, args);
+  if (!target) {
+    await replyToCommand(runtime, message, "Usage: /modaudit @username, /modaudit &lt;numeric-user-id&gt;, or reply with /modaudit");
+    return;
+  }
+
+  const chatId = String(message.chat.id);
+  const state = await readTipBotModerationState();
+  const member = state.chats[chatId]?.members[target.id];
+  const entries = state.audit.filter((entry) => entry.chatId === chatId && entry.userId === target.id).slice(-5);
+  const status = member
+    ? `${member.strikes} strike${member.strikes === 1 ? "" : "s"}, ${member.warnings} warning${member.warnings === 1 ? "" : "s"}${member.mutedUntil ? `, muted until ${escapeHtml(member.mutedUntil)}` : ""}${member.bannedAt ? `, banned at ${escapeHtml(member.bannedAt)}` : ""}`
+    : "no member moderation state";
+  const auditLines = entries.length
+    ? entries.flatMap((entry) => [
+        `• ${escapeHtml(entry.createdAt)} — <code>${escapeHtml(entry.reason)}</code> → <code>${escapeHtml(entry.action)}</code>${entry.messageId !== undefined ? ` (message ${entry.messageId})` : ""}`,
+        `  ${escapeHtml(moderationAuditEvidenceLine(entry))}`,
+      ])
+    : ["• No moderation actions recorded for this member in this group."];
+
+  await replyToCommand(
+    runtime,
+    message,
+    [
+      `🛡️ <b>Moderation audit — ${moderationAuditTargetLabel(target)}</b>`,
+      `Current: ${status}`,
+      "Recent actions:",
+      ...auditLines,
+    ].join("\n"),
+  );
+}
+
 async function handleModerationCommand(runtime: TipBotModerationRuntime, message: TgMessage): Promise<boolean> {
   const parsed = parseModerationCommand(message.text ?? "", runtime.botUsername);
   if (!parsed) return false;
@@ -357,7 +423,7 @@ async function handleModerationCommand(runtime: TipBotModerationRuntime, message
         "🛡️ <b>Moderator commands</b>",
         "Reply with /warn [reason], /mute [minutes], /ban [reason], or /unban.",
         "Reply with /trust or /untrust to manage the per-group allowlist.",
-        "Use /modmode audit|enforce|off and /modstats.",
+        "Use /modaudit @username for evidence, plus /modmode audit|enforce|off and /modstats.",
       ].join("\n"),
     );
     return true;
@@ -391,6 +457,11 @@ async function handleModerationCommand(runtime: TipBotModerationRuntime, message
         `Warnings / strikes: ${stats.warnings} / ${stats.strikes}`,
       ].join("\n"),
     );
+    return true;
+  }
+
+  if (parsed.command === "modaudit") {
+    await handleModerationAuditCommand(runtime, message, parsed.args);
     return true;
   }
 
@@ -519,6 +590,7 @@ export async function handleTipBotModerationUpdate(runtime: TipBotModerationRunt
     return false;
   }
 
+  const updateKind: ModerationUpdateKind = update.edited_message ? "edited_message" : "message";
   const message = update.edited_message ?? update.message;
   if (!message?.from || message.from.is_bot || !isGroupMessage(message) || !isManagedChat(runtime.config, message.chat.id)) {
     return false;
@@ -542,25 +614,39 @@ export async function handleTipBotModerationUpdate(runtime: TipBotModerationRunt
   const now = new Date().toISOString();
   const existingMember = stateBefore.chats[chatId]?.members[userId];
   const member =
-    existingMember && existingMember.messagesSeen > runtime.config.newMemberMessageLimit
+    updateKind === "edited_message" && existingMember
       ? existingMember
-      : await mutateTipBotModerationState((state) =>
-          recordModerationMemberMessage(state, { chatId, userId, at: now }),
-        );
+      : await mutateTipBotModerationState((state) => recordModerationMemberMessage(state, { chatId, userId, at: now }));
   const text = messageText(message);
   if (!text) return false;
-  const activity = recordRecentActivity(chatId, userId, text, runtime.config);
+  const activity =
+    updateKind === "message"
+      ? activityTracker.record(
+          { chatId, userId, messageId: message.message_id, text },
+          {
+            duplicateMinCharacters: runtime.config.duplicateMinCharacters,
+            duplicateMinOccurrences: runtime.config.duplicateMinOccurrences,
+            duplicateWindowMs: runtime.config.duplicateWindowMs,
+            floodMaxMessages: runtime.config.floodMaxMessages,
+            floodWindowMs: runtime.config.floodWindowMs,
+          },
+        )
+      : undefined;
   const decision = classifyModerationMessage({
     text,
     memberMessageCount: member.messagesSeen,
     newMemberMessageLimit: runtime.config.newMemberMessageLimit,
     allowedDomains: runtime.config.allowedDomains,
     blockedDomains: runtime.config.blockedDomains,
-    duplicate: activity.duplicate,
-    flood: activity.flood,
+    duplicate: activity?.duplicate,
+    flood: activity?.flood,
   });
   if (!decision) return false;
-  return executeAutomaticDecision(runtime, message, decision, mode, member.strikes);
+  return executeAutomaticDecision(runtime, message, decision, mode, member.strikes, {
+    activity,
+    updateId: update.update_id,
+    updateKind,
+  });
 }
 
 export async function moderationPermissionWarnings(runtime: TipBotModerationRuntime): Promise<string[]> {

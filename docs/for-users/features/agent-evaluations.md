@@ -93,6 +93,8 @@ This matters most when agents are operating for a long time. A false pass does m
 
 ## Measured Improvement
 
+For changes to agent context, tools, skills, instructions, or proof, [Harness Experiments](harness-experiments.html) adds a controlled baseline and treatment layer. It holds the worker and job steady, requires repeated runs, and blocks a savings or improvement claim unless the real outcome and worker-produced proof also pass.
+
 The deterministic evaluation benchmark covers successful work, empty answers, refusals, missing artifacts, unobserved external runs, and high risk review:
 
 - Completion classification improved from 6/9 correct to 9/9 correct.

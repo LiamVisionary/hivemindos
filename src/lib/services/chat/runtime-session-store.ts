@@ -226,6 +226,21 @@ export async function appendRuntimeChatSessionText(sessionId: string, role: "ass
   await writeSession(session);
 }
 
+export async function replaceRuntimeChatSessionAssistantText(sessionId: string, content: string, raw?: unknown) {
+  const session = await readSessionFile(sessionPath(sessionId));
+  if (!session) return;
+  for (let index = session.messages.length - 1; index >= 0; index -= 1) {
+    const message = session.messages[index];
+    if (message.type === "process") continue;
+    if (message.role !== "assistant" || message.type || message.turnId !== session.activeTurnId) break;
+    message.content = content;
+    message.raw = raw ?? message.raw;
+    session.updatedAt = Date.now();
+    await writeSession(session);
+    return;
+  }
+}
+
 function applicationGenerationContent(card: RuntimeApplicationGeneration) {
   const label = card.kind === "model3d" ? "3D model" : card.kind;
   if (card.status === "ready") return `Generated ${label}: ${card.prompt}`;

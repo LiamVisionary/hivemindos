@@ -3,6 +3,8 @@ import { AlertTriangle, ArrowUpRight, Bell, CalendarClock, Check, CheckCheck, Ch
 
 import { ApprovalReviewCard } from "@/features/approvals/ApprovalReviewCard";
 import { useSpendApprovals } from "@/features/approvals/use-spend-approvals";
+import { MARKETPLACE_NOTE_MODE, marketplaceDecisionToView } from "@/features/dashboard/views/marketplace/marketplace-approval-model";
+import { useMarketplaceDecisions } from "@/features/dashboard/views/marketplace/use-marketplace-decisions";
 import type { SpendApprovalView } from "@/features/approvals/spend-approval-model";
 import notificationStyles from "@/app/notifications.module.css";
 import { ChatMarkdown } from "@/features/dashboard/ChatMarkdown";
@@ -171,6 +173,8 @@ export function NotificationsPanel({
   // The real human-in-the-loop spend-approval queue (shared with the Zero Human
   // Companies approvals section). Powers the "Review first" rail + its modal.
   const spendApprovals = useSpendApprovals();
+  // Marketplace decisions ride the same rail through their own endpoint.
+  const marketplaceDecisions = useMarketplaceDecisions();
 
   // Automation-health warnings (duplicate loops, enabled-but-dead schedules) —
   // moved here from the scheduler route's top banner. Mount-time clock keeps
@@ -730,13 +734,23 @@ export function NotificationsPanel({
             </div>
           </div>
 
-          {spendApprovals.approvals.length ? (
+          {spendApprovals.approvals.length || marketplaceDecisions.decisions.length ? (
             <div className={notificationClass("sidePanel")}>
               <div className={notificationClass("sidePanelHead")}>
                 <p className={notificationClass("sidePanelLabel")}>Review first</p>
-                <span className={notificationClass("reviewCount")}>{spendApprovals.approvals.length}</span>
+                <span className={notificationClass("reviewCount")}>{spendApprovals.approvals.length + marketplaceDecisions.decisions.length}</span>
               </div>
               <div className={notificationClass("reviewList")}>
+                {marketplaceDecisions.decisions.map((decision) => (
+                  <ApprovalReviewCard
+                    key={decision.id}
+                    approval={marketplaceDecisionToView(decision)}
+                    noteMode={MARKETPLACE_NOTE_MODE}
+                    busy={marketplaceDecisions.busyId === decision.id}
+                    error={marketplaceDecisions.error || undefined}
+                    onDecide={(verdict, note, makeStanding) => marketplaceDecisions.decide(decision.id, verdict, note, Boolean(makeStanding))}
+                  />
+                ))}
                 {spendApprovals.approvals.map((approval) => (
                   <ApprovalReviewCard
                     key={approval.id}

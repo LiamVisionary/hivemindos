@@ -19,9 +19,9 @@ import { HiveOftAddresses } from "./HiveOftAddresses.sol";
 ///     --account <deployer-keystore> --broadcast --verify
 ///
 /// Required env:
-///   HIVE_OFT_OWNER — the Safe/multisig that will own + delegate the adapter.
-///                    Do NOT use a hot EOA: this key controls peers, DVNs,
-///                    rate limits, fees, and pause for the whole bridge.
+///   HIVE_OFT_OWNER — the chain-local TimelockController that will own and act
+///                    as the LayerZero delegate. Its proposer should be the
+///                    governing Safe; do not use a hot EOA on mainnet.
 contract DeployHiveAdapterBase is Script {
     function run() external returns (address adapter) {
         address owner = vm.envAddress("HIVE_OFT_OWNER");
@@ -49,6 +49,6 @@ contract DeployHiveAdapterBase is Script {
         console2.log("  wraps HIVE:", hiveToken);
         console2.log("  endpoint:  ", lzEndpoint);
         console2.log("  owner:     ", owner);
-        console2.log("NOTE: deploys CLOSED (rate limits 0) - WireHiveOft opens the valve");
+        console2.log("NOTE: deploys CLOSED (rate limits 0) - configuration is a separate governed action");
     }
 }

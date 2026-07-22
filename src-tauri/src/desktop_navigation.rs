@@ -105,7 +105,7 @@ fn handle_deep_link_urls(app: &AppHandle, urls: Vec<String>) {
         let Ok(url) = url::Url::parse(&raw_url) else {
             continue;
         };
-        if url.scheme() != "hivemindos" {
+        if url.scheme() != "hivemindos" && url.scheme() != "hivemindos-dev" {
             continue;
         }
         let host = url.host_str().unwrap_or_default();
@@ -128,18 +128,29 @@ fn handle_deep_link_urls(app: &AppHandle, urls: Vec<String>) {
             // open Connect modal is already polling for the saved refresh token.
             show_main_window(app);
             let _ = app.emit(NAVIGATE_EVENT, serde_json::json!({ "view": "integrations" }));
-        } else if host == "integrations" && path == "x-managed" {
+        } else if (host == "integrations" && path == "x-managed")
+            || (host == "socials" && path == "x-managed")
+        {
+            let return_view = if host == "socials" {
+                "socials"
+            } else {
+                "integrations"
+            };
             show_main_window(app);
-            let _ = app.emit(NAVIGATE_EVENT, serde_json::json!({ "view": "integrations" }));
-            let _ = app.emit(MANAGED_X_RETURN_EVENT, serde_json::json!({
-                "status": query_value(&url, "x_status").unwrap_or_default(),
-                "connectionId": query_value(&url, "connectionId").unwrap_or_default(),
-                "username": query_value(&url, "username").unwrap_or_default(),
-                "error": query_value(&url, "error").unwrap_or_default(),
-                "creditAccountId": query_value(&url, "x_credit_account_id").unwrap_or_default(),
-                "slug": query_value(&url, "x_slug").unwrap_or_default(),
-                "url": url.to_string(),
-            }));
+            let _ = app.emit(NAVIGATE_EVENT, serde_json::json!({ "view": return_view }));
+            let _ = app.emit(
+                MANAGED_X_RETURN_EVENT,
+                serde_json::json!({
+                    "status": query_value(&url, "x_status").unwrap_or_default(),
+                    "connectionId": query_value(&url, "connectionId").unwrap_or_default(),
+                    "username": query_value(&url, "username").unwrap_or_default(),
+                    "error": query_value(&url, "error").unwrap_or_default(),
+                    "creditAccountId": query_value(&url, "x_credit_account_id").unwrap_or_default(),
+                    "slug": query_value(&url, "x_slug").unwrap_or_default(),
+                    "returnView": return_view,
+                    "url": url.to_string(),
+                }),
+            );
         } else if host == "research" && path == "sync" {
             // "Sync memories to app" on hivemindos.app/research. Park the code
             // for take_pending_research_sync_code (cold start) and emit it for

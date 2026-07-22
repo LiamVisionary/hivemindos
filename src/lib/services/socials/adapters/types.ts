@@ -18,6 +18,8 @@ import type {
 export type SocialAdapterContext = {
   env: Record<string, string>;
   fetchImpl?: typeof fetch;
+  /** Hermetic override for the local Agent Reach X session command runner. */
+  xAgentReachRun?: (args: string[]) => Promise<unknown>;
 };
 
 export type SocialConnectProbe = {
@@ -30,12 +32,43 @@ export type SocialConnectProbe = {
 export type SocialPostInput = {
   account: SocialAccount;
   text: string;
+  title?: string;
+  subreddit?: string;
   media?: SocialQueueItem["media"];
   replyTo?: string;
   quoteOf?: string;
+  /** Stable queue-item key. Providers with native idempotency must forward it. */
+  idempotencyKey: string;
 };
 
 export type SocialPostResult = { externalId: string; url?: string };
+
+export class SocialPostError extends Error {
+  readonly status?: number;
+  readonly retryable: boolean;
+  readonly ambiguous: boolean;
+
+  constructor(message: string, input: { status?: number; retryable?: boolean; ambiguous?: boolean } = {}) {
+    super(message);
+    this.name = "SocialPostError";
+    this.status = input.status;
+    this.retryable = input.retryable ?? false;
+    this.ambiguous = input.ambiguous ?? false;
+  }
+}
+
+export async function socialPostResponseError(platform: SocialPlatform, response: Response): Promise<SocialPostError> {
+  const body = await response.text().catch(() => "");
+  const compact = body.replace(/\s+/g, " ").trim().slice(0, 500);
+  const suffix = compact ? `: ${compact}` : "";
+  return new SocialPostError(`${platform} rejected the post (HTTP ${response.status})${suffix}`, {
+    status: response.status,
+    retryable: response.status === 429,
+    // A timeout/5xx response can arrive after the provider committed a write.
+    // Adapters with native idempotency explicitly downgrade this to retryable.
+    ambiguous: response.status === 408 || response.status === 425 || response.status >= 500,
+  });
+}
 
 export type SocialPostMetrics = {
   externalId: string;
@@ -62,7 +95,8 @@ export interface SocialPlatformAdapter {
  */
 export function accountEnvValue(account: SocialAccount, ctx: SocialAdapterContext, canonicalKey: string): string {
   const override = (account.binding?.[`env:${canonicalKey}`] ?? "").trim();
-  return (ctx.env[override || canonicalKey] ?? "").trim();
+  const key = override || canonicalKey;
+  return (process.env[key] ?? ctx.env[key] ?? "").trim();
 }
 
 /** Shared helper: a fetch with a hard timeout, mirroring provider-connections' 6s probes. */
@@ -80,9 +114,4 @@ export async function probeFetch(
   } finally {
     clearTimeout(timer);
   }
-}
-
-/** Standard Phase-1 stub for capabilities that land in a later phase. */
-export function notYetWired(platform: SocialPlatform, what: string): never {
-  throw new Error(`${platform} ${what} lands in a later Socials phase; this build is connect-only for it.`);
 }

@@ -24,6 +24,14 @@ import {
   legacyHoneyMicroFromHiveRaw,
   parseHoneyCommandArgs,
 } from "../src/lib/services/telegram-tip-bot/honey-recognition.ts";
+import {
+  appendHoneyRecognitionAudit,
+  completeHoneyRecognitionAudit,
+  emptyHoneyAuditState,
+  honeyAuditDetail,
+  honeyRecognitionAuditId,
+  listHoneyRecognitionAudit,
+} from "../src/lib/services/telegram-tip-bot/honey-audit-state.ts";
 import { CLAW_LIGHT_RICH_THEME, richAccent, richCode, richMuted, richTable } from "../src/lib/services/telegram-tip-bot/rich-formatting.ts";
 import {
   bountyPayoutLeaderboard,
@@ -40,6 +48,7 @@ import {
   normalizeModerationText,
   parseModerationCommand,
 } from "../src/lib/services/telegram-tip-bot/moderation-rules.ts";
+import { ModerationActivityTracker } from "../src/lib/services/telegram-tip-bot/moderation-activity.ts";
 import {
   addModerationStrike,
   appendModerationAudit,
@@ -96,6 +105,10 @@ function groupMessage(text, extra = {}) {
 
 test("parseCommand finds /tip mid-message but anchors other commands", () => {
   assert.deepEqual(parseCommand("/tip 100 @bob", "thebot"), { command: "tip", args: "100 @bob" });
+  assert.deepEqual(parseCommand("  /honey @bob Documented the full setup path  ", "thebot"), {
+    command: "honey",
+    args: "@bob Documented the full setup path",
+  });
   assert.deepEqual(parseCommand("thanks a lot, /tip 5m", "thebot"), { command: "tip", args: "5m" });
   // The reported bug: mention before /tip — parseCommand keeps only post-/tip args.
   assert.deepEqual(parseCommand("reported a bug so @bob /tip 5m", "thebot"), { command: "tip", args: "5m" });
@@ -167,6 +180,45 @@ test("the built-in trophy reaction is an explicit recognition action", () => {
   }), false);
 });
 
+test("HONEY recognition audit tracks terminal outcomes without retaining message text", () => {
+  const state = emptyHoneyAuditState();
+  const id = honeyRecognitionAuditId("command", 1234);
+  appendHoneyRecognitionAudit(state, {
+    id,
+    source: "command",
+    updateId: 1234,
+    chatId: "group",
+    messageId: 99,
+    giverUserId: "giver",
+    recipientUserId: "recipient",
+    outcome: "received",
+    createdAt: T0,
+    updatedAt: T0,
+  });
+  completeHoneyRecognitionAudit(state, id, {
+    outcome: "recorded",
+    recognitionsRemainingToday: 2,
+    dailyRecognitionLimit: 3,
+    detail: "The hosted ledger recorded the recognition.",
+  });
+  assert.deepEqual(listHoneyRecognitionAudit(state, { chatId: "group", userId: "giver" }).map((entry) => entry.outcome), ["recorded"]);
+  assert.equal(listHoneyRecognitionAudit(state, { chatId: "other" }).length, 0);
+  assert.equal("text" in state.entries[0], false);
+  assert.equal("reason" in state.entries[0], false);
+  assert.equal(honeyAuditDetail(new Error(`failed\n${"x".repeat(300)}`)).length, 240);
+
+  for (let updateId = 2_000; updateId <= 4_005; updateId += 1) {
+    appendHoneyRecognitionAudit(state, {
+      ...state.entries[0],
+      id: honeyRecognitionAuditId("reaction", updateId),
+      source: "reaction",
+      updateId,
+    });
+  }
+  assert.equal(state.entries.length, 2_000);
+  assert.equal(state.entries.at(-1)?.updateId, 4_005);
+});
+
 test("reaction targets are bounded to recent human-authored group messages", () => {
   const index = new HoneyReactionMessageIndex({ ttlMs: 1_000, maxEntries: 2 });
   const alice = { id: 101, username: "alice" };
@@ -193,16 +245,32 @@ test("reaction targets are bounded to recent human-authored group messages", () 
 test("Telegram polling and bot handling wire message reactions into the existing HONEY endpoint", () => {
   const api = readFileSync(new URL("../src/lib/services/telegram-tip-bot/telegram-api.ts", import.meta.url), "utf8");
   const commands = readFileSync(new URL("../src/lib/services/telegram-tip-bot/commands.ts", import.meta.url), "utf8");
+  const reactionHandler = readFileSync(new URL("../src/lib/services/telegram-tip-bot/honey-reaction-handler.ts", import.meta.url), "utf8");
   assert.match(api, /allowed_updates[^\n]+message_reaction/);
   assert.match(commands, /handleHoneyReaction/);
-  assert.match(commands, /givePeerHoney/);
-  assert.match(commands, /HONEY_REACTION_REASON/);
+  assert.match(reactionHandler, /givePeerHoney/);
+  assert.match(reactionHandler, /HONEY_REACTION_REASON/);
   // The bot must never place reactions itself: Telegram animates every
   // reaction placement, so a bot-seeded 🏆 plays the award animation on every
   // comment. The trophy may only ever come from a member's own reaction.
   assert.doesNotMatch(api, /setMessageReaction/);
   assert.doesNotMatch(commands, /seedHoneyRecognitionReaction/);
   assert.doesNotMatch(commands, /clearHoneyRecognitionReactionSeed/);
+});
+
+test("HONEY attempts have durable admin receipts and explicit per-giver quota copy", () => {
+  const commands = readFileSync(new URL("../src/lib/services/telegram-tip-bot/commands.ts", import.meta.url), "utf8");
+  const reactionHandler = readFileSync(new URL("../src/lib/services/telegram-tip-bot/honey-reaction-handler.ts", import.meta.url), "utf8");
+  const auditStore = readFileSync(new URL("../src/lib/services/telegram-tip-bot/honey-audit-store.ts", import.meta.url), "utf8");
+  const runner = readFileSync(new URL("../src/lib/services/telegram-tip-bot/runner.ts", import.meta.url), "utf8");
+  assert.match(commands, /case "honeyaudit"/);
+  assert.match(commands, /HONEY recognition audit/);
+  assert.match(commands, /rejected-reply-failed/);
+  assert.match(commands, /Telegram command failed and its error reply was not delivered/);
+  assert.match(reactionHandler, /Quota for .*recognitions left this UTC day/);
+  assert.match(reactionHandler, /recorded-reply-failed/);
+  assert.match(auditStore, /telegram-tip-bot-honey-audit\.json/);
+  assert.match(runner, /command: "honeyaudit"/);
 });
 
 test("legacy HIVE receiver values convert to micro-HONEY at 1 HONEY per 1,000,000 HIVE", () => {
@@ -338,6 +406,53 @@ test("flood and duplicate decisions escalate predictably", () => {
   assert.equal(moderationActionFor(flood, 0, 3), "mute-delete");
 });
 
+test("duplicate tracking requires three substantial, distinct Telegram messages", () => {
+  const tracker = new ModerationActivityTracker();
+  const policy = {
+    duplicateMinCharacters: 32,
+    duplicateMinOccurrences: 3,
+    duplicateWindowMs: 10 * 60_000,
+    floodMaxMessages: 5,
+    floodWindowMs: 10_000,
+  };
+  const base = {
+    chatId: "chat",
+    userId: "member",
+    text: "This is a substantial repeated promotion message for the community",
+  };
+
+  assert.equal(tracker.record({ ...base, messageId: 10, now: 1_000 }, policy).duplicate, false);
+  assert.equal(tracker.record({ ...base, messageId: 11, now: 2_000 }, policy).duplicate, false);
+  const third = tracker.record({ ...base, messageId: 12, now: 3_000 }, policy);
+  assert.equal(third.duplicate, true);
+  assert.equal(third.duplicateOccurrences, 3);
+  assert.deepEqual(third.matchedMessageIds, [10, 11]);
+
+  const replay = tracker.record({ ...base, messageId: 12, now: 3_500 }, policy);
+  assert.equal(replay.replayedMessage, true);
+  assert.equal(replay.duplicate, false);
+  assert.equal(replay.floodMessageCount, 3);
+
+  const shortTracker = new ModerationActivityTracker();
+  for (let messageId = 1; messageId <= 4; messageId += 1) {
+    assert.equal(
+      shortTracker.record({ chatId: "chat", userId: "member", messageId, now: messageId * 1_000, text: "thanks" }, policy)
+        .duplicate,
+      false,
+    );
+  }
+});
+
+test("moderation excludes edits from duplicate and flood activity while retaining content checks", () => {
+  const moderation = readFileSync(new URL("../src/lib/services/telegram-tip-bot/moderation.ts", import.meta.url), "utf8");
+  assert.match(moderation, /updateKind === "message"\s*\? activityTracker\.record/);
+  assert.match(moderation, /classifyModerationMessage\(\{/);
+  assert.match(moderation, /updateKind: ModerationUpdateKind = update\.edited_message \? "edited_message" : "message"/);
+  assert.doesNotMatch(moderation, /existingMember && existingMember\.messagesSeen > runtime\.config\.newMemberMessageLimit/);
+  assert.match(moderation, /handleModerationAuditCommand/);
+  assert.match(moderation, /matched messages \$\{evidence\.matchedMessageIds\.join/);
+});
+
 test("moderation text and admin command parsing are stable", () => {
   assert.equal(normalizeModerationText("HEY @Alice — read https://example.com now!"), "hey <mention> read <url> now");
   assert.deepEqual(parseModerationCommand("/mute@HiveTipBot 30 repeated spam", "HiveTipBot"), {
@@ -345,6 +460,10 @@ test("moderation text and admin command parsing are stable", () => {
     args: "30 repeated spam",
   });
   assert.equal(parseModerationCommand("/ban@OtherBot", "HiveTipBot"), null);
+  assert.deepEqual(parseModerationCommand("/modaudit @Cryptocurry02", "HiveTipBot"), {
+    command: "modaudit",
+    args: "@Cryptocurry02",
+  });
 });
 
 test("moderation state keeps trust, per-chat mode, strikes, and privacy-safe stats", () => {

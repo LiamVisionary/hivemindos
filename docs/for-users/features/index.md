@@ -39,6 +39,11 @@ The product starts with machines and agents. Fleet tells you what is online, whi
     <a href="fleet-machine-permissions.html">Open machine permissions</a>
   </section>
   <section class="docCard">
+    <h3>SRE Incident Investigations</h3>
+    <p>Redacted durable incident bundles, Fleet Watchdog escalation evidence, optional local OpenSRE root-cause reports, and a hard boundary between recommendations and approved actions.</p>
+    <a href="sre-investigations.html">Open SRE investigation docs</a>
+  </section>
+  <section class="docCard">
     <h3>Agents, Runtimes, And Chat</h3>
     <p>Runtime profiles, model selection, adaptive free-model routing, adapter behavior, streaming chat, `/swarm [number]` agent-team passes, `/swarm-goal` build orchestration, attachments, directory context, and phone-call handoff.</p>
     <a href="runtimes-and-chat.html">Open agents</a>
@@ -49,6 +54,11 @@ The product starts with machines and agents. Fleet tells you what is online, whi
     <a href="local-document-reader.html">Open document reader</a>
   </section>
   <section class="docCard">
+    <h3>Local Web Research</h3>
+    <p>Runtime-independent keyless search, guarded page extraction, bounded site crawling, screenshots, scanned-PDF OCR, and public-network safety controls.</p>
+    <a href="web-research.html">Open web research</a>
+  </section>
+  <section class="docCard">
     <h3>Capability Plan Approvals</h3>
     <p>Review the installed and setup-required capabilities behind a chat build, choose alternatives, remove entire task steps, and control when autonomous work should ask first.</p>
     <a href="capability-approvals.html">Open capability approvals</a>
@@ -57,6 +67,11 @@ The product starts with machines and agents. Fleet tells you what is online, whi
     <h3>Calling</h3>
     <p>Dashboard and mobile agent calls, BYOK Realtime by default, speaker-only fallback, phone pairing, and paid LiveKit/SFU cloud rooms.</p>
     <a href="calling.html">Open calling docs</a>
+  </section>
+  <section class="docCard">
+    <h3>Socials</h3>
+    <p>Connected accounts, per-account posting voice, durable drafts and schedules, explicit approvals, awake hours, cancellation windows, delivery-safe retries, history, and platform analytics.</p>
+    <a href="socials.html">Open Socials</a>
   </section>
 </div>
 
@@ -84,6 +99,11 @@ Looped work is where operator intent turns into agent execution. A loop contract
     <h3>Agent Evaluations</h3>
     <p>Shared completion checks across chat, Work Board, companies, schedules, and managed runtime tasks, with trusted evidence and separate reviewers for consequential work.</p>
     <a href="agent-evaluations.html">Open evaluation docs</a>
+  </section>
+  <section class="docCard">
+    <h3>Harness Experiments</h3>
+    <p>Fixed-worker baseline and treatment comparisons with context lifecycle evidence, real outcome grading, repeat thresholds, and retain, revise, or remove decisions.</p>
+    <a href="harness-experiments.html">Open harness docs</a>
   </section>
   <section class="docCard">
     <h3>Agent Challenges</h3>

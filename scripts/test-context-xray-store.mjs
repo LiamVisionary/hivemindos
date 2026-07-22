@@ -90,6 +90,28 @@ try {
   assert.equal(fromContextIndex.sources[0].reason?.includes("score 72"), true);
   assert.equal(fromContextIndex.sources[0].snippet?.includes("anothersecret123456"), false);
   assert.equal(fromContextIndex.sources[1].kind, "skill");
+  assert.ok(fromContextIndex.sources.every((source) => source.lifecycle?.availableAt && source.lifecycle?.retrievedAt));
+
+  const capabilityManifest = await service.createContextXrayManifest({
+    runId: "run-capability",
+    sources: [{ id: "hive-action:apps.build", kind: "tool", title: "App builder", status: "active" }],
+  });
+  await service.recordContextXrayCapabilityUse({
+    runId: "run-capability",
+    rawArguments: { surface: "hive_action", capabilityId: "apps.build" },
+    invoked: false,
+    ok: false,
+    target: "approval required",
+  });
+  assert.equal((await service.getContextXrayManifest(capabilityManifest.id)).sources[0].lifecycle?.invokedAt, undefined);
+  await service.recordContextXrayCapabilityUse({
+    runId: "run-capability",
+    rawArguments: { surface: "hive_action", capabilityId: "apps.build" },
+    invoked: true,
+    ok: true,
+    target: "apps.build",
+  });
+  assert.ok((await service.getContextXrayManifest(capabilityManifest.id)).sources[0].lifecycle?.invokedAt);
 
   const fetched = await service.getContextXrayManifest(created.id);
   assert.equal(fetched.id, created.id);
@@ -128,10 +150,21 @@ try {
   assert.equal(apiCreateBody.ok, true);
   assert.equal(apiCreateBody.manifest.runId, "run-2");
 
+  const apiEvidence = await route.POST(jsonRequest(NextRequest, "http://127.0.0.1/api/context-xray", {
+    action: "record-evidence",
+    runId: "run-2",
+    sourceId: apiCreateBody.manifest.sources[0].id,
+    stage: "relevant",
+    evidence: "The accepted outcome cites this skill's review gate.",
+  }));
+  assert.equal(apiEvidence.status, 200);
+
   const apiGet = await route.GET(authedRequest(NextRequest, `http://127.0.0.1/api/context-xray?id=${apiCreateBody.manifest.id}`));
   assert.equal(apiGet.status, 200);
   const apiGetBody = await apiGet.json();
   assert.equal(apiGetBody.manifest.id, apiCreateBody.manifest.id);
+  assert.ok(apiGetBody.manifest.sources[0].lifecycle.relevantAt);
+  assert.match(apiGetBody.manifest.sources[0].lifecycle.evidence.join(" "), /accepted outcome/i);
 
   const apiList = await route.GET(authedRequest(NextRequest, "http://127.0.0.1/api/context-xray?limit=10"));
   assert.equal(apiList.status, 200);

@@ -21,7 +21,7 @@ export const FLEET_MACHINE_ACCESS_CAPABILITIES: ReadonlyArray<{
   {
     id: "sharedEnv",
     label: "Shared env",
-    description: "Use credentials and configuration replicated through the shared hive environment.",
+    description: "Use credentials and configuration replicated through the shared hive environment. Allowed by default.",
   },
   {
     id: "chatHistory",
@@ -117,7 +117,7 @@ export type FleetMachinePolicyResponse = {
 
 export const DEFAULT_FLEET_MACHINE_ACCESS_POLICY: FleetMachineAccessPolicy = {
   sharedBrain: "ask",
-  sharedEnv: "ask",
+  sharedEnv: "allow",
   chatHistory: "ask",
   connectedApps: "ask",
   messagingChannels: "ask",

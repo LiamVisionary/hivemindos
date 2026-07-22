@@ -75,6 +75,29 @@ async function makeFakeHermes(name) {
   return path;
 }
 
+async function makeNoisyStreamingHermes(name) {
+  const path = join(sandbox, name);
+  await writeFile(path, `#!/bin/sh
+mkdir -p "$HERMES_HOME"
+sqlite3 "$HERMES_HOME/state.db" "create table if not exists sessions (id text primary key, source text not null, started_at real not null, ended_at real, end_reason text, title text, message_count integer default 0, tool_call_count integer default 0); create table if not exists messages (id integer primary key autoincrement, session_id text not null, role text not null, content text, tool_name text, timestamp real not null); insert into sessions (id,source,started_at,message_count) values ('20260718_203500_deadbe','hivemindos',strftime('%s','now'),1); insert into messages (session_id,role,content,timestamp) values ('20260718_203500_deadbe','user','output contract test',strftime('%s','now'));"
+printf '  ┊ review diff\\na/index.html → b/index.html\\n@@ -1 +1 @@\\n-old\\n+new\\n'
+printf '%s\\n' '__HIVEMIND_HERMES_EVENT__{"type":"assistant.delta","delta":"I am checking the scaffold."}'
+sleep 0.3
+printf '%s\\n' '__HIVEMIND_HERMES_EVENT__{"type":"assistant.segment_end"}'
+printf '%s\\n' '__HIVEMIND_HERMES_EVENT__{"type":"tool.started","name":"write_file","status":"running"}'
+sleep 0.3
+printf '%s\\n' '__HIVEMIND_HERMES_EVENT__{"type":"tool.completed","name":"write_file","status":"completed"}'
+printf '%s\\n' '__HIVEMIND_HERMES_EVENT__{"type":"assistant.delta","delta":"## Build complete\\n\\n"}'
+sleep 0.3
+printf '%s\\n' '__HIVEMIND_HERMES_EVENT__{"type":"assistant.delta","delta":"Done from canonical Hermes session."}'
+sqlite3 "$HERMES_HOME/state.db" "insert into messages (session_id,role,content,timestamp) values ('20260718_203500_deadbe','assistant','## Build complete\n\nDone from canonical Hermes session.',strftime('%s','now')); update sessions set message_count=2 where id='20260718_203500_deadbe';"
+printf 'Done from noisy unmarked stdout.\\n'
+printf 'session_id: 20260718_203500_deadbe\\n' >&2
+`);
+  await chmod(path, 0o755);
+  return path;
+}
+
 async function bootCollector(hermesBin, extraEnv = {}) {
   const port = await freePort();
   const base = `http://127.0.0.1:${port}`;
@@ -126,12 +149,48 @@ async function abortedChat(base, fakeBin, abortAfterMs) {
   return pid;
 }
 
+async function assertStreamingChatOutput(base) {
+  const response = await fetch(`${base}/chat`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      stream: true,
+      forceHermesCli: true,
+      message: "output contract test",
+      rawUserMessage: "output contract test",
+      agent: { id: "quiet-output-test", runtime: "hermes" },
+    }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  assert.equal(response.status, 200);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let streamText = "";
+  let interimAt = 0;
+  let finalAt = 0;
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    streamText += decoder.decode(value, { stream: true });
+    if (!interimAt && streamText.includes("I am checking the scaffold.")) interimAt = Date.now();
+    if (!finalAt && streamText.includes("Done from canonical Hermes session.")) finalAt = Date.now();
+  }
+  assert.match(streamText, /20260718_203500_deadbe/, "collector should surface the pollable Hermes session id");
+  assert.ok(interimAt > 0 && finalAt > interimAt, "interim assistant text must arrive before the delayed final response");
+  assert.match(streamText, /assistant\.reset/, "a later Hermes response segment should replace interim narration");
+  assert.match(streamText, /tool\.started/, "Hermes tool lifecycle should stream as process data");
+  assert.match(streamText, /Done from canonical Hermes session\./, "collector should emit the canonical final assistant message");
+  assert.doesNotMatch(streamText, /review diff|a\/index\.html|Done from noisy unmarked stdout/, "unmarked CLI terminal output must not become assistant chat text");
+}
+
 try {
   const fakeKill = await makeFakeHermes("fake-hermes-kill");
   const fakeDetach = await makeFakeHermes("fake-hermes-detach");
-  const [killBase, detachBase] = await Promise.all([
+  const fakeNoisyStreaming = await makeNoisyStreamingHermes("fake-hermes-noisy-streaming");
+  const [killBase, detachBase, quietBase] = await Promise.all([
     bootCollector(fakeKill),
     bootCollector(fakeDetach, { AGENT_TELEMETRY_CHAT_ABORT_KILL: "0" }),
+    bootCollector(fakeNoisyStreaming),
   ]);
 
   await Promise.all([
@@ -155,6 +214,10 @@ try {
         "with AGENT_TELEMETRY_CHAT_ABORT_KILL=0 the hermes child must outlive the abort",
       );
       console.log("✓ AGENT_TELEMETRY_CHAT_ABORT_KILL=0 keeps the old detached behavior");
+    })(),
+    (async () => {
+      await assertStreamingChatOutput(quietBase);
+      console.log("✓ structured Hermes deltas stream while terminal diff output stays out of chat");
     })(),
   ]);
 

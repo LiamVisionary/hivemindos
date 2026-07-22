@@ -278,6 +278,21 @@ if ask "Stop and remove the HivemindOS Link sidecar service?" "yes"; then
   fi
 fi
 
+if ask "Stop and remove the optional HivemindOS OpenSRE root-cause sidecar service?" "yes"; then
+  "$ROOT/scripts/install-opensre-sidecar.sh" uninstall
+fi
+
+if ask "Remove the optional OpenSRE isolated runtime under ~/.hivemindos/opensre? (Incident records under ~/.hivemindos/ops/incidents are preserved.)" "no"; then
+  rm -rf "$HOME/.hivemindos/opensre"
+  ok "Removed the optional OpenSRE isolated runtime"
+fi
+
+if ask "Remove the isolated local web research runtime, browser, OCR models, screenshots, and cache under ~/.hivemindos?" "yes"; then
+  rm -rf "$HOME/.hivemindos/integrations/web-research" "$HOME/.hivemindos/web-research"
+  rm -f "$HOME/.hivemindos/integrations/web-research-state.json"
+  ok "Removed the local web research runtime and HivemindOS-owned artifacts"
+fi
+
 if ask "Stop and remove the Claw backend service?" "yes"; then
   if [[ "$(uname -s)" == "Darwin" ]]; then
     # com.hivemindos.claw-backend = legacy headless gateway; com.hivemindos.claw-gateway

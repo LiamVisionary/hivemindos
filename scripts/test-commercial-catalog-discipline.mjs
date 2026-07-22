@@ -3,12 +3,15 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const agents = readFileSync(new URL("../AGENTS.md", import.meta.url), "utf8");
+const agents = [
+  readFileSync(new URL("../AGENTS.md", import.meta.url), "utf8"),
+  readFileSync(new URL("../src/AGENTS.md", import.meta.url), "utf8"),
+].join("\n");
 const claude = readFileSync(new URL("../CLAUDE.md", import.meta.url), "utf8");
 const endpoint = "https://hivemindos-paid-agent-gateway.hivemindos.workers.dev/api/commercial/catalog";
 const buybackPolicySource = "../hivemind-cloud-services/workers/paid-agent-gateway/src/commercial-service-policy.ts";
 
-for (const [name, source] of [["AGENTS.md", agents], ["CLAUDE.md", claude]]) {
+for (const [name, source] of [["AGENTS.md + src/AGENTS.md", agents], ["CLAUDE.md", claude]]) {
   assert.ok(source.includes(endpoint), `${name} must name the canonical commercial catalog`);
   assert.match(source, /\?service=<service-id>/, `${name} must document focused service queries`);
   assert.match(source, /pricing[\s\S]*free (?:quota|allowance)[\s\S]*discount[\s\S]*cost[\s\S]*margin/i,

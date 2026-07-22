@@ -16,24 +16,37 @@ assert.match(integrationsView, /await openExternalUrl\(data\.authorizationUrl\)/
 assert.doesNotMatch(integrationsView, /window\.location\.assign\(data\.authorizationUrl\)/);
 
 const integrationsHelpers = readFileSync("src/features/integrations/integrations-view-helpers.ts", "utf8");
-assert.match(integrationsHelpers, /isTauriDesktopRuntime/);
-assert.match(integrationsHelpers, /\/api\/integrations\/x-managed\/desktop-return/);
-assert.match(integrationsHelpers, /view", "integrations"/);
-assert.match(integrationsHelpers, /tab", "mcp"/);
+assert.match(integrationsHelpers, /managedXReturnUrl/);
+
+const managedXOAuthReturn = readFileSync("src/lib/services/managed-x-oauth-return.ts", "utf8");
+assert.match(managedXOAuthReturn, /isTauriDesktopRuntime/);
+assert.match(managedXOAuthReturn, /\/api\/integrations\/x-managed\/desktop-return/);
+assert.match(managedXOAuthReturn, /x_return_view/);
+assert.match(managedXOAuthReturn, /x_return_scheme", "hivemindos-dev"/);
+assert.match(managedXOAuthReturn, /view", view/);
+assert.match(managedXOAuthReturn, /tab", "mcp"/);
 
 const managedXReturnService = readFileSync("src/lib/services/managed-x-return.ts", "utf8");
 assert.match(managedXReturnService, /hivemindos:managed-x-return/);
-assert.match(managedXReturnService, /hivemindos:\/\/integrations\/x-managed/);
+assert.match(managedXReturnService, /\$\{scheme\}:\/\/\$\{returnView\}\/x-managed/);
+assert.match(managedXReturnService, /"hivemindos-dev" \? "hivemindos-dev" : "hivemindos"/);
+assert.match(managedXReturnService, /"socials" : "integrations"/);
 assert.match(managedXReturnService, /x_credit_account_id/);
 assert.match(managedXReturnService, /x_slug/);
 
 const managedXDesktopReturnRoute = readFileSync("src/app/api/integrations/x-managed/desktop-return/route.ts", "utf8");
 assert.match(managedXDesktopReturnRoute, /storeManagedXDesktopReturn/);
 assert.match(managedXDesktopReturnRoute, /Return received/);
-assert.doesNotMatch(managedXDesktopReturnRoute, /managedXDeepLinkFromSearchParams/);
-assert.doesNotMatch(managedXDesktopReturnRoute, /window\.location\.href =/);
-assert.doesNotMatch(managedXDesktopReturnRoute, /hivemindos:\/\//);
-assert.doesNotMatch(managedXDesktopReturnRoute, /Open HivemindOS/);
+assert.match(managedXDesktopReturnRoute, /managedXDeepLinkFromSearchParams/);
+assert.match(managedXDesktopReturnRoute, /window\.location\.replace/);
+assert.match(managedXDesktopReturnRoute, /Open HivemindOS/);
+
+const socialsModal = readFileSync("src/components/socials/ConnectAccountModal.tsx", "utf8");
+assert.match(socialsModal, /managedXReturnUrl/);
+assert.match(socialsModal, /managedXReturnUrl\(managedCreditAccountId, managedCreditSlug, "socials"\)/);
+assert.doesNotMatch(socialsModal, /returnUrl: window\.location\.href/);
+assert.match(socialsModal, /MANAGED_X_RETURN_EVENT/);
+assert.match(socialsModal, /desktop-return-pending/);
 
 const managedXDesktopReturnPendingRoute = readFileSync("src/app/api/integrations/x-managed/desktop-return-pending/route.ts", "utf8");
 assert.match(managedXDesktopReturnPendingRoute, /latestManagedXDesktopReturn/);
@@ -77,6 +90,29 @@ assert.doesNotMatch(allowlist, /"\/api\/integrations\/google\/oauth\/start"/);
 const tauriDesktopNavigation = readFileSync("src-tauri/src/desktop_navigation.rs", "utf8");
 assert.match(tauriDesktopNavigation, /hivemindos:managed-x-return/);
 assert.match(tauriDesktopNavigation, /host == "integrations" && path == "x-managed"/);
+assert.match(tauriDesktopNavigation, /host == "socials" && path == "x-managed"/);
+assert.match(tauriDesktopNavigation, /"view": return_view/);
 assert.match(tauriDesktopNavigation, /"creditAccountId": query_value\(&url, "x_credit_account_id"\)/);
+
+const macInfoPlist = readFileSync("src-tauri/Info.plist", "utf8");
+assert.match(macInfoPlist, /<key>CFBundleURLTypes<\/key>/);
+assert.match(macInfoPlist, /<key>CFBundleURLSchemes<\/key>[\s\S]*?<string>hivemindos<\/string>/);
+assert.doesNotMatch(macInfoPlist, /<string>hivemindos-dev<\/string>/);
+
+const tauriConfig = readFileSync("src-tauri/tauri.conf.json", "utf8");
+assert.match(tauriConfig, /"schemes": \["hivemindos"\]/);
+
+const tauriDevConfig = readFileSync("src-tauri/tauri.dev.conf.json", "utf8");
+assert.match(tauriDevConfig, /"schemes": \["hivemindos-dev"\]/);
+
+const tauriDevLauncher = readFileSync("scripts/tauri-dev-signed.mjs", "utf8");
+assert.match(tauriDevLauncher, /tauri\.dev\.conf\.json/);
+assert.match(tauriDevLauncher, /'--config', devConfig/);
+
+const devRunner = readFileSync("scripts/dev-codesign-runner.sh", "utf8");
+assert.match(devRunner, /LaunchServices\.framework\/Support\/lsregister/);
+assert.match(devRunner, /"\$LAUNCH_SERVICES_REGISTER" -f "\$BUNDLE"/);
+assert.match(devRunner, /configure_dev_url_scheme/);
+assert.match(devRunner, /CFBundleURLSchemes:0 string hivemindos-dev/);
 
 console.log("Tauri OAuth external browser checks passed.");

@@ -1,13 +1,32 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, X } from "lucide-react";
 
 import { useSocialsDesk } from "@/components/socials/socials-context";
 import { SocialsSpinner } from "@/components/socials/skeletons";
 import { loadSharedHiveEnvKeys } from "@/features/dashboard/shared-hive-env-client";
 import { openExternalUrl } from "@/lib/native/open-external-url";
+import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
+import {
+  MANAGED_X_RETURN_POLL_GRACE_MS,
+  MANAGED_X_RETURN_POLL_INTERVAL_MS,
+  MANAGED_X_RETURN_POLL_WINDOW_MS,
+  managedXReturnUrl,
+} from "@/lib/services/managed-x-oauth-return";
+import {
+  MANAGED_X_RETURN_EVENT,
+  managedXReturnMessage,
+  type ManagedXReturnPayload,
+} from "@/lib/services/managed-x-return";
 import { SharedHiveEnvCredentialInput } from "@/features/env/SharedHiveEnvCredentialInput";
+import { BrowserProfileConnectFlow } from "@/components/socials/BrowserProfileConnectFlow";
+import {
+  managedXConnectionHandle,
+  managedXConnectionId,
+  type ManagedXConnectionRecord,
+} from "@/lib/services/managed-x-connections";
 
 /**
  * Connect flow: pick platform → pick method → identify the account.
@@ -20,23 +39,13 @@ import { SharedHiveEnvCredentialInput } from "@/features/env/SharedHiveEnvCreden
  * slug would probe as "finish the managed X sign-in" forever.
  */
 
-type ManagedXConnection = Record<string, unknown>;
-
-function managedConnectionSlug(connection: ManagedXConnection): string {
-  for (const key of ["slug", "connectionSlug", "id"]) {
-    const value = connection[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  return "";
-}
-
-function managedConnectionHandle(connection: ManagedXConnection): string {
-  for (const key of ["handle", "username", "screenName", "xUsername", "accountHandle"]) {
-    const value = connection[key];
-    if (typeof value === "string" && value.trim()) return value.trim().replace(/^@/, "");
-  }
-  return "";
-}
+type ManagedXCreditAccount = { accountId?: string; slug?: string; balanceLabel?: string };
+type ManagedXReturnPoll = {
+  creditAccountId: string;
+  slug: string;
+  since: number;
+  until: number;
+};
 
 export function ConnectAccountModal() {
   const desk = useSocialsDesk();
@@ -50,9 +59,14 @@ export function ConnectAccountModal() {
 
   const [managedLoading, setManagedLoading] = useState(false);
   const [managedError, setManagedError] = useState<string | null>(null);
-  const [managedConnections, setManagedConnections] = useState<ManagedXConnection[]>([]);
+  const [managedConnections, setManagedConnections] = useState<ManagedXConnectionRecord[]>([]);
+  const [managedCreditAccounts, setManagedCreditAccounts] = useState<ManagedXCreditAccount[]>([]);
   const [managedCreditAccountId, setManagedCreditAccountId] = useState("");
+  const [managedCreditSlug, setManagedCreditSlug] = useState("");
+  const [managedRefreshKey, setManagedRefreshKey] = useState(0);
+  const [managedReturnPoll, setManagedReturnPoll] = useState<ManagedXReturnPoll | null>(null);
   const [signInBusy, setSignInBusy] = useState(false);
+  const preferredManagedConnectionId = useRef("");
 
   const platform = useMemo(
     () => desk.platforms.find((candidate) => candidate.platform === platformKey) ?? desk.platforms[0],
@@ -60,6 +74,14 @@ export function ConnectAccountModal() {
   );
   const method = platform?.methods.find((candidate) => candidate.method === methodKey) ?? platform?.methods[0];
   const isManagedX = platform?.platform === "x" && method?.method === "managed-oauth";
+  const isBrowserProfile = method?.method === "browser-profile";
+
+  const handleManagedXReturn = useCallback((payload: ManagedXReturnPayload) => {
+    setManagedReturnPoll(null);
+    preferredManagedConnectionId.current = payload.connectionId?.trim() || "";
+    setManagedError(managedXReturnMessage(payload) || "X sign-in returned to HivemindOS.");
+    setManagedRefreshKey((current) => current + 1);
+  }, []);
 
   useEffect(() => {
     if (!desk.connectOpen || !isManagedX) return;
@@ -72,12 +94,15 @@ export function ConnectAccountModal() {
       setManagedError(null);
       void (async () => {
         try {
-          const res = await fetch("/api/integrations/x-managed", { cache: "no-store" });
+          const query = new URLSearchParams();
+          if (managedCreditAccountId) query.set("creditAccountId", managedCreditAccountId);
+          if (managedCreditSlug) query.set("slug", managedCreditSlug);
+          const res = await fetch(`/api/integrations/x-managed${query.size ? `?${query.toString()}` : ""}`, { cache: "no-store" });
           const payload = (await res.json()) as {
             ok?: boolean;
-            connections?: ManagedXConnection[];
+            connections?: ManagedXConnectionRecord[];
             selectedCreditAccountId?: string;
-            creditAccounts?: Array<{ accountId?: string }>;
+            creditAccounts?: ManagedXCreditAccount[];
             error?: string;
           };
           if (cancelled) return;
@@ -85,8 +110,24 @@ export function ConnectAccountModal() {
             setManagedError(payload.error ?? `HTTP ${res.status}`);
             return;
           }
-          setManagedConnections(Array.isArray(payload.connections) ? payload.connections : []);
-          setManagedCreditAccountId(payload.selectedCreditAccountId ?? payload.creditAccounts?.[0]?.accountId ?? "");
+          const connections = Array.isArray(payload.connections) ? payload.connections : [];
+          const creditAccounts = Array.isArray(payload.creditAccounts) ? payload.creditAccounts : [];
+          const selectedCreditAccountId = managedCreditAccountId || payload.selectedCreditAccountId || creditAccounts[0]?.accountId || "";
+          const selectedCreditAccount = payload.creditAccounts?.find((account) => account.accountId === selectedCreditAccountId)
+            ?? payload.creditAccounts?.[0];
+          setManagedConnections(connections);
+          setManagedCreditAccounts(creditAccounts);
+          setManagedCreditAccountId(selectedCreditAccountId);
+          setManagedCreditSlug(selectedCreditAccount?.slug ?? "");
+          const preferredId = preferredManagedConnectionId.current;
+          const preferred = preferredId
+            ? connections.find((connection) => managedXConnectionId(connection) === preferredId)
+            : undefined;
+          if (preferred) {
+            preferredManagedConnectionId.current = "";
+            setBinding((current) => ({ ...current, connectionSlug: preferredId }));
+            setHandle(managedXConnectionHandle(preferred) || preferredId);
+          }
         } catch (fetchError) {
           if (!cancelled) setManagedError(fetchError instanceof Error ? fetchError.message : String(fetchError));
         } finally {
@@ -98,7 +139,73 @@ export function ConnectAccountModal() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [desk.connectOpen, isManagedX]);
+  }, [desk.connectOpen, isManagedX, managedCreditAccountId, managedCreditSlug, managedRefreshKey]);
+
+  useEffect(() => {
+    if (!desk.connectOpen || !isManagedX || !isTauriDesktopRuntime()) return undefined;
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) => listen<ManagedXReturnPayload>(MANAGED_X_RETURN_EVENT, (event) => {
+        if (event.payload?.returnView && event.payload.returnView !== "socials") return;
+        handleManagedXReturn(event.payload ?? {});
+      }))
+      .then((unlisten) => {
+        const safeUnlisten = createSafeTauriUnlisten(unlisten);
+        if (cancelled) {
+          safeUnlisten();
+          return;
+        }
+        cleanup = safeUnlisten;
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, [desk.connectOpen, handleManagedXReturn, isManagedX]);
+
+  useEffect(() => {
+    if (!managedReturnPoll) return undefined;
+    let cancelled = false;
+    let timeoutId: number | undefined;
+
+    const poll = async () => {
+      if (cancelled) return;
+      if (Date.now() > managedReturnPoll.until) {
+        setManagedReturnPoll(null);
+        setManagedError("X sign-in is still pending. Finish in the browser, then reopen this modal to refresh.");
+        return;
+      }
+      const params = new URLSearchParams({
+        creditAccountId: managedReturnPoll.creditAccountId,
+        since: String(managedReturnPoll.since),
+      });
+      if (managedReturnPoll.slug) params.set("slug", managedReturnPoll.slug);
+      try {
+        const response = await fetch(`/api/integrations/x-managed/desktop-return-pending?${params.toString()}`, { cache: "no-store" });
+        const data = (await response.json().catch(() => ({}))) as {
+          ok?: boolean;
+          returned?: ManagedXReturnPayload | null;
+        };
+        if (response.ok && data.ok !== false && data.returned) {
+          handleManagedXReturn(data.returned);
+          return;
+        }
+      } catch {
+        // Keep polling while the external browser completes the OAuth redirect.
+      }
+      if (!cancelled) {
+        timeoutId = window.setTimeout(() => void poll(), MANAGED_X_RETURN_POLL_INTERVAL_MS);
+      }
+    };
+
+    timeoutId = window.setTimeout(() => void poll(), MANAGED_X_RETURN_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    };
+  }, [handleManagedXReturn, managedReturnPoll]);
 
   // Auto-detect saved credentials: when a canonical key is absent from the
   // shared env but a known same-meaning alias (matrix envKeyAliases) is saved,
@@ -154,7 +261,12 @@ export function ConnectAccountModal() {
       const res = await fetch("/api/integrations/x-managed", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "oauth-start", creditAccountId: managedCreditAccountId, returnUrl: window.location.href }),
+        body: JSON.stringify({
+          action: "oauth-start",
+          creditAccountId: managedCreditAccountId,
+          slug: managedCreditSlug,
+          returnUrl: managedXReturnUrl(managedCreditAccountId, managedCreditSlug, "socials"),
+        }),
       });
       const payload = (await res.json()) as { ok?: boolean; url?: string; authorizeUrl?: string; authorizationUrl?: string; error?: string };
       const target = payload.url ?? payload.authorizeUrl ?? payload.authorizationUrl;
@@ -163,7 +275,18 @@ export function ConnectAccountModal() {
         return;
       }
       await openExternalUrl(target);
-      setManagedError("Finish the sign-in in the opened tab, then come back and pick the new connection (reopen this modal to refresh the list).");
+      if (isTauriDesktopRuntime()) {
+        const now = Date.now();
+        setManagedReturnPoll({
+          creditAccountId: managedCreditAccountId,
+          slug: managedCreditSlug,
+          since: now - MANAGED_X_RETURN_POLL_GRACE_MS,
+          until: now + MANAGED_X_RETURN_POLL_WINDOW_MS,
+        });
+        setManagedError("Finish the sign-in in the opened tab. HivemindOS will reopen and select the connected account automatically.");
+      } else {
+        setManagedError("Finish the sign-in in the opened tab, then return here and refresh the connection list.");
+      }
     } catch (startError) {
       setManagedError(startError instanceof Error ? startError.message : String(startError));
     } finally {
@@ -177,11 +300,14 @@ export function ConnectAccountModal() {
     setBusy(true);
     setError(null);
     try {
+      const accountBinding = isManagedX
+        ? { ...binding, creditAccountId: managedCreditAccountId, creditSlug: managedCreditSlug }
+        : binding;
       const result = await desk.createAccount({
         platform: platform.platform,
         handle,
         method: method.method,
-        ...(Object.keys(binding).length ? { binding } : {}),
+        ...(Object.keys(accountBinding).length ? { binding: accountBinding } : {}),
         ...(soulPath ? { soulPath } : {}),
       });
       if (!result.ok) {
@@ -246,7 +372,29 @@ export function ConnectAccountModal() {
           {method.notes ? <div className="sc-note">{method.notes}</div> : null}
         </div>
 
-        {!isManagedX && method.envKeys.length ? (
+        {isBrowserProfile ? (
+          <div className="sc-field">
+            <BrowserProfileConnectFlow
+              provider={platform.platform}
+              providerLabel={platform.label}
+              onDone={async ({ accountId, importCatalog }) => {
+                if (importCatalog) {
+                  // Best-effort initial catalog import; the monitor re-syncs hourly anyway.
+                  await fetch("/api/marketplace/listings", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action: "sync-catalog", accountId }),
+                  }).catch(() => undefined);
+                }
+                await desk.refresh();
+                close();
+              }}
+              onCancel={close}
+            />
+          </div>
+        ) : null}
+
+        {!isBrowserProfile && !isManagedX && method.envKeys.length ? (
           <div className="sc-field">
             <span className="sc-label">Credentials (Shared Hive Env)</span>
             <div className="sc-note" style={{ marginTop: 0 }}>
@@ -282,8 +430,32 @@ export function ConnectAccountModal() {
           </div>
         ) : null}
 
-        {isManagedX ? (
+        {isBrowserProfile ? null : isManagedX ? (
           <div className="sc-field">
+            {managedCreditAccounts.length > 1 ? (
+              <>
+                <span className="sc-label">Credit account for X usage</span>
+                <select
+                  className="sc-select"
+                  value={managedCreditAccountId}
+                  onChange={(event) => {
+                    const accountId = event.target.value;
+                    const account = managedCreditAccounts.find((candidate) => candidate.accountId === accountId);
+                    setManagedCreditAccountId(accountId);
+                    setManagedCreditSlug(account?.slug ?? "");
+                    setManagedConnections([]);
+                    setBinding({});
+                    setHandle("");
+                  }}
+                >
+                  {managedCreditAccounts.map((account) => (
+                    <option key={`${account.accountId}:${account.slug}`} value={account.accountId}>
+                      {account.accountId}{account.balanceLabel ? ` · ${account.balanceLabel}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </>
+            ) : null}
             <span className="sc-label">X account</span>
             {managedLoading ? (
               <div className="sc-note" role="status" aria-label="Loading managed X connections" style={{ display: "flex", alignItems: "center", gap: 7 }}>
@@ -296,8 +468,8 @@ export function ConnectAccountModal() {
                   value={binding.connectionSlug ?? ""}
                   onChange={(event) => {
                     const slug = event.target.value;
-                    const picked = managedConnections.find((connection) => managedConnectionSlug(connection) === slug);
-                    const pickedHandle = picked ? managedConnectionHandle(picked) : "";
+                    const picked = managedConnections.find((connection) => managedXConnectionId(connection) === slug);
+                    const pickedHandle = picked ? managedXConnectionHandle(picked) : "";
                     setBinding(slug ? { ...binding, connectionSlug: slug } : (() => { const next = { ...binding }; delete next.connectionSlug; return next; })());
                     setHandle(pickedHandle || (slug ? slug : ""));
                   }}
@@ -306,8 +478,8 @@ export function ConnectAccountModal() {
                     {managedConnections.length ? "Pick a connected X account" : "No gateway connections yet — sign in below"}
                   </option>
                   {managedConnections.map((connection) => {
-                    const slug = managedConnectionSlug(connection);
-                    const connHandle = managedConnectionHandle(connection);
+                    const slug = managedXConnectionId(connection);
+                    const connHandle = managedXConnectionHandle(connection);
                     if (!slug) return null;
                     return (
                       <option key={slug} value={slug}>
@@ -337,7 +509,7 @@ export function ConnectAccountModal() {
           </div>
         )}
 
-        {(method.setupFields ?? []).map((field) => (
+        {(isBrowserProfile ? [] : method.setupFields ?? []).map((field) => (
           <div key={field} className="sc-field">
             <span className="sc-label">{field}</span>
             <input
@@ -349,33 +521,37 @@ export function ConnectAccountModal() {
           </div>
         ))}
 
-        <div className="sc-field">
-          <span className="sc-label">Posting voice (optional)</span>
-          <select className="sc-select" value={soulPath} onChange={(event) => setSoulPath(event.target.value)}>
-            <option value="">Pick later</option>
-            {desk.souls.map((soul) => (
-              <option key={soul.path} value={soul.path}>{soul.label}</option>
-            ))}
-          </select>
-        </div>
+        {!isBrowserProfile ? (
+          <div className="sc-field">
+            <span className="sc-label">Posting voice (optional)</span>
+            <select className="sc-select" value={soulPath} onChange={(event) => setSoulPath(event.target.value)}>
+              <option value="">Pick later</option>
+              {desk.souls.map((soul) => (
+                <option key={soul.path} value={soul.path}>{soul.label}</option>
+              ))}
+            </select>
+          </div>
+        ) : null}
 
         {platform.limits.length ? (
           <div className="sc-note">{platform.limits.join(" ")}</div>
         ) : null}
         {error ? <div className="sc-error">{error}</div> : null}
 
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button type="button" className="sc-btn" onClick={close}>Cancel</button>
-          <button
-            type="button"
-            className="sc-btn"
-            data-tone="primary"
-            disabled={busy || !handle.trim() || !managedReady}
-            onClick={() => void submit()}
-          >
-            {busy ? <SocialsSpinner /> : null} Connect
-          </button>
-        </div>
+        {!isBrowserProfile ? (
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button type="button" className="sc-btn" onClick={close}>Cancel</button>
+            <button
+              type="button"
+              className="sc-btn"
+              data-tone="primary"
+              disabled={busy || !handle.trim() || !managedReady}
+              onClick={() => void submit()}
+            >
+              {busy ? <SocialsSpinner /> : null} Connect
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -34,6 +34,8 @@ contract VerifyHiveOftDeployment is Script {
         address localOApp = vm.envAddress("HIVE_LOCAL_OAPP");
         address remoteOApp = vm.envAddress("HIVE_REMOTE_OAPP");
         address expectedOwner = vm.envAddress("HIVE_EXPECTED_OWNER");
+        uint16 expectedFeeBps = uint16(vm.envOr("HIVE_EXPECTED_FEE_BPS", uint256(0)));
+        bool expectedOpen = vm.envOr("HIVE_EXPECT_OPEN", false);
         uint32 remoteEid = HiveOftAddresses.remoteEidForChain(block.chainid);
         bool mainnet = block.chainid == HiveOftAddresses.BASE_CHAIN_ID
             || block.chainid == HiveOftAddresses.ROBINHOOD_CHAIN_ID;
@@ -42,7 +44,7 @@ contract VerifyHiveOftDeployment is Script {
 
         _check("owner is expected (timelock)", Ownable(localOApp).owner() == expectedOwner);
         _check("not paused", !Pausable(localOApp).paused());
-        _check("fee is zero at launch", controls.defaultFeeBps() == 0);
+        _check("fee matches expected policy", controls.defaultFeeBps() == expectedFeeBps);
         _check(
             "peer matches remote OApp",
             IOAppCore(localOApp).peers(remoteEid) == bytes32(uint256(uint160(remoteOApp)))
@@ -81,7 +83,7 @@ contract VerifyHiveOftDeployment is Script {
             console2.log("  (testnet: lib/DVN pinning checks skipped)");
         }
 
-        _logBuckets(controls, remoteEid);
+        _checkBuckets(controls, remoteEid, expectedOpen);
 
         if (failures > 0) {
             console2.log("FAILURES:", failures);
@@ -114,7 +116,7 @@ contract VerifyHiveOftDeployment is Script {
         }
     }
 
-    function _logBuckets(HiveBridgeControls _controls, uint32 _eid) private view {
+    function _checkBuckets(HiveBridgeControls _controls, uint32 _eid, bool _expectedOpen) private {
         (, uint256 outH) = _controls.getAmountCanBeSent(_controls.outboundShortKey(_eid));
         (, uint256 outD) = _controls.getAmountCanBeSent(_controls.outboundLongKey(_eid));
         (, uint256 inH) = _controls.getAmountCanBeSent(_controls.inboundShortKey(_eid));
@@ -123,7 +125,11 @@ contract VerifyHiveOftDeployment is Script {
         console2.log("  capacity out daily: ", outD);
         console2.log("  capacity in hourly: ", inH);
         console2.log("  capacity in daily:  ", inD);
-        console2.log("  (all zero = closed, which is correct before activation)");
+        if (_expectedOpen) {
+            _check("all bridge capacity windows are open", outH > 0 && outD > 0 && inH > 0 && inD > 0);
+        } else {
+            _check("all bridge capacity windows remain closed", outH == 0 && outD == 0 && inH == 0 && inD == 0);
+        }
     }
 
     function _check(string memory _label, bool _ok) private {

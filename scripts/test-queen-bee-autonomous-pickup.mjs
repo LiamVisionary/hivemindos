@@ -359,7 +359,10 @@ for (const askText of [
   });
   assert.equal(result.status, "skipped", "a transient-only chain should auto-retry (skipped), not block");
   assert.equal(failInput?.failureReason, "timeout", "transient exhaustion should fail with the retryable 'timeout' reason");
-  assert.deepEqual(calls, ["claim", "chat", "reroute", "claim", "chat"]);
+  // The trailing reroute is the queen takeover (2026-07-18): after the retried
+  // failTask, the task is re-pointed at the transient-failed delegate so the
+  // next sweep runs it directly instead of re-burning the whole chain.
+  assert.deepEqual(calls, ["claim", "chat", "reroute", "claim", "chat", "reroute"]);
 }
 
 // --- Scenario 5c: a transient-only exhaustion whose retry budget is spent →

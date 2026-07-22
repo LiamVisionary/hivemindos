@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type ElementType, type ReactNode } from "react";
-import { Activity, Check, Eye, FileText, GitBranch, LoaderCircle, RefreshCcw, ShieldCheck, Sparkles, X } from "lucide-react";
+import { Activity, Beaker, Check, Eye, FileText, GitBranch, LoaderCircle, RefreshCcw, ShieldCheck, Sparkles, X } from "lucide-react";
 
 import type { SharedVaultConfig } from "@/lib/types/agent-runtime";
 import type { BrainReviewProposal } from "@/lib/types/brain-review";
 import type { ContextXrayManifest, ContextXraySource } from "@/lib/types/context-xray";
+import type { HarnessExperimentRecord } from "@/lib/types/harness-experiments";
 import type { VisualArtifact, VisualArtifactBlock } from "@/lib/types/visual-artifacts";
 
 type ClassNameBuilder = (...names: Array<string | false | null | undefined>) => string;
@@ -29,6 +30,12 @@ type ContextXrayListResponse = {
   ok?: boolean;
   error?: string;
   manifests?: ContextXrayManifest[];
+};
+
+type HarnessExperimentListResponse = {
+  ok?: boolean;
+  error?: string;
+  experiments?: HarnessExperimentRecord[];
 };
 
 type VisualArtifactListResponse = {
@@ -57,6 +64,7 @@ export function AgentNativeInsightsPanel({
 }: AgentNativeInsightsPanelProps) {
   const [reviews, setReviews] = useState<BrainReviewProposal[]>([]);
   const [manifests, setManifests] = useState<ContextXrayManifest[]>([]);
+  const [experiments, setExperiments] = useState<HarnessExperimentRecord[]>([]);
   const [artifacts, setArtifacts] = useState<VisualArtifact[]>([]);
   const [selectedManifestId, setSelectedManifestId] = useState("");
   const [selectedArtifactId, setSelectedArtifactId] = useState("");
@@ -76,6 +84,7 @@ export function AgentNativeInsightsPanel({
   const pendingReviews = reviews.filter((proposal) => proposal.status === "pending").length;
   const approvedReviews = reviews.filter((proposal) => proposal.status === "approved").length;
   const totalContextTokens = manifests.reduce((sum, manifest) => sum + manifest.totalEstimatedTokens, 0);
+  const claimReadyExperiments = experiments.filter((experiment) => experiment.comparison.claimReady).length;
 
   const refresh = useCallback(async () => {
     if (!active) return;
@@ -84,14 +93,16 @@ export function AgentNativeInsightsPanel({
     try {
       const visualParams = new URLSearchParams({ limit: "8", public: "1" });
       if (vaultPath) visualParams.set("vaultPath", vaultPath);
-      const [reviewData, xrayData, artifactData] = await Promise.all([
+      const [reviewData, xrayData, artifactData, experimentData] = await Promise.all([
         fetchJson<BrainReviewListResponse>("/api/brain/review?status=all"),
         fetchJson<ContextXrayListResponse>("/api/context-xray?limit=8"),
         fetchJson<VisualArtifactListResponse>(`/api/visual-artifacts?${visualParams.toString()}`),
+        fetchJson<HarnessExperimentListResponse>("/api/harness-experiments?limit=6"),
       ]);
       setReviews(reviewData.proposals ?? []);
       setManifests(xrayData.manifests ?? []);
       setArtifacts(artifactData.artifacts ?? []);
+      setExperiments(experimentData.experiments ?? []);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Agent-native insights failed to load.");
     } finally {
@@ -138,8 +149,8 @@ export function AgentNativeInsightsPanel({
       <div className={fleetClass("taskPanelHeader")}>
         <div>
           <p className="eyebrow">Agent-native review</p>
-          <h2>Memory and context workbench</h2>
-          <p>Review proposed brain writes, inspect context manifests, and browse local visual plans or recaps.</p>
+          <h2>Memory, context, and harness workbench</h2>
+          <p>Review brain writes, inspect context evidence, and compare controlled agent experiments.</p>
         </div>
         <Button type="button" size="sm" variant="secondary" onClick={() => void refresh()} disabled={loading}>
           {loading ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
@@ -153,9 +164,10 @@ export function AgentNativeInsightsPanel({
         </p>
       ) : null}
 
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         <MetricCard label="Pending review" value={String(pendingReviews)} detail={`${approvedReviews} approved and ready to apply`} />
         <MetricCard label="Context manifests" value={String(manifests.length)} detail={`${formatNumber(totalContextTokens)} estimated tokens shown`} />
+        <MetricCard label="Harness experiments" value={String(experiments.length)} detail={`${claimReadyExperiments} ready for a comparative claim`} />
         <MetricCard label="Visual artifacts" value={String(artifacts.length)} detail="plans and recaps from vault or local fallback" />
         <MetricCard label="Vault target" value={vaultPath ? "enabled" : "fallback"} detail={vaultPath || "using local HivemindOS state"} />
       </div>
@@ -271,6 +283,14 @@ export function AgentNativeInsightsPanel({
           ) : null}
         </section>
       </div>
+
+      <section className="mt-4 grid content-start gap-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] p-4">
+        <PanelHeading icon={<Beaker aria-hidden="true" />} eyebrow="Harness experiments" title="Controlled comparisons" />
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {experiments.map((experiment) => <HarnessExperimentCard experiment={experiment} key={experiment.id} />)}
+          {experiments.length ? null : <EmptyState text="No harness experiments recorded yet." />}
+        </div>
+      </section>
     </section>
   );
 }
@@ -333,6 +353,8 @@ function StatusPill({ children, tone }: { children: ReactNode; tone: "good" | "w
 }
 
 function ContextSourceRow({ source }: { source: ContextXraySource }) {
+  const lifecycleStages = (["available", "retrieved", "invoked", "relevant"] as const)
+    .filter((stage) => Boolean(source.lifecycle?.[`${stage}At`]));
   return (
     <article className="rounded-md border border-[rgba(148,163,184,0.1)] bg-[rgba(10,14,21,0.38)] p-2 text-xs">
       <div className="flex flex-wrap items-center gap-2">
@@ -342,8 +364,47 @@ function ContextSourceRow({ source }: { source: ContextXraySource }) {
       <p className="m-0 mt-1 break-words text-[var(--muted)]">
         {[source.kind, source.route, source.path, `${formatNumber(source.tokenEstimate)} tokens`].filter(Boolean).join(" · ")}
       </p>
+      {lifecycleStages.length ? (
+        <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Context lifecycle evidence">
+          {lifecycleStages.map((stage) => <StatusPill tone={stage === "relevant" ? "good" : stage === "invoked" ? "warn" : "neutral"} key={stage}>{stage}</StatusPill>)}
+        </div>
+      ) : null}
       {source.reason ? <p className="m-0 mt-1 whitespace-pre-wrap break-words text-[var(--foreground)]">{source.reason}</p> : null}
     </article>
+  );
+}
+
+function HarnessExperimentCard({ experiment }: { experiment: HarnessExperimentRecord }) {
+  const comparison = experiment.comparison;
+  const runSummary = `${comparison.baselineRuns} baseline · ${comparison.treatmentRuns} treatment`;
+  const tokenDelta = comparison.promptTokenDelta === null ? "not measured" : `${signedNumber(comparison.promptTokenDelta)} prompt tokens`;
+  return (
+    <article className="grid gap-3 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(2,6,23,0.32)] p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusPill tone={comparison.claimReady ? "good" : "warn"}>{comparison.claimReady ? "claim ready" : "collecting evidence"}</StatusPill>
+        <StatusPill tone={experiment.decision === "retain" ? "good" : experiment.decision === "remove" ? "bad" : "neutral"}>{experiment.decision}</StatusPill>
+      </div>
+      <div>
+        <strong className="block text-sm text-[var(--foreground)]">{experiment.contract.title}</strong>
+        <p className="m-0 mt-1 text-xs leading-5 text-[var(--muted)]">{experiment.intervention.change}</p>
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <HarnessMetric label="Runs" value={runSummary} />
+        <HarnessMetric label="Acceptance" value={formatPercentDelta(comparison.acceptanceDelta)} />
+        <HarnessMetric label="Tokens" value={tokenDelta} />
+        <HarnessMetric label="Proof" value={formatPercentDelta(comparison.proofDelta)} />
+      </div>
+      {!comparison.claimReady && comparison.claimLimits[0] ? <small className="leading-5 text-[var(--muted)]">{comparison.claimLimits[0]}</small> : null}
+    </article>
+  );
+}
+
+function HarnessMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-[rgba(148,163,184,0.1)] px-2 py-1.5">
+      <span className="block text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--muted)]">{label}</span>
+      <span className="mt-0.5 block break-words text-[var(--foreground)]">{value}</span>
+    </div>
   );
 }
 
@@ -390,4 +451,15 @@ function relativeIso(value: string | undefined, formatRelativeTime: (timestamp: 
 
 function formatNumber(value: number) {
   return new Intl.NumberFormat().format(Math.max(0, Math.round(value)));
+}
+
+function signedNumber(value: number) {
+  const rounded = Math.round(value);
+  return `${rounded > 0 ? "+" : ""}${new Intl.NumberFormat().format(rounded)}`;
+}
+
+function formatPercentDelta(value: number | null) {
+  if (value === null) return "not measured";
+  const percentage = Math.round(value * 100);
+  return `${percentage > 0 ? "+" : ""}${percentage} pts`;
 }

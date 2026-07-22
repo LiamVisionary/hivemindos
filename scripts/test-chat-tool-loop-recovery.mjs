@@ -80,8 +80,36 @@ try {
     "after tool rounds are exhausted the runtime should request one final tool-free user-facing answer",
   );
   assert.match(body, /Nothing was run/);
-  assert.doesNotMatch(body, /Capability operation must be list or invoke/);
+  // Validator errors are shown in the process-event badges on purpose (so the
+  // user sees the real failure instead of a bare "Hive capability failed"),
+  // but they must never leak into the assistant's own chat text.
+  const assistantText = body
+    .split("\n")
+    .filter((line) => line.startsWith("data: ") && line.trim() !== "data: [DONE]")
+    .map((line) => {
+      try {
+        return JSON.parse(line.slice("data: ".length));
+      } catch {
+        return null;
+      }
+    })
+    .filter(Boolean)
+    .flatMap((payload) => payload.choices?.flatMap((choice) => choice.delta?.content ? [choice.delta.content] : []) ?? [])
+    .join("");
+  assert.doesNotMatch(assistantText, /Capability operation must be list or invoke/);
+  assert.match(body, /Capability operation must be list or invoke\. The agent produced an invalid capability request; nothing was run\./);
   assert.doesNotMatch(body, /<\|?tool_call/i);
+  // Repeated malformed calls inject the corrective system nudge on a later
+  // round, and a run that executed nothing ends with the honest notice instead
+  // of an unqualified model answer.
+  assert.ok(
+    requestBodies.some((requestBody) => requestBody.messages?.some((message) => (
+      message.role === "system" && typeof message.content === "string" && message.content.includes("failing validation")
+    ))),
+    "repeated malformed capability calls should inject the corrective system nudge",
+  );
+  assert.match(assistantText, /invalid capability tool calls/);
+  assert.match(assistantText, /stronger tool-calling model/);
 } finally {
   globalThis.fetch = originalFetch;
 }

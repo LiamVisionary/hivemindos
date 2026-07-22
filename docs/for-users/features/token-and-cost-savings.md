@@ -55,7 +55,9 @@ The harness sent that task twice to OpenRouter's OpenAI-compatible chat completi
 
 This is provider-reported usage from a live run on June 7, 2026. The full `pnpm benchmark:e2e-token-savings` command writes redacted artifacts with usage counters, durations, response IDs, context hashes, and truncation flags, but not prompt bodies or secrets.
 
-## Complex Chatbot Build Benchmark
+## Historical Chatbot Build Run
+
+This June 8, 2026 pair is preserved as a useful failure case, not as validated savings. The shorter Hive response named implementation and test paths that do not exist in the repository, so it fails the current repository-outcome grader. Its lower token count cannot be treated as a successful optimization.
 
 **Prompt Under Test**
 
@@ -89,7 +91,7 @@ The harness sent that task twice to OpenRouter's OpenAI-compatible chat completi
 >
 > Usage: `4,989` prompt tokens, `318` completion tokens, `5,307` total tokens. Context: targeted Hive assimilation/capability pack, `3` files, `3` snippets, `2` sections, not truncated.
 
-**Result**
+**Observed usage, outcome not accepted**
 
 | Run | Prompt tokens | Completion tokens | Total tokens |
 | --- | ---: | ---: | ---: |
@@ -97,7 +99,7 @@ The harness sent that task twice to OpenRouter's OpenAI-compatible chat completi
 | Hive | 4,989 | 318 | 5,307 |
 | Saved | 37,196, 88.2% | 68, 17.6% | 37,264, 87.5% |
 
-This is provider-reported usage from a live `pnpm benchmark:e2e-token-savings -- --scenario chatbot-build` run on June 8, 2026. The artifact was written to `.outputs/benchmarks/e2e-token-savings-2026-06-08T06-46-24-934Z.json` with response content included for this docs transcript. The prompt is intentionally more like a real app-building request: the broad baseline loaded a large project sweep, while Hive used focused assimilation, capability, and context-index evidence.
+This is provider-reported usage from a live run on June 8, 2026, but there is no validated savings claim for this pair. The current grader checks claimed repository paths and architecture owners before token results qualify. Existing owners for this capability include the agent-runtime chat route, shared-brain chat context, runtime-adapter registry, and dashboard chat controller.
 
 ## Savings Model
 
@@ -211,7 +213,7 @@ HivemindOS has two benchmark modes:
 | Command | What it measures |
 | --- | --- |
 | `pnpm benchmark:context-savings` | Deterministic local estimate of broad context packs versus targeted Hive context packs. No provider call. |
-| `pnpm benchmark:e2e-token-savings` | Real OpenAI-compatible chat completion calls that record provider-reported `prompt_tokens`, `completion_tokens`, and `total_tokens`. |
+| `pnpm benchmark:e2e-token-savings` | Real OpenAI-compatible chat completion calls with outcome grading, fixed-worker trajectory evidence, and provider-reported token usage. Comparative claims require at least three runs per condition. |
 
 ### Real E2E Provider Run
 
@@ -232,7 +234,7 @@ Useful options:
 ./scripts/hive-env-run -- pnpm benchmark:e2e-token-savings -- --repeats 3
 ```
 
-The artifact intentionally stores context hashes, file counts, sent character counts, truncation flags, durations, response IDs, and token usage. It does not store API keys or full prompt bodies. If a broad baseline context pack exceeds the live benchmark cap, the run marks `context.truncated: true` so the numbers are not confused with an uncapped prompt.
+The artifact intentionally stores context hashes, file counts, sent character counts, truncation flags, durations, response IDs, outcome grades, condition order, context lifecycle evidence, and token usage. It does not store API keys or full prompt bodies. If a broad baseline context pack exceeds the live benchmark cap, the run marks `context.truncated: true` so the numbers are not confused with an uncapped prompt. A comparison is marked claim-ready only when both conditions meet the repeat threshold, outcomes remain comparable, and the intervention was available and exercised.
 
 ### Deterministic Context Budget
 

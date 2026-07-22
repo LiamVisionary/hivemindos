@@ -1161,6 +1161,25 @@ function formatApprovalRequest(args = {}) {
 }
 
 async function callTool(name, args = {}) {
+  if (name === "web_search") {
+    const response = await callDashboard("/api/web-research/search", "POST", args);
+    return response.result ?? response;
+  }
+  if (name === "web_fetch") {
+    const response = await callDashboard("/api/web-research/fetch", "POST", args);
+    return response.result ?? response;
+  }
+  if (name === "web_crawl") {
+    const response = await callDashboard("/api/web-research/crawl", "POST", args);
+    return response.result ?? response;
+  }
+  if (name === "web_screenshot") {
+    const response = await callDashboard("/api/web-research/screenshot", "POST", {
+      ...args,
+      includeImageData: true,
+    });
+    return response.result ?? response;
+  }
   if (name === "app_builder") {
     const requiredConfirmation = {
       create: APP_BUILDER_CONFIRMATIONS.createProject,
@@ -1223,6 +1242,38 @@ async function callTool(name, args = {}) {
   }
   if (name === "request_human_approval") {
     return requestHumanApproval(args);
+  }
+  if (name === "investigate_incident") {
+    const action = String(args.action || "investigate");
+    if (action === "status") return callDashboard("/api/ops/investigations?action=status", "GET");
+    if (action === "list") {
+      return callDashboard(`/api/ops/investigations?action=list&limit=${encodeURIComponent(String(args.limit || 100))}`, "GET");
+    }
+    if (action === "get") {
+      if (!args.incidentId) throw new Error("investigate_incident get requires incidentId.");
+      return callDashboard(`/api/ops/investigations?action=get&incidentId=${encodeURIComponent(String(args.incidentId))}`, "GET");
+    }
+    if (action === "retry") {
+      if (!args.incidentId) throw new Error("investigate_incident retry requires incidentId.");
+      return callDashboard("/api/ops/investigations", "POST", { action: "retry", incidentId: args.incidentId });
+    }
+    if (action !== "investigate") throw new Error(`Unknown investigate_incident action: ${action}`);
+    if (!args.summary) throw new Error("investigate_incident requires summary.");
+    return callDashboard("/api/ops/investigations", "POST", {
+      action: "investigate",
+      enqueue: args.enqueue !== false,
+      incident: definedArgs(args, [
+        "summary",
+        "description",
+        "severity",
+        "source",
+        "target",
+        "symptoms",
+        "evidence",
+        "remediationAttempts",
+        "correlationId",
+      ]),
+    });
   }
   if (name === "crypto_capabilities") {
     return callDashboard("/api/crypto/capabilities", "POST", {
@@ -1660,7 +1711,19 @@ async function handle(message) {
       return;
     }
     if (message.method === "tools/call") {
-      const result = await callTool(message.params?.name, message.params?.arguments || {});
+      const toolName = message.params?.name;
+      const result = await callTool(toolName, message.params?.arguments || {});
+      if (toolName === "web_screenshot" && result?.imageData && result?.mimeType) {
+        const { imageData, ...metadata } = result;
+        respond(id, {
+          content: [
+            { type: "image", data: imageData, mimeType: metadata.mimeType },
+            { type: "text", text: JSON.stringify(metadata, null, 2) },
+          ],
+          structuredContent: metadata,
+        });
+        return;
+      }
       respond(id, {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         structuredContent: result,

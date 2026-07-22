@@ -77,6 +77,7 @@ import { createAsyncTtlCache } from "./lib/async-ttl-cache.mjs";
 import { createCollectorMaintenance } from "./lib/collector-maintenance.mjs";
 import { collectorUpdateCommand } from "./lib/collector-update-command.mjs";
 import { readCollectorAppVersion } from "./lib/collector-source-version.mjs";
+import { startSelfReloadWatcher } from "./lib/collector-self-reload.mjs";
 import { resolveHiveEnvAddCommand } from "./lib/hive-env-add-command.mjs";
 import { launchCollectorUpdate } from "./lib/collector-update-launcher.mjs";
 import {
@@ -85,6 +86,7 @@ import {
   summarizeHermesDbSessionTimeline,
   summarizeHermesProcessPayload,
 } from "./lib/hermes-api-proxy-telemetry.mjs";
+import { createHermesCliStreamProtocol } from "./lib/hermes-cli-stream-protocol.mjs";
 import {
   hermesApiMessages,
   hermesApiSelectionMatchesAgent,
@@ -98,7 +100,12 @@ import {
   readHermesModelSelection,
   setHermesModelAssignment,
 } from "./lib/hermes-model-settings.mjs";
+import {
+  hermesAgentUsesCodex,
+  repairHermesCodexAuth,
+} from "./lib/hermes-codex-auth-recovery.mjs";
 import { mapWithConcurrency, processResourceStats } from "./lib/fd-safety.mjs";
+import { readCodexRuntimeIntegrationStatus } from "./lib/codex-app-server-models.mjs";
 // systemStats also accumulates a short rolling cpu/ram/net history (while /health
 // is actively polled) so the dashboard Telemetry sparklines show a real trend.
 import { systemStats } from "./lib/system-stats.mjs";
@@ -114,15 +121,14 @@ import {
   effectiveFleetAccess,
   fleetMachinePolicyFailureSummary,
   fleetMachinePolicyHealthSummary,
-  fleetMachinePolicyPrompt,
   fleetMachinePolicyPublicView,
   fleetPolicyNeedsIsolatedHermes,
-  fleetPolicyRuntimeFlags,
   readFleetMachinePolicy,
   releaseFleetPolicyMaster,
   resolveFleetAccessRequest,
   updateFleetMachinePolicy,
 } from "./lib/fleet-machine-policy.mjs";
+import { fleetPolicySpawnEnv, prepareFleetSharedEnvChat } from "./lib/fleet-shared-env-access.mjs";
 // NOTE: bonjour-service is imported LAZILY inside advertiseHubMdns() (its only use),
 // not at top level. A -SkipDeps app-driven collector install (Windows) has no
 // node_modules, and a failed top-level import would crash the whole collector at
@@ -152,7 +158,9 @@ const collectorOnly = /^(1|true|yes)$/i.test(
 );
 const port = Number(process.env.AGENT_TELEMETRY_PORT || 8787);
 const host = process.env.AGENT_TELEMETRY_HOST || "0.0.0.0";
-const appDir = resolve(join(fileURLToPath(import.meta.url), "..", ".."));
+const collectorSourcePath = fileURLToPath(import.meta.url);
+const appDir = resolve(join(collectorSourcePath, "..", ".."));
+const hermesHivemindStreamBridge = join(appDir, "scripts", "hermes-hivemind-stream.py");
 const collectorStartedAtMs = Date.now();
 const collectorStartedAt = new Date(collectorStartedAtMs).toISOString();
 const defaultHermesDir = process.env.HERMES_HOME || join(homedir(), ".hermes");
@@ -658,44 +666,6 @@ async function currentFleetMachinePolicy() {
   return readFleetMachinePolicy({ machineId: await stableMachineId().catch(() => "") });
 }
 
-function fleetPolicyChatContext(policy, dashboardContext) {
-  return [
-    typeof dashboardContext === "string" ? dashboardContext.trim() : "",
-    fleetMachinePolicyPrompt(policy),
-  ].filter(Boolean).join("\n\n");
-}
-
-function fleetPolicySpawnEnv(policy, sharedHiveEnv, extra = {}) {
-  const sharedEnvAllowed = !policy?.authority
-    || effectiveFleetAccess(policy).sharedEnv === "allow";
-  const excludedKeys = sharedEnvAllowed ? [] : Object.keys(sharedHiveEnv);
-  const filteredExtra = { ...extra };
-  for (const key of excludedKeys) delete filteredExtra[key];
-  return {
-    extra: {
-      ...(sharedEnvAllowed ? sharedHiveEnv : {}),
-      ...filteredExtra,
-      ...fleetPolicyRuntimeFlags(policy),
-    },
-    excludedKeys,
-  };
-}
-
-function hermesContextEnv(agentEnv, context) {
-  const dashboardContext = typeof context === "string" ? context.trim() : "";
-  if (!dashboardContext) return agentEnv;
-  const existingPrompt =
-    typeof agentEnv.HERMES_EPHEMERAL_SYSTEM_PROMPT === "string"
-      ? agentEnv.HERMES_EPHEMERAL_SYSTEM_PROMPT.trim()
-      : "";
-  return {
-    ...agentEnv,
-    HERMES_EPHEMERAL_SYSTEM_PROMPT: [existingPrompt, dashboardContext]
-      .filter(Boolean)
-      .join("\n\n"),
-  };
-}
-
 function stripHermesCliMetadata(value) {
   return String(value || "")
     .split(/\r?\n/)
@@ -710,99 +680,6 @@ function isHermesCliNoiseLine(value) {
   return /tirith security scanner enabled but not available/i.test(
     String(value || ""),
   );
-}
-
-function couldBeSessionIdPrefix(value) {
-  const candidate = String(value || "")
-    .replace(/^\s+/, "")
-    .toLowerCase();
-  return (
-    "session_id:".startsWith(candidate) || candidate.startsWith("session_id:")
-  );
-}
-
-function createHermesCliOutputSanitizer(write) {
-  let pendingLineStart = "";
-  let filteringLineStart = true;
-
-  function emit(value) {
-    if (value) write(value);
-  }
-
-  function process(input) {
-    let text = String(input || "");
-    while (text) {
-      if (filteringLineStart) {
-        pendingLineStart += text;
-        text = "";
-
-        const prefix = pendingLineStart.match(/^\s*session_id:\s*\S+\s*/i);
-        if (prefix) {
-          const rest = pendingLineStart.slice(prefix[0].length);
-          pendingLineStart = "";
-          if (rest.startsWith("\r\n")) {
-            text = rest.slice(2);
-            filteringLineStart = true;
-          } else if (rest.startsWith("\n") || rest.startsWith("\r")) {
-            text = rest.slice(1);
-            filteringLineStart = true;
-          } else {
-            text = rest;
-            filteringLineStart = false;
-          }
-          continue;
-        }
-
-        const newline = pendingLineStart.match(/\r?\n/);
-        if (newline?.index !== undefined) {
-          const end = newline.index + newline[0].length;
-          const line = pendingLineStart.slice(0, end);
-          const rest = pendingLineStart.slice(end);
-          if (
-            !/^\s*session_id:\s*\S+\s*\r?\n$/i.test(line) &&
-            !isHermesCliNoiseLine(line)
-          )
-            emit(line);
-          pendingLineStart = "";
-          text = rest;
-          filteringLineStart = true;
-          continue;
-        }
-
-        if (!couldBeSessionIdPrefix(pendingLineStart)) {
-          emit(pendingLineStart);
-          pendingLineStart = "";
-          filteringLineStart = false;
-        }
-        continue;
-      }
-
-      const newlineIndex = text.search(/\r?\n/);
-      if (newlineIndex === -1) {
-        emit(text);
-        text = "";
-        continue;
-      }
-      const newlineText = text.slice(newlineIndex).startsWith("\r\n")
-        ? "\r\n"
-        : text.slice(newlineIndex, newlineIndex + 1);
-      const end = newlineIndex + newlineText.length;
-      const line = text.slice(0, end);
-      if (!isHermesCliNoiseLine(line)) emit(line);
-      text = text.slice(end);
-      filteringLineStart = true;
-    }
-  }
-
-  function flush() {
-    if (!pendingLineStart) return;
-    const sanitized = pendingLineStart.replace(/^\s*session_id:\s*\S+\s*/i, "");
-    if (sanitized && !isHermesCliNoiseLine(sanitized)) emit(sanitized);
-    pendingLineStart = "";
-    filteringLineStart = true;
-  }
-
-  return { process, flush };
 }
 
 function slugify(value) {
@@ -1609,6 +1486,15 @@ function runtimeCapabilitiesFor(runtime) {
       backgroundTasks: true,
       notifications: true,
       setup: true,
+    };
+  }
+  if (runtime === "codex") {
+    return {
+      status: true,
+      runs: true,
+      backgroundTasks: true,
+      codexRuntime: true,
+      modelSelection: true,
     };
   }
   if (runtime === HIVE_RUNTIME_ID) {
@@ -3588,6 +3474,44 @@ async function resolveHermesPython() {
   throw new Error("Hermes' Python runtime was not found.");
 }
 
+async function resolveHermesStreamingLaunch(args) {
+  // Explicit HERMES_BIN overrides are commonly test doubles or custom wrappers;
+  // preserve them unless their owner also supplies the matching Python runtime.
+  if (process.env.HERMES_BIN && !process.env.HERMES_PYTHON) {
+    return { command: await resolveHermesBin(), args };
+  }
+  try {
+    return {
+      command: await resolveHermesPython(),
+      args: [hermesHivemindStreamBridge, ...args],
+    };
+  } catch {
+    return { command: await resolveHermesBin(), args };
+  }
+}
+
+async function repairHermesCodexAuthBeforeChat(agent, hermesHome) {
+  if (!hermesAgentUsesCodex(agent)) return;
+  try {
+    const result = await repairHermesCodexAuth({
+      hermesHome,
+      projectDir: hermesAgentProjectDir,
+      pythonPath: await resolveHermesPython(),
+      execFileAsync,
+    });
+    if (result.status === "repaired") {
+      console.info(
+        `[collector] Recovered Hermes Codex auth for ${hermesHome} from the current Codex CLI login.`,
+      );
+    }
+  } catch (error) {
+    console.warn(
+      `[collector] Hermes Codex auth preflight could not run for ${hermesHome}:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
 async function resolveChatWorkingDirectory(input) {
   const candidate = typeof input === "string" ? expandHome(input.trim()) : "";
   if (!candidate) return appDir;
@@ -4044,6 +3968,16 @@ async function openClawIntegrationStatus(agent = {}) {
     },
     diagnostics: configReadable ? [] : ["OpenClaw config was not found."],
   };
+}
+
+async function codexIntegrationStatus(agent = {}) {
+  const command = await resolveCliRuntimeCommand(process.env.CODEX_BIN, "codex");
+  return readCodexRuntimeIntegrationStatus({
+    command,
+    env: runtimeProcessEnv(),
+    configuredModel: String(agent.model || "").trim(),
+    capabilities: runtimeCapabilitiesFor("codex"),
+  });
 }
 
 function localOpenAiBase(agent = {}) {
@@ -6731,6 +6665,13 @@ function cliRuntimeCandidates(envBin, command) {
   ];
 }
 
+async function resolveCliRuntimeCommand(envBin, command) {
+  for (const candidate of cliRuntimeCandidates(envBin, command).filter(Boolean)) {
+    if (await binaryInstalled(candidate)) return candidate;
+  }
+  return "";
+}
+
 async function detectOpenClawInstalled() {
   const runnable = await anyBinaryInstalled([
     process.env.OPENCLAW_BIN,
@@ -6943,10 +6884,15 @@ async function sendHermesChat(body, options = {}) {
     currentFleetMachinePolicy(),
     readSharedHiveEnvForSpawn(),
   ]);
-  const agentEnv = hermesContextEnv(
-    safeAgentEnv(body.agentEnv),
-    fleetPolicyChatContext(fleetPolicy, body.context),
-  );
+  const { agentEnv, sharedEnvBlock } = prepareFleetSharedEnvChat(fleetPolicy, sharedHiveEnv, safeAgentEnv(body.agentEnv), body.context);
+  if (sharedEnvBlock) {
+    return {
+      ...sharedEnvBlock,
+      status: 403,
+      host: hostname(),
+    };
+  }
+  await repairHermesCodexAuthBeforeChat(agent, hermesHome);
   const spawnEnv = fleetPolicySpawnEnv(fleetPolicy, sharedHiveEnv, {
     ...agentEnv,
     ...hermesModelHostEnv(body, agent),
@@ -7398,22 +7344,25 @@ async function readRuntimeSession(runtime, options = {}) {
   return session ? { ...session, runtime: "hermes" } : null;
 }
 
-async function waitForHermesCliSession(hermesHome, sinceMs, text) {
+async function findHermesCliSession(hermesHome, sinceMs, text) {
   const needle = text.trim().slice(0, 80);
+  const sessions = await listRecentHermesDbSessions(hermesHome, sinceMs);
+  const matched = sessions.find(
+    (session) =>
+      !needle ||
+      session.messages.some(
+        (message) =>
+          message.role === "user" && message.content.includes(needle),
+      ),
+  );
+  return matched ?? sessions.find((session) => !session.endedAt) ?? null;
+}
+
+async function waitForHermesCliSession(hermesHome, sinceMs, text) {
   const deadline = Date.now() + sessionDiscoveryTimeoutMs;
   while (Date.now() < deadline) {
-    const sessions = await listRecentHermesDbSessions(hermesHome, sinceMs);
-    const matched = sessions.find(
-      (session) =>
-        !needle ||
-        session.messages.some(
-          (message) =>
-            message.role === "user" && message.content.includes(needle),
-        ),
-    );
-    if (matched) return matched;
-    const openSession = sessions.find((session) => !session.endedAt);
-    if (openSession) return openSession;
+    const session = await findHermesCliSession(hermesHome, sinceMs, text);
+    if (session) return session;
     await sleep(250);
   }
   return null;
@@ -7930,10 +7879,16 @@ async function streamHermesChat(body, response, options = {}) {
     currentFleetMachinePolicy(),
     readSharedHiveEnvForSpawn(),
   ]);
-  const agentEnv = hermesContextEnv(
-    safeAgentEnv(body.agentEnv),
-    fleetPolicyChatContext(fleetPolicy, body.context),
-  );
+  const { agentEnv, sharedEnvBlock } = prepareFleetSharedEnvChat(fleetPolicy, sharedHiveEnv, safeAgentEnv(body.agentEnv), body.context);
+  if (sharedEnvBlock) {
+    jsonResponse(response, 403, {
+      ...sharedEnvBlock,
+      host: hostname(),
+    });
+    releaseCollectorChatRun();
+    return;
+  }
+  await repairHermesCodexAuthBeforeChat(agent, hermesHome);
   // The Hermes gateway API server runs its configured default model and
   // ignores per-request model/provider. An explicit selection does not need a
   // cold CLI process when it already matches that live gateway. Distinct
@@ -7962,7 +7917,6 @@ async function streamHermesChat(body, response, options = {}) {
   );
   const args = hermesCliArgs(agent, [
     "chat",
-    "-Q",
     "-q",
     text,
     "--accept-hooks",
@@ -7989,7 +7943,8 @@ async function streamHermesChat(body, response, options = {}) {
     PAGER: "cat",
     ...hermesPrivacyGuardEnv(hermesHome, fleetPolicy),
   });
-  const child = spawn(await resolveHermesBin(), args, {
+  const launch = await resolveHermesStreamingLaunch(args);
+  const child = spawn(launch.command, launch.args, {
     cwd,
     env: runtimeProcessEnv(spawnEnv.extra, { excludeKeys: spawnEnv.excludedKeys }),
     stdio: ["ignore", "pipe", "pipe"],
@@ -7997,9 +7952,9 @@ async function streamHermesChat(body, response, options = {}) {
 
   let stdout = "";
   let stderr = "";
-  let streamedStdout = "";
   let settled = false;
   let emittedSession = false;
+  let emittedHermesSessionId = "";
   let sessionLookupInFlight = false;
   let sessionTimer = null;
   response.writeHead(200, {
@@ -8008,10 +7963,26 @@ async function streamHermesChat(body, response, options = {}) {
     connection: "keep-alive",
     "x-hermes-stream-source": "cli-chat",
   });
+  const streamProtocol = createHermesCliStreamProtocol({
+    onAssistantDelta: (content) => {
+      if (!settled && !response.writableEnded && !response.destroyed) {
+        response.write(ssePayload({ choices: [{ delta: { content } }] }));
+      }
+    },
+    onAssistantReset: (content) => {
+      if (!settled && !response.writableEnded && !response.destroyed) {
+        response.write(ssePayload({ type: "assistant.reset", content }));
+      }
+    },
+    onProcessEvent: (event) => {
+      if (!settled && !response.writableEnded && !response.destroyed) {
+        response.write(ssePayload(event));
+      }
+    },
+  });
 
   const finish = (payload = null) => {
     if (settled) return;
-    stdoutSanitizer.flush();
     settled = true;
     clearTimeout(timeout);
     if (sessionTimer) clearInterval(sessionTimer);
@@ -8020,13 +7991,6 @@ async function streamHermesChat(body, response, options = {}) {
       response.end("data: [DONE]\n\n");
     }
   };
-  const stdoutSanitizer = createHermesCliOutputSanitizer((content) => {
-    if (!content || settled || response.writableEnded || response.destroyed)
-      return;
-    streamedStdout += content;
-    response.write(ssePayload({ choices: [{ delta: { content } }] }));
-  });
-
   async function emitSession() {
     if (
       emittedSession ||
@@ -8052,6 +8016,7 @@ async function streamHermesChat(body, response, options = {}) {
       )
         return;
       emittedSession = true;
+      emittedHermesSessionId = session.sessionId;
       response.write(
         ssePayload({
           session: {
@@ -8101,7 +8066,7 @@ async function streamHermesChat(body, response, options = {}) {
   child.stdout.on("data", (chunk) => {
     const textChunk = chunk.toString("utf8");
     stdout += textChunk;
-    stdoutSanitizer.process(textChunk);
+    streamProtocol.push(textChunk);
   });
 
   child.stderr.on("data", (chunk) => {
@@ -8118,23 +8083,26 @@ async function streamHermesChat(body, response, options = {}) {
   child.on("close", (code) => {
     releaseCollectorChatRun();
     if (settled) return;
-    stdoutSanitizer.flush();
-    const content = stripHermesCliMetadata(stdout);
-    const errorText = stripHermesCliMetadata(stderr);
-    if (code === 0) {
-      if (!streamedStdout.trim() && content) {
-        response.write(ssePayload({ choices: [{ delta: { content } }] }));
-      } else if (!streamedStdout.trim() && errorText) {
-        response.write(
-          ssePayload({ choices: [{ delta: { content: errorText } }] }),
-        );
+    streamProtocol.flush();
+    void (async () => {
+      const content = stripHermesCliMetadata(stdout);
+      const errorText = stripHermesCliMetadata(stderr);
+      if (code === 0) {
+        const completedSession = emittedHermesSessionId
+          ? await readHermesDbSession(hermesHome, emittedHermesSessionId).catch(() => null)
+          : await findHermesCliSession(hermesHome, requestStartedAt - 2_000, sessionMatchText).catch(() => null);
+        const finalAssistantText = [...(completedSession?.messages ?? [])]
+          .reverse()
+          .find((message) => message.role === "assistant" && message.content.trim())
+          ?.content.trim();
+        const snapshot = streamProtocol.snapshot();
+        const finalContent = finalAssistantText || (!snapshot.sawAssistantDelta ? content || errorText : "");
+        streamProtocol.reconcileFinal(finalContent);
+        finish();
+        return;
       }
-      finish();
-      return;
-    }
-    finish({
-      error: errorText || `Hermes exited with code ${code ?? "unknown"}.`,
-    });
+      finish({ error: errorText || `Hermes exited with code ${code ?? "unknown"}.` });
+    })();
   });
 }
 
@@ -9199,6 +9167,13 @@ async function handleCollectorRequest(request, response) {
         });
         return;
       }
+      if (runtimeName === "codex" && !body.action) {
+        jsonResponse(response, 200, {
+          ok: true,
+          status: await codexIntegrationStatus(body.agent || {}),
+        });
+        return;
+      }
       if (
         COLLECTOR_RUNTIME_INSTALL[runtimeName] &&
         runtimeName !== "hermes"
@@ -9685,66 +9660,5 @@ telemetryServer.listen(port, host, () => {
   startEnvSyncMaintenance();
   startReliabilitySync();
   void initializeRuntimeStateSync();
-  startSelfReloadWatcher();
+  void startSelfReloadWatcher({ selfPath: collectorSourcePath });
 });
-
-// launchd's WatchPaths is unreliable for in-place edits, so the collector
-// watches its own source instead: on a real code change it exits cleanly and
-// launchd's KeepAlive relaunches it with the new code — no manual kickstart.
-//
-// IMPORTANT: gate on CONTENT HASH, not raw fs events. fs.watch fires on mtime
-// touches, atomic-save renames, and Syncthing/editor writes that don't change
-// content; reacting to every event sent this into a restart LOOP (hundreds of
-// reloads) that knocked the collector offline and broke in-flight voice calls.
-// A startup grace period also breaks any tight relaunch loop.
-async function startSelfReloadWatcher() {
-  if (process.env.AGENT_TELEMETRY_DISABLE_SELF_RELOAD === "1") return;
-  let selfPath;
-  try {
-    selfPath = fileURLToPath(import.meta.url);
-  } catch {
-    return;
-  }
-  const hashSelf = async () => {
-    try {
-      return createHash("sha256").update(await readFile(selfPath)).digest("hex");
-    } catch {
-      return "";
-    }
-  };
-  const baselineHash = await hashSelf();
-  if (!baselineHash) return;
-  const startedAt = Date.now();
-  let pending = null;
-  let reloading = false;
-  try {
-    watch(selfPath, { persistent: false }, () => {
-      if (reloading) return;
-      if (pending) clearTimeout(pending);
-      pending = setTimeout(async () => {
-        pending = null;
-        // Ignore events right after launch so a misbehaving write can't loop us.
-        if (Date.now() - startedAt < 5_000) return;
-        const nextHash = await hashSelf();
-        if (!nextHash || nextHash === baselineHash) return; // content unchanged
-        reloading = true;
-        // launchd/systemd KeepAlive relaunch on ANY exit, so unix exits clean.
-        // On Windows neither a clean nor a failed exit gets relaunched — Task
-        // Scheduler's -RestartCount only covers tasks that failed to LAUNCH
-        // (validated on a real box: exit 1 after running left the task Ready,
-        // never restarted). The hidden supervisor generated by
-        // install-telemetry-collector.ps1 is the relauncher: it restarts the
-        // collector immediately on this dedicated reload code.
-        const reloadExitCode = process.platform === "win32" ? 75 : 0;
-        console.log(
-          `[collector] source changed — exiting ${reloadExitCode} for ${
-            process.platform === "win32" ? "supervisor restart" : "KeepAlive reload"
-          }`,
-        );
-        process.exit(reloadExitCode);
-      }, 1_000);
-    });
-  } catch {
-    // Auto-reload is a convenience; never block startup on it.
-  }
-}

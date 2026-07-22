@@ -708,7 +708,8 @@ export type ChatTreeMachine = {
   detail: string;
   folders: ChatTreeFolder[];
   onStartChat?: () => void;
-  onCreateFolder?: () => void;
+  onCreateProject?: () => void;
+  onImportProject?: () => void;
 };
 
 export type DiscoveredMachine = {
@@ -1101,7 +1102,7 @@ export type MiroSharkSurfaceView = "x" | "reddit" | "polymarket" | "timeline";
 
 export type MiroSharkWorkspaceMode = "new" | "run";
 
-export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "trade" | "socials" | "vault" | "integrations" | "beeline" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "messaging" | "chat" | "more" | "env" | "my-apps" | "mini-apps" | "phone" | "aeon" | "fusion" | "governance" | "cloud" | "compute" | "podcast" | "credit-admin";
+export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "trade" | "socials" | "marketplace" | "vault" | "integrations" | "beeline" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "messaging" | "chat" | "more" | "env" | "my-apps" | "mini-apps" | "phone" | "aeon" | "fusion" | "governance" | "cloud" | "compute" | "podcast" | "credit-admin";
 
 export type WorkView = Extract<DashboardView, "kanban" | "scheduler" | "swarm" | "history">;
 

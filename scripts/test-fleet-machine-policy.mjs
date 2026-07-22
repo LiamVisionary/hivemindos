@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -25,7 +25,7 @@ register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 const { resolveFleetMachineAccessAnswer } = await import(
   "../src/lib/services/fleet/machine-access-approval.ts"
 );
-const { parseFleetMachineAccessRequest } = await import(
+const { createDefaultFleetMachinePolicy, parseFleetMachineAccessRequest } = await import(
   "../src/lib/types/fleet-machine-policy.ts"
 );
 
@@ -64,7 +64,57 @@ let collector;
 try {
   const initial = defaultFleetMachinePolicy({ machineId: "gpu-box", now: 1_000 });
   assert.equal(initial.authority, null);
-  assert.ok(Object.values(initial.access).every((decision) => decision === "ask"));
+  assert.equal(initial.access.sharedEnv, "allow", "shared hive env should be available to agents by default");
+  assert.ok(
+    Object.entries(initial.access)
+      .filter(([capability]) => capability !== "sharedEnv")
+      .every(([, decision]) => decision === "ask"),
+  );
+  assert.equal(
+    createDefaultFleetMachinePolicy("gpu-box").access.sharedEnv,
+    "allow",
+    "the dashboard policy default must match the collector default",
+  );
+
+  const untouchedLegacyPolicyPath = join(sandbox, "untouched-legacy-policy.json");
+  await writeFile(untouchedLegacyPolicyPath, `${JSON.stringify({
+    version: 1,
+    machineId: "legacy-box",
+    authority: {
+      masterHubId: master.id,
+      masterHubLabel: master.label,
+      claimedAt: new Date(2_000).toISOString(),
+    },
+    access: {
+      sharedBrain: "ask",
+      sharedEnv: "ask",
+      chatHistory: "ask",
+      connectedApps: "ask",
+      messagingChannels: "ask",
+      fileTransfers: "ask",
+    },
+    performance: { enabled: true, ignore: false, maxCpuPct: 85, maxRamPct: 90, maxDiskPct: 95 },
+    temporaryGrants: {},
+    updatedAt: new Date(2_000).toISOString(),
+  }, null, 2)}\n`, "utf8");
+  const migratedLegacyPolicy = await readFleetMachinePolicy({ filePath: untouchedLegacyPolicyPath });
+  assert.equal(
+    migratedLegacyPolicy.access.sharedEnv,
+    "allow",
+    "an untouched legacy all-Ask policy should inherit the new shared-env default",
+  );
+
+  const reviewedLegacyPolicyPath = join(sandbox, "reviewed-legacy-policy.json");
+  await writeFile(reviewedLegacyPolicyPath, `${JSON.stringify({
+    ...migratedLegacyPolicy,
+    access: { ...migratedLegacyPolicy.access, sharedEnv: "ask" },
+    updatedAt: new Date(3_000).toISOString(),
+  }, null, 2)}\n`, "utf8");
+  assert.equal(
+    (await readFleetMachinePolicy({ filePath: reviewedLegacyPolicyPath })).access.sharedEnv,
+    "ask",
+    "a reviewed legacy Ask decision must remain explicit",
+  );
 
   const claimed = await claimFleetPolicyMaster({
     caller: master,
@@ -172,6 +222,20 @@ try {
   assert.deepEqual(fleetMachinePolicyFailureSummary().performance.ignore, true);
 
   const home = join(sandbox, "collector-home");
+  const fakeHermes = join(sandbox, "fake-hermes.mjs");
+  const fakeHermesRunLog = join(sandbox, "fake-hermes-runs.log");
+  await mkdir(join(home, ".hivemindos"), { recursive: true });
+  await writeFile(join(home, ".hivemindos", ".env"), "OPENROUTER_API_KEY=test-shared-openrouter-key\n", "utf8");
+  await writeFile(fakeHermes, `#!/usr/bin/env node
+import { appendFile } from "node:fs/promises";
+await appendFile(process.env.FAKE_HERMES_RUN_LOG, "run\\n");
+if (process.env.OPENROUTER_API_KEY !== "test-shared-openrouter-key") {
+  console.error("Provider resolver returned an empty API key.");
+  process.exit(1);
+}
+console.log("shared-env-present");
+`, "utf8");
+  await chmod(fakeHermes, 0o755);
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
   let collectorStderr = "";
@@ -183,11 +247,13 @@ try {
       USERPROFILE: home,
       AGENT_TELEMETRY_PORT: String(port),
       AGENT_TELEMETRY_HOST: "127.0.0.1",
-      AGENT_TELEMETRY_CHAT_DISABLED: "1",
+      AGENT_TELEMETRY_CHAT_DISABLED: "0",
       AGENT_TELEMETRY_DISABLE_SELF_RELOAD: "1",
       AGENT_TELEMETRY_ENV_SYNC_DISABLED: "1",
       AGENT_TELEMETRY_HEALTH_CACHE_MS: "0",
       HIVE_COLLECTOR_ONLY: "1",
+      HERMES_BIN: fakeHermes,
+      FAKE_HERMES_RUN_LOG: fakeHermesRunLog,
       HIVEMINDOS_MDNS_DISABLE: "1",
       HIVEMINDOS_SYNC_PATH: join(sandbox, "vault"),
     },
@@ -213,21 +279,83 @@ try {
     body: JSON.stringify({ action: "claim-master" }),
   });
   assert.equal(claimResponse.status, 200);
-  assert.equal((await claimResponse.json()).configured, true);
+  const claimedCollectorPolicy = await claimResponse.json();
+  assert.equal(claimedCollectorPolicy.configured, true);
+  assert.equal(claimedCollectorPolicy.effectiveAccess.sharedEnv, "allow");
+
+  const allowedChatResponse = await fetch(`${baseUrl}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Confirm shared env",
+      agent: { provider: "openrouter", model: "test/model" },
+      agentEnv: { OPENROUTER_API_KEY: "test-shared-openrouter-key" },
+    }),
+  });
+  assert.equal(allowedChatResponse.status, 200);
+  assert.equal((await allowedChatResponse.json()).text, "shared-env-present");
+
+  const allowedStreamResponse = await fetch(`${baseUrl}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Confirm streamed shared env",
+      stream: true,
+      forceHermesCli: true,
+      agent: { provider: "openrouter", model: "test/model" },
+      agentEnv: { OPENROUTER_API_KEY: "test-shared-openrouter-key" },
+    }),
+  });
+  assert.equal(allowedStreamResponse.status, 200);
+  assert.match(await allowedStreamResponse.text(), /shared-env-present/);
 
   const updateResponse = await fetch(`${baseUrl}/fleet-policy`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       action: "update",
-      access: { sharedBrain: "deny" },
+      access: { sharedBrain: "deny", sharedEnv: "ask" },
       performance: { enabled: true, ignore: false, maxCpuPct: 70, maxRamPct: 80, maxDiskPct: 90 },
     }),
   });
   assert.equal(updateResponse.status, 200);
   const collectorPolicy = await updateResponse.json();
   assert.equal(collectorPolicy.policy.access.sharedBrain, "deny");
+  assert.equal(collectorPolicy.policy.access.sharedEnv, "ask");
   assert.equal(collectorPolicy.policy.performance.maxCpuPct, 70);
+
+  const blockedChatResponse = await fetch(`${baseUrl}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Confirm blocked shared env",
+      agent: { provider: "openrouter", model: "test/model" },
+      agentEnv: { OPENROUTER_API_KEY: "test-shared-openrouter-key" },
+    }),
+  });
+  assert.equal(blockedChatResponse.status, 403);
+  const blockedChat = await blockedChatResponse.json();
+  assert.equal(blockedChat.code, "fleet_shared_env_access_blocked");
+  assert.equal(blockedChat.capability, "sharedEnv");
+  assert.equal(blockedChat.decision, "ask");
+  assert.deepEqual(blockedChat.blockedKeys, ["OPENROUTER_API_KEY"]);
+  assert.match(blockedChat.error, /^FLEET ACCESS REQUEST: sharedEnv$/m);
+  assert.equal((await readFile(fakeHermesRunLog, "utf8")).trim().split(/\r?\n/).length, 2);
+
+  const blockedStreamResponse = await fetch(`${baseUrl}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Confirm streamed blocked shared env",
+      stream: true,
+      forceHermesCli: true,
+      agent: { provider: "openrouter", model: "test/model" },
+      agentEnv: { OPENROUTER_API_KEY: "test-shared-openrouter-key" },
+    }),
+  });
+  assert.equal(blockedStreamResponse.status, 403);
+  assert.equal((await blockedStreamResponse.json()).code, "fleet_shared_env_access_blocked");
+  assert.equal((await readFile(fakeHermesRunLog, "utf8")).trim().split(/\r?\n/).length, 2);
 
   const resolveResponse = await fetch(`${baseUrl}/fleet-policy`, {
     method: "POST",
@@ -236,6 +364,46 @@ try {
   });
   assert.equal(resolveResponse.status, 200);
   assert.equal((await resolveResponse.json()).effectiveAccess.sharedEnv, "allow");
+
+  const temporarilyAllowedChatResponse = await fetch(`${baseUrl}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Confirm temporarily allowed shared env",
+      agent: { provider: "openrouter", model: "test/model" },
+      agentEnv: { OPENROUTER_API_KEY: "test-shared-openrouter-key" },
+    }),
+  });
+  assert.equal(temporarilyAllowedChatResponse.status, 200);
+  assert.equal((await temporarilyAllowedChatResponse.json()).text, "shared-env-present");
+  assert.equal((await readFile(fakeHermesRunLog, "utf8")).trim().split(/\r?\n/).length, 3);
+
+  const denyResponse = await fetch(`${baseUrl}/fleet-policy`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "resolve-access",
+      capability: "sharedEnv",
+      decision: "deny",
+    }),
+  });
+  assert.equal(denyResponse.status, 200);
+  const deniedChatResponse = await fetch(`${baseUrl}/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: "Confirm denied shared env",
+      stream: true,
+      forceHermesCli: true,
+      agent: { provider: "openrouter", model: "test/model" },
+      agentEnv: { OPENROUTER_API_KEY: "test-shared-openrouter-key" },
+    }),
+  });
+  assert.equal(deniedChatResponse.status, 403);
+  const deniedChat = await deniedChatResponse.json();
+  assert.equal(deniedChat.decision, "deny");
+  assert.doesNotMatch(deniedChat.error, /^FLEET ACCESS REQUEST:/m);
+  assert.equal((await readFile(fakeHermesRunLog, "utf8")).trim().split(/\r?\n/).length, 3);
 
   const health = await (await fetch(`${baseUrl}/health`)).json();
   assert.equal(health.capabilities.machinePolicy, true);

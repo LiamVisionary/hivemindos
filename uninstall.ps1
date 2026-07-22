@@ -248,6 +248,15 @@ if (Ask-YesNo "Remove the 'HivemindOS Link' scheduled task, Startup launcher, ru
   Warn "Tailscale sign-in state stays in ~/.hivemindos/link; a later prompt offers to remove it"
 }
 
+if (Ask-YesNo "Stop and remove the optional HivemindOS OpenSRE root-cause sidecar Scheduled Task?" $true) {
+  & (Join-Path $Root "scripts\install-opensre-sidecar.ps1") -Uninstall
+}
+
+if (Ask-YesNo "Remove the optional OpenSRE isolated runtime under ~/.hivemindos/opensre? (Incident records under ~/.hivemindos/ops/incidents are preserved.)" $false) {
+  Remove-Item (Join-Path ([Environment]::GetFolderPath("UserProfile")) ".hivemindos\opensre") -Recurse -Force -ErrorAction SilentlyContinue
+  Ok "Removed the optional OpenSRE isolated runtime"
+}
+
 if (Ask-YesNo "Remove HivemindOS collector environment file ~/.hivemindos/collector.env?" $false) {
   $collectorEnv = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".hivemindos\collector.env"
   Remove-Item $collectorEnv -Force -ErrorAction SilentlyContinue
@@ -602,6 +611,18 @@ if (Ask-YesNo "Remove local Hivemind Link Tailscale state from ~/.hivemindos/lin
   $linkState = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".hivemindos\link"
   if (Test-Path $linkState) { Remove-Item $linkState -Recurse -Force }
   Ok "Removed $linkState"
+}
+
+if (Ask-YesNo "Remove the isolated local web research runtime, browser, OCR models, screenshots, and cache under ~/.hivemindos?" $true) {
+  $profileRoot = [Environment]::GetFolderPath("UserProfile")
+  @(
+    (Join-Path $profileRoot ".hivemindos\integrations\web-research"),
+    (Join-Path $profileRoot ".hivemindos\integrations\web-research-state.json"),
+    (Join-Path $profileRoot ".hivemindos\web-research")
+  ) | ForEach-Object {
+    if (Test-Path $_) { Remove-Item $_ -Recurse -Force }
+  }
+  Ok "Removed the local web research runtime and HivemindOS-owned artifacts"
 }
 
 if (Ask-YesNo "Remove .env.local from this checkout?" $false) {

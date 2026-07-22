@@ -11,6 +11,7 @@ import { runtimeSettingsFeature } from "@/lib/types/agent-runtime";
 import { visibleChannelMarkupText } from "@/lib/services/chat/channel-markup";
 import { mergeRuntimeHydratedChatMessages } from "@/lib/services/chat/runtime-session-message-merge";
 import { chatTelemetryMessages, chatTelemetrySession } from "@/lib/services/telemetry/chat-dev-telemetry";
+import { isUnsortedChatLeafKey } from "./status-chat-input-helpers";
 import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 import { normalizeEvaluationHumanFeedback } from "@/lib/types/evaluation";
 
@@ -324,7 +325,7 @@ export function useChatTreeController(props: any) {
     setSelectedAgentId(agentId);
     setSelectedChatLeafKey(leafKey);
     setSelectedChatRuntimeSessionId(runtimeSessionForChat(agent, leafKey, options.runtimeSessionId));
-    setSelectedChatDirectoryPath(projectDirectoryPath(options.workingDirectoryPath ?? machine?.version?.appDir));
+    setSelectedChatDirectoryPath(projectDirectoryPath(options.workingDirectoryPath ?? (isUnsortedChatLeafKey(leafKey) ? "" : machine?.version?.appDir)));
     setSelectedChatPreview(options.seedMessages?.length ? { agentId, leafKey, messages: options.seedMessages } : null);
     setActiveView("chat");
     setStatus(null);
@@ -422,7 +423,7 @@ export function useChatTreeController(props: any) {
     });
   }, [agentWorkById, displayAgents, openRuntimeSessionChat, startAgentChat]);
 
-  function openChatFolderCreator(machine: MachineGroup) {
+  function openChatProjectImporter(machine: MachineGroup) {
     const chatAgents = machine.agents.filter((agent) => runtimeCan(agent, "chat"));
     const agent = chatAgents[0];
     if (!agent) return;
@@ -461,6 +462,19 @@ export function useChatTreeController(props: any) {
         workingDirectoryPath: path,
         chatLeafKey: `folder-${machine.key}-${chatDedupeKey(path)}-${agent.id}`,
       });
+    });
+  }
+
+  function openChatProjectCreator(machine: MachineGroup) {
+    const agent = machine.agents.find((item) => runtimeCan(item, "chat"));
+    if (!agent) return;
+    const currentProjectPath = projectDirectoryPath(machine.version?.appDir);
+    setChatFolderDraft({
+      machineKey: machine.key,
+      parentPath: currentProjectPath ? parentPathFromPath(currentProjectPath) : "~",
+      name: "",
+      busy: false,
+      error: "",
     });
   }
 
@@ -540,6 +554,45 @@ export function useChatTreeController(props: any) {
     });
   }
 
+  // "No folder" in the composer's Task context: detach the current chat from
+  // any project folder so it runs as a general chat. Mirrors
+  // changeChatWorkingDirectory's move semantics, but toward the machine-level
+  // "Unsorted chats" leaf instead of a folder.
+  async function clearChatWorkingDirectory() {
+    if (!selectedAgent) return;
+    const machine = machineGroups.find((group) => group.agents.some((agent) => agent.id === selectedAgent.id));
+    if (!machine) {
+      setStatus("Choose a connected machine before changing the chat working directory.");
+      setStatusAgentId(selectedAgent.id);
+      return;
+    }
+    if (isUnsortedChatLeafKey(selectedChatLeafKey) && !selectedChatDirectoryPath) return;
+    const sourceStorageKey = chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey);
+    const sourceMessages = messagesByAgent[sourceStorageKey] ?? [];
+    const hasMessages = sourceMessages.some((message) => isManualAgentChatMessage(message) && message.content.trim());
+    if (!hasMessages) {
+      // An empty draft simply restarts as a machine-level chat with no folder.
+      startAgentChat(selectedAgent.id, { fresh: true, workingDirectoryPath: "", chatLeafKey: `machine-${machine.key}-${selectedAgent.id}` });
+      return;
+    }
+    const nextLeafKey = createChatLeafKey(selectedAgent.id, `machine-${machine.key}`);
+    const targetStorageKey = chatMessageStorageKey(selectedAgent.id, nextLeafKey);
+    const confirmed = await confirmUserAction("Move this chat to Unsorted chats? It keeps its messages and will no longer work in a folder.");
+    if (!confirmed) return;
+    setSelectedChatDirectoryPath("");
+    setSelectedChatLeafKey(nextLeafKey);
+    setChatMessageWindow(null);
+    setMessagesByAgent((current) => {
+      const movedMessages = current[sourceStorageKey] ?? [];
+      if (!movedMessages.length) return current;
+      const next = { ...current };
+      next[targetStorageKey] = movedMessages;
+      if (sourceStorageKey !== targetStorageKey) delete next[sourceStorageKey];
+      return next;
+    });
+    setSelectedChatPreview(sourceMessages.length ? { agentId: selectedAgent.id, leafKey: nextLeafKey, messages: sourceMessages } : null);
+  }
+
   function closeChatFolderCreator() {
     setChatFolderDraft({ machineKey: "", parentPath: "", name: "", busy: false, error: "" });
   }
@@ -577,7 +630,7 @@ export function useChatTreeController(props: any) {
       startAgentChat(agent.id, {
         fresh: true,
         workingDirectoryPath: nativeData.path,
-        workingDirectoryLabel: label,
+        chatLeafKey: `folder-${machine.key}-${chatDedupeKey(nativeData.path)}-${agent.id}`,
       });
       return;
     }
@@ -643,7 +696,7 @@ export function useChatTreeController(props: any) {
         const folderPath = projectDirectoryPath(machine.version?.appDir);
         let fallbackFolder: ChatTreeFolder | undefined;
         const strayFolder = () => ensureFolder("Stray chats");
-        const machineChatFolder = () => ensureFolder("Unsorted chats");
+        const machineChatFolder = () => ensureFolder("Unsorted chats", startFreshChatInMachine(agent));
         const defaultFolder = () => {
           if (!folderPath) return strayFolder();
           fallbackFolder ??= ensureFolder(
@@ -781,7 +834,10 @@ export function useChatTreeController(props: any) {
         onStartChat: newChatAgent
           ? startFreshChatInMachine(newChatAgent)
           : undefined,
-        onCreateFolder: chatAgents.length > 0 ? () => openChatFolderCreator(machine) : undefined,
+        onCreateProject: machine.self && chatAgents.length > 0
+          ? () => openChatProjectCreator(machine)
+          : undefined,
+        onImportProject: chatAgents.length > 0 ? () => openChatProjectImporter(machine) : undefined,
         folders: [...folderMap.values()]
           .map((folder) => ({
             ...folder,
@@ -827,7 +883,9 @@ export function useChatTreeController(props: any) {
   const selectedChatDirectory = useMemo(() => {
     if (!selectedAgent) return "";
     const activeFolder = selectedChatMachine?.folders.find((folder) => folder.active || folder.chats.some((chat) => chat.active));
-    if (activeFolder) return activeFolder.label;
+    // Pathless groups ("Unsorted chats" / "Stray chats") are not directories —
+    // show no working-directory label for chats that live there.
+    if (activeFolder) return activeFolder.path ? activeFolder.label : "";
     if (selectedChatDirectoryPath) return workspaceLabelFromPath(selectedChatDirectoryPath);
     const machine = machineGroups.find((group) => group.agents.some((agent) => agent.id === selectedAgent.id));
     return machine ? workspaceLabelFromPath(projectDirectoryPath(machine.version?.appDir)) : "Stray chats";
@@ -842,6 +900,7 @@ export function useChatTreeController(props: any) {
     () => {
       if (!chatFolderCreatorMachine) return [];
       return [...new Set([
+        parentPathFromPath(projectDirectoryPath(chatFolderCreatorMachine.version?.appDir)),
         chatFolderCreatorMachine.version?.appDir,
         ...chatCustomFolders
           .filter((folder) => folder.machineKey === chatFolderCreatorMachine.key)
@@ -865,5 +924,5 @@ export function useChatTreeController(props: any) {
     window.setTimeout(() => setSetupCommandCopied(false), 2500);
   }
 
-  return { switchRuntime, appendMessage, hasConversation, conversationTitle, hydrateRuntimeSessionChat, startAgentChat, startAgentWorkChat, openChatFolderCreator, changeChatWorkingDirectory, closeChatFolderCreator, createChatFolder, chatSidebarTree, selectedChatMachine, selectedChatDirectory, chatFolderCreatorMachine, chatFolderCreatorParentOptions, openSetupModal, copySetupCommand };
+  return { switchRuntime, appendMessage, hasConversation, conversationTitle, hydrateRuntimeSessionChat, startAgentChat, startAgentWorkChat, changeChatWorkingDirectory, clearChatWorkingDirectory, closeChatFolderCreator, createChatFolder, chatSidebarTree, selectedChatMachine, selectedChatDirectory, chatFolderCreatorMachine, chatFolderCreatorParentOptions, openSetupModal, copySetupCommand };
 }

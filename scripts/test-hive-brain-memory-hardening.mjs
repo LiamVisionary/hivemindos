@@ -406,6 +406,35 @@ assert.ok(
 );
 ok("optional embeddings enable paraphrase recall (hybrid)");
 
+// Long records embed as multiple contextual chunks: a fact buried past the
+// single-input character cap must stay semantically reachable via its chunk.
+const { semanticScoresForRecords } = await import("../src/lib/services/obsidian/agent-memory/embeddings.ts");
+const fillerParagraphs = Array.from(
+  { length: 64 },
+  (unused, index) => `Routine operational paragraph ${index} covering unrelated fleet housekeeping details and periodic maintenance chatter that pads the record body.`,
+);
+const buriedFact = "The Okavango floodgate valve cadence is managed from the Maun pump station console.";
+const longContent = [...fillerParagraphs, buriedFact].join("\n\n");
+assert.ok(longContent.length > 7_000, "fixture content must exceed the single-input embed cap");
+const longMemory = await rememberAgentMemory({
+  vaultPath,
+  type: "learning",
+  title: "Fleet housekeeping compendium",
+  content: longContent,
+});
+assert.equal(longMemory.embedding?.embedded, true, "long record should embed");
+const chunkRows = readFileSync(EMBEDDINGS, "utf8").split("\n").filter(Boolean).map((line) => JSON.parse(line))
+  .filter((row) => row.memoryId === longMemory.record.id);
+assert.ok(chunkRows.some((row) => (row.chunk ?? 0) >= 1), "long record should produce multiple chunk rows");
+const longRecords = (await listAgentMemoryRecords({ vaultPath })).records.filter((record) => record.id === longMemory.record.id);
+assert.equal(longRecords.length, 1, "long record should be listed");
+const tailScores = await semanticScoresForRecords(vaultPath, "okavango floodgate valve cadence", longRecords);
+assert.ok(
+  (tailScores.get(longMemory.record.id) ?? 0) >= 0.3,
+  `tail fact past the embed cap should score semantically via its chunk, got ${tailScores.get(longMemory.record.id) ?? 0}`,
+);
+ok("contextual chunking keeps long-record tails semantically reachable");
+
 // --- consolidation -----------------------------------------------------------------
 
 const staleSsh = await rememberAgentMemory({

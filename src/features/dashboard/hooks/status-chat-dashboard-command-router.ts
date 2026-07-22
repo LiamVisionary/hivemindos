@@ -24,7 +24,7 @@ export type StatusChatDashboardCommandInput = {
   walletsByAgent: Record<string, AgentWalletConfig>;
   createDefaultAgentWallet: (agentId: string) => AgentWalletConfig;
   honeyLedgerEnabled: boolean;
-  queuedMessage: { clearComposer?: boolean };
+  chatTurn: { clearComposer?: boolean };
   appendMessage: (agentId: string, message: ChatMessage, storageKey?: string) => void;
   appendPreviewMessages: (agentId: string, leafKey: string, messages: ChatMessage[]) => void;
   setText: (value: string) => void;
@@ -80,7 +80,7 @@ export async function handleStatusChatDashboardCommand(input: StatusChatDashboar
   input.appendMessage(selectedAgent.id, userMessage, selectedStorageKey);
   input.appendMessage(selectedAgent.id, assistantMessage, selectedStorageKey);
   input.appendPreviewMessages(selectedAgent.id, selectedChatLeafKey, [userMessage, assistantMessage]);
-  if (input.queuedMessage.clearComposer !== false) input.setText("");
+  if (input.chatTurn.clearComposer !== false) input.setText("");
   input.setAttachmentError("");
   input.setAttachmentMenuOpen(false);
   input.setActiveView?.(dashboardCommand.view);

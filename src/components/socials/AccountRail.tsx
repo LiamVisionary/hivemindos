@@ -11,6 +11,7 @@ const PLATFORM_GLYPH: Record<SocialPlatform, string> = {
   farcaster: "FC",
   linkedin: "in",
   reddit: "r/",
+  facebook: "fb",
 };
 
 export function AccountRail() {

@@ -137,6 +137,10 @@ export function deriveNotificationActions(notification: NotificationActionSource
     actions.push({ type: "navigate", label: "Open Work Board", target: { view: "kanban" } });
   }
 
+  if (hasTag(notification, "marketplace") || /marketplace listing|buyer offer/.test(text)) {
+    actions.push({ type: "navigate", label: "Open Marketplace", target: { view: "marketplace" } });
+  }
+
   if (hasTag(notification, "company", "driver", "dispatch", "progress", "budget") || /\bcompany\b|autonomy driver/.test(text)) {
     actions.push({ type: "navigate", label: "Open Companies", target: { view: "governance" } });
   }

@@ -57,11 +57,11 @@ assert.match(
 assert.match(
   controllerSource,
   /suppressOutgoingUserMessage:\s*input\.suppressUserMessage\s*===\s*true/,
-  "the chat queue should translate silent-delivery intent into outgoing-message suppression",
+  "the chat turn should translate silent-delivery intent into outgoing-message suppression",
 );
 assert.match(
   controllerSource,
-  /if \(!suppressOutgoingUserMessage\) appendMessage\(selectedAgent\.id, outgoingUserMessage, selectedStorageKey\)/,
+  /let outgoingUserMessagePublished = suppressOutgoingUserMessage;[\s\S]*?if \(outgoingUserMessagePublished\) return;[\s\S]*?appendMessage\(selectedAgent\.id, outgoingUserMessage, selectedStorageKey\)/,
   "silent prompt responses should skip the visible user message while retaining runtime submission",
 );
 assert.match(

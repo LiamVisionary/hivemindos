@@ -46,6 +46,7 @@ export function toMcpTool(action: HiveActionDefinition): HiveMcpToolDescriptor {
   };
   return {
     name: hiveActionMcpName(action),
+    title: action.title,
     description: action.description,
     inputSchema: hiveActionInputSchema(action),
     annotations,

@@ -26,12 +26,14 @@ const storedQueen = {
   name: "Hermes Lead",
   runtime: "hermes",
   gatewayUrl: "",
+  statusPath: "/status",
   beeRole: "queen",
 };
 const migratedQueen = parseStoredAgents({
   "hivemindos.agentProfiles.v1": JSON.stringify([storedQueen]),
 })[0];
 assert.equal(migratedQueen.name, "Solara", "the legacy default should migrate through the real dashboard hydration path");
+assert.equal(migratedQueen.statusPath, "/health", "legacy Hermes /status probes should migrate to the live health endpoint");
 
 const customizedQueen = parseStoredAgents({
   "hivemindos.agentProfiles.v1": JSON.stringify([{ ...storedQueen, queenNameCustomized: true }]),
