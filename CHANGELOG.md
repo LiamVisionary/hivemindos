@@ -6,10 +6,10 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 ## Unreleased
 
 - 2026-07-22 09:21:37 EDT (-0400) - Publish the complete pending HivemindOS app workspace on the current remote lineage
-  - Status: Uncommitted.
+  - Status: Pushed to `main` in `1a120bd3a` and `6cf670538`.
   - User-facing release note: The complete pending app workspace is reconciled with the latest `origin/main` and prepared for publication, including the live HIVE Base ↔ Robinhood bridge, agent platform improvements, and the remaining Cloudflare Artifacts reference shelf.
   - Areas changed: 434 previously committed app, bridge, contract, agent, skill, documentation, and test files; `skills/cloudflare/cloudflare/references/artifacts/` for the final three pending Cloudflare reference files; reasoned route-drift declarations for three dashboard/boot-only APIs introduced before the upstream guard; changelog reconciliation.
-  - Verification: Pre-publication full gate passed 251/251; the aggregate commit was rebased onto current `origin/main` with the changelog conflict resolved by retaining both histories. The first post-rebase gate correctly caught the three previously undeclared dashboard/boot-only routes and one unrelated collector-abort timing failure; the route declarations and their guard suite then passed, the collector test passed on immediate isolated rerun, `pnpm check-sizes` passed, and the final full gate passed 251/251 in 107.5 seconds. Remote synchronization is pending.
+  - Verification: Pre-publication full gate passed 251/251; the aggregate commit was rebased onto current `origin/main` with the changelog conflict resolved by retaining both histories. The first post-rebase gate correctly caught the three previously undeclared dashboard/boot-only routes and one unrelated collector-abort timing failure; the route declarations and their guard suite then passed, the collector test passed on immediate isolated rerun, `pnpm check-sizes` passed, and the final full gate passed 251/251 in 107.5 seconds. GitHub accepted the fast-forward push from `ab43aae9d` through `6cf670538`.
   - Rollback: Revert the publication commits from `main`; the pre-rebase aggregate commit remains addressable as `3ec37244` and the rebased aggregate commit as `1a120bd3a` until garbage collection.
   - Intended commit message: `docs(cloudflare): add Artifacts reference shelf`
 
