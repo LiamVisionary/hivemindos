@@ -89,6 +89,20 @@ try {
   const baseline = runGuard(baselineRoot, ["--baseline", "allowed.json"]);
   assert.equal(baseline.status, 0, baseline.stderr || baseline.stdout);
 
+  const commentRoot = path.join(tmp, "comments");
+  await write(
+    commentRoot,
+    "src/features/dashboard/comments.ts",
+    `/** localStorage key for persisting the widget draft */
+export const DRAFT_KEY = "draft";
+/* localStorage is intentionally unused here */
+// localStorage mention in a line comment
+export function noop() {}
+`,
+  );
+  const comments = runGuard(commentRoot);
+  assert.equal(comments.status, 0, comments.stderr || comments.stdout);
+
   console.log("Browser durable-state guard tests passed.");
 } finally {
   await rm(tmp, { recursive: true, force: true });

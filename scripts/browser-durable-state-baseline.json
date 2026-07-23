@@ -4,19 +4,19 @@
   "entries": [
     {
       "file": "src/components/wallets-drop-in/WalletsView.tsx",
-      "line": "try { return localStorage.getItem(\"fr-mywallets-collapsed\") === \"1\"; } catch (e) { return false; }"
+      "line": "try { return localStorage.getItem(\"fr-mywallets-collapsed\") === \"1\"; } catch { return false; }"
     },
     {
       "file": "src/components/wallets-drop-in/WalletsView.tsx",
-      "line": "const toggle = () => setCollapsed((c) => { const n = !c; try { localStorage.setItem(\"fr-mywallets-collapsed\", n ? \"1\" : \"0\"); } catch (e) {} return n; });"
+      "line": "const toggle = () => setCollapsed((c) => { const n = !c; try { localStorage.setItem(\"fr-mywallets-collapsed\", n ? \"1\" : \"0\"); } catch { /* storage unavailable */ } return n; });"
     },
     {
       "file": "src/components/wallets-drop-in/WalletsView.tsx",
-      "line": "try { return localStorage.getItem(FW_DENSITY_KEY) || \"compact\"; } catch (e) { return \"compact\"; }"
+      "line": "try { return localStorage.getItem(FW_DENSITY_KEY) || \"compact\"; } catch { return \"compact\"; }"
     },
     {
       "file": "src/components/wallets-drop-in/WalletsView.tsx",
-      "line": "const setD = (d) => { setDensity(d); setExpanded(null); try { localStorage.setItem(FW_DENSITY_KEY, d); } catch (e) {} };"
+      "line": "const setD = (d: string) => { setDensity(d); setExpanded(null); try { localStorage.setItem(FW_DENSITY_KEY, d); } catch { /* storage unavailable */ } };"
     },
     {
       "file": "src/features/dashboard/DashboardApp.tsx",

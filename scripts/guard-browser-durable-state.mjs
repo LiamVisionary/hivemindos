@@ -134,7 +134,14 @@ function walkSourceFiles(dir) {
 
 function normalizeLine(line) {
   const trimmed = String(line ?? "").trim();
-  if (!trimmed || trimmed.startsWith("//") || trimmed.startsWith("*")) return "";
+  if (
+    !trimmed ||
+    trimmed.startsWith("//") ||
+    trimmed.startsWith("/*") ||
+    trimmed.startsWith("*")
+  ) {
+    return "";
+  }
   return trimmed.replace(/\s+/g, " ");
 }
 
