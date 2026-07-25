@@ -18,6 +18,7 @@ import { createServer } from "node:net";
 import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { gzipSync } from "node:zlib";
 
 const execFileAsync = promisify(execFile);
 const moduleDirectory = dirname(fileURLToPath(import.meta.url));
@@ -586,23 +587,33 @@ function cleanDeploymentName(value) {
   return slug || "hivemindos-app";
 }
 
-async function collectHostingFiles(root, relativeDirectory = "") {
+async function collectHostingFiles(root, relativeDirectory = "", { portable = false } = {}) {
   const directory = relativeDirectory ? join(root, ...relativeDirectory.split("/")) : root;
   const files = [];
   const entries = await readdir(directory, { withFileTypes: true });
   entries.sort((left, right) => left.name.localeCompare(right.name));
   for (const entry of entries) {
+    if (portable && ignoredEntries.has(entry.name)) continue;
     const relativePath = relativeDirectory ? `${relativeDirectory}/${entry.name}` : entry.name;
     const normalized = normalizeRelativePath(relativePath);
-    if (hostingSecretName.test(normalized)) throw new Error(`Refusing to publish secret-like artifact path: ${normalized}.`);
+    if (hostingSecretName.test(normalized)) {
+      if (portable) continue;
+      throw new Error(`Refusing to publish secret-like artifact path: ${normalized}.`);
+    }
     const target = join(root, ...normalized.split("/"));
     const info = await lstat(target);
-    if (info.isSymbolicLink()) throw new Error(`Static hosting artifacts cannot contain a symbolic link: ${normalized}.`);
+    if (info.isSymbolicLink()) {
+      if (portable) continue;
+      throw new Error(`Static hosting artifacts cannot contain a symbolic link: ${normalized}.`);
+    }
     if (info.isDirectory()) {
-      files.push(...await collectHostingFiles(root, normalized));
+      files.push(...await collectHostingFiles(root, normalized, { portable }));
       continue;
     }
-    if (!info.isFile()) throw new Error(`Static hosting artifacts can contain files only: ${normalized}.`);
+    if (!info.isFile()) {
+      if (portable) continue;
+      throw new Error(`Static hosting artifacts can contain files only: ${normalized}.`);
+    }
     if (info.size > maxHostingFileBytes) throw new Error(`Static hosting artifact file exceeds ${maxHostingFileBytes} bytes: ${normalized}.`);
     const content = await readFile(target);
     files.push({
@@ -615,12 +626,21 @@ async function collectHostingFiles(root, relativeDirectory = "") {
   return files;
 }
 
+async function staticHostingSource(directory, project) {
+  const output = await pathInsideProject(directory, staticArtifactContract.outputDirectory, { allowMissing: true });
+  const outputInfo = await lstat(output.target).catch(() => null);
+  if (outputInfo) {
+    if (outputInfo.isSymbolicLink() || !outputInfo.isDirectory()) throw new Error("The static hosting output must be a real out directory.");
+    return { directory: output.target, portable: false };
+  }
+  if (project.templateId === "static") return { directory, portable: true };
+  throw new Error(`Build a static site with ${staticArtifactContract.outputDirectory}/index.html before publishing.`);
+}
+
 export async function prepareStaticHostingArtifact(directoryValue) {
   const { directory, project } = await requiredProject(directoryValue);
-  const output = await pathInsideProject(directory, staticArtifactContract.outputDirectory);
-  const outputInfo = await lstat(output.target);
-  if (outputInfo.isSymbolicLink() || !outputInfo.isDirectory()) throw new Error("The static hosting output must be a real out directory.");
-  const files = await collectHostingFiles(output.target);
+  const source = await staticHostingSource(directory, project);
+  const files = await collectHostingFiles(source.directory, "", { portable: source.portable });
   if (!files.length || !files.some((file) => file.path === "index.html")) {
     throw new Error(`Build a static site with ${staticArtifactContract.outputDirectory}/index.html before publishing.`);
   }
@@ -637,6 +657,80 @@ export async function prepareStaticHostingArtifact(directoryValue) {
     fileCount: files.length,
     totalBytes,
     files,
+  };
+}
+
+function writeTarString(header, value, offset, length) {
+  const encoded = Buffer.from(String(value), "utf8");
+  if (encoded.byteLength > length) throw new Error("Source archive path is too long for the portable tar format.");
+  encoded.copy(header, offset, 0, encoded.byteLength);
+}
+
+function writeTarOctal(header, value, offset, length) {
+  const encoded = Math.max(0, Number(value) || 0).toString(8).padStart(length - 1, "0");
+  writeTarString(header, `${encoded}\0`, offset, length);
+}
+
+function tarPathParts(path) {
+  if (Buffer.byteLength(path, "utf8") <= 100) return { name: path, prefix: "" };
+  const separators = [...path.matchAll(/\//g)].map((match) => match.index ?? -1).reverse();
+  for (const separator of separators) {
+    const prefix = path.slice(0, separator);
+    const name = path.slice(separator + 1);
+    if (Buffer.byteLength(prefix, "utf8") <= 155 && Buffer.byteLength(name, "utf8") <= 100) return { name, prefix };
+  }
+  throw new Error(`Source archive path is too long: ${path}.`);
+}
+
+function tarHeader(path, size) {
+  const header = Buffer.alloc(512);
+  const { name, prefix } = tarPathParts(path);
+  writeTarString(header, name, 0, 100);
+  writeTarOctal(header, 0o644, 100, 8);
+  writeTarOctal(header, 0, 108, 8);
+  writeTarOctal(header, 0, 116, 8);
+  writeTarOctal(header, size, 124, 12);
+  writeTarOctal(header, 0, 136, 12);
+  header.fill(0x20, 148, 156);
+  writeTarString(header, "0", 156, 1);
+  writeTarString(header, "ustar\0", 257, 6);
+  writeTarString(header, "00", 263, 2);
+  writeTarString(header, "hivemindos", 265, 32);
+  writeTarString(header, "hivemindos", 297, 32);
+  if (prefix) writeTarString(header, prefix, 345, 155);
+  const checksum = header.reduce((sum, byte) => sum + byte, 0);
+  writeTarString(header, `${checksum.toString(8).padStart(6, "0")}\0 `, 148, 8);
+  return header;
+}
+
+function gzipTarFiles(files) {
+  const chunks = [];
+  for (const file of files) {
+    const content = Buffer.from(file.contentBase64, "base64");
+    chunks.push(tarHeader(file.path, content.byteLength), content);
+    const padding = (512 - (content.byteLength % 512)) % 512;
+    if (padding) chunks.push(Buffer.alloc(padding));
+  }
+  chunks.push(Buffer.alloc(1_024));
+  return gzipSync(Buffer.concat(chunks), { level: 9 });
+}
+
+export async function exportLocalAppProject(input) {
+  const { directory, project } = await requiredProject(input?.directory);
+  const files = await collectHostingFiles(directory, "", { portable: true });
+  if (!files.length) throw new Error("The project does not contain exportable source files.");
+  if (files.length > maxHostingFiles) throw new Error(`Source exports cannot exceed ${maxHostingFiles} files.`);
+  const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+  if (totalBytes > maxHostingArtifactBytes) throw new Error(`Source exports cannot exceed ${maxHostingArtifactBytes} bytes.`);
+  const archive = gzipTarFiles(files);
+  return {
+    fileName: `${cleanDeploymentName(project.name)}.tar.gz`,
+    contentType: "application/gzip",
+    bytes: archive.byteLength,
+    sha256: createHash("sha256").update(archive).digest("hex"),
+    contentBase64: archive.toString("base64"),
+    sourceFileCount: files.length,
+    sourceBytes: totalBytes,
   };
 }
 
@@ -660,18 +754,29 @@ export async function prepareDynamicHostingArtifact(directoryValue) {
 export async function cloudflareTemporaryDeploySpec(directoryValue, nameValue, runtimeValue = "static") {
   const { directory, project } = await requiredProject(directoryValue);
   const runtime = runtimeValue === "dynamic" ? "dynamic" : "static";
-  if (runtime === "dynamic") await prepareDynamicHostingArtifact(directory);
-  else await prepareStaticHostingArtifact(directory);
   const configDirectory = join(directory, runtimeDirectoryName, "cloudflare-temporary");
   const configPath = join(configDirectory, "wrangler.jsonc");
-  const runtimeConfig = runtime === "dynamic"
-    ? { main: relative(configDirectory, join(directory, dynamicArtifactContract.entrypoint)).split(sep).join("/") }
-    : {
-        assets: {
-          directory: join(directory, staticArtifactContract.outputDirectory),
-          not_found_handling: "single-page-application",
-        },
-      };
+  let runtimeConfig;
+  if (runtime === "dynamic") {
+    await prepareDynamicHostingArtifact(directory);
+    runtimeConfig = { main: relative(configDirectory, join(directory, dynamicArtifactContract.entrypoint)).split(sep).join("/") };
+  } else {
+    const artifact = await prepareStaticHostingArtifact(directory);
+    const assetsDirectory = join(configDirectory, "assets");
+    await rm(assetsDirectory, { recursive: true, force: true });
+    await mkdir(assetsDirectory, { recursive: true, mode: 0o700 });
+    for (const file of artifact.files) {
+      const target = join(assetsDirectory, ...file.path.split("/"));
+      await mkdir(dirname(target), { recursive: true, mode: 0o700 });
+      await writeFile(target, Buffer.from(file.contentBase64, "base64"));
+    }
+    runtimeConfig = {
+      assets: {
+        directory: assetsDirectory,
+        not_found_handling: "single-page-application",
+      },
+    };
+  }
   await atomicWrite(configPath, `${JSON.stringify({
     name: cleanDeploymentName(nameValue || project.name),
     compatibility_date: "2026-06-19",
@@ -734,6 +839,7 @@ export async function runLocalAppBuilderAction(input) {
       ? await prepareDynamicHostingArtifact(input?.directory)
       : await prepareStaticHostingArtifact(input?.directory),
   };
+  if (action === "export_source") return { export: await exportLocalAppProject(input) };
   if (action === "test_deploy") return deployCloudflareTemporaryApp(input);
   throw new Error("Unsupported local app-builder action.");
 }

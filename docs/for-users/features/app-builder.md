@@ -41,6 +41,18 @@ reported a directory inside the selected Chat workspace. It then starts a
 durable, loopback-only runtime and opens that exact project through the linked
 machine proxy.
 
+Expand Preview to open the full project workspace. The active conversation
+stays beside the app, while the project bar provides Preview and Code views,
+desktop and mobile widths, refresh, open-in-browser, Export, and Deploy. Code
+uses the linked machine's real project tree and saves back through App Builder;
+saved changes refresh the preview without moving the source to the dashboard
+machine.
+
+Export downloads a `.tar.gz` copy of the source without dependencies, Git
+history, HivemindOS runtime state, secret-like files, or symbolic links. Deploy
+creates the same confirmation-gated 60-minute Cloudflare preview described
+below and shows the public and claim links inside the workspace.
+
 Simple HTML, CSS, JavaScript, canvas, and game projects run with the bundled
 static preview server and do not need package installation. Framework projects
 continue to use their project-owned Next.js runtime.
@@ -67,6 +79,9 @@ Local projects support:
 - confirmation-gated start and stop
 - a loopback-only development preview
 - conversation-bound preview identity in Chat
+- an expanded Preview/Code workspace with direct file editing
+- a portable source archive export that excludes secrets and generated runtime state
+- a confirmation-gated temporary public deployment from the workspace
 - automatic discovery in Apps while the preview is running
 - deterministic static and dynamic hosting artifacts with secret and symbolic-link checks
 
@@ -161,8 +176,11 @@ Link access uses a revocable URL and a secure, Site-scoped browser cookie so
 assets and page navigation continue to work without exposing the token in every
 request.
 
-Static publishing reads a generated `out` directory. The current client
-transport accepts at most 1,000 files, 20 MiB total, and 5 MiB per file.
+Framework static publishing reads a generated `out` directory. Adopted plain
+HTML/CSS/JavaScript projects can publish directly from their source root;
+HivemindOS first copies only reviewed public files into a sanitized managed
+staging directory. The current client transport accepts at most 1,000 files,
+20 MiB total, and 5 MiB per file.
 Dynamic publishing reads one bundled `dist/worker.mjs` module and runs it as an
 untrusted Cloudflare Dynamic Worker with server-controlled CPU and
 subrequest limits. Declared D1/R2-style bindings are narrow, per-Site

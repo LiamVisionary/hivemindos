@@ -25,6 +25,16 @@ export type StaticHostingArtifact = {
   files: Array<{ path: string; size: number; sha256: string; contentBase64: string }>;
 };
 
+export type LocalAppSourceExport = {
+  fileName: string;
+  contentType: "application/gzip";
+  bytes: number;
+  sha256: string;
+  contentBase64: string;
+  sourceFileCount: number;
+  sourceBytes: number;
+};
+
 export type LocalHostingManifest = {
   project_id: string;
   d1?: string[];
@@ -52,6 +62,7 @@ export function startLocalAppProject(input: Record<string, unknown>): Promise<{ 
 export function stopLocalAppProject(input: Record<string, unknown>): Promise<{ project: LocalAppProject }>;
 export function prepareStaticHostingArtifact(directory: string): Promise<StaticHostingArtifact>;
 export function prepareDynamicHostingArtifact(directory: string): Promise<{ protocol: "hivemindos.dynamic-worker/v1"; projectId: string; code: string; bytes: number; sha256: string }>;
+export function exportLocalAppProject(input: Record<string, unknown>): Promise<LocalAppSourceExport>;
 export function cloudflareTemporaryDeploySpec(directory: string, name?: string): Promise<{ command: string; args: string[]; cwd: string; shell: false }>;
 export function deployCloudflareTemporaryApp(input: Record<string, unknown>): Promise<{ deploymentUrl: string; claimUrl: string; expiresInSeconds: 3600 }>;
 export function runLocalAppBuilderAction(input: Record<string, unknown>): Promise<Record<string, unknown>>;

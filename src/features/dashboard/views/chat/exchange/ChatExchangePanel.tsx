@@ -47,13 +47,14 @@ import { requestAppBuilderWithCollectorRecovery } from "@/lib/services/app-build
 import { nativeOpenInAppSupported, openNativeInApp } from "@/lib/native/filesystem";
 
 import { MessageThread } from "./MessageThread";
+import { AppBuilderWorkspace, type WorkspaceMessage } from "./AppBuilderWorkspace";
 import { ThreadTitleSettings } from "./ThreadTitleSettings";
 import { Dot, HiveMark, HistorySkeleton, frChatState } from "./primitives";
 import { useChatThreadTitleConfig } from "@/features/dashboard/hooks/use-chat-thread-titles";
 
 import { ChatSidebar } from "./ChatSidebar";
 import type { SidebarRow } from "./ChatSidebar";
-import { ContextShelf, PreviewFrame } from "./ContextShelf";
+import { ContextShelf } from "./ContextShelf";
 import type { ShelfDeliverable, ShelfMode } from "./ContextShelf";
 import { ChatTerminalDrawer } from "./ChatTerminalDrawer";
 import { ExchangeComposer } from "./ExchangeComposer";
@@ -63,7 +64,7 @@ import {
   duplicateChatThreadSeed,
   serializeChatTranscript,
 } from "./chat-thread-actions";
-import { HexIco, ICON_PATHS, Ico, POP_STYLE, headerIconBtnStyle } from "./composer-primitives";
+import { ICON_PATHS, Ico, POP_STYLE, headerIconBtnStyle } from "./composer-primitives";
 
 function coldStartStatusText(events: any[], selectedAgent: any) {
   return events.some((event) => isAgentColdStartProcessEvent(event)) ? agentWakeStatusText(selectedAgent) : undefined;
@@ -656,6 +657,21 @@ export function ChatExchangePanel(props: any) {
     [machineGroups, selectedChatMachine?.key],
   );
   const collectorUrl = selectedMachineGroup?.collectorUrl ?? "";
+  const requestThreadAppBuilder = useCallback((body: Record<string, unknown>) => requestAppBuilderWithCollectorRecovery({
+    appBuilderBody: body,
+    machine: {
+      collectorUrl: collectorUrl || undefined,
+      dnsName: selectedMachineGroup?.dnsName,
+      name: selectedMachineGroup?.name || machineLabel,
+      ip: selectedMachineGroup?.ip || selectedMachineGroup?.address,
+      appDir: selectedMachineGroup?.version?.appDir,
+      updateCommand: selectedMachineGroup?.version?.updateCommand,
+    },
+    onRecoveryStatus: (status) => {
+      if (status === "updating") flashToast("Updating App Builder on the linked machine…");
+      if (status === "retrying") flashToast("App Builder updated — retrying…");
+    },
+  }), [collectorUrl, flashToast, machineLabel, selectedMachineGroup]);
   const threadAppArtifact = useMemo(() => latestChatAppArtifact(renderMessages), [renderMessages]);
   const legacyAppDirectory = useMemo(
     () => inferLegacyChatAppDirectory(renderMessages, chatWorkingDirectory),
@@ -689,25 +705,10 @@ export function ChatExchangePanel(props: any) {
     }
     setThreadAppPreviewBusyKey(previewStorageKey);
     setThreadAppPreviewErrorState({ storageKey: previewStorageKey, message: "" });
-    const requestAppBuilder = (body: Record<string, unknown>) => requestAppBuilderWithCollectorRecovery({
-      appBuilderBody: body,
-      machine: {
-        collectorUrl: collectorUrl || undefined,
-        dnsName: selectedMachineGroup?.dnsName,
-        name: selectedMachineGroup?.name || machineLabel,
-        ip: selectedMachineGroup?.ip || selectedMachineGroup?.address,
-        appDir: selectedMachineGroup?.version?.appDir,
-        updateCommand: selectedMachineGroup?.version?.updateCommand,
-      },
-      onRecoveryStatus: (status) => {
-        if (status === "updating") flashToast("Updating Preview on the linked machine…");
-        if (status === "retrying") flashToast("Preview updated — starting the app…");
-      },
-    });
     try {
       let project: Record<string, any> | null;
       if (!artifact) {
-        const data = await requestAppBuilder({
+        const data = await requestThreadAppBuilder({
           action: "adopt",
           backend: "local",
           directory: legacyAppDirectory,
@@ -722,7 +723,7 @@ export function ChatExchangePanel(props: any) {
         artifact = chatAppArtifactFromProject(project, { key: selectedChatMachine?.key, name: machineLabel });
         updateThreadAppArtifact(artifact);
       } else {
-        const status = await requestAppBuilder({
+        const status = await requestThreadAppBuilder({
           action: "status",
           backend: "local",
           directory: artifact.directory,
@@ -734,7 +735,7 @@ export function ChatExchangePanel(props: any) {
       }
       if (!project) throw new Error("App Builder could not resolve this conversation's project.");
       if (!project.dependenciesReady) {
-        const installed = await requestAppBuilder({
+        const installed = await requestThreadAppBuilder({
           action: "install",
           backend: "local",
           directory: project.directory,
@@ -746,7 +747,7 @@ export function ChatExchangePanel(props: any) {
         project = appBuilderProject(installed) || project;
       }
       if (project.status !== "running" || !project.previewUrl) {
-        const started = await requestAppBuilder({
+        const started = await requestThreadAppBuilder({
           action: "start",
           backend: "local",
           directory: project.directory,
@@ -775,7 +776,7 @@ export function ChatExchangePanel(props: any) {
       setThreadAppPreviewBusyKey((current) => current === previewStorageKey ? "" : current);
       setPreviewWaitingKey((current) => current === previewStorageKey ? "" : current);
     }
-  }, [chatWorkingDirectory, collectorUrl, flashToast, legacyAppDirectory, machineLabel, refreshFleetHostedApps, selectedChatMachine, selectedChatStorageKey, selectedMachineGroup, threadAppArtifact, updateThreadAppArtifact]);
+  }, [chatWorkingDirectory, collectorUrl, legacyAppDirectory, machineLabel, refreshFleetHostedApps, requestThreadAppBuilder, selectedChatMachine, selectedChatStorageKey, threadAppArtifact, updateThreadAppArtifact]);
 
   const openThreadPreview = useCallback(() => {
     setShelfOpen(true);
@@ -797,6 +798,11 @@ export function ChatExchangePanel(props: any) {
   }, [busy, ensureThreadAppPreview, selectedChatStorageKey]);
 
   const threadTitle = (selectedChatStorageKey && chatThreadTitles[selectedChatStorageKey]?.title) || selectedChatDirectory || "agent chat";
+  const workspaceMessages = useMemo<WorkspaceMessage[]>(() => renderMessages.flatMap((message: any, index: number) => {
+    const role: WorkspaceMessage["role"] | null = message?.role === "user" ? "user" : message?.role === "assistant" ? "assistant" : null;
+    const content = messageText(message, chatDisplayContent);
+    return role && content ? [{ id: messageKey(message, index), role, text: content }] : [];
+  }), [chatDisplayContent, renderMessages]);
   const agentSubline = [selectedAgent?.workerClass ?? selectedAgent?.beeRole, machineLabel].filter(Boolean).join(" · ");
   const headerSubline = selectedAgent
     ? `${runtimeLabel} · ${machineLabel}${selectedChatDirectory ? ` · ${selectedChatDirectory}` : ""}`
@@ -1157,18 +1163,21 @@ export function ChatExchangePanel(props: any) {
         </div>
 
         {previewExpanded && previewTargets.length ? (
-          <div className="cx-slidefull fr-root fr-chat-root" style={{ position: "absolute", inset: 0, zIndex: 110, display: "grid", gridTemplateRows: "auto minmax(0,1fr)", background: "var(--bg)" }}>
-            <header style={{ display: "flex", alignItems: "center", gap: 11, padding: "15px 20px", borderBottom: "1px solid var(--line)" }}>
-              <HexIco size={20} />
-              <span style={{ flex: 1, fontFamily: "var(--f-body)", fontSize: 15, fontWeight: 600, letterSpacing: "-0.01em" }}>Preview · {previewTargets[0].name}</span>
-              <button type="button" className="cx-iconbtn" onClick={() => setPreviewExpanded(false)} title="Collapse preview" aria-label="Collapse preview" style={headerIconBtnStyle(false)}>
-                <Ico d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3" size={17} sw={1.8} />
-              </button>
-            </header>
-            <div className="cx-scroll" style={{ display: "grid", placeItems: "center", overflow: "auto", padding: 30 }}>
-              <PreviewFrame target={previewTargets[0]} tall />
-            </div>
-          </div>
+          <AppBuilderWorkspace
+            key={`${threadAppProject?.id ?? "hosted"}:${previewTargets[0].url}`}
+            target={previewTargets[0]}
+            project={threadAppProject}
+            threadTitle={threadTitle}
+            agentName={selectedAgent?.name ?? "Assistant"}
+            machineLabel={machineLabel}
+            messages={workspaceMessages}
+            chatDraft={text ?? ""}
+            chatBusy={busy}
+            onChatDraftChange={setText}
+            onSendPrompt={(prompt) => sendPromptMessage?.(prompt, { agentMode, permissionMode, reasoningEffort })}
+            onClose={() => setPreviewExpanded(false)}
+            requestAppBuilder={requestThreadAppBuilder}
+          />
         ) : null}
 
         {toast ? (

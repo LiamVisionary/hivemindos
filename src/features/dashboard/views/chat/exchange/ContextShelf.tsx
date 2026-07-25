@@ -239,11 +239,22 @@ function EmptyState({ title, body }: { title: string; body: string }) {
 }
 
 /** Probes the target through the SSRF-gated route before embedding it. */
-export function PreviewFrame({ target, tall }: { target: ChatPreviewTarget; tall?: boolean }) {
+export function PreviewFrame({
+  target,
+  tall,
+  refreshKey = 0,
+  workspace = false,
+}: {
+  target: ChatPreviewTarget;
+  tall?: boolean;
+  refreshKey?: number;
+  workspace?: boolean;
+}) {
   const targetKey = [target.url, target.machine, target.projectId, target.directory].join("\u001f");
+  const probeKey = `${targetKey}\u001f${refreshKey}`;
   const [result, setResult] = useState<{ key: string; state: "live" | "dead"; reason: string } | null>(null);
-  const state = result?.key === targetKey ? result.state : "probing";
-  const reason = result?.key === targetKey ? result.reason : "";
+  const state = result?.key === probeKey ? result.state : "probing";
+  const reason = result?.key === probeKey ? result.reason : "";
 
   useEffect(() => {
     let cancelled = false;
@@ -257,23 +268,24 @@ export function PreviewFrame({ target, tall }: { target: ChatPreviewTarget; tall
       .then((payload) => {
         if (cancelled) return;
         const live = Boolean(payload?.live ?? payload?.data?.live);
-        setResult({ key: targetKey, state: live ? "live" : "dead", reason: String(payload?.reason ?? payload?.data?.reason ?? "") });
+        setResult({ key: probeKey, state: live ? "live" : "dead", reason: String(payload?.reason ?? payload?.data?.reason ?? "") });
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        setResult({ key: targetKey, state: "dead", reason: error instanceof Error ? error.message : "probe failed" });
+        setResult({ key: probeKey, state: "dead", reason: error instanceof Error ? error.message : "probe failed" });
       });
     return () => { cancelled = true; };
-  }, [target.collectorUrl, target.directory, target.machine, target.machineKey, target.projectId, target.url, targetKey]);
+  }, [probeKey, target.collectorUrl, target.directory, target.machine, target.machineKey, target.projectId, target.url]);
 
   const frameStyle: React.CSSProperties = {
     width: "100%",
-    aspectRatio: tall ? undefined : "9 / 16",
-    height: tall ? "min(78vh, 720px)" : undefined,
-    border: "1px solid var(--line-2)",
-    borderRadius: tall ? 30 : 22,
+    aspectRatio: workspace || tall ? undefined : "9 / 16",
+    height: workspace ? "100%" : tall ? "min(78vh, 720px)" : undefined,
+    border: workspace ? 0 : "1px solid var(--line-2)",
+    borderRadius: workspace ? 0 : tall ? 30 : 22,
     overflow: "hidden",
     background: "var(--bg-soft)",
+    display: "block",
   };
 
   if (state === "probing") {
@@ -292,6 +304,7 @@ export function PreviewFrame({ target, tall }: { target: ChatPreviewTarget; tall
     <iframe
       title={`${target.name} preview`}
       src={target.url}
+      key={probeKey}
       style={frameStyle}
       sandbox="allow-scripts allow-same-origin allow-forms"
       referrerPolicy="no-referrer"

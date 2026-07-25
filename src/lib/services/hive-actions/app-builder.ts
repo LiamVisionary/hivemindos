@@ -7,7 +7,7 @@ export const appBuilderAction = defineHiveAction({
   id: "apps.build",
   title: "Build HivemindOS app",
   description:
-    "List, create, inspect, edit, install, start, stop, and preview app projects on a selected local/fleet machine, or create and inspect projects on a managed cloud agent.",
+    "List, create, inspect, edit, export, install, start, stop, and preview app projects on a selected local/fleet machine, or create and inspect projects on a managed cloud agent.",
   schema: z.object({
     action: z.enum([
       "list",
@@ -24,6 +24,7 @@ export const appBuilderAction = defineHiveAction({
       "start",
       "stop",
       "artifact_prepare",
+      "export_source",
       "test_deploy",
       "hosting_catalog",
       "hosting_list",
@@ -89,7 +90,7 @@ export const appBuilderAction = defineHiveAction({
   contextIndex: {
     summary: "Build and run local-first or managed HivemindOS app projects through one backend-neutral contract.",
     retrievalText:
-      "Use app_builder for Replit/Lovable-style app work. Prefer backend=local for an agent running on a user's machine. test_deploy creates a confirmation-gated 60-minute workers.dev deployment through Cloudflare Temporary Accounts. Official Sites are persistent projects: hosting_save_version creates an immutable version, hosting_deploy_version explicitly activates it, hosting_rollback restores a prior version, hosting_usage reads the current request, reserved-CPU, operation, and storage allowances, and hosting_publish remains the save-and-deploy shortcut. Access, logical D1/R2 bindings, and server-held environment keys are managed through the hosting_* actions. Managed agents are optional.",
+      "Use app_builder for Replit/Lovable-style app work. Prefer backend=local for an agent running on a user's machine. export_source downloads a secret-safe source tarball without dependencies or runtime state. test_deploy creates a confirmation-gated 60-minute workers.dev deployment through Cloudflare Temporary Accounts. Official Sites are persistent projects: hosting_save_version creates an immutable version, hosting_deploy_version explicitly activates it, hosting_rollback restores a prior version, hosting_usage reads the current request, reserved-CPU, operation, and storage allowances, and hosting_publish remains the save-and-deploy shortcut. Access, logical D1/R2 bindings, and server-held environment keys are managed through the hosting_* actions. Managed agents are optional.",
     route: "/api/app-builder",
     methods: ["GET", "POST"],
   },

@@ -64,10 +64,37 @@ test("temporary Cloudflare deploy uses argv execution and requires explicit conf
   assert.equal(spec.command, "npx");
   assert.deepEqual(spec.args.slice(0, 5), ["--yes", "wrangler@^4.102.0", "deploy", "--temporary", "--config"]);
   assert.equal(spec.shell, false);
+  const config = JSON.parse(await readFile(spec.args.at(-1), "utf8"));
+  assert.match(config.assets.directory, /\.hivemindos[/\\]cloudflare-temporary[/\\]assets$/);
+  assert.equal(await readFile(join(config.assets.directory, "index.html"), "utf8"), "ok");
   await assert.rejects(
     () => appBuilder.runLocalAppBuilderAction({ action: "test_deploy", directory: project }),
     /CONFIRM_CLOUDFLARE_TEMPORARY_DEPLOY/,
   );
+});
+
+test("adopted static apps deploy from their source root through a sanitized staging directory", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hive-static-root-deploy-"));
+  const workspace = join(root, "workspace");
+  const project = join(workspace, "arcade");
+  await mkdir(project, { recursive: true });
+  await writeFile(join(project, "index.html"), "<h1>Arcade</h1>");
+  await writeFile(join(project, "game.js"), "console.log('play')");
+  await writeFile(join(project, ".env"), "SECRET=never-upload");
+  await appBuilder.adoptLocalAppProject({
+    directory: project,
+    workspaceDirectory: workspace,
+    name: "Arcade",
+    confirmation: appBuilderContract.confirmations.createProject,
+  });
+
+  const artifact = await appBuilder.prepareStaticHostingArtifact(project);
+  assert.deepEqual(artifact.files.map((file) => file.path), ["game.js", "index.html"]);
+  const spec = await appBuilder.cloudflareTemporaryDeploySpec(project, "arcade");
+  const config = JSON.parse(await readFile(spec.args.at(-1), "utf8"));
+  assert.notEqual(config.assets.directory, project);
+  await assert.rejects(() => readFile(join(config.assets.directory, ".env"), "utf8"), /ENOENT/);
+  assert.equal(await readFile(join(config.assets.directory, "index.html"), "utf8"), "<h1>Arcade</h1>");
 });
 
 test("temporary Cloudflare deploy supports a dynamic Worker artifact", async () => {
@@ -133,7 +160,7 @@ test("the public contract exposes hosting capabilities without authoritative pri
   assert.equal(appBuilderContract.confirmations.renewHosting, "CONFIRM_APP_HOSTING_PURCHASE");
   assert.equal(appBuilderContract.confirmations.unpublishHosting, "CONFIRM_APP_HOSTING_UNPUBLISH");
   const ids = appBuilderContract.capabilities.map((capability) => capability.id);
-  for (const id of ["artifact.prepare", "deploy.temporary", "hosting.catalog", "hosting.usage", "hosting.publish", "hosting.renew", "hosting.unpublish"]) {
+  for (const id of ["artifact.prepare", "artifact.export", "deploy.temporary", "hosting.catalog", "hosting.usage", "hosting.publish", "hosting.renew", "hosting.unpublish"]) {
     assert.equal(ids.includes(id), true, `missing ${id}`);
   }
   assert.equal(JSON.stringify(appBuilderContract).includes("priceUsd"), false);

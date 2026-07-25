@@ -1,6 +1,6 @@
 {
   "protocol": "hivemindos.app-builder/v1",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "provenance": {
     "donors": {
       "december": {
@@ -46,6 +46,7 @@
     { "id": "runtime.stop", "sideEffect": "write", "backends": ["local"] },
     { "id": "runtime.preview", "sideEffect": "read", "backends": ["local"] },
     { "id": "artifact.prepare", "sideEffect": "read", "backends": ["local"] },
+    { "id": "artifact.export", "sideEffect": "read", "backends": ["local"] },
     { "id": "deploy.temporary", "sideEffect": "write", "backends": ["local"] },
     { "id": "hosting.catalog", "sideEffect": "read", "backends": ["local", "managed"] },
     { "id": "hosting.list", "sideEffect": "read", "backends": ["local", "managed"] },
