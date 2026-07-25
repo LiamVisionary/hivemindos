@@ -646,6 +646,7 @@ function MessageThreadBase({
   onForkResponse,
   onMessageFeedback,
   onOpenAppWorkspace,
+  onAgentNameClick,
   setCopiedMessageKey,
   setOpenKanbanTaskMenuKey,
   chatKanbanGeneration,
@@ -682,6 +683,8 @@ function MessageThreadBase({
   onForkResponse?: (responseIndex: number) => void;
   onMessageFeedback?: (message: ThreadMessage, renderKey: string, rating: "up" | "down") => void | Promise<void>;
   onOpenAppWorkspace?: () => void;
+  /** Click on the agent's name in a message header → open the assets overview popover at this anchor. */
+  onAgentNameClick?: (anchor: { x: number; y: number }) => void;
   setCopiedMessageKey: Dispatch<SetStateAction<string>>;
   setOpenKanbanTaskMenuKey: Dispatch<SetStateAction<string>>;
   chatKanbanGeneration?: ChatKanbanGeneration | null;
@@ -750,7 +753,11 @@ function MessageThreadBase({
           : null;
         const capabilityApproval = !isUser ? message.capabilityApproval : undefined;
         const capabilityApprovalNeedsReview = Boolean(capabilityApproval);
-        const appArtifact = !isUser ? message.appArtifact : undefined;
+        const rawAppArtifact = !isUser ? message.appArtifact : undefined;
+        // The "Open app" checkpoint appears only once the app has actually run
+        // (a freshly created, never-started project is not a deliverable yet):
+        // a port exists only after the first successful start.
+        const appArtifact = rawAppArtifact && (rawAppArtifact.status === "running" || rawAppArtifact.port) ? rawAppArtifact : undefined;
         const hasAssistantBody = Boolean(content || capabilityApprovalNeedsReview || applicationGenerationCard || generatedMediaPathCard || mirosharkCard || transcriptCard || appArtifact);
         const promptUi = !isUser && content ? promptUiFromMessage(message, content) : null;
         const isHyperframesPromptBuilder = !isUser && message.agentPrompt?.id === HYPERFRAMES_PROMPT_BUILDER_ID;
@@ -858,7 +865,21 @@ function MessageThreadBase({
             ) : hasAssistantBody ? (
               <article className={`fr-chat-agent-article${promptUi ? " fr-chat-prompt-article" : ""}`}>
                 <div className="fr-chat-agent-message-header">
-                  <strong className="fr-chat-agent-message-name">{selectedAgent?.name ?? "Agent"}</strong>
+                  {onAgentNameClick && selectedAgent ? (
+                    <button
+                      type="button"
+                      className="fr-chat-agent-message-name fr-chat-agent-message-name-btn"
+                      title={`View ${selectedAgent.name}'s wallet and email overview`}
+                      onClick={(event) => {
+                        const rect = event.currentTarget.getBoundingClientRect();
+                        onAgentNameClick({ x: rect.left, y: rect.bottom + 6 });
+                      }}
+                    >
+                      {selectedAgent.name}
+                    </button>
+                  ) : (
+                    <strong className="fr-chat-agent-message-name">{selectedAgent?.name ?? "Agent"}</strong>
+                  )}
                   {(capabilityApprovalNeedsReview && capabilityApproval?.status === "pending") || (promptUi?.options?.length && !promptUi.response) ? (
                     /* Prototype 599: a pending decision reads "needs approval". */
                     <span className="fr-chat-agent-message-state is-approval">needs approval</span>

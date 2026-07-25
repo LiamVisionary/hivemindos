@@ -5,6 +5,14 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-07-25 16:04:04 EDT (-0400) - The thread shows only what the person typed, and Open app waits for a real app
+  - Status: Committed and pushed with this entry.
+  - User-facing release note: The capability continuation prompt no longer leaks into the thread as a giant fake user message — the display compacts it to the person's original task text (the full prompt remains in the runtime session). The app card's Open app row now appears only once the app has actually run (running, or carrying the port a first start assigns) instead of the moment an empty project directory is created.
+  - Areas changed: `messageText` in `chat-panel-helpers.ts` (continuation compaction), the app-card gate in `MessageThread.tsx`, and pinned regressions in `scripts/test-capability-approval.mjs`.
+  - Verification: `pnpm test:chat-capability-approval` passes; touched-file ESLint clean (only the pre-existing unused-icon warning). Verified live on the reported AdaptiveAgent bee-clone thread: the thread now opens with the original one-line prompt instead of the marker monolith, and the never-started project renders no Open app row.
+  - Rollback: revert this commit.
+  - Intended commit message: `fix(chat): show only the user's words and gate Open app on a built app`
+
 - 2026-07-25 02:07 EDT (-0400) - A newly created chat project no longer disappears on reload
   - Status: Uncommitted.
   - User-facing release note: Creating a project from the chat rail's "Create new project" now keeps that project in the sidebar across reloads. Previously the project was only visible while its empty first chat happened to be the selected thread — the folder was saved correctly, but the rail builds its Projects sections from chat threads, so a project with no conversations in it yet rendered nothing and looked deleted. An empty project now shows its own section with a "No chats yet — start one" action, and empty projects sort after projects that hold chats (newest created first) so adding one never pushes active work down the rail.

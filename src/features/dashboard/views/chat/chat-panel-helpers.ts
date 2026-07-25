@@ -1,4 +1,5 @@
 import { HIVEMIND_OS_RUNTIME } from "@/lib/types/agent-runtime";
+import { CAPABILITY_APPROVAL_CONTINUATION_MARKER } from "@/lib/types/capability-approval";
 import { isAgentColdStartProcessEvent } from "@/lib/services/chat/agent-cold-start";
 import { normalizeChatPermissionMode } from "@/lib/types/chat-permissions";
 import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
@@ -282,10 +283,19 @@ export function messageKey(message: ChatMessageLike, index: number) {
   return [source, sourceIndex, role, createdAt, index].filter(Boolean).join(":");
 }
 
+/** A capability-plan continuation is runtime plumbing: the person only typed
+ * the original task, so that is all the thread may ever display. The full
+ * continuation stays in the session for the runtime. */
+function compactCapabilityContinuation(text: string) {
+  if (!text.startsWith(CAPABILITY_APPROVAL_CONTINUATION_MARKER)) return text;
+  const originalTask = text.match(/^Original task:\s*(.+)$/m)?.[1]?.trim();
+  return originalTask || "Approved capability plan. Continue with the task.";
+}
+
 export function messageText(message: ChatMessageLike, chatDisplayContent?: (message: ChatMessageLike) => string) {
   const display = chatDisplayContent?.(message);
-  if (typeof display === "string" && display.trim()) return display;
-  return String(message?.content ?? message?.text ?? message?.body ?? "").trim();
+  if (typeof display === "string" && display.trim()) return compactCapabilityContinuation(display);
+  return compactCapabilityContinuation(String(message?.content ?? message?.text ?? message?.body ?? "").trim());
 }
 
 export function isSilentCommandApprovalMessage(message: ChatMessageLike) {

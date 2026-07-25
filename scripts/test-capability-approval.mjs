@@ -610,6 +610,13 @@ assert.match(controllerSource, /Error: Could not prepare the app workspace/, "a 
 assert.doesNotMatch(controllerSource, /capabilityApproval: reviewPlan/, "a failed automatic preparation must not downgrade into an approval card");
 const clientSource = await readFile(new URL("../src/lib/services/chat/capability-app-project-client.ts", import.meta.url), "utf8");
 assert.match(clientSource, /requestAppBuilderWithCollectorRecovery/, "workspace preparation must self-heal a collector that is behind the app-builder contract");
+
+// The continuation prompt is plumbing: the thread must display only the words
+// the person actually typed, and the app card only once the app has run.
+const helpersSource = await readFile(new URL("../src/features/dashboard/views/chat/chat-panel-helpers.ts", import.meta.url), "utf8");
+assert.match(helpersSource, /compactCapabilityContinuation/, "the display path must compact capability continuations");
+assert.match(helpersSource, /Original task:\\s\*\(\.\+\)/, "the compacted display must recover the person's original task text");
+assert.match(threadSource, /rawAppArtifact\.status === "running" \|\| rawAppArtifact\.port/, "the Open app card must wait for an app that has actually run");
 assert.match(capabilityRouteSource, /workingDirectory:\s*typeof body\.workingDirectory/, "the capability API forwards bounded repository context to the ranker");
 assert.match(capabilityRouteSource, /required:\s*capabilityPlanRequiresReview\(plan\)/, "the API distinguishes an automatic single choice from a plan that needs review");
 assert.match(appBuilderActionSource, /title:\s*"Create app workspace"/, "the stable apps.build action uses an unambiguous user-facing name");
