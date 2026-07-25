@@ -109,6 +109,7 @@ fn main() {
                 "download_aeon_deliverable",
                 "send_aeon_deliverable",
                 "open_route_window",
+                "move_route_window",
                 "set_companion_popover",
                 "take_pending_research_sync_code",
                 "wallet_secret_export_save",
