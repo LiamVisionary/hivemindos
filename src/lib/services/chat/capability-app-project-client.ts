@@ -1,4 +1,5 @@
 import { APP_BUILDER_CONFIRMATIONS } from "@/lib/services/app-builder/contract";
+import { requestAppBuilderWithCollectorRecovery } from "@/lib/services/app-builder/collector-recovery";
 import {
   chatAppArtifactFromProject,
   chatAppProjectDirectory,
@@ -29,11 +30,22 @@ type AppBuilderCreateResponse = {
   data?: { project?: AppBuilderProject };
 };
 
+type PrepareCapabilityAppProjectMachine = {
+  key?: string;
+  name?: string;
+  collectorUrl?: string;
+  dnsName?: string;
+  ip?: string;
+  appDir?: string;
+  updateCommand?: string;
+};
+
 type PrepareCapabilityAppProjectOptions = {
   plan: CapabilityApprovalPlan;
   baseDirectory: string;
-  machine: { key?: string; name?: string; collectorUrl?: string };
+  machine: PrepareCapabilityAppProjectMachine;
   request?: (body: AppBuilderCreateBody) => Promise<AppBuilderCreateResponse>;
+  onRecoveryStatus?: (status: "updating" | "retrying") => void;
 };
 
 function planUsesAppBuilder(plan: CapabilityApprovalPlan) {
@@ -55,15 +67,41 @@ async function requestAppBuilderProject(body: AppBuilderCreateBody): Promise<App
   return data;
 }
 
+/** Remote machines go through collector recovery so a collector that is behind
+ * the app-builder contract self-updates instead of failing the automatic
+ * capability path (which previously surfaced as a pointless approval card). */
+function recoveringRequester(
+  machine: PrepareCapabilityAppProjectMachine,
+  onRecoveryStatus?: (status: "updating" | "retrying") => void,
+) {
+  return async (body: AppBuilderCreateBody): Promise<AppBuilderCreateResponse> => {
+    if (!body.collectorUrl) return requestAppBuilderProject(body);
+    return await requestAppBuilderWithCollectorRecovery({
+      appBuilderBody: body,
+      machine: {
+        collectorUrl: machine.collectorUrl,
+        dnsName: machine.dnsName,
+        name: machine.name,
+        ip: machine.ip,
+        appDir: machine.appDir,
+        updateCommand: machine.updateCommand,
+      },
+      onRecoveryStatus,
+    }) as AppBuilderCreateResponse;
+  };
+}
+
 export async function prepareCapabilityAppProject({
   plan,
   baseDirectory,
   machine,
-  request = requestAppBuilderProject,
+  request,
+  onRecoveryStatus,
 }: PrepareCapabilityAppProjectOptions) {
+  const send = request ?? recoveringRequester(machine, onRecoveryStatus);
   if (!planUsesAppBuilder(plan)) return undefined;
   const directory = chatAppProjectDirectory(baseDirectory, plan.task, plan.id);
-  const response = await request({
+  const response = await send({
     action: "create",
     backend: "local",
     directory,

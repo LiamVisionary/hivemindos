@@ -1021,6 +1021,14 @@ export function useStatusChatInputController(props: any) {
               key: selectedMachineGroup?.key,
               name: selectedMachineGroup?.name ?? selectedAgent.machineName ?? "This Mac",
               collectorUrl: selectedMachineGroup?.collectorUrl,
+              dnsName: selectedMachineGroup?.dnsName,
+              ip: selectedMachineGroup?.ip ?? selectedMachineGroup?.address,
+              appDir: selectedMachineGroup?.version?.appDir,
+              updateCommand: selectedMachineGroup?.version?.updateCommand,
+            },
+            onRecoveryStatus: (status) => {
+              if (status === "updating") updateCapabilityPreflightUi("Updating the linked machine…");
+              if (status === "retrying") updateCapabilityPreflightUi("Machine updated — creating the workspace…");
             },
           });
           const resolutionResponse = await fetch("/api/chat/capability-approval", {
@@ -1051,12 +1059,13 @@ export function useStatusChatInputController(props: any) {
           });
         } catch (error) {
           const issue = error instanceof Error ? error.message : "Could not continue with the selected capability.";
-          finishCapabilityPreflightUi("Capability setup needs review", "failed");
-          const reviewPlan = { ...capabilityData.plan, reviewMode: "ask" as const };
+          finishCapabilityPreflightUi("Capability setup failed", "failed");
+          // An approval card cannot fix a failed preparation — surface the real
+          // error with the standard retry affordance instead of asking the
+          // human to approve something that already failed.
           const capabilityMessage: ChatMessage = {
             role: "assistant",
-            content: `Automatic capability setup could not finish: ${issue} Review the capability plan and retry when ready.`,
-            capabilityApproval: reviewPlan,
+            content: `Error: Could not prepare the app workspace: ${issue}`,
             appArtifact: preparedAppProject?.artifact,
             surface: "chat",
             createdAt: createdAt + 1,

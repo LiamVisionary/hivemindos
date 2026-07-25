@@ -603,6 +603,13 @@ assert.equal(
 );
 assert.match(controllerSource, /workingDirectory:\s*selectedChatDirectoryPath/, "chat preflight sends the attached project directory as repository context");
 assert.match(controllerSource, /!capabilityData\.required[\s\S]+prepareCapabilityAppProject[\s\S]+runChatMessage/, "the send controller continues an automatic plan without relying on a rendered approval card");
+// A failed automatic preparation must read as an error with the standard retry
+// affordance — an approval card cannot fix a broken machine, and clicking
+// Continue on one just re-runs the same failure.
+assert.match(controllerSource, /Error: Could not prepare the app workspace/, "a failed automatic preparation surfaces the real error");
+assert.doesNotMatch(controllerSource, /capabilityApproval: reviewPlan/, "a failed automatic preparation must not downgrade into an approval card");
+const clientSource = await readFile(new URL("../src/lib/services/chat/capability-app-project-client.ts", import.meta.url), "utf8");
+assert.match(clientSource, /requestAppBuilderWithCollectorRecovery/, "workspace preparation must self-heal a collector that is behind the app-builder contract");
 assert.match(capabilityRouteSource, /workingDirectory:\s*typeof body\.workingDirectory/, "the capability API forwards bounded repository context to the ranker");
 assert.match(capabilityRouteSource, /required:\s*capabilityPlanRequiresReview\(plan\)/, "the API distinguishes an automatic single choice from a plan that needs review");
 assert.match(appBuilderActionSource, /title:\s*"Create app workspace"/, "the stable apps.build action uses an unambiguous user-facing name");
