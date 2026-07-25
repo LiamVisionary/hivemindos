@@ -1,4 +1,5 @@
 import type { ChatMessage } from "@/features/dashboard/dashboard-types";
+import { CAPABILITY_APPROVAL_CONTINUATION_MARKER } from "@/lib/types/capability-approval";
 
 // Pure transcript helpers: message identity/equality, turn matching, and the
 // split of a runtime message that arrived with the assistant's reply glued to
@@ -19,8 +20,25 @@ export function runtimeSessionIdFromChatLeafKey(leafKey = "") {
   return afterMarker.split("-hermes-state-")[0]?.trim() ?? "";
 }
 
+/** A capability-plan continuation is runtime plumbing: the person only typed
+ * the original task, so that is all the thread may ever display. The full
+ * continuation stays in the session for the runtime. */
+export function compactCapabilityContinuation(text: string) {
+  if (!text.startsWith(CAPABILITY_APPROVAL_CONTINUATION_MARKER)) return text;
+  const originalTask = text.match(/^Original task:\s*(.+)$/m)?.[1]?.trim();
+  return originalTask || "Approved capability plan. Continue with the task.";
+}
+
+export function isCapabilityContinuationEcho(message: Pick<ChatMessage, "role" | "content"> | undefined) {
+  return message?.role === "user" && Boolean(message.content?.startsWith(CAPABILITY_APPROVAL_CONTINUATION_MARKER));
+}
+
 export function normalizedChatMessageContent(message: Pick<ChatMessage, "content">) {
-  return message.content.replace(/\s+/g, " ").trim().toLowerCase();
+  // Identity must match what the thread DISPLAYS: a runtime-session user turn
+  // that carries the capability-continuation prompt is the same turn as the
+  // local message holding the person's original words, or session merges
+  // duplicate the whole exchange (observed 2026-07-25).
+  return compactCapabilityContinuation(message.content).replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 export function sameVisibleChatMessage(left: ChatMessage | undefined, right: ChatMessage | undefined) {

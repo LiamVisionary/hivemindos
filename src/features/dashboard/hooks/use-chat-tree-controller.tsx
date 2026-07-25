@@ -6,6 +6,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { stripJsonRenderPayload } from "@/components/json-render/JsonRenderSurface";
+import { compactCapabilityContinuation } from "@/features/dashboard/chat-transcript-helpers";
 import { createNativeLocalFolder } from "@/lib/native/filesystem";
 import { runtimeSettingsFeature } from "@/lib/types/agent-runtime";
 import { visibleChannelMarkupText } from "@/lib/services/chat/channel-markup";
@@ -57,7 +58,9 @@ function chatSearchContent(messages: ChatMessage[] = []) {
 
 function chatVisibleContent(message?: ChatMessage) {
   const content = message?.content ?? "";
-  return message?.role === "assistant" ? visibleChannelMarkupText(content) : content;
+  // A user turn that carries the capability-continuation prompt may only ever
+  // surface the person's original words — in titles, previews, and search.
+  return message?.role === "assistant" ? visibleChannelMarkupText(content) : compactCapabilityContinuation(content);
 }
 
 function chatPreviewContent(message?: ChatMessage) {
@@ -786,8 +789,10 @@ export function useChatTreeController(props: any) {
             : defaultFolder();
           taskFolder.chats.push({
             key: taskChatKey,
-            title: task.title || "Previous chat",
-            subtitle: task.lastMessage || agent.name,
+            // Runtime-session tasks can title themselves with the raw
+            // capability-continuation prompt (the session's first user turn).
+            title: compactCapabilityContinuation(task.title || "") || "Previous chat",
+            subtitle: compactCapabilityContinuation(task.lastMessage || "") || agent.name,
             updatedAt: task.updatedAt > 0 ? task.updatedAt : task.startedAt > 0 ? task.startedAt : undefined,
             rank: workPriority(task) + (task.messages?.length ? 3 : 0),
             agentId: agent.id,

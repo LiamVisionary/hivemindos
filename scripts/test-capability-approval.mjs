@@ -617,6 +617,37 @@ const helpersSource = await readFile(new URL("../src/features/dashboard/views/ch
 assert.match(helpersSource, /compactCapabilityContinuation/, "the display path must compact capability continuations");
 assert.match(helpersSource, /Original task:\\s\*\(\.\+\)/, "the compacted display must recover the person's original task text");
 assert.match(threadSource, /rawAppArtifact\.status === "running" \|\| rawAppArtifact\.port/, "the Open app card must wait for an app that has actually run");
+
+// The sidebar is a display path too: thread titles, previews, and search text
+// built from a runtime-task leaf must show the person's words, never the raw
+// continuation prompt (live repro 2026-07-25: an AdaptiveAgent hermes-state
+// leaf titled itself with the full plumbing prompt).
+const { compactCapabilityContinuation } = await import("../src/features/dashboard/chat-transcript-helpers.ts");
+const sidebarContinuation = capabilityApprovalContinuationPrompt({
+  version: 1,
+  reviewMode: "automatic",
+  id: "plan-sidebar-title",
+  task: "Make me a flappy bird game",
+  agentId: "agent-a",
+  agentName: "Agent A",
+  chatStorageKey: "agent-a::task-a",
+  chatLeaf: "task-a",
+  status: "approved",
+  items: [],
+  createdAt: 0,
+});
+assert.equal(compactCapabilityContinuation(sidebarContinuation), "Make me a flappy bird game", "compaction recovers the person's original task from a full continuation");
+assert.equal(compactCapabilityContinuation("Make me a flappy bird game"), "Make me a flappy bird game", "ordinary user text passes through compaction unchanged");
+assert.equal(
+  compactCapabilityContinuation(sidebarContinuation.slice(0, 160)).startsWith(CAPABILITY_APPROVAL_CONTINUATION_MARKER),
+  false,
+  "even a pre-truncated continuation (its Original task line cut off) never surfaces the marker",
+);
+assert.match(chatTreeControllerSource, /compactCapabilityContinuation\(content\)/, "sidebar message previews/titles/search compact capability continuations");
+assert.match(chatTreeControllerSource, /compactCapabilityContinuation\(task\.title/, "runtime-task sidebar rows compact capability continuations in the title");
+assert.match(chatTreeControllerSource, /compactCapabilityContinuation\(task\.lastMessage/, "runtime-task sidebar rows compact capability continuations in the subtitle");
+const snapshotRouteSource = await readFile(new URL("../src/app/api/fleet/snapshot/route.ts", import.meta.url), "utf8");
+assert.match(snapshotRouteSource, /compactCapabilityContinuation\(session\.title \|\| latestUser\?\.content/, "the fleet snapshot compacts hermes-state titles BEFORE the 160-char truncation so the original task line survives");
 assert.match(capabilityRouteSource, /workingDirectory:\s*typeof body\.workingDirectory/, "the capability API forwards bounded repository context to the ranker");
 assert.match(capabilityRouteSource, /required:\s*capabilityPlanRequiresReview\(plan\)/, "the API distinguishes an automatic single choice from a plan that needs review");
 assert.match(appBuilderActionSource, /title:\s*"Create app workspace"/, "the stable apps.build action uses an unambiguous user-facing name");

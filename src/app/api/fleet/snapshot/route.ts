@@ -11,6 +11,7 @@ import { getRuntimeAdapter } from "@/lib/services/runtime-adapters/registry";
 import { getRuntimeIntegrationStatus } from "@/lib/services/runtime-integrations";
 import type { RuntimeRun } from "@/lib/services/runtime-adapters/types";
 import { normalizeAgentTelemetryUrl } from "@/lib/utils/agent-telemetry-url";
+import { compactCapabilityContinuation } from "@/features/dashboard/chat-transcript-helpers";
 import { canonicalLocalCollectorUrl, isFleetCollectorUrl, normalizeCollectorUrl } from "@/lib/services/local-collector-url";
 
 export const runtime = "nodejs";
@@ -420,8 +421,11 @@ async function scanHermesStateDb(agent: AgentProfile, hermesDir: string): Promis
     return {
       id: `hermes-state:${session.id}`,
       agentId: agent.id,
-      title: (session.title || latestUser?.content || `Hermes ${session.source} session`).slice(0, 160),
-      lastMessage: compact(latest?.content, HERMES_EMPTY_TRANSCRIPT_MESSAGE),
+      // Compact BEFORE truncating: the continuation prompt's "Original task:"
+      // line sits past the 160-char cut, so a truncated title cannot recover
+      // the person's words later.
+      title: compactCapabilityContinuation(session.title || latestUser?.content || `Hermes ${session.source} session`).slice(0, 160),
+      lastMessage: compact(latest ? compactCapabilityContinuation(latest.content) : undefined, HERMES_EMPTY_TRANSCRIPT_MESSAGE),
       status: statusFromSession(session.ended_at, session.end_reason),
       source: "hermes-state",
       startedAt: session.started_at * 1000,
