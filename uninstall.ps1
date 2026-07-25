@@ -245,6 +245,12 @@ if (Ask-YesNo "Remove the 'HivemindOS Link' scheduled task, Startup launcher, ru
   Warn "Tailscale sign-in state stays in ~/.hivemindos/link; a later prompt offers to remove it"
 }
 
+if (Ask-YesNo "Remove bundled HivemindOS Link collector runtimes from ~/.hivemindos/link-runtime?" $true) {
+  $linkRuntimeDir = Join-Path $UserHome ".hivemindos\link-runtime"
+  Remove-Item $linkRuntimeDir -Recurse -Force -ErrorAction SilentlyContinue
+  Ok "Removed $linkRuntimeDir"
+}
+
 if (Ask-YesNo "Remove HivemindOS collector environment file ~/.hivemindos/collector.env?" $false) {
   $collectorEnv = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".hivemindos\collector.env"
   Remove-Item $collectorEnv -Force -ErrorAction SilentlyContinue

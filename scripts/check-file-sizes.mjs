@@ -32,6 +32,9 @@ const ignoredRelativeDirectories = new Set([
   "packaged-skills/auto-install/embedded-captions",
   "public/design-system",
   "src-tauri/gen",
+  // Generated per-platform release payload. Its collector source is checked at
+  // the canonical scripts/ path; counting the staged copy would duplicate it.
+  "src-tauri/link-runtime",
   "src-tauri/static",
   "src-tauri/target",
 ]);

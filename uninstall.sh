@@ -278,6 +278,11 @@ if ask "Stop and remove the HivemindOS Link sidecar service?" "yes"; then
   fi
 fi
 
+if ask "Remove bundled HivemindOS Link collector runtimes from ~/.hivemindos/link-runtime?" "yes"; then
+  rm -rf "$HOME/.hivemindos/link-runtime"
+  ok "Removed ~/.hivemindos/link-runtime"
+fi
+
 if ask "Stop and remove the Claw backend service?" "yes"; then
   if [[ "$(uname -s)" == "Darwin" ]]; then
     # com.hivemindos.claw-backend = legacy headless gateway; com.hivemindos.claw-gateway

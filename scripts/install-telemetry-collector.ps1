@@ -34,6 +34,11 @@ param(
   # Repo root that contains scripts/agent-telemetry-collector.mjs. Defaults to
   # the parent of this script's folder.
   [string]$RepoRoot = "",
+  # Ready-to-run runtime paths supplied by the downloadable Link GUI. Empty
+  # values preserve the source-install behavior for Advanced setup users.
+  [string]$NodePath = "",
+  [string]$CollectorScript = "",
+  [string]$PrebuiltLinkBinary = "",
   # Skip the post-install Start + /health check (used by callers that start it
   # themselves or run headless).
   [switch]$NoStart,
@@ -52,14 +57,23 @@ $ErrorActionPreference = "Stop"
 if (-not $RepoRoot -or $RepoRoot -eq "") {
   $RepoRoot = Split-Path -Parent $PSScriptRoot
 }
-$collectorScript = Join-Path $RepoRoot "scripts\agent-telemetry-collector.mjs"
-if (-not (Test-Path $collectorScript)) {
-  throw "Collector script not found at $collectorScript (pass -RepoRoot)."
+if (-not $CollectorScript) {
+  $CollectorScript = Join-Path $RepoRoot "scripts\agent-telemetry-collector.mjs"
+}
+if (-not (Test-Path -LiteralPath $CollectorScript -PathType Leaf)) {
+  throw "Collector script not found at $CollectorScript (pass -RepoRoot or -CollectorScript)."
 }
 
-$nodeCmd = Get-Command node -ErrorAction SilentlyContinue
-if (-not $nodeCmd) { throw "Node.js was not found on PATH; install Node 20+ and rerun." }
-$nodeExe = $nodeCmd.Source
+if ($NodePath) {
+  if (-not (Test-Path -LiteralPath $NodePath -PathType Leaf)) {
+    throw "Bundled Node executable not found at $NodePath."
+  }
+  $nodeExe = (Resolve-Path -LiteralPath $NodePath).Path
+} else {
+  $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+  if (-not $nodeCmd) { throw "Node.js was not found on PATH; install Node 20+ and rerun." }
+  $nodeExe = $nodeCmd.Source
+}
 
 # --- pick a free port (default 8787, scan 24 ports up, like the Unix picker) ---
 function Test-PortFree([int]$p) {
@@ -195,20 +209,26 @@ if ($env:HIVE_LINK_CONTROL) {
 
 $linkActive = $false
 if ($linkRequested) {
-  $goPath = Ensure-HivemindLinkGo
-  $linkSource = Join-Path $RepoRoot "cmd\hivemind-linkd\main.go"
-  if (-not (Test-Path $linkSource)) {
-    throw "Hivemind Link source is missing at $linkSource. Update the HivemindOS checkout and rerun collector setup."
-  } else {
-    # Stop any previous linkd first: a running hivemind-linkd.exe holds a
-    # Windows file lock that would fail the rebuild, and the Unix installer
-    # restarts the service on rerun anyway. This only ever stops our own
-    # daemon (by process name), never a foreign port owner.
-    try { Stop-ScheduledTask -TaskName $linkTaskName -ErrorAction SilentlyContinue } catch {}
-    Get-Process hivemind-linkd -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Milliseconds 500
+  # Stop only the HivemindOS-owned task/process before replacing its binary.
+  try { Stop-ScheduledTask -TaskName $linkTaskName -ErrorAction SilentlyContinue } catch {}
+  Get-Process hivemind-linkd -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+  Start-Sleep -Milliseconds 500
+  New-Item -ItemType Directory -Force -Path $linkBinDir | Out-Null
 
-    New-Item -ItemType Directory -Force -Path $linkBinDir | Out-Null
+  if ($PrebuiltLinkBinary) {
+    if (-not (Test-Path -LiteralPath $PrebuiltLinkBinary -PathType Leaf)) {
+      throw "Bundled Hivemind Link binary not found at $PrebuiltLinkBinary."
+    }
+    Write-Host "Installing bundled Hivemind Link sidecar..."
+    Copy-Item -LiteralPath $PrebuiltLinkBinary -Destination $linkBin -Force
+    try { Unblock-File -LiteralPath $linkBin -ErrorAction SilentlyContinue } catch {}
+    $linkActive = Test-Path -LiteralPath $linkBin -PathType Leaf
+  } else {
+    $goPath = Ensure-HivemindLinkGo
+    $linkSource = Join-Path $RepoRoot "cmd\hivemind-linkd\main.go"
+    if (-not (Test-Path $linkSource)) {
+      throw "Hivemind Link source is missing at $linkSource. Update the HivemindOS checkout and rerun collector setup."
+    }
     # Stamp the build so /version and /_hivemind/version can expose stale
     # daemons (mirrors scripts/build-hivemind-linkd.sh). git can be absent on
     # Windows (setup is git-free); "unknown" matches the Unix fallback.
@@ -302,7 +322,8 @@ Set-Content -Path $cmdFile -Encoding ASCII -Value @(
   "set AGENT_TELEMETRY_PORT=$Port",
   "set AGENT_TELEMETRY_HOST=$collectorHost",
   "set HIVE_COLLECTOR_ONLY=$collectorOnlyValue",
-  "`"$nodeExe`" `"$collectorScript`""
+  "set HIVEMINDOS_APP_DIR=$RepoRoot",
+  "`"$nodeExe`" `"$CollectorScript`""
 )
 
 # Keep a hidden supervisor alive for as long as the service command runs. The
@@ -361,8 +382,16 @@ function Register-HivemindScheduledTask {
     $Action,
     $Trigger,
     $Settings,
-    [string]$Description
+    [string]$Description,
+    [switch]$RequireInteractive
   )
+
+  $interactivePrincipal = New-ScheduledTaskPrincipal -UserId $principalUser -LogonType Interactive -RunLevel Limited
+  if ($RequireInteractive) {
+    Register-ScheduledTask -TaskName $Name -Action $Action -Trigger $Trigger `
+      -Settings $Settings -Principal $interactivePrincipal -Description $Description -Force | Out-Null
+    return "Interactive"
+  }
 
   $s4uPrincipal = New-ScheduledTaskPrincipal -UserId $principalUser -LogonType S4U -RunLevel Limited
   try {
@@ -371,7 +400,6 @@ function Register-HivemindScheduledTask {
     return "S4U"
   } catch {
     $s4uError = $_
-    $interactivePrincipal = New-ScheduledTaskPrincipal -UserId $principalUser -LogonType Interactive -RunLevel Limited
     try {
       Register-ScheduledTask -TaskName $Name -Action $Action -Trigger $Trigger `
         -Settings $Settings -Principal $interactivePrincipal -Description $Description -Force | Out-Null
@@ -422,7 +450,8 @@ function Register-HivemindLogonLauncher {
   param(
     [string]$Name,
     [string]$LauncherPath,
-    [string]$Description
+    [string]$Description,
+    [switch]$RequireInteractive
   )
 
   try {
@@ -439,7 +468,8 @@ function Register-HivemindLogonLauncher {
       -Action $taskAction `
       -Trigger $taskTrigger `
       -Settings $taskSettings `
-      -Description $Description
+      -Description $Description `
+      -RequireInteractive:$RequireInteractive
 
     Remove-HivemindStartupLauncher -Name $Name
     Write-Host "Registered Scheduled Task '$Name' (logon type: $taskLogonType; runs at logon)."
@@ -555,7 +585,8 @@ if ($linkActive) {
   $linkRegistration = Register-HivemindLogonLauncher `
     -Name $linkTaskName `
     -LauncherPath $linkLauncherFile `
-    -Description "Runs the HivemindOS Link tsnet sidecar (Tailnet proxy for the local agent bridge)."
+    -Description "Runs the HivemindOS Link tsnet sidecar (Tailnet proxy for the local agent bridge)." `
+    -RequireInteractive
 
   Write-Host "Hivemind Link control URL: http://$linkControl/status"
 }
@@ -591,7 +622,7 @@ if ($ok) {
 
 if ($linkActive) {
   Write-Host "Starting Hivemind Link..."
-  if ($linkRegistration.Kind -eq "ScheduledTask" -and $linkRegistration.LogonType -eq "S4U") {
+  if ($linkRegistration.Kind -eq "ScheduledTask") {
     $linkStartedNow = Start-HivemindScheduledTaskNow -Name $linkTaskName
     if (-not $linkStartedNow) {
       Start-HivemindHiddenLauncher -Label "Hivemind Link" -LauncherPath $linkLauncherFile | Out-Null

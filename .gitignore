@@ -69,6 +69,7 @@ src-tauri/binaries/
 /contracts/cache/
 # Rust build output for the gateway-host crate (sibling of the ignored target/).
 src-tauri/target-gwhost/
+src-tauri/link-runtime/
 # Jekyll/sass build cache for the docs site.
 .sass-cache/
 __pycache__/
