@@ -232,6 +232,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Set up Go for HivemindOS Link runtime
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Node.js for HivemindOS Link runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.11.0"
+
       - name: Fetch Rust dependencies
         shell: bash
         run: |
@@ -289,6 +300,20 @@ jobs:
             -s \
             -k "$keychain_password" \
             "$keychain_path"
+
+      - name: Prepare HivemindOS Link runtime
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && secrets.APPLE_SIGNING_IDENTITY || '' }}
+        run: pnpm link:runtime:prepare
+
+      - name: Test HivemindOS Link runtime
+        run: pnpm link:runtime:test
+
+      - name: Restore Node.js for Complete Hub build
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
 
       - name: Download prebuilt Next standalone
         uses: actions/download-artifact@v4

@@ -45,7 +45,7 @@ LINK_STATUS_TIMEOUT="${HIVE_LINK_STATUS_TIMEOUT:-3s}"
 LINK_CONTROL_STATUS_URL="http://$LINK_CONTROL/status"
 LINK_CONTROL_HEALTH_URL="http://$LINK_CONTROL/health"
 SYSTEM_TAILNET_SERVE_ACTIVE="false"
-NODE_BIN="$(command -v node)"
+NODE_BIN="${HIVEMINDOS_NODE_BIN:-$(command -v node || true)}"
 MACOS_BACKGROUND_HELPER_SOURCE="$APP_DIR/scripts/hivemindos-background-helper.c"
 MACOS_COLLECTOR_HELPER_NAME="HivemindOS Collector"
 MACOS_COLLECTOR_HELPER_ID="com.hivemindos.collector-helper"
@@ -83,10 +83,16 @@ if [[ ! -f "$COLLECTOR" ]]; then
   echo "Missing collector: $COLLECTOR" >&2
   exit 1
 fi
+if [[ -z "$NODE_BIN" || ! -x "$NODE_BIN" ]]; then
+  echo "Node.js was not found; install Node 22+ or use the downloadable HivemindOS Link GUI." >&2
+  exit 1
+fi
 
 # The collector imports bonjour-service; make sure it resolves even when the full
 # workspace install never ran (collector-only machines). No-op otherwise.
-"$APP_DIR/scripts/ensure-collector-deps.sh"
+if [[ "${HIVEMINDOS_COLLECTOR_BUNDLED:-false}" != "true" ]]; then
+  "$APP_DIR/scripts/ensure-collector-deps.sh"
+fi
 
 resolve_macos_collector_program_arguments() {
   if [[ "$(uname -s)" != "Darwin" ]]; then
@@ -270,6 +276,13 @@ linkd_sources_unchanged_since() {
 
 build_hivemind_linkd_if_enabled() {
   [[ "$LINK_ENABLED" == "true" ]] || return 1
+  if [[ "${HIVE_LINK_PREBUILT:-false}" == "true" ]]; then
+    [[ -x "$LINK_BIN" ]] || {
+      echo "Bundled Hivemind Link binary is missing or not executable: $LINK_BIN" >&2
+      return 1
+    }
+    return 0
+  fi
   if [[ -x "$LINK_BIN" ]]; then
     local bin_commit repo_commit
     bin_commit="$("$LINK_BIN" -version 2>/dev/null | sed -n 's/.*"commit":"\([^"]*\)".*/\1/p')"
@@ -1354,6 +1367,7 @@ PLIST
     <key>AGENT_TELEMETRY_HERMES_API_PORT</key><string>$HERMES_API_PORT</string>
 $HERMES_API_KEY_PLIST_ENTRY
     <key>HIVE_COLLECTOR_ONLY</key><string>$COLLECTOR_ONLY</string>
+    <key>HIVEMINDOS_APP_DIR</key><string>$APP_DIR</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <!-- KeepAlive also powers auto-reload: the collector watches its own source
@@ -1477,7 +1491,8 @@ Environment=AGENT_TELEMETRY_HERMES_API_HOST=$HERMES_API_HOST
 Environment=AGENT_TELEMETRY_HERMES_API_PORT=$HERMES_API_PORT
 $HERMES_API_KEY_SYSTEMD_ENTRY
 Environment=HIVE_COLLECTOR_ONLY=$COLLECTOR_ONLY
-ExecStart=$(command -v node) $COLLECTOR
+Environment=HIVEMINDOS_APP_DIR=$APP_DIR
+ExecStart=$NODE_BIN $COLLECTOR
 Restart=always
 
 [Install]

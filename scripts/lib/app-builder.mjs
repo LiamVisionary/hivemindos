@@ -21,8 +21,11 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const moduleDirectory = dirname(fileURLToPath(import.meta.url));
-const contractFile = resolve(moduleDirectory, "../../contracts/app-builder/v1.json");
-const staticServerFile = resolve(moduleDirectory, "app-builder-static-server.mjs");
+const appRoot = process.env.HIVEMINDOS_APP_DIR
+  ? resolve(process.env.HIVEMINDOS_APP_DIR)
+  : resolve(moduleDirectory, "../..");
+const contractFile = resolve(appRoot, "contracts/app-builder/v1.json");
+const staticServerFile = resolve(appRoot, "scripts/lib/app-builder-static-server.mjs");
 const manifestName = ".hivemindos-app.json";
 const runtimeDirectoryName = ".hivemindos";
 const hostingManifestName = "hosting.json";

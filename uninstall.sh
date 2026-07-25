@@ -293,6 +293,11 @@ if ask "Remove the isolated local web research runtime, browser, OCR models, scr
   ok "Removed the local web research runtime and HivemindOS-owned artifacts"
 fi
 
+if ask "Remove bundled HivemindOS Link collector runtimes from ~/.hivemindos/link-runtime?" "yes"; then
+  rm -rf "$HOME/.hivemindos/link-runtime"
+  ok "Removed ~/.hivemindos/link-runtime"
+fi
+
 if ask "Stop and remove the Claw backend service?" "yes"; then
   if [[ "$(uname -s)" == "Darwin" ]]; then
     # com.hivemindos.claw-backend = legacy headless gateway; com.hivemindos.claw-gateway

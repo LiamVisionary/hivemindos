@@ -33,7 +33,9 @@
   "bundle": {
     "createUpdaterArtifacts": false,
     "externalBin": [],
-    "resources": [],
+    "resources": {
+      "link-runtime/": "link-runtime/"
+    },
     "macOS": {
       "bundleName": "HivemindOS Link",
       "entitlements": "LinkEntitlements.plist"

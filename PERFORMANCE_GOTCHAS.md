@@ -141,11 +141,31 @@ those frames now appear on `tokio-rt-worker` threads.
   cost only shows up in `tauri dev` and vanishes in release, suspect
   debug-unoptimized dependencies before concluding the architecture is at fault.
 
+### The same trap in a small setup app
+
+The standalone HivemindOS Link window hit this class of failure in July 2026.
+Its JavaScript requested `native_setup_status` every 1.8 seconds, while that
+synchronous Tauri command scanned runtime paths, probed the collector port
+range, and read Link status with socket timeouts. Setup continued in a hidden
+child process, but overlapping UI-thread invokes made Windows report the window
+as “Not Responding.” The durable fix is two-sided: make the native command
+`async` and move its blocking checks through `spawn_blocking`, then keep the
+frontend poll single-flight so slow probes cannot queue. A spinner or longer
+poll interval alone only hides the same blocked-main-thread bug.
+
+On Windows, validate the service launch context separately from task
+registration success. Embedded Tailscale starts far enough to create state and
+logs under an S4U task, then exits because the non-interactive token cannot read
+the user's policy store. Register Link with `LogonType Interactive` and start
+that registered task immediately; launching a replacement child from a
+headless setup process recreates the same denial even though the task itself is
+configured correctly.
+
 ### Where it's written up
 
 - `OPTIMIZATIONS.md` — the change entry (files, verification, tradeoffs).
 - `CHANGELOG.md` — the release-facing entry.
-- Fixed 2026-07-04.
+- Fixed 2026-07-16.
 
 ## G2 - A cached agent request can still be slow, and the selected-model label can be false
 

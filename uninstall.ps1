@@ -257,6 +257,12 @@ if (Ask-YesNo "Remove the optional OpenSRE isolated runtime under ~/.hivemindos/
   Ok "Removed the optional OpenSRE isolated runtime"
 }
 
+if (Ask-YesNo "Remove bundled HivemindOS Link collector runtimes from ~/.hivemindos/link-runtime?" $true) {
+  $linkRuntimeDir = Join-Path $UserHome ".hivemindos\link-runtime"
+  Remove-Item $linkRuntimeDir -Recurse -Force -ErrorAction SilentlyContinue
+  Ok "Removed $linkRuntimeDir"
+}
+
 if (Ask-YesNo "Remove HivemindOS collector environment file ~/.hivemindos/collector.env?" $false) {
   $collectorEnv = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".hivemindos\collector.env"
   Remove-Item $collectorEnv -Force -ErrorAction SilentlyContinue

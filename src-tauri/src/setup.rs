@@ -7,7 +7,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 /// Tauri event the setup wizard listens on to render live progress + errors in
 /// the modal (so setup can run hidden with no console window).
@@ -457,6 +457,67 @@ fn app_source_root() -> PathBuf {
         .join(".hivemindos/app-source")
 }
 
+fn powershell_quote(value: &str) -> String {
+    value.replace('\'', "''")
+}
+
+fn windows_shell_path(path: &Path) -> String {
+    let value = path.display().to_string();
+    if let Some(network_path) = value.strip_prefix(r"\\?\UNC\") {
+        return format!(r"\\{network_path}");
+    }
+    value
+        .strip_prefix(r"\\?\")
+        .unwrap_or(&value)
+        .to_string()
+}
+
+fn bundled_link_setup_command(app: &AppHandle, platform: SetupPlatform) -> Result<String, String> {
+    let resource_root = app
+        .path()
+        .resource_dir()
+        .map_err(|error| format!("Could not locate HivemindOS Link resources: {error}"))?
+        .join("link-runtime");
+    let home = home_dir().ok_or_else(|| "No home directory was detected.".to_string())?;
+    let runtime_parent = home.join(".hivemindos/link-runtime");
+    bundled_link_setup_command_for_roots(&resource_root, &runtime_parent, platform)
+}
+
+fn bundled_link_setup_command_for_roots(
+    resource_root: &Path,
+    runtime_parent: &Path,
+    platform: SetupPlatform,
+) -> Result<String, String> {
+    let runtime_root = runtime_parent.join(format!(
+        "{}-{}",
+        env!("CARGO_PKG_VERSION"),
+        chrono::Utc::now().timestamp()
+    ));
+
+    if !resource_root.join("runtime-manifest.json").exists() {
+        return Err(format!(
+            "The packaged collector runtime is missing from {}. Reinstall HivemindOS Link.",
+            resource_root.display()
+        ));
+    }
+
+    match platform {
+        SetupPlatform::Windows => {
+            let source = powershell_quote(&windows_shell_path(resource_root));
+            let target = powershell_quote(&windows_shell_path(&runtime_root));
+            Ok(format!(
+                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; $source='{source}'; $target='{target}'; Write-Host 'Preparing bundled collector runtime...'; New-Item -ItemType Directory -Force -Path $target | Out-Null; Copy-Item -Path (Join-Path $source '*') -Destination $target -Recurse -Force; $env:HIVEMINDOS_APP_DIR=$target; & (Join-Path $target 'scripts\\install-telemetry-collector.ps1') -RepoRoot $target -CollectorOnly -EnableLink -NodePath (Join-Path $target 'node.exe') -CollectorScript (Join-Path $target 'scripts\\agent-telemetry-collector.mjs') -PrebuiltLinkBinary (Join-Path $target 'hivemind-linkd.exe'); exit $LASTEXITCODE\""
+            ))
+        }
+        SetupPlatform::Unix => Ok(format!(
+            "echo 'Preparing bundled collector runtime...'\nmkdir -p {parent}\ncp -R {source} {target}\nchmod 700 {target}/node {target}/hivemind-linkd {target}/scripts/install-telemetry-collector.sh\nPATH={target}:\"$PATH\" HIVEMINDOS_NODE_BIN={target}/node HIVEMINDOS_APP_DIR={target} HIVEMINDOS_COLLECTOR_BUNDLED=true HIVE_LINK_PREBUILT=true HIVE_LINK_ENABLED=true HIVE_LINK_BIN={target}/hivemind-linkd HIVE_COLLECTOR_ONLY=true bash {target}/scripts/install-telemetry-collector.sh",
+            parent = shell_quote(&runtime_parent.display().to_string()),
+            source = shell_quote(&resource_root.display().to_string()),
+            target = shell_quote(&runtime_root.display().to_string()),
+        )),
+    }
+}
+
 // GitHub serves a downloadable, extractable snapshot of any ref at these URLs.
 // We bootstrap the app source from the archive instead of `git clone` so a
 // fresh machine needs no `git` on PATH — a hard blocker on a stock Windows PC,
@@ -597,7 +658,13 @@ fn open_command_file(path: &Path) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub(crate) fn native_setup_status() -> Result<serde_json::Value, String> {
+pub(crate) async fn native_setup_status() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(collect_native_setup_status)
+        .await
+        .map_err(|error| format!("native setup status task failed: {error}"))?
+}
+
+fn collect_native_setup_status() -> Result<serde_json::Value, String> {
     let platform = SetupPlatform::current();
     let current_dir = std::env::current_dir().ok();
     let setup_script = current_dir
@@ -821,7 +888,13 @@ fn build_setup_invocation(request: NativeSetupRunRequest, platform: SetupPlatfor
 #[tauri::command]
 pub(crate) fn native_setup_run(app: AppHandle, request: NativeSetupRunRequest) -> Result<serde_json::Value, String> {
     let platform = SetupPlatform::current();
-    let (mode, command) = build_setup_invocation(request, platform);
+    let bundled_collector_requested =
+        cfg!(feature = "link-app") && request.install_mode.as_deref() == Some("collector");
+    let (mode, command) = if bundled_collector_requested {
+        ("collector".to_string(), bundled_link_setup_command(&app, platform)?)
+    } else {
+        build_setup_invocation(request, platform)
+    };
     let command_path = write_command_file(&command, platform)?;
     // Run the launcher HIDDEN and stream its output to the setup wizard via the
     // progress event, instead of opening a console window. Fall back to the
@@ -1137,5 +1210,54 @@ mod tests {
         assert_eq!(setup_mode_arg("link"), "--link");
         assert_eq!(setup_mode_arg("collector"), "--collector-only");
         assert_eq!(setup_mode_arg("anything-else"), "--local-only");
+    }
+
+    #[test]
+    fn windows_shell_paths_strip_verbatim_prefixes() {
+        assert_eq!(
+            windows_shell_path(Path::new(r"\\?\C:\Users\Tester\HivemindOS Link")),
+            r"C:\Users\Tester\HivemindOS Link"
+        );
+        assert_eq!(
+            windows_shell_path(Path::new(r"\\?\UNC\server\share\HivemindOS Link")),
+            r"\\server\share\HivemindOS Link"
+        );
+    }
+
+    #[test]
+    fn bundled_link_setup_uses_only_packaged_runtime() {
+        let test_root = std::env::temp_dir().join(format!(
+            "hivemind-link-setup-test-{}",
+            std::process::id()
+        ));
+        let resource_root = test_root.join("resources/link-runtime");
+        let runtime_parent = test_root.join("home/.hivemindos/link-runtime");
+        fs::create_dir_all(&resource_root).unwrap();
+        fs::write(resource_root.join("runtime-manifest.json"), "{}\n").unwrap();
+
+        let windows = bundled_link_setup_command_for_roots(
+            &resource_root,
+            &runtime_parent,
+            SetupPlatform::Windows,
+        )
+        .unwrap();
+        assert!(windows.contains("Copy-Item"));
+        assert!(windows.contains("-NodePath"));
+        assert!(windows.contains("-PrebuiltLinkBinary"));
+        assert!(!windows.contains("Invoke-WebRequest"));
+        assert!(!windows.contains("setup.ps1"));
+
+        let unix = bundled_link_setup_command_for_roots(
+            &resource_root,
+            &runtime_parent,
+            SetupPlatform::Unix,
+        )
+        .unwrap();
+        assert!(unix.contains("HIVEMINDOS_COLLECTOR_BUNDLED=true"));
+        assert!(unix.contains("HIVE_LINK_PREBUILT=true"));
+        assert!(!unix.contains("curl -fsSL"));
+        assert!(!unix.contains("setup.sh"));
+
+        fs::remove_dir_all(test_root).unwrap();
     }
 }

@@ -7,6 +7,7 @@ const views = ["welcome", "progress", "approval", "done", "error"];
 const state = {
   running: false,
   processDone: false,
+  statusPending: false,
   poll: null,
   lines: [],
   advancedPlatform: /Win/i.test(navigator.platform) ? "windows" : "unix",
@@ -84,6 +85,8 @@ async function closeApp() {
 
 async function refreshStatus() {
   if (!invoke) return;
+  if (state.statusPending) return;
+  state.statusPending = true;
   try {
     const status = await invoke("native_setup_status");
     const link = linkStatus(status);
@@ -116,6 +119,8 @@ async function refreshStatus() {
       element("error-copy").textContent = `Could not read setup status: ${String(error)}`;
       showView("error");
     }
+  } finally {
+    state.statusPending = false;
   }
 }
 

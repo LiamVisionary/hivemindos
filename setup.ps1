@@ -653,6 +653,26 @@ if ($resolvedNetworkMode -eq "link") {
   Info "Network mode: local only"
 }
 
+# Collector-only is a narrow product mode, not a smaller Complete Hub install.
+# Stop here after the bridge + Link sidecar so a linked device never pays for
+# Python, Obsidian, GPG, Unison, shared-brain seeding, MCP registration, pnpm,
+# or dashboard configuration. The downloadable GUI supplies prebuilt runtime
+# paths and bypasses this source installer entirely; this keeps Advanced setup
+# fast and faithful too.
+if ($collectorOnlyMode) {
+  Ensure-Node
+  if ($Missing.Count -gt 0) {
+    foreach ($item in $Missing) { Write-Host "  - $item" }
+    exit 1
+  }
+  $collectorArgs = @{ Port = $CollectorPort; RepoRoot = $Root; CollectorOnly = $true }
+  if ($resolvedNetworkMode -eq "link") { $collectorArgs.EnableLink = $true }
+  & (Join-Path $Root "scripts\install-telemetry-collector.ps1") @collectorArgs
+  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  Ok "Collector-only setup complete"
+  exit 0
+}
+
 Ensure-Node
 $needsPnpm = (-not $SkipDeps) -or (-not $SkipBuild) -or (-not $SkipDashboard)
 if ($needsPnpm) {
