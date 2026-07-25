@@ -11,6 +11,7 @@
     "dev:ui": "node scripts/dev-ui.mjs",
     "quant-research": "node scripts/hive-quant-research.mjs",
     "browser-extension:build": "node scripts/build-browser-extension.mjs",
+    "test:browser-durable-state-guard": "node scripts/test-browser-durable-state-guard.mjs",
     "test:browser-extension": "node --import tsx scripts/test-browser-extension.mjs && node --import tsx scripts/test-browser-extension-install.mjs",
     "hive:update": "bash scripts/update-hivemindos.sh",
     "build": "scripts/run-with-memory-limit.sh --limit-mb 5000 --timeout-seconds 300 -- next build --webpack",

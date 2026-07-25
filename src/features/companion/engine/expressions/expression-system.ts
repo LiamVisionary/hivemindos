@@ -159,6 +159,7 @@ export class ExpressionSystem implements IExpressionSystem {
   private persistEmotionalState(): void {
     try {
       const target = this.emotionalState.getTarget();
+      // guard:allow-browser-storage - disposable per-device companion mood; loss just resets to neutral
       localStorage.setItem(PERSIST_KEY, JSON.stringify(target));
     } catch { /* ignore (non-browser env / storage denied) */ }
   }
@@ -166,6 +167,7 @@ export class ExpressionSystem implements IExpressionSystem {
   /** Restore emotional state from localStorage on init */
   restorePersistedState(): void {
     try {
+      // guard:allow-browser-storage - disposable per-device companion mood; loss just resets to neutral
       const saved = localStorage.getItem(PERSIST_KEY);
       if (saved) {
         const state = JSON.parse(saved) as Partial<EmotionalState>;
