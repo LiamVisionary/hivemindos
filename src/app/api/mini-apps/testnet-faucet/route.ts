@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - dashboard-authenticated Mini testnet-faucet claim invoked by the embedded host UI, not an agent-invocable capability; the governed x402 execution and spend caps live in the faucet service.
 import { type NextRequest } from "next/server";
 
 import { executeMiniAppTestnetFaucet } from "@/lib/services/wallet/mini-app-testnet-faucet";
