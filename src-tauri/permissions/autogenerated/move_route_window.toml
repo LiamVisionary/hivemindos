@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-move-route-window"
+description = "Enables the move_route_window command without any pre-configured scope."
+commands.allow = ["move_route_window"]
+
+[[permission]]
+identifier = "deny-move-route-window"
+description = "Denies the move_route_window command without any pre-configured scope."
+commands.deny = ["move_route_window"]
