@@ -32,6 +32,7 @@ try {
   assert.equal(tool.annotations["hivemindos/risk"], "high");
   assert.ok(tool.annotations["hivemindos/confirmation"].tokens.includes("CONFIRM_APP_PROJECT_CREATE"));
   assert.ok(tool.inputSchema.properties.action.enum.includes("adopt"));
+  assert.ok(tool.inputSchema.properties.action.enum.includes("export_source"));
   assert.ok(tool.inputSchema.properties.templateId.enum.includes("static"));
 
   const rejected = await request(mcp, lines, {

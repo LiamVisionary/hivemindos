@@ -53,6 +53,15 @@ use the reviewed Next.js starter. Older chat results that already contain an
 HTML app can be adopted without overwriting their files when the assistant
 reported a project directory inside the selected Chat workspace.
 
+The App workspace opens beside the conversation as a resizable split pane with
+App, Code, and Console tabs. The App tab adds a browser-style header: the
+preview address with copy, reload, open-in-browser, and desktop, tablet, and
+phone widths. Code browses the linked machine's real project tree read-only —
+the agent owns edits — and Console is the same real machine shell. Share
+creates the confirmation-gated temporary Cloudflare preview described below. A
+stopped app shows a Start button in place, and the workspace reports each
+preparation step honestly while dependencies install and the runtime starts.
+
 If the linked machine is missing the required App Builder protocol, Preview
 updates its HivemindOS collector, waits for the new collector to report ready,
 and retries automatically. Fleet also shows the machine as updateable when its
@@ -75,6 +84,9 @@ Local projects support:
 - confirmation-gated start and stop
 - a loopback-only development preview
 - conversation-bound preview identity in Chat
+- an expanded Preview/Code workspace with direct file editing
+- a portable source archive export that excludes secrets and generated runtime state
+- a confirmation-gated temporary public deployment from the workspace
 - automatic discovery in Apps while the preview is running
 - deterministic static and dynamic hosting artifacts with secret and symbolic-link checks
 
@@ -169,8 +181,11 @@ Link access uses a revocable URL and a secure, Site-scoped browser cookie so
 assets and page navigation continue to work without exposing the token in every
 request.
 
-Static publishing reads a generated `out` directory. The current client
-transport accepts at most 1,000 files, 20 MiB total, and 5 MiB per file.
+Framework static publishing reads a generated `out` directory. Adopted plain
+HTML/CSS/JavaScript projects can publish directly from their source root;
+HivemindOS first copies only reviewed public files into a sanitized managed
+staging directory. The current client transport accepts at most 1,000 files,
+20 MiB total, and 5 MiB per file.
 Dynamic publishing reads one bundled `dist/worker.mjs` module and runs it as an
 untrusted Cloudflare Dynamic Worker with server-controlled CPU and
 subrequest limits. Declared D1/R2-style bindings are narrow, per-Site

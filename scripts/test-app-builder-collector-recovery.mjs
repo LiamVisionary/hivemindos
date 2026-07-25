@@ -7,10 +7,10 @@ const {
   requestAppBuilderWithCollectorRecovery,
 } = await import("../src/lib/services/app-builder/collector-recovery.ts");
 
-assert.equal(collectorSupportsAppBuilderContract("1.2.0", "1.2.0"), true);
-assert.equal(collectorSupportsAppBuilderContract("1.3.0", "1.2.0"), true);
-assert.equal(collectorSupportsAppBuilderContract("1.1.9", "1.2.0"), false);
-assert.equal(collectorSupportsAppBuilderContract(undefined, "1.2.0"), false);
+assert.equal(collectorSupportsAppBuilderContract("1.3.0", "1.3.0"), true);
+assert.equal(collectorSupportsAppBuilderContract("1.4.0", "1.3.0"), true);
+assert.equal(collectorSupportsAppBuilderContract("1.2.9", "1.3.0"), false);
+assert.equal(collectorSupportsAppBuilderContract(undefined, "1.3.0"), false);
 
 const calls = [];
 const responses = [
@@ -55,7 +55,7 @@ assert.deepEqual(calls.map((call) => call.url), [
   "/api/fleet/update",
   "/api/app-builder",
 ]);
-assert.equal(calls[1].body.requiredCapabilities.appBuilderContractVersion, "1.2.0");
+assert.equal(calls[1].body.requiredCapabilities.appBuilderContractVersion, "1.3.0");
 assert.equal(calls[1].body.collectorUrl, "http://ubuntu.tailnet:8787");
 assert.deepEqual(statuses, ["updating", "retrying"]);
 

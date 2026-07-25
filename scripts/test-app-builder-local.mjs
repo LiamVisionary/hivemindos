@@ -5,6 +5,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { gunzipSync } from "node:zlib";
 
 const modulePath = new URL("./lib/app-builder.mjs", import.meta.url);
 const appBuilder = await import(modulePath.href).catch(() => null);
@@ -16,6 +17,22 @@ const confirmations = {
   delete: "CONFIRM_APP_FILE_DELETE",
   runtime: "CONFIRM_APP_RUNTIME",
 };
+
+function tarFileNames(contentBase64) {
+  const tar = gunzipSync(Buffer.from(contentBase64, "base64"));
+  const names = [];
+  for (let offset = 0; offset + 512 <= tar.byteLength;) {
+    const header = tar.subarray(offset, offset + 512);
+    if (header.every((byte) => byte === 0)) break;
+    const value = (start, length) => header.subarray(start, start + length).toString("utf8").replace(/\0.*$/, "");
+    const name = value(0, 100);
+    const prefix = value(345, 155);
+    const size = Number.parseInt(value(124, 12).trim() || "0", 8);
+    names.push(prefix ? `${prefix}/${name}` : name);
+    offset += 512 + Math.ceil(size / 512) * 512;
+  }
+  return names;
+}
 
 test("local project creation is approval-gated, idempotent, and confined to the selected directory", async () => {
   const root = await mkdtemp(join(tmpdir(), "hivemind-local-app-"));
@@ -117,6 +134,35 @@ test("local file operations enforce project boundaries and write/delete approval
       confirmation: confirmations.delete,
     });
     assert.equal(existsSync(join(project, "src/app/message.txt")), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("source export produces a portable archive without dependencies, runtime state, or secrets", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hivemind-source-export-"));
+  const project = join(root, "portal");
+  try {
+    await appBuilder.createLocalAppProject({
+      directory: project,
+      name: "Portal Source",
+      templateId: "static",
+      confirmation: confirmations.create,
+    });
+    await mkdir(join(project, "assets"));
+    await mkdir(join(project, "node_modules", "package"), { recursive: true });
+    await writeFile(join(project, "assets", "game.js"), "console.log('game')");
+    await writeFile(join(project, ".env"), "SECRET=do-not-export");
+    await writeFile(join(project, "node_modules", "package", "index.js"), "dependency");
+    const sourceExport = await appBuilder.exportLocalAppProject({ directory: project });
+    assert.equal(sourceExport.fileName, "portal-source.tar.gz");
+    assert.match(sourceExport.sha256, /^[a-f0-9]{64}$/);
+    const names = tarFileNames(sourceExport.contentBase64);
+    assert.equal(names.includes("index.html"), true);
+    assert.equal(names.includes("assets/game.js"), true);
+    assert.equal(names.some((name) => name === ".env" || name.startsWith("node_modules/") || name.startsWith(".hivemindos/")), false);
+    const action = await appBuilder.runLocalAppBuilderAction({ action: "export_source", directory: project });
+    assert.equal(action.export.sha256, sourceExport.sha256);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -20,7 +20,7 @@ assert.doesNotMatch(source.client, /priceUsd\s*:\s*[0-9]/);
 assert.doesNotMatch(source.client, /CLOUDFLARE_API_TOKEN|STRIPE_SECRET|payTo/);
 
 for (const action of [
-  "test_deploy", "hosting_catalog", "hosting_list", "hosting_get", "hosting_create", "hosting_versions",
+  "export_source", "test_deploy", "hosting_catalog", "hosting_list", "hosting_get", "hosting_create", "hosting_versions",
   "hosting_save_version", "hosting_deployments", "hosting_deploy_version", "hosting_rollback",
   "hosting_access_get", "hosting_access_set", "hosting_access_token", "hosting_bindings_get",
   "hosting_bindings_set", "hosting_environment_get", "hosting_environment_set", "hosting_publish",

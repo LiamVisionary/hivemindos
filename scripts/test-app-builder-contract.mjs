@@ -8,7 +8,7 @@ assert.equal(existsSync(contractPath), true, "the public repo must own the canon
 
 const contract = JSON.parse(await readFile(contractPath, "utf8"));
 assert.equal(contract.protocol, "hivemindos.app-builder/v1");
-assert.equal(contract.version, "1.2.0");
+assert.equal(contract.version, "1.3.0");
 assert.equal(contract.provenance?.donors?.december?.commit, "909b5c23dce9316e88a2755baef56b3ded2845e0");
 assert.equal(contract.templates.nextjs.files["package.json"].includes('"next": "16.2.6"'), true);
 assert.equal(contract.templates.static.files["index.html"].includes("HivemindOS App"), true);
@@ -26,6 +26,10 @@ assert.deepEqual(
 );
 assert.deepEqual(
   contract.capabilities.find((item) => item.id === "files.write")?.backends,
+  ["local"],
+);
+assert.deepEqual(
+  contract.capabilities.find((item) => item.id === "artifact.export")?.backends,
   ["local"],
 );
 assert.equal(contract.confirmations.createProject, "CONFIRM_APP_PROJECT_CREATE");

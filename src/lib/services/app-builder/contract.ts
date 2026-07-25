@@ -16,6 +16,7 @@ export type AppBuilderCapabilityId =
   | "runtime.stop"
   | "runtime.preview"
   | "artifact.prepare"
+  | "artifact.export"
   | "deploy.temporary"
   | "hosting.catalog"
   | "hosting.list"
