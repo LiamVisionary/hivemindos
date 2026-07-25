@@ -3,7 +3,7 @@ import { constants } from "fs";
 import { access, mkdir, readFile, readdir, stat, writeFile } from "fs/promises";
 import { isAbsolute, relative, resolve, sep } from "path";
 import { createTask } from "@/lib/services/kanban/local-kanban-store";
-import { buildBrainGraph } from "@/lib/services/obsidian/brain-graph";
+import { buildBrainGraph, type BrainGraph } from "@/lib/services/obsidian/brain-graph";
 import type { CapturedObsidianNote } from "@/lib/services/obsidian/note-capture";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
@@ -76,6 +76,12 @@ export type ProcessBrainDropCaptureInput = {
   inputTags?: string[] | null;
   now?: Date;
   classifyWithModel?: (content: string) => Promise<BrainDropModelClassification>;
+  /**
+   * Batch callers pass one graph for every capture so a 20-capture tick does
+   * not force 20 full vault scans. Single interactive captures omit it and
+   * keep the fresh forced build.
+   */
+  prebuiltGraph?: BrainGraph;
 };
 
 export type BrainDropProcessingResult = {
@@ -208,10 +214,10 @@ function tokens(value: string) {
   );
 }
 
-async function relatedNotePaths(vaultPath: string, content: string, sourceNotePath: string) {
+async function relatedNotePaths(vaultPath: string, content: string, sourceNotePath: string, prebuiltGraph?: BrainGraph) {
   const captureTokens = tokens(content);
   if (captureTokens.size === 0) return [];
-  const graph = await buildBrainGraph(vaultPath, { force: true });
+  const graph = prebuiltGraph ?? await buildBrainGraph(vaultPath, { force: true });
   return graph.nodes
     .filter((node) => {
       if (node.id.startsWith("unresolved:") || node.id === sourceNotePath) return false;
@@ -363,7 +369,7 @@ export async function processBrainDropCapture(input: ProcessBrainDropCaptureInpu
   const processedAt = (input.now ?? new Date()).toISOString();
   const createdAt = input.capture.createdAt || processedAt;
   const source = input.source?.trim() || "brain-drop";
-  const relatedPaths = await relatedNotePaths(root, cleanedContent, input.capture.notePath);
+  const relatedPaths = await relatedNotePaths(root, cleanedContent, input.capture.notePath, input.prebuiltGraph);
   const notePath = routePath(classification.category, title, createdAt, brainDropId);
   const tags = tagsFor(classification.category, source, input.inputTags, classification.tags);
   await writeRoutedNote(root, notePath, routedMarkdown({
@@ -477,6 +483,12 @@ export async function processPendingBrainDropInbox(input: {
   const results: BrainDropProcessingResult[] = [];
   let skipped = 0;
   const limit = Math.max(1, Math.min(input.limit ?? MAX_PENDING_CAPTURES, MAX_PENDING_CAPTURES));
+  // One forced graph build serves the whole batch (built lazily so an empty
+  // inbox tick never scans the vault). Notes routed earlier in the same batch
+  // are not in this graph, so intra-batch captures cannot relate to each
+  // other's routed notes until the next batch — acceptable for related-note
+  // hints, and far cheaper than a forced full vault scan per capture.
+  let batchGraph: BrainGraph | undefined;
   for (const fullPath of [...new Set(paths)].sort().reverse()) {
     const markdown = await readFile(fullPath, "utf8");
     const content = captureBody(markdown);
@@ -491,6 +503,7 @@ export async function processPendingBrainDropInbox(input: {
       continue;
     }
     if (results.length >= limit) break;
+    batchGraph ??= await buildBrainGraph(root, { force: true });
     const fileStat = await stat(fullPath);
     // An injected clock must also govern the undated-note fallback, or replays
     // under a frozen `now` route notes by the real file mtime instead.
@@ -510,6 +523,7 @@ export async function processPendingBrainDropInbox(input: {
       inputTags: frontmatterTags(markdown),
       now: input.now,
       classifyWithModel: input.classifyWithModel,
+      prebuiltGraph: batchGraph,
     });
     results.push(result);
   }

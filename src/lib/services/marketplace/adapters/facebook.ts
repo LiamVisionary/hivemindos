@@ -2,9 +2,13 @@ import { hostname } from "node:os";
 
 import { runBrowserUse } from "@/lib/services/browser-use-runner";
 import { extractCurrentUrl, looksLoggedOutUrl, probeBrowserProfileLogin, runBrowserUseOverCdp } from "@/lib/services/browser-profile-connect";
-import { ensureMarketplaceBrowser, readBrowserTab } from "@/lib/services/marketplace/marketplace-browser-runtime";
+import { ensureMarketplaceBrowser } from "@/lib/services/marketplace/marketplace-browser-runtime";
 import { acquireMarketplaceProfileLock } from "@/lib/services/marketplace/marketplace-profile-lock";
 import { marketplaceProviderRow } from "@/lib/services/marketplace/marketplace-provider-matrix";
+import {
+  resolveIndependentTabReader,
+  verifyMarketplaceOpClaim,
+} from "@/lib/services/marketplace/marketplace-verification-matrix";
 import type {
   MarketplaceAccount,
   MarketplaceAgentReport,
@@ -16,6 +20,7 @@ import { sameMachineIdentity } from "@/features/fleet/fleet-identity";
 import type {
   MarketplaceActivityProbe,
   MarketplaceAdapterContext,
+  MarketplaceClaimDisposition,
   MarketplaceConnectProbe,
   MarketplaceInboxWorkInput,
   MarketplaceProviderAdapter,
@@ -23,6 +28,7 @@ import type {
 import {
   buildCreateListingPrompt,
   buildEndListingPrompt,
+  buildFullSweepPrompt,
   buildInboxWorkPrompt,
   buildSyncCatalogPrompt,
 } from "@/lib/services/marketplace/marketplace-agent-context";
@@ -133,7 +139,7 @@ export const facebookMarketplaceAdapter: MarketplaceProviderAdapter = {
     return report.catalog ?? [];
   },
 
-  async createListing(account, listing, approvedDecisionId, ctx): Promise<{ externalId: string; url: string }> {
+  async createListing(account, listing, approvedDecisionId, ctx): Promise<{ externalId: string; url: string; verification: MarketplaceClaimDisposition }> {
     if (!approvedDecisionId.trim()) {
       throw new Error("Refusing to post a marketplace listing without an approved decision (listing-approval-required).");
     }
@@ -150,72 +156,58 @@ export const facebookMarketplaceAdapter: MarketplaceProviderAdapter = {
       );
     }
     const posted = { externalId: report.postedListing.externalId, url: report.postedListing.url };
-    await verifyPostedListingIndependently(account, ctx, posted, listing.title);
-    return posted;
+    // Independent proof the claimed post is real: read-back inside the agent
+    // session is the AGENT'S OWN claim — a session fabricated externalId
+    // "1234567890" plus a matching URL and the pipeline marked the listing
+    // live (2026-07-18, VeniceAgent). Refuted ⇒ throw; unobservable from here
+    // (foreign machine / no WebSocket) ⇒ "deferred" so the caller records the
+    // claim posted-unverified and the OWNING machine's monitor promotes it —
+    // the claim never goes active on trust.
+    const reader = resolveIndependentTabReader(account, ctx);
+    const claimCheck = await verifyMarketplaceOpClaim(reader, account.machine.profileName, {
+      op: "create-listing",
+      url: posted.url,
+      title: listing.title,
+    });
+    if (claimCheck.outcome === "refuted") {
+      throw new Error(
+        `Listing post FAILED independent verification: ${claimCheck.reason}. The agent's claim was rejected and nothing was marked live.`,
+      );
+    }
+    return { ...posted, verification: claimCheck.outcome === "verified" ? "verified" : "deferred" };
   },
 
-  async endListing(account, externalId, ctx): Promise<void> {
+  async endListing(account, externalId, ctx): Promise<{ verification: MarketplaceClaimDisposition }> {
     const dispatch = requireDispatch(ctx);
     const cdpUrl = await agentSessionCdpUrl(account, ctx);
     const report = await dispatch({ account, op: "end-listing", prompt: buildEndListingPrompt(account, externalId, cdpUrl) });
     if (report.sessionHealth !== "ok") {
       throw new Error(`Ending listing ${externalId} did not complete cleanly (session ${report.sessionHealth}).`);
     }
+    // A fabricated end-listing "ok" used to be accepted as-is — require the
+    // listing URL to hit the dead-page detection before treating it as ended.
+    const reader = resolveIndependentTabReader(account, ctx);
+    const claimCheck = await verifyMarketplaceOpClaim(reader, account.machine.profileName, {
+      op: "end-listing",
+      url: `https://www.facebook.com/marketplace/item/${externalId}`,
+    });
+    if (claimCheck.outcome === "refuted") {
+      throw new Error(`Ending listing ${externalId} FAILED independent verification: ${claimCheck.reason}.`);
+    }
+    return { verification: claimCheck.outcome === "verified" ? "verified" : "deferred" };
   },
 
   async workInbox(account, input: MarketplaceInboxWorkInput, ctx): Promise<MarketplaceAgentReport> {
     const dispatch = requireDispatch(ctx);
     const cdpUrl = await agentSessionCdpUrl(account, ctx);
-    return dispatch({ account, op: "work-inbox", prompt: buildInboxWorkPrompt(account, input, cdpUrl) });
+    const prompt = input.fullSweep ? buildFullSweepPrompt(account, input, cdpUrl) : buildInboxWorkPrompt(account, input, cdpUrl);
+    return dispatch({ account, op: "work-inbox", prompt });
   },
 
   capabilities(): Record<MarketplaceCapability, MarketplaceCapabilitySupport> {
     return { ...marketplaceProviderRow("facebook").capabilities };
   },
 };
-
-/**
- * Independent proof that a claimed post is real: the dispatcher loads the
- * reported listing URL in a NEW tab of the account's own browser and requires
- * a real listing page carrying the item title. Read-back inside the agent
- * session is the AGENT'S OWN claim — a session fabricated externalId
- * "1234567890" plus a matching URL and the pipeline marked the listing live
- * (2026-07-18, VeniceAgent). Fail-closed: only "cannot observe from here"
- * (foreign machine / no WebSocket runtime) falls back to trusting read-back.
- */
-async function verifyPostedListingIndependently(
-  account: MarketplaceAccount,
-  ctx: MarketplaceAdapterContext,
-  posted: { externalId: string; url: string },
-  listingTitle: string,
-): Promise<void> {
-  if (!/facebook\.com\/marketplace\/item\/\d+/i.test(posted.url)) {
-    throw new Error(`Listing post rejected: the agent reported "${posted.url}", which is not a Marketplace item URL.`);
-  }
-  const canObserveHere = typeof WebSocket !== "undefined" && sameMachineIdentity(account.machine.machineKey, hostname());
-  const reader = ctx.readBrowserTabImpl ?? (canObserveHere ? readBrowserTab : null);
-  if (!reader) return; // cannot observe the page from this machine — the agent's read-back stands
-  let page: { url: string; text: string };
-  try {
-    page = await reader(account.machine.profileName, posted.url);
-  } catch (error) {
-    throw new Error(
-      `Listing post could not be independently verified (browser check failed: ${error instanceof Error ? error.message : String(error)}). Not marking it live.`,
-    );
-  }
-  const text = page.text ?? "";
-  if (!text.trim() || /isn'?t available|content isn'?t available|page not found|something went wrong/i.test(text)) {
-    throw new Error(
-      "Listing post FAILED independent verification: the reported listing URL does not load a real listing page. The agent's claim was rejected and nothing was marked live.",
-    );
-  }
-  const titleTokens = listingTitle.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length >= 4);
-  if (titleTokens.length && !titleTokens.some((token) => text.toLowerCase().includes(token))) {
-    throw new Error(
-      "Listing post FAILED independent verification: the reported listing page does not mention the item. The agent's claim was rejected and nothing was marked live.",
-    );
-  }
-}
 
 export type FacebookMarketplaceAdapter = typeof facebookMarketplaceAdapter;
 

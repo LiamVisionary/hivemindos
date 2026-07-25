@@ -11,6 +11,8 @@ import {
   miniAppWalletResponse,
   parseMiniAppWalletRequest,
   parsePersonalSignParams,
+  parseRobinhoodUsdgTransferParams,
+  parseTestnetFaucetRequestParams,
   type MiniAppWalletRpcRequest,
   type MiniAppWalletRpcResponse,
 } from "@/lib/services/mini-app-wallet-bridge";
@@ -18,6 +20,7 @@ import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { createDefaultAgentWallet, getSurvivalSnapshot, hasConfiguredAgentWallet } from "@/lib/utils/agent-wallet";
 import { recoveryPhraseWalletGroupId } from "@/lib/utils/personal-wallet-grouping";
 import { fetchBankrWallet } from "@/features/dashboard/views/trade/trade-api";
+import { sendApprovedPersonalWalletAsset } from "@/lib/services/wallet/send-usdc-client";
 import { WalletSelectModal, type PickableWallet } from "@/features/dashboard/views/trade/WalletSelectModal";
 import {
   agentPickable,
@@ -38,7 +41,11 @@ type SelectedSigningWallet = {
   walletId: string;
   kind: "local" | "bankr";
   address: string;
+  network: string;
 };
+
+const PAID_AGENT_GATEWAY = process.env.NEXT_PUBLIC_PAID_AGENT_GATEWAY_API
+  || "https://hivemindos-paid-agent-gateway.hivemindos.workers.dev";
 
 function isEvmAddress(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value.trim());
@@ -64,6 +71,7 @@ export function MiniAppWalletBridge({ activeAppUrl, frameRef, agents = [], walle
   const [selectedWallet, setSelectedWallet] = useState<SelectedSigningWallet | null>(null);
   const selectedWalletRef = useRef<SelectedSigningWallet | null>(null);
   const selectionConfirmedRef = useRef(false);
+  const activeChainRef = useRef("0x2105");
   const miniAppOrigin = useMemo(() => {
     try { return new URL(activeAppUrl).origin; } catch { return ""; }
   }, [activeAppUrl]);
@@ -182,6 +190,97 @@ export function MiniAppWalletBridge({ activeAppUrl, frameRef, agents = [], walle
     postResponse(miniAppWalletResponse(request.requestId, data.signature));
   }, [postResponse]);
 
+  const sendRobinhoodUsdg = useCallback(async (request: MiniAppWalletRpcRequest) => {
+    const transfer = parseRobinhoodUsdgTransferParams(request.params);
+    const signingWallet = selectedWalletRef.current;
+    if (!transfer || !signingWallet || signingWallet.kind !== "local" || signingWallet.network !== "eip155:4663") {
+      postResponse(miniAppWalletErrorResponse(request.requestId, "Only confirmed USDG payments from a selected local Robinhood Chain wallet are supported."));
+      return;
+    }
+    if (transfer.from !== signingWallet.address.toLowerCase()) {
+      postResponse(miniAppWalletErrorResponse(request.requestId, "The USDG payment source does not match the selected wallet."));
+      return;
+    }
+    const configResponse = await fetch(`${PAID_AGENT_GATEWAY}/api/payments/robinhood-usdg`, { cache: "no-store" });
+    const config = await configResponse.json().catch(() => null) as { ok?: boolean; chainId?: number; token?: string; recipient?: string; error?: string } | null;
+    if (!configResponse.ok || !config?.ok || config.chainId !== 4663
+      || config.token?.toLowerCase() !== transfer.tokenAddress
+      || config.recipient?.toLowerCase() !== transfer.recipient) {
+      postResponse(miniAppWalletErrorResponse(request.requestId, config?.error || "The official Robinhood USDG payment recipient could not be verified."));
+      return;
+    }
+    const approved = window.confirm(`Send ${transfer.amountUsdg} USDG on Robinhood Chain to ${transfer.recipient}?\n\nThis funds an official HivemindOS Mini payment claim.`);
+    if (!approved) {
+      postResponse(miniAppWalletErrorResponse(request.requestId, "USDG payment was canceled."));
+      return;
+    }
+    const result = await sendApprovedPersonalWalletAsset({
+      agentId: signingWallet.walletId,
+      toAddress: transfer.recipient,
+      asset: "USDG",
+      assetAmount: transfer.amountUsdg,
+      tokenAddress: transfer.tokenAddress,
+      confirmation: "SEND_TOKEN",
+    });
+    if (!result.ok || !result.signature) {
+      postResponse(miniAppWalletErrorResponse(request.requestId, result.error || "HivemindOS could not send the USDG payment."));
+      return;
+    }
+    postResponse(miniAppWalletResponse(request.requestId, result.signature));
+  }, [postResponse]);
+
+  const requestTestnetFaucet = useCallback(async (request: MiniAppWalletRpcRequest) => {
+    const faucet = parseTestnetFaucetRequestParams(request.params);
+    const signingWallet = selectedWalletRef.current;
+    if (!faucet || !signingWallet || signingWallet.kind !== "local" || signingWallet.network !== "eip155:8453") {
+      postResponse(miniAppWalletErrorResponse(request.requestId, "Choose a confirmed local Base wallet for this faucet payment."));
+      return;
+    }
+
+    const catalogResponse = await fetch(`${PAID_AGENT_GATEWAY}/api/x402/testnet-faucet/assets`, { cache: "no-store" });
+    const catalog = await catalogResponse.json().catch(() => null) as {
+      available?: Array<{
+        network?: string;
+        networkLabel?: string;
+        asset?: string;
+        assetLabel?: string;
+        amount?: string;
+        priceUsd?: number;
+      }>;
+      error?: string;
+    } | null;
+    const pair = catalog?.available?.find((entry) => entry.network === faucet.network && entry.asset === faucet.asset);
+    const priceUsd = Number(pair?.priceUsd);
+    if (!catalogResponse.ok || !pair || !Number.isFinite(priceUsd) || priceUsd <= 0 || priceUsd > 0.99) {
+      postResponse(miniAppWalletErrorResponse(request.requestId, catalog?.error || "The official faucet route and price could not be verified."));
+      return;
+    }
+
+    const approved = window.confirm(
+      `Request ${pair.amount} ${pair.assetLabel} on ${pair.networkLabel} for ${faucet.recipient}?\n\nPay up to $${priceUsd.toFixed(2)} USDC on Base for HivemindOS programmatic routing. Test tokens are free and have no monetary value.`,
+    );
+    if (!approved) {
+      postResponse(miniAppWalletErrorResponse(request.requestId, "The faucet payment was canceled."));
+      return;
+    }
+
+    const response = await fetch("/api/mini-apps/testnet-faucet", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...signingWallet,
+        ...faucet,
+        confirmation: "TESTNET_FAUCET",
+      }),
+    });
+    const data = await response.json().catch(() => null) as { ok?: boolean; faucet?: unknown; error?: string } | null;
+    if (!response.ok || !data?.ok || !data.faucet) {
+      postResponse(miniAppWalletErrorResponse(request.requestId, data?.error || "HivemindOS could not complete the faucet payment."));
+      return;
+    }
+    postResponse(miniAppWalletResponse(request.requestId, data.faucet));
+  }, [postResponse]);
+
   useEffect(() => {
     if (!miniAppOrigin || !isOfficialMiniAppOrigin(miniAppOrigin)) return;
     const onMessage = (event: MessageEvent) => {
@@ -195,16 +294,35 @@ export function MiniAppWalletBridge({ activeAppUrl, frameRef, agents = [], walle
         return;
       }
       if (request.method === "eth_chainId") {
-        postResponse(miniAppWalletResponse(request.requestId, "0x2105"));
+        postResponse(miniAppWalletResponse(request.requestId, activeChainRef.current));
         return;
       }
       if (request.method === "wallet_switchEthereumChain") {
         const requestedChain = Array.isArray(request.params) && request.params[0] && typeof request.params[0] === "object"
           ? String((request.params[0] as Record<string, unknown>).chainId || "").toLowerCase()
           : "";
-        postResponse(requestedChain === "0x2105"
-          ? miniAppWalletResponse(request.requestId, null)
-          : miniAppWalletErrorResponse(request.requestId, "Mini-app wallet linking is limited to Base."));
+        const requestedNetwork = requestedChain === "0x2105" ? "eip155:8453" : requestedChain === "0x1237" ? "eip155:4663" : "";
+        const selected = selectedWalletRef.current;
+        if (!requestedNetwork) {
+          postResponse(miniAppWalletErrorResponse(request.requestId, "Mini-app wallet linking supports Base and Robinhood Chain."));
+        } else if (selected && selected.network !== requestedNetwork) {
+          postResponse(miniAppWalletErrorResponse(request.requestId, `Choose a ${requestedChain === "0x1237" ? "Robinhood Chain" : "Base"} wallet for this action.`));
+        } else {
+          activeChainRef.current = requestedChain;
+          postResponse(miniAppWalletResponse(request.requestId, null));
+        }
+        return;
+      }
+      if (request.method === "eth_sendTransaction") {
+        void sendRobinhoodUsdg(request).catch((error) => {
+          postResponse(miniAppWalletErrorResponse(request.requestId, error instanceof Error ? error.message : "USDG payment failed."));
+        });
+        return;
+      }
+      if (request.method === "hivemindos_requestTestnetFaucet") {
+        void requestTestnetFaucet(request).catch((error) => {
+          postResponse(miniAppWalletErrorResponse(request.requestId, error instanceof Error ? error.message : "The faucet request failed."));
+        });
         return;
       }
       void signMessage(request).catch((error) => {
@@ -213,7 +331,7 @@ export function MiniAppWalletBridge({ activeAppUrl, frameRef, agents = [], walle
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [frameRef, loadWallets, miniAppOrigin, postResponse, signMessage]);
+  }, [frameRef, loadWallets, miniAppOrigin, postResponse, requestTestnetFaucet, sendRobinhoodUsdg, signMessage]);
 
   const cancelSelection = () => {
     if (selectionConfirmedRef.current) {
@@ -241,7 +359,9 @@ export function MiniAppWalletBridge({ activeAppUrl, frameRef, agents = [], walle
       walletId: pickable.id,
       kind: pickable.kind === "bankr" ? "bankr" : "local",
       address,
+      network: pickable.wallet.network,
     };
+    activeChainRef.current = pickable.wallet.network === "eip155:4663" ? "0x1237" : "0x2105";
     selectedWalletRef.current = signingWallet;
     setSelectedWallet(signingWallet);
     postResponse(miniAppWalletResponse(pendingRequest.requestId, [address]));

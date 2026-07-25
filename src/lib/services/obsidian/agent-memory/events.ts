@@ -12,6 +12,9 @@ import type {
 
 const MAX_EVENT_FILE_BYTES = 8 * 1024 * 1024;
 const MAX_EVENT_TEXT_CHARS = 6_000;
+// Well above the event count a full current+rotated journal (2 x 8MB of
+// ~400+ byte rows) can contain, so mining normally sees the whole journal.
+const MAX_MINING_EVENTS = 100_000;
 let operationalEventWriteQueue: Promise<unknown> = Promise.resolve();
 
 export function agentOperationalEventsPath() {
@@ -108,14 +111,13 @@ function parseEventLines(raw: string) {
   return events;
 }
 
-export async function listAgentOperationalEvents(input: ListAgentOperationalEventsInput = {}) {
+async function collectAgentOperationalEvents(input: Omit<ListAgentOperationalEventsInput, "limit">) {
   const file = agentOperationalEventsPath();
   const [current, rotated] = await Promise.all([
     readFile(file, "utf8").catch(() => ""),
     readFile(`${file}.1`, "utf8").catch(() => ""),
   ]);
   const queryTerms = (input.query ?? "").toLowerCase().split(/[^a-z0-9]+/).filter((term) => term.length >= 2);
-  const limit = Math.min(Math.max(Math.trunc(Number(input.limit ?? 200)), 1), 1_000);
   const sinceMs = input.since ? Date.parse(input.since) : Number.NaN;
   const events = parseEventLines(`${rotated}\n${current}`)
     .filter((event) => !input.project || event.project?.toLowerCase() === input.project.trim().toLowerCase())
@@ -125,7 +127,29 @@ export async function listAgentOperationalEvents(input: ListAgentOperationalEven
       const text = `${event.title} ${event.summary} ${event.operationKey} ${event.failureKey ?? ""} ${event.tags.join(" ")}`.toLowerCase();
       return queryTerms.every((term) => text.includes(term));
     })
-    .sort((left, right) => Date.parse(right.occurredAt) - Date.parse(left.occurredAt))
-    .slice(0, limit);
+    .sort((left, right) => Date.parse(right.occurredAt) - Date.parse(left.occurredAt));
   return { path: file, events };
+}
+
+export async function listAgentOperationalEvents(input: ListAgentOperationalEventsInput = {}) {
+  const { path, events } = await collectAgentOperationalEvents(input);
+  const limit = Math.min(Math.max(Math.trunc(Number(input.limit ?? 200)), 1), 1_000);
+  return { path, events: events.slice(0, limit) };
+}
+
+// Internal full-journal listing for pattern mining: occurrence and cadence
+// statistics need every retained event, so this bypasses the public list
+// clamp above. The guard cap only bounds memory and sits above what the
+// size-rotated journal can physically hold, so `truncated` stays honest.
+export async function listAgentOperationalEventsForMining(
+  input: Omit<ListAgentOperationalEventsInput, "limit"> & { maxEvents?: number } = {},
+) {
+  const { path, events } = await collectAgentOperationalEvents(input);
+  const maxEvents = Math.max(1, Math.trunc(Number(input.maxEvents ?? MAX_MINING_EVENTS)));
+  return {
+    path,
+    events: events.slice(0, maxEvents),
+    totalMatching: events.length,
+    truncated: events.length > maxEvents,
+  };
 }

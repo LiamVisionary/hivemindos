@@ -354,47 +354,6 @@ details[open] > summary .treeDisclosure::before {
   padding: 6px 8px;
 }
 
-.folderCreatorForm {
-  display: grid;
-  gap: 12px;
-  margin-top: 18px;
-}
-
-.folderCreatorForm label {
-  display: grid;
-  gap: 7px;
-}
-
-.folderCreatorForm label span {
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.folderCreatorForm input {
-  min-height: 42px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 7px;
-  background: var(--field);
-  color: var(--foreground);
-  font-size: 14px;
-  letter-spacing: 0;
-  outline: none;
-  padding: 0 12px;
-}
-
-.folderCreatorForm input:focus {
-  border-color: var(--accent);
-}
-
-.folderCreatorError {
-  margin: 0;
-  color: #fca5a5;
-  font-size: 13px;
-}
-
 .machineChatCard {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

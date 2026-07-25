@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Unit tests for Hive Fusion: the orchestrator control flow (fan-out -> judge ->
 // synthesize, with partial-failure, all-failure, synth-fallback, single-success,
-// and hosted-OpenRouter paths) plus the judge-analysis JSON parser. Runs offline:
+// hosted-OpenRouter, quorum-release-with-straggler, and judge-JSON-contract
+// paths) plus the judge-analysis JSON parser. Runs offline:
 // the orchestrator's provider callers are injected with fakes, and a tiny resolve
 // hook lets Node import the project's .ts modules directly.
 import { register } from "node:module";
@@ -218,6 +219,115 @@ function collector() {
 {
   const s = analysisSummary(parseJudgeAnalysis(ANALYSIS_JSON));
   check("analysisSummary: has consensus + focus", s.includes("Consensus") && s.includes("Focus:"));
+}
+
+// --- orchestrator: quorum release + judge JSON contract ---
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// 16) Quorum release: a hung member no longer holds the panel barrier. Two fast
+// successes reach quorum, the straggler gets only the (shortened) grace, is
+// marked timed-out in member.done + meta, and its late result is swallowed.
+{
+  process.env.HIVEMINDOS_FUSION_STRAGGLER_GRACE_MS = "80";
+  try {
+    let lateResolved = false;
+    const call = async (m) => {
+      if (m.id === JUDGE.id) return { text: ANALYSIS_JSON };
+      if (m.id === P3.id) {
+        return new Promise((resolve) =>
+          setTimeout(() => {
+            lateResolved = true;
+            resolve({ text: "late straggler answer" });
+          }, 600),
+        );
+      }
+      return { text: `Answer about the blue sky from ${m.label}.` };
+    };
+    const { stream } = makeFakes();
+    const c = collector();
+    const result = await runFusion({ messages, resolvePlan: resolveNative, call, stream, emit: c.emit });
+    check("quorum: released while the straggler was still pending", lateResolved === false);
+    const dones = c.events.filter((e) => e.type === "member.done");
+    check("quorum: exactly one member.done per member", dones.length === 3 && new Set(dones.map((e) => e.id)).size === 3);
+    const stragglerDone = dones.find((e) => e.id === P3.id);
+    check("quorum: straggler member.done marked timed-out", stragglerDone && stragglerDone.ok === false && /straggler grace/.test(stragglerDone.error ?? ""));
+    check("quorum: meta stays honest (2/3, judged)", result.meta.participantsSucceeded === 2 && result.meta.participantsTotal === 3 && result.meta.judged === true);
+    check("quorum: straggler marked failed in meta panel", result.meta.panel.find((p) => p.id === P3.id)?.ok === false);
+    check("quorum: synthesized answer produced", result.finalText.length > 0);
+    const eventCountAtReturn = c.events.length;
+    await sleep(700);
+    check("quorum: late straggler eventually resolved", lateResolved === true);
+    check("quorum: late result swallowed — no extra events after done", c.events.length === eventCountAtReturn);
+  } finally {
+    delete process.env.HIVEMINDOS_FUSION_STRAGGLER_GRACE_MS;
+  }
+}
+
+// 17) All-but-one settled with a single success also releases: one ok + one
+// failed reaches quorum, the hung last member is cut at the grace, judge skipped.
+{
+  process.env.HIVEMINDOS_FUSION_STRAGGLER_GRACE_MS = "60";
+  try {
+    const call = async (m) => {
+      if (m.id === JUDGE.id) return { text: ANALYSIS_JSON };
+      if (m.id === P2.id) throw new Error("beta down");
+      // Hung forever; a bare pending promise does not hold the process open.
+      if (m.id === P3.id) return new Promise(() => {});
+      return { text: `Answer about the blue sky from ${m.label}.` };
+    };
+    const { stream } = makeFakes();
+    const c = collector();
+    const startedAt = Date.now();
+    const result = await runFusion({ messages, resolvePlan: resolveNative, call, stream, emit: c.emit });
+    check("all-but-one: released within the grace, not the member timeout", Date.now() - startedAt < 2_000);
+    check("all-but-one: single success, judge skipped, judged=false", result.meta.participantsSucceeded === 1 && c.types().includes("judge.skipped") && result.meta.judged === false);
+    check("all-but-one: 3 member.done events", c.events.filter((e) => e.type === "member.done").length === 3);
+    check("all-but-one: still answered", result.finalText.length > 0 && c.types().includes("done"));
+  } finally {
+    delete process.env.HIVEMINDOS_FUSION_STRAGGLER_GRACE_MS;
+  }
+}
+
+// 18) Judge replies with prose -> exactly one corrective retry -> retry parses -> judged=true.
+{
+  const judgeCalls = [];
+  const call = async (m, msgs) => {
+    if (m.id === JUDGE.id) {
+      judgeCalls.push(msgs);
+      return { text: judgeCalls.length === 1 ? "Sure! Here are my thoughts in prose, not JSON." : ANALYSIS_JSON };
+    }
+    return { text: `Answer about the blue sky from ${m.label}.` };
+  };
+  const { stream } = makeFakes();
+  const c = collector();
+  const result = await runFusion({ messages, resolvePlan: resolveNative, call, stream, emit: c.emit });
+  check("judge-retry: judge called exactly twice", judgeCalls.length === 2);
+  const nudge = judgeCalls[1][judgeCalls[1].length - 1];
+  check("judge-retry: corrective nudge appended as final user turn", nudge.role === "user" && /ONLY the JSON object/.test(nudge.content));
+  check("judge-retry: retry parsed -> judged=true with analysis", result.meta.judged === true && result.analysis && result.analysis.consensus.length === 1);
+  check("judge-retry: judge.done emitted", c.types().includes("judge.done"));
+}
+
+// 19) Judge replies with prose twice -> judge.skipped with a parse reason,
+// judged stays false, analysis stays null (meta + telemetry honesty).
+{
+  let judgeCallCount = 0;
+  const call = async (m) => {
+    if (m.id === JUDGE.id) {
+      judgeCallCount += 1;
+      return { text: "Still prose, still not JSON." };
+    }
+    return { text: `Answer about the blue sky from ${m.label}.` };
+  };
+  const { stream } = makeFakes();
+  const c = collector();
+  const result = await runFusion({ messages, resolvePlan: resolveNative, call, stream, emit: c.emit });
+  check("judge-unparseable: retried once then gave up", judgeCallCount === 2);
+  const skipped = c.events.find((e) => e.type === "judge.skipped");
+  check("judge-unparseable: judge.skipped with parse-failure reason", skipped && /parseable JSON/.test(skipped.reason));
+  check("judge-unparseable: judged=false, analysis null, no judge.done", result.meta.judged === false && result.analysis === null && !c.types().includes("judge.done"));
+  check("judge-unparseable: still synthesized", result.finalText.length > 0 && c.types().includes("done"));
 }
 
 console.log(`\n✓ Hive Fusion: ${passed} assertions passed.`);

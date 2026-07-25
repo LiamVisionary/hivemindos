@@ -52,6 +52,12 @@ hivemindos-speech-native = { path = "speech-native" }
 # from this parent crate, which forbids unsafe code.
 [target.'cfg(target_os = "macos")'.dependencies]
 hivemindos-biometric-native = { path = "biometric-native" }
+# Live drag-out follow (desktop_navigation): safe wrappers for the global
+# cursor position and pressed-button state, so the popped-out window can track
+# the OS drag without this crate needing unsafe code. Both are already in the
+# dependency tree via tao/wry.
+core-graphics = "0.24"
+objc2-app-kit = { version = "0.3", features = ["NSEvent"] }
 
 # Vendored inside src-tauri (not the repo-root vendor/) so the Go module's
 # `go mod vendor` can never delete the patched crate.

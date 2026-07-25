@@ -78,6 +78,8 @@
     "test:queen-slash-commands": "node scripts/test-queen-slash-commands.mjs",
     "test:queen-clap": "node scripts/test-queen-clap-activation.mjs",
     "test:queen-chat-stream": "node scripts/test-queen-chat-stream.mjs",
+    "test:chat-agent-menu-ordering": "node --import tsx scripts/test-chat-agent-menu-ordering.mjs",
+    "test:chat-app-workspace": "node scripts/test-chat-app-workspace.mjs",
     "test:chat-command-approval-silent": "node --import tsx scripts/test-chat-command-approval-silent.mjs",
     "test:chat-command-permissions": "node scripts/test-chat-command-permissions.mjs",
     "test:chat-detail-pane-default": "node scripts/test-chat-detail-pane-default.mjs",

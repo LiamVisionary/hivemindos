@@ -2,23 +2,27 @@
 
 import "@/components/json-render/fr/fr-style.css";
 import "./chat-exchange.css";
+import "./chat-exchange-header.css";
 import "./chat-exchange-markdown.css";
 import "./chat-exchange-errors.css";
 import "./chat-exchange-motion.css";
 import "./chat-exchange-shell.css";
+import "./chat-workspace.css";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ChatFolderModal } from "@/features/dashboard/views/chat/ChatFolderModal";
 import { collapseSameTurnGenerationMessages } from "@/features/dashboard/chat-generation-message-dedupe";
 import { transcriptCardIsRunning } from "@/features/dashboard/chat-transcript-card";
 import { agentWakeStatusText, isAgentColdStartProcessEvent } from "@/lib/services/chat/agent-cold-start";
 import {
+  AGENT_MENU_GROUP_LABELS,
   MODEL_SWITCHABLE_RUNTIMES,
   agentInitials,
   agentMenuMachineLabel,
   agentMenuRuntimeIdentity,
   agentMenuStatusLabel,
+  chatAgentUsageStats,
   isChatScrollNearBottom,
   isFixtureChatMachine,
   isSilentCommandApprovalMessage,
@@ -26,6 +30,7 @@ import {
   messageText,
   normalizeSearchText,
   processText,
+  rankAgentMenuRows,
   selectedAgentIcon,
   titleCaseLabel,
 } from "@/features/dashboard/views/chat/chat-panel-helpers";
@@ -39,15 +44,13 @@ import { normalizeEvaluationHumanFeedback } from "@/lib/types/evaluation";
 import { evaluationOutputFingerprint } from "@/lib/services/evaluation/control-plane";
 import { selectChatPreviewTargets } from "@/lib/services/chat/chat-preview-targets";
 import {
-  chatAppArtifactFromProject,
   chatWorkingDirectoryForThread,
   inferLegacyChatAppDirectory,
   latestChatAppArtifact,
   type ChatAppArtifact,
 } from "@/lib/services/chat/chat-app-artifact";
 import { capabilityAppProjectContext, prepareCapabilityAppProject } from "@/lib/services/chat/capability-app-project-client";
-import { APP_BUILDER_CONFIRMATIONS } from "@/lib/services/app-builder/contract";
-import { requestAppBuilderWithCollectorRecovery } from "@/lib/services/app-builder/collector-recovery";
+import { useRememberedDashboardValue } from "@/lib/services/use-remembered-dashboard-value";
 import { nativeOpenInAppSupported, openNativeInApp } from "@/lib/native/filesystem";
 import { hasPendingCapabilityApproval, type CapabilityApprovalPlan } from "@/lib/types/capability-approval";
 
@@ -58,8 +61,10 @@ import { useChatThreadTitleConfig } from "@/features/dashboard/hooks/use-chat-th
 
 import { ChatSidebar } from "./ChatSidebar";
 import type { SidebarRow } from "./ChatSidebar";
-import { ContextShelf, PreviewFrame } from "./ContextShelf";
+import { ContextShelf } from "./ContextShelf";
 import type { ShelfDeliverable, ShelfMode } from "./ContextShelf";
+import { AppWorkspace, type AppWorkspaceTab } from "./AppWorkspace";
+import { useThreadAppPreview } from "./use-thread-app-preview";
 import { ChatTerminalDrawer } from "./ChatTerminalDrawer";
 import { ExchangeComposer } from "./ExchangeComposer";
 import { useChatViewPreferences } from "./use-chat-view-preferences";
@@ -67,6 +72,7 @@ import {
   chatTranscriptSourceMessages,
   deleteChatThread,
   duplicateChatThreadSeed,
+  forkChatThreadSeed,
   serializeChatTranscript,
 } from "./chat-thread-actions";
 import { HexIco, ICON_PATHS, Ico, POP_STYLE, headerIconBtnStyle } from "./composer-primitives";
@@ -84,21 +90,6 @@ function elapsedLabel(startedAt: number | undefined, nowMs: number) {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   return `${hours ? `${hours}h ` : ""}${minutes}m ${seconds % 60}s`;
-}
-
-function appBuilderProject(payload: any): Record<string, any> | null {
-  return payload?.project ?? payload?.data?.project ?? null;
-}
-
-async function requestAppBuilder(body: Record<string, unknown>) {
-  const response = await fetch("/api/app-builder", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = await response.json().catch(() => null) as Record<string, any> | null;
-  if (!response.ok || !data?.ok) throw new Error(String(data?.error || "App Builder request failed."));
-  return data;
 }
 
 /** Real generated artifacts on this thread's messages — never fixtures. */
@@ -223,8 +214,8 @@ export function ChatExchangePanel(props: any) {
 
   const [shelfOpen, setShelfOpen] = useState(false);
   const [shelfMode, setShelfMode] = useState<ShelfMode>("details");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
-  const [previewExpanded, setPreviewExpanded] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [openInOpen, setOpenInOpen] = useState(false);
   const [agentMenuOpen, setAgentMenuOpen] = useState(false);
@@ -238,14 +229,11 @@ export function ChatExchangePanel(props: any) {
   const [copiedMessageKey, setCopiedMessageKey] = useState("");
   const [feedbackBusyKey, setFeedbackBusyKey] = useState("");
   const [capabilityPlanSubmittingId, setCapabilityPlanSubmittingId] = useState("");
-  const [threadAppProjectState, setThreadAppProjectState] = useState<{ storageKey: string; project: Record<string, any> } | null>(null);
-  const [threadAppPreviewBusyKey, setThreadAppPreviewBusyKey] = useState("");
-  const [threadAppPreviewErrorState, setThreadAppPreviewErrorState] = useState<{ storageKey: string; message: string } | null>(null);
-  const [previewWaitingKey, setPreviewWaitingKey] = useState("");
-  const pendingPreviewRequestRef = useRef("");
-  const threadAppProject = threadAppProjectState?.storageKey === selectedChatStorageKey ? threadAppProjectState?.project ?? null : null;
-  const threadAppPreviewBusy = threadAppPreviewBusyKey === selectedChatStorageKey;
-  const threadAppPreviewError = threadAppPreviewErrorState?.storageKey === selectedChatStorageKey ? threadAppPreviewErrorState?.message ?? "" : "";
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [workspaceTab, setWorkspaceTab] = useState<AppWorkspaceTab>("app");
+  const [activePreviewTargetId, setActivePreviewTargetId] = useState("");
+  const [wsResizing, setWsResizing] = useState(false);
+  const [workspaceWidth, rememberWorkspaceWidth] = useRememberedDashboardValue("chat.workspace.width", "46%");
   const [agentMode, setAgentMode] = useState<"plan" | "act">("act");
   const [permissionMode, setPermissionMode] = useState<ChatPermissionMode>("manual");
   const [reasoningEffort, setReasoningEffort] = useState<ChatReasoningEffort>("medium");
@@ -351,60 +339,6 @@ export function ChatExchangePanel(props: any) {
       return attached ? { ...current, [selectedChatStorageKey]: next } : current;
     });
   }, [selectedChatStorageKey, setMessagesByAgent]);
-
-  async function prepareReviewedCapabilityAppProject(plan: CapabilityApprovalPlan) {
-    const prepared = await prepareCapabilityAppProject({
-      plan,
-      baseDirectory: chatWorkingDirectory,
-      machine: {
-        key: selectedChatMachine?.key,
-        name: machineLabel,
-        collectorUrl: collectorUrl || undefined,
-      },
-    });
-    if (prepared) setThreadAppProjectState({ storageKey: selectedChatStorageKey, project: prepared.project });
-    return prepared?.artifact;
-  }
-
-  async function submitCapabilityPlan(plan: CapabilityApprovalPlan) {
-    if (!sendPromptMessage || capabilityPlanSubmittingId) return;
-    setCapabilityPlanSubmittingId(plan.id);
-    try {
-      const appArtifact = await prepareReviewedCapabilityAppProject(plan);
-      const response = await fetch("/api/chat/capability-approval", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "resolve",
-          plan,
-          vaultPath: sharedVault?.vaultPath,
-          notificationsFolder: sharedVault?.notificationsFolder,
-        }),
-      });
-      const data = await response.json().catch(() => null) as { ok?: boolean; plan?: CapabilityApprovalPlan; continuationPrompt?: string; error?: string } | null;
-      if (!response.ok || !data?.ok || !data.plan || !data.continuationPrompt) {
-        throw new Error(data?.error || "Could not submit the capability plan.");
-      }
-      updateCapabilityPlan(data.plan, appArtifact);
-      await Promise.resolve(refreshNotifications?.()).catch(() => undefined);
-      const approvalMessageIndex = renderMessages.findIndex((message) => message.capabilityApproval?.id === plan.id);
-      const approvalRequestAttachments = approvalMessageIndex > 0
-        ? [...renderMessages.slice(0, approvalMessageIndex)].reverse().find((message) => message.role === "user")?.attachments ?? []
-        : [];
-      const appProjectContext = capabilityAppProjectContext(appArtifact);
-      await sendPromptMessage(`${data.continuationPrompt}${appProjectContext}`, {
-        visiblePrompt: "Approved capability plan. Continue with the task.",
-        promptResponse: { label: "Capability plan approved", value: `${data.continuationPrompt}${appProjectContext}` },
-        attachments: approvalRequestAttachments,
-        workingDirectory: appArtifact?.directory,
-        appArtifact,
-      });
-    } catch (error) {
-      flashToast(error instanceof Error ? error.message : "Could not submit the capability plan");
-    } finally {
-      setCapabilityPlanSubmittingId((current) => current === plan.id ? "" : current);
-    }
-  }
 
   const liveProcessEvents = normalizeProcessEvents(selectedChatProcess);
   const chatProcessScopeKey = `${selectedChatStorageKey || ""}${selectedChatLeafKey || ""}`;
@@ -734,7 +668,10 @@ export function ChatExchangePanel(props: any) {
 
   // ---- agent menu ----------------------------------------------------------
   const normalizedAgentMenuSearchQuery = normalizeSearchText(agentMenuSearchQuery);
-  const agentMenuRows = useMemo(() => machinesWithChats
+  // Recency/volume come from the real chat rows, and ranking runs before the
+  // search filter so typing narrows the list without reordering it.
+  const agentMenuUsage = useMemo(() => chatAgentUsageStats(sidebarRows), [sidebarRows]);
+  const agentMenuRows = useMemo(() => rankAgentMenuRows(machinesWithChats
     .map((machine: any) => ({ machine, agents: (machineGroups.find((group: any) => group.key === machine.key)?.agents ?? []).filter((agent: any) => agent?.id) }))
     .filter((item: any) => item.agents.length > 0)
     .flatMap(({ machine, agents }: any) => agents.map((agent: any) => ({
@@ -743,12 +680,12 @@ export function ChatExchangePanel(props: any) {
       machineMenuLabel: agentMenuMachineLabel(machine, agent),
       statusLabel: agentMenuStatusLabel(machine, agent),
       runtimeIdentity: agentMenuRuntimeIdentity(agent, runtimeModelSelectionsByRuntime),
-    })))
+    }))), agentMenuUsage)
     .filter(({ agent, machine, machineMenuLabel, statusLabel }: any) => {
       if (!normalizedAgentMenuSearchQuery) return true;
       const searchable = normalizeSearchText([agent?.name, agent?.runtime, agent?.provider, agent?.model, agent?.workerClass, machine?.name, machineMenuLabel, statusLabel].filter(Boolean).join(" "));
       return normalizedAgentMenuSearchQuery.split(" ").every((token) => searchable.includes(token));
-    }), [machinesWithChats, machineGroups, normalizedAgentMenuSearchQuery, runtimeModelSelectionsByRuntime]);
+    }), [agentMenuUsage, machinesWithChats, machineGroups, normalizedAgentMenuSearchQuery, runtimeModelSelectionsByRuntime]);
 
   // ---- thread actions ------------------------------------------------------
   function handleDeleteThread(storageKey: string) {
@@ -769,6 +706,26 @@ export function ChatExchangePanel(props: any) {
     const agentId = storageKey.includes("::") ? storageKey.slice(0, storageKey.indexOf("::")) : storageKey;
     startAgentChat?.(agentId, { fresh: true, chatLeafKey: seed.leafKey, seedMessages: seed.seedMessages });
     flashToast("Chat duplicated");
+  }
+
+  function handleForkResponse(responseIndex: number) {
+    if (!selectedChatStorageKey || !selectedAgent) return;
+    const seed = forkChatThreadSeed(
+      renderMessages,
+      selectedChatStorageKey,
+      responseIndex,
+      Date.now(),
+      messagesByAgent[selectedChatStorageKey],
+    );
+    if (!seed.seedMessages.length) {
+      flashToast("Nothing to fork");
+      return;
+    }
+    startAgentChat?.(selectedAgent.id, {
+      chatLeafKey: seed.leafKey,
+      seedMessages: seed.seedMessages,
+    });
+    flashToast("Chat forked");
   }
 
   function applyRename() {
@@ -802,6 +759,22 @@ export function ChatExchangePanel(props: any) {
     () => inferLegacyChatAppDirectory(renderMessages, chatWorkingDirectory),
     [chatWorkingDirectory, renderMessages],
   );
+  const preview = useThreadAppPreview({
+    storageKey: selectedChatStorageKey,
+    busy: Boolean(busy),
+    threadAppArtifact,
+    legacyAppDirectory,
+    chatWorkingDirectory,
+    machineLabel,
+    selectedMachineKey: selectedChatMachine?.key,
+    collectorUrl,
+    machineGroup: selectedMachineGroup,
+    refreshFleetHostedApps,
+    onToast: flashToast,
+    updateThreadAppArtifact,
+  });
+  const threadAppProject = preview.threadAppProject;
+
   const threadAppPreviewTarget = useMemo(() => threadAppArtifact ? {
     projectId: threadAppArtifact.projectId,
     name: threadAppArtifact.name,
@@ -818,124 +791,110 @@ export function ChatExchangePanel(props: any) {
     [fleetHostedApps, machineLabel, threadAppPreviewTarget],
   );
 
-  const ensureThreadAppPreview = useCallback(async () => {
-    const previewStorageKey = selectedChatStorageKey;
-    let artifact = threadAppArtifact;
-    if (!artifact && !legacyAppDirectory) {
-      if (refreshFleetHostedApps) {
-        const controller = new AbortController();
-        await Promise.resolve(refreshFleetHostedApps(controller.signal)).catch(() => undefined);
-      }
+  const openThreadWorkspace = useCallback(() => {
+    setWorkspaceOpen(true);
+    setWorkspaceTab("app");
+    setShelfOpen(false);
+    preview.requestThreadAppPreview();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- requestThreadAppPreview is the only consumed member
+  }, [preview.requestThreadAppPreview]);
+
+  // The header eye button is a toggle: a second press closes the workspace.
+  // Card/approval paths keep calling openThreadWorkspace so they always open.
+  const toggleThreadWorkspace = useCallback(() => {
+    if (workspaceOpen) {
+      setWorkspaceOpen(false);
       return;
     }
-    setThreadAppPreviewBusyKey(previewStorageKey);
-    setThreadAppPreviewErrorState({ storageKey: previewStorageKey, message: "" });
-    const requestAppBuilder = (body: Record<string, unknown>) => requestAppBuilderWithCollectorRecovery({
-      appBuilderBody: body,
+    openThreadWorkspace();
+  }, [openThreadWorkspace, workspaceOpen]);
+
+  const layoutRef = useRef<HTMLDivElement | null>(null);
+  const startWorkspaceResize = useCallback((event: React.PointerEvent) => {
+    const layout = layoutRef.current;
+    // The width var lives on the section root so the floating header controls
+    // (absolutely positioned siblings of the layout) can track the pane edge.
+    const root = layout?.closest<HTMLElement>(".fr-chat-root");
+    if (!layout || !root) return;
+    event.preventDefault();
+    setWsResizing(true);
+    const rect = layout.getBoundingClientRect();
+    const move = (pointer: PointerEvent) => {
+      const fraction = Math.min(0.72, Math.max(0.24, (rect.right - pointer.clientX) / rect.width));
+      root.style.setProperty("--cx-ws-w", `${(fraction * 100).toFixed(1)}%`);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      setWsResizing(false);
+      const value = root.style.getPropertyValue("--cx-ws-w").trim();
+      if (value) rememberWorkspaceWidth(value);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }, [rememberWorkspaceWidth]);
+
+  async function prepareReviewedCapabilityAppProject(plan: CapabilityApprovalPlan) {
+    const prepared = await prepareCapabilityAppProject({
+      plan,
+      baseDirectory: chatWorkingDirectory,
       machine: {
+        key: selectedChatMachine?.key,
+        name: machineLabel,
         collectorUrl: collectorUrl || undefined,
-        dnsName: selectedMachineGroup?.dnsName,
-        name: selectedMachineGroup?.name || machineLabel,
-        ip: selectedMachineGroup?.ip || selectedMachineGroup?.address,
-        appDir: selectedMachineGroup?.version?.appDir,
-        updateCommand: selectedMachineGroup?.version?.updateCommand,
-      },
-      onRecoveryStatus: (status) => {
-        if (status === "updating") flashToast("Updating Preview on the linked machine…");
-        if (status === "retrying") flashToast("Preview updated — starting the app…");
       },
     });
+    if (prepared) preview.setThreadAppProject(prepared.project);
+    return prepared?.artifact;
+  }
+
+  async function submitCapabilityPlan(plan: CapabilityApprovalPlan) {
+    if (!sendPromptMessage || capabilityPlanSubmittingId) return;
+    setCapabilityPlanSubmittingId(plan.id);
     try {
-      let project: Record<string, any> | null;
-      if (!artifact) {
-        const data = await requestAppBuilder({
-          action: "adopt",
-          backend: "local",
-          directory: legacyAppDirectory,
-          workspaceDirectory: chatWorkingDirectory,
-          name: legacyAppDirectory.split(/[\\/]/).filter(Boolean).at(-1) || "Chat app",
-          machineKey: selectedChatMachine?.key,
-          collectorUrl: collectorUrl || undefined,
-          confirmation: APP_BUILDER_CONFIRMATIONS.createProject,
-        });
-        project = appBuilderProject(data);
-        if (!project) throw new Error("App Builder did not return the adopted project.");
-        artifact = chatAppArtifactFromProject(project, { key: selectedChatMachine?.key, name: machineLabel });
-        updateThreadAppArtifact(artifact);
-      } else {
-        const status = await requestAppBuilder({
-          action: "status",
-          backend: "local",
-          directory: artifact.directory,
-          projectId: artifact.projectId,
-          machineKey: artifact.machineKey || selectedChatMachine?.key,
-          collectorUrl: collectorUrl || undefined,
-        });
-        project = appBuilderProject(status);
-      }
-      if (!project) throw new Error("App Builder could not resolve this conversation's project.");
-      if (!project.dependenciesReady) {
-        const installed = await requestAppBuilder({
-          action: "install",
-          backend: "local",
-          directory: project.directory,
-          projectId: project.id,
-          machineKey: artifact.machineKey || selectedChatMachine?.key,
-          collectorUrl: collectorUrl || undefined,
-          confirmation: APP_BUILDER_CONFIRMATIONS.installDependencies,
-        });
-        project = appBuilderProject(installed) || project;
-      }
-      if (project.status !== "running" || !project.previewUrl) {
-        const started = await requestAppBuilder({
-          action: "start",
-          backend: "local",
-          directory: project.directory,
-          projectId: project.id,
-          machineKey: artifact.machineKey || selectedChatMachine?.key,
-          collectorUrl: collectorUrl || undefined,
-          confirmation: APP_BUILDER_CONFIRMATIONS.startRuntime,
-        });
-        project = appBuilderProject(started) || project;
-      }
-      setThreadAppProjectState({ storageKey: previewStorageKey, project });
-      updateThreadAppArtifact(chatAppArtifactFromProject(project, {
-        key: artifact.machineKey || selectedChatMachine?.key,
-        name: artifact.machineName || machineLabel,
-      }, artifact));
-      if (refreshFleetHostedApps) {
-        const controller = new AbortController();
-        await Promise.resolve(refreshFleetHostedApps(controller.signal)).catch(() => undefined);
-      }
-    } catch (error) {
-      setThreadAppPreviewErrorState({
-        storageKey: previewStorageKey,
-        message: error instanceof Error ? error.message : "Could not start the app preview.",
+      const appArtifact = await prepareReviewedCapabilityAppProject(plan);
+      const response = await fetch("/api/chat/capability-approval", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "resolve",
+          plan,
+          vaultPath: sharedVault?.vaultPath,
+          notificationsFolder: sharedVault?.notificationsFolder,
+        }),
       });
+      const data = await response.json().catch(() => null) as { ok?: boolean; plan?: CapabilityApprovalPlan; continuationPrompt?: string; error?: string } | null;
+      if (!response.ok || !data?.ok || !data.plan || !data.continuationPrompt) {
+        throw new Error(data?.error || "Could not submit the capability plan.");
+      }
+      updateCapabilityPlan(data.plan, appArtifact);
+      await Promise.resolve(refreshNotifications?.()).catch(() => undefined);
+      const approvalMessageIndex = renderMessages.findIndex((message) => message.capabilityApproval?.id === plan.id);
+      const approvalRequestAttachments = approvalMessageIndex > 0
+        ? [...renderMessages.slice(0, approvalMessageIndex)].reverse().find((message) => message.role === "user")?.attachments ?? []
+        : [];
+      const appProjectContext = capabilityAppProjectContext(appArtifact);
+      // The Replit moment: the app project now exists, so open the workspace and
+      // queue the preview — it starts on its own the moment the agent's turn ends.
+      if (appArtifact) {
+        setWorkspaceOpen(true);
+        setWorkspaceTab("app");
+        setShelfOpen(false);
+        preview.requestThreadAppPreview();
+      }
+      await sendPromptMessage(`${data.continuationPrompt}${appProjectContext}`, {
+        visiblePrompt: "Approved capability plan. Continue with the task.",
+        promptResponse: { label: "Capability plan approved", value: `${data.continuationPrompt}${appProjectContext}` },
+        attachments: approvalRequestAttachments,
+        workingDirectory: appArtifact?.directory,
+        appArtifact,
+      });
+    } catch (error) {
+      flashToast(error instanceof Error ? error.message : "Could not submit the capability plan");
     } finally {
-      setThreadAppPreviewBusyKey((current) => current === previewStorageKey ? "" : current);
-      setPreviewWaitingKey((current) => current === previewStorageKey ? "" : current);
+      setCapabilityPlanSubmittingId((current) => current === plan.id ? "" : current);
     }
-  }, [chatWorkingDirectory, collectorUrl, flashToast, legacyAppDirectory, machineLabel, refreshFleetHostedApps, selectedChatMachine, selectedChatStorageKey, selectedMachineGroup, threadAppArtifact, updateThreadAppArtifact]);
-
-  const openThreadPreview = useCallback(() => {
-    setShelfOpen(true);
-    setShelfMode("preview");
-    if (busy) {
-      pendingPreviewRequestRef.current = selectedChatStorageKey;
-      setPreviewWaitingKey(selectedChatStorageKey);
-      return;
-    }
-    pendingPreviewRequestRef.current = "";
-    setPreviewWaitingKey("");
-    void ensureThreadAppPreview();
-  }, [busy, ensureThreadAppPreview, selectedChatStorageKey]);
-
-  useEffect(() => {
-    if (busy || pendingPreviewRequestRef.current !== selectedChatStorageKey) return;
-    pendingPreviewRequestRef.current = "";
-    void ensureThreadAppPreview();
-  }, [busy, ensureThreadAppPreview, selectedChatStorageKey]);
+  }
 
   const sourceMachine = useMemo(() => (
     selectedMachineGroup && !selectedMachineGroup.self && collectorUrl
@@ -960,8 +919,130 @@ export function ChatExchangePanel(props: any) {
 
   return (
     <>
-      <section className="fr-root fr-chat-root" aria-label="Agent chat">
-        <div className="fr-chat-layout" data-shelf-open={shelfOpen ? "true" : "false"}>
+      <section
+        className="fr-root fr-chat-root"
+        aria-label="Agent chat"
+        data-workspace-open={workspaceOpen ? "true" : "false"}
+        style={{ "--cx-ws-w": workspaceWidth } as React.CSSProperties}
+      >
+        {/* One header across every column. The rail title stays put when the
+            history rail collapses — only the rail's search and list below it
+            fold away — so the bar never loses its left edge. */}
+        <header className="fr-chat-topbar" data-rail-collapsed={sidebarCollapsed ? "true" : "false"}>
+          <div className="fr-chat-topbar-brand">
+            <span className="fr-chat-rail-mark"><HexIco size={22} /></span>
+            <span className="fr-chat-rail-title">Chat</span>
+          </div>
+          <button
+            type="button"
+            className="cx-iconbtn cx-sidebar-toggle"
+            onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+            aria-pressed={!sidebarCollapsed}
+            aria-label="Toggle chat history"
+            title={sidebarCollapsed ? "Show chat history" : "Hide chat history"}
+            style={headerIconBtnStyle(false)}
+          >
+            <Ico d="M9 4v16" size={17} sw={1.7}><rect x="3" y="4" width="18" height="16" rx="2" /></Ico>
+          </button>
+          <div className="fr-chat-agent-picker" ref={agentMenuRef}>
+            <button
+              type="button"
+              className="fr-chat-agent-trigger cx-agenttrigger"
+              title="Choose the machine and agent for this chat"
+              aria-haspopup="dialog"
+              aria-expanded={agentMenuOpen}
+              onClick={() => { if (agentMenuOpen) setAgentMenuSearchQuery(""); setAgentMenuOpen((open) => !open); }}
+            >
+              <span className="fr-chat-agent-avatar">
+                {iconSrc
+                  ? <span className="fr-chat-agent-avatar-image" style={{ backgroundImage: `url(${iconSrc})` }} aria-hidden />
+                  : selectedAgent ? <span>{agentInitials(selectedAgent)}</span> : <HiveMark size={20} stroke="var(--honey)" />}
+              </span>
+              <span className="fr-chat-agent-copy">
+                <span className="fr-chat-agent-title-row">
+                  <span className="fr-chat-agent-title">{selectedAgent?.name ?? "Hive overview"}</span>
+                  <span className="fr-chat-agent-state" style={{ color: state.text }}>
+                    <Dot state={stateKey} size={5} /> {state.label}
+                  </span>
+                </span>
+                <span className="fr-chat-agent-subline" title={headerSubline}>{headerSubline}</span>
+              </span>
+              {ChevronDown ? <ChevronDown aria-hidden className="fr-chat-agent-chevron" data-open={agentMenuOpen ? "true" : undefined} /> : null}
+            </button>
+            {agentMenuOpen ? (
+              <div className="fr-chat-agent-menu cx-pop" role="dialog" aria-label="Choose chat agent">
+                <label className="fr-chat-agent-menu-search">
+                  {Search ? <Search aria-hidden /> : null}
+                  <input
+                    type="search"
+                    // The menu only mounts on open, so this focuses the field
+                    // every time the picker is opened — type straight away.
+                    autoFocus
+                    value={agentMenuSearchQuery}
+                    onChange={(event) => setAgentMenuSearchQuery(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Escape") return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      if (agentMenuSearchQuery) setAgentMenuSearchQuery("");
+                      else { setAgentMenuOpen(false); setAgentMenuSearchQuery(""); }
+                    }}
+                    placeholder="Search agents"
+                    aria-label="Search agents by name, machine, runtime, or model"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                </label>
+                <div className="fr-chat-agent-menu-list" role="menu" aria-label="Agents">
+                  {agentMenuRows.length ? agentMenuRows.map(({ machine, agent, machineMenuLabel, statusLabel, runtimeIdentity, menuGroup }: any, rowIndex: number) => {
+                    const agentIconSrc = selectedAgentIcon(agent, beeRoleIconPath);
+                    // Group headings only make sense on the full, ranked list —
+                    // a search result is already ordered by the same ranking.
+                    const groupHeading = !normalizedAgentMenuSearchQuery && menuGroup !== agentMenuRows[rowIndex - 1]?.menuGroup
+                      ? AGENT_MENU_GROUP_LABELS[menuGroup as keyof typeof AGENT_MENU_GROUP_LABELS]
+                      : "";
+                    return (
+                      <Fragment key={`${machine.key}-${agent.id}`}>
+                        {groupHeading ? <p className="fr-chat-agent-menu-group" role="presentation">{groupHeading}</p> : null}
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className={agent.id === selectedAgent?.id ? "active" : undefined}
+                          onClick={() => {
+                            startAgentChat?.(agent.id, { fresh: true, chatLeafKey: `machine-${machine.key}-${agent.id}` });
+                            setAgentMenuOpen(false);
+                            setAgentMenuSearchQuery("");
+                          }}
+                        >
+                          <span className={`fr-chat-agent-menu-icon${agentIconSrc ? " has-image" : ""}`} style={agentIconSrc ? { backgroundImage: `url(${agentIconSrc})` } : undefined} aria-hidden>
+                            {agentIconSrc ? null : <b>{agentInitials(agent)}</b>}
+                          </span>
+                          <span>
+                            <strong>{agent.name}</strong>
+                            <small>
+                              {runtimeIdentity.provider && runtimeIdentity.model ? `${runtimeIdentity.runtime} / ${runtimeIdentity.provider}/${runtimeIdentity.model}` : runtimeIdentity.runtime}
+                              {" / "}{machineMenuLabel}
+                              {statusLabel && statusLabel !== agent.name ? ` / ${statusLabel.replace(`${agent.name} / `, "")}` : ""}
+                            </small>
+                          </span>
+                        </button>
+                      </Fragment>
+                    );
+                  }) : <p className="fr-chat-empty-text">{normalizedAgentMenuSearchQuery ? "No agents match that search" : "No chat agents found"}</p>}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </header>
+
+        <div
+          ref={layoutRef}
+          className="fr-chat-layout"
+          data-shelf-open={shelfOpen && !workspaceOpen ? "true" : "false"}
+          data-workspace-open={workspaceOpen ? "true" : "false"}
+          data-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
+          data-ws-resizing={wsResizing ? "true" : undefined}
+        >
           <ChatSidebar
             rows={sidebarRows}
             machineNames={machineNames}
@@ -980,88 +1061,6 @@ export function ChatExchangePanel(props: any) {
           />
 
           <main className="fr-chat-main" aria-label="Current chat">
-            <header className="fr-chat-header" style={{ padding: "13px 18px" }}>
-              <div className="fr-chat-agent-picker" ref={agentMenuRef} style={{ paddingRight: shelfOpen ? 8 : 96 }}>
-                <button
-                  type="button"
-                  className="fr-chat-agent-trigger cx-agenttrigger"
-                  title="Choose the machine and agent for this chat"
-                  aria-haspopup="dialog"
-                  aria-expanded={agentMenuOpen}
-                  onClick={() => { if (agentMenuOpen) setAgentMenuSearchQuery(""); setAgentMenuOpen((open) => !open); }}
-                >
-                  <span className="fr-chat-agent-avatar">
-                    {iconSrc
-                      ? <span className="fr-chat-agent-avatar-image" style={{ backgroundImage: `url(${iconSrc})` }} aria-hidden />
-                      : selectedAgent ? <span>{agentInitials(selectedAgent)}</span> : <HiveMark size={20} stroke="var(--honey)" />}
-                  </span>
-                  <span className="fr-chat-agent-copy">
-                    <span className="fr-chat-agent-title-row">
-                      <span className="fr-chat-agent-title">{selectedAgent?.name ?? "Hive overview"}</span>
-                      <span className="fr-chat-agent-state" style={{ color: state.text }}>
-                        <Dot state={stateKey} size={5} /> {state.label}
-                      </span>
-                    </span>
-                    <span className="fr-chat-agent-subline" title={headerSubline}>{headerSubline}</span>
-                  </span>
-                  {ChevronDown ? <ChevronDown aria-hidden className="fr-chat-agent-chevron" data-open={agentMenuOpen ? "true" : undefined} /> : null}
-                </button>
-                {agentMenuOpen ? (
-                  <div className="fr-chat-agent-menu cx-pop" role="dialog" aria-label="Choose chat agent">
-                    <label className="fr-chat-agent-menu-search">
-                      {Search ? <Search aria-hidden /> : null}
-                      <input
-                        type="search"
-                        value={agentMenuSearchQuery}
-                        onChange={(event) => setAgentMenuSearchQuery(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key !== "Escape") return;
-                          event.preventDefault();
-                          event.stopPropagation();
-                          if (agentMenuSearchQuery) setAgentMenuSearchQuery("");
-                          else { setAgentMenuOpen(false); setAgentMenuSearchQuery(""); }
-                        }}
-                        placeholder="Search agents"
-                        aria-label="Search agents by name, machine, runtime, or model"
-                        autoComplete="off"
-                        spellCheck={false}
-                      />
-                    </label>
-                    <div className="fr-chat-agent-menu-list" role="menu" aria-label="Agents">
-                      {agentMenuRows.length ? agentMenuRows.map(({ machine, agent, machineMenuLabel, statusLabel, runtimeIdentity }: any) => {
-                        const agentIconSrc = selectedAgentIcon(agent, beeRoleIconPath);
-                        return (
-                          <button
-                            type="button"
-                            role="menuitem"
-                            key={`${machine.key}-${agent.id}`}
-                            className={agent.id === selectedAgent?.id ? "active" : undefined}
-                            onClick={() => {
-                              startAgentChat?.(agent.id, { fresh: true, chatLeafKey: `machine-${machine.key}-${agent.id}` });
-                              setAgentMenuOpen(false);
-                              setAgentMenuSearchQuery("");
-                            }}
-                          >
-                            <span className={`fr-chat-agent-menu-icon${agentIconSrc ? " has-image" : ""}`} style={agentIconSrc ? { backgroundImage: `url(${agentIconSrc})` } : undefined} aria-hidden>
-                              {agentIconSrc ? null : <b>{agentInitials(agent)}</b>}
-                            </span>
-                            <span>
-                              <strong>{agent.name}</strong>
-                              <small>
-                                {runtimeIdentity.provider && runtimeIdentity.model ? `${runtimeIdentity.runtime} / ${runtimeIdentity.provider}/${runtimeIdentity.model}` : runtimeIdentity.runtime}
-                                {" / "}{machineMenuLabel}
-                                {statusLabel && statusLabel !== agent.name ? ` / ${statusLabel.replace(`${agent.name} / `, "")}` : ""}
-                              </small>
-                            </span>
-                          </button>
-                        );
-                      }) : <p className="fr-chat-empty-text">{normalizedAgentMenuSearchQuery ? "No agents match that search" : "No chat agents found"}</p>}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </header>
-
             <div ref={attachScrollNode} className="cx-scroll fr-chat-scroller" onScroll={handleScroll} aria-busy={selectedChatHistoryLoading} style={{ minHeight: 0, overflow: "auto", padding: "26px 24px 14px", paddingBottom: composerClearance }}>
               <div ref={threadNodeRef} className="fr-chat-content-rail fr-chat-thread-rail" style={{ display: "grid", gap: 24 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -1116,6 +1115,8 @@ export function ChatExchangePanel(props: any) {
                     sendPromptMessage={sendPromptMessage}
                     onCapabilityPlanChange={updateCapabilityPlan}
                     onCapabilityPlanSubmit={submitCapabilityPlan}
+                    onForkResponse={handleForkResponse}
+                    onOpenAppWorkspace={openThreadWorkspace}
                     sharedVault={sharedVault}
                     onMessageFeedback={submitMessageFeedback}
                     setCopiedMessageKey={setCopiedMessageKey}
@@ -1221,41 +1222,63 @@ export function ChatExchangePanel(props: any) {
             ) : null}
           </main>
 
-          <aside className="fr-chat-shelf" aria-label="Chat details" style={{ position: "relative", minWidth: 0, overflow: "hidden", borderLeft: "1px solid var(--line)", background: "color-mix(in srgb, var(--bg-soft) 88%, transparent)" }}>
-            <div className="cx-scroll" style={{ display: "grid", alignContent: "start", gap: 20, width: "100%", maxWidth: 366, height: "100%", overflowY: "auto", overflowX: "hidden", padding: "60px 18px 24px" }}>
-              <ContextShelf
-                mode={shelfMode}
-                onModeChange={setShelfMode}
-                taskTitle={threadTitle}
-                statusLabel={activeChatTaskRunning ? "Working" : state.label}
-                statusColor={activeChatTaskRunning ? "var(--live)" : state.text}
-                agentLine={[selectedAgent?.name, selectedAgent?.workerClass ?? selectedAgent?.beeRole].filter(Boolean).join(", ")}
-                machineLabel={machineLabel}
-                runtimes={runtimeLabel ? [runtimeLabel] : []}
-                providers={providerLabel ? [providerLabel] : []}
-                models={chatCurrentModel ? [chatCurrentModel] : []}
-                elapsedLabel={activeChatTaskRunning ? threadElapsed : "—"}
-                workingDirectory={chatWorkingDirectory}
-                usage={usage}
-                usageLoading={usageLoading}
-                messageCount={renderMessages.length}
-                liveOutput={liveOutput}
-                live={activeChatTaskRunning}
-                deliverables={deliverables}
-                onOpenDeliverable={(deliverable) => { if (deliverable.url) window.open(deliverable.url, "_blank", "noopener,noreferrer"); }}
-                previewTargets={previewTargets}
-                previewBusy={threadAppPreviewBusy || (busy && previewWaitingKey === selectedChatStorageKey)}
-                previewError={threadAppPreviewError}
-                onExpandPreview={() => setPreviewExpanded(true)}
-              />
-              {statusAgentId === selectedAgent?.id && status?.message ? <p style={{ margin: 0, color: "var(--fg-3)", fontSize: 12.5, lineHeight: 1.55 }}>{status.message}</p> : null}
-              {statusChecking ? <p className="fr-eyebrow" style={{ margin: 0, color: "var(--live)" }}>checking status…</p> : null}
-            </div>
-          </aside>
+          {workspaceOpen ? (
+            <AppWorkspace
+              targets={previewTargets}
+              activeTargetId={activePreviewTargetId}
+              onSelectTarget={setActivePreviewTargetId}
+              tab={workspaceTab}
+              onTabChange={setWorkspaceTab}
+              appArtifact={threadAppArtifact}
+              projectStatus={String(threadAppProject?.status ?? threadAppArtifact?.status ?? "")}
+              previewBusy={preview.previewBusy}
+              previewPhase={preview.previewPhase}
+              previewError={preview.previewError}
+              previewWaiting={preview.previewWaiting}
+              onEnsurePreview={() => void preview.ensureThreadAppPreview()}
+              onStopApp={() => void preview.stopThreadApp()}
+              machineLabel={machineLabel}
+              machineKey={selectedChatMachine?.key}
+              collectorUrl={collectorUrl}
+              workingDirectory={chatWorkingDirectory}
+              onClose={() => setWorkspaceOpen(false)}
+              onToast={flashToast}
+              onResizeStart={startWorkspaceResize}
+            />
+          ) : (
+            <aside className="fr-chat-shelf" aria-label="Chat details" style={{ position: "relative", minWidth: 0, overflow: "hidden", borderLeft: "1px solid var(--line)", background: "color-mix(in srgb, var(--bg-soft) 88%, transparent)" }}>
+              <div className="cx-scroll" style={{ display: "grid", alignContent: "start", gap: 20, width: "100%", maxWidth: 366, height: "100%", overflowY: "auto", overflowX: "hidden", padding: "20px 18px 24px" }}>
+                <ContextShelf
+                  mode={shelfMode}
+                  onModeChange={setShelfMode}
+                  taskTitle={threadTitle}
+                  statusLabel={activeChatTaskRunning ? "Working" : state.label}
+                  statusColor={activeChatTaskRunning ? "var(--live)" : state.text}
+                  agentLine={[selectedAgent?.name, selectedAgent?.workerClass ?? selectedAgent?.beeRole].filter(Boolean).join(", ")}
+                  machineLabel={machineLabel}
+                  runtimes={runtimeLabel ? [runtimeLabel] : []}
+                  providers={providerLabel ? [providerLabel] : []}
+                  models={chatCurrentModel ? [chatCurrentModel] : []}
+                  elapsedLabel={activeChatTaskRunning ? threadElapsed : "—"}
+                  workingDirectory={chatWorkingDirectory}
+                  usage={usage}
+                  usageLoading={usageLoading}
+                  messageCount={renderMessages.length}
+                  liveOutput={liveOutput}
+                  live={activeChatTaskRunning}
+                  deliverables={deliverables}
+                  onOpenDeliverable={(deliverable) => { if (deliverable.url) window.open(deliverable.url, "_blank", "noopener,noreferrer"); }}
+                />
+                {statusAgentId === selectedAgent?.id && status?.message ? <p style={{ margin: 0, color: "var(--fg-3)", fontSize: 12.5, lineHeight: 1.55 }}>{status.message}</p> : null}
+                {statusChecking ? <p className="fr-eyebrow" style={{ margin: 0, color: "var(--live)" }}>checking status…</p> : null}
+              </div>
+            </aside>
+          )}
         </div>
 
-        {/* floating header controls — overlay the shelf when it is open */}
-        <div ref={headerPopRef} style={{ position: "absolute", top: 14, right: 18, zIndex: 70, display: "flex", alignItems: "center", gap: 2 }}>
+        {/* floating header controls — overlay the shelf when it is open, and
+            slide left of the workspace column so they never cover its header */}
+        <div ref={headerPopRef} className="cx-header-float">
           <TooltipProvider>
             {nativeOpenInAppSupported() && chatWorkingDirectory ? (
               <div style={{ position: "relative" }}>
@@ -1301,11 +1324,11 @@ export function ChatExchangePanel(props: any) {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <button type="button" className="cx-iconbtn" onClick={openThreadPreview} aria-pressed={shelfMode === "preview"} aria-label="Preview" style={headerIconBtnStyle(shelfMode === "preview")}>
+                <button type="button" className="cx-iconbtn" onClick={toggleThreadWorkspace} aria-pressed={workspaceOpen} aria-label="App workspace" style={headerIconBtnStyle(workspaceOpen)}>
                   <Ico d={ICON_PATHS.eye} size={18} sw={1.7}><circle cx="12" cy="12" r="3" /></Ico>
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Preview conversation app</TooltipContent>
+              <TooltipContent side="bottom">{workspaceOpen ? "Close the app workspace" : "Open the app workspace"}</TooltipContent>
             </Tooltip>
 
             <div style={{ position: "relative" }}>
@@ -1325,7 +1348,7 @@ export function ChatExchangePanel(props: any) {
                     </Ico>
                     <span>{copiedAll ? "Copied chat" : "Copy chat"}</span>
                   </button>
-                  <button type="button" className="cx-menuitem" onClick={() => { setShelfOpen(true); setShelfMode("files"); setMoreOpen(false); }} style={moreItem}>
+                  <button type="button" className="cx-menuitem" onClick={() => { setShelfOpen(true); setWorkspaceOpen(false); setShelfMode("files"); setMoreOpen(false); }} style={moreItem}>
                     <Ico d={["M4 5a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z", "M4 10h16"]} size={16} sw={1.7} />
                     <span>Files</span>
                   </button>
@@ -1347,7 +1370,7 @@ export function ChatExchangePanel(props: any) {
 
             <Tooltip>
               <TooltipTrigger asChild>
-                <button type="button" className="cx-iconbtn" onClick={() => setShelfOpen((open) => !open)} aria-pressed={shelfOpen} aria-label="Toggle details panel" style={headerIconBtnStyle(shelfOpen)}>
+                <button type="button" className="cx-iconbtn" onClick={() => { setShelfOpen((open) => { const next = !open || workspaceOpen; if (next) setWorkspaceOpen(false); return next; }); }} aria-pressed={shelfOpen && !workspaceOpen} aria-label="Toggle details panel" style={headerIconBtnStyle(shelfOpen && !workspaceOpen)}>
                   <Ico d={ICON_PATHS.panel} size={17} sw={1.7}><rect x="3" y="4" width="18" height="16" rx="2" /></Ico>
                 </button>
               </TooltipTrigger>
@@ -1355,21 +1378,6 @@ export function ChatExchangePanel(props: any) {
             </Tooltip>
           </TooltipProvider>
         </div>
-
-        {previewExpanded && previewTargets.length ? (
-          <div className="cx-slidefull fr-root fr-chat-root" style={{ position: "absolute", inset: 0, zIndex: 110, display: "grid", gridTemplateRows: "auto minmax(0,1fr)", background: "var(--bg)" }}>
-            <header style={{ display: "flex", alignItems: "center", gap: 11, padding: "15px 20px", borderBottom: "1px solid var(--line)" }}>
-              <HexIco size={20} />
-              <span style={{ flex: 1, fontFamily: "var(--f-body)", fontSize: 15, fontWeight: 600, letterSpacing: "-0.01em" }}>Preview · {previewTargets[0].name}</span>
-              <button type="button" className="cx-iconbtn" onClick={() => setPreviewExpanded(false)} title="Collapse preview" aria-label="Collapse preview" style={headerIconBtnStyle(false)}>
-                <Ico d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3" size={17} sw={1.8} />
-              </button>
-            </header>
-            <div className="cx-scroll" style={{ display: "grid", placeItems: "center", overflow: "auto", padding: 30 }}>
-              <PreviewFrame target={previewTargets[0]} tall />
-            </div>
-          </div>
-        ) : null}
 
         {toast ? (
           <div className="cx-pop" role="status" style={{ position: "absolute", left: "50%", bottom: 26, zIndex: 130, transform: "translateX(-50%)", display: "flex", alignItems: "center", gap: 9, border: "1px solid var(--line-2)", borderRadius: 999, color: "var(--fg)", fontFamily: "var(--f-body)", fontSize: 11.5, padding: "9px 16px" }}>

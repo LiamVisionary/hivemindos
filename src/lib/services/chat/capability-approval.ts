@@ -583,9 +583,12 @@ function capabilityPlanReviewMode(items: CapabilityApprovalItem[]) {
   if (items.length !== 1) return "ask" as const;
   const item = items[0];
   const candidate = selectedCapability(item);
-  return item.candidates.length === 1 && candidate?.availability === "ready" && item.decision === "use"
-    ? "automatic" as const
-    : "ask" as const;
+  if (candidate?.availability !== "ready" || item.decision !== "use") return "ask" as const;
+  // A plain "build me X" maps to the built-in conversation workspace — that IS
+  // the request, so discovered alternates are steering options, never a reason
+  // to stop and ask. Deploy/publish/spend keep their own downstream gates.
+  if (candidate.id === "hive-action:apps.build") return "automatic" as const;
+  return item.candidates.length === 1 ? "automatic" as const : "ask" as const;
 }
 
 function intentTaskContext(task: string, intent: CapabilityIntent) {
@@ -735,7 +738,7 @@ export function capabilityApprovalContinuationPrompt(plan: CapabilityApprovalPla
   const lines = [
     CAPABILITY_APPROVAL_CONTINUATION_MARKER,
     automatic
-      ? "HivemindOS selected the only ready capability automatically. Continue the original task now; this capability choice does not bypass spend, secret, deploy, destructive-action, external-send, or runtime permission gates."
+      ? "HivemindOS selected this ready capability automatically. Continue the original task now; this capability choice does not bypass spend, secret, deploy, destructive-action, external-send, or runtime permission gates."
       : "The user approved this capability plan. Continue the original task now and treat this approval as authorization only for the capability setup described below; existing spend, secret, deploy, and destructive-action gates still apply.",
     "",
     `Original task: ${plan.task}`,

@@ -109,7 +109,7 @@ import { readCodexRuntimeIntegrationStatus } from "./lib/codex-app-server-models
 // systemStats also accumulates a short rolling cpu/ram/net history (while /health
 // is actively polled) so the dashboard Telemetry sparklines show a real trend.
 import { systemStats } from "./lib/system-stats.mjs";
-import { tailnetSelfNode } from "./lib/tailnet-self.mjs";
+import { tailnetSelfNode, tailnetSelfOwner, tailscaleStatusJson } from "./lib/tailnet-self.mjs";
 import {
   createSyncthingApiKeyResolver,
   defaultSyncthingConfigCandidates,
@@ -2672,11 +2672,9 @@ function reliabilityRecordFreshness(record) {
 }
 
 async function tailnetPeerHosts() {
-  const { stdout } = await execFileAsync("tailscale", ["status", "--json"], {
-    timeout: 5000,
-    maxBuffer: 1_500_000,
-  });
-  const status = JSON.parse(stdout);
+  // Shared multi-candidate CLI resolution: a bare "tailscale" is not on PATH
+  // for LaunchAgent/scheduled-task collectors (macOS GUI app, sparse PATH).
+  const status = await tailscaleStatusJson();
   const peers = Object.values(status?.Peer ?? {});
   const hosts = [];
   for (const peer of peers) {
@@ -2690,27 +2688,14 @@ async function tailnetPeerHosts() {
 }
 
 // The tailnet owner (LoginName) of THIS node, used to gate cross-machine runtime
-// state transfers to the node owner's own fleet. Cached; mirrors the trust model
-// of hivemind-linkd shell.go requireTailnetSelfUser.
-let selfTailnetOwnerCache = { value: "", checkedAt: 0 };
+// state transfers to the node owner's own fleet. Mirrors the trust model of
+// hivemind-linkd shell.go requireTailnetSelfUser. Lives in lib/tailnet-self.mjs
+// so it resolves the tailscale CLI from its known install locations — a bare
+// "tailscale" is ENOENT under the sparse PATH of a LaunchAgent/scheduled-task
+// collector, which made this gate fail closed for every linkd-stamped request
+// (surfaced in the dashboard as remote task-permission approvals erroring out).
 async function selfTailnetOwner() {
-  const now = Date.now();
-  if (selfTailnetOwnerCache.value && now - selfTailnetOwnerCache.checkedAt < 300_000) {
-    return selfTailnetOwnerCache.value;
-  }
-  try {
-    const { stdout } = await execFileAsync("tailscale", ["status", "--json"], {
-      timeout: 5000,
-      maxBuffer: 1_500_000,
-    });
-    const status = JSON.parse(stdout);
-    const selfUserId = status?.Self?.UserID;
-    const login = String(status?.User?.[selfUserId]?.LoginName || "").trim();
-    if (login) selfTailnetOwnerCache = { value: login, checkedAt: now };
-    return login;
-  } catch {
-    return selfTailnetOwnerCache.value || "";
-  }
+  return tailnetSelfOwner();
 }
 
 // Gate for cross-machine runtime-state transfers (the first authenticated

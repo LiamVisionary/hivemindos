@@ -51,6 +51,11 @@ export type DashboardRouteTarget = {
    * conversation (bee-piloted). Intentionally never serialized into URLs or
    * persisted routes, so restored sessions don't replay the flight. */
   openTask?: boolean;
+  /** This URL belongs to a popped-out satellite window: the dashboard renders
+   * chrome-free (no nav rail, no brain inspector). Carried in popout-window
+   * URLs so a hard refresh keeps the mode; never written to persisted routes
+   * or recents, so the main window can't restore into it. */
+  popout?: boolean;
 };
 
 export type DashboardRouteCatalogItem = {
@@ -61,6 +66,19 @@ export type DashboardRouteCatalogItem = {
   shortcut?: string;
   keywords: string[];
 };
+
+/** Where the pointer "holds" a popped-out browser window relative to its
+ * top-left corner — used both to place the popup at the drop point and to
+ * keep it under the cursor during a live drag-out. Mirrored by the native
+ * side in desktop_navigation.rs. */
+export const POPOUT_GRAB_OFFSET_X = 160;
+export const POPOUT_GRAB_OFFSET_Y = 24;
+
+/** Minimal handle for keeping a just-popped-out window under the cursor
+ * during a live drag-out. A browser popup Window satisfies it structurally;
+ * the native path implements it with cursor-follow IPC pings (which ignore
+ * the passed coordinates and read the OS cursor instead). */
+export type PopoutFollowHandle = { closed: boolean; moveTo: (x: number, y: number) => void };
 
 export const DESKTOP_NAVIGATE_EVENT = "hivemindos:navigate";
 export const DESKTOP_OPEN_PALETTE_EVENT = "hivemindos:open-command-palette";
@@ -397,6 +415,7 @@ export function dashboardTargetFromSearch(search: string): DashboardRouteTarget 
         ? "connect"
         : undefined,
     integrationAction: params.get("integrationAction") ?? undefined,
+    popout: params.get("popout") === "1" || undefined,
   };
 }
 
@@ -410,6 +429,7 @@ export function dashboardUrlForTarget(target: DashboardRouteTarget, basePath = "
   if (target.integration) params.set("integration", target.integration);
   if (target.integrationTab) params.set("integrationTab", target.integrationTab);
   if (target.integrationAction) params.set("integrationAction", target.integrationAction);
+  if (target.popout) params.set("popout", "1");
   return `${basePath}?${params.toString()}`;
 }
 

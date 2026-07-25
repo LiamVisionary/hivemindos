@@ -9,17 +9,104 @@ register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
 const tempHome = await mkdtemp(join(tmpdir(), "hivemind-social-drafting-engine-"));
 const tempVault = join(tempHome, "vault");
-await mkdir(tempVault, { recursive: true });
+const tempSoul = join(tempVault, "Skills", "test-x-soul");
+await mkdir(join(tempSoul, "data"), { recursive: true });
+await writeFile(join(tempSoul, "SOUL.md"), "Use the authored corpus as voice evidence, never as a phrase bank.\n");
+await writeFile(join(tempSoul, "data", "liam_corpus.jsonl"), `${JSON.stringify({
+  id: "voice-1",
+  text: "spent half the morning tracing one broken callback. fixed it, added the regression test, and the desktop app finally catches the deep link again",
+  time: "2026-07-21T15:00:00.000Z",
+})}\n`);
 process.env.HOME = tempHome;
 process.env.NEXT_PUBLIC_OBSIDIAN_VAULT_PATH = tempVault;
 
 const store = await import("../src/lib/services/socials/socials-store.ts");
+const { buildSocialDraftContext } = await import("../src/lib/services/socials/social-draft-context.ts");
+const {
+  socialDraftCadenceFamily,
+  socialDraftQualityIssues,
+  socialDraftSimilarity,
+  sourceAnchorIsSupported,
+} = await import("../src/lib/services/socials/social-draft-quality.ts");
+const { generateSocialDraftPack } = await import("../src/lib/services/socials/social-draft-generator.ts");
 const { runSocialDraftingCycle } = await import("../src/lib/services/socials/social-drafting-engine.ts");
 const { startSocialQueueEngine, stopSocialQueueEngine } = await import("../src/lib/services/socials/social-queue-engine.ts");
 
-const created = await store.createSocialAccount({ platform: "x", handle: "draft-test", method: "api-token" });
+const created = await store.createSocialAccount({
+  platform: "x",
+  handle: "draft-test",
+  method: "api-token",
+  soulPath: "Skills/test-x-soul",
+});
 assert.equal(created.drafting.enabled, true, "posting-capable accounts start with daily drafting enabled");
 assert.equal(created.drafting.draftsPerRun, 3);
+
+const draftContext = await buildSocialDraftContext(created, []);
+assert.match(draftContext.voiceCorpusText ?? "", /spent half the morning tracing one broken callback/);
+assert.match(draftContext.text, /Anti-repetition memory/);
+assert.ok(sourceAnchorIsSupported("broken callback", `${draftContext.voiceCorpusText}\n${draftContext.sourceText}`));
+
+assert.equal(
+  socialDraftCadenceFamily("an agent wallet without a hard cap is just a liability"),
+  "abstract-agent-thesis",
+);
+assert.ok(
+  socialDraftQualityIssues({
+    text: "an agent browser without approvals is just a liability",
+    maxCharacters: 280,
+    priorTexts: ["an agent wallet without a hard cap is just a liability"],
+  }).some((issue) => issue.startsWith("repeated-cadence:")),
+  "noun-swapped manifesto openings are rejected even when their topics differ",
+);
+assert.ok(
+  socialDraftSimilarity(
+    "we shipped the desktop callback fix and added a regression test",
+    "added a regression test after shipping the desktop callback fix",
+  ) >= 0.72,
+  "near-copy detection ignores word order and common account vocabulary",
+);
+
+const qualityGatedPreview = await generateSocialDraftPack({
+  account: created,
+  queue: [],
+  count: 3,
+  mode: "posts",
+  now: new Date("2026-07-22T15:00:00.000Z"),
+  dependencies: {
+    standaloneModelImpl: async () => ({
+      model: "test-luna",
+      text: JSON.stringify({ drafts: [
+        {
+          shape: "receipt",
+          sourceAnchor: "broken callback",
+          text: "spent half the morning on one callback. the desktop catches it again, and the regression test is staying forever",
+          rationale: "Concrete repair receipt from the authored corpus.",
+        },
+        {
+          shape: "reaction",
+          sourceAnchor: "broken callback",
+          text: "the future of desktop callbacks is here",
+          rationale: "Quota filler that should be rejected.",
+        },
+        {
+          shape: "lesson",
+          sourceAnchor: "a made up launch",
+          text: "made up evidence should never reach the queue",
+          rationale: "Unsupported source anchor that should be rejected.",
+        },
+        {
+          shape: "walkthrough",
+          sourceAnchor: "regression test",
+          text: "callback opens the browser, desktop catches the deep link, test pins the route. small chain, very annoying bug",
+          rationale: "Specific walkthrough with a separate cadence.",
+        },
+      ] }),
+    }),
+  },
+});
+assert.equal(qualityGatedPreview.model, "test-luna");
+assert.equal(qualityGatedPreview.drafts.length, 2, "unsupported and generic quota filler is dropped instead of backfilled");
+assert.ok(qualityGatedPreview.drafts.every((draft) => draft.kind === "post"));
 
 let generationCalls = 0;
 const generateImpl = async ({ count }) => {

@@ -99,11 +99,42 @@ assert.equal(flappyPlan.items[0]?.selectedCapabilityId, "hive-action:apps.build"
 assert.equal(flappyPlan.items[0]?.candidates[0]?.name, "Create app workspace", "the App Builder label cannot imply that the HivemindOS product itself will be modified");
 assert.deepEqual(flappyPlan.items[0]?.candidates.map((candidate) => candidate.id), ["hive-action:apps.build"], "the raw App Builder API route is not presented as a second capability");
 assert.equal(flappyPlan.reviewMode, "automatic", "one ready unambiguous capability continues without asking for approval");
+
+// Regression (2026-07-24): in a real vault, discovery surfaces alternates next
+// to the built-in workspace. The built-in selection IS the plain "build me X"
+// request — alternates are steering options and must not force a review stop.
+const flappyWithAlternatesPlan = await buildCapabilityApprovalPlan({
+  task: "build a flappy bird clone but instead of birds use bees",
+  agentId: "hermes",
+  chatStorageKey: "hermes::flappy-bees",
+  origin: "http://localhost:5021",
+  connectedApps: [],
+  search: async (_options, queries) => queries.map(() => ({
+    items: [
+      ...appBuilderContextItems,
+      {
+        id: "mcp:website-builder-suite",
+        kind: "mcp-tool",
+        title: "Website builder suite",
+        summary: "Third-party site generator integration.",
+        tags: ["app-builder", "website"],
+        route: "/api/mcp/website-builder",
+        load: { type: "api", target: "/api/mcp/website-builder" },
+        score: 200,
+      },
+    ],
+    totals: {},
+  })),
+  now: 1_700_000_000_060,
+});
+assert.equal(flappyWithAlternatesPlan.items[0]?.selectedCapabilityId, "hive-action:apps.build", "the built-in workspace stays selected ahead of discovered alternates");
+assert.ok((flappyWithAlternatesPlan.items[0]?.candidates.length ?? 0) > 1, "the regression fixture must actually surface an alternate candidate");
+assert.equal(flappyWithAlternatesPlan.reviewMode, "automatic", "discovered alternates must not turn a plain app build into an approval stop");
 assert.equal(capabilityPlanRequiresReview(flappyPlan), false);
 const flappyContinuation = capabilityApprovalContinuationPrompt(flappyPlan);
 assert.doesNotMatch(flappyContinuation, /hivemindos-feature-development/i, "a standalone game continuation cannot load the HivemindOS repo-development skill");
 assert.doesNotMatch(flappyContinuation, /the user approved/i, "an automatic capability selection cannot claim the user approved it");
-assert.match(flappyContinuation, /selected the only ready capability/i, "the automatic continuation explains why no review was needed");
+assert.match(flappyContinuation, /selected this ready capability automatically/i, "the automatic continuation explains why no review was needed");
 assert.match(flappyContinuation, /invoke_hive_capability/, "the App Builder continuation names the capability tool actually exposed by this chat runtime");
 assert.doesNotMatch(flappyContinuation, /Use the app_builder tool/, "the App Builder continuation cannot direct the model to an unavailable direct tool");
 

@@ -654,7 +654,7 @@ export async function GET(request: Request) {
   // individual failure still resolves to its `{ success: false }` fallback; we only
   // cache the aggregate when the whole batch resolves (a throw would evict the entry).
   const liveKey = `miroshark:swarm:live:${status.baseUrl}|${simulationId}|${socialPlatform}|${limit}`;
-  const live = await cachedCall(liveKey, SWARM_LIVE_TTL_MS, async () => {
+  const livePromise = cachedCall(liveKey, SWARM_LIVE_TTL_MS, async () => {
     const [runStatus, runStatusDetail, actions, posts, timeline, profiles, realtimeProfiles, beliefDrift, counterfactual, agentStats, influence, interactionNetwork, demographics, quality, markets, surfaceStats, threadJson, webhookLog, graphData, observabilityStats, observabilityEvents, llmCalls] = await Promise.all([
       fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/run-status`),
       fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/run-status/detail?platform=${socialPlatform}`),
@@ -692,8 +692,11 @@ export async function GET(request: Request) {
   // interview-history/entities/project are written roughly once per run (graph
   // build, end-of-run report, ad-hoc interviews) and otherwise unchanged. Each gets
   // a longer SWARM_SLOW_TTL_MS via fetchJsonCached so they leave the 2s hot path
-  // without altering the response shape. They run concurrently with the live batch.
-  const slow = await Promise.all([
+  // without altering the response shape. They run concurrently with the live
+  // batch: both promises are started before either is awaited (fetchJson and
+  // fetchJsonCached never reject, so awaiting them jointly cannot leave an
+  // unhandled rejection behind).
+  const slowPromise = Promise.all([
     fetchJsonCached(`miroshark:swarm:slow:lineage:${status.baseUrl}|${simulationId}`, SWARM_SLOW_TTL_MS, `${status.baseUrl}/api/simulation/${simulationId}/lineage`),
     fetchJsonCached(`miroshark:swarm:slow:transcript:${status.baseUrl}|${simulationId}`, SWARM_SLOW_TTL_MS, `${status.baseUrl}/api/simulation/${simulationId}/transcript.json`),
     fetchJsonCached(`miroshark:swarm:slow:embedSummary:${status.baseUrl}|${simulationId}`, SWARM_SLOW_TTL_MS, `${status.baseUrl}/api/simulation/${simulationId}/embed-summary`),
@@ -702,6 +705,7 @@ export async function GET(request: Request) {
     graphId ? fetchJsonCached(`miroshark:swarm:slow:entities:${status.baseUrl}|${graphId}`, SWARM_SLOW_TTL_MS, `${status.baseUrl}/api/simulation/entities/${encodeURIComponent(graphId)}`) : Promise.resolve({ success: false, error: "graph_id unavailable" }),
     projectId ? fetchJsonCached(`miroshark:swarm:slow:project:${status.baseUrl}|${projectId}`, SWARM_SLOW_TTL_MS, `${status.baseUrl}/api/graph/project/${encodeURIComponent(projectId)}`) : Promise.resolve({ success: false, error: "project_id unavailable" }),
   ]);
+  const [live, slow] = await Promise.all([livePromise, slowPromise]);
   const [lineage, transcriptJson, embedSummary, report, interviewHistory, entities, project] = slow;
 
   const { runStatus, runStatusDetail, actions, posts, timeline, profiles, realtimeProfiles, beliefDrift, counterfactual, agentStats, influence, interactionNetwork, demographics, quality, markets, marketPrices, surfaceStats, threadJson, webhookLog, graphData, observabilityStats, observabilityEvents, llmCalls } = live;

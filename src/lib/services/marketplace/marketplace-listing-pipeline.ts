@@ -7,20 +7,36 @@ import { decideMarketplaceDecision, enqueueMarketplaceDecision, getMarketplaceDe
 import {
   findDuplicateListing,
   getMarketplaceListing,
+  readMarketplaceListings,
   setMarketplaceListingState,
   upsertSyncedListings,
 } from "@/lib/services/marketplace/marketplace-listings-store";
+import { MarketplaceProfileBusyError, acquireMarketplaceProfileLock } from "@/lib/services/marketplace/marketplace-profile-lock";
+import {
+  partitionCatalogClaims,
+  resolveIndependentTabReader,
+  verifyMarketplaceOpClaim,
+} from "@/lib/services/marketplace/marketplace-verification-matrix";
 import { getMarketplaceAccount } from "@/lib/services/marketplace/marketplace-store";
 import { patchAccountRuntime } from "@/lib/services/marketplace/marketplace-runtime";
 import type { MarketplaceAgentDispatch } from "@/lib/services/marketplace/adapters/types";
-import type { MarketplaceDecision, MarketplaceListing } from "@/lib/services/marketplace/marketplace-types";
+import type { ReadBrowserTab } from "@/lib/services/marketplace/marketplace-browser-runtime";
+import type {
+  MarketplaceAccount,
+  MarketplaceDecision,
+  MarketplaceListing,
+  MarketplaceReportCatalogItem,
+} from "@/lib/services/marketplace/marketplace-types";
 
 /**
  * Listing lifecycle orchestration: draft → approval decision → (on approve)
  * agent posts on the profile-owning machine with read-back verification →
  * active. Posting is fail-closed twice: the decision must be approved at fire
  * time, and the adapter refuses to post without the approved decision id
- * (matrix gate listing-approval-required).
+ * (matrix gate listing-approval-required). A post whose claim could not be
+ * independently observed from the approving process lands "posted-unverified";
+ * the owning machine's monitor promotes it to active (or routes a refuted
+ * claim to attention) via verifyUnverifiedPostedListings below.
  */
 
 export class DuplicateListingError extends Error {
@@ -142,7 +158,12 @@ export async function postApprovedListing(
       const adapter = marketplaceAdapter(account.provider);
       const posted = await adapter.createListing(account, listing, decision.id, { env: {}, dispatchAgentTaskImpl: options?.dispatchImpl ?? dispatchMarketplaceAgentTask });
       const now = new Date().toISOString();
-      const updated = await setMarketplaceListingState(listing.id, "active", "agent", {
+      // "verified" = this process observed the claimed page itself → active.
+      // "deferred" = observation impossible from here (approval decided off the
+      // owning machine) → the claim is RECORDED, not trusted: posted-unverified
+      // until the owning machine's monitor refutes or promotes it.
+      const nextState = posted.verification === "verified" ? "active" : "posted-unverified";
+      const updated = await setMarketplaceListingState(listing.id, nextState, "agent", {
         externalId: posted.externalId,
         url: posted.url,
         postedAt: now,
@@ -169,12 +190,150 @@ export async function postApprovedListing(
   return dispatchAndVerify();
 }
 
-/** Full catalog sweep on the owning machine; merges results into the listings store. */
+export type VerifiedCatalogSweepResult = { added: number; updated: number; refuted: number; deferred: number };
+
+/**
+ * Merge a claimed catalog with per-op refutation (matrix row "sync-catalog"):
+ * new unknown items and no-flip rows merge as before (low-stakes), but any row
+ * that would flip an EXISTING record's state is verified against its live page
+ * first — a mis-scraped or fabricated catalog used to flip real records to
+ * ended unchecked. Refuted rows escalate and never merge; unobservable rows
+ * defer to the owning machine's next sweep.
+ */
+export async function applyVerifiedCatalogSweep(
+  account: MarketplaceAccount,
+  items: MarketplaceReportCatalogItem[],
+  options?: { readBrowserTabImpl?: ReadBrowserTab },
+): Promise<VerifiedCatalogSweepResult> {
+  const existing = await readMarketplaceListings(account.id);
+  const { safe, contested } = partitionCatalogClaims(existing, items);
+  const accepted: MarketplaceReportCatalogItem[] = [...safe];
+  let refuted = 0;
+  let deferred = 0;
+  const reader = resolveIndependentTabReader(account, options);
+  for (const claim of contested) {
+    const claimCheck = await verifyMarketplaceOpClaim(reader, account.machine.profileName, {
+      op: "sync-catalog",
+      url: claim.url,
+      expectDead: claim.claimedState === "ended",
+    });
+    if (claimCheck.outcome === "verified") {
+      accepted.push(claim.item);
+      continue;
+    }
+    if (claimCheck.outcome === "refuted") {
+      refuted++;
+      await notifyEscalation({
+        key: `marketplace-catalog-claim-${claim.existing.id}`,
+        title: `Catalog claim rejected: ${claim.existing.title}`,
+        body: `A catalog sweep claimed "${claim.existing.title}" is ${claim.claimedState}, but ${claimCheck.reason}. The record was left ${claim.existing.state}; check the listing on the marketplace.`,
+        severity: "high",
+        tags: ["marketplace", `listing:${claim.existing.id}`],
+      }).catch(() => undefined);
+      continue;
+    }
+    deferred++;
+  }
+  const merged = await upsertSyncedListings(account.id, accepted);
+  return { ...merged, refuted, deferred };
+}
+
+/** Full catalog sweep on the owning machine; merges verified results into the listings store. */
 export async function syncMarketplaceCatalog(accountId: string): Promise<{ added: number; updated: number; total: number }> {
   const account = await getMarketplaceAccount(accountId);
   if (!account) throw new Error(`Unknown marketplace account: ${accountId}`);
   const adapter = marketplaceAdapter(account.provider);
   const items = await adapter.syncCatalog(account, { env: {}, dispatchAgentTaskImpl: dispatchMarketplaceAgentTask });
-  const merged = await upsertSyncedListings(accountId, items);
-  return { ...merged, total: items.length };
+  const merged = await applyVerifiedCatalogSweep(account, items);
+  return { added: merged.added, updated: merged.updated, total: items.length };
+}
+
+/** A posted-unverified listing this old with no successful observation gets a human heads-up instead of waiting silently. */
+const UNVERIFIED_POST_STALE_MS = 6 * 60 * 60_000;
+
+export type UnverifiedPostSweepResult = { promoted: number; refuted: number; deferred: number };
+
+/**
+ * The owning machine's promotion pass for finding-of-record posts: each
+ * "posted-unverified" listing's claimed URL is independently observed
+ * (readBrowserTab, matrix row "create-listing") and the listing is promoted to
+ * active on proof, routed to the failed + escalation attention path on
+ * refutation, and left posted-unverified (retried next tick, escalated once
+ * stale) when the page cannot be read right now. Holds the profile lock
+ * briefly so the check never races a live agent session.
+ */
+export async function verifyUnverifiedPostedListings(
+  account: MarketplaceAccount,
+  options?: { readBrowserTabImpl?: ReadBrowserTab },
+): Promise<UnverifiedPostSweepResult> {
+  const listings = (await readMarketplaceListings(account.id)).filter((listing) => listing.state === "posted-unverified");
+  const result: UnverifiedPostSweepResult = { promoted: 0, refuted: 0, deferred: 0 };
+  if (!listings.length) return result;
+
+  const escalateStale = async (listing: MarketplaceListing) => {
+    const claimedMs = Date.parse(listing.external?.postedAt ?? listing.updatedAt);
+    if (!Number.isFinite(claimedMs) || Date.now() - claimedMs < UNVERIFIED_POST_STALE_MS) return;
+    await notifyEscalation({
+      key: `marketplace-listing-unverified-stale-${listing.id}`,
+      title: `Posted listing still unverified: ${listing.title}`,
+      body: `The agent claimed "${listing.title}" was posted, but the claim has gone unverified for hours (the listing page could not be read). Check ${listing.external?.url || "the marketplace"} yourself.`,
+      severity: "high",
+      tags: ["marketplace", `listing:${listing.id}`],
+    }).catch(() => undefined);
+  };
+
+  const reader = resolveIndependentTabReader(account, options);
+  if (!reader) {
+    result.deferred = listings.length;
+    for (const listing of listings) await escalateStale(listing);
+    return result;
+  }
+  let release: (() => Promise<void>) | null = null;
+  try {
+    // Short wait: a busy profile (live agent session) defers to the next tick.
+    release = await acquireMarketplaceProfileLock(account.machine.profileName, 1_000);
+  } catch (error) {
+    if (!(error instanceof MarketplaceProfileBusyError)) throw error;
+    result.deferred = listings.length;
+    return result;
+  }
+  try {
+    for (const listing of listings) {
+      const url = listing.external?.url ?? "";
+      const claimCheck = await verifyMarketplaceOpClaim(reader, account.machine.profileName, {
+        op: "create-listing",
+        url,
+        title: listing.title,
+      });
+      if (claimCheck.outcome === "verified") {
+        const now = new Date().toISOString();
+        await setMarketplaceListingState(
+          listing.id,
+          "active",
+          "tick",
+          listing.external ? { ...listing.external, lastSyncedAt: now } : undefined,
+        );
+        await patchAccountRuntime(account.id, { lastActivityAt: now });
+        result.promoted++;
+        continue;
+      }
+      if (claimCheck.outcome === "refuted") {
+        await setMarketplaceListingState(listing.id, "failed", "tick");
+        await notifyEscalation({
+          key: `marketplace-listing-post-failed-${listing.id}`,
+          title: `Posting claim refuted: ${listing.title}`,
+          body: `The agent claimed "${listing.title}" was posted, but the independent page check refuted it: ${claimCheck.reason}. The draft and photos are intact — approve again to retry.`,
+          severity: "high",
+          tags: ["marketplace", `listing:${listing.id}`],
+        }).catch(() => undefined);
+        result.refuted++;
+        continue;
+      }
+      result.deferred++;
+      await escalateStale(listing);
+    }
+  } finally {
+    await release();
+  }
+  return result;
 }

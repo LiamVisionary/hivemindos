@@ -41,6 +41,11 @@ class MarkItDownSidecarClient {
   private pending = new Map<string, PendingRequest>();
   private idleTimer: NodeJS.Timeout | null = null;
   private stderr = "";
+  // Last time the child produced any output (protocol lines or stderr).
+  // A request timeout only restarts the child when nothing at all arrived
+  // during that request's window — a live-but-busy sidecar keeps serving its
+  // other in-flight conversions.
+  private lastActivityAt = 0;
 
   constructor(
     binaries: string[],
@@ -65,12 +70,19 @@ class MarkItDownSidecarClient {
     this.clearIdleTimer();
     this.setStreamReferences(child, true);
     const id = randomUUID();
+    const startedAt = Date.now();
     return new Promise<MarkItDownSidecarResponse>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         const error = new Error(`Bundled document-reader conversion timed out after ${timeoutMs} ms.`);
         reject(error);
-        this.shutdown(error);
+        if (this.child === child && this.lastActivityAt < startedAt) {
+          // The child said nothing for this request's entire window: treat it
+          // as wedged and restart it (rejecting the other pending requests).
+          this.shutdown(error);
+        } else {
+          this.scheduleIdleShutdown();
+        }
       }, timeoutMs);
       timer.unref?.();
       this.pending.set(id, { resolve, reject, timer });
@@ -152,6 +164,7 @@ class MarkItDownSidecarClient {
       };
 
       child.stderr.on("data", (chunk) => {
+        this.lastActivityAt = Date.now();
         this.stderr = `${this.stderr}${String(chunk)}`.slice(-8_000);
       });
       child.on("error", (error) => fail(error));
@@ -164,6 +177,7 @@ class MarkItDownSidecarClient {
         if (this.child === child) this.handleExit(code, signal);
       });
       child.stdout.on("data", (chunk) => {
+        this.lastActivityAt = Date.now();
         stdoutBuffer += String(chunk);
         if (stdoutBuffer.length > MAX_PROTOCOL_BUFFER_CHARS) {
           abort(new Error("Bundled document reader exceeded its protocol buffer limit."));

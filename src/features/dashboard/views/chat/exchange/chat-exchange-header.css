@@ -1,0 +1,388 @@
+/* The chat view's single top header and the agent picker it opens.
+ *
+ * Split out of chat-exchange.css (1500-line ratchet). Imported immediately
+ * after it in ChatExchangePanel.tsx, so chat-exchange-motion.css still wins
+ * where it animates these same selectors.
+ *
+ * The tokens (--cx-header-h / --cx-header-pad / --cx-rail-w) stay on
+ * .fr-chat-root in chat-exchange.css, next to the layout grid they size. */
+
+/* One bar across the whole view, above the column grid: rail title, history
+   toggle, agent picker, and the pinned control cluster that .cx-header-float
+   parks over its right end. Because it sits outside the grid, collapsing the
+   history rail folds away only that rail's search and list — the bar keeps its
+   left edge. */
+.fr-chat-topbar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  min-width: 0;
+  min-height: var(--cx-header-h);
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+  /* Right pad clears the pinned cluster, which overlays this bar's right end. */
+  padding: 0 var(--cx-header-pad) 0 0;
+}
+
+/* Sized to the history rail so its divider continues the rail's own right
+   border; when the rail collapses it shrinks to the title and the divider goes
+   with it. */
+.fr-chat-topbar-brand {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 var(--cx-rail-w);
+  align-self: stretch;
+  align-items: center;
+  gap: 10px;
+  border-right: 1px solid var(--line);
+  padding-left: 16px;
+  transition:
+    flex-basis 320ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    padding 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.fr-chat-topbar[data-rail-collapsed="true"] .fr-chat-topbar-brand {
+  flex-basis: auto;
+  border-right-color: transparent;
+  padding-right: 8px;
+}
+
+@media (max-width: 980px) {
+  .fr-chat-topbar-brand {
+    flex-basis: auto;
+    border-right-color: transparent;
+    padding-right: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fr-chat-topbar-brand {
+    transition: none;
+  }
+}
+
+.fr-chat-rail-mark {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  place-items: center;
+}
+
+.fr-chat-rail-title {
+  min-width: 0;
+  color: var(--fg);
+  font-family: var(--f-body);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.fr-chat-agent-picker {
+  position: relative;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.fr-chat-agent-trigger {
+  display: grid;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  grid-template-columns: 28px minmax(0, auto) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px 7px 4px 4px;
+  text-align: left;
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.fr-chat-agent-trigger:hover,
+.fr-chat-agent-trigger:focus-visible,
+.fr-chat-agent-trigger[aria-expanded="true"] {
+  border-color: var(--line-2);
+  background: color-mix(in srgb, var(--panel) 68%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.fr-chat-agent-trigger:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--honey) 38%, transparent);
+  outline-offset: 3px;
+}
+
+.fr-chat-agent-avatar,
+.fr-chat-agent-menu-icon {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+  color: var(--honey);
+  font-family: var(--f-display);
+  font-weight: 700;
+}
+
+.fr-chat-agent-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  /* Explicit, because the initials fallback would otherwise inherit the
+     header's 15px body size and overflow the smaller tile. */
+  font-size: 10.5px;
+}
+
+.fr-chat-agent-avatar-image,
+.fr-chat-agent-menu-icon.has-image {
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+}
+
+.fr-chat-agent-avatar-image {
+  width: 100%;
+  height: 100%;
+}
+
+/* Single row: name + state, then the runtime/machine meta after a hairline.
+   The two-line stack made this trigger 56px tall and forced the header band
+   taller than every other control in it. */
+.fr-chat-agent-copy {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+}
+
+.fr-chat-agent-title-row {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.fr-chat-agent-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg);
+  font-family: var(--f-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fr-chat-agent-state {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+}
+
+.fr-chat-agent-subline {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  border-left: 1px solid var(--line-2);
+  color: var(--fg-4);
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  padding-left: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fr-chat-agent-chevron {
+  width: 15px;
+  height: 15px;
+  color: var(--fg-4);
+  transition: color 150ms ease, transform 150ms ease;
+}
+
+.fr-chat-agent-trigger:hover .fr-chat-agent-chevron,
+.fr-chat-agent-trigger:focus-visible .fr-chat-agent-chevron,
+.fr-chat-agent-trigger[aria-expanded="true"] .fr-chat-agent-chevron {
+  color: var(--honey);
+}
+
+.fr-chat-agent-chevron[data-open="true"] {
+  transform: rotate(180deg);
+}
+
+/* Header controls (terminal / workspace / more / details). Pinned to the
+ * section's top-right rather than laid out in the bar, so the eye toggle keeps
+ * its exact position at every workspace width — including when the pane
+ * overlays the chat below 980px, hence the z-index above that overlay. The top
+ * offset centres it in the --cx-header-h bar it sits over, and the bar reserves
+ * --cx-header-pad on its right so nothing lands underneath. */
+.cx-header-float {
+  position: absolute;
+  top: calc((var(--cx-header-h) - 34px) / 2);
+  right: 18px;
+  z-index: 110;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.fr-chat-agent-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 80;
+  display: grid;
+  width: min(430px, 100%);
+  max-height: min(390px, calc(100vh - 190px));
+  overflow: hidden;
+  gap: 7px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--panel) 96%, black);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.48);
+  padding: 8px;
+}
+
+.fr-chat-agent-menu-search {
+  display: flex;
+  min-width: 0;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--bg-soft) 74%, transparent);
+  color: var(--fg-4);
+  padding: 0 10px;
+}
+
+.fr-chat-agent-menu-search:focus-within {
+  border-color: var(--honey-line);
+  outline: 2px solid color-mix(in srgb, var(--honey) 34%, transparent);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--honey) 10%, transparent);
+}
+
+.fr-chat-agent-menu-search svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.fr-chat-agent-menu-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0 !important;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.fr-chat-agent-menu-search input:focus,
+.fr-chat-agent-menu-search input:focus-visible {
+  outline: 0 !important;
+  box-shadow: none !important;
+}
+
+.fr-chat-agent-menu-search input::placeholder {
+  color: var(--fg-4);
+}
+
+.fr-chat-agent-menu-list {
+  display: grid;
+  min-height: 0;
+  max-height: min(332px, calc(100vh - 244px));
+  gap: 4px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.fr-chat-agent-menu-group {
+  margin: 0;
+  color: var(--fg-4);
+  font-family: var(--f-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  line-height: 1;
+  padding: 8px 8px 3px;
+  text-transform: uppercase;
+}
+
+.fr-chat-agent-menu-group:first-child {
+  padding-top: 2px;
+}
+
+.fr-chat-agent-menu-list button {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
+  padding: 8px;
+  text-align: left;
+}
+
+.fr-chat-agent-menu-list button:hover,
+.fr-chat-agent-menu-list button:focus-visible,
+.fr-chat-agent-menu-list button.active {
+  border-color: var(--honey-line);
+  background: var(--honey-soft);
+  color: var(--fg);
+}
+
+.fr-chat-agent-menu-list button > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.fr-chat-agent-menu-list strong {
+  min-width: 0;
+  overflow: hidden;
+  color: currentColor;
+  font-family: var(--f-display);
+  font-size: 12.5px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fr-chat-agent-menu-list small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg-4);
+  font-family: var(--f-mono);
+  font-size: 10px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fr-chat-agent-menu-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+}

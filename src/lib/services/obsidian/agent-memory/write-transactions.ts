@@ -111,14 +111,20 @@ async function staleLockCanBeRemoved(path: string) {
   return true;
 }
 
-async function acquireLock(root: string) {
-  const path = lockPath(root);
+type CrossProcessFileLockOptions = {
+  /** Extra fields recorded in the lockfile body next to pid/host/acquiredAt. */
+  owner?: Record<string, unknown>;
+  /** Human-readable lock name used in the acquisition-timeout error. */
+  label?: string;
+};
+
+async function acquireLock(path: string, options: CrossProcessFileLockOptions = {}) {
   await mkdir(dirname(path), { recursive: true });
   const deadline = Date.now() + LOCK_WAIT_MS;
   while (Date.now() <= deadline) {
     try {
       const handle = await open(path, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600);
-      await handle.writeFile(JSON.stringify({ pid: process.pid, host: hostname(), acquiredAt: new Date().toISOString(), rootHash: sha256(resolve(root)) }));
+      await handle.writeFile(JSON.stringify({ pid: process.pid, host: hostname(), acquiredAt: new Date().toISOString(), ...(options.owner ?? {}) }));
       await handle.close();
       return path;
     } catch (error) {
@@ -130,16 +136,33 @@ async function acquireLock(root: string) {
       await sleep(LOCK_RETRY_MS);
     }
   }
-  throw new Error("Timed out waiting for the cross-process Shared Brain memory write lock.");
+  throw new Error(`Timed out waiting for the ${options.label ?? "cross-process file"} lock.`);
 }
 
-export async function withAgentMemoryWriteLock<T>(root: string, task: () => Promise<T>) {
-  const path = await acquireLock(root);
+/**
+ * Serializes read-modify-write cycles on a shared file across the multiple
+ * server processes that can run on one machine (dev server, agent server,
+ * Tauri sidecar). In-process promise queues cannot see each other, so callers
+ * mutating a shared store must also hold this O_EXCL lockfile.
+ */
+export async function withCrossProcessFileLock<T>(
+  path: string,
+  task: () => Promise<T>,
+  options: CrossProcessFileLockOptions = {},
+) {
+  await acquireLock(path, options);
   try {
     return await task();
   } finally {
     await unlink(path).catch(() => undefined);
   }
+}
+
+export async function withAgentMemoryWriteLock<T>(root: string, task: () => Promise<T>) {
+  return withCrossProcessFileLock(lockPath(root), task, {
+    owner: { rootHash: sha256(resolve(root)) },
+    label: "cross-process Shared Brain memory write",
+  });
 }
 
 async function appendJournal(root: string, row: TransactionRow) {

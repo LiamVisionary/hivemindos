@@ -9,10 +9,10 @@
    `fr-shelf-app` modifier (fixed positioning + macOS drag region). onNavigate
    receives a DashboardView id; wire it to the dashboard view switch. */
 
-import { Fragment, memo, useEffect, useRef, useState } from "react";
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from "react";
 import { BellRing, Brain, Building2, Cloud, Cpu } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { buildAppNavShelfGroups, resolveActiveShelfSlot } from "@/features/dashboard/dashboard-navigation";
+import { POPOUT_GRAB_OFFSET_X, POPOUT_GRAB_OFFSET_Y, buildAppNavShelfGroups, resolveActiveShelfSlot, type PopoutFollowHandle } from "@/features/dashboard/dashboard-navigation";
 import { DashboardSecurityControl } from "@/features/dashboard/DashboardSecurityControl";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
@@ -36,6 +36,8 @@ function FrNavIcon({ id }: { id: string }) {
     strokeLinejoin: "round" as const,
   };
   switch (id) {
+    case "agents":
+      return (<svg {...p}><path d="M12 3l7.4 4.3v8.6L12 20.2 4.6 15.9V7.3z" /><path d="M12 8.4l3.1 1.8v3.6L12 15.6l-3.1-1.8v-3.6z" /></svg>);
     case "kanban":
       return (<svg {...p}><rect x="3" y="4" width="5" height="16" rx="1.2" /><rect x="9.5" y="4" width="5" height="10" rx="1.2" /><rect x="16" y="4" width="5" height="13" rx="1.2" /></svg>);
     case "vault":
@@ -95,13 +97,237 @@ function FrNavIcon({ id }: { id: string }) {
   }
 }
 
-function NavShelfItem({ id, label, active, onNavigate, onPrefetch, badge }: {
+/* ---- tear-off: drag a rail tab out of the shelf to pop that view into its
+   own window (native webview window on desktop, browser popup on the web).
+   Pointer-based rather than HTML5 drag&drop because the Tauri shell's native
+   drag-drop handler swallows HTML5 drags on some platforms. A short click
+   still navigates; only a real drag (past the distance threshold) tears.
+   Crossing the window's LEFT edge mid-drag pops the window out immediately
+   ("live"): the native window enters an OS drag, and a browser popup keeps
+   following the pointer until release. */
+
+const TEAR_START_DISTANCE_PX = 14;
+
+type TearState = { id: DashboardView; label: string; armed: boolean };
+
+type NavShelfPopoutHandler = (
+  id: DashboardView,
+  screenPosition?: { x: number; y: number },
+  opts?: { live?: boolean },
+) => PopoutFollowHandle | null | void;
+
+type NavShelfTearOff = {
+  ghost: ReactNode;
+  itemProps: (id: DashboardView, label: string) => {
+    onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+    onPointerMove: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+    onPointerUp: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+    onPointerCancel: () => void;
+  };
+  shouldSuppressClick: () => boolean;
+};
+
+function useNavShelfTearOff(
+  shelfRef: RefObject<HTMLElement | null>,
+  onPopout?: NavShelfPopoutHandler,
+): NavShelfTearOff {
+  const [tear, setTear] = useState<TearState | null>(null);
+  const ghostRef = useRef<HTMLDivElement | null>(null);
+  const lastPointRef = useRef({ x: 0, y: 0 });
+  const suppressClickRef = useRef(false);
+  // Window popped out by a live drag-out; moved along with the pointer until
+  // release (a browser popup via moveTo, a native window via cursor pings).
+  const livePopupRef = useRef<PopoutFollowHandle | null>(null);
+  const dragRef = useRef<{
+    pointerId: number;
+    id: DashboardView;
+    label: string;
+    startX: number;
+    startY: number;
+    tearing: boolean;
+    armed: boolean;
+    canceled: boolean;
+    livePopped: boolean;
+  } | null>(null);
+
+  const positionGhost = useCallback((x: number, y: number) => {
+    lastPointRef.current = { x, y };
+    const ghost = ghostRef.current;
+    if (ghost) ghost.style.transform = `translate(${Math.round(x + 14)}px, ${Math.round(y + 12)}px)`;
+  }, []);
+
+  // Place the ghost before its first paint so it never flashes at the origin.
+  const tearing = tear !== null;
+  useLayoutEffect(() => {
+    if (tearing) positionGhost(lastPointRef.current.x, lastPointRef.current.y);
+  }, [tearing, positionGhost]);
+
+  // Escape cancels an active tear; the pointer release then does nothing.
+  useEffect(() => {
+    if (!tearing) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const drag = dragRef.current;
+      if (drag) drag.canceled = true;
+      setTear(null);
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [tearing]);
+
+  useEffect(() => {
+    if (!tearing) return;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "grabbing";
+    // The native mouse gesture keeps extending a text selection under the
+    // ghost; suppress it for the duration of the tear.
+    document.body.style.userSelect = "none";
+    window.getSelection()?.removeAllRanges();
+    return () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+    };
+  }, [tearing]);
+
+  const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>, id: DashboardView, label: string) => {
+    suppressClickRef.current = false;
+    if (!onPopout || event.button !== 0 || event.pointerType !== "mouse") return;
+    // Capture immediately: a fast drag leaves the button before its first
+    // pointermove is delivered, and an uncaptured gesture would escape into
+    // whatever the cursor crosses. Capture keeps click behavior intact.
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      /* capture is best-effort; the press still works as a plain click */
+    }
+    dragRef.current = {
+      pointerId: event.pointerId,
+      id,
+      label,
+      startX: event.clientX,
+      startY: event.clientY,
+      tearing: false,
+      armed: false,
+      canceled: false,
+      livePopped: false,
+    };
+  }, [onPopout]);
+
+  const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || drag.canceled) return;
+    if (drag.livePopped) {
+      // The window already popped out mid-drag; keep the browser popup under
+      // the pointer until release. (Native windows ride the OS drag instead.)
+      const popup = livePopupRef.current;
+      if (popup && !popup.closed) {
+        try {
+          popup.moveTo(
+            Math.max(0, Math.round(event.screenX - POPOUT_GRAB_OFFSET_X)),
+            Math.max(0, Math.round(event.screenY - POPOUT_GRAB_OFFSET_Y)),
+          );
+        } catch {
+          livePopupRef.current = null;
+        }
+      }
+      return;
+    }
+    if (!drag.tearing) {
+      const dx = event.clientX - drag.startX;
+      const dy = event.clientY - drag.startY;
+      if (dx * dx + dy * dy < TEAR_START_DISTANCE_PX * TEAR_START_DISTANCE_PX) return;
+      drag.tearing = true;
+      setTear({ id: drag.id, label: drag.label, armed: false });
+    }
+    if (event.clientX < 0) {
+      // Crossed the window's left edge mid-drag: pop out NOW and let the user
+      // keep dragging the new window from where their pointer is.
+      drag.livePopped = true;
+      const handle = onPopout?.(drag.id, { x: event.screenX, y: event.screenY }, { live: true });
+      livePopupRef.current = handle && typeof handle === "object" && "moveTo" in handle ? handle : null;
+      setTear(null);
+      return;
+    }
+    const shelfRect = shelfRef.current?.getBoundingClientRect();
+    const armed = !!shelfRect
+      && (event.clientX < shelfRect.left || event.clientX > shelfRect.right
+        || event.clientY < shelfRect.top || event.clientY > shelfRect.bottom);
+    if (armed !== drag.armed) {
+      drag.armed = armed;
+      setTear((current) => (current ? { ...current, armed } : current));
+    }
+    positionGhost(event.clientX, event.clientY);
+  }, [onPopout, positionGhost, shelfRef]);
+
+  const handlePointerUp = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (drag.tearing || drag.livePopped) {
+      // A drag happened — the click that follows this release must not navigate.
+      suppressClickRef.current = true;
+      if (!drag.canceled && !drag.livePopped && drag.armed) {
+        onPopout?.(drag.id, { x: event.screenX, y: event.screenY });
+      }
+      const popup = livePopupRef.current;
+      if (drag.livePopped && popup && !popup.closed) {
+        // Final placement at the release point, in case any intermediate
+        // follow moves were dropped (e.g. focus shifted mid-drag).
+        try {
+          popup.moveTo(
+            Math.max(0, Math.round(event.screenX - POPOUT_GRAB_OFFSET_X)),
+            Math.max(0, Math.round(event.screenY - POPOUT_GRAB_OFFSET_Y)),
+          );
+        } catch {
+          /* popup already gone */
+        }
+      }
+    }
+    livePopupRef.current = null;
+    dragRef.current = null;
+    setTear(null);
+  }, [onPopout]);
+
+  const handlePointerCancel = useCallback(() => {
+    livePopupRef.current = null;
+    dragRef.current = null;
+    setTear(null);
+  }, []);
+
+  const itemProps = useCallback((id: DashboardView, label: string) => ({
+    onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => handlePointerDown(event, id, label),
+    onPointerMove: handlePointerMove,
+    onPointerUp: handlePointerUp,
+    onPointerCancel: handlePointerCancel,
+  }), [handlePointerCancel, handlePointerDown, handlePointerMove, handlePointerUp]);
+
+  const shouldSuppressClick = useCallback(() => {
+    const suppressed = suppressClickRef.current;
+    suppressClickRef.current = false;
+    return suppressed;
+  }, []);
+
+  const ghost = tear ? (
+    <div ref={ghostRef} className="fr-nav-tear-ghost" data-armed={tear.armed ? "" : undefined} aria-hidden="true">
+      <span className="fr-nav-ico"><FrNavIcon id={tear.id} /></span>
+      <span className="fr-nav-tear-ghost-text">
+        <strong>{tear.label}</strong>
+        <small>{tear.armed ? "Release to open in a new window" : "Drag out of the rail to pop out"}</small>
+      </span>
+    </div>
+  ) : null;
+
+  return { ghost, itemProps, shouldSuppressClick };
+}
+
+function NavShelfItem({ id, label, active, onNavigate, onPrefetch, badge, tearOff }: {
   id: DashboardView;
   label: string;
   active: boolean;
   onNavigate: (id: DashboardView) => void;
   onPrefetch?: (id: DashboardView) => void;
   badge?: number;
+  tearOff?: NavShelfTearOff;
 }) {
   return (
     <button
@@ -110,10 +336,14 @@ function NavShelfItem({ id, label, active, onNavigate, onPrefetch, badge }: {
       data-active={active ? "" : undefined}
       aria-current={active ? "page" : undefined}
       data-bee-nav={id}
-      onClick={() => onNavigate(id)}
+      onClick={() => {
+        if (tearOff?.shouldSuppressClick()) return;
+        onNavigate(id);
+      }}
       onMouseEnter={() => onPrefetch?.(id)}
       onFocus={() => onPrefetch?.(id)}
       title={label}
+      {...(tearOff ? tearOff.itemProps(id, label) : undefined)}
     >
       <span className="fr-nav-ico"><FrNavIcon id={id} /></span>
       <span className="fr-nav-label">{label}</span>
@@ -126,6 +356,7 @@ function AppNavShelfBase({
   activeView,
   onNavigate,
   onPrefetch,
+  onPopout,
   theme,
   onToggleTheme,
   brandSrc = "/icon-512.png",
@@ -137,6 +368,11 @@ function AppNavShelfBase({
   activeView: DashboardView;
   onNavigate: (id: DashboardView) => void;
   onPrefetch?: (id: DashboardView) => void;
+  /** Drag-to-pop-out: called when a rail tab is dragged out of the shelf and
+   * released (or live, when the pointer crosses the window's left edge);
+   * opens that view in its own window. Enables the tear gesture. May return
+   * the browser popup handle so a live drag can keep moving the window. */
+  onPopout?: NavShelfPopoutHandler;
   theme: ShelfTheme;
   onToggleTheme: () => void;
   brandSrc?: string;
@@ -152,6 +388,8 @@ function AppNavShelfBase({
   const shelfGroups = buildAppNavShelfGroups(pinnedUtilities).filter((group) => group.length > 0);
   const renderedShelfIds = new Set<DashboardView>(shelfGroups.flatMap((group) => group.map((item) => item.id)));
   const active = resolveActiveShelfSlot(activeView, renderedShelfIds);
+  const shelfNavRef = useRef<HTMLElement | null>(null);
+  const tearOff = useNavShelfTearOff(shelfNavRef, onPopout);
   const keyboardNavigationRef = useRef(false);
   const [shelfKeyboardFocus, setShelfKeyboardFocus] = useState(false);
   const [securityTooltipOpen, setSecurityTooltipOpen] = useState(false);
@@ -224,6 +462,7 @@ function AppNavShelfBase({
     <TooltipProvider delayDuration={120}>
     <div className="fr-root" data-fr-theme={theme}>
       <nav
+        ref={shelfNavRef}
         className="fr-shelf fr-shelf-app"
         aria-label="Primary"
         data-keyboard-focus={shelfKeyboardFocus ? "true" : undefined}
@@ -243,8 +482,12 @@ function AppNavShelfBase({
           className="fr-brand"
           data-active={active === "agents" ? "" : undefined}
           aria-current={active === "agents" ? "page" : undefined}
-          onClick={() => onNavigate("agents")}
+          onClick={() => {
+            if (tearOff.shouldSuppressClick()) return;
+            onNavigate("agents");
+          }}
           title="HivemindOS · Fleet"
+          {...tearOff.itemProps("agents", "Fleet")}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={brandSrc} alt="HivemindOS" />
@@ -253,7 +496,7 @@ function AppNavShelfBase({
         {shelfGroups.map((g, i) => (
           <Fragment key={i}>
             {g.map((it) => (
-              <NavShelfItem key={it.id} id={it.id} label={it.label} active={active === it.id} onNavigate={onNavigate} onPrefetch={onPrefetch} badge={navBadges[it.id]} />
+              <NavShelfItem key={it.id} id={it.id} label={it.label} active={active === it.id} onNavigate={onNavigate} onPrefetch={onPrefetch} badge={navBadges[it.id]} tearOff={tearOff} />
             ))}
             {i < shelfGroups.length - 1 ? <div className="fr-nav-div" /> : null}
           </Fragment>
@@ -274,7 +517,7 @@ function AppNavShelfBase({
               <span className="fr-nav-label">{updateLabel}</span>
             </button>
           ) : null}
-          <NavShelfItem id="more" label="More" active={active === "more"} onNavigate={onNavigate} onPrefetch={onPrefetch} />
+          <NavShelfItem id="more" label="More" active={active === "more"} onNavigate={onNavigate} onPrefetch={onPrefetch} tearOff={tearOff} />
           {onOpenCompanionSetup ? (
             <button type="button" className="fr-nav" onClick={onOpenCompanionSetup} title="Hologram companion">
               <span className="fr-nav-ico">
@@ -310,6 +553,7 @@ function AppNavShelfBase({
           {displayVersion ? <div className="fr-shelf-version" aria-label={`HivemindOS version ${displayVersion}`}>v{displayVersion}</div> : null}
         </div>
       </nav>
+      {tearOff.ghost}
     </div>
     </TooltipProvider>
   );

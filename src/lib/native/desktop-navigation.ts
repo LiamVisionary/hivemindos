@@ -24,7 +24,9 @@ export async function listenForDesktopNavigation(
       const target = event.payload?.view
         ? event.payload
         : dashboardTargetFromSearch(window.location.search);
-      if (target?.view) void openNativeRouteWindow(target);
+      // Menu/tray popouts get the same chrome-free satellite treatment as
+      // drag-outs and palette popouts.
+      if (target?.view) void openNativeRouteWindow({ ...target, popout: true });
     });
     return createSafeTauriUnlistenAll([unlistenNavigate, unlistenPalette, unlistenPopout]);
   } catch {
@@ -32,18 +34,46 @@ export async function listenForDesktopNavigation(
   }
 }
 
-export async function openNativeRouteWindow(target: DashboardRouteTarget) {
+export async function openNativeRouteWindow(
+  target: DashboardRouteTarget,
+  opts?: {
+    /** Requests spawn-under-pointer (drag flows). The native side positions
+     * from the real OS cursor; these webview-reported coordinates are only
+     * its fallback, since webview screenX/screenY are unreliable. */
+    screenX?: number;
+    screenY?: number;
+    /** The pointer is still held mid-drag: the window spawns unfocused (so
+     * the origin window's gesture stays alive) and the native side keeps it
+     * under the cursor until the physical button releases. */
+    live?: boolean;
+  },
+): Promise<string | false> {
   if (!isTauriDesktopRuntime()) return false;
   try {
     const { invoke } = await import("@tauri-apps/api/core");
-    await invoke("open_route_window", {
+    const label = await invoke<string>("open_route_window", {
       target: {
         url: dashboardUrlForTarget(target),
         view: target.view,
+        screenX: opts?.screenX,
+        screenY: opts?.screenY,
+        live: opts?.live,
       },
     });
-    return true;
+    return typeof label === "string" && label ? label : false;
   } catch {
     return false;
+  }
+}
+
+/** Live drag-out follow: nudge a popped-out native route window to the OS
+ * cursor. Fire-and-forget; the native side reads the cursor itself. */
+export async function moveNativeRouteWindowToCursor(label: string) {
+  if (!isTauriDesktopRuntime()) return;
+  try {
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("move_route_window", { label });
+  } catch {
+    /* window may already be closed */
   }
 }

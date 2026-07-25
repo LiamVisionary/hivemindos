@@ -56,6 +56,10 @@
     ".next-tauri/verify-5046/dev/types/**/*.ts",
     ".next-tauri/verify-5032/types/**/*.ts",
     ".next-tauri/verify-5032/dev/types/**/*.ts",
+    ".next-tauri/verify-5055/types/**/*.ts",
+    ".next-tauri/verify-5055/dev/types/**/*.ts",
+    ".next-tauri/verify-5057/types/**/*.ts",
+    ".next-tauri/verify-5057/dev/types/**/*.ts",
     ".next-tauri/dev-5121/types/**/*.ts",
     ".next-tauri/dev-5121/dev/types/**/*.ts"
   ],

@@ -181,6 +181,99 @@ export function agentMenuStatusLabel(machine: ChatMachineLike, agent: ChatAgentL
   return `${agent?.name ?? "Agent"} / needs chat URL`;
 }
 
+export type ChatAgentUsageStat = { lastUsedAt: number; threadCount: number };
+
+/**
+ * Per-agent recency/volume, derived from the same sidebar rows the chat history
+ * renders. `threadCount` counts every thread row the agent owns — including the
+ * placeholder row for a freshly opened, still-empty chat, because opening a
+ * thread with an agent is itself a use of that agent.
+ */
+export function chatAgentUsageStats(rows: Array<{ agentId?: string; updatedAt?: unknown }> = []) {
+  const stats = new Map<string, ChatAgentUsageStat>();
+  for (const row of rows) {
+    const agentId = String(row?.agentId ?? "").trim();
+    if (!agentId) continue;
+    const updatedAtValue = Number(row?.updatedAt ?? 0);
+    const updatedAt = Number.isFinite(updatedAtValue) && updatedAtValue > 0 ? updatedAtValue : 0;
+    const current = stats.get(agentId);
+    if (current) {
+      current.threadCount += 1;
+      current.lastUsedAt = Math.max(current.lastUsedAt, updatedAt);
+      continue;
+    }
+    stats.set(agentId, { lastUsedAt: updatedAt, threadCount: 1 });
+  }
+  return stats;
+}
+
+export type AgentMenuGroupKey = "recent" | "frequent" | "all";
+
+export const AGENT_MENU_GROUP_LABELS: Record<AgentMenuGroupKey, string> = {
+  recent: "Recent",
+  frequent: "Most used",
+  all: "All agents",
+};
+
+const AGENT_MENU_RECENT_LIMIT = 4;
+const AGENT_MENU_FREQUENT_MIN_THREADS = 2;
+
+function compareAgentNames(a: string, b: string) {
+  return a.localeCompare(b, undefined, { sensitivity: "base", numeric: true }) || a.localeCompare(b);
+}
+
+/**
+ * Orders the agent picker: a short most-recently-used run, then the agents you
+ * chat with most, then everything else alphabetically. Ranking runs over the
+ * unfiltered list so a search never reshuffles which group an agent belongs to.
+ */
+export function rankAgentMenuRows<T extends { agent?: ChatAgentLike }>(
+  rows: T[],
+  usage: Map<string, ChatAgentUsageStat>,
+  options?: { recentLimit?: number; frequentMinThreads?: number },
+): Array<T & { menuGroup: AgentMenuGroupKey }> {
+  const recentLimit = options?.recentLimit ?? AGENT_MENU_RECENT_LIMIT;
+  const frequentMinThreads = options?.frequentMinThreads ?? AGENT_MENU_FREQUENT_MIN_THREADS;
+  const decorated = rows.map((row, index) => {
+    const agentId = String(row?.agent?.id ?? "").trim();
+    const stat = usage.get(agentId);
+    return {
+      row,
+      index,
+      name: String(row?.agent?.name ?? agentId).trim(),
+      lastUsedAt: stat?.lastUsedAt ?? 0,
+      threadCount: stat?.threadCount ?? 0,
+    };
+  });
+
+  const recent = decorated
+    .filter((item) => item.lastUsedAt > 0)
+    .sort((a, b) => b.lastUsedAt - a.lastUsedAt || compareAgentNames(a.name, b.name) || a.index - b.index)
+    .slice(0, Math.max(0, recentLimit));
+  const recentIndexes = new Set(recent.map((item) => item.index));
+
+  const rest = decorated.filter((item) => !recentIndexes.has(item.index));
+  const frequent = rest
+    .filter((item) => item.threadCount >= frequentMinThreads)
+    .sort((a, b) => (
+      b.threadCount - a.threadCount
+      || b.lastUsedAt - a.lastUsedAt
+      || compareAgentNames(a.name, b.name)
+      || a.index - b.index
+    ));
+  const frequentIndexes = new Set(frequent.map((item) => item.index));
+
+  const remaining = rest
+    .filter((item) => !frequentIndexes.has(item.index))
+    .sort((a, b) => compareAgentNames(a.name, b.name) || a.index - b.index);
+
+  return [
+    ...recent.map((item) => ({ ...item.row, menuGroup: "recent" as const })),
+    ...frequent.map((item) => ({ ...item.row, menuGroup: "frequent" as const })),
+    ...remaining.map((item) => ({ ...item.row, menuGroup: "all" as const })),
+  ];
+}
+
 export function messageKey(message: ChatMessageLike, index: number) {
   const role = String(message?.role ?? "message");
   const source = String(message?.sourceSessionId ?? "");

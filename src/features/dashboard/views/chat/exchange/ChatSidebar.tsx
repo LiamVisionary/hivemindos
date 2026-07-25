@@ -28,7 +28,7 @@ import {
   sortChatThreads,
 } from "./chat-thread-actions";
 import type { UseChatViewPreferences } from "./use-chat-view-preferences";
-import { HexIco, ICON_PATHS, Ico, POP_STYLE, SearchIco } from "./composer-primitives";
+import { ICON_PATHS, Ico, POP_STYLE, SearchIco } from "./composer-primitives";
 
 export type SidebarRow = ChatThreadRow & {
   active?: boolean;
@@ -173,15 +173,10 @@ export function ChatSidebar(props: ChatSidebarProps) {
   const optLabel = (opts: Array<[string, string]>, value: string) => opts.find(([v]) => v === value)?.[1] ?? value;
 
   return (
-    <aside className="fr-chat-sidebar" aria-label="Chats" style={{ position: "relative", display: "grid", gridTemplateRows: "auto auto auto minmax(0,1fr) auto", minHeight: 0, borderRight: "1px solid var(--line)", background: "color-mix(in srgb, var(--bg-soft) 88%, transparent)" }}>
-      <header style={{ display: "flex", alignItems: "center", gap: 10, padding: "18px 16px 10px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-          <span style={{ display: "grid", placeItems: "center", width: 26, height: 26, flexShrink: 0 }}><HexIco size={22} /></span>
-          <span style={{ fontFamily: "var(--f-body)", fontWeight: 600, fontSize: 16, letterSpacing: "-0.01em" }}>Chat</span>
-        </div>
-      </header>
-
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "2px 14px 10px" }}>
+    <aside className="fr-chat-sidebar" aria-label="Chats" style={{ position: "relative", display: "grid", gridTemplateRows: "auto auto minmax(0,1fr) auto", minHeight: 0, borderRight: "1px solid var(--line)", background: "color-mix(in srgb, var(--bg-soft) 88%, transparent)" }}>
+      {/* The rail title lives in the chat's single top header (ChatExchangePanel)
+          so collapsing this rail never takes the header's left edge with it. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 14px 10px" }}>
         <label style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0, minHeight: 34, border: "1px solid var(--line-2)", borderRadius: 9, background: "color-mix(in srgb, var(--bg-soft) 74%, transparent)", padding: "0 10px" }}>
           <SearchIco size={14} />
           <input

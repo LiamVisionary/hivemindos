@@ -275,7 +275,10 @@ export async function upsertSyncedListings(accountId: string, items: Marketplace
           ...existing,
           title: item.title.trim(),
           ...(typeof item.priceUsd === "number" && Number.isFinite(item.priceUsd) ? { priceUsd: item.priceUsd } : {}),
-          state: existing.state === "posting" ? existing.state : stateFromItem,
+          // "posting"/"posted-unverified" flips belong to the posting pipeline
+          // and the owning machine's promotion pass — a catalog claim never
+          // overrides an in-flight post.
+          state: existing.state === "posting" || existing.state === "posted-unverified" ? existing.state : stateFromItem,
           external: {
             externalId,
             url: item.url?.trim() || existing.external?.url || "",

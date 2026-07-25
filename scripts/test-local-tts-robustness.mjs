@@ -44,6 +44,7 @@ const PROVIDER_ID = `local-tts:${APP_ID}`;
 // --- fetch mock -------------------------------------------------------------
 let speechMode = "ok"; // "ok" | "http-500" | "network" | "slow-ok"
 let speechCalls = 0;
+let lastSpeechPayload = null;
 
 function pcmBytes(sampleCount) {
   const bytes = new Uint8Array(sampleCount * 2);
@@ -65,7 +66,7 @@ function speechResponse() {
   });
 }
 
-globalThis.fetch = async (input) => {
+globalThis.fetch = async (input, init) => {
   const url = String(input instanceof Request ? input.url : input);
   if (url.startsWith("http://link.test/status")) {
     return Response.json({ ok: true, peer: {} });
@@ -97,8 +98,37 @@ globalThis.fetch = async (input) => {
   if (url === "http://tts.test/health") {
     return Response.json({ ok: true });
   }
+  if (url === "http://tts.test/v1/audio/capabilities") {
+    return Response.json({
+      object: "universal_tts.capabilities",
+      providers: {
+        qwen3: {
+          models: ["qwen3-tts-0.6b-custom"],
+          loaded: true,
+          supports_streaming_api: true,
+          supports_true_streaming: true,
+          streaming_kind: "pcm16",
+          sample_format: "pcm16",
+          sample_rate: 24000,
+          channels: 1,
+          voices_endpoint: "/v1/voices",
+        },
+      },
+    });
+  }
+  if (url === "http://tts.test/v1/voices") {
+    return Response.json({
+      object: "list",
+      voices: [{ id: "voice01" }, { id: "Ryan" }, { id: "Aiden" }],
+    });
+  }
   if (url.startsWith("http://tts.test/v1/audio/speech-stream")) {
     speechCalls += 1;
+    try {
+      lastSpeechPayload = JSON.parse(init?.body ?? (input instanceof Request ? await input.text() : "{}"));
+    } catch {
+      lastSpeechPayload = null;
+    }
     if (speechMode === "network") throw new TypeError("fetch failed");
     if (speechMode === "http-500") return new Response("boom", { status: 500 });
     if (speechMode === "slow-ok") {
@@ -210,6 +240,116 @@ globalThis.fetch = async (input) => {
   assert.ok(failed.error, "failed prewarm carries the error");
   assert.equal(localTtsBreakerState(APP_ID).open, true, "failed prewarm trips the breaker");
   console.log("prewarm failure reporting ok");
+}
+
+// --- call config: stored voice ids are validated against the server ----------
+// Voice continuity (2026-07-24): the queen's stored Calls voiceId can be
+// foreign (an ElevenLabs id carried over from a previous runtime) or orphaned
+// (a registered clone the TTS server lost across a restart). The upstream
+// server silently renders a DEFAULT speaker for an unknown voice (HTTP 200),
+// so an unvalidated id ships the wrong voice while every gate reports success.
+// resolveLocalTtsCallConfig must only trust ids the candidate advertises.
+{
+  const { discoverLocalTtsCandidates, resolveLocalTtsCallConfig } =
+    await import("../src/lib/services/phone/local-tts.ts");
+  // Fresh origin: the candidates cache is per-origin and this block needs the
+  // discovery below to be the one that populates it.
+  const VOICE_ORIGIN = "http://voice-validation.test";
+  const candidates = await discoverLocalTtsCandidates(VOICE_ORIGIN);
+  const candidate = candidates.find((item) => item.ok);
+  assert.ok(candidate, "discovery validates the mock universal-tts candidate");
+  assert.deepEqual(
+    candidate.availableVoices,
+    ["voice01", "Ryan", "Aiden"],
+    "candidate advertises the server's registered voices",
+  );
+  assert.equal(candidate.voice, "voice01", "preferred voice is the registered clone");
+
+  // The incident shape: stored ElevenLabs-format voiceId unknown to the
+  // server resolves to the candidate's own voice, not passed through to be
+  // silently substituted upstream.
+  const orphaned = await resolveLocalTtsCallConfig({
+    origin: VOICE_ORIGIN,
+    voiceProviderId: candidate.id,
+    voiceModelId: "qwen3-tts-0.6b-custom",
+    voiceId: "bMxLr8fP6hzNRRi9nJxU",
+    openingLine: "",
+  });
+  assert.equal(orphaned?.voice, "voice01", "an unknown stored voice falls back to the candidate's voice");
+  assert.equal(orphaned?.model, "qwen3-tts-0.6b-custom", "the served model passes through");
+
+  // A voice the server actually advertises passes through untouched.
+  const advertised = await resolveLocalTtsCallConfig({
+    origin: VOICE_ORIGIN,
+    voiceProviderId: candidate.id,
+    voiceModelId: "qwen3-tts-0.6b-custom",
+    voiceId: "Ryan",
+    openingLine: "",
+  });
+  assert.equal(advertised?.voice, "Ryan", "an advertised voice is honored");
+
+  // The discovery path (no pinned provider) applies the same validation.
+  const discovered = await resolveLocalTtsCallConfig({
+    origin: VOICE_ORIGIN,
+    voiceId: "bMxLr8fP6hzNRRi9nJxU",
+    openingLine: "",
+  });
+  assert.equal(discovered?.voice, "voice01", "discovery-path config validates the stored voice too");
+
+  // App ids rotate when a machine/collector restarts (trailing hash changes):
+  // a pinned provider id with a stale hash still validates via host+port.
+  const rotatedProviderId = `local-tts:${candidate.appId.split(":").slice(0, 2).join(":")}:rotated0000`;
+  const rotated = await resolveLocalTtsCallConfig({
+    origin: VOICE_ORIGIN,
+    voiceProviderId: rotatedProviderId,
+    voiceModelId: "qwen3-tts-0.6b-custom",
+    voiceId: "bMxLr8fP6hzNRRi9nJxU",
+    openingLine: "",
+  });
+  assert.equal(rotated?.voice, "voice01", "a rotated app-id hash still validates by host+port");
+
+  // Prewarm (session open, off the audible path) awaits discovery on a cold
+  // cache, so a foreign stored voice prewarms the SERVED voice instead of
+  // 404ing upstream and tripping the breaker before the first turn.
+  resetLocalTtsHealth();
+  speechMode = "ok";
+  lastSpeechPayload = null;
+  const prewarmForeign = await prewarmLocalTts({
+    origin: "http://voice-prewarm-cold.test",
+    voiceProviderId: candidate.id,
+    voiceModelId: "qwen3-tts-0.6b-custom",
+    voiceId: "bMxLr8fP6hzNRRi9nJxU",
+  });
+  assert.equal(prewarmForeign.ok, true, "foreign-voice prewarm succeeds");
+  assert.equal(prewarmForeign.voice, "voice01", "prewarm resolved the served voice");
+  assert.equal(lastSpeechPayload?.voice, "voice01", "upstream prewarm synthesis used the served voice");
+
+  // The audible fast path never awaits discovery: a cold cache passes the
+  // stored id through (upstream now rejects unknown voices loudly) and warms
+  // the cache in the background so later resolves validate.
+  const COLD_ORIGIN = "http://voice-cold.test";
+  const cold = await resolveLocalTtsCallConfig({
+    origin: COLD_ORIGIN,
+    voiceProviderId: candidate.id,
+    voiceModelId: "qwen3-tts-0.6b-custom",
+    voiceId: "bMxLr8fP6hzNRRi9nJxU",
+    openingLine: "",
+  });
+  assert.equal(cold?.voice, "bMxLr8fP6hzNRRi9nJxU", "cold-cache audible path stays latency-first (no discovery wait)");
+  let warmedVoice = cold?.voice;
+  for (let attempt = 0; attempt < 40 && warmedVoice !== "voice01"; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    const warmed = await resolveLocalTtsCallConfig({
+      origin: COLD_ORIGIN,
+      voiceProviderId: candidate.id,
+      voiceModelId: "qwen3-tts-0.6b-custom",
+      voiceId: "bMxLr8fP6hzNRRi9nJxU",
+      openingLine: "",
+    });
+    warmedVoice = warmed?.voice;
+  }
+  assert.equal(warmedVoice, "voice01", "background warm validates the stored voice from a later resolve");
+  console.log("call config voice validation ok");
 }
 
 // --- call prefs: a store outage is never "cloud voice selected" --------------

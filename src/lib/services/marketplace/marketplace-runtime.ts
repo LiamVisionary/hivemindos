@@ -23,8 +23,8 @@ export type MarketplaceAccountRuntime = {
   nextPollAt?: string;
   /** Last full base-cadence sweep (catalog sync + inbox) — hot rungs only probe. */
   lastSweepAt?: string;
-  /** Set while an agent session or probe is running; suppresses overlapping work. */
-  inFlightOp?: MarketplaceAgentOp | "probe";
+  /** Set while an agent session, probe, or posted-unverified promotion check is running; suppresses overlapping work. */
+  inFlightOp?: MarketplaceAgentOp | "probe" | "verify-listing";
   inFlightSince?: string;
   lastError?: string;
 };

@@ -98,8 +98,8 @@ const NO_MESSAGING_GUARD = [
   "Stay strictly on the pages this task names.",
 ].join("\n");
 
-export function buildInboxWorkPrompt(account: MarketplaceAccount, input: MarketplaceInboxWorkInput, cdpUrl?: string | null): string {
-  const listingsContext = input.listings.length
+function inboxListingsContext(input: MarketplaceInboxWorkInput): string {
+  return input.listings.length
     ? [
         "Your live listings (answer buyer questions from these details; never invent specs):",
         ...input.listings.map((listing) => {
@@ -111,18 +111,50 @@ export function buildInboxWorkPrompt(account: MarketplaceAccount, input: Marketp
         }),
       ].join("\n")
     : "No listing context is on file — answer only from what the marketplace page itself shows.";
+}
+
+const INBOX_CONVERSATION_SCOPE = [
+  "CONVERSATION SCOPE — reply ONLY in conversations about the live listings named below.",
+  "Old threads about items you are not managing (sold long ago, other people's listings, anything not in the list) are strictly read-only: never reply there, no matter how easy the answer seems. If such a thread has a pending message worth a human's attention, record it as an escalation instead.",
+].join("\n");
+
+export function buildInboxWorkPrompt(account: MarketplaceAccount, input: MarketplaceInboxWorkInput, cdpUrl?: string | null): string {
   return [
     sessionPreamble(account, cdpUrl),
     "Task: open Marketplace inbox conversations with pending buyer messages and work through ALL of them.",
-    [
-      "CONVERSATION SCOPE — reply ONLY in conversations about the live listings named below.",
-      "Old threads about items you are not managing (sold long ago, other people's listings, anything not in the list) are strictly read-only: never reply there, no matter how easy the answer seems. If such a thread has a pending message worth a human's attention, record it as an escalation instead.",
-    ].join("\n"),
+    INBOX_CONVERSATION_SCOPE,
     AUTONOMY_CONTRACT[account.autonomy],
     negotiationBlock(account, input.listings),
     directivesBlock(input.directives),
-    listingsContext,
+    inboxListingsContext(input),
     reportContract("inbox"),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+/**
+ * Base-cadence combined sweep: catalog + inbox in ONE session and ONE
+ * MARKETPLACE_REPORT. The report contract already carries both, so the sweep
+ * used to burn two full queen round-trips against the same profile for no
+ * reason. The standalone sync-catalog prompt stays for the on-demand
+ * listings-route action.
+ */
+export function buildFullSweepPrompt(account: MarketplaceAccount, input: MarketplaceInboxWorkInput, cdpUrl?: string | null): string {
+  return [
+    sessionPreamble(account, cdpUrl),
+    [
+      "Task, in order, in this ONE session:",
+      "1. Open the Marketplace selling page and catalogue EVERY listing on this account — active, sold, and ended. For each capture externalId (numeric id from its URL), url, title, price when shown, and state. Report them all in the catalog array. Do not modify any listing.",
+      "2. Then open the Marketplace inbox and work through ALL conversations with pending buyer messages, per the rules below.",
+      "End with exactly ONE report covering both the catalog and the conversations.",
+    ].join("\n"),
+    INBOX_CONVERSATION_SCOPE,
+    AUTONOMY_CONTRACT[account.autonomy],
+    negotiationBlock(account, input.listings),
+    directivesBlock(input.directives),
+    inboxListingsContext(input),
+    reportContract("full-sweep"),
   ]
     .filter(Boolean)
     .join("\n\n");

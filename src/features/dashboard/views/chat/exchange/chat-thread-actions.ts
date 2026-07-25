@@ -116,6 +116,67 @@ export function duplicateChatThreadSeed(
 }
 
 /**
+ * Build a new thread from the complete stored conversation through one
+ * response. The rendered response identifies the boundary; when the view is a
+ * bounded window, the stable message metadata recovers its position in the
+ * full stored thread. Later turns are excluded while the clicked response
+ * remains available as context in the fork.
+ */
+export function forkChatThreadSeed(
+  renderedMessages: ChatMessage[],
+  storageKey: string,
+  responseIndex: number,
+  nowMs: number,
+  storedMessages: ChatMessage[] = renderedMessages,
+): { seedMessages: ChatMessage[]; leafKey: string } {
+  const agentId = agentIdFromChatStorageKey(storageKey);
+  const renderedBoundary = Math.min(
+    renderedMessages.length - 1,
+    Math.max(-1, Math.trunc(responseIndex)),
+  );
+  const selectedResponse = renderedMessages[renderedBoundary];
+  const storedBoundary = selectedResponse
+    ? findForkBoundaryMessage(storedMessages, selectedResponse)
+    : -1;
+  const sourceMessages = storedBoundary >= 0 ? storedMessages : renderedMessages;
+  const boundary = storedBoundary >= 0 ? storedBoundary : renderedBoundary;
+  const seedMessages = sourceMessages
+    .slice(0, boundary + 1)
+    .map((message) => ({ ...message }));
+  const suffix = shortDeterministicHash(`${storageKey}\u001f${boundary}\u001f${nowMs}`);
+  const leafKey = `agent-${agentId}-fork-${nowMs.toString(36)}-${suffix}`;
+  return { seedMessages, leafKey };
+}
+
+function findForkBoundaryMessage(messages: ChatMessage[], selectedResponse: ChatMessage) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const candidate = messages[index];
+    if (!candidate || candidate.role !== selectedResponse.role) continue;
+    const sameSession = Boolean(
+      candidate.sourceSessionId
+      && selectedResponse.sourceSessionId
+      && candidate.sourceSessionId === selectedResponse.sourceSessionId
+    );
+    if (
+      sameSession
+      && Number.isFinite(candidate.sourceIndex)
+      && candidate.sourceIndex === selectedResponse.sourceIndex
+    ) return index;
+    if (
+      sameSession
+      && Number.isFinite(candidate.createdAt)
+      && candidate.createdAt === selectedResponse.createdAt
+    ) return index;
+    if (
+      Number.isFinite(candidate.createdAt)
+      && candidate.createdAt === selectedResponse.createdAt
+      && candidate.content === selectedResponse.content
+    ) return index;
+  }
+  return -1;
+}
+
+/**
  * Rename a thread by writing a title override into the titles map (persisted
  * under `CHAT_THREAD_TITLES_STATE_KEY`). Returns a NEW map; never mutates the
  * input. An empty/blank title clears any existing override for that key.

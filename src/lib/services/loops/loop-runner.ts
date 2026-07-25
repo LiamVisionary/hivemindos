@@ -179,11 +179,18 @@ export async function runLoopGates(input: RunLoopGatesInput): Promise<RunLoopGat
   const successCriteria = input.loop?.successCriteria ?? [];
   const evidenceRequired = input.loop?.evidenceRequired ?? [];
 
-  const receipts: LoopReceipt[] = [];
+  // ── Pass 1 (sequential, gate order): self-report resolution ────────────────
+  // Self-report matching consumes the shared usedReports set in GATE ORDER — one
+  // report entry satisfies at most one gate and earlier gates have priority — so
+  // this pass must stay sequential. Synchronous receipt-kind gates resolve here
+  // too. Gates needing an independent evaluation (command run, artifact
+  // probe/stat, judge chat) are deferred as thunks for the concurrent pass 2.
   const usedReports = new Set<LoopSelfReportEntry>();
-  for (const gate of gates) {
+  const gateReceipts: Array<LoopReceipt | undefined> = new Array(gates.length).fill(undefined);
+  const deferred: Array<{ index: number; evaluate: () => Promise<LoopReceipt | undefined> }> = [];
+  gates.forEach((gate, index) => {
     // Pre-phase human approval is never machine-satisfiable; leave it pending.
-    if (gate.kind === "human") continue;
+    if (gate.kind === "human") return;
 
     // An `agent:judge` gate is INDEPENDENT by definition — the builder must not get to
     // satisfy (or skip) its own judge via a self-report. Always route it to the judge.
@@ -191,8 +198,8 @@ export async function runLoopGates(input: RunLoopGatesInput): Promise<RunLoopGat
       const reported = matchSelfReport(selfReport, gate, usedReports);
       if (reported) {
         usedReports.add(reported); // one self-report entry can satisfy at most one gate.
-        receipts.push(receiptFor(gate, reported.status, reported.summary ?? `Worker reported ${gate.title} as ${reported.status}.`, reported.evidence, "self-report", now));
-        continue;
+        gateReceipts[index] = receiptFor(gate, reported.status, reported.summary ?? `Worker reported ${gate.title} as ${reported.status}.`, reported.evidence, "self-report", now);
+        return;
       }
     }
 
@@ -201,105 +208,146 @@ export async function runLoopGates(input: RunLoopGatesInput): Promise<RunLoopGat
     // still run a command. (verifier-registry.ts)
     const command = typeof gate.command === "string" ? gate.command.trim() : "";
     if (command) {
-      if (input.runCommand) {
-        const run = await input.runCommand({ gate, command }).catch((error): LoopGateCommandResult => ({
-          ok: false,
-          exitCode: undefined,
-          output: error instanceof Error ? error.message : String(error),
-        }));
-        const evidence = [command, run.output ? truncate(run.output, 600) : `exit ${run.exitCode ?? "?"}`].filter(Boolean);
-        receipts.push(receiptFor(gate, run.ok ? "passed" : "failed", run.ok ? `\`${command}\` passed.` : `\`${command}\` failed (exit ${run.exitCode ?? "?"}).`, evidence, "command", now));
+      const runCommand = input.runCommand;
+      if (runCommand) {
+        deferred.push({
+          index,
+          evaluate: async () => {
+            const run = await runCommand({ gate, command }).catch((error): LoopGateCommandResult => ({
+              ok: false,
+              exitCode: undefined,
+              output: error instanceof Error ? error.message : String(error),
+            }));
+            const evidence = [command, run.output ? truncate(run.output, 600) : `exit ${run.exitCode ?? "?"}`].filter(Boolean);
+            return receiptFor(gate, run.ok ? "passed" : "failed", run.ok ? `\`${command}\` passed.` : `\`${command}\` failed (exit ${run.exitCode ?? "?"}).`, evidence, "command", now);
+          },
+        });
       }
       // No runner here (remote workspace) and no self-report → leave pending; required gates fail closed.
-      continue;
+      return;
     }
 
     if (gate.kind === "artifact") {
       if (!routableArtifacts.length) {
-        receipts.push(receiptFor(gate, "failed", "No durable artifact (real path or routable URL) was found in the worker output.", [], "artifact", now));
-        continue;
+        gateReceipts[index] = receiptFor(gate, "failed", "No durable artifact (real path or routable URL) was found in the worker output.", [], "artifact", now);
+        return;
       }
-      const verifiedEvidence: string[] = [];
-      let verifiedArtifact: string | undefined;
-      for (const artifact of routableArtifacts) {
-        let verification: { ok: boolean; evidence?: string[]; error?: string } | undefined;
-        if (/^https?:\/\//i.test(artifact) && input.probeUrl) {
-          const probe = await input.probeUrl({ url: artifact }).catch((error): LoopUrlProbeResult => ({ error: error instanceof Error ? error.message : String(error) }));
-          verification = {
-            ok: typeof probe.status === "number" && probe.status >= 200 && probe.status < 400,
-            evidence: [`${artifact} — HTTP ${probe.status ?? "unreachable"}`],
-            error: probe.error,
-          };
-        } else if (input.verifyArtifact) {
-          verification = await input.verifyArtifact({ gate, artifact }).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
-        }
-        if (verification?.ok) {
-          verifiedArtifact = artifact;
-          verifiedEvidence.push(...(verification.evidence ?? []));
-          break;
-        }
-      }
-      if (verifiedArtifact) {
-        receipts.push(receiptFor(gate, "passed", `Verified durable artifact: ${verifiedArtifact}`, [verifiedArtifact, ...verifiedEvidence], "artifact", now));
-      }
-      // No trusted verifier or no verified candidate: leave the required gate pending.
-      continue;
+      deferred.push({
+        index,
+        evaluate: async () => {
+          const verifiedEvidence: string[] = [];
+          let verifiedArtifact: string | undefined;
+          for (const artifact of routableArtifacts) {
+            let verification: { ok: boolean; evidence?: string[]; error?: string } | undefined;
+            if (/^https?:\/\//i.test(artifact) && input.probeUrl) {
+              const probe = await input.probeUrl({ url: artifact }).catch((error): LoopUrlProbeResult => ({ error: error instanceof Error ? error.message : String(error) }));
+              verification = {
+                ok: typeof probe.status === "number" && probe.status >= 200 && probe.status < 400,
+                evidence: [`${artifact} — HTTP ${probe.status ?? "unreachable"}`],
+                error: probe.error,
+              };
+            } else if (input.verifyArtifact) {
+              verification = await input.verifyArtifact({ gate, artifact }).catch((error) => ({ ok: false, error: error instanceof Error ? error.message : String(error) }));
+            }
+            if (verification?.ok) {
+              verifiedArtifact = artifact;
+              verifiedEvidence.push(...(verification.evidence ?? []));
+              break;
+            }
+          }
+          if (verifiedArtifact) {
+            return receiptFor(gate, "passed", `Verified durable artifact: ${verifiedArtifact}`, [verifiedArtifact, ...verifiedEvidence], "artifact", now);
+          }
+          // No trusted verifier or no verified candidate: leave the required gate pending.
+          return undefined;
+        },
+      });
+      return;
     }
 
     if (gate.kind === "agent") {
-      if (input.judge) {
-        const verdict = await input.judge({ gate, output, goal, successCriteria, contract: input.loop?.contract, evaluationRubric: input.loop?.evaluationRubric }).catch((error) => ({
-          accepted: false,
-          summary: error instanceof Error ? error.message : String(error),
-        }) as LoopJudgeVerdict);
-        const accepted = judgeVerdictPasses(verdict, input.loop?.evaluationRubric);
-        receipts.push(receiptFor(
-          gate,
-          accepted ? "passed" : "failed",
-          verdict.summary || (accepted ? "Independent judge accepted the result." : "Independent judge or rubric rejected the result."),
-          verdict.evidence ?? [],
-          "judge",
-          now,
-          {
-            confidence: verdict.confidence,
-            axes: verdict.axes,
-            evaluator: verdict.evaluator,
+      const judge = input.judge;
+      if (judge) {
+        deferred.push({
+          index,
+          evaluate: async () => {
+            const verdict = await judge({ gate, output, goal, successCriteria, contract: input.loop?.contract, evaluationRubric: input.loop?.evaluationRubric }).catch((error) => ({
+              accepted: false,
+              summary: error instanceof Error ? error.message : String(error),
+            }) as LoopJudgeVerdict);
+            const accepted = judgeVerdictPasses(verdict, input.loop?.evaluationRubric);
+            return receiptFor(
+              gate,
+              accepted ? "passed" : "failed",
+              verdict.summary || (accepted ? "Independent judge accepted the result." : "Independent judge or rubric rejected the result."),
+              verdict.evidence ?? [],
+              "judge",
+              now,
+              {
+                confidence: verdict.confidence,
+                axes: verdict.axes,
+                evaluator: verdict.evaluator,
+              },
+            );
           },
-        ));
+        });
       }
       // No judge reachable → leave pending; required judge gates fail closed.
-      continue;
+      return;
     }
 
     if (gate.kind === "receipt") {
       // Governance/policy receipts must not be auto-passed from raw text: a spend or
       // approval claim needs an explicit self-report or judge. Without one, stay pending.
-      if (gate.verifier === "governance:policy") continue;
+      if (gate.verifier === "governance:policy") return;
       // When the worker emitted an explicit receipt set, absence is meaningful. Do not
       // let the JSON/fence itself become generic prose evidence for every unmatched gate.
-      if (selfReport.length) continue;
+      if (selfReport.length) return;
       const matchedEvidence = evidenceRequired.filter((hint) => output.toLowerCase().includes(hint.toLowerCase().slice(0, 24)));
       if (output.trim().length >= MIN_EVIDENCE_CHARS) {
         const evidence = [truncate(output.trim(), 600), ...matchedEvidence].filter(Boolean);
-        receipts.push(receiptFor(gate, "passed", "Worker output recorded as evidence.", evidence, "evidence", now));
+        gateReceipts[index] = receiptFor(gate, "passed", "Worker output recorded as evidence.", evidence, "evidence", now);
       } else {
-        receipts.push(receiptFor(gate, "failed", "Worker output was too thin to count as an evidence receipt.", [], "evidence", now));
+        gateReceipts[index] = receiptFor(gate, "failed", "Worker output was too thin to count as an evidence receipt.", [], "evidence", now);
       }
-      continue;
+      return;
     }
 
     // Unknown/other test-kind gates (e.g. evo:score) need a real benchmark; leave pending.
-  }
+  });
 
-  // ── Live-URL integrity (independent of the loop's own gates) ───────────────
-  // A deliverable/outcome that CLAIMS a live URL must not pass with a dead or
-  // fabricated link. Runs on every loop (any company/template) and emits a
-  // stable-id receipt so a clean retry overwrites a prior failure. A violation is
-  // a HARD fail — it blocks completion (→ needs-human) regardless of whether the
-  // loop's gates are "required" (see loopCompletionBlock). Only affirmatively-false
-  // evidence blocks: a missing URL never does. Reserved/mock/non-public domains are
-  // caught with NO network; a dead real URL (404/410/NXDOMAIN) needs the injected prober.
-  const liveUrl = await evaluateLiveUrlClaims(output, input.probeUrl);
+  // ── Pass 2 (concurrent): independent evaluations + integrity checks ────────
+  // Command runs, artifact probes, and judge chats are independent of each other
+  // and of the two output-level integrity checks, so they run concurrently — a
+  // slow judge chat no longer serializes behind a slow test run. Receipts are
+  // reassembled in original gate order below.
+  const [liveUrl, acceptance] = await Promise.all([
+    // Live-URL integrity (independent of the loop's own gates): a deliverable/
+    // outcome that CLAIMS a live URL must not pass with a dead or fabricated
+    // link. Runs on every loop (any company/template) and emits a stable-id
+    // receipt so a clean retry overwrites a prior failure. A violation is a HARD
+    // fail — it blocks completion (→ needs-human) regardless of whether the
+    // loop's gates are "required" (see loopCompletionBlock). Only affirmatively-
+    // false evidence blocks: a missing URL never does. Reserved/mock/non-public
+    // domains are caught with NO network; a dead real URL (404/410/NXDOMAIN)
+    // needs the injected prober.
+    evaluateLiveUrlClaims(output, input.probeUrl),
+    // Deliverable content acceptance (independent of the loop's own gates): a
+    // claimed outward deliverable (preview site, landing/offer page) must not
+    // pass as a PLACEHOLDER/wireframe skeleton — a real bug (2026-07-07) shipped
+    // a restaurant preview to a live prospect with fake "menu" items and no
+    // prices. Fetches the customer-facing URL(s) and runs the typed acceptance
+    // contract for the kind. An affirmative rejection is a HARD fail that blocks
+    // completion → needs-human, exactly like a dead live URL. Unfetchable/
+    // ambiguous content never blocks, and a missing fetcher (the kill-switch)
+    // makes this a no-op.
+    evaluateDeliverableAcceptance({ output, fetchContent: input.fetchContent }),
+    Promise.all(deferred.map(async ({ index, evaluate }) => {
+      gateReceipts[index] = await evaluate();
+    })),
+  ]);
+
+  const receipts: LoopReceipt[] = gateReceipts.filter((receipt): receipt is LoopReceipt => Boolean(receipt));
   if (liveUrl.checked.length) {
     const failed = liveUrl.violations.length > 0;
     receipts.push({
@@ -316,16 +364,6 @@ export async function runLoopGates(input: RunLoopGatesInput): Promise<RunLoopGat
     });
   }
 
-  // ── Deliverable content acceptance (independent of the loop's own gates) ──────
-  // A claimed outward deliverable (preview site, landing/offer page) must not pass
-  // as a PLACEHOLDER/wireframe skeleton — a real bug (2026-07-07) shipped a
-  // restaurant preview to a live prospect with fake "menu" items and no prices.
-  // Runs on every loop (any company/template): fetches the customer-facing URL(s)
-  // and runs the typed acceptance contract for the kind. An affirmative rejection
-  // is a HARD fail that blocks completion → needs-human, exactly like a dead live
-  // URL. Unfetchable/ambiguous content never blocks, and a missing fetcher (the
-  // kill-switch) makes this a no-op.
-  const acceptance = await evaluateDeliverableAcceptance({ output, fetchContent: input.fetchContent });
   if (acceptance.checked.length) {
     const failed = acceptance.violations.length > 0;
     receipts.push({

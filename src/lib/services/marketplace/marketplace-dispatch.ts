@@ -9,6 +9,7 @@ import { machineMatchesTarget } from "@/lib/services/queen-bee/router";
 import { submitQueenBeeMessage, type QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plane";
 import { moveTask, readBoard } from "@/lib/services/kanban/local-kanban-store";
 import { parseMarketplaceAgentReport } from "@/lib/services/marketplace/marketplace-agent-report";
+import { withMarketplaceSessionLock } from "@/lib/services/marketplace/marketplace-profile-lock";
 import type { MarketplaceAgentDispatch, MarketplaceAgentTaskInput } from "@/lib/services/marketplace/adapters/types";
 import type { MarketplaceAgentReport } from "@/lib/services/marketplace/marketplace-types";
 
@@ -168,10 +169,18 @@ export async function abandonUnclaimedQueenTask(taskId: string): Promise<boolean
  * pinned to the account's machine, await completion, parse the report.
  * A session that ends without a parseable MARKETPLACE_REPORT throws — callers
  * treat it as "the session told us nothing", never as an empty result.
+ *
+ * The whole round-trip holds the profile lock (with mtime renewal) so
+ * scripted probes and the dispatched session are mutually exclusive on this
+ * machine for the session's full duration — before this, only probes locked
+ * and the monitor probed the same Chrome mid-session.
  */
 export const dispatchMarketplaceAgentTask: MarketplaceAgentDispatch = async (
   input: MarketplaceAgentTaskInput,
-): Promise<MarketplaceAgentReport> => {
+): Promise<MarketplaceAgentReport> =>
+  withMarketplaceSessionLock(input.account.machine.profileName, () => dispatchMarketplaceAgentTaskUnlocked(input));
+
+const dispatchMarketplaceAgentTaskUnlocked = async (input: MarketplaceAgentTaskInput): Promise<MarketplaceAgentReport> => {
   const label = input.account.displayName ?? input.account.id;
   const submitted = await submitMarketplaceQueenTask({
     message: input.prompt,

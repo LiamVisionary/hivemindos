@@ -23,6 +23,7 @@ import type { ChatResponseBilling } from "@/lib/types/chat-billing";
 import type { CapabilityApprovalPlan } from "@/lib/types/capability-approval";
 import type { DeliverableSourceMachine } from "@/lib/services/deliverable-open-client";
 import { Dot, Glyph, ICON } from "./primitives";
+import { AppArtifactCard } from "./AppArtifactCard";
 import { CapabilityApprovalCard } from "./CapabilityApprovalCard";
 import { HyperframesPromptBuilder } from "../HyperframesPromptBuilder";
 import { HYPERFRAMES_PROMPT_BUILDER_ID } from "@/lib/services/chat/hyperframes-prompt";
@@ -56,6 +57,7 @@ export type ThreadIconProps = {
   Check?: IconComponent;
   CircleAlert?: IconComponent;
   Copy?: IconComponent;
+  GitBranch?: IconComponent;
   KanbanSquare?: IconComponent;
   LoaderCircle?: IconComponent;
   Sparkles?: IconComponent;
@@ -320,6 +322,7 @@ function AgentSessionStartLoader({ label }: { label: string }) {
 function MessageActions({
   Check,
   Copy,
+  GitBranch,
   KanbanSquare,
   LoaderCircle,
   Sparkles,
@@ -330,6 +333,7 @@ function MessageActions({
   onCopy,
   onDismissKanban,
   onFeedback,
+  onFork,
   onToggleKanban,
   open,
   feedback,
@@ -338,6 +342,7 @@ function MessageActions({
 }: {
   Check?: IconComponent;
   Copy?: IconComponent;
+  GitBranch?: IconComponent;
   KanbanSquare?: IconComponent;
   LoaderCircle?: IconComponent;
   Sparkles?: IconComponent;
@@ -348,6 +353,7 @@ function MessageActions({
   onCopy: () => void;
   onDismissKanban: () => void;
   onFeedback?: (rating: "up" | "down") => void | Promise<void>;
+  onFork?: () => void;
   onToggleKanban: () => void;
   open?: boolean;
   feedback?: ChatMessage["feedback"];
@@ -405,6 +411,21 @@ function MessageActions({
             </TooltipTrigger>
             <TooltipContent side="bottom">{copied ? "Copied!" : "Copy message"}</TooltipContent>
           </Tooltip>
+          {onFork ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="fr-chat-feedback-button"
+                  aria-label="Fork chat from this response"
+                  onClick={onFork}
+                >
+                  {GitBranch ? <GitBranch aria-hidden="true" /> : <Glyph d={ICON.sparkles} s={12} />}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Fork chat</TooltipContent>
+            </Tooltip>
+          ) : null}
           {generateKanbanTaskFromChat ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -622,7 +643,9 @@ function MessageThreadBase({
   sendPromptMessage,
   onCapabilityPlanChange,
   onCapabilityPlanSubmit,
+  onForkResponse,
   onMessageFeedback,
+  onOpenAppWorkspace,
   setCopiedMessageKey,
   setOpenKanbanTaskMenuKey,
   chatKanbanGeneration,
@@ -656,7 +679,9 @@ function MessageThreadBase({
   sendPromptMessage?: (prompt: string, options?: SendPromptOptions) => void | Promise<void>;
   onCapabilityPlanChange?: (plan: CapabilityApprovalPlan) => void;
   onCapabilityPlanSubmit?: (plan: CapabilityApprovalPlan) => void | Promise<void>;
+  onForkResponse?: (responseIndex: number) => void;
   onMessageFeedback?: (message: ThreadMessage, renderKey: string, rating: "up" | "down") => void | Promise<void>;
+  onOpenAppWorkspace?: () => void;
   setCopiedMessageKey: Dispatch<SetStateAction<string>>;
   setOpenKanbanTaskMenuKey: Dispatch<SetStateAction<string>>;
   chatKanbanGeneration?: ChatKanbanGeneration | null;
@@ -725,7 +750,8 @@ function MessageThreadBase({
           : null;
         const capabilityApproval = !isUser ? message.capabilityApproval : undefined;
         const capabilityApprovalNeedsReview = Boolean(capabilityApproval);
-        const hasAssistantBody = Boolean(content || capabilityApprovalNeedsReview || applicationGenerationCard || generatedMediaPathCard || mirosharkCard || transcriptCard);
+        const appArtifact = !isUser ? message.appArtifact : undefined;
+        const hasAssistantBody = Boolean(content || capabilityApprovalNeedsReview || applicationGenerationCard || generatedMediaPathCard || mirosharkCard || transcriptCard || appArtifact);
         const promptUi = !isUser && content ? promptUiFromMessage(message, content) : null;
         const isHyperframesPromptBuilder = !isUser && message.agentPrompt?.id === HYPERFRAMES_PROMPT_BUILDER_ID;
         const hyperframesSourceRequest = isHyperframesPromptBuilder
@@ -767,6 +793,7 @@ function MessageThreadBase({
         const actionProps = {
           Check: iconProps.Check,
           Copy: iconProps.Copy,
+          GitBranch: iconProps.GitBranch,
           KanbanSquare: iconProps.KanbanSquare,
           LoaderCircle: iconProps.LoaderCircle,
           Sparkles: iconProps.Sparkles,
@@ -779,6 +806,7 @@ function MessageThreadBase({
           onFeedback: !isUser && message.sourceSessionId && onMessageFeedback
             ? (rating: "up" | "down") => onMessageFeedback(message, renderKey, rating)
             : undefined,
+          onFork: !isUser && onForkResponse ? () => onForkResponse(index) : undefined,
           onToggleKanban: () => setOpenKanbanTaskMenuKey((current) => current === renderKey ? "" : renderKey),
           open: openKanbanTaskMenuKey === renderKey,
           feedback: !isUser ? message.feedback : undefined,
@@ -874,6 +902,7 @@ function MessageThreadBase({
                       onSubmit={onCapabilityPlanSubmit}
                     />
                   ) : null}
+                  {appArtifact ? <AppArtifactCard artifact={appArtifact} onOpen={onOpenAppWorkspace} /> : null}
                   {applicationGenerationCard ? <ApplicationGenerationCard card={applicationGenerationCard} /> : null}
                   {!applicationGenerationCard && generatedMediaPathCard ? <ApplicationGenerationCard card={generatedMediaPathCard} /> : null}
                   {isHyperframesPromptBuilder ? (

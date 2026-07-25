@@ -90,6 +90,8 @@ export function processEventsAreActive(events: ProcessEvent[] = []) {
 function processToolKey(event: ProcessEvent) {
   const text = `${event?.label ?? ""} ${event?.detail ?? ""}`.toLowerCase();
   if (/error|failed|interrupted|timed out/.test(text)) return "error";
+  if (/files[._]?(write|rename|delete)/.test(text)) return "edit";
+  if (/files[._]?(read|tree)/.test(text)) return "read";
   if (/git|commit|branch|origin\//.test(text)) return "git";
   if (/image|screenshot|vision/.test(text)) return "image";
   if (/skill context|skill loaded/.test(text)) return "skill";
@@ -117,9 +119,21 @@ function processFileTarget(event: ProcessEvent) {
   return target ? target.split(/[)\],]/)[0].replace(/^["'`]+|["'`]+$/g, "") : "";
 }
 
+// App Builder file capabilities read as raw tool ids in runtime events; the
+// timeline shows them as the file activity they are (Replit-style edit chips).
+const APP_FILE_TOOL_LABELS: [RegExp, string][] = [
+  [/files[._]?write/i, "Edited app file"],
+  [/files[._]?rename/i, "Renamed app file"],
+  [/files[._]?delete/i, "Deleted app file"],
+  [/files[._]?read/i, "Read app file"],
+  [/files[._]?tree/i, "Listed app files"],
+];
+
 function processDisplayLabel(event: ProcessEvent) {
   const label = String(event?.label ?? "Runtime event").trim();
   if (/tool output/i.test(label)) return "Tool output";
+  const appFileLabel = APP_FILE_TOOL_LABELS.find(([pattern]) => pattern.test(label))?.[1];
+  if (appFileLabel) return appFileLabel;
   return label;
 }
 

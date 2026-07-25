@@ -28,6 +28,75 @@ const QUEEN_SETTINGS_EVENT: &str = "hivemindos:queen-bee-settings";
 pub struct RouteWindowTarget {
     url: String,
     view: String,
+    /// Spawn the window under the pointer (drag-out flows). The actual
+    /// position comes from the OS cursor — webview screenX/screenY are not
+    /// trustworthy across platforms — with these as the fallback when the
+    /// cursor can't be read.
+    #[serde(default, rename = "screenX")]
+    screen_x: Option<f64>,
+    #[serde(default, rename = "screenY")]
+    screen_y: Option<f64>,
+    /// The pointer is still held mid-drag (live drag-out). The window spawns
+    /// unfocused so the origin window keeps its pointer stream, and on macOS
+    /// a native follow loop keeps it under the cursor until the physical
+    /// button releases — webview pointer events die once focus shifts, so
+    /// the follow cannot depend on them.
+    #[serde(default)]
+    live: Option<bool>,
+}
+
+/// Native cursor/button reads for the live drag-out follow loop, via the safe
+/// core-graphics / objc2-app-kit wrappers (this crate forbids unsafe code).
+/// The reads are OS-global and independent of any webview event stream, which
+/// is the whole point: the origin webview stops delivering pointermoves once
+/// the new window appears, so the follow must come from the OS.
+#[cfg(target_os = "macos")]
+mod macos_drag {
+    use core_graphics::event::CGEvent;
+    use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
+    use objc2_app_kit::NSEvent;
+
+    /// Global cursor position in logical points (top-left origin) — the same
+    /// space Quartz events and window positioning use.
+    pub fn cursor_point() -> Option<(f64, f64)> {
+        let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState).ok()?;
+        let event = CGEvent::new(source).ok()?;
+        let point = event.location();
+        Some((point.x, point.y))
+    }
+
+    /// Whether the primary (left) mouse button is physically held.
+    pub fn left_button_down() -> bool {
+        NSEvent::pressedMouseButtons() & 1 == 1
+    }
+}
+
+/// Where the pointer "holds" a popped-out window relative to its top-left
+/// corner. Mirrors POPOUT_GRAB_OFFSET_X/Y in dashboard-navigation.ts.
+const POPOUT_GRAB_OFFSET_X: f64 = 160.0;
+const POPOUT_GRAB_OFFSET_Y: f64 = 24.0;
+
+/// The OS cursor in logical (points) coordinates — the space window
+/// positioning uses. Reads the physical cursor and divides by the scale
+/// factor of the monitor under it.
+fn cursor_logical_position(app: &AppHandle) -> Option<(f64, f64)> {
+    let cursor = app.cursor_position().ok()?;
+    let mut scale = 1.0;
+    if let Ok(monitors) = app.available_monitors() {
+        for monitor in monitors {
+            let origin = monitor.position();
+            let size = monitor.size();
+            if cursor.x >= origin.x as f64
+                && cursor.x <= origin.x as f64 + size.width as f64
+                && cursor.y >= origin.y as f64
+                && cursor.y <= origin.y as f64 + size.height as f64
+            {
+                scale = monitor.scale_factor();
+                break;
+            }
+        }
+    }
+    Some((cursor.x / scale, cursor.y / scale))
 }
 
 #[derive(Serialize, Deserialize)]
@@ -623,7 +692,7 @@ pub fn open_route_window(
     app: AppHandle,
     state: tauri::State<NativeServerState>,
     target: RouteWindowTarget,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let route = if target.url.starts_with('/') {
         target.url
     } else {
@@ -635,13 +704,81 @@ pub fn open_route_window(
         .as_millis();
     let label = format!("route-{}-{created_at}", target.view.replace(|c: char| !c.is_ascii_alphanumeric(), "-"));
     let title = format!("HivemindOS - {}", target.view);
-    let window = WebviewWindowBuilder::new(&app, label, route_url(&app, &state, &route)?)
+    let mut builder = WebviewWindowBuilder::new(&app, label.clone(), route_url(&app, &state, &route)?)
         .title(title)
         .inner_size(1100.0, 760.0)
         .min_inner_size(860.0, 560.0)
-        .resizable(true)
-        .build()
-        .map_err(|error| error.to_string())?;
-    let _ = window.set_focus();
+        .resizable(true);
+    if target.screen_x.is_some() || target.screen_y.is_some() {
+        // Drag-out flow: spawn under the pointer. Trust the OS cursor over
+        // the webview-reported coordinates; clamp so the title bar stays
+        // reachable.
+        let (x, y) = cursor_logical_position(&app)
+            .or_else(|| match (target.screen_x, target.screen_y) {
+                (Some(x), Some(y)) => Some((x, y)),
+                _ => None,
+            })
+            .unwrap_or((POPOUT_GRAB_OFFSET_X, POPOUT_GRAB_OFFSET_Y));
+        builder = builder.position((x - POPOUT_GRAB_OFFSET_X).max(0.0), (y - POPOUT_GRAB_OFFSET_Y).max(0.0));
+    }
+    let live = target.live.unwrap_or(false);
+    if live {
+        // Keep the origin window focused so its drag gesture stays alive;
+        // the follow loop (or the release) focuses this window afterwards.
+        builder = builder.focused(false);
+    }
+    let window = builder.build().map_err(|error| error.to_string())?;
+    if !live {
+        let _ = window.set_focus();
+    }
+    #[cfg(target_os = "macos")]
+    if live {
+        // Native follow: track the physical cursor while the button is held,
+        // then focus on release. Runs off-thread; set_position/set_focus are
+        // dispatched to the main loop by tauri. Hard 60s cap as a backstop
+        // against a stuck button-state read.
+        let follow = window.clone();
+        std::thread::spawn(move || {
+            let started = std::time::Instant::now();
+            while macos_drag::left_button_down()
+                && started.elapsed() < std::time::Duration::from_secs(60)
+            {
+                if let Some((x, y)) = macos_drag::cursor_point() {
+                    if follow
+                        .set_position(tauri::LogicalPosition::new(
+                            (x - POPOUT_GRAB_OFFSET_X).max(0.0),
+                            (y - POPOUT_GRAB_OFFSET_Y).max(0.0),
+                        ))
+                        .is_err()
+                    {
+                        // Window is gone; stop following.
+                        return;
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis(16));
+            }
+            let _ = follow.set_focus();
+        });
+    }
+    Ok(label)
+}
+
+/// Live drag-out follow: reposition a popped-out route window under the OS
+/// cursor. Driven by the origin window's pointermove stream while the user
+/// keeps holding the drag after the window pops out.
+#[tauri::command]
+pub fn move_route_window(app: AppHandle, label: String) -> Result<(), String> {
+    if !label.starts_with("route-") {
+        return Err("not a route window".to_string());
+    }
+    let Some(window) = app.get_webview_window(&label) else {
+        return Ok(());
+    };
+    if let Some((x, y)) = cursor_logical_position(&app) {
+        let _ = window.set_position(tauri::LogicalPosition::new(
+            (x - POPOUT_GRAB_OFFSET_X).max(0.0),
+            (y - POPOUT_GRAB_OFFSET_Y).max(0.0),
+        ));
+    }
     Ok(())
 }

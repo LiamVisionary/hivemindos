@@ -1,4 +1,5 @@
 import type { LoopSpec } from "@/lib/types/loops";
+import { booleanEnv } from "@/lib/config/env";
 import { withObservation } from "@/lib/services/loops/loop-engine";
 import { listLoopPatterns } from "@/lib/services/loops/pattern-registry";
 import { loopGateFromVerifier, type LoopVerifierId } from "@/lib/services/loops/verifier-registry";
@@ -138,6 +139,15 @@ export function buildOperatingUnitLearningLoop(input: OperatingUnitLearningLoopI
   const governanceLabel = input.governanceLabel ?? "governance policy";
   const skillTargets = [...new Set((input.skills ?? []).map((skill) => skill.trim()).filter(Boolean))];
   const usesProductTasteRubric = shouldUseProductTasteRubric(input);
+  // EVERY company completion gets a required independent judge, not only
+  // product-taste work: the outcome gate below is receipt:evidence, which any
+  // 40+ char worker self-report satisfies un-refuted (loop-runner), so "task
+  // done" prose completed real company tasks. The runner fails closed to
+  // needs-human when no independent judge is staffable, and judgeVerdictPasses
+  // requires evaluator.independent. Cost: one bounded extra chat per completion.
+  // QUEEN_BEE_LOOP_OUTCOME_JUDGE=0 disables — default ON, disable-flag
+  // semantics like the other QUEEN_BEE_LOOP_* integrity gates.
+  const requiresIndependentJudge = usesProductTasteRubric || booleanEnv("QUEEN_BEE_LOOP_OUTCOME_JUDGE", true);
   return withObservation({
     mode: "optimizer",
     goal: `${input.workTitle}: improve "${goal}" while preserving the unit's charter, budget, and evidence trail.`,
@@ -152,8 +162,13 @@ export function buildOperatingUnitLearningLoop(input: OperatingUnitLearningLoopI
       : undefined,
     evalGates: [
       loopGateFromVerifier("receipt:evidence", { id: `${gatePrefix}-outcome`, title: `Outcome evidence for ${metric}`, required: true, now }),
-      ...(usesProductTasteRubric
-        ? [loopGateFromVerifier("agent:judge", { id: `${gatePrefix}-judge`, title: "Independent product-quality review", required: true, now })]
+      ...(requiresIndependentJudge
+        ? [loopGateFromVerifier("agent:judge", {
+          id: `${gatePrefix}-judge`,
+          title: usesProductTasteRubric ? "Independent product-quality review" : "Independent outcome review",
+          required: true,
+          now,
+        })]
         : []),
       loopGateFromVerifier("receipt:evidence", { id: `${gatePrefix}-learning`, title: "Reviewed learning distillation candidate", required: false, now }),
       loopGateFromVerifier("governance:policy", { id: `${gatePrefix}-governance`, title: "Budget and policy constraints respected", required: false, now }),

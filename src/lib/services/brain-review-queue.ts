@@ -11,6 +11,7 @@ import {
   type EvolveAgentMemoryInput,
   type RememberAgentMemoryInput,
 } from "@/lib/services/obsidian/agent-memory";
+import { withCrossProcessFileLock } from "@/lib/services/obsidian/agent-memory/write-transactions";
 import {
   BRAIN_REVIEW_EVIDENCE_SOURCE_TYPES,
   BRAIN_REVIEW_KINDS,
@@ -28,6 +29,7 @@ import type { ScopePolicy } from "@/lib/types/principal";
 import type { KanbanTask } from "@/lib/types/kanban";
 
 const BRAIN_REVIEW_QUEUE_FILE = join(homedir(), ".hivemindos", "brain-review-queue.json");
+const BRAIN_REVIEW_QUEUE_LOCK_FILE = `${BRAIN_REVIEW_QUEUE_FILE}.lock`;
 const MAX_TITLE_LENGTH = 160;
 const MAX_SUMMARY_LENGTH = 1_000;
 const MAX_CONTENT_LENGTH = 40_000;
@@ -723,7 +725,15 @@ function cleanMetadata(value: unknown): Record<string, unknown> | undefined {
 }
 
 function enqueueBrainReviewWrite<T>(operation: () => Promise<T>): Promise<T> {
-  const next = brainReviewWriteQueue.catch(() => undefined).then(operation);
+  // The promise chain only serializes writers inside this process; the dev
+  // server, agent server, and Tauri sidecar each run their own copy, so every
+  // read-modify-write also holds the cross-process lockfile or concurrent
+  // processes silently drop each other's proposals.
+  const next = brainReviewWriteQueue
+    .catch(() => undefined)
+    .then(() => withCrossProcessFileLock(BRAIN_REVIEW_QUEUE_LOCK_FILE, operation, {
+      label: "cross-process brain review queue write",
+    }));
   brainReviewWriteQueue = next.then(
     () => undefined,
     () => undefined,

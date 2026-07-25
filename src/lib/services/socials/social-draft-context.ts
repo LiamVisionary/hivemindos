@@ -14,12 +14,15 @@ import type { SocialAccount, SocialQueueItem } from "@/lib/services/socials/soci
 
 const MAX_SOUL_CHARS = 36_000;
 const MAX_SOUL_FILE_CHARS = 6_000;
+const MAX_VOICE_CORPUS_READ_BYTES = 128_000;
+const MAX_VOICE_CORPUS_POSTS = 16;
 const MAX_SOURCE_CHARS = 8_000;
 const MAX_ALL_SOURCE_CHARS = 24_000;
 const MAX_REMOTE_BYTES = 1_500_000;
 const MAX_LOCAL_FILES = 10;
 const SOURCE_TIMEOUT_MS = 12_000;
 const SOUL_FILES = ["SKILL.md", "SOUL.md", "STYLE.md", "examples/good-outputs.md", "examples/bad-outputs.md", "MEMORY.md"];
+const VOICE_CORPUS_FILES = ["data/recent-posts.jsonl", "data/liam_corpus.jsonl"];
 const TEXT_FILE_PATTERN = /\.(?:md|mdx|txt|json|jsonl|ya?ml|toml|csv|ts|tsx|js|jsx|py|rs)$/i;
 const SENSITIVE_FILE_PATTERN = /(?:^|\/)(?:\.env(?:\.|$)|credentials?|secrets?|private[-_.]?key)/i;
 
@@ -27,6 +30,10 @@ export type SocialDraftContext = {
   text: string;
   contextSourceIds: string[];
   warnings: string[];
+  voiceInstructionsText?: string;
+  voiceCorpusText?: string;
+  sourceText?: string;
+  recentQueueText?: string;
 };
 
 type ContextDependencies = { fetchImpl?: typeof fetch };
@@ -52,10 +59,42 @@ function inside(root: string, candidate: string): boolean {
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
-async function loadSoul(account: SocialAccount): Promise<string> {
+async function loadVoiceCorpus(file: string, maxCharacters: number): Promise<string> {
+  const raw = await readFilePrefix(file, MAX_VOICE_CORPUS_READ_BYTES);
+  const posts: string[] = [];
+  const seen = new Set<string>();
+  let used = 0;
+  for (const line of raw.split("\n")) {
+    if (posts.length >= MAX_VOICE_CORPUS_POSTS || used >= maxCharacters) break;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue;
+    const record = parsed as Record<string, unknown>;
+    const text = typeof record.text === "string" ? record.text.replace(/\u0000/g, "").trim() : "";
+    if (text.length < 20) continue;
+    const key = text.normalize("NFKC").toLowerCase().replace(/\s+/g, " ");
+    if (seen.has(key)) continue;
+    const time = typeof record.time === "string" && Number.isFinite(Date.parse(record.time))
+      ? new Date(record.time).toISOString().slice(0, 10)
+      : "date unknown";
+    const clippedText = clamp(text, Math.min(900, Math.max(0, maxCharacters - used)));
+    const entry = `### Authored post (${time})\n${clippedText}`;
+    if (!clippedText || used + entry.length > maxCharacters) break;
+    posts.push(entry);
+    seen.add(key);
+    used += entry.length;
+  }
+  return posts.join("\n\n");
+}
+
+async function loadSoul(account: SocialAccount): Promise<{ instructions: string; corpus: string }> {
   const soulPath = account.soulPath?.trim();
   const configured = DEFAULT_SHARED_VAULT.vaultPath?.trim();
-  if (!soulPath || !configured) return "";
+  if (!soulPath || !configured) return { instructions: "", corpus: "" };
   const vaultRoot = path.resolve(resolveObsidianVaultPath(configured));
   const soulRoot = path.resolve(vaultRoot, soulPath);
   if (!inside(vaultRoot, soulRoot)) throw new Error("The configured social voice resolves outside the shared vault.");
@@ -74,7 +113,15 @@ async function loadSoul(account: SocialAccount): Promise<string> {
     sections.push(`## Voice: ${relative}\n${clipped}`);
     remaining -= clipped.length;
   }
-  return sections.join("\n\n");
+  let corpus = "";
+  for (const relative of VOICE_CORPUS_FILES) {
+    if (remaining <= 0) break;
+    const file = path.resolve(soulRoot, relative);
+    if (!inside(soulRoot, file)) continue;
+    corpus = await loadVoiceCorpus(file, remaining).catch(() => "");
+    if (corpus) break;
+  }
+  return { instructions: sections.join("\n\n"), corpus };
 }
 
 function isPrivateIpv4(address: string): boolean {
@@ -241,20 +288,29 @@ export async function buildSocialDraftContext(
       warnings.push(`${source.kind} source ${source.ref}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
-  let soul = "";
+  let soul = { instructions: "", corpus: "" };
   try {
     soul = await loadSoul(account);
   } catch (error) {
     warnings.push(`Posting voice: ${error instanceof Error ? error.message : String(error)}`);
   }
+  const voiceInstructionsText = soul.instructions || "## Voice\nNo soul stack is bound. Use a clear, specific, non-corporate voice.";
+  const voiceCorpusText = soul.corpus ? `## Recent authored voice corpus\n${soul.corpus}` : "";
+  const sourceText = sourceSections.join("\n\n");
+  const recentQueueText = recentQueueContext(queue, account.id);
   return {
     text: [
-      soul || "## Voice\nNo soul stack is bound. Use a clear, specific, non-corporate voice.",
-      ...sourceSections,
-      `## Recent local queue history (avoid repeating these)\n${recentQueueContext(queue, account.id)}`,
+      voiceInstructionsText,
+      voiceCorpusText,
+      sourceText,
+      `## Anti-repetition memory\nThese are prior local drafts and posts. Treat them as negative memory only: do not copy their wording, framing, rhythm, or rhetorical structure.\n${recentQueueText}`,
       warnings.length ? `## Context collection warnings\n${warnings.map((warning) => `- ${warning}`).join("\n")}` : "",
     ].filter(Boolean).join("\n\n"),
     contextSourceIds,
     warnings,
+    voiceInstructionsText,
+    voiceCorpusText,
+    sourceText,
+    recentQueueText,
   };
 }

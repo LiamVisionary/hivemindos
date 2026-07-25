@@ -132,6 +132,10 @@ export async function prewarmLocalTts(input: {
     voiceModelId: input.voiceModelId,
     voiceId: input.voiceId,
     openingLine: "",
+    // Prewarm is off the audible path, so pay discovery here: stored ids get
+    // validated against the server's advertised voices before the first
+    // spoken turn (a stale id would otherwise 404 and trip the breaker).
+    awaitDiscoveryForValidation: true,
   }).catch(() => null);
   if (!config) {
     return {

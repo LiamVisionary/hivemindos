@@ -328,6 +328,13 @@
 
 /* ---- Floating inspector ---- */
 
+/* Popped-out satellite windows are chrome-free: the right-docked inspector
+   (and its reveal pill) stay hidden so only the graph shows. */
+:global(:root[data-popout-window="true"]) .inspector,
+:global(:root[data-popout-window="true"]) .inspectorReveal {
+  display: none;
+}
+
 .inspector {
   position: absolute;
   z-index: 6;

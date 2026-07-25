@@ -9,6 +9,7 @@ const {
   extractEngagementTargetHandles,
 } = await import("../src/lib/services/socials/social-x-discovery.ts");
 const { generateSocialEngagementDrafts } = await import("../src/lib/services/socials/social-engagement-generator.ts");
+const { targetAnchorIsSupported } = await import("../src/lib/services/socials/social-draft-quality.ts");
 
 const account = {
   id: "x:thehivemindos",
@@ -94,6 +95,24 @@ const queue = [{
   createdAt: "2026-07-20T12:00:00.000Z",
 }];
 
+assert.equal(
+  targetAnchorIsSupported(
+    "app sessions",
+    "Base is shipping account abstraction for app sessions",
+    "session keys are much more useful with scoped budgets",
+  ),
+  true,
+);
+assert.equal(
+  targetAnchorIsSupported(
+    "framework",
+    "this framework crossed a new token market cap",
+    "the best framework is the one that gets out of the way of execution",
+  ),
+  false,
+  "generic bridge words cannot make an unrelated reply look contextual",
+);
+
 const discovery = await discoverRelevantXPosts({
   account,
   contextText,
@@ -128,9 +147,10 @@ const generated = await generateSocialEngagementDrafts({
       return {
         model: "gpt-5.6-luna",
         text: JSON.stringify({ suggestions: [
-          { kind: "reply", targetId: "101", text: "session keys get much more useful once agents carry scoped budgets too", rationale: "Connects Base session keys to governed agent spending." },
-          { kind: "reply", targetId: "103", text: "memory without limits is intelligence without accountability. agents need both", rationale: "Adds the governance angle naturally." },
-          { kind: "quote", targetId: "103", text: "the agent stack is converging on memory + money + limits", rationale: "A concise quote-post frame." },
+          { kind: "reply", targetId: "101", targetAnchor: "account abstraction", text: "scoped budgets make sessions much safer", rationale: "Looks relevant but drops the claimed anchor.", relevanceScore: 99 },
+          { kind: "reply", targetId: "101", targetAnchor: "app sessions", text: "session keys get much more useful once agents carry scoped budgets too", rationale: "Connects app sessions to governed agent spending.", relevanceScore: 94 },
+          { kind: "reply", targetId: "103", targetAnchor: "durable memory", text: "memory without limits is intelligence without accountability. agents need both", rationale: "Adds the governance angle naturally.", relevanceScore: 91 },
+          { kind: "quote", targetId: "103", targetAnchor: "spending limits", text: "spending limits are what turn agent money from a demo into something I can leave running", rationale: "A concrete quote-post frame.", relevanceScore: 93 },
         ] }),
       };
     },

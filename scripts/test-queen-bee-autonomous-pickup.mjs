@@ -715,4 +715,218 @@ for (const askText of [
   }
 }
 
+// --- Scenario 13: judge verdicts fail CLOSED. Negated prose ("The output is not
+//     accepted") contains the ACCEPTED keyword and used to pass; now an unparseable
+//     reply triggers exactly ONE corrective re-ask for pure JSON, and a still-
+//     unparseable reply rejects. An exact single-token ACCEPT reply still passes.
+function judgeVerdictDeps({ judgeReplies, judgeMessages, onComplete }) {
+  return {
+    claim: async (slug, taskId, input) => ({ task: { ...loopTask, status: "working", claimLock: input.claimer, currentRunId: "r_loop" }, board: {}, run: { id: "r_loop" } }),
+    fetchJson: async (url, init) => {
+      const body = JSON.parse(String(init.body));
+      if (body.context?.queenBeeLoopJudge) {
+        judgeMessages.push(body.message);
+        const reply = judgeReplies.shift();
+        assert.notEqual(reply, undefined, "the judge must not be asked more times than scripted (exactly one retry)");
+        return { ok: true, text: reply };
+      }
+      return { ok: true, text: SUBSTANTIVE };
+    },
+    complete: onComplete,
+    block: async () => { throw new Error("block should not be called when the worker produced output"); },
+    reroute: async () => ({ task: { ...loopTask, status: "ready" }, board: {} }),
+    fail: async () => ({ task: { ...loopTask, status: "needs-human" }, board: {}, retried: false }),
+  };
+}
+const blockingComplete = async (slug, taskId, input) => {
+  const passedIds = new Set((input.loopReceipts ?? []).filter((r) => r.status === "passed").map((r) => r.gateId));
+  const missing = requiredGateIds.filter((id) => !passedIds.has(id));
+  if (missing.length) return { task: { ...loopTask, status: "needs-human" }, board: {}, blocked: true, missingGateIds: missing };
+  return { task: { ...loopTask, status: "done", result: input.result }, board: {} };
+};
+
+// 13a. Negated prose twice → the gate REJECTS (fail closed), never keyword-passes.
+{
+  const judgeMessages = [];
+  const result = await runQueenBeeAutonomousPickup(
+    { task: loopTask, delegation, delegationChain: [delegation, fallbackDelegation] },
+    judgeVerdictDeps({
+      judgeReplies: [
+        "The output is NOT ACCEPTED — the evidence is missing.",
+        "As discussed, this cannot be accepted without further evidence.",
+      ],
+      judgeMessages,
+      onComplete: blockingComplete,
+    }),
+  );
+  assert.equal(result.status, "blocked", "an unparseable judge verdict must fail closed, not keyword-pass");
+  assert.equal(judgeMessages.length, 2, "an unparseable reply triggers exactly one corrective retry");
+  assert.match(judgeMessages[1], /Return ONLY the JSON object/, "the retry carries the corrective JSON nudge");
+}
+
+// 13b. Unparseable first reply, valid JSON on the retry → the recovered verdict decides.
+{
+  const judgeMessages = [];
+  const result = await runQueenBeeAutonomousPickup(
+    { task: loopTask, delegation, delegationChain: [delegation, fallbackDelegation] },
+    judgeVerdictDeps({
+      judgeReplies: [
+        "The result looks accepted to me overall, great work team!",
+        '{"accepted": true, "reason": "verified against the criteria"}',
+      ],
+      judgeMessages,
+      onComplete: blockingComplete,
+    }),
+  );
+  assert.equal(result.status, "completed", "a parseable retry verdict should decide the gate");
+  assert.equal(judgeMessages.length, 2);
+}
+
+// 13c. An exact single-token ACCEPT reply is still a valid verdict (no retry).
+{
+  const judgeMessages = [];
+  const result = await runQueenBeeAutonomousPickup(
+    { task: loopTask, delegation, delegationChain: [delegation, fallbackDelegation] },
+    judgeVerdictDeps({ judgeReplies: ["ACCEPT"], judgeMessages, onComplete: blockingComplete }),
+  );
+  assert.equal(result.status, "completed", "an exact single-token ACCEPT passes");
+  assert.equal(judgeMessages.length, 1, "a parseable reply must not trigger the retry");
+}
+
+// --- Scenario 14: the STRONGEST-model eligible reviewer judges, not the first in
+//     chain order — a weak fallback model must not rubber-stamp a frontier worker.
+//     Runs twice with a 0ms slot wait to also prove the cross-machine judge RELEASES
+//     its reviewer-machine chat slot (a leak would strand the second run's judge).
+{
+  const weakReviewer = {
+    status: "delegated",
+    agent: { id: "weak-reviewer", name: "Weak Reviewer", runtime: "hermes", model: "claude-3-haiku", runtimeCapabilities: { chat: true } },
+    machine: { key: "linux", device: { name: "Linux Box", collectorUrl: "http://collector-two.local:5055" } },
+  };
+  const strongReviewer = {
+    status: "delegated",
+    agent: { id: "strong-reviewer", name: "Strong Reviewer", runtime: "hermes", model: "claude-opus-4.9", runtimeCapabilities: { chat: true } },
+    machine: { key: "win", device: { name: "Win Box", collectorUrl: "http://collector-three.local:5055" } },
+  };
+  process.env.QUEEN_BEE_MACHINE_SLOT_WAIT_MS = "0";
+  try {
+    for (const round of [1, 2]) {
+      const judgeCalls = [];
+      const result = await runQueenBeeAutonomousPickup(
+        { task: loopTask, delegation, delegationChain: [delegation, weakReviewer, strongReviewer] },
+        {
+          claim: async (slug, taskId, input) => ({ task: { ...loopTask, status: "working", claimLock: input.claimer }, board: {} }),
+          fetchJson: async (url, init) => {
+            const body = JSON.parse(String(init.body));
+            if (body.context?.queenBeeLoopJudge) {
+              judgeCalls.push({ url, agentId: body.agent.id });
+              return { ok: true, text: '{"accepted": true, "reason": "meets the bar"}' };
+            }
+            return { ok: true, text: SUBSTANTIVE };
+          },
+          complete: blockingComplete,
+          block: async () => { throw new Error("block should not be called"); },
+          reroute: async () => ({ task: { ...loopTask, status: "ready" }, board: {} }),
+          fail: async () => ({ task: { ...loopTask, status: "needs-human" }, board: {}, retried: false }),
+        },
+      );
+      assert.equal(result.status, "completed", `round ${round}: judge slot must be acquired AND released (no leak)`);
+      assert.equal(judgeCalls.length, 1, `round ${round}: exactly one judge chat`);
+      assert.equal(judgeCalls[0].agentId, "strong-reviewer", "the strongest-model reviewer judges, not the first in chain");
+      assert.equal(judgeCalls[0].url, "http://collector-three.local:5055/chat", "the judge chat lands on the strong reviewer's collector");
+    }
+  } finally {
+    delete process.env.QUEEN_BEE_MACHINE_SLOT_WAIT_MS;
+  }
+}
+
+// --- Scenario 15: judge chat slot accounting (skeptic-corrected design).
+// 15a. A judge on the SAME machine the worker pickup already holds keeps running
+//      under that held slot — with a 0ms slot wait, re-acquiring would self-deadlock.
+{
+  const sameMachineReviewer = {
+    status: "delegated",
+    agent: { id: "ada-lovelace", name: "Ada Lovelace", runtime: "hermes", runtimeCapabilities: { chat: true } },
+    machine: { key: "mac", device: { name: "This Mac", collectorUrl: "http://collector.local:5055" } },
+  };
+  process.env.QUEEN_BEE_MACHINE_SLOT_WAIT_MS = "0";
+  try {
+    let judgeRan = false;
+    const result = await runQueenBeeAutonomousPickup(
+      { task: loopTask, delegation, delegationChain: [delegation, sameMachineReviewer] },
+      {
+        claim: async (slug, taskId, input) => ({ task: { ...loopTask, status: "working", claimLock: input.claimer }, board: {} }),
+        fetchJson: async (url, init) => {
+          const body = JSON.parse(String(init.body));
+          if (body.context?.queenBeeLoopJudge) {
+            judgeRan = true;
+            return { ok: true, text: '{"accepted": true, "reason": "meets the bar"}' };
+          }
+          return { ok: true, text: SUBSTANTIVE };
+        },
+        complete: blockingComplete,
+        block: async () => { throw new Error("block should not be called"); },
+        reroute: async () => ({ task: { ...loopTask, status: "ready" }, board: {} }),
+        fail: async () => ({ task: { ...loopTask, status: "needs-human" }, board: {}, retried: false }),
+      },
+    );
+    assert.equal(judgeRan, true, "a same-machine judge must run under the already-held slot (no self-deadlock)");
+    assert.equal(result.status, "completed");
+  } finally {
+    delete process.env.QUEEN_BEE_MACHINE_SLOT_WAIT_MS;
+  }
+}
+
+// 15b. A judge on a DIFFERENT machine must take that machine's chat slot: when the
+//      reviewer machine is saturated, the judge chat never fires and the gate fails
+//      closed with a capacity receipt instead of piling a chat onto the busy box.
+{
+  process.env.QUEEN_BEE_MACHINE_SLOT_WAIT_MS = "0";
+  try {
+    let releaseHeldChat = () => {};
+    const heldChat = new Promise((resolve) => { releaseHeldChat = resolve; });
+    // Saturate the reviewer machine ("linux") with a worker pickup that parks in its chat.
+    const holder = runQueenBeeAutonomousPickup({ task: { ...task, id: "t_judge_slot_hold" }, delegation: fallbackDelegation }, {
+      claim: async (slug, taskId, input) => ({ task: { ...task, id: "t_judge_slot_hold", status: "working", claimLock: input.claimer }, board: {} }),
+      fetchJson: async () => { await heldChat; return { ok: true, text: "held done" }; },
+      complete: async (slug, taskId, input) => ({ task: { ...task, id: "t_judge_slot_hold", status: "done", result: input.result }, board: {} }),
+      block: async () => { throw new Error("holder must not block"); },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    let judgeChatRan = false;
+    let capturedReceipts = null;
+    const result = await runQueenBeeAutonomousPickup(
+      { task: loopTask, delegation, delegationChain: [delegation, fallbackDelegation] },
+      {
+        claim: async (slug, taskId, input) => ({ task: { ...loopTask, status: "working", claimLock: input.claimer }, board: {} }),
+        fetchJson: async (url, init) => {
+          const body = JSON.parse(String(init.body));
+          if (body.context?.queenBeeLoopJudge) {
+            judgeChatRan = true;
+            return { ok: true, text: '{"accepted": true, "reason": "should never be reached"}' };
+          }
+          return { ok: true, text: SUBSTANTIVE };
+        },
+        complete: async (slug, taskId, input) => {
+          capturedReceipts = input.loopReceipts ?? [];
+          return { task: { ...loopTask, status: "done", result: input.result }, board: {} };
+        },
+        block: async () => { throw new Error("block should not be called"); },
+        reroute: async () => ({ task: { ...loopTask, status: "ready" }, board: {} }),
+        fail: async () => ({ task: { ...loopTask, status: "needs-human" }, board: {}, retried: false }),
+      },
+    );
+    assert.equal(result.status, "completed");
+    assert.equal(judgeChatRan, false, "the judge chat must not fire while its machine is at chat capacity");
+    const judgeReceipt = capturedReceipts.find((r) => /judge/.test(String(r.gateId)));
+    assert.equal(judgeReceipt?.status, "failed", "a capacity-starved judge fails the gate closed");
+    assert.match(judgeReceipt?.summary ?? "", /capacity/i, "the receipt names the reviewer-machine capacity cause");
+    releaseHeldChat();
+    assert.equal((await holder).status, "completed");
+  } finally {
+    delete process.env.QUEEN_BEE_MACHINE_SLOT_WAIT_MS;
+  }
+}
+
 console.log("Queen Bee autonomous pickup + loop receipts contract test passed.");

@@ -143,9 +143,7 @@ assert.match(settings, /route\.auth === "oauth" \? "OAuth" : "API"/);
 assert.match(settings, /Recommended/);
 assert.match(settings, /All available/);
 
-const conversationNav = read("src/features/dashboard/views/chat/exchange/ConversationNav.tsx");
-assert.match(conversationNav, /compactChatSidebarText\(title \|\| "Previous chat", 7\)/);
-assert.match(conversationNav, /function PreviewToggle/);
-assert.match(conversationNav, /aria-label=\{expanded \? "Collapse chat preview" : "Expand chat preview"\}/);
+// ConversationNav was an unshipped predecessor of ChatSidebar; it was deleted
+// with the App workspace change, so its compaction assertions went with it.
 
 console.log("Chat thread title captioning checks passed.");

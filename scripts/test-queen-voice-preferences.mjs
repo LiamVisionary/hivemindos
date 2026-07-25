@@ -205,7 +205,7 @@ check("GEMINI: Queen Calls prefs route Gemini Live to the Gemini hook", () => {
   assert.match(route, /body\.action === "gemini-live-session"/, "Gemini session action missing");
   assert.match(route, /mintGeminiLiveToken\(/, "Gemini session does not mint a Gemini token");
   assert.match(route, /calls\?\.voiceRuntime === GEMINI_LIVE_RUNTIME/, "GET route does not detect saved Gemini Live prefs");
-  assert.match(route, /voiceMode:\s*geminiLiveSelected[\s\S]*\? "gemini-live"/, "GET route does not return gemini-live voiceMode");
+  assert.match(route, /voiceMode:\s*callPrefsUnavailable[\s\S]*geminiLiveSelected[\s\S]*\? "gemini-live"/, "GET route does not return gemini-live voiceMode");
   assert.match(overlay, /useQueenBeeGeminiLive\(/, "overlay does not start the Gemini hook");
   assert.match(overlay, /voiceModeForOpen === "gemini-live"/, "overlay does not branch on gemini-live mode");
   assert.match(geminiHook, /action:\s*"gemini-live-session"/, "Gemini hook does not request the Queen Gemini session");
@@ -226,7 +226,20 @@ check("CLOUD TTS: saved ElevenLabs runtime opens the Queen pipeline", () => {
   assert.match(route, /const resolvedCallVoice = calls \? resolveVoiceRuntime\(calls\.voiceRuntime\) : null/, "Queen settings do not resolve the saved voice runtime through the capability matrix");
   assert.match(route, /const cloudTtsSelected = resolvedCallVoice\?\.kind === "cloud-tts"/, "Queen settings do not detect cloud TTS runtimes");
   assert.match(route, /localTtsSelected \|\| cloudTtsSelected\s*\? "pipeline"/, "Queen settings still route cloud TTS to realtime");
-  assert.match(route, /pipelineSelected:\s*localTtsSelected \|\| cloudTtsSelected/, "Queen settings do not expose cloud TTS as a pipeline");
+  assert.match(route, /pipelineSelected:\s*callPrefsUnavailable \|\| localTtsSelected \|\| cloudTtsSelected/, "Queen settings do not expose cloud TTS as a pipeline");
+});
+
+check("VOICE CONTINUITY: a prefs-store outage routes to the pipeline, never realtime", () => {
+  // An unreadable store must not read as "no local voice selected" — the GET
+  // resolves the outage to the pipeline, whose per-turn speak paths re-check
+  // the store and report voiceUnavailable instead of substituting a voice.
+  assert.match(route, /let callPrefsUnavailable = false/, "GET route does not track a call-prefs outage");
+  assert.match(route, /voiceMode:\s*callPrefsUnavailable\s*\? "pipeline"/, "a call-prefs outage does not route the overlay to the pipeline");
+  assert.doesNotMatch(route, /readQueenBeeCallPreferences\(\)\.catch\(\(\) => null\)[\s\S]{0,600}voiceMode:/, "the GET route may not swallow a prefs outage into a realtime default");
+  // The overlay client mirrors the same rule when the settings GET itself
+  // fails: default to the pipeline, not to a realtime cloud voice.
+  assert.match(overlay, /setResolvedVoiceMode\(\{ nonce, mode: "pipeline", inputTranscriptionMode: "realtime" \}\)/, "overlay GET failure does not fall back to the pipeline");
+  assert.doesNotMatch(overlay, /catch[\s\S]{0,200}setResolvedVoiceMode\(\{ nonce, mode: "realtime"/, "overlay GET failure still defaults to the realtime voice");
 });
 
 check("CLOUD TTS: Queen PCM speech uses the saved provider voice and model", () => {

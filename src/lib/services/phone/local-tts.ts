@@ -17,6 +17,8 @@ import {
   recordLocalTtsFailure,
   recordLocalTtsSuccess,
 } from "@/lib/services/phone/local-tts-health";
+import { servedLocalTtsModel, servedLocalTtsVoice } from "@/lib/services/phone/local-tts-voice-selection";
+import { pcm16ToWav } from "@/lib/services/phone/pcm-wav";
 
 export const LOCAL_TTS_RUNTIME = "local-tts";
 export const LOCAL_TTS_PROVIDER_PREFIX = "local-tts:";
@@ -1177,23 +1179,60 @@ export async function manageLocalTtsModel(input: {
   };
 }
 
+// App ids rotate when a machine/collector restarts (per-registration hash):
+// match exactly first, then by host+port — the same fallback resolvedTtsApp uses.
+function findCandidateByAppId(candidates: LocalTtsCandidate[], selectedAppId: string) {
+  return candidates.find((item) => item.appId === selectedAppId)
+    ?? candidates.find((item) => {
+      const selected = appIdHint(selectedAppId);
+      const own = appIdHint(item.appId);
+      return Boolean(selected && own && selected.host === own.host && selected.port === own.port);
+    });
+}
+
+// Single-flight background candidates-cache warm so the audible speak paths
+// (which must not pay discovery latency) validate stored ids from the NEXT resolve.
+const candidateWarmsInFlight = new Set<string>();
+function warmCandidatesForValidation(origin: string) {
+  if (candidateWarmsInFlight.has(origin) || cachedCandidates(origin)) return;
+  candidateWarmsInFlight.add(origin);
+  void discoverLocalTtsCandidates(origin)
+    .catch(() => undefined)
+    .finally(() => candidateWarmsInFlight.delete(origin));
+}
+
 export async function resolveLocalTtsCallConfig(input: {
   origin: string;
   voiceProviderId?: string;
   voiceModelId?: string;
   voiceId?: string;
   openingLine: string;
+  /** Await discovery on a cache miss so stored ids validate before first use.
+   *  Prewarm/session-open only — too slow for the audible speak paths. */
+  awaitDiscoveryForValidation?: boolean;
 }): Promise<LocalTtsCallConfig | null> {
   const selectedAppId = appIdFromLocalTtsProviderId(input.voiceProviderId);
   if (selectedAppId && input.voiceModelId?.trim() && input.voiceId?.trim()) {
-    const candidate = cachedCandidates(input.origin)?.find((item) => item.appId === selectedAppId && item.ok);
+    const cachedMatch = findCandidateByAppId(cachedCandidates(input.origin) ?? [], selectedAppId);
+    let candidate = cachedMatch?.ok ? cachedMatch : undefined;
+    if (!candidate) {
+      if (input.awaitDiscoveryForValidation) {
+        const discoveredMatch = findCandidateByAppId(
+          await discoverLocalTtsCandidates(input.origin).catch(() => []),
+          selectedAppId,
+        );
+        candidate = discoveredMatch?.ok ? discoveredMatch : undefined;
+      } else {
+        warmCandidatesForValidation(input.origin);
+      }
+    }
     return {
       provider: LOCAL_TTS_RUNTIME,
       appId: selectedAppId,
       appName: candidate?.name || "Local TTS",
       machineName: candidate?.machineName,
-      model: input.voiceModelId.trim(),
-      voice: input.voiceId.trim(),
+      model: servedLocalTtsModel(candidate, input.voiceModelId.trim()),
+      voice: servedLocalTtsVoice(candidate, input.voiceId.trim()),
       sampleRate: candidate?.sampleRate || DEFAULT_SAMPLE_RATE,
       channels: candidate?.channels || 1,
       sampleFormat: candidate?.sampleFormat || "pcm16",
@@ -1204,12 +1243,12 @@ export async function resolveLocalTtsCallConfig(input: {
   }
   const cached = cachedCandidates(input.origin);
   const candidates = cached ?? await discoverLocalTtsCandidates(input.origin);
-  const candidate = (selectedAppId ? candidates.find((item) => item.appId === selectedAppId) : null)
+  const candidate = (selectedAppId ? findCandidateByAppId(candidates, selectedAppId) : null)
     ?? candidates.find((item) => item.ok)
     ?? null;
   if (!candidate?.ok) return null;
-  const model = input.voiceModelId?.trim() || candidate.model || DEFAULT_LOCAL_TTS_MODEL;
-  const voice = input.voiceId?.trim() || candidate.voice || DEFAULT_LOCAL_TTS_VOICE;
+  const model = servedLocalTtsModel(candidate, input.voiceModelId?.trim() || "") || DEFAULT_LOCAL_TTS_MODEL;
+  const voice = servedLocalTtsVoice(candidate, input.voiceId?.trim() || "") || DEFAULT_LOCAL_TTS_VOICE;
   return {
     provider: LOCAL_TTS_RUNTIME,
     appId: candidate.appId,
@@ -1226,38 +1265,6 @@ export async function resolveLocalTtsCallConfig(input: {
   };
 }
 
-// Wrap raw PCM16 (little-endian, signed) in a 44-byte RIFF/WAVE header so a
-// Web Audio `decodeAudioData` consumer can play it. The in-app Queen voice
-// overlay buffers the whole reply and decodes it (it does not stream frames),
-// so it needs a real container — raw PCM would fail to decode and silently
-// fall back to browser speech synthesis.
-export function pcm16ToWav(pcm: Uint8Array, sampleRate: number, channels: number): ArrayBuffer {
-  const bitsPerSample = 16;
-  const blockAlign = channels * (bitsPerSample / 8);
-  const byteRate = sampleRate * blockAlign;
-  const header = new ArrayBuffer(44);
-  const view = new DataView(header);
-  const writeAscii = (offset: number, text: string) => {
-    for (let i = 0; i < text.length; i += 1) view.setUint8(offset + i, text.charCodeAt(i));
-  };
-  writeAscii(0, "RIFF");
-  view.setUint32(4, 36 + pcm.byteLength, true);
-  writeAscii(8, "WAVE");
-  writeAscii(12, "fmt ");
-  view.setUint32(16, 16, true); // PCM fmt chunk size
-  view.setUint16(20, 1, true); // audio format = PCM
-  view.setUint16(22, channels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, byteRate, true);
-  view.setUint16(32, blockAlign, true);
-  view.setUint16(34, bitsPerSample, true);
-  writeAscii(36, "data");
-  view.setUint32(40, pcm.byteLength, true);
-  const out = new Uint8Array(44 + pcm.byteLength);
-  out.set(new Uint8Array(header), 0);
-  out.set(pcm, 44);
-  return out.buffer;
-}
 
 export type LocalTtsWavResult =
   | { ok: true; wav: ArrayBuffer; sampleRate: number; channels: number; bytes: number; appName: string }

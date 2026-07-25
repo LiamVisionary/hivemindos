@@ -56,6 +56,8 @@ const TESTS = [
   "test:collector-slash-commands",
   "test:collector-ssrf-guard",
   "test:collector-windows-update",
+  "test:chat-agent-menu-ordering",
+  "test:chat-app-workspace",
   "test:chat-capability-approval",
   "test:chat-capability-preflight",
   "test:chat-command-approval-silent",

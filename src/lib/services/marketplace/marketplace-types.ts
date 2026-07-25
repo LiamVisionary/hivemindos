@@ -147,6 +147,64 @@ export function computeMarketplacePollIntervalMs(config: MarketplaceMonitorConfi
 }
 
 // ---------------------------------------------------------------------------
+// Monitor tick gate (pure — what the per-account wake may do right now)
+// ---------------------------------------------------------------------------
+
+export type MarketplaceTickGate = {
+  /** Non-null: skip this account entirely this wake. */
+  skip: "in-flight" | "posting-session" | null;
+  /** A stale in-flight marker (crash mid-session) should be cleared before proceeding. */
+  clearStaleInFlight: boolean;
+  /** posted-unverified listings await this machine's independent page check. */
+  verifyPostedUnverified: boolean;
+  /** The account's poll cadence is due. */
+  pollDue: boolean;
+};
+
+/**
+ * Decide what a monitor wake may do for one account. Two mutual-exclusion
+ * rules live here (pure, tested in the hermetic marketplace suites):
+ *
+ * - An in-flight op suppresses overlapping work until it goes stale.
+ * - A listing in "posting" means a dispatched agent session is (or may be)
+ *   driving this profile's browser RIGHT NOW — possibly dispatched from
+ *   another machine, which the local profile lock cannot see. The listing
+ *   state is vault-replicated, so deferring on it works cross-machine.
+ *   A "posting" older than `postingStaleMs` is a crashed session, not a live
+ *   one — it stops deferring so a wedged flip can never mute monitoring
+ *   forever (the base sweep flags it instead).
+ */
+export function computeMarketplaceTickGate(input: {
+  runtime: { inFlightOp?: string; inFlightSince?: string; nextPollAt?: string };
+  listings: ReadonlyArray<{ state: MarketplaceListingState; updatedAt: string }>;
+  nowMs: number;
+  inFlightStaleMs: number;
+  postingStaleMs: number;
+}): MarketplaceTickGate {
+  const { runtime, listings, nowMs, inFlightStaleMs, postingStaleMs } = input;
+  let clearStaleInFlight = false;
+  if (runtime.inFlightOp) {
+    const sinceMs = runtime.inFlightSince ? Date.parse(runtime.inFlightSince) : Number.NaN;
+    if (Number.isFinite(sinceMs) && nowMs - sinceMs < inFlightStaleMs) {
+      return { skip: "in-flight", clearStaleInFlight: false, verifyPostedUnverified: false, pollDue: false };
+    }
+    clearStaleInFlight = true;
+  }
+  const postingInFlight = listings.some((listing) => {
+    if (listing.state !== "posting") return false;
+    const flippedMs = Date.parse(listing.updatedAt);
+    return !Number.isFinite(flippedMs) || nowMs - flippedMs < postingStaleMs;
+  });
+  if (postingInFlight) {
+    return { skip: "posting-session", clearStaleInFlight, verifyPostedUnverified: false, pollDue: false };
+  }
+  const verifyPostedUnverified = listings.some((listing) => listing.state === "posted-unverified");
+  const nextMs = runtime.nextPollAt ? Date.parse(runtime.nextPollAt) : Number.NaN;
+  const pollDue = !Number.isFinite(nextMs) || nowMs >= nextMs;
+  return { skip: null, clearStaleInFlight, verifyPostedUnverified, pollDue };
+}
+
+// ---------------------------------------------------------------------------
 // Accounts
 // ---------------------------------------------------------------------------
 
@@ -211,6 +269,14 @@ export const MARKETPLACE_LISTING_STATES = [
   "pending-approval",
   "approved",
   "posting",
+  /**
+   * The agent CLAIMED the post succeeded but no independent observation has
+   * confirmed it yet (approval decided off the profile-owning machine, or the
+   * page read failed). The owning machine's monitor performs the readBrowserTab
+   * refutation and promotes to "active" or routes to attention — the claim
+   * alone never goes live on trust.
+   */
+  "posted-unverified",
   "active",
   "ended",
   "rejected",

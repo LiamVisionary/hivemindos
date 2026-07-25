@@ -64,6 +64,38 @@ assert(operatingLoop.evalGates.some((gate) => gate.verifier === "agent:judge" &&
 assert.equal(operatingLoop.benchmark?.metricName, "activated users");
 assert.equal(operatingLoop.experiments?.[0]?.agent, "growth");
 
+// Company-sourced work WITHOUT a product-taste shape still gets a required
+// independent outcome judge by default — otherwise the only required gate is
+// receipt:evidence, which any 40+ char self-report satisfies un-refuted.
+// QUEEN_BEE_LOOP_OUTCOME_JUDGE=0 disables (disable-flag semantics, default ON).
+{
+  const opsInput = {
+    unitId: "unit-b",
+    unitName: "Aperture Tools",
+    workTitle: "Rotate the weekly ops runbook",
+    runId: "run-2",
+    metricName: "runbook freshness",
+    strategicGoal: "Keep runbooks current",
+    branchAgent: "ops",
+    now,
+  };
+  const opsLoop = buildOperatingUnitLearningLoop(opsInput);
+  assert.equal(opsLoop.evaluationRubric, undefined, "non-product work keeps no product-taste rubric");
+  const judgeGate = opsLoop.evalGates.find((gate) => gate.verifier === "agent:judge");
+  assert(judgeGate?.required, "non-product company work still requires an independent outcome judge by default");
+  assert.equal(judgeGate.title, "Independent outcome review");
+
+  process.env.QUEEN_BEE_LOOP_OUTCOME_JUDGE = "0";
+  try {
+    const disabled = buildOperatingUnitLearningLoop(opsInput);
+    assert(!disabled.evalGates.some((gate) => gate.verifier === "agent:judge"), "the outcome judge is a disable-flag integrity gate");
+    const productLoop = buildOperatingUnitLearningLoop({ ...opsInput, workTitle: "Publish onboarding landing page" });
+    assert(productLoop.evalGates.some((gate) => gate.verifier === "agent:judge" && gate.required), "product-taste work keeps its judge even when the outcome-judge flag is off");
+  } finally {
+    delete process.env.QUEEN_BEE_LOOP_OUTCOME_JUDGE;
+  }
+}
+
 const capability = computeLoopCapabilityCapital({
   tasks: [{
     status: "done",

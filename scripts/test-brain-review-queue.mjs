@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { readFile, rm, mkdtemp } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { access, readFile, rm, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { register } from "node:module";
@@ -137,7 +138,68 @@ try {
   const apiListBody = await apiList.json();
   assert.ok(apiListBody.proposals.length >= 2);
 
-  console.log("Brain review queue store and API tests passed.");
+  // Two separate OS processes hammer the queue concurrently. Without the
+  // cross-process lockfile their read-modify-write cycles interleave and
+  // silently drop proposals (each process's in-memory promise queue cannot
+  // see the other process).
+  const writerCount = 20;
+  const runnerPath = join(tempHome, "contention-writer.mjs");
+  await writeFile(runnerPath, [
+    'import { register } from "node:module";',
+    'import { writeFile as fsWriteFile, access as fsAccess } from "node:fs/promises";',
+    "register(new URL(process.env.TS_LOADER_URL));",
+    "const queue = await import(process.env.QUEUE_MODULE_URL);",
+    "const writer = process.env.WRITER_ID;",
+    "// Start barrier: both writers finish booting before either writes, so the",
+    "// read-modify-write cycles genuinely overlap.",
+    "await fsWriteFile(`${process.env.BARRIER_DIR}/ready-${writer}`, writer);",
+    "for (let waited = 0; waited < 200; waited += 1) {",
+    "  const peers = await Promise.all([\"a\", \"b\"].map((id) => fsAccess(`${process.env.BARRIER_DIR}/ready-${id}`).then(() => true, () => false)));",
+    "  if (peers.every(Boolean)) break;",
+    "  await new Promise((resolveSleep) => setTimeout(resolveSleep, 25));",
+    "}",
+    `for (let index = 0; index < ${writerCount}; index += 1) {`,
+    "  await queue.createBrainReviewProposal({",
+    '    kind: "memory",',
+    "    title: `Contention writer ${writer} proposal ${index}`,",
+    "    summary: `Cross-process contention proposal ${writer}-${index}.`,",
+    "    // Large bodies widen each read-modify-write cycle so an unlocked",
+    "    // interleave loses updates reliably instead of only occasionally.",
+    '    proposedContent: `Unique cross-process contention content ${writer}-${index}. ${"x".repeat(20000)}`,',
+    "  });",
+    "}",
+    "",
+  ].join("\n"), "utf8");
+  const runContentionWriter = (writerId) => new Promise((resolveRun, rejectRun) => {
+    const child = spawn(process.execPath, [runnerPath], {
+      env: {
+        ...process.env,
+        WRITER_ID: writerId,
+        BARRIER_DIR: tempHome,
+        TS_LOADER_URL: new URL("./lib/ts-relative-loader.mjs", import.meta.url).href,
+        QUEUE_MODULE_URL: new URL("../src/lib/services/brain-review-queue.ts", import.meta.url).href,
+      },
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    child.on("error", rejectRun);
+    child.on("exit", (code) => {
+      if (code === 0) resolveRun(undefined);
+      else rejectRun(new Error(`contention writer ${writerId} exited with ${code}`));
+    });
+  });
+  await Promise.all([runContentionWriter("a"), runContentionWriter("b")]);
+  const afterContention = await queue.readBrainReviewQueue();
+  const contentionTitles = afterContention.proposals
+    .map((proposal) => proposal.title)
+    .filter((title) => title.startsWith("Contention writer "));
+  assert.equal(contentionTitles.length, writerCount * 2,
+    `both processes' proposals must survive concurrent writes (got ${contentionTitles.length} of ${writerCount * 2})`);
+  await assert.rejects(
+    access(join(tempHome, ".hivemindos", "brain-review-queue.json.lock")),
+    "the cross-process queue lock must be released after writes",
+  );
+
+  console.log("Brain review queue store, API, and cross-process lock tests passed.");
 } finally {
   await rm(tempHome, { recursive: true, force: true });
 }

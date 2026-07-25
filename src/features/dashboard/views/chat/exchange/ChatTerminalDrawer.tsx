@@ -41,9 +41,12 @@ export type ChatTerminalDrawerProps = {
   collectorUrl: string;
   workingDirectory: string;
   onClose: () => void;
+  /** "drawer" floats over the chat (default); "embedded" fills its parent —
+   * used by the App workspace Console tab. Same live shell either way. */
+  variant?: "drawer" | "embedded";
 };
 
-export function ChatTerminalDrawer({ machineName, machineKey, collectorUrl, workingDirectory, onClose }: ChatTerminalDrawerProps) {
+export function ChatTerminalDrawer({ machineName, machineKey, collectorUrl, workingDirectory, onClose, variant = "drawer" }: ChatTerminalDrawerProps) {
   const [buffer, setBuffer] = useState("");
   const [input, setInput] = useState("");
   const [connected, setConnected] = useState(false);
@@ -155,8 +158,12 @@ export function ChatTerminalDrawer({ machineName, machineKey, collectorUrl, work
     }
   }
 
+  const containerStyle: React.CSSProperties = variant === "embedded"
+    ? { display: "flex", flexDirection: "column", minHeight: 0, height: "100%", background: "#0b0b0d", overflow: "hidden" }
+    : { position: "absolute", left: 16, right: 16, bottom: 16, zIndex: 60, display: "flex", flexDirection: "column", height: "min(340px, 60%)", border: "1px solid rgba(148,163,184,0.22)", borderRadius: 16, background: "#0b0b0d", boxShadow: "0 40px 90px -20px rgba(0,0,0,0.7)", overflow: "hidden" };
+
   return (
-    <div className="cx-pop" style={{ position: "absolute", left: 16, right: 16, bottom: 16, zIndex: 60, display: "flex", flexDirection: "column", height: "min(340px, 60%)", border: "1px solid rgba(148,163,184,0.22)", borderRadius: 16, background: "#0b0b0d", boxShadow: "0 40px 90px -20px rgba(0,0,0,0.7)", overflow: "hidden" }}>
+    <div className={variant === "embedded" ? undefined : "cx-pop"} style={containerStyle}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderBottom: "1px solid rgba(148,163,184,0.16)", background: "rgba(15,23,42,0.4)" }}>
         <Ico d={ICON_PATHS.terminal} size={14} sw={1.9} stroke="#6ed88f">
           <rect x="3" y="4" width="18" height="16" rx="2" />

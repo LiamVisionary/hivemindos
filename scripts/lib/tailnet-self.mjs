@@ -11,18 +11,24 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 // Mirrors TAILSCALE_CLI_CANDIDATES in the dashboard: on macOS the CLI often
-// is not on PATH for LaunchAgents; the app-bundle binary always exists when
-// Tailscale.app is installed.
+// is not on PATH for LaunchAgents (and on Windows the scheduled-task PATH can
+// miss the install dir); the app-bundle / Program Files binaries always exist
+// when Tailscale is installed.
 const TAILSCALE_CLI_CANDIDATES = [
   "tailscale",
   "/usr/local/bin/tailscale",
   "/opt/homebrew/bin/tailscale",
+  "/opt/homebrew/opt/tailscale/bin/tailscale",
+  "/usr/bin/tailscale",
   "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+  ...(process.platform === "win32"
+    ? [`${process.env.ProgramFiles || "C:\\Program Files"}\\Tailscale\\tailscale.exe`]
+    : []),
 ];
 
 let cache = { value: null, checkedAt: 0 };
 
-async function tailscaleStatusJson() {
+export async function tailscaleStatusJson() {
   let lastError = null;
   for (const cli of TAILSCALE_CLI_CANDIDATES) {
     try {
@@ -55,5 +61,27 @@ export async function tailnetSelfNode({ ttlMs = 300_000 } = {}) {
     return value;
   } catch {
     return cache.value;
+  }
+}
+
+let ownerCache = { value: "", checkedAt: 0 };
+
+/**
+ * The tailnet owner (LoginName) of this machine's system tailscaled node, used
+ * to gate cross-machine mutations to the node owner's own fleet. Mirrors the
+ * trust model of hivemind-linkd shell.go requireTailnetSelfUser. Cached; stale
+ * values are better than none — an empty answer fails those gates closed.
+ */
+export async function tailnetSelfOwner({ ttlMs = 300_000 } = {}) {
+  const now = Date.now();
+  if (ownerCache.value && now - ownerCache.checkedAt < ttlMs) return ownerCache.value;
+  try {
+    const status = await tailscaleStatusJson();
+    const selfUserId = status?.Self?.UserID;
+    const login = String(status?.User?.[selfUserId]?.LoginName || "").trim();
+    if (login) ownerCache = { value: login, checkedAt: now };
+    return login || ownerCache.value;
+  } catch {
+    return ownerCache.value;
   }
 }

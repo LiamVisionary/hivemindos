@@ -174,7 +174,69 @@ try {
   assert.equal(pendingReplay.processed, 0);
   assert.ok(pendingReplay.skipped >= 1);
 
-  console.log("Brain Drop intake classification, cleanup, routing, linking, review, and idempotency checks passed.");
+  // A prebuilt graph must be used as-is instead of forcing a fresh vault
+  // scan: the phantom node below has no backing file, so it can only appear
+  // in the related list if the prebuilt graph was consulted.
+  const phantomRaw = await captureObsidianNote({
+    vaultPath,
+    content: "Remember that the phantom signal archive is worth studying.",
+    source: "dashboard",
+    idempotencyKey: "brain-drop-test-prebuilt",
+    now: new Date("2026-07-16T18:00:00.000Z"),
+  });
+  const phantomProcessed = await processBrainDropCapture({
+    vaultPath,
+    capture: phantomRaw,
+    content: "Remember that the phantom signal archive is worth studying.",
+    source: "dashboard",
+    now: new Date("2026-07-16T18:01:00.000Z"),
+    prebuiltGraph: {
+      nodes: [{
+        id: "Memory/Phantom Signal Archive.md",
+        label: "Phantom Signal Archive",
+        tags: [],
+        preview: "phantom signal archive of unexplained transmissions",
+      }],
+      links: [],
+    },
+  });
+  assert.deepEqual(phantomProcessed.relatedNotePaths, ["Memory/Phantom Signal Archive.md"],
+    "processBrainDropCapture must honor an injected prebuilt graph");
+
+  // Batch processing builds the graph once up front: a note routed earlier in
+  // the same batch must NOT appear in a later capture's related list (a
+  // per-capture forced rebuild would have picked it up), while pre-existing
+  // vault notes still relate normally.
+  await writeFile(
+    join(vaultPath, "Memory", "Quantum Observatory.md"),
+    "---\ntags: [research]\n---\n\n# Quantum Observatory\n\nQuantum hummingbird telescope research notes.\n",
+    "utf8",
+  );
+  await writeFile(
+    join(vaultPath, "Inbox", "Zz quantum first.md"),
+    "---\ncreated: 2026-07-16T19:00:00.000Z\n---\n\nIdea: quantum hummingbird telescope prototype.\n",
+    "utf8",
+  );
+  await writeFile(
+    join(vaultPath, "Inbox", "Aa quantum second.md"),
+    "---\ncreated: 2026-07-16T19:01:00.000Z\n---\n\nIdea: quantum hummingbird telescope shed.\n",
+    "utf8",
+  );
+  const batch = await processPendingBrainDropInbox({
+    vaultPath,
+    now: new Date("2026-07-16T19:05:00.000Z"),
+  });
+  assert.equal(batch.processed, 2);
+  const [batchFirst, batchSecond] = batch.results;
+  assert.match(batchFirst.title, /prototype/);
+  assert.match(batchSecond.title, /shed/);
+  assert.ok(batchFirst.relatedNotePaths.includes("Memory/Quantum Observatory.md"),
+    "batch captures still relate against the shared prebuilt graph");
+  assert.ok(batchSecond.relatedNotePaths.includes("Memory/Quantum Observatory.md"));
+  assert.ok(!batchSecond.relatedNotePaths.some((path) => path.startsWith("Ideas/") && path.includes("prototype")),
+    "one graph serves the whole batch, so intra-batch routed notes are not rebuilt into it");
+
+  console.log("Brain Drop intake classification, cleanup, routing, linking, review, idempotency, and batch-graph checks passed.");
 } finally {
   await rm(vaultPath, { recursive: true, force: true });
 }

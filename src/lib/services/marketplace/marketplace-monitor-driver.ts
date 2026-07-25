@@ -15,22 +15,34 @@ import {
   releaseMarketplaceDriverLease,
   type MarketplaceDriverLeaseState,
 } from "@/lib/services/marketplace/marketplace-driver-lease";
-import { syncMarketplaceCatalog } from "@/lib/services/marketplace/marketplace-listing-pipeline";
+import { applyVerifiedCatalogSweep, verifyUnverifiedPostedListings } from "@/lib/services/marketplace/marketplace-listing-pipeline";
 import { recoverLateMarketplaceResearch } from "@/lib/services/marketplace/marketplace-research";
-import { readMarketplaceListings, upsertSyncedListings } from "@/lib/services/marketplace/marketplace-listings-store";
+import { readMarketplaceListings } from "@/lib/services/marketplace/marketplace-listings-store";
+import { resolveIndependentTabReader, verifyClaimedReplies } from "@/lib/services/marketplace/marketplace-verification-matrix";
 import { listMarketplaceDirectives, readMarketplaceAccounts, updateMarketplaceAccount } from "@/lib/services/marketplace/marketplace-store";
 import { mutateMarketplaceRuntime, patchAccountRuntime, readMarketplaceRuntime } from "@/lib/services/marketplace/marketplace-runtime";
-import { computeMarketplacePollIntervalMs, type MarketplaceAccount, type MarketplaceAgentReport } from "@/lib/services/marketplace/marketplace-types";
+import {
+  computeMarketplacePollIntervalMs,
+  computeMarketplaceTickGate,
+  type MarketplaceAccount,
+  type MarketplaceAgentReport,
+  type MarketplaceReportEscalation,
+} from "@/lib/services/marketplace/marketplace-types";
 
 /**
  * The marketplace monitor: a lease-elected per-machine loop that wakes every
  * few seconds, and per connected LOCALLY-HOMED account decides whether work is
  * due from the backoff ladder — cheap scripted activity probes on the hot
- * rungs, full agent sweeps (catalog sync + inbox work) at the base cadence,
- * and an immediate inbox session whenever pending buyer messages show up.
- * Escalations become decision cards; the ladder accelerates after activity
- * and relaxes back to the hourly base (all cadence math is pure, tested in
- * scripts/test-marketplace-backoff.mjs).
+ * rungs, ONE combined agent sweep (catalog + inbox in a single dispatched
+ * session) at the base cadence, and an immediate inbox session whenever
+ * pending buyer messages show up. As the process that runs ON the profile-
+ * owning machine, each wake also settles deferred agent claims: it promotes
+ * (or refutes) posted-unverified listings via the independent page check, and
+ * it defers all probing while a vault-replicated "posting" state says an agent
+ * session may be driving this profile's browser. Escalations become decision
+ * cards; the ladder accelerates after activity and relaxes back to the hourly
+ * base (cadence + gate math is pure, tested in the hermetic marketplace
+ * suites).
  */
 
 type Runner = {
@@ -49,6 +61,8 @@ const globalState = globalThis as GlobalState;
 const wakeMs = () => numberEnv("HIVEMINDOS_MARKETPLACE_DRIVER_TICK_MS", 5_000);
 /** An op stuck in-flight this long is presumed dead (server restart mid-session). */
 const IN_FLIGHT_STALE_MS = 45 * 60_000;
+/** A "posting" listing older than this is a crashed session, not a live one — stop deferring on it (create cap 60 min + slack). */
+const POSTING_SESSION_STALE_MS = 75 * 60_000;
 
 export function marketplaceMonitorDisabled(): boolean {
   return (process.env.HIVEMINDOS_MARKETPLACE_MONITOR || "").trim() === "0";

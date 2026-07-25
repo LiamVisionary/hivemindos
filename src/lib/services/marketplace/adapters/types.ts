@@ -36,7 +36,18 @@ export type MarketplaceActivityProbe = {
 };
 
 /** One dispatched agent operation on the profile-owning machine. */
-export type MarketplaceAgentOp = "work-inbox" | "create-listing" | "end-listing" | "sync-catalog";
+export const MARKETPLACE_AGENT_OPS = ["work-inbox", "create-listing", "end-listing", "sync-catalog"] as const;
+export type MarketplaceAgentOp = (typeof MARKETPLACE_AGENT_OPS)[number];
+
+/**
+ * How an agent's claim about a mutating op stands after the dispatcher's
+ * independent check: "verified" = this process observed the claimed page state
+ * itself; "deferred" = observation is impossible from here (foreign machine /
+ * no page text) — the state flip waits for the profile-owning machine's
+ * monitor instead of going through on trust. Refuted claims never return —
+ * they throw into the caller's failure path.
+ */
+export type MarketplaceClaimDisposition = "verified" | "deferred";
 
 export type MarketplaceAgentTaskInput = {
   account: MarketplaceAccount;
@@ -68,6 +79,13 @@ export type MarketplaceInboxWorkInput = {
   directives: MarketplaceDirective[];
   /** Listings context the agent may answer questions from. */
   listings: MarketplaceListing[];
+  /**
+   * Base-cadence combined sweep: the ONE dispatched session catalogues the
+   * selling page first, then works the inbox, returning both in a single
+   * MARKETPLACE_REPORT — two separate queen round-trips against the same
+   * profile were pure overhead (the report contract already carries catalog).
+   */
+  fullSweep?: boolean;
 };
 
 export interface MarketplaceProviderAdapter {
@@ -81,15 +99,22 @@ export interface MarketplaceProviderAdapter {
   /**
    * Post an approved listing. Fail-closed: throws unless `approvedDecisionId`
    * references a decision the caller re-verified as approved (the matrix gates
-   * createListing on listing-approval-required).
+   * createListing on listing-approval-required). `verification: "deferred"`
+   * means the claim could not be observed from this process — the caller
+   * records it posted-unverified and the owning machine's monitor promotes it.
    */
   createListing(
     account: MarketplaceAccount,
     listing: MarketplaceListing,
     approvedDecisionId: string,
     ctx: MarketplaceAdapterContext,
-  ): Promise<{ externalId: string; url: string }>;
-  endListing(account: MarketplaceAccount, externalId: string, ctx: MarketplaceAdapterContext): Promise<void>;
+  ): Promise<{ externalId: string; url: string; verification: MarketplaceClaimDisposition }>;
+  /** End a live listing. Throws when the claimed end is refuted by the page still being live. */
+  endListing(
+    account: MarketplaceAccount,
+    externalId: string,
+    ctx: MarketplaceAdapterContext,
+  ): Promise<{ verification: MarketplaceClaimDisposition }>;
   /** Work pending buyer messages per the account's autonomy mode; returns the full session report. */
   workInbox(account: MarketplaceAccount, input: MarketplaceInboxWorkInput, ctx: MarketplaceAdapterContext): Promise<MarketplaceAgentReport>;
   capabilities(account: MarketplaceAccount): Record<MarketplaceCapability, MarketplaceCapabilitySupport>;

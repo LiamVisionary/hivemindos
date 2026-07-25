@@ -27,11 +27,11 @@ import { isXaiOAuthProvider } from "@/lib/services/xai-oauth-inference-contract"
 import {
   LOCAL_TTS_RUNTIME,
   isLocalTtsProviderId,
-  pcm16ToWav,
   resolveLocalTtsCallConfig,
   streamLocalTtsPcm,
   synthesizeLocalTtsWav,
 } from "@/lib/services/phone/local-tts";
+import { pcm16ToWav } from "@/lib/services/phone/pcm-wav";
 import {
   localTtsBreakerState,
   prewarmLocalTts,
@@ -303,7 +303,19 @@ async function resolveVoiceChatBrainPlan(): Promise<VoiceChatBrainPlan> {
 // marks that the spoken voice is a local one (voice-continuity semantics).
 export async function GET() {
   try {
-    const calls = await readQueenBeeCallPreferences().catch(() => null);
+    // A prefs-store outage must never read as "no local voice selected": with
+    // no stored prefs, "realtime" (a cloud voice) is the legitimate default,
+    // but an UNREADABLE store means the user may have selected a local voice
+    // we can't see. Route the outage to the pipeline, whose per-turn speak
+    // paths re-check the store and report a voiceUnavailable outage instead
+    // of substituting a different voice.
+    let calls: AgentCallPreferences | null = null;
+    let callPrefsUnavailable = false;
+    try {
+      calls = await readQueenBeeCallPreferences();
+    } catch {
+      callPrefsUnavailable = true;
+    }
     const localTtsSelected = Boolean(
       calls &&
         (calls.voiceRuntime === LOCAL_TTS_RUNTIME ||
@@ -347,12 +359,15 @@ export async function GET() {
       callVoiceModelId: calls?.voiceModelId ?? null,
       callVoiceId: calls?.voiceId ?? null,
       localTtsSelected,
-      voiceMode: geminiLiveSelected
+      callPrefsUnavailable,
+      voiceMode: callPrefsUnavailable
+        ? "pipeline"
+        : geminiLiveSelected
         ? "gemini-live"
         : localTtsSelected || cloudTtsSelected
           ? "pipeline"
           : "realtime",
-      pipelineSelected: localTtsSelected || cloudTtsSelected,
+      pipelineSelected: callPrefsUnavailable || localTtsSelected || cloudTtsSelected,
       inputTranscriptionMode: inputTranscription?.mode ?? "realtime",
       inputTranscriptionProvider: inputTranscription?.providerId ?? "openai",
       brainLabel,

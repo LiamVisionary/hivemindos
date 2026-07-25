@@ -551,13 +551,21 @@ export function QueenBeeVoiceOverlay({
             nonce,
             // voiceMode carries Gemini Live explicitly; pipelineSelected covers
             // older servers that only knew local/cloud TTS pipeline routing.
-            mode: data?.voiceMode ?? ((data?.pipelineSelected ?? data?.localTtsSelected) ? "pipeline" : "realtime"),
+            // A failed settings read (null data) resolves to the pipeline, not
+            // realtime: the user may have a local voice selected we can't see,
+            // and the pipeline's speak paths re-check per turn and report a
+            // voiceUnavailable outage instead of substituting a cloud voice.
+            mode: data
+              ? data.voiceMode ?? ((data.pipelineSelected ?? data.localTtsSelected) ? "pipeline" : "realtime")
+              : "pipeline",
             inputTranscriptionMode: data?.inputTranscriptionMode ?? "realtime",
           });
         }
       })
       .catch(() => {
-        if (!cancelled) setResolvedVoiceMode({ nonce, mode: "realtime", inputTranscriptionMode: "realtime" });
+        // Same voice-continuity rule as a non-ok settings read above: never
+        // let "couldn't read the settings" open a realtime cloud-voice session.
+        if (!cancelled) setResolvedVoiceMode({ nonce, mode: "pipeline", inputTranscriptionMode: "realtime" });
       });
     return () => {
       cancelled = true;

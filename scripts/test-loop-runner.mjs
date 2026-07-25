@@ -473,4 +473,58 @@ function liveUrlReceipt(receipts) {
   assert.ok(loopCompletionBlock(loopWith([]), merged), "the task stays blocked despite the forged pass");
 }
 
+// 25. Two-pass evaluation: independent gate evaluations (judge chat, command runs)
+//     and the output-level integrity checks run CONCURRENTLY (a slow judge no longer
+//     serializes behind a slow test run), and receipts reassemble in gate order.
+{
+  const gates = [
+    gate("agent:judge", "g-judge"),
+    gate("command:test", "g-test"),
+    gate("command:lint", "g-lint"),
+    gate("receipt:evidence", "g-evidence"),
+  ];
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const track = async (result, delayMs) => {
+    inFlight += 1;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    inFlight -= 1;
+    return result;
+  };
+  const res = await runLoopGates({
+    loop: loopWith(gates),
+    output: "The deploy is live at https://acme-widgets.pages.dev/preview/x — detailed evidence of the change and how it was verified.",
+    judge: () => track({ accepted: true, summary: "verified", evaluator: { agentId: "reviewer", independent: true } }, 30),
+    runCommand: () => track({ ok: true, exitCode: 0, output: "ok" }, 30),
+    probeUrl: () => track({ status: 200 }, 30),
+    now,
+  });
+  assert(maxInFlight >= 2, `independent evaluations should overlap, not serialize (max in-flight ${maxInFlight})`);
+  const order = res.receipts.map((r) => r.gateId);
+  assert.deepEqual(order.slice(0, 4), ["g-judge", "g-test", "g-lint", "g-evidence"], "receipts must be reassembled in original gate order (judge resolved last but stays first)");
+  assert.equal(order[4], "live-url-integrity", "integrity receipts still follow the gate receipts");
+  assert.equal(res.unsatisfiedRequiredGateIds.length, 0, "all gates satisfied in the concurrent pass");
+}
+
+// 26. The sequential self-report pass keeps gate-order priority even when later
+//     gates evaluate concurrently: the first same-titled gate consumes the single
+//     report entry while a concurrent judge gate between them evaluates normally.
+{
+  const g1 = loopGateFromVerifier("receipt:evidence", { now, required: true, id: "g-first", title: "Attach evidence" });
+  const gJudge = gate("agent:judge", "g-mid-judge");
+  const g2 = loopGateFromVerifier("receipt:evidence", { now, required: true, id: "g-second", title: "Attach evidence" });
+  const output = '```loop-receipts\n[{"title":"Attach evidence","status":"passed","evidence":["focused result"]}]\n```';
+  const res = await runLoopGates({
+    loop: loopWith([g1, gJudge, g2]),
+    output,
+    judge: async () => ({ accepted: true, summary: "ok", evaluator: { agentId: "reviewer", independent: true } }),
+    now,
+  });
+  assert(passedFor(res.receipts, "g-first"), "the FIRST same-titled gate consumes the self-report entry");
+  assert(passedFor(res.receipts, "g-mid-judge"), "the concurrent judge gate still evaluates");
+  assert(!passedFor(res.receipts, "g-second"), "the second same-titled gate must stay unsatisfied");
+  assert.deepEqual(res.unsatisfiedRequiredGateIds, ["g-second"]);
+}
+
 console.log("loop runner tests passed");

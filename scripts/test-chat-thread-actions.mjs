@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 
 const {
   deleteChatThread,
   duplicateChatThreadSeed,
+  forkChatThreadSeed,
   renameChatThread,
   chatTranscriptSourceMessages,
   serializeChatTranscript,
@@ -85,6 +87,78 @@ const {
   // Mutating the duplicate must not reach the source.
   seedMessages[0].content = "MUTATED";
   assert.equal(JSON.stringify(input), snapshot, "source thread untouched by duplicate mutation");
+}
+
+// ---------------------------------------------------------------------------
+// forkChatThreadSeed: copies history through the selected response only
+// ---------------------------------------------------------------------------
+{
+  const messages = [
+    { role: "user", content: "first", createdAt: 1 },
+    { role: "assistant", content: "first reply", createdAt: 2 },
+    { role: "user", content: "second", createdAt: 3 },
+    { role: "assistant", content: "second reply", createdAt: 4 },
+  ];
+  const snapshot = JSON.stringify(messages);
+  const nowMs = 1_700_000_000_500;
+  const { seedMessages, leafKey } = forkChatThreadSeed(
+    messages,
+    "hermes-main::leaf-src",
+    1,
+    nowMs,
+  );
+
+  assert.deepEqual(
+    seedMessages.map((message) => message.content),
+    ["first", "first reply"],
+    "fork includes the selected response and excludes later turns",
+  );
+  assert.ok(leafKey.startsWith("agent-hermes-main-fork-"), "fork receives a fresh agent-scoped leaf");
+  assert.notEqual(seedMessages, messages, "fork seed is a fresh array");
+  assert.notEqual(seedMessages[0], messages[0], "fork messages are fresh objects");
+  seedMessages[0].content = "MUTATED";
+  assert.equal(JSON.stringify(messages), snapshot, "source messages remain untouched");
+
+  const again = forkChatThreadSeed(messages, "hermes-main::leaf-src", 1, nowMs);
+  assert.equal(again.leafKey, leafKey, "fixed inputs produce a deterministic fork leaf");
+  const laterResponse = forkChatThreadSeed(messages, "hermes-main::leaf-src", 3, nowMs);
+  assert.notEqual(laterResponse.leafKey, leafKey, "the fork point participates in the leaf identity");
+  assert.equal(laterResponse.seedMessages.length, 4, "a later response carries the full preceding history");
+
+  const completeStoredThread = [
+    { role: "system", content: "original setup", createdAt: 10 },
+    { role: "user", content: "earlier question", createdAt: 11 },
+    { role: "assistant", content: "earlier answer", createdAt: 12 },
+    { role: "user", content: "visible question", createdAt: 13, sourceSessionId: "session-a", sourceIndex: 4 },
+    { role: "assistant", content: "visible answer", createdAt: 14, sourceSessionId: "session-a", sourceIndex: 5 },
+    { role: "user", content: "later question", createdAt: 15, sourceSessionId: "session-a", sourceIndex: 6 },
+  ];
+  const boundedRenderedThread = completeStoredThread.slice(3, 5);
+  const completeFork = forkChatThreadSeed(
+    boundedRenderedThread,
+    "hermes-main::leaf-src",
+    1,
+    nowMs,
+    completeStoredThread,
+  );
+  assert.deepEqual(
+    completeFork.seedMessages.map((message) => message.content),
+    ["original setup", "earlier question", "earlier answer", "visible question", "visible answer"],
+    "a bounded rendered window still forks the complete stored history through the response",
+  );
+}
+
+{
+  const source = await readFile(
+    new URL("../src/features/dashboard/views/chat/exchange/MessageThread.tsx", import.meta.url),
+    "utf8",
+  );
+  const copyAction = source.indexOf("<Tooltip {...(copied");
+  const forkAction = source.indexOf("{onFork ? (", copyAction);
+  const kanbanAction = source.indexOf("{generateKanbanTaskFromChat ? (", forkAction);
+  assert.ok(copyAction >= 0, "response actions include Copy");
+  assert.ok(forkAction > copyAction, "Fork follows Copy");
+  assert.ok(kanbanAction > forkAction, "Fork precedes Kanban");
 }
 
 // ---------------------------------------------------------------------------

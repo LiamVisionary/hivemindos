@@ -1,0 +1,4 @@
+{
+  "private": true,
+  "description": "Module-scope marker for the saved Claude Code workflow scripts in this directory. They are written in the workflow-harness dialect (export const meta + top-level await + top-level return), which Node accepts only under ambiguous module detection. Deliberately NO \"type\" field: without this file the repo root's \"type\": \"module\" would apply and `node --check` would reject every script here as strict ESM. Not a workspace package (pnpm-workspace.yaml pins packages to the root)."
+}

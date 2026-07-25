@@ -1776,6 +1776,7 @@ pub fn run(context: tauri::Context<tauri::Wry>) {
             deliverables::download_aeon_deliverable,
             deliverables::send_aeon_deliverable,
             desktop_navigation::open_route_window,
+            desktop_navigation::move_route_window,
             desktop_navigation::set_companion_popover,
             desktop_navigation::take_pending_research_sync_code,
             speech::speech_recognition_available,

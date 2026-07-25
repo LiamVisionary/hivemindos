@@ -18,6 +18,7 @@ import { promisify } from "node:util";
 import { isLocalCollectorUrl } from "@/lib/services/local-collector-url";
 import { runtimeCommandEnv } from "@/lib/services/runtime-command-env";
 import { companyIdFromSource } from "@/lib/services/queen-bee/company-task-context";
+import { scoreModelStrength } from "@/lib/config/model-strength";
 
 const execFileAsync = promisify(execFile);
 
@@ -433,6 +434,8 @@ export async function runQueenBeeAutonomousPickup(
           fetchJson,
           claimLock,
           marker: input.marker,
+          machineKey: pickupMachineKey(reviewer, delegationCollectorUrl(reviewer)),
+          heldMachineKey: machineKey,
         })
         : undefined;
       const { receipts } = await runLoopGates({
@@ -699,7 +702,7 @@ function independentReviewerDelegation(
   worker: QueenBeeAutonomousAgent,
 ): QueenBeeAutonomousDelegation | undefined {
   const workerIdentity = agentIdentity(worker);
-  return chain.slice(startIndex).find((delegation) => {
+  const eligible = chain.slice(startIndex).filter((delegation) => {
     const reviewer = delegation.agent;
     return Boolean(
       reviewer
@@ -708,6 +711,11 @@ function independentReviewerDelegation(
       && agentIdentity(reviewer) !== workerIdentity,
     );
   });
+  // The strongest-model eligible reviewer judges, not merely the next in chain
+  // order — a weak fallback model rubber-stamping a frontier worker's output
+  // defeats the independent review. Array.prototype.sort is stable, so equal
+  // scores keep the delegation chain's own order as the tiebreak.
+  return eligible.sort((a, b) => scoreModelStrength(b.agent?.model).score - scoreModelStrength(a.agent?.model).score)[0];
 }
 
 function agentIdentity(agent: QueenBeeAutonomousAgent): string {
@@ -884,6 +892,10 @@ function makeLoopJudge(ctx: {
   fetchJson: JsonFetcher;
   claimLock: string;
   marker?: string;
+  /** Fleet identity of the machine the judge chat lands on (see pickupMachineKey). */
+  machineKey?: string;
+  /** Machine key whose chat slot the worker pickup ALREADY holds while gates run. */
+  heldMachineKey?: string;
 }): LoopGateJudge | undefined {
   if (process.env.QUEEN_BEE_LOOP_JUDGE === "0") return undefined;
   return async ({ gate, output, goal, successCriteria, contract, evaluationRubric }) => {
@@ -909,28 +921,51 @@ function makeLoopJudge(ctx: {
         ? `Score every rubric axis. Reply with ONE line of JSON only: {"accepted":true|false,"confidence":0.0,"reason":"<short reason>","axes":[${evaluationRubric.axes.map((axis) => `{"id":"${axis.id}","score":0.0,"evidence":["specific evidence"]}`).join(",")}]} . Accept only when every score is evidence-backed and the weighted result meets the threshold.`
         : 'Reply with ONE line of JSON only: {"accepted":true|false,"confidence":0.0,"reason":"<short reason>","axes":[]}. Accept only if the output genuinely meets the gate; otherwise reject.',
     ].filter(Boolean).join("\n");
-    const chat = await ctx.fetchJson(`${ctx.collectorUrl}/chat`, {
+    const runJudgeChat = (message: string) => ctx.fetchJson(`${ctx.collectorUrl}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        message: prompt,
-        rawUserMessage: prompt,
+        message,
+        rawUserMessage: message,
         stream: false,
         agent: ctx.agent,
         context: { queenBeeLoopJudge: true, gateId: gate.id, claimLock: ctx.claimLock },
       }),
       signal: AbortSignal.timeout(Number(process.env.QUEEN_BEE_LOOP_JUDGE_TIMEOUT_MS || 120_000)),
     });
-    const verdict = parseJudgeVerdict(chatText(chat));
-    return {
-      ...verdict,
-      evaluator: {
-        agentId: ctx.agent.id || ctx.agent.agentId || ctx.agent.name,
-        model: ctx.agent.model,
-        runtime: ctx.agent.runtime,
-        independent: true,
-      },
-    };
+    // A judge chat landing on a DIFFERENT machine than the one the worker pickup
+    // already holds must take that machine's own chat slot — the 1-chat-per-machine
+    // gate protects small boxes from concurrent `hermes -z` turns regardless of which
+    // pickup fired them. A same-machine judge keeps running under the already-held
+    // slot: re-acquiring it here would self-deadlock the pickup against itself.
+    const needsOwnSlot = Boolean(ctx.machineKey && ctx.machineKey !== ctx.heldMachineKey);
+    if (needsOwnSlot && !(await acquireMachineChatSlot(ctx.machineKey!))) {
+      return {
+        accepted: false,
+        summary: `Reviewer machine "${ctx.machineKey}" is at its autonomous chat capacity; the judge chat never ran.`,
+      };
+    }
+    try {
+      let verdict = parseJudgeVerdict(chatText(await runJudgeChat(prompt)));
+      if (!verdict) {
+        // Mirror of the worker's empty-output retry: some runtimes wrap the verdict
+        // in prose ("The output is not accepted…"), which must never keyword-match
+        // to a pass. One corrective retry, then fail closed (judge doctrine above).
+        verdict = parseJudgeVerdict(chatText(await runJudgeChat(`${prompt}\n\nYour previous reply was not parseable. Return ONLY the JSON object.`)));
+      }
+      if (!verdict) verdict = { accepted: false, summary: "unparseable judge verdict" };
+      return {
+        ...verdict,
+        evaluator: {
+          agentId: ctx.agent.id || ctx.agent.agentId || ctx.agent.name,
+          model: ctx.agent.model,
+          runtime: ctx.agent.runtime,
+          independent: true,
+        },
+      };
+    } finally {
+      if (needsOwnSlot) releaseMachineChatSlot(ctx.machineKey!);
+    }
   };
 }
 
@@ -970,7 +1005,13 @@ function errorCode(error: unknown): string | undefined {
   return undefined;
 }
 
-function parseJudgeVerdict(text: string): LoopJudgeVerdict {
+/**
+ * Parses a judge chat reply into a verdict, or `null` when the reply carries no
+ * parseable verdict at all — the caller retries once, then fails closed. Free
+ * prose must NEVER keyword-match to a pass: "The output is not accepted" contains
+ * ACCEPTED, so keyword detection is restricted to an exact single-token reply.
+ */
+function parseJudgeVerdict(text: string): LoopJudgeVerdict | null {
   const json = text.match(/\{[\s\S]*"accepted"[\s\S]*\}/i);
   if (json) {
     try {
@@ -999,11 +1040,13 @@ function parseJudgeVerdict(text: string): LoopJudgeVerdict {
         axes,
       };
     } catch {
-      // fall through to keyword detection
+      // fall through to the exact-token check / unparseable-null
     }
   }
-  const accepted = /\bACCEPT(?:ED)?\b/i.test(text) && !/\bREJECT(?:ED)?\b/i.test(text);
-  return { accepted, summary: truncateForJudge(text, 280) };
+  const token = text.trim().toUpperCase();
+  if (token === "ACCEPT" || token === "ACCEPTED") return { accepted: true, summary: text.trim() };
+  if (token === "REJECT" || token === "REJECTED") return { accepted: false, summary: text.trim() };
+  return null;
 }
 
 function truncateForJudge(value: string, max = 4_000) {

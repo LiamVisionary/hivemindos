@@ -1,22 +1,19 @@
 "use client";
 
-/* Right-hand shelf for the redesigned chat route: Details / Files / Preview.
+/* Right-hand shelf for the redesigned chat route: Details / Files. The live
+ * app preview moved to the App workspace pane (AppWorkspace.tsx).
  *
  * Honesty rules baked in:
  *  - Tokens render only when `/api/chat/thread-usage` reports tokensAvailable.
  *    A thread whose runtime never wrote a usage row shows "not recorded",
  *    never a fabricated 0.
  *  - Files are the real generated artifacts on this thread's messages.
- *  - Preview lists real hosted apps on the chat's machine; with none, it says so.
  */
 
-import { useEffect, useState } from "react";
-
 import type { ChatThreadUsage } from "@/lib/services/chat/thread-usage";
-import type { ChatPreviewTarget } from "@/lib/services/chat/chat-preview-targets";
 import { ICON_PATHS, Ico } from "./composer-primitives";
 
-export type ShelfMode = "details" | "files" | "preview";
+export type ShelfMode = "details" | "files";
 
 export type ShelfDeliverable = {
   id: string;
@@ -67,11 +64,6 @@ export type ContextShelfProps = {
 
   deliverables: ShelfDeliverable[];
   onOpenDeliverable?: (deliverable: ShelfDeliverable) => void;
-
-  previewTargets: ChatPreviewTarget[];
-  previewBusy?: boolean;
-  previewError?: string;
-  onExpandPreview: () => void;
 };
 
 export function ContextShelf(props: ContextShelfProps) {
@@ -79,38 +71,8 @@ export function ContextShelf(props: ContextShelfProps) {
     mode, onModeChange, taskTitle, statusLabel, statusColor, agentLine, machineLabel,
     runtimes, providers, models, elapsedLabel, workingDirectory,
     usage, usageLoading, messageCount, liveOutput, live,
-    deliverables, onOpenDeliverable, previewTargets, previewBusy = false, previewError = "", onExpandPreview,
+    deliverables, onOpenDeliverable,
   } = props;
-
-  if (mode === "preview") {
-    return (
-      <div style={{ display: "grid", gap: 13 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <button type="button" className="cx-iconbtn" onClick={() => onModeChange("details")} title="Back to details" aria-label="Back to details" style={backBtn}>
-            <Ico d={ICON_PATHS.chevronLeft} size={16} sw={1.9} />
-          </button>
-          <span style={{ flex: 1, ...sectionLabel }}>Preview</span>
-          {previewTargets.length ? (
-            <button type="button" className="cx-iconbtn" onClick={onExpandPreview} title="Expand to full view" aria-label="Expand to full view" style={backBtn}>
-              <Ico d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3" size={15} sw={1.9} />
-            </button>
-          ) : null}
-        </div>
-        {previewBusy ? (
-          <div role="status" aria-label="Preparing conversation preview" className="cx-genskel" style={{ width: "100%", aspectRatio: "9 / 16", border: "1px solid var(--line-2)", borderRadius: 22 }} />
-        ) : previewError ? (
-          <EmptyState title="Preview could not start" body={previewError} />
-        ) : previewTargets.length ? (
-          <PreviewFrame target={previewTargets[0]} />
-        ) : (
-          <EmptyState
-            title="No preview available"
-            body={`This conversation does not have a runnable app on ${machineLabel || "this machine"} yet.`}
-          />
-        )}
-      </div>
-    );
-  }
 
   if (mode === "files") {
     return (
@@ -235,82 +197,5 @@ function EmptyState({ title, body }: { title: string; body: string }) {
       <strong style={{ fontFamily: "var(--f-body)", fontSize: 13.5, fontWeight: 600, color: "var(--fg-2)" }}>{title}</strong>
       <p style={{ margin: 0, fontFamily: "var(--f-body)", fontSize: 11.5, lineHeight: 1.55, color: "var(--fg-4)" }}>{body}</p>
     </div>
-  );
-}
-
-/** Probes the target through the SSRF-gated route before embedding it. */
-export function PreviewFrame({ target, tall }: { target: ChatPreviewTarget; tall?: boolean }) {
-  const targetKey = [target.url, target.machine, target.projectId, target.directory].join("\u001f");
-  const [result, setResult] = useState<{ key: string; state: "live" | "dead"; reason: string; projectStatus: string } | null>(null);
-  const state = result?.key === targetKey ? result.state : "probing";
-  const reason = result?.key === targetKey ? result.reason : "";
-  const projectStatus = result?.key === targetKey ? result.projectStatus : "";
-
-  useEffect(() => {
-    let cancelled = false;
-    const query = new URLSearchParams({ url: target.url, machine: target.machine });
-    if (target.projectId) query.set("projectId", target.projectId);
-    if (target.directory) query.set("directory", target.directory);
-    if (target.machineKey) query.set("machineKey", target.machineKey);
-    if (target.collectorUrl) query.set("collectorUrl", target.collectorUrl);
-    fetch(`/api/chat/preview?${query}`)
-      .then((response) => response.json())
-      .then((payload) => {
-        if (cancelled) return;
-        const live = Boolean(payload?.live ?? payload?.data?.live);
-        setResult({
-          key: targetKey,
-          state: live ? "live" : "dead",
-          reason: String(payload?.reason ?? payload?.data?.reason ?? ""),
-          projectStatus: String(payload?.projectStatus ?? payload?.data?.projectStatus ?? ""),
-        });
-      })
-      .catch((error: unknown) => {
-        if (cancelled) return;
-        setResult({ key: targetKey, state: "dead", reason: error instanceof Error ? error.message : "probe failed", projectStatus: "" });
-      });
-    return () => { cancelled = true; };
-  }, [target.collectorUrl, target.directory, target.machine, target.machineKey, target.projectId, target.url, targetKey]);
-
-  const frameStyle: React.CSSProperties = {
-    width: "100%",
-    aspectRatio: tall ? undefined : "9 / 16",
-    height: tall ? "min(78vh, 720px)" : undefined,
-    border: "1px solid var(--line-2)",
-    borderRadius: tall ? 30 : 22,
-    overflow: "hidden",
-    background: "var(--bg-soft)",
-  };
-
-  if (state === "probing") {
-    return (
-      <div role="status" aria-label="Checking preview" className="cx-genskel" style={frameStyle} />
-    );
-  }
-  if (state === "dead") {
-    // projectStatus is the thread app project's real manifest state from the
-    // status re-fetch (stopped / error / running-elsewhere) — render the honest
-    // "press Preview to restart it" story instead of a generic no-response.
-    const title = projectStatus === "stopped"
-      ? `${target.name} is not running`
-      : projectStatus === "error"
-        ? `${target.name} could not start`
-        : projectStatus === "running"
-          ? `${target.name} restarted`
-          : `${target.name} is not reachable`;
-    return (
-      <div style={{ ...frameStyle, display: "grid", placeItems: "center", padding: 20 }}>
-        <EmptyState title={title} body={reason || "The hosted app did not respond."} />
-      </div>
-    );
-  }
-  return (
-    <iframe
-      title={`${target.name} preview`}
-      src={target.url}
-      style={frameStyle}
-      sandbox="allow-scripts allow-same-origin allow-forms"
-      referrerPolicy="no-referrer"
-    />
   );
 }
