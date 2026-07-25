@@ -121,6 +121,7 @@ import {
   effectiveFleetAccess,
   fleetMachinePolicyFailureSummary,
   fleetMachinePolicyHealthSummary,
+  fleetMachinePolicyPrompt,
   fleetMachinePolicyPublicView,
   fleetPolicyNeedsIsolatedHermes,
   readFleetMachinePolicy,

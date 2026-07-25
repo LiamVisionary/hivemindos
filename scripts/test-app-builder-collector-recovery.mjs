@@ -9,8 +9,17 @@ const {
 
 assert.equal(collectorSupportsAppBuilderContract("1.3.0", "1.3.0"), true);
 assert.equal(collectorSupportsAppBuilderContract("1.4.0", "1.3.0"), true);
-assert.equal(collectorSupportsAppBuilderContract("1.2.9", "1.3.0"), false);
+// Same-major collectors at or above the contract's minimumCompatibleVersion
+// floor (1.2.0) stay compatible across additive minor bumps — a 1.3.0 hub
+// must not block Preview on a 1.2.x collector that serves every required action.
+assert.equal(collectorSupportsAppBuilderContract("1.2.0", "1.3.0"), true);
+assert.equal(collectorSupportsAppBuilderContract("1.2.9", "1.3.0"), true);
+// Below the floor (pre-adopt collectors) stays hard-blocked, as do
+// cross-major gaps and unreported/garbage versions.
+assert.equal(collectorSupportsAppBuilderContract("1.1.0", "1.3.0"), false);
+assert.equal(collectorSupportsAppBuilderContract("0.9.0", "1.3.0"), false);
 assert.equal(collectorSupportsAppBuilderContract(undefined, "1.3.0"), false);
+assert.equal(collectorSupportsAppBuilderContract("nonsense", "1.3.0"), false);
 
 const calls = [];
 const responses = [

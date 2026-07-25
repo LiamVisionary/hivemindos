@@ -32,6 +32,14 @@ function numericVersion(version: string | undefined) {
   return match ? match.slice(1).map(Number) : null;
 }
 
+function versionAtLeast(candidate: number[], baseline: number[]) {
+  for (let index = 0; index < baseline.length; index += 1) {
+    if (candidate[index] > baseline[index]) return true;
+    if (candidate[index] < baseline[index]) return false;
+  }
+  return true;
+}
+
 export function collectorSupportsAppBuilderContract(
   collectorVersion: string | undefined,
   requiredVersion = APP_BUILDER_CONTRACT.version,
@@ -39,11 +47,16 @@ export function collectorSupportsAppBuilderContract(
   const collector = numericVersion(collectorVersion);
   const required = numericVersion(requiredVersion);
   if (!collector || !required) return false;
-  for (let index = 0; index < required.length; index += 1) {
-    if (collector[index] > required[index]) return true;
-    if (collector[index] < required[index]) return false;
-  }
-  return true;
+  if (versionAtLeast(collector, required)) return true;
+  // Additive (minor/patch) contract bumps must not strand the fleet: a
+  // same-major collector at or above the contract's declared compatibility
+  // floor still serves every action the hub requires — an action it lacks
+  // fails per-action with a clear "Unsupported local app-builder action."
+  // (Regression guard: the 1.2.0 → 1.3.0 bump only added artifact.export,
+  // yet the strict gate blocked plain Preview on every non-updated machine.)
+  const floor = numericVersion(APP_BUILDER_CONTRACT.minimumCompatibleVersion);
+  if (!floor) return false;
+  return collector[0] === required[0] && versionAtLeast(collector, floor);
 }
 
 async function responsePayload(response: Response | undefined): Promise<AppBuilderPayload> {

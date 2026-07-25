@@ -42,6 +42,9 @@ export type AppBuilderCapabilityId =
 type AppBuilderContract = {
   protocol: "hivemindos.app-builder/v1";
   version: string;
+  /** Oldest collector contract the hub can still drive end-to-end. Raise only
+   *  when an action the hub REQUIRES (not an optional capability) is added. */
+  minimumCompatibleVersion?: string;
   provenance: {
     donors: {
       december: {

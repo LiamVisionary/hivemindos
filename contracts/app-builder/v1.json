@@ -1,6 +1,7 @@
 {
   "protocol": "hivemindos.app-builder/v1",
   "version": "1.3.0",
+  "minimumCompatibleVersion": "1.2.0",
   "provenance": {
     "donors": {
       "december": {
