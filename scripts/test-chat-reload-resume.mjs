@@ -3,12 +3,14 @@ import { readFileSync } from "node:fs";
 
 const controllerPath = "src/features/dashboard/hooks/use-status-chat-input-controller.tsx";
 const dashboardPath = "src/features/dashboard/DashboardApp.tsx";
+const chatRunTranscriptsPath = "src/features/dashboard/chat-run-transcripts.ts";
 const inputHelpersPath = "src/features/dashboard/hooks/status-chat-input-helpers.ts";
 const processPanelPath = "src/features/dashboard/views/chat/AgentProcessPanel.tsx";
 const streamStatePath = "src/features/dashboard/hooks/status-chat-stream-state.ts";
 
 const controller = readFileSync(controllerPath, "utf8");
 const dashboard = readFileSync(dashboardPath, "utf8");
+const chatRunTranscripts = readFileSync(chatRunTranscriptsPath, "utf8");
 const inputHelpers = readFileSync(inputHelpersPath, "utf8");
 const processPanel = readFileSync(processPanelPath, "utf8");
 const streamState = readFileSync(streamStatePath, "utf8");
@@ -59,7 +61,7 @@ assertIncludes(controller, "if (transportInterrupted) {", "transport interruptio
 assertIncludes(controller, "if (!preserveActiveRun && (sawDone || !abortController.signal.aborted || recoveredAssistantText.trim())) clearActiveChatRun?.(selectedStorageKey, taskId);", "finally clears only the completed active run");
 
 assertIncludes(processPanel, "cancelled|canceled|error", "process panel treats error events as terminal");
-assertIncludes(dashboard, "if (message?.type === \"process\")", "dashboard preserves runtime-session process event labels");
+assertIncludes(chatRunTranscripts, "if (message?.type === \"process\")", "dashboard preserves runtime-session process event labels");
 assertIncludes(inputHelpers, "if (message?.type === \"process\")", "live session recovery preserves runtime-session process event labels");
 assertIncludes(dashboard, "? !endedAt", "runtime poller uses the explicit session end marker rather than partial assistant text");
 assertIncludes(dashboard, "reconcilePolledChatStreamState", "runtime poll reconciliation is monotonic and run-scoped");

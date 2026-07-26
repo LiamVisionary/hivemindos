@@ -52,9 +52,9 @@ const controllerSource = await readFile(
   new URL("../src/features/dashboard/hooks/use-status-chat-input-controller.tsx", import.meta.url),
   "utf8",
 );
-const dashboardSource = await readFile(new URL("../src/features/dashboard/DashboardApp.tsx", import.meta.url), "utf8");
+const chatRunTranscriptsSource = await readFile(new URL("../src/features/dashboard/chat-run-transcripts.ts", import.meta.url), "utf8");
 
 assert.match(controllerSource, /runtimePromptFromSessionMessage\(sessionMessage\)/);
-assert.match(dashboardSource, /agentPrompt:\s*runtimePromptFromSessionMessage\(message\)/);
+assert.match(chatRunTranscriptsSource, /agentPrompt:\s*\(runtimePromptFromSessionMessage\(message\)/);
 
 console.log("Structured runtime prompts survive session polling and reloads.");

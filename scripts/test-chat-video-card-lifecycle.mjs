@@ -133,8 +133,8 @@ const routeSource = readFileSync(new URL("../src/app/api/chat/agent-runtime/rout
 assert.doesNotMatch(routeSource, /return streamNativeVideoGeneration\(\{/, "the chat route must not bypass agent inference from video keywords");
 const controllerSource = readFileSync(new URL("../src/features/dashboard/hooks/use-status-chat-input-controller.tsx", import.meta.url), "utf8");
 assert.match(controllerSource, /normalizeApplicationGenerationCard\(sessionMessage\?\.applicationGeneration\)/, "timeout polling should recover a persisted result card");
-const dashboardSource = readFileSync(new URL("../src/features/dashboard/DashboardApp.tsx", import.meta.url), "utf8");
-assert.match(dashboardSource, /applicationGeneration: normalizeApplicationGenerationCard\(message\.applicationGeneration\)/, "session reload should recover a persisted result card");
+const chatRunTranscriptsSource = readFileSync(new URL("../src/features/dashboard/chat-run-transcripts.ts", import.meta.url), "utf8");
+assert.match(chatRunTranscriptsSource, /applicationGeneration: normalizeApplicationGenerationCard\(message\.applicationGeneration\)/, "session reload should recover a persisted result card");
 const dashboardStorageSource = readFileSync(new URL("../src/features/dashboard/dashboard-storage.ts", import.meta.url), "utf8");
 assert.match(dashboardStorageSource, /sourceArtifacts:\s*Array\.isArray\(card\.sourceArtifacts\)/, "durable dashboard chat storage should retain source thumbnails");
 const cardSource = readFileSync(new URL("../src/features/dashboard/views/chat/ApplicationGenerationCard.tsx", import.meta.url), "utf8");

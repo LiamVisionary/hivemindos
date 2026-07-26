@@ -114,7 +114,8 @@ assert.equal(isCapabilityContinuationEcho(localUser), false);
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const dashboardApp = await read("src/features/dashboard/DashboardApp.tsx");
-assert.match(dashboardApp, /isCapabilityContinuationEcho\(message\)\) continue;/, "dedupeChatTranscript repairs transcripts that already saved a duplicated continuation turn");
+const chatRunTranscripts = await read("src/features/dashboard/chat-run-transcripts.ts");
+assert.match(chatRunTranscripts, /isCapabilityContinuationEcho\(message\)\) continue;/, "dedupeChatTranscript repairs transcripts that already saved a duplicated continuation turn");
 
 const controller = await read("src/features/dashboard/hooks/use-status-chat-input-controller.tsx");
 assert.match(controller, /sealActiveAssistantSegment\(\);/, "a tool pause seals the streamed narration instead of replacing it");
@@ -122,8 +123,8 @@ assert.match(controller, /rawRuntimeEventType\) && streamedAssistantText\.trim\(
 assert.match(controller, /interimText !== lastSealedSegmentText/, "a reset after a step-triggered seal must not render the same narration twice");
 assert.match(controller, /pruneTrailingEmptyAssistant\(\);/, "a run cannot leave an invisible empty assistant behind");
 
-assert.doesNotMatch(dashboardApp, /fallbackProcessIndex/, "positional pairing is dead: it re-distributed one segment's steps onto another and its identity stamping made the visible dedupe drop finished responses");
-assert.match(dashboardApp, /createdAt: processSource\.createdAt \?\? message\.createdAt/, "content-confirmed pairings preserve local identity so React keys stay stable mid-stream");
+assert.doesNotMatch(chatRunTranscripts, /fallbackProcessIndex/, "positional pairing is dead: it re-distributed one segment's steps onto another and its identity stamping made the visible dedupe drop finished responses");
+assert.match(chatRunTranscripts, /createdAt: processSource\.createdAt \?\? message\.createdAt/, "content-confirmed pairings preserve local identity so React keys stay stable mid-stream");
 
 // The capability preflight is ONE step whose phases replace in place — no row
 // may be left frozen at "active" when the next phase begins.

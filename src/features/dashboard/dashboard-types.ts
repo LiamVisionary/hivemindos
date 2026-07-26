@@ -322,7 +322,7 @@ export type ChatMessage = {
   sourceSessionId?: string;
   sourceIndex?: number;
   feedback?: EvaluationHumanFeedback;
-  processEvents?: Array<{ at?: number; label: string; detail?: string; status?: string }>;
+  processEvents?: Array<{ at?: number; label: string; detail?: string; status?: string; runId?: string }>;
   billing?: ChatResponseBilling;
   attachments?: ChatAttachment[];
   applicationGeneration?: ChatApplicationGenerationCard;

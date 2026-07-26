@@ -88,9 +88,13 @@ const legacyOversizedAllowances = new Map([
   // features/dashboard/chat-transcript-helpers.ts. (Near-copies of some of them
   // still live in dashboard-storage.ts and use-dashboard-derived-state.tsx and
   // have already drifted — collapsing those is a behavior call, left as
-  // follow-up.) Watermark carries ~2 lines of slack over clean HEAD because it
-  // was measured in a working tree with concurrent uncommitted edits.
-  ["src/features/dashboard/DashboardApp.tsx", 4777],
+  // follow-up.)
+  // 2026-07-26: −384, the active-chat-run records + runtime-session transcript
+  // merge cluster (readActiveChatRuns…mergeRuntimeSessionMessages, the
+  // ActiveChatRunRecord type, and its two constants) moved verbatim to
+  // features/dashboard/chat-run-transcripts.ts. The dashboard-storage.ts
+  // near-copy follow-up above still stands.
+  ["src/features/dashboard/DashboardApp.tsx", 4398],
   ["src/lib/services/hive-actions/catalog.ts", 1817],
   ["src/features/dashboard/views/AeonAutopilotPanel.tsx", 3857],
   // Ratchet re-baselined 2026-07-02: watermarks set to then-current line counts
@@ -123,7 +127,10 @@ const legacyOversizedAllowances = new Map([
   // applyPatchToBoard parks hardFails needs-human; the park branch needs the
   // store's private event/finishActiveRun/mergeDeliverables internals. The
   // evaluators themselves live in kanban/completion-integrity.ts.
-  ["src/lib/services/kanban/local-kanban-store.ts", 2527],
+  // 2026-07-26: −11, assertResultNotMisattributed (byte-identical-result
+  // misattribution gate) moved to kanban/completion-integrity.ts with the other
+  // untrusted-completion gates.
+  ["src/lib/services/kanban/local-kanban-store.ts", 2517],
   ["src/features/dashboard/hooks/use-dashboard-derived-state.tsx", 2244],
   ["src/features/dashboard/views/chat/HiveChatView.module.css", 1802],
   ["src/lib/services/obsidian/agent-memory/core.ts", 1901],
@@ -137,7 +144,10 @@ const legacyOversizedAllowances = new Map([
   // handlers moved to hooks/status-chat-composer-attachments.ts (a plain factory
   // — the block touched no hook state and no React hooks). The controller's
   // return shape is unchanged; DashboardApp still destructures all 23 names.
-  ["src/features/dashboard/hooks/use-status-chat-input-controller.tsx", 1751],
+  // 2026-07-26: −101, the brain-graph inspect + pan/drag pointer handlers moved
+  // to hooks/status-chat-brain-graph.ts (same plain-factory pattern). The
+  // controller's return shape is unchanged.
+  ["src/features/dashboard/hooks/use-status-chat-input-controller.tsx", 1693],
   ["src/features/dashboard/views/chat/AgentSettingsModal.tsx", 1640],
   ["src/components/fleet/fleet-tokens.module.css", 1541],
   ["src/features/dashboard/views/chat/UsePodSetup.module.css", 1540],

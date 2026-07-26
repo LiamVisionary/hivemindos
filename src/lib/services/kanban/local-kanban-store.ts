@@ -42,7 +42,7 @@ import {
 import {
   sanitizeClientLoopReceipts,
 } from "@/lib/services/evaluation/control-plane";
-import { coerceKanbanText, untrustedCompletionIntegrityReceipts, type KanbanIntegrityProbes } from "@/lib/services/kanban/completion-integrity";
+import { assertResultNotMisattributed, coerceKanbanText, untrustedCompletionIntegrityReceipts, type KanbanIntegrityProbes } from "@/lib/services/kanban/completion-integrity";
 import { evaluateKanbanCompletion } from "@/lib/services/evaluation/kanban-completion";
 import {
   gitLawbProofForProject,
@@ -1226,17 +1226,6 @@ export async function heartbeatTask(
 // identically however the completion arrived (issue triage regexes this text).
 function loopGateBlockNote(gateTitles: string): string {
   return `⚠ Loop gate block — missing passing eval receipts: ${gateTitles}.\nACTION NEEDED: The crew finished this but its automated checks (${gateTitles}) haven't passed yet. Review the output above; if it looks right, move the card forward, or use Discuss to have the crew fix the checks.`;
-}
-
-function assertResultNotMisattributed(board: KanbanBoard, taskId: string, result: string | undefined): void {
-  const normalized = (result ?? "").trim();
-  if (normalized.length < 200) return;
-  const twin = board.tasks.find((item) => item.id !== taskId && (item.result ?? "").trim() === normalized);
-  if (twin) {
-    throw new Error(
-      `Completion rejected: the result is byte-identical to task ${twin.id} ("${twin.title.slice(0, 60)}") — that is a misattributed session output, not this task's work. Re-run the task and return ITS deliverable.`,
-    );
-  }
 }
 
 export async function completeTask(
