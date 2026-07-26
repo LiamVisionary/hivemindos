@@ -375,6 +375,8 @@ export interface AgentProfile {
   token?: string;
   provider?: string;
   model?: string;
+  /** Client timestamp for resolving synchronized runtime/provider/model edits. */
+  configurationUpdatedAt?: number;
   adaptiveOpenRouter?: AdaptiveOpenRouterConfig;
   adaptiveRouting?: AdaptiveRoutingConfig;
   /** Hive Fusion compound-model config; only consulted when provider === "hive-fusion". */
@@ -419,6 +421,13 @@ export interface AgentProfile {
   beeRole?: BeeAgentRole;
   /** Set after an explicit queen rename so legacy-default migrations never overwrite the user's choice. */
   queenNameCustomized?: boolean;
+  /**
+   * Company.id of the zero-human company this profile is the cloned CEO
+   * ("company queen") of. Set only on the per-company clones created by
+   * src/lib/services/company-queen.ts — never on the fleet queen. Clones never
+   * carry beeRole: "queen" (that field stays the fleet crown).
+   */
+  companyQueenOf?: string;
   workerClass?: BeeWorkerClass;
   customWorkerClass?: CustomWorkerClassProfile;
   customWorkerClasses?: CustomWorkerClassProfile[];

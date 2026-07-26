@@ -36,6 +36,25 @@ The default company engine is still a HivemindOS crew. In AEON mode, a native cr
 - Runtime availability is read through `/api/runtimes/availability`.
 - Remote runtime agent creation is proxied through `/api/agents/runtime` when the collector supports it.
 
+### OpenAI OAuth And API Billing
+
+When ChatGPT OAuth is connected, HivemindOS treats it as the default OpenAI
+authentication method for chat. This applies to normal agent chat, delegated
+Hermes runs, Queen Bee's tool-capable fallback, and other built-in OpenAI chat
+fallbacks.
+
+The choice is enforced again when a run starts. An older browser tab, phone,
+fleet sync, or vault mirror cannot silently turn a newer OAuth selection into
+an API-key-billed OpenAI run. If an OAuth-protected run fails, HivemindOS shows
+the failure instead of retrying through an unscoped runtime default that might
+use an API key.
+
+Set `OPENAI_PREFER_API_KEY=1` only when you intentionally want OpenAI chat to
+use API-key billing. Disconnecting ChatGPT OAuth also makes the API key the
+fallback when one is configured. This boundary covers OpenAI chat; separately
+configured OpenAI services such as speech-to-text, text-to-speech, or image
+generation may still use their documented API credentials.
+
 ## Managed Codex And Claude Code Tasks
 
 Codex and Claude Code can run managed background tasks from HivemindOS. The task keeps its working directory, selected model, process status, logs, and completion evaluation in one run record.

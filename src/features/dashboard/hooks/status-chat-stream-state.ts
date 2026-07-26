@@ -48,6 +48,11 @@ export function startChatStreamState(input: {
             leafKey: input.leafKey,
             hasChunk: false,
             startedAt: input.startedAt,
+            // Marks a run whose SSE lives in THIS tab. While one exists, the
+            // 5s session poll must keep its hands off the thread — the stream
+            // is the single source of truth and merging the laggier session
+            // snapshot replaced messages and panels under the reader.
+            local: true,
           },
         },
       },
@@ -107,6 +112,11 @@ function entryRuns(existing: any) {
   } : {});
 }
 
+/** True when this tab currently owns a live SSE run for the thread entry. */
+export function chatStreamHasLocalRun(entry: any) {
+  return Object.values(entryRuns(entry)).some((run: any) => run?.local === true);
+}
+
 function latestChatStreamRun(runs: Record<string, any>) {
   return Object.entries(runs)
     .sort(([, left]: any, [, right]: any) => Number(right.startedAt || 0) - Number(left.startedAt || 0))[0];
@@ -145,6 +155,7 @@ export function reconcilePolledChatStreamState(current: any, input: {
       leafKey: input.leafKey,
       hasChunk: input.hasChunk || previousRun?.hasChunk === true || (existing?.runId === runId && existing.hasChunk === true),
       startedAt: previousRun?.startedAt ?? input.startedAt,
+      ...(previousRun?.local === true ? { local: true } : {}),
     },
   };
   const [nextRunId, nextRun] = latestChatStreamRun(nextRuns);

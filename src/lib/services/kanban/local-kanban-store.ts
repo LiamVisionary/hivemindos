@@ -42,6 +42,7 @@ import {
 import {
   sanitizeClientLoopReceipts,
 } from "@/lib/services/evaluation/control-plane";
+import { coerceKanbanText, untrustedCompletionIntegrityReceipts, type KanbanIntegrityProbes } from "@/lib/services/kanban/completion-integrity";
 import { evaluateKanbanCompletion } from "@/lib/services/evaluation/kanban-completion";
 import {
   gitLawbProofForProject,
@@ -177,6 +178,9 @@ export type KanbanStorageOptions = {
   kanbanFolder?: string | null;
   /** Internal-only: receipts were produced by the in-process loop runner. */
   trustedLoopReceipts?: boolean;
+  /** Test seam: integrity probes for UNTRUSTED completions (see completion-integrity.ts).
+   *  Never populated from HTTP input — the route builds options server-side. */
+  integrityProbes?: KanbanIntegrityProbes;
 };
 
 export type KanbanStorageInfo = {
@@ -484,20 +488,6 @@ function normalizeBoard(parsed: KanbanBoard, slug: string): KanbanBoard {
   return board;
 }
 
-// Agents and remote collectors sometimes POST structured (object) completion
-// results, and synced boards from other machines can carry them too; stored
-// verbatim, ONE such task crashes deliverable extraction and 400s every
-// subsequent board read. Coerce anything non-string to readable text.
-function coerceKanbanText(value: unknown): string {
-  if (typeof value === "string") return value;
-  if (value == null) return "";
-  try {
-    return JSON.stringify(value, null, 2) ?? String(value);
-  } catch {
-    return String(value);
-  }
-}
-
 function normalizeTask(task: KanbanTask): KanbanTask {
   const result = coerceKanbanText(task.result) || undefined;
   const body = coerceKanbanText(task.body);
@@ -710,15 +700,19 @@ export async function createTask(
 
 // Apply a single patch to an already-loaded board, mutating it in place and
 // returning the changed task. Shared by patchTask (single write) and
-// bulkPatchTasks (one write for K patches). Behavior is identical to the
-// inlined single-task path; the only thing hoisted out is the per-board project
-// map, which the caller computes once.
+// bulkPatchTasks (one write for K patches, status-less patches only — status
+// moves route through applyMoveToBoard). `integrityReceipts` are the
+// server-run untrusted-completion verdicts patchTask computed BEFORE the
+// mutation queue (network probes must not hold the board lock); they merge
+// LAST so a same-id forgery in the patch is overwritten, and a hardFail among
+// them parks the task needs-human instead of completing it.
 function applyPatchToBoard(
   board: KanbanBoard,
   taskId: string,
   patch: PatchTaskInput,
   projectsById: Map<string, HivemindProject>,
-): KanbanTask {
+  integrityReceipts: KanbanLoopReceipt[] = [],
+): { task: KanbanTask; completionBlocked?: { missingGateIds: string[]; missingGateTitles: string[] } } {
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
   const fromStatus = task.status;
@@ -816,19 +810,51 @@ function applyPatchToBoard(
     ...changedBase,
     proofs: mergedProjectProofs(changedBase, projectsById),
   };
+  // Server-run integrity receipts merge LAST so they overwrite a same-id
+  // forgery submitted in the same patch (mirrors completeTask).
+  if (integrityReceipts.length) {
+    changed.loopReceipts = mergeLoopReceipts(changed.loopReceipts, integrityReceipts);
+  }
+  let completionBlocked: { missingGateIds: string[]; missingGateTitles: string[] } | undefined;
   if (changed.status === "done") {
     const gateBlock = loopCompletionBlock(changed.loop, changed.loopReceipts ?? [], changed.result);
-    if (gateBlock) {
+    if (gateBlock?.hardFailed && fromStatus !== "done") {
+      // Affirmatively-false evidence (a fabricated/dead claimed-live URL, a
+      // placeholder deliverable, or a stored hard-fail from a prior attempt)
+      // on a task ENTERING done: park it needs-human with the receipts —
+      // exactly like the untrusted completeTask path — instead of completing,
+      // or throwing a 400 the agent would just retry blind. A task already
+      // done keeps the throw below so a later patch cannot silently un-complete
+      // a card a human moved to Done via the moveTask override.
+      completionBlocked = gateBlock;
+      const blockNote = loopGateBlockNote(gateBlock.missingGateTitles.join(", "));
+      const output = typeof changed.result === "string" ? changed.result.trim() : "";
+      changed.status = "needs-human";
+      changed.result = output ? `${output}\n\n${blockNote}` : blockNote;
+      changed.loop = applyLoopReceipts(changed.loop, changed.loopReceipts ?? []);
+      changed.completedAt = undefined;
+      changed.deliverables = mergeDeliverables(
+        task.deliverables,
+        extractTaskDeliverables(task, patch.result ?? task.result, changed.updatedAt),
+      );
+      board.events.unshift(
+        event("loop.eval-blocked", `${changed.title} needs eval evidence before completion`, taskId, {
+          missingGateIds: gateBlock.missingGateIds,
+          missingGateTitles: gateBlock.missingGateTitles,
+        }),
+      );
+    } else if (gateBlock) {
       throw new Error(`Completion rejected: missing passing eval receipts for ${gateBlock.missingGateTitles.join(", ")}.`);
+    } else {
+      changed.deliverables = mergeDeliverables(
+        changed.deliverables,
+        extractTaskDeliverables(
+          changed,
+          changed.result,
+          changed.completedAt ?? changed.updatedAt,
+        ),
+      );
     }
-    changed.deliverables = mergeDeliverables(
-      changed.deliverables,
-      extractTaskDeliverables(
-        changed,
-        changed.result,
-        changed.completedAt ?? changed.updatedAt,
-      ),
-    );
   } else if (nextStatus && nextStatus !== "done" && !patch.deliverables) {
     changed.deliverables = [];
   }
@@ -837,21 +863,23 @@ function applyPatchToBoard(
     changed.claimExpiresAt = undefined;
     changed.lastHeartbeatAt =
       nextStatus === "ready" ? undefined : changed.lastHeartbeatAt;
+    // Keyed to changed.status, not nextStatus: an integrity-parked patch-to-done
+    // finishes its run "blocked", not "completed".
     if (
       task.currentRunId &&
-      ["done", "needs-human", "archived"].includes(nextStatus)
+      ["done", "needs-human", "archived"].includes(changed.status)
     ) {
       finishActiveRun(
         board,
         task.id,
-        nextStatus === "done"
+        changed.status === "done"
           ? "completed"
-          : nextStatus === "needs-human"
+          : changed.status === "needs-human"
             ? "blocked"
             : "reclaimed",
         {
           summary: patch.result ?? task.result,
-          reason: nextStatus,
+          reason: changed.status,
         },
       );
       changed.currentRunId = undefined;
@@ -871,7 +899,7 @@ function applyPatchToBoard(
     event(
       nextStatus && nextStatus !== fromStatus ? "task.moved" : "task.updated",
       nextStatus && nextStatus !== fromStatus
-        ? `Moved ${changed.title} from ${fromStatus} to ${nextStatus}`
+        ? `Moved ${changed.title} from ${fromStatus} to ${changed.status}`
         : `Updated ${changed.title}`,
       taskId,
     ),
@@ -880,7 +908,7 @@ function applyPatchToBoard(
     createVisualHandoffChild(board, changed, changed.result);
     promoteReadyChildren(board, "dependency.auto-promote");
   }
-  return changed;
+  return { task: changed, completionBlocked };
 }
 
 // Apply a single status move to an already-loaded board, mutating it in place
@@ -967,12 +995,32 @@ export async function patchTask(
   patch: PatchTaskInput,
   options: KanbanStorageOptions = {},
 ) {
+  // A patch that sets status:"done" is an untrusted completion too — agents
+  // PATCH straight to done over HTTP/MCP (the human override is status-only
+  // moveTask, which stays gate-free). Run the live-URL/deliverable integrity
+  // evaluators BEFORE the mutation queue exactly like completeTask; a hardFail
+  // among the receipts parks the card needs-human in applyPatchToBoard.
+  const integrityReceipts =
+    patch.status === "done" && !options.trustedLoopReceipts
+      ? await untrustedCompletionIntegrityReceipts({
+          submittedText: coerceKanbanText(patch.result),
+          readStoredResult: async () =>
+            coerceKanbanText(
+              (await readBoard(slug, options)).tasks.find((item) => item.id === taskId)?.result,
+            ),
+          probes: options.integrityProbes,
+        })
+      : [];
   return withBoardMutation(slug, options, async () => {
     const board = await readBoard(slug, options);
     const projectsById = await projectMapForKanban(options);
-    const changed = applyPatchToBoard(board, taskId, patch, projectsById);
+    const { task: changed, completionBlocked } = applyPatchToBoard(board, taskId, patch, projectsById, integrityReceipts);
     await writeBoard(touch(board), options);
-    return { board, task: changed };
+    return {
+      board,
+      task: changed,
+      ...(completionBlocked ? { blocked: true, missingGateIds: completionBlocked.missingGateIds } : {}),
+    };
   });
 }
 
@@ -1172,6 +1220,14 @@ export async function heartbeatTask(
  * so every completion path — autonomous pickup, dashboard, API patch — rejects
  * the write and the task stays claimed/working for an honest attempt.
  */
+// Human-facing note stored on a card parked by a completion gate block: names
+// the failing/missing checks and tells the owner what to do next. Shared by
+// completeTask and the patch-to-done park path so the Needs You card reads
+// identically however the completion arrived (issue triage regexes this text).
+function loopGateBlockNote(gateTitles: string): string {
+  return `⚠ Loop gate block — missing passing eval receipts: ${gateTitles}.\nACTION NEEDED: The crew finished this but its automated checks (${gateTitles}) haven't passed yet. Review the output above; if it looks right, move the card forward, or use Discuss to have the crew fix the checks.`;
+}
+
 function assertResultNotMisattributed(board: KanbanBoard, taskId: string, result: string | undefined): void {
   const normalized = (result ?? "").trim();
   if (normalized.length < 200) return;
@@ -1189,6 +1245,15 @@ export async function completeTask(
   input: FinishRunInput = {},
   options: KanbanStorageOptions = {},
 ) {
+  // Untrusted (HTTP/MCP) completions run the live-URL/deliverable integrity gates
+  // over the result BEFORE the mutation queue; a hardFail receipt parks the task
+  // needs-human below. See completion-integrity.ts for the full rationale.
+  const integrityReceipts = options.trustedLoopReceipts ? [] : await untrustedCompletionIntegrityReceipts({
+    submittedText: coerceKanbanText(input.result ?? input.summary),
+    readStoredResult: async () =>
+      coerceKanbanText((await readBoard(slug, options)).tasks.find((item) => item.id === taskId)?.result),
+    probes: options.integrityProbes,
+  });
   return withBoardMutation(slug, options, async () => {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
@@ -1247,14 +1312,14 @@ export async function completeTask(
   const submittedReceipts = options.trustedLoopReceipts
     ? input.loopReceipts
     : sanitizeClientLoopReceipts(task.loop, input.loopReceipts);
-  const loopReceipts = mergeLoopReceipts(task.loopReceipts, submittedReceipts);
+  // Server-run integrity receipts merge LAST so they overwrite a same-id forgery.
+  const loopReceipts = mergeLoopReceipts(task.loopReceipts, [...normalizeLoopReceipts(submittedReceipts), ...integrityReceipts]);
   const gateBlock = loopCompletionBlock(task.loop, loopReceipts, result);
   if (gateBlock) {
     // Preserve the real worker output (and any artifacts/passed-gate progress) instead of
     // overwriting it with the missing-receipts summary — a human needs to see what was
     // actually produced before they can unblock it.
-    const gateTitles = gateBlock.missingGateTitles.join(", ");
-    const blockNote = `⚠ Loop gate block — missing passing eval receipts: ${gateTitles}.\nACTION NEEDED: The crew finished this but its automated checks (${gateTitles}) haven't passed yet. Review the output above; if it looks right, move the card forward, or use Discuss to have the crew fix the checks.`;
+    const blockNote = loopGateBlockNote(gateBlock.missingGateTitles.join(", "));
     const preservedResult = result?.trim()
       ? `${result.trim()}\n\n${blockNote}`
       : `${input.summary?.trim() || "Completion blocked."} ${blockNote}`;
@@ -1848,7 +1913,7 @@ export async function bulkPatchTasks(
       try {
         const task = patch.status
           ? applyMoveToBoard(board, taskId, patch.status)
-          : applyPatchToBoard(board, taskId, patch, projectsById);
+          : applyPatchToBoard(board, taskId, patch, projectsById).task;
         applied += 1;
         results.push({ taskId, ok: true, task });
       } catch (error) {

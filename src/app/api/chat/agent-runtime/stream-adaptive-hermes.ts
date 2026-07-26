@@ -15,6 +15,7 @@ import {
   appendRuntimeChatSessionText,
   finishRuntimeChatSession,
   replaceRuntimeChatSessionAssistantText,
+  sealRuntimeChatSessionAssistantSegment,
 } from "@/lib/services/chat/runtime-session-store";
 import {
   createChannelMarkupState,
@@ -264,6 +265,7 @@ export async function streamAdaptiveHermesOpenRouterRuntime(
           let channelMarkupState = createChannelMarkupState();
           let pendingAssistantText = "";
           let sawHermesCliFailure = false;
+          let sealedByToolEvent = false;
           const emitAssistantText = (content: string, raw?: unknown) => {
             if (!content) return;
             fullText += content;
@@ -383,13 +385,27 @@ export async function streamAdaptiveHermesOpenRouterRuntime(
                   }
                   if (parsed?.type === RUNTIME_STREAM_EVENT_TYPES.TEXT_RESET || parsed?.type === "assistant.reset") {
                     flushPendingAssistantText();
+                    // A tool event already sealed the narration this reset is
+                    // closing — forwarding the (content-less) bridge reset now
+                    // would misreport whatever text the NEXT segment has begun
+                    // streaming as the segment to seal. Swallow it.
+                    if (sealedByToolEvent) {
+                      sealedByToolEvent = false;
+                      continue;
+                    }
                     const interimText = String(parsed?.content ?? fullText).trim();
                     fullText = "";
                     pendingAssistantText = "";
                     channelMarkupState = createChannelMarkupState();
-                    queueSessionWrite(() => replaceRuntimeChatSessionAssistantText(runtimeSessionId, "", parsed));
                     if (interimText) {
-                      queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Hermes progress", interimText.slice(0, 600), parsed));
+                      // The narration the model streamed before pausing for tools
+                      // stays in the transcript as its own assistant message,
+                      // chronologically between the tool events — sealed so the
+                      // next segment appends as a fresh message instead of
+                      // replacing what the person already read.
+                      queueSessionWrite(() => sealRuntimeChatSessionAssistantSegment(runtimeSessionId, parsed));
+                    } else {
+                      queueSessionWrite(() => replaceRuntimeChatSessionAssistantText(runtimeSessionId, "", parsed));
                     }
                     safeEnqueue(ssePayload({ type: RUNTIME_STREAM_EVENT_TYPES.TEXT_RESET, content: interimText }));
                     continue;
@@ -431,9 +447,25 @@ export async function streamAdaptiveHermesOpenRouterRuntime(
                       : typeof parsed?.error === "string"
                         ? parsed.error
                         : undefined;
+                    const rawEventType = typeof parsed?.type === "string" ? parsed.type : typeof parsed?.event?.type === "string" ? parsed.event.type : "Runtime event";
+                    if (/(^|\.)tool\./.test(rawEventType)) {
+                      // A tool call ends the narration the model was streaming:
+                      // seal it so the next segment starts a fresh session
+                      // message instead of gluing onto text the person already
+                      // read (keeps the transcript chronological across tools).
+                      // fullText restarts with the segment, so a later reset or
+                      // the final presentation cleanup only ever touches the
+                      // text streamed AFTER this boundary.
+                      flushPendingAssistantText();
+                      if (fullText.trim()) {
+                        fullText = "";
+                        sealedByToolEvent = true;
+                        queueSessionWrite(() => sealRuntimeChatSessionAssistantSegment(runtimeSessionId, parsed));
+                      }
+                    }
                     queueSessionWrite(() => appendRuntimeChatSessionEvent(
                       runtimeSessionId,
-                      typeof parsed?.type === "string" ? parsed.type : typeof parsed?.event?.type === "string" ? parsed.event.type : "Runtime event",
+                      rawEventType,
                       eventDetail,
                       parsed,
                     ));

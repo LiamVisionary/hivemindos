@@ -17,6 +17,8 @@ import { syncCompanyTaskOutcomes } from "@/lib/services/company-memory";
 import { reconcileCompanyProposals } from "@/lib/services/company-needs-human-triage";
 import { companyExecutionCapability } from "@/lib/services/company-execution-capabilities";
 import { inspectCompanyAeonActivity } from "@/lib/services/company-aeon-binding";
+import { syncCompanyAeonOutcomes } from "@/lib/services/company-aeon-execution";
+import { numberEnv } from "@/lib/config/env";
 import { readSalesContentMachine } from "@/lib/services/sales-content";
 import { readCompanySalesContentEvents } from "@/lib/services/sales-content/event-store";
 import type { Company } from "@/lib/types/company";
@@ -181,6 +183,11 @@ const defaultMaxWaitingOnHuman = () => envNum("HIVEMINDOS_COMPANY_MAX_WAITING_DE
 // Standby instances (lease held elsewhere) re-check the lease this often — a
 // tiny file read — so a killed holder is replaced within about a minute.
 const standbyPollMs = () => envNum("HIVEMINDOS_COMPANY_DRIVER_STANDBY_POLL_MS", 60_000);
+// Bounded fan-out for the per-company redispatch pass: one company's planning leg
+// can hold a ~60s timeout, so a strictly serial pass starves the companies behind
+// it. 0 or 1 = serial; the tick's cross-company phase ORDER is unchanged — only
+// the per-company loop fans out.
+const companyRedispatchConcurrency = () => Math.max(0, Math.floor(numberEnv("HIVEMINDOS_COMPANY_DRIVER_CONCURRENCY", 3)));
 
 export function companyAutonomyDriverDisabled(): boolean {
   return (process.env.HIVEMINDOS_COMPANY_AUTONOMY_DRIVER || "").trim() === "0";
@@ -376,6 +383,17 @@ async function tickOnce(): Promise<void> {
   } catch (error) {
     console.warn("[company-autonomy-driver] memory sync failed:", error instanceof Error ? error.message : error);
   }
+  // AEON counterpart of the fold above: a dispatch-accepted company run now stays
+  // OPEN until its workspace run reaches a terminal state, and this sweep is what
+  // closes it — recording the outcome into memory (so re-planning sees it) and
+  // finishing the run with an observed completed/failed evaluation. Covers every
+  // locally-homed AEON company (even autonomy off), like the Work Board fold.
+  try {
+    const aeonRecorded = await syncCompanyAeonOutcomes(companies.filter((company) => companyRunsOnThisMachine(company)));
+    if (aeonRecorded > 0) console.log(`[company-autonomy-driver] recorded ${aeonRecorded} AEON run outcome(s) into company memory`);
+  } catch (error) {
+    console.warn("[company-autonomy-driver] AEON outcome sweep failed:", error instanceof Error ? error.message : error);
+  }
 
   let companyPassError: unknown = null;
   if (eligible.length > 0) {
@@ -489,7 +507,7 @@ async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof r
     }
   }
 
-  for (const company of eligible) {
+  const redispatchOne = async (company: Company): Promise<void> => {
     try {
       // Detect prospect replies without a human opening the Cockpit. Runs before
       // the work-surface/pause/cadence guards so a busy or paused company still
@@ -498,19 +516,19 @@ async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof r
       const executionCapability = companyExecutionCapability(company.execution);
       const companyPrefix = `company:${company.id}:`;
       if (executionCapability.autonomy.activityAuthority === "work-board") {
-        if (!board) continue;
+        if (!board) return;
         const scoped = scopeFleetToMembers(fleet, company.agentIds);
         // No member online + chat-capable → nobody to do the work; don't pile up queued tasks.
-        if (executionCapability.autonomy.requiresOnlineCrew && countDispatchableMembers(scoped) === 0) continue;
+        if (executionCapability.autonomy.requiresOnlineCrew && countDispatchableMembers(scoped) === 0) return;
         // Crew already has live work → let it finish before re-dispatching.
         const idents = memberIdentities(scoped);
-        if (companyHasActiveWork(tasks, idents, company.id)) continue;
+        if (companyHasActiveWork(tasks, idents, company.id)) return;
       } else if (company.execution?.engine === "aeon") {
         // The AEON workspace is the activity authority. Any queued/active run in
         // that workspace serializes company dispatches so overlapping external
         // runs cannot be created by the HivemindOS cadence.
         const activity = await inspectCompanyAeonActivity(company.execution);
-        if (activity.hasActiveRun) continue;
+        if (activity.hasActiveRun) return;
       }
 
       // Approval backpressure: once too many items are already waiting on a human,
@@ -536,7 +554,7 @@ async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof r
             ttlMs: autonomyPauseNudgeTtlMs(),
             tags: ["company", "paused"],
           }).catch(() => undefined);
-          continue;
+          return;
         }
       }
 
@@ -551,7 +569,7 @@ async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof r
         && sinceDispatch > 0
         && completedSince === 0;
       const interval = noProgress ? minRedispatchMs() * noProgressBackoff() : minRedispatchMs();
-      if (now - sinceDispatch < interval) continue;
+      if (now - sinceDispatch < interval) return;
 
       // Titles of this company's recent + in-flight tasks, so the planner's fresh
       // batch can be deduped against work already done or under way.
@@ -605,7 +623,38 @@ async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof r
         tags: ["company", "dispatch"],
       }).catch(() => undefined);
     }
+  };
+
+  // Fan out the per-company pass with bounded concurrency: shared stores stay
+  // safe because markCompanyDispatched runs its whole RMW as one queued unit and
+  // the submit path's JSONL receipts are true appends. redispatchOne never
+  // throws (per-company try/catch above), so one company cannot fail the pass.
+  const concurrency = companyRedispatchConcurrency();
+  if (concurrency > 1 && eligible.length > 1) {
+    await mapWithConcurrency(eligible, concurrency, redispatchOne);
+  } else {
+    for (const company of eligible) await redispatchOne(company);
   }
+}
+
+/** Local bounded-concurrency map (prior art in quant-research/runner.ts and
+ *  x-transcript/media-transcribe.ts — deliberately not imported across domains). */
+async function mapWithConcurrency<T>(
+  values: T[],
+  concurrency: number,
+  operation: (value: T) => Promise<void>,
+): Promise<void> {
+  let nextIndex = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, values.length) }, async () => {
+      while (nextIndex < values.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        if (index >= values.length) return;
+        await operation(values[index]);
+      }
+    }),
+  );
 }
 
 /**

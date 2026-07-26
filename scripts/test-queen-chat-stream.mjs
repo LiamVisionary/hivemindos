@@ -537,6 +537,7 @@ const {
       suppressWalletIntents: true,
     },
     {
+      resolveRoute: async () => ({ auth: "api-key", model: "gpt-4o-mini" }),
       apiKey: async () => "test-key",
       fetcher: async (_url, init) => {
         fallbackRequest = JSON.parse(String(init?.body ?? "{}"));
@@ -556,6 +557,40 @@ const {
   assert.equal(fallbackRequest?.agent?.runtime, "hivemind-os");
   assert.equal(fallbackRequest?.actingWalletSource?.agentId, "wallet-1");
   assert.equal(fallbackRequest?.suppressWalletIntents, true);
+
+  const oauthProfile = builtInQueenCapabilityProfile(
+    "gpt-5.4",
+    "",
+    "oauth",
+  );
+  assert.equal(oauthProfile.runtime, "hermes");
+  assert.equal(oauthProfile.provider, "openai-codex");
+  assert.equal(oauthProfile.token, undefined);
+  let oauthFallbackRequest = null;
+  await runBuiltInQueenCapabilityTurn(
+    {
+      origin: "http://127.0.0.1:5021",
+      messages: [{ role: "user", content: "Inspect through OAuth." }],
+      model: "gpt-4o-mini",
+      sessionId: "queen-capability-oauth-test",
+    },
+    {
+      resolveRoute: async () => ({ auth: "oauth", model: "gpt-5.4" }),
+      apiKey: async () => {
+        throw new Error("OAuth capability fallback must not read an API key.");
+      },
+      fetcher: async (_url, init) => {
+        oauthFallbackRequest = JSON.parse(String(init?.body ?? "{}"));
+        return new Response("ok");
+      },
+      readResponse: async () => "Observed through OAuth.",
+      readSession: async () => ({ messages: [] }),
+    },
+  );
+  assert.equal(oauthFallbackRequest?.agent?.runtime, "hermes");
+  assert.equal(oauthFallbackRequest?.agent?.provider, "openai-codex");
+  assert.equal(oauthFallbackRequest?.agent?.model, "gpt-5.4");
+  assert.equal(oauthFallbackRequest?.agent?.token, undefined);
   assert.equal(
     capabilityExecutionFromSse('data: {"type":"chat.tool.done","toolName":"invoke_hive_capability","operation":"list","status":"completed"}\n\n'),
     false,

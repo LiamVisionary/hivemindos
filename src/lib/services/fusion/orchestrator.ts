@@ -172,8 +172,14 @@ async function runPanelWithQuorumRelease(
     };
     for (let i = 0; i < pending.length; i += 1) {
       // The assignment handler above runs first on the same chain, so
-      // settled[i] is populated by the time this counts it.
-      void pending[i].then(() => onSettled(Boolean(settled[i]?.ok)));
+      // settled[i] is populated by the time this counts it. Count rejections
+      // too: emit can throw (the SSE controller throws on enqueue once the
+      // client disconnects mid-panel), which rejects the chain AFTER
+      // settled[i] was assigned — without the rejection arm the barrier
+      // never resolves, runFusion hangs forever, and route-stream's finally
+      // never finalizes the runtime chat session.
+      const countSettled = () => onSettled(Boolean(settled[i]?.ok));
+      void pending[i].then(countSettled, countSettled);
     }
   });
   released = true;

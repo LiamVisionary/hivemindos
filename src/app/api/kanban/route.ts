@@ -28,6 +28,7 @@ import {
   type KanbanStorageOptions,
 } from "@/lib/services/kanban/local-kanban-store";
 import { holdTask, clearHold } from "@/lib/services/kanban/task-hold";
+import { DASHBOARD_AUTH_HEADER, internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import { buildLoopFromTemplate, listLoopTemplates, stripProtectedIntegrityReceipts, type LoopTemplateId } from "@/lib/services/loops";
 import { filterKanbanTasks, groupKanbanTasks } from "@/lib/utils/kanban-board";
 import { recordTaskSkillOutcome } from "@/lib/services/skills/skill-autoresearch";
@@ -165,21 +166,34 @@ export async function POST(request: NextRequest) {
       await clearHold(boardSlug, body.taskId, storageOptions).catch(() => undefined);
       // Resume with the SAME agent that asked: when the card still carries a
       // delegated target, schedule an immediate autonomous pickup instead of
-      // waiting for the next re-dispatch sweep (same delegation shape as
-      // redispatchReadyQueenBeeTasks).
+      // waiting for the next re-dispatch sweep. The chain is rebuilt against
+      // the CURRENT fleet (same rules as the recovery sweep) so a judge-gated
+      // task resumes with real fallbacks and an independent reviewer — a
+      // fabricated one-element chain cannot staff a reviewer, so judge-gated
+      // work ran and immediately re-parked at needs-human. When discovery is
+      // unavailable this degrades to the single known delegate, never blocks.
       const task = result.task;
       const assignee = task.assignee?.trim();
       const collectorUrl = task.targetMachine?.collectorUrl;
       let pickupScheduled = false;
       if (assignee && assignee !== "queen-bee" && collectorUrl) {
         const { scheduleQueenBeeAutonomousPickup } = await import("@/lib/services/queen-bee/autonomous-worker");
+        const { prepareQueenBeeResumeChainContext, rebuildQueenBeeResumeChain } = await import("@/lib/services/queen-bee/control-plane");
+        const { discoverQueenBeeFleetSnapshot } = await import("@/lib/services/queen-bee/fleet-snapshot");
+        const fleetSnapshot = await discoverQueenBeeFleetSnapshot(
+          request.nextUrl.origin,
+          request.headers.get(DASHBOARD_AUTH_HEADER) ?? internalApiAuthHeaders()[DASHBOARD_AUTH_HEADER] ?? null,
+        );
+        const context = await prepareQueenBeeResumeChainContext({ ...storageOptions, fleetSnapshot }).catch(() => null);
+        const chain = context ? rebuildQueenBeeResumeChain(task, context) : [];
         pickupScheduled = scheduleQueenBeeAutonomousPickup({
           task,
-          delegation: {
+          delegation: chain[0] ?? {
             status: "delegated",
             agent: { name: assignee, runtime: "hermes", runtimeCapabilities: { chat: true } },
             machine: { key: task.targetMachine?.key, device: { name: task.targetMachine?.name, collectorUrl } },
           },
+          delegationChain: chain,
           vaultPath: storageOptions.vaultPath,
           kanbanFolder: storageOptions.kanbanFolder,
         });

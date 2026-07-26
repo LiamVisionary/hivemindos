@@ -80,10 +80,31 @@
   letter-spacing: -0.01em;
 }
 
+/* Centred on the whole bar rather than laid out after the title, so the picker
+   holds one position no matter how wide the title block is or whether the
+   shelf/workspace is open. The reserve is what a centred box must give up to
+   clear the title block on its left and the pinned cluster on its right —
+   deliberately NOT relaxed when the rail collapses, so the trigger renders at
+   exactly the same width in both states and its edges don't jump either. */
+.fr-chat-topbar {
+  --cx-picker-reserve: calc(2 * var(--cx-rail-w) + 24px);
+}
+
+@media (max-width: 980px) {
+  /* The title block is auto-width here, so only the pinned cluster binds. */
+  .fr-chat-topbar {
+    --cx-picker-reserve: 344px;
+  }
+}
+
 .fr-chat-agent-picker {
-  position: relative;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
   min-width: 0;
-  flex: 1 1 auto;
+  max-width: max(180px, min(560px, calc(100% - var(--cx-picker-reserve))));
+  transform: translate(-50%, -50%);
 }
 
 .fr-chat-agent-trigger {
@@ -155,10 +176,17 @@
 
 /* Single row: name + state, then the runtime/machine meta after a hairline.
    The two-line stack made this trigger 56px tall and forced the header band
-   taller than every other control in it. */
+   taller than every other control in it.
+
+   Two columns rather than a flex row so the shrink priority is deterministic:
+   the name + status track sizes to its content and the meta track takes only
+   what is left, truncating first. Weighted flex-shrink was not enough — a
+   narrow window still ate into the agent name, which is the one part of this
+   control that has to survive. */
 .fr-chat-agent-copy {
-  display: flex;
+  display: grid;
   min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 9px;
 }
@@ -166,7 +194,6 @@
 .fr-chat-agent-title-row {
   display: flex;
   min-width: 0;
-  flex: 0 1 auto;
   align-items: center;
   gap: 8px;
 }
@@ -194,7 +221,6 @@
 
 .fr-chat-agent-subline {
   min-width: 0;
-  flex: 1 1 auto;
   overflow: hidden;
   border-left: 1px solid var(--line-2);
   color: var(--fg-4);
@@ -245,7 +271,10 @@
   left: 0;
   z-index: 80;
   display: grid;
-  width: min(430px, 100%);
+  /* Sized independently of the trigger — the centred picker shrinks to its
+     content, and the menu's rows need more room than the trigger does. */
+  width: 430px;
+  max-width: calc(100vw - 120px);
   max-height: min(390px, calc(100vh - 190px));
   overflow: hidden;
   gap: 7px;

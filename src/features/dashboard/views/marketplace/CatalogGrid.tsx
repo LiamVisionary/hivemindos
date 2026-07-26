@@ -23,7 +23,12 @@ function matchesFilter(listing: MarketplaceListing, unread: number, filter: Stat
     case "draft":
       return listing.state === "draft" || listing.state === "rejected" || listing.state === "failed";
     case "pending-approval":
-      return listing.state === "pending-approval" || listing.state === "approved" || listing.state === "posting";
+      return (
+        listing.state === "pending-approval" ||
+        listing.state === "approved" ||
+        listing.state === "posting" ||
+        listing.state === "posted-unverified"
+      );
     case "active":
       return listing.state === "active";
     case "messages":

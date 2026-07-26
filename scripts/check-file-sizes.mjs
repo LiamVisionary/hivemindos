@@ -118,7 +118,12 @@ const legacyOversizedAllowances = new Map([
   // 2026-07-18: −127, deliverable extraction helpers moved to
   // kanban/deliverable-extraction.ts. The cut stops before mergeDeliverables /
   // sourceDeliverableKeys, which still reach back into store internals.
-  ["src/lib/services/kanban/local-kanban-store.ts", 2465],
+  // 2026-07-26: +62 for patch-to-done completion integrity — patchTask runs the
+  // untrusted live-URL/deliverable evaluators before the mutation queue and
+  // applyPatchToBoard parks hardFails needs-human; the park branch needs the
+  // store's private event/finishActiveRun/mergeDeliverables internals. The
+  // evaluators themselves live in kanban/completion-integrity.ts.
+  ["src/lib/services/kanban/local-kanban-store.ts", 2527],
   ["src/features/dashboard/hooks/use-dashboard-derived-state.tsx", 2244],
   ["src/features/dashboard/views/chat/HiveChatView.module.css", 1802],
   ["src/lib/services/obsidian/agent-memory/core.ts", 1901],

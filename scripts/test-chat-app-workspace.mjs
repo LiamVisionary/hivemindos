@@ -115,6 +115,26 @@ assert.match(
   /<header className="fr-chat-topbar" data-rail-collapsed=\{sidebarCollapsed \? "true" : "false"\}>[\s\S]*?<span className="fr-chat-rail-title">Chat<\/span>[\s\S]*?aria-label="Toggle chat history"[\s\S]*?className="fr-chat-agent-picker"[\s\S]*?<\/header>\n\n        <div\n          ref=\{layoutRef\}/,
   "the rail title, history toggle, and agent picker must share one header ABOVE the column grid",
 );
+
+// --- controls that must not move between states ---
+// The rail toggle rides with the title (whose width is constant) instead of
+// after the title block (whose width tracks the rail), and the picker is
+// centred on the bar rather than laid out after them. Both therefore hold one
+// position whether the rail, shelf, or workspace is open.
+assert.match(
+  panel,
+  /<div className="fr-chat-topbar-brand">[\s\S]*?<span className="fr-chat-rail-title">Chat<\/span>[\s\S]*?aria-label="Toggle chat history"[\s\S]*?<\/button>\s*<\/div>/,
+  "the history toggle must sit inside the title block, next to the word Chat",
+);
+assert.match(
+  headerCss,
+  /\.fr-chat-agent-picker \{[^}]*position: absolute[^}]*left: 50%[^}]*transform: translate\(-50%, -50%\)/,
+  "the agent picker must be centred on the bar, not laid out in its flex row",
+);
+assert.match(headerCss, /\.fr-chat-agent-picker \{[^}]*max-width: max\(180px, min\(560px, calc\(100% - var\(--cx-picker-reserve\)\)\)\)/, "the centred picker must stay clear of the title block and the pinned cluster, with a floor for narrow windows");
+assert.match(headerCss, /\.fr-chat-topbar \{\s*--cx-picker-reserve: calc\(2 \* var\(--cx-rail-w\) \+ 24px\)/, "the picker's clearance must derive from the rail width, not a hard-coded literal");
+assert.doesNotMatch(headerCss, /\[data-rail-collapsed="true"\][^{]*\{[^}]*--cx-picker-reserve/, "collapsing the rail must not change the picker's width — only its surroundings move");
+assert.doesNotMatch(headerCss, /\.fr-chat-agent-menu \{[^}]*width: min\(430px, 100%\)/, "the dropdown must not size off the shrink-to-fit picker");
 assert.doesNotMatch(sidebar, /fr-chat-rail-header|fr-chat-rail-title/, "the rail must not render its own title any more — the shared header owns it");
 assert.doesNotMatch(exchangeCss, /\.fr-chat-shelf::before/, "the shelf's stand-in header band is obsolete under a single bar");
 for (const sheet of [exchangeCss, headerCss]) {
@@ -124,7 +144,7 @@ assert.doesNotMatch(panel, /data-float-reserve/, "the reserve moved onto the alw
 
 // The picker was a two-line block 56px tall, which forced the header taller than
 // every other control in it; name + state + meta now share one row.
-assert.match(headerCss, /\.fr-chat-agent-copy \{[^}]*display: flex[^}]*align-items: center/, "the agent picker must lay its name and meta out on one row");
+assert.match(headerCss, /\.fr-chat-agent-copy \{[^}]*display: grid[^}]*grid-template-columns: auto minmax\(0, 1fr\)/, "the agent picker must lay name and meta out on one row, with the meta as the track that truncates first");
 assert.match(headerCss, /\.fr-chat-agent-avatar \{[^}]*width: 28px/, "the agent picker avatar must be the compact size");
 
 // The split sheet must stay loaded, and after chat-exchange.css so the tokens

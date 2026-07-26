@@ -14,6 +14,7 @@ export const dynamic = "force-dynamic";
 // companies (each company's read fans out over live mail providers).
 const PER_COMPANY_LIMIT = 60;
 const TOTAL_LIMIT = 200;
+const PER_AGENT_LIMIT = 60;
 
 /** A thread tagged with the company it belongs to, so a single mobile inbox
  *  can show cross-company mail without N per-company round-trips. */
@@ -27,6 +28,11 @@ type AggregatedThread = CompanyEmailThread & { companyId: string; companyName: s
  *
  * `?threadId=` returns one thread's full body/links/attachments — the provider
  * is encoded in the id, so no company id is needed for detail.
+ *
+ * `?agentId=` returns one agent's threads/mailboxes only (the chat route's
+ * agent-asset popover). Both live inbox readers scope by agent id, and the
+ * company-outbox reader no-ops without a company id, so no post-filtering is
+ * needed.
  */
 export async function GET(request: NextRequest) {
   const unauthorized = await requireAuth(request);
@@ -40,6 +46,23 @@ export async function GET(request: NextRequest) {
     } catch (error) {
       return NextResponse.json(
         { ok: false, error: error instanceof Error ? error.message : "Failed to load the email." },
+        { status: 400 },
+      );
+    }
+  }
+
+  const agentId = request.nextUrl.searchParams.get("agentId")?.trim();
+  if (agentId) {
+    try {
+      const result = await readCompanyEmailThreads({
+        agentIds: [agentId],
+        companyId: "",
+        totalLimit: PER_AGENT_LIMIT,
+      });
+      return NextResponse.json({ ok: true, ...result });
+    } catch (error) {
+      return NextResponse.json(
+        { ok: false, error: error instanceof Error ? error.message : "Failed to load the agent's mail." },
         { status: 400 },
       );
     }

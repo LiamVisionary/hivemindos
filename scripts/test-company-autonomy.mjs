@@ -17,6 +17,12 @@ const tempHome = await mkdtemp(join(tmpdir(), "hivemind-company-autonomy-home-")
 const vaultPath = await mkdtemp(join(tmpdir(), "hivemind-company-autonomy-vault-"));
 process.env.HOME = tempHome;
 process.env.QUEEN_BEE_AUTONOMOUS_PICKUP = "0"; // routing must not fire network pickups in tests
+// Untrusted (HTTP-shape) completions now run the live-URL/deliverable integrity
+// gates server-side; the URL-bearing deliverable-hygiene fixtures below must not
+// probe the real network from a hermetic suite. The PURE reserved/mock-URL check
+// still runs (the fabricated .example completion legitimately parks needs-human).
+process.env.QUEEN_BEE_LIVE_URL_PROBE = "0";
+process.env.QUEEN_BEE_DELIVERABLE_ACCEPTANCE = "0";
 
 const {
   companyHasActiveWork,
@@ -445,6 +451,35 @@ try {
     assert.equal(resolveCompanyDriverSelfBases()[0], "http://127.0.0.1:5021", "a newer loopback door replaces the old one");
     if (savedPort === undefined) delete process.env.PORT;
     else process.env.PORT = savedPort;
+  }
+
+  // ── markCompanyDispatched: full RMW runs as ONE queued unit ───────────────
+  // The driver's fan-out stamps several companies concurrently; before the
+  // queued-RMW fix, each call's stale readRaw() overwrote the other company's
+  // just-written lastDispatchedAt (last write won with old data).
+  {
+    const { getCompany, markCompanyDispatched } = await import("../src/lib/services/companies-store.ts");
+    const raceA = await upsertCompany({ name: "Race Co A", agentIds: ["race-agent-a"] });
+    const raceB = await upsertCompany({ name: "Race Co B", agentIds: ["race-agent-b"] });
+    await Promise.all([
+      markCompanyDispatched(raceA.id, 1_111),
+      markCompanyDispatched(raceB.id, 2_222),
+    ]);
+    assert.equal((await getCompany(raceA.id))?.lastDispatchedAt, 1_111, "concurrent stamp A survives");
+    assert.equal((await getCompany(raceB.id))?.lastDispatchedAt, 2_222, "concurrent stamp B survives (no lost update)");
+    assert.equal(await markCompanyDispatched("no-such-company", 3), null, "unknown company still returns null through the queued path");
+  }
+
+  // ── driver fan-out + submit-path append safety (source contracts) ─────────
+  {
+    const driverSrc = await readFile(new URL("../src/lib/services/company-autonomy-driver.ts", import.meta.url), "utf8");
+    assert.match(driverSrc, /HIVEMINDOS_COMPANY_DRIVER_CONCURRENCY/, "per-company fan-out is env-tunable");
+    assert.match(driverSrc, /numberEnv\("HIVEMINDOS_COMPANY_DRIVER_CONCURRENCY", 3\)/, "fan-out defaults ON with bound 3 via numberEnv");
+    assert.match(driverSrc, /mapWithConcurrency\(eligible, concurrency, redispatchOne\)/, "the per-company pass fans out with bounded concurrency");
+    assert.match(driverSrc, /for \(const company of eligible\) await redispatchOne\(company\);/, "0/1 keeps the serial per-company pass");
+    const controlPlaneSrc = await readFile(new URL("../src/lib/services/queen-bee/control-plane.ts", import.meta.url), "utf8");
+    assert.match(controlPlaneSrc, /async function appendJsonl\([^)]*\)\s*\{\s*\n\s*await mkdir\(dirname\(path\), \{ recursive: true \}\);\s*\n\s*await appendFile\(/, "submit-path JSONL receipts are true appends");
+    assert.doesNotMatch(controlPlaneSrc, /const prior = existsSync\(path\)/, "the read-then-rewrite append (which dropped concurrent lines) is gone");
   }
 
   // ── Fresh-code ticks: driver fixes must land with NO server restart ────────

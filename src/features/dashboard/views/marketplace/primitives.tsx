@@ -70,6 +70,7 @@ const LISTING_STATE_TONE: Record<ListingDisplayState, { label: string; color: st
   "pending-approval": { label: "Needs approval", color: "var(--honey)", live: true },
   approved: { label: "Approved", color: "var(--honey)" },
   posting: { label: "Posting", color: "var(--honey)", live: true },
+  "posted-unverified": { label: "Verifying post", color: "var(--honey)", live: true },
   active: { label: "Listed", color: "var(--live)" },
   "pending-messages": { label: "Messages", color: "var(--honey)", live: true },
   ended: { label: "Ended", color: "var(--fg-4)" },

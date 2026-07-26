@@ -13,6 +13,7 @@ import {
 import { mintGoogleCloudAccessToken } from "@/lib/services/integrations/google-cloud-oauth";
 import { CONNECTOR_MANIFESTS } from "@/lib/services/integrations/connector-manifests";
 import { buildCompanyApiUsageSnapshot, readCompanyApiUsage } from "@/lib/services/company-api-usage";
+import { readCompanyEngineBudgetSnapshot } from "@/lib/services/company-engine-budget";
 import {
   preserveCompanyApiBudgetProviderState,
   sameCompanyApiBudgetScope,
@@ -147,7 +148,15 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   }));
   const projectRef = request.nextUrl.searchParams.get("projectId")?.trim() ?? "";
   const service = request.nextUrl.searchParams.get("service")?.trim() ?? "";
-  const base = { apiBudgets, integrationLimits, usage, connectors };
+  const base = {
+    apiBudgets,
+    integrationLimits,
+    usage,
+    connectors,
+    // The company engine's own in-process meter (pushed by its bridge), so the
+    // Limits tab shows engine-side hard caps next to crew-side guardrails.
+    engine: await readCompanyEngineBudgetSnapshot(companyId),
+  };
 
   // Mint once so a valid connection remains "connected" even when the account
   // lacks one optional discovery permission. Individual discovery errors are

@@ -167,6 +167,9 @@ export interface ZeroHumanCompaniesProps {
   onAddAgents: (companyId: string, crew: Agent[]) => Promise<void>;
   /** Open the established agent-duplication flow for an identity owned by another company. */
   onDuplicateAgent?: (agentId: string) => void;
+  /** Open the full AgentSettingsModal for an agent id (the cockpit's "Queen
+   *  settings" uses this for the auto-seeded company Queen profile). */
+  onOpenAgentSettings?: (agentId: string) => void | Promise<void>;
   onDecideApproval: (companyId: string, approvalId: string, decision: ApprovalDecision, note: string) => void | Promise<void>;
   /** Decide an approval-like Work Board issue from the shared approval surface. */
   onDecideIssueApproval: (companyId: string, issue: Issue, decision: ApprovalDecision, note: string) => void | Promise<void>;
@@ -201,7 +204,7 @@ export interface ZeroHumanCompaniesProps {
 
 export default function ZeroHumanCompanies({
   colonies, portfolioColonies, agentPool, initialCreateCrew, loading, initialLoading = loading, initialTasksLoading = false, error, notice, busyId, onRefresh,
-  onCreateCompany, onImportCompany, onEditCompany, onAddAgents, onDuplicateAgent, onDecideApproval, onDecideIssueApproval, onResolvePricing, onSetApprovalPolicy, onFreeze, onDelete, onDispatch, onStopAutonomy, onResolveIssue, onRetryIssues, onDismissIssues, onReviewPreview, onRecordRevenue,
+  onCreateCompany, onImportCompany, onEditCompany, onAddAgents, onDuplicateAgent, onOpenAgentSettings, onDecideApproval, onDecideIssueApproval, onResolvePricing, onSetApprovalPolicy, onFreeze, onDelete, onDispatch, onStopAutonomy, onResolveIssue, onRetryIssues, onDismissIssues, onReviewPreview, onRecordRevenue,
   openSkillAttachmentBrowser,
   chooseDirectoryForMachine,
   defaultDirectoryMachine,
@@ -309,6 +312,7 @@ export default function ZeroHumanCompanies({
     onEdit: () => setModal({ type: "edit", id: colony.id }),
     onEditTreasury: () => setModal({ type: "treasury", id: colony.id }),
     onEditAgent: (agentId) => setModal({ type: "edit-agent", id: colony.id, agentId }),
+    onOpenAgentSettings,
     onOpenIssue: (issue) => setModal({ type: "task", id: colony.id, issueId: getIssueIdentity(issue) }),
     onResolveIssue: (issue, answer) => onResolveIssue(colony.id, issue, answer),
     onRetryIssues: onRetryIssues ? (issues) => onRetryIssues(colony.id, issues) : undefined,

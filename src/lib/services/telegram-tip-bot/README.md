@@ -134,11 +134,15 @@ the reaction menu. That reaction is the explicit recognition action; it sends
 the same identities and Telegram update id to the hosted gateway and posts a
 short confirmation only after the award succeeds. The confirmation names the
 giver whose daily quota changed, says whether the award came from a 🏆 reaction,
-and includes a receipt id. Removing the reaction, adding another emoji, or
-reacting anonymously awards nothing. Message text is not sent to the gateway.
-The bot keeps only a bounded, in-memory index of recent message authors, so an
-older message that predates a bot restart falls back to replying with
-`/honey <why>`.
+and includes a receipt id. If the award is rejected, the bot removes that
+member's 🏆 reaction and replies under the original group message with the
+reason and receipt; a private message is only the fallback when the group reply
+cannot be delivered. If Telegram refuses the reaction cleanup, the group reply
+asks the member to remove it manually. Removing the reaction, adding another
+emoji, or reacting anonymously awards nothing. Message text is not sent to the
+gateway. The bot keeps only a bounded, in-memory index of recent message
+authors, so an older message that predates a bot restart falls back to replying
+with `/honey <why>`.
 
 Every typed recognition and 🏆 attempt first creates a bounded durable receipt
 at `~/.hivemindos/telegram-tip-bot-honey-audit.json`. Admins can inspect the ten
@@ -154,9 +158,10 @@ The bot must never place the 🏆 reaction itself. Telegram clients animate ever
 reaction placement, so a bot-seeded trophy plays the award animation under
 every comment and reads as an award that never happened — the trophy may only
 appear when a member actually gives one (guarded by the test suite). The bot
-must be a group administrator to receive member reaction updates, group
-reactions must allow 🏆 (or all emoji), Group Privacy must be disabled so it can
-observe message authors, and `message_reaction` must remain in the poller's
+must be a group administrator to receive member reaction updates and needs
+`can_delete_messages` to clean up a failed member reaction. Group reactions
+must allow 🏆 (or all emoji), Group Privacy must be disabled so it can observe
+message authors, and `message_reaction` must remain in the poller's
 `allowed_updates` list. Telegram's Bot API cannot change the group's allowed
 reaction set, so an admin enables that once in the group settings. The built-in
 reaction is intentionally used instead of a custom 🍯 emoji so the action does

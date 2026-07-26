@@ -5,6 +5,7 @@ import { openNativeDirectory } from "@/lib/native/filesystem";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { NATIVE_SETUP_RERUN_EVENT, readNativeSetupStatus } from "@/lib/native/setup";
 import { renderBeeSoulTemplate, type BeeWorkerPreset } from "@/lib/config/bee-worker-presets";
+import { stampAgentProfileConfigurationPatch } from "@/lib/config/agent-profile-configuration";
 import { DEFAULT_RESEARCH_METHOD } from "@/lib/config/research-methods";
 import { isMobileMachineOs } from "@/features/fleet/fleet-identity";
 import { saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
@@ -119,9 +120,10 @@ export function useAgentController(props: UseAgentControllerProps) {
       const existing = current.find((agent) => agent.id === agentId);
       const discovered = displayAgents.find((agent) => agent.id === agentId);
       const target = existing ?? discovered;
+      const stampedPatch = stampAgentProfileConfigurationPatch(patch);
       const nextPatch = target?.beeRole === "queen" && typeof patch.name === "string"
-        ? { ...patch, queenNameCustomized: true }
-        : patch;
+        ? { ...stampedPatch, queenNameCustomized: true }
+        : stampedPatch;
       if (existing) {
         return current.map((agent) => (
           agent.id === agentId ? { ...agent, ...nextPatch } : agent

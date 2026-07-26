@@ -22,6 +22,8 @@ import {
   upsertCompany,
 } from "@/lib/services/companies-store";
 import { dispatchCompanyGoal } from "@/lib/services/companies-orchestration";
+import { ensureAllCompanyQueens } from "@/lib/services/company-queen";
+import { recordCompanyEngineBudgetSnapshot, validateEngineBudgetSnapshot } from "@/lib/services/company-engine-budget";
 import { ensureCompanyProductsSeeded } from "@/lib/services/company-products";
 import {
   ensureCompanyAutonomyDriver,
@@ -97,6 +99,11 @@ export async function GET(request: NextRequest) {
     for (const company of companies) seeded.push(await ensureCompanyProductsSeeded(company).catch(() => company));
     return seeded;
   })();
+  // Company CEO seeding, same self-heal stance: every company carries its own
+  // cloned queen agent + non-removable Queen member. Cheap once settled — the
+  // profile check is memoized per process and the member check is pure, so a
+  // steady-state poll does no writes.
+  companies = await ensureAllCompanyQueens(companies).catch(() => companies);
   // Same self-heal stance as the driver revive above: any settled x402 seller
   // receipts sweep into the revenue ledger (throttled + idempotent) before the
   // rollups are computed, so revenue and apex progress never wait on a human.
@@ -124,6 +131,8 @@ export async function GET(request: NextRequest) {
 type CompanyBody = {
   action?: string;
   id?: string;
+  /** record-engine-api-budget: the engine bridge's spend-meter snapshot. */
+  snapshot?: unknown;
   name?: string;
   agentIds?: string[];
   charter?: string;
@@ -271,6 +280,17 @@ export async function POST(request: NextRequest) {
       const company = await removeCompanyIntegrationLimit(body.id.trim(), body.limitId.trim());
       if (!company) return errorJson("Company not found.", 404);
       return okJson({ company, integrationLimits: company.integrationLimits ?? [] });
+    }
+    if (action === "record-engine-api-budget") {
+      // A company's own deterministic engine (e.g. maps-agency's bridge)
+      // reporting its in-process spend meter + cap state for the Limits tab.
+      if (!body.id?.trim()) return errorJson("id is required", 400);
+      const company = await getCompany(body.id.trim());
+      if (!company) return errorJson("Company not found.", 404);
+      const snapshot = validateEngineBudgetSnapshot(body.snapshot);
+      if (!snapshot) return errorJson("A valid engine budget snapshot is required.", 400);
+      await recordCompanyEngineBudgetSnapshot(company.id, snapshot);
+      return okJson({ recorded: true });
     }
     if (action === "check-api-usage" || action === "consume-api-usage" || action === "record-api-usage") {
       if (!body.id?.trim()) return errorJson("id is required", 400);

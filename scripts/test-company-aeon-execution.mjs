@@ -25,8 +25,9 @@ const {
   listCompanyAeonOptions,
   resolveCompanyAeonBinding,
 } = await import("../src/lib/services/company-aeon-binding.ts");
-const { dispatchCompanyWithAeon, buildCompanyAeonVariable } = await import("../src/lib/services/company-aeon-execution.ts");
+const { dispatchCompanyWithAeon, buildCompanyAeonVariable, syncCompanyAeonOutcomes } = await import("../src/lib/services/company-aeon-execution.ts");
 const { listCompanyRuns } = await import("../src/lib/services/company-runs.ts");
+const { readCompanyMemory } = await import("../src/lib/services/company-memory.ts");
 const { getCompany, upsertCompany } = await import("../src/lib/services/companies-store.ts");
 
 try {
@@ -148,11 +149,66 @@ try {
   assert.equal(captured.overrides.var, buildCompanyAeonVariable(company));
 
   const ledger = await listCompanyRuns(company.id);
-  assert.equal(ledger.runs[0]?.status, "completed");
-  assert.equal(ledger.runs[0]?.output?.executionEngine, "aeon");
-  assert.equal(ledger.runs[0]?.output?.aeonSkill, "digest");
-  assert.equal(ledger.runs[0]?.output?.evaluation?.verdict, "unobserved", "an accepted external dispatch is not misreported as evaluated work");
+  assert.equal(ledger.runs[0]?.status, "running", "dispatch-accept leaves the company run OPEN until the workspace run actually finishes");
+  assert.equal(ledger.runs[0]?.output, undefined, "no completion output is fabricated at dispatch-accept");
   assert.ok(ledger.runs[0]?.events?.some((event) => event.kind === "aeon-dispatched"));
+
+  // ── outcome sweep: terminal workspace runs fold back into memory + the run ledger ──
+  const liveCompany = await getCompany(company.id);
+  const sweepDeps = (runs) => ({
+    resolveBinding: async () => ({ profile, skill }),
+    listRuns: async () => runs,
+  });
+  const stillActive = await syncCompanyAeonOutcomes([liveCompany], { vaultPath }, sweepDeps([
+    { id: "9001", runtime: "aeon", name: "Digest", status: "active", createdAt: new Date().toISOString() },
+  ]));
+  assert.equal(stillActive, 0, "an in-flight workspace run records nothing");
+  assert.equal((await listCompanyRuns(company.id)).runs[0]?.status, "running", "the dispatch stays open while the workspace run is active");
+
+  const staleRun = { id: "8000", runtime: "aeon", name: "Old digest", status: "completed", conclusion: "success", createdAt: new Date(Date.now() - 3 * 60 * 60_000).toISOString(), updatedAt: new Date(Date.now() - 3 * 60 * 60_000).toISOString() };
+  const doneRun = { id: "9001", runtime: "aeon", name: "Digest", status: "completed", conclusion: "success", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), url: "https://github.com/example/aeon/runs/9001" };
+  const firstSweep = await syncCompanyAeonOutcomes([liveCompany], { vaultPath }, sweepDeps([staleRun, doneRun]));
+  assert.equal(firstSweep, 1, "only the run from THIS dispatch window is recorded — pre-dispatch history is ignored");
+  const secondSweep = await syncCompanyAeonOutcomes([liveCompany], { vaultPath }, sweepDeps([staleRun, doneRun]));
+  assert.equal(secondSweep, 0, "the outcome sweep is idempotent (deduped on aeonRunId in company memory)");
+  const memoryAfter = await readCompanyMemory(company.id);
+  const outcomeRecord = memoryAfter.find((record) => record.data?.aeonRunId === "9001");
+  assert.equal(outcomeRecord?.kind, "task-completed", "a successful workspace run lands in memory as task-completed");
+  const closedRun = (await listCompanyRuns(company.id)).runs.find((run) => run.id === result.companyRunId);
+  assert.equal(closedRun?.status, "completed", "the sweep finishes the open dispatch run");
+  assert.equal(closedRun?.output?.aeonRunId, "9001", "the finished run names the workspace run that closed it");
+  assert.equal(closedRun?.output?.evaluation?.verdict, "accepted", "the observed completion is evaluated for real, not unobserved");
+  assert.ok(closedRun?.events?.some((event) => event.kind === "aeon-run-completed"), "the run trail records the observed workspace completion");
+
+  // A FAILING workspace run must surface as a failure, not silent success.
+  const failCompany = await upsertCompany({
+    name: "AEON Fail Company",
+    members: [{ agentId: "founder-queen-2", roleInCompany: "Queen" }],
+    apexGoal: { title: "Ship the weekly digest", metric: "digests", target: "1" },
+    execution: { engine: "aeon", profileId: "aeon-growth", skill: "digest" },
+  });
+  const failDispatch = await dispatchCompanyWithAeon(await getCompany(failCompany.id), { vaultPath }, {
+    resolveBinding: async () => ({ profile, skill }),
+    dispatchSkill: async () => ({ dispatched: true, skill: "digest", source: "aeon-cli" }),
+  });
+  const failedRun = { id: "9100", runtime: "aeon", name: "Digest", status: "failed", conclusion: "failure", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  assert.equal(await syncCompanyAeonOutcomes([await getCompany(failCompany.id)], { vaultPath }, sweepDeps([failedRun])), 1);
+  const failMemory = await readCompanyMemory(failCompany.id);
+  assert.equal(failMemory.find((record) => record.data?.aeonRunId === "9100")?.kind, "task-blocked", "a failed workspace run lands in memory as task-blocked");
+  const failClosed = (await listCompanyRuns(failCompany.id)).runs.find((run) => run.id === failDispatch.companyRunId);
+  assert.equal(failClosed?.status, "failed", "a failing external run closes the dispatch as FAILED — no longer invisible");
+  assert.equal(failClosed?.output?.evaluation?.verdict, "rejected", "the observed failure evaluates as rejected");
+
+  // Non-AEON companies and AEON companies with nothing outstanding are skipped without a workspace lookup.
+  let lookedUp = false;
+  assert.equal(
+    await syncCompanyAeonOutcomes([await getCompany(failCompany.id)], { vaultPath }, {
+      resolveBinding: async () => { lookedUp = true; return { profile, skill }; },
+      listRuns: async () => { lookedUp = true; return []; },
+    }),
+    0,
+  );
+  assert.equal(lookedUp, false, "no open dispatch means no binding/workspace lookup at all");
 
   await assert.rejects(
     dispatchCompanyWithAeon(company, { vaultPath }, {

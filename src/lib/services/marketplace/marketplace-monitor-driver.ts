@@ -80,7 +80,7 @@ function sleepUnlessStopped(runner: Runner, ms: number): Promise<void> {
   });
 }
 
-/** Apply one agent inbox report: conversations, catalog, escalations → decisions. */
+/** Apply one agent inbox report: verified replies + conversations, verified catalog, escalations → decisions. */
 async function applyInboxReport(account: MarketplaceAccount, report: MarketplaceAgentReport): Promise<void> {
   const now = new Date().toISOString();
   if (report.sessionHealth === "logged-out") {
@@ -94,12 +94,27 @@ async function applyInboxReport(account: MarketplaceAccount, report: Marketplace
     }).catch(() => undefined);
     return;
   }
-  const ingest = await ingestConversationSnapshot(account.id, report.conversations, report.replies);
-  if (report.catalog?.length) await upsertSyncedListings(account.id, report.catalog);
+  // Per-op refutation (matrix row "work-inbox"): a claimed sent reply ingests
+  // only when the real thread shows it — a fabricated "reply sent" used to
+  // mark the conversation awaiting-buyer and ghost the buyer. Refuted claims
+  // become escalations below; unobservable claims defer to the next sweep's
+  // thread snapshot, which carries the reply if it was really sent.
+  const reader = resolveIndependentTabReader(account);
+  const replyCheck = await verifyClaimedReplies(reader, account.machine.profileName, report);
+  const ingest = await ingestConversationSnapshot(account.id, report.conversations, replyCheck.accepted);
+  // Catalog rows that would flip an EXISTING record verify against their live
+  // pages before merging (matrix row "sync-catalog") — never a raw upsert.
+  if (report.catalog?.length) await applyVerifiedCatalogSweep(account, report.catalog);
+
+  const refutedReplyEscalations: MarketplaceReportEscalation[] = replyCheck.refuted.map((claim) => ({
+    conversationId: claim.conversationId,
+    reason: `The agent reported a reply this conversation's thread does not show (${claim.reason}).`,
+    question: "Review the conversation and answer the buyer yourself — the claimed reply was not sent.",
+  }));
 
   // Escalations → decision cards (deduped per conversation: one pending card at a time).
   const pending = await listMarketplaceDecisions({ status: "pending", accountId: account.id });
-  for (const escalation of report.escalations) {
+  for (const escalation of [...report.escalations, ...refutedReplyEscalations]) {
     const conversationId = `${account.id}:${escalation.conversationId}`;
     if (pending.some((decision) => decision.conversationId === conversationId)) continue;
     const conversation = (await readMarketplaceConversations(account.id)).find((candidate) => candidate.id === conversationId);
@@ -133,7 +148,7 @@ async function applyInboxReport(account: MarketplaceAccount, report: Marketplace
     }).catch(() => undefined);
   }
 
-  if (ingest.newBuyerMessages > 0 || report.replies.length > 0) {
+  if (ingest.newBuyerMessages > 0 || replyCheck.accepted.length > 0) {
     await patchAccountRuntime(account.id, { lastActivityAt: now });
   }
 }
@@ -175,14 +190,14 @@ async function tickAccount(account: MarketplaceAccount, nowMs: number): Promise<
       pending = probe.pendingConversations;
     }
 
-    if (fullSweepDue) {
-      fullSweepRan = true;
-      await patchAccountRuntime(account.id, { inFlightOp: "sync-catalog" });
-      await syncMarketplaceCatalog(account.id);
-      await flagUnsyncedActiveListings(account);
-    }
-
     if (fullSweepDue || (typeof pending === "number" && pending > 0)) {
+      // The base-cadence sweep is ONE dispatched session (fullSweep: catalogue
+      // the selling page, then the inbox, one MARKETPLACE_REPORT) — two queen
+      // round-trips against the same profile were pure overhead. The separate
+      // sync-catalog dispatch stays only for the on-demand listings-route
+      // action. Stamp lastSweepAt even on a failed sweep so a broken dispatch
+      // retries at base cadence, not on every hot-rung poll.
+      fullSweepRan = fullSweepDue;
       await patchAccountRuntime(account.id, { inFlightOp: "work-inbox" });
       const [directives, listings] = await Promise.all([
         listMarketplaceDirectives(account.id),
@@ -190,10 +205,11 @@ async function tickAccount(account: MarketplaceAccount, nowMs: number): Promise<
       ]);
       const report = await adapter.workInbox(
         account,
-        { directives, listings: listings.filter((listing) => listing.state === "active") },
+        { directives, listings: listings.filter((listing) => listing.state === "active"), fullSweep: fullSweepDue },
         { env: {}, dispatchAgentTaskImpl: dispatchMarketplaceAgentTask },
       );
       await applyInboxReport(account, report);
+      if (fullSweepDue) await flagUnsyncedActiveListings(account);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -233,14 +249,36 @@ async function tickOnce(): Promise<{ ticked: string[] }> {
     if (account.status !== "connected") continue;
     if (!sameMachineIdentity(account.machine.machineKey, localKey)) continue;
     const runtime = overlay.perAccount[account.id] ?? {};
-    if (runtime.inFlightOp) {
-      const sinceMs = runtime.inFlightSince ? Date.parse(runtime.inFlightSince) : Number.NaN;
-      if (Number.isFinite(sinceMs) && nowMs - sinceMs < IN_FLIGHT_STALE_MS) continue;
+    const listings = await readMarketplaceListings(account.id);
+    const gate = computeMarketplaceTickGate({
+      runtime,
+      listings,
+      nowMs,
+      inFlightStaleMs: IN_FLIGHT_STALE_MS,
+      postingStaleMs: POSTING_SESSION_STALE_MS,
+    });
+    if (gate.clearStaleInFlight) {
       // Stale in-flight marker (crash mid-session) — clear and resume.
       await patchAccountRuntime(account.id, { inFlightOp: undefined, inFlightSince: undefined });
     }
-    const nextMs = runtime.nextPollAt ? Date.parse(runtime.nextPollAt) : Number.NaN;
-    if (Number.isFinite(nextMs) && nowMs < nextMs) continue;
+    // "in-flight": an op is live; "posting-session": a dispatched agent session
+    // (possibly from another machine — the vault-replicated listing state is
+    // the cross-machine signal the local profile lock cannot give) may be
+    // driving this profile's browser right now.
+    if (gate.skip) continue;
+    if (gate.verifyPostedUnverified) {
+      // Settle deferred posting claims FIRST: this machine owns the profile,
+      // so it is the only place the independent page check can run.
+      await patchAccountRuntime(account.id, { inFlightOp: "verify-listing", inFlightSince: new Date(nowMs).toISOString() });
+      try {
+        await verifyUnverifiedPostedListings(account);
+      } catch (error) {
+        await patchAccountRuntime(account.id, { lastError: error instanceof Error ? error.message : String(error) });
+      } finally {
+        await patchAccountRuntime(account.id, { inFlightOp: undefined, inFlightSince: undefined });
+      }
+    }
+    if (!gate.pollDue) continue;
     ticked.push(account.id);
     await tickAccount(account, nowMs);
   }

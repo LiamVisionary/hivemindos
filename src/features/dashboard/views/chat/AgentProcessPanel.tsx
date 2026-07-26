@@ -6,14 +6,9 @@ import {
 } from "@/features/dashboard/views/chat/MiroSharkSimulationCard";
 import { isHiddenChatProcessEvent } from "@/features/dashboard/views/chat/chat-panel-helpers";
 import { Glyph, ICON } from "@/features/dashboard/views/chat/exchange/primitives";
+import { collapseProcessEvents, mergeProcessEvents, normalizeProcessEvents, type ProcessEvent } from "@/features/dashboard/views/chat/process-event-collapse";
 
-export type ProcessEvent = {
-  at?: number;
-  label?: string;
-  detail?: string;
-  status?: string;
-  runId?: string;
-};
+export { collapseProcessEvents, mergeProcessEvents, normalizeProcessEvents, type ProcessEvent };
 
 const PROCESS_TOOL_META: Record<string, { icon: string }> = {
   bash: { icon: "terminal" },
@@ -45,36 +40,10 @@ const TOOL_GLYPH: Record<string, string | readonly string[]> = {
   terminal: ["M4 5h16v14H4z", "M7.5 9.5l3 2.5-3 2.5", "M13 15h4"],
 };
 
-export function normalizeProcessEvents(value: unknown): ProcessEvent[] {
-  // External boundary: process events arrive as untyped JSON from runtime/session payloads.
-  const source = value as ProcessEvent[] | { events?: ProcessEvent[]; steps?: ProcessEvent[] } | null | undefined;
-  if (Array.isArray(source)) return source;
-  if (Array.isArray(source?.events)) return source.events;
-  if (Array.isArray(source?.steps)) return source.steps;
-  return [];
-}
-
-export function mergeProcessEvents(first: ProcessEvent[] = [], second: ProcessEvent[] = []) {
-  const output: ProcessEvent[] = [];
-  const indexByKey = new Map<string, number>();
-  for (const event of [...first, ...second]) {
-    if (!event) continue;
-    const key = [event.runId ?? "", event.label ?? "", event.detail ?? "", event.status ?? ""].join("\u001f");
-    const existingIndex = indexByKey.get(key);
-    if (existingIndex === undefined) {
-      indexByKey.set(key, output.length);
-      output.push(event);
-    } else if (Number(event.at ?? 0) >= Number(output[existingIndex]?.at ?? 0)) {
-      output[existingIndex] = event;
-    }
-  }
-  return output.sort((left, right) => Number(left.at ?? 0) - Number(right.at ?? 0)).slice(-80);
-}
-
 function processDisplayEvents(events: ProcessEvent[] = []) {
-  return events.filter((event) => {
+  return collapseProcessEvents(events.filter((event) => {
     return !isHiddenChatProcessEvent(event);
-  });
+  }));
 }
 
 export function processEventsAreActive(events: ProcessEvent[] = []) {

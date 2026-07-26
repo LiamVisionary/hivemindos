@@ -7,7 +7,7 @@
 // exclusive. Fake browser runner throughout — no real browser.
 import { register } from "node:module";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir, hostname } from "node:os";
 
@@ -207,6 +207,41 @@ await release();
 const release2 = await acquireMarketplaceProfileLock("marketplace-facebook", 300);
 await release2();
 await assert.rejects(() => acquireMarketplaceProfileLock("../evil", 100), /Invalid marketplace profile name/);
+
+// ── agent sessions hold the lock too (bidirectional mutual exclusion) ───────
+// The dispatch rail wraps the WHOLE queen round-trip in withMarketplaceSessionLock
+// — before that, only scripted probes locked and the monitor probed the same
+// Chrome mid-session.
+const { withMarketplaceSessionLock } = await import("../src/lib/services/marketplace/marketplace-profile-lock.ts");
+const { stat: statLock } = await import("node:fs/promises");
+const lockPath = join(tempHome, ".hivemindos", "marketplace", "browser-locks", "marketplace-facebook.lock");
+await withMarketplaceSessionLock(
+  "marketplace-facebook",
+  async () => {
+    // While the "session" runs, a probe cannot take the profile.
+    await assert.rejects(() => acquireMarketplaceProfileLock("marketplace-facebook", 100), MarketplaceProfileBusyError);
+    // Renewal keeps the lock's mtime fresh so long sessions survive the stale window.
+    const before = (await statLock(lockPath)).mtimeMs;
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    for (let i = 0; i < 40 && (await statLock(lockPath)).mtimeMs <= before; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.ok((await statLock(lockPath)).mtimeMs > before, "the session lock renews its mtime while held");
+  },
+  { waitMs: 200, renewEveryMs: 50 },
+);
+const releaseAfterSession = await acquireMarketplaceProfileLock("marketplace-facebook", 300);
+await releaseAfterSession();
+// A throwing session still releases.
+await assert.rejects(() => withMarketplaceSessionLock("marketplace-facebook", async () => { throw new Error("boom"); }, { waitMs: 200 }), /boom/);
+const releaseAfterThrow = await acquireMarketplaceProfileLock("marketplace-facebook", 300);
+await releaseAfterThrow();
+// Drift guard: the dispatch rail itself must route through the session lock.
+const dispatchSource = await readFile(new URL("../src/lib/services/marketplace/marketplace-dispatch.ts", import.meta.url), "utf8");
+assert.ok(
+  /dispatchMarketplaceAgentTask[\s\S]*withMarketplaceSessionLock\(input\.account\.machine\.profileName/.test(dispatchSource),
+  "dispatchMarketplaceAgentTask holds the profile lock for the whole agent session",
+);
 
 assert.equal(await realVaultSnapshot(), realVaultBefore, "TRIPWIRE: this run modified the REAL vault's marketplace/socials files — isolation is broken");
 

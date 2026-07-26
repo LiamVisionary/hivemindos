@@ -595,7 +595,7 @@ assert.ok(
   capabilityPreflightFetchIndex >= 0 && publishOutgoingUserMessageIndex < capabilityPreflightFetchIndex,
   "chat publishes and clears the outgoing message before awaiting capability planning",
 );
-assert.match(controllerSource, /startCapabilityPreflightUi\([\s\S]+Checking capabilities/, "slow capability planning has a visible preflight state");
+assert.match(controllerSource, /capabilityPreflightUi\.start\([\s\S]+Checking capabilities/, "slow capability planning has a visible preflight state");
 assert.equal(
   (controllerSource.match(/appendMessage\(selectedAgent\.id, outgoingUserMessage, selectedStorageKey\)/g) ?? []).length,
   1,
@@ -615,7 +615,11 @@ assert.match(clientSource, /requestAppBuilderWithCollectorRecovery/, "workspace 
 // the person actually typed, and the app card only once the app has run.
 const helpersSource = await readFile(new URL("../src/features/dashboard/views/chat/chat-panel-helpers.ts", import.meta.url), "utf8");
 assert.match(helpersSource, /compactCapabilityContinuation/, "the display path must compact capability continuations");
-assert.match(helpersSource, /Original task:\\s\*\(\.\+\)/, "the compacted display must recover the person's original task text");
+// The compaction now lives in the shared transcript helpers so message
+// IDENTITY (session merges, dedupe) agrees with what the thread displays.
+const transcriptHelpersSource = await readFile(new URL("../src/features/dashboard/chat-transcript-helpers.ts", import.meta.url), "utf8");
+assert.match(transcriptHelpersSource, /Original task:\\s\*\(\.\+\)/, "the compacted display must recover the person's original task text");
+assert.match(transcriptHelpersSource, /compactCapabilityContinuation\(message\.content\)/, "normalized message identity must compact continuations, or session merges duplicate the turn");
 assert.match(threadSource, /rawAppArtifact\.status === "running" \|\| rawAppArtifact\.port/, "the Open app card must wait for an app that has actually run");
 assert.match(capabilityRouteSource, /workingDirectory:\s*typeof body\.workingDirectory/, "the capability API forwards bounded repository context to the ranker");
 assert.match(capabilityRouteSource, /required:\s*capabilityPlanRequiresReview\(plan\)/, "the API distinguishes an automatic single choice from a plan that needs review");

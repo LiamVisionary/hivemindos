@@ -35,6 +35,12 @@ import type {
 } from "@/lib/types/company";
 import { normalizeCompanyApprovalPolicies } from "@/lib/services/company-approval-policies";
 import {
+  companyAgentIdsWithQueen,
+  ensureCompanyQueenAgent,
+  ensureCompanyQueenMemberList,
+  removeCompanyQueenAgent,
+} from "@/lib/services/company-queen";
+import {
   normalizeAgentIds,
   normalizeAlignment,
   normalizeApexGoal,
@@ -412,29 +418,37 @@ async function readRaw(): Promise<Company[]> {
   return migrated.map((definition) => mergeCompany(definition, overlay.companies[definition.id]));
 }
 
+// The persist step itself, OUTSIDE the write queue. Only two callers may use it:
+// writeRaw below (which enqueues it), and a full read-modify-write already running
+// INSIDE enqueueCompaniesWrite — calling writeRaw from there would double-enqueue
+// and deadlock the queue on itself.
+async function writeRawUnqueued(records: Company[]): Promise<void> {
+  const storage = resolveCompaniesStorage();
+  if (storage.source === "local") {
+    // Fail closed on a corrupt current file so a routine write can't wipe it.
+    await readCompaniesFile(storage.file);
+    await writeDurableDefinitions(storage.file, JSON.stringify(records, null, 2));
+    return;
+  }
+  const overlay = await readRuntimeOverlay();
+  const nextRuntime: CompanyRuntimeOverlay["companies"] = {};
+  for (const record of records) nextRuntime[record.id] = companyRuntimeStateOf(record);
+  overlay.companies = nextRuntime; // entries for deleted companies drop out here
+  await writeRuntimeOverlay(overlay);
+  await writeDefinitionsIfChanged(storage.file, records);
+}
+
 // writeRaw runs under the write queue so the multi-step persist (overlay write +
 // backup rotation + definitions write) of two concurrent callers can't interleave
 // and corrupt the rotation or leave overlay/definitions inconsistent. NOTE: this
 // serializes the WRITE, not the whole read-modify-write — two mutations that each
-// readRaw() before either writes can still lose an update in-process, and nothing
-// here guards cross-process writers (5020 + 5021 + Tauri). Rotated backups above
-// make those clobbers recoverable; full RMW/cross-process locking is a follow-up.
+// readRaw() before either writes can still lose an update in-process. Mutations
+// that need the full RMW as one atomic unit run enqueueCompaniesWrite(read →
+// mutate → writeRawUnqueued) themselves (see markCompanyDispatched). Nothing
+// here guards cross-process writers (5020 + 5021 + Tauri); rotated backups above
+// make those clobbers recoverable — cross-process locking is a follow-up.
 function writeRaw(records: Company[]): Promise<void> {
-  return enqueueCompaniesWrite(async () => {
-    const storage = resolveCompaniesStorage();
-    if (storage.source === "local") {
-      // Fail closed on a corrupt current file so a routine write can't wipe it.
-      await readCompaniesFile(storage.file);
-      await writeDurableDefinitions(storage.file, JSON.stringify(records, null, 2));
-      return;
-    }
-    const overlay = await readRuntimeOverlay();
-    const nextRuntime: CompanyRuntimeOverlay["companies"] = {};
-    for (const record of records) nextRuntime[record.id] = companyRuntimeStateOf(record);
-    overlay.companies = nextRuntime; // entries for deleted companies drop out here
-    await writeRuntimeOverlay(overlay);
-    await writeDefinitionsIfChanged(storage.file, records);
-  });
+  return enqueueCompaniesWrite(() => writeRawUnqueued(records));
 }
 
 /** Governance trail is best-effort: it must never block or fail a company write. */
@@ -809,8 +823,15 @@ export async function setCompanyAgents(
   const company = records.find((record) => record.id === id);
   if (!company) return null;
   const before = companyDefinitionOf(company);
-  const normalizedMembers = members ? normalizeMembers(members) : undefined;
-  const nextAgentIds = normalizedMembers ? agentIdsFromMembers(normalizedMembers) : normalizeAgentIds(agentIds);
+  // Non-removable CEO guard: the company's cloned queen member survives every
+  // member-replacing write — an incoming list that dropped it gets it re-added
+  // (or an incoming /queen/i role re-pointed to the clone id).
+  const normalizedMembers = members
+    ? ensureCompanyQueenMemberList(company.id, normalizeMembers(members) ?? []).members
+    : undefined;
+  const nextAgentIds = normalizedMembers
+    ? agentIdsFromMembers(normalizedMembers)
+    : companyAgentIdsWithQueen(company.id, normalizeAgentIds(agentIds));
   assertExclusiveCompanyMembership(records, company.id, nextAgentIds);
   if (normalizedMembers) {
     company.members = normalizedMembers;
@@ -818,9 +839,13 @@ export async function setCompanyAgents(
   } else {
     company.agentIds = nextAgentIds;
     if (company.members) {
-      // Drop member metadata for agents that are no longer on the roster.
+      // Drop member metadata for agents that are no longer on the roster —
+      // except the queen member, which the guard re-ensures.
       const keep = new Set(company.agentIds);
-      company.members = company.members.filter((member) => keep.has(member.agentId));
+      company.members = ensureCompanyQueenMemberList(
+        company.id,
+        company.members.filter((member) => keep.has(member.agentId)),
+      ).members;
     }
   }
   company.updatedAt = new Date().toISOString();
@@ -922,12 +947,21 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<Company>
       ? normalizeAgentIds(input.agentIds)
       : (existing?.agentIds ?? []);
   const companyId = existing?.id ?? input.id?.trim() ?? randomUUID();
-  assertExclusiveCompanyMembership(records, companyId, agentIds);
+  // Company CEO seeding: every company always carries its own cloned-queen
+  // member, on the create AND update paths (cheap, idempotent — the seeding is
+  // a no-op when the member is already present). The clone's stored
+  // AgentProfile is ensured after the write below.
+  const seededMembers = ensureCompanyQueenMemberList(
+    companyId,
+    members ?? agentIds.map((agentId): CompanyMember => ({ agentId })),
+  ).members;
+  const seededAgentIds = agentIdsFromMembers(seededMembers);
+  assertExclusiveCompanyMembership(records, companyId, seededAgentIds);
 
   const company: Company = {
     id: companyId,
     name,
-    agentIds,
+    agentIds: seededAgentIds,
     charter: input.charter !== undefined ? trimmed(input.charter) : existing?.charter,
     dailyBudgetUsd: input.dailyBudgetUsd !== undefined ? normalizeBudget(input.dailyBudgetUsd) : existing?.dailyBudgetUsd,
     monthlyBudgetUsd: input.monthlyBudgetUsd !== undefined ? normalizeBudget(input.monthlyBudgetUsd) : existing?.monthlyBudgetUsd,
@@ -944,7 +978,7 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<Company>
     alignment: input.alignment !== undefined ? normalizeAlignment(input.alignment) : existing?.alignment,
     apexGoal: input.apexGoal !== undefined ? normalizeApexGoal(input.apexGoal) : existing?.apexGoal,
     revenue: input.revenue !== undefined ? normalizeRevenue(input.revenue) : existing?.revenue,
-    members: members ?? undefined,
+    members: seededMembers,
     lastDispatchedAt: existing?.lastDispatchedAt,
     autonomy: existing?.autonomy,
     autonomyPause: input.autonomyPause !== undefined ? normalizeAutonomyPause(input.autonomyPause) : existing?.autonomyPause,
@@ -979,6 +1013,10 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<Company>
     : [...records, company];
   await writeRaw(next);
   await recordConfigChange(existing ? "updated" : "created", existing ?? null, company, "companies-store:upsert");
+  // Best-effort: the seeded queen member needs its cloned CEO AgentProfile. A
+  // profile-store hiccup must never fail the company save — the GET sweep
+  // (ensureAllCompanyQueens) re-ensures it on the next poll.
+  await ensureCompanyQueenAgent(company).catch(() => undefined);
   return company;
 }
 
@@ -1070,15 +1108,20 @@ export async function removeCompanyDirective(companyId: string, directiveId: str
   return company;
 }
 
-/** Record that the apex goal was just decomposed + dispatched to the crew. */
+/** Record that the apex goal was just decomposed + dispatched to the crew.
+ *  Runs the WHOLE read-modify-write as one queued unit: the driver stamps
+ *  several companies concurrently, and an unserialized RMW let one stamp's
+ *  stale read overwrite another company's just-written lastDispatchedAt. */
 export async function markCompanyDispatched(id: string, when = Date.now()): Promise<Company | null> {
-  const records = await readRaw();
-  const company = records.find((record) => record.id === id);
-  if (!company) return null;
-  company.lastDispatchedAt = when;
-  company.updatedAt = new Date().toISOString();
-  await writeRaw(records);
-  return company;
+  return enqueueCompaniesWrite(async () => {
+    const records = await readRaw();
+    const company = records.find((record) => record.id === id);
+    if (!company) return null;
+    company.lastDispatchedAt = when;
+    company.updatedAt = new Date().toISOString();
+    await writeRawUnqueued(records);
+    return company;
+  });
 }
 
 /** Turn perpetual autonomy on/off for a company (the driver's per-company gate). */
@@ -1216,6 +1259,9 @@ export async function deleteCompany(id: string): Promise<boolean> {
   if (next.length === records.length) return false;
   await writeRaw(next);
   await recordConfigChange("deleted", removed, null, "companies-store:delete");
+  // The cloned CEO profile dies with its company (best-effort — an orphaned
+  // profile is inert, so cleanup must never fail the delete).
+  await removeCompanyQueenAgent(id).catch(() => undefined);
   return true;
 }
 

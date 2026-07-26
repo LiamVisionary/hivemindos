@@ -8,6 +8,7 @@ import { MULTI_CHAIN_WALLET_LABEL, personalWalletNetworkForChainLabel } from "@/
 import { fetchPersonalWalletRecords } from "@/lib/native/personal-wallets";
 import { loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import { sendApprovedPersonalWalletAsset, sendApprovedWalletUsdc, type WalletSendUsdcRequest } from "@/lib/services/wallet/send-usdc-client";
+import { executeAgentFunding, fundingNetworkLabel, resolvePersonalWalletRecordForAsset, stableSendAssetForNetwork } from "@/lib/services/wallet/fund-agent-client";
 import { refreshWalletUntilAssetBalance } from "@/lib/services/wallet/post-send-balance-refresh";
 import { getSurvivalSnapshot, hasConfiguredAgentWallet, resolveAgentWallet } from "@/lib/utils/agent-wallet";
 import { exportAgentWalletSecret, exportPersonalWalletGroupSecret } from "./wallet-secret-export-actions";
@@ -326,53 +327,8 @@ function chainToNetwork(chain: string): string {
   return personalWalletNetworkForChainLabel(chain);
 }
 
-function stableSendAssetForNetwork(network: string): "USDC" | "USDG" {
-  return String(network || "").toLowerCase() === "eip155:4663" ? "USDG" : "USDC";
-}
-
-function isStableSendAsset(asset: string): asset is "USDC" | "USDG" {
-  return asset === "USDC" || asset === "USDG";
-}
-
-function tokenBalanceForAsset(wallet: any, asset: string): number {
-  const tokens = Array.isArray(wallet?.tokens) ? wallet.tokens : [];
-  const match = tokens.find((token: any) => tokenSymbol(token) === asset);
-  return Number(match?.balance ?? 0) || 0;
-}
-
-function personalWalletSupportsAsset(wallet: any, asset: string): boolean {
-  if (tokenBalanceForAsset(wallet, asset) > 0) return true;
-  return stableSendAssetForNetwork(String(wallet?.network || "")) === asset;
-}
-
 function walletId(wallet: any): string {
   return String(wallet?.id || wallet?.agentId || "");
-}
-
-function resolvePersonalWalletRecordForAsset(source: any, asset: string, wallets: any[]): any | null {
-  const ids = new Set<string>([
-    String(source?.spendId || ""),
-    String(source?.id || ""),
-    ...(Array.isArray(source?.accounts) ? source.accounts.map((account: any) => String(account?.id || "")) : []),
-  ].filter(Boolean));
-  const addresses = new Set<string>([
-    String(source?.addr || "").toLowerCase(),
-    ...(Array.isArray(source?.addresses) ? source.addresses.map((row: any) => String(row?.[1] || "").toLowerCase()) : []),
-  ].filter(Boolean));
-  const candidates = wallets.filter((wallet: any) => {
-    const id = String(wallet?.id || wallet?.agentId || "");
-    const address = String(wallet?.address || "").toLowerCase();
-    return (id && ids.has(id)) || (address && addresses.has(address));
-  });
-  const localCandidates = candidates.filter((wallet: any) => wallet?.custodyMode === "local");
-  const funded = localCandidates.find((wallet: any) => tokenBalanceForAsset(wallet, asset) > 0);
-  const supported = localCandidates.find((wallet: any) => personalWalletSupportsAsset(wallet, asset));
-  return funded ?? supported ?? null;
-}
-
-function resolvePersonalWalletAgentIdForAsset(source: any, asset: string, wallets: any[]): string {
-  const wallet = resolvePersonalWalletRecordForAsset(source, asset, wallets);
-  return String(wallet?.id || wallet?.agentId || source?.spendId || source?.id || "");
 }
 
 function tokenSymbol(token: any): string {
@@ -503,18 +459,6 @@ function shortWalletAddress(value: unknown): string {
   const text = stringValue(value);
   if (!text) return "";
   return text.length > 18 ? `${text.slice(0, 8)}...${text.slice(-6)}` : text;
-}
-
-function fundingNetworkLabel(network: string): string {
-  if (network === "eip155:8453") return "Base";
-  if (network === "eip155:84532") return "Base Sepolia";
-  if (network === "eip155:4663") return "Robinhood Chain";
-  if (network === "eip155:46630") return "Robinhood Chain Testnet";
-  if (network === "solana:mainnet") return "Solana";
-  if (network === "solana:devnet") return "Solana devnet";
-  if (network.startsWith("eip155:")) return "EVM";
-  if (network.startsWith("solana:")) return "Solana";
-  return network || "Unknown network";
 }
 
 function fundingDetail(network: string, address: string): string {
@@ -1164,18 +1108,15 @@ function WalletPanelComponent(props: any) {
       return { ok: true };
     },
     onFundAgent: async (input: any) => {
-      const asset = String(input.asset || "USDC").toUpperCase();
-      if (!isStableSendAsset(asset)) throw new Error("Agent funding is wired for USDC or USDG transfers only.");
-      if (input.source?.canSpend === false) throw new Error("This personal wallet is watch-only. Reimport it locally before funding agents.");
-      const wallet = effectiveWalletsByAgent?.[input.agentId] || {};
-      const toAddress = wallet.walletAddress || wallet.vaultAddress || wallet.address || "";
-      if (!toAddress) throw new Error("That agent does not have a deposit address yet.");
-      const recipientAsset = stableSendAssetForNetwork(String(wallet.network || ""));
-      if (asset !== recipientAsset) throw new Error(`That agent wallet receives ${recipientAsset} on ${fundingNetworkLabel(String(wallet.network || ""))}.`);
-      const sourceAgentId = resolvePersonalWalletAgentIdForAsset(input.source, asset, mergedPersonalWallets);
-      if (!sourceAgentId) throw new Error(`No local ${asset} wallet is available to fund this agent.`);
-      const data = await sendApprovedWalletUsdc({ agentId: sourceAgentId, toAddress, amountUsd: Number(input.amount), autoPayEnabled: false, confirmation: input.confirmation, maxPaymentUsd: Number(input.amount) || undefined, gasSponsorAgentId: input.agentId });
-      if (!data?.ok) throw new Error(data?.error || "Could not fund agent.");
+      const data = await executeAgentFunding({
+        source: input.source,
+        recipientAgentId: input.agentId,
+        recipientWallet: effectiveWalletsByAgent?.[input.agentId],
+        asset: input.asset,
+        amountUsd: Number(input.amount),
+        confirmation: input.confirmation,
+        personalWallets: mergedPersonalWallets,
+      });
       const [recipientWallet] = await Promise.all([refreshWalletBalance?.(input.agentId), refreshPersonalWalletSourceBalance(input.source), loadWalletActivity()]);
       if (recipientWallet) {
         setFreshWalletsByAgent((current) => mergeWalletsByAgentWithFresh(current, { [input.agentId]: recipientWallet }));

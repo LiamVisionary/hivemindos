@@ -1,5 +1,5 @@
 import { HIVEMIND_OS_RUNTIME } from "@/lib/types/agent-runtime";
-import { CAPABILITY_APPROVAL_CONTINUATION_MARKER } from "@/lib/types/capability-approval";
+import { compactCapabilityContinuation } from "@/features/dashboard/chat-transcript-helpers";
 import { isAgentColdStartProcessEvent } from "@/lib/services/chat/agent-cold-start";
 import { normalizeChatPermissionMode } from "@/lib/types/chat-permissions";
 import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
@@ -76,6 +76,10 @@ export function isHiddenChatProcessEvent(event: ProcessEventLike = {}) {
   if (/^Attached .+ session$/i.test(label)) return true;
   if (/^Runtime session active$/i.test(label)) return true;
   if (/^Runtime event$/i.test(label) || /^Runtime event$/i.test(detail)) return true;
+  // Raw runtime lifecycle markers with no payload duplicate the real tool
+  // steps rendered around them, and the stream keepalive is plumbing.
+  if (/^(?:chat\.)?tool\.(?:generating|pending|started?|progress|running|completed|done)$/i.test(label) && !detail) return true;
+  if (/stream still working$/i.test(label)) return true;
   return false;
 }
 
@@ -281,15 +285,6 @@ export function messageKey(message: ChatMessageLike, index: number) {
   const sourceIndex = typeof message?.sourceIndex === "number" && Number.isFinite(message.sourceIndex) ? String(message.sourceIndex) : "";
   const createdAt = typeof message?.createdAt === "number" && Number.isFinite(message.createdAt) ? String(message.createdAt) : "";
   return [source, sourceIndex, role, createdAt, index].filter(Boolean).join(":");
-}
-
-/** A capability-plan continuation is runtime plumbing: the person only typed
- * the original task, so that is all the thread may ever display. The full
- * continuation stays in the session for the runtime. */
-function compactCapabilityContinuation(text: string) {
-  if (!text.startsWith(CAPABILITY_APPROVAL_CONTINUATION_MARKER)) return text;
-  const originalTask = text.match(/^Original task:\s*(.+)$/m)?.[1]?.trim();
-  return originalTask || "Approved capability plan. Continue with the task.";
 }
 
 export function messageText(message: ChatMessageLike, chatDisplayContent?: (message: ChatMessageLike) => string) {

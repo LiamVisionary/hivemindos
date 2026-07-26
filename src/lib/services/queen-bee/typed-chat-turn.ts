@@ -39,7 +39,7 @@ import {
   createSseJsonParser,
   finalizeQueenChatStream,
 } from "./chat-stream";
-import { queenChatTools, queenInstructionsForPersonality } from "./queen-brain";
+import { companyCeoChatTools, queenChatTools, queenInstructionsForPersonality } from "./queen-brain";
 import { queenModelTransparencyNote } from "./model-transparency";
 import { configuredQueenProviderFallbacks } from "./provider-fallback";
 import { resolveProviderChatEndpoint } from "./voice-turn";
@@ -85,6 +85,54 @@ type QueenConfiguredBrainFailure = {
   label: string;
   error: string;
 };
+
+type QueenCompanyChatTools = ReturnType<typeof companyCeoChatTools>;
+
+/**
+ * Company boardroom scope: when the typed chat body carries a `companyId`, the
+ * turn answers AS that company's cloned CEO queen — its profile pins brain
+ * resolution, the CEO preamble + live company context land in the system
+ * prompt, and the company tools ride along in the request tool list.
+ */
+type QueenCompanyScope = {
+  companyId: string;
+  /** Cloned CEO profile id (company-queen.ts) — threads into brain resolution. */
+  agentId: string;
+  agentName: string;
+  /** CEO identity preamble — stable per company. */
+  preamble: string;
+  /** companyWorkerContext + memory digest — changes as the company works (volatile). */
+  context: string;
+};
+
+async function resolveQueenCompanyScope(body: Record<string, unknown>): Promise<QueenCompanyScope | null> {
+  const companyId = typeof body.companyId === "string" ? body.companyId.trim() : "";
+  if (!companyId) return null;
+  try {
+    // Dynamic imports: the company graph loads only for company-scoped turns —
+    // the global Queen chat path stays untouched.
+    const { getCompany } = await import("@/lib/services/companies-store");
+    const company = await getCompany(companyId);
+    if (!company) return null;
+    const { ensureCompanyQueenAgent } = await import("@/lib/services/company-queen");
+    const profile = await ensureCompanyQueenAgent(company);
+    const { companyMemoryDigest } = await import("@/lib/services/company-memory");
+    const digest = await companyMemoryDigest(company.id, { maxChars: 1_600 }).catch(() => "");
+    const { companyWorkerContext } = await import("@/lib/services/companies-orchestration");
+    const agentName = profile.name?.trim() || `${company.name} Queen`;
+    return {
+      companyId: company.id,
+      agentId: profile.id,
+      agentName,
+      preamble: `You are ${agentName}, the Queen — the CEO — of the company ${company.name}. The human founder is speaking with you directly in your boardroom channel. Speak as the accountable executive of this specific company: ground every answer in the company context below, its live pipeline, directives, and memory. You have company tools: record standing directives (company_add_directive), update the charter (company_update_charter), and launch the crew at the apex goal (company_dispatch_goal). Propose before you act: for charter changes and crew dispatch, state what you intend and get the founder's yes first unless their current message already explicitly asks for it. Never invent company facts — the context below is the source of truth.`,
+      context: companyWorkerContext(company, digest),
+    };
+  } catch {
+    // A transient company/profile-store failure degrades to the global Queen
+    // rather than dead-ending the turn (the chat lane's standing stance).
+    return null;
+  }
+}
 
 const RUNTIME_COMMAND_GATE_FALLBACK =
   "The selected Queen runtime hit its command-safety timeout before it produced a chat answer. I did not run any command.";
@@ -168,7 +216,11 @@ async function preferredOpenAiTypedBrain(input: {
  * Queen agent's own runtime, then plain key-based OpenAI-compatible providers.
  * The built-in OpenAI lane remains only as the declared final fallback.
  */
-async function resolveQueenTypedChatBrains(origin: string): Promise<{
+async function resolveQueenTypedChatBrains(
+  origin: string,
+  /** Company scope pins runtime-held brains to the cloned CEO profile. */
+  queenAgentIdOverride?: string,
+): Promise<{
   brains: QueenTypedChatBrain[];
   configuredBrainFailure?: QueenConfiguredBrainFailure;
 }> {
@@ -223,7 +275,7 @@ async function resolveQueenTypedChatBrains(origin: string): Promise<{
     });
     if (brain) brains.push(brain);
   } else if (defaults?.model && isRuntimeHeldQueenProvider(provider)) {
-    const agent = await readQueenBeeAgentProfile(defaults.agentId).catch(() => null);
+    const agent = await readQueenBeeAgentProfile(queenAgentIdOverride || defaults.agentId).catch(() => null);
     if (agent) {
       brains.push({
         kind: "agent-runtime",
@@ -489,7 +541,7 @@ async function queenChatBlockingRequest(
   brain: QueenTypedChatBrain,
   system: string | QueenTypedSystemPrompt,
   incoming: unknown[],
-  options?: { noTools?: boolean; suppressWalletIntents?: boolean },
+  options?: { noTools?: boolean; suppressWalletIntents?: boolean; companyTools?: QueenCompanyChatTools },
 ) {
   if (brain.kind === "agent-runtime") return queenChatRuntimeRequest(brain, system, incoming);
   if (brain.kind === "openai-oauth") {
@@ -500,7 +552,7 @@ async function queenChatBlockingRequest(
         timeoutMs: brain.timeoutMs ?? 120_000,
         tools: options?.noTools
           ? undefined
-          : queenChatTools() as Array<Record<string, unknown>>,
+          : [...queenChatTools(), ...(options?.companyTools ?? [])] as Array<Record<string, unknown>>,
       },
     );
     const content = stripLeakedToolCallMarkup(result.text);
@@ -722,7 +774,7 @@ function queenChatRequestBody(
   system: string | QueenTypedSystemPrompt,
   incoming: unknown[],
   extra?: Record<string, unknown>,
-  options?: { noTools?: boolean },
+  options?: { noTools?: boolean; companyTools?: QueenCompanyChatTools },
 ) {
   const reasoningModel = /^(o\d|gpt-5|codex)/i.test(brain.model.trim());
   const inferenceOptions = isXaiOAuthProvider(brain.providerSlug)
@@ -752,7 +804,10 @@ function queenChatRequestBody(
     // noTools = the client tool loop spent its budget and needs a FINAL text
     // answer: omit the tools entirely so tool-happy brains (Scout looped
     // read_work_board four rounds straight on 2026-07-06) must reply in prose.
-    ...(options?.noTools ? {} : { tools: queenChatTools(), tool_choice: "auto" }),
+    // Company-scoped turns append the CEO tools to the shared list.
+    ...(options?.noTools
+      ? {}
+      : { tools: [...queenChatTools(), ...(options?.companyTools ?? [])], tool_choice: "auto" }),
     ...(isXaiOAuthProvider(brain.providerSlug) && extra?.stream === true
       ? { stream_options: { include_usage: true } }
       : {}),
@@ -771,7 +826,11 @@ function queenCachedPromptTokens(usage: unknown) {
 
 /** Shared setup for the typed chat turn (blocking and streaming variants). */
 async function prepareQueenChatTurn(body: Record<string, unknown>, origin: string) {
-  const { brains, configuredBrainFailure } = await resolveQueenTypedChatBrains(origin);
+  // Company boardroom scope (companyId in the body): the company's cloned CEO
+  // queen answers — her profile pins brain resolution, and the CEO preamble +
+  // live company context + company tools ride along below.
+  const companyScope = await resolveQueenCompanyScope(body);
+  const { brains, configuredBrainFailure } = await resolveQueenTypedChatBrains(origin, companyScope?.agentId);
   if (!brains.length) return null;
   const incoming = Array.isArray(body.messages) ? body.messages : [];
   const suppressWalletIntents = body.suppressWalletIntents === true;
@@ -793,6 +852,9 @@ async function prepareQueenChatTurn(body: Record<string, unknown>, origin: strin
   const systemFor = (brain: QueenTypedChatBrain): QueenTypedSystemPrompt => {
     const stable = [
       queenInstructionsForPersonality(defaults?.soulPrompt),
+      // CEO identity comes after the shared Queen instructions so the
+      // company-executive framing wins where the two overlap.
+      companyScope?.preamble ?? "",
       queenModelTransparencyNote(
         brain.model,
         `${queenBrainProviderLabel(brain.providerSlug)} (Queen Bee's typed chat brain)`,
@@ -802,14 +864,20 @@ async function prepareQueenChatTurn(body: Record<string, unknown>, origin: strin
     ]
       .filter(Boolean)
       .join("\n\n");
-    const volatile = screenContextPrompt;
+    // Company context is volatile: the memory digest + pipeline lines change as
+    // the company works, so keeping them out of `stable` preserves the cached
+    // stable-prefix hit rate.
+    const volatile = [screenContextPrompt, companyScope?.context ?? ""].filter(Boolean).join("\n\n");
     return {
       stable,
       volatile,
       text: [stable, volatile].filter(Boolean).join("\n\n"),
     };
   };
-  return { brains, incoming, systemFor, suppressWalletIntents, configuredBrainFailure };
+  // Company tools ride only on company-scoped turns (and never on the
+  // toolChoice:"none" forced-prose path, which omits tools entirely).
+  const companyTools = companyScope ? companyCeoChatTools() : undefined;
+  return { brains, incoming, systemFor, suppressWalletIntents, configuredBrainFailure, companyTools };
 }
 
 export async function runQueenChatTurn(body: Record<string, unknown>, origin: string) {
@@ -817,7 +885,7 @@ export async function runQueenChatTurn(body: Record<string, unknown>, origin: st
   if (!prepared) {
     return NextResponse.json({ ok: false, fallback: true, error: "no-openai-key" });
   }
-  const { brains, incoming, systemFor, suppressWalletIntents, configuredBrainFailure } = prepared;
+  const { brains, incoming, systemFor, suppressWalletIntents, configuredBrainFailure, companyTools } = prepared;
   // toolChoice:"none" = the client tool loop's budget is spent; force prose.
   const noTools = body.toolChoice === "none";
   // The agent's own brain first, built-in OpenAI lane last — a failing
@@ -831,7 +899,7 @@ export async function runQueenChatTurn(body: Record<string, unknown>, origin: st
     : [];
   for (const brain of brains) {
     try {
-      const result = await queenChatBlockingRequest(brain, systemFor(brain), incoming, { noTools, suppressWalletIntents });
+      const result = await queenChatBlockingRequest(brain, systemFor(brain), incoming, { noTools, suppressWalletIntents, companyTools });
       recordQueenChatTelemetry({
         action: "chat-turn",
         ok: true,
@@ -881,7 +949,7 @@ export async function runQueenChatTurnStream(body: Record<string, unknown>, orig
   if (!prepared) {
     return new Response(line({ ok: false, fallback: true, error: "no-openai-key" }), { headers: ndjson });
   }
-  const { brains, incoming, systemFor, suppressWalletIntents, configuredBrainFailure } = prepared;
+  const { brains, incoming, systemFor, suppressWalletIntents, configuredBrainFailure, companyTools } = prepared;
   // Try brains in order for the INITIAL connection (the agent's own brain,
   // then the built-in OpenAI lane). Buffered-only brains (the HivemindOS
   // models gateway) answer as one terminal frame — the client tool loop is
@@ -930,7 +998,7 @@ export async function runQueenChatTurnStream(body: Record<string, unknown>, orig
     }
     if (brain.streaming === false) {
       try {
-        const result = await queenChatBlockingRequest(brain, systemFor(brain), incoming, { noTools, suppressWalletIntents });
+        const result = await queenChatBlockingRequest(brain, systemFor(brain), incoming, { noTools, suppressWalletIntents, companyTools });
         recordQueenChatTelemetry({
           action: "chat-turn-stream",
           ok: true,
@@ -967,7 +1035,7 @@ export async function runQueenChatTurnStream(body: Record<string, unknown>, orig
       method: "POST",
       headers: { ...queenBrainRequestHeaders(brain), ...cacheHints.headers },
       body: JSON.stringify(
-        queenChatRequestBody(brain, systemFor(brain), incoming, { stream: true, ...cacheHints.body }, { noTools }),
+        queenChatRequestBody(brain, systemFor(brain), incoming, { stream: true, ...cacheHints.body }, { noTools, companyTools }),
       ),
       cache: "no-store",
       // Generous vs the blocking action's 20s: this bounds the WHOLE stream, and

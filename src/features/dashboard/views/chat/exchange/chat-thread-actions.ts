@@ -57,6 +57,19 @@ export type ChatThreadGroup<Row extends ChatThreadRow = ChatThreadRow> = {
   chats: Row[];
 };
 
+/**
+ * A project folder the user created that holds no chats yet. The sidebar
+ * renders groups derived from chat ROWS, so a project with zero conversations
+ * produces zero rows and would otherwise be invisible — which reads as "the
+ * project I just made vanished" the moment the empty draft chat stops being
+ * the selected leaf (e.g. after a reload). These are merged in as empty groups.
+ */
+export type ChatThreadProject = {
+  label: string;
+  /** Epoch ms the project folder was created; newest empty project sorts first. */
+  createdAt?: number;
+};
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const CHAT_HISTORY_PAGE_SIZE = 5;
@@ -383,6 +396,36 @@ export function groupChatThreads<Row extends ChatThreadRow>(
     bucket.chats.push(row);
   }
   return order.map((key) => buckets.get(key)!);
+}
+
+/** Group key a project label lands on under `groupBy: "project"`. */
+export function chatThreadProjectGroupKey(label: string): string {
+  return `project:${label.trim()}`;
+}
+
+/**
+ * Append chat-less project folders to the project groups as empty buckets.
+ * A project whose label already has a group (it holds chats) is skipped, so an
+ * empty folder never duplicates a live one. Empty projects keep their own
+ * order — newest created first — and always sort AFTER groups that hold chats,
+ * so adding a project never pushes active work down the rail. Returns a NEW
+ * array; the input groups are not mutated.
+ */
+export function mergeEmptyProjectGroups<Row extends ChatThreadRow, Project extends ChatThreadProject>(
+  groups: Array<ChatThreadGroup<Row>>,
+  projects: Project[],
+): Array<ChatThreadGroup<Row>> {
+  const seen = new Set(groups.map((group) => group.key));
+  const empties: Array<ChatThreadGroup<Row>> = [];
+  for (const project of [...projects].sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))) {
+    const label = project.label?.trim() ?? "";
+    if (!label) continue;
+    const key = chatThreadProjectGroupKey(label);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    empties.push({ label, key, chats: [] });
+  }
+  return [...groups, ...empties];
 }
 
 function groupKeyLabel(

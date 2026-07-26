@@ -148,7 +148,9 @@ assert.match(myAppsPanel, /Promise\.allSettled/);
 
 const prdSource = readFileSync("src/lib/services/queen-bee/prd-decomposition.ts", "utf8");
 assert.match(prdSource, /export function decomposePrdToTaskDrafts/);
-assert.match(prdSource, /dependsOnDraftIndexes: index > 0 \? \[index - 1\] : \[\]/);
+// Drafts fan out as a DAG: no blanket predecessor chain, only real QA→build edges.
+assert.doesNotMatch(prdSource, /dependsOnDraftIndexes: index > 0/);
+assert.match(prdSource, /qaTargetIndexes/);
 assert.match(prdSource, /Acceptance criteria/);
 
 const queenBeeRoute = readFileSync("src/app/api/queen-bee/route.ts", "utf8");

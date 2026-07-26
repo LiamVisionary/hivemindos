@@ -409,6 +409,32 @@ function buildCompanyLearningLoop(company: Company, draft: QueenBeePrdTaskDraft,
   });
 }
 
+/**
+ * After dedupe drops drafts, surviving drafts' `dependsOnDraftIndexes` still point
+ * into the ORIGINAL array. Remap them to positions in the surviving array and drop
+ * edges to dropped drafts (their work already exists, so the dependency is treated
+ * as satisfied). Pure; exported for hermetic tests.
+ */
+export function remapDraftDependencies(
+  original: readonly QueenBeePrdTaskDraft[],
+  fresh: readonly QueenBeePrdTaskDraft[],
+): QueenBeePrdTaskDraft[] {
+  const newIndexByDraft = new Map<QueenBeePrdTaskDraft, number>();
+  fresh.forEach((draft, index) => newIndexByDraft.set(draft, index));
+  const newIndexByOldIndex = new Map<number, number>();
+  original.forEach((draft, oldIndex) => {
+    const newIndex = newIndexByDraft.get(draft);
+    if (newIndex !== undefined) newIndexByOldIndex.set(oldIndex, newIndex);
+  });
+  return fresh.map((draft) => ({
+    ...draft,
+    dependsOnDraftIndexes: (draft.dependsOnDraftIndexes ?? []).flatMap((oldIndex) => {
+      const mapped = newIndexByOldIndex.get(oldIndex);
+      return mapped !== undefined ? [mapped] : [];
+    }),
+  }));
+}
+
 export function companyTaskWorkspace(company: Company, draft: Pick<QueenBeePrdTaskDraft, "title" | "body" | "skills">): KanbanTask["workspace"] {
   if (!company.projectId) return "scratch";
   const text = [draft.title, draft.body, ...(draft.skills ?? [])].filter(Boolean).join(" ");
@@ -482,7 +508,8 @@ export async function dispatchCompanyGoal(
     if (dropped.length) {
       console.log(`[company-dispatch] ${company.id}: dropped ${dropped.length}/${drafts.length} planned task(s) already recent or in flight`);
     }
-    drafts = fresh;
+    // Surviving drafts' dependency indexes still point into the pre-dedupe array.
+    drafts = remapDraftDependencies(drafts, fresh);
   }
   if (drafts.length === 0) {
     // Everything the planner proposed is already recent or in flight — nothing new
@@ -522,11 +549,20 @@ export async function dispatchCompanyGoal(
 
   const workerContext = companyWorkerContext(company, workerMemory, salesContentContext);
   const tasks: CompanyDispatchTask[] = [];
+  // Draft index → created task id, so planner `dependsOn` edges become board
+  // parent links (same mapping createQueenBeePrdTasks uses). A failed submit
+  // leaves no id and its dependents simply drop that edge.
+  const draftTaskIdByIndex = new Map<number, string>();
   let firstError: Error | null = null;
   // Sequential: each submit reads+writes the shared board file; avoid clobbering.
   // One failing draft must not abort the whole dispatch.
-  for (const draft of drafts) {
+  for (let draftIndex = 0; draftIndex < drafts.length; draftIndex += 1) {
+    const draft = drafts[draftIndex]!;
     try {
+      const parents = (draft.dependsOnDraftIndexes ?? []).flatMap((dependsIndex) => {
+        const id = draftTaskIdByIndex.get(dependsIndex);
+        return id ? [id] : [];
+      });
       const result = await submitQueenBeeMessage({
         message: `${draft.body}\n${workerContext}`,
         taskTitle: draft.title,
@@ -540,8 +576,10 @@ export async function dispatchCompanyGoal(
         // The company's domain repo: routes code work toward machines with the
         // checkout and gives the task the project's GitLawb proof badge.
         projectId: company.projectId,
+        parents: parents.length ? parents : undefined,
         vaultPath: opts.vaultPath,
       });
+      draftTaskIdByIndex.set(draftIndex, result.task.id);
       tasks.push({
         taskId: result.task.id,
         title: result.task.title,

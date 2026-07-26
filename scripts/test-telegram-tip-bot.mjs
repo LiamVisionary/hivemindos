@@ -24,6 +24,7 @@ import {
   legacyHoneyMicroFromHiveRaw,
   parseHoneyCommandArgs,
 } from "../src/lib/services/telegram-tip-bot/honey-recognition.ts";
+import * as honeyRecognition from "../src/lib/services/telegram-tip-bot/honey-recognition.ts";
 import {
   appendHoneyRecognitionAudit,
   completeHoneyRecognitionAudit,
@@ -180,6 +181,55 @@ test("the built-in trophy reaction is an explicit recognition action", () => {
   }), false);
 });
 
+test("failed trophy recognition removes the giver reaction and reports in the group before DM fallback", async () => {
+  assert.equal(typeof honeyRecognition.reportRejectedHoneyReaction, "function");
+
+  const publicCalls = [];
+  const publicResult = await honeyRecognition.reportRejectedHoneyReaction({
+    deleteReaction: async () => {
+      publicCalls.push("delete-reaction");
+      return true;
+    },
+    sendGroupReply: async (reactionRemoved) => {
+      publicCalls.push(`group-reply:${reactionRemoved}`);
+    },
+    notifyGiver: async () => {
+      publicCalls.push("dm");
+      return true;
+    },
+  });
+  assert.deepEqual(publicCalls, ["delete-reaction", "group-reply:true"]);
+  assert.deepEqual(publicResult, {
+    reactionRemoved: true,
+    publicReplySent: true,
+    giverDmSent: false,
+    reported: true,
+  });
+
+  const fallbackCalls = [];
+  const fallbackResult = await honeyRecognition.reportRejectedHoneyReaction({
+    deleteReaction: async () => {
+      fallbackCalls.push("delete-reaction");
+      throw new Error("missing permission");
+    },
+    sendGroupReply: async (reactionRemoved) => {
+      fallbackCalls.push(`group-reply:${reactionRemoved}`);
+      throw new Error("group send failed");
+    },
+    notifyGiver: async (reactionRemoved) => {
+      fallbackCalls.push(`dm:${reactionRemoved}`);
+      return true;
+    },
+  });
+  assert.deepEqual(fallbackCalls, ["delete-reaction", "group-reply:false", "dm:false"]);
+  assert.deepEqual(fallbackResult, {
+    reactionRemoved: false,
+    publicReplySent: false,
+    giverDmSent: true,
+    reported: true,
+  });
+});
+
 test("HONEY recognition audit tracks terminal outcomes without retaining message text", () => {
   const state = emptyHoneyAuditState();
   const id = honeyRecognitionAuditId("command", 1234);
@@ -250,6 +300,9 @@ test("Telegram polling and bot handling wire message reactions into the existing
   assert.match(commands, /handleHoneyReaction/);
   assert.match(reactionHandler, /givePeerHoney/);
   assert.match(reactionHandler, /HONEY_REACTION_REASON/);
+  assert.match(api, /deleteMessageReaction\([\s\S]*user_id: params\.userId/);
+  assert.match(reactionHandler, /reportRejectedHoneyReaction/);
+  assert.match(reactionHandler, /deleteMessageReaction/);
   // The bot must never place reactions itself: Telegram animates every
   // reaction placement, so a bot-seeded 🏆 plays the award animation on every
   // comment. The trophy may only ever come from a member's own reaction.

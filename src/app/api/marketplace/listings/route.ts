@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
         if (!id) return errorJson("id is required");
         const existing = await getMarketplaceListing(id);
         if (!existing) return errorJson(`Unknown listing: ${id}`, 404);
-        if (existing.state === "active" || existing.state === "posting") {
+        if (existing.state === "active" || existing.state === "posting" || existing.state === "posted-unverified") {
           return errorJson("This listing is live — end it on the marketplace instead of deleting the record.");
         }
         await deleteMarketplaceListing(id);

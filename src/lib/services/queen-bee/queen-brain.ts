@@ -234,6 +234,76 @@ export function queenChatTools() {
   }));
 }
 
+/**
+ * Company-scope CEO tools, offered ONLY when the typed Queen chat carries a
+ * `companyId` (the company boardroom channel — typed-chat-turn.ts). Like the
+ * other typed-lane tools, the CLIENT executes them (existing pattern: the tool
+ * loop lives client-side); the server only defines the contract.
+ */
+export const COMPANY_CEO_CHAT_TOOL_DEFS: QueenToolDef[] = [
+  {
+    name: "company_add_directive",
+    description:
+      "Record a standing directive for this company. Directives are durable human-instruction records appended to every future crew task dispatch — they land in the crew's working context each cycle without editing the charter. Use when the founder states a lasting rule, constraint, or course-correction for how the crew should work.",
+    parameters: {
+      type: "object",
+      properties: {
+        text: {
+          type: "string",
+          description: "The standing directive, as a short imperative the crew reads verbatim every cycle.",
+        },
+        skills: {
+          type: "array",
+          items: { type: "string" },
+          description: "Optional skill slugs the directive relies on.",
+        },
+      },
+      required: ["text"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "company_update_charter",
+    description:
+      "Replace the company's charter — the mission prose describing what this company is and does. This rewrites the whole charter, so include everything that should remain. Propose the new wording and get the founder's explicit yes first, unless their current message already asks for exactly this change.",
+    parameters: {
+      type: "object",
+      properties: {
+        charter: {
+          type: "string",
+          description: "The complete replacement charter/mission prose.",
+        },
+      },
+      required: ["charter"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "company_dispatch_goal",
+    description:
+      "Launch the company's crew at the apex goal: decomposes the goal into tasks and dispatches them to the crew now. Get the founder's explicit yes first, unless their current message already asks to launch or dispatch.",
+    parameters: {
+      type: "object",
+      properties: {
+        note: {
+          type: "string",
+          description: "Optional founder guidance to carry into this launch.",
+        },
+      },
+      required: [],
+      additionalProperties: false,
+    },
+  },
+];
+
+/** Chat Completions format for the company-scope CEO tools (typed lane only). */
+export function companyCeoChatTools() {
+  return COMPANY_CEO_CHAT_TOOL_DEFS.map((t) => ({
+    type: "function" as const,
+    function: { name: t.name, description: t.description, parameters: t.parameters },
+  }));
+}
+
 const QUEEN_PIPELINE_TOOL_NAMES = new Set([
   "read_hivemind_context",
   "read_x_account",

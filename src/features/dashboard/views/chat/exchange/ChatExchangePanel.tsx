@@ -35,6 +35,7 @@ import {
   titleCaseLabel,
 } from "@/features/dashboard/views/chat/chat-panel-helpers";
 import { mergeProcessEvents, normalizeProcessEvents } from "@/features/dashboard/views/chat/AgentProcessPanel";
+import { AgentAssetOverview, type AgentAssetAnchor } from "./AgentAssetOverview";
 import { normalizeChatPermissionMode } from "@/lib/types/chat-permissions";
 import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 import { normalizeChatReasoningEffort } from "@/lib/types/chat-reasoning-effort";
@@ -60,7 +61,7 @@ import { Dot, HiveMark, HistorySkeleton, frChatState } from "./primitives";
 import { useChatThreadTitleConfig } from "@/features/dashboard/hooks/use-chat-thread-titles";
 
 import { ChatSidebar } from "./ChatSidebar";
-import type { SidebarRow } from "./ChatSidebar";
+import type { SidebarEmptyProject, SidebarRow } from "./ChatSidebar";
 import { ContextShelf } from "./ContextShelf";
 import type { ShelfDeliverable, ShelfMode } from "./ContextShelf";
 import { AppWorkspace, type AppWorkspaceTab } from "./AppWorkspace";
@@ -200,9 +201,15 @@ export function ChatExchangePanel(props: any) {
     visibleMessages = [],
     voiceTarget,
     ChatMarkdown,
+    walletsByAgent,
+    refreshWalletBalance,
+    setActiveView,
   } = props;
 
   const [capabilityPlanDrafts, setCapabilityPlanDrafts] = useState<Record<string, CapabilityApprovalPlan>>({});
+  // Anchor is stamped with the agent it was opened for, so switching agents
+  // simply stops rendering it (no reset effect needed).
+  const [agentAssetPopover, setAgentAssetPopover] = useState<{ agentId: string; anchor: AgentAssetAnchor } | null>(null);
   const renderMessages = useMemo(() => collapseSameTurnGenerationMessages(visibleMessages).filter((message) => !isSilentCommandApprovalMessage(message)).map((message) => {
     const planId = message.capabilityApproval?.id;
     return planId && capabilityPlanDrafts[planId]
@@ -634,6 +641,27 @@ export function ChatExchangePanel(props: any) {
     return rows;
   }, [chatSidebarTree, chatThreadTitles, displayAgents, messagesByAgent, runningChatStorageKeys]);
 
+  // Project folders the user created but has never chatted in. They produce no
+  // rows above (rows come from chats), so without this a brand-new project
+  // disappears from the rail as soon as its empty draft chat stops being the
+  // selected leaf — which is what a reload does.
+  const emptyProjects = useMemo<SidebarEmptyProject[]>(() => {
+    const projects: SidebarEmptyProject[] = [];
+    for (const machine of chatSidebarTree) {
+      if (machine.key === "unassigned" || isFixtureChatMachine(machine)) continue;
+      for (const folder of machine.folders ?? []) {
+        if (!folder.path || (folder.chats ?? []).length) continue;
+        projects.push({
+          label: folder.label,
+          machineName: machine.name,
+          createdAt: Number(folder.createdAt ?? 0),
+          onStartChat: folder.onStartChat,
+        });
+      }
+    }
+    return projects;
+  }, [chatSidebarTree]);
+
   const chatWorkingDirectory = chatWorkingDirectoryForThread(
     sidebarRows,
     selectedChatStorageKey,
@@ -927,23 +955,27 @@ export function ChatExchangePanel(props: any) {
       >
         {/* One header across every column. The rail title stays put when the
             history rail collapses — only the rail's search and list below it
-            fold away — so the bar never loses its left edge. */}
+            fold away — so the bar never loses its left edge. The rail toggle
+            sits with the title (its own position is then constant, since the
+            title's width never changes) and the agent picker is centred on the
+            bar, so neither control moves when the rail, shelf, or workspace
+            opens and closes. */}
         <header className="fr-chat-topbar" data-rail-collapsed={sidebarCollapsed ? "true" : "false"}>
           <div className="fr-chat-topbar-brand">
             <span className="fr-chat-rail-mark"><HexIco size={22} /></span>
             <span className="fr-chat-rail-title">Chat</span>
+            <button
+              type="button"
+              className="cx-iconbtn cx-sidebar-toggle"
+              onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+              aria-pressed={!sidebarCollapsed}
+              aria-label="Toggle chat history"
+              title={sidebarCollapsed ? "Show chat history" : "Hide chat history"}
+              style={headerIconBtnStyle(false)}
+            >
+              <Ico d="M9 4v16" size={17} sw={1.7}><rect x="3" y="4" width="18" height="16" rx="2" /></Ico>
+            </button>
           </div>
-          <button
-            type="button"
-            className="cx-iconbtn cx-sidebar-toggle"
-            onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
-            aria-pressed={!sidebarCollapsed}
-            aria-label="Toggle chat history"
-            title={sidebarCollapsed ? "Show chat history" : "Hide chat history"}
-            style={headerIconBtnStyle(false)}
-          >
-            <Ico d="M9 4v16" size={17} sw={1.7}><rect x="3" y="4" width="18" height="16" rx="2" /></Ico>
-          </button>
           <div className="fr-chat-agent-picker" ref={agentMenuRef}>
             <button
               type="button"
@@ -1045,6 +1077,7 @@ export function ChatExchangePanel(props: any) {
         >
           <ChatSidebar
             rows={sidebarRows}
+            emptyProjects={emptyProjects}
             machineNames={machineNames}
             prefs={prefs}
             search={sidebarSearch}
@@ -1119,10 +1152,26 @@ export function ChatExchangePanel(props: any) {
                     onOpenAppWorkspace={openThreadWorkspace}
                     sharedVault={sharedVault}
                     onMessageFeedback={submitMessageFeedback}
+                    onAgentNameClick={selectedAgent?.id
+                      ? (anchor: AgentAssetAnchor) => setAgentAssetPopover({ agentId: selectedAgent.id, anchor })
+                      : undefined}
                     setCopiedMessageKey={setCopiedMessageKey}
                     setOpenKanbanTaskMenuKey={setOpenKanbanTaskMenuKey}
                   />
                 )}
+                {agentAssetPopover && selectedAgent && agentAssetPopover.agentId === selectedAgent.id ? (
+                  <AgentAssetOverview
+                    key={selectedAgent.id}
+                    agent={selectedAgent}
+                    anchor={agentAssetPopover.anchor}
+                    onClose={() => setAgentAssetPopover(null)}
+                    walletsByAgent={walletsByAgent}
+                    refreshWalletBalance={refreshWalletBalance}
+                    setActiveView={setActiveView}
+                    vaultPath={sharedVault?.enabled ? String(sharedVault.vaultPath || "").trim() : ""}
+                    formatRelativeTime={formatRelativeTime}
+                  />
+                ) : null}
                 <div ref={messagesEndRef} />
               </div>
             </div>

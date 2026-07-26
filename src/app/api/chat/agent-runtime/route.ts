@@ -86,6 +86,7 @@ import { localAdminPrincipal } from "@/lib/types/principal";
 import { verifyAuth } from "@/lib/utils/server-auth";
 import { resolveChatSkillAttribution } from "@/lib/services/chat/skill-attribution";
 import { warmBundledMarkItDown } from "@/lib/services/document-ingestion";
+import { enforceOpenAiChatProfile } from "@/lib/services/openai-chat-profile-guard";
 
 export const runtime = "nodejs";
 export const maxDuration = 600;
@@ -120,6 +121,11 @@ export async function POST(request: NextRequest) {
   let requestAttachments: unknown[] = [];
   let mediaArtifacts: ChatMediaArtifact[] = [];
   let documentArtifactContext = "";
+  let openAiBillingGuard: {
+    enforced: boolean;
+    requestedProvider: string;
+    requestedModel: string;
+  } | null = null;
   try {
     const body = (await request.json()) as {
       agent?: AgentProfile;
@@ -141,7 +147,13 @@ export async function POST(request: NextRequest) {
       reasoningEffort?: unknown;
     };
     if (!body.agent || !Array.isArray(body.messages)) throw new Error("Missing agent or messages");
-    profile = { ...body.agent, runtime: normalizeAgentRuntime(body.agent.runtime) };
+    const normalizedProfile = {
+      ...body.agent,
+      runtime: normalizeAgentRuntime(body.agent.runtime),
+    };
+    const guardedProfile = await enforceOpenAiChatProfile(normalizedProfile);
+    profile = guardedProfile.profile;
+    openAiBillingGuard = guardedProfile;
     messages = body.messages;
     requestAttachments = Array.isArray(body.attachments) ? body.attachments : [];
     sharedVault = body.sharedVault;
@@ -178,6 +190,13 @@ export async function POST(request: NextRequest) {
     suppressWalletIntents,
     permissionMode,
     reasoningEffort,
+    openAiOAuthBillingGuardEnforced: openAiBillingGuard?.enforced === true,
+    requestedOpenAiProvider: openAiBillingGuard?.enforced
+      ? openAiBillingGuard.requestedProvider
+      : null,
+    requestedOpenAiModel: openAiBillingGuard?.enforced
+      ? openAiBillingGuard.requestedModel
+      : null,
     sharedVaultEnabled: Boolean(sharedVault?.enabled),
     honeyLedgerEnabled,
     elapsedMs: Date.now() - routeStartedAt,

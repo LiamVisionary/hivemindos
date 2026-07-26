@@ -238,7 +238,7 @@ function CrewRow({ a, onChange, onRemove, locked }: { a: Agent; onChange: (next:
         <span style={{ fontFamily: "var(--f-mono)", fontSize: 9, color: overWallet ? "var(--danger-2)" : "var(--fg-4)" }}>{overWallet ? "over wallet cap" : wallet > 0 ? "wallet $" + wallet : "company budget"}</span>
       </div>
       {locked ? (
-        <span style={{ width: 26, textAlign: "center", fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-4)" }} title="CEO is required">♛</span>
+        <span style={{ width: 26, textAlign: "center", fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-4)" }} title="Every company has a Queen — configure her instead">♛</span>
       ) : (
         <button onClick={onRemove} aria-label="Remove" style={{ width: 26, height: 26, display: "grid", placeItems: "center", cursor: "pointer", border: "1px solid var(--line)", borderRadius: 7, background: "transparent", color: "var(--fg-4)", fontSize: 12 }}>✕</button>
       )}
@@ -301,7 +301,7 @@ function CrewBuilder({
       <div>
         <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{crew.length} agents · ${totalCap}/day company budget</span>}>the crew</SectionLabel>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {crew.map((a, i) => <CrewRow key={a.id ?? a.name} a={a} locked={seedQueen && a.role === "Queen"} onChange={(next) => updateAt(i, next)} onRemove={() => removeAt(i)} />)}
+          {crew.map((a, i) => <CrewRow key={a.id ?? a.name} a={a} locked={a.role === "Queen"} onChange={(next) => updateAt(i, next)} onRemove={() => removeAt(i)} />)}
           {crew.length === 0 && <div style={{ borderRadius: 10, border: "1px dashed var(--line-2)", padding: "22px 12px", textAlign: "center", fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)" }}>select agents on the left to staff this company{seedQueen ? " — the first hire becomes the Queen/CEO" : ""}</div>}
         </div>
       </div>
@@ -441,7 +441,22 @@ export function CreateCompanyModal({
           <CompanyExecutionFields value={form} onChange={(patch) => setForm((current) => ({ ...current, ...patch }))} />
         </div>
       ) : (
-        <CrewBuilder crew={crew} setCrew={setCrew} agentPool={agentPool} seedQueen={requiresCrew} membershipOwners={membershipOwners} onDuplicateAgent={onDuplicateAgent} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {/* The company Queen is not staffed here — she is auto-seeded with the
+              company itself and configured from the cockpit's Team tab. */}
+          <div aria-disabled="true" style={{ display: "flex", gap: 11, alignItems: "center", padding: "10px 12px", borderRadius: 10, border: "1px dashed var(--honey-line)", background: "var(--honey-soft)", opacity: 0.9 }}>
+            <RoleGlyph role="Queen" size={28} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontFamily: "var(--f-display)", fontSize: 13.5, fontWeight: 600, color: "var(--fg)" }}>Queen · CEO</span>
+                <span style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, color: "var(--honey-2)" }}>auto-created</span>
+              </div>
+              <div style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)", marginTop: 3, lineHeight: 1.45 }}>Created with the company — inherits your Hive Queen's settings.</div>
+            </div>
+            <span title="Every company has a Queen — configure her instead" style={{ width: 26, textAlign: "center", fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-4)" }}>♛</span>
+          </div>
+          <CrewBuilder crew={crew} setCrew={setCrew} agentPool={agentPool} seedQueen={requiresCrew} membershipOwners={membershipOwners} onDuplicateAgent={onDuplicateAgent} />
+        </div>
       )}
     </Modal>
   );
@@ -642,13 +657,22 @@ function MemberEditRow({
       <Field label="Task">
         <TextInput value={member.task ?? ""} placeholder="Current work caption" onChange={(event) => onChange({ ...member, task: event.target.value })} />
       </Field>
-      <button
-        onClick={onRemove}
-        aria-label={`Remove ${member.name}`}
-        style={{ width: 34, height: 34, display: "grid", placeItems: "center", cursor: "pointer", border: "1px solid var(--line-2)", borderRadius: 8, background: "transparent", color: "var(--fg-4)", fontSize: 13 }}
-      >
-        ✕
-      </button>
+      {member.role === "Queen" ? (
+        <span
+          title="Every company has a Queen — configure her instead"
+          style={{ width: 34, height: 34, display: "grid", placeItems: "center", fontFamily: "var(--f-mono)", fontSize: 13, color: "var(--fg-4)" }}
+        >
+          ♛
+        </span>
+      ) : (
+        <button
+          onClick={onRemove}
+          aria-label={`Remove ${member.name}`}
+          style={{ width: 34, height: 34, display: "grid", placeItems: "center", cursor: "pointer", border: "1px solid var(--line-2)", borderRadius: 8, background: "transparent", color: "var(--fg-4)", fontSize: 13 }}
+        >
+          ✕
+        </button>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
-import { Fragment, memo, useEffect, useState } from "react";
-import type { ComponentType, Dispatch, ElementType, SetStateAction } from "react";
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { ComponentType, Dispatch, ElementType, ReactNode, SetStateAction } from "react";
 import { ThumbsDown, ThumbsUp } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { JsonRenderSurface, extractJsonRenderPayload } from "@/components/json-render/JsonRenderSurface";
@@ -294,6 +294,75 @@ function InteractivePromptResponse({ response }: { response: PromptResponse }) {
       {response.label}
     </div>
   );
+}
+
+// Streamed tokens arrive in bursts; revealing them per LETTER at a steady
+// cadence reads as typing instead of text jumping in. The reveal starts at the
+// mounted length, so history and reloads render instantly — only live growth
+// animates — and the step scales with the backlog so the reveal never falls
+// more than a beat behind the model.
+const TYPEWRITER_TICK_MS = 24;
+const TYPEWRITER_CATCH_UP_DIVISOR = 24;
+
+// Layout effect so the "typing" report lands BEFORE paint: the parent's
+// sequential-reveal gate must suppress downstream blocks in the same frame the
+// reveal starts, or the next block flashes once before hiding. Server renders
+// fall back to a plain effect (useLayoutEffect warns during SSR).
+const useTypewriterEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
+function TypewriterText({ text, render, revealKey, onTypingChange }: {
+  text: string;
+  render: (visible: string) => ReactNode;
+  revealKey?: string;
+  onTypingChange?: (key: string, typing: boolean) => void;
+}) {
+  const [visibleLength, setVisibleLength] = useState(text.length);
+  const visibleLengthRef = useRef(text.length);
+  // The canonical hydration pattern: animation state advances from effects
+  // because the reveal is driven by prop growth over time, not by render.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useTypewriterEffect(() => {
+    visibleLengthRef.current = Math.min(visibleLengthRef.current, text.length);
+    const reducedMotion = typeof window !== "undefined"
+      && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    // A hidden tab throttles timers to ~1/sec, which would turn the reveal
+    // into minutes of artificial lag (and hold the sequential gate shut) with
+    // nobody watching — render instantly there, like the loaders do.
+    const hiddenTab = typeof document !== "undefined" && document.hidden;
+    if (reducedMotion || hiddenTab || visibleLengthRef.current >= text.length) {
+      visibleLengthRef.current = text.length;
+      setVisibleLength(text.length);
+      if (revealKey) onTypingChange?.(revealKey, false);
+      return undefined;
+    }
+    setVisibleLength(visibleLengthRef.current);
+    if (revealKey) onTypingChange?.(revealKey, true);
+    const timer = window.setInterval(() => {
+      const backlog = text.length - visibleLengthRef.current;
+      if (backlog <= 0 || document.hidden) {
+        window.clearInterval(timer);
+        visibleLengthRef.current = text.length;
+        setVisibleLength(text.length);
+        if (revealKey) onTypingChange?.(revealKey, false);
+        return;
+      }
+      visibleLengthRef.current = Math.min(
+        text.length,
+        visibleLengthRef.current + Math.max(1, Math.ceil(backlog / TYPEWRITER_CATCH_UP_DIVISOR)),
+      );
+      setVisibleLength(visibleLengthRef.current);
+      if (visibleLengthRef.current >= text.length && revealKey) onTypingChange?.(revealKey, false);
+    }, TYPEWRITER_TICK_MS);
+    return () => window.clearInterval(timer);
+  }, [text, revealKey, onTypingChange]);
+  // Never leave a stale gate behind when the message unmounts mid-reveal
+  // (poll merges can replace the array element).
+  useEffect(() => {
+    if (!revealKey) return undefined;
+    return () => onTypingChange?.(revealKey, false);
+  }, [revealKey, onTypingChange]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+  return <>{render(visibleLength >= text.length ? text : text.slice(0, visibleLength))}</>;
 }
 
 function ThinkingLoader({ AgentResponseLoader, phrase }: { AgentResponseLoader?: AgentResponseLoaderComponent; phrase?: string }) {
@@ -697,6 +766,21 @@ function MessageThreadBase({
     && !messageText(message, chatDisplayContent)
   ));
 
+  // Sequential reveal queue: while a message is still typing out, everything
+  // below it holds its turn — otherwise the next tool panel and segment land
+  // mid-animation and the thread reads out of order. Typing speed is
+  // backlog-adaptive, so a hold never lasts more than a beat.
+  const [typingRevealKeys, setTypingRevealKeys] = useState<ReadonlySet<string>>(() => new Set());
+  const handleTypingChange = useCallback((key: string, typing: boolean) => {
+    setTypingRevealKeys((current) => {
+      if (current.has(key) === typing) return current;
+      const next = new Set(current);
+      if (typing) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  }, []);
+
   function copyMessageContent(key: string, content: string) {
     void navigator.clipboard?.writeText(content).then(() => {
       setCopiedMessageKey(key);
@@ -729,6 +813,21 @@ function MessageThreadBase({
     );
   }
 
+  // One app is one checkpoint: every streamed segment of a run inherits the
+  // artifact, so only the last carrier shows the "Open app" card.
+  const lastAppArtifactIndexByProject = new Map<string, number>();
+  messages.forEach((message, index) => {
+    const artifact = message.role !== "user" ? message.appArtifact : undefined;
+    if (artifact && (artifact.status === "running" || artifact.port)) {
+      lastAppArtifactIndexByProject.set(artifact.projectId || artifact.directory, index);
+    }
+  });
+
+  // First still-typing message: every assistant block after it waits its turn.
+  const firstTypingIndex = messages.findIndex((message, index) => (
+    message.role !== "user" && typingRevealKeys.has(messageKey(message, index))
+  ));
+
   return (
     <>
       {messages.map((message, index) => {
@@ -756,8 +855,13 @@ function MessageThreadBase({
         const rawAppArtifact = !isUser ? message.appArtifact : undefined;
         // The "Open app" checkpoint appears only once the app has actually run
         // (a freshly created, never-started project is not a deliverable yet):
-        // a port exists only after the first successful start.
-        const appArtifact = rawAppArtifact && (rawAppArtifact.status === "running" || rawAppArtifact.port) ? rawAppArtifact : undefined;
+        // a port exists only after the first successful start. And it appears
+        // once per app — on the run's last message that carries it.
+        const appArtifact = rawAppArtifact
+          && (rawAppArtifact.status === "running" || rawAppArtifact.port)
+          && lastAppArtifactIndexByProject.get(rawAppArtifact.projectId || rawAppArtifact.directory) === index
+          ? rawAppArtifact
+          : undefined;
         const hasAssistantBody = Boolean(content || capabilityApprovalNeedsReview || applicationGenerationCard || generatedMediaPathCard || mirosharkCard || transcriptCard || appArtifact);
         const promptUi = !isUser && content ? promptUiFromMessage(message, content) : null;
         const isHyperframesPromptBuilder = !isUser && message.agentPrompt?.id === HYPERFRAMES_PROMPT_BUILDER_ID;
@@ -774,23 +878,17 @@ function MessageThreadBase({
         const isPendingAssistant = !isUser && !content && busy && index === messages.length - 1;
         const pendingAssistantLabel = isPendingAssistant ? pendingAssistantStatusText : undefined;
         const renderKey = messageKey(message, index);
-        const userProcessRenderKey = `${chatProcessScopeKey}\u001fuser\u001f${renderKey}`;
-        const assistantProcessRenderKey = `${chatProcessScopeKey}\u001fassistant\u001f${renderKey}`;
-        const liveEvents = !isUser && assistantProcessRenderKey === processEventsTargetKey && !messageEvents.length
-          ? processEventsForDisplay
-          : [];
-        const nextAssistantHasProcessEvents = isUser ? (() => {
-          for (let nextIndex = index + 1; nextIndex < messages.length; nextIndex += 1) {
-            const candidate = messages[nextIndex];
-            if (candidate?.role === "user") return false;
-            if (candidate?.role === "assistant" && normalizeProcessEvents(candidate.processEvents ?? candidate.events).length > 0) return true;
-          }
-          return false;
-        })() : false;
-        const userLiveEvents = isUser && userProcessRenderKey === processEventsTargetKey && !nextAssistantHasProcessEvents
-          ? processEventsForDisplay
-          : [];
-        const events = messageEvents.length ? messageEvents : liveEvents;
+        // Sequential reveal: sealed blocks below a still-typing message wait
+        // their turn. The live tail (the turn's anchor message, where current
+        // activity lands) is exempt — its panel below the typing text IS the
+        // honest "happening right now" zone and must never blink out.
+        const isLiveTail = !isUser && busy && index === messages.length - 1;
+        if (!isUser && !isLiveTail && firstTypingIndex >= 0 && index > firstTypingIndex) return <Fragment key={renderKey} />;
+        // Single-anchor model: a turn's steps live on its anchor assistant
+        // message from the first preflight step onward. There is no separate
+        // user-anchored or thread-level live strip to hand off to — that
+        // handoff was the appear→vanish→reappear churn.
+        const events = messageEvents;
         const generationForMessage = chatKanbanGeneration?.key === renderKey ? chatKanbanGeneration : null;
         // Copying a transcript message should yield the readable transcript +
         // summary, not the raw hidden marker that carries the card payload.
@@ -831,13 +929,6 @@ function MessageThreadBase({
                 <AttachmentPills attachments={attachments} />
                 <MessageFooter align="user" timeLabel={timeLabel} actions={<MessageActions {...actionProps} />} />
               </article>
-              {userLiveEvents.length ? (
-                <ProcessPanel
-                  iconProps={iconProps}
-                  active={chatProcessTimerIsActive(Boolean(busy), processEventsAreActive(userLiveEvents))}
-                  events={userLiveEvents}
-                />
-              ) : null}
             </Fragment>
           );
         }
@@ -954,7 +1045,14 @@ function MessageThreadBase({
                     ? (assistantDisplayTextWithoutJsonRender
                       ? selectedAgent?.workerClass === "research"
                         ? <ResearchBriefTabs text={markdownText(assistantDisplayTextWithoutJsonRender)} ChatMarkdown={ChatMarkdown} sourceMachine={sourceMachine} />
-                        : <ChatMarkdown text={markdownText(assistantDisplayTextWithoutJsonRender)} className="fr-chat-markdown" sourceMachine={sourceMachine} surface="chat" />
+                        : (
+                          <TypewriterText
+                            text={assistantDisplayTextWithoutJsonRender}
+                            revealKey={renderKey}
+                            onTypingChange={handleTypingChange}
+                            render={(visible) => <ChatMarkdown text={markdownText(visible)} className="fr-chat-markdown" sourceMachine={sourceMachine} surface="chat" />}
+                          />
+                        )
                       : null)
                     : renderInline(assistantDisplayTextWithoutJsonRender)}
                   {isHyperframesPromptBuilder ? null : promptUi?.response ? (

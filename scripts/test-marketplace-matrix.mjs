@@ -146,7 +146,17 @@ const posted = await facebookMarketplaceAdapter.createListing(account, listing, 
     return okReport;
   },
 });
-assert.deepEqual(posted, { externalId: "123456", url: "https://www.facebook.com/marketplace/item/123456" });
+// This process is NOT on the profile-owning machine ("test-machine") and has
+// no page reader — the claim is "deferred", never silently trusted: the
+// caller records it posted-unverified and the owning machine's monitor
+// promotes or refutes it.
+assert.deepEqual(posted, { externalId: "123456", url: "https://www.facebook.com/marketplace/item/123456", verification: "deferred" });
+// With an independent page reader the same claim verifies in-process (fast path).
+const postedVerified = await facebookMarketplaceAdapter.createListing(account, listing, "mdec_ok", {
+  dispatchAgentTaskImpl: async () => okReport,
+  readBrowserTabImpl: async (profileName, url) => ({ url, text: "Marketplace · Test bike · $100 · A bike" }),
+});
+assert.equal(postedVerified.verification, "verified");
 await assert.rejects(
   () =>
     facebookMarketplaceAdapter.createListing(account, listing, "mdec_ok", {
@@ -155,5 +165,67 @@ await assert.rejects(
   /signed out/i,
   "logged-out session surfaces a reconnect error",
 );
+
+// ── per-op refutation spec: every dispatched op declares its check ──────────
+const { MARKETPLACE_OP_VERIFICATION_SPEC, verifyMarketplaceOpClaim } = await import(
+  "../src/lib/services/marketplace/marketplace-verification-matrix.ts"
+);
+const { MARKETPLACE_AGENT_OPS } = await import("../src/lib/services/marketplace/adapters/types.ts");
+for (const op of MARKETPLACE_AGENT_OPS) {
+  const row = MARKETPLACE_OP_VERIFICATION_SPEC[op];
+  assert.ok(row, `verification spec row exists: ${op}`);
+  assert.equal(row.op, op, `row self-identifies: ${op}`);
+  assert.equal(typeof row.verify, "function", `row declares its refutation check: ${op}`);
+  assert.ok(row.refutes, `row documents what it refutes: ${op}`);
+}
+// A null reader is ALWAYS "unobservable" — never a silent pass.
+const unobservable = await verifyMarketplaceOpClaim(null, "marketplace-facebook", { op: "end-listing", url: "https://www.facebook.com/marketplace/item/1" });
+assert.equal(unobservable.outcome, "unobservable");
+
+// ── end-listing: a fabricated "ok" is refuted by the still-live page ────────
+const endOk = { conversations: [], replies: [], escalations: [], sessionHealth: "ok" };
+const deadPage = async (profileName, url) => ({ url, text: "This content isn't available right now" });
+const livePage = async (profileName, url) => ({ url, text: "Marketplace · Test bike · $100 · Send seller a message" });
+const ended = await facebookMarketplaceAdapter.endListing(account, "123456", {
+  dispatchAgentTaskImpl: async (input) => {
+    assert.equal(input.op, "end-listing");
+    return endOk;
+  },
+  readBrowserTabImpl: deadPage,
+});
+assert.deepEqual(ended, { verification: "verified" }, "a dead listing page proves the end really happened");
+await assert.rejects(
+  () => facebookMarketplaceAdapter.endListing(account, "123456", { dispatchAgentTaskImpl: async () => endOk, readBrowserTabImpl: livePage }),
+  /FAILED independent verification/i,
+  "a still-live page refutes the claimed end — never accepted on trust",
+);
+const endedDeferred = await facebookMarketplaceAdapter.endListing(account, "123456", { dispatchAgentTaskImpl: async () => endOk });
+assert.deepEqual(endedDeferred, { verification: "deferred" }, "an unobservable end defers to the owning machine's monitor");
+
+// ── the base-cadence sweep is ONE dispatched session ────────────────────────
+const sweepDispatches = [];
+const sweepReport = { conversations: [], replies: [], escalations: [], catalog: [], sessionHealth: "ok" };
+const sweep = await facebookMarketplaceAdapter.workInbox(
+  account,
+  { directives: [], listings: [], fullSweep: true },
+  {
+    dispatchAgentTaskImpl: async (input) => {
+      sweepDispatches.push(input);
+      return sweepReport;
+    },
+  },
+);
+assert.equal(sweep, sweepReport);
+assert.equal(sweepDispatches.length, 1, "catalog + inbox ride ONE dispatch, not two queen round-trips");
+assert.equal(sweepDispatches[0].op, "work-inbox");
+assert.match(sweepDispatches[0].prompt, /catalogue EVERY listing/, "the single session catalogues the selling page");
+assert.match(sweepDispatches[0].prompt, /Then open the Marketplace inbox/, "then works the inbox");
+const plainInbox = [];
+await facebookMarketplaceAdapter.workInbox(
+  account,
+  { directives: [], listings: [] },
+  { dispatchAgentTaskImpl: async (input) => (plainInbox.push(input), sweepReport) },
+);
+assert.ok(!/catalogue EVERY listing/.test(plainInbox[0].prompt), "a hot-rung inbox session does not re-catalogue");
 
 console.log("marketplace matrix tests passed");

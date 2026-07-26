@@ -1,11 +1,13 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, join, sep } from "node:path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { createTask, patchTask, readBoard } from "@/lib/services/kanban/local-kanban-store";
 import { scheduleQueenBeeAutonomousPickup } from "@/lib/services/queen-bee/autonomous-worker";
-import { chooseQueenBeeDelegate, machineMatchesTarget, rankQueenBeeDelegates, type QueenBeeWorkerClass } from "@/lib/services/queen-bee/router";
+import { chooseQueenBeeDelegate, machineMatchesTarget, rankQueenBeeDelegates, type QueenBeeDelegate, type QueenBeeRouterOptions, type QueenBeeTaskIntent, type QueenBeeWorkerClass } from "@/lib/services/queen-bee/router";
+import { discoverQueenBeeFleetSnapshot } from "@/lib/services/queen-bee/fleet-snapshot";
+import { DASHBOARD_AUTH_HEADER, internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import { companyIdFromSource } from "@/lib/services/queen-bee/company-task-context";
 import { readQueenBeeOutcomeStats } from "@/lib/services/queen-bee/outcome-stats";
 import { readProjectRegistry } from "@/lib/services/projects/project-registry";
@@ -37,6 +39,12 @@ export type QueenBeeMessageInput = QueenBeeOptions & {
   workspace?: KanbanTask["workspace"] | null;
   /** Project-registry id to stamp on the created task (routing + proof badge). */
   projectId?: string | null;
+  /**
+   * Work Board task ids this task depends on. The board parent-gates the child
+   * (created in "ideas" until every parent is done) and promoteReadyChildren
+   * releases it, so dependent plans run as a DAG instead of all-at-once.
+   */
+  parents?: string[] | null;
 };
 
 export type QueenBeeFleetMachine = {
@@ -240,6 +248,146 @@ export function isRedispatchableReadyTask(
   return now - (task.updatedAt ?? 0) >= REDISPATCH_MIN_READY_AGE_MS;
 }
 
+export type QueenBeeResumeChainOptions = QueenBeeOptions & {
+  /** Injected fleet snapshot (tests / callers that already hold one); when absent the rebuild self-fetches discovery. */
+  fleetSnapshot?: QueenBeeFleetMachine[] | null;
+  companyMembers?: Map<string, Set<string>>;
+};
+
+/** Inputs one recovery/resume pass shares across every chain rebuild: the current fleet plus routing signals. */
+export type QueenBeeResumeChainContext = {
+  fleet: QueenBeeFleetMachine[];
+  membersByCompany: Map<string, Set<string>>;
+  projectRegistry: QueenBeeTaskIntent["projectRegistry"];
+  routerOptions: QueenBeeRouterOptions;
+};
+
+/**
+ * Best-effort context for rebuilding delegation chains outside the submit path.
+ * Returns null when the fleet cannot be discovered — callers degrade to the
+ * task's single known delegate instead of blocking recovery.
+ */
+export async function prepareQueenBeeResumeChainContext(options: QueenBeeResumeChainOptions = {}): Promise<QueenBeeResumeChainContext | null> {
+  const fleet = options.fleetSnapshot ?? await fetchOwnFleetSnapshotForResume();
+  if (!fleet.length) return null;
+  const membersByCompany = options.companyMembers ?? await readCompanyMembersByCompany();
+  const projectRegistry = await readQueenBeeProjectRegistry(options.vaultPath);
+  const sessionOutcomes = await readQueenBeeOutcomeStats().catch(() => ({}));
+  const { assignments, boardOutcomes } = await readQueenBeeBoardSignals(options);
+  return {
+    fleet,
+    membersByCompany,
+    projectRegistry,
+    routerOptions: { outcomes: mergeQueenBeeOutcomes(sessionOutcomes, boardOutcomes), assignments },
+  };
+}
+
+/**
+ * Rebuild a REAL delegation chain for a task that already carries an assignee
+ * and a delegated target, by ranking the current fleet — honoring the task's
+ * company crew scoping and requestedMachine/requestedAgent pins exactly like
+ * the pending-task re-router. The previously-assigned agent stays first (both
+ * recovery and answer-resume resume the same worker); the ranked peers behind
+ * it give the autonomous pickup real fallbacks AND an independent reviewer for
+ * judge-gated loops — a fabricated one-element chain structurally cannot staff
+ * a reviewer, so judge-gated tasks ran their work and then parked needs-human.
+ * Returns [] when no safe chain can be built (callers degrade to the single
+ * known delegate).
+ */
+export function rebuildQueenBeeResumeChain(
+  task: Pick<KanbanTask, "title" | "body" | "skills" | "source" | "assignee" | "targetMachine" | "requestedMachine" | "requestedAgent">,
+  context: QueenBeeResumeChainContext,
+): QueenBeeDelegate[] {
+  const assignee = task.assignee?.trim();
+  if (!assignee || assignee === "queen-bee") return [];
+  let candidateFleet = context.fleet;
+  // Company tasks may only ever run (and be reviewed) by their own crew.
+  const companyId = companyIdFromSource(task.source);
+  if (companyId) {
+    const memberIds = context.membersByCompany.get(companyId);
+    if (!memberIds || memberIds.size === 0) return [];
+    candidateFleet = scopeFleetToMemberIds(candidateFleet, memberIds);
+    if (candidateFleet.length === 0) return [];
+  }
+  const requestedMachine = task.requestedMachine?.trim();
+  if (requestedMachine) {
+    candidateFleet = candidateFleet.filter((machine) => machineMatchesTarget(machine, requestedMachine));
+    if (candidateFleet.length === 0) return [];
+  }
+  const requestedAgent = task.requestedAgent?.trim();
+  if (requestedAgent) {
+    candidateFleet = scopeFleetToMemberIds(candidateFleet, new Set([requestedAgent]));
+    if (candidateFleet.length === 0) return [];
+  }
+  const intent = { title: task.title, body: task.body ?? "", skills: task.skills ?? [], projectRegistry: context.projectRegistry };
+  const ranked = rankQueenBeeDelegates(
+    intent,
+    candidateFleet,
+    requestedMachine ? { ...context.routerOptions, targetMachineKey: requestedMachine } : context.routerOptions,
+  );
+  if (ranked.length === 0) return [];
+  // Resume the SAME agent that owns the card. Its ranked entry moves first so
+  // the pickup runs it with real fleet metadata (runtime, model — which feeds
+  // the reviewer's model-strength scoring); when the assignee is not currently
+  // routable, keep it first as the known delegate with the ranked fleet behind
+  // it as fallbacks/reviewers.
+  const matchIndex = ranked.findIndex((delegation) => delegationMatchesAssignee(delegation, assignee));
+  if (matchIndex > 0) ranked.unshift(...ranked.splice(matchIndex, 1));
+  else if (matchIndex < 0) ranked.unshift(assignedTaskResumeDelegation(task, assignee));
+  return ranked;
+}
+
+function delegationMatchesAssignee(delegation: QueenBeeDelegate, assignee: string): boolean {
+  const wanted = assignee.toLowerCase();
+  return [delegation.agent?.name, delegation.agent?.id, delegation.agent?.agentId]
+    .some((value) => String(value || "").trim().toLowerCase() === wanted);
+}
+
+/** The degraded single-delegate shape: resume the recorded assignee on the task's recorded target machine. */
+function assignedTaskResumeDelegation(task: Pick<KanbanTask, "targetMachine">, assignee: string): QueenBeeDelegate {
+  return {
+    status: "delegated",
+    workerClass: "general",
+    score: 0,
+    reason: "Resuming the task's previously delegated agent on its recorded target machine.",
+    agent: { name: assignee, runtime: "hermes", runtimeCapabilities: { chat: true } },
+    machine: { key: task.targetMachine?.key, device: { name: task.targetMachine?.name, collectorUrl: task.targetMachine?.collectorUrl } },
+  };
+}
+
+/** Company membership map: injected (tests / caller) or lazily read from the company store. */
+async function readCompanyMembersByCompany(): Promise<Map<string, Set<string>>> {
+  // Lazy import keeps control-plane free of a static companies-store dependency.
+  return new Map(
+    (await import("@/lib/services/companies-store")
+      .then((m) => m.readCompanies())
+      .catch(() => [] as Array<{ id: string; agentIds?: string[] }>)
+    ).map((c) => [c.id, new Set(c.agentIds ?? [])]),
+  );
+}
+
+/**
+ * Best-effort fleet discovery for sweeps that run with no request context (the
+ * driver ticks). Reuses the company driver's remembered self-base candidates so
+ * the fetch works through whichever loopback family this server actually
+ * listens on; an empty result means discovery is unavailable and the caller
+ * degrades. Lazy driver import avoids a static import cycle (the driver
+ * statically imports this module).
+ */
+async function fetchOwnFleetSnapshotForResume(): Promise<QueenBeeFleetMachine[]> {
+  try {
+    const { resolveCompanyDriverSelfBases } = await import("@/lib/services/company-autonomy-driver");
+    const token = internalApiAuthHeaders()[DASHBOARD_AUTH_HEADER] ?? null;
+    for (const base of resolveCompanyDriverSelfBases()) {
+      const machines = await discoverQueenBeeFleetSnapshot(base, token);
+      if (machines.length) return machines;
+    }
+  } catch {
+    // fall through — resume degrades to the single known delegate
+  }
+  return [];
+}
+
 /**
  * Recovers autonomous Work Board tasks left "ready" with a delegated target but no live worker —
  * e.g. when a server restart killed the in-process pickup, or `reclaimStaleTasks` returned a
@@ -247,20 +395,23 @@ export function isRedispatchableReadyTask(
  * dispatch self-heals instead of stranding. Only touches tasks idle a beat (so it never races a
  * freshly-scheduled pickup) that carry a collector URL. Returns the number of pickups scheduled.
  */
-export async function redispatchReadyQueenBeeTasks(options: QueenBeeOptions = {}): Promise<number> {
+export async function redispatchReadyQueenBeeTasks(options: QueenBeeResumeChainOptions = {}): Promise<number> {
   const board = await readBoard(null, { vaultPath: options.vaultPath, kanbanFolder: options.kanbanFolder }).catch(() => null);
   if (!board) return 0;
   const now = Date.now();
+  const stranded = (board.tasks ?? []).filter((task) => isRedispatchableReadyTask(task, now));
+  if (stranded.length === 0) return 0;
+  // One chain-rebuild context per sweep. Judge-gated tasks need a real
+  // multi-delegate chain to staff an independent reviewer; when discovery is
+  // unavailable the sweep degrades to the single known delegate per task.
+  const context = await prepareQueenBeeResumeChainContext(options).catch(() => null);
   let scheduled = 0;
-  for (const task of board.tasks ?? []) {
-    if (!isRedispatchableReadyTask(task, now)) continue;
+  for (const task of stranded) {
+    const chain = context ? rebuildQueenBeeResumeChain(task, context) : [];
     const ok = scheduleQueenBeeAutonomousPickup({
       task,
-      delegation: {
-        status: "delegated",
-        agent: { name: task.assignee!.trim(), runtime: "hermes", runtimeCapabilities: { chat: true } },
-        machine: { key: task.targetMachine?.key, device: { name: task.targetMachine?.name, collectorUrl: task.targetMachine?.collectorUrl } },
-      },
+      delegation: chain[0] ?? assignedTaskResumeDelegation(task, task.assignee!.trim()),
+      delegationChain: chain,
       vaultPath: options.vaultPath,
       kanbanFolder: options.kanbanFolder,
     });
@@ -334,14 +485,7 @@ export async function routePendingQueenBeeTasks(
   if (pending.length === 0) return 0;
 
   // Company membership: injected (tests / caller) or read from the company store.
-  // Lazy import keeps control-plane free of a static companies-store dependency.
-  const membersByCompany = options.companyMembers
-    ?? new Map(
-      (await import("@/lib/services/companies-store")
-        .then((m) => m.readCompanies())
-        .catch(() => [] as Array<{ id: string; agentIds?: string[] }>)
-      ).map((c) => [c.id, new Set(c.agentIds ?? [])]),
-    );
+  const membersByCompany = options.companyMembers ?? await readCompanyMembersByCompany();
 
   const projectRegistry = await readQueenBeeProjectRegistry(options.vaultPath);
   const sessionOutcomes = await readQueenBeeOutcomeStats().catch(() => ({}));
@@ -395,6 +539,13 @@ export async function routePendingQueenBeeTasks(
           collectorUrl,
         },
       }, { vaultPath: options.vaultPath, kanbanFolder: options.kanbanFolder });
+      // The sweep must see its OWN placements: ranked against a frozen
+      // assignments snapshot, a burst of pending tasks all landed on the same
+      // top agent/machine and then serialized behind its chat slot. Count each
+      // placement in the shared in-memory assignments (keyed like the board's
+      // assignee signal) so the router's load penalty and machine spreader see
+      // intra-sweep assignments when ranking the next task.
+      assignments[agentName] = (assignments[agentName] ?? 0) + 1;
       const scheduled = scheduleQueenBeeAutonomousPickup({
         task: updated,
         delegation,
@@ -537,6 +688,7 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
     requestedAgent,
     loop: input.loop ?? undefined,
     projectId: input.projectId?.trim() || undefined,
+    parents: input.parents?.filter(Boolean) ?? undefined,
     idempotencyKey,
   }, {
     vaultPath: input.vaultPath,
@@ -573,7 +725,10 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
   };
   await appendJsonl(paths.receipts, receipt);
   await updateCurrentState(paths.currentState, { taskId: result.task.id, title, source, mode, createdAt, delegation });
-  const autonomousPickupScheduled = result.created && mode === "act" && scheduleQueenBeeAutonomousPickup({
+  // A parent-gated task is created in "ideas" (not "ready"): the board releases it
+  // via promoteReadyChildren when its parents finish, and the regular dispatch
+  // sweep picks it up then — scheduling pickup now would race an unmet dependency.
+  const autonomousPickupScheduled = result.created && mode === "act" && result.task.status === "ready" && scheduleQueenBeeAutonomousPickup({
     task: result.task,
     delegation,
     delegationChain,
@@ -646,11 +801,11 @@ async function writeIfMissing(path: string, content: string) {
   return true;
 }
 
+// True O_APPEND write: records are self-contained JSONL lines, and the previous
+// read-then-rewrite dropped lines whenever two submits appended concurrently.
 async function appendJsonl(path: string, record: Record<string, unknown>) {
   await mkdir(dirname(path), { recursive: true });
-  const prior = existsSync(path) ? await readFile(path, "utf8") : "";
-  const next = `${prior}${prior && !prior.endsWith("\n") ? "\n" : ""}${JSON.stringify(record)}\n`;
-  await writeFile(path, next, "utf8");
+  await appendFile(path, `${JSON.stringify(record)}\n`, "utf8");
 }
 
 async function updateCurrentState(path: string, event: { taskId: string; title: string; source: string; mode: string; createdAt: string; delegation: ReturnType<typeof chooseQueenBeeDelegate> }) {

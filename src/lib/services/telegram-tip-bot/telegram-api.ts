@@ -259,6 +259,18 @@ export class TelegramBotApi {
     return this.call<boolean>("deleteMessage", { chat_id: params.chatId, message_id: params.messageId });
   }
 
+  deleteMessageReaction(params: {
+    chatId: number | string;
+    messageId: number;
+    userId: number | string;
+  }): Promise<boolean> {
+    return this.call<boolean>("deleteMessageReaction", {
+      chat_id: params.chatId,
+      message_id: params.messageId,
+      user_id: params.userId,
+    });
+  }
+
   copyMessage(params: {
     chatId: number | string;
     fromChatId: number | string;

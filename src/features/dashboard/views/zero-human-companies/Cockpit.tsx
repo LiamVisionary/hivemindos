@@ -33,6 +33,7 @@ import type { CompanyApprovalPolicy, CompanyPricingProposal } from "@/lib/types/
 import type { SkillBrowserAttachmentTarget } from "@/features/dashboard/dashboard-types";
 import { formatPipelineUsd } from "@/features/dashboard/work-board-pipeline";
 import { companyExecutionCapability } from "@/lib/services/company-execution-capabilities";
+import { useQueenChat } from "@/features/queen-voice/queen-chat-store";
 
 type SkillAttachmentBrowserOpener = (target: SkillBrowserAttachmentTarget) => void | Promise<void>;
 
@@ -58,6 +59,10 @@ export type CockpitHandlers = {
   onEditTreasury: () => void;
   /** Open one member agent's company settings. */
   onEditAgent: (agentId: string) => void;
+  /** Open the full AgentSettingsModal for an agent id (used for the company
+   *  Queen, whose profile is auto-seeded as `company-queen-<companyId first 8>`).
+   *  May resolve asynchronously: a just-seeded profile needs a roster refresh first. */
+  onOpenAgentSettings?: (agentId: string) => void | Promise<void>;
   /** Open a board card's underlying Work Board task (result + deliverables). */
   onOpenIssue: (issue: Issue) => void;
   /** Human fixed the blocker; answer the Needs-You task so it resumes. */
@@ -88,7 +93,7 @@ function actBtn(kind: "primary" | "ghost" | "danger", disabled?: boolean): React
 }
 
 // ── Org chart ────────────────────────────────────────────────────────────
-function OrgChart({ colony, wide, onEditAgent }: { colony: Colony; wide?: boolean; onEditAgent?: (agentId: string) => void }) {
+function OrgChart({ colony, wide, onEditAgent, queenActions }: { colony: Colony; wide?: boolean; onEditAgent?: (agentId: string) => void; queenActions?: React.ReactNode }) {
   const queen = colony.agents.find((a) => a.role === "Queen");
   const reports = colony.agents.filter((a) => a.role !== "Queen");
   const editFor = (agent: Agent) => {
@@ -99,6 +104,7 @@ function OrgChart({ colony, wide, onEditAgent }: { colony: Colony; wide?: boolea
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {queen && <AgentNode agent={queen} head onEdit={editFor(queen)} />}
+        {queenActions}
         <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
           {reports.map((a) => <AgentNode key={a.id ?? a.name} agent={a} flat onEdit={editFor(a)} />)}
         </div>
@@ -108,6 +114,7 @@ function OrgChart({ colony, wide, onEditAgent }: { colony: Colony; wide?: boolea
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {queen && <AgentNode agent={queen} head onEdit={editFor(queen)} />}
+      {queenActions}
       <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingLeft: 14, borderLeft: "1px solid var(--line-2)", marginLeft: 18 }}>
         {reports.map((a) => <AgentNode key={a.id ?? a.name} agent={a} onEdit={editFor(a)} />)}
       </div>
@@ -831,6 +838,56 @@ export function Cockpit({
   const wbPct = wb.total > 0 ? Math.round((wb.done / wb.total) * 100) : 0;
   const [tab, setTab] = React.useState("board");
 
+  // Company-CEO chat: scope the shared hive chat to this company and open it.
+  const queenChat = useQueenChat();
+  // Every company's Queen has an auto-seeded stored agent profile with this id.
+  const companyQueenAgentId = `company-queen-${c.id.slice(0, 8)}`;
+  const talkToCeo = () => {
+    queenChat.setCompanyCeoScope({ companyId: c.id, companyName: c.name });
+    queenChat.setHistoryMinimized(false);
+  };
+  // Opening Queen settings may first refresh the roster (just-seeded profile),
+  // so the button carries an inline spinner while that resolves.
+  const [queenSettingsBusy, setQueenSettingsBusy] = React.useState(false);
+  const openQueenSettings = async () => {
+    if (queenSettingsBusy || !handlers.onOpenAgentSettings) return;
+    setQueenSettingsBusy(true);
+    try {
+      await handlers.onOpenAgentSettings(companyQueenAgentId);
+    } finally {
+      setQueenSettingsBusy(false);
+    }
+  };
+  // The Queen is permanent — no remove affordance anywhere; configure her instead.
+  const ceoActionsRow = (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      <span style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, color: "var(--fg-4)", textTransform: "uppercase", letterSpacing: 0.06 }}>
+        ♛ every company has a Queen — she is permanent
+      </span>
+      <span style={{ flex: 1 }} />
+      <button
+        type="button"
+        onClick={talkToCeo}
+        title={`Chat with ${c.name}'s Queen as its CEO`}
+        className="zhc-btn-ghost"
+        style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer", borderRadius: 8, padding: "5px 11px", fontFamily: "var(--f-mono)", fontSize: 10.5, fontWeight: 600, color: "var(--honey)", border: "1px solid var(--honey-line)", background: "var(--honey-soft)" }}
+      >
+        Talk to CEO
+      </button>
+      {handlers.onOpenAgentSettings ? (
+        <button
+          type="button"
+          onClick={() => void openQueenSettings()}
+          title="Open the company Queen's agent settings"
+          className="zhc-btn-ghost"
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: queenSettingsBusy ? "wait" : "pointer", borderRadius: 8, padding: "5px 11px", fontFamily: "var(--f-mono)", fontSize: 10.5, fontWeight: 600, color: "var(--fg-3)", border: "1px solid var(--line-2)", background: "transparent" }}
+        >
+          {queenSettingsBusy ? <Spinner size={12} /> : <Settings2 size={12} strokeWidth={1.8} />} Queen settings
+        </button>
+      ) : null}
+    </div>
+  );
+
   // The output spec decides what THIS company's deliverables are (its sites /
   // books / clips) vs. work log, and its outreach / product labels.
   const spec = React.useMemo(() => outputSpecForCompany(companyProfileSignal(c)), [c]);
@@ -1065,9 +1122,12 @@ export function Cockpit({
             <button onClick={onAddAgents} className="zhc-btn-ghost" style={{ display: "inline-flex", alignItems: "center", gap: 6, cursor: "pointer", border: "1px solid var(--honey-line)", borderRadius: 8, background: "var(--honey-soft)", color: "var(--honey)", fontFamily: "var(--f-mono)", fontSize: 10.5, fontWeight: 600, padding: "5px 11px", textTransform: "uppercase", letterSpacing: 0.06 }}>+ add agent</button>
           }>org · {c.agents.length} agents · reports → Queen</SectionLabel>
           {c.agents.length === 0 ? (
-            <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-4)", padding: "16px 0" }}>No agents yet — use “+ add agent” to staff this company from your roster.</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-4)", padding: "16px 0 0" }}>No agents yet — use “+ add agent” to staff this company from your roster.</div>
+              {ceoActionsRow}
+            </div>
           ) : (
-            <OrgChart colony={c} wide onEditAgent={handlers.onEditAgent} />
+            <OrgChart colony={c} wide onEditAgent={handlers.onEditAgent} queenActions={ceoActionsRow} />
           )}
         </Panel>
       )}

@@ -4,11 +4,15 @@ import { CommunityHoneyClient } from "./community-honey";
 import { telegramPublicLabel } from "./community-honey-logic";
 import { honeyAuditDetail, honeyRecognitionAuditId, type HoneyRecognitionAuditEntry } from "./honey-audit-state";
 import { finishHoneyRecognitionAudit, startHoneyRecognitionAudit } from "./honey-audit-store";
-import { HONEY_REACTION_REASON, HONEY_RECOGNITION_REACTION_EMOJI } from "./honey-recognition";
+import {
+  HONEY_REACTION_REASON,
+  HONEY_RECOGNITION_REACTION_EMOJI,
+  reportRejectedHoneyReaction,
+} from "./honey-recognition";
 import { escapeHtml, type TelegramBotApi, type TgUpdate, type TgUser } from "./telegram-api";
 
 type HoneyReactionHandlerInput = {
-  api: Pick<TelegramBotApi, "sendMessage">;
+  api: Pick<TelegramBotApi, "deleteMessageReaction" | "sendMessage">;
   client: CommunityHoneyClient;
   update: TgUpdate;
   recipient: TgUser | null;
@@ -37,21 +41,13 @@ export async function handleHoneyReactionWithAudit(input: HoneyReactionHandlerIn
 
   if (!input.recipient) {
     const detail = "The reacted-to message was not present in the recent-member index.";
-    const auditUpdated = await finishHoneyRecognitionAudit(audit.id, { outcome: "rejected", detail })
-      .then(() => true)
-      .catch(() => false);
-    const notified = await input.notifyGiver(
-      String(giver.id),
-      `${HONEY_RECOGNITION_REACTION_EMOJI} I couldn't match that message to a recent member. Reply to it with <code>/honey &lt;why&gt;</code> instead.`,
-    );
-    if (!notified || !auditUpdated) {
-      await finishHoneyRecognitionAudit(audit.id, {
-        outcome: "rejected-reply-failed",
-        detail: `${detail}${notified ? " The audit outcome could not be finalized." : " The giver could not be notified."}`,
-      }).catch(() => undefined);
-      throw new Error("A rejected HONEY reaction could not be fully audited and reported.");
-    }
-    return;
+    return reportReactionRejection({
+      input,
+      audit,
+      giver,
+      reason: "I couldn't match that message to a recent member. Reply to it with <code>/honey &lt;why&gt;</code> instead.",
+      auditDetail: detail,
+    });
   }
 
   let ledgerOutcome: "recorded" | "duplicate" | null = null;
@@ -101,19 +97,95 @@ export async function handleHoneyReactionWithAudit(input: HoneyReactionHandlerIn
       if (!notified || !auditUpdated) throw new Error(`Hosted HONEY receipt ${audit.id} could not be fully audited and delivered.`);
       return;
     }
-    const auditUpdated = await finishHoneyRecognitionAudit(audit.id, { outcome: "rejected", detail: honeyAuditDetail(error) })
-      .then(() => true)
-      .catch(() => false);
-    const notified = await input.notifyGiver(
-      String(giver.id),
-      `${HONEY_RECOGNITION_REACTION_EMOJI} Recognition not recorded: ${escapeHtml(reason)}\nReceipt: <code>${escapeHtml(audit.id)}</code>`,
-    );
-    if (!notified || !auditUpdated) {
-      await finishHoneyRecognitionAudit(audit.id, {
-        outcome: "rejected-reply-failed",
-        detail: `${honeyAuditDetail(error)}${notified ? " The audit outcome could not be finalized." : " The giver could not be notified."}`,
-      }).catch(() => undefined);
-      throw new Error(`Rejected HONEY receipt ${audit.id} could not be fully audited and delivered.`);
-    }
+    await reportReactionRejection({
+      input,
+      audit,
+      giver,
+      reason: escapeHtml(reason),
+      auditDetail: honeyAuditDetail(error),
+    });
   }
+}
+
+async function reportReactionRejection(params: {
+  input: HoneyReactionHandlerInput;
+  audit: HoneyRecognitionAuditEntry;
+  giver: TgUser;
+  reason: string;
+  auditDetail: string;
+}) {
+  const { input, audit, giver } = params;
+  const report = await reportRejectedHoneyReaction({
+    deleteReaction: () => input.api.deleteMessageReaction({
+      chatId: audit.chatId,
+      messageId: audit.messageId,
+      userId: giver.id,
+    }),
+    sendGroupReply: async (reactionRemoved) => {
+      await input.api.sendMessage({
+        chatId: audit.chatId,
+        replyToMessageId: audit.messageId,
+        text: rejectionMessage({
+          audit,
+          giver,
+          recipient: input.recipient,
+          reason: params.reason,
+          reactionRemoved,
+        }),
+      });
+    },
+    notifyGiver: (reactionRemoved) => input.notifyGiver(
+      String(giver.id),
+      [
+        rejectionMessage({
+          audit,
+          giver,
+          recipient: input.recipient,
+          reason: params.reason,
+          reactionRemoved,
+        }),
+        "I couldn't post this failure in the group.",
+      ].join("\n"),
+    ),
+  });
+  const deliveryDetail = [
+    report.reactionRemoved ? "The giver's trophy reaction was removed." : "The giver's trophy reaction could not be removed.",
+    report.publicReplySent
+      ? "The rejection was reported in the group."
+      : report.giverDmSent
+        ? "The group reply failed, so the giver was notified privately."
+        : "Neither the group reply nor the private fallback was delivered.",
+  ].join(" ");
+  const auditUpdated = await finishHoneyRecognitionAudit(audit.id, {
+    outcome: "rejected",
+    detail: `${params.auditDetail} ${deliveryDetail}`,
+  }).then(() => true).catch(() => false);
+  if (report.reported && auditUpdated) return;
+
+  await finishHoneyRecognitionAudit(audit.id, {
+    outcome: "rejected-reply-failed",
+    detail: `${params.auditDetail} ${deliveryDetail}${auditUpdated ? "" : " The audit outcome could not be finalized."}`,
+  }).catch(() => undefined);
+  throw new Error(`Rejected HONEY receipt ${audit.id} could not be fully audited and delivered.`);
+}
+
+function rejectionMessage(params: {
+  audit: HoneyRecognitionAuditEntry;
+  giver: TgUser;
+  recipient: TgUser | null;
+  reason: string;
+  reactionRemoved: boolean;
+}) {
+  const participants = params.recipient
+    ? `${escapeHtml(telegramPublicLabel(params.giver))} → ${escapeHtml(telegramPublicLabel(params.recipient))}`
+    : escapeHtml(telegramPublicLabel(params.giver));
+  return [
+    `${HONEY_RECOGNITION_REACTION_EMOJI} <b>Recognition not recorded</b>`,
+    participants,
+    params.reason,
+    params.reactionRemoved
+      ? "The 🏆 reaction was removed."
+      : "I couldn't remove the 🏆 reaction automatically; please remove it manually.",
+    `Receipt: <code>${escapeHtml(params.audit.id)}</code>`,
+  ].join("\n");
 }

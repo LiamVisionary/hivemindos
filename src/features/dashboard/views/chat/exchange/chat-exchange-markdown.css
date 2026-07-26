@@ -22,6 +22,22 @@
   white-space: nowrap;
 }
 
+/* Clickable variant: opens the agent assets overview popover. */
+.fr-chat-agent-message-name-btn {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.fr-chat-agent-message-name-btn:hover,
+.fr-chat-agent-message-name-btn:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--fg-4);
+}
+
 .fr-chat-agent-message-subline,
 .fr-chat-agent-message-state {
   min-width: 0;

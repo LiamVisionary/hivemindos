@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Unit tests for Hive Fusion: the orchestrator control flow (fan-out -> judge ->
 // synthesize, with partial-failure, all-failure, synth-fallback, single-success,
-// hosted-OpenRouter, quorum-release-with-straggler, and judge-JSON-contract
-// paths) plus the judge-analysis JSON parser. Runs offline:
+// hosted-OpenRouter, quorum-release-with-straggler, emit-throw-on-disconnect,
+// and judge-JSON-contract paths) plus the judge-analysis JSON parser. Runs offline:
 // the orchestrator's provider callers are injected with fakes, and a tiny resolve
 // hook lets Node import the project's .ts modules directly.
 import { register } from "node:module";
@@ -328,6 +328,83 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   check("judge-unparseable: judge.skipped with parse-failure reason", skipped && /parseable JSON/.test(skipped.reason));
   check("judge-unparseable: judged=false, analysis null, no judge.done", result.meta.judged === false && result.analysis === null && !c.types().includes("judge.done"));
   check("judge-unparseable: still synthesized", result.finalText.length > 0 && c.types().includes("done"));
+}
+
+// --- orchestrator: emit throws mid-panel (client disconnect) must not hang ---
+
+// A fake SSE controller: once the client "disconnects", every subsequent emit
+// throws (route-stream's send() calls controller.enqueue, which throws after
+// the client cancels). The first member.done trips the disconnect.
+function disconnectingEmitter() {
+  const events = [];
+  let cancelled = false;
+  const emit = (e) => {
+    if (e.type === "member.done") cancelled = true;
+    if (cancelled) throw new Error("Invalid state: Controller is already closed");
+    events.push(e);
+  };
+  return { emit, events };
+}
+
+// Mirrors route-stream's try/catch/finally around runFusion, racing against a
+// hang sentinel: pre-fix, an emit throw inside the panel barrier left runFusion
+// pending forever, so the finally that finalizes the runtime chat session never
+// ran. Also asserts the rejected member chains left no unhandled rejections.
+async function checkRunFusionSettles(label, { call, emit }) {
+  const unhandled = [];
+  const onUnhandled = (reason) => unhandled.push(reason);
+  process.on("unhandledRejection", onUnhandled);
+  try {
+    const { stream } = makeFakes();
+    let finallyRan = false;
+    const outcome = await Promise.race([
+      (async () => {
+        try {
+          await runFusion({ messages, resolvePlan: resolveNative, call, stream, emit });
+          return "resolved";
+        } catch {
+          return "rejected";
+        } finally {
+          finallyRan = true;
+        }
+      })(),
+      sleep(1_500).then(() => "hung"),
+    ]);
+    check(`${label}: runFusion settled instead of hanging`, outcome !== "hung");
+    check(`${label}: settled as a rejection (propagates to route-stream's catch)`, outcome === "rejected");
+    check(`${label}: the route-stream finally path was reached`, finallyRan === true);
+    // Let any stray rejected chains surface before asserting none leaked.
+    await sleep(20);
+    check(`${label}: no unhandled rejections`, unhandled.length === 0);
+  } finally {
+    process.off("unhandledRejection", onUnhandled);
+  }
+}
+
+// 20) Disconnect mid-panel with a hung straggler: the fast members' member.done
+// emits throw, so their chains reject — the barrier must still count them,
+// reach quorum, release at the grace, and let runFusion settle.
+{
+  process.env.HIVEMINDOS_FUSION_STRAGGLER_GRACE_MS = "60";
+  try {
+    const call = async (m) => {
+      if (m.id === JUDGE.id) return { text: ANALYSIS_JSON };
+      // Hung forever; a bare pending promise does not hold the process open.
+      if (m.id === P3.id) return new Promise(() => {});
+      return { text: `Answer about the blue sky from ${m.label}.` };
+    };
+    await checkRunFusionSettles("disconnect-straggler", { call, emit: disconnectingEmitter().emit });
+  } finally {
+    delete process.env.HIVEMINDOS_FUSION_STRAGGLER_GRACE_MS;
+  }
+}
+
+// 21) Disconnect with every member settling: all three chains reject on their
+// member.done emit, the barrier counts all of them and releases without a
+// grace wait, and runFusion settles (rejecting at the next emit).
+{
+  const { call } = makeFakes();
+  await checkRunFusionSettles("disconnect-all-settled", { call, emit: disconnectingEmitter().emit });
 }
 
 console.log(`\n✓ Hive Fusion: ${passed} assertions passed.`);

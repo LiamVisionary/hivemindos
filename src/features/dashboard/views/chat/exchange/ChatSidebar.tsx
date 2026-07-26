@@ -23,7 +23,9 @@ import type {
 import {
   applyChatThreadFilters,
   CHAT_HISTORY_PAGE_SIZE,
+  chatThreadProjectGroupKey,
   groupChatThreads,
+  mergeEmptyProjectGroups,
   nextChatHistoryVisibleCount,
   sortChatThreads,
 } from "./chat-thread-actions";
@@ -36,6 +38,18 @@ export type SidebarRow = ChatThreadRow & {
   capabilityApprovalPending?: boolean;
   subtitle?: string;
   onOpen?: () => void;
+  onStartChat?: () => void;
+};
+
+/**
+ * A project folder with no chats in it yet. It has no rows to group, so the
+ * rail is told about it separately and renders it as an empty project group —
+ * otherwise a just-created project silently disappears on the next reload.
+ */
+export type SidebarEmptyProject = {
+  label: string;
+  machineName?: string;
+  createdAt?: number;
   onStartChat?: () => void;
 };
 
@@ -69,6 +83,7 @@ const eyebrow: React.CSSProperties = {
 
 export type ChatSidebarProps = {
   rows: SidebarRow[];
+  emptyProjects?: SidebarEmptyProject[];
   machineNames: string[];
   prefs: UseChatViewPreferences;
   search: string;
@@ -86,7 +101,7 @@ export type ChatSidebarProps = {
 
 export function ChatSidebar(props: ChatSidebarProps) {
   const {
-    rows, machineNames, prefs, search, onSearchChange,
+    rows, emptyProjects = [], machineNames, prefs, search, onSearchChange,
     onNewChat, onNewGeneralChat, onCreateProject, onImportProject,
     newChatLabel, onDuplicate, onDelete, footerLabel, loading,
   } = props;
@@ -151,8 +166,28 @@ export function ChatSidebar(props: ChatSidebarProps) {
   const rest = useMemo(() => visible.filter((row) => !prefs.pinned.includes(row.storageKey)), [visible, prefs.pinned]);
   const generalRows = useMemo(() => rest.filter((row) => !row.machineName && !row.projectLabel && !row.workingDirectoryPath), [rest]);
   const groupedRows = useMemo(() => rest.filter((row) => !generalRows.includes(row)), [rest, generalRows]);
+  // An empty project has no chats, so the status/activity filters (both about
+  // chat activity) can only exclude it, and it only has a bucket to live in
+  // under project grouping.
+  const visibleEmptyProjects = useMemo(() => {
+    if (prefs.groupBy !== "project") return [];
+    if (prefs.filters.status !== "all" || prefs.filters.activity !== "all") return [];
+    const machine = prefs.filters.machine?.trim() ?? "";
+    const query = search.trim().toLowerCase();
+    return emptyProjects.filter((project) => {
+      if (machine && machine !== "all" && (project.machineName ?? "") !== machine) return false;
+      return !query || project.label.toLowerCase().includes(query);
+    });
+  }, [emptyProjects, prefs.filters.activity, prefs.filters.machine, prefs.filters.status, prefs.groupBy, search]);
+
+  // `nowMs` is intentionally excluded for the same reason as `visible` above:
+  // it changes every render and only the date buckets read it.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const groups = useMemo(() => groupChatThreads(groupedRows, prefs.groupBy, nowMs), [groupedRows, prefs.groupBy]);
+  const groups = useMemo(() => mergeEmptyProjectGroups(groupChatThreads(groupedRows, prefs.groupBy, nowMs), visibleEmptyProjects), [groupedRows, prefs.groupBy, visibleEmptyProjects]);
+
+  const emptyProjectChatActions = useMemo(() => new Map(
+    visibleEmptyProjects.map((project) => [chatThreadProjectGroupKey(project.label), project.onStartChat]),
+  ), [visibleEmptyProjects]);
 
   const sectionLabel = GROUP_SECTION_LABEL[prefs.groupBy];
   const noResults = !pinnedRows.length && !generalRows.length && !groups.length;
@@ -288,6 +323,7 @@ export function ChatSidebar(props: ChatSidebarProps) {
           const folderChatAction = prefs.groupBy === "project"
             ? group.chats.find((chat) => chat.active && chat.onStartChat)?.onStartChat
               ?? group.chats.find((chat) => chat.onStartChat)?.onStartChat
+              ?? emptyProjectChatActions.get(group.key)
             : undefined;
           const visibilityKey = `${prefs.groupBy}:${group.key}`;
           const visibleCount = visibleChatsByGroup[visibilityKey] ?? CHAT_HISTORY_PAGE_SIZE;
@@ -326,6 +362,16 @@ export function ChatSidebar(props: ChatSidebarProps) {
               {open ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 1, marginLeft: 14, paddingLeft: 10, borderLeft: "1px solid var(--line)" }}>
                   <RowList rows={visibleChats} prefs={prefs} onOpenMenu={setRowMenu} activeMenuKey={rowMenu?.key} />
+                  {!group.chats.length ? (
+                    <button
+                      type="button"
+                      onClick={folderChatAction}
+                      disabled={!folderChatAction}
+                      style={{ alignSelf: "flex-start", margin: "3px 0 4px 4px", border: 0, background: "transparent", color: "var(--fg-4)", cursor: folderChatAction ? "pointer" : "default", fontFamily: "var(--f-body)", fontSize: 11.5, lineHeight: 1.4, padding: "4px 7px", textAlign: "left" }}
+                    >
+                      {folderChatAction ? "No chats yet — start one" : "No chats yet"}
+                    </button>
+                  ) : null}
                   {remainingCount ? (
                     <button
                       type="button"

@@ -63,6 +63,33 @@ export function honeyRecognitionReactionWasAdded(
   return !hasRecognitionReaction(update.old_reaction) && hasRecognitionReaction(update.new_reaction);
 }
 
+export type HoneyReactionRejectionReport = {
+  reactionRemoved: boolean;
+  publicReplySent: boolean;
+  giverDmSent: boolean;
+  reported: boolean;
+};
+
+export async function reportRejectedHoneyReaction(input: {
+  deleteReaction: () => Promise<boolean>;
+  sendGroupReply: (reactionRemoved: boolean) => Promise<void>;
+  notifyGiver: (reactionRemoved: boolean) => Promise<boolean>;
+}): Promise<HoneyReactionRejectionReport> {
+  const reactionRemoved = await input.deleteReaction().catch(() => false);
+  const publicReplySent = await input.sendGroupReply(reactionRemoved)
+    .then(() => true)
+    .catch(() => false);
+  const giverDmSent = publicReplySent
+    ? false
+    : await input.notifyGiver(reactionRemoved).catch(() => false);
+  return {
+    reactionRemoved,
+    publicReplySent,
+    giverDmSent,
+    reported: publicReplySent || giverDmSent,
+  };
+}
+
 function hasRecognitionReaction(reactions: TgMessageReactionUpdated["new_reaction"]): boolean {
   return reactions.some(
     (reaction) => reaction.type === "emoji" && reaction.emoji === HONEY_RECOGNITION_REACTION_EMOJI,

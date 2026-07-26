@@ -107,7 +107,7 @@ const posted = await facebookMarketplaceAdapter.createListing(
   approved.decision.id,
   { env: {}, ensureBrowserImpl: fakeEnsureBrowser, dispatchAgentTaskImpl: async () => okReport, readBrowserTabImpl: realPage },
 );
-assert.deepEqual(posted, { externalId: "777", url: "https://www.facebook.com/marketplace/item/777" });
+assert.deepEqual(posted, { externalId: "777", url: "https://www.facebook.com/marketplace/item/777", verification: "verified" });
 
 // Fabricated claim: the page behind the reported URL does not exist.
 await assert.rejects(
@@ -159,13 +159,77 @@ assert.equal(
   false,
   "no pending card parked for a human submit",
 );
-// The detached dispatch completes with the fake report → active + read-back external id.
-for (let i = 0; i < 100 && (await getMarketplaceListing(humanDraft.id)).state !== "active"; i += 1) {
+// The detached dispatch completes with the fake report, but the approving
+// process is NOT on the profile-owning machine (remote-mac) and has no page
+// reader — the claim is RECORDED as posted-unverified, never trusted active.
+for (let i = 0; i < 100 && (await getMarketplaceListing(humanDraft.id)).state !== "posted-unverified"; i += 1) {
   await new Promise((resolve) => setTimeout(resolve, 20));
 }
 const humanPosted = await getMarketplaceListing(humanDraft.id);
-assert.equal(humanPosted.state, "active", "detached dispatch completed the post");
-assert.equal(humanPosted.external?.externalId, "777");
+assert.equal(humanPosted.state, "posted-unverified", "an unobservable post claim lands posted-unverified, not active");
+assert.equal(humanPosted.external?.externalId, "777", "the claim is recorded for the owning machine to settle");
+
+// ── owning-machine promotion pass: claim → independent page check → active ──
+const { verifyUnverifiedPostedListings, applyVerifiedCatalogSweep } = await import(
+  "../src/lib/services/marketplace/marketplace-listing-pipeline.ts"
+);
+// Unobservable from here (foreign machine, no reader) → the flip DEFERS; nothing changes on trust.
+const deferredSweep = await verifyUnverifiedPostedListings(remoteAccount);
+assert.deepEqual(deferredSweep, { promoted: 0, refuted: 0, deferred: 1 });
+assert.equal((await getMarketplaceListing(humanDraft.id)).state, "posted-unverified", "an unobservable claim never flips on trust");
+// The owning machine's monitor reads the claimed page itself → promoted to active.
+const promotedSweep = await verifyUnverifiedPostedListings(remoteAccount, {
+  readBrowserTabImpl: async (profileName, url) => ({ url, text: "Marketplace · Standing desk · $220 · Solid wood" }),
+});
+assert.deepEqual(promotedSweep, { promoted: 1, refuted: 0, deferred: 0 });
+const promotedListing = await getMarketplaceListing(humanDraft.id);
+assert.equal(promotedListing.state, "active", "the owning machine's page check promotes the claim");
+assert.equal(promotedListing.stateHistory.at(-1).by, "tick", "the promotion is the monitor's own observation");
+
+// Refuted claim → the attention path (failed; draft intact to approve again).
+const refutedDraft = await createMarketplaceListingDraft({ accountId: remoteAccount.id, title: "Kayak paddle", description: "Carbon fiber", priceUsd: 75 });
+const refutedReport = {
+  conversations: [], replies: [], escalations: [],
+  postedListing: { externalId: "888", url: "https://www.facebook.com/marketplace/item/888" },
+  sessionHealth: "ok",
+};
+await requestListingApproval(refutedDraft.id, { submittedBy: "human", dispatchImpl: async () => refutedReport });
+for (let i = 0; i < 100 && (await getMarketplaceListing(refutedDraft.id)).state !== "posted-unverified"; i += 1) {
+  await new Promise((resolve) => setTimeout(resolve, 20));
+}
+const refutedSweep = await verifyUnverifiedPostedListings(remoteAccount, {
+  readBrowserTabImpl: async (profileName, url) => ({ url, text: "This content isn't available right now" }),
+});
+assert.deepEqual(refutedSweep, { promoted: 0, refuted: 1, deferred: 0 });
+assert.equal((await getMarketplaceListing(refutedDraft.id)).state, "failed", "a refuted posting claim routes to the attention path");
+
+// ── catalog claims only flip EXISTING records after their page agrees ───────
+// (matrix row "sync-catalog": a mis-scraped catalog used to flip real records
+// to ended unchecked; unknown/no-flip rows still merge as before.)
+const catalogClaims = [
+  { externalId: "777", title: "Standing desk", state: "ended" }, // flips active → ended: contested
+  { externalId: "999", title: "Garden hose", priceUsd: 15, state: "active" }, // unknown: merges freely
+];
+const contestedRefuted = await applyVerifiedCatalogSweep(remoteAccount, catalogClaims, {
+  readBrowserTabImpl: async (profileName, url) => ({ url, text: "Marketplace · Standing desk · $220 · Send seller a message" }),
+});
+assert.equal(contestedRefuted.refuted, 1, "the live page refutes the claimed end");
+assert.equal(contestedRefuted.added, 1, "the unknown item still merges (low-stakes)");
+assert.equal((await getMarketplaceListing(humanDraft.id)).state, "active", "the refuted catalog claim left the record alone");
+const contestedVerified = await applyVerifiedCatalogSweep(remoteAccount, [{ externalId: "777", title: "Standing desk", state: "sold" }], {
+  readBrowserTabImpl: async (profileName, url) => ({ url, text: "This content isn't available right now" }),
+});
+assert.equal(contestedVerified.updated, 1, "a dead page verifies the claimed end");
+assert.equal((await getMarketplaceListing(humanDraft.id)).state, "ended", "the verified flip merges");
+
+// ── monitor wiring drift guards (the driver consumes all of the above) ──────
+const { readFile: readDriverFile } = await import("node:fs/promises");
+const driverSource = await readDriverFile(new URL("../src/lib/services/marketplace/marketplace-monitor-driver.ts", import.meta.url), "utf8");
+assert.ok(driverSource.includes("computeMarketplaceTickGate("), "the monitor gates every wake (in-flight + posting-session deferral)");
+assert.ok(driverSource.includes("verifyUnverifiedPostedListings(account)"), "the owning machine's wake settles posted-unverified claims");
+assert.ok(driverSource.includes("fullSweep: fullSweepDue"), "the base-cadence sweep is one combined dispatch");
+assert.ok(driverSource.includes("verifyClaimedReplies("), "claimed replies are refuted before ingest");
+assert.ok(driverSource.includes("applyVerifiedCatalogSweep(account"), "report catalogs merge only through the verified sweep");
 // The agent-submitted path (default) still parks a pending card — the gate
 // stays for anything the human did not author.
 const agentDraft = await createMarketplaceListingDraft({ accountId: remoteAccount.id, title: "Office chair", description: "Mesh", priceUsd: 90 });

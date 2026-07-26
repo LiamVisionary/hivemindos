@@ -21,7 +21,7 @@ const AGENT_TURN_TIMEOUT_MS = 30_000;
 const OPENAI_TURN_TIMEOUT_MS = 30_000;
 const OPENAI_FALLBACK_MODEL = "gpt-4o-mini";
 
-type PlannedTask = { title: string; detail: string; role: string };
+type PlannedTask = { title: string; detail: string; role: string; dependsOn: number[] };
 
 const ROLE_SKILL: Record<string, string> = {
   Engineer: "code", Product: "planner", Designer: "writer", QA: "qa",
@@ -46,10 +46,11 @@ function systemPrompt(maxTasks: number): string {
   return [
     "You are the Queen Bee planning the next batch of work for an autonomous, zero-human company.",
     "Turn the company's apex goal into concrete, independently-actionable tasks for its crew.",
-    'Reply with STRICT JSON ONLY (no prose, no markdown fences), matching: {"tasks": [{"title": string, "detail": string, "role": string}]}.',
+    'Reply with STRICT JSON ONLY (no prose, no markdown fences), matching: {"tasks": [{"title": string, "detail": string, "role": string, "dependsOn": number[]}]}.',
     `Rules: return ${Math.min(3, maxTasks)}-${maxTasks} tasks; each title is a short verb-first action phrase of 4-9 words naming its concrete object (e.g. "Audit reply rates for the first outreach batch"), never a single word;`,
     "detail is 1-3 sentences of concrete scope tied directly to THIS goal and its metric (no generic filler);",
     "role is one of the crew roles provided; prefer tasks that can run in parallel; make tasks specific to this goal, not boilerplate.",
+    "dependsOn is optional: the 0-based indexes of EARLIER tasks in this same array that must finish first. Use it only for true prerequisites (a task consuming another's output); leave it [] or omit it otherwise — independent tasks run in parallel.",
     "When company activity history is provided: plan the NEXT increment — build on completed work, do NOT repeat it, unblock or route around blocked items, and follow up on open threads, leads, or customers mentioned there.",
   ].join("\n");
 }
@@ -140,7 +141,8 @@ export function userPrompt(company: Company, history?: string, completedTitles?:
   return lines.join("\n");
 }
 
-function extractTasks(raw: string, maxTasks: number): PlannedTask[] {
+/** Exported for hermetic tests (scripts/test-planner-dependencies.mjs). */
+export function extractTasks(raw: string, maxTasks: number): PlannedTask[] {
   if (!raw) return [];
   // Tolerate code fences / surrounding prose: grab the first {...} block.
   const start = raw.indexOf("{");
@@ -160,17 +162,27 @@ function extractTasks(raw: string, maxTasks: number): PlannedTask[] {
     const raw2 = entry as Record<string, unknown>;
     const title = typeof raw2.title === "string" ? raw2.title.trim() : "";
     if (!title) continue;
+    const index = out.length;
+    // Only EARLIER indexes are dependable: parent task ids are resolved in array
+    // order at dispatch, and a forward/self edge could never be satisfied.
+    const dependsOn = Array.isArray(raw2.dependsOn)
+      ? [...new Set(raw2.dependsOn.filter(
+        (value): value is number => typeof value === "number" && Number.isInteger(value) && value >= 0 && value < index,
+      ))].sort((a, b) => a - b)
+      : [];
     out.push({
       title: title.slice(0, 110),
       detail: typeof raw2.detail === "string" ? raw2.detail.trim() : "",
       role: typeof raw2.role === "string" ? raw2.role.trim() : "",
+      dependsOn,
     });
     if (out.length >= maxTasks) break;
   }
   return out;
 }
 
-function toDrafts(tasks: PlannedTask[], company: Company): QueenBeePrdTaskDraft[] {
+/** Exported for hermetic tests (scripts/test-planner-dependencies.mjs). */
+export function toDrafts(tasks: PlannedTask[], company: Company): QueenBeePrdTaskDraft[] {
   const apex = company.apexGoal;
   const goal = apex?.title?.trim() || company.name;
   const metricLine = apex?.metric || apex?.target ? ` (metric: ${apex?.metric || "—"}${apex?.target ? ` → ${apex.target}` : ""})` : "";
@@ -183,7 +195,7 @@ function toDrafts(tasks: PlannedTask[], company: Company): QueenBeePrdTaskDraft[
       "Complete this scoped task and record the result on the Work Board.",
     ].join("\n"),
     skills: ["company-goal", ROLE_SKILL[t.role] || "code"],
-    dependsOnDraftIndexes: [],
+    dependsOnDraftIndexes: t.dependsOn,
   }));
 }
 

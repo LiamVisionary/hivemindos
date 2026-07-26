@@ -11,6 +11,7 @@ import { agentColdStartProcessEvent, recordAgentRuntimeWarm } from "./agent-cold
 import { handleStatusChatDashboardCommand } from "./status-chat-dashboard-command-router";
 import { createComposerAttachmentHandlers } from "./status-chat-composer-attachments";
 import { chatWorkingDirectoryTargets, compactRepeatedAssistantText, extractGeneratedKanbanTask, isChatTransportInterruption, kanbanBodyWithFullSource, nextChatTextDelta, processLabelFromComment, processLabelFromRuntimeEvent, processLabelFromSessionMessage, runtimePromptFromPayload, runtimePromptFromSessionMessage, yieldChatPaint } from "./status-chat-input-helpers";
+import { createCapabilityPreflightUi, createChatIssueNotifier, createSessionTurnMatcher, pruneTrailingEmptyRunAssistant, sessionMessageCreatedMs, visibleBillingAssistantIndex } from "./status-chat-turn-helpers";
 import { handleNativeImageGenerationCommand } from "./status-chat-image-generation";
 import { handleTranscriptCommand } from "./status-chat-transcript";
 import { appendPreviewMessagesForActiveChat, applicationGenerationSignature, buildActiveImageGenerationCard, cloneApplicationGenerationCard, findLatestAssistantIndexAfterLastUser, imageGenerationCardContent, imageGenerationCompletionPatchFromText, processEventSignature, shouldStartImageGenerationCard } from "./status-chat-process-image-generation";
@@ -814,19 +815,19 @@ export function useStatusChatInputController(props: any) {
     const outgoingAttachments = chatTurn.attachments ?? [];
     const outgoingDirectories = chatTurn.directories ?? [];
     const activeAppArtifact = chatTurn.appArtifact || latestChatAppArtifact(messages);
-    let chatIssueReported = false;
-    const notifyChatIssue = (issue: string, runId: string) => {
-      if (chatIssueReported || !issue.trim()) return;
-      chatIssueReported = true;
-      props.onChatIssue?.(chatIssueCompletionNotification({
-        agentId: selectedAgent.id,
-        agentName: selectedAgent.name || selectedAgent.runtime || "Agent",
-        chatLeaf: selectedChatLeafKey,
-        issue,
-        runId,
-      }));
-    };
-    let activeRunProcessEvents: Array<{ at: number; label: string; detail?: string; status?: string; runId?: string }> = [];
+    const notifyChatIssue = createChatIssueNotifier((issue, runId) => props.onChatIssue?.(chatIssueCompletionNotification({
+      agentId: selectedAgent.id,
+      agentName: selectedAgent.name || selectedAgent.runtime || "Agent",
+      chatLeaf: selectedChatLeafKey,
+      issue,
+      runId,
+    })));
+    // The capability continuation re-enters this function; carrying the first
+    // entry's steps keeps the turn's single anchor message intact instead of
+    // wiping its preflight history on the first runtime step.
+    let activeRunProcessEvents: Array<{ at: number; label: string; detail?: string; status?: string; runId?: string }> = Array.isArray(chatTurn.carryProcessEvents)
+      ? chatTurn.carryProcessEvents.map((event: any) => ({ ...event }))
+      : [];
     let activeApplicationGenerationCard: any = null;
     const appendPreviewMessages = (agentId: string, leafKey: string, appendedMessages: ChatMessage[]) => {
       setSelectedChatPreview((current) => appendPreviewMessagesForActiveChat(current, agentId, leafKey, appendedMessages));
@@ -862,11 +863,24 @@ export function useStatusChatInputController(props: any) {
       next[assistantIndex] = { ...assistant, processEvents: nextEvents, applicationGeneration: nextApplicationGeneration };
       return next;
     };
+    const persistActiveProcessEventsToAssistant = () => {
+      setMessagesByAgent((current: Record<string, ChatMessage[]>) => {
+        const existing = current[chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey)] ?? [];
+        const next = attachActiveProcessEventsToAssistant(existing);
+        return next === existing ? current : { ...current, [chatMessageStorageKey(selectedAgent.id, selectedChatLeafKey)]: next };
+      });
+      setSelectedChatPreview((current) => {
+        if (!current || current.agentId !== selectedAgent.id || current.leafKey !== selectedChatLeafKey) return current;
+        const next = attachActiveProcessEventsToAssistant(current.messages);
+        return next === current.messages ? current : { ...current, messages: next };
+      });
+    };
     const attachBillingToActiveAssistant = (items: ChatMessage[], billing: unknown) => {
       const normalizedBilling = normalizeChatResponseBilling(billing);
       if (!normalizedBilling) return items;
-      const assistantIndex = findActiveAssistantIndex(items);
-      if (assistantIndex < 0) return items;
+      const activeIndex = findActiveAssistantIndex(items);
+      if (activeIndex < 0) return items;
+      const assistantIndex = visibleBillingAssistantIndex(items, activeIndex);
       const assistant = items[assistantIndex];
       const next = [...items];
       next[assistantIndex] = { ...assistant, billing: normalizedBilling };
@@ -940,33 +954,32 @@ export function useStatusChatInputController(props: any) {
       });
     };
 
-    const capabilityPreflightRunId = `${chatTurn.id}:capability-preflight`;
-    let capabilityPreflightUiActive = false;
-    const startCapabilityPreflightUi = (label: string) => {
-      if (capabilityPreflightUiActive) return;
-      capabilityPreflightUiActive = true;
-      const startedAt = Date.now();
-      startChatStreamState({
+    const capabilityPreflightUi = createCapabilityPreflightUi({
+      runId: `${chatTurn.id}:capability-preflight`,
+      begin: (runId, startedAt) => startChatStreamState({
         agentId: selectedAgent.id,
         leafKey: selectedChatLeafKey,
-        runId: capabilityPreflightRunId,
+        runId,
         setChatProcessByKey,
         setChatStreamingByKey,
         startedAt,
         storageKey: selectedStorageKey,
-      });
-      appendChatProcess(selectedStorageKey, label, undefined, "active", capabilityPreflightRunId);
-    };
-    const updateCapabilityPreflightUi = (label: string) => {
-      if (!capabilityPreflightUiActive) return;
-      appendChatProcess(selectedStorageKey, label, undefined, "active", capabilityPreflightRunId);
-    };
-    const finishCapabilityPreflightUi = (label: string, status: "completed" | "failed") => {
-      if (!capabilityPreflightUiActive) return;
-      appendChatProcess(selectedStorageKey, label, undefined, status, capabilityPreflightRunId);
-      finishChatStream(selectedStorageKey, capabilityPreflightRunId);
-      capabilityPreflightUiActive = false;
-    };
+      }),
+      // Preflight steps land on the SAME anchor message the runtime turn will
+      // use: one panel from first step to last, never an anchor handoff. The
+      // preflight is ONE logical step — its phases replace the row in place
+      // (keyed by the preflight run id), so no phase is left frozen at
+      // "active" when the next phase begins.
+      appendProcess: (label, status, runId) => {
+        appendChatProcess(selectedStorageKey, label, undefined, status, runId);
+        const last = activeRunProcessEvents[activeRunProcessEvents.length - 1];
+        activeRunProcessEvents = last?.runId === runId
+          ? [...activeRunProcessEvents.slice(0, -1), { at: Date.now(), label, status, runId }]
+          : [...activeRunProcessEvents, { at: Date.now(), label, status, runId }].slice(-80);
+        persistActiveProcessEventsToAssistant();
+      },
+      finish: (runId) => finishChatStream(selectedStorageKey, runId),
+    });
 
     const setupIssue = chatSetupIssue(selectedAgent);
     if (setupIssue) {
@@ -979,8 +992,21 @@ export function useStatusChatInputController(props: any) {
     }
 
     publishOutgoingUserMessage();
+    // One anchor for the whole turn: the pending assistant exists before the
+    // first preflight step, so the process panel never appears under one
+    // anchor, vanishes, and reappears under another. The capability
+    // continuation re-enters with the same chatTurn.id and reuses it.
+    const requestStartedAt = Date.now();
+    const taskId = `${selectedAgent.id}-${chatTurn.id || requestStartedAt}`;
+    const localRuntimeSessionId = taskId;
+    activeAssistantSessionId = localRuntimeSessionId;
+    if (!capabilityPlanContinuation) {
+      const anchorAssistantMessage: ChatMessage = withActiveProcessEvents({ role: "assistant", content: "", surface: "chat", sourceSessionId: localRuntimeSessionId, createdAt: requestStartedAt + 1, appArtifact: activeAppArtifact });
+      appendMessage(selectedAgent.id, anchorAssistantMessage, selectedStorageKey);
+      appendPreviewMessages(selectedAgent.id, selectedChatLeafKey, [anchorAssistantMessage]);
+    }
     if (!capabilityPlanContinuation && !suppressOutgoingUserMessage && prompt.trim()) {
-      startCapabilityPreflightUi("Checking capabilities…");
+      capabilityPreflightUi.start("Checking capabilities…");
       const capabilityResponse = await fetch("/api/chat/capability-approval", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -999,7 +1025,7 @@ export function useStatusChatInputController(props: any) {
       const capabilityData = await capabilityResponse?.json().catch(() => null) as { ok?: boolean; required?: boolean; plan?: CapabilityApprovalPlan; error?: string } | null;
       if (!capabilityResponse?.ok || !capabilityData?.ok) {
         const issue = capabilityData?.error || "Capability planning is unavailable, so the task was not sent. Retry when planning is available.";
-        finishCapabilityPreflightUi("Capability check failed", "failed");
+        capabilityPreflightUi.finish("Capability check failed", "failed");
         const createdAt = Date.now();
         const capabilityErrorMessage: ChatMessage = { role: "assistant", content: `Error: ${issue}`, surface: "chat", createdAt: createdAt + 1 };
         appendMessage(selectedAgent.id, capabilityErrorMessage, selectedStorageKey);
@@ -1009,7 +1035,7 @@ export function useStatusChatInputController(props: any) {
       }
       if (capabilityData.plan && !capabilityData.required) {
         const createdAt = Date.now();
-        updateCapabilityPreflightUi("Preparing the selected capability…");
+        capabilityPreflightUi.update("Preparing the selected capability…");
 
         let preparedAppProject;
         try {
@@ -1027,8 +1053,8 @@ export function useStatusChatInputController(props: any) {
               updateCommand: selectedMachineGroup?.version?.updateCommand,
             },
             onRecoveryStatus: (status) => {
-              if (status === "updating") updateCapabilityPreflightUi("Updating the linked machine…");
-              if (status === "retrying") updateCapabilityPreflightUi("Machine updated — creating the workspace…");
+              if (status === "updating") capabilityPreflightUi.update("Updating the linked machine…");
+              if (status === "retrying") capabilityPreflightUi.update("Machine updated — creating the workspace…");
             },
           });
           const resolutionResponse = await fetch("/api/chat/capability-approval", {
@@ -1047,7 +1073,7 @@ export function useStatusChatInputController(props: any) {
           }
           await Promise.resolve(refreshNotifications?.()).catch(() => undefined);
           const continuationPrompt = `${resolutionData.continuationPrompt}${capabilityAppProjectContext(preparedAppProject?.artifact)}`;
-          finishCapabilityPreflightUi("Capabilities ready", "completed");
+          capabilityPreflightUi.finish("Capabilities ready", "completed");
           return runChatMessage({
             ...chatTurn,
             prompt: continuationPrompt,
@@ -1056,10 +1082,11 @@ export function useStatusChatInputController(props: any) {
             appArtifact: preparedAppProject?.artifact ?? chatTurn.appArtifact,
             clearComposer: false,
             suppressOutgoingUserMessage: true,
+            carryProcessEvents: activeProcessEventsForMessage(),
           });
         } catch (error) {
           const issue = error instanceof Error ? error.message : "Could not continue with the selected capability.";
-          finishCapabilityPreflightUi("Capability setup failed", "failed");
+          capabilityPreflightUi.finish("Capability setup failed", "failed");
           // An approval card cannot fix a failed preparation — surface the real
           // error with the standard retry affordance instead of asking the
           // human to approve something that already failed.
@@ -1078,7 +1105,7 @@ export function useStatusChatInputController(props: any) {
         }
       }
       if (capabilityData.plan) {
-        finishCapabilityPreflightUi("Capabilities ready", "completed");
+        capabilityPreflightUi.finish("Capabilities ready", "completed");
         const createdAt = Date.now();
         const capabilityMessage: ChatMessage = {
           role: "assistant",
@@ -1096,13 +1123,8 @@ export function useStatusChatInputController(props: any) {
       }
     }
 
-    finishCapabilityPreflightUi("Capabilities checked", "completed");
-    const requestStartedAt = Date.now();
-    const taskId = `${selectedAgent.id}-${chatTurn.id || requestStartedAt}`;
+    capabilityPreflightUi.finish("Capabilities checked", "completed");
     const { record: workingDirectory, request: runtimeWorkingDirectory } = chatWorkingDirectoryTargets(selectedChatDirectoryPath, selectedChatLeafKey, selectedAgent.localDataDir);
-    const localRuntimeSessionId = taskId;
-    activeAssistantSessionId = localRuntimeSessionId;
-    activeRunProcessEvents = [];
     startChatStream(selectedStorageKey, selectedAgent.id, selectedChatLeafKey, outgoingLabel, taskId, requestStartedAt, localRuntimeSessionId);
     const requestAgentId = selectedAgent.id;
     const requestLeafKey = selectedChatLeafKey;
@@ -1121,35 +1143,10 @@ export function useStatusChatInputController(props: any) {
       [prompt, outgoingDirectorySummary].filter(Boolean).join("\n\n"),
       currentRuntimeMessageAttachments(outgoingAttachments),
     );
-    const sessionMessageCreatedMs = (message: any) => {
-      const raw = Number(message?.createdAt ?? message?.timestamp ?? 0);
-      if (!Number.isFinite(raw) || raw <= 0) return 0;
-      return raw < 10_000_000_000 ? raw * 1000 : raw;
-    };
-    const normalizeSessionTurnText = (value: unknown) => String(value ?? "").replace(/\s+/g, " ").trim().toLowerCase();
-    const currentRequestTexts = new Set(
-      [outgoingContent, outgoingLabel, prompt]
-        .map(normalizeSessionTurnText)
-        .filter(Boolean),
+    const { findCurrentRequestSessionUserIndex, sessionMessageBelongsToCurrentTurn } = createSessionTurnMatcher(
+      requestStartedAt,
+      [outgoingContent, outgoingLabel, prompt],
     );
-    const findCurrentRequestSessionUserIndex = (sessionMessages: any[]) => {
-      let fallbackRecentUserIndex = -1;
-      for (let index = 0; index < sessionMessages.length; index += 1) {
-        const sessionMessage = sessionMessages[index];
-        if (String(sessionMessage?.role ?? "").toLowerCase() !== "user") continue;
-        const text = normalizeSessionTurnText(sessionMessage?.content);
-        const createdAt = sessionMessageCreatedMs(sessionMessage);
-        const isRecent = createdAt >= requestStartedAt - 2_000;
-        if (text && currentRequestTexts.has(text) && (!createdAt || isRecent)) fallbackRecentUserIndex = index;
-        else if (isRecent) fallbackRecentUserIndex = index;
-      }
-      return fallbackRecentUserIndex;
-    };
-    const sessionMessageBelongsToCurrentTurn = (sessionMessage: any, index: number, currentUserIndex: number) => {
-      if (currentUserIndex >= 0) return index > currentUserIndex;
-      const createdAt = sessionMessageCreatedMs(sessionMessage);
-      return createdAt >= requestStartedAt - 2_000;
-    };
     upsertTask({
       id: taskId,
       agentId: selectedAgent.id,
@@ -1160,22 +1157,8 @@ export function useStatusChatInputController(props: any) {
       updatedAt: Date.now(),
       workingDirectory,
     });
-    const pendingAssistantMessage: ChatMessage = withActiveProcessEvents({ role: "assistant", content: "", surface: "chat", sourceSessionId: localRuntimeSessionId, createdAt: requestStartedAt + 1, appArtifact: activeAppArtifact });
-    appendMessage(selectedAgent.id, pendingAssistantMessage, selectedStorageKey);
-    appendPreviewMessages(selectedAgent.id, selectedChatLeafKey, [pendingAssistantMessage]);
-
-    const persistActiveProcessEventsToAssistant = () => {
-      setMessagesByAgent((current) => {
-        const existing = current[selectedStorageKey] ?? [];
-        const next = attachActiveProcessEventsToAssistant(existing);
-        return next === existing ? current : { ...current, [selectedStorageKey]: next };
-      });
-      setSelectedChatPreview((current) => {
-        if (!current || current.agentId !== selectedAgent.id || current.leafKey !== selectedChatLeafKey) return current;
-        const next = attachActiveProcessEventsToAssistant(current.messages);
-        return next === current.messages ? current : { ...current, messages: next };
-      });
-    };
+    // The anchor assistant message was created at turn start (or carried in by
+    // the capability continuation) — no second pending message here.
     const appendRunChatProcess = (label: string, detail?: string, status?: string) => {
       const cleanLabel = label.trim();
       if (!cleanLabel) return;
@@ -1242,6 +1225,29 @@ export function useStatusChatInputController(props: any) {
       replacePendingAssistant({ role: "assistant", content: nextText, surface: "chat", sourceSessionId: localRuntimeSessionId, createdAt, agentPrompt });
       updateTask(taskId, agentPrompt ? { status: "active", lastMessage: `Waiting for reply: ${nextText}` } : { lastMessage: nextText });
     };
+    // A tool pause ends the current narration segment: its text and steps stay
+    // in place as a finished message, and a fresh pending assistant is opened
+    // so everything that follows renders after it, in order.
+    const sealActiveAssistantSegment = () => {
+      lastSealedSegmentText = streamedAssistantText.trim();
+      activeRunProcessEvents = [];
+      streamedAssistantText = "";
+      const segmentPending: ChatMessage = { role: "assistant", content: "", surface: "chat", sourceSessionId: localRuntimeSessionId, createdAt: Date.now() };
+      appendMessage(selectedAgent.id, segmentPending, selectedStorageKey);
+      appendPreviewMessages(selectedAgent.id, selectedChatLeafKey, [segmentPending]);
+    };
+    const pruneTrailingEmptyAssistant = () => {
+      setMessagesByAgent((current) => {
+        const existing = current[selectedStorageKey] ?? [];
+        const next = pruneTrailingEmptyRunAssistant(existing, localRuntimeSessionId);
+        return next === existing ? current : { ...current, [selectedStorageKey]: next };
+      });
+      setSelectedChatPreview((current) => {
+        if (!current || current.agentId !== selectedAgent.id || current.leafKey !== selectedChatLeafKey) return current;
+        const next = pruneTrailingEmptyRunAssistant(current.messages, localRuntimeSessionId);
+        return next === current.messages ? current : { ...current, messages: next };
+      });
+    };
     const abortController = new AbortController();
     let stallTimer = window.setTimeout(() => abortController.abort("chat-response-stall"), CHAT_RESPONSE_STALL_TIMEOUT_MS);
     const refreshStallTimer = () => {
@@ -1251,6 +1257,7 @@ export function useStatusChatInputController(props: any) {
     let sawAssistantContent = false;
     let sawAgentPrompt = false;
     let sawDone = false;
+    let lastSealedSegmentText = "";
     let contentEventsSincePaint = 0;
     let currentRuntimeSessionId = localRuntimeSessionId || "";
     let recoveredAssistantText = "";
@@ -1437,10 +1444,28 @@ export function useStatusChatInputController(props: any) {
           }
           if (parsed.type === RUNTIME_STREAM_EVENT_TYPES.TEXT_RESET) {
             const interimText = String((parsed as any).content ?? "").trim();
-            if (interimText) appendRunChatProcess("Hermes progress", interimText.slice(0, 600), "completed");
-            streamedAssistantText = "";
-            sawAssistantContent = false;
-            replacePendingAssistant({ role: "assistant", content: "", surface: "chat", sourceSessionId: localRuntimeSessionId });
+            if (interimText) {
+              // The narration streamed before this tool pause stays visible as
+              // its own finished message; a fresh pending assistant keeps later
+              // steps and text chronologically after it instead of replacing
+              // what the person already read. A visible tool step usually
+              // sealed this segment already — never render the same text twice.
+              if (interimText !== lastSealedSegmentText) {
+                const remainder = lastSealedSegmentText && interimText.startsWith(lastSealedSegmentText)
+                  ? interimText.slice(lastSealedSegmentText.length).trim()
+                  : interimText;
+                if (remainder) {
+                  renderAssistantText(remainder);
+                  sealActiveAssistantSegment();
+                }
+              }
+            } else {
+              // An empty reset is a model retry: the partial text from the
+              // failed attempt must not survive.
+              streamedAssistantText = "";
+              sawAssistantContent = false;
+              replacePendingAssistant({ role: "assistant", content: "", surface: "chat", sourceSessionId: localRuntimeSessionId });
+            }
             continue;
           }
           const responseBilling = normalizeChatResponseBilling(parsed.billing);
@@ -1456,6 +1481,15 @@ export function useStatusChatInputController(props: any) {
               return next === current.messages ? current : { ...current, messages: next };
             });
             continue;
+          }
+          // Chronology invariant (mirrors the runtime session store): a tool
+          // event ends the narration the model was streaming, so the sealed
+          // text stays put and the tool step opens the next segment. The
+          // bridge's later reset for that segment is redundant — the server
+          // swallows it.
+          const rawRuntimeEventType = String(parsed.event?.type ?? parsed.type ?? "");
+          if (/(^|\.)tool\./.test(rawRuntimeEventType) && streamedAssistantText.trim()) {
+            sealActiveAssistantSegment();
           }
           const processEvent = processLabelFromRuntimeEvent(parsed);
           if (processEvent) {
@@ -1581,6 +1615,7 @@ export function useStatusChatInputController(props: any) {
       notifyChatIssue(message, taskId);
     } finally {
       window.clearTimeout(stallTimer);
+      pruneTrailingEmptyAssistant();
       if (!preserveActiveRun && (sawDone || !abortController.signal.aborted || recoveredAssistantText.trim())) clearActiveChatRun?.(selectedStorageKey, taskId);
       finishChatStream(selectedStorageKey, taskId);
     }

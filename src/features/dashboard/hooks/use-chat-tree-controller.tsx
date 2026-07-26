@@ -733,11 +733,49 @@ export function useChatTreeController(props: any) {
           ...chat,
           subtitle: chat.subtitle === agent.id ? agent.name : chat.subtitle,
         }));
+        // A folder chat's leaf key encodes the project it was started in
+        // (`folder-<machine>-<chatDedupeKey(path)>-…`). Resolve it against the
+        // paths this machine knows, longest match first — dumping every saved
+        // chat into the machine's default workspace both mis-grouped the rail
+        // AND made reopened chats run in the wrong working directory.
+        const knownFolderPaths = [
+          ...chatCustomFolders
+            .filter((folder) => folder.machineKey === machine.key)
+            .map((folder) => projectDirectoryPath(folder.path)),
+          folderPath,
+          projectDirectoryPath(selectedChatDirectoryPath),
+        ].filter((path): path is string => Boolean(path));
+        const savedChatFolderPath = (leafKey: string) => {
+          let best = "";
+          for (const path of knownFolderPaths) {
+            const encoded = chatDedupeKey(path);
+            if (!encoded || chatDedupeKey(best).length >= encoded.length) continue;
+            if (leafKey.startsWith(`folder-${machine.key}-${encoded}-`)) best = path;
+          }
+          return best;
+        };
         for (const savedChat of savedChats) {
-          const targetFolder = savedChat.key.startsWith(`machine-${machine.key}-`)
-            ? machineChatFolder()
+          if (savedChat.key.startsWith(`machine-${machine.key}-`)) {
+            machineChatFolder().chats.push(savedChat);
+            continue;
+          }
+          const encodedFolderPath = savedChatFolderPath(savedChat.key);
+          const targetFolder = encodedFolderPath
+            ? ensureFolder(
+              workspaceLabelFromPath(encodedFolderPath),
+              startFreshChatInMachine(agent, encodedFolderPath),
+              encodedFolderPath,
+              selectedAgentId === agent.id && selectedChatDirectoryPath === encodedFolderPath,
+            )
             : defaultFolder();
-          targetFolder.chats.push(savedChat);
+          targetFolder.chats.push(encodedFolderPath
+            ? {
+              ...savedChat,
+              // Reopen the chat in ITS project, not whatever directory happens
+              // to be selected when the row is clicked.
+              onOpen: () => startAgentChat(agent.id, { chatLeafKey: savedChat.key, workingDirectoryPath: encodedFolderPath }),
+            }
+            : savedChat);
         }
 
         const selectedStorageKey = chatMessageStorageKey(agent.id, selectedChatLeafKey);
@@ -817,12 +855,15 @@ export function useChatTreeController(props: any) {
       for (const customFolder of chatCustomFolders.filter((folder) => folder.machineKey === machine.key && projectDirectoryPath(folder.path))) {
         const chatAgents = machine.agents.filter((item) => runtimeCan(item, "chat"));
         const agent = chatAgents.find((item) => item.id === customFolder.agentId) ?? chatAgents[0];
-        ensureFolder(
+        const treeFolder = ensureFolder(
           customFolder.label,
           agent ? startFreshChatInMachine(agent, customFolder.path) : undefined,
           customFolder.path,
           selectedAgentId === agent?.id && Boolean(selectedChatDirectoryPath && selectedChatDirectoryPath === customFolder.path),
         );
+        // Stamped so a project the user made but hasn't chatted in yet still has
+        // an order in the sidebar (newest first) — it has no chats to sort by.
+        treeFolder.createdAt ??= customFolder.createdAt;
       }
 
       const chatAgents = machine.agents.filter((item) => runtimeCan(item, "chat"));

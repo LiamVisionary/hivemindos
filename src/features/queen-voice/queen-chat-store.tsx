@@ -39,6 +39,14 @@ import {
   QUEEN_TEXT_CHAT_API_PATH,
   queenChatRouteForSend,
 } from "./queen-chat-routing";
+import {
+  COMPANY_CEO_TOOL_NAMES,
+  COMPANY_CEO_TOOL_STATUS,
+  COMPANY_DISPATCH_NOT_AUTHORIZED_RESULT,
+  executeCompanyCeoTool,
+  userAuthorizedCompanyDispatch,
+  type CompanyCeoScope,
+} from "./company-ceo-tools";
 import { dispatchQueenSlashCommand } from "./queen-slash-commands";
 import { playSpokenReply } from "./spoken-reply-playback";
 
@@ -115,6 +123,12 @@ type QueenChatContextValue = {
   speakScript: (lines: readonly QueenVoiceScriptLine[]) => Promise<boolean>;
   /** Shared typed entry point: append the user turn, preserve screen context, and fill the reply. */
   sendText: (text: string, opts?: QueenChatSendOptions) => Promise<void>;
+  /** Non-null while the chat is scoped to one company's CEO: chat turns carry
+   *  the companyId so the Queen answers as that company's CEO with company
+   *  tools. Session-only on purpose — a durable scope would silently re-route
+   *  later, unrelated conversations. Clear it to return to the hive-wide Queen. */
+  companyCeoScope: CompanyCeoScope | null;
+  setCompanyCeoScope: (scope: CompanyCeoScope | null) => void;
 };
 
 const QueenChatContext = React.createContext<QueenChatContextValue | null>(null);
@@ -163,6 +177,14 @@ export function QueenChatProvider({
   const [composerActive, setComposerActive] = React.useState(false);
   const [transcriptInteractionActive, setTranscriptInteractionActive] = React.useState(false);
   const [voiceChatActive, setVoiceChatActiveState] = React.useState(false);
+  // Company-CEO scope: state for the UI chip, mirrored into a ref so the send
+  // loop and tool executor read the scope at fetch time without re-binding.
+  const [companyCeoScope, setCompanyCeoScopeState] = React.useState<CompanyCeoScope | null>(null);
+  const companyCeoScopeRef = React.useRef<CompanyCeoScope | null>(null);
+  const setCompanyCeoScope = React.useCallback((scope: CompanyCeoScope | null) => {
+    companyCeoScopeRef.current = scope;
+    setCompanyCeoScopeState(scope);
+  }, []);
   const [recentMessageOpen, setRecentMessageOpen] = React.useState(false);
   const [dismissedAutoOpenTurnId, setDismissedAutoOpenTurnId] = React.useState<string | null>(null);
   const lastActivitySignatureRef = React.useRef("");
@@ -496,6 +518,14 @@ export function QueenChatProvider({
         // instead of deflecting. Shared with the voice executor so both match.
         return finishTool(await fetchAgentStatusAnswer(String(args.agentName ?? "")));
       }
+      if (COMPANY_CEO_TOOL_NAMES.has(name)) {
+        // Company-CEO tools (directive / charter / dispatch) — offered by the
+        // server only while the chat is company-scoped; the companyId comes
+        // from the scope, never from model-authored args.
+        return finishTool(await executeCompanyCeoTool(name, args, companyCeoScopeRef.current), {
+          companyId: companyCeoScopeRef.current?.companyId,
+        });
+      }
       return finishTool("Unknown tool.");
     } catch (error) {
       return failTool(error);
@@ -583,6 +613,7 @@ export function QueenChatProvider({
       read_x_account: "Reading the connected X account…",
       read_work_board: "Checking the Work Board…",
       read_agent_status: "Checking agent status…",
+      ...COMPANY_CEO_TOOL_STATUS,
     } as Record<string, string>)[name] ?? "Working on it…";
 
     // Carry the server's "your configured brain was skipped, here's why" note
@@ -632,6 +663,9 @@ export function QueenChatProvider({
           messages,
           screenContext,
           suppressWalletIntents,
+          // Company-CEO scope: the Queen answers as this company's CEO with
+          // the company tools enabled server-side.
+          ...(companyCeoScopeRef.current ? { companyId: companyCeoScopeRef.current.companyId } : {}),
           // Budget spent: the server omits the tools so the brain must answer
           // in prose (tool-happy brains otherwise loop until the cap).
           ...(forceAnswer ? { toolChoice: "none" } : {}),
@@ -679,6 +713,7 @@ export function QueenChatProvider({
           messages,
           screenContext,
           suppressWalletIntents,
+          ...(companyCeoScopeRef.current ? { companyId: companyCeoScopeRef.current.companyId } : {}),
           ...(forceAnswer ? { toolChoice: "none" } : {}),
         }),
       });
@@ -727,7 +762,24 @@ export function QueenChatProvider({
               });
               continue;
             }
-            const callKey = `${tc.name}:${(tc.arguments || "{}").trim()}`;
+            // Same mechanical gate for launching a company crew: dispatch enters
+            // perpetual autonomy and spends budget, so it only executes when the
+            // user's current message asks for it (or affirms a pending offer).
+            if (tc.name === "company_dispatch_goal" && !userAuthorizedCompanyDispatch(trimmed)) {
+              answerNextRound = true;
+              messages.push({
+                role: "tool",
+                tool_call_id: tc.id,
+                content: COMPANY_DISPATCH_NOT_AUTHORIZED_RESULT,
+              });
+              continue;
+            }
+            // company_dispatch_goal keys by NAME only: one dispatch per turn.
+            // Args-inclusive keying let a reworded `note` fire a second real
+            // dispatch in the same turn (two crun_* records, 2026-07-26 E2E).
+            const callKey = tc.name === "company_dispatch_goal"
+              ? tc.name
+              : `${tc.name}:${(tc.arguments || "{}").trim()}`;
             if (executedToolCalls.has(callKey)) {
               answerNextRound = true;
               messages.push({
@@ -894,6 +946,8 @@ export function QueenChatProvider({
       clear,
       speakScript,
       sendText,
+      companyCeoScope,
+      setCompanyCeoScope,
     }),
     [
       turns,
@@ -911,6 +965,8 @@ export function QueenChatProvider({
       removeTurn,
       clear,
       sendText,
+      companyCeoScope,
+      setCompanyCeoScope,
     ],
   );
 

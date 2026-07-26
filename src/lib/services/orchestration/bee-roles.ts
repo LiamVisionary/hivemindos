@@ -33,19 +33,28 @@ type BeeAssignmentOptions = {
   preferQueen?: boolean;
 };
 
-const CLASS_KEYWORDS: Array<{ workerClass: BeeWorkerClass; priority: number; keywords: Array<{ pattern: RegExp; weight?: number }> }> = [
-  { workerClass: "planner", priority: 80, keywords: [/plan/i, /decompos/i, /architect/i, /strategy/i, /roadmap/i, /coordinate/i, /orchestrat/i].map((pattern) => ({ pattern })) },
-  { workerClass: "code", priority: 75, keywords: [/code/i, /bug/i, /api/i, /test/i, /repo/i, /typescript/i, /css/i, /component/i, /build/i, /implement/i].map((pattern) => ({ pattern })) },
+/**
+ * Single source of truth for worker-class keyword inference (capability-matrix
+ * convention). Every dispatch surface — the Queen Bee fleet router, the
+ * dashboard pickup loop, and the handoff intake — classifies through THIS
+ * table. Two copies had drifted apart (router: qa 85 / security 82 / vision 70
+ * vs this file's 40 / 47 / 50, with different keywords); the merge adopts the
+ * ROUTER's priorities and weights, and preserves the keywords that existed only
+ * here as explicit entries on the security row.
+ */
+export const WORKER_CLASS_KEYWORDS: Array<{ workerClass: BeeWorkerClass; priority: number; keywords: Array<{ pattern: RegExp; weight: number }> }> = [
+  { workerClass: "planner", priority: 80, keywords: [/plan/i, /decompos/i, /architect/i, /strategy/i, /roadmap/i, /coordinate/i, /orchestrat/i].map((pattern) => ({ pattern, weight: 1 })) },
+  { workerClass: "code", priority: 75, keywords: [/code/i, /bug/i, /api/i, /test/i, /repo/i, /typescript/i, /javascript/i, /css/i, /component/i, /build/i, /implement/i, /lint/i, /typecheck/i].map((pattern) => ({ pattern, weight: 1 })) },
   {
     workerClass: "writer",
     priority: 70,
     keywords: [
       { pattern: /linkedin|social post|social copy|thread|caption/i, weight: 4 },
-      { pattern: /\bpost\b|\bcopy\b|\bwrite\b|docs?|readme|summary|article|prompt/i, weight: 2 },
+      { pattern: /\bpost\b|\bcopy\b|\bwrite\b|docs?|readme|summary|article|prompt|release notes/i, weight: 2 },
       { pattern: /editorial|newsletter|announcement|launch copy|tone/i, weight: 2 },
     ],
   },
-  { workerClass: "research", priority: 60, keywords: [/research/i, /find/i, /compare/i, /latest/i, /source/i, /market/i, /investigate/i].map((pattern) => ({ pattern })) },
+  { workerClass: "research", priority: 60, keywords: [/research/i, /find/i, /compare/i, /latest/i, /source/i, /market/i, /investigate/i].map((pattern) => ({ pattern, weight: 1 })) },
   {
     workerClass: "artist",
     priority: 55,
@@ -56,36 +65,62 @@ const CLASS_KEYWORDS: Array<{ workerClass: BeeWorkerClass; priority: number; key
   },
   {
     workerClass: "vision",
-    priority: 50,
+    priority: 70,
     keywords: [
-      { pattern: /screenshot|inspect|ui|ux|screen/i, weight: 3 },
+      { pattern: /screenshot|screen|visual qa/i, weight: 6 },
+      { pattern: /inspect|ui|ux|contrast/i, weight: 4 },
       { pattern: /\bimage\b|visual/i, weight: 1 },
+    ],
+  },
+  { workerClass: "ops", priority: 45, keywords: [/deploy/i, /server/i, /cron/i, /websocket/i, /mcp/i, /fleet/i, /tailscale/i, /collector/i, /docker/i, /render/i].map((pattern) => ({ pattern, weight: 1 })) },
+  {
+    workerClass: "qa",
+    priority: 85,
+    keywords: [
+      { pattern: /\bqa\b|quality assurance/i, weight: 4 },
+      { pattern: /verify|verification|review|playwright|lint|typecheck|screenshot test|rigorous/i, weight: 2 },
     ],
   },
   {
     workerClass: "security",
-    priority: 47,
+    priority: 82,
     keywords: [
-      { pattern: /vulnerab|exploit|malicious|threat|cve\b|injection|exfiltrat|skillspector/i, weight: 4 },
-      { pattern: /security|audit|scan|pentest|penetration|sandbox escape|supply chain/i, weight: 2 },
+      { pattern: /security|vulnerab|exploit|owasp|threat model|pentest|penetration test|injection|\bxss\b|\bcsrf\b|secrets? (?:rotation|scan|leak)|hardening/i, weight: 4 },
+      { pattern: /\bauth\b|authn|authz|credential|sandbox escape|audit (?:the )?(?:code|deps|permissions)/i, weight: 2 },
+      // Orchestration-surface keywords that only existed in this file's old
+      // table, preserved as explicit entries when the two tables merged.
+      { pattern: /malicious|threat|cve\b|exfiltrat|skillspector/i, weight: 4 },
+      { pattern: /audit|scan|supply chain/i, weight: 2 },
     ],
   },
-  { workerClass: "ops", priority: 45, keywords: [/deploy/i, /server/i, /cron/i, /websocket/i, /mcp/i, /fleet/i, /tailscale/i, /collector/i].map((pattern) => ({ pattern })) },
-  { workerClass: "qa", priority: 40, keywords: [/qa/i, /verify/i, /review/i, /playwright/i, /lint/i, /typecheck/i, /screenshot test/i].map((pattern) => ({ pattern })) },
 ];
 
-// Adapted from Conway-Research/automaton's role-to-harness registry:
-// use lightweight role/class matching first, then fall back to a general worker.
-export function inferWorkerClass(task: Pick<KanbanTask, "title" | "body" | "skills">): BeeWorkerClass {
+const WORKER_CLASS_IDS = new Set<BeeWorkerClass>(BEE_WORKER_CLASSES.map((entry) => entry.id));
+
+/** Normalize a raw class/skill token to a built-in worker class, or null for custom/unknown tokens. */
+export function normalizeWorkerClassToken(value?: string | null): BeeWorkerClass | null {
+  const normalized = String(value || "").toLowerCase().trim();
+  return WORKER_CLASS_IDS.has(normalized as BeeWorkerClass) ? (normalized as BeeWorkerClass) : null;
+}
+
+// The ONE inference function, consumed by every dispatch surface (the Queen Bee
+// router's inferQueenBeeWorkerClass delegates here). An explicit worker-class
+// token in `skills` wins outright — Queen Bee stamps the routed class into task
+// skills, so re-classification downstream stays consistent with the router.
+export function inferWorkerClass(task: { title: string; body?: string; skills?: string[] }): BeeWorkerClass {
   if (/^\s*(?:generate|create|make|design)\s+(?:an?\s+)?(?:image|visual|illustration|art|asset)\b/i.test(task.title)) {
     return "artist";
   }
+  for (const skill of task.skills ?? []) {
+    const normalized = normalizeWorkerClassToken(skill);
+    if (normalized && normalized !== "general") return normalized;
+  }
   const text = [task.title, task.body, ...(task.skills ?? [])].join(" ");
-  const scored = CLASS_KEYWORDS
+  const scored = WORKER_CLASS_KEYWORDS
     .map((entry) => ({
       workerClass: entry.workerClass,
       priority: entry.priority,
-      score: entry.keywords.reduce((score, keyword) => score + (keyword.pattern.test(text) ? keyword.weight ?? 1 : 0), 0),
+      score: entry.keywords.reduce((score, keyword) => score + (keyword.pattern.test(text) ? keyword.weight : 0), 0),
     }))
     .filter((entry) => entry.score > 0)
     .sort((left, right) => right.score - left.score || right.priority - left.priority);

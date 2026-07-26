@@ -3,6 +3,10 @@ import "server-only";
 import { mkdir, readFile, rename, writeFile } from "fs/promises";
 import { homedir } from "@/lib/home-dir";
 import { dirname, join } from "path";
+import {
+  AGENT_PROFILES_STORAGE_KEY,
+  mergeSerializedAgentProfileSnapshot,
+} from "@/lib/config/agent-profile-configuration";
 
 export type DashboardStateValues = Record<string, string>;
 
@@ -82,7 +86,11 @@ export async function updateDashboardState(input: {
     }
     for (const [key, value] of Object.entries(input.values ?? {})) {
       if (!key.trim() || typeof value !== "string") continue;
-      values[key] = value;
+      values[key] =
+        key === AGENT_PROFILES_STORAGE_KEY ||
+        key.endsWith(".agentProfiles.v1")
+          ? mergeSerializedAgentProfileSnapshot(values[key], value)
+          : value;
     }
     const next = {
       version: 1 as const,

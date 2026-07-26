@@ -226,6 +226,26 @@ export async function appendRuntimeChatSessionText(sessionId: string, role: "ass
   await writeSession(session);
 }
 
+// Seal the active turn's streamed assistant narration as its own completed
+// message ("segment") so later text starts a fresh assistant message. This
+// keeps interim narration in the transcript, chronologically between the tool
+// events that interrupted it, instead of demoting it to a process row.
+export async function sealRuntimeChatSessionAssistantSegment(sessionId: string, raw?: unknown) {
+  const session = await readSessionFile(sessionPath(sessionId));
+  if (!session) return;
+  for (let index = session.messages.length - 1; index >= 0; index -= 1) {
+    const message = session.messages[index];
+    if (message.type === "process") continue;
+    if (message.role !== "assistant" || message.type || message.turnId !== session.activeTurnId) break;
+    if (!message.content.trim()) break;
+    message.type = "segment";
+    message.raw = raw ?? message.raw;
+    session.updatedAt = Date.now();
+    await writeSession(session);
+    return;
+  }
+}
+
 export async function replaceRuntimeChatSessionAssistantText(sessionId: string, content: string, raw?: unknown) {
   const session = await readSessionFile(sessionPath(sessionId));
   if (!session) return;

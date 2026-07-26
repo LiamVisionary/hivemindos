@@ -70,6 +70,7 @@ import type { RecentDirectory } from "@/lib/types/recent-directories";
 import type { MiroSharkAnalysisMode, MiroSharkIntelligence } from "@/lib/services/miroshark/run-intelligence";
 import { KANBAN_COLUMNS } from "@/lib/types/kanban";
 import { AGENT_PAYMENT_PROVIDER_COPY } from "@/lib/config/agent-payments";
+import { mergeAgentProfileConfiguration } from "@/lib/config/agent-profile-configuration";
 import { beeRoleIconPath } from "@/lib/config/bee-role-icons";
 import { DEFAULT_QUEEN_BEE_NAME } from "@/lib/config/queen-bee-personality";
 import { QUEEN_BEE_AGENT_ID } from "@/features/dashboard/views/messaging-shared";
@@ -85,6 +86,7 @@ import { normalizeApplicationGenerationCard } from "@/features/dashboard/chat-ap
 import {
   findLastChatMessageIndex,
   findNextChatUserIndex,
+  isCapabilityContinuationEcho,
   normalizedChatMessageContent,
   runtimeSessionIdFromChatLeafKey,
   sameVisibleChatMessage,
@@ -92,7 +94,7 @@ import {
   userMessagesLikelySameTurn,
 } from "@/features/dashboard/chat-transcript-helpers";
 import { runtimePromptFromSessionMessage } from "@/features/dashboard/hooks/status-chat-input-helpers";
-import { reconcilePolledChatProcessState, reconcilePolledChatStreamState } from "@/features/dashboard/hooks/status-chat-stream-state";
+import { chatStreamHasLocalRun, reconcilePolledChatProcessState, reconcilePolledChatStreamState } from "@/features/dashboard/hooks/status-chat-stream-state";
 import { readNativeDashboardBootstrap } from "@/lib/native/dashboard-bootstrap";
 import { getNativeAppVersion } from "@/lib/native/desktop-status";
 import { getNativeFleetAppsCache, getNativeFleetDiscovery, getNativeTailscaleDevices } from "@/lib/native/fleet";
@@ -558,9 +560,13 @@ function mergeAgentProfiles(current: AgentProfile[], incoming: AgentProfile[]) {
     const mirrorKey = [...merged.entries()].find(([, existing]) => agentMirrorKey(existing) === agentMirrorKey(agent))?.[0];
     const key = directKey || mirrorKey || agent.id || agentMirrorKey(agent);
     const existing = merged.get(key);
+    const configurationSafeAgent = existing
+      ? mergeAgentProfileConfiguration(existing, agent, {
+          preferExistingOnEqual: true,
+        })
+      : agent;
     merged.set(key, normalizeAgentProfile({
-      ...(existing ?? {}),
-      ...agent,
+      ...configurationSafeAgent,
       usePod: existing?.usePod || agent.usePod ? { ...(existing?.usePod ?? {}), ...(agent.usePod ?? {}) } : undefined,
       venice: existing?.venice || agent.venice ? { ...(existing?.venice ?? {}), ...(agent.venice ?? {}) } : undefined,
     }));
@@ -751,7 +757,9 @@ function mergeChatProcessEvents(
   const indexByKey = new Map<string, number>();
   for (const event of [...(first ?? []), ...(second ?? [])]) {
     if (!event) continue;
-    const key = [event.runId ?? "", event.label ?? "", event.detail ?? "", event.status ?? ""].join("\u001f");
+    // Status is deliberately NOT part of the identity: the same step arriving
+    // again as running→completed must update the existing row, not add a twin.
+    const key = [event.runId ?? "", event.label ?? "", event.detail ?? ""].join("\u001f");
     const existingIndex = indexByKey.get(key);
     if (existingIndex === undefined) {
       indexByKey.set(key, output.length);
@@ -797,6 +805,11 @@ function dedupeChatTranscript(messages: ChatMessage[]) {
     }
     if (message.role === "user") {
       const previousUserIndex = findLastChatMessageIndex(output, (item) => sameVisibleChatMessage(item, message));
+      // A runtime-session echo of the capability continuation is never a new
+      // human turn: the person typed the original words exactly once. Drop the
+      // echo row and let the run's assistant messages join the original turn
+      // (also repairs transcripts persisted before this fix).
+      if (previousUserIndex >= 0 && isCapabilityContinuationEcho(message)) continue;
       if (previousUserIndex >= 0) {
         const between = output.slice(previousUserIndex + 1);
         const duplicateActiveTurn = between.length > 0 && between.every((item) => (
@@ -850,7 +863,6 @@ function dedupeChatTranscript(messages: ChatMessage[]) {
 function preserveLocalTurnProcessEvents(sessionTurn: ChatMessage[], localTurn: ChatMessage[]) {
   const localAssistantMessages = localTurn.filter((message) => message.role === "assistant");
   const localUserMessage = localTurn.find((message) => message.role === "user" && message.content.trim());
-  let fallbackProcessIndex = 0;
   return sessionTurn.map((message) => {
     if (message.role === "user" && userMessagesLikelySameTurn(localUserMessage, message)) {
       return {
@@ -859,15 +871,22 @@ function preserveLocalTurnProcessEvents(sessionTurn: ChatMessage[], localTurn: C
         attachments: localUserMessage?.attachments,
         surface: localUserMessage?.surface ?? message.surface,
         createdAt: localUserMessage?.createdAt ?? message.createdAt,
+        // Keep the local bubble's identity so its React key survives the merge.
+        sourceSessionId: localUserMessage?.sourceSessionId,
+        sourceIndex: localUserMessage?.sourceIndex,
       };
     }
     if (message.role !== "assistant") return message;
-    const sameContentProcessMessage = localAssistantMessages.find((localMessage) => (
+    // Local state transfers ONLY between content-confirmed pairs. The old
+    // positional fallback paired segments by index — under the segment model
+    // it re-distributed one message's steps onto a DIFFERENT segment (preflight
+    // rows resurfacing next to a later phase's retries) and its identity
+    // stamping gave distinct segments the same sourceIndex, which made the
+    // visible-message dedupe silently DROP finished responses. No pairing, no
+    // transfer: an unmatched session segment keeps exactly its own state.
+    const processSource = localAssistantMessages.find((localMessage) => (
       sameVisibleChatMessage(localMessage, message)
     ));
-    const fallbackProcessMessage = localAssistantMessages[fallbackProcessIndex];
-    if (!sameContentProcessMessage && fallbackProcessMessage) fallbackProcessIndex += 1;
-    const processSource = sameContentProcessMessage ?? fallbackProcessMessage;
     if (!processSource) return message;
     return {
       ...message,
@@ -878,6 +897,10 @@ function preserveLocalTurnProcessEvents(sessionTurn: ChatMessage[], localTurn: C
       feedback: message.feedback ?? processSource.feedback,
       sourceSessionId: processSource.sourceSessionId ?? message.sourceSessionId,
       sourceIndex: processSource.sourceIndex ?? message.sourceIndex,
+      // Keep the locally streamed message's identity: React keys include
+      // createdAt, so re-stamping it from the session store remounted the
+      // whole article (visible flicker).
+      createdAt: processSource.createdAt ?? message.createdAt,
     };
   });
 }
@@ -3299,6 +3322,15 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
             current[storageKey] === sessionKey ? current : { ...current, [storageKey]: sessionKey }
           ));
         }
+        // This tab owns a live SSE for this thread: the stream already carries
+        // every step and text delta, so it is the single source of truth.
+        // Merging the (laggier) session snapshot mid-stream replaced messages
+        // and process panels under the reader. The poll re-takes over the
+        // moment no local stream is alive (reload, stall, another tab's run).
+        if (chatStreamHasLocalRun(chatStreamingByKeyRef.current[storageKey])) {
+          markRuntimeLeafLoaded();
+          return;
+        }
         const active = localRunActive
           ? !endedAt
           : !replaceRuntimeLeafHistory && !endedAt && sessionStreamingFresh;
@@ -4536,6 +4568,17 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     });
   }, [hydrated, kanbanBoardSlug, sharedVault.enabled, sharedVault.kanbanFolder, sharedVault.scheduledFolder, sharedVault.vaultPath]);
   const handleAeonWorkspaceCreated = useCallback((agent: AgentProfile) => { setAgents((current) => current.some((item) => item.id === agent.id) ? current.map((item) => item.id === agent.id ? { ...item, ...agent } : item) : [...current, agent]); setSelectedAgentId(agent.id); }, []);
+  // ZHC cockpit "Queen settings": open the AgentSettingsModal by agent id. A
+  // just-seeded company-Queen profile may not be in this client's roster yet;
+  // stored profiles overlay onto fleet discovery, so poll once, then run the
+  // same open sequence as AgentsPanel's settings entry.
+  const openAgentSettingsById = useCallback(async (agentId: string) => {
+    if (!displayAgents.some((agent) => agent.id === agentId)) await pollFleetDiscovery(new AbortController().signal).catch(() => undefined);
+    setSelectedAgentId(agentId);
+    setAgentRenameDraft(displayAgents.find((agent) => agent.id === agentId)?.name ?? "");
+    setAgentRenameEditing(false); setAgentRuntimeFolderEditing(false); setAgentRuntimeFolderStatus(""); setAgentRuntimeAdvancedOpen(false);
+    setAgentSettingsPanel("role"); setAgentRoleModalId(agentId);
+  }, [displayAgents, pollFleetDiscovery]);
   // Chat, Fleet, and Scheduler fill the full width right of the rail so dense
   // canvas/detail views reach the edge instead of showing the default route gutter.
   const fullWidthRouteShellStyle = (activeView === "chat" || activeView === "agents" || activeView === "scheduler")
@@ -4661,9 +4704,9 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       }, schedules, openRuntimeFile, pinnedUtilities, promoteRuntimeEnvValue, refreshHiveEnv, refreshMaintenanceReport, refreshMemoryTelemetry, refreshNotifications, refreshRuntimeFileRoots, renderAgentKey, restoreSharedEnvBackup, revealedEnvValues, runMaintenanceAction, runtimeEnvSources, runtimeFileDraft, runtimeFileOpen, runtimeFilePath, runtimeFileRootKey, runtimeFileRoots, runtimeFileStatus, runtimeFiles, runtimeModelSelectionsByRuntime, saveAgentEnvValue, saveRuntimeFile, saveSharedEnvValue, searchAllRuntimeSessions, selectedRuntimeEnvSource, sessionSearchLoading, sessionSearchMessage, sessionSearchQuery, sessionSearchResults, setActiveView, setAgentEnvDrafts, setHiveEnvRuntimeSourceId, setRuntimeFileDraft, setRuntimeFileOpen, setRuntimeFilePath, setRuntimeFileRootKey, setSessionSearchQuery, setSharedEnvAddMenuOpen, setSharedEnvDraft, setSharedEnvEditable, setSharedEnvImportOpen, setSharedEnvImportText, sharedBackupStatus, sharedEnvAddMenuOpen, sharedEnvCount, sharedEnvDraft, sharedEnvEditable, sharedEnvImport, sharedEnvImportChangedCount, sharedEnvImportDiff, sharedEnvImportNewCount, sharedEnvImportOpen, sharedEnvImportSameCount, sharedEnvImportText, sharedEnvImporting, sharedEnvSource, sharedVault, startAgentChat, syncSharedEnvMachines, toggleEnvValue, togglePinnedUtility, updateNotificationSettings, vaultClass, vaultPanelMode, walletClass }} /> : null}
       {activeView === "aeon" ? <AeonAutopilotPanel agentProfiles={displayAgents.filter((agent) => agent.runtime === "aeon")} sharedVault={sharedVault} machineGroups={machineGroups} chooseDirectoryForMachine={chooseDirectoryForMachine} onWorkspaceCreated={handleAeonWorkspaceCreated} /> : null}
       {activeView === "fusion" ? <FusionPanel sharedVault={sharedVault} /> : activeView === "phone" ? <PhonePanel activeView={activeView} fleetClass={fleetClass} formatRelativeTime={formatRelativeTime} sharedVault={sharedVault} /> : null}
-      {activeView === "governance" ? <GovernancePanel theme={dashboardTheme === "hive-light" ? "light" : "dark"} openSkillAttachmentBrowser={openSkillAttachmentBrowser} chooseDirectoryForMachine={chooseDirectoryForMachine} defaultDirectoryMachine={localKanbanMachineTarget} onDuplicateAgent={requestDuplicateAgent} /> : null}
+      {activeView === "governance" ? <GovernancePanel theme={dashboardTheme === "hive-light" ? "light" : "dark"} openSkillAttachmentBrowser={openSkillAttachmentBrowser} chooseDirectoryForMachine={chooseDirectoryForMachine} defaultDirectoryMachine={localKanbanMachineTarget} onDuplicateAgent={requestDuplicateAgent} onOpenAgentSettings={openAgentSettingsById} /> : null}
       {activeView === "chat" && chatInitialLoading ? <DashboardRouteLoading view="chat" /> : null}
-      {((activeView === "chat" && !chatInitialLoading) || chatFolderCreatorMachine) ? <ChatPanel {...{ Activity, AgentResponseLoader, AlignLeft, BEE_WORKER_PRESET_LIST, BrainCircuit, Button, ChatMarkdown, Check, ChevronDown, ChevronRight, ChevronUp, CircleAlert, ComposerField, Copy, Cpu, Download, Eye, FileText, Folder, FolderOpen, FolderPlus, GitBranch, HERMES_UPDATE_INTEGRATION_KEYS, Hammer, Image, KanbanSquare, LoaderCircle, MessageAttachments, MessageSquare, Minus, Monitor, Pencil, PlugZap, Plus, RUNTIME_LABELS, RefreshCcw, Repeat2, Search, Send, Settings2, ShieldCheck, Sparkles, Terminal, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Upload, activeView, addAgentPreferredSkill, addHermesModelFromDraft, aeonEnvKeys, aeonEnvSyncStatus, aeonEnvSyncing, agentCreateDraft, agentCreateMachine, agentRenameDraft, agentRenameEditing, agentRuntimeAdvancedOpen, agentRuntimeFolderBrowsing, agentRuntimeFolderEditing, agentRuntimeFolderStatus, agentSettingsCustomWorker, agentSettingsCustomWorkers, agentSettingsDescription, agentSettingsIntegrationTarget, agentSettingsPanel, agentSettingsPreferredSkills, agentSettingsProvider, agentSettingsRuntime, agentSettingsSelectedCustomWorkerId, agentSettingsSkillProfile, agentSettingsTitle, agentSettingsWorkerClass, agentSettingsWorkerImage, agentSettingsWorkerLabel, agentSettingsWorkerPreset, agentWorkerClassView, applyCustomWorkerClass, attachChatDirectory, attachChatRecentDirectory, attachmentError, attachmentMenuOpen, attachmentMenuRef, beeRoleIconPath, beeRoleLabel, browseAgentRuntimeFolder, busy: selectedChatStreaming, changeChatWorkingDirectory, clearChatWorkingDirectory, chatAttachments, chatAutoScrollRef, chatClass, chatContextMenu, chatContextMenuRef, chatDirectories, chatDisplayContent, chatFileInputRef, chatFolderCreatorMachine, chatFolderCreatorParentOptions, chatFolderDraft, chatImageInputRef, chatKanbanGeneration, chatSidebarTree, chatStreamingByKey, chatThreadTitles, chooseDirectoryForMachine, setChatThreadTitle, messagesByAgent, setMessagesByAgent, fleetHostedApps, dashboardTheme, toggleDashboardTheme: handleNavShelfToggleTheme, checkStatus, closeAgentSettingsModal, closeChatFolderCreator, createAgentFromModal, createChatFolder, customWorkerDraft, customWorkerImageError, customWorkerImageInputRef, customWorkerSkillSearch, dismissChatKanbanGeneration, displayAgents, expandedChatFolders, filteredCustomWorkerSkills, filteredSkillBrowserSkills, fleetClass, formatAgentEnvText, formatRelativeTime, generateKanbanTaskFromChat, handleChatFileChange, handleChatFileReferenceDrop, handleChatImageChange, hasStreamingChunk: selectedChatHasStreamingChunk, hermesUpdateRequired, hermesUpdateRequiredDetail, importRemoteSkillToBrain, convertSkillToAeon, installGithubSkillToBrain, addWrittenSkillToBrain, lastAssistant, logClientTelemetry, machineGroups, messagesEndRef, messagesScrollRef, openAgentSkillBrowser, openCustomWorkerClassCreator, openSkillBrowser, parseAgentEnvText, providerIconPath, providerIconRenderMode, recentDirectories, recentDirectoriesExpanded, recording, refreshRuntimeIntegrations, removeAgentPreferredSkill, removeChatAttachment, removeChatDirectory, roleModalAgent, runRuntimeIntegrationAction, runtimeAvailability, runtimeBackgroundPrompt, runtimeCapabilities, runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode, runtimeIntegrationBusy, runtimeIntegrationMessage, runtimeIntegrationStatus, runtimeModelDraft, runtimeModelProviders, runtimeModelSelection, runtimeModelSelectionsByRuntime, runtimeModelSetupMode, runtimeSessionQuery, runtimeSessionResults, runtimeSetupDefinition, runtimeSetupKey, runtimeUpdateConfirmKey, searchRuntimeSessionsForAgent, selectAgentWorkerClass, selectCustomWorkerClass, selectedAgent, selectedChatDirectory, selectedChatHistoryLoading, selectedChatLeafKey, selectedChatMachine, selectedChatProcess, selectedChatStorageKey, selectedRuntimeModel, selectedRuntimeModelId, selectedRuntimeModels, selectedRuntimeProvider, sendMessage, sendPromptMessage, chatDiscussContext, clearChatDiscussContext, sessionNotice, setActiveView, setAeonEnvKeys, setAgentCreateDraft, setAgentRenameDraft, setAgentRenameEditing, setAgentRuntimeAdvancedOpen, setAgentRuntimeFolderEditing, setAgentRuntimeFolderStatus, setAgentSettingsPanel, setAgentWorkerClassView, setAttachmentMenuOpen, setChatContextMenu, setChatFolderDraft, setCustomWorkerDraft, setCustomWorkerSkillSearch, setExpandedChatFolders, setRecentDirectoriesExpanded, setRuntimeBackgroundPrompt, setRuntimeModelDraft, setRuntimeModelSetupMode, setRuntimeSessionQuery, setRuntimeSetupKey, setRuntimeUpdateConfirmKey, setSkillBrowserGithubOpen, setSkillBrowserGithubUrl, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, setStatus, setStatusAgentId, setText, sharedVault, skillBrowserGithubInstalling, skillBrowserGithubOpen, skillBrowserGithubUrl, skillBrowserImporting, skillBrowserLoading, skillBrowserMode, skillBrowserOpen, skillBrowserSearch, skillBrowserStatus, skillBrowserView, skillBrowserWrittenContent, skillBrowserWriting, skillRequiresHermesUpdate, startAgentChat, startAudioRecording, status, statusAgentId, stopAudioRecording, switchRuntime, syncAeonEnvToGitHub, text, toggleCustomWorkerSkill, updateAgent, updateAgentProfile, updateAgentRuntimeModel, updateAgentSkillProfile, updateChatAutoScroll, uploadCustomWorkerImage, vaultClass, visibleMessages, voiceTarget, voiceTranscript, workerCapabilityBadges }} /> : null}
+      {((activeView === "chat" && !chatInitialLoading) || chatFolderCreatorMachine) ? <ChatPanel {...{ Activity, AgentResponseLoader, AlignLeft, BEE_WORKER_PRESET_LIST, BrainCircuit, Button, ChatMarkdown, Check, ChevronDown, ChevronRight, ChevronUp, CircleAlert, ComposerField, Copy, Cpu, Download, Eye, FileText, Folder, FolderOpen, FolderPlus, GitBranch, HERMES_UPDATE_INTEGRATION_KEYS, Hammer, Image, KanbanSquare, LoaderCircle, MessageAttachments, MessageSquare, Minus, Monitor, Pencil, PlugZap, Plus, RUNTIME_LABELS, RefreshCcw, Repeat2, Search, Send, Settings2, ShieldCheck, Sparkles, Terminal, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, Upload, activeView, addAgentPreferredSkill, addHermesModelFromDraft, aeonEnvKeys, aeonEnvSyncStatus, aeonEnvSyncing, agentCreateDraft, agentCreateMachine, agentRenameDraft, agentRenameEditing, agentRuntimeAdvancedOpen, agentRuntimeFolderBrowsing, agentRuntimeFolderEditing, agentRuntimeFolderStatus, agentSettingsCustomWorker, agentSettingsCustomWorkers, agentSettingsDescription, agentSettingsIntegrationTarget, agentSettingsPanel, agentSettingsPreferredSkills, agentSettingsProvider, agentSettingsRuntime, agentSettingsSelectedCustomWorkerId, agentSettingsSkillProfile, agentSettingsTitle, agentSettingsWorkerClass, agentSettingsWorkerImage, agentSettingsWorkerLabel, agentSettingsWorkerPreset, agentWorkerClassView, applyCustomWorkerClass, attachChatDirectory, attachChatRecentDirectory, attachmentError, attachmentMenuOpen, attachmentMenuRef, beeRoleIconPath, beeRoleLabel, browseAgentRuntimeFolder, busy: selectedChatStreaming, changeChatWorkingDirectory, clearChatWorkingDirectory, chatAttachments, chatAutoScrollRef, chatClass, chatContextMenu, chatContextMenuRef, chatDirectories, chatDisplayContent, chatFileInputRef, chatFolderCreatorMachine, chatFolderCreatorParentOptions, chatFolderDraft, chatImageInputRef, chatKanbanGeneration, chatSidebarTree, chatStreamingByKey, chatThreadTitles, chooseDirectoryForMachine, setChatThreadTitle, messagesByAgent, setMessagesByAgent, fleetHostedApps, dashboardTheme, toggleDashboardTheme: handleNavShelfToggleTheme, checkStatus, closeAgentSettingsModal, closeChatFolderCreator, createAgentFromModal, createChatFolder, customWorkerDraft, customWorkerImageError, customWorkerImageInputRef, customWorkerSkillSearch, dismissChatKanbanGeneration, displayAgents, expandedChatFolders, filteredCustomWorkerSkills, filteredSkillBrowserSkills, fleetClass, formatAgentEnvText, formatRelativeTime, generateKanbanTaskFromChat, handleChatFileChange, handleChatFileReferenceDrop, handleChatImageChange, hasStreamingChunk: selectedChatHasStreamingChunk, hermesUpdateRequired, hermesUpdateRequiredDetail, importRemoteSkillToBrain, convertSkillToAeon, installGithubSkillToBrain, addWrittenSkillToBrain, lastAssistant, logClientTelemetry, machineGroups, messagesEndRef, messagesScrollRef, openAgentSkillBrowser, openCustomWorkerClassCreator, openSkillBrowser, parseAgentEnvText, providerIconPath, providerIconRenderMode, recentDirectories, recentDirectoriesExpanded, recording, refreshRuntimeIntegrations, refreshWalletBalance, removeAgentPreferredSkill, removeChatAttachment, removeChatDirectory, roleModalAgent, runRuntimeIntegrationAction, runtimeAvailability, runtimeBackgroundPrompt, runtimeCapabilities, runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode, runtimeIntegrationBusy, runtimeIntegrationMessage, runtimeIntegrationStatus, runtimeModelDraft, runtimeModelProviders, runtimeModelSelection, runtimeModelSelectionsByRuntime, runtimeModelSetupMode, runtimeSessionQuery, runtimeSessionResults, runtimeSetupDefinition, runtimeSetupKey, runtimeUpdateConfirmKey, searchRuntimeSessionsForAgent, selectAgentWorkerClass, selectCustomWorkerClass, selectedAgent, selectedChatDirectory, selectedChatHistoryLoading, selectedChatLeafKey, selectedChatMachine, selectedChatProcess, selectedChatStorageKey, selectedRuntimeModel, selectedRuntimeModelId, selectedRuntimeModels, selectedRuntimeProvider, sendMessage, sendPromptMessage, chatDiscussContext, clearChatDiscussContext, sessionNotice, setActiveView, setAeonEnvKeys, setAgentCreateDraft, setAgentRenameDraft, setAgentRenameEditing, setAgentRuntimeAdvancedOpen, setAgentRuntimeFolderEditing, setAgentRuntimeFolderStatus, setAgentSettingsPanel, setAgentWorkerClassView, setAttachmentMenuOpen, setChatContextMenu, setChatFolderDraft, setCustomWorkerDraft, setCustomWorkerSkillSearch, setExpandedChatFolders, setRecentDirectoriesExpanded, setRuntimeBackgroundPrompt, setRuntimeModelDraft, setRuntimeModelSetupMode, setRuntimeSessionQuery, setRuntimeSetupKey, setRuntimeUpdateConfirmKey, setSkillBrowserGithubOpen, setSkillBrowserGithubUrl, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, setStatus, setStatusAgentId, setText, sharedVault, skillBrowserGithubInstalling, skillBrowserGithubOpen, skillBrowserGithubUrl, skillBrowserImporting, skillBrowserLoading, skillBrowserMode, skillBrowserOpen, skillBrowserSearch, skillBrowserStatus, skillBrowserView, skillBrowserWrittenContent, skillBrowserWriting, skillRequiresHermesUpdate, startAgentChat, startAudioRecording, status, statusAgentId, stopAudioRecording, switchRuntime, syncAeonEnvToGitHub, text, toggleCustomWorkerSkill, updateAgent, updateAgentProfile, updateAgentRuntimeModel, updateAgentSkillProfile, updateChatAutoScroll, uploadCustomWorkerImage, vaultClass, visibleMessages, voiceTarget, voiceTranscript, walletsByAgent, workerCapabilityBadges }} /> : null}
       {(roleModalAgent || agentCreateMachine) ? <AgentSettingsModal {...{ BEE_WORKER_PRESET_LIST, BrainCircuit, Button, Check, ChevronRight, Copy, Cpu, Eye, FolderOpen, HERMES_UPDATE_INTEGRATION_KEYS, Image, KanbanSquare, LoaderCircle, MessageSquare, Minus, Pencil, PlugZap, Plus, RUNTIME_LABELS, RefreshCcw, Repeat2, Search, Send, Settings2, ShieldCheck, Sparkles, Upload, addHermesModelFromDraft, agentCreateDraft, agentCreateMachine, agentRenameDraft, agentRenameEditing, agentRuntimeAdvancedOpen, agentRuntimeFolderBrowsing, agentRuntimeFolderEditing, agentRuntimeFolderStatus, agentSettingsCustomWorker, agentSettingsCustomWorkers, agentSettingsDescription, agentSettingsIntegrationTarget, agentSettingsPanel, agentSettingsPreferredSkills, agentSettingsProvider, agentSettingsRuntime, agentSettingsSelectedCustomWorkerId, agentSettingsSoulPrompt, agentSettingsSkillProfile, agentSettingsTitle, agentSettingsWorkerClass, agentSettingsWorkerImage, agentSettingsWorkerLabel, agentSettingsWorkerPreset, agentWorkerClassView, applyCustomWorkerClass, installPackagedAgent, beeRoleIconPath, browseAgentRuntimeFolder, chooseDirectoryForMachine, closeAgentSettingsModal, createAgentFromModal, customWorkerDraft, customWorkerImageError, customWorkerImageInputRef, customWorkerSkillSearch, displayAgents, filteredCustomWorkerSkills, fleetClass, hermesUpdateRequired, machineGroups, notifyAgentVoiceFailure, onAeonWorkspaceCreated: handleAeonWorkspaceCreated, onQueenClapWakeEnabledChange: updateQueenClapWakeEnabled, openAgentSkillBrowser, openCustomWorkerClassCreator, providerIconPath, providerIconRenderMode, queenClapWakeEnabled, refreshRuntimeIntegrations, refreshRuntimeAvailability, removeAgentPreferredSkill, roleModalAgent, runRuntimeIntegrationAction, runtimeAvailability, runtimeBackgroundPrompt, runtimeCapabilities, runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode, runtimeIntegrationBusy, runtimeIntegrationMessage, runtimeIntegrationStatus, runtimeModelDraft, runtimeModelProviders, runtimeModelSelection, runtimeModelSelectionsByRuntime, runtimeModelSelectionFresh, runtimeModelSetupMode, runtimeSessionQuery, runtimeSessionResults, runtimeSetupDefinition, runtimeSetupKey, runtimeUpdateConfirmKey, searchRuntimeSessionsForAgent, selectAgentWorkerClass, selectCustomWorkerClass, selectedRuntimeModelId, selectedRuntimeModels, selectedRuntimeProvider, setActiveView, setAgentCreateDraft, setAgentRenameDraft, setAgentRenameEditing, setAgentRuntimeAdvancedOpen, setAgentRuntimeFolderEditing, setAgentRuntimeFolderStatus, setAgentSettingsPanel, setAgentWorkerClassView, setCustomWorkerDraft, setCustomWorkerSkillSearch, setRuntimeBackgroundPrompt, setRuntimeModelDraft, setRuntimeModelSetupMode, setRuntimeSessionQuery, setRuntimeSetupKey, setRuntimeUpdateConfirmKey, sharedVault, startAgentChat, toggleCustomWorkerSkill, updateAgentProfile, updateAgentRuntimeModel, updateAgentSoulPrompt, updateAgentSkillProfile, uploadCustomWorkerImage, walletsByAgent, workerCapabilityBadges }} /> : null}
       <SkillBrowserModal {...{ Button, Copy, Download, GitBranch, Image, LoaderCircle, Minus, Plus, RefreshCcw, Sparkles, addAgentPreferredSkill, addWrittenSkillToBrain, agentSettingsPreferredSkills, convertSkillToAeon, fleetClass, hermesUpdateRequired, hermesUpdateRequiredDetail, importRemoteSkillToBrain, installGithubSkillToBrain, openAgentSkillBrowser, openSkillBrowser, removeAgentPreferredSkill, setSkillBrowserAttachTarget, setSkillBrowserGithubOpen, setSkillBrowserGithubUrl, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, sharedVaultPath: sharedVault.enabled ? sharedVault.vaultPath : undefined, skillBrowserAttachTarget, skillBrowserGithubInstalling, skillBrowserGithubOpen, skillBrowserGithubUrl, skillBrowserImporting, skillBrowserLoading, skillBrowserEnriching, skillBrowserMode, skillBrowserOpen, skillBrowserSearch, skillBrowserSkills, skillBrowserStatus, skillBrowserView, skillBrowserWrittenContent, skillBrowserWriting, skillRequiresHermesUpdate, vaultClass }} /></Suspense>
       </DashboardRouteErrorBoundary>

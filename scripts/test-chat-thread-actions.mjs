@@ -13,6 +13,8 @@ const {
   applyChatThreadFilters,
   sortChatThreads,
   groupChatThreads,
+  chatThreadProjectGroupKey,
+  mergeEmptyProjectGroups,
   CHAT_HISTORY_PAGE_SIZE,
   nextChatHistoryVisibleCount,
 } = await import("../src/features/dashboard/views/chat/exchange/chat-thread-actions.ts");
@@ -417,6 +419,58 @@ const {
   const order = rows.map((r) => r.storageKey);
   sortChatThreads(rows, "name");
   assert.deepEqual(rows.map((r) => r.storageKey), order, "sort returns a new array, input unchanged");
+}
+
+// ---------------------------------------------------------------------------
+// mergeEmptyProjectGroups: a project with no chats still gets a group
+//
+// Regression guard: the sidebar builds groups from chat ROWS, so a project the
+// user just created (zero chats) produced zero rows and vanished from the rail
+// on the next reload even though it was still in `hivemindos.chatFolders.v1`.
+// ---------------------------------------------------------------------------
+{
+  const rows = [
+    { storageKey: "k1", agentId: "a", projectLabel: "hivemind-os", updatedAt: 30 },
+    { storageKey: "k2", agentId: "a", projectLabel: "hivemind-os", updatedAt: 20 },
+  ];
+  const groups = groupChatThreads(rows, "project", 0);
+  assert.deepEqual(groups.map((g) => g.label), ["hivemind-os"], "baseline: one group from rows");
+
+  const merged = mergeEmptyProjectGroups(groups, [
+    { label: "flappy-bird", createdAt: 200 },
+    { label: "older-idea", createdAt: 100 },
+  ]);
+  assert.deepEqual(
+    merged.map((g) => g.label),
+    ["hivemind-os", "flappy-bird", "older-idea"],
+    "empty projects append after groups with chats, newest created first",
+  );
+  assert.deepEqual(merged[1].chats, [], "an empty project group holds no chats");
+  assert.equal(merged[1].key, chatThreadProjectGroupKey("flappy-bird"), "key matches the project grouping scheme");
+
+  // Input is not mutated and the original groups keep their rows.
+  assert.equal(groups.length, 1, "input groups array untouched");
+  assert.equal(merged[0].chats.length, 2, "existing group keeps its chats");
+
+  // A project that DOES hold chats must not be duplicated as an empty group.
+  const noDuplicate = mergeEmptyProjectGroups(groups, [{ label: "hivemind-os", createdAt: 999 }]);
+  assert.deepEqual(noDuplicate.map((g) => g.label), ["hivemind-os"], "a project with chats is never duplicated");
+  assert.equal(noDuplicate[0].chats.length, 2, "the surviving group is the one with the chats");
+
+  // Same label twice (two machines, same folder name) collapses to one bucket,
+  // matching how `groupChatThreads` keys projects by label.
+  const deduped = mergeEmptyProjectGroups([], [
+    { label: "scratch", createdAt: 2 },
+    { label: "scratch", createdAt: 1 },
+  ]);
+  assert.deepEqual(deduped.map((g) => g.label), ["scratch"], "duplicate labels collapse to one group");
+
+  // Blank labels are dropped rather than producing an unlabelled group.
+  assert.deepEqual(mergeEmptyProjectGroups([], [{ label: "  " }]), [], "blank project labels are skipped");
+
+  // A project with no createdAt still appears (sorts last among empties).
+  const undated = mergeEmptyProjectGroups([], [{ label: "no-date" }, { label: "dated", createdAt: 5 }]);
+  assert.deepEqual(undated.map((g) => g.label), ["dated", "no-date"], "undated projects sort after dated ones");
 }
 
 console.log("test-chat-thread-actions: all assertions passed");

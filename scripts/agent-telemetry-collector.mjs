@@ -104,6 +104,7 @@ import {
   hermesAgentUsesCodex,
   repairHermesCodexAuth,
 } from "./lib/hermes-codex-auth-recovery.mjs";
+import { resolvePreferredOpenAiAgentSelection } from "./lib/openai-provider-routing.mjs";
 import { mapWithConcurrency, processResourceStats } from "./lib/fd-safety.mjs";
 import { readCodexRuntimeIntegrationStatus } from "./lib/codex-app-server-models.mjs";
 // systemStats also accumulates a short rolling cpu/ram/net history (while /health
@@ -3498,6 +3499,30 @@ async function repairHermesCodexAuthBeforeChat(agent, hermesHome) {
   }
 }
 
+async function resolveBillingSafeOpenAiAgent(agent, hermesHome, sharedHiveEnv) {
+  const fallbackSelection = await readHermesModelConfig(hermesHome);
+  const selection = resolvePreferredOpenAiAgentSelection({
+    agent,
+    processEnv: process.env,
+    sharedEnv: sharedHiveEnv,
+    fallbackSelection,
+  });
+  if (selection.redirectedFromApiKey) {
+    const agentId = safeTelemetryText(agent.id || agent.agentId || "", 120);
+    console.warn(
+      `[collector] Blocked API-key billing for ${agentId || "an agent"} because ChatGPT OAuth is configured; routing ${selection.requestedProvider || "openai"}/${selection.requestedModel || "default"} through openai-codex instead.`,
+    );
+    void recordCollectorTelemetry("openai.oauth_billing_guard.enforced", {
+      agentId: agentId || null,
+      requestedProvider: safeTelemetryText(selection.requestedProvider, 120),
+      requestedModel: safeTelemetryText(selection.requestedModel, 160),
+      effectiveProvider: "openai-codex",
+      effectiveModel: safeTelemetryText(selection.profile.model || "", 160),
+    });
+  }
+  return selection;
+}
+
 async function resolveChatWorkingDirectory(input) {
   const candidate = typeof input === "string" ? expandHome(input.trim()) : "";
   if (!candidate) return appDir;
@@ -6860,9 +6885,10 @@ async function sendHermesChat(body, options = {}) {
       : "");
   if (!text) return { ok: false, status: 400, error: "Message is required." };
 
-  const agent = body.agent && typeof body.agent === "object" ? body.agent : {};
+  const requestedAgent =
+    body.agent && typeof body.agent === "object" ? body.agent : {};
   const hermesHome = expandHome(
-    sanitizeLocalDataDir(agent.localDataDir) ||
+    sanitizeLocalDataDir(requestedAgent.localDataDir) ||
       sanitizeLocalDataDir(body.localDataDir) ||
       defaultHermesDir,
   );
@@ -6878,6 +6904,8 @@ async function sendHermesChat(body, options = {}) {
       host: hostname(),
     };
   }
+  const openAiSelection = await resolveBillingSafeOpenAiAgent(requestedAgent, hermesHome, sharedHiveEnv);
+  const agent = openAiSelection.profile;
   await repairHermesCodexAuthBeforeChat(agent, hermesHome);
   const spawnEnv = fleetPolicySpawnEnv(fleetPolicy, sharedHiveEnv, {
     ...agentEnv,
@@ -6959,7 +6987,7 @@ async function sendHermesChat(body, options = {}) {
     };
   }
   let modelFallback = null;
-  if (!content && scopedModelRun) {
+  if (!content && scopedModelRun && !openAiSelection.oauthProtected) {
     content = await runHermes(fallbackArgs).catch(() => "");
     if (abortSignal?.aborted) return abortedResult();
     if (content) {
@@ -6977,7 +7005,9 @@ async function sendHermesChat(body, options = {}) {
       status: 502,
       error:
         primaryError ||
-        "Hermes produced no output (silent failure). Check the agent's model/provider config or simplify the prompt.",
+        (openAiSelection.oauthProtected
+          ? "The OAuth-protected OpenAI run produced no output. HivemindOS blocked the unscoped Hermes fallback because it could use an API-key-billed default provider."
+          : "Hermes produced no output (silent failure). Check the agent's model/provider config or simplify the prompt."),
       host: hostname(),
     };
   }
@@ -6986,6 +7016,14 @@ async function sendHermesChat(body, options = {}) {
     text: content,
     choices: [{ message: { role: "assistant", content } }],
     host: hostname(),
+    ...(openAiSelection.redirectedFromApiKey
+      ? {
+          billingGuard: {
+            auth: "oauth", provider: "openai-codex", model: agent.model,
+            reason: "ChatGPT OAuth is configured and API-key billing was not explicitly selected.",
+          },
+        }
+      : {}),
     ...(modelFallback
       ? {
           modelFallback,
@@ -7855,9 +7893,10 @@ async function streamHermesChat(body, response, options = {}) {
     releaseCollectorChatRun();
     return;
   }
-  const agent = body.agent && typeof body.agent === "object" ? body.agent : {};
+  const requestedAgent =
+    body.agent && typeof body.agent === "object" ? body.agent : {};
   const hermesHome = expandHome(
-    sanitizeLocalDataDir(agent.localDataDir) ||
+    sanitizeLocalDataDir(requestedAgent.localDataDir) ||
       sanitizeLocalDataDir(body.localDataDir) ||
       defaultHermesDir,
   );
@@ -7874,6 +7913,8 @@ async function streamHermesChat(body, response, options = {}) {
     releaseCollectorChatRun();
     return;
   }
+  const openAiSelection = await resolveBillingSafeOpenAiAgent(requestedAgent, hermesHome, sharedHiveEnv);
+  const agent = openAiSelection.profile;
   await repairHermesCodexAuthBeforeChat(agent, hermesHome);
   // The Hermes gateway API server runs its configured default model and
   // ignores per-request model/provider. An explicit selection does not need a
@@ -7892,7 +7933,7 @@ async function streamHermesChat(body, response, options = {}) {
     body.forceHermesCli !== true &&
     !agentNeedsScopedCli &&
     hermesChatMode === "api" &&
-    (await proxyHermesApiChat(body, response, text, hermesHome, fleetPolicy))
+    (await proxyHermesApiChat({ ...body, agent }, response, text, hermesHome, fleetPolicy))
   ) {
     releaseCollectorChatRun();
     return;

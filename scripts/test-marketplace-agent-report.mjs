@@ -19,7 +19,7 @@ process.env.HOME = tempHome;
 process.env.NEXT_PUBLIC_OBSIDIAN_VAULT_PATH = tempVault;
 
 const { parseMarketplaceAgentReport, parseResearchResultBlock } = await import("../src/lib/services/marketplace/marketplace-agent-report.ts");
-const { buildInboxWorkPrompt, buildCreateListingPrompt, buildSyncCatalogPrompt, buildPriceResearchPrompt, directivesBlock } = await import(
+const { buildInboxWorkPrompt, buildCreateListingPrompt, buildFullSweepPrompt, buildSyncCatalogPrompt, buildPriceResearchPrompt, directivesBlock } = await import(
   "../src/lib/services/marketplace/marketplace-agent-context.ts"
 );
 
@@ -164,6 +164,19 @@ assert.match(syncPrompt, /NEVER open the Marketplace inbox/, "sync sessions are 
 assert.match(inboxPrompt, /reply ONLY in conversations about the live listings/, "inbox replies scoped to managed listings");
 assert.match(inboxPrompt, /strictly read-only/, "old unrelated threads are read-only");
 assert.ok(!/NEVER open the Marketplace inbox/.test(inboxPrompt), "the inbox op itself may open the inbox");
+
+// The base-cadence combined sweep: catalog + inbox in ONE session and ONE
+// report — two separate queen round-trips against the same profile were pure
+// overhead (the report contract already carries both).
+const fullSweepPrompt = buildFullSweepPrompt(account, { directives, listings: [listing] });
+assert.match(fullSweepPrompt, /catalogue EVERY listing/, "full sweep catalogues the selling page");
+assert.match(fullSweepPrompt, /Then open the Marketplace inbox/, "full sweep then works the inbox in the same session");
+assert.match(fullSweepPrompt, /exactly ONE report covering both/, "one MARKETPLACE_REPORT covers catalog + conversations");
+assert.match(fullSweepPrompt, /AUTONOMOUS/, "full sweep carries the autonomy contract");
+assert.match(fullSweepPrompt, /Standing directives from the human — follow these exactly/, "full sweep carries the directives block");
+assert.equal(fullSweepPrompt.match(/```json MARKETPLACE_REPORT/g).length, 1, "exactly one report contract in the combined prompt");
+assert.ok(!/NEVER open the Marketplace inbox/.test(fullSweepPrompt), "the combined sweep may open the inbox");
+assert.match(fullSweepPrompt, /reply ONLY in conversations about the live listings/, "combined sweep keeps the inbox reply scope");
 
 const localResearch = buildPriceResearchPrompt(account, listing, false);
 assert.match(localResearch, /Sarasota, FL/, "local scope names the locale");

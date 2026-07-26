@@ -69,6 +69,54 @@ export function PersistentHiveChat({
     </button>
   ) : null;
 
+  // Company-CEO scope chip: while set, typed turns go to this company's CEO.
+  // Sits just above the pill; the ✕ clears the scope back to the hive-wide Queen.
+  const ceoScope = queenChat.companyCeoScope;
+  const ceoScopeChip = ceoScope ? (
+    <div
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 7,
+        pointerEvents: "auto",
+        padding: "4px 5px 4px 12px",
+        borderRadius: 999,
+        border: "1px solid var(--honey-line)",
+        background: "color-mix(in srgb, var(--panel) 92%, transparent)",
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)",
+        color: "var(--honey-2)",
+        fontSize: 11,
+        fontWeight: 600,
+        lineHeight: 1.3,
+      }}
+    >
+      <span>CEO · {ceoScope.companyName}</span>
+      <button
+        type="button"
+        aria-label={`Leave ${ceoScope.companyName} CEO chat`}
+        title="Back to the hive-wide Queen"
+        onClick={() => queenChat.setCompanyCeoScope(null)}
+        style={{
+          width: 18,
+          height: 18,
+          display: "inline-grid",
+          placeItems: "center",
+          cursor: "pointer",
+          border: "1px solid var(--line-2)",
+          borderRadius: 999,
+          background: "transparent",
+          color: "var(--fg-3)",
+          fontSize: 10,
+          lineHeight: 1,
+          padding: 0,
+        }}
+      >
+        ✕
+      </button>
+    </div>
+  ) : null;
+
   return createPortal(
     <div
       className="fr-root"
@@ -80,10 +128,13 @@ export function PersistentHiveChat({
         bottom: HIVE_CHAT_DOCK_BOTTOM,
         zIndex: 50,
         display: "flex",
-        justifyContent: "center",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 8,
         pointerEvents: "none",
       }}
     >
+      {ceoScopeChip}
       <ChatPill
         placeholder={isBrainRoute ? `Ask ${queenName} about this brain...` : "Ask the hive to dispatch a task..."}
         tone={tone}

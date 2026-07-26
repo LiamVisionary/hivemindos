@@ -6,8 +6,12 @@ import {
   readRuntimeResponseText,
 } from "@/lib/services/phone/runtime-voice-turn";
 import { readRuntimeChatSession } from "@/lib/services/chat/runtime-session-store";
-import { transcriptionApiKey } from "@/lib/services/phone/transcription";
+import {
+  resolveOpenAiApiKeyChatEndpoint,
+  resolvePreferredOpenAiChatRoute,
+} from "@/lib/services/openai-preferred-chat";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
+import type { PreferredOpenAiChatRoute } from "@/lib/config/openai-provider-routing";
 
 type CapabilityMessage = { role: string; content: string };
 
@@ -25,6 +29,8 @@ type CapabilityFallbackDependencies = {
   fetcher?: typeof fetch;
   readSession?: typeof readRuntimeChatSession;
   readResponse?: (response: Response) => Promise<string>;
+  resolveRoute?: (model: string) => Promise<PreferredOpenAiChatRoute>;
+  resolveApiEndpoint?: typeof resolveOpenAiApiKeyChatEndpoint;
 };
 
 export type BuiltInCapabilityTurnResult = {
@@ -91,15 +97,39 @@ export function capabilityApprovalFromSse(raw: string) {
   return null;
 }
 
-export function builtInQueenCapabilityProfile(model: string, token: string): AgentProfile {
+export function builtInQueenCapabilityProfile(
+  model: string,
+  token = "",
+  auth: PreferredOpenAiChatRoute["auth"] = "api-key",
+  apiUrl = new URL(
+    "/v1/chat/completions",
+    "https://api.openai.com",
+  ).toString(),
+): AgentProfile {
+  if (auth === "oauth") {
+    return {
+      id: "queen-capability-fallback",
+      name: "Queen capability fallback",
+      runtime: "hermes",
+      provider: "openai-codex",
+      model,
+      gatewayUrl:
+        process.env.NEXT_PUBLIC_HERMES_BASE_URL ?? "http://127.0.0.1:8642",
+      chatPath: "/chat",
+      statusPath: "/health",
+      runtimeCapabilities: { chat: true, skillActions: true },
+      workerClass: "general",
+    };
+  }
+  const endpoint = new URL(apiUrl);
   return {
     id: "queen-capability-fallback",
     name: "Queen capability fallback",
     runtime: HIVEMIND_OS_RUNTIME,
     provider: "openai",
     model,
-    gatewayUrl: "https://api.openai.com/v1",
-    chatPath: "/chat/completions",
+    gatewayUrl: endpoint.origin,
+    chatPath: endpoint.pathname,
     statusPath: "/models",
     token,
     runtimeCapabilities: { chat: true, skillActions: true },
@@ -118,9 +148,36 @@ export async function runBuiltInQueenCapabilityTurnWithEvidence(
   input: CapabilityFallbackInput,
   dependencies: CapabilityFallbackDependencies = {},
 ): Promise<BuiltInCapabilityTurnResult> {
-  const apiKey = dependencies.apiKey ?? transcriptionApiKey;
-  const token = await apiKey();
-  if (!token) throw new Error("The built-in tool-capable fallback has no OpenAI key.");
+  const route = await (
+    dependencies.resolveRoute ?? resolvePreferredOpenAiChatRoute
+  )(input.model);
+  let profile: AgentProfile;
+  if (route.auth === "oauth") {
+    profile = builtInQueenCapabilityProfile(route.model, "", "oauth");
+  } else {
+    const endpoint = dependencies.apiKey
+      ? {
+          key: await dependencies.apiKey(),
+          url: new URL(
+            "/v1/chat/completions",
+            "https://api.openai.com",
+          ).toString(),
+        }
+      : await (
+          dependencies.resolveApiEndpoint ?? resolveOpenAiApiKeyChatEndpoint
+        )();
+    if (!endpoint?.key) {
+      throw new Error(
+        "The built-in tool-capable fallback has no OpenAI API key.",
+      );
+    }
+    profile = builtInQueenCapabilityProfile(
+      route.model,
+      endpoint.key,
+      "api-key",
+      endpoint.url,
+    );
+  }
 
   const fetcher = dependencies.fetcher ?? fetch;
   const readSession = dependencies.readSession ?? readRuntimeChatSession;
@@ -129,7 +186,7 @@ export async function runBuiltInQueenCapabilityTurnWithEvidence(
     method: "POST",
     headers: { "content-type": "application/json", ...internalApiAuthHeaders() },
     body: JSON.stringify({
-      agent: builtInQueenCapabilityProfile(input.model, token),
+      agent: profile,
       messages: input.messages,
       runtimeSessionId: input.sessionId,
       agentMode: "act",

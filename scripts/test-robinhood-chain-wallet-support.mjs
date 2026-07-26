@@ -72,8 +72,10 @@ contains(capabilityRail, 'if (network === "eip155:4663") return "Robinhood Chain
 contains(capabilityRail, "walletNetworkLabel(wallet.network)", "Trade rail receive copy must use network-specific labels");
 
 const walletPanel = read("src/features/dashboard/views/WalletPanel.tsx");
-contains(walletPanel, 'return String(network || "").toLowerCase() === "eip155:4663" ? "USDG" : "USDC"', "Wallet panel must resolve Robinhood Chain stable sends to USDG");
-contains(walletPanel, "resolvePersonalWalletAgentIdForAsset", "Grouped personal wallets must resolve the correct chain account by stable asset");
+const fundAgentClient = read("src/lib/services/wallet/fund-agent-client.ts");
+contains(fundAgentClient, 'return String(network || "").toLowerCase() === "eip155:4663" ? "USDG" : "USDC"', "The shared fund-agent client must resolve Robinhood Chain stable sends to USDG");
+contains(fundAgentClient, "resolvePersonalWalletAgentIdForAsset", "Grouped personal wallets must resolve the correct chain account by stable asset");
+contains(walletPanel, "executeAgentFunding", "Wallet panel agent funding must go through the shared fund-agent client");
 contains(walletPanel, "MULTI_CHAIN_WALLET_LABEL", "Wallet creation must use the canonical multi-chain option");
 contains(read("src/lib/config/personal-wallet-chains.ts"), 'MULTI_CHAIN_WALLET_LABEL = "Multi-chain (Base + Robinhood Chain + Solana)"', "Wallet creation copy must name Robinhood Chain");
 

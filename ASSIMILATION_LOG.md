@@ -13231,3 +13231,91 @@ also can we add long actions in telegram? like in the menu that appears when i h
 - Assimilated: 5 concrete donor mappings recorded in ASSIMILATION.opensre-integration.json.
 - Not assimilated: No user machine sidecar installation, no external OpenSRE model call, no automatic Work Board task or Shared Brain memory from unreviewed diagnosis.
 - Verification: Manifest valid with 5 concrete/3 substantive entries. Full gate 233/237: both new SRE suites green; four unrelated concurrent reds were DashboardApp size allowance plus three chat source-contract suites. Original baseline collector-abort and quant-research reds passed in the final run.
+## 2026-07-25T01:57:24.700308+00:00 - shared-brain
+
+- Request: Fix HiveTipBot reaction failures so they are visible in the Telegram group and undo failed trophy reactions when possible
+- Source: shared-brain
+- Selected backbone: local-project:hivemind-os
+- Note: Full-vault recall confirmed the current reaction-recognition contract before code inspection.
+
+### Candidates
+- Memory/Distillations/Agent Memory/decision/2026-07-18-hivemindos-has-one-cumulative-honey-44bd6af4a3.md
+  - Decision: selected
+  - Reason: confirms member-added trophy is the recognition action and bot must not seed trophies
+- Skills/telegram-tip-bot/SKILL.md
+  - Decision: selected
+  - Reason: defines the source-of-truth modules, focused suite, production daemon, and one-poller constraint
+## 2026-07-25T01:57:30.078239+00:00 - local-search
+
+- Request: Fix HiveTipBot reaction failures so they are visible in the Telegram group and undo failed trophy reactions when possible
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+- Note: The exact production receipt was confirmed rejected, and the bot is a chat administrator with can_delete_messages.
+
+### Candidates
+- src/lib/services/telegram-tip-bot/honey-reaction-handler.ts
+  - Decision: selected
+  - Reason: exact rejection path currently DMs notifyGiver after hosted-ledger errors
+- src/lib/services/telegram-tip-bot/telegram-api.ts
+  - Decision: selected-donor
+  - Reason: existing typed Bot API client provides the canonical call method and sendMessage shape
+- scripts/test-telegram-tip-bot.mjs
+  - Decision: selected-donor
+  - Reason: established focused regression suite and reaction contracts
+## 2026-07-25T01:57:35.157896+00:00 - audit
+
+- Request: Fix HiveTipBot reaction failures so they are visible in the Telegram group and undo failed trophy reactions when possible
+- Source: official-docs:telegram-bot-api-10.0
+- Selected backbone: local-project:hivemind-os
+- Note: The new API deletes the giver's reaction directly; no bot-authored trophy placement is introduced.
+
+### Candidates
+- https://core.telegram.org/bots/api#deletemessagereaction
+  - Decision: selected-donor
+  - Reason: Bot API 10.0 deleteMessageReaction removes a specified user's reaction when the bot has can_delete_messages
+- public-github
+  - Decision: not-assimilated
+  - Reason: no external implementation search needed because the pinned project contains the complete handler/client/test backbone and Telegram primary docs close the only API gap
+## 2026-07-25T02:04:08.484966+00:00 - assimilation-manifest
+
+- Request: Fix HiveTipBot reaction failures so they are visible in the Telegram group and undo failed trophy reactions when possible
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: hivemind-os:src/lib/services/telegram-tip-bot/honey-recognition.ts => src/lib/services/telegram-tip-bot/honey-recognition.ts, hivemind-os:src/lib/services/telegram-tip-bot/telegram-api.ts => src/lib/services/telegram-tip-bot/telegram-api.ts, hivemind-os:src/lib/services/telegram-tip-bot/honey-reaction-handler.ts => src/lib/services/telegram-tip-bot/honey-reaction-handler.ts, hivemind-os:scripts/test-telegram-tip-bot.mjs => scripts/test-telegram-tip-bot.mjs
+- Verification: Wrote ASSIMILATION.tipbot-reaction-rejection.json with 4 entries and custom_code_assessment=mostly_assimilated.
+## 2026-07-25T02:04:09.220830+00:00 - verification
+
+- Request: Fix HiveTipBot reaction failures so they are visible in the Telegram group and undo failed trophy reactions when possible
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.tipbot-reaction-rejection.json: 4 concrete reuse entries, 3 substantive
+## 2026-07-25T02:12:07.550457+00:00 - implementation
+
+- Request: Fix HiveTipBot reaction failures so they are visible in the Telegram group and undo failed trophy reactions when possible
+- Source: local-project:hivemind-os
+- Decision: adapted_code
+- Reason: Extended the existing reaction domain, audited handler, canonical Telegram client, and focused suite; no parallel implementation or external framework was introduced.
+- Selected backbone: local-project:hivemind-os
+- Note: Failed reactions now attempt member-specific cleanup, report in the group, and use DM only when the group reply fails.
+## 2026-07-25T02:12:07.606931+00:00 - verification
+
+- Request: Fix HiveTipBot reaction failures so they are visible in the Telegram group and undo failed trophy reactions when possible
+- Source: focused-tests-and-live-daemon
+- Decision: passed
+- Reason: 53/53 focused tests, scoped lint, bundle parse, live deployment, exact receipt cleanup, retroactive group reply, and a full post-restart poll/report interval without conflict passed.
+- Selected backbone: local-project:hivemind-os
+- Note: Repository-wide typecheck remains blocked only by three unrelated Marketplace errors; the tip-bot files are absent from diagnostics.
+## 2026-07-25T02:12:07.655983+00:00 - final
+
+- Request: Fix HiveTipBot reaction failures so they are visible in the Telegram group and undo failed trophy reactions when possible
+- Source: verification
+- Decision: complete-uncommitted
+- Reason: The requested behavior is deployed live and the screenshot occurrence is repaired; source and documentation remain intentionally uncommitted in the shared dirty tree.
+- Selected backbone: local-project:hivemind-os
+- Note: The shared local autostart flag is disabled so the VPS remains the only token poller.
+## 2026-07-25T02:12:50.396711+00:00 - verification
+
+- Request: Fix HiveTipBot reaction failures so they are visible in the Telegram group and undo failed trophy reactions when possible
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.tipbot-reaction-rejection.json: 4 concrete reuse entries, 3 substantive

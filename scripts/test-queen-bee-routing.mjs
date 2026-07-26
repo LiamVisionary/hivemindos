@@ -1,6 +1,13 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { chooseQueenBeeDelegate, inferQueenBeeWorkerClass } from "../src/lib/services/queen-bee/router.ts";
+import { register } from "node:module";
+
+// router.ts now imports the shared worker-class matrix through the "@/" alias,
+// so this suite needs the repo's TS loader like its sibling suites.
+register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
+
+const { chooseQueenBeeDelegate, inferQueenBeeWorkerClass } = await import("../src/lib/services/queen-bee/router.ts");
+const { inferWorkerClass } = await import("../src/lib/services/orchestration/bee-roles.ts");
 
 const baseAgent = {
   id: "agent-general",
@@ -34,6 +41,32 @@ function machine(key, name, agents, extra = {}) {
 assert.equal(inferQueenBeeWorkerClass({ title: "fix the TypeScript API tests", body: "" }), "code");
 assert.equal(inferQueenBeeWorkerClass({ title: "verify this UI with screenshots", body: "" }), "vision");
 assert.equal(inferQueenBeeWorkerClass({ title: "deploy the collector and check Tailscale", body: "" }), "ops");
+
+// ── single-sourced worker-class matrix (2026-07-26) ─────────────────────────
+// The router and the orchestration surface (dashboard pickup loop, handoff)
+// classify through ONE shared table in bee-roles.ts, so every surface agrees.
+for (const intent of [
+  { title: "fix the TypeScript API tests", body: "" },
+  { title: "verify this UI with screenshots", body: "" },
+  { title: "deploy the collector and check Tailscale", body: "" },
+  { title: "write the launch newsletter", body: "" },
+  { title: "qa verification review pass", body: "" },
+]) {
+  assert.equal(
+    inferQueenBeeWorkerClass(intent),
+    inferWorkerClass(intent),
+    `router and orchestration surfaces must classify "${intent.title}" identically`,
+  );
+}
+// Handoff-surface classification intentionally follows the router's weights
+// now: "verify" (qa, weight 2) outweighs "deploy" (ops, weight 1) — the old
+// orchestration table tied 1-1 and let ops win on priority.
+assert.equal(inferWorkerClass({ title: "verify the deploy", body: "" }), "qa");
+// Keywords that only existed in the orchestration table are preserved in the
+// merged matrix (security: malicious/cve/exfiltrat/skillspector/scan...).
+assert.equal(inferQueenBeeWorkerClass({ title: "Scan skill uploads for malicious exfiltration", body: "" }), "security");
+// An explicit worker-class token in skills wins outright on BOTH surfaces.
+assert.equal(inferWorkerClass({ title: "do the thing", body: "", skills: ["security"] }), "security");
 
 const codeMachine = machine("ubuntu", "Ubuntu Build Box", [{
   ...baseAgent,

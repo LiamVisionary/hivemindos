@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-07-25T02:04:08.246938+00:00",
+  "request": "Fix HiveTipBot reaction failures so they are visible in the Telegram group and undo failed trophy reactions when possible",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/telegram-tip-bot/honey-recognition.ts",
+      "target_path": "src/lib/services/telegram-tip-bot/honey-recognition.ts",
+      "reuse_type": "adapted_code",
+      "note": "extended the existing pure reaction domain with tested public-first rejection orchestration"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/telegram-tip-bot/telegram-api.ts",
+      "target_path": "src/lib/services/telegram-tip-bot/telegram-api.ts",
+      "reuse_type": "adapted_code",
+      "note": "extended the canonical Bot API client with Bot API 10.0 deleteMessageReaction"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/telegram-tip-bot/honey-reaction-handler.ts",
+      "target_path": "src/lib/services/telegram-tip-bot/honey-reaction-handler.ts",
+      "reuse_type": "adapted_code",
+      "note": "changed the existing audited rejection path from DM-first to reaction cleanup and group reply with DM fallback"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "scripts/test-telegram-tip-bot.mjs",
+      "target_path": "scripts/test-telegram-tip-bot.mjs",
+      "reuse_type": "test_adapted",
+      "note": "extended the established focused suite with RED-GREEN routing and cleanup regression coverage"
+    }
+  ]
+}

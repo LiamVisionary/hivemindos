@@ -5,6 +5,7 @@ import {
   readDashboardState,
   readDashboardStateStrict,
 } from "@/lib/services/dashboard-state";
+import { mergeAgentProfileSnapshot } from "@/lib/config/agent-profile-configuration";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 
 /**
@@ -61,9 +62,34 @@ export async function readStoredAgentProfilesStrict(): Promise<AgentProfile[]> {
 export async function upsertStoredAgentProfile(agent: AgentProfile): Promise<AgentProfile> {
   const state = await readDashboardState();
   const key = resolveProfilesKey(state.values);
+  let saved = agent;
   await mutateDashboardStateValue(key, (current) => {
     const profiles = parseProfiles(current);
-    return JSON.stringify([...profiles.filter((item) => item.id !== agent.id), agent]);
+    const merged = mergeAgentProfileSnapshot(
+      profiles,
+      [...profiles.filter((item) => item.id !== agent.id), agent],
+    );
+    saved = merged.find((item) => item.id === agent.id) ?? agent;
+    return JSON.stringify(merged);
   });
-  return agent;
+  return saved;
+}
+
+/**
+ * Remove one stored agent profile by id — e.g. a deleted company's cloned CEO
+ * queen (company-queen.ts). Runs inside the same write queue as upserts so a
+ * concurrent profile edit can't resurrect the removed entry mid-write. No-op
+ * (returns false) when the id is not present.
+ */
+export async function removeStoredAgentProfile(id: string): Promise<boolean> {
+  const state = await readDashboardState();
+  const key = resolveProfilesKey(state.values);
+  let removed = false;
+  await mutateDashboardStateValue(key, (current) => {
+    const profiles = parseProfiles(current);
+    const next = profiles.filter((item) => item.id !== id);
+    removed = next.length !== profiles.length;
+    return JSON.stringify(next);
+  });
+  return removed;
 }

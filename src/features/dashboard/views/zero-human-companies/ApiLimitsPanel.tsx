@@ -1,11 +1,12 @@
 "use client";
 
 import React from "react";
-import { Activity, AlertTriangle, CheckCircle2, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, PlugZap, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
 
 import { Panel, Skeleton, Spinner } from "./primitives";
 import type { CompanyApiBudget, CompanyIntegrationLimit, GcpApiDailyCap } from "@/lib/types/company";
 import { companyApiBudgetScopeKey } from "@/lib/services/company-api-budget";
+import type { CompanyEngineBudgetSnapshot } from "@/lib/services/company-engine-budget";
 import type { ConnectionProviderKey } from "@/lib/types/integrations";
 import styles from "./api-limits.module.css";
 
@@ -67,6 +68,8 @@ type LimitsPayload = {
   billingInfo: GcpBillingInfo | null;
   metrics: GcpMetric[];
   discoveryErrors: string[];
+  /** The company engine's own in-process spend meter, pushed by its bridge. */
+  engine?: CompanyEngineBudgetSnapshot | null;
 };
 
 type MetricDraft = GcpMetric & { enabled: boolean; value: string; skuUnitCostUsd: string; freeMonthlyCalls: string };
@@ -410,6 +413,106 @@ function IntegrationLimitsEditor({ companyId, data, onReload }: { companyId: str
   );
 }
 
+/**
+ * Translate an engine's raw lockdown escalation into founder-readable copy.
+ * The raw text stays available behind an expander — never silently hidden.
+ */
+function friendlyLockdown(reason?: string): { headline: string; hint: string } {
+  if (/403|permission.?denied|forbidden|unauthoriz/i.test(reason ?? "")) {
+    return {
+      headline: "Google is refusing this company's API calls right now (access denied).",
+      hint: "New lead scouting is paused; everything else keeps working on existing leads. Re-enable the API or its billing for this project in the Google Cloud console, then resolve the open escalation on the Work Board.",
+    };
+  }
+  return {
+    headline: "The provider is rejecting this engine's API calls.",
+    hint: "The engine keeps working on existing leads and retries automatically next cycle.",
+  };
+}
+
+/**
+ * The company engine's OWN hard-cap meter (e.g. maps-agency's Places meter),
+ * pushed by its bridge each cycle. Read-only on purpose: these caps are
+ * enforced inside the engine's process and edited in the engine repo. Rendered
+ * INSIDE the Google Cloud panel when the provider is Google (one Google pane),
+ * or as a standalone panel for any future non-Google engine.
+ */
+function EngineMeterBody({ engine }: { engine: CompanyEngineBudgetSnapshot }) {
+  const skus = [...new Set([...Object.keys(engine.dailyCallCaps), ...Object.keys(engine.dayCalls)])].sort();
+  const monthPct = engine.monthlyCeilingUsd > 0
+    ? Math.min(100, (engine.monthEstCostUsd / engine.monthlyCeilingUsd) * 100)
+    : 0;
+  const lock = engine.lockdown ? friendlyLockdown(engine.lockdownReason) : null;
+  return (
+    <>
+      {lock ? (
+        <div className={styles.error} style={{ marginBottom: 12, display: "block" }}>
+          <div><AlertTriangle size={14} /> {lock.headline}</div>
+          <div className={styles.rowMeta} style={{ marginTop: 6 }}>{lock.hint}</div>
+          {engine.lockdownReason ? (
+            <details style={{ marginTop: 6 }}>
+              <summary className={styles.rowMeta} style={{ cursor: "pointer" }}>What the engine reported</summary>
+              <div className={styles.rowMeta} style={{ marginTop: 4 }}>{engine.lockdownReason}</div>
+            </details>
+          ) : null}
+        </div>
+      ) : null}
+      <div className={styles.savedList}>
+        <div className={styles.savedRow}>
+          <div className={styles.rowHead}>
+            <div>
+              <div className={styles.rowTitle}>Month {engine.month}</div>
+              <div className={styles.rowMeta}>
+                {usd(engine.monthEstCostUsd)} estimated of {usd(engine.monthlyCeilingUsd)} ceiling ({Math.round(monthPct)}%)
+              </div>
+            </div>
+          </div>
+        </div>
+        {skus.map((sku) => {
+          const used = engine.dayCalls[sku] ?? 0;
+          const cap = engine.dailyCallCaps[sku];
+          return (
+            <div key={sku} className={styles.savedRow}>
+              <div className={styles.rowHead}>
+                <div>
+                  <div className={styles.rowTitle}>{sku}</div>
+                  <div className={styles.rowMeta}>
+                    {cap !== undefined
+                      ? `${integer(used)} / ${integer(cap)} calls on ${engine.dayDate}`
+                      : `${integer(used)} calls on ${engine.dayDate} · no daily cap`}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className={styles.note} style={{ marginTop: 12 }}>
+        Live meter reported by the company engine{engine.configPath ? ` — caps are edited in the engine repo (${engine.configPath})` : ""}. Last report {new Date(engine.updatedAt).toLocaleString()}.
+      </div>
+    </>
+  );
+}
+
+/** Standalone wrapper for a NON-Google engine meter (none exist yet). */
+function EngineBudgetSection({ engine }: { engine: CompanyEngineBudgetSnapshot }) {
+  return (
+    <Panel>
+      <div className={styles.chartHeader}>
+        <div>
+          <h3 className={styles.sectionTitle}>{engine.label || `Engine meter · ${engine.providerKey}`}</h3>
+          <p className={styles.sectionCopy}>The company engine meters every billed call in-process, stops at each per-day cap, and stops the month at the ceiling.</p>
+        </div>
+        <span className={`${styles.pill} ${engine.lockdown ? styles.pillWarn : styles.pillLive}`}>
+          {engine.lockdown ? <AlertTriangle size={12} /> : <CheckCircle2 size={12} />}
+          {engine.lockdown ? "Provider lockdown" : "Metering"}
+        </span>
+      </div>
+      <EngineMeterBody engine={engine} />
+    </Panel>
+  );
+}
+
 function budgetForScope(payload: LimitsPayload, projectRef: string, service: string): CompanyApiBudget | undefined {
   return payload.apiBudgets.find(
     (budget) => budget.provider === "gcp" && budget.service === service &&
@@ -432,7 +535,7 @@ function metricDrafts(payload: LimitsPayload, projectRef: string, service: strin
   });
 }
 
-function GcpGuardrailEditor({ companyId, data, onReload }: { companyId: string; data: LimitsPayload; onReload: (projectId?: string, service?: string) => Promise<LimitsPayload> }) {
+function GcpGuardrailEditor({ companyId, data, engine, onReload }: { companyId: string; data: LimitsPayload; engine?: CompanyEngineBudgetSnapshot | null; onReload: (projectId?: string, service?: string) => Promise<LimitsPayload> }) {
   const [projectId, setProjectId] = React.useState("");
   const [projectNumber, setProjectNumber] = React.useState("");
   const [service, setService] = React.useState("");
@@ -449,6 +552,40 @@ function GcpGuardrailEditor({ companyId, data, onReload }: { companyId: string; 
     setDrafts(metricDrafts(payload, selectedProject, selectedService));
     setMonthlyCeiling(saved ? String(saved.monthlyCeilingUsd) : "");
     setBillingAccount(saved?.billingAccount || payload.billingInfo?.billingAccountName || payload.billingAccounts.find((account) => account.open)?.name || "");
+  }
+
+  // In-place OAuth connect: fetch the authorization URL and open Google's
+  // consent screen in a popup, then poll until the grant lands — no detour
+  // through the Integrations view. The GET start route stays available as the
+  // full-page fallback.
+  async function startConnect() {
+    setBusy("connect");
+    setMessage("");
+    setMessageError(false);
+    try {
+      const response = await fetch("/api/integrations/google-cloud/oauth/start", { method: "POST" });
+      const payload = await responseJson<{ authorizationUrl?: string }>(response);
+      if (!response.ok || payload.ok === false || !payload.authorizationUrl) {
+        throw new Error(payload.error || "Google Cloud sign-in could not start.");
+      }
+      window.open(payload.authorizationUrl, "_blank", "noopener,width=560,height=760");
+      setMessage("Finish the Google sign-in in the window that just opened — this panel updates itself once the grant lands.");
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 3000));
+        const refreshed = await onReload(projectId, service).catch(() => null);
+        if (refreshed?.connected) {
+          setMessage("Google Cloud connected.");
+          return;
+        }
+      }
+      setMessage("Still not connected — finish the sign-in, then press Refresh.");
+      setMessageError(true);
+    } catch (reason) {
+      setMessage(reason instanceof Error ? reason.message : "Google Cloud sign-in could not start.");
+      setMessageError(true);
+    } finally {
+      setBusy("");
+    }
   }
 
   async function discover(nextProject: string, nextService = "") {
@@ -568,11 +705,29 @@ function GcpGuardrailEditor({ companyId, data, onReload }: { companyId: string; 
     <Panel>
       <div className={styles.chartHeader}>
         <div>
-          <h3 className={styles.sectionTitle}>Google Cloud provider guardrails</h3>
-          <p className={styles.sectionCopy}>Daily consumer-quota overrides throttle at Google. Monthly Cloud Billing budgets alert at 50%, 90%, and 100%; Google budgets do not hard-stop billing.</p>
+          <h3 className={styles.sectionTitle}>Google spend & guardrails</h3>
+          <p className={styles.sectionCopy}>One pane for Google: the engine's own live meter, saved provider-side guardrails, and Google-enforced quotas/budgets. Daily consumer-quota overrides throttle at Google; monthly Cloud Billing budgets alert at 50%, 90%, and 100% (they do not hard-stop billing).</p>
         </div>
-        <span className={`${styles.pill} ${data.connected ? styles.pillLive : styles.pillWarn}`}>{data.connected ? <CheckCircle2 size={12} /> : <AlertTriangle size={12} />}{data.connected ? "OAuth ready" : "Connect in Integrations"}</span>
+        {/* One status element + one action, right-aligned even when wrapped —
+            the lockdown state renders as the banner in the meter block below,
+            so a header pill for it would be redundant noise. */}
+        <div className={styles.statusRow} style={{ justifyContent: "flex-end" }}>
+          {data.connected ? (
+            <span className={`${styles.pill} ${styles.pillLive}`}><CheckCircle2 size={12} /> OAuth ready</span>
+          ) : (
+            <button type="button" className={styles.button} disabled={busy === "connect"} onClick={() => void startConnect()}>
+              {busy === "connect" ? <Spinner size={11} /> : <PlugZap size={12} />} Connect Google Cloud
+            </button>
+          )}
+        </div>
       </div>
+
+      {engine ? (
+        <div style={{ marginBottom: 16 }}>
+          <div className={styles.rowTitle} style={{ marginBottom: 8 }}>{engine.label || "Engine spend meter"}</div>
+          <EngineMeterBody engine={engine} />
+        </div>
+      ) : null}
 
       {data.apiBudgets.length ? (
         <div className={styles.savedList} style={{ marginBottom: 16 }}>
@@ -591,7 +746,12 @@ function GcpGuardrailEditor({ companyId, data, onReload }: { companyId: string; 
         </div>
       ) : null}
 
-      {!data.connected ? <div className={styles.note}>Connect Google Cloud from the Integrations view to discover projects, enabled APIs, quota metrics, and linked billing accounts. Saved provider-side guardrails remain listed above.</div> : (
+      {!data.connected ? (
+        <>
+          <div className={styles.note}>Connect Google Cloud (button above) to discover projects, enabled APIs, quota metrics, and linked billing accounts right here. Saved provider-side guardrails remain listed above.</div>
+          {message ? <div className={messageError ? styles.error : styles.note} style={{ marginTop: 13 }}>{message}</div> : null}
+        </>
+      ) : (
         <>
           <div className={styles.editorGrid}>
             <label className={styles.field}>
@@ -761,9 +921,11 @@ export function ApiLimitsPanel({ companyId, companyName }: { companyId: string; 
 
       <RecentUsage usage={data.usage} connectors={data.connectors} />
 
+      {data.engine && !data.engine.providerKey.startsWith("google") ? <EngineBudgetSection engine={data.engine} /> : null}
+
       <IntegrationLimitsEditor companyId={companyId} data={data} onReload={() => load()} />
 
-      <GcpGuardrailEditor companyId={companyId} data={data} onReload={load} />
+      <GcpGuardrailEditor companyId={companyId} data={data} engine={data.engine?.providerKey.startsWith("google") ? data.engine : null} onReload={load} />
     </div>
   );
 }

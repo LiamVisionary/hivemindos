@@ -61,6 +61,7 @@ const {
 } = await import("../src/lib/services/companies-store.ts");
 const { ensureCompanyProductsSeeded, extractPricingProposalMarkers } = await import("../src/lib/services/company-products.ts");
 const { proposeCompanyPricingChange, resolveCompanyPricingProposal } = await import("../src/lib/services/companies-store.ts");
+const { companyQueenAgentId } = await import("../src/lib/services/company-queen.ts");
 const { companyWorkerContext } = await import("../src/lib/services/companies-orchestration.ts");
 const membershipModule = await import("../src/lib/services/company-membership.ts");
 const { readCompanyMemory, syncCompanyTaskOutcomes } = await import("../src/lib/services/company-memory.ts");
@@ -123,8 +124,19 @@ try {
     "set-agents rejects an agent identity already owned by another company",
   );
   const ownerStillValid = await setCompanyAgents(exclusiveOwner.id, ["shared-agent"]);
-  assert.deepEqual(ownerStillValid.agentIds, ["shared-agent"], "saving the existing owner is still allowed");
-  assert.deepEqual((await getCompany(exclusiveCandidate.id)).agentIds, [], "rejected membership never mutates the target company");
+  // Every roster now leads with the company's own cloned CEO queen (the
+  // non-removable member seeded by company-queen.ts); it is company-scoped, so
+  // it never trips the exclusive-membership rule.
+  assert.deepEqual(
+    ownerStillValid.agentIds,
+    [companyQueenAgentId(exclusiveOwner.id), "shared-agent"],
+    "saving the existing owner is still allowed",
+  );
+  assert.deepEqual(
+    (await getCompany(exclusiveCandidate.id)).agentIds,
+    [companyQueenAgentId(exclusiveCandidate.id)],
+    "rejected membership never mutates the target company (only its own seeded queen is on the roster)",
+  );
   assert.equal(typeof membershipModule.companyMembershipOwners, "function", "membership module exposes the ownership map used by the company picker");
   const membershipOwners = membershipModule.companyMembershipOwners(await readCompanies());
   assert.deepEqual(

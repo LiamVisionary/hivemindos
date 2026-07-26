@@ -1,0 +1,563 @@
+/* Agent asset overview (chat route): popover card + wallet/fund/emails modals.
+ * Styled entirely with global theme tokens so dark and hive-light both work. */
+
+.pop {
+  position: fixed;
+  z-index: 200;
+  display: grid;
+  gap: 10px;
+  width: 324px;
+  padding: 12px;
+  transform-origin: top left;
+}
+
+.popHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.popHeaderCopy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+}
+
+.popName {
+  font: 600 13.5px/1.3 var(--f-body);
+  color: var(--fg);
+  overflow-wrap: anywhere;
+}
+
+.popSub {
+  font: 500 11px/1.35 var(--f-body);
+  color: var(--fg-4);
+  overflow-wrap: anywhere;
+}
+
+.section {
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid var(--line);
+  padding-top: 9px;
+}
+
+.sectionLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 600 10.5px/1 var(--f-body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+}
+
+.sectionLabel svg {
+  width: 12px;
+  height: 12px;
+}
+
+.balanceRow {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.balance {
+  font-family: var(--f-mono);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--fg);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font: 500 10.5px/1.4 var(--f-body);
+  color: var(--fg-3);
+}
+
+.chip[data-tone="ok"] {
+  color: var(--live);
+  border-color: color-mix(in srgb, var(--live) 35%, transparent);
+}
+
+.chip[data-tone="warn"] {
+  color: var(--honey);
+  border-color: color-mix(in srgb, var(--honey) 35%, transparent);
+}
+
+.chip[data-tone="danger"] {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+}
+
+.rows {
+  display: grid;
+  gap: 4px;
+}
+
+.holdingRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font: 500 12px/1.4 var(--f-body);
+  color: var(--fg-2);
+}
+
+.holdingSym {
+  flex: 0 0 auto;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.holdingAmount {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+}
+
+.holdingVal {
+  flex: 0 0 auto;
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  color: var(--fg-3);
+}
+
+.addrRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: 500 11px/1.4 var(--f-body);
+  color: var(--fg-4);
+}
+
+.addrText {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--f-mono);
+}
+
+.iconBtn {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-4);
+  cursor: pointer;
+}
+
+.iconBtn:hover {
+  color: var(--fg-2);
+  background: var(--panel-hi);
+}
+
+.iconBtn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.empty {
+  font: 500 11.5px/1.5 var(--f-body);
+  color: var(--fg-4);
+}
+
+.mailAddress {
+  font: 500 11.5px/1.4 var(--f-mono);
+  color: var(--fg-2);
+  overflow-wrap: anywhere;
+}
+
+.mailMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font: 500 11px/1.4 var(--f-body);
+  color: var(--fg-4);
+}
+
+.footer {
+  display: flex;
+  gap: 6px;
+  border-top: 1px solid var(--line);
+  padding-top: 9px;
+}
+
+.footerBtn {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 30px;
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--fg-2);
+  font: 500 11.5px/1 var(--f-body);
+  cursor: pointer;
+}
+
+.footerBtn:hover {
+  color: var(--fg);
+  background: var(--panel-hi);
+}
+
+.footerBtn svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* Animated skeleton rows for pending wallet/mail loads (never a static label). */
+.skel {
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(100deg, var(--panel-hi) 40%, color-mix(in srgb, var(--fg-4) 22%, var(--panel-hi)) 50%, var(--panel-hi) 60%);
+  background-size: 200% 100%;
+  animation: aao-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes aao-shimmer {
+  from { background-position: 120% 0; }
+  to { background-position: -80% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skel {
+    animation: none;
+    background: var(--panel-hi);
+  }
+}
+
+.spin {
+  animation: aao-spin 0.8s linear infinite;
+}
+
+@keyframes aao-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin { animation-duration: 1.6s; }
+}
+
+/* --- Modals (mirrors the chat route's capability-setup modal chrome) --- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: color-mix(in srgb, #07090c 72%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.modal {
+  display: grid;
+  width: min(560px, 100%);
+  max-height: min(720px, calc(100dvh - 40px));
+  overflow: auto;
+  border: 1px solid var(--line-2);
+  border-radius: 16px;
+  color: var(--fg);
+  background: var(--panel);
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.42);
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+  padding: 14px 16px;
+}
+
+.modalHeader h2 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font: 600 15px/1.25 var(--f-body);
+}
+
+.modalHeader svg {
+  width: 16px;
+  height: 16px;
+  color: var(--fg-3);
+}
+
+.modalClose {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
+}
+
+.modalClose:hover {
+  color: var(--fg);
+  background: var(--panel-hi);
+}
+
+.modalBody {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.modalSection {
+  display: grid;
+  gap: 8px;
+}
+
+.modalSectionTitle {
+  font: 600 11px/1 var(--f-body);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+}
+
+.kvRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font: 500 12.5px/1.5 var(--f-body);
+  color: var(--fg-2);
+}
+
+.kvRow > span:first-child {
+  color: var(--fg-4);
+}
+
+.kvRow > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.modalActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.primaryBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  border: 0;
+  border-radius: 10px;
+  padding: 0 14px;
+  background: var(--honey, #f2b705);
+  color: #1a1305;
+  font: 600 12.5px/1 var(--f-body);
+  cursor: pointer;
+}
+
+.primaryBtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.secondaryBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  padding: 0 14px;
+  background: transparent;
+  color: var(--fg-2);
+  font: 500 12.5px/1 var(--f-body);
+  cursor: pointer;
+}
+
+.secondaryBtn:hover {
+  color: var(--fg);
+  background: var(--panel-hi);
+}
+
+.help {
+  font: 500 11.5px/1.55 var(--f-body);
+  color: var(--fg-4);
+  overflow-wrap: anywhere;
+}
+
+.error {
+  font: 500 11.5px/1.5 var(--f-body);
+  color: var(--danger);
+  overflow-wrap: anywhere;
+}
+
+.success {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid color-mix(in srgb, var(--live) 35%, transparent);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: 500 12px/1.5 var(--f-body);
+  color: var(--fg-2);
+}
+
+.success strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.success a {
+  color: var(--live);
+}
+
+/* Fund modal: source + amount */
+.sourceGrid {
+  display: grid;
+  gap: 6px;
+}
+
+.sourceCard {
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  padding: 9px 11px;
+  background: transparent;
+  color: var(--fg-2);
+  text-align: left;
+  font: 500 12px/1.4 var(--f-body);
+  cursor: pointer;
+}
+
+.sourceCard:hover {
+  background: var(--panel-hi);
+}
+
+.sourceCard[data-sel] {
+  border-color: color-mix(in srgb, var(--honey) 55%, var(--line-2));
+  background: color-mix(in srgb, var(--honey) 8%, transparent);
+}
+
+.sourceCard b {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.sourceCard small {
+  font: 500 10.5px/1.4 var(--f-body);
+  color: var(--fg-4);
+  overflow-wrap: anywhere;
+}
+
+.amountRow {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.amountField {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  padding: 0 12px;
+  min-height: 34px;
+  background: transparent;
+  color: var(--fg);
+  font: 500 13px/1 var(--f-mono);
+}
+
+.amountField:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--honey) 55%, var(--line-2));
+}
+
+.assetTag {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  padding: 0 12px;
+  color: var(--fg-3);
+  font: 600 12px/1 var(--f-body);
+}
+
+/* Emails modal */
+.threadRow {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  padding: 9px 11px;
+  background: transparent;
+  color: var(--fg-2);
+  text-align: left;
+  font: 500 12px/1.45 var(--f-body);
+  cursor: pointer;
+}
+
+.threadRow:hover {
+  background: var(--panel-hi);
+}
+
+.threadTop {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.threadSubject {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.threadTime {
+  flex: 0 0 auto;
+  font-size: 10.5px;
+  color: var(--fg-4);
+}
+
+.threadPreview {
+  overflow-wrap: anywhere;
+  color: var(--fg-3);
+  font-size: 11.5px;
+}
+
+.threadBody {
+  border-top: 1px solid var(--line);
+  margin-top: 5px;
+  padding-top: 7px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 400 11.5px/1.6 var(--f-body);
+  color: var(--fg-2);
+}

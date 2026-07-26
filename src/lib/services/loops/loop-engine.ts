@@ -117,6 +117,10 @@ export function loopCompletionBlock(loop: LoopSpec | undefined, receipts: LoopRe
   return {
     missingGateIds: [...missing.map((gate) => gate.id), ...hardFails.map((receipt) => receipt.gateId ?? receipt.id)],
     missingGateTitles: [...missing.map((gate) => gate.title), ...hardFails.map((receipt) => receipt.summary || "Integrity check failed")],
+    // Affirmatively-false evidence (vs a recoverable missing receipt). Callers
+    // that can park the task for a human should do so instead of bouncing the
+    // write — a bounced agent just retries blind.
+    hardFailed: hardFails.length > 0,
   };
 }
 

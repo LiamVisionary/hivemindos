@@ -527,4 +527,24 @@ function liveUrlReceipt(receipts) {
   assert.deepEqual(res.unsatisfiedRequiredGateIds, ["g-second"]);
 }
 
+// 27. runIntegrityGates (the standalone integrity pass shared with the untrusted
+//     HTTP completion path) emits the same bound receipts runLoopGates does.
+{
+  const { runIntegrityGates } = await import("../src/lib/services/loops/loop-runner.ts");
+  const output = "Shipped: the payment page is live at https://demo.acme.example/paid?session_id=mock_1.";
+  const standalone = await runIntegrityGates({ output, now });
+  assert.equal(standalone.length, 1, "one integrity receipt for one claimed-live URL");
+  const [receipt] = standalone;
+  assert.equal(receipt.id, "lr_live-url-integrity");
+  assert.equal(receipt.status, "failed", "a reserved/mock claimed-live URL fails with NO prober (pure check)");
+  assert.equal(receipt.metadata?.hardFail, true);
+  assert.equal(receipt.metadata?.authority, "server", "standalone receipts are server-authority-bound");
+  // Identical to what a full runLoopGates emits for the same output.
+  const viaRunner = (await runLoopGates({ output, now })).receipts.find((r) => r.id === "lr_live-url-integrity");
+  assert.deepEqual(receipt, viaRunner, "runIntegrityGates and runLoopGates emit the identical integrity receipt");
+  // Nothing claimed → no receipts at all.
+  const silent = await runIntegrityGates({ output: "Refactored the retry helper; all tests pass.", now });
+  assert.equal(silent.length, 0, "no integrity receipts when the output claims nothing");
+}
+
 console.log("loop runner tests passed");

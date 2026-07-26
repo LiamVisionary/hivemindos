@@ -698,6 +698,8 @@ export type ChatTreeFolder = {
   label: string;
   path?: string;
   active?: boolean;
+  /** Epoch ms this folder was created, for user-created project folders only. */
+  createdAt?: number;
   chats: ChatTreeItem[];
   onStartChat?: () => void;
 };

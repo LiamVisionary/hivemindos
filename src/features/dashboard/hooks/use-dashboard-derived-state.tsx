@@ -717,8 +717,16 @@ export function useDashboardDerivedState(props: any) {
           chatDisplayContent(message).trim()
         ) {
           output[previousIndex] = withPreservedProcessEvents(message, previous);
+          continue;
         }
-        continue;
+        if (sameMessage(previous, message) || !chatDisplayContent(message).trim()) {
+          continue;
+        }
+        // Two DIFFERENT visible texts under one source identity means the
+        // identity was mis-stamped (positional merge pairing) — dropping the
+        // later one deleted real responses from the thread. Keep it.
+      } else if (sourceKey) {
+        seenSourceKeys.add(sourceKey);
       }
       if (sameMessage(output.at(-1), message)) {
         const previous = output.at(-1);

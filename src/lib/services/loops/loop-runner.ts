@@ -321,33 +321,81 @@ export async function runLoopGates(input: RunLoopGatesInput): Promise<RunLoopGat
   // and of the two output-level integrity checks, so they run concurrently — a
   // slow judge chat no longer serializes behind a slow test run. Receipts are
   // reassembled in original gate order below.
-  const [liveUrl, acceptance] = await Promise.all([
-    // Live-URL integrity (independent of the loop's own gates): a deliverable/
-    // outcome that CLAIMS a live URL must not pass with a dead or fabricated
-    // link. Runs on every loop (any company/template) and emits a stable-id
-    // receipt so a clean retry overwrites a prior failure. A violation is a HARD
-    // fail — it blocks completion (→ needs-human) regardless of whether the
-    // loop's gates are "required" (see loopCompletionBlock). Only affirmatively-
-    // false evidence blocks: a missing URL never does. Reserved/mock/non-public
-    // domains are caught with NO network; a dead real URL (404/410/NXDOMAIN)
-    // needs the injected prober.
-    evaluateLiveUrlClaims(output, input.probeUrl),
-    // Deliverable content acceptance (independent of the loop's own gates): a
-    // claimed outward deliverable (preview site, landing/offer page) must not
-    // pass as a PLACEHOLDER/wireframe skeleton — a real bug (2026-07-07) shipped
-    // a restaurant preview to a live prospect with fake "menu" items and no
-    // prices. Fetches the customer-facing URL(s) and runs the typed acceptance
-    // contract for the kind. An affirmative rejection is a HARD fail that blocks
-    // completion → needs-human, exactly like a dead live URL. Unfetchable/
-    // ambiguous content never blocks, and a missing fetcher (the kill-switch)
-    // makes this a no-op.
-    evaluateDeliverableAcceptance({ output, fetchContent: input.fetchContent }),
+  const [integrityReceipts] = await Promise.all([
+    runIntegrityGates({ output, probeUrl: input.probeUrl, fetchContent: input.fetchContent, now }),
     Promise.all(deferred.map(async ({ index, evaluate }) => {
       gateReceipts[index] = await evaluate();
     })),
   ]);
 
-  const receipts: LoopReceipt[] = gateReceipts.filter((receipt): receipt is LoopReceipt => Boolean(receipt));
+  const outputFingerprint = evaluationOutputFingerprint(output);
+  const boundReceipts: LoopReceipt[] = [
+    ...gateReceipts
+      .filter((receipt): receipt is LoopReceipt => Boolean(receipt))
+      .map((receipt) => ({
+        ...receipt,
+        metadata: {
+          ...receipt.metadata,
+          authority: "server",
+          outputFingerprint,
+        },
+      })),
+    // runIntegrityGates already binds authority + fingerprint for this output.
+    ...integrityReceipts,
+  ];
+  const passedGateIds = new Set(boundReceipts.filter((r) => r.status === "passed" && r.gateId).map((r) => r.gateId));
+  const unsatisfiedRequiredGateIds = gates
+    .filter((gate) => gate.required && gate.status !== "passed" && !passedGateIds.has(gate.id))
+    .map((gate) => gate.id);
+
+  return { receipts: boundReceipts, unsatisfiedRequiredGateIds };
+}
+
+export type RunIntegrityGatesInput = {
+  /** Raw text whose live-URL / deliverable claims are verified. */
+  output: string;
+  /** Liveness prober for claimed-live URLs. Omit → reserved/mock domains are still rejected (pure). */
+  probeUrl?: LoopUrlProber;
+  /** Content fetcher for the deliverable-acceptance gate. Omit → the gate is a no-op (kill-switch). */
+  fetchContent?: DeliverableContentFetcher;
+  now?: number;
+};
+
+/**
+ * Runs ONLY the two output-level integrity checks and returns their stable-id
+ * receipts, already bound to server authority + this output's fingerprint (the
+ * exact shape `runLoopGates` emits). Shared by BOTH completion enforcement
+ * points — the in-process gate run (`runLoopGates`, autonomous worker) and the
+ * untrusted HTTP/MCP completion path (POST /api/kanban "complete" →
+ * `completeTask`) — so an agent completing over HTTP gets the same honest
+ * verification as an in-process pickup. Empty result → nothing was claimed.
+ *
+ * - Live-URL integrity: a deliverable/outcome that CLAIMS a live URL must not
+ *   pass with a dead or fabricated link. Emits a stable-id receipt so a clean
+ *   retry overwrites a prior failure. A violation is a HARD fail — it blocks
+ *   completion (→ needs-human) regardless of whether any loop gate is
+ *   "required" (see loopCompletionBlock). Only affirmatively-false evidence
+ *   blocks: a missing URL never does. Reserved/mock/non-public domains are
+ *   caught with NO network; a dead real URL (404/410/NXDOMAIN) needs the
+ *   injected prober.
+ * - Deliverable content acceptance: a claimed outward deliverable (preview
+ *   site, landing/offer page) must not pass as a PLACEHOLDER/wireframe
+ *   skeleton — a real bug (2026-07-07) shipped a restaurant preview to a live
+ *   prospect with fake "menu" items and no prices. Fetches the customer-facing
+ *   URL(s) and runs the typed acceptance contract for the kind. An affirmative
+ *   rejection is a HARD fail, exactly like a dead live URL. Unfetchable/
+ *   ambiguous content never blocks, and a missing fetcher (the kill-switch)
+ *   makes it a no-op.
+ */
+export async function runIntegrityGates(input: RunIntegrityGatesInput): Promise<LoopReceipt[]> {
+  const output = String(input.output ?? "");
+  const now = input.now ?? Date.now();
+  const [liveUrl, acceptance] = await Promise.all([
+    evaluateLiveUrlClaims(output, input.probeUrl),
+    evaluateDeliverableAcceptance({ output, fetchContent: input.fetchContent }),
+  ]);
+
+  const receipts: LoopReceipt[] = [];
   if (liveUrl.checked.length) {
     const failed = liveUrl.violations.length > 0;
     receipts.push({
@@ -383,8 +431,9 @@ export async function runLoopGates(input: RunLoopGatesInput): Promise<RunLoopGat
     });
   }
 
+  if (!receipts.length) return receipts;
   const outputFingerprint = evaluationOutputFingerprint(output);
-  const boundReceipts = receipts.map((receipt) => ({
+  return receipts.map((receipt) => ({
     ...receipt,
     metadata: {
       ...receipt.metadata,
@@ -392,12 +441,6 @@ export async function runLoopGates(input: RunLoopGatesInput): Promise<RunLoopGat
       outputFingerprint,
     },
   }));
-  const passedGateIds = new Set(boundReceipts.filter((r) => r.status === "passed" && r.gateId).map((r) => r.gateId));
-  const unsatisfiedRequiredGateIds = gates
-    .filter((gate) => gate.required && gate.status !== "passed" && !passedGateIds.has(gate.id))
-    .map((gate) => gate.id);
-
-  return { receipts: boundReceipts, unsatisfiedRequiredGateIds };
 }
 
 function isServerAuthoritativeGate(gate: LoopEvalGate): boolean {

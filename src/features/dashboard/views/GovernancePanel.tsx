@@ -18,12 +18,15 @@ export function GovernancePanel({
   chooseDirectoryForMachine,
   defaultDirectoryMachine,
   onDuplicateAgent,
+  onOpenAgentSettings,
 }: {
   theme?: "dark" | "light";
   openSkillAttachmentBrowser?: (target: SkillBrowserAttachmentTarget) => void | Promise<void>;
   chooseDirectoryForMachine?: DirectoryPicker;
   defaultDirectoryMachine?: KanbanMachineTarget | null;
   onDuplicateAgent?: (agentId: string) => void;
+  /** Open the full AgentSettingsModal for an agent id (company Queen settings). */
+  onOpenAgentSettings?: (agentId: string) => void | Promise<void>;
 }) {
   // The shell (.commandMain) is viewport-capped with overflow hidden, so every
   // route panel owns its own scrolling via the global .tabPanel contract (see
@@ -37,6 +40,7 @@ export function GovernancePanel({
         chooseDirectoryForMachine={chooseDirectoryForMachine}
         defaultDirectoryMachine={defaultDirectoryMachine}
         onDuplicateAgent={onDuplicateAgent}
+        onOpenAgentSettings={onOpenAgentSettings}
       />
     </section>
   );

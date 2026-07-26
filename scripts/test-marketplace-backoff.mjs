@@ -80,4 +80,54 @@ const custom = normalizeMarketplaceMonitorConfig({
 assert.equal(computeMarketplacePollIntervalMs(custom, now - 1_000, now), 15_000);
 assert.equal(computeMarketplacePollIntervalMs(custom, now - 600_000, now), 1_800_000, "custom reset window returns to custom base");
 
+// ── monitor tick gate (mutual exclusion + posted-unverified promotion) ──────
+const { computeMarketplaceTickGate } = await import("../src/lib/services/marketplace/marketplace-types.ts");
+const iso = (ms) => new Date(ms).toISOString();
+const gate = (runtime, listings) =>
+  computeMarketplaceTickGate({ runtime, listings, nowMs: now, inFlightStaleMs: 45 * 60_000, postingStaleMs: 75 * 60_000 });
+
+// A fresh in-flight op suppresses the whole wake.
+assert.deepEqual(gate({ inFlightOp: "work-inbox", inFlightSince: iso(now - 60_000) }, []), {
+  skip: "in-flight",
+  clearStaleInFlight: false,
+  verifyPostedUnverified: false,
+  pollDue: false,
+});
+// A stale in-flight marker (crash mid-session) clears and the wake proceeds.
+const staleInFlight = gate({ inFlightOp: "work-inbox", inFlightSince: iso(now - 46 * 60_000) }, []);
+assert.equal(staleInFlight.skip, null);
+assert.equal(staleInFlight.clearStaleInFlight, true);
+assert.equal(staleInFlight.pollDue, true, "no nextPollAt means the poll is due");
+
+// A "posting" listing = a dispatched agent session may own the profile's
+// browser RIGHT NOW (possibly dispatched from another machine — the listing
+// state is vault-replicated, the local profile lock is not). Everything defers.
+assert.deepEqual(gate({}, [{ state: "posting", updatedAt: iso(now - 60_000) }]), {
+  skip: "posting-session",
+  clearStaleInFlight: false,
+  verifyPostedUnverified: false,
+  pollDue: false,
+});
+// A wedged "posting" older than the session cap stops muting the monitor.
+assert.equal(gate({}, [{ state: "posting", updatedAt: iso(now - 76 * 60_000) }]).skip, null, "a crashed posting session cannot defer forever");
+// An unparseable posting timestamp is treated as live (defer) — fail safe.
+assert.equal(gate({}, [{ state: "posting", updatedAt: "garbage" }]).skip, "posting-session");
+
+// posted-unverified triggers the owning machine's promotion pass even when the
+// poll cadence is not due — deferred claims never wait on the ladder.
+assert.deepEqual(gate({ nextPollAt: iso(now + 3_600_000) }, [{ state: "posted-unverified", updatedAt: iso(now - 60_000) }]), {
+  skip: null,
+  clearStaleInFlight: false,
+  verifyPostedUnverified: true,
+  pollDue: false,
+});
+// Ordinary listings gate nothing; the poll respects nextPollAt.
+assert.deepEqual(gate({ nextPollAt: iso(now - 1) }, [{ state: "active", updatedAt: iso(now) }]), {
+  skip: null,
+  clearStaleInFlight: false,
+  verifyPostedUnverified: false,
+  pollDue: true,
+});
+assert.equal(gate({ nextPollAt: iso(now + 1) }, []).pollDue, false);
+
 console.log("marketplace backoff tests passed");

@@ -73,12 +73,14 @@ function ZeroHumanCompaniesDemoView({
   chooseDirectoryForMachine,
   defaultDirectoryMachine,
   onDuplicateAgent,
+  onOpenAgentSettings,
 }: {
   theme?: "dark" | "light";
   openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
   chooseDirectoryForMachine?: DirectoryPicker;
   defaultDirectoryMachine?: KanbanMachineTarget | null;
   onDuplicateAgent?: (agentId: string) => void;
+  onOpenAgentSettings?: (agentId: string) => void | Promise<void>;
 } = {}) {
   const [colonies, setColonies] = React.useState<Colony[]>(DEMO_COLONIES);
   const [busyId, setBusyId] = React.useState<string | null>(null);
@@ -348,6 +350,7 @@ function ZeroHumanCompaniesDemoView({
       onEditCompany={handleEditCompany}
       onAddAgents={handleAddAgents}
       onDuplicateAgent={onDuplicateAgent}
+      onOpenAgentSettings={onOpenAgentSettings}
       onDecideApproval={(companyId, approvalId, decision, note) => decideApproval(companyId, approvalId, decision, note)}
       onDecideIssueApproval={(companyId, issue, decision, note) => handleDecideIssueApproval(companyId, issue, decision, note)}
       onResolvePricing={(companyId, proposalId) =>
@@ -379,12 +382,14 @@ function ZeroHumanCompaniesLiveView({
   chooseDirectoryForMachine,
   defaultDirectoryMachine,
   onDuplicateAgent,
+  onOpenAgentSettings,
 }: {
   theme?: "dark" | "light";
   openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
   chooseDirectoryForMachine?: DirectoryPicker;
   defaultDirectoryMachine?: KanbanMachineTarget | null;
   onDuplicateAgent?: (agentId: string) => void;
+  onOpenAgentSettings?: (agentId: string) => void | Promise<void>;
 } = {}) {
   const [data, setData] = React.useState<CompanyEntry[]>([]);
   const [agents, setAgents] = React.useState<AgentLite[]>([]);
@@ -1260,6 +1265,7 @@ function ZeroHumanCompaniesLiveView({
       onEditCompany={handleEditCompany}
       onAddAgents={handleAddAgents}
       onDuplicateAgent={onDuplicateAgent}
+      onOpenAgentSettings={onOpenAgentSettings}
       onDecideApproval={(_companyId, approvalId, decision, note) => void decideApproval(approvalId, decision, note)}
       onDecideIssueApproval={(companyId, issue, decision, note) => void handleDecideIssueApproval(companyId, issue, decision, note)}
       onResolvePricing={(companyId, proposalId, decision) => void resolvePricing(companyId, proposalId, decision)}
@@ -1287,14 +1293,16 @@ export function ZeroHumanCompaniesView({
   chooseDirectoryForMachine,
   defaultDirectoryMachine,
   onDuplicateAgent,
+  onOpenAgentSettings,
 }: {
   theme?: "dark" | "light";
   openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
   chooseDirectoryForMachine?: DirectoryPicker;
   defaultDirectoryMachine?: KanbanMachineTarget | null;
   onDuplicateAgent?: (agentId: string) => void;
+  onOpenAgentSettings?: (agentId: string) => void | Promise<void>;
 } = {}) {
   return USE_ZHC_DEMO_DATA
-    ? <ZeroHumanCompaniesDemoView theme={theme} openSkillAttachmentBrowser={openSkillAttachmentBrowser} chooseDirectoryForMachine={chooseDirectoryForMachine} defaultDirectoryMachine={defaultDirectoryMachine} onDuplicateAgent={onDuplicateAgent} />
-    : <ZeroHumanCompaniesLiveView theme={theme} openSkillAttachmentBrowser={openSkillAttachmentBrowser} chooseDirectoryForMachine={chooseDirectoryForMachine} defaultDirectoryMachine={defaultDirectoryMachine} onDuplicateAgent={onDuplicateAgent} />;
+    ? <ZeroHumanCompaniesDemoView theme={theme} openSkillAttachmentBrowser={openSkillAttachmentBrowser} chooseDirectoryForMachine={chooseDirectoryForMachine} defaultDirectoryMachine={defaultDirectoryMachine} onDuplicateAgent={onDuplicateAgent} onOpenAgentSettings={onOpenAgentSettings} />
+    : <ZeroHumanCompaniesLiveView theme={theme} openSkillAttachmentBrowser={openSkillAttachmentBrowser} chooseDirectoryForMachine={chooseDirectoryForMachine} defaultDirectoryMachine={defaultDirectoryMachine} onDuplicateAgent={onDuplicateAgent} onOpenAgentSettings={onOpenAgentSettings} />;
 }

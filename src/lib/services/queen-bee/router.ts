@@ -1,4 +1,7 @@
-export type QueenBeeWorkerClass = "general" | "planner" | "code" | "vision" | "writer" | "research" | "artist" | "ops" | "qa" | "security";
+import { inferWorkerClass, normalizeWorkerClassToken } from "@/lib/services/orchestration/bee-roles";
+import type { BeeWorkerClass } from "@/lib/types/agent-runtime";
+
+export type QueenBeeWorkerClass = BeeWorkerClass;
 
 type QueenBeeAgent = {
   id?: string;
@@ -126,39 +129,13 @@ type ScoredCandidate = {
   reasons: string[];
 };
 
-const WORKER_CLASSES = new Set<QueenBeeWorkerClass>(["general", "planner", "code", "vision", "writer", "research", "artist", "ops", "qa", "security"]);
-
-const CLASS_KEYWORDS: Array<{ workerClass: QueenBeeWorkerClass; priority: number; keywords: Array<{ pattern: RegExp; weight: number }> }> = [
-  { workerClass: "planner", priority: 80, keywords: [/plan/i, /decompos/i, /architect/i, /strategy/i, /roadmap/i, /coordinate/i, /orchestrat/i].map((pattern) => ({ pattern, weight: 1 })) },
-  { workerClass: "code", priority: 75, keywords: [/code/i, /bug/i, /api/i, /test/i, /repo/i, /typescript/i, /javascript/i, /css/i, /component/i, /build/i, /implement/i, /lint/i, /typecheck/i].map((pattern) => ({ pattern, weight: 1 })) },
-  { workerClass: "writer", priority: 70, keywords: [{ pattern: /linkedin|social post|social copy|thread|caption/i, weight: 4 }, { pattern: /\bpost\b|\bcopy\b|\bwrite\b|docs?|readme|summary|article|prompt|release notes/i, weight: 2 }, { pattern: /editorial|newsletter|announcement|launch copy|tone/i, weight: 2 }] },
-  { workerClass: "research", priority: 60, keywords: [/research/i, /find/i, /compare/i, /latest/i, /source/i, /market/i, /investigate/i].map((pattern) => ({ pattern, weight: 1 })) },
-  { workerClass: "artist", priority: 55, keywords: [{ pattern: /image gen|generate (?:an? )?image|create (?:an? )?image|illustrat|visual asset|poster|logo/i, weight: 4 }, { pattern: /\bart\b|style|image concept|art direction/i, weight: 2 }] },
-  { workerClass: "vision", priority: 70, keywords: [{ pattern: /screenshot|screen|visual qa/i, weight: 6 }, { pattern: /inspect|ui|ux|contrast/i, weight: 4 }, { pattern: /\bimage\b|visual/i, weight: 1 }] },
-  { workerClass: "ops", priority: 45, keywords: [/deploy/i, /server/i, /cron/i, /websocket/i, /mcp/i, /fleet/i, /tailscale/i, /collector/i, /docker/i, /render/i].map((pattern) => ({ pattern, weight: 1 })) },
-  { workerClass: "qa", priority: 85, keywords: [{ pattern: /\bqa\b|quality assurance/i, weight: 4 }, { pattern: /verify|verification|review|playwright|lint|typecheck|screenshot test|rigorous/i, weight: 2 }] },
-  { workerClass: "security", priority: 82, keywords: [{ pattern: /security|vulnerab|exploit|owasp|threat model|pentest|penetration test|injection|\bxss\b|\bcsrf\b|secrets? (?:rotation|scan|leak)|hardening/i, weight: 4 }, { pattern: /\bauth\b|authn|authz|credential|sandbox escape|audit (?:the )?(?:code|deps|permissions)/i, weight: 2 }] },
-];
-
 const RUNTIME_PRIORITY = ["hermes", "openclaw", "opencode", "codex", "claude-code", "hivemind-os", "aeon"];
 const CURRENT_APP_PROJECT_SLUGS = new Set(["hivemindos", "omniagenthivemind"]);
 
+// Classification is single-sourced in the shared worker-class keyword matrix
+// (orchestration/bee-roles.ts) so every dispatch surface infers identically.
 export function inferQueenBeeWorkerClass(task: QueenBeeTaskIntent): QueenBeeWorkerClass {
-  if (/^\s*(?:generate|create|make|design)\s+(?:an?\s+)?(?:image|visual|illustration|art|asset)\b/i.test(task.title)) return "artist";
-  for (const skill of task.skills ?? []) {
-    const normalized = normalizeWorkerClass(skill);
-    if (normalized && normalized !== "general") return normalized;
-  }
-  const text = [task.title, task.body, ...(task.skills ?? [])].join(" ");
-  const scored = CLASS_KEYWORDS
-    .map((entry) => ({
-      workerClass: entry.workerClass,
-      priority: entry.priority,
-      score: entry.keywords.reduce((score, keyword) => score + (keyword.pattern.test(text) ? keyword.weight : 0), 0),
-    }))
-    .filter((entry) => entry.score > 0)
-    .sort((left, right) => right.score - left.score || right.priority - left.priority);
-  return scored[0]?.workerClass ?? "general";
+  return inferWorkerClass(task);
 }
 
 export type QueenBeeRouterOptions = {
@@ -380,8 +357,8 @@ function scoreCandidate(agent: QueenBeeAgent, machine: QueenBeeMachine, workerCl
   const reasons: string[] = [];
   let score = 10;
   const rawAgentClass = String(agent.workerClass || "").toLowerCase().trim();
-  const agentClass = normalizeWorkerClass(agent.workerClass) ?? "general";
-  const isCustomClass = Boolean(rawAgentClass) && !WORKER_CLASSES.has(rawAgentClass as QueenBeeWorkerClass);
+  const agentClass = normalizeWorkerClassToken(agent.workerClass) ?? "general";
+  const isCustomClass = Boolean(rawAgentClass) && !normalizeWorkerClassToken(rawAgentClass);
   let classMatched = false;
   if (agentClass === workerClass) {
     score += 100;
@@ -597,11 +574,6 @@ function isCollectorUsable(collector?: string) {
   if (!normalized || normalized === "ready") return true;
   if (normalized.startsWith("http://") || normalized.startsWith("https://")) return true;
   return false;
-}
-
-function normalizeWorkerClass(value?: string | null): QueenBeeWorkerClass | null {
-  const normalized = String(value || "").toLowerCase().trim();
-  return WORKER_CLASSES.has(normalized as QueenBeeWorkerClass) ? normalized as QueenBeeWorkerClass : null;
 }
 
 // True when the request names a custom (non-built-in) worker-class token, so a user-defined
