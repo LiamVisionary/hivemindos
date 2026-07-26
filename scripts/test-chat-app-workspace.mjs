@@ -168,4 +168,15 @@ assert.doesNotMatch(workspaceCss, /\.cx-ws\s*\{[^}]*display:\s*none/, "the works
 assert.ok(!existsSync(new URL("../src/features/dashboard/views/chat/exchange/ContextPanel.tsx", import.meta.url)), "ContextPanel.tsx was dead code and stays deleted");
 assert.ok(!existsSync(new URL("../src/features/dashboard/views/chat/exchange/ConversationNav.tsx", import.meta.url)), "ConversationNav.tsx was dead code and stays deleted");
 
+// A thread rehydrated from the runtime session store has no message-level
+// appArtifact (it is client-only state), so the workspace must fall back to
+// the project identity embedded in the capability continuation prompt.
+if (!/latestChatAppArtifact\(renderMessages\)\s*\n?\s*\?\? chatAppArtifactFromCapabilityContext\(/.test(panel)) {
+  throw new Error("ChatExchangePanel must derive threadAppArtifact with the capability-context fallback; without it a rehydrated thread shows 'No preview available' for an app that exists on disk.");
+}
+
+if (!/\|\| chatAppDirectoryFromTaskRecords\(renderMessages, agentWorkById\[selectedAgent\?\.id\] \?\? \[\], chatWorkingDirectory\)/.test(panel)) {
+  throw new Error("ChatExchangePanel must fall back to the runtime task record's project directory; without it a thread whose transcript lost the artifact AND whose merges rewrote the continuation text cannot recover its app.");
+}
+
 console.log("chat app workspace checks passed");

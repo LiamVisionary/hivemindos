@@ -8,6 +8,10 @@ const MAX_LINES = 1500;
 const root = process.cwd();
 
 const ignoredDirectories = new Set([
+  // Concurrent agent sessions' isolated checkouts (git-excluded). Each worktree
+  // runs this gate on its own tree; counting their copies here makes the shared
+  // tree permanently red and masks real violations.
+  ".claude",
   ".evo",
   ".git",
   ".next",
@@ -88,9 +92,11 @@ const legacyOversizedAllowances = new Map([
   // features/dashboard/chat-transcript-helpers.ts. (Near-copies of some of them
   // still live in dashboard-storage.ts and use-dashboard-derived-state.tsx and
   // have already drifted — collapsing those is a behavior call, left as
-  // follow-up.) Watermark carries ~2 lines of slack over clean HEAD because it
-  // was measured in a working tree with concurrent uncommitted edits.
-  ["src/features/dashboard/DashboardApp.tsx", 4777],
+  // follow-up.)
+  // 2026-07-26: −60, mergeChatProcessEvents + preserveLocalTurnProcessEvents
+  // moved to chat-transcript-helpers.ts (pure, and now type-checked — this file
+  // is @ts-nocheck). Watermark ratcheted down to the measured clean size.
+  ["src/features/dashboard/DashboardApp.tsx", 4717],
   ["src/lib/services/hive-actions/catalog.ts", 1817],
   ["src/features/dashboard/views/AeonAutopilotPanel.tsx", 3857],
   // Ratchet re-baselined 2026-07-02: watermarks set to then-current line counts
@@ -123,7 +129,10 @@ const legacyOversizedAllowances = new Map([
   // applyPatchToBoard parks hardFails needs-human; the park branch needs the
   // store's private event/finishActiveRun/mergeDeliverables internals. The
   // evaluators themselves live in kanban/completion-integrity.ts.
-  ["src/lib/services/kanban/local-kanban-store.ts", 2527],
+  // 2026-07-26: +1 at the 63b835a98 publication — completion-integrity gate
+  // wiring (net of the coerceKanbanText extraction to completion-integrity.ts;
+  // the gate logic itself lives there). No slack.
+  ["src/lib/services/kanban/local-kanban-store.ts", 2528],
   ["src/features/dashboard/hooks/use-dashboard-derived-state.tsx", 2244],
   ["src/features/dashboard/views/chat/HiveChatView.module.css", 1802],
   ["src/lib/services/obsidian/agent-memory/core.ts", 1901],
@@ -137,7 +146,13 @@ const legacyOversizedAllowances = new Map([
   // handlers moved to hooks/status-chat-composer-attachments.ts (a plain factory
   // — the block touched no hook state and no React hooks). The controller's
   // return shape is unchanged; DashboardApp still destructures all 23 names.
-  ["src/features/dashboard/hooks/use-status-chat-input-controller.tsx", 1751],
+  // 2026-07-26: +43 re-baselined at the 63b835a98 full-tree publication, which
+  // landed the chat live-display redo (anchor message, segment seals, preflight
+  // in-place phases) plus concurrent sessions' turn wiring without this gate
+  // re-running last. The remaining in-hook helpers mutate shared run state
+  // (activeAssistantSessionId/activeRunProcessEvents), so the next shrink needs
+  // a parameterized extraction, not a cheap cut. No slack: growth fails again.
+  ["src/features/dashboard/hooks/use-status-chat-input-controller.tsx", 1794],
   ["src/features/dashboard/views/chat/AgentSettingsModal.tsx", 1640],
   ["src/components/fleet/fleet-tokens.module.css", 1541],
   ["src/features/dashboard/views/chat/UsePodSetup.module.css", 1540],

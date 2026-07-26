@@ -45,6 +45,8 @@ import { normalizeEvaluationHumanFeedback } from "@/lib/types/evaluation";
 import { evaluationOutputFingerprint } from "@/lib/services/evaluation/control-plane";
 import { selectChatPreviewTargets } from "@/lib/services/chat/chat-preview-targets";
 import {
+  chatAppArtifactFromCapabilityContext,
+  chatAppDirectoryFromTaskRecords,
   chatWorkingDirectoryForThread,
   inferLegacyChatAppDirectory,
   latestChatAppArtifact,
@@ -198,6 +200,7 @@ export function ChatExchangePanel(props: any) {
     clearChatDiscussContext,
     updateAgent,
     updateChatAutoScroll,
+    agentWorkById = {},
     visibleMessages = [],
     voiceTarget,
     ChatMarkdown,
@@ -782,10 +785,21 @@ export function ChatExchangePanel(props: any) {
     [machineGroups, selectedChatMachine?.key],
   );
   const collectorUrl = selectedMachineGroup?.collectorUrl ?? "";
-  const threadAppArtifact = useMemo(() => latestChatAppArtifact(renderMessages), [renderMessages]);
+  // Messages lose their client-only appArtifact whenever a thread rehydrates
+  // from the runtime session store, so fall back to the project identity the
+  // session keeps inside the capability continuation prompt.
+  const threadAppArtifact = useMemo(
+    () => latestChatAppArtifact(renderMessages)
+      ?? chatAppArtifactFromCapabilityContext(renderMessages, { key: selectedChatMachine?.key, name: machineLabel }),
+    [machineLabel, renderMessages, selectedChatMachine?.key],
+  );
+  // Order matters: labelled paths in the transcript first, then the runtime
+  // task record (the continuation ran with the project directory as its cwd),
+  // which survives even when merges rewrote the message content.
   const legacyAppDirectory = useMemo(
-    () => inferLegacyChatAppDirectory(renderMessages, chatWorkingDirectory),
-    [chatWorkingDirectory, renderMessages],
+    () => inferLegacyChatAppDirectory(renderMessages, chatWorkingDirectory)
+      || chatAppDirectoryFromTaskRecords(renderMessages, agentWorkById[selectedAgent?.id] ?? [], chatWorkingDirectory),
+    [agentWorkById, chatWorkingDirectory, renderMessages, selectedAgent?.id],
   );
   const preview = useThreadAppPreview({
     storageKey: selectedChatStorageKey,

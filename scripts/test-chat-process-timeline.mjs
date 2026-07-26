@@ -12,9 +12,11 @@ const { isHiddenChatProcessEvent } = await import("../src/features/dashboard/vie
 const {
   compactCapabilityContinuation,
   isCapabilityContinuationEcho,
+  preserveLocalTurnProcessEvents,
   sameVisibleChatMessage,
   userMessagesLikelySameTurn,
 } = await import("../src/features/dashboard/chat-transcript-helpers.ts");
+const { chatAppArtifactFromCapabilityContext, chatAppDirectoryFromTaskRecords } = await import("../src/lib/services/chat/chat-app-artifact.ts");
 const { CAPABILITY_APPROVAL_CONTINUATION_MARKER } = await import("../src/lib/types/capability-approval.ts");
 
 // --- tool lifecycle collapse -------------------------------------------------
@@ -110,6 +112,67 @@ assert.equal(userMessagesLikelySameTurn(localUser, sessionUser), true, "session 
 assert.equal(isCapabilityContinuationEcho(sessionUser), true);
 assert.equal(isCapabilityContinuationEcho(localUser), false);
 
+// --- the app artifact survives session rehydration ---------------------------
+// Repro context: 2026-07-26 flappy-bird thread — the app existed on disk, but
+// the workspace showed "No preview available" because appArtifact is
+// client-only state the runtime session store never persists.
+
+const continuationWithProject = [
+  { role: "user", content: `${continuationContent}\nAssigned App Builder project:\n- Project id: local_4dbf8f86d7cfd342523d\n- Directory: /tmp/flappy-bird/scratchpad/a-flappy-bird-clone-1ea72d69\n- Template: static\nImplement the app in that exact directory.` },
+  { role: "assistant", content: "Flappy Bird clone is built and ready." },
+];
+const derived = chatAppArtifactFromCapabilityContext(continuationWithProject, { key: "127.0.0.1:8787", name: "This Mac" });
+assert.ok(derived, "a rehydrated thread derives its app from the continuation prompt the session store kept");
+assert.equal(derived.projectId, "local_4dbf8f86d7cfd342523d");
+assert.equal(derived.directory, "/tmp/flappy-bird/scratchpad/a-flappy-bird-clone-1ea72d69");
+assert.equal(derived.templateId, "static");
+assert.equal(derived.name, "a flappy bird clone but use a bee instead", "the derived name matches what project creation would have produced");
+assert.equal(derived.machineKey, "127.0.0.1:8787");
+assert.equal(chatAppArtifactFromCapabilityContext([{ role: "user", content: originalTask }]), undefined, "a thread with no assigned project derives nothing");
+
+// When merges rewrote the message content to the person's typed words (so
+// neither the artifact nor the continuation text survives), the runtime task
+// record still knows the project directory — including when the chat row
+// stored a home-relative ("~/") workspace the browser cannot expand.
+const taskMessages = [{ sourceSessionId: "agent-chat-turn-ms2abnrb" }];
+const taskRecords = [
+  { id: "agent-chat-turn-other", workingDirectory: "/Users/x/projects/flappy-bird/scratchpad/other-app", updatedAt: 9 },
+  { id: "agent-chat-turn-ms2abnrb", workingDirectory: "/Users/x/projects/flappy-bird/scratchpad/a-flappy-bird-clone-1ea72d69", updatedAt: 5 },
+];
+assert.equal(
+  chatAppDirectoryFromTaskRecords(taskMessages, taskRecords, "~/projects/flappy-bird"),
+  "/Users/x/projects/flappy-bird/scratchpad/a-flappy-bird-clone-1ea72d69",
+  "the task record recovers the project directory through a home-relative workspace",
+);
+assert.equal(
+  chatAppDirectoryFromTaskRecords(taskMessages, taskRecords, "/Users/x/projects/flappy-bird"),
+  "/Users/x/projects/flappy-bird/scratchpad/a-flappy-bird-clone-1ea72d69",
+  "absolute workspaces match too",
+);
+assert.equal(
+  chatAppDirectoryFromTaskRecords(taskMessages, [{ id: "agent-chat-turn-ms2abnrb", workingDirectory: "/Users/x/projects/flappy-bird", updatedAt: 5 }], "~/projects/flappy-bird"),
+  "",
+  "a task cwd that is the workspace itself is never adoptable — only a scratchpad project layout",
+);
+assert.equal(
+  chatAppDirectoryFromTaskRecords(taskMessages, [{ id: "agent-chat-turn-ms2abnrb", workingDirectory: "/Users/x/elsewhere/scratchpad/app", updatedAt: 5 }], "~/projects/flappy-bird"),
+  "",
+  "a scratchpad outside the thread's workspace is never adoptable",
+);
+
+// The poll-takeover merge must not lose the turn's artifact when content
+// pairing finds no carrier (segmentation drift between streamed and stored).
+const localArtifactTurn = [
+  { role: "user", content: originalTask, createdAt: 1 },
+  { role: "assistant", content: "Streamed narration that the store kept differently.", createdAt: 2, appArtifact: { protocol: "hivemindos.chat-app/v1", projectId: "local_x", name: "a flappy bird clone", directory: "/tmp/x", templateId: "static", machineKey: "k", machineName: "This Mac", status: "stopped", dependenciesReady: true, createdAt: 1, updatedAt: 1 } },
+];
+const sessionVersionOfTurn = [
+  { role: "user", content: originalTask, createdAt: 5 },
+  { role: "assistant", content: "A reworded final summary the local tab never streamed.", createdAt: 6 },
+];
+const mergedTurn = preserveLocalTurnProcessEvents(sessionVersionOfTurn, localArtifactTurn);
+assert.equal(mergedTurn.at(-1).appArtifact?.projectId, "local_x", "an unpaired session turn still keeps the local turn's app artifact on its last assistant row");
+
 // --- source pins: the paths that regressed ----------------------------------
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
@@ -122,8 +185,10 @@ assert.match(controller, /rawRuntimeEventType\) && streamedAssistantText\.trim\(
 assert.match(controller, /interimText !== lastSealedSegmentText/, "a reset after a step-triggered seal must not render the same narration twice");
 assert.match(controller, /pruneTrailingEmptyAssistant\(\);/, "a run cannot leave an invisible empty assistant behind");
 
+const transcriptHelpersSource = await read("src/features/dashboard/chat-transcript-helpers.ts");
 assert.doesNotMatch(dashboardApp, /fallbackProcessIndex/, "positional pairing is dead: it re-distributed one segment's steps onto another and its identity stamping made the visible dedupe drop finished responses");
-assert.match(dashboardApp, /createdAt: processSource\.createdAt \?\? message\.createdAt/, "content-confirmed pairings preserve local identity so React keys stay stable mid-stream");
+assert.doesNotMatch(transcriptHelpersSource, /fallbackProcessIndex/, "positional pairing must not return with the moved merge helpers");
+assert.match(transcriptHelpersSource, /createdAt: processSource\.createdAt \?\? message\.createdAt/, "content-confirmed pairings preserve local identity so React keys stay stable mid-stream");
 
 // The capability preflight is ONE step whose phases replace in place — no row
 // may be left frozen at "active" when the next phase begins.

@@ -1,4 +1,5 @@
 import type { ChatMessage } from "@/features/dashboard/dashboard-types";
+import { latestChatAppArtifact } from "@/lib/services/chat/chat-app-artifact";
 import { CAPABILITY_APPROVAL_CONTINUATION_MARKER } from "@/lib/types/capability-approval";
 
 // Pure transcript helpers: message identity/equality, turn matching, and the
@@ -118,4 +119,81 @@ export function findNextChatUserIndex(messages: ChatMessage[], startIndex: numbe
     if (messages[index]?.role === "user") return index;
   }
   return -1;
+}
+
+export function mergeChatProcessEvents(
+  first: ChatMessage["processEvents"] = [],
+  second: ChatMessage["processEvents"] = [],
+) {
+  const output: NonNullable<ChatMessage["processEvents"]> = [];
+  const indexByKey = new Map<string, number>();
+  for (const event of [...(first ?? []), ...(second ?? [])]) {
+    if (!event) continue;
+    // Status is deliberately NOT part of the identity: the same step arriving
+    // again as running→completed must update the existing row, not add a twin.
+    const key = [event.runId ?? "", event.label ?? "", event.detail ?? ""].join("");
+    const existingIndex = indexByKey.get(key);
+    if (existingIndex === undefined) {
+      indexByKey.set(key, output.length);
+      output.push(event);
+    } else if (Number(event.at ?? 0) >= Number(output[existingIndex]?.at ?? 0)) {
+      output[existingIndex] = event;
+    }
+  }
+  return output.sort((left, right) => Number(left.at ?? 0) - Number(right.at ?? 0)).slice(-80);
+}
+
+export function preserveLocalTurnProcessEvents(sessionTurn: ChatMessage[], localTurn: ChatMessage[]) {
+  const localAssistantMessages = localTurn.filter((message) => message.role === "assistant");
+  const localUserMessage = localTurn.find((message) => message.role === "user" && message.content.trim());
+  const mapped = sessionTurn.map((message) => {
+    if (message.role === "user" && userMessagesLikelySameTurn(localUserMessage, message)) {
+      return {
+        ...message,
+        content: localUserMessage?.content ?? message.content,
+        attachments: localUserMessage?.attachments,
+        surface: localUserMessage?.surface ?? message.surface,
+        createdAt: localUserMessage?.createdAt ?? message.createdAt,
+        // Keep the local bubble's identity so its React key survives the merge.
+        sourceSessionId: localUserMessage?.sourceSessionId,
+        sourceIndex: localUserMessage?.sourceIndex,
+      };
+    }
+    if (message.role !== "assistant") return message;
+    // Local state transfers ONLY between content-confirmed pairs. The old
+    // positional fallback paired segments by index — under the segment model
+    // it re-distributed one message's steps onto a DIFFERENT segment (preflight
+    // rows resurfacing next to a later phase's retries) and its identity
+    // stamping gave distinct segments the same sourceIndex, which made the
+    // visible-message dedupe silently DROP finished responses. No pairing, no
+    // transfer: an unmatched session segment keeps exactly its own state.
+    const processSource = localAssistantMessages.find((localMessage) => (
+      sameVisibleChatMessage(localMessage, message)
+    ));
+    if (!processSource) return message;
+    return {
+      ...message,
+      processEvents: mergeChatProcessEvents(processSource.processEvents, message.processEvents),
+      applicationGeneration: message.applicationGeneration ?? processSource.applicationGeneration,
+      imageGeneration: message.imageGeneration ?? processSource.imageGeneration,
+      appArtifact: message.appArtifact ?? processSource.appArtifact,
+      feedback: message.feedback ?? processSource.feedback,
+      sourceSessionId: processSource.sourceSessionId ?? message.sourceSessionId,
+      sourceIndex: processSource.sourceIndex ?? message.sourceIndex,
+      // Keep the locally streamed message's identity: React keys include
+      // createdAt, so re-stamping it from the session store remounted the
+      // whole article (visible flicker).
+      createdAt: processSource.createdAt ?? message.createdAt,
+    };
+  });
+  // The app artifact is client-only state — the session store never carries
+  // it. When content pairing found no carrier (segmentation drift between the
+  // streamed and stored versions of the turn), the turn must not lose its app:
+  // re-attach the local artifact to the turn's last assistant row.
+  const localArtifact = latestChatAppArtifact(localAssistantMessages);
+  if (localArtifact && !mapped.some((message) => message.role === "assistant" && message.appArtifact)) {
+    const lastAssistantIndex = findLastChatMessageIndex(mapped, (message) => message.role === "assistant");
+    if (lastAssistantIndex >= 0) mapped[lastAssistantIndex] = { ...mapped[lastAssistantIndex], appArtifact: localArtifact };
+  }
+  return mapped;
 }

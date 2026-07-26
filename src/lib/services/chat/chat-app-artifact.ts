@@ -165,8 +165,88 @@ function pathInsideWorkspace(candidate: string, workspace: string) {
   const left = normalizedPath(candidate);
   const right = normalizedPath(workspace);
   const fold = (value: string) => right.separator === "\\" ? value.toLowerCase() : value;
-  return fold(left.normalized) === fold(right.normalized)
-    || fold(left.normalized).startsWith(`${fold(right.normalized)}${right.separator}`);
+  const candidateNormalized = fold(left.normalized);
+  const workspaceNormalized = fold(right.normalized);
+  if (candidateNormalized === workspaceNormalized || candidateNormalized.startsWith(`${workspaceNormalized}${right.separator}`)) return true;
+  // Chat rows persist home-relative workspaces ("~/code/app") while task
+  // records and continuation prompts carry absolute paths. The browser cannot
+  // expand "~", so align the workspace's post-~ tail at a segment boundary.
+  if (workspaceNormalized.startsWith(`~${right.separator}`)) {
+    const anchor = right.separator + workspaceNormalized.slice(2);
+    return candidateNormalized.includes(`${anchor}${right.separator}`) || candidateNormalized.endsWith(anchor);
+  }
+  return false;
+}
+
+// The app artifact lives only on client-side messages — the runtime session
+// store never persists it. But the capability continuation prompt, which the
+// session DOES keep verbatim on the turn's user message, embeds the project
+// identity ("Assigned App Builder project"). Rebuilding the artifact from that
+// text is what lets a rehydrated thread find its app again instead of showing
+// "No preview available" for an app that exists on disk.
+export function chatAppArtifactFromCapabilityContext(
+  messages: readonly ChatAppArtifactMessage[] = [],
+  machine: { key?: string; name?: string } = {},
+) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role !== "user") continue;
+    const content = String(message.content || "");
+    if (!content.includes("Assigned App Builder project:")) continue;
+    const projectId = content.match(/^- Project id:\s*(\S+)\s*$/m)?.[1] ?? "";
+    const directory = content.match(/^- Directory:\s*(.+)$/m)?.[1]?.trim() ?? "";
+    const templateId = content.match(/^- Template:\s*(nextjs|static)\s*$/m)?.[1];
+    const originalTask = content.match(/^Original task:\s*(.+)$/m)?.[1]?.trim() ?? "";
+    const artifact = normalizeChatAppArtifact({
+      protocol: CHAT_APP_ARTIFACT_PROTOCOL,
+      projectId,
+      name: originalTask
+        ? chatAppProjectName(originalTask)
+        : directory.split(/[\\/]/).filter(Boolean).at(-1) || "Chat app",
+      directory,
+      templateId,
+      machineKey: machine.key,
+      machineName: machine.name,
+      // Identity only: the preview flow re-fetches live status, port, and
+      // dependency readiness from the project's on-disk manifest.
+      status: "stopped",
+      dependenciesReady: false,
+    });
+    if (artifact) return artifact;
+  }
+  return undefined;
+}
+
+// A capability app build runs its continuation with the project directory as
+// the turn's working directory, so the runtime TASK record keeps that path
+// durably. Unlike message content — which transcript merges rewrite to the
+// person's typed words — the task record survives, making it the recovery
+// path for threads whose messages lost both the artifact and the
+// continuation text.
+export function chatAppDirectoryFromTaskRecords(
+  messages: readonly { sourceSessionId?: string }[] = [],
+  tasks: readonly { id?: unknown; workingDirectory?: unknown; updatedAt?: unknown }[] = [],
+  workspaceDirectory = "",
+) {
+  if (!workspaceDirectory.trim()) return "";
+  const sessionIds = new Set(messages.map((message) => message?.sourceSessionId).filter(Boolean));
+  if (!sessionIds.size) return "";
+  let best = "";
+  let bestAt = -1;
+  for (const task of tasks) {
+    if (typeof task?.id !== "string" || !sessionIds.has(task.id)) continue;
+    const candidate = clean(task.workingDirectory, 2_000);
+    // Only an App Builder project layout (<workspace>/scratchpad/<slug>) may
+    // be adopted — never the workspace itself or an arbitrary task cwd.
+    if (!/[\\/]scratchpad[\\/][^\\/]+$/.test(candidate)) continue;
+    if (!pathInsideWorkspace(candidate, workspaceDirectory)) continue;
+    const at = Number(task.updatedAt ?? 0) || 0;
+    if (at >= bestAt) {
+      best = candidate;
+      bestAt = at;
+    }
+  }
+  return best;
 }
 
 export function inferLegacyChatAppDirectory(
