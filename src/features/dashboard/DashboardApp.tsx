@@ -100,6 +100,7 @@ import { chatStreamHasLocalRun, reconcilePolledChatProcessState, reconcilePolled
 import { readNativeDashboardBootstrap } from "@/lib/native/dashboard-bootstrap";
 import { getNativeAppVersion } from "@/lib/native/desktop-status";
 import { getNativeFleetAppsCache, getNativeFleetDiscovery, getNativeTailscaleDevices } from "@/lib/native/fleet";
+import { tailscaleStatusPresentation } from "@/lib/native/tailscale-status";
 import { getNativeObsidianAgents } from "@/lib/native/obsidian";
 import { readNativeHiveEnv } from "@/lib/native/hive-env";
 import { readNativeMemoryTelemetry } from "@/lib/native/memory";
@@ -429,9 +430,9 @@ import {
   type DashboardActingWallet,
 } from "@/features/dashboard/screen-context";
 import { TRADE_ROUTE_CAPABILITY_LINES, WALLET_ROUTE_CAPABILITY_LINES } from "@/lib/services/chat/trade-route-context";
-// DashboardHeader is retained as a legacy component; the app now navigates via
-// the left AppNavShelf (the redesigned hive shelf) instead of a top header.
+// DashboardHeader is legacy; the app now navigates through the left AppNavShelf.
 import { DashboardAppCompletionToast, type DashboardAppCompletionNotification } from "@/features/dashboard/views/DashboardHeader";
+import { TailscaleAttentionBanner } from "@/features/dashboard/TailscaleAttentionBanner";
 import { AppNavShelf } from "@/components/fleet-hive";
 import { CompanionSetupModal } from "@/features/companion/CompanionSetupModal";
 import { useCompanionPopoverBoot } from "@/features/companion/use-companion-popover-boot";
@@ -1667,10 +1668,9 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     applyHivemindLinkStatus(null);
     if (data?.tailnetHealth?.state === "peer-traffic-stalled") {
       setTailscaleStatus("Tailscale Running; peer traffic stalled");
-    } else if (data?.tailnetHealth?.state === "status-unavailable") {
-      setTailscaleStatus("Tailscale status unavailable. Running locally.");
-    } else if (data?.tailnetHealth?.state === "not-running") {
-      setTailscaleStatus(`Tailscale ${data.backendState ?? "not running"}`);
+    } else if (data?.tailnetHealth?.state === "status-unavailable" || data?.tailnetHealth?.state === "not-running") {
+      const presentation = tailscaleStatusPresentation(data);
+      setTailscaleStatus(`${presentation.label}. ${presentation.detail}`);
     } else {
       setTailscaleStatus(data?.ok ? `Tailscale ${data.backendState}` : "Tailscale not configured. Running locally.");
     }
@@ -2646,7 +2646,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
         applyHivemindLinkStatus(data.hivemindLink);
       }
       const machines = data.machines;
-      const statusUnavailableFallback = tailscaleStatus.startsWith("Tailscale status unavailable")
+      const statusUnavailableFallback = tailscaleStatus.startsWith("Tailscale needs attention")
         && discoveredMachines.length > 1
         && machines.length <= 1
         && machines.every((machine) => machine.device.self);
@@ -4595,8 +4595,8 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
           style={{ position: "fixed", insetInline: 0, top: 0, height: 2, zIndex: 9999, background: "var(--accent-strong, #6fe0b0)", opacity: 0.85, pointerEvents: "none" }}
         />
       ) : null}
-      {/* Popped-out satellite windows render chrome-free: no rail is mounted,
-          so the shell drops its 72px rail inset and the view fills the window. */}
+      {!isPopoutWindow ? <TailscaleAttentionBanner status={tailscaleStatus} onOpenFleet={() => handleNavShelfNavigate("agents")} /> : null}
+      {/* Popped-out windows are chrome-free, so the shell drops its rail inset. */}
       <main className="shell commandShell" style={isPopoutWindow ? ({ "--shelf-w": "0px" } as CSSProperties) : undefined}>
       <div className="commandMain" style={fullWidthRouteShellStyle}>
       <DashboardRouteErrorBoundary

@@ -193,6 +193,7 @@
     "test:markitdown-bundle": "node scripts/test-markitdown-bundle.mjs",
     "test:legal-policies": "node --import tsx scripts/test-terms-acceptance.mjs",
     "test:taildrop-ingest": "node scripts/test-taildrop-ingest.mjs",
+    "test:tailscale-optional": "node scripts/test-tailscale-optional.mjs",
     "test:tauri-release-mode": "node scripts/test-tauri-release-mode.mjs",
     "test:tauri-runtime-bundle": "node scripts/test-tauri-runtime-bundle.mjs",
     "test:windows-release-signing": "node scripts/test-windows-release-signing.mjs",

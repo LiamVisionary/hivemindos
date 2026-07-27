@@ -146,6 +146,10 @@ if (!(await isPortAvailable(proxyPort, proxyBindHost))) {
     for (const attachSignal of ["SIGINT", "SIGTERM"]) {
       process.once(attachSignal, () => process.exit(0));
     }
+    // An unresolved Promise alone does not keep Node's event loop alive. Node
+    // 20+ exits attached sessions with code 13 ("unsettled top-level await")
+    // unless this lightweight handle remains active.
+    setInterval(() => {}, 60_000);
     await new Promise(() => {});
   }
   console.error(

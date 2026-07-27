@@ -100,6 +100,7 @@ import { promisify } from "node:util";
 
 import { createEscalationTracker, formatEscalationAlert } from "./lib/fleet-watchdog-escalation.mjs";
 import { linkdSourcesChangedBetween } from "./lib/linkd-staleness.mjs";
+import { shouldUseTailscaleCliFallback } from "./lib/tailscale-optional.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -519,6 +520,7 @@ function localMachineId() {
 // watchdog run on collector-only machines and keeps working when the local
 // dashboard is closed. Phones never host collectors and are skipped.
 async function discoverViaTailscale() {
+  if (!shouldUseTailscaleCliFallback()) return [];
   let status = null;
   for (const cli of tailscaleCli()) {
     try {

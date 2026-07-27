@@ -2,13 +2,15 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::path::PathBuf;
-use std::time::Duration;
+use std::process::{Child, Command, Output, Stdio};
+use std::time::{Duration, Instant};
 
 const APPS_CACHE_FILE: &str = "~/.hivemindos/fleet-apps-cache.json";
 const COLLECTOR_ENV_FILE: &str = "~/.hivemindos/collector.env";
+const TAILSCALE_STATUS_TIMEOUT: Duration = Duration::from_secs(3);
 const TAILSCALE_CLI_CANDIDATES: &[&str] = &[
     "/usr/local/bin/tailscale",
     "/opt/homebrew/bin/tailscale",
@@ -211,6 +213,50 @@ fn status_from_localapi() -> Option<Value> {
     serde_json::from_str(body).ok()
 }
 
+fn terminate_command_tree(child: &mut Child) {
+    #[cfg(unix)]
+    {
+        let process_group = format!("-{}", child.id());
+        let _ = Command::new("/bin/kill")
+            .args(["-KILL", &process_group])
+            .status();
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+fn command_output_with_timeout(
+    mut command: Command,
+    timeout: Duration,
+) -> io::Result<Output> {
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
+    let mut child = command.spawn()?;
+    let started = Instant::now();
+    loop {
+        if child.try_wait()?.is_some() {
+            return child.wait_with_output();
+        }
+        if started.elapsed() >= timeout {
+            terminate_command_tree(&mut child);
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                format!("command timed out after {} ms", timeout.as_millis()),
+            ));
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+fn should_use_tailscale_cli_fallback() -> bool {
+    !cfg!(target_os = "macos")
+        || std::env::var("HIVEMIND_TAILSCALE_CLI_FALLBACK").as_deref() == Ok("1")
+}
+
 fn app_initials(name: &str) -> String {
     let initials = name
         .split_whitespace()
@@ -390,15 +436,28 @@ fn status_from_cli() -> Result<Value, String> {
     if let Some(status) = status_from_localapi() {
         return Ok(status);
     }
+    if !should_use_tailscale_cli_fallback() {
+        return Err("Tailscale LocalAPI did not respond.".to_string());
+    }
     let mut last_error = "tailscale unavailable".to_string();
     for command in TAILSCALE_CLI_CANDIDATES {
         // hidden_command: fleet status is polled; a plain `tailscale status`
         // spawn flashes a console window on Windows each poll when the local
         // API path is unavailable. See crate::hidden_command.
-        let output = crate::hidden_command(command).args(["status", "--json"]).output();
-        let Ok(output) = output else {
-            last_error = format!("{command} unavailable");
-            continue;
+        let mut probe = crate::hidden_command(command);
+        probe.args(["status", "--json"]);
+        let output = match command_output_with_timeout(probe, TAILSCALE_STATUS_TIMEOUT) {
+            Ok(output) => output,
+            Err(error) if error.kind() == io::ErrorKind::TimedOut => {
+                return Err(format!(
+                    "Tailscale status check timed out after {} seconds.",
+                    TAILSCALE_STATUS_TIMEOUT.as_secs()
+                ));
+            }
+            Err(_) => {
+                last_error = format!("{command} unavailable");
+                continue;
+            }
         };
         if !output.status.success() {
             last_error = String::from_utf8_lossy(&output.stderr).trim().to_string();
@@ -429,13 +488,21 @@ pub(crate) fn self_tailnet_ipv4() -> Option<String> {
 
 fn tailnet_health(status: Option<&Value>) -> Value {
     let Some(status) = status else {
-        return json!({ "state": "status-unavailable", "detail": "Tailscale status was not available." });
+        return json!({
+            "state": "status-unavailable",
+            "requiresAttention": true,
+            "detail": "Tailscale needs attention. Its local service did not respond. HivemindOS is continuing locally."
+        });
     };
     let backend = status.get("BackendState").and_then(Value::as_str).unwrap_or("");
     if !backend.is_empty() && backend != "Running" {
-        return json!({ "state": "not-running", "detail": format!("Tailscale backend is {backend}.") });
+        return json!({
+            "state": "not-running",
+            "requiresAttention": true,
+            "detail": format!("Tailscale needs attention. Its backend is {backend}. HivemindOS is continuing locally.")
+        });
     }
-    json!({ "state": "ok" })
+    json!({ "state": "ok", "requiresAttention": false })
 }
 
 /// Exact machine identity, mirroring `exactMachineIdentity` in the fleet
@@ -494,8 +561,7 @@ fn devices_from_status(status: &Value) -> Vec<NativeDevice> {
     seen.into_values().collect()
 }
 
-#[tauri::command]
-pub(crate) fn tailscale_devices() -> Result<Value, String> {
+pub(crate) fn tailscale_devices_payload() -> Result<Value, String> {
     match status_from_cli() {
         Ok(status) => Ok(json!({
             "ok": status.get("BackendState").and_then(Value::as_str) == Some("Running"),
@@ -513,6 +579,13 @@ pub(crate) fn tailscale_devices() -> Result<Value, String> {
             "devices": [local_device()],
         })),
     }
+}
+
+#[tauri::command]
+pub(crate) async fn tailscale_devices() -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(tailscale_devices_payload)
+        .await
+        .map_err(|error| format!("Tailscale status task failed: {error}"))?
 }
 
 fn is_mobile_device(device: &NativeDevice) -> bool {
@@ -710,8 +783,7 @@ fn fold_ready_tailnet_self(machines: Vec<Value>) -> Vec<Value> {
         .collect()
 }
 
-#[tauri::command]
-pub(crate) fn fleet_discover() -> Result<Value, String> {
+fn fleet_discover_payload() -> Result<Value, String> {
     let status = status_from_cli().ok();
     let devices = status
         .as_ref()
@@ -729,9 +801,63 @@ pub(crate) fn fleet_discover() -> Result<Value, String> {
     }))
 }
 
+#[tauri::command]
+pub(crate) async fn fleet_discover() -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(fleet_discover_payload)
+        .await
+        .map_err(|error| format!("Fleet discovery task failed: {error}"))?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn command_timeout_stops_the_process_group() {
+        let marker = std::env::temp_dir().join(format!(
+            "hivemindos-tailscale-timeout-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_file(&marker);
+        let mut command = std::process::Command::new("/bin/sh");
+        command
+            .arg("-c")
+            .arg("(sleep 0.25; printf reached > \"$1\") & wait")
+            .arg("hivemindos-timeout-test")
+            .arg(&marker);
+
+        let started = std::time::Instant::now();
+        let error = command_output_with_timeout(command, Duration::from_millis(50))
+            .expect_err("the child command should time out");
+
+        assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
+        assert!(started.elapsed() < Duration::from_secs(1));
+        std::thread::sleep(Duration::from_millis(350));
+        assert!(
+            !marker.exists(),
+            "a timed-out command must not leave descendants running"
+        );
+    }
+
+    #[test]
+    fn unavailable_tailnet_health_requires_attention() {
+        let health = tailnet_health(None);
+        assert_eq!(
+            health.get("state").and_then(Value::as_str),
+            Some("status-unavailable")
+        );
+        assert_eq!(
+            health.get("requiresAttention").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert!(
+            health
+                .get("detail")
+                .and_then(Value::as_str)
+                .is_some_and(|detail| detail.contains("Tailscale needs attention"))
+        );
+    }
 
     fn peer(host: &str, dns: &str, ip: &str) -> Value {
         json!({

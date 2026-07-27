@@ -707,6 +707,7 @@ function tailscaleSshTargets(device: Device) {
 }
 
 async function execTailscaleSsh(target: string, script: string) {
+  if (!shouldUseTailscaleCliFallback()) throw new Error("Automatic Tailscale CLI repair is disabled on macOS.");
   const errors: string[] = [];
   for (const command of TAILSCALE_CLI_CANDIDATES) {
     try {

@@ -156,6 +156,7 @@ function run(args, statusFile, collectorPort) {
       PATH: `${binDir}${delimiter}${process.env.PATH || ""}`,
       HIVE_ENV_COLLECTOR_PORTS: String(collectorPort),
       FAKE_TAILSCALE_STATUS_FILE: statusFile,
+      HIVEMIND_TAILSCALE_CLI_FALLBACK: "1",
     };
     // The peer-enumeration branch under test only runs when no targets are
     // pinned; scrub any pins or CLI overrides leaking from the outer env.

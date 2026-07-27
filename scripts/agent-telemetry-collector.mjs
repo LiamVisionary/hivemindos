@@ -9623,15 +9623,7 @@ async function advertiseHubMdns() {
     let magicDnsSuffix = "";
     let magicDnsName = ""; // the full stable tailnet name (Self.DNSName)
     try {
-      const { stdout } = await promisify(execFile)(
-        "tailscale",
-        ["status", "--json"],
-        {
-          timeout: 5000,
-          maxBuffer: 1_500_000,
-        },
-      );
-      const st = JSON.parse(stdout);
+      const st = await tailscaleStatusJson();
       magicDnsSuffix = st?.MagicDNSSuffix || "";
       magicDnsName = (st?.Self?.DNSName || "").replace(/\.$/, "");
     } catch {

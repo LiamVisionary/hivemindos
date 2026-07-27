@@ -47,6 +47,35 @@ compileIntoContext(helperSubset, helperContext, "dashboard-display-helpers.tsx")
 const { mergeDiscoveredMachines, machineNetworkIssue, readyTailnetSelfShadowBases, isTailnetSelfShadowGroup } =
   helperContext.__fleetMerge;
 
+const tailscaleStatusSource = readFileSync(
+  new URL("../src/lib/native/tailscale-status.ts", import.meta.url),
+  "utf8",
+).replace(/\bexport\s+/g, "");
+const tailscaleStatusContext = vm.createContext({});
+compileIntoContext(
+  `${tailscaleStatusSource}\n;globalThis.__tailscaleStatus = { tailscaleStatusPresentation };`,
+  tailscaleStatusContext,
+  "tailscale-status.ts",
+);
+const { tailscaleStatusPresentation } = tailscaleStatusContext.__tailscaleStatus;
+
+assert.deepEqual(
+  JSON.parse(JSON.stringify(tailscaleStatusPresentation({
+    ok: false,
+    error: "Tailscale LocalAPI unavailable",
+    tailnetHealth: {
+      state: "status-unavailable",
+      detail: "Tailscale status was not available.",
+    },
+  }))),
+  {
+    label: "Tailscale needs attention",
+    detail: "Tailscale did not respond. HivemindOS is continuing locally; restart or reconnect Tailscale to restore Fleet, sync, and phone access.",
+    requiresAttention: true,
+  },
+  "an unavailable optional Tailnet must produce an actionable, non-blocking status",
+);
+
 function readyUbuntuMachine() {
   return {
     device: {
