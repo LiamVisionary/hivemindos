@@ -334,7 +334,7 @@ jobs:
         run: node scripts/stage-markitdown-sidecar.mjs
 
       - name: Exercise bundled document converter
-        run: node scripts/test-markitdown-sidecar-runtime.mjs
+        run: node --import tsx scripts/test-markitdown-sidecar-runtime.mjs
 
       - name: Build Tauri app
         if: runner.os != 'macOS' || github.event.inputs.notarize_macos == 'true'

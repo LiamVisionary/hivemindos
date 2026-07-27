@@ -51,7 +51,11 @@ assert.match(notice, /msg_parser 0\.3\.6/);
 assert.match(notice, /html-to-markdown-rs 3\.8\.3/);
 assert.match(notice, /lopdf 0\.44\.0/);
 assert.match(notice, /quick-xml 0\.41\.0/);
-assert.match(releaseWorkflow, /Exercise bundled document converter/);
+assert.match(
+  releaseWorkflow,
+  /name: Exercise bundled document converter\s+run: node --import tsx scripts\/test-markitdown-sidecar-runtime\.mjs/,
+  "the Node 20 release runners must load the TypeScript sidecar client through tsx",
+);
 
 const stagedBinary = stagedBinaryPath();
 if (existsSync(stagedBinary)) {
