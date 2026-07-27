@@ -1,4 +1,5 @@
 import { createTask } from "@/lib/services/kanban/local-kanban-store";
+import { titleTokens } from "@/lib/services/company-task-dedup";
 import type { QueenBeeOptions, QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plane";
 import { chooseQueenBeeDelegate } from "@/lib/services/queen-bee/router";
 import { readQueenBeeOutcomeStats } from "@/lib/services/queen-bee/outcome-stats";
@@ -108,6 +109,39 @@ function workerSkills(requirement: string) {
   return ["code"];
 }
 
+// Tokens that mark a requirement AS verification work; they never link a QA draft
+// to a specific build draft ("test the checkout flow" links via "checkout", not "test").
+const QA_GENERIC_TOKENS = new Set([
+  "test", "tests", "testing", "tested", "verify", "verified", "verification",
+  "acceptance", "coverage", "harden", "criteria",
+]);
+
+function isBuildClass(skills: readonly string[]): boolean {
+  return skills.includes("code") || skills.includes("ops");
+}
+
+/**
+ * Dependency edges for a QA-classified draft: the earlier build (code/ops) drafts
+ * it verifies. A verification bullet that names a specific build requirement
+ * (shared meaningful token) depends on exactly those; one that names no target
+ * verifies the build work as a whole and depends on every earlier build draft.
+ * Only earlier indexes are eligible — createQueenBeePrdTasks resolves parent ids
+ * in draft order, and board parent-gating needs the parent to exist first.
+ */
+function qaTargetIndexes(requirements: readonly string[], skillsByIndex: readonly string[][], index: number): number[] {
+  const buildIndexes: number[] = [];
+  for (let i = 0; i < index; i += 1) {
+    if (isBuildClass(skillsByIndex[i]!)) buildIndexes.push(i);
+  }
+  if (!buildIndexes.length) return [];
+  const qaTokens = [...titleTokens(requirements[index]!)].filter((token) => !QA_GENERIC_TOKENS.has(token));
+  const matched = buildIndexes.filter((i) => {
+    const buildTokens = titleTokens(requirements[i]!);
+    return qaTokens.some((token) => buildTokens.has(token));
+  });
+  return matched.length ? matched : buildIndexes;
+}
+
 function taskBody(input: { requirement: string; title: string; source: string; criteria: string[]; index: number }) {
   const criteria = input.criteria.length
     ? input.criteria.map((criterion) => `- ${criterion}`).join("\n")
@@ -132,11 +166,18 @@ export function decomposePrdToTaskDrafts(prd: string, options: { title?: string 
   const source = options.source?.trim() || title;
   const criteria = acceptanceCriteria(prd);
   const requirements = candidateRequirements(prd, maxTasks);
+  const skillsByIndex = requirements.map((requirement) => workerSkills(requirement));
+  // Independent by default so the board runs the epic as a parallel DAG. The only
+  // real edges are verification ones: QA drafts wait for the build drafts they
+  // verify. (The old blanket chain — each task depending on its predecessor —
+  // serialized 12-24 task epics for no content reason.)
   const drafts: QueenBeePrdTaskDraft[] = requirements.map((requirement, index) => ({
     title: taskTitle(requirement, index),
     body: taskBody({ requirement, title, source, criteria, index }),
-    skills: ["prd-decomposition", ...workerSkills(requirement)],
-    dependsOnDraftIndexes: index > 0 ? [index - 1] : [],
+    skills: ["prd-decomposition", ...skillsByIndex[index]!],
+    dependsOnDraftIndexes: skillsByIndex[index]!.includes("qa")
+      ? qaTargetIndexes(requirements, skillsByIndex, index)
+      : [],
   }));
   return { title, source, criteria, drafts };
 }

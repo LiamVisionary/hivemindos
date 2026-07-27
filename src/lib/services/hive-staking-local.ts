@@ -1,34 +1,17 @@
 import "server-only";
 
 import { createWalletClient, http, parseUnits } from "viem";
+import type { Hash } from "viem";
 import { validateMnemonic } from "@scure/bip39";
 import { wordlist as englishWordlist } from "@scure/bip39/wordlists/english";
 import { mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
 import { DEFAULT_BASE_HIVE_STAKING_CONTRACT_ADDRESS, DEFAULT_BASE_HIVE_TOKEN_ADDRESS } from "@/lib/config/hive-staking";
 import { isEvmAddress } from "@/lib/services/hive-staking-client";
+import { createHiveStakingPublicClient, HIVE_ERC20_ABI, HIVE_STAKE_VAULT_ABI } from "@/lib/services/hive-staking";
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
 import { base } from "@/lib/services/wallet/base-chain";
 
 const EVM_RECOVERY_PATH = "m/44'/60'/0'/0/0";
-
-const HIVE_ERC20_APPROVE_ABI = [{
-  type: "function",
-  name: "approve",
-  stateMutability: "nonpayable",
-  inputs: [
-    { name: "spender", type: "address" },
-    { name: "amount", type: "uint256" },
-  ],
-  outputs: [{ name: "", type: "bool" }],
-}] as const;
-
-const HIVE_STAKE_ABI = [{
-  type: "function",
-  name: "stake",
-  stateMutability: "nonpayable",
-  inputs: [{ name: "amount", type: "uint256" }],
-  outputs: [],
-}] as const;
 
 export async function hiveStakingWriteContractAddress(): Promise<`0x${string}`> {
   const candidate = await hiveEnvValue("HIVE_STAKING_CONTRACT_ADDRESS")
@@ -46,7 +29,7 @@ export async function hiveWriteTokenAddress(): Promise<`0x${string}`> {
   return candidate;
 }
 
-async function hiveBaseRpcUrl() {
+export async function hiveBaseRpcUrl() {
   return await hiveEnvValue("BASE_RPC_URL") || "https://mainnet.base.org";
 }
 
@@ -58,8 +41,6 @@ export async function stakeHiveFromLocalWallet(input: {
   stakingAddress?: string;
 }) {
   if (!isEvmAddress(input.fromAddress)) throw new Error("Wallet address is not a valid Base address.");
-  const amount = Number(input.amountHive);
-  if (!Number.isFinite(amount) || amount <= 0) throw new Error("Stake amount must be greater than zero.");
 
   const account = evmAccountFromLocalSecret(input.secret);
   if (account.address.toLowerCase() !== input.fromAddress.toLowerCase()) {
@@ -68,25 +49,36 @@ export async function stakeHiveFromLocalWallet(input: {
 
   const tokenAddress = input.tokenAddress ? validateAddress(input.tokenAddress, "HIVE token") : await hiveWriteTokenAddress();
   const stakingAddress = input.stakingAddress ? validateAddress(input.stakingAddress, "HIVE staking contract") : await hiveStakingWriteContractAddress();
-  const amountRaw = parseUnits(input.amountHive, 18);
+  const rpcUrl = await hiveBaseRpcUrl();
+  const publicClient = createHiveStakingPublicClient(rpcUrl);
+  const tokenDecimals = Number(await publicClient.readContract({
+    address: tokenAddress,
+    abi: HIVE_ERC20_ABI,
+    functionName: "decimals",
+  }).catch(() => 18));
+  const amountRaw = parseHiveStakeAmount(input.amountHive, tokenDecimals);
   const wallet = createWalletClient({
     account,
     chain: base,
-    transport: http(await hiveBaseRpcUrl()),
+    transport: http(rpcUrl),
   });
 
   const approveHash = await wallet.writeContract({
     address: tokenAddress,
-    abi: HIVE_ERC20_APPROVE_ABI,
+    abi: HIVE_ERC20_ABI,
     functionName: "approve",
     args: [stakingAddress, amountRaw],
   });
+  await waitForHiveTransactionReceipt(publicClient, approveHash, "approval");
+  await waitForHiveAllowance({ publicClient, owner: account.address, tokenAddress, spender: stakingAddress, amountRaw });
+
   const stakeHash = await wallet.writeContract({
     address: stakingAddress,
-    abi: HIVE_STAKE_ABI,
+    abi: HIVE_STAKE_VAULT_ABI,
     functionName: "stake",
     args: [amountRaw],
   });
+  await waitForHiveTransactionReceipt(publicClient, stakeHash, "stake");
 
   return { approveHash, stakeHash };
 }
@@ -114,4 +106,57 @@ function normalizeRecoveryPhrase(secret: string) {
 function validateAddress(value: string, label: string): `0x${string}` {
   if (!isEvmAddress(value)) throw new Error(`${label} address is invalid.`);
   return value;
+}
+
+export function parseHiveStakeAmount(amountHive: string, decimals: number) {
+  if (!Number.isInteger(decimals) || decimals < 0) throw new Error(`Invalid HIVE token decimals: ${decimals}`);
+  let amountRaw: bigint;
+  try {
+    amountRaw = parseUnits(amountHive.trim(), decimals);
+  } catch {
+    throw new Error("Stake amount must be a valid HIVE amount.");
+  }
+  if (amountRaw <= 0n) throw new Error("Stake amount must be greater than zero.");
+  return amountRaw;
+}
+
+async function waitForHiveTransactionReceipt(
+  publicClient: ReturnType<typeof createHiveStakingPublicClient>,
+  hash: Hash,
+  label: "approval" | "stake",
+) {
+  const receipt = await publicClient.waitForTransactionReceipt({
+    hash,
+    timeout: 120_000,
+  });
+  if (receipt.status !== "success") throw new Error(`HIVE ${label} transaction failed.`);
+}
+
+export async function waitForHiveAllowance(params: {
+  publicClient: ReturnType<typeof createHiveStakingPublicClient>;
+  owner: `0x${string}`;
+  tokenAddress: `0x${string}`;
+  spender: `0x${string}`;
+  amountRaw: bigint;
+}) {
+  const timeoutMs = 90_000;
+  const pollMs = 2_000;
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const allowance = await params.publicClient.readContract({
+      address: params.tokenAddress,
+      abi: HIVE_ERC20_ABI,
+      functionName: "allowance",
+      args: [params.owner, params.spender],
+    }).catch(() => null);
+    if (allowance != null && allowance >= params.amountRaw) return;
+    await sleep(pollMs);
+  }
+
+  throw new Error("HIVE approval confirmed, but the Base RPC has not returned the updated allowance yet. Try again after the approval is visible.");
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

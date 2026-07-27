@@ -1,0 +1,139 @@
+.root {
+  --mc-bg: #090d14;
+  --mc-panel: rgba(17, 24, 36, 0.86);
+  --mc-panel-strong: rgba(24, 33, 48, 0.94);
+  --mc-line: rgba(148, 163, 184, 0.2);
+  --mc-line-strong: rgba(94, 234, 212, 0.46);
+  --mc-text: #f4f7fb;
+  --mc-muted: #9aa8bb;
+  --mc-teal: #5eead4;
+  --mc-teal-strong: #2dd4bf;
+  --mc-honey: #ffd45a;
+  --mc-danger: #fb7185;
+  min-height: 100%;
+  padding: clamp(20px, 3vw, 42px);
+  overflow-y: auto;
+  color: var(--mc-text);
+  background:
+    radial-gradient(circle at 11% 4%, rgba(45, 212, 191, 0.13), transparent 30%),
+    radial-gradient(circle at 88% 7%, rgba(255, 212, 90, 0.09), transparent 24%),
+    var(--mc-bg);
+  font-family: "Space Grotesk", "Inter", system-ui, sans-serif;
+}
+
+:global([data-theme="hive-light"]) .root {
+  --mc-bg: #f3ead5;
+  --mc-panel: rgba(255, 251, 240, 0.86);
+  --mc-panel-strong: rgba(255, 252, 244, 0.97);
+  --mc-line: rgba(92, 75, 45, 0.24);
+  --mc-line-strong: rgba(13, 90, 78, 0.48);
+  --mc-text: #302719;
+  --mc-muted: #75684f;
+  --mc-teal: #0d5a4e;
+  --mc-teal-strong: #0d8e7e;
+  --mc-honey: #8c5e0a;
+  --mc-danger: #a9233e;
+}
+
+.hero { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 22px; margin: 0 auto 24px; max-width: 1320px; }
+.heroCopy { max-width: 760px; }
+.hero h1 { margin: 9px 0 10px; font-size: clamp(34px, 5vw, 58px); line-height: .96; letter-spacing: -.05em; }
+.hero p, .panelCopy { margin: 0; color: var(--mc-muted); font-size: 14px; line-height: 1.65; }
+.eyebrow, .kicker { color: var(--mc-teal); font-family: ui-monospace, "JetBrains Mono", monospace; font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.eyebrow { display: inline-flex; align-items: center; gap: 7px; }
+.balanceCard { min-width: 205px; padding: 17px 19px; border: 1px solid var(--mc-line); border-radius: 18px; background: var(--mc-panel); box-shadow: 0 22px 60px rgba(0,0,0,.18); }
+.balanceCard span, .balanceCard small { display: block; color: var(--mc-muted); font-family: ui-monospace, monospace; font-size: 10px; }
+.balanceCard strong { display: block; margin: 5px 0 4px; color: var(--mc-honey); font-size: 25px; letter-spacing: -.04em; }
+.commercialPanel { max-width: 1320px; margin: 0 auto 18px; padding: clamp(18px, 2.5vw, 27px); border: 1px solid var(--mc-line); border-radius: 22px; background: linear-gradient(145deg, var(--mc-panel-strong), var(--mc-panel)); box-shadow: 0 28px 80px rgba(0,0,0,.16); }
+.commercialHeading { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 16px; }
+.commercialHeading h2 { margin: 5px 0 0; color: var(--mc-text); font-size: 21px; letter-spacing: -.025em; }
+.commercialHeading p { max-width: 540px; margin: 0; color: var(--mc-muted); font-size: 11px; line-height: 1.55; }
+.commercialGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.commercialCard { display: grid; gap: 8px; min-width: 0; padding: 14px; border: 1px solid var(--mc-line); border-radius: 14px; background: color-mix(in srgb, var(--mc-panel-strong) 72%, transparent); }
+.commercialCard div > span, .commercialCard div > strong { display: block; }
+.commercialCard div > span { color: var(--mc-teal); font-family: ui-monospace, monospace; font-size: 9px; text-transform: uppercase; }
+.commercialCard div > strong { margin-top: 5px; font-size: 15px; }
+.commercialCard b { color: var(--mc-honey); font-size: 14px; font-weight: 600; }
+.commercialCard p, .commercialCard small { margin: 0; color: var(--mc-muted); font-size: 10px; line-height: 1.45; overflow-wrap: anywhere; }
+.workspace, .loadingGrid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, .75fr); gap: 18px; max-width: 1320px; margin: 0 auto; }
+.primaryColumn, .secondaryColumn { display: grid; align-content: start; gap: 18px; }
+.panel { padding: clamp(18px, 2.5vw, 27px); border: 1px solid var(--mc-line); border-radius: 22px; background: linear-gradient(145deg, var(--mc-panel-strong), var(--mc-panel)); box-shadow: 0 28px 80px rgba(0,0,0,.16); }
+.sectionHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; color: var(--mc-teal); }
+.sectionHeading h2 { margin: 5px 0 0; color: var(--mc-text); font-size: 21px; letter-spacing: -.025em; }
+.field { display: grid; gap: 7px; margin-top: 16px; }
+.field > span { color: var(--mc-muted); font-size: 11px; font-weight: 700; }
+.field input, .field select, .root textarea { width: 100%; border: 1px solid var(--mc-line); border-radius: 11px; outline: 0; background: color-mix(in srgb, var(--mc-panel-strong) 80%, transparent); color: var(--mc-text); font: inherit; font-size: 13px; transition: border-color 160ms ease, box-shadow 160ms ease; }
+.field input, .field select { min-height: 43px; padding: 0 12px; }
+.root textarea { resize: vertical; min-height: 116px; padding: 12px; line-height: 1.55; }
+.field input:focus, .field select:focus, .root textarea:focus { border-color: var(--mc-line-strong); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mc-teal-strong) 13%, transparent); }
+.twoFields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.planGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.planCard { display: grid; gap: 6px; padding: 13px; text-align: left; border: 1px solid var(--mc-line); border-radius: 14px; background: transparent; color: var(--mc-muted); cursor: pointer; transition: transform 160ms ease, border-color 160ms ease, background 160ms ease; }
+.planCard:hover { transform: translateY(-2px); border-color: var(--mc-line-strong); }
+.planCard.selected { border-color: var(--mc-line-strong); background: color-mix(in srgb, var(--mc-teal-strong) 11%, transparent); color: var(--mc-text); }
+.planTop { display: flex; align-items: center; justify-content: space-between; color: var(--mc-text); }
+.planCard > span { font-size: 10px; line-height: 1.35; }
+.planCard b { margin-top: 3px; color: var(--mc-honey); font-size: 13px; }
+.fundingBox { display: grid; gap: 10px; margin-top: 18px; padding: 15px; border: 1px solid color-mix(in srgb, var(--mc-honey) 35%, transparent); border-radius: 15px; background: color-mix(in srgb, var(--mc-honey) 8%, transparent); }
+.fundingBox strong { display: block; margin-top: 4px; }
+.fundingBox p, .costNote { margin: 0; color: var(--mc-muted); font-size: 10px; line-height: 1.55; }
+.amountRow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin: 12px 0; }
+.amountRow button { min-height: 36px; border: 1px solid var(--mc-line); border-radius: 9px; background: transparent; color: var(--mc-muted); cursor: pointer; font-size: 11px; font-weight: 800; }
+.amountRow button:hover, .amountRow button.selectedAmount { border-color: color-mix(in srgb, var(--mc-honey) 60%, transparent); background: color-mix(in srgb, var(--mc-honey) 12%, transparent); color: var(--mc-honey); }
+.deployButton, .secondaryButton { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 43px; border: 1px solid color-mix(in srgb, var(--mc-teal) 55%, transparent); border-radius: 11px; background: linear-gradient(135deg, color-mix(in srgb, var(--mc-teal-strong) 28%, transparent), color-mix(in srgb, var(--mc-teal-strong) 12%, transparent)); color: var(--mc-text); cursor: pointer; font: inherit; font-size: 12px; font-weight: 800; }
+.deployButton { width: 100%; margin-top: 19px; }
+.secondaryButton { width: 100%; }
+.deployButton:disabled, .secondaryButton:disabled, .agentActions button:disabled { cursor: not-allowed; opacity: .48; }
+.costNote { margin-top: 9px; text-align: center; }
+.errorBanner { display: flex; align-items: flex-start; gap: 9px; max-width: 1320px; margin: 0 auto 16px; padding: 12px 14px; border: 1px solid color-mix(in srgb, var(--mc-danger) 40%, transparent); border-radius: 12px; background: color-mix(in srgb, var(--mc-danger) 10%, transparent); color: var(--mc-danger); font-size: 12px; line-height: 1.5; }
+.iconButton { display: grid; width: 35px; height: 35px; place-items: center; border: 1px solid var(--mc-line); border-radius: 10px; background: transparent; color: var(--mc-muted); cursor: pointer; }
+.agentList { display: grid; gap: 10px; }
+.agentCard { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 16px; padding: 15px; border: 1px solid var(--mc-line); border-radius: 15px; background: color-mix(in srgb, var(--mc-panel-strong) 72%, transparent); cursor: pointer; }
+.agentCard.activeAgent { border-color: var(--mc-line-strong); }
+.agentIdentity { display: flex; min-width: 0; align-items: center; gap: 11px; }
+.agentIcon { display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center; border: 1px solid var(--mc-line-strong); border-radius: 12px; background: color-mix(in srgb, var(--mc-teal-strong) 10%, transparent); color: var(--mc-teal); }
+.agentIdentity h3 { margin: 0 0 3px; font-size: 15px; overflow-wrap: anywhere; }
+.agentIdentity span { color: var(--mc-muted); font-size: 10px; }
+.status { display: inline-flex; height: fit-content; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid var(--mc-line); border-radius: 999px; color: var(--mc-muted); font-family: ui-monospace, monospace; font-size: 9px; text-transform: uppercase; }
+.status i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.status.live { color: var(--mc-teal); }.status.danger { color: var(--mc-danger); }.status.pending { color: var(--mc-honey); }.status.stopped { color: var(--mc-muted); }
+.agentMeta { display: flex; min-width: 0; flex-wrap: wrap; gap: 8px 16px; color: var(--mc-muted); font-family: ui-monospace, monospace; font-size: 9px; }
+.agentMeta span { display: inline-flex; min-width: 0; align-items: center; gap: 5px; overflow-wrap: anywhere; }
+.agentError { grid-column: 1 / -1; margin: 0; color: var(--mc-danger); font-size: 11px; line-height: 1.45; }
+.agentActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+.agentActions button { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px; border: 1px solid var(--mc-line); border-radius: 9px; background: transparent; color: var(--mc-muted); cursor: pointer; font-size: 10px; font-weight: 700; }
+.agentActions button:hover { border-color: var(--mc-line-strong); color: var(--mc-text); }
+.agentActions button.deleteButton:hover { border-color: color-mix(in srgb, var(--mc-danger) 55%, transparent); color: var(--mc-danger); }
+.emptyState, .emptyCompact { display: grid; place-items: center; gap: 8px; padding: 34px 18px; text-align: center; color: var(--mc-muted); }
+.emptyState svg { color: var(--mc-teal); }.emptyState strong { color: var(--mc-text); }.emptyState span, .emptyCompact { font-size: 11px; }
+.chatReply { min-height: 110px; max-height: 280px; margin-bottom: 12px; padding: 13px; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere; border: 1px solid var(--mc-line); border-radius: 12px; background: rgba(0,0,0,.1); color: var(--mc-muted); font-size: 12px; line-height: 1.6; }
+.root textarea + .secondaryButton { margin-top: 10px; }
+.reachList { display: grid; gap: 12px; }
+.reachRow { display: grid; grid-template-columns: 9px minmax(0, 1fr); gap: 10px; align-items: start; }
+.reachRow i { width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; }
+.reachLive { background: var(--mc-teal); box-shadow: 0 0 12px color-mix(in srgb, var(--mc-teal) 55%, transparent); }
+.reachPending { background: var(--mc-honey); }
+.reachRow strong, .reachRow span { display: block; }
+.reachRow strong { font-size: 11px; }
+.reachRow span { margin-top: 3px; color: var(--mc-muted); font-size: 10px; line-height: 1.5; }
+.integrationStack { display: grid; gap: 14px; }
+.capabilityStatusGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.capabilityStatusGrid > div { min-width: 0; padding: 12px; border: 1px solid var(--mc-line); border-radius: 12px; background: color-mix(in srgb, var(--mc-panel-strong) 68%, transparent); }
+.capabilityStatusGrid span, .capabilityStatusGrid small { display: block; color: var(--mc-muted); font-size: 9px; line-height: 1.45; overflow-wrap: anywhere; }
+.capabilityStatusGrid strong { display: block; margin: 5px 0 3px; color: var(--mc-teal); font-size: 11px; text-transform: capitalize; }
+.advancedSetup { padding: 12px 13px; border: 1px solid var(--mc-line); border-radius: 12px; background: color-mix(in srgb, var(--mc-panel-strong) 64%, transparent); }
+.advancedSetup summary { display: flex; align-items: center; gap: 8px; color: var(--mc-text); cursor: pointer; font-size: 11px; font-weight: 800; }
+.advancedSetup > p, .integrationList > p { margin: 10px 0 0; color: var(--mc-muted); font-size: 10px; line-height: 1.55; }
+.advancedSetup code { color: var(--mc-honey); font-family: ui-monospace, monospace; }
+.advancedSetup .secondaryButton { margin-top: 12px; }
+.integrationList { display: grid; gap: 8px; }
+.integrationListHeading { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--mc-muted); font-size: 10px; }
+.integrationRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 11px; border: 1px solid var(--mc-line); border-radius: 10px; }
+.integrationRow strong, .integrationRow span { display: block; overflow-wrap: anywhere; }
+.integrationRow strong { font-size: 11px; }.integrationRow span { margin-top: 3px; color: var(--mc-muted); font-size: 9px; text-transform: capitalize; }
+.integrationRow button { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; border: 1px solid var(--mc-line); border-radius: 8px; background: transparent; color: var(--mc-danger); cursor: pointer; }
+
+@media (max-width: 980px) { .commercialGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.workspace, .loadingGrid { grid-template-columns: 1fr; }.secondaryColumn { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 700px) { .root { padding: 18px 14px 34px; }.commercialHeading { align-items: start; flex-direction: column; }.commercialGrid, .planGrid, .twoFields, .secondaryColumn, .capabilityStatusGrid { grid-template-columns: 1fr; }.agentCard { grid-template-columns: 1fr; }.status { justify-self: start; }.agentActions { justify-content: flex-start; }.amountRow { grid-template-columns: repeat(2, 1fr); } }
+
+@media (prefers-reduced-motion: reduce) { .planCard, .deployButton, .secondaryButton { transition: none; } }

@@ -1,30 +1,61 @@
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
+import { fileURLToPath } from "node:url";
 
-const baseUrl = process.env.HIVEMINDOS_TEST_BASE_URL || process.argv.find((arg) => arg.startsWith("--base-url="))?.slice("--base-url=".length) || "http://127.0.0.1:5033";
-const label = process.argv.find((arg) => arg.startsWith("--label="))?.slice("--label=".length) || "agent-memory-api";
-const iterations = Number(process.argv.find((arg) => arg.startsWith("--iterations="))?.slice("--iterations=".length) || 12);
+function cliValue(name) {
+  const inline = process.argv.find((arg) => arg.startsWith(`${name}=`));
+  if (inline) return inline.slice(name.length + 1);
+  const index = process.argv.indexOf(name);
+  return index >= 0 ? process.argv[index + 1] : undefined;
+}
+
+const baseUrl = process.env.HIVEMINDOS_TEST_BASE_URL || cliValue("--base-url") || "http://127.0.0.1:5033";
+
+// Dashboard /api routes 401 tokenless since the API auth gate moved to
+// src/proxy.ts (same resolution order as scripts/fleet-health-watchdog.mjs).
+function envFileValue(path, key) {
+  if (!existsSync(path)) return "";
+  const match = readFileSync(path, "utf8").match(new RegExp(`^\\s*(?:export\\s+)?${key}\\s*=\\s*(.+)\\s*$`, "m"));
+  let value = match?.[1]?.trim() ?? "";
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
+  return value.trim();
+}
+
+const deviceToken = (
+  process.env.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN
+  || envFileValue(resolve(dirname(fileURLToPath(import.meta.url)), "..", ".env.local"), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN")
+  || envFileValue(join(homedir(), ".hivemindos", ".env"), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN")
+).trim();
+
+function dashboardHeaders(extra = {}) {
+  return deviceToken ? { ...extra, "x-hivemindos-device-token": deviceToken } : extra;
+}
+const label = cliValue("--label") || "agent-memory-api";
+const iterations = Number(cliValue("--iterations") || 12);
+const warmupIterations = Number(cliValue("--warmup") || 1);
 
 async function write(path, body) {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, body, "utf8");
 }
 
-async function recall(vaultPath, query, options = {}) {
+async function queryMemory(vaultPath, testCase) {
   const started = performance.now();
   const response = await fetch(`${baseUrl}/api/brain/memory`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: dashboardHeaders({ "content-type": "application/json" }),
     body: JSON.stringify({
-      action: "recall",
+      action: testCase.action || "recall",
       vaultPath,
-      query,
+      query: testCase.query,
       scope: "agent-memory",
       limit: 5,
-      ...options,
+      trackUsage: false,
+      ...testCase.options,
     }),
   });
   const elapsedMs = performance.now() - started;
@@ -166,47 +197,67 @@ await write(retrievalsPath, [
 ].join("\n") + "\n");
 
 const cases = [
-  { name: "entity-alias", query: "QB", expected: "mem-entity-queen" },
+  { name: "entity", query: "Queen Bee coordinator", expected: "mem-entity-queen" },
   { name: "alias", query: "GitLawb", expected: "mem-alias-gitlawb" },
   { name: "temporal-history", query: "what did release notes used to be like before?", expected: "mem-old-release", options: { temporalMode: "historical" } },
   { name: "current-chain-head", query: "release notes style", expected: "mem-new-release" },
   { name: "usage-boost", query: "proof ledger", expected: "mem-usage-preferred" },
-  { name: "action", query: "handoff receipt Hermes", expected: "mem-action-handoff" },
+  { name: "operational-explicit", query: "handoff receipt Hermes", expected: "mem-action-handoff", options: { type: "action" } },
+  { name: "operational-hidden", query: "handoff receipt Hermes", absent: "mem-action-handoff" },
+  { name: "unsupported-abstention", query: "subglacial vineyard payroll reconciliation", expectEmpty: true, action: "answer" },
 ];
 
 const times = [];
 const results = [];
-for (let iteration = 0; iteration < iterations; iteration += 1) {
+let benchmarkStarted = 0;
+for (let iteration = -warmupIterations; iteration < iterations; iteration += 1) {
+  if (iteration === 0) benchmarkStarted = performance.now();
   for (const testCase of cases) {
-    const result = await recall(vaultPath, testCase.query, testCase.options);
-    times.push(result.elapsedMs);
+    const result = await queryMemory(vaultPath, testCase);
+    if (iteration >= 0) times.push(result.elapsedMs);
     if (iteration === 0) {
+      const correct = testCase.expectEmpty
+        ? result.hits.length === 0
+        : testCase.absent
+          ? !result.hits.some((hit) => hit.id === testCase.absent)
+          : result.hits[0]?.id === testCase.expected;
       results.push({
         name: testCase.name,
-        expected: testCase.expected,
+        ...(testCase.expected ? { expected: testCase.expected } : {}),
+        ...(testCase.absent ? { expectedAbsent: testCase.absent } : {}),
+        ...(testCase.expectEmpty ? { expectedEmpty: true } : {}),
         ok: result.ok,
         status: result.status,
         error: result.error,
         top: result.hits[0]?.id || null,
-        correct: result.hits[0]?.id === testCase.expected,
+        correct,
         scoreDetails: result.hits[0]?.scoreDetails || null,
       });
     }
   }
 }
+const elapsedMs = performance.now() - benchmarkStarted;
 
 assert.ok(times.length > 0, "benchmark should record timings");
 const correct = results.filter((result) => result.correct).length;
+assert.equal(correct, cases.length, `expected every API behavior case to pass; got ${correct}/${cases.length}`);
+const rankedCases = results.filter((result) => result.expected);
+const top1Correct = rankedCases.filter((result) => result.correct).length;
 
 console.log(JSON.stringify({
   ok: true,
   label,
   baseUrl,
   iterations,
+  warmupIterations,
   cases: cases.length,
-  top1: `${correct}/${cases.length}`,
+  requests: times.length,
+  behaviorPass: `${correct}/${cases.length}`,
+  top1: `${top1Correct}/${rankedCases.length}`,
   p50Ms: Math.round(percentile(times, 0.5) * 100) / 100,
   p95Ms: Math.round(percentile(times, 0.95) * 100) / 100,
+  elapsedMs: Math.round(elapsedMs * 100) / 100,
+  requestsPerSecond: Math.round((times.length / elapsedMs) * 100_000) / 100,
   results,
   vaultPath,
 }, null, 2));

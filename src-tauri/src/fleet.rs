@@ -611,6 +611,7 @@ fn probe_collector(device: &NativeDevice, collector_url: &str) -> Option<Value> 
         "collector": "ready",
         "collectorHost": health.get("host").cloned().unwrap_or(Value::Null),
         "machineId": health.get("machineId").cloned().unwrap_or(Value::Null),
+        "tailnetSelf": health.get("tailnetSelf").cloned().unwrap_or(Value::Null),
         "version": health.get("version").cloned().unwrap_or(Value::Null),
         "capabilities": capabilities,
         "envSync": health.get("envSync").cloned().unwrap_or(Value::Null),
@@ -642,6 +643,73 @@ fn discover_machine(device: NativeDevice) -> Value {
     })
 }
 
+// Identity candidates a ready collector claims for itself beyond its own
+// device: the system tailscaled node it reported in /health `tailnetSelf`.
+// After an OS hostname rename the linkd tsnet node re-registers under the
+// new name while the system node keeps its sticky MagicDNS name — without
+// this, the orphaned system node renders as an empty ghost machine.
+fn tailnet_self_identities(machine: &Value) -> Vec<String> {
+    let Some(tailnet_self) = machine.get("tailnetSelf") else {
+        return Vec::new();
+    };
+    // dnsName ONLY: the MagicDNS name is sticky and unique per node, while
+    // the reported `name` (tailscaled HostName = macOS ComputerName) can be
+    // shared by two physical machines — deriving an identity from it would
+    // let one machine's collector claim the OTHER machine's system node.
+    let dns_name = tailnet_self.get("dnsName").and_then(Value::as_str).unwrap_or("");
+    let identity = exact_machine_identity("", dns_name);
+    if identity.is_empty() {
+        Vec::new()
+    } else {
+        vec![identity]
+    }
+}
+
+fn machine_device_identity(machine: &Value) -> String {
+    let device = machine.get("device");
+    let name = device
+        .and_then(|d| d.get("name"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let dns_name = device
+        .and_then(|d| d.get("dnsName"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    exact_machine_identity(name, dns_name)
+}
+
+fn fold_ready_tailnet_self(machines: Vec<Value>) -> Vec<Value> {
+    let ready_self_identities = machines
+        .iter()
+        .filter(|machine| {
+            machine.get("collector").and_then(Value::as_str) == Some("ready")
+        })
+        .flat_map(tailnet_self_identities)
+        .collect::<std::collections::HashSet<_>>();
+    if ready_self_identities.is_empty() {
+        return machines;
+    }
+    machines
+        .into_iter()
+        .filter(|machine| {
+            if machine.get("collector").and_then(Value::as_str) == Some("ready") {
+                return true;
+            }
+            // Self is never folded by a remote collector's claims.
+            if machine
+                .get("device")
+                .and_then(|device| device.get("self"))
+                .and_then(Value::as_bool)
+                == Some(true)
+            {
+                return true;
+            }
+            let identity = machine_device_identity(machine);
+            identity.is_empty() || !ready_self_identities.contains(&identity)
+        })
+        .collect()
+}
+
 #[tauri::command]
 pub(crate) fn fleet_discover() -> Result<Value, String> {
     let status = status_from_cli().ok();
@@ -653,6 +721,7 @@ pub(crate) fn fleet_discover() -> Result<Value, String> {
         .into_iter()
         .map(discover_machine)
         .collect::<Vec<_>>();
+    let machines = fold_ready_tailnet_self(machines);
     Ok(json!({
         "ok": true,
         "source": "native-fleet",
@@ -707,5 +776,60 @@ mod tests {
             exact_machine_identity("x", "hivemindos-liams-macbook-pro-1.tail1.ts.net"),
             exact_machine_identity("x", "hivemindos-liams-macbook-pro.tail1.ts.net"),
         );
+    }
+
+    #[test]
+    fn folds_ghost_system_node_claimed_by_ready_collector_tailnet_self() {
+        // An OS hostname rename rotated the linkd tsnet node name; the system
+        // node kept its sticky old MagicDNS name. The ready collector claims
+        // the system node via /health tailnetSelf → the empty ghost folds.
+        // tailnetSelf `name` is tailscaled's HostName = the macOS
+        // ComputerName BOTH MacBooks share — identity comes from dnsName only.
+        let ready = json!({
+            "device": { "name": "LiamsMBP481146", "dnsName": "hivemindos-liamsmbp481146-lan.tail1.ts.net" },
+            "collector": "ready",
+            "tailnetSelf": { "name": "Liam's MacBook Pro", "dnsName": "liams-macbook-pro-1.tail1.ts.net" },
+        });
+        let ghost = json!({
+            "device": { "name": "Liam's MacBook Pro", "dnsName": "liams-macbook-pro-1.tail1.ts.net" },
+            "collector": "offline",
+        });
+        // A DIFFERENT machine sharing the ComputerName must survive, even
+        // with its collector down.
+        let sibling = json!({
+            "device": { "name": "Liam's MacBook Pro", "dnsName": "liams-macbook-pro.tail1.ts.net" },
+            "collector": "offline",
+        });
+        // Self is untouchable even on an identity collision.
+        let self_machine = json!({
+            "device": { "self": true, "name": "This Mac", "dnsName": "liams-macbook-pro-1.tail1.ts.net" },
+            "collector": "offline",
+        });
+        let machines =
+            fold_ready_tailnet_self(vec![ready, ghost, sibling, self_machine]);
+        assert_eq!(machines.len(), 3);
+        assert!(!machines.iter().any(|machine| {
+            let device = machine.get("device");
+            device.and_then(|d| d.get("dnsName")).and_then(Value::as_str)
+                == Some("liams-macbook-pro-1.tail1.ts.net")
+                && device.and_then(|d| d.get("self")).and_then(Value::as_bool) != Some(true)
+        }));
+        assert!(machines.iter().any(|machine| {
+            machine.get("device").and_then(|d| d.get("self")).and_then(Value::as_bool)
+                == Some(true)
+        }));
+    }
+
+    #[test]
+    fn fold_is_inert_without_tailnet_self() {
+        let ready = json!({
+            "device": { "name": "a", "dnsName": "hivemindos-a.tail1.ts.net" },
+            "collector": "ready",
+        });
+        let offline = json!({
+            "device": { "name": "b", "dnsName": "b.tail1.ts.net" },
+            "collector": "offline",
+        });
+        assert_eq!(fold_ready_tailnet_self(vec![ready, offline]).len(), 2);
     }
 }

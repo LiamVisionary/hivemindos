@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { machineVersionCopy } from "@/features/dashboard/dashboard-display-helpers";
+import { machineNeedsAppBuilderRepair } from "@/features/fleet/app-builder-collector-capability";
 import { useVisibilityAwarePolling } from "@/features/dashboard/hooks/use-visibility-aware-polling";
 import type { AppVersion, MachineGroup, MachineUpdateStatus } from "@/features/dashboard/dashboard-types";
 
@@ -44,6 +45,7 @@ function writeCommitFirstSeen(value: CommitFirstSeen) {
 type FleetAutoUpdateOptions = {
   enabled: boolean;
   paused: boolean;
+  activeAgentIds: ReadonlySet<string>;
   machineGroups: MachineGroup[];
   appVersion: AppVersion | null;
   updateStatusByMachine: Record<string, MachineUpdateStatus>;
@@ -69,7 +71,7 @@ export function useFleetAutoUpdate(options: FleetAutoUpdateOptions) {
     hiddenIntervalMs: AUTO_UPDATE_HIDDEN_TICK_MS,
     initialDelayMs: AUTO_UPDATE_INITIAL_DELAY_MS,
     task: async () => {
-      const { paused, machineGroups, appVersion, updateStatusByMachine, runMachineUpdate } = latestRef.current;
+      const { paused, activeAgentIds, machineGroups, appVersion, updateStatusByMachine, runMachineUpdate } = latestRef.current;
       if (paused) return;
       const target = appVersion?.latestCommit?.trim();
       if (!target) return;
@@ -93,6 +95,7 @@ export function useFleetAutoUpdate(options: FleetAutoUpdateOptions) {
       const selfAppDir = appVersion?.appDir?.trim();
       const machine = machineGroups.find((candidate) => {
         if (candidate.self || candidate.key === "unassigned" || !candidate.online) return false;
+        if (candidate.agents.some((agent) => activeAgentIds.has(agent.id))) return false;
         const candidateMachineId = candidate.machineId?.trim().toLowerCase();
         if (candidateMachineId && selfMachineIds.has(candidateMachineId)) return false;
         // The update route runs updates for any locally-present appDir on this host's
@@ -101,7 +104,7 @@ export function useFleetAutoUpdate(options: FleetAutoUpdateOptions) {
         if (selfAppDir && candidate.version?.appDir?.trim() === selfAppDir) return false;
         // "stale" means the collector reports a commit that differs from origin/main;
         // machines with no reported version stay manual-only.
-        if (machineVersionCopy(candidate, target)?.state !== "stale") return false;
+        if (machineVersionCopy(candidate, target)?.state !== "stale" && !machineNeedsAppBuilderRepair(candidate)) return false;
         const attempt = attemptsRef.current.get(candidate.key);
         if (!attempt || attempt.commit !== target) return true;
         return attempt.attempts < MAX_ATTEMPTS_PER_COMMIT && now - attempt.lastAttemptAt >= RETRY_BACKOFF_MS;

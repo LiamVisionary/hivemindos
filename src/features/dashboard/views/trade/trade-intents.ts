@@ -9,6 +9,8 @@ export type CryptoIntentInputKind =
   | "amount" // USD amount only (fund credits)
   | "address" // read-only receive address
   | "info" // informational / hand-off (e.g. cards)
+  | "nansen" // read-only Nansen research templates
+  | "quant-research" // reviewed local request run through the quant research swarm
   | "none"; // read-only action with no inputs
 
 export type CryptoIntentDef = {
@@ -29,13 +31,15 @@ export const CRYPTO_INTENTS: CryptoIntentDef[] = [
   { id: "trade", label: "Swap / Trade", desc: "Spot buy or sell a token", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "swap $50 USDC to ETH" },
   { id: "crosschain-swap", label: "Cross-chain swap", desc: "Swap across chains", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "swap 100 USDC on Base to SOL on Solana" },
   { id: "bridge", label: "Bridge", desc: "Move a token between chains", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "bridge 0.2 ETH from Base to Arbitrum" },
-  { id: "hyperliquid", label: "Perps / leverage", desc: "Hyperliquid positions", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "long 5x ETH with $200" },
+  { id: "hyperliquid", label: "Hyperliquid", desc: "Spot, perps, orders", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "quote a $25 ETH long or buy HYPE spot" },
   { id: "polymarket", label: "Prediction markets", desc: "Search or bet on Polymarket", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "bet $20 yes on the next Fed cut market" },
   { id: "token-launch", label: "Launch a token", desc: "Deploy a new token", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "launch a token called HIVE BEE, ticker BEE" },
+  { id: "claim-fees", label: "Claim fees", desc: "Collect creator & LP trading fees", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "claim my creator fees for BEE" },
   { id: "nft", label: "NFTs", desc: "Buy, sell, or mint NFTs", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "buy the floor of <collection>" },
   { id: "automation", label: "Automations", desc: "DCA, TWAP, limit, stop", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "DCA $25 into ETH every day" },
+  { id: "copy-trading", label: "Copy trading", desc: "Auto-mirror a wallet's trades", group: "Trade & markets", input: "info", mutating: true },
 
-  { id: "send", label: "Send USDC", desc: "On-chain USDC transfer", group: "Move money", input: "recipient-amount", mutating: true },
+  { id: "send", label: "Send stablecoin", desc: "USDC or Robinhood Chain USDG transfer", group: "Move money", input: "recipient-amount", mutating: true },
   { id: "private-transfer", label: "Private transfer", desc: "Shielded USDC / ETH via Veil", group: "Move money", input: "recipient-amount", mutating: true, withAsset: true },
   { id: "crosschain-payment", label: "Cross-chain pay", desc: "Pay an address on another chain", group: "Move money", input: "prompt", mutating: true, promptPlaceholder: "pay 50 USDC on Base to 0x… as a recipient on Polygon" },
   { id: "receive", label: "Receive", desc: "Show a deposit address", group: "Move money", input: "address", mutating: false },
@@ -46,6 +50,16 @@ export const CRYPTO_INTENTS: CryptoIntentDef[] = [
   { id: "card-payment", label: "Card payment", desc: "Virtual-card checkout (MoneyClaw)", group: "Pay & fund", input: "info", mutating: true },
 
   { id: "portfolio", label: "Portfolio", desc: "Read balances, PnL, positions", group: "Read", input: "none", mutating: false },
+  { id: "nansen-defi-positions", label: "DeFi positions", desc: "Wallet DeFi holdings", group: "Read", input: "nansen", mutating: false },
+  { id: "quant-research", label: "Quant research", desc: "Rust backtests + independent validation", group: "Read", input: "quant-research", mutating: false },
+  { id: "nansen-smart-money-holdings", label: "Smart Money holdings", desc: "Top Smart Money tokens", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-token-holders", label: "Token holders", desc: "Top holder context", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-token-screener", label: "Token screener", desc: "New-token discovery", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-token-tracking", label: "Token tracking", desc: "Smart Money token brief", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-hyperliquid-wallets", label: "Hyperliquid wallets", desc: "Leaderboard + wallet context", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-related-wallets", label: "Related wallets", desc: "Cluster wallet relationships", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-top-wallets", label: "Top wallets", desc: "Find top wallets for a token", group: "Read", input: "nansen", mutating: false },
+  { id: "nansen-cex-health", label: "CEX health", desc: "Exchange balance/flow brief", group: "Read", input: "nansen", mutating: false },
 ];
 
 export const STOCK_SIDES = ["buy", "sell"] as const;

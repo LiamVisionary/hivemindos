@@ -9,12 +9,15 @@ import {
   type InstallableServiceStatus,
   type InstallableServiceId,
 } from "@/lib/services/installable-services";
+import { isGitHubCapabilityInstallableId } from "@/lib/services/github-capability-installers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function serviceId(value: unknown): InstallableServiceId {
+  if (typeof value === "string" && isGitHubCapabilityInstallableId(value)) return value;
   if (value === "n8n") return value;
+  if (value === "listmonk") return value;
   if (value === "browser-use") return value;
   if (value === "agentic-inbox") return value;
   if (value === "mcp-email-server") return value;
@@ -22,6 +25,7 @@ function serviceId(value: unknown): InstallableServiceId {
   if (value === "aider") return value;
   if (value === "agent-reach") return value;
   if (value === "palmier-pro") return value;
+  if (value === "copy-trading-daemon") return value;
   throw new Error("Unknown installable service.");
 }
 

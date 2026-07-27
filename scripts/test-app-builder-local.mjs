@@ -1,0 +1,437 @@
+#!/usr/bin/env node
+import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+import { gunzipSync } from "node:zlib";
+
+const modulePath = new URL("./lib/app-builder.mjs", import.meta.url);
+const appBuilder = await import(modulePath.href).catch(() => null);
+assert.ok(appBuilder, "the shared local app-builder adapter must exist");
+
+const confirmations = {
+  create: "CONFIRM_APP_PROJECT_CREATE",
+  write: "CONFIRM_APP_FILE_WRITE",
+  delete: "CONFIRM_APP_FILE_DELETE",
+  runtime: "CONFIRM_APP_RUNTIME",
+};
+
+function tarFileNames(contentBase64) {
+  const tar = gunzipSync(Buffer.from(contentBase64, "base64"));
+  const names = [];
+  for (let offset = 0; offset + 512 <= tar.byteLength;) {
+    const header = tar.subarray(offset, offset + 512);
+    if (header.every((byte) => byte === 0)) break;
+    const value = (start, length) => header.subarray(start, start + length).toString("utf8").replace(/\0.*$/, "");
+    const name = value(0, 100);
+    const prefix = value(345, 155);
+    const size = Number.parseInt(value(124, 12).trim() || "0", 8);
+    names.push(prefix ? `${prefix}/${name}` : name);
+    offset += 512 + Math.ceil(size / 512) * 512;
+  }
+  return names;
+}
+
+test("local project creation is approval-gated, idempotent, and confined to the selected directory", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hivemind-local-app-"));
+  const project = join(root, "portal");
+  try {
+    await assert.rejects(
+      appBuilder.createLocalAppProject({ directory: project, name: "Portal", templateId: "nextjs" }),
+      /CONFIRM_APP_PROJECT_CREATE/,
+    );
+    const created = await appBuilder.createLocalAppProject({
+      directory: project,
+      name: "Portal",
+      templateId: "nextjs",
+      confirmation: confirmations.create,
+    });
+    assert.equal(created.created, true);
+    assert.equal(created.project.status, "stopped");
+    assert.equal(JSON.parse(await readFile(join(project, "package.json"), "utf8")).dependencies.next, "16.2.6");
+
+    const nested = join(root, "scratchpad", "nested-app");
+    const nestedProject = await appBuilder.createLocalAppProject({
+      directory: nested,
+      workspaceDirectory: root,
+      name: "Nested",
+      templateId: "static",
+      confirmation: confirmations.create,
+    });
+    assert.equal(nestedProject.created, true, "confirmed project creation may create safe parent folders inside the selected workspace");
+    await assert.rejects(
+      appBuilder.createLocalAppProject({
+        directory: join(root, "..", "outside-app"),
+        workspaceDirectory: root,
+        name: "Outside",
+        templateId: "static",
+        confirmation: confirmations.create,
+      }),
+      /inside the selected chat workspace/,
+    );
+
+    const replay = await appBuilder.createLocalAppProject({
+      directory: project,
+      name: "Portal",
+      templateId: "nextjs",
+      confirmation: confirmations.create,
+    });
+    assert.equal(replay.created, false);
+
+    await mkdir(join(root, "empty-target"));
+    await symlink("empty-target", join(root, "alias"));
+    await assert.rejects(
+      appBuilder.createLocalAppProject({
+        directory: join(root, "alias"),
+        name: "Alias",
+        templateId: "nextjs",
+        confirmation: confirmations.create,
+      }),
+      /symbolic link/,
+    );
+    assert.deepEqual(await readdir(join(root, "empty-target")), []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("local file operations enforce project boundaries and write/delete approvals", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hivemind-local-files-"));
+  const project = join(root, "portal");
+  try {
+    await appBuilder.createLocalAppProject({
+      directory: project,
+      name: "Portal",
+      templateId: "nextjs",
+      confirmation: confirmations.create,
+    });
+    await assert.rejects(
+      appBuilder.writeLocalAppFile({ directory: project, path: "src/app/page.tsx", content: "changed" }),
+      /CONFIRM_APP_FILE_WRITE/,
+    );
+    const written = await appBuilder.writeLocalAppFile({
+      directory: project,
+      path: "src/app/message.txt",
+      content: "hello hive\n",
+      confirmation: confirmations.write,
+    });
+    assert.equal(written.content, "hello hive\n");
+    assert.equal((await appBuilder.readLocalAppFile({ directory: project, path: "src/app/message.txt" })).content, "hello hive\n");
+    assert.ok((await appBuilder.listLocalAppFiles({ directory: project, path: "src/app" })).entries.some((item) => item.name === "message.txt"));
+    await assert.rejects(
+      appBuilder.readLocalAppFile({ directory: project, path: "../secret" }),
+      /escapes/,
+    );
+    await assert.rejects(
+      appBuilder.deleteLocalAppFile({ directory: project, path: "src/app/message.txt" }),
+      /CONFIRM_APP_FILE_DELETE/,
+    );
+    await appBuilder.deleteLocalAppFile({
+      directory: project,
+      path: "src/app/message.txt",
+      confirmation: confirmations.delete,
+    });
+    assert.equal(existsSync(join(project, "src/app/message.txt")), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("source export produces a portable archive without dependencies, runtime state, or secrets", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hivemind-source-export-"));
+  const project = join(root, "portal");
+  try {
+    await appBuilder.createLocalAppProject({
+      directory: project,
+      name: "Portal Source",
+      templateId: "static",
+      confirmation: confirmations.create,
+    });
+    await mkdir(join(project, "assets"));
+    await mkdir(join(project, "node_modules", "package"), { recursive: true });
+    await writeFile(join(project, "assets", "game.js"), "console.log('game')");
+    await writeFile(join(project, ".env"), "SECRET=do-not-export");
+    await writeFile(join(project, "node_modules", "package", "index.js"), "dependency");
+    const sourceExport = await appBuilder.exportLocalAppProject({ directory: project });
+    assert.equal(sourceExport.fileName, "portal-source.tar.gz");
+    assert.match(sourceExport.sha256, /^[a-f0-9]{64}$/);
+    const names = tarFileNames(sourceExport.contentBase64);
+    assert.equal(names.includes("index.html"), true);
+    assert.equal(names.includes("assets/game.js"), true);
+    assert.equal(names.some((name) => name === ".env" || name.startsWith("node_modules/") || name.startsWith(".hivemindos/")), false);
+    const action = await appBuilder.runLocalAppBuilderAction({ action: "export_source", directory: project });
+    assert.equal(action.export.sha256, sourceExport.sha256);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("static projects start without dependencies and serve only project-owned files", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hivemind-static-runtime-"));
+  const project = join(root, "arcade");
+  const outside = join(root, "outside.txt");
+  try {
+    const created = await appBuilder.createLocalAppProject({
+      directory: project,
+      name: "Arcade",
+      templateId: "static",
+      confirmation: confirmations.create,
+    });
+    assert.equal(created.project.templateId, "static");
+    assert.equal(created.project.dependenciesReady, true);
+    assert.equal(existsSync(join(project, "index.html")), true);
+    await writeFile(outside, "private-value");
+    await symlink(outside, join(project, "linked-secret.txt"));
+    const started = await appBuilder.startLocalAppProject({ directory: project, confirmation: confirmations.runtime });
+    try {
+      const preview = await fetch(started.project.previewUrl);
+      assert.equal(preview.status, 200);
+      assert.match(await preview.text(), /HivemindOS App/);
+      const linked = await fetch(`${started.project.previewUrl}/linked-secret.txt`);
+      assert.doesNotMatch(await linked.text(), /private-value/);
+    } finally {
+      const stopped = await appBuilder.stopLocalAppProject({ directory: project, confirmation: confirmations.runtime });
+      assert.equal(stopped.project.status, "stopped");
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("status reconciles a stale running manifest after the preview process exits", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hivemind-stale-static-runtime-"));
+  const project = join(root, "arcade");
+  try {
+    await appBuilder.createLocalAppProject({
+      directory: project,
+      name: "Arcade",
+      templateId: "static",
+      confirmation: confirmations.create,
+    });
+    const started = await appBuilder.startLocalAppProject({ directory: project, confirmation: confirmations.runtime });
+    assert.equal(started.project.status, "running");
+    assert.ok(Number.isInteger(started.project.pid));
+
+    process.kill(started.project.pid, "SIGKILL");
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      try {
+        process.kill(started.project.pid, 0);
+      } catch {
+        break;
+      }
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 10));
+    }
+
+    const status = await appBuilder.getLocalAppProject({ directory: project });
+    assert.equal(status.status, "stopped");
+    assert.equal(status.pid, null);
+    assert.equal(status.port, null);
+    assert.equal(status.previewUrl, null);
+    assert.equal(status.lastError, appBuilder.APP_BUILDER_RUNTIME_EXITED_MESSAGE);
+  } finally {
+    await appBuilder.stopLocalAppProject({ directory: project, confirmation: confirmations.runtime }).catch(() => undefined);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+async function waitForProcessExit(pid) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    try {
+      process.kill(pid, 0);
+    } catch {
+      return;
+    }
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 10));
+  }
+}
+
+test("boot reconcile restarts an interrupted runtime on its previous port and leaves a live one alone", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hivemind-restart-interrupted-"));
+  const project = join(root, "arcade");
+  try {
+    await appBuilder.createLocalAppProject({
+      directory: project,
+      name: "Arcade",
+      templateId: "static",
+      confirmation: confirmations.create,
+    });
+    const started = await appBuilder.startLocalAppProject({ directory: project, confirmation: confirmations.runtime });
+
+    const untouched = await appBuilder.restartInterruptedLocalAppProject(project);
+    assert.equal(untouched.restarted, false, "a live runtime must not be restarted");
+    assert.equal(untouched.project.pid, started.project.pid);
+
+    process.kill(started.project.pid, "SIGKILL");
+    await waitForProcessExit(started.project.pid);
+
+    const restarted = await appBuilder.restartInterruptedLocalAppProject(project);
+    assert.equal(restarted.restarted, true);
+    assert.equal(restarted.project.status, "running");
+    assert.notEqual(restarted.project.pid, started.project.pid);
+    assert.equal(restarted.project.port, started.project.port, "the previous port keeps stale preview URLs working");
+    assert.equal(restarted.project.previewUrl, started.project.previewUrl);
+  } finally {
+    await appBuilder.stopLocalAppProject({ directory: project, confirmation: confirmations.runtime }).catch(() => undefined);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("the collector boot sweep restarts interrupted registry projects and skips foreign entries quietly", async () => {
+  const { reconcileAppBuilderRuntimesAtBoot } = await import(new URL("./lib/app-builder-boot-reconcile.mjs", import.meta.url).href);
+  const root = await mkdtemp(join(tmpdir(), "hivemind-boot-sweep-"));
+  const project = join(root, "arcade");
+  try {
+    await appBuilder.createLocalAppProject({
+      directory: project,
+      name: "Arcade",
+      templateId: "static",
+      confirmation: confirmations.create,
+    });
+    const started = await appBuilder.startLocalAppProject({ directory: project, confirmation: confirmations.runtime });
+    process.kill(started.project.pid, "SIGKILL");
+    await waitForProcessExit(started.project.pid);
+
+    const warnings = [];
+    const restarted = await reconcileAppBuilderRuntimesAtBoot({
+      readProjects: async () => [
+        // Another machine's checkout: no directory here — must skip quietly.
+        { id: "elsewhere", name: "Elsewhere", localPath: join(root, "not-on-this-machine"), appBuilder: { backend: "local" } },
+        // Managed/non-local registrations are not this collector's to restart.
+        { id: "managed", name: "Managed", localPath: project, appBuilder: { backend: "managed" } },
+        { id: "arcade", name: "Arcade", localPath: project, appBuilder: { backend: "local" } },
+      ],
+      expandHome: (path) => path,
+      log: () => {},
+      warn: (message) => warnings.push(message),
+    });
+    assert.equal(restarted.length, 1, "only the interrupted local project restarts");
+    assert.equal(restarted[0].status, "running");
+    assert.equal(restarted[0].port, started.project.port);
+    assert.deepEqual(warnings, [], "foreign registry entries must not spam boot logs");
+
+    const status = await appBuilder.getLocalAppProject({ directory: project });
+    assert.equal(status.status, "running");
+  } finally {
+    await appBuilder.stopLocalAppProject({ directory: project, confirmation: confirmations.runtime }).catch(() => undefined);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("boot reconcile restarts a reconcile-stamped exited stop but never a user-requested stop", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hivemind-restart-stamped-"));
+  const project = join(root, "arcade");
+  try {
+    await appBuilder.createLocalAppProject({
+      directory: project,
+      name: "Arcade",
+      templateId: "static",
+      confirmation: confirmations.create,
+    });
+    const started = await appBuilder.startLocalAppProject({ directory: project, confirmation: confirmations.runtime });
+    process.kill(started.project.pid, "SIGKILL");
+    await waitForProcessExit(started.project.pid);
+
+    // A status poll reconciled the dead runtime to a stamped exited stop first.
+    const stamped = await appBuilder.getLocalAppProject({ directory: project });
+    assert.equal(stamped.status, "stopped");
+    assert.equal(stamped.lastError, appBuilder.APP_BUILDER_RUNTIME_EXITED_MESSAGE);
+
+    const restarted = await appBuilder.restartInterruptedLocalAppProject(project);
+    assert.equal(restarted.restarted, true);
+    assert.equal(restarted.project.status, "running");
+
+    const stopped = await appBuilder.stopLocalAppProject({ directory: project, confirmation: confirmations.runtime });
+    assert.equal(stopped.project.status, "stopped");
+    assert.equal(stopped.project.lastError, null);
+
+    const left = await appBuilder.restartInterruptedLocalAppProject(project);
+    assert.equal(left.restarted, false, "a user-requested stop must stay stopped across collector boots");
+    assert.equal(left.project.status, "stopped");
+  } finally {
+    await appBuilder.stopLocalAppProject({ directory: project, confirmation: confirmations.runtime }).catch(() => undefined);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("existing static apps can be adopted inside the selected chat workspace without overwriting files", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hivemind-static-adopt-"));
+  const workspace = join(root, "workspace");
+  const project = join(workspace, "scratchpad", "flappy-bird-clone");
+  const outside = join(root, "outside-app");
+  try {
+    await mkdir(project, { recursive: true });
+    await mkdir(outside);
+    await writeFile(join(project, "index.html"), "<!doctype html><title>Flappy</title>");
+    await writeFile(join(outside, "index.html"), "<!doctype html><title>Outside</title>");
+    await assert.rejects(
+      appBuilder.adoptLocalAppProject({ directory: project, workspaceDirectory: workspace, name: "Flappy" }),
+      /CONFIRM_APP_PROJECT_CREATE/,
+    );
+    const adopted = await appBuilder.adoptLocalAppProject({
+      directory: project,
+      workspaceDirectory: workspace,
+      name: "Flappy",
+      confirmation: confirmations.create,
+    });
+    assert.equal(adopted.adopted, true);
+    assert.equal(adopted.project.templateId, "static");
+    assert.equal(await readFile(join(project, "index.html"), "utf8"), "<!doctype html><title>Flappy</title>");
+    const replay = await appBuilder.adoptLocalAppProject({
+      directory: project,
+      workspaceDirectory: workspace,
+      name: "Ignored on replay",
+      confirmation: confirmations.create,
+    });
+    assert.equal(replay.adopted, false);
+    assert.equal(replay.project.id, adopted.project.id);
+    await assert.rejects(
+      appBuilder.adoptLocalAppProject({
+        directory: outside,
+        workspaceDirectory: workspace,
+        confirmation: confirmations.create,
+      }),
+      /inside the selected chat workspace/,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("local runtime start and stop use the project-owned Next binary and loopback preview", async () => {
+  const root = await mkdtemp(join(tmpdir(), "hivemind-local-runtime-"));
+  const project = join(root, "portal");
+  try {
+    await appBuilder.createLocalAppProject({
+      directory: project,
+      name: "Portal",
+      templateId: "nextjs",
+      confirmation: confirmations.create,
+    });
+    const nextBin = join(project, "node_modules", "next", "dist", "bin", "next");
+    await mkdir(join(nextBin, ".."), { recursive: true });
+    await writeFile(nextBin, [
+      "const http = require('node:http');",
+      "const args = process.argv.slice(2);",
+      "const port = Number(args[args.indexOf('--port') + 1]);",
+      "http.createServer((_request, response) => { response.setHeader('content-type', 'text/html'); response.end(process.env.APP_BUILDER_TEST_SECRET || '<title>Portal</title>'); }).listen(port, '127.0.0.1');",
+    ].join("\n"));
+    await assert.rejects(appBuilder.startLocalAppProject({ directory: project }), /CONFIRM_APP_RUNTIME/);
+    process.env.APP_BUILDER_TEST_SECRET = "must-not-reach-generated-code";
+    try {
+      const started = await appBuilder.startLocalAppProject({ directory: project, confirmation: confirmations.runtime });
+      assert.equal(started.project.status, "running");
+      assert.match(started.project.previewUrl, /^http:\/\/127\.0\.0\.1:\d+$/);
+      const preview = await fetch(started.project.previewUrl);
+      assert.equal(preview.status, 200);
+      assert.doesNotMatch(await preview.text(), /must-not-reach-generated-code/);
+      const stopped = await appBuilder.stopLocalAppProject({ directory: project, confirmation: confirmations.runtime });
+      assert.equal(stopped.project.status, "stopped");
+    } finally {
+      delete process.env.APP_BUILDER_TEST_SECRET;
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

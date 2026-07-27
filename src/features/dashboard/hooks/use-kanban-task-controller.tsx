@@ -4,20 +4,55 @@
 
 /* eslint-disable react-hooks/immutability, react-hooks/purity */
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { findTaskTemplate, taskTemplateBody } from "@/components/task-modal";
 import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } from "./runtime-stream-errors";
 import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 
 export function useKanbanTaskController(props: any) {
-  const { AbortController, Eye, GitBranch, KANBAN_COLUMNS, KANBAN_PICKUP_PREVIEW_MS, MessageSquare, Pencil, RotateCcw, Trash2, Users, agentsForKanbanTask, appVersion, appendMessage, attachmentSizeLabel, beeRoleIconPath, beeWorkerClassLabel, chatSetupIssue, chooseBeeAssignment, chooseDirectoryForMachine, createDefaultAgentWallet, dispatchKanbanTaskToAgentRef, displayAgents, honeyLedgerEnabled, kanbanBoard, kanbanBoardSlug, kanbanCardAttachmentTargetId, kanbanCardFileInputRef, kanbanCardImageInputRef, kanbanDispatchCooldownRef, kanbanEditDraft, kanbanEditPendingTaskId, kanbanReadyPickupAttemptRef, kanbanReadyPickupInFlightRef, kanbanReadyPickupSignature, kanbanRuntimeAbortRef, kanbanStorageBody, kanbanTaskAssigneeAgent, kanbanTaskInterruptPrompt, linkedDirectoryLabel, logClientTelemetry, newBoardDraft, quickAddAttachments, quickAddDirectories, quickAddDrafts, quickAddMachineTarget, readComposerFiles, recordRecentDirectory, refreshHoneyLedger, refreshKanbanOnce, selectedKanbanAgent, selectedKanbanBulkIds, selectedKanbanTask, selectedKanbanTaskId, setKanbanBoard, setKanbanBoardSlug, setKanbanBulkPending, setKanbanCardAttachmentMenuOpen, setKanbanCardAttachmentTargetId, setKanbanCardRecentsExpanded, setKanbanEditDraft, setKanbanEditPendingTaskId, setKanbanError, setKanbanPickupPreviewByTask, setKanbanStorage, setKanbanTaskModal, setMessagesByAgent, setNewBoardDraft, setQuickAddAttachmentError, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setQuickAddMachineMenuOpen, setQuickAddMachineTargets, setQuickAddStatus, setSelectedKanbanTaskId, setSelectedKanbanTaskIds, sharedVault, updateTask, upsertTask, wait, walletsByAgent } = props;
+  const { AbortController, Archive, Eye, GitBranch, KANBAN_COLUMNS, KANBAN_PICKUP_PREVIEW_MS, MessageSquare, Pencil, RotateCcw, Trash2, Users, agentsForKanbanTask, appVersion, appendMessage, attachmentSizeLabel, beeRoleIconPath, beeWorkerClassLabel, chatSetupIssue, chooseBeeAssignment, chooseDirectoryForMachine, createDefaultAgentWallet, dispatchKanbanTaskToAgentRef, displayAgents, honeyLedgerEnabled, kanbanBoard, kanbanBoardSlug, kanbanCardAttachmentTargetId, kanbanCardFileInputRef, kanbanCardImageInputRef, kanbanDispatchCooldownRef, kanbanEditDraft, kanbanEditPendingTaskId, kanbanReadyPickupAttemptRef, kanbanReadyPickupInFlightRef, kanbanReadyPickupSignature, kanbanRuntimeAbortRef, kanbanStorageBody, kanbanTaskAssigneeAgent, kanbanTaskInterruptPrompt, linkedDirectoryLabel, logClientTelemetry, newBoardDraft, quickAddAttachments, quickAddDirectories, quickAddDrafts, quickAddMachineTarget, quickAddSkills, quickAddTemplateIds, readComposerFiles, recordRecentDirectory, refreshHoneyLedger, refreshKanbanOnce, selectedKanbanAgent, selectedKanbanBulkIds, selectedKanbanTask, selectedKanbanTaskId, setKanbanBoard, setKanbanBoardSlug, setKanbanBulkPending, setKanbanCardAttachmentMenuOpen, setKanbanCardAttachmentTargetId, setKanbanCardRecentsExpanded, setKanbanEditDraft, setKanbanEditPendingTaskId, setKanbanError, setKanbanPickupPreviewByTask, setKanbanStorage, setKanbanTaskModal, setMessagesByAgent, setNewBoardDraft, setQuickAddAttachmentError, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setQuickAddMachineMenuOpen, setQuickAddMachineTargets, setQuickAddSkills, setQuickAddStatus, setQuickAddTemplateIds, setSelectedKanbanTaskId, setSelectedKanbanTaskIds, sharedVault, updateTask, upsertTask, wait, walletsByAgent } = props;
+  // Records the user's latest manual move per task so in-flight Queen pickup
+  // (which waits through a preview delay before claiming) can tell the user
+  // moved the card away and must not overwrite that move.
+  const kanbanManualMoveRef = useRef(new Map<string, { status: KanbanStatus; at: number }>());
+  // Transient non-error board notices (e.g. "move adjusted", "run stopped");
+  // the panel auto-dismisses them.
+  const [kanbanNotice, setKanbanNotice] = useState("");
+  const [kanbanClearingColumnId, setKanbanClearingColumnId] = useState("");
+
+  function stopLocalKanbanTaskActivity(taskId: string, status: KanbanStatus, task?: KanbanTask | null, options: { at?: number; notify?: boolean } = {}) {
+    kanbanManualMoveRef.current.set(taskId, { status, at: options.at ?? Date.now() });
+    const activeStream = kanbanRuntimeAbortRef.current.get(taskId);
+    activeStream?.abort();
+    kanbanRuntimeAbortRef.current.delete(taskId);
+    kanbanReadyPickupInFlightRef.current.delete(taskId);
+    kanbanReadyPickupAttemptRef.current.delete(taskId);
+    if (task) {
+      kanbanReadyPickupAttemptRef.current.delete(`working:${kanbanReadyPickupSignature(task, displayAgents)}`);
+    }
+    setKanbanPickupPreviewByTask((current) => {
+      if (!current[taskId]) return current;
+      const next = { ...current };
+      delete next[taskId];
+      return next;
+    });
+    if (options.notify && task?.status === "working") {
+      setKanbanNotice(`Stopped the active agent run on "${task.title}".`);
+    }
+  }
+
   async function createKanbanTask(event: FormEvent, status: KanbanStatus, projectId?: string) {
     event.preventDefault();
     const title = quickAddDrafts[status]?.trim();
     const attachments = quickAddAttachments[status] ?? [];
     const directories = quickAddDirectories[status] ?? [];
+    const skills = [...new Set(quickAddSkills?.[status] ?? [])];
+    const template = findTaskTemplate(quickAddTemplateIds?.[status]);
     const targetMachine = quickAddMachineTarget(status);
-    if (!title && attachments.length === 0 && directories.length === 0) return;
+    if (!title && attachments.length === 0 && directories.length === 0 && skills.length === 0 && !template) return;
     const body = [
+      taskTemplateBody(template),
+      skills.length ? ["Attached skills:", ...skills.map((skill) => `- ${skill}`)].join("\n") : "",
       directories.length ? ["Linked directories:", ...directories.map((directory) => `- ${linkedDirectoryLabel(directory)}`)].join("\n") : "",
       attachments.length ? [
         "Attached context:",
@@ -35,10 +70,12 @@ export function useKanbanTaskController(props: any) {
         tenant: "",
         priority: "normal",
         status,
+        skills,
         attachments,
         linkedDirectories: directories,
         targetMachine,
         projectId,
+        loopTemplateId: template?.loopTemplateId,
       }),
     });
     const data = await response.json().catch(() => null) as KanbanResponse | null;
@@ -56,6 +93,12 @@ export function useKanbanTaskController(props: any) {
     setQuickAddDrafts((current) => ({ ...current, [status]: "" }));
     setQuickAddAttachments((current) => ({ ...current, [status]: [] }));
     setQuickAddDirectories((current) => ({ ...current, [status]: [] }));
+    setQuickAddSkills?.((current) => ({ ...current, [status]: [] }));
+    setQuickAddTemplateIds?.((current) => {
+      const next = { ...current };
+      delete next[status];
+      return next;
+    });
     setQuickAddMachineTargets((current) => ({ ...current, [status]: null }));
     setQuickAddMachineMenuOpen((current) => ({ ...current, [status]: false }));
     setQuickAddAttachmentError("");
@@ -134,6 +177,75 @@ export function useKanbanTaskController(props: any) {
     if (failures.length) setKanbanError(`${failures.length} selected task${failures.length === 1 ? "" : "s"} could not be updated.`);
     else setKanbanError("");
     await refreshKanbanOnce().catch((error) => setKanbanError(error instanceof Error ? error.message : "Kanban refresh failed."));
+  }
+
+  async function clearKanbanColumnTasks(column: KanbanColumn, columnTasks: KanbanTask[]) {
+    const tasks = columnTasks.filter((task) => task.status !== "archived");
+    if (!tasks.length || kanbanClearingColumnId) return;
+    const activeTasks = tasks.filter((task) => task.status === "working");
+    const confirmed = await confirmUserAction([
+      `Clear all ${tasks.length} task${tasks.length === 1 ? "" : "s"} from ${column.title}?`,
+      "They will move to Archive and leave the active board.",
+      activeTasks.length
+        ? `This will stop ${activeTasks.length} active agent run${activeTasks.length === 1 ? "" : "s"}.`
+        : "",
+    ].filter(Boolean).join("\n\n"));
+    if (!confirmed) return;
+
+    const ids = tasks.map((task) => task.id);
+    const idSet = new Set(ids);
+    const now = Date.now();
+    setKanbanClearingColumnId(column.id);
+    setKanbanBulkPending(true);
+    setKanbanError("");
+    for (const task of tasks) {
+      stopLocalKanbanTaskActivity(task.id, "archived", task, { at: now });
+    }
+
+    try {
+      const response = await fetch(`/api/kanban?board=${encodeURIComponent(kanbanBoardSlug)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...kanbanStorageBody(),
+          action: "bulk",
+          ids,
+          patch: { status: "archived" },
+        }),
+      }).catch(() => null);
+      const data = await response?.json().catch(() => null) as KanbanResponse & { results?: Array<{ ok: boolean; error?: string }> } | null;
+      if (!response?.ok || !data?.ok) {
+        setKanbanError(data?.error ?? "Could not clear that row.");
+        return;
+      }
+      const failures = data.results?.filter((result) => !result.ok) ?? [];
+      if (data.board) {
+        setKanbanBoard(data.board);
+        setKanbanStorage(data.storage ?? null);
+      }
+      setSelectedKanbanTaskIds((current: Record<string, boolean>) => {
+        const next = { ...current };
+        for (const taskId of ids) delete next[taskId];
+        return next;
+      });
+      if (selectedKanbanTaskId && idSet.has(selectedKanbanTaskId)) {
+        setSelectedKanbanTaskId("");
+        setKanbanTaskModal("");
+      }
+      if (failures.length) {
+        setKanbanError(`${failures.length} task${failures.length === 1 ? "" : "s"} could not be cleared.`);
+      } else {
+        setKanbanNotice(
+          activeTasks.length
+            ? `Archived ${tasks.length} ${column.title} task${tasks.length === 1 ? "" : "s"} and stopped ${activeTasks.length} active run${activeTasks.length === 1 ? "" : "s"}.`
+            : `Archived ${tasks.length} ${column.title} task${tasks.length === 1 ? "" : "s"}.`,
+        );
+      }
+      await refreshKanbanOnce().catch((error) => setKanbanError(error instanceof Error ? error.message : "Kanban refresh failed."));
+    } finally {
+      setKanbanBulkPending(false);
+      setKanbanClearingColumnId("");
+    }
   }
 
   async function promoteKanbanIdea(task: KanbanTask, mode: "specify" | "decompose") {
@@ -302,9 +414,18 @@ export function useKanbanTaskController(props: any) {
 
   async function moveKanbanTask(taskId: string, status: KanbanStatus) {
     const currentTask = kanbanBoard?.tasks.find((task) => task.id === taskId);
+    // The user's move wins over any automation in flight for this card.
+    if (status !== "working") {
+      stopLocalKanbanTaskActivity(taskId, status, currentTask, { notify: true });
+    } else {
+      kanbanManualMoveRef.current.set(taskId, { status, at: Date.now() });
+    }
     const targetStatus = status === "working" && !currentTask?.assignee?.trim()
       ? "ready"
       : status;
+    if (targetStatus !== status) {
+      setKanbanNotice("No agent is assigned yet, so the task went to Waiting for Queen instead — the Queen Bee picks up work from there.");
+    }
     logClientTelemetry("kanban.task.move.requested", {
       taskId,
       fromStatus: currentTask?.status ?? null,
@@ -351,6 +472,7 @@ export function useKanbanTaskController(props: any) {
   async function deleteKanbanTask(task: KanbanTask) {
     const confirmed = await confirmUserAction(`Delete "${task.title}" from the Work board? This also removes its notes and task links.`);
     if (!confirmed) return;
+    stopLocalKanbanTaskActivity(task.id, "archived", task);
     const response = await fetch(`/api/kanban?board=${encodeURIComponent(kanbanBoardSlug)}`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
@@ -365,8 +487,6 @@ export function useKanbanTaskController(props: any) {
       setSelectedKanbanTaskId("");
       setKanbanTaskModal("");
     }
-    kanbanRuntimeAbortRef.current.get(task.id)?.abort();
-    kanbanRuntimeAbortRef.current.delete(task.id);
     if (data.board) {
       setKanbanBoard(data.board);
       setKanbanStorage(data.storage ?? null);
@@ -378,19 +498,27 @@ export function useKanbanTaskController(props: any) {
   async function editAndInterruptKanbanTask(event: FormEvent) {
     event.preventDefault();
     if (!selectedKanbanTask || kanbanEditPendingTaskId) return;
-    const agent = selectedKanbanAgent;
+    const title = kanbanEditDraft.title.trim();
+    if (!title) {
+      setKanbanError("Task title is required.");
+      return;
+    }
+    const agent = selectedKanbanTask.status === "working" ? selectedKanbanAgent : null;
     if (!agent) {
-      setKanbanError("Assign this task to an available agent before using Edit & interrupt.");
+      // Plain edit: no agent is actively working this card, so just save the
+      // revised title/body without dispatching or interrupting anything.
+      setKanbanEditPendingTaskId(selectedKanbanTask.id);
+      try {
+        await patchKanbanTask(selectedKanbanTask.id, { title, body: kanbanEditDraft.body.trim() });
+        setKanbanTaskModal("");
+      } finally {
+        setKanbanEditPendingTaskId("");
+      }
       return;
     }
     const setupIssue = chatSetupIssue(agent);
     if (setupIssue) {
       setKanbanError(`Could not resend to ${agent.name}: ${setupIssue}`);
-      return;
-    }
-    const title = kanbanEditDraft.title.trim();
-    if (!title) {
-      setKanbanError("Task title is required.");
       return;
     }
 
@@ -586,7 +714,20 @@ export function useKanbanTaskController(props: any) {
         onClick: () => void moveKanbanTask(task.id, column.id),
         disabled: task.status === column.id,
       }));
+    const interruptibleAgent = task.status === "working" ? kanbanTaskAssigneeAgent(task, displayAgents) : null;
     return [
+      {
+        key: "chat",
+        label: taskComments ? `Conversation (${taskComments})` : "Conversation",
+        icon: <MessageSquare aria-hidden="true" />,
+        onClick: () => openKanbanTaskModal(task, "chat"),
+      },
+      {
+        key: "edit",
+        label: interruptibleAgent ? "Edit & interrupt" : "Edit task",
+        icon: <Pencil aria-hidden="true" />,
+        onClick: () => openKanbanTaskModal(task, "edit"),
+      },
       {
         key: "move",
         label: "Move to",
@@ -621,30 +762,22 @@ export function useKanbanTaskController(props: any) {
         onClick: () => openKanbanTaskModal(task, "assign"),
       },
       {
-        key: "chat",
-        label: "Agent chat",
-        icon: <MessageSquare aria-hidden="true" />,
-        onClick: () => openKanbanTaskModal(task, "chat"),
-      },
-      {
-        key: "edit",
-        label: "Edit & interrupt",
-        icon: <Pencil aria-hidden="true" />,
-        onClick: () => openKanbanTaskModal(task, "edit"),
-        disabled: !kanbanTaskAssigneeAgent(task, displayAgents),
-      },
-      {
-        key: "notes",
-        label: taskComments ? `Notes (${taskComments})` : "Add note",
-        icon: <Pencil aria-hidden="true" />,
-        onClick: () => openKanbanTaskModal(task, "notes"),
-      },
-      {
         key: "events",
         label: taskEvents ? `Events (${taskEvents})` : "Events",
         icon: <Eye aria-hidden="true" />,
         onClick: () => openKanbanTaskModal(task, "events"),
       },
+      ...(task.status === "archived" ? [{
+        key: "restore",
+        label: "Restore to Ideas",
+        icon: <RotateCcw aria-hidden="true" />,
+        onClick: () => void moveKanbanTask(task.id, "ideas"),
+      } satisfies CellMenuItem] : [{
+        key: "archive",
+        label: "Archive",
+        icon: <Archive aria-hidden="true" />,
+        onClick: () => void moveKanbanTask(task.id, "archived"),
+      } satisfies CellMenuItem]),
       {
         key: "delete",
         label: "Delete task",
@@ -657,6 +790,24 @@ export function useKanbanTaskController(props: any) {
   /* eslint-enable react-hooks/refs */
 
   async function orchestrateReadyKanbanTask(task: KanbanTask) {
+    const orchestrationStartedAt = Date.now();
+    // True once the user manually moves this card somewhere other than Ready
+    // after pickup began; claiming would overwrite (snap back) their move.
+    const movedAwayManually = () => {
+      const manualMove = kanbanManualMoveRef.current.get(task.id);
+      return Boolean(manualMove && manualMove.at >= orchestrationStartedAt && manualMove.status !== "ready");
+    };
+    const cancelPickupForManualMove = () => {
+      logClientTelemetry("kanban.ready.orchestrate.cancelled_manual_move", {
+        taskId: task.id,
+        manualStatus: kanbanManualMoveRef.current.get(task.id)?.status ?? null,
+      });
+      setKanbanPickupPreviewByTask((current) => {
+        const next = { ...current };
+        delete next[task.id];
+        return next;
+      });
+    };
     const undoRequested = Boolean(task.undoRequestedAt);
     const targetAgents = agentsForKanbanTask(task);
     const dispatchAgents = undoRequested
@@ -689,6 +840,10 @@ export function useKanbanTaskController(props: any) {
     const excludedAgentIds = new Set<string>();
 
     while (excludedAgentIds.size < dispatchAgents.length) {
+      if (movedAwayManually()) {
+        cancelPickupForManualMove();
+        return;
+      }
       // eslint-disable-next-line react-hooks/purity
       const now = Date.now();
       const eligibleAgents = dispatchAgents.filter((agent) => {
@@ -736,11 +891,17 @@ export function useKanbanTaskController(props: any) {
             owner.beeRole === "queen" ? "queen" : "worker",
             owner.workerClass ?? assignment.workerClass ?? "general",
           ),
-          label: assignment.mode === "queen" ? "Queen Bee picked this up" : `${beeWorkerClassLabel(assignment.workerClass)} bee picked this up`,
+          label: assignment.mode === "queen" ? "Queen Bee picked up" : `${beeWorkerClassLabel(assignment.workerClass)} bee picked up`,
           assignee: owner.name,
         },
       }));
       await wait(KANBAN_PICKUP_PREVIEW_MS);
+      if (movedAwayManually()) {
+        // The user moved the card during the pickup preview; claiming now
+        // would flip it back to Working against their intent.
+        cancelPickupForManualMove();
+        return;
+      }
       const response = await fetch(`/api/kanban?board=${encodeURIComponent(kanbanBoardSlug)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -861,5 +1022,5 @@ export function useKanbanTaskController(props: any) {
   }
 
 
-  return { createKanbanTask, createKanbanBoard, patchKanbanTask, bulkPatchKanbanTasks, promoteKanbanIdea, updateKanbanTaskMachine, markKanbanTaskReviewed, requestKanbanTaskUndo, readWorkspaceGitSnapshot, kanbanWorkspaceChangeSummary, addKanbanCardFiles, openKanbanCardFilePicker, handleKanbanCardFileChange, handleKanbanCardImageChange, attachKanbanCardDirectory, attachKanbanCardRecentDirectory, removeKanbanCardAttachment, removeKanbanCardDirectory, moveKanbanTask, deleteKanbanTask, editAndInterruptKanbanTask, openKanbanTaskModal, kanbanTaskMenuItems, orchestrateReadyKanbanTask, addKanbanSystemComment };
+  return { kanbanNotice, setKanbanNotice, kanbanClearingColumnId, createKanbanTask, createKanbanBoard, patchKanbanTask, bulkPatchKanbanTasks, clearKanbanColumnTasks, promoteKanbanIdea, updateKanbanTaskMachine, markKanbanTaskReviewed, requestKanbanTaskUndo, readWorkspaceGitSnapshot, kanbanWorkspaceChangeSummary, addKanbanCardFiles, openKanbanCardFilePicker, handleKanbanCardFileChange, handleKanbanCardImageChange, attachKanbanCardDirectory, attachKanbanCardRecentDirectory, removeKanbanCardAttachment, removeKanbanCardDirectory, moveKanbanTask, deleteKanbanTask, editAndInterruptKanbanTask, openKanbanTaskModal, kanbanTaskMenuItems, orchestrateReadyKanbanTask, addKanbanSystemComment };
 }

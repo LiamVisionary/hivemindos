@@ -8,6 +8,34 @@ export type DashboardContextItem = {
   detail?: string;
 };
 
+/**
+ * The wallet the user has selected as the "acting wallet" on the current screen
+ * (the Trade desk's picked wallet, or the selected agent's wallet on the Wallets
+ * screen). When present, the hive treats it as the default owner/source for
+ * wallet, payment, trading, and fee actions unless the user names another.
+ *
+ * `address` is the FULL on-chain address — it is carried structurally for the
+ * deterministic send/swap source resolver and is deliberately NOT rendered raw
+ * into the prompt prose (the formatter truncates it) so it can never be captured
+ * by the natural-language "send/swap to 0x…" interceptors.
+ */
+export type DashboardActingWallet = {
+  /** Resolution id: agentId, a `user:` personal-wallet id, or "bankr". */
+  id?: string;
+  label: string;
+  /** "user" | "agent" | "bankr", or a provider name. */
+  kind?: string;
+  provider?: string;
+  /** CAIP-2 network id, e.g. "eip155:8453" or "solana:mainnet". */
+  network?: string;
+  networkLabel?: string;
+  /** Full address (structural only — truncated in the prompt prose). */
+  address?: string;
+  custody?: string;
+  /** Per-trade USD guardrail; null/undefined = none / your custody. */
+  capUsd?: number | null;
+};
+
 export type DashboardScreenContext = {
   view: DashboardView | string;
   viewLabel?: string;
@@ -17,6 +45,10 @@ export type DashboardScreenContext = {
   selections?: DashboardContextItem[];
   openModals?: DashboardContextItem[];
   openPanels?: DashboardContextItem[];
+  /** The user's currently-selected acting wallet (Trade desk / Wallets screen). */
+  actingWallet?: DashboardActingWallet | null;
+  /** Concise capability briefing lines for the current route (e.g. trading). */
+  capabilities?: string[];
 };
 
 const MAX_TEXT_LENGTH = 180;
@@ -72,6 +104,47 @@ function coerceContextItems(value: unknown): DashboardContextItem[] {
   return uniqueItems(value.map(coerceContextItem).filter((item): item is DashboardContextItem => Boolean(item)));
 }
 
+/** Truncate an address for prompt prose so it can never match a 40-hex / base58
+ *  address regex used by the natural-language send/swap interceptors. */
+function shortWalletAddress(address: string): string {
+  const value = address.trim();
+  if (value.length <= 14) return value;
+  return `${value.slice(0, 6)}…${value.slice(-4)}`;
+}
+
+function coerceActingWallet(value: unknown): DashboardActingWallet | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const label = cleanText(record.label, 80);
+  if (!label) return null;
+  const capRaw = Number(record.capUsd);
+  return {
+    id: cleanText(record.id, 120) || undefined,
+    label,
+    kind: cleanText(record.kind, 40) || undefined,
+    provider: cleanText(record.provider, 40) || undefined,
+    network: cleanText(record.network, 60) || undefined,
+    networkLabel: cleanText(record.networkLabel, 60) || undefined,
+    address: cleanText(record.address, 120) || undefined,
+    custody: cleanText(record.custody, 60) || undefined,
+    capUsd: Number.isFinite(capRaw) && capRaw > 0 ? capRaw : null,
+  };
+}
+
+function coerceCapabilities(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const lines: string[] = [];
+  for (const entry of value) {
+    const line = cleanText(entry, 400);
+    if (!line || seen.has(line)) continue;
+    seen.add(line);
+    lines.push(line);
+    if (lines.length >= 14) break;
+  }
+  return lines;
+}
+
 export function baseDashboardScreenContext(view: DashboardView | string): DashboardScreenContext {
   const route = isDashboardView(view) ? dashboardRouteForView(view) : null;
   return {
@@ -96,6 +169,8 @@ export function coerceDashboardScreenContext(value: unknown): DashboardScreenCon
     selections: coerceContextItems(record.selections),
     openModals: coerceContextItems(record.openModals),
     openPanels: coerceContextItems(record.openPanels),
+    actingWallet: coerceActingWallet(record.actingWallet),
+    capabilities: coerceCapabilities(record.capabilities),
   };
 }
 
@@ -133,6 +208,23 @@ export function formatDashboardScreenContextForPrompt(context: DashboardScreenCo
   if (safe.route) lines.push(`Route: ${safe.route}.`);
   if (safe.section) lines.push(`Current section: ${itemLine(safe.section)}.`);
   if (safe.selections?.length) lines.push(`Selected context: ${safe.selections.map(itemLine).join("; ")}.`);
+  if (safe.actingWallet?.label) {
+    const w = safe.actingWallet;
+    const descriptor = [w.custody || w.provider || w.kind, w.networkLabel || w.network].filter(Boolean).join(" on ");
+    const addr = w.address ? `, wallet address ${shortWalletAddress(w.address)}` : "";
+    // NOTE: this prose is prepended to the user's message before the deterministic
+    // send/swap interceptors parse it, so it must contain NO "$<number>" or
+    // "<number> usd/usdc" (would be grabbed as the send amount) and no full
+    // address (would be grabbed as a recipient/source). The per-trade cap is
+    // carried structurally in actingWallet.capUsd and enforced server-side — it
+    // is deliberately not rendered here as a dollar figure.
+    lines.push(`Acting wallet — the default owner/source for wallet, payment, trading, and fee actions on this screen: ${w.label}${descriptor ? ` (${descriptor})` : ""}${addr}.`);
+    lines.push("Unless the user explicitly names a different wallet, run sends, swaps, trades, fee collection, balance and portfolio questions against THIS acting wallet, routed through its provider (a Bankr-managed wallet uses Bankr; a personal or governed-agent wallet uses the local rails).");
+  }
+  if (safe.capabilities?.length) {
+    lines.push("Capabilities available from this screen (subject to configured credentials):");
+    for (const capability of safe.capabilities) lines.push(`- ${capability}`);
+  }
   if (safe.openPanels?.length) lines.push(`Open panels/popovers: ${safe.openPanels.map(itemLine).join("; ")}.`);
   lines.push(safe.openModals?.length
     ? `Open modals/dialogs: ${safe.openModals.map(itemLine).join("; ")}.`

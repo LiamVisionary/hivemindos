@@ -1,11 +1,16 @@
-import { execFile, spawn } from "child_process";
-import { join } from "path";
-import { promisify } from "util";
 import { requireAuth } from "@/lib/utils/server-auth";
+import { cachedCall, invalidateCachedCall } from "@/lib/services/async-cache";
+import { execFileHiveEnvAdd, spawnHiveEnvAdd } from "@/lib/services/hive-env-command";
 
 export const runtime = "nodejs";
 
-const execFileAsync = promisify(execFile);
+// readEnvPayload spawns ~5 `hive-env-add` subprocesses per call. Coalesce
+// concurrent GETs and serve rapid repeat reads from memory for a short window.
+// Successful reads only — cachedCall evicts rejections. Mutations below call
+// invalidateCachedCall so a write is reflected on the next read; the TTL only
+// bounds how long an out-of-band edit to ~/.hivemindos/.env goes unseen.
+const ENV_PAYLOAD_CACHE_KEY = "env-payload";
+const ENV_PAYLOAD_CACHE_MS = 30_000;
 
 type HiveEnvExport = {
   version?: number;
@@ -59,7 +64,7 @@ function updateHiveEnvSource(source: (typeof ALL_AGENT_SOURCES)[number], key: st
   if (options.backup === false) args.splice(1, 0, "--no-backup");
   if (options.sync === false) args.splice(1, 0, "--no-tailnet-sync");
   return new Promise<void>((resolve, reject) => {
-    const child = spawn(join(process.cwd(), "scripts", "hive-env-add"), args, {
+    const child = spawnHiveEnvAdd(args, {
       stdio: ["pipe", "pipe", "pipe"],
     });
     let errorText = "";
@@ -103,7 +108,7 @@ function importHiveEnvSource(source: (typeof ALL_AGENT_SOURCES)[number], entries
   if (options.backup === false) args.splice(1, 0, "--no-backup");
   if (options.sync === false) args.splice(1, 0, "--no-tailnet-sync");
   return new Promise<void>((resolve, reject) => {
-    const child = spawn(join(process.cwd(), "scripts", "hive-env-add"), args, {
+    const child = spawnHiveEnvAdd(args, {
       stdio: ["pipe", "ignore", "pipe"],
     });
     let errorText = "";
@@ -132,7 +137,7 @@ function importHiveEnvSource(source: (typeof ALL_AGENT_SOURCES)[number], entries
 
 async function readSharedBackupStatus() {
   try {
-    const { stdout } = await execFileAsync(join(process.cwd(), "scripts", "hive-env-add"), [
+    const { stdout } = await execFileHiveEnvAdd([
       "--backup-status",
       "--scope",
       SHARED_SOURCE.scope,
@@ -154,7 +159,7 @@ async function readSharedBackupStatus() {
 
 async function readHiveEnvSource(source: (typeof ALL_AGENT_SOURCES)[number]) {
   try {
-    const { stdout } = await execFileAsync(join(process.cwd(), "scripts", "hive-env-add"), [
+    const { stdout } = await execFileHiveEnvAdd([
       "--export-json",
       "--scope",
       source.scope,
@@ -204,9 +209,36 @@ async function readEnvPayload() {
   };
 }
 
+type EnvPayload = Awaited<ReturnType<typeof readEnvPayload>>;
+type EnvSourcePayload = Awaited<ReturnType<typeof readHiveEnvSource>>;
+
+function envSourceKeysOnly(source: EnvSourcePayload) {
+  const { values, ...rest } = source;
+  return {
+    ...rest,
+    keys: Object.keys(values),
+  };
+}
+
+function envPayloadKeysOnly(payload: EnvPayload) {
+  return {
+    ...payload,
+    sharedSource: envSourceKeysOnly(payload.sharedSource),
+    runtimeSources: payload.runtimeSources.map(envSourceKeysOnly),
+  };
+}
+
+function readCachedEnvPayload() {
+  return cachedCall(ENV_PAYLOAD_CACHE_KEY, ENV_PAYLOAD_CACHE_MS, readEnvPayload);
+}
+
+function invalidateEnvPayload() {
+  invalidateCachedCall(ENV_PAYLOAD_CACHE_KEY);
+}
+
 function restoreSharedBackup() {
   return new Promise<void>((resolve, reject) => {
-    const child = spawn(join(process.cwd(), "scripts", "hive-env-add"), [
+    const child = spawnHiveEnvAdd([
       "--restore-backup",
       "--scope",
       SHARED_SOURCE.scope,
@@ -240,7 +272,7 @@ function restoreSharedBackup() {
 
 function syncSharedEnvMachines() {
   return new Promise<void>((resolve, reject) => {
-    const child = spawn(join(process.cwd(), "scripts", "hive-env-add"), [
+    const child = spawnHiveEnvAdd([
       "--reconcile",
       "--scope",
       SHARED_SOURCE.scope,
@@ -275,7 +307,9 @@ function syncSharedEnvMachines() {
 export async function GET(request: Request) {
   const unauthorized = await requireAuth(request);
   if (unauthorized) return unauthorized;
-  return Response.json(await readEnvPayload());
+  const payload = await readCachedEnvPayload();
+  const keysOnly = new URL(request.url).searchParams.get("keysOnly") === "1";
+  return Response.json(keysOnly ? envPayloadKeysOnly(payload) : payload);
 }
 
 export async function POST(request: Request) {
@@ -287,7 +321,8 @@ export async function POST(request: Request) {
   if (body.action === "restoreBackup") {
     try {
       await restoreSharedBackup();
-      return Response.json(await readEnvPayload());
+      invalidateEnvPayload();
+      return Response.json(await readCachedEnvPayload());
     } catch (error) {
       return Response.json({
         ok: false,
@@ -299,7 +334,8 @@ export async function POST(request: Request) {
   if (body.action === "syncMachines") {
     try {
       await syncSharedEnvMachines();
-      return Response.json(await readEnvPayload());
+      invalidateEnvPayload();
+      return Response.json(await readCachedEnvPayload());
     } catch (error) {
       return Response.json({
         ok: false,
@@ -331,7 +367,8 @@ export async function POST(request: Request) {
       } else {
         await importHiveEnvSource(source, entries, { backup: false });
       }
-      return Response.json(await readEnvPayload());
+      invalidateEnvPayload();
+      return Response.json(await readCachedEnvPayload());
     } catch (error) {
       return Response.json({
         ok: false,
@@ -352,7 +389,8 @@ export async function POST(request: Request) {
     } else {
       await updateHiveEnvSource(source, key, value, { backup: false });
     }
-    return Response.json(await readEnvPayload());
+    invalidateEnvPayload();
+    return Response.json(await readCachedEnvPayload());
   } catch (error) {
     return Response.json({
       ok: false,

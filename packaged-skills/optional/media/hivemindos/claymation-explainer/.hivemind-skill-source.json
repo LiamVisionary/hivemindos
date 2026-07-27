@@ -1,0 +1,20 @@
+{
+  "upstreamName": "Claymation Explainer",
+  "upstreamSlug": "claymation-explainer",
+  "hiveSlug": "claymation-explainer",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/media/hivemindos/claymation-explainer",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-06-25T06:07:40Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional media skills",
+  "sourcePath": "packaged-skills/optional/media/hivemindos/claymation-explainer",
+  "status": "optional",
+  "relatedPublicReference": "https://github.com/alexmcdonnell-airtable/hyperagent-public-skills",
+  "relatedPublicReferenceLicense": "No license detected on 2026-06-25; not vendored or copied.",
+  "hivemindAdaptations": [
+    "Uses HivemindOS media generation, local voice, assembly, subtitle, and render-QA skills.",
+    "Adds private voice, paid generation, and product-claim approval gates.",
+    "Keeps the workflow provider-neutral instead of requiring a Hyperagent-specific tool."
+  ]
+}

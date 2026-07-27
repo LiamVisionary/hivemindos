@@ -1,5 +1,6 @@
 import { DASHBOARD_ROUTE_CATALOG, isDashboardView } from "@/features/dashboard/dashboard-navigation";
 import type { DashboardScreenContext } from "@/features/dashboard/screen-context";
+import { z } from "zod";
 
 /**
  * Shared Bee Pilot action catalog. Imported by both the client executor and
@@ -155,31 +156,42 @@ export function planOpensModal(plan: BeePilotPlan): boolean {
 
 const MAX_PLAN_STEPS = 6;
 
-/** Extracts and validates a Bee Pilot plan from raw model text (strict-JSON-with-slack). */
+const nonEmptyString = z.string().trim().min(1);
+const emptyParams = z.object({}).strict();
+const beePilotStepSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("navigate"), params: z.object({ view: nonEmptyString.refine(isDashboardView, "Unknown dashboard view.") }).strict() }).strict(),
+  z.object({ action: z.literal("open-agent-create"), params: z.object({
+    machine: nonEmptyString.optional(),
+    runtime: nonEmptyString.optional(),
+    provider: nonEmptyString.optional(),
+    model: nonEmptyString.optional(),
+    name: nonEmptyString.optional(),
+  }).strict() }).strict(),
+  z.object({ action: z.literal("open-agent-settings"), params: z.object({ agent: nonEmptyString }).strict() }).strict(),
+  z.object({ action: z.literal("chat-with-agent"), params: z.object({ agent: nonEmptyString, message: nonEmptyString.optional(), send: z.literal("true").optional() }).strict() }).strict(),
+  z.object({ action: z.literal("create-wallet"), params: z.object({ agent: nonEmptyString }).strict() }).strict(),
+  z.object({ action: z.literal("open-wallet"), params: z.object({ agent: nonEmptyString.optional() }).strict() }).strict(),
+  z.object({ action: z.literal("add-kanban-task"), params: z.object({ text: nonEmptyString, column: z.enum(["ideas", "ready", "working", "needs-human", "done"]).optional() }).strict() }).strict(),
+  z.object({ action: z.literal("search-kanban"), params: z.object({ query: nonEmptyString }).strict() }).strict(),
+  z.object({ action: z.literal("open-kanban-task"), params: z.object({ task: nonEmptyString }).strict() }).strict(),
+  z.object({ action: z.literal("create-schedule"), params: emptyParams }).strict(),
+  z.object({ action: z.literal("open-skill-browser"), params: emptyParams }).strict(),
+  z.object({ action: z.literal("queen-task"), params: z.object({ title: nonEmptyString, message: nonEmptyString }).strict() }).strict(),
+]);
+const beePilotPlanSchema = z.object({
+  reply: z.string().trim().max(300),
+  steps: z.array(beePilotStepSchema).max(MAX_PLAN_STEPS),
+}).strict();
+
+/** Parses one complete strict JSON plan with action-specific parameter contracts. */
 export function parseBeePilotPlan(text: string): BeePilotPlan | null {
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start) return null;
   try {
-    const parsed = JSON.parse(text.slice(start, end + 1)) as { reply?: unknown; steps?: unknown };
-    const rawSteps = Array.isArray(parsed.steps) ? parsed.steps : [];
-    const steps: BeePilotStep[] = [];
-    for (const raw of rawSteps.slice(0, MAX_PLAN_STEPS)) {
-      if (!raw || typeof raw !== "object") continue;
-      const record = raw as { action?: unknown; params?: unknown };
-      if (!isBeePilotActionId(record.action)) continue;
-      const params: Record<string, string> = {};
-      if (record.params && typeof record.params === "object") {
-        for (const [key, value] of Object.entries(record.params as Record<string, unknown>)) {
-          if (typeof value === "string" && value.trim()) params[key] = value.trim();
-          else if (typeof value === "number" || typeof value === "boolean") params[key] = String(value);
-        }
-      }
-      steps.push({ action: record.action, params });
-    }
-    const reply = typeof parsed.reply === "string" ? parsed.reply.trim().slice(0, 300) : "";
-    if (!reply && !steps.length) return null;
-    return { reply: reply || "On it.", steps };
+    const parsed = beePilotPlanSchema.safeParse(JSON.parse(text));
+    if (!parsed.success || (!parsed.data.reply && !parsed.data.steps.length)) return null;
+    return {
+      reply: parsed.data.reply || "On it.",
+      steps: parsed.data.steps.map((step) => ({ action: step.action, params: step.params })),
+    };
   } catch {
     return null;
   }

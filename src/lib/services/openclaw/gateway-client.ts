@@ -42,6 +42,12 @@ export interface GatewayEvent {
 
 export type GatewayFrame = GatewayResponse | GatewayEvent;
 
+// OpenClaw 2026.6 moved the Gateway protocol from v3 to v4. Advertise the
+// compatibility range instead of pinning one release so existing v3 gateways
+// and current v4 gateways can both negotiate a connection.
+export const OPENCLAW_GATEWAY_MIN_PROTOCOL = 3;
+export const OPENCLAW_GATEWAY_MAX_PROTOCOL = 4;
+
 export interface ConnectParams {
   gatewayUrl: string;
   token: string;
@@ -216,8 +222,8 @@ async function sendMessageViaGatewayOnce(
         id: nextRequestId(),
         method: 'connect',
         params: {
-          minProtocol: 3,
-          maxProtocol: 3,
+          minProtocol: OPENCLAW_GATEWAY_MIN_PROTOCOL,
+          maxProtocol: OPENCLAW_GATEWAY_MAX_PROTOCOL,
           client: {
             id: 'gateway-client',
             version: '1.0.0',
@@ -485,8 +491,8 @@ export async function testGatewayConnection(
         id: nextRequestId(),
         method: 'connect',
         params: {
-          minProtocol: 3,
-          maxProtocol: 3,
+          minProtocol: OPENCLAW_GATEWAY_MIN_PROTOCOL,
+          maxProtocol: OPENCLAW_GATEWAY_MAX_PROTOCOL,
           client: {
             id: 'gateway-client',
             version: '1.0.0',

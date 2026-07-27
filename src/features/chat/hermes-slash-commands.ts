@@ -62,6 +62,7 @@ export const HERMES_SLASH_COMMANDS: HermesSlashCommand[] = [
   { name: "cron", category: "Tools & Skills", description: "Manage scheduled tasks", argsHint: "[subcommand]", cliOnly: true },
   { name: "curator", category: "Tools & Skills", description: "Background skill maintenance", argsHint: "[status|run|pin|archive]" },
   { name: "kanban", category: "Tools & Skills", description: "Use the collaboration board", argsHint: "[subcommand]" },
+  { name: "transcript", category: "Tools & Skills", description: "Pull the transcript from an X video or thread", argsHint: "<x-link>" },
   { name: "reload", category: "Tools & Skills", description: "Reload env variables", cliOnly: true },
   { name: "reload-mcp", category: "Tools & Skills", description: "Reload MCP servers from config", aliases: ["reload_mcp"] },
   { name: "reload-skills", category: "Tools & Skills", description: "Re-scan installed skills", aliases: ["reload_skills"] },
@@ -87,3 +88,28 @@ export const CHAT_SLASH_COMMANDS: HermesSlashCommand[] = [
   ...DASHBOARD_SLASH_COMMANDS,
   ...HERMES_SLASH_COMMANDS,
 ];
+
+export function filterChatSlashCommands(
+  commands: readonly HermesSlashCommand[],
+  query: string,
+): readonly HermesSlashCommand[] {
+  if (!commands.length) return [];
+  const cleanQuery = query.trim().toLowerCase();
+  if (!cleanQuery) return commands;
+  const directMatches = commands.filter((command) => (
+    command.name.toLowerCase().startsWith(cleanQuery)
+    || command.aliases?.some((alias) => alias.toLowerCase().startsWith(cleanQuery))
+  ));
+  if (directMatches.length) return directMatches;
+  const fuzzyMatches = commands.filter((command) => {
+    const haystack = [
+      command.name,
+      command.description,
+      command.category,
+      command.argsHint ?? "",
+      ...(command.aliases ?? []),
+    ].join(" ").toLowerCase();
+    return haystack.includes(cleanQuery);
+  });
+  return fuzzyMatches.length ? fuzzyMatches : commands;
+}

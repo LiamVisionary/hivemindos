@@ -34,8 +34,12 @@ async function loadModule(sourcePath, replacements = []) {
 function mcpRequest(child, message) {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error(`Timed out waiting for MCP response to ${message.method}`)), 5000);
+    let buffer = "";
     const onData = (chunk) => {
-      for (const line of String(chunk).split("\n")) {
+      buffer += String(chunk);
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
         if (!line.trim()) continue;
         const parsed = JSON.parse(line);
         if (parsed.id !== message.id) continue;
@@ -70,6 +74,10 @@ try {
     [
       'import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";',
       "function resolveObsidianVaultPath(vaultPath) { return vaultPath; }",
+    ],
+    [
+      'import { contentAddressForText } from "@/lib/services/obsidian/content-address";',
+      `function contentAddressForText(value) { const normalized = String(value).replace(/\\r\\n?/g, "\\n").normalize("NFC").split("\\n").map((line) => line.replace(/[ \\t]+$/g, "")).join("\\n"); return \`sha256:\${createHash("sha256").update(normalized, "utf8").digest("hex")}\`; }`,
     ],
     [
       'import { listFilesMatchingTerms, searchTermsFromQuery } from "@/lib/services/search/ripgrep-search";',
@@ -114,6 +122,7 @@ async function listFilesMatchingTerms() { return null; }`,
   const root = join(vault, "Synthesis", "Compiled Knowledge", "research", "wiki");
   const summary = await readFile(join(root, result.summaryPath), "utf8");
   assert.match(summary, /type: "compiled-summary"/);
+  assert.match(summary, /contentHash: "sha256:[a-f0-9]{64}"/);
   assert.match(summary, /\[\[hivemindos]]/);
   assert.match(summary, /\[\[compiled-knowledge]]/);
 

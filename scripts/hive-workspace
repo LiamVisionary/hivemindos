@@ -1,0 +1,292 @@
+#!/usr/bin/env node
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import readline from "node:readline";
+
+const STORE_PATH = path.resolve(expandHome(process.env.HIVE_WORKSPACES_FILE || "~/.hivemindos/workspaces.json"));
+const DEFAULT_MAIN_VAULT = "~/Documents/Obsidian/hivemindos-vault";
+const DEFAULT_MAIN_ENV = "~/.hivemindos/.env";
+
+function expandHome(value) {
+  if (!value) return value;
+  if (value === "~") return os.homedir();
+  if (value.startsWith("~/") || value.startsWith("~\\")) return path.join(os.homedir(), value.slice(2));
+  return value;
+}
+
+function collapseHome(value) {
+  const resolved = path.resolve(expandHome(value));
+  const home = os.homedir();
+  if (resolved === home) return "~";
+  return resolved.startsWith(`${home}${path.sep}`) ? `~/${resolved.slice(home.length + 1)}` : resolved;
+}
+
+function slug(value) {
+  return String(value || "")
+    .trim()
+    .replace(/[^A-Za-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+}
+
+function defaultMainWorkspace() {
+  const vaultPath = collapseHome(process.env.NEXT_PUBLIC_OBSIDIAN_VAULT_PATH || DEFAULT_MAIN_VAULT);
+  return normalizeWorkspace({
+    id: "main",
+    name: "Main shared brain",
+    vaultPath,
+    envPath: process.env.HIVE_ENV_FILE || DEFAULT_MAIN_ENV,
+    default: true,
+    description: "Default HivemindOS shared brain, env, and skills workspace.",
+  });
+}
+
+function normalizeWorkspace(input) {
+  const id = slug(input.id || input.name || input.vaultPath);
+  if (!id) throw new Error("Workspace id is required.");
+  const vaultPath = collapseHome(input.vaultPath || DEFAULT_MAIN_VAULT);
+  return {
+    id,
+    name: String(input.name || id).trim(),
+    vaultPath,
+    envPath: collapseHome(input.envPath || `~/.hivemindos/workspaces/${id}/.env`),
+    skillsPath: collapseHome(input.skillsPath || `${vaultPath}/Skills`),
+    brainServicesPath: collapseHome(input.brainServicesPath || `${vaultPath}/Operations/Brain Services`),
+    default: Boolean(input.default) || undefined,
+    description: input.description ? String(input.description).trim() : undefined,
+  };
+}
+
+function loadStore() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(STORE_PATH, "utf8"));
+    const workspaces = Array.isArray(parsed.workspaces) ? parsed.workspaces.map(normalizeWorkspace) : [];
+    if (!workspaces.some((workspace) => workspace.id === "main")) workspaces.unshift(defaultMainWorkspace());
+    const activeWorkspaceId = workspaces.some((workspace) => workspace.id === parsed.activeWorkspaceId) ? parsed.activeWorkspaceId : "main";
+    return { version: 1, activeWorkspaceId, workspaces };
+  } catch {
+    return { version: 1, activeWorkspaceId: "main", workspaces: [defaultMainWorkspace()] };
+  }
+}
+
+function saveStore(store) {
+  fs.mkdirSync(path.dirname(STORE_PATH), { recursive: true });
+  fs.writeFileSync(STORE_PATH, `${JSON.stringify(store, null, 2)}\n`, "utf8");
+}
+
+function activeWorkspace(store) {
+  return store.workspaces.find((workspace) => workspace.id === store.activeWorkspaceId)
+    || store.workspaces.find((workspace) => workspace.id === "main")
+    || store.workspaces[0];
+}
+
+function existsDir(value) {
+  try {
+    return fs.statSync(path.resolve(expandHome(value))).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function scaffold(workspace) {
+  for (const folder of [
+    workspace.vaultPath,
+    workspace.skillsPath,
+    workspace.brainServicesPath,
+    `${workspace.vaultPath}/Memory/Distillations/Agent Memory`,
+    `${workspace.vaultPath}/Operations/Secure`,
+    path.dirname(expandHome(workspace.envPath)),
+  ]) {
+    fs.mkdirSync(path.resolve(expandHome(folder)), { recursive: true });
+  }
+  const envPath = path.resolve(expandHome(workspace.envPath));
+  if (!fs.existsSync(envPath)) fs.writeFileSync(envPath, "", { mode: 0o600 });
+}
+
+function parseOptions(argv) {
+  const options = { _: [] };
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    const next = argv[index + 1];
+    if (arg.startsWith("--")) {
+      const key = arg.slice(2).replace(/-([a-z])/g, (_, char) => char.toUpperCase());
+      if (["setActive", "scaffold", "json", "help"].includes(key)) {
+        options[key] = true;
+      } else {
+        options[key] = next;
+        index += 1;
+      }
+    } else {
+      options._.push(arg);
+    }
+  }
+  return options;
+}
+
+function printCurrent(json = false) {
+  const store = loadStore();
+  const active = activeWorkspace(store);
+  if (json) {
+    console.log(JSON.stringify({ activeWorkspaceId: store.activeWorkspaceId, active, workspaces: store.workspaces }, null, 2));
+    return;
+  }
+  console.log(`Current hive workspace: ${active.name} (${active.id})`);
+  console.log(`Vault: ${active.vaultPath}`);
+  console.log(`Env: ${active.envPath}`);
+  const others = store.workspaces.filter((workspace) => workspace.id !== active.id);
+  if (others.length) {
+    console.log("\nOther workspaces:");
+    for (const workspace of others) {
+      const status = existsDir(workspace.vaultPath) ? "ready" : "missing vault";
+      console.log(`- ${workspace.name} (${workspace.id}) — ${workspace.vaultPath} [${status}]`);
+    }
+  } else {
+    console.log("\nNo additional workspaces registered yet.");
+  }
+  console.log("\nwant to change your default workspace? run hive-workspace-switch");
+}
+
+function setActive(id) {
+  const store = loadStore();
+  const workspace = store.workspaces.find((item) => item.id === id || item.name.toLowerCase() === id.toLowerCase());
+  if (!workspace) throw new Error(`Workspace not found: ${id}`);
+  store.activeWorkspaceId = workspace.id;
+  saveStore(store);
+  console.log(`Default hive workspace set to: ${workspace.name} (${workspace.id})`);
+  console.log(`Vault: ${workspace.vaultPath}`);
+}
+
+async function switchInteractive() {
+  const store = loadStore();
+  if (store.workspaces.length <= 1) {
+    printCurrent(false);
+    console.log("\nNo other workspaces yet. Run hive-workspace-add to create one.");
+    return;
+  }
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error("Interactive workspace switching needs a TTY. Pass a workspace id: hive-workspace-switch <id>");
+  }
+  let selected = Math.max(0, store.workspaces.findIndex((workspace) => workspace.id === store.activeWorkspaceId));
+  readline.emitKeypressEvents(process.stdin);
+  process.stdin.setRawMode(true);
+  const render = () => {
+    process.stdout.write("\x1b[2J\x1b[H");
+    console.log("Select default hive workspace (↑/↓ then Enter, q to cancel):\n");
+    store.workspaces.forEach((workspace, index) => {
+      const cursor = index === selected ? "›" : " ";
+      const active = workspace.id === store.activeWorkspaceId ? " current" : "";
+      console.log(`${cursor} ${workspace.name} (${workspace.id})${active}`);
+      console.log(`  ${workspace.vaultPath}`);
+    });
+  };
+  render();
+  await new Promise((resolve) => {
+    process.stdin.on("keypress", (_str, key = {}) => {
+      if (key.name === "up") selected = (selected - 1 + store.workspaces.length) % store.workspaces.length;
+      else if (key.name === "down") selected = (selected + 1) % store.workspaces.length;
+      else if (key.name === "return") {
+        process.stdin.setRawMode(false);
+        process.stdin.pause();
+        process.stdout.write("\n");
+        setActive(store.workspaces[selected].id);
+        resolve();
+        return;
+      } else if (key.name === "q" || (key.ctrl && key.name === "c")) {
+        process.stdin.setRawMode(false);
+        process.stdin.pause();
+        process.stdout.write("\nCancelled.\n");
+        resolve();
+        return;
+      }
+      render();
+    });
+  });
+}
+
+function question(rl, label, defaultValue = "") {
+  const suffix = defaultValue ? ` [${defaultValue}]` : "";
+  return new Promise((resolve) => rl.question(`${label}${suffix}: `, (answer) => resolve(answer.trim() || defaultValue)));
+}
+
+async function addWorkspace(options) {
+  let input = { ...options };
+  if (!input.id && !input.name && !input.vaultPath && process.stdin.isTTY) {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const name = await question(rl, "Workspace name");
+    const id = await question(rl, "Workspace id", slug(name));
+    const vaultPath = await question(rl, "Vault path", `~/Documents/Obsidian/${id}-vault`);
+    const envPath = await question(rl, "Shared env file", `~/.hivemindos/workspaces/${id}/.env`);
+    const setActiveAnswer = await question(rl, "Make this the default workspace? yes/no", "yes");
+    const scaffoldAnswer = await question(rl, "Create folders now? yes/no", "yes");
+    rl.close();
+    input = {
+      ...input,
+      id,
+      name,
+      vaultPath,
+      envPath,
+      setActive: /^y/i.test(setActiveAnswer),
+      scaffold: /^y/i.test(scaffoldAnswer),
+    };
+  }
+  if (!input.vaultPath) throw new Error("vault path is required. Use --vault-path <path> or run interactively.");
+  const workspace = normalizeWorkspace({
+    id: input.id || slug(input.name || input.vaultPath),
+    name: input.name || input.id || input.vaultPath,
+    vaultPath: input.vaultPath,
+    envPath: input.envPath,
+    skillsPath: input.skillsPath,
+    brainServicesPath: input.brainServicesPath,
+    description: input.description,
+  });
+  const store = loadStore();
+  const next = store.workspaces.filter((item) => item.id !== workspace.id);
+  next.push(workspace);
+  next.sort((left, right) => Number(Boolean(right.default)) - Number(Boolean(left.default)) || left.name.localeCompare(right.name));
+  const nextStore = { version: 1, activeWorkspaceId: input.setActive ? workspace.id : store.activeWorkspaceId, workspaces: next };
+  saveStore(nextStore);
+  if (input.scaffold) scaffold(workspace);
+  console.log(`Hive workspace saved: ${workspace.name} (${workspace.id})`);
+  console.log(`Vault: ${workspace.vaultPath}`);
+  console.log(`Env: ${workspace.envPath}`);
+  if (input.setActive) console.log("This is now the default workspace.");
+  else console.log("To make it default, run hive-workspace-switch.");
+}
+
+function usage() {
+  console.log(`Usage:
+  hive-workspace [--json]
+  hive-workspace switch [workspace-id]
+  hive-workspace add [--id ID] [--name NAME] --vault-path PATH [--env-path PATH] [--set-active] [--scaffold]
+
+Aliases:
+  hive-workspace-switch [workspace-id]
+  hive-workspace-add [options]
+`);
+}
+
+async function main() {
+  const invoked = path.basename(process.argv[1] || "hive-workspace");
+  const argv = process.argv.slice(2);
+  const aliasAction = invoked === "hive-workspace-switch" ? "switch" : invoked === "hive-workspace-add" ? "add" : "";
+  let action = aliasAction || argv[0];
+  if (!aliasAction && action?.startsWith("--")) action = "current";
+  if (!aliasAction && (action === "switch" || action === "add")) argv.shift();
+  if (!action) action = "current";
+  const options = parseOptions(argv);
+  if (options.help || action === "help") return usage();
+  if (action === "current" || action === "list") return printCurrent(Boolean(options.json));
+  if (action === "switch") {
+    const id = options._[0];
+    if (id) return setActive(id);
+    return switchInteractive();
+  }
+  if (action === "add") return addWorkspace(options);
+  throw new Error(`Unknown hive-workspace action: ${action}`);
+}
+
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exit(1);
+});

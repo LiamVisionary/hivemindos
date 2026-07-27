@@ -1,0 +1,20 @@
+{
+  "upstreamName": "finishing-a-development-branch",
+  "upstreamSlug": "finishing-a-development-branch",
+  "hiveSlug": "finishing-a-development-branch",
+  "sourceLabel": "obra-superpowers",
+  "sourceUrl": "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/finishing-a-development-branch/SKILL.md",
+  "repository": "https://github.com/obra/superpowers",
+  "installCommand": "npx skills add https://github.com/obra/superpowers --skill finishing-a-development-branch",
+  "importedAt": "2026-07-11T12:24:08.768Z",
+  "refreshedAt": "2026-07-11T12:41:15.452Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/engineering/obra-superpowers/finishing-a-development-branch",
+  "packageGroup": "engineering",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+  "normalized": "hivemindos-augmented-upstream",
+  "description": "Use after implementation and verification to present safe branch handoff choices without assuming merge, push, cleanup, or deletion authority."
+}

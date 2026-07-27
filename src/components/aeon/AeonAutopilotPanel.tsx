@@ -8,6 +8,7 @@ import { AeonWork, type SkillActionKind } from "./work";
 import { AeonActivity } from "./activity";
 import { AeonDeliverables } from "./deliverables";
 import { AeonSettings } from "./settings";
+import { AeonControlPlane } from "./control-plane";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   AEON_AGENTS, AEON_ANALYTICS, AEON_DELIVERABLES, AEON_MACHINES, AEON_MEMORY, AEON_SKILLS,
@@ -22,12 +23,14 @@ import type {
   RuntimeMemorySnapshot,
   RuntimeRepoSyncStatus,
   RuntimeRun,
+  RuntimeRunLog,
   RuntimeSecretStatus,
   RuntimeSkill,
 } from "@/lib/services/runtime-adapters/types";
 import type { KanbanMachineTarget } from "@/lib/types/kanban";
+import { Spinner } from "@/features/dashboard/views/zero-human-companies/primitives";
 
-export type AeonDetailView = "overview" | "work" | "activity" | "deliverables" | "settings";
+export type AeonDetailView = "overview" | "work" | "activity" | "deliverables" | "control" | "settings";
 type IconName = Parameters<typeof Icon>[0]["name"];
 const OFFICIAL_AEON_REPO_URL = "https://github.com/aaronjmars/aeon.git";
 const CLONE_STEP_MS = 1300;
@@ -37,6 +40,7 @@ const DETAIL_TABS: { id: AeonDetailView; label: string; detail: string; icon: Ic
   { id: "work", label: "Work", detail: "Skills & automation", icon: "sparkles" },
   { id: "activity", label: "Activity", detail: "Runs & outputs", icon: "activity" },
   { id: "deliverables", label: "Deliverables", detail: "Artifacts & handoff", icon: "layers" },
+  { id: "control", label: "Control", detail: "Packs, MCP & identity", icon: "shield" },
   { id: "settings", label: "Settings", detail: "Repo, keys, memory", icon: "key" },
 ];
 
@@ -152,7 +156,7 @@ function aeonCategory(value?: string): AeonCategoryId {
 
 function aeonSkillSource(source?: string): AeonSkill["source"] {
   if (source === "shared-brain") return "shared-brain";
-  if (source === "aeon-a2a") return "aeon-a2a";
+  if (source === "aeon-cli") return "aeon-cli";
   if (source === "aeon-skill-folder") return "aeon-skill-folder";
   return "aeon.yml";
 }
@@ -277,7 +281,7 @@ function runtimePaths(agent: AeonAgent, memory?: RuntimeMemorySnapshot) {
   ].filter((entry) => entry.value);
 }
 
-type RuntimeStatusPayload = { root?: string; repo?: string; hasConfig?: boolean; a2aReachable?: boolean; localSkillCount?: number };
+type RuntimeStatusPayload = { root?: string; repo?: string; hasConfig?: boolean; generation?: "v0.1" | "legacy" | "invalid"; cliAvailable?: boolean; catalogAvailable?: boolean; localSkillCount?: number; harness?: string; gateway?: string };
 type AeonRuntimeData = {
   loading: boolean;
   error: string;
@@ -336,7 +340,7 @@ function aeonMachineCollectorUrl(machine: MachineGroup) {
 function aeonAgentFromProfile(profile: AgentProfile): AeonAgent {
   const repo = profile.aeonRepo?.trim() || null;
   const localPath = profile.aeonLocalPath || profile.localDataDir || "";
-  const mode: AeonAgent["mode"] = profile.aeonMode === "github" || repo ? "GitHub" : profile.aeonMode === "a2a" ? "A2A" : "Local path";
+  const mode: AeonAgent["mode"] = profile.aeonMode === "github" || repo ? "GitHub" : "Local path";
   return {
     id: profile.id,
     name: profile.name || profile.aeonRepoName || profile.agentId || "AEON Workspace",
@@ -383,11 +387,14 @@ function Modal({ title, eyebrow, subtitle, onClose, children, wide }: { title: s
   );
 }
 
-function ComposeModal({ skill, onClose, onCreate }: { skill: AeonSkill | null; onClose: () => void; onCreate: (skill: AeonSkill | null, cfg: { summary: string; duty: boolean }) => void }) {
+type AutomationConfig = { summary: string; duty: boolean; schedule: string; brief: string; model: string };
+
+function ComposeModal({ skill, onClose, onCreate }: { skill: AeonSkill | null; onClose: () => void; onCreate: (skill: AeonSkill | null, cfg: AutomationConfig) => void | Promise<void> }) {
   const [sched, setSched] = React.useState<ConvertScheduleMode>("daily");
   const [brief, setBrief] = React.useState("description");
   const [model, setModel] = React.useState("");
   const [duty, setDuty] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
   const summary = sched === "manual" ? "Manual dispatch" : sched === "hourly" ? "Every hour" : sched === "daily" ? "Daily at 09:00" : sched === "weekdays" ? "Weekdays at 09:00" : "Weekly · Mon 09:00";
   const cron = sched === "manual" ? "manual" : sched === "hourly" ? "0 * * * *" : sched === "weekdays" ? "0 9 * * 1-5" : sched === "weekly" ? "0 9 * * 1" : "0 9 * * *";
   const opt = (active: boolean): React.CSSProperties => ({ padding: 11, borderRadius: 9, textAlign: "left", cursor: "pointer", border: `1px solid ${active ? "var(--aeon-line)" : "var(--line)"}`, background: active ? "var(--aeon-soft)" : "rgba(2,6,23,0.3)" });
@@ -440,7 +447,7 @@ function ComposeModal({ skill, onClose, onCreate }: { skill: AeonSkill | null; o
           <code style={{ fontSize: 11.5, fontFamily: "var(--f-mono)", padding: "5px 9px", borderRadius: 7, background: "rgba(2,6,23,0.5)", border: "1px solid var(--line)", color: "var(--fg-2)" }}>{cron}</code>
           <div style={{ display: "flex", gap: 8 }}>
             <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-            <Btn variant="primary" icon="rocket" onClick={() => onCreate(skill, { summary, duty })}>Create automation</Btn>
+            <Btn variant="primary" icon={saving ? undefined : "rocket"} disabled={saving} onClick={() => { setSaving(true); void Promise.resolve(onCreate(skill, { summary, duty, schedule: cron, brief, model })).finally(() => setSaving(false)); }}>{saving ? <><Spinner />Creating</> : "Create automation"}</Btn>
           </div>
         </div>
       </div>
@@ -543,8 +550,8 @@ export function WorkspaceModal({
       disabled: !officialCloneFork,
     },
     {
-      label: "Inject shared brain secrets",
-      detail: "Pushes every shared env key to the new repo after GitHub setup so GitHub Actions can use them immediately.",
+      label: "Inject required AEON secrets",
+      detail: "Pushes core credentials for the selected harness/gateway plus required enabled-skill keys from v0.1 frontmatter.",
       checked: officialCloneInjectSecrets,
       setChecked: setOfficialCloneInjectSecrets,
       disabled: !officialCloneFork,
@@ -720,14 +727,14 @@ export function WorkspaceModal({
       steps.push({ key: "push", label: "Pushing AEON to your repo", icon: "upload" });
     }
     steps.push({ key: "skills", label: "Indexing skills & runtime", icon: "list" });
-    if (officialCloneFork && officialCloneInjectSecrets) steps.push({ key: "secrets", label: "Injecting shared brain secrets", icon: "key" });
+    if (officialCloneFork && officialCloneInjectSecrets) steps.push({ key: "secrets", label: "Injecting required AEON secrets", icon: "key" });
     steps.push({ key: "mesh", label: "Calibrating neural mesh", icon: "drive" });
     steps.push({ key: "warm", label: "Warming up runtime", icon: "refresh" });
     steps.push({ key: "ready", label: "AEON Agent online", icon: "rocket" });
     return steps;
   };
 
-  const syncSecretsForAgent = async (agent: AgentProfile) => postJson("/api/runtimes/aeon/env/sync", { agent, all: true });
+  const syncSecretsForAgent = async (agent: AgentProfile) => postJson("/api/runtimes/aeon/env/sync", { agent });
 
   const completeOfficialCloneTail = async (agent: AgentProfile) => {
     const tasks: Array<Promise<unknown>> = [];
@@ -996,18 +1003,23 @@ function Toast({ msg }: { msg: string }) {
 
 // ---------- detail shell ----------
 interface DetailProps {
-  agent: AeonAgent; allSkills: AeonSkill[]; deliverables: AeonDeliverable[]; machines: AeonMachine[];
+  agent: AeonAgent; profile?: AgentProfile; allSkills: AeonSkill[]; deliverables: AeonDeliverable[]; machines: AeonMachine[];
   analytics: AeonAnalytics; pulse: number[]; runs: AeonRun[]; outputs: AeonOutput[];
   secrets: AeonSecret[]; paths: AeonPathEntry[]; memory: AeonMemory; status?: RuntimeStatusPayload; repoSync?: RuntimeRepoSyncStatus;
   loading?: boolean; error?: string; onBack: () => void; toast: (m: string) => void; onRefresh?: () => void; onRepoAction?: (action: "pull" | "push") => void;
   onToggleSkill?: (slug: string, nextState: "on-duty" | "paused") => void | Promise<void>;
   onRunSkill?: (slug: string) => void | Promise<void>;
+  onConfigureAutomation?: (skill: AeonSkill, config: AutomationConfig) => void | Promise<void>;
+  onLoadRunLog?: (runId: string) => Promise<string>;
+  onSyncSkills?: () => void | Promise<void>;
+  onSyncKeys?: (keys?: string[]) => void | Promise<void>;
+  onMirrorAction?: (action: "start" | "stop" | "once") => void | Promise<void>;
   onSendDeliverable?: (id: string, machineKey: string) => void;
 }
 
 function AeonDetail({
-  agent, allSkills, deliverables, machines, analytics, pulse, runs, outputs, secrets, paths, memory, status, repoSync, loading, error,
-  onBack, toast, onRefresh, onRepoAction, onToggleSkill, onRunSkill, onSendDeliverable,
+  agent, profile, allSkills, deliverables, machines, analytics, pulse, runs, outputs, secrets, paths, memory, status, repoSync, loading, error,
+  onBack, toast, onRefresh, onRepoAction, onToggleSkill, onRunSkill, onConfigureAutomation, onLoadRunLog, onSyncSkills, onSyncKeys, onMirrorAction, onSendDeliverable,
 }: DetailProps) {
   const [tab, setTab] = React.useState<AeonDetailView>("overview");
   const [skills, setSkills] = React.useState(allSkills);
@@ -1039,12 +1051,19 @@ function AeonDetail({
     else setCompose(skill);
   };
 
-  const createAutomation = (skill: AeonSkill | null, cfg: { summary: string; duty: boolean }) => {
-    setCompose(undefined);
+  const createAutomation = async (skill: AeonSkill | null, cfg: AutomationConfig) => {
     if (skill) {
+      try {
+        await onConfigureAutomation?.(skill, cfg);
+      } catch (err) {
+        toast(err instanceof Error ? err.message : "Could not create AEON automation.");
+        return;
+      }
+      setCompose(undefined);
       setSkills((arr) => arr.map((s) => s.slug === skill.slug ? { ...s, state: cfg.duty ? "on-duty" : "manual", scheduleLabel: cfg.summary } : s));
       toast(`${skill.name} armed — ${cfg.summary}`);
-    } else toast("New automation created");
+      onRefresh?.();
+    } else toast("Choose an AEON skill before creating an automation.");
   };
 
   const stats: { value: React.ReactNode; label: string; tone?: "honey" | "cyan" }[] = [
@@ -1073,7 +1092,7 @@ function AeonDetail({
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <Btn variant="ghost" icon="chevronL" onClick={onBack}>All AEON Agents</Btn>
             <Btn variant="danger" icon="power" onClick={() => { skills.filter((s) => s.state === "on-duty").forEach((s) => void toggleDuty(s.slug)); toast("All AEON automations stopped"); }}>Stop AEON</Btn>
-            <Btn variant="secondary" icon="refresh" onClick={onRefresh}>{loading ? "Refreshing..." : "Refresh"}</Btn>
+            <Btn variant="secondary" icon={loading ? undefined : "refresh"} onClick={onRefresh}>{loading ? <><Spinner />Refreshing</> : "Refresh"}</Btn>
           </div>
         </div>
         {error ? <div style={{ marginTop: 12, padding: "8px 12px", borderRadius: 9, border: "1px solid rgba(251,113,133,0.35)", background: "rgba(251,113,133,0.10)", color: "var(--danger-2)", fontSize: 12 }}>{error}</div> : null}
@@ -1101,9 +1120,10 @@ function AeonDetail({
       <div key={tab} className={styles.scroll} style={{ overflow: "auto", padding: "18px clamp(18px,3vw,40px) 40px", minHeight: 0 }}>
         {tab === "overview" && <AeonOverview agent={{ ...agent, onDuty }} skills={skills} analytics={analytics} pulse={pulse} onView={setTab} onToggle={(slug) => void toggleDuty(slug)} />}
         {tab === "work" && <AeonWork skills={skills} runs={runs} selectedSlug={selSkill} onSelect={(s) => setSelSkill(s === selSkill ? null : s)} onAction={(skill, kind) => void skillAction(skill, kind)} onImport={() => setCompose(null)} />}
-        {tab === "activity" && <AeonActivity runs={runs} outputs={outputs} />}
+        {tab === "activity" && <AeonActivity runs={runs} outputs={outputs} onLoadRunLog={onLoadRunLog} />}
         {tab === "deliverables" && <AeonDeliverables deliverables={deliverables} onSend={setSendD} />}
-        {tab === "settings" && <AeonSettings agent={agent} secrets={secrets} paths={paths} memory={memory} status={status} repoSync={repoSync} onRepoAction={onRepoAction} />}
+        {tab === "control" && <AeonControlPlane agent={profile} onToast={toast} onChanged={onRefresh} />}
+        {tab === "settings" && <AeonSettings agent={agent} secrets={secrets} paths={paths} memory={memory} status={status} repoSync={repoSync} onRepoAction={onRepoAction} onSyncSkills={onSyncSkills} onSyncKeys={onSyncKeys} onMirrorAction={onMirrorAction} onError={toast} />}
       </div>
 
       {compose !== undefined && <ComposeModal skill={compose} onClose={() => setCompose(undefined)} onCreate={createAutomation} />}
@@ -1211,7 +1231,7 @@ export function AeonAutopilotPanel({
         },
       }));
       void Promise.allSettled([
-        postJson<{ secrets?: RuntimeSecretStatus }>("/api/runtimes/aeon/secrets/status", { ...body, fast: true }),
+        postJson<{ secrets?: RuntimeSecretStatus }>("/api/runtimes/aeon/secrets/status", body),
         postJson<{ status?: RuntimeRepoSyncStatus }>("/api/runtimes/aeon/repo/sync", { agent: profile, action: "status" }),
       ]).then(([secretsResult, repoResult]) => {
         setRuntimeDataByAgent((current) => {
@@ -1279,6 +1299,53 @@ export function AeonAutopilotPanel({
     onToggleSkill?.(slug, nextState);
   }, [activeProfile, onToggleSkill]);
 
+  const configureActiveAutomation = React.useCallback(async (skill: AeonSkill, config: AutomationConfig) => {
+    if (!activeProfile) throw new Error("Link an AEON workspace before creating an automation.");
+    const instructions = config.brief === "checklist"
+      ? `Run ${skill.name} exactly as documented, then report what completed and what remains.`
+      : config.brief === "changes"
+        ? `Monitor ${skill.name} for meaningful changes and report only items that need attention.`
+        : config.brief === "summary"
+          ? `Run ${skill.name} and produce a concise reusable artifact from the result.`
+          : skill.desc;
+    await postJson("/api/runtimes/aeon/control-plane", {
+      agent: activeProfile,
+      action: "skill-configure",
+      skill: skill.slug,
+      schedule: config.schedule,
+      var: instructions,
+      model: config.model,
+      enabled: config.duty,
+    });
+  }, [activeProfile]);
+
+  const loadActiveRunLog = React.useCallback(async (runId: string) => {
+    if (!activeProfile) throw new Error("Link an AEON workspace before loading run logs.");
+    const response = await postJson<{ log?: RuntimeRunLog }>("/api/runtimes/aeon/runs/logs", { agent: activeProfile, runId });
+    if (!response.log) throw new Error("AEON did not return a run log.");
+    return [response.log.summary, response.log.logs].filter(Boolean).join("\n\n");
+  }, [activeProfile]);
+
+  const syncActiveSkills = React.useCallback(async () => {
+    if (!activeProfile) throw new Error("Link an AEON workspace before syncing skills.");
+    await postJson("/api/runtimes/aeon/skills/sync", { agent: activeProfile, vaultPath: sharedVault?.vaultPath });
+    toast("Synced the Shared Brain skill library into AEON v0.1.");
+    refreshActiveRuntime();
+  }, [activeProfile, refreshActiveRuntime, sharedVault?.vaultPath]);
+
+  const syncActiveKeys = React.useCallback(async (keys?: string[]) => {
+    if (!activeProfile) throw new Error("Link an AEON workspace before syncing keys.");
+    await postJson("/api/runtimes/aeon/env/sync", { agent: activeProfile, ...(keys?.length ? { keys } : {}) });
+    toast(keys?.length ? `Synced ${keys.join(", ")}.` : "Synced required AEON keys.");
+    refreshActiveRuntime();
+  }, [activeProfile, refreshActiveRuntime]);
+
+  const runMirrorAction = React.useCallback(async (action: "start" | "stop" | "once") => {
+    if (!activeProfile) throw new Error("Link an AEON workspace before syncing with Obsidian.");
+    await postJson("/api/runtimes/aeon/obsidian-sync", { agent: activeProfile, action, vaultPath: sharedVault?.vaultPath });
+    toast(action === "start" ? "Started the AEON Obsidian mirror." : action === "stop" ? "Stopped the AEON Obsidian mirror." : "Synced AEON with Obsidian.");
+  }, [activeProfile, sharedVault?.vaultPath]);
+
   const runRepoAction = React.useCallback(async (action: "pull" | "push") => {
     if (!activeProfile) return;
     try {
@@ -1298,11 +1365,11 @@ export function AeonAutopilotPanel({
       <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
         {mode !== "detail" || !agent
           ? <AeonFleet agents={displayAgents} onOpen={(a) => { setAgentId(a.id); setMode("detail"); }} onCreate={() => { onCreateWorkspace?.(); setWorkspaceModalOpen(true); }} />
-          : <AeonDetail key={`${agent.id}:${runtimeData.skills.map((skill) => `${skill.slug}:${skill.state}`).join("|")}`} agent={agent} allSkills={runtimeData.skills.length ? runtimeData.skills : skills}
+          : <AeonDetail key={`${agent.id}:${runtimeData.skills.map((skill) => `${skill.slug}:${skill.state}`).join("|")}`} agent={agent} profile={activeProfile} allSkills={runtimeData.skills.length ? runtimeData.skills : skills}
               deliverables={runtimeData.deliverables.length ? runtimeData.deliverables : deliverables} machines={machines} analytics={runtimeData.analytics} pulse={runtimeData.pulse}
               runs={runtimeData.runs} outputs={runtimeData.outputs} secrets={runtimeData.secrets} paths={runtimeData.paths} memory={runtimeData.memory}
               status={runtimeData.status} repoSync={runtimeData.repoSync} loading={runtimeData.loading} error={runtimeData.error} onRefresh={refreshActiveRuntime} onRepoAction={runRepoAction}
-              onBack={() => setMode("fleet")} toast={toast} onToggleSkill={toggleActiveSkill} onRunSkill={runActiveSkill} onSendDeliverable={onSendDeliverable} />}
+              onBack={() => setMode("fleet")} toast={toast} onToggleSkill={toggleActiveSkill} onRunSkill={runActiveSkill} onConfigureAutomation={configureActiveAutomation} onLoadRunLog={loadActiveRunLog} onSyncSkills={syncActiveSkills} onSyncKeys={syncActiveKeys} onMirrorAction={runMirrorAction} onSendDeliverable={onSendDeliverable} />}
       </div>
       {workspaceModalOpen ? (
         <WorkspaceModal

@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-07-12T20:22:08.000000+00:00",
+  "request": "Hermes agent models must be discoverable and changeable from mobile agent settings over the selected machine's collector/Tailscale route.",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "NousResearch/hermes-agent@0a7a81835b89227041d06e9486bc3e4b22feb7d9",
+      "source_path": "hermes_cli/inventory.py",
+      "target_path": "scripts/lib/hermes-model-settings.mjs",
+      "reuse_type": "translated_code",
+      "note": "translated the official build_models_payload/load_picker_context inventory substrate into the collector bridge"
+    },
+    {
+      "source_repo": "NousResearch/hermes-agent@0a7a81835b89227041d06e9486bc3e4b22feb7d9",
+      "source_path": "hermes_cli/web_server.py",
+      "target_path": "scripts/lib/hermes-model-settings.mjs",
+      "reuse_type": "adapted_code",
+      "note": "adapted the official POST /api/model/set normalization and main-model assignment path under the selected HERMES_HOME"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/runtime-integrations.ts",
+      "target_path": "scripts/agent-telemetry-collector.mjs",
+      "reuse_type": "adapted_code",
+      "note": "ported the existing app-side Hermes inventory and set-model bridge into the standalone per-machine collector"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "scripts/test-local-collector-url.mjs",
+      "target_path": "scripts/test-hermes-model-settings-bridge.mjs",
+      "reuse_type": "test_adapted",
+      "note": "reused the collector contract-test style for normalization, profile scoping, and command invocation"
+    }
+  ]
+}

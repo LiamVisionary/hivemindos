@@ -1,0 +1,14 @@
+{
+  "id": "collector-auth-expired",
+  "expectation": {
+    "requiredKeywords": ["authentication", "human action", "restart cannot"],
+    "forbiddenKeywords": ["keep restarting", "delete state"],
+    "requiredEvidence": ["auth_needed=true", "login URL"]
+  },
+  "diagnosis": {
+    "problem": "The collector is reachable but cannot join the private network.",
+    "rootCause": "Authentication expired and requires human action; restart cannot restore identity.",
+    "report": "Open the reported login URL and re-authenticate the node.",
+    "toolCalls": [{ "source": "collector-health", "result": "auth_needed=true" }, { "source": "collector-health", "result": "login URL available" }]
+  }
+}

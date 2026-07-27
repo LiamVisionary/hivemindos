@@ -8,6 +8,7 @@ const providerIds = new Set(EXTERNAL_AGENT_PROVIDERS.map((provider) => provider.
 for (const id of [
   "browser-use",
   "awesome-mcp-servers",
+  "agentmail",
   "cloudflare-agentic-inbox",
   "mcp-email-server",
   "openhands",
@@ -15,6 +16,7 @@ for (const id of [
   "palmier-pro",
   "rentahuman",
   "n8n",
+  "listmonk",
   "queen-bee-prd-decomposition",
 ]) {
   assert.ok(providerIds.has(id), `missing provider ${id}`);
@@ -23,6 +25,10 @@ for (const id of [
 const browserMcp = searchHiveMcpCatalog("browser forms", 5);
 assert.equal(browserMcp[0]?.id, "browser-use");
 assert.ok(browserMcp[0]?.credentialKeys.includes("BROWSER_USE_API_KEY"));
+
+const agentMailMcp = searchHiveMcpCatalog("agentmail email inbox", 5);
+assert.equal(agentMailMcp[0]?.id, "agentmail");
+assert.ok(agentMailMcp[0]?.credentialKeys.includes("AGENTMAIL_API_KEY"));
 
 const githubMcp = searchHiveMcpCatalog("github pull request", 5);
 assert.equal(githubMcp[0]?.id, "github");
@@ -47,7 +53,11 @@ assert.match(cliRuntimeSource, /aider[\s\S]*"--message"[\s\S]*"--no-auto-commits
 assert.match(cliRuntimeSource, /action !== "run-task"/);
 assert.match(cliRuntimeSource, /\.local", "bin"/);
 const cliTaskRunsSource = readFileSync("src/lib/services/runtime-adapters/cli-task-runs.ts", "utf8");
-assert.match(cliTaskRunsSource, /PATH: cliRuntimePath\(\)/);
+// Spawned CLI runtimes must keep the augmented PATH (GUI-launched apps miss
+// ~/.local/bin etc.) — now via the shared runtime-command-env helper.
+assert.match(cliTaskRunsSource, /runtimeCommandEnv\(\{ \.\.\.sharedEnv, \.\.\.process\.env \}\)/);
+const runtimeCommandEnvSource = readFileSync("src/lib/services/runtime-command-env.ts", "utf8");
+assert.match(runtimeCommandEnvSource, /PATH: runtimeCommandPath\(/);
 assert.match(cliTaskRunsSource, /LLM_API_KEY[\s\S]*OPENAI_API_KEY/);
 assert.match(cliTaskRunsSource, /LLM_MODEL[\s\S]*profile\?\.model/);
 
@@ -65,6 +75,7 @@ assert.match(browserUseRunner, /requires Full permissions on the Browser Use pro
 assert.match(browserUseRunner, /ANONYMIZED_TELEMETRY: "False"/);
 assert.match(browserUseRunner, /Browser Use open only allows http\(s\) URLs and about:blank/);
 assert.match(browserUseRunner, /safeScreenshotPath/);
+assert.match(browserUseRunner, /REDACTED_TYPED_TEXT/);
 assert.match(browserUseRunner, /"cloud"[\s\S]*"v2"[\s\S]*"POST"[\s\S]*"\/tasks"/);
 assert.match(rentAHumanRoute, /requireAuth/);
 assert.match(rentAHumanRoute, /normalizeRentAHumanAction/);
@@ -78,7 +89,7 @@ assert.match(rentAHumanService, /sideEffect !== "none"[\s\S]*input\.confirmation
 
 const installableServices = readFileSync("src/lib/services/installable-services.ts", "utf8");
 const palmierProInstallable = readFileSync("src/lib/services/palmier-pro-installable.ts", "utf8");
-assert.match(installableServices, /InstallableServiceId = "n8n" \| "browser-use" \| "agentic-inbox" \| "mcp-email-server" \| "openhands" \| "aider"/);
+assert.match(installableServices, /InstallableServiceId = "n8n" \| "listmonk" \| "browser-use" \| "agentic-inbox" \| "mcp-email-server" \| "openhands" \| "aider"/);
 assert.match(installableServices, /uv"[\s\S]*"tool"[\s\S]*"install"[\s\S]*"browser-use\[cli\]"/);
 assert.match(installableServices, /"tool", "install", "openhands", "--python", "3\.12"/);
 assert.match(installableServices, /"tool", "install", "aider-chat"/);
@@ -108,6 +119,7 @@ assert.match(installableServicesRoute, /value === "mcp-email-server"/);
 assert.match(installableServicesRoute, /value === "openhands"/);
 assert.match(installableServicesRoute, /value === "aider"/);
 assert.match(installableServicesRoute, /value === "palmier-pro"/);
+assert.match(installableServicesRoute, /value === "listmonk"/);
 
 const agenticInboxSetup = readFileSync("src/lib/services/cloudflare/agentic-inbox-setup.ts", "utf8");
 const agenticInboxRoute = readFileSync("src/app/api/cloudflare/agentic-inbox/route.ts", "utf8");
@@ -121,11 +133,13 @@ assert.match(agenticInboxRoute, /action === "deploy"/);
 const appCatalog = readFileSync("src/features/dashboard/agent-capability-catalog.ts", "utf8");
 const myAppsPanel = readFileSync("src/features/dashboard/views/MyAppsPanel.tsx", "utf8");
 assert.match(appCatalog, /installableServiceId: "browser-use"/);
+assert.match(appCatalog, /id: "agentmail"/);
 assert.match(appCatalog, /installableServiceId: "agentic-inbox"/);
 assert.match(appCatalog, /installableServiceId: "mcp-email-server"/);
 assert.match(appCatalog, /installableServiceId: "openhands"/);
 assert.match(appCatalog, /installableServiceId: "aider"/);
 assert.match(appCatalog, /installableServiceId: "palmier-pro"/);
+assert.match(appCatalog, /installableServiceId: "listmonk"/);
 assert.match(appCatalog, /id: "rentahuman"/);
 assert.match(myAppsPanel, /BrowserUseFullPermissionsModal/);
 assert.match(myAppsPanel, /Enable Browser Use full permissions/);
@@ -134,7 +148,9 @@ assert.match(myAppsPanel, /Promise\.allSettled/);
 
 const prdSource = readFileSync("src/lib/services/queen-bee/prd-decomposition.ts", "utf8");
 assert.match(prdSource, /export function decomposePrdToTaskDrafts/);
-assert.match(prdSource, /dependsOnDraftIndexes: index > 0 \? \[index - 1\] : \[\]/);
+// Drafts fan out as a DAG: no blanket predecessor chain, only real QA→build edges.
+assert.doesNotMatch(prdSource, /dependsOnDraftIndexes: index > 0/);
+assert.match(prdSource, /qaTargetIndexes/);
 assert.match(prdSource, /Acceptance criteria/);
 
 const queenBeeRoute = readFileSync("src/app/api/queen-bee/route.ts", "utf8");

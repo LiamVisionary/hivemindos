@@ -1,0 +1,30 @@
+[package]
+name = "hivemind-document-reader"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.93"
+publish = false
+
+[[bin]]
+name = "hivemind-markitdown"
+path = "src/main.rs"
+
+[dependencies]
+calamine = { version = "=0.36.0", default-features = false }
+csv = "=1.4.0"
+html-to-markdown-rs = { version = "=3.8.3", default-features = false }
+lopdf = { version = "=0.44.0", default-features = false }
+msg_parser = "=0.3.6"
+quick-xml = "=0.41.0"
+serde_json = "=1.0.150"
+zip = { version = "=2.4.2", default-features = false, features = ["deflate"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "z"
+panic = "abort"
+strip = "symbols"

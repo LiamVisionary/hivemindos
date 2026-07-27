@@ -1,0 +1,28 @@
+{
+  "created_at": "2026-07-14T16:06:51.624389+00:00",
+  "request": "Fix the Fleet Hive Reveal all and New machine buttons so they match the styling of the surrounding controls",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "local-project/hivemind-os",
+      "source_path": "src/design-system/ui/button.tsx",
+      "target_path": "src/components/fleet-hive/FleetHiveView.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Retained the canonical Button primitive while adapting its variants into the Fleet toolbar group."
+    },
+    {
+      "source_repo": "local-project/hivemind-os",
+      "source_path": "src/components/fleet-hive/FleetHiveView.tsx",
+      "target_path": "src/components/fleet-hive/FleetHiveView.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the adjacent ViewModeToggle segmented JSX structure for the Hive action group."
+    },
+    {
+      "source_repo": "local-project/hivemind-os",
+      "source_path": "src/features/dashboard/views/AgentsPanel.tsx",
+      "target_path": "src/components/fleet-hive/fleet-hive.css",
+      "reuse_type": "translated_code",
+      "note": "Translated the FleetLayoutToggle inline mono typography and honey state styling into scoped Fleet CSS."
+    }
+  ]
+}

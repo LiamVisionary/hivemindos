@@ -1,10 +1,13 @@
 import "server-only";
 
 import type { Company } from "@/lib/types/company";
+import { activeCompanyApprovalPolicies } from "@/lib/services/company-approval-policies";
 import type { QueenBeePrdTaskDraft } from "@/lib/services/queen-bee/prd-decomposition";
 import { pickConversationAgent } from "@/lib/services/queen-bee/voice-turn";
 import { readRuntimeResponseText, voiceOptimizedAgent } from "@/lib/services/phone/runtime-voice-turn";
-import { transcriptionApiKey } from "@/lib/services/phone/transcription";
+import { optionalEnv } from "@/lib/config/env";
+import { runPreferredOpenAiTextTurn } from "@/lib/services/openai-preferred-chat";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
 /**
  * LLM-authored decomposition of a company's apex goal into concrete, goal-specific
@@ -18,7 +21,7 @@ const AGENT_TURN_TIMEOUT_MS = 30_000;
 const OPENAI_TURN_TIMEOUT_MS = 30_000;
 const OPENAI_FALLBACK_MODEL = "gpt-4o-mini";
 
-type PlannedTask = { title: string; detail: string; role: string };
+type PlannedTask = { title: string; detail: string; role: string; dependsOn: number[] };
 
 const ROLE_SKILL: Record<string, string> = {
   Engineer: "code", Product: "planner", Designer: "writer", QA: "qa",
@@ -43,14 +46,19 @@ function systemPrompt(maxTasks: number): string {
   return [
     "You are the Queen Bee planning the next batch of work for an autonomous, zero-human company.",
     "Turn the company's apex goal into concrete, independently-actionable tasks for its crew.",
-    'Reply with STRICT JSON ONLY (no prose, no markdown fences), matching: {"tasks": [{"title": string, "detail": string, "role": string}]}.',
-    `Rules: return ${Math.min(3, maxTasks)}-${maxTasks} tasks; each title STARTS with an action verb (Implement, Research, Design, Test, Deploy, Write, Launch, Audit, Negotiate, Ship...);`,
+    'Reply with STRICT JSON ONLY (no prose, no markdown fences), matching: {"tasks": [{"title": string, "detail": string, "role": string, "dependsOn": number[]}]}.',
+    `Rules: return ${Math.min(3, maxTasks)}-${maxTasks} tasks; each title is a short verb-first action phrase of 4-9 words naming its concrete object (e.g. "Audit reply rates for the first outreach batch"), never a single word;`,
     "detail is 1-3 sentences of concrete scope tied directly to THIS goal and its metric (no generic filler);",
     "role is one of the crew roles provided; prefer tasks that can run in parallel; make tasks specific to this goal, not boilerplate.",
+    "dependsOn is optional: the 0-based indexes of EARLIER tasks in this same array that must finish first. Use it only for true prerequisites (a task consuming another's output); leave it [] or omit it otherwise — independent tasks run in parallel.",
+    "When company activity history is provided: plan the NEXT increment — build on completed work, do NOT repeat it, unblock or route around blocked items, and follow up on open threads, leads, or customers mentioned there.",
   ].join("\n");
 }
 
-function userPrompt(company: Company): string {
+/** How many lifetime completed-task titles the planner prompt carries. */
+const COMPLETED_INVENTORY_LIMIT = 40;
+
+export function userPrompt(company: Company, history?: string, completedTitles?: readonly string[], salesContentContext?: string): string {
   const apex = company.apexGoal;
   const goal = apex?.title?.trim() || company.name;
   const lines = [
@@ -60,12 +68,81 @@ function userPrompt(company: Company): string {
   if (apex?.metric || apex?.target) lines.push(`Metric: ${apex?.metric || "—"}${apex?.target ? ` → target ${apex.target}` : ""}${apex?.current ? ` (current ${apex.current})` : ""}`);
   const mission = (company.blurb || company.charter || "").trim();
   if (mission) lines.push(`Mission: ${mission}`);
+  const products = company.products?.items ?? [];
+  if (products.length) {
+    lines.push(
+      `Official products & pricing (plan sales/outreach around exactly these): ${products
+        .map((p) => `${p.name} $${p.amountUsd.toLocaleString("en-US")}${p.interval === "month" ? "/mo" : p.interval === "year" ? "/yr" : ""}${p.recommended ? " (recommended)" : ""}`)
+        .join("; ")}`,
+    );
+    lines.push(
+      "If recent activity suggests price is blocking conversions, one good task is a pricing-evidence review (objections, quote-vs-close, checkout drop-off) that ends in a PRICING PROPOSAL for human approval — never a task that changes prices directly.",
+    );
+  }
+  const pendingPricing = company.pricingProposals ?? [];
+  if (pendingPricing.length) {
+    lines.push(
+      `Pricing proposals already awaiting human decision (do not plan duplicate proposals): ${pendingPricing
+        .map((p) => `${p.productName} → $${p.proposedAmountUsd.toLocaleString("en-US")}`)
+        .join("; ")}`,
+    );
+  }
+  // Standing operator directions steer the WORKERS but were invisible to the
+  // PLANNER — so a human teaching "stop cold-emailing restaurants, target law
+  // firms" never stopped the planner re-proposing restaurant outreach. Feed the
+  // durable directions + active approval policies in so the plan respects them.
+  const directives = (company.directives ?? []).map((directive) => directive.text?.trim()).filter(Boolean);
+  if (directives.length) {
+    // Newest last in storage; the planner budget takes the NEWEST 12 (older
+    // lessons age out of planning first). The old head-slice silently dropped
+    // the newest teachings once a company accreted >12 — the human "taught"
+    // and the planner never heard it (WEBS had 25, so 13 were invisible).
+    const budget = directives.slice(-12);
+    lines.push(
+      "",
+      `Standing operator directions (plan consistent with these — they override the goal's default approach)${directives.length > budget.length ? ` — newest ${budget.length} of ${directives.length}` : ""}:`,
+      ...budget.map((text) => `- ${text}`),
+    );
+  }
+  const activePolicies = activeCompanyApprovalPolicies(company);
+  const neverSubjects = activePolicies.filter((policy) => policy.mode === "never").map((policy) => policy.subject);
+  const askSubjects = activePolicies.filter((policy) => policy.mode === "ask").map((policy) => policy.subject);
+  if (neverSubjects.length) {
+    lines.push("", `NEVER plan a task whose purpose is any of these — the company is forbidden from them: ${neverSubjects.join("; ")}.`);
+  }
+  if (askSubjects.length) {
+    lines.push(
+      "",
+      `These need human approval before the crew acts, so any task involving them must end by parking a draft for approval, never by doing it directly: ${askSubjects.join("; ")}.`,
+    );
+  }
   lines.push(`Crew roles available: ${crewRoster(company)}`);
+  // Lifetime inventory of finished work. The recent-activity digest below only
+  // reaches back a few records, so without this the planner re-mints assets the
+  // company built days ago (live 2026-07-06: a second "outreach email templates"
+  // task 3.5 days after the first — the original had rolled off every window).
+  const inventory = (completedTitles ?? []).map((t) => t.trim()).filter(Boolean).slice(0, COMPLETED_INVENTORY_LIMIT);
+  if (inventory.length) {
+    lines.push(
+      "",
+      "Work this company has ALREADY completed (these assets exist — never plan a task that recreates one; plan tasks that USE them or advance past them):",
+      ...inventory.map((t) => `- ${t}`),
+    );
+  }
+  const trimmedHistory = history?.trim();
+  if (trimmedHistory) {
+    lines.push("", "Recent company activity (newest first):", trimmedHistory, "");
+  }
+  const salesContext = salesContentContext?.trim();
+  if (salesContext) {
+    lines.push("", salesContext, "");
+  }
   lines.push("Produce the next batch of tasks that moves this goal toward its target.");
   return lines.join("\n");
 }
 
-function extractTasks(raw: string, maxTasks: number): PlannedTask[] {
+/** Exported for hermetic tests (scripts/test-planner-dependencies.mjs). */
+export function extractTasks(raw: string, maxTasks: number): PlannedTask[] {
   if (!raw) return [];
   // Tolerate code fences / surrounding prose: grab the first {...} block.
   const start = raw.indexOf("{");
@@ -85,17 +162,27 @@ function extractTasks(raw: string, maxTasks: number): PlannedTask[] {
     const raw2 = entry as Record<string, unknown>;
     const title = typeof raw2.title === "string" ? raw2.title.trim() : "";
     if (!title) continue;
+    const index = out.length;
+    // Only EARLIER indexes are dependable: parent task ids are resolved in array
+    // order at dispatch, and a forward/self edge could never be satisfied.
+    const dependsOn = Array.isArray(raw2.dependsOn)
+      ? [...new Set(raw2.dependsOn.filter(
+        (value): value is number => typeof value === "number" && Number.isInteger(value) && value >= 0 && value < index,
+      ))].sort((a, b) => a - b)
+      : [];
     out.push({
       title: title.slice(0, 110),
       detail: typeof raw2.detail === "string" ? raw2.detail.trim() : "",
       role: typeof raw2.role === "string" ? raw2.role.trim() : "",
+      dependsOn,
     });
     if (out.length >= maxTasks) break;
   }
   return out;
 }
 
-function toDrafts(tasks: PlannedTask[], company: Company): QueenBeePrdTaskDraft[] {
+/** Exported for hermetic tests (scripts/test-planner-dependencies.mjs). */
+export function toDrafts(tasks: PlannedTask[], company: Company): QueenBeePrdTaskDraft[] {
   const apex = company.apexGoal;
   const goal = apex?.title?.trim() || company.name;
   const metricLine = apex?.metric || apex?.target ? ` (metric: ${apex?.metric || "—"}${apex?.target ? ` → ${apex.target}` : ""})` : "";
@@ -108,30 +195,23 @@ function toDrafts(tasks: PlannedTask[], company: Company): QueenBeePrdTaskDraft[
       "Complete this scoped task and record the result on the Work Board.",
     ].join("\n"),
     skills: ["company-goal", ROLE_SKILL[t.role] || "code"],
-    dependsOnDraftIndexes: [],
+    dependsOnDraftIndexes: t.dependsOn,
   }));
 }
 
 async function runOpenAiDecompose(system: string, user: string): Promise<string> {
-  const apiKey = await transcriptionApiKey().catch(() => "");
-  if (!apiKey) return "";
   try {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
-      body: JSON.stringify({
-        model: process.env.OPENAI_VOICE_CHAT_MODEL || OPENAI_FALLBACK_MODEL,
-        messages: [{ role: "system", content: system }, { role: "user", content: user }],
-        max_tokens: 900,
-        temperature: 0.3,
-        response_format: { type: "json_object" },
-      }),
-      cache: "no-store",
-      signal: AbortSignal.timeout(OPENAI_TURN_TIMEOUT_MS),
+    const result = await runPreferredOpenAiTextTurn({
+      model: optionalEnv("OPENAI_VOICE_CHAT_MODEL") || OPENAI_FALLBACK_MODEL,
+      messages: [{ role: "system", content: system }, { role: "user", content: user }],
+      cacheScope: "company-goal-planner",
+      timeoutMs: OPENAI_TURN_TIMEOUT_MS,
+      maxTokens: 900,
+      temperature: 0.3,
+      jsonMode: true,
+      errorContext: "Company goal planner",
     });
-    if (!response.ok) return "";
-    const data = (await response.json().catch(() => null)) as { choices?: Array<{ message?: { content?: string } }> } | null;
-    return data?.choices?.[0]?.message?.content?.trim() || "";
+    return result.text;
   } catch {
     return "";
   }
@@ -139,12 +219,12 @@ async function runOpenAiDecompose(system: string, user: string): Promise<string>
 
 export async function llmDecomposeApexGoal(
   company: Company,
-  opts: { origin?: string; vaultPath?: string; maxTasks?: number } = {},
+  opts: { origin?: string; vaultPath?: string; maxTasks?: number; history?: string; completedTitles?: readonly string[]; salesContentContext?: string } = {},
 ): Promise<QueenBeePrdTaskDraft[] | null> {
   if (!company.apexGoal?.title?.trim()) return null;
   const maxTasks = Math.max(1, Math.min(opts.maxTasks ?? 6, 8));
   const system = systemPrompt(maxTasks);
-  const user = userPrompt(company);
+  const user = userPrompt(company, opts.history, opts.completedTitles, opts.salesContentContext);
 
   // 1. Brain: the company's own chat-capable fleet agent (agent-scoped model),
   //    via the same /api/chat/agent-runtime path queen-bee's pilot/voice turns use.
@@ -154,7 +234,9 @@ export async function llmDecomposeApexGoal(
       try {
         const response = await fetch(new URL("/api/chat/agent-runtime", opts.origin), {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          // Self-fetches 401 without the server's own device token since the
+          // API auth gate moved to src/proxy.ts.
+          headers: { "content-type": "application/json", ...internalApiAuthHeaders() },
           body: JSON.stringify({
             agent: voiceOptimizedAgent(agent),
             messages: [{ role: "system", content: system }, { role: "user", content: user }],

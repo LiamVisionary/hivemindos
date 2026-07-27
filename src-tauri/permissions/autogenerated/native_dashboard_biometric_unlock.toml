@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-native-dashboard-biometric-unlock"
+description = "Enables the native_dashboard_biometric_unlock command without any pre-configured scope."
+commands.allow = ["native_dashboard_biometric_unlock"]
+
+[[permission]]
+identifier = "deny-native-dashboard-biometric-unlock"
+description = "Denies the native_dashboard_biometric_unlock command without any pre-configured scope."
+commands.deny = ["native_dashboard_biometric_unlock"]

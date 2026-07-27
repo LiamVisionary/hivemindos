@@ -1,0 +1,502 @@
+.panel {
+  display: grid;
+  gap: 16px;
+  animation: brainAugFade 0.28s ease both;
+}
+
+@keyframes brainAugFade {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hero,
+.detailCard,
+.recommendationCard,
+.roiCard,
+.clusterCard,
+.roiStats span {
+  border: 1px solid var(--brain-line, rgba(238, 232, 220, 0.08));
+  border-radius: 8px;
+  background: var(--brain-panel, #14161c);
+}
+
+.hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+}
+
+.hero h3,
+.detailHead h4 {
+  margin: 0;
+  color: var(--brain-fg, #f3f0e9);
+  font-family: var(--f-display, system-ui, sans-serif);
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.2;
+}
+
+.detailHead h4 {
+  font-size: 18px;
+}
+
+.hero p,
+.recommendationCard p,
+.roiCard p,
+.empty,
+.notice {
+  color: var(--brain-fg-3, #76726a);
+  font-size: 13px;
+  line-height: 1.55;
+  margin: 8px 0 0;
+}
+
+.hero p {
+  max-width: 68ch;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--brain-fg-4, #545049);
+  font-family: var(--f-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.searchRow {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.searchRow > span,
+.detailHead small,
+.clusterCard small,
+.nodeList small,
+.nodeList time,
+.recommendationCard small,
+.roiCard small,
+.roiActions em {
+  color: var(--brain-fg-4, #545049);
+  font-size: 11.5px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.searchBox {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--brain-panel-2, #181b22) 84%, transparent);
+  color: var(--brain-honey, #e7b45c);
+  padding: 0 10px;
+}
+
+.searchBox input {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--brain-fg, #f3f0e9);
+  font: inherit;
+  font-size: 12.5px;
+  outline: 0;
+  padding: 10px 0;
+}
+
+.searchBox input::placeholder {
+  color: var(--brain-fg-4, #545049);
+}
+
+.atlasGrid {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.72fr) minmax(0, 1.28fr);
+  gap: 12px;
+}
+
+.clusterRail,
+.nodeList,
+.recommendationGrid,
+.roiGrid {
+  display: grid;
+  gap: 10px;
+}
+
+.clusterCard {
+  display: grid;
+  gap: 6px;
+  cursor: pointer;
+  padding: 12px;
+  text-align: left;
+}
+
+.clusterCard.active {
+  border-color: color-mix(in srgb, var(--brain-honey, #e7b45c) 48%, var(--brain-line));
+  background: color-mix(in srgb, var(--brain-honey, #e7b45c) 10%, var(--brain-panel));
+}
+
+.clusterCard span,
+.detailHead,
+.roiStats span,
+.statusPill,
+.switchLine,
+.dreamControls,
+.recommendationCard,
+.roiActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.clusterCard span {
+  color: var(--brain-fg, #f3f0e9);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.clusterCard strong {
+  color: var(--brain-honey, #e7b45c);
+  font-family: var(--f-display, system-ui, sans-serif);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.detailCard {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.detailHead {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.detailHead > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.tile {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
+  border-radius: 8px;
+  background: var(--brain-panel-2, #181b22);
+  color: var(--brain-honey, #e7b45c);
+}
+
+.nodeList button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto minmax(88px, auto);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid var(--brain-line, rgba(238, 232, 220, 0.08));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--brain-panel-2, #181b22) 80%, transparent);
+  color: var(--brain-fg-2, #a7a39a);
+  cursor: pointer;
+  padding: 10px;
+  text-align: left;
+}
+
+.nodeList button:hover,
+.nodeList button:focus-visible,
+.clusterCard:hover,
+.clusterCard:focus-visible {
+  border-color: var(--brain-line-3, rgba(238, 232, 220, 0.22));
+  outline: none;
+}
+
+.nodeList span,
+.roiCard > div:nth-child(2),
+.recommendationCard div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.nodeList strong,
+.recommendationCard strong,
+.roiCard strong {
+  color: var(--brain-fg, #f3f0e9);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.nodeList em {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--brain-honey, #e7b45c);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.statusPill {
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brain-panel-2, #181b22) 86%, transparent);
+  color: var(--brain-fg-3, #76726a);
+  font-size: 12px;
+  padding: 8px 12px;
+}
+
+.switchLine {
+  flex: 0 0 auto;
+  border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
+  border-radius: 999px;
+  color: var(--brain-fg-2, #a7a39a);
+  cursor: pointer;
+  font-size: 12.5px;
+  padding: 8px 12px;
+}
+
+.switchLine input {
+  accent-color: var(--brain-honey, #e7b45c);
+}
+
+.dreamControls {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  border: 1px solid var(--brain-line, rgba(238, 232, 220, 0.08));
+  border-radius: 8px;
+  background: var(--brain-panel, #14161c);
+  padding: 12px;
+}
+
+.dreamControls[data-disabled] {
+  opacity: 0.68;
+}
+
+.segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brain-panel-2, #181b22) 86%, transparent);
+  padding: 3px;
+}
+
+.segmented button {
+  min-height: 29px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--brain-fg-3, #76726a);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 12px;
+  text-transform: capitalize;
+}
+
+.segmented button[data-on] {
+  border-color: color-mix(in srgb, var(--brain-honey, #e7b45c) 45%, var(--brain-line));
+  background: color-mix(in srgb, var(--brain-honey, #e7b45c) 10%, transparent);
+  color: var(--brain-honey, #e7b45c);
+}
+
+.segmented button:disabled {
+  cursor: default;
+}
+
+.recommendationGrid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.recommendationCard {
+  align-items: flex-start;
+  padding: 14px;
+}
+
+.recommendationCard p,
+.roiCard p {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.recommendationCard [data-slot="button"] {
+  margin-left: auto;
+}
+
+.roiStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.roiStats span {
+  min-height: 56px;
+  color: var(--brain-fg-3, #76726a);
+  font-size: 12px;
+  padding: 12px;
+}
+
+.roiStats strong {
+  color: var(--brain-honey, #e7b45c);
+  font-family: var(--f-display, system-ui, sans-serif);
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.roiGrid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.roiCard {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 14px;
+}
+
+.roiRank {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brain-honey, #e7b45c) 14%, var(--brain-panel-2));
+  color: var(--brain-honey, #e7b45c);
+  font-family: var(--f-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.roiMeter,
+.roiActions {
+  grid-column: 1 / -1;
+}
+
+.roiMeter {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brain-panel-2, #181b22) 80%, transparent);
+}
+
+.roiMeter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--brain-cyan, #6fcdba), var(--brain-honey, #e7b45c));
+}
+
+.roiActions {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.skeleton {
+  min-height: 170px;
+}
+
+.skeleton span,
+.skeleton b,
+.skeleton i {
+  display: block;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(148, 163, 184, 0.08), rgba(148, 163, 184, 0.18), rgba(148, 163, 184, 0.08));
+  background-size: 220% 100%;
+  animation: brainAugShimmer 1.5s ease-in-out infinite;
+}
+
+.skeleton span {
+  width: 36px;
+  height: 36px;
+}
+
+.skeleton b,
+.skeleton i {
+  grid-column: 1 / -1;
+  height: 12px;
+}
+
+.skeleton i {
+  width: 70%;
+}
+
+@keyframes brainAugShimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  100% {
+    background-position: 220% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel,
+  .skeleton span,
+  .skeleton b,
+  .skeleton i {
+    animation: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .hero,
+  .detailHead,
+  .recommendationCard,
+  .dreamControls {
+    align-items: flex-start;
+  }
+
+  .hero,
+  .atlasGrid,
+  .searchRow,
+  .roiStats,
+  .recommendationGrid,
+  .roiGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero {
+    display: grid;
+  }
+
+  .nodeList button {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .nodeList em,
+  .nodeList time {
+    grid-column: 2;
+  }
+
+  .recommendationCard {
+    display: grid;
+  }
+
+  .recommendationCard [data-slot="button"] {
+    margin-left: 0;
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "created_at": "2026-07-12T16:53:36.509764+00:00",
+  "request": "Create a skill in HivemindOS packaged skills from the supplied TikTok app ads growth article.",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "shared-brain",
+      "source_path": "Skills/apple-ads-revenuecat-growth-loop/SKILL.md",
+      "target_path": "packaged-skills/optional/gtm/hivemindos/tiktok-app-ads-growth-loop/SKILL.md",
+      "reuse_type": "adapted_code",
+      "note": "readiness scoring, contribution economics, attribution evidence and approval gates"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "packaged-skills/optional/media/hivemindos/ai-ugc-production-pipeline/SKILL.md",
+      "target_path": "packaged-skills/optional/gtm/hivemindos/tiktok-app-ads-growth-loop/SKILL.md",
+      "reuse_type": "adapted_code",
+      "note": "six-creative matrix, provider-neutral media discovery and external side-effect gates"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "packaged-skills/optional/gtm/hivemindos/organic-reach-gtm/SKILL.md",
+      "target_path": "packaged-skills/optional/gtm/hivemindos/tiktok-app-ads-growth-loop/SKILL.md",
+      "reuse_type": "adapted_code",
+      "note": "no-fabricated-proof boundary and authentic engagement principles"
+    }
+  ]
+}

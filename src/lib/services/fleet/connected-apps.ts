@@ -1,4 +1,5 @@
 import { hivemindLinkControlUrl } from "@/lib/services/hivemind-link-control";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
 export type ConnectedHostedApp = {
   id?: string;
@@ -120,9 +121,10 @@ function appName(app: CollectorApp, port: number) {
   return clean(app.name) || `App ${port}`;
 }
 
-async function fetchJson<T>(url: string, timeoutMs = RAW_DISCOVERY_TIMEOUT_MS): Promise<T> {
+async function fetchJson<T>(url: string, timeoutMs = RAW_DISCOVERY_TIMEOUT_MS, headers?: Record<string, string>): Promise<T> {
   const response = await fetch(url, {
     cache: "no-store",
+    headers,
     signal: AbortSignal.timeout(timeoutMs),
   });
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
@@ -196,11 +198,33 @@ function rawHostedApp(app: CollectorApp, machine: FleetMachine, collectorUrl: st
   };
 }
 
-export async function discoverRawConnectedApps(origin: string, options?: { selfOnly?: boolean; timeoutMs?: number }): Promise<ConnectedHostedApp[]> {
+export async function discoverRawConnectedApps(origin: string, options?: {
+  selfOnly?: boolean;
+  timeoutMs?: number;
+  /**
+   * Known machine host (dns name) to query DIRECTLY instead of running the
+   * fleet-wide discovery sweep. A full `fresh=1` fleet discovery measured
+   * ~10s; when the caller already knows which machine hosts the app (encoded
+   * in the connected-app id), probing that machine's collector ports costs
+   * ~0.5-1.5s. Falls out naturally when the host is stale: no apps come back
+   * and the caller retries without the hint.
+   */
+  directHost?: string;
+  /**
+   * Ask collectors for their cached app list instead of a refresh rescan.
+   * Resolving a KNOWN app id doesn't need a rescan, and the rescan is the
+   * slow part of a collector /apps call (measured ~3.7s vs sub-second).
+   */
+  cachedAppsOnly?: boolean;
+}): Promise<ConnectedHostedApp[]> {
   const fleetUrl = new URL("/api/fleet/discover?includeSnapshots=0&fresh=1", origin);
-  const fleet = options?.selfOnly
+  const directHost = options?.directHost?.trim().replace(/\.$/, "") || "";
+  const fleet = options?.selfOnly || directHost
     ? { machines: [] }
-    : await fetchJson<{ machines?: FleetMachine[] }>(fleetUrl.toString(), options?.timeoutMs ?? RAW_DISCOVERY_TIMEOUT_MS).catch(() => ({ machines: [] }));
+    // Self-fetch of our own /api/fleet/discover: needs the server's device
+    // token since the API auth gate moved to src/proxy.ts. Collector fetches
+    // stay tokenless — the device token must not leak to non-dashboard hosts.
+    : await fetchJson<{ machines?: FleetMachine[] }>(fleetUrl.toString(), options?.timeoutMs ?? RAW_DISCOVERY_TIMEOUT_MS, internalApiAuthHeaders()).catch(() => ({ machines: [] }));
   const selfCollector: FleetMachine = {
     collector: "ready",
     collectorHost: "localhost",
@@ -210,15 +234,14 @@ export async function discoverRawConnectedApps(origin: string, options?: { selfO
       collectorUrl: "http://127.0.0.1:8787",
     },
   };
-  const machines = [
-    selfCollector,
-    ...(options?.selfOnly ? [] : (fleet.machines ?? []).filter((machine) => normalizeBaseUrl(machine.device?.collectorUrl) !== selfCollector.device?.collectorUrl)),
-  ];
-  const appGroups = await Promise.all(machines.map(async (machine) => {
+  const fetchMachineApps = async (machine: FleetMachine): Promise<ConnectedHostedApp[]> => {
     const collectorUrl = normalizeBaseUrl(machine.device?.collectorUrl);
     if (machine.collector !== "ready" || !collectorUrl) return [];
     try {
-      const payload = await fetchJson<{ apps?: CollectorApp[] }>(collectorAppsUrl(collectorUrl, true), options?.timeoutMs ?? RAW_DISCOVERY_TIMEOUT_MS);
+      const payload = await fetchJson<{ apps?: CollectorApp[] }>(
+        collectorAppsUrl(collectorUrl, !options?.cachedAppsOnly),
+        options?.timeoutMs ?? RAW_DISCOVERY_TIMEOUT_MS,
+      );
       return (payload.apps ?? []).flatMap((app) => {
         const hosted = rawHostedApp(app, machine, collectorUrl);
         return hosted ? [hosted] : [];
@@ -226,7 +249,31 @@ export async function discoverRawConnectedApps(origin: string, options?: { selfO
     } catch {
       return [];
     }
-  }));
+  };
+  if (directHost && !options?.selfOnly) {
+    // Race the port variants of the one known machine: the first collector
+    // that answers with apps wins; dead ports must not gate the result on
+    // their timeouts.
+    const directMachines: FleetMachine[] = LINK_PEER_COLLECTOR_PORTS.map((port) => ({
+      collector: "ready",
+      collectorHost: directHost,
+      device: {
+        name: directHost.split(".")[0] || directHost,
+        dnsName: directHost,
+        collectorUrl: `http://${directHost}:${port}`,
+      },
+    }));
+    return await Promise.any(directMachines.map(async (machine) => {
+      const apps = await fetchMachineApps(machine);
+      if (!apps.length) throw new Error(`No apps from ${machine.device?.collectorUrl}.`);
+      return apps;
+    })).catch(() => []);
+  }
+  const machines = [
+    selfCollector,
+    ...(options?.selfOnly ? [] : (fleet.machines ?? []).filter((machine) => normalizeBaseUrl(machine.device?.collectorUrl) !== selfCollector.device?.collectorUrl)),
+  ];
+  const appGroups = await Promise.all(machines.map(fetchMachineApps));
   const linkPeerApps = options?.selfOnly ? [] : await discoverLinkPeerApps().catch(() => []);
   const byId = new Map<string, ConnectedHostedApp>();
   for (const app of [...appGroups.flat(), ...linkPeerApps]) {

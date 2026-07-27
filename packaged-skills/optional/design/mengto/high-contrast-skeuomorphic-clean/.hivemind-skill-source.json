@@ -1,0 +1,21 @@
+{
+  "upstreamName": "high-contrast-skeuomorphic-clean",
+  "upstreamSlug": "high-contrast-skeuomorphic-clean",
+  "hiveSlug": "high-contrast-skeuomorphic-clean",
+  "sourceLabel": "mengto",
+  "sourceUrl": "https://github.com/MengTo/Skills/blob/6ad391b6c78cc716327180d72db3f7fa26bc3fdd/agent-skills/web-design/high-contrast-skeuomorphic-clean/SKILL.md",
+  "repository": "https://github.com/MengTo/Skills",
+  "installCommand": "npx skills add https://github.com/MengTo/Skills --skill high-contrast-skeuomorphic-clean",
+  "importedAt": "2026-07-07T16:32:45.736Z",
+  "refreshedAt": "2026-07-07T16:33:23.330Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/mengto/high-contrast-skeuomorphic-clean",
+  "packageGroup": "design",
+  "upstreamCategory": "web-design",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "6ad391b6c78cc716327180d72db3f7fa26bc3fdd",
+  "normalized": "verbatim-frontmatter",
+  "description": "Create a high-contrast clean skeuomorphic design system with molded dark surfaces, crisp light separation, tactile inset depth, and restrained signal accents."
+}

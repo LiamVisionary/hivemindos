@@ -289,7 +289,7 @@
 
 .kanbanColumnHeader {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
   align-items: start;
   gap: 8px 10px;
   min-height: 0;
@@ -351,10 +351,30 @@
   cursor: pointer;
 }
 
+.kanbanClearColumnTasks {
+  min-height: 28px;
+  border: 1px solid rgba(238, 232, 220, 0.14);
+  border-radius: 6px;
+  background: rgba(9, 13, 20, 0.3);
+  color: #cbd5e1;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.15;
+  padding: 4px 8px;
+  white-space: normal;
+}
+
 .kanbanAddColumnTask:hover,
-.kanbanEmptyAction:hover {
+.kanbanEmptyAction:hover,
+.kanbanClearColumnTasks:hover:not(:disabled) {
   border-color: rgba(111, 205, 186, 0.5);
   background: rgba(111, 205, 186, 0.12);
+}
+
+.kanbanClearColumnTasks:disabled {
+  cursor: wait;
+  opacity: 0.52;
 }
 
 .kanbanAddColumnTask svg,
@@ -517,16 +537,16 @@
 
 .kanbanPickupPreview {
   display: inline-flex;
-  max-width: min(100%, 210px);
+  max-width: min(100%, 180px);
   align-items: center;
-  gap: 7px;
+  gap: 5px;
   margin-right: auto;
   border: 1px solid rgba(250, 204, 21, 0.34);
   border-radius: 999px;
   background: rgba(250, 204, 21, 0.1);
-  box-shadow: 0 0 22px rgba(250, 204, 21, 0.14);
+  box-shadow: 0 0 14px rgba(250, 204, 21, 0.12);
   color: #fde68a;
-  padding: 4px 9px 4px 5px;
+  padding: 2px 8px 2px 4px;
   animation: pickupPreviewEnter 0.32s cubic-bezier(0.2, 1.35, 0.36, 1) both;
 }
 
@@ -543,8 +563,8 @@
 }
 
 .kanbanPickupPreview img {
-  width: 26px;
-  height: 26px;
+  width: 16px;
+  height: 16px;
   flex: 0 0 auto;
   object-fit: contain;
   transform-origin: 50% 80%;
@@ -553,11 +573,15 @@
 
 .kanbanPickupPreview small {
   min-width: 0;
-  overflow-wrap: anywhere;
+  flex: 0 1 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: #fde68a;
-  font-size: 10px;
-  font-weight: 900;
-  line-height: 1.15;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
   text-transform: uppercase;
 }
 
@@ -842,6 +866,13 @@
   padding-top: 9px;
 }
 
+/* `display: grid` above outranks the UA `[hidden]` rule, so a Needs-You card's
+   hidden message row would otherwise render as an empty bordered strip below
+   the card. Honor the attribute so the space collapses. */
+.kanbanMessageRow[hidden] {
+  display: none;
+}
+
 .kanbanCardMarkdown {
   display: -webkit-box;
   overflow: hidden;
@@ -938,7 +969,7 @@
   gap: 14px;
   height: 100%;
   min-height: 0;
-  padding: 0 24px 24px;
+  padding: 16px 24px 24px;
 }
 
 .workBoardShell > [data-work-section-header="true"] {
@@ -1458,7 +1489,7 @@
 
 .workBoardPanel .kanbanColumnHeader {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
   align-items: start;
   gap: 8px 10px;
   min-height: 68px;
@@ -1517,6 +1548,17 @@
   border-color: rgba(238, 232, 220, 0.12);
   background: rgba(255, 255, 255, 0.026);
   color: var(--lane-title);
+}
+
+.workBoardPanel .kanbanClearColumnTasks {
+  min-height: 24px;
+  align-self: start;
+  border-color: rgba(238, 232, 220, 0.12);
+  background: rgba(255, 255, 255, 0.026);
+  color: var(--kb-muted);
+  font-size: 10.5px;
+  font-weight: 850;
+  padding: 3px 7px;
 }
 
 .workBoardPanel .kanbanCards {
@@ -2229,7 +2271,9 @@
 .kanbanCardShell:has([data-kanban-machine-menu="true"] [aria-expanded="true"]),
 .kanbanCard:has([data-kanban-machine-menu="true"] [aria-expanded="true"]),
 .kanbanCardShell:has([data-kanban-card-attachment-menu="true"] [aria-expanded="true"]),
-.kanbanCard:has([data-kanban-card-attachment-menu="true"] [aria-expanded="true"]) {
+.kanbanCard:has([data-kanban-card-attachment-menu="true"] [aria-expanded="true"]),
+.kanbanCardShell:has([data-slot="cell-menu-trigger"][aria-expanded="true"]),
+.kanbanCard:has([data-slot="cell-menu-trigger"][aria-expanded="true"]) {
   position: relative;
   z-index: 35;
 }
@@ -2237,7 +2281,9 @@
 .workBoardPanel .kanbanColumn:has([data-kanban-machine-menu="true"] [aria-expanded="true"]),
 .workBoardPanel .kanbanCards:has([data-kanban-machine-menu="true"] [aria-expanded="true"]),
 .workBoardPanel .kanbanColumn:has([data-kanban-card-attachment-menu="true"] [aria-expanded="true"]),
-.workBoardPanel .kanbanCards:has([data-kanban-card-attachment-menu="true"] [aria-expanded="true"]) {
+.workBoardPanel .kanbanCards:has([data-kanban-card-attachment-menu="true"] [aria-expanded="true"]),
+.workBoardPanel .kanbanColumn:has([data-slot="cell-menu-trigger"][aria-expanded="true"]),
+.workBoardPanel .kanbanCards:has([data-slot="cell-menu-trigger"][aria-expanded="true"]) {
   overflow: visible;
   z-index: 35;
 }
@@ -2250,14 +2296,20 @@
   grid-template-rows: auto auto auto minmax(0, 1fr);
 }
 .workHistoryList {
-  display: grid;
-  align-content: start;
+  /* Block flow (not grid/flex): an expanded card contains a native <details>
+     body. WebKit sizes grid/flex items by intrinsic content and does NOT count
+     an open <details> body, so the body overflowed and bled over the rows below.
+     Block flow measures the real laid-out height, so each card grows to fit. */
+  display: block;
   grid-row: 4;
-  gap: 14px;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
   padding: 4px 4px 16px;
+}
+
+.workHistoryList > * + * {
+  margin-top: 14px;
 }
 
 .workHistoryItem {
@@ -3896,7 +3948,7 @@
   --kb-cyan-3: #166b5d;
   --kb-danger: #c0524d;
   --kb-danger-2: #8f3a36;
-  --kb-honey: #b07f1c;
+  --kb-honey: #936811; --kb-honey-fill: #e6bb5c;
   --kb-honey-2: #936811;
   --kb-honey-3: #6b4d12;
   border-color: rgba(79, 68, 52, 0.12);
@@ -4024,9 +4076,29 @@
 }
 .workBoardPanel .workBoardHeader { border-bottom-color: var(--fc-line) !important; }
 
+.workBoardPanel:not(.workHistoryPanel) .workBoardShell {
+  display: flex;
+  flex-direction: column;
+}
+
+.workBoardPanel:not(.workHistoryPanel) .kanbanWorkspace {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 /* board + columns */
 .workBoardPanel .kanbanBoard {
-  grid-template-columns: repeat(auto-fit, minmax(252px, 1fr)) !important;
+  /* Uniform, horizontally-scrolling lanes sized to match the work-route card
+     source: a 400px lane renders the standalone card at 374px (its source
+     width). Must NOT use auto-fit template-columns (that made the first N lanes
+     252px while later lanes fell to grid-auto-columns, so "Needs You" squished
+     and "Done" ballooned). A fixed track (no 1fr) keeps every lane identical and
+     never stretches wider than the source on large monitors; 90vw is the
+     narrow-screen floor. */
+  grid-template-columns: none !important;
+  grid-auto-columns: min(400px, 90vw) !important;
   gap: 12px !important;
 }
 .workBoardPanel .kanbanColumn {
@@ -4058,19 +4130,21 @@
   gap: 6px 10px !important;
   align-items: center !important;
 }
-.workBoardPanel .kanbanColumnHeader h3 {
-  font-family: "Space Grotesk", system-ui, sans-serif !important;
-  font-size: 13.5px !important;
+/* Calm mono column label, matching the Work Route source. The extra
+   `.kanbanColumn` ancestor lifts specificity above the header-title override
+   so the letter-spacing lands. */
+.workBoardPanel .kanbanColumn .kanbanColumnHeader h3 {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+  font-size: 10.5px !important;
   font-weight: 600 !important;
-  letter-spacing: -0.01em !important;
-  line-height: 1.2 !important;
-  color: var(--fc-fg) !important;
+  letter-spacing: 1.3px !important;
+  line-height: 1.35 !important;
+  text-transform: uppercase !important;
+  color: var(--fc-fg-2) !important;
 }
+/* Single-row header like the Work Route source — drop the lane description. */
 .workBoardPanel .kanbanColumnHeader p {
-  margin-top: 5px !important;
-  color: var(--fc-fg-3) !important;
-  font-size: 11px !important;
-  line-height: 1.4 !important;
+  display: none !important;
 }
 .workBoardPanel .kanbanColumnDot {
   width: 8px !important;
@@ -4081,20 +4155,20 @@
 .workBoardPanel .kanbanColumnDot.ideas { background: #76726a !important; }
 .workBoardPanel .kanbanColumnDot.ready { background: #a7a39a !important; }
 .workBoardPanel .kanbanColumnDot.working { background: var(--fc-live) !important; }
-.workBoardPanel .kanbanColumnDot.needs-human { background: var(--fc-danger) !important; }
-.workBoardPanel .kanbanColumnDot.done { background: var(--fc-honey) !important; }
+.workBoardPanel .kanbanColumnDot.needs-human { background: var(--fc-honey-fill, var(--fc-honey)) !important; }
+.workBoardPanel .kanbanColumnDot.done { background: var(--fc-honey-fill, var(--fc-honey)) !important; }
 .workBoardPanel .kanbanColumnDot.archived { background: #545049 !important; }
 .workBoardPanel .kanbanColumnCount {
   min-width: auto !important;
   height: auto !important;
-  border: 1px solid var(--fc-line-2) !important;
-  border-radius: 999px !important;
-  background: var(--fc-panel-2) !important;
-  color: var(--fc-fg-3) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--fc-fg-4) !important;
   font-family: "JetBrains Mono", ui-monospace, monospace !important;
-  font-size: 11px !important;
+  font-size: 10.5px !important;
   font-weight: 500 !important;
-  padding: 1px 8px !important;
+  padding: 0 !important;
 }
 .workBoardPanel .kanbanAddColumnTask {
   width: 26px !important;
@@ -4104,10 +4178,27 @@
   background: transparent !important;
   color: var(--fc-fg-3) !important;
 }
-.workBoardPanel .kanbanAddColumnTask:hover {
+.workBoardPanel .kanbanClearColumnTasks {
+  min-height: 26px !important;
+  border: 1px solid var(--fc-line-2) !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  color: var(--fc-fg-3) !important;
+  font-family: "JetBrains Mono", monospace !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  padding: 4px 8px !important;
+}
+.workBoardPanel .kanbanAddColumnTask:hover,
+.workBoardPanel .kanbanClearColumnTasks:hover:not(:disabled) {
   border-color: var(--fc-honey-line) !important;
   background: var(--fc-honey-soft) !important;
   color: var(--fc-honey) !important;
+}
+.workBoardPanel .kanbanClearColumnTasks:disabled {
+  cursor: wait;
+  color: var(--fc-fg-4) !important;
+  opacity: 0.62;
 }
 .workBoardPanel .kanbanCards { padding: 12px 12px 4px !important; gap: 10px !important; }
 
@@ -4180,6 +4271,9 @@
   margin-top: -39px !important;
   padding: 0 7px 7px !important;
 }
+.workBoardPanel .kanbanInlineAdd :global([class*="composerTools"][data-attachment-menu-open="true"]) {
+  z-index: 8 !important;
+}
 .workBoardPanel .kanbanInlineAdd :global([class*="composerIconButton"]) {
   width: 28px !important;
   height: 28px !important;
@@ -4211,7 +4305,7 @@
 .workBoardPanel .kanbanInlineAdd :global([class*="sendButton"]:hover:not(:disabled)),
 .workBoardPanel .kanbanInlineAdd :global([class*="sendButton"]:focus-visible) {
   border-color: var(--fc-honey-line) !important;
-  background: var(--fc-honey) !important;
+  background: var(--fc-honey-fill, var(--fc-honey)) !important;
   color: var(--fc-bg-soft) !important;
 }
 .workBoardPanel .kanbanInlineAdd :global([data-bee-send]:disabled),
@@ -4273,6 +4367,29 @@
   box-shadow: none !important;
   padding: 12px 13px 11px !important;
 }
+/* A Needs-You card renders the Work Route card as its whole body — drop the
+   generic card chrome in every interactive state so only the honey card's own
+   16px border shows. The hover/active/stale chrome otherwise exposed the outer
+   card's 9px radius around the 16px card — two mismatched rounded borders. */
+.workBoardPanel .kanbanCard.workRoute,
+.workBoardPanel .kanbanCard.workRoute:hover,
+.workBoardPanel .kanbanCard.workRoute:focus-visible,
+.workBoardPanel .kanbanCard.workRoute.stale,
+.workBoardPanel .kanbanCard.workRoute.active {
+  gap: 0 !important;
+  padding: 0 !important;
+  border-radius: 16px !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+/* selection cue rides the honey card's own 16px edge, not the outer 9px box */
+.workBoardPanel .kanbanCard.workRoute.active { box-shadow: 0 0 0 1px var(--fc-honey-line) !important; }
+.workBoardPanel .kanbanCard.workRoute .kanbanCardHeader,
+.workBoardPanel .kanbanCard.workRoute .kanbanCardMeta,
+.workBoardPanel .kanbanCard.workRoute .kanbanCardFooter {
+  display: none !important;
+}
 .workBoardPanel .kanbanCard:hover,
 .workBoardPanel .kanbanCard:focus-visible {
   border-color: var(--fc-line-3) !important;
@@ -4282,7 +4399,7 @@
 }
 .workBoardPanel .kanbanCard.active {
   border-color: var(--fc-honey-line) !important;
-  background: color-mix(in srgb, var(--fc-honey) 5%, var(--fc-panel)) !important;
+  background: color-mix(in srgb, var(--fc-honey-fill, var(--fc-honey)) 5%, var(--fc-panel)) !important;
   box-shadow: 0 0 0 1px var(--fc-honey-line) !important;
 }
 .workBoardPanel .kanbanCard.working { box-shadow: none !important; }
@@ -4446,6 +4563,9 @@
 
 /* bulk bar */
 .workBoardPanel .kanbanBulkBar {
+  position: relative;
+  z-index: 4;
+  flex: 0 0 auto;
   border: 1px solid var(--fc-line-2) !important;
   border-radius: var(--fc-radius-sm) !important;
   background: var(--fc-panel-2) !important;
@@ -4463,7 +4583,7 @@
   --fc-fg-2: #5e574b;
   --fc-fg-3: #867d6e;
   --fc-fg-4: #a59b89;
-  --fc-honey: #b07f1c;
+  --fc-honey: #936811; --fc-honey-fill: #e6bb5c;
   --fc-honey-soft: rgba(176, 127, 28, 0.12);
   --fc-honey-line: rgba(176, 127, 28, 0.34);
   --fc-live: #1d8e7c;

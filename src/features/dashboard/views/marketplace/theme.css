@@ -1,0 +1,228 @@
+/* Marketplace — scoped theme.
+   All tokens live under .mkt-root so they never clobber the dashboard's global
+   Tailwind tokens. Values mirror the Zero Human Companies honey/clay handoff
+   (that view's classes are scoped under .zhc-root and its stylesheet only
+   loads with that view, so Marketplace carries its own mirrored copy — the
+   sanctioned "mirror, don't import" path). */
+
+.mkt-root {
+  /* type */
+  --f-display: "Space Grotesk", system-ui, sans-serif;
+  --f-body: "Inter", "Geist", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ---- dark (default) ---- */
+  --bg: #0c0d11;
+  --bg-soft: #101116;
+  --panel: #14161c;
+  --panel-2: #181b22;
+  --panel-hi: #1e222b;
+
+  --line: rgba(238, 232, 220, 0.07);
+  --line-2: rgba(238, 232, 220, 0.13);
+  --line-3: rgba(238, 232, 220, 0.2);
+
+  --fg: #f3f0e9;
+  --fg-2: #a7a39a;
+  --fg-3: #76726a;
+  --fg-4: #545049;
+
+  --honey: #e7b45c;
+  --honey-2: #f0c879;
+  --honey-soft: rgba(231, 180, 92, 0.13);
+  --honey-line: rgba(231, 180, 92, 0.32);
+
+  --live: #6fcdba;
+  --live-soft: rgba(111, 205, 186, 0.14);
+  --danger: #e58e85;
+  --danger-soft: rgba(229, 142, 133, 0.13);
+
+  --btn-bg: #e7b45c;
+  --btn-fg: #1a1305;
+  --btn-line: #e7b45c;
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 18px 50px -28px rgba(0, 0, 0, 0.7);
+
+  color-scheme: dark;
+  color: var(--fg);
+  font-family: var(--f-body);
+}
+
+.mkt-root[data-theme="light"] {
+  /* ---- hive-light / clay ---- */
+  --bg: #f3ecd6;
+  --bg-soft: #ede4c8;
+  --panel: #f9f2e2;
+  --panel-2: #efe6cf;
+  --panel-hi: #fdf8ec;
+
+  --line: rgba(92, 75, 45, 0.18);
+  --line-2: rgba(92, 75, 45, 0.3);
+  --line-3: rgba(92, 75, 45, 0.44);
+
+  --fg: #2a1c05;
+  --fg-2: #4a3a1f;
+  --fg-3: #6e5c3d;
+  --fg-4: #8a7a5a;
+
+  --honey: #bd6a4a;
+  --honey-2: #a1512f;
+  --honey-soft: rgba(189, 106, 74, 0.1);
+  --honey-line: rgba(189, 106, 74, 0.38);
+
+  --live: #0d8e7e;
+  --live-soft: rgba(13, 142, 126, 0.16);
+  --danger: #b42342;
+  --danger-soft: rgba(180, 35, 66, 0.13);
+
+  --btn-bg: #bd6a4a;
+  --btn-fg: #f6ece1;
+  --btn-line: #bd6a4a;
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 18px 50px -30px rgba(80, 60, 20, 0.35);
+
+  color-scheme: light;
+}
+
+/* Mono caption ("mcap") — section labels and tiny metadata. */
+.mkt-root .mcap {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Status dot; .live pulses. */
+.mkt-root .mkt-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.mkt-root .mkt-dot.live {
+  animation: mktPulse 1.8s ease-in-out infinite;
+}
+@keyframes mktPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* --------------------------------------------------------------------------
+   Loading primitives. NEVER render a bare "Loading…" string — use the React
+   helpers in primitives.tsx (Spinner / Skeleton / SkeletonText / LoadingBar).
+   -------------------------------------------------------------------------- */
+@keyframes mktSpin { to { transform: rotate(360deg); } }
+@keyframes mktSkelShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes mktBarSlide {
+  0% { left: -35%; }
+  100% { left: 100%; }
+}
+
+/* Inline rotating ring — inherits currentColor. Unscoped so portaled modals keep it. */
+.mkt-spinner {
+  display: inline-block;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, currentColor 24%, transparent);
+  border-top-color: currentColor;
+  animation: mktSpin 0.66s linear infinite;
+  vertical-align: -0.14em;
+  flex-shrink: 0;
+}
+
+.mkt-root .mkt-skel {
+  background: linear-gradient(
+    90deg,
+    var(--line) 0%,
+    color-mix(in srgb, var(--fg) 8%, var(--line-2)) 50%,
+    var(--line) 100%
+  );
+  background-size: 200% 100%;
+  animation: mktSkelShimmer 1.5s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+.mkt-root .mkt-progress {
+  position: relative;
+  overflow: hidden;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--line);
+}
+.mkt-root .mkt-progress::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -35%;
+  width: 35%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--honey-2), transparent);
+  animation: mktBarSlide 1.15s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Research stage ticker: new stages slide in; the active label shimmers. */
+.mkt-root .mkt-stage-enter {
+  animation: mktStageIn 160ms ease-out;
+}
+@keyframes mktStageIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.mkt-root .mkt-stage-active {
+  background: linear-gradient(
+    90deg,
+    var(--fg-2) 0%,
+    var(--fg) 50%,
+    var(--fg-2) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: mktSkelShimmer 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mkt-spinner,
+  .mkt-root .mkt-skel,
+  .mkt-root .mkt-progress::after,
+  .mkt-root .mkt-dot.live,
+  .mkt-root .mkt-stage-enter { animation: none; }
+  .mkt-root .mkt-skel { background: var(--line-2); }
+  .mkt-root .mkt-progress::after { left: 0; width: 100%; opacity: 0.5; }
+  .mkt-root .mkt-stage-active {
+    animation: none;
+    background: none;
+    color: var(--fg);
+  }
+}
+
+/* Button hover/press feedback (inline styles can't express :hover). */
+.mkt-root button {
+  transition: filter 120ms ease, transform 80ms ease;
+}
+.mkt-root button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.mkt-root button:active:not(:disabled) {
+  transform: translateY(0.5px);
+}
+.mkt-root button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* Drop zone drag-over highlight. */
+.mkt-root .mkt-dropzone {
+  border: 1.5px dashed var(--line-2);
+  border-radius: 12px;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.mkt-root .mkt-dropzone.drag-over {
+  border-color: var(--honey);
+  background: var(--honey-soft);
+}

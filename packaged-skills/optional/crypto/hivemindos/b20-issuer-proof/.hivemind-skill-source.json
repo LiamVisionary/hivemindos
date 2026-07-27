@@ -1,0 +1,19 @@
+{
+  "upstreamName": "B20 Issuer Proof",
+  "upstreamSlug": "b20-issuer-proof",
+  "hiveSlug": "b20-issuer-proof",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/crypto/hivemindos/b20-issuer-proof",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-06-24T00:00:00Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional crypto skills",
+  "sourcePath": "packaged-skills/optional/crypto/hivemindos/b20-issuer-proof",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Uses the HivemindOS authenticated B20 issuer route instead of asking agents to handle private keys.",
+    "Defaults live tests to Base Sepolia while B20 mainnet activation is uncertain.",
+    "Requires a deterministic proof card and explicit confirmation before token creation.",
+    "Records official Base B20 factory, role, params, and bootstrap-init-call details for auditability."
+  ]
+}

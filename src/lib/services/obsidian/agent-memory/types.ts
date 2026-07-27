@@ -28,6 +28,29 @@ export type AgentMemoryEvolutionType = (typeof AGENT_MEMORY_EVOLUTION_TYPES)[num
 export const AGENT_MEMORY_SOURCE_TYPES = ["explicit", "inferred", "composite"] as const;
 export type AgentMemorySourceType = (typeof AGENT_MEMORY_SOURCE_TYPES)[number];
 
+const LEGACY_AGENT_MEMORY_SOURCE_TYPE_ALIASES: Readonly<Record<string, AgentMemorySourceType>> = {
+  conversation: "explicit",
+  analysis: "inferred",
+  observed: "inferred",
+  "reviewed-artifact": "inferred",
+  "reviewed-work-board-result": "inferred",
+  "work-board": "inferred",
+  "work-board-artifact": "inferred",
+  "work-board-research": "inferred",
+  "work-board-result": "inferred",
+  "work-board-task": "inferred",
+};
+
+export function normalizeAgentMemorySourceType(value?: string): AgentMemorySourceType | undefined {
+  if (!value?.trim()) return undefined;
+  const normalized = value.trim().toLowerCase().replace(/[^a-z]+/g, "-");
+  const canonical = LEGACY_AGENT_MEMORY_SOURCE_TYPE_ALIASES[normalized] ?? normalized;
+  if (!(AGENT_MEMORY_SOURCE_TYPES as readonly string[]).includes(canonical)) {
+    throw new Error(`Unsupported memory source type "${value}". Use one of: ${AGENT_MEMORY_SOURCE_TYPES.join(", ")}.`);
+  }
+  return canonical as AgentMemorySourceType;
+}
+
 export const AGENT_MEMORY_ACTOR_ROLES = ["user", "assistant", "agent", "system", "tool"] as const;
 export type AgentMemoryActorRole = (typeof AGENT_MEMORY_ACTOR_ROLES)[number];
 
@@ -50,8 +73,11 @@ export type AgentMemoryUsageSummary = {
 
 export type AgentMemoryScoreDetails = {
   exact?: number;
+  coverage?: number;
+  intent?: number;
   lexical?: number;
   entity?: number;
+  semantic?: number;
   temporal?: number;
   confidence?: number;
   recency?: number;
@@ -78,6 +104,9 @@ export type AgentMemoryRecord = {
   type: AgentMemoryType;
   title: string;
   content: string;
+  /** Exact normalized content identity used for dedupe and provenance. */
+  contentHash?: string;
+  memoryKey?: string;
   confidence: number;
   status: "active" | "superseded" | "archived";
   cognitiveStage?: AgentMemoryCognitiveStage;
@@ -115,6 +144,8 @@ export type AgentMemoryRecord = {
   proofPath?: string;
   actorDid?: string;
   searchScore?: number;
+  /** Full-vault BM25 score normalized against the best direct index hit. */
+  searchScoreNormalized?: number;
   searchCollection?: string;
   usage?: AgentMemoryUsageSummary;
 };
@@ -134,6 +165,8 @@ export type RememberAgentMemoryInput = {
   type?: string;
   title?: string;
   content?: string;
+  /** Stable single-source-of-truth key. A second active write must evolve the current head. */
+  memoryKey?: string;
   confidence?: number;
   cognitiveStage?: string;
   evidenceCount?: number;
@@ -157,6 +190,45 @@ export type RememberAgentMemoryInput = {
   sessionId?: string;
   project?: string;
   proof?: AgentMemoryProofMode;
+  // Fuzzy suspected-duplicate writes are blocked unless this is set. A
+  // canonical-key collision still requires evolve or a genuinely distinct key.
+  allowDuplicate?: boolean;
+  // High-confidence secret shapes block a write unless explicitly overridden.
+  allowSensitiveContent?: boolean;
+  /** Operational-event metadata used by remember-action / record-operation. */
+  operationKey?: string;
+  failureKey?: string;
+  outcome?: string;
+  taskId?: string;
+};
+
+export type RecordAgentOperationalEventInput = RememberAgentMemoryInput;
+
+export type AgentOperationalEvent = {
+  schema: "hivemindos.agent-operational-event.v1";
+  id: string;
+  title: string;
+  summary: string;
+  operationKey: string;
+  failureKey?: string;
+  outcome: "success" | "failure" | "blocked" | "cancelled" | "unknown";
+  taskId?: string;
+  source?: string;
+  agentName?: string;
+  agentId?: string;
+  runtime?: string;
+  project?: string;
+  sessionId?: string;
+  tags: string[];
+  entities: string[];
+  occurredAt: string;
+};
+
+export type ListAgentOperationalEventsInput = {
+  query?: string;
+  project?: string;
+  since?: string;
+  limit?: number;
 };
 
 export type EvolveAgentMemoryInput = RememberAgentMemoryInput & {
@@ -174,11 +246,16 @@ export type RecallAgentMemoryInput = {
   project?: string;
   limit?: number;
   includeArchived?: boolean;
+  includeOperational?: boolean;
   scope?: string;
   temporalMode?: "auto" | "current" | "historical" | "as-of";
   asOf?: string;
+  /** Replay recall against one verified immutable Agent Memory generation. */
+  generationId?: string;
   trackUsage?: boolean;
   usageContext?: string;
+  // Floor applied by answer mode before hits reach model context.
+  minScore?: number;
 };
 
 export type RebuildAgentMemoryIndexInput = {

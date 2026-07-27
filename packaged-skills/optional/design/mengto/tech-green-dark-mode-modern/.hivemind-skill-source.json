@@ -1,0 +1,21 @@
+{
+  "upstreamName": "tech-green-dark-mode-modern",
+  "upstreamSlug": "tech-green-dark-mode-modern",
+  "hiveSlug": "tech-green-dark-mode-modern",
+  "sourceLabel": "mengto",
+  "sourceUrl": "https://github.com/MengTo/Skills/blob/6ad391b6c78cc716327180d72db3f7fa26bc3fdd/agent-skills/web-design/tech-green-dark-mode-modern/SKILL.md",
+  "repository": "https://github.com/MengTo/Skills",
+  "installCommand": "npx skills add https://github.com/MengTo/Skills --skill tech-green-dark-mode-modern",
+  "importedAt": "2026-07-07T16:32:45.736Z",
+  "refreshedAt": "2026-07-07T16:33:23.330Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/mengto/tech-green-dark-mode-modern",
+  "packageGroup": "design",
+  "upstreamCategory": "web-design",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "6ad391b6c78cc716327180d72db3f7fa26bc3fdd",
+  "normalized": "verbatim-frontmatter",
+  "description": "Create a modern dark-mode technical design system with matte-black surfaces, emerald signal accents, mono system labeling, framed dashboard cards, and restrained glow."
+}

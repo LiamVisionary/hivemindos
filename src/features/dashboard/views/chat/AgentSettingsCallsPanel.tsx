@@ -1,20 +1,51 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck
 "use client";
 
 import { useEffect, useState } from "react";
-import QRCode from "qrcode";
-import { Bell, Briefcase, Clock, MessageSquareText, Phone, PlugZap, RefreshCcw, Send, Shield, Volume2, Wand2 } from "lucide-react";
+import type { Dispatch, SetStateAction } from "react";
+import {
+  Bell,
+  Briefcase,
+  ChevronUp,
+  MessageSquareText,
+  Phone,
+  QrCode,
+  RefreshCcw,
+  Send,
+  Shield,
+  Volume2,
+  Wand2,
+  type LucideIcon,
+} from "lucide-react";
 import { buildAgentCallPreferences } from "@/lib/types/agent-runtime";
-import { clawMobilePairingUrl, hubUrlForPairingHost } from "@/lib/phone/pairing-url";
-import { Badge, Btn, Field, GroupLabel, PanelHead, Toggle } from "./AgentSettingsModalPrimitives";
+import type { AgentCallMissedFallback, AgentCallPreferences, AgentProfile } from "@/lib/types/agent-runtime";
+import type { AgentCreateDraft } from "@/features/dashboard/agent-settings-types";
+import type { AgentVoiceFailureDetail } from "@/features/dashboard/hooks/use-agent-voice-failure-notifications";
+import { usePairingQr } from "@/lib/phone/usePairingQr";
+import { Btn, Field, GroupLabel, PanelHead, Toggle } from "./AgentSettingsModalPrimitives";
+import { AgentSettingsCallsVoiceSection } from "./AgentSettingsCallsVoiceSection";
+import {
+  asRecord,
+  fmt12,
+  readLocalTtsCandidates,
+  readLocalTtsLaunchCandidates,
+  readVoiceOptions,
+  type LocalTtsCandidate,
+  type LocalTtsLaunchCandidate,
+  type PhoneStatus,
+} from "./agent-settings-calls-data";
 import styles from "./AgentSettingsCallsPanel.module.css";
 
-const VOICE_RUNTIME_LABELS: Record<string, string> = {
-  "openai-realtime": "OpenAI Realtime",
-  "grok-voice": "Grok Voice",
-  "gemini-live": "Gemini Live",
-  "local-tts": "Local TTS",
+type AgentCallSourceKey = keyof AgentCallPreferences["sources"];
+
+export type AgentSettingsCallsPanelProps = {
+  agentCreateDraft: AgentCreateDraft;
+  agentCreateMachine: { name?: string } | null;
+  onQueenClapWakeEnabledChange?: (enabled: boolean) => unknown;
+  onVoiceFailure?: (detail: AgentVoiceFailureDetail) => void;
+  queenClapWakeEnabled?: boolean;
+  roleModalAgent: AgentProfile | null;
+  setAgentCreateDraft: Dispatch<SetStateAction<AgentCreateDraft>>;
+  updateAgentProfile: (agentId: string, patch: Partial<AgentProfile>) => unknown;
 };
 
 const FALLBACK_OPTIONS = [
@@ -24,157 +55,85 @@ const FALLBACK_OPTIONS = [
   { value: "telegram", label: "Telegram" },
 ];
 
-const CALL_SOURCES = [
+const CALL_SOURCES: Array<{ key: AgentCallSourceKey; label: string; sub: string; Icon: LucideIcon }> = [
   { key: "obsidianBriefing", label: "Obsidian briefing", sub: "Vault deltas and open loops.", Icon: MessageSquareText },
   { key: "codingJobCompletion", label: "Coding completion", sub: "Call when long work finishes.", Icon: Briefcase },
   { key: "blockedAgentDecision", label: "Blocked decision", sub: "Ring when a choice needs you.", Icon: Wand2 },
 ];
 
-const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
+const DAY_OPTIONS = [
+  { value: 1, label: "M", short: "Mon", name: "Monday" },
+  { value: 2, label: "T", short: "Tue", name: "Tuesday" },
+  { value: 3, label: "W", short: "Wed", name: "Wednesday" },
+  { value: 4, label: "T", short: "Thu", name: "Thursday" },
+  { value: 5, label: "F", short: "Fri", name: "Friday" },
+  { value: 6, label: "S", short: "Sat", name: "Saturday" },
+  { value: 0, label: "S", short: "Sun", name: "Sunday" },
+];
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+function pad2(value: number) {
+  return String(value).padStart(2, "0");
 }
 
-function runtimeDefaultVoiceOptions(provider: string) {
-  return [{ id: `runtime-default:${provider}`, provider, voice: "Gateway default", source: "runtime-default" }];
+function summarizeCallDays(days: number[]) {
+  const selected = new Set(days);
+  const hasAll = (values: number[]) => values.every((day) => selected.has(day));
+  if (DAY_OPTIONS.every((day) => selected.has(day.value))) return "every day";
+  if (selected.size === 5 && hasAll([1, 2, 3, 4, 5])) return "weekdays";
+  if (selected.size === 2 && hasAll([6, 0])) return "weekends";
+  return DAY_OPTIONS.filter((day) => selected.has(day.value)).map((day) => day.short).join(", ");
 }
 
-function readVoiceOptions(value: unknown) {
-  const config = asRecord(asRecord(value)?.config);
-  const options = Array.isArray(config?.voiceOptions) ? config.voiceOptions : config?.voiceProviders;
-  if (!Array.isArray(options)) return runtimeDefaultVoiceOptions("openai-realtime");
-  const configuredOptions = options.flatMap((provider) => {
-    const item = asRecord(provider);
-    const id = typeof item?.id === "string" ? item.id : "";
-    const runtime = typeof item?.provider === "string" ? item.provider : "";
-    const voice = typeof item?.voice === "string" ? item.voice : "";
-    const model = typeof item?.model === "string" ? item.model : undefined;
-    const appName = typeof item?.appName === "string" ? item.appName : undefined;
-    const machineName = typeof item?.machineName === "string" ? item.machineName : undefined;
-    const source = item?.source === "runtime-default" ? "runtime-default" : "configured";
-    return id && runtime && voice ? [{ id, provider: runtime, voice, model, appName, machineName, source }] : [];
-  });
-  return configuredOptions.length ? configuredOptions : runtimeDefaultVoiceOptions("openai-realtime");
-}
-
-function readLocalTtsCandidates(value: unknown) {
-  const config = asRecord(asRecord(value)?.config);
-  const candidates = Array.isArray(config?.localTtsCandidates) ? config.localTtsCandidates : [];
-  return candidates.flatMap((candidate) => {
-    const item = asRecord(candidate);
-    const id = typeof item?.id === "string" ? item.id : "";
-    const appId = typeof item?.appId === "string" ? item.appId : "";
-    if (!id || !appId) return [];
-    return [{
-      id,
-      appId,
-      name: typeof item?.name === "string" ? item.name : "Local TTS",
-      machineName: typeof item?.machineName === "string" ? item.machineName : undefined,
-      port: typeof item?.port === "number" ? item.port : undefined,
-      ok: item?.ok === true,
-      error: typeof item?.error === "string" ? item.error : undefined,
-      model: typeof item?.model === "string" ? item.model : "chatterbox-turbo",
-      voice: typeof item?.voice === "string" ? item.voice : "voice01",
-      voiceCount: typeof item?.voiceCount === "number" ? item.voiceCount : undefined,
-      streamingKind: typeof item?.streamingKind === "string" ? item.streamingKind : undefined,
-      streamingImplementation: typeof item?.streamingImplementation === "string" ? item.streamingImplementation : undefined,
-      sampleRate: typeof item?.sampleRate === "number" ? item.sampleRate : 24_000,
-      sampleFormat: typeof item?.sampleFormat === "string" ? item.sampleFormat : "pcm16",
-    }];
-  });
-}
-
-function fmt12(time: string) {
-  const [rawHour, rawMinute] = String(time || "09:00").split(":").map(Number);
-  const hour = Number.isFinite(rawHour) ? rawHour : 9;
-  const minute = Number.isFinite(rawMinute) ? rawMinute : 0;
-  const ap = hour >= 12 ? "PM" : "AM";
-  return { h: ((hour + 11) % 12) + 1, m: String(minute).padStart(2, "0"), ap };
-}
-
-export function AgentSettingsCallsPanel(props: any) {
+export function AgentSettingsCallsPanel(props: AgentSettingsCallsPanelProps) {
   const {
     agentCreateDraft,
     agentCreateMachine,
     onQueenClapWakeEnabledChange,
+    onVoiceFailure,
     queenClapWakeEnabled,
     roleModalAgent,
     setAgentCreateDraft,
     updateAgentProfile,
   } = props;
-  const [phoneQr, setPhoneQr] = useState("");
-  const [phoneHubUrl, setPhoneHubUrl] = useState("");
-  const [phoneConnectError, setPhoneConnectError] = useState("");
-  const [phoneStatus, setPhoneStatus] = useState({ checked: false, connected: false, apnsMissing: [] });
-  const [voiceOptions, setVoiceOptions] = useState(() => runtimeDefaultVoiceOptions("openai-realtime"));
-  const [localTtsCandidates, setLocalTtsCandidates] = useState([]);
+
+  const [section, setSection] = useState<"calls" | "voice">("voice");
+  const [phoneStatus, setPhoneStatus] = useState<PhoneStatus>({ checked: false, connected: false, apnsMissing: [] });
+  const [localTtsDiscoveryStatus, setLocalTtsDiscoveryStatus] = useState<"idle" | "loading" | "ready" | "error">("loading");
+  const [localTtsDiscoveryError, setLocalTtsDiscoveryError] = useState("");
+  const [localTtsCandidates, setLocalTtsCandidates] = useState<LocalTtsCandidate[]>([]);
+  const [localTtsLaunchCandidates, setLocalTtsLaunchCandidates] = useState<LocalTtsLaunchCandidate[]>([]);
   const [callTestBusy, setCallTestBusy] = useState(false);
   const [callTestMessage, setCallTestMessage] = useState("");
   const [callTestTone, setCallTestTone] = useState<"ok" | "error" | "muted">("muted");
+  const [timeOpen, setTimeOpen] = useState(false);
+  const [timeRect, setTimeRect] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
+  // Reveal the pairing QR even when the phone reads "connected": tailnet presence
+  // (lastSeenAt) says nothing about whether the phone's stored hub device token
+  // still matches. When the phone reports "hub rejected your device token", the
+  // fix is to re-scan — so surface a re-pair QR from the connected row too.
+  const [showRepairQr, setShowRepairQr] = useState(false);
 
   const agentCallSettings = buildAgentCallPreferences(agentCreateMachine ? agentCreateDraft.calls : roleModalAgent?.calls);
   const isQueenSettings = !agentCreateMachine && roleModalAgent?.beeRole === "queen";
   const callTimezone = agentCallSettings.timezone || "UTC";
   const selectedTime = fmt12(agentCallSettings.dailyCallTime);
-  const voiceRuntimeOptions = ["openai-realtime", "local-tts", agentCallSettings.voiceRuntime, ...voiceOptions.map((provider) => provider.provider)]
-    .filter((provider, index, list) => provider && list.indexOf(provider) === index);
-  const selectedVoiceOptions = voiceOptions.filter((provider) => provider.provider === agentCallSettings.voiceRuntime);
-  const selectedVoiceOption = voiceOptions.find((provider) => provider.id === agentCallSettings.voiceProviderId)
-    ?? selectedVoiceOptions.find((provider) => provider.voice === agentCallSettings.voiceId)
-    ?? selectedVoiceOptions[0]
-    ?? runtimeDefaultVoiceOptions(agentCallSettings.voiceRuntime)[0];
-  const hasConfiguredVoices = voiceOptions.some((provider) => provider.source === "configured");
+  const selectedDailyCallDays = new Set(agentCallSettings.dailyCallDays);
+  const dailyCallDaysSummary = summarizeCallDays(agentCallSettings.dailyCallDays);
+  const localTtsDiscoveryLoading = localTtsDiscoveryStatus === "loading";
+  const { qr: phoneQr, hubUrl: phoneHubUrl, error: phoneConnectError } = usePairingQr(true);
 
-  const updateAgentCalls = (patch: Record<string, unknown>) => {
+  const updateAgentCalls = (patch: Partial<AgentCallPreferences>) => {
     const next = buildAgentCallPreferences({ ...agentCallSettings, ...patch });
     if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, calls: next }));
     else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, { calls: next });
   };
 
-  const updateCallSource = (source: string, enabled: boolean) => {
+  const updateCallSource = (source: AgentCallSourceKey, enabled: boolean) => {
     updateAgentCalls({ sources: { ...agentCallSettings.sources, [source]: enabled } });
   };
 
-  const updateVoiceRuntime = (voiceRuntime: string) => {
-    const firstVoice = voiceOptions.find((provider) => provider.provider === voiceRuntime)
-      ?? runtimeDefaultVoiceOptions(voiceRuntime)[0];
-    updateAgentCalls({
-      voiceRuntime,
-      voiceProviderId: firstVoice.source === "configured" ? firstVoice.id : undefined,
-      voiceModelId: firstVoice.source === "configured" ? firstVoice.model : undefined,
-      voiceId: firstVoice.source === "configured" ? firstVoice.voice : undefined,
-    });
-  };
-
-  const updateVoiceProvider = (voiceProviderId: string) => {
-    const provider = voiceOptions.find((item) => item.id === voiceProviderId)
-      ?? runtimeDefaultVoiceOptions(agentCallSettings.voiceRuntime)[0];
-    updateAgentCalls({
-      voiceProviderId: provider.source === "configured" ? provider.id : undefined,
-      voiceRuntime: provider.provider,
-      voiceModelId: provider.source === "configured" ? provider.model : undefined,
-      voiceId: provider.source === "configured" ? provider.voice : undefined,
-    });
-  };
-
-  const selectLocalTtsCandidate = (candidate: any) => {
-    if (!candidate.ok) return;
-    updateAgentCalls({
-      voiceRuntime: "local-tts",
-      voiceProviderId: candidate.id,
-      voiceModelId: candidate.model,
-      voiceId: candidate.voice,
-    });
-  };
-
-  const refreshCallConnectionState = async () => {
-    const [statusResponse, voiceResponse] = await Promise.all([
-      fetch("/api/phone?action=device-status", { cache: "no-store" }).catch(() => null),
-      fetch("/api/phone?action=voice-config", { cache: "no-store" }).catch(() => null),
-    ]);
+  const updatePhoneStatusFromResponse = async (statusResponse: Response | null) => {
     const statusData = asRecord(await statusResponse?.json().catch(() => null));
-    const voiceData = asRecord(await voiceResponse?.json().catch(() => null));
     const statusResult = asRecord(statusData?.result) ?? statusData;
     const device = asRecord(statusResult?.device);
     const apns = asRecord(statusResult?.apns);
@@ -186,29 +145,59 @@ export function AgentSettingsCallsPanel(props: any) {
       apnsConfigured: typeof apns?.configured === "boolean" ? apns.configured : undefined,
       apnsMissing: Array.isArray(missingApns) ? missingApns.filter((item) => typeof item === "string") : [],
     });
-    const voicePayload = voiceData?.result ?? voiceData;
-    setVoiceOptions(readVoiceOptions(voicePayload));
-    setLocalTtsCandidates(readLocalTtsCandidates(voicePayload));
   };
 
-  const buildPairingQr = async () => {
+  // ---- Time popover -----------------------------------------------------
+  const adjustHour = (delta: number) => {
+    const [h, m] = agentCallSettings.dailyCallTime.split(":").map(Number);
+    updateAgentCalls({ dailyCallTime: `${pad2(((h || 0) + delta + 24) % 24)}:${pad2(m || 0)}` });
+  };
+  const adjustMinute = (delta: number) => {
+    const [h, m] = agentCallSettings.dailyCallTime.split(":").map(Number);
+    updateAgentCalls({ dailyCallTime: `${pad2(h || 0)}:${pad2(((m || 0) + delta + 60) % 60)}` });
+  };
+  const setAmPm = (ap: "AM" | "PM") => {
+    const [rawHour, m] = agentCallSettings.dailyCallTime.split(":").map(Number);
+    let h = rawHour || 0;
+    const isPm = h >= 12;
+    if (ap === "PM" && !isPm) h += 12;
+    if (ap === "AM" && isPm) h -= 12;
+    updateAgentCalls({ dailyCallTime: `${pad2(h)}:${pad2(m || 0)}` });
+  };
+  const toggleDailyCallDay = (day: number) => {
+    const nextDays = new Set(agentCallSettings.dailyCallDays);
+    if (nextDays.has(day)) nextDays.delete(day);
+    else nextDays.add(day);
+    const orderedDays = DAY_OPTIONS.map((option) => option.value).filter((value) => nextDays.has(value));
+    if (orderedDays.length) updateAgentCalls({ dailyCallDays: orderedDays });
+  };
+
+  // ---- Discovery + pairing ----------------------------------------------
+  const refreshCallConnectionState = async () => {
+    setLocalTtsDiscoveryStatus("loading");
+    setLocalTtsDiscoveryError("");
     try {
-      const response = await fetch("/api/tailscale/devices", { cache: "no-store" });
-      const data = await response.json() as { devices?: Array<{ self?: boolean; ip?: string; dnsName?: string; machineId?: string }> };
-      const self = (data.devices ?? []).find((device) => device?.self) ?? data.devices?.[0];
-      const host = self?.ip || (self?.dnsName ? String(self.dnsName).replace(/\.$/, "") : "") || "";
-      if (!host) {
-        setPhoneConnectError("Couldn't determine this machine's tailnet address. Is Tailscale up?");
-        return;
-      }
-      const hubUrl = hubUrlForPairingHost(host);
-      const name = (self?.dnsName ? String(self.dnsName).split(".")[0] : "") || host;
-      const pairUrl = clawMobilePairingUrl({ hubUrl, name, machineId: self?.machineId });
-      setPhoneHubUrl(hubUrl);
-      setPhoneQr(await QRCode.toDataURL(pairUrl, { width: 320, margin: 2 }));
-      setPhoneConnectError("");
+      const statusRequest = fetch("/api/phone?action=device-status", { cache: "no-store" }).catch(() => null);
+      const voiceRequest = fetch("/api/phone?action=voice-config", { cache: "no-store" }).catch(() => null);
+      const localTtsRequest = fetch("/api/phone/local-tts", { cache: "no-store" }).catch(() => null);
+      const statusResponse = await statusRequest;
+      await updatePhoneStatusFromResponse(statusResponse);
+      const [voiceResponse, localTtsResponse] = await Promise.all([voiceRequest, localTtsRequest]);
+      const voiceData = asRecord(await voiceResponse?.json().catch(() => null));
+      const localTtsData = asRecord(await localTtsResponse?.json().catch(() => null));
+      const voicePayload = voiceData?.result ?? voiceData;
+      // voiceOptions are still parsed to keep the gateway discovery contract warm.
+      readVoiceOptions(voicePayload);
+      const nextLocalTtsCandidates = readLocalTtsCandidates(voicePayload);
+      const nextLocalTtsLaunchCandidates = readLocalTtsLaunchCandidates(localTtsData);
+      setLocalTtsCandidates(nextLocalTtsCandidates);
+      setLocalTtsLaunchCandidates(nextLocalTtsLaunchCandidates);
+      setLocalTtsDiscoveryStatus("ready");
+      return { localTtsCandidates: nextLocalTtsCandidates, localTtsLaunchCandidates: nextLocalTtsLaunchCandidates };
     } catch (error) {
-      setPhoneConnectError(error instanceof Error ? error.message : "Failed to build the pairing code.");
+      setLocalTtsDiscoveryStatus("error");
+      setLocalTtsDiscoveryError(error instanceof Error ? error.message : "Local TTS discovery failed.");
+      return { localTtsCandidates, localTtsLaunchCandidates };
     }
   };
 
@@ -240,10 +229,12 @@ export function AgentSettingsCallsPanel(props: any) {
             name: agent.name,
             runtime: agent.runtime,
             role: agent.workerClass,
-            voiceProviderId: selectedVoiceOption.source === "configured" ? selectedVoiceOption.id : undefined,
+            voiceProviderId: agentCallSettings.voiceProviderId,
             voiceRuntime: agentCallSettings.voiceRuntime,
-            voiceModelId: selectedVoiceOption.source === "configured" ? selectedVoiceOption.model : undefined,
-            voiceId: selectedVoiceOption.source === "configured" ? selectedVoiceOption.voice : undefined,
+            voiceModelId: agentCallSettings.voiceModelId,
+            voiceId: agentCallSettings.voiceId,
+            voiceLanguage: agentCallSettings.voiceLanguage,
+            voiceTextLanguage: agentCallSettings.voiceTextLanguage,
             skillProfilePrompt: agent.skillProfilePrompt,
             preferredSkillSlugs: agent.preferredSkillSlugs,
             aeonRepo: agent.aeonRepo,
@@ -272,208 +263,318 @@ export function AgentSettingsCallsPanel(props: any) {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void refreshCallConnectionState();
-      void buildPairingQr();
     }, 0);
     return () => window.clearTimeout(timer);
+    // Mount-only discovery; manual Refresh handles later availability checks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const isCalls = section === "calls";
+  const phoneChecking = !phoneStatus.checked;
+  const showSchedule = isCalls && phoneStatus.connected && agentCallSettings.enabled;
 
   return (
     <div className={styles.panel}>
       <PanelHead
         eyebrow="Calls"
-        title="Scheduled phone calls"
-        sub="Let this agent ring your phone with status briefings through the HivemindOS Mobile gateway."
-        action={<Btn sm onClick={() => void refreshCallConnectionState()}><RefreshCcw size={13} aria-hidden="true" />Refresh</Btn>}
+        title={isCalls ? "Scheduled phone calls" : "Agent voice"}
+        sub={
+          isCalls
+            ? "Let this agent ring your phone with status briefings through the HivemindOS Mobile gateway."
+            : "Choose the voice and chat brain this agent speaks with — used for calls and Queen Bee voice chat."
+        }
+        action={
+          <Btn sm disabled={localTtsDiscoveryLoading} onClick={() => void refreshCallConnectionState()}>
+            <RefreshCcw size={13} className={localTtsDiscoveryLoading ? "animate-spin" : undefined} aria-hidden="true" />
+            {localTtsDiscoveryLoading ? "Refreshing" : "Refresh"}
+          </Btn>
+        }
       />
 
-      {isQueenSettings && onQueenClapWakeEnabledChange ? (
-        <article className={styles.eventRow} data-on={queenClapWakeEnabled ? "" : undefined}>
-          <span className={styles.eventIcon}><Bell size={16} aria-hidden="true" /></span>
-          <div className={styles.meta}>
-            <div className={styles.eventTitle}>Clap wake</div>
-            <div className={styles.eventSub}>Open Queen Bee voice chat when two quick claps are detected locally.</div>
-          </div>
-          <Toggle on={Boolean(queenClapWakeEnabled)} onChange={() => onQueenClapWakeEnabledChange(!queenClapWakeEnabled)} />
-        </article>
-      ) : null}
-
-      <section className={styles.callLine} data-live={phoneStatus.connected ? "" : undefined} data-off={!agentCallSettings.enabled ? "" : undefined}>
-        <span className={styles.tile}><Phone size={18} aria-hidden="true" /></span>
-        <div className={styles.meta}>
-          <div className={styles.title}>iPhone · HivemindOS Mobile</div>
-          <div className={styles.status}>
-            <span className={["fr-dot", phoneStatus.connected && agentCallSettings.enabled ? "live" : ""].filter(Boolean).join(" ")} />
-            {phoneStatus.connected
-              ? agentCallSettings.enabled
-                ? `Connected${phoneStatus.lastSeenAt ? ` · last seen ${new Date(phoneStatus.lastSeenAt).toLocaleString()}` : ""}`
-                : "Calls paused"
-              : "Waiting for mobile pairing"}
-          </div>
-        </div>
-        {phoneStatus.connected ? (
-          <Btn sm disabled={callTestBusy} onClick={() => void requestAgentTestCall()}>
-            {callTestBusy ? <RefreshCcw size={13} className="animate-spin" aria-hidden="true" /> : <Send size={13} aria-hidden="true" />}
-            {callTestBusy ? "Requesting..." : "Test call"}
-          </Btn>
-        ) : null}
-        <Toggle on={agentCallSettings.enabled} onChange={() => updateAgentCalls({ enabled: !agentCallSettings.enabled })} />
-      </section>
-      {callTestMessage ? <p className={["as-status", callTestTone === "ok" ? styles.messageOk : callTestTone === "error" ? styles.messageError : ""].filter(Boolean).join(" ")}>{callTestMessage}</p> : null}
-
-      {!phoneStatus.connected ? (
-        <section className={styles.setupCard}>
-          <PanelHead eyebrow="Mobile pairing" title="Connect HivemindOS Mobile" sub="Your phone scans the same pairing code from /connect-phone, then the gateway can ring the device for scheduled agent calls." />
-          <ol className={styles.setupSteps}>
-            <li>
-              <b className={styles.stepNumber}>1</b>
-              <div><div className={styles.title}>Install HivemindOS Mobile</div><p>Use the phone you want agents to call.</p></div>
-            </li>
-            <li>
-              <b className={styles.stepNumber}>2</b>
-              <div>
-                <div className={styles.title}>Open Settings, then scan this QR code</div>
-                {phoneConnectError ? <p className={styles.messageError}>{phoneConnectError}</p> : phoneQr ? (
-                  <div className={styles.qrWrap}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={phoneQr} alt="HivemindOS Mobile pairing QR" />
-                    <code>{phoneHubUrl}</code>
-                  </div>
-                ) : <p>Generating pairing code...</p>}
-              </div>
-            </li>
-          </ol>
-        </section>
-      ) : null}
-
-      {agentCallSettings.enabled ? (
-        <>
-          <section className={styles.alarm} data-off={!agentCallSettings.dailyEnabled ? "" : undefined}>
-            <div className={styles.alarmInfo}>
-              <span className="fb-eyebrow">Daily briefing</span>
-              <div className={styles.time}>{selectedTime.h}:{selectedTime.m}<span className={styles.ampm}>{selectedTime.ap}</span></div>
-              <div className={styles.days}>{DAY_LABELS.map((day, index) => <span key={`${day}-${index}`} className={styles.day}>{day}</span>)}</div>
-            </div>
-            <div className={styles.alarmActions}>
-              <Toggle on={agentCallSettings.dailyEnabled} onChange={() => updateAgentCalls({ dailyEnabled: !agentCallSettings.dailyEnabled })} />
-              <label className={styles.timeChange}>
-                <Clock size={12} aria-hidden="true" />Change time
-                <input type="time" value={agentCallSettings.dailyCallTime} onChange={(event) => updateAgentCalls({ dailyCallTime: event.target.value })} />
-              </label>
-            </div>
-            <div className={styles.next}>
-              <Phone size={12} aria-hidden="true" />
-              {agentCallSettings.dailyEnabled
-                ? `Next call · tomorrow ${selectedTime.h}:${selectedTime.m} ${selectedTime.ap} · every day · ${callTimezone}`
-                : "Daily call paused"}
-            </div>
-          </section>
-
-          <div>
-            <GroupLabel>Also ring me when</GroupLabel>
-            <div className={styles.events}>
-              {CALL_SOURCES.map(({ key, label, sub, Icon }) => (
-                <article key={key} className={styles.eventRow} data-on={agentCallSettings.sources[key] ? "" : undefined}>
-                  <span className={styles.eventIcon}><Icon size={16} aria-hidden="true" /></span>
-                  <div className={styles.meta}>
-                    <div className={styles.eventTitle}>{label}</div>
-                    <div className={styles.eventSub}>{sub}</div>
-                  </div>
-                  <Toggle on={Boolean(agentCallSettings.sources[key])} onChange={() => updateCallSource(key, !agentCallSettings.sources[key])} />
-                </article>
-              ))}
-            </div>
-          </div>
-        </>
-      ) : null}
-
-      <div>
-        <GroupLabel>Voice and limits</GroupLabel>
-        <section className={styles.voiceBlock}>
-          <div className={styles.voiceGrid}>
-            <Field label="Runtime">
-              <select className="fb-select" value={agentCallSettings.voiceRuntime} onChange={(event) => updateVoiceRuntime(event.target.value)}>
-                {voiceRuntimeOptions.map((runtime) => <option value={runtime} key={runtime}>{VOICE_RUNTIME_LABELS[runtime] ?? runtime}</option>)}
-              </select>
-            </Field>
-            <Field label="Voice">
-              <select className="fb-select" value={selectedVoiceOption.id} onChange={(event) => updateVoiceProvider(event.target.value)}>
-                {selectedVoiceOptions.map((provider) => (
-                  <option value={provider.id} key={provider.id}>{VOICE_RUNTIME_LABELS[provider.provider] ?? provider.provider} · {provider.voice}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Missed-call fallback">
-              <select className="fb-select" value={agentCallSettings.missedCallFallback} onChange={(event) => updateAgentCalls({ missedCallFallback: event.target.value })}>
-                {FALLBACK_OPTIONS.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}
-              </select>
-            </Field>
-          </div>
-
-          {!hasConfiguredVoices ? (
-            <div className="as-info">
-              <PlugZap size={16} className="ic" aria-hidden="true" />
-              <p>Using the gateway-resolved default voice. Sync custom voices from Hivemind Mobile Settings when you want an explicit provider voice.</p>
-            </div>
-          ) : null}
-
-          {agentCallSettings.voiceRuntime === "local-tts" ? (
-            <div className={styles.localTtsGrid}>
-              {localTtsCandidates.length ? localTtsCandidates.map((candidate) => (
-                <button
-                  type="button"
-                  key={candidate.id}
-                  className={styles.localTtsCard}
-                  data-selected={candidate.id === agentCallSettings.voiceProviderId ? "" : undefined}
-                  disabled={!candidate.ok}
-                  onClick={() => selectLocalTtsCandidate(candidate)}
-                >
-                  <Badge tone={candidate.ok ? "live" : "danger"}>{candidate.ok ? "Validated" : "Unavailable"}</Badge>
-                  <strong>{candidate.name}</strong>
-                  <small>{[candidate.machineName, candidate.port ? `port ${candidate.port}` : ""].filter(Boolean).join(" · ") || "Connected app"}</small>
-                  <dl>
-                    <div><dt>Model</dt><dd>{candidate.model}</dd></div>
-                    <div><dt>Voice</dt><dd>{candidate.voice}</dd></div>
-                    <div><dt>Stream</dt><dd>{candidate.sampleFormat} · {candidate.sampleRate} Hz</dd></div>
-                    <div><dt>Engine</dt><dd>{candidate.streamingImplementation || candidate.streamingKind || "streaming"}</dd></div>
-                  </dl>
-                  {candidate.voiceCount ? <small>{candidate.voiceCount} voices</small> : null}
-                  {!candidate.ok && candidate.error ? <p className={styles.messageError}>{candidate.error}</p> : null}
-                </button>
-              )) : (
-                <div className="as-info">
-                  <Volume2 size={16} className="ic" aria-hidden="true" />
-                  <p>No TTS candidates were discovered yet. Start Universal TTS, then refresh this panel.</p>
-                </div>
-              )}
-            </div>
-          ) : null}
-
-          <div className={styles.quietGrid}>
-            <article className={styles.eventRow} data-on={agentCallSettings.quietHoursEnabled ? "" : undefined}>
-              <span className={styles.eventIcon}><Shield size={16} aria-hidden="true" /></span>
-              <div className={styles.meta}>
-                <div className={styles.eventTitle}>Quiet hours</div>
-                <div className={styles.eventSub}>Hold calls during the quiet window.</div>
-              </div>
-              <Toggle on={agentCallSettings.quietHoursEnabled} onChange={() => updateAgentCalls({ quietHoursEnabled: !agentCallSettings.quietHoursEnabled })} />
-            </article>
-            <Field label="From">
-              <input type="time" className="fb-field fb-mono" value={agentCallSettings.quietHoursStart} disabled={!agentCallSettings.quietHoursEnabled} onChange={(event) => updateAgentCalls({ quietHoursStart: event.target.value })} />
-            </Field>
-            <Field label="To">
-              <input type="time" className="fb-field fb-mono" value={agentCallSettings.quietHoursEnd} disabled={!agentCallSettings.quietHoursEnabled} onChange={(event) => updateAgentCalls({ quietHoursEnd: event.target.value })} />
-            </Field>
-            <Field label="Max calls / day">
-              <input type="number" className="fb-field fb-mono" min="0" max="20" value={agentCallSettings.maxCallsPerDay} onChange={(event) => updateAgentCalls({ maxCallsPerDay: Number(event.target.value) || 0 })} />
-            </Field>
-          </div>
-          {phoneStatus.apnsConfigured === false && phoneStatus.apnsMissing.length ? (
-            <p className={styles.muted}>Gateway push needs {phoneStatus.apnsMissing.join(", ")} for closed-app ringing.</p>
-          ) : (
-            <p className={styles.muted}>No calls between <code>{agentCallSettings.quietHoursStart}</code> and <code>{agentCallSettings.quietHoursEnd}</code>; triggers queue until the window clears.</p>
-          )}
-        </section>
+      <div className={styles.sectionTabs} role="tablist" aria-label="Calls settings section">
+        <button type="button" role="tab" aria-selected={!isCalls} className={styles.sectionTab} data-on={!isCalls ? "" : undefined} onClick={() => setSection("voice")}>
+          <Volume2 size={14} aria-hidden="true" />
+          Voice
+        </button>
+        <button type="button" role="tab" aria-selected={isCalls} className={styles.sectionTab} data-on={isCalls ? "" : undefined} onClick={() => setSection("calls")}>
+          <Phone size={14} aria-hidden="true" />
+          Phone calls
+        </button>
       </div>
+
+      {isCalls ? (
+        <>
+          <section className={styles.callLine} data-live={phoneStatus.connected ? "" : undefined} data-off={!agentCallSettings.enabled ? "" : undefined}>
+            <span className={styles.tile}>
+              <Phone size={18} aria-hidden="true" />
+            </span>
+            <div className={styles.meta}>
+              <div className={styles.title}>iPhone · HivemindOS Mobile</div>
+              <div className={styles.status}>
+                {phoneChecking ? (
+                  <RefreshCcw size={11} className="animate-spin" aria-hidden="true" />
+                ) : (
+                  <span className={["fr-dot", phoneStatus.connected && agentCallSettings.enabled ? "live" : ""].filter(Boolean).join(" ")} />
+                )}
+                {phoneChecking
+                  ? "Checking mobile pairing"
+                  : phoneStatus.connected
+                  ? agentCallSettings.enabled
+                    ? `Connected${phoneStatus.lastSeenAt ? ` · last seen ${new Date(phoneStatus.lastSeenAt).toLocaleString()}` : ""}`
+                    : "Calls paused"
+                  : "Waiting for mobile pairing"}
+              </div>
+            </div>
+            {phoneStatus.connected ? (
+              <>
+                <Btn
+                  sm
+                  title="Re-pair this phone — refresh its hub device token (no data lost)"
+                  aria-pressed={showRepairQr}
+                  onClick={() => setShowRepairQr((current) => !current)}
+                >
+                  <QrCode size={13} aria-hidden="true" />
+                  {showRepairQr ? "Hide QR" : "Re-pair"}
+                </Btn>
+                <Btn sm disabled={callTestBusy} onClick={() => void requestAgentTestCall()}>
+                  {callTestBusy ? <RefreshCcw size={13} className="animate-spin" aria-hidden="true" /> : <Send size={13} aria-hidden="true" />}
+                  {callTestBusy ? "Requesting..." : "Test call"}
+                </Btn>
+              </>
+            ) : null}
+            <Toggle on={agentCallSettings.enabled} onChange={() => updateAgentCalls({ enabled: !agentCallSettings.enabled })} />
+          </section>
+          {callTestMessage ? (
+            <p className={["as-status", callTestTone === "ok" ? styles.messageOk : callTestTone === "error" ? styles.messageError : ""].filter(Boolean).join(" ")}>{callTestMessage}</p>
+          ) : null}
+
+          {(phoneStatus.checked && !phoneStatus.connected) || showRepairQr ? (
+            <section className={styles.setupCard}>
+              <PanelHead
+                eyebrow="Mobile pairing"
+                title={phoneStatus.connected ? "Re-pair HivemindOS Mobile" : "Connect HivemindOS Mobile"}
+                sub={
+                  phoneStatus.connected
+                    ? "Connected, but the phone says the hub rejected its device token? Re-scan this code to refresh the token — nothing is lost, it re-uses the existing pairing."
+                    : "Your phone scans the same pairing code from /connect-phone, then the gateway can ring the device for scheduled agent calls."
+                }
+              />
+              <ol className={styles.setupSteps}>
+                <li>
+                  <b className={styles.stepNumber}>1</b>
+                  <div>
+                    <div className={styles.title}>Install HivemindOS Mobile</div>
+                    <p>Use the phone you want agents to call.</p>
+                  </div>
+                </li>
+                <li>
+                  <b className={styles.stepNumber}>2</b>
+                  <div>
+                    <div className={styles.title}>Open Settings, then scan this QR code</div>
+                    {phoneConnectError ? (
+                      <p className={styles.messageError}>{phoneConnectError}</p>
+                    ) : phoneQr ? (
+                      <div className={styles.qrWrap}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={phoneQr} alt="HivemindOS Mobile pairing QR" />
+                        <code>{phoneHubUrl}</code>
+                      </div>
+                    ) : (
+                      <p className={styles.inlineLoading} role="status" aria-label="Generating phone pairing code">
+                        <RefreshCcw size={12} className="animate-spin" aria-hidden="true" />
+                        Generating pairing code
+                      </p>
+                    )}
+                  </div>
+                </li>
+              </ol>
+            </section>
+          ) : null}
+
+          {showSchedule ? (
+            <>
+              <section className={styles.alarm} data-off={!agentCallSettings.dailyEnabled ? "" : undefined}>
+                <div className={styles.alarmInfo}>
+                  <span className="fb-eyebrow">Daily briefing call</span>
+                  <div className={styles.timePickerWrap}>
+                    <button
+                      type="button"
+                      className={styles.time}
+                      title="Change the call time"
+                      onClick={(event) => {
+                        const rect = event.currentTarget.getBoundingClientRect();
+                        setTimeRect({ left: rect.left, top: rect.bottom });
+                        setTimeOpen((current) => !current);
+                      }}
+                    >
+                      {selectedTime.h}:{selectedTime.m}
+                      <span className={styles.ampm}>{selectedTime.ap}</span>
+                    </button>
+                    {timeOpen ? (
+                      <>
+                        <button type="button" aria-label="Close time picker" className={styles.timeScrim} onClick={() => setTimeOpen(false)} />
+                        <div role="dialog" aria-label="Set call time" className={styles.timePop} style={{ left: timeRect.left, top: timeRect.top + 10 }}>
+                          <div className={styles.timeSteppers}>
+                            <div className={styles.timeStepCol}>
+                              <button type="button" aria-label="Hour up" onClick={() => adjustHour(1)}>
+                                <ChevronUp size={15} aria-hidden="true" />
+                              </button>
+                              <span>{selectedTime.h}</span>
+                              <button type="button" aria-label="Hour down" onClick={() => adjustHour(-1)}>
+                                <ChevronUp size={15} style={{ transform: "rotate(180deg)" }} aria-hidden="true" />
+                              </button>
+                            </div>
+                            <span className={styles.timeColon}>:</span>
+                            <div className={styles.timeStepCol}>
+                              <button type="button" aria-label="Minute up" onClick={() => adjustMinute(5)}>
+                                <ChevronUp size={15} aria-hidden="true" />
+                              </button>
+                              <span>{selectedTime.m}</span>
+                              <button type="button" aria-label="Minute down" onClick={() => adjustMinute(-5)}>
+                                <ChevronUp size={15} style={{ transform: "rotate(180deg)" }} aria-hidden="true" />
+                              </button>
+                            </div>
+                            <div className={styles.timeAmpm}>
+                              <button type="button" className={styles.ampmBtn} data-on={selectedTime.ap === "AM" ? "" : undefined} onClick={() => setAmPm("AM")}>
+                                AM
+                              </button>
+                              <button type="button" className={styles.ampmBtn} data-on={selectedTime.ap === "PM" ? "" : undefined} onClick={() => setAmPm("PM")}>
+                                PM
+                              </button>
+                            </div>
+                          </div>
+                          <Btn variant="primary" sm onClick={() => setTimeOpen(false)}>
+                            Done
+                          </Btn>
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+                  <div className={styles.days} aria-label="Call days">
+                    {DAY_OPTIONS.map((day) => (
+                      <button
+                        key={day.value}
+                        type="button"
+                        className={styles.day}
+                        data-on={selectedDailyCallDays.has(day.value) ? "" : undefined}
+                        aria-pressed={selectedDailyCallDays.has(day.value)}
+                        aria-label={`${selectedDailyCallDays.has(day.value) ? "Disable" : "Enable"} calls on ${day.name}`}
+                        title={day.name}
+                        onClick={() => toggleDailyCallDay(day.value)}
+                      >
+                        {day.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className={styles.alarmActions}>
+                  <Toggle on={agentCallSettings.dailyEnabled} onChange={() => updateAgentCalls({ dailyEnabled: !agentCallSettings.dailyEnabled })} />
+                </div>
+                <div className={styles.next}>
+                  <Phone size={12} aria-hidden="true" />
+                  {agentCallSettings.dailyEnabled
+                    ? `Schedule · ${dailyCallDaysSummary} · ${selectedTime.h}:${selectedTime.m} ${selectedTime.ap} · ${callTimezone}`
+                    : "Daily call paused"}
+                </div>
+              </section>
+
+              <div>
+                <GroupLabel>When to call</GroupLabel>
+                <div className={styles.events}>
+                  {isQueenSettings && onQueenClapWakeEnabledChange ? (
+                    <article className={styles.eventRow} data-on={queenClapWakeEnabled ? "" : undefined}>
+                      <span className={styles.eventIcon}>
+                        <Bell size={16} aria-hidden="true" />
+                      </span>
+                      <div className={styles.meta}>
+                        <div className={styles.eventTitle}>Clap wake</div>
+                        <div className={styles.eventSub}>Open Queen Bee voice chat on two quick claps detected locally.</div>
+                      </div>
+                      <Toggle on={Boolean(queenClapWakeEnabled)} onChange={() => onQueenClapWakeEnabledChange(!queenClapWakeEnabled)} />
+                    </article>
+                  ) : null}
+                  {CALL_SOURCES.map(({ key, label, sub, Icon }) => (
+                    <article key={key} className={styles.eventRow} data-on={agentCallSettings.sources[key] ? "" : undefined}>
+                      <span className={styles.eventIcon}>
+                        <Icon size={16} aria-hidden="true" />
+                      </span>
+                      <div className={styles.meta}>
+                        <div className={styles.eventTitle}>{label}</div>
+                        <div className={styles.eventSub}>{sub}</div>
+                      </div>
+                      <Toggle on={Boolean(agentCallSettings.sources[key])} onChange={() => updateCallSource(key, !agentCallSettings.sources[key])} />
+                    </article>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : isCalls && phoneChecking ? (
+            <div className="as-info" role="status" aria-label="Checking mobile pairing">
+              <RefreshCcw size={16} className="ic animate-spin" aria-hidden="true" />
+              <p>Checking mobile pairing before showing call setup.</p>
+            </div>
+          ) : isCalls && phoneStatus.checked && !phoneStatus.connected ? (
+            <div className="as-info">
+              <Phone size={16} className="ic" aria-hidden="true" />
+              <p>Finish pairing your phone to schedule a daily briefing and event triggers.</p>
+            </div>
+          ) : null}
+
+          <section className={styles.voiceBlock}>
+            <span className="fb-eyebrow">Guardrails</span>
+            <div className={styles.quietGrid}>
+              <article className={styles.eventRow} data-on={agentCallSettings.quietHoursEnabled ? "" : undefined}>
+                <span className={styles.eventIcon}>
+                  <Shield size={16} aria-hidden="true" />
+                </span>
+                <div className={styles.meta}>
+                  <div className={styles.eventTitle}>Quiet hours</div>
+                  <div className={styles.eventSub}>Hold calls during the window.</div>
+                </div>
+                <Toggle on={agentCallSettings.quietHoursEnabled} onChange={() => updateAgentCalls({ quietHoursEnabled: !agentCallSettings.quietHoursEnabled })} />
+              </article>
+              <Field label="From">
+                <input type="time" className="fb-field fb-mono" value={agentCallSettings.quietHoursStart} disabled={!agentCallSettings.quietHoursEnabled} onChange={(event) => updateAgentCalls({ quietHoursStart: event.target.value })} />
+              </Field>
+              <Field label="To">
+                <input type="time" className="fb-field fb-mono" value={agentCallSettings.quietHoursEnd} disabled={!agentCallSettings.quietHoursEnabled} onChange={(event) => updateAgentCalls({ quietHoursEnd: event.target.value })} />
+              </Field>
+              <Field label="Max calls / day">
+                <input type="number" className="fb-field fb-mono" min="0" max="20" value={agentCallSettings.maxCallsPerDay} onChange={(event) => updateAgentCalls({ maxCallsPerDay: Number(event.target.value) || 0 })} />
+              </Field>
+              <Field label="Missed-call fallback">
+                {/* DOM boundary: the option values below are exactly the AgentCallMissedFallback union. */}
+                <select className="fb-select" value={agentCallSettings.missedCallFallback} onChange={(event) => updateAgentCalls({ missedCallFallback: event.target.value as AgentCallMissedFallback })}>
+                  {FALLBACK_OPTIONS.map((option) => (
+                    <option value={option.value} key={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            {phoneStatus.apnsConfigured === false && phoneStatus.apnsMissing.length ? (
+              <p className={styles.muted}>Gateway push needs {phoneStatus.apnsMissing.join(", ")} for closed-app ringing.</p>
+            ) : (
+              <p className={styles.muted}>
+                No calls between <code>{agentCallSettings.quietHoursStart}</code> and <code>{agentCallSettings.quietHoursEnd}</code>; triggers queue until the window clears.
+              </p>
+            )}
+          </section>
+        </>
+      ) : (
+        <AgentSettingsCallsVoiceSection
+          agentCallSettings={agentCallSettings}
+          updateAgentCalls={updateAgentCalls}
+          roleModalAgent={roleModalAgent}
+          localTtsCandidates={localTtsCandidates}
+          localTtsLaunchCandidates={localTtsLaunchCandidates}
+          localTtsDiscoveryStatus={localTtsDiscoveryStatus}
+          localTtsDiscoveryError={localTtsDiscoveryError}
+          onVoiceFailure={onVoiceFailure}
+          refreshCallConnectionState={refreshCallConnectionState}
+        />
+      )}
     </div>
   );
 }

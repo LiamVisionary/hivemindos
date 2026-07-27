@@ -1,12 +1,11 @@
-import { spawn } from "child_process";
-import { join } from "path";
 import { tailnetAutoCleanupEnabled } from "@/lib/services/fleet/tailnet-cleanup";
+import { spawnHiveEnvAdd } from "@/lib/services/hive-env-command";
 
 export const runtime = "nodejs";
 
 function saveAutoCleanupSetting(enabled: boolean) {
   return new Promise<void>((resolve, reject) => {
-    const child = spawn(join(process.cwd(), "scripts", "hive-env-add"), ["--import-stdin"], {
+    const child = spawnHiveEnvAdd(["--import-stdin"], {
       stdio: ["pipe", "pipe", "pipe"],
     });
     let stderr = "";

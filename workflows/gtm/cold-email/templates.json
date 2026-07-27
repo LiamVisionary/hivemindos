@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "provenance": "authored",
+  "license": "MIT (same as this repository)",
+  "verifiedOn": "2026-07-11",
+  "note": "Cold-email building blocks: first-touch skeleton, framework picker, 6-touch sequence spine, subject-line formulas, anti-pattern list, seniority voice caps, domain-warming ramp, and metric triage rows. This bank is authored, not measured — the benchmark targets are widely-circulated rules of thumb, not results from our campaigns, and agents must not present anything here as 'proven'. A fuller step-by-step playbook with copy-paste prompts lives in the shared skills shelf as the cold-email-gtm skill; this bank is only the rows agents sample from. Hard rules that travel with every row: never fabricate a signal or proof point, drafts are queued for human approval before sending unless the operator explicitly authorized automated sends, and compliance rows are a checklist, not legal advice. Slots are UPPERCASE so an unfilled template trips the placeholder check in src/lib/services/deliverables/acceptance-contracts.ts.",
+  "count": 62,
+  "volumeInfrastructure": [
+    { "id": "VI01", "rule": "send from dedicated secondary domains, never the primary domain", "detail": "10+ sending domains is a normal footprint for a scaled motion; the primary domain's reputation is never put at risk" },
+    { "id": "VI02", "rule": "about 3 inboxes per domain, roughly 30 emails per day per inbox", "detail": "scale horizontally by adding domains and inboxes; never by pushing one mailbox harder" },
+    { "id": "VI03", "rule": "reputable mailbox providers only", "detail": "major-provider inboxes deliver; bargain SMTP does not" },
+    { "id": "VI04", "rule": "never send cold email through newsletter or marketing ESPs", "detail": "opt-in marketing tools land cold mail in the promotions folder and lack sequence/reply mechanics; use a cold-email sequencer instead" }
+  ],
+  "deliverabilityPractices": [
+    { "id": "DP01", "practice": "do not track opens", "why": "open tracking injects an HTML pixel; plain-text mail delivers better, so reply rate becomes the primary metric at volume" },
+    { "id": "DP02", "practice": "vary copy per recipient at volume (spintax)", "why": "byte-identical bodies sent to thousands get fingerprinted by filters; surface phrasing varies, meaning stays identical" },
+    { "id": "DP03", "practice": "verify every address before sending, whatever the list source", "why": "bounces tell receiving servers you do not know who you are mailing" }
+  ],
+  "offerLevers": [
+    { "id": "OL01", "lever": "specific and measurable beats generic", "example": "a named outcome with a number and a timeframe, never a category description of your services" },
+    { "id": "OL02", "lever": "free credibility demonstration", "example": "an audit, mockup, trial, or consultation that makes the first yes easy without making the campaign a loss" },
+    { "id": "OL03", "lever": "offer-audience fit dominates copy quality", "example": "if the audience does not need the offer, no rewrite saves the campaign; fix the offer or the segment first" }
+  ],
+  "escalationPlays": [
+    { "id": "EP01", "play": "email-to-linkedin fallback", "how": "sequence non-responders get a LinkedIn connection touch where photo, profile, and mutuals raise trust; run under the linkedin bank's caps and human-approval rules" },
+    { "id": "EP02", "play": "pixel retargeting loop", "how": "cold-email clicks land on a pixeled page; retarget visitors with case-study ads to stay present between touches at low cost" },
+    { "id": "EP03", "play": "AI qualification before sending", "how": "score each prospect's site against explicit fit criteria and personalise from scraped specifics before spending any sending volume on them" }
+  ],
+  "sequenceLengthFork": "sources disagree: the craft motion runs 6 touches over 35 days; the volume motion caps at 2-3 touches and spends remaining capacity on new prospects. Choose per motion: high-personalisation low-volume gets the long sequence, high-volume broad gets the short one.",
+  "taxonomy": {
+    "frameworks": ["problem-first", "trigger-based", "mutual-connection", "value-first", "direct-ask"],
+    "seniorityLevels": ["exec", "director-manager", "ic-practitioner"],
+    "positioningSpectrum": ["process", "sender-centered", "active-position", "overclaim"]
+  },
+  "positioningSpectrum": [
+    { "id": "PX01", "position": "process", "soundsLike": "we can build a system for you", "judgment": "too much setup; the reader must believe in the process before feeling any outcome" },
+    { "id": "PX02", "position": "sender-centered", "soundsLike": "we run campaigns for companies like yours", "judgment": "credible but centered on the sender, not the reader's result" },
+    { "id": "PX03", "position": "active-position", "soundsLike": "we're already talking to the kind of buyers you want more of", "judgment": "target zone: active, in motion, close to the outcome the reader wants; use only when truthful" },
+    { "id": "PX04", "position": "overclaim", "soundsLike": "I have clients ready for you tomorrow", "judgment": "claim density collapses believability; pull back one step and anchor in what is genuinely in motion" }
+  ],
+  "positioningRule": "move as close to the reader's desired outcome as credibility allows; the ceiling is what a realistic prospect would believe, never how bold the claim is, and a fabricated active position is off the table",
+  "languageLists": [
+    { "id": "LL01", "list": "setup verbs to ban", "words": ["build", "set up", "install", "create", "launch", "implement", "help companies generate"], "why": "process language walks the reader backward through your work instead of forward to their result" },
+    { "id": "LL02", "list": "active-position phrasing to prefer when truthful", "words": ["already working with", "already speaking to", "already running", "already seeing", "already live"], "why": "in-motion language puts the reader next to the outcome; only usable when it is actually true" }
+  ],
+  "emailSkeleton": [
+    { "id": "CE01", "name": "First-touch skeleton", "template": "Subject: [TWO TO FOUR WORD SUBJECT THAT READS LIKE AN INTERNAL EMAIL]\n\n[ONE SENTENCE ABOUT THEIR WORLD THAT NEVER STARTS WITH I OR WE]\n\n[ONE OR TWO SENTENCES LINKING THEIR SITUATION TO YOUR OFFER]\n\n[ONE SENTENCE OF SPECIFIC PROOF WITH A REAL NUMBER OR NAMED CUSTOMER]\n\n[ONE LOW FRICTION QUESTION AS THE ONLY CTA]\n\n[SIGN OFF]", "why": "Every line has exactly one job; a sentence that adds no curiosity, relevance, credibility, or ask gets cut." }
+  ],
+  "frameworks": [
+    { "id": "CF01", "key": "problem-first", "useWhen": "The prospect has a visible pain point", "shape": "problem observation, then relevance, then ask" },
+    { "id": "CF02", "key": "trigger-based", "useWhen": "A specific recent event: funding, hiring, news, job change", "shape": "trigger reference, then connection to the problem, then ask" },
+    { "id": "CF03", "key": "mutual-connection", "useWhen": "A referral or shared network exists", "shape": "name drop, then context, then ask" },
+    { "id": "CF04", "key": "value-first", "useWhen": "You have something genuinely useful to share", "shape": "insight or resource, then brief context, then ask" },
+    { "id": "CF05", "key": "direct-ask", "useWhen": "High-intent or very senior prospect", "shape": "brief context, then one direct question; under 80 words" }
+  ],
+  "sequenceTouches": [
+    { "id": "ST01", "touch": 1, "day": 1, "angle": "problem-first or trigger opener", "maxWords": 150 },
+    { "id": "ST02", "touch": 2, "day": 4, "angle": "new evidence: case study, data point, or recent result", "maxWords": 120 },
+    { "id": "ST03", "touch": 3, "day": 9, "angle": "a different but related pain point", "maxWords": 120 },
+    { "id": "ST04", "touch": 4, "day": 16, "angle": "industry insight tied to the problem", "maxWords": 100 },
+    { "id": "ST05", "touch": 5, "day": 25, "angle": "one direct question, no context or recap", "maxWords": 60 },
+    { "id": "ST06", "touch": 6, "day": 35, "angle": "breakup: professional close plus referral ask", "maxWords": 60 }
+  ],
+  "sequenceRules": ["each follow-up stands alone", "each touch brings a new angle", "emails get shorter with each touch", "never say checking in or circling back", "never recap previous emails"],
+  "subjectFormulas": [
+    { "id": "SF01", "name": "Specific observation", "pattern": "[OBSERVATION ABOUT THEIR WORLD]", "example": "growing the sales team" },
+    { "id": "SF02", "name": "Single keyword", "pattern": "[PROBLEM KEYWORD]", "example": "pipeline" },
+    { "id": "SF03", "name": "Name reference", "pattern": "[FIRST NAME], [BRIEF TOPIC]", "example": "Sarah, onboarding time" },
+    { "id": "SF04", "name": "Company reference", "pattern": "[COMPANY] and [SPECIFIC OBSERVATION]", "example": "Acme and SDR ramp time" },
+    { "id": "SF05", "name": "Referral drop", "pattern": "[REFERRER NAME] suggested", "example": "Jamie suggested" }
+  ],
+  "subjectRules": ["two to four words", "lowercase after the first word", "no exclamation marks or all-caps", "no question marks by default; question-mark subjects are a known A/B variant, not a default", "reads like an internal email between colleagues", "never names your product or company", "photograph principle: form one clear mental picture; clarity beats curiosity, curiosity beats clever"],
+  "antiPatterns": [
+    { "id": "AP01", "pattern": "Opening with your own name and company", "why": "The reader does not care yet; the opener belongs to their world." },
+    { "id": "AP02", "pattern": "I wanted to reach out", "why": "Passive filler that wastes the first line." },
+    { "id": "AP03", "pattern": "I came across your profile", "why": "Announces that you searched a list." },
+    { "id": "AP04", "pattern": "I hope this finds you well", "why": "Copy-paste filler; adds nothing." },
+    { "id": "AP05", "pattern": "We help companies like yours", "why": "Could apply to anyone, so it lands as generic." },
+    { "id": "AP06", "pattern": "Personalisation disconnected from the problem", "why": "A biography fact with an unrelated pitch reads worse than no personalisation." },
+    { "id": "AP07", "pattern": "Multiple CTAs in one email", "why": "Offering a demo, a trial, and a call at once means no decision gets made." },
+    { "id": "AP08", "pattern": "Body over 200 words", "why": "Walls of text do not get read cold." },
+    { "id": "AP09", "pattern": "Corporate buzzwords", "why": "Disruptive, innovative, synergy, leverage, cutting-edge, game-changing all mark the email as marketing copy." },
+    { "id": "AP10", "pattern": "Em dashes", "why": "A strong machine-written tell; rewrite the sentence instead." },
+    { "id": "AP11", "pattern": "Fake RE:/FWD: thread prefixes on a first touch", "why": "A deceptive subject line: a compliance violation and a trust killer even when it lifts opens." },
+    { "id": "AP12", "pattern": "Word-swapping a flagged line", "why": "Replacing a banned word with a synonym keeps the same weak idea; rewrite the idea underneath the line instead." },
+    { "id": "AP13", "pattern": "Personalization carrying weak positioning", "why": "A researched opener bolted onto process-first body copy still loses; personalization supports the message, it cannot substitute for it." },
+    { "id": "AP14", "pattern": "Rented or borrowed sender identities", "why": "Renting verified third-party profiles for outreach is identity deception and a platform-terms violation; scale with owned domains and inboxes instead." }
+  ],
+  "benchmarks": [
+    { "id": "BM01", "metric": "open rate", "target": "35-50%", "red": "under 25%", "fix": "subject lines" },
+    { "id": "BM02", "metric": "reply rate", "target": "3-8%", "red": "under 2%", "fix": "body relevance or lower-friction CTA" },
+    { "id": "BM03", "metric": "positive reply rate", "target": "1-3%", "red": "under 1%", "fix": "offer or ICP mismatch" },
+    { "id": "BM04", "metric": "bounce rate", "target": "under 3%", "red": "over 5%", "fix": "verify the list before sending" },
+    { "id": "BM05", "metric": "unsubscribe rate", "target": "under 0.5%", "red": "over 1%", "fix": "wrong personas or too much volume" }
+  ],
+  "seniorityVoice": [
+    { "id": "SV01", "level": "exec", "maxWords": 80, "lead": "business outcome; one question, no options" },
+    { "id": "SV02", "level": "director-manager", "maxWords": 120, "lead": "the specific problem their team faces; one proof point" },
+    { "id": "SV03", "level": "ic-practitioner", "maxWords": 150, "lead": "a day-to-day pain or a tool they recognise; technical detail acceptable" }
+  ],
+  "warmingSchedule": [
+    { "id": "WS01", "week": 1, "perDay": "5-10", "note": "real conversations, not campaigns" },
+    { "id": "WS02", "week": 2, "perDay": "20-30", "note": "keep replies coming" },
+    { "id": "WS03", "week": 3, "perDay": "50", "note": "watch bounce and spam placement" },
+    { "id": "WS04", "week": 4, "perDay": "up to 100 per inbox", "note": "never spike volume suddenly" }
+  ]
+}

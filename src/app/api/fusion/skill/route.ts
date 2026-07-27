@@ -1,20 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createFusionSkill } from "@/lib/services/fusion/fusion-skill";
-import type { ContextConnectedApp } from "@/lib/services/context-index";
+import { connectedAppsForFusion } from "@/lib/services/fusion/connected-apps";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-async function connectedAppsFromAppsView(request: NextRequest) {
-  const url = new URL("/api/fleet/apps", request.url);
-  const response = await fetch(url, {
-    cache: "no-store",
-    signal: AbortSignal.timeout(7_000),
-  }).catch(() => null);
-  if (!response?.ok) return undefined;
-  const payload = await response.json().catch(() => null) as { apps?: ContextConnectedApp[] } | null;
-  return Array.isArray(payload?.apps) ? payload.apps : undefined;
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,7 +15,7 @@ export async function POST(request: NextRequest) {
     const result = await createFusionSkill({
       prompt: body.prompt ?? "",
       vaultPath: body.vaultPath,
-      connectedApps: body.includeConnectedApps === false ? undefined : await connectedAppsFromAppsView(request),
+      connectedApps: body.includeConnectedApps === false ? undefined : await connectedAppsForFusion(request.url),
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {

@@ -1,0 +1,21 @@
+{
+  "upstreamName": "Nansen Related Wallet Clustering",
+  "upstreamSlug": "nansen-related-wallet-clustering",
+  "hiveSlug": "nansen-related-wallet-clustering",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/crypto/hivemindos/nansen-related-wallet-clustering",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-08T12:30:00Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional crypto skills",
+  "sourcePath": "packaged-skills/optional/crypto/hivemindos/nansen-related-wallet-clustering",
+  "status": "optional",
+  "references": [
+    "https://docs.nansen.ai/guides/templates/complex-use-cases/use-case-3-identifying-related-wallets-at-scale"
+  ],
+  "hivemindAdaptations": [
+    "Adds probabilistic-language guardrails for wallet clustering.",
+    "Uses the live profiler premium-labels endpoint rather than the stale beta labels snippet in older template docs.",
+    "Routes through HivemindOS managed/BYOK Nansen capability without exposing secrets."
+  ]
+}

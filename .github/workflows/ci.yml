@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.6.12
+
+      # The hermetic test suites import src/*.ts directly and rely on Node's
+      # native TypeScript type-stripping, which needs Node >= 22.6. Do not
+      # copy the Node 20 pin from the release workflows here.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Runs typecheck, static guards, the file-size ratchet, and all fast
+      # hermetic test suites (see scripts/test-gate.mjs for membership rules).
+      - name: Test gate
+        run: pnpm test

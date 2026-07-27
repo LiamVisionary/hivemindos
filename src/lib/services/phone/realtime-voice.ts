@@ -392,6 +392,7 @@ export function voiceConfigPayload(managed: ManagedVoiceConfig = readManagedVoic
       timezone: managed.timezone,
       quietHoursEnabled: false,
       dailyEnabled: false,
+      dailyCallDays: [1, 2, 3, 4, 5, 6, 0],
       voiceProviders,
       voiceOptions: voiceOptions.length ? voiceOptions : [{
         id: "runtime-default:openai-realtime",

@@ -1,40 +1,52 @@
-/* eslint-disable */
-// @ts-nocheck
 "use client";
 import React from "react";
 
-export function WalletRewardsActions({ actions }: any) {
-  const rewards = actions?.bankrRewards || {};
-  const stats = rewards.honeyStats || {};
-  const vault = actions?.walletVaultBackup || {};
-  const vaultStatus = vault.status || {};
-  const [recipient, setRecipient] = React.useState(actions?.bankrRecipientAddress || "");
+type WalletRewardsHoneyStats = {
+  totalHoney?: number;
+  availableHoney?: number;
+  legacyHive?: number;
+};
+
+type WalletRewardsVaultStatus = {
+  vaultExists?: boolean;
+  recordCount?: number;
+  backupExists?: boolean;
+  gpgAvailable?: boolean;
+  recipientConfigured?: boolean;
+};
+
+export type WalletRewardsActionsSlice = {
+  bankrRewards?: { honeyStats?: WalletRewardsHoneyStats };
+  walletVaultBackup?: { status?: WalletRewardsVaultStatus; busy?: boolean; message?: string };
+  bankrRecipientAddress?: string;
+  formatHiveAmount?: (amount: number) => string;
+  onReturnAllHiveToHoney?: () => Promise<unknown>;
+  onRunWalletVaultBackupAction?: (action: "refresh" | "restore") => unknown;
+};
+
+export function WalletRewardsActions({ actions }: { actions?: WalletRewardsActionsSlice }) {
+  const rewards: NonNullable<WalletRewardsActionsSlice["bankrRewards"]> = actions?.bankrRewards || {};
+  const stats: WalletRewardsHoneyStats = rewards.honeyStats || {};
+  const vault: NonNullable<WalletRewardsActionsSlice["walletVaultBackup"]> = actions?.walletVaultBackup || {};
+  const vaultStatus: WalletRewardsVaultStatus = vault.status || {};
   const [busy, setBusy] = React.useState("");
   const [status, setStatus] = React.useState("");
-  React.useEffect(() => setRecipient(actions?.bankrRecipientAddress || ""), [actions?.bankrRecipientAddress]);
-  const fmt = (amount) => actions?.formatHiveAmount ? actions.formatHiveAmount(amount || 0) : String(amount || 0);
-  const recipientReady = /^0x[a-fA-F0-9]{40}$/.test(recipient.trim());
+  const fmt = (amount?: number) => actions?.formatHiveAmount ? actions.formatHiveAmount(amount || 0) : String(amount || 0);
   const vaultBusy = Boolean(vault.busy || busy.startsWith("vault-"));
-  const connect = async () => { setBusy("connect"); setStatus(""); try { const address = await actions?.onConnectBankrWallet?.(); if (address) setRecipient(address); setStatus(address ? "Base wallet connected." : "Wallet connection did not return an address."); } catch (e) { setStatus(e instanceof Error ? e.message : "Could not connect wallet."); } finally { setBusy(""); } };
-  const claim = async () => { setBusy("claim"); setStatus("Sending Bankr HIVE transaction..."); try { const result = await actions?.onClaimBankrHive?.(recipient.trim()); if (!result?.ok) throw new Error(result?.error || "Bankr HIVE claim failed."); const tx = result.txHash ? ` Tx ${result.txHash.slice(0, 10)}...${result.txHash.slice(-6)}.` : ""; setStatus(`Sent ${fmt(result.amount)} HIVE to Bankr.${tx}`); } catch (e) { setStatus(e instanceof Error ? e.message : "Bankr HIVE claim failed."); } finally { setBusy(""); } };
   const returnLegacy = async () => { setBusy("return"); setStatus("Moving legacy HIVE back to Honey..."); try { if (!actions?.onReturnAllHiveToHoney) throw new Error("Legacy HIVE return is not available in this build."); await actions.onReturnAllHiveToHoney(); setStatus("Legacy HIVE moved back to Honey."); } catch (e) { setStatus(e instanceof Error ? e.message : "Could not move legacy HIVE back."); } finally { setBusy(""); } };
-  const runVault = async (action) => { setBusy(`vault-${action}`); setStatus(""); try { if (!actions?.onRunWalletVaultBackupAction) throw new Error("Wallet vault action is not available in this build."); await actions.onRunWalletVaultBackupAction(action); setStatus(action === "refresh" ? "Wallet vault sync requested." : "Wallet vault restore requested."); } catch (e) { setStatus(e instanceof Error ? e.message : "Wallet vault action failed."); } finally { setBusy(""); } };
+  const runVault = async (action: "refresh" | "restore") => { setBusy(`vault-${action}`); setStatus(""); try { if (!actions?.onRunWalletVaultBackupAction) throw new Error("Wallet vault action is not available in this build."); await actions.onRunWalletVaultBackupAction(action); setStatus(action === "refresh" ? "Wallet vault sync requested." : "Wallet vault restore requested."); } catch (e) { setStatus(e instanceof Error ? e.message : "Wallet vault action failed."); } finally { setBusy(""); } };
   return (
     <div className="fb-card pad" style={{ display: "grid", gap: 14 }}>
       <div>
-        <span className="fb-eyebrow">Bankr rewards</span>
+        <span className="fb-eyebrow">Honey · contribution record</span>
         <div style={{ display: "grid", gap: 8, marginTop: 8 }} className="fw-kv">
           <div><span>Total Honey</span><strong>{fmt(stats.totalHoney)}</strong></div>
-          <div><span>Ready to claim</span><strong>{fmt(stats.availableHoney)}</strong></div>
+          <div><span>Available Honey</span><strong>{fmt(stats.availableHoney)}</strong></div>
           <div><span>Legacy HIVE</span><strong>{fmt(stats.legacyHive)}</strong></div>
         </div>
       </div>
-      <label className="fb-label">Bankr receiving address<input className="fb-field fb-mono" value={recipient} onChange={(e) => { setRecipient(e.target.value); setStatus(""); }} placeholder="0x..." /></label>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button type="button" className="fb-btn secondary" disabled={busy === "connect"} onClick={connect}>{busy === "connect" ? "Connecting..." : "Connect Base wallet"}</button>
-        <button type="button" className="fb-btn primary" disabled={busy === "claim" || !recipientReady || (stats.availableHoney || 0) <= 0} onClick={claim}>Claim Bankr HIVE</button>
-        {(stats.legacyHive || 0) > 0 ? <button type="button" className="fb-btn secondary" disabled={busy === "return"} onClick={returnLegacy}>{busy === "return" ? "Moving..." : "Move legacy HIVE back"}</button> : null}
-      </div>
+      <p className="fw-sheet-help">Honey records reviewed ecosystem contribution. It is not cash, company ownership, or automatically convertible to HIVE. Any future redemption requires a separately authorized policy.</p>
+      {(stats.legacyHive || 0) > 0 ? <div><button type="button" className="fb-btn secondary" disabled={busy === "return"} onClick={returnLegacy}>{busy === "return" ? "Moving..." : "Move legacy HIVE back"}</button></div> : null}
       <details className="fw-details">
         <summary>Encrypted wallet vault</summary>
         <div className="fw-kv" style={{ marginTop: 10 }}>

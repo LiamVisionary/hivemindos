@@ -1,14 +1,12 @@
 top_links:
-  - title: Features
-    url: /features/
-  - title: Whole Brain
-    url: /whole-brain/
-  - title: Skills
-    url: /packaged-skills/
+  - title: For Users
+    url: /for-users/
+  - title: For Investors
+    url: /for-investors/
+  - title: Trading
+    url: /for-users/trading/
   - title: Architecture
-    url: /architecture/
-  - title: Integrations
-    url: /integrations/
+    url: /for-users/architecture/
   - title: Preview
     url: /preview.html
 
@@ -17,142 +15,203 @@ sections:
     items:
       - title: Overview
         url: /
-      - title: Feature Guide
-        url: /features/
+      - title: For Users
+        url: /for-users/
+      - title: For Investors
+        url: /for-investors/
       - title: Diagrams And Maps
-        url: /diagrams.html
+        url: /for-users/diagrams.html
       - title: Native App
-        url: /native-app.html
+        url: /for-users/native-app.html
       - title: Slash Commands
-        url: /slash-commands.html
+        url: /for-users/slash-commands.html
 
-  - title: Product
+  - title: For Users · Product
     items:
       - title: Product Home
-        url: /product/
+        url: /for-users/product/
       - title: Design Philosophy
-        url: /product/design-philosophy.html
+        url: /for-users/product/design-philosophy.html
       - title: UI Rules
-        url: /product/ui-rules.html
+        url: /for-users/product/ui-rules.html
 
-  - title: Core Systems
+  - title: For Users · Core Systems
     items:
       - title: Features
-        url: /features/
+        url: /for-users/features/
         children:
           - title: Fleet
-            url: /features/fleet.html
+            url: /for-users/features/fleet.html
+          - title: SRE Incident Investigations
+            url: /for-users/features/sre-investigations.html
           - title: Agents And Chat
-            url: /features/runtimes-and-chat.html
+            url: /for-users/features/runtimes-and-chat.html
+          - title: Local Document Reader
+            url: /for-users/features/local-document-reader.html
+          - title: Local Web Research
+            url: /for-users/features/web-research.html
           - title: Calling
-            url: /features/calling.html
+            url: /for-users/features/calling.html
+          - title: Socials
+            url: /for-users/features/socials.html
           - title: Work And Scheduler
-            url: /features/work-and-scheduler.html
+            url: /for-users/features/work-and-scheduler.html
+          - title: Loop Engineering
+            url: /for-users/features/loop-engineering.html
+          - title: Agent Evaluations
+            url: /for-users/features/agent-evaluations.html
+          - title: Harness Experiments
+            url: /for-users/features/harness-experiments.html
+          - title: Agent Challenges
+            url: /for-users/features/agent-challenges.html
+          - title: Zero Human Companies
+            url: /for-users/features/zero-human-companies.html
+          - title: Founder Mode, Labs, And Proof Packs
+            url: /for-users/features/founder-mode.html
           - title: Brain, Vault, And Skills
-            url: /features/brain-vault-and-skills.html
+            url: /for-users/features/brain-vault-and-skills.html
+          - title: Inbox Triage
+            url: /for-users/features/inbox-triage.html
           - title: Hivemind Sync
-            url: /features/hivemind-sync.html
+            url: /for-users/features/hivemind-sync.html
           - title: Hive Fusion
-            url: /features/hive-fusion.html
+            url: /for-users/features/hive-fusion.html
           - title: Token And Cost Savings
-            url: /features/token-and-cost-savings.html
+            url: /for-users/features/token-and-cost-savings.html
+          - title: Shared Brain Benchmarks
+            url: /for-users/features/shared-brain-benchmarks.html
           - title: Wallets, Honey, And x402
-            url: /features/wallets-honey-and-x402.html
+            url: /for-users/features/wallets-honey-and-x402.html
+          - title: Hive Compute
+            url: /for-users/features/hive-compute.html
+          - title: App Builder And Hosting
+            url: /for-users/features/app-builder.html
+          - title: HivemindOS Machines
+            url: /for-users/features/hivemindos-machines.html
           - title: Evo Optimization
-            url: /features/evo-optimization.html
+            url: /for-users/features/evo-optimization.html
           - title: Env, Notifications, Maintenance
-            url: /features/env-files-notifications-maintenance.html
+            url: /for-users/features/env-files-notifications-maintenance.html
           - title: Integrations And Work History
-            url: /features/integrations-and-work-history.html
+            url: /for-users/features/integrations-and-work-history.html
           - title: MiroShark And OpenClaw
-            url: /features/miroshark-and-openclaw.html
+            url: /for-users/features/miroshark-and-openclaw.html
+          - title: Computer Interaction
+            url: /for-users/features/computer-interaction.html
+          - title: Page Agent (Experimental)
+            url: /for-users/features/page-agent.html
 
       - title: Whole Brain
-        url: /whole-brain/
+        url: /for-users/whole-brain/
         children:
           - title: Vault Map
-            url: /whole-brain/vault-map.html
+            url: /for-users/whole-brain/vault-map.html
           - title: Brain Services
-            url: /whole-brain/brain-services.html
+            url: /for-users/whole-brain/brain-services.html
           - title: Shared Skills
-            url: /whole-brain/shared-skills.html
+            url: /for-users/whole-brain/shared-skills.html
           - title: Shared Env
-            url: /whole-brain/shared-env.html
+            url: /for-users/whole-brain/shared-env.html
           - title: Sync And Health
-            url: /whole-brain/sync-and-health.html
+            url: /for-users/whole-brain/sync-and-health.html
           - title: Architecture Sync
-            url: /whole-brain/architecture-sync.html
+            url: /for-users/whole-brain/architecture-sync.html
           - title: Code Map
-            url: /whole-brain/code-map.html
+            url: /for-users/whole-brain/code-map.html
 
       - title: Packaged Skills
-        url: /packaged-skills/
+        url: /for-users/packaged-skills/
         children:
           - title: Hive Skills
-            url: /packaged-skills/hive-skills.html
+            url: /for-users/packaged-skills/hive-skills.html
           - title: Third-party Skills
-            url: /packaged-skills/third-party-skills.html
+            url: /for-users/packaged-skills/third-party-skills.html
 
-  - title: Architecture
+  - title: For Users · Trading
+    items:
+      - title: Trading Home
+        url: /for-users/trading/
+      - title: Crypto Trading
+        url: /for-users/trading/crypto.html
+      - title: Hyperliquid Trading
+        url: /for-users/trading/hyperliquid.html
+      - title: Stock Trading
+        url: /for-users/trading/stocks.html
+      - title: Ways To Trade
+        url: /for-users/trading/agent-access.html
+      - title: Safety And Limits
+        url: /for-users/trading/governance.html
+
+  - title: For Users · Architecture
     items:
       - title: Architecture Home
-        url: /architecture/
+        url: /for-users/architecture/
       - title: API And Storage
-        url: /architecture/api-and-storage.html
+        url: /for-users/architecture/api-and-storage.html
       - title: Syncing And Tailscale
-        url: /architecture/syncing-and-tailscale.html
+        url: /for-users/architecture/syncing-and-tailscale.html
       - title: Fleet Telemetry
-        url: /architecture/tailscale-fleet-telemetry.html
+        url: /for-users/architecture/tailscale-fleet-telemetry.html
       - title: Generated Media Signing
-        url: /architecture/generated-media-signing.html
+        url: /for-users/architecture/generated-media-signing.html
       - title: Targeted File Transfers
-        url: /targeted-file-transfers.html
+        url: /for-users/targeted-file-transfers.html
       - title: Tailnet Generation Skills
-        url: /tailnet-generation-skills.html
+        url: /for-users/tailnet-generation-skills.html
       - title: macOS Code Signing
-        url: /macos-code-signing.html
+        url: /for-users/macos-code-signing.html
 
-  - title: Integrations
+  - title: For Users · Integrations
     items:
       - title: Integrations Home
-        url: /integrations/
+        url: /for-users/integrations/
       - title: GitLawb Code Proof
-        url: /integrations/gitlawb.html
-      - title: UsePod
-        url: /integrations/usepod.html
+        url: /for-users/integrations/gitlawb.html
+      - title: Microsoft Azure
+        url: /for-users/integrations/microsoft-azure.html
       - title: MiroShark
-        url: /integrations/miroshark/
+        url: /for-users/integrations/miroshark/
         children:
           - title: Companion
-            url: /integrations/miroshark/companion.html
+            url: /for-users/integrations/miroshark/companion.html
           - title: Todo
-            url: /integrations/miroshark/todo.html
+            url: /for-users/integrations/miroshark/todo.html
 
-  - title: Runtimes
+  - title: For Users · Runtimes
     items:
       - title: Runtime Guides
-        url: /runtimes/
+        url: /for-users/runtimes/
       - title: Hermes Local Setup
-        url: /runtimes/hermes/local-setup.html
+        url: /for-users/runtimes/hermes/local-setup.html
+      - title: AEON v0.1 Control Plane
+        url: /for-users/runtimes/aeon/v01-control-plane.html
+      - title: AEON For Zero Human Companies
+        url: /for-users/runtimes/aeon/zero-human-companies.html
       - title: AEON GitHub Actions Brain Access
-        url: /runtimes/aeon/github-actions-brain-access.html
+        url: /for-users/runtimes/aeon/github-actions-brain-access.html
 
-  - title: Monetization
-    items:
-      - title: Monetization Home
-        url: /monetization/
-      - title: Ecosystem Plan
-        url: /monetization/ecosystem-plan.html
-      - title: Honey And HIVE Treasury
-        url: /monetization/honey-hive-treasury.html
-      - title: HIVE Staking And Community Tiers
-        url: /monetization/hive-staking-and-community-tiers.html
-      - title: Paid Features
-        url: /monetization/paid-features/
-      - title: Hivemind Cloud Agent Calls
-        url: /monetization/paid-features/hivemind-cloud-agent-calls.html
-
-  - title: Reference
+  - title: For Users · Reference
     items:
       - title: Bankr Platform Reference
-        url: /bankr/bankr-platform-reference.html
+        url: /for-users/bankr/bankr-platform-reference.html
+
+  - title: For Investors
+    items:
+      - title: Investor Home
+        url: /for-investors/
+      - title: Ecosystem Plan
+        url: /for-investors/ecosystem-plan.html
+      - title: Honey And HIVE Treasury
+        url: /for-investors/honey-hive-treasury.html
+      - title: Treasury Reserve And Seasonal Programs
+        url: /for-investors/treasury-reserve-and-seasonal-programs.html
+      - title: HIVE Staking And Community Tiers
+        url: /for-investors/hive-staking-and-community-tiers.html
+      - title: Paid Features
+        url: /for-investors/paid-features/
+      - title: App Builder And Hosting
+        url: /for-investors/paid-features/app-builder-hosting.html
+      - title: Hivemind Cloud Agent Calls
+        url: /for-investors/paid-features/hivemind-cloud-agent-calls.html
+      - title: Hive Compute Marketplace
+        url: /for-investors/paid-features/hive-compute-marketplace.html

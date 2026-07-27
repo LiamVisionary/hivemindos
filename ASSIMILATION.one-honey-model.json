@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-07-13T16:42:28.512884+00:00",
+  "request": "but we do only have 1 HONEY right? we shouldnt have more than one",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemind-cloud-services",
+      "source_path": "workers/compute-gateway/src/community-contributions.ts",
+      "target_path": "src/lib/services/wallet/honey-community.ts",
+      "reuse_type": "adapted_code",
+      "note": "Mirrored the hosted one-total HONEY contract and provenance-only source breakdown at the app boundary."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/telegram-tip-bot/community-honey.ts",
+      "target_path": "src/lib/services/telegram-tip-bot/commands.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the bot profile and leaderboard copy to one cumulative HONEY total plus a non-HONEY recognition action allowance."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/components/wallets-drop-in/WalletsView.tsx",
+      "target_path": "src/components/wallets-drop-in/HoneyContributionCard.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Kept the established wallet contribution surface while clarifying lifetime HONEY, provenance, and signature proof."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-telegram-tip-bot.mjs",
+      "target_path": "scripts/test-honey-contribution-layer.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Extended focused contracts to reject multiple HONEY classes and spendable-credit naming."
+    }
+  ]
+}

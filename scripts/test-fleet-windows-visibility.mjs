@@ -124,34 +124,31 @@ assert.equal(isDesktopMachineOs(undefined), false);
 
 // --- Drift guard: this exact Windows/Linux fix was silently dropped once by a
 // branch merge (the released v0.2.14 route fix in 2c8b5838 was reverted when
-// merge 99fe4c1e integrated the in-flight branch). Fail loudly if any of the
-// route-level Windows/Linux+self clauses disappears again. ---
+// merge 99fe4c1e integrated the in-flight branch). Visibility is now
+// single-sourced: the routes must filter through the real isVisibleFleetMachine
+// (whose Windows/Linux/self behavior is asserted on the shipped module above).
+// Fail loudly if a route stops routing through it again. ---
 function assertRouteKeepsDesktops(relPath, label) {
   const text = readFileSync(new URL(relPath, import.meta.url), "utf8");
   assert.ok(
-    /function isDesktopDevice/.test(text),
-    `${label}: isDesktopDevice helper must exist`,
+    /import \{[^}]*isVisibleFleetMachine[^}]*\} from "@\/features\/fleet\/fleet-identity"/.test(text),
+    `${label}: must import isVisibleFleetMachine from fleet-identity (single-source visibility)`,
   );
   assert.ok(
-    /isDesktopDevice\(device\)/.test(text),
-    `${label}: dedupeDevices must keep Windows/Linux desktops`,
-  );
-  assert.ok(
-    /device\.self\s*\|\|/.test(text),
-    `${label}: dedupeDevices must keep the self device`,
-  );
-  assert.ok(
-    /win32/.test(text),
-    `${label}: isDesktopDevice must match the win32 process.platform spelling`,
+    /\.filter\(isVisibleFleetMachine\)/.test(text),
+    `${label}: dedupeDevices must filter through isVisibleFleetMachine (keeps self + Windows/Linux)`,
   );
 }
 assertRouteKeepsDesktops(
   "../src/app/api/tailscale/devices/route.ts",
   "tailscale/devices route",
 );
+// fleet/discover's device helpers (dedupeDevices and friends) were extracted
+// out of the route into this sibling module to get the route back under the
+// file-size ratchet; the visibility filter moved with them.
 assertRouteKeepsDesktops(
-  "../src/app/api/fleet/discover/route.ts",
-  "fleet/discover route",
+  "../src/app/api/fleet/discover-devices.ts",
+  "fleet/discover device helpers",
 );
 
 // --- v0.2.16 Windows desktop UX drift guards. A fresh Windows user was shown a
@@ -166,6 +163,10 @@ const helpers = readFileSync(
 assert.ok(
   /setup\.ps1/.test(helpers),
   "setupCollectorCommand / network-issue commands must offer the Windows setup.ps1 path",
+);
+assert.ok(
+  /setup\.ps1 -CollectorOnly/.test(helpers) && /setup\.sh --collector-only/.test(helpers),
+  "additional-machine setup commands must use the persisted collector-only mode on Windows and Unix",
 );
 assert.ok(
   /isWindowsOs/.test(helpers),

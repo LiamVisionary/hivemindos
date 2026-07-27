@@ -1,0 +1,21 @@
+{
+  "upstreamName": "gooey-blob-system",
+  "upstreamSlug": "gooey-blob-system",
+  "hiveSlug": "gooey-blob-system",
+  "sourceLabel": "mengto",
+  "sourceUrl": "https://github.com/MengTo/Skills/blob/6ad391b6c78cc716327180d72db3f7fa26bc3fdd/agent-skills/web-design/gooey-blob-system/SKILL.md",
+  "repository": "https://github.com/MengTo/Skills",
+  "installCommand": "npx skills add https://github.com/MengTo/Skills --skill gooey-blob-system",
+  "importedAt": "2026-07-07T16:32:45.736Z",
+  "refreshedAt": "2026-07-07T16:33:23.330Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/mengto/gooey-blob-system",
+  "packageGroup": "design",
+  "upstreamCategory": "web-design",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "6ad391b6c78cc716327180d72db3f7fa26bc3fdd",
+  "normalized": "verbatim-frontmatter",
+  "description": "Create a gooey blob system using SVG filters where multiple shapes merge into a single fluid form. Use overlapping circles combined with a Gaussian blur and color matrix filter to produce a continuous, organic mass. The forms should visually fuse and separate based on proximity. Focus on filter-driven merging (blur + threshold effect), soft organic boundaries with no hard edges, multiple independent shapes behaving as one system, and smooth continuous motion that feels fluid and cohesive."
+}

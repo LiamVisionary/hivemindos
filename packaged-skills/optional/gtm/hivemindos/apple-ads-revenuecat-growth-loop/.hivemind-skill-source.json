@@ -1,0 +1,17 @@
+{
+  "upstreamName": "Apple Ads RevenueCat Growth Loop",
+  "upstreamSlug": "apple-ads-revenuecat-growth-loop",
+  "hiveSlug": "apple-ads-revenuecat-growth-loop",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/gtm/hivemindos/apple-ads-revenuecat-growth-loop",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-16T23:02:02Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional GTM skills",
+  "sourcePath": "packaged-skills/optional/gtm/hivemindos/apple-ads-revenuecat-growth-loop",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Packages the ethical Apple Search Ads + RevenueCat experiment loop (readiness scoring, attribution checks, country-tier campaigns, export joins, kill/hold/scale decisions) as a reusable optional skill.",
+    "Keeps approval gates on all spend, bid, budget, and App Store asset changes."
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "upstreamName": "animation-on-scroll",
+  "upstreamSlug": "animation-on-scroll",
+  "hiveSlug": "animation-on-scroll",
+  "sourceLabel": "mengto",
+  "sourceUrl": "https://github.com/MengTo/Skills/blob/6ad391b6c78cc716327180d72db3f7fa26bc3fdd/agent-skills/web-design/animation-on-scroll/SKILL.md",
+  "repository": "https://github.com/MengTo/Skills",
+  "installCommand": "npx skills add https://github.com/MengTo/Skills --skill animation-on-scroll",
+  "importedAt": "2026-07-07T16:32:45.736Z",
+  "refreshedAt": "2026-07-07T16:33:23.330Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/mengto/animation-on-scroll",
+  "packageGroup": "design",
+  "upstreamCategory": "web-design",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "6ad391b6c78cc716327180d72db3f7fa26bc3fdd",
+  "normalized": "verbatim-frontmatter",
+  "description": "Create an on-scroll animation trigger using IntersectionObserver with Tailwind-friendly animation classes and keyframes. Use when asked for scroll-reveal, animate-on-scroll, or sequencing element animations when they enter the viewport."
+}

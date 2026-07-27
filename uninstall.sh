@@ -5,6 +5,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PORT="${PORT:-5020}"
 COLLECTOR_PORT="${AGENT_TELEMETRY_PORT:-8787}"
 TAILNET_COLLECTOR_PORT="${HIVE_TAILNET_COLLECTOR_PORT:-8787}"
+SYSTEMD_LINGER_MARKER="$HOME/.hivemindos/systemd-linger-enabled-by-hivemindos"
+OPENCLAW_CODEX_TRUST_MARKER="$HOME/.hivemindos/openclaw-codex-plugin-trust.json"
 
 info() { printf "\033[1;36m%s\033[0m\n" "$*"; }
 ok() { printf "\033[1;32m✓\033[0m %s\n" "$*"; }
@@ -69,6 +71,16 @@ ask() {
 
 run_if_exists() {
   command -v "$1" >/dev/null 2>&1
+}
+
+run_privileged() {
+  if [[ "$(id -u)" == "0" ]]; then
+    "$@"
+  elif run_if_exists sudo; then
+    sudo "$@"
+  else
+    return 127
+  fi
 }
 
 remove_managed_block() {
@@ -219,6 +231,15 @@ if ask "Remove HivemindOS telemetry collector service?" "yes"; then
   fi
 fi
 
+if [[ -f "$SYSTEMD_LINGER_MARKER" ]] && ask "Disable systemd user lingering that HivemindOS enabled for background services?" "no"; then
+  if run_if_exists loginctl && run_privileged loginctl disable-linger "$(id -un)"; then
+    rm -f "$SYSTEMD_LINGER_MARKER"
+    ok "Disabled HivemindOS-managed systemd user lingering"
+  else
+    warn "Could not disable systemd user lingering; it remains enabled"
+  fi
+fi
+
 if ask "Disable HivemindOS Tailscale Serve collector forwarding on port $TAILNET_COLLECTOR_PORT?" "yes"; then
   tailscale_cli=""
   if [[ -n "${HIVE_TAILSCALE_CLI:-}" && -x "${HIVE_TAILSCALE_CLI:-}" ]]; then
@@ -257,6 +278,26 @@ if ask "Stop and remove the HivemindOS Link sidecar service?" "yes"; then
   fi
 fi
 
+if ask "Stop and remove the optional HivemindOS OpenSRE root-cause sidecar service?" "yes"; then
+  "$ROOT/scripts/install-opensre-sidecar.sh" uninstall
+fi
+
+if ask "Remove the optional OpenSRE isolated runtime under ~/.hivemindos/opensre? (Incident records under ~/.hivemindos/ops/incidents are preserved.)" "no"; then
+  rm -rf "$HOME/.hivemindos/opensre"
+  ok "Removed the optional OpenSRE isolated runtime"
+fi
+
+if ask "Remove the isolated local web research runtime, browser, OCR models, screenshots, and cache under ~/.hivemindos?" "yes"; then
+  rm -rf "$HOME/.hivemindos/integrations/web-research" "$HOME/.hivemindos/web-research"
+  rm -f "$HOME/.hivemindos/integrations/web-research-state.json"
+  ok "Removed the local web research runtime and HivemindOS-owned artifacts"
+fi
+
+if ask "Remove bundled HivemindOS Link collector runtimes from ~/.hivemindos/link-runtime?" "yes"; then
+  rm -rf "$HOME/.hivemindos/link-runtime"
+  ok "Removed ~/.hivemindos/link-runtime"
+fi
+
 if ask "Stop and remove the Claw backend service?" "yes"; then
   if [[ "$(uname -s)" == "Darwin" ]]; then
     # com.hivemindos.claw-backend = legacy headless gateway; com.hivemindos.claw-gateway
@@ -272,14 +313,16 @@ if ask "Stop and remove the Claw backend service?" "yes"; then
     rm -f "$HOME/.hivemindos/bin/HivemindOS Voice Worker"
     ok "Removed HivemindOS Voice Worker helper if present"
   elif run_if_exists systemctl; then
+    systemctl --user disable --now hivemindos-mobile-backend.service >/dev/null 2>&1 || true
     systemctl --user disable --now hivemindos-claw-backend.service >/dev/null 2>&1 || true
     systemctl --user disable --now hivemindos-voice-worker.service >/dev/null 2>&1 || true
     systemctl --user disable --now hivemindos-claw-voice-worker.service >/dev/null 2>&1 || true
+    rm -f "$HOME/.config/systemd/user/hivemindos-mobile-backend.service"
     rm -f "$HOME/.config/systemd/user/hivemindos-claw-backend.service"
     rm -f "$HOME/.config/systemd/user/hivemindos-voice-worker.service"
     rm -f "$HOME/.config/systemd/user/hivemindos-claw-voice-worker.service"
     systemctl --user daemon-reload >/dev/null 2>&1 || true
-    ok "Removed Claw backend and voice worker systemd services"
+    ok "Removed HivemindOS Mobile backend and voice worker systemd services"
   fi
 fi
 
@@ -303,9 +346,35 @@ if ask "Remove HivemindOS collector environment file ~/.hivemindos/collector.env
   ok "Removed ~/.hivemindos/collector.env"
 fi
 
+if ask "Remove HivemindOS Syncthing API key cache ~/.hivemindos/syncthing-api-key?" "no"; then
+  rm -f "$HOME/.hivemindos/syncthing-api-key"
+  ok "Removed ~/.hivemindos/syncthing-api-key"
+fi
+
 if ask "Remove HivemindOS GitLawb config/status cache from ~/.hivemindos/gitlawb?" "yes"; then
   rm -rf "$HOME/.hivemindos/gitlawb/status.json" "$HOME/.hivemindos/gitlawb/setup-status.json"
   ok "Removed HivemindOS GitLawb status cache"
+fi
+
+if [[ -f "$OPENCLAW_CODEX_TRUST_MARKER" ]] && ask "Remove the HivemindOS-added Codex entry from OpenClaw's plugin allowlist?" "no"; then
+  openclaw_config="$HOME/.openclaw/openclaw.json"
+  if [[ -f "$openclaw_config" ]] && command -v node >/dev/null 2>&1; then
+    node - "$openclaw_config" <<'NODE'
+const fs = require("fs");
+const configPath = process.argv[2];
+let config;
+try { config = JSON.parse(fs.readFileSync(configPath, "utf8")); } catch { process.exit(0); }
+if (!Array.isArray(config?.plugins?.allow)) process.exit(0);
+config.plugins.allow = config.plugins.allow.filter((pluginId) => pluginId !== "codex");
+if (config.plugins.allow.length === 0) delete config.plugins.allow;
+if (Object.keys(config.plugins).length === 0) delete config.plugins;
+fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+NODE
+    rm -f "$OPENCLAW_CODEX_TRUST_MARKER"
+    ok "Removed the HivemindOS-added Codex plugin trust entry"
+  else
+    warn "OpenClaw config was not readable; left the plugin trust marker in place"
+  fi
 fi
 
 if ask "Remove fallback HivemindOS project registry ~/.hivemindos/projects.json?" "no"; then
@@ -411,7 +480,7 @@ if ask "Remove HivemindOS-managed shared skill projections from local agent skil
   done
 fi
 
-if ask "Remove Aeon shared-brain skill manifest entries created by HivemindOS? This only edits skills.json." "no"; then
+if ask "Remove legacy Aeon shared-brain manifest entries created by older HivemindOS versions? This only edits a legacy skills.json." "no"; then
   aeon_root="${AEON_LOCAL_PATH:-${AEON_HOME:-$HOME/.aeon}}"
   if [[ -f "$aeon_root/skills.json" ]] && run_if_exists node; then
     node - "$aeon_root/skills.json" <<'NODE'
@@ -473,6 +542,42 @@ if ask "Remove dashboard auth secret and device token from .env.local and shared
     else
       warn "Could not remove dashboard auth keys from shared hive env"
     fi
+  fi
+fi
+
+if ask "Remove registered dashboard passkeys from ~/.hivemindos/dashboard-passkeys.json?" "no"; then
+  rm -f "$HOME/.hivemindos/dashboard-passkeys.json"
+  ok "Removed registered dashboard passkeys"
+fi
+
+if ask "Delete Beeline local credentials from the operating-system credential store and remove their local metadata?" "no"; then
+  beeline_broker=""
+  for candidate in \
+    "/Applications/HivemindOS.app/Contents/MacOS/HivemindOS" \
+    "$HOME/Applications/HivemindOS.app/Contents/MacOS/HivemindOS" \
+    "$ROOT/src-tauri/target/release/HivemindOS" \
+    "$ROOT/src-tauri/target/debug/HivemindOS"; do
+    if [[ -x "$candidate" ]]; then
+      beeline_broker="$candidate"
+      break
+    fi
+  done
+  if [[ -z "$beeline_broker" ]] && command -v HivemindOS >/dev/null 2>&1; then
+    beeline_broker="$(command -v HivemindOS)"
+  fi
+  if [[ -n "$beeline_broker" ]]; then
+    broker_response="$(printf '%s\n' '{"action":"delete-all"}' | "$beeline_broker" --beeline-credential-broker 2>/dev/null || true)"
+    if [[ "$broker_response" == *'"ok":true'* || "$broker_response" == *'"ok": true'* ]]; then
+      rm -rf "$HOME/.hivemindos/beeline/local-credentials.json" \
+        "$HOME/.hivemindos/beeline/local-credentials.lock" \
+        "$HOME/.hivemindos/beeline/local-credential-audit.jsonl" \
+        "$HOME/.hivemindos/beeline/browser-use-locks"
+      ok "Deleted Beeline local credentials and secret-free local metadata"
+    else
+      warn "The native broker could not delete Beeline credentials; metadata was preserved so the credential-store entries are not orphaned"
+    fi
+  else
+    warn "No HivemindOS native executable was found; open the desktop app and delete Beeline credentials before uninstalling"
   fi
 fi
 
@@ -572,6 +677,9 @@ if ask "Remove empty canonical HivemindOS vault folders created by setup?" "no";
     "$vault_path/$brain_services_folder/Queen Bee/inbox" \
     "$vault_path/$brain_services_folder/Queen Bee/nodes" \
     "$vault_path/$brain_services_folder/Queen Bee" \
+    "$vault_path/$brain_services_folder/Index Generations/agent-memory" \
+    "$vault_path/$brain_services_folder/Index Generations/full-vault" \
+    "$vault_path/$brain_services_folder/Index Generations" \
     "$vault_path/Operations/Brain Services/Queen Bee" \
     "$vault_path/$brain_services_folder" \
     "$vault_path/$synthesis_folder/pack" \
@@ -623,8 +731,12 @@ if ask "Remove .env.local from this checkout?" "no"; then
   ok "Removed .env.local"
 fi
 
-if ask "Remove hive env, transfer, handoff, Hivemind MCP, update, brain, brain hook, and Hive Pulse commands from ~/.local/bin if they point to this checkout?" "yes"; then
-  for command_name in hive-env-add hive-env-remove hive-env-delete hive-env-run hive-env-check hive-transfer hive-handoff hivemind-mcp hive-update hive-brain hive-brain-hook hive-pulse; do
+if ask "Remove the HivemindOS MCP server from agent harness configs (Claude, Codex, Gemini, OpenClaw, Hermes, Aeon)?" "yes"; then
+  node "$ROOT/scripts/register-mcp-clients.mjs" --remove --targets all || true
+fi
+
+if ask "Remove hive env, transfer, handoff, Hivemind MCP, update, brain, workspace, Hive Pulse, quant research, capability search, and dashboard auth commands from ~/.local/bin if they point to this checkout?" "yes"; then
+  for command_name in hive-env-add hive-env-remove hive-env-delete hive-env-run hive-env-check hive-transfer hive-handoff hivemind-mcp hive-update hive-brain hive-brain-hook hive-workspace hive-workspace-switch hive-workspace-add hive-pulse hive-quant-research hive-capability-search dashboard-auth; do
     command_path="$HOME/.local/bin/$command_name"
     script_path="$ROOT/scripts/$command_name"
     if [[ -L "$command_path" && "$(readlink "$command_path")" == "$script_path" ]]; then

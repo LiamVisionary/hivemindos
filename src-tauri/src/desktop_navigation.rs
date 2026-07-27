@@ -2,11 +2,12 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
+    App, AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder,
 };
 
 use crate::{guard_native_callback, NativeServerState};
@@ -17,6 +18,9 @@ const NAVIGATE_EVENT: &str = "hivemindos:navigate";
 const OPEN_PALETTE_EVENT: &str = "hivemindos:open-command-palette";
 const OPEN_POPOUT_EVENT: &str = "hivemindos:open-popout";
 const RERUN_SETUP_EVENT: &str = "hivemindos:rerun-setup";
+const MODELS_CREDITS_RETURN_EVENT: &str = "hivemindos:models-credits-return";
+const MANAGED_X_RETURN_EVENT: &str = "hivemindos:managed-x-return";
+const RESEARCH_SYNC_CODE_EVENT: &str = "hivemindos:research-sync-code";
 const QUEEN_VOICE_EVENT: &str = "hivemindos:queen-bee-voice";
 const QUEEN_SETTINGS_EVENT: &str = "hivemindos:queen-bee-settings";
 
@@ -24,6 +28,75 @@ const QUEEN_SETTINGS_EVENT: &str = "hivemindos:queen-bee-settings";
 pub struct RouteWindowTarget {
     url: String,
     view: String,
+    /// Spawn the window under the pointer (drag-out flows). The actual
+    /// position comes from the OS cursor — webview screenX/screenY are not
+    /// trustworthy across platforms — with these as the fallback when the
+    /// cursor can't be read.
+    #[serde(default, rename = "screenX")]
+    screen_x: Option<f64>,
+    #[serde(default, rename = "screenY")]
+    screen_y: Option<f64>,
+    /// The pointer is still held mid-drag (live drag-out). The window spawns
+    /// unfocused so the origin window keeps its pointer stream, and on macOS
+    /// a native follow loop keeps it under the cursor until the physical
+    /// button releases — webview pointer events die once focus shifts, so
+    /// the follow cannot depend on them.
+    #[serde(default)]
+    live: Option<bool>,
+}
+
+/// Native cursor/button reads for the live drag-out follow loop, via the safe
+/// core-graphics / objc2-app-kit wrappers (this crate forbids unsafe code).
+/// The reads are OS-global and independent of any webview event stream, which
+/// is the whole point: the origin webview stops delivering pointermoves once
+/// the new window appears, so the follow must come from the OS.
+#[cfg(target_os = "macos")]
+mod macos_drag {
+    use core_graphics::event::CGEvent;
+    use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
+    use objc2_app_kit::NSEvent;
+
+    /// Global cursor position in logical points (top-left origin) — the same
+    /// space Quartz events and window positioning use.
+    pub fn cursor_point() -> Option<(f64, f64)> {
+        let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState).ok()?;
+        let event = CGEvent::new(source).ok()?;
+        let point = event.location();
+        Some((point.x, point.y))
+    }
+
+    /// Whether the primary (left) mouse button is physically held.
+    pub fn left_button_down() -> bool {
+        NSEvent::pressedMouseButtons() & 1 == 1
+    }
+}
+
+/// Where the pointer "holds" a popped-out window relative to its top-left
+/// corner. Mirrors POPOUT_GRAB_OFFSET_X/Y in dashboard-navigation.ts.
+const POPOUT_GRAB_OFFSET_X: f64 = 160.0;
+const POPOUT_GRAB_OFFSET_Y: f64 = 24.0;
+
+/// The OS cursor in logical (points) coordinates — the space window
+/// positioning uses. Reads the physical cursor and divides by the scale
+/// factor of the monitor under it.
+fn cursor_logical_position(app: &AppHandle) -> Option<(f64, f64)> {
+    let cursor = app.cursor_position().ok()?;
+    let mut scale = 1.0;
+    if let Ok(monitors) = app.available_monitors() {
+        for monitor in monitors {
+            let origin = monitor.position();
+            let size = monitor.size();
+            if cursor.x >= origin.x as f64
+                && cursor.x <= origin.x as f64 + size.width as f64
+                && cursor.y >= origin.y as f64
+                && cursor.y <= origin.y as f64 + size.height as f64
+            {
+                scale = monitor.scale_factor();
+                break;
+            }
+        }
+    }
+    Some((cursor.x / scale, cursor.y / scale))
 }
 
 #[derive(Serialize, Deserialize)]
@@ -57,6 +130,118 @@ fn show_main_window(app: &AppHandle) {
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
+}
+
+// Deep-linked hrsc_ research pairing codes are single-use with a 10-minute
+// TTL, so a code that arrives before the dashboard webview is listening (the
+// app was cold-started by the deep link itself) is parked here for the
+// frontend to collect exactly once via take_pending_research_sync_code.
+static PENDING_RESEARCH_SYNC_CODE: Mutex<Option<String>> = Mutex::new(None);
+
+/// One-shot handoff of a deep-linked research sync code: returns the parked
+/// code and clears it, so a later dashboard reload can never re-redeem a
+/// single-use code.
+#[tauri::command]
+pub fn take_pending_research_sync_code() -> Option<String> {
+    PENDING_RESEARCH_SYNC_CODE
+        .lock()
+        .ok()
+        .and_then(|mut pending| pending.take())
+}
+
+pub fn setup_deep_links(app: &App) -> Result<(), String> {
+    use tauri_plugin_deep_link::DeepLinkExt;
+
+    let start_urls = app.deep_link().get_current().map_err(|error| error.to_string())?;
+    if let Some(urls) = start_urls {
+        handle_deep_link_urls(app.handle(), urls.iter().map(|url| url.to_string()).collect());
+    }
+
+    let handle = app.handle().clone();
+    app.deep_link().on_open_url(move |event| {
+        let urls = event.urls().iter().map(|url| url.to_string()).collect::<Vec<_>>();
+        handle_deep_link_urls(&handle, urls);
+    });
+
+    #[cfg(any(target_os = "linux", all(debug_assertions, windows)))]
+    app.deep_link().register_all().map_err(|error| error.to_string())?;
+
+    Ok(())
+}
+
+fn handle_deep_link_urls(app: &AppHandle, urls: Vec<String>) {
+    for raw_url in urls {
+        let Ok(url) = url::Url::parse(&raw_url) else {
+            continue;
+        };
+        if url.scheme() != "hivemindos" && url.scheme() != "hivemindos-dev" {
+            continue;
+        }
+        let host = url.host_str().unwrap_or_default();
+        let path = url.path().trim_matches('/');
+        if host == "models" && path == "credits" {
+            show_main_window(app);
+            let status = query_value(&url, "status").unwrap_or_else(|| "returned".to_string());
+            let source = query_value(&url, "source").unwrap_or_else(|| "stripe".to_string());
+            let slug = query_value(&url, "slug").unwrap_or_default();
+            let _ = app.emit(MODELS_CREDITS_RETURN_EVENT, serde_json::json!({
+                "status": status,
+                "source": source,
+                "slug": slug,
+                "url": url.to_string(),
+            }));
+        } else if host == "integrations" && path == "google-cloud" {
+            // Return target from the Google Cloud OAuth "close this tab" page.
+            // The consent flow ran in the external browser; this deep link brings
+            // the desktop app back to the front and opens Integrations, where the
+            // open Connect modal is already polling for the saved refresh token.
+            show_main_window(app);
+            let _ = app.emit(NAVIGATE_EVENT, serde_json::json!({ "view": "integrations" }));
+        } else if (host == "integrations" && path == "x-managed")
+            || (host == "socials" && path == "x-managed")
+        {
+            let return_view = if host == "socials" {
+                "socials"
+            } else {
+                "integrations"
+            };
+            show_main_window(app);
+            let _ = app.emit(NAVIGATE_EVENT, serde_json::json!({ "view": return_view }));
+            let _ = app.emit(
+                MANAGED_X_RETURN_EVENT,
+                serde_json::json!({
+                    "status": query_value(&url, "x_status").unwrap_or_default(),
+                    "connectionId": query_value(&url, "connectionId").unwrap_or_default(),
+                    "username": query_value(&url, "username").unwrap_or_default(),
+                    "error": query_value(&url, "error").unwrap_or_default(),
+                    "creditAccountId": query_value(&url, "x_credit_account_id").unwrap_or_default(),
+                    "slug": query_value(&url, "x_slug").unwrap_or_default(),
+                    "returnView": return_view,
+                    "url": url.to_string(),
+                }),
+            );
+        } else if host == "research" && path == "sync" {
+            // "Sync memories to app" on hivemindos.app/research. Park the code
+            // for take_pending_research_sync_code (cold start) and emit it for
+            // a running dashboard; the frontend claims each code exactly once
+            // so the single-use hrsc_ code is never redeemed twice.
+            let code = query_value(&url, "code").unwrap_or_default();
+            if let Ok(mut pending) = PENDING_RESEARCH_SYNC_CODE.lock() {
+                *pending = (!code.is_empty()).then(|| code.clone());
+            }
+            show_main_window(app);
+            let _ = app.emit(NAVIGATE_EVENT, serde_json::json!({ "view": "integrations" }));
+            let _ = app.emit(RESEARCH_SYNC_CODE_EVENT, serde_json::json!({
+                "code": code,
+                "url": url.to_string(),
+            }));
+        }
+    }
+}
+
+fn query_value(url: &url::Url, key: &str) -> Option<String> {
+    url.query_pairs()
+        .find_map(|(name, value)| (name == key).then(|| value.into_owned()))
 }
 
 // Tray menu clicks are delivered to both the tray menu handler and the
@@ -457,12 +642,57 @@ fn open_about_window(app: &AppHandle, check_now: bool) -> Result<(), String> {
     Ok(())
 }
 
+/// The floating hologram-companion popover: a small transparent, borderless,
+/// always-on-top window showing only the 3D companion (route
+/// /companion-popover). `open: true` creates or re-shows it; `open: false`
+/// closes it. Mirrors the standalone Ami widget shell's window flags.
+#[tauri::command]
+pub fn set_companion_popover(
+    app: AppHandle,
+    state: tauri::State<NativeServerState>,
+    open: bool,
+) -> Result<(), String> {
+    const LABEL: &str = "companion-popover";
+    if !open {
+        if let Some(window) = app.get_webview_window(LABEL) {
+            let _ = window.close();
+        }
+        return Ok(());
+    }
+    if let Some(window) = app.get_webview_window(LABEL) {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+        return Ok(());
+    }
+    let window = WebviewWindowBuilder::new(
+        &app,
+        LABEL,
+        route_url(&app, &state, "/companion-popover")?,
+    )
+    .title("Companion")
+    .inner_size(360.0, 560.0)
+    .min_inner_size(240.0, 360.0)
+    .resizable(true)
+    .decorations(false)
+    .transparent(true)
+    .shadow(false)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .build()
+    .map_err(|error| error.to_string())?;
+    // Fully transparent webview background (macOS) so only the hologram
+    // paints — same trick the standalone Ami widget uses.
+    let _ = window.set_background_color(Some(tauri::webview::Color(0, 0, 0, 0)));
+    Ok(())
+}
+
 #[tauri::command]
 pub fn open_route_window(
     app: AppHandle,
     state: tauri::State<NativeServerState>,
     target: RouteWindowTarget,
-) -> Result<(), String> {
+) -> Result<String, String> {
     let route = if target.url.starts_with('/') {
         target.url
     } else {
@@ -474,13 +704,81 @@ pub fn open_route_window(
         .as_millis();
     let label = format!("route-{}-{created_at}", target.view.replace(|c: char| !c.is_ascii_alphanumeric(), "-"));
     let title = format!("HivemindOS - {}", target.view);
-    let window = WebviewWindowBuilder::new(&app, label, route_url(&app, &state, &route)?)
+    let mut builder = WebviewWindowBuilder::new(&app, label.clone(), route_url(&app, &state, &route)?)
         .title(title)
         .inner_size(1100.0, 760.0)
         .min_inner_size(860.0, 560.0)
-        .resizable(true)
-        .build()
-        .map_err(|error| error.to_string())?;
-    let _ = window.set_focus();
+        .resizable(true);
+    if target.screen_x.is_some() || target.screen_y.is_some() {
+        // Drag-out flow: spawn under the pointer. Trust the OS cursor over
+        // the webview-reported coordinates; clamp so the title bar stays
+        // reachable.
+        let (x, y) = cursor_logical_position(&app)
+            .or_else(|| match (target.screen_x, target.screen_y) {
+                (Some(x), Some(y)) => Some((x, y)),
+                _ => None,
+            })
+            .unwrap_or((POPOUT_GRAB_OFFSET_X, POPOUT_GRAB_OFFSET_Y));
+        builder = builder.position((x - POPOUT_GRAB_OFFSET_X).max(0.0), (y - POPOUT_GRAB_OFFSET_Y).max(0.0));
+    }
+    let live = target.live.unwrap_or(false);
+    if live {
+        // Keep the origin window focused so its drag gesture stays alive;
+        // the follow loop (or the release) focuses this window afterwards.
+        builder = builder.focused(false);
+    }
+    let window = builder.build().map_err(|error| error.to_string())?;
+    if !live {
+        let _ = window.set_focus();
+    }
+    #[cfg(target_os = "macos")]
+    if live {
+        // Native follow: track the physical cursor while the button is held,
+        // then focus on release. Runs off-thread; set_position/set_focus are
+        // dispatched to the main loop by tauri. Hard 60s cap as a backstop
+        // against a stuck button-state read.
+        let follow = window.clone();
+        std::thread::spawn(move || {
+            let started = std::time::Instant::now();
+            while macos_drag::left_button_down()
+                && started.elapsed() < std::time::Duration::from_secs(60)
+            {
+                if let Some((x, y)) = macos_drag::cursor_point() {
+                    if follow
+                        .set_position(tauri::LogicalPosition::new(
+                            (x - POPOUT_GRAB_OFFSET_X).max(0.0),
+                            (y - POPOUT_GRAB_OFFSET_Y).max(0.0),
+                        ))
+                        .is_err()
+                    {
+                        // Window is gone; stop following.
+                        return;
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis(16));
+            }
+            let _ = follow.set_focus();
+        });
+    }
+    Ok(label)
+}
+
+/// Live drag-out follow: reposition a popped-out route window under the OS
+/// cursor. Driven by the origin window's pointermove stream while the user
+/// keeps holding the drag after the window pops out.
+#[tauri::command]
+pub fn move_route_window(app: AppHandle, label: String) -> Result<(), String> {
+    if !label.starts_with("route-") {
+        return Err("not a route window".to_string());
+    }
+    let Some(window) = app.get_webview_window(&label) else {
+        return Ok(());
+    };
+    if let Some((x, y)) = cursor_logical_position(&app) {
+        let _ = window.set_position(tauri::LogicalPosition::new(
+            (x - POPOUT_GRAB_OFFSET_X).max(0.0),
+            (y - POPOUT_GRAB_OFFSET_Y).max(0.0),
+        ));
+    }
     Ok(())
 }

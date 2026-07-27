@@ -2,10 +2,83 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { Box, ExternalLink, Image as ImageIcon, Music, Sparkles, Video, Volume2, X } from "lucide-react";
+import { Box, ExternalLink, FolderOpen, Image as ImageIcon, Music, Sparkles, Video, Volume2, X } from "lucide-react";
 import { normalizeApplicationGenerationUrl, type ChatApplicationGenerationArtifact, type ChatApplicationGenerationCard as ChatApplicationGenerationCardData, type ChatApplicationGenerationKind } from "@/features/dashboard/chat-application-generation";
+import { nativeOrFetch } from "@/lib/native/bridge";
 import { cachedGenerationMetric, loadGenerationMetricsSnapshot, recordGenerationMetric } from "@/lib/services/generation-metrics-client";
 import styles from "./ImageGenerationCard.module.css";
+
+type DeliverableActionResult = { ok?: boolean; error?: string };
+
+/**
+ * The on-disk path of a generated artifact, or "" when it isn't a local file.
+ *
+ * `/api/chat/generated-media` streams the file and carries its absolute path in
+ * the `path` query param, so the card can recover the real location to reveal.
+ * Remote http(s) artifacts (a hosted app returning its own URL) have no local
+ * path and stay openable as links.
+ */
+export function revealablePathFromArtifactUrl(url: string) {
+  const base = typeof window === "undefined" ? "http://localhost" : window.location.origin;
+  let parsed: URL;
+  try {
+    parsed = new URL(url, base);
+  } catch {
+    return "";
+  }
+  if (parsed.protocol === "file:") return decodeURIComponent(parsed.pathname);
+  if (parsed.pathname === "/api/chat/generated-media") return parsed.searchParams.get("path")?.trim() ?? "";
+  return "";
+}
+
+/**
+ * Reveal the artifact in the OS file manager. Native invoke first: the released
+ * desktop app is a static bundle with no `/api` server, so the HTTP route only
+ * answers in dev/browser. The server re-validates the path — this is a
+ * convenience, not the trust boundary.
+ */
+async function revealGeneratedArtifact(path: string): Promise<DeliverableActionResult> {
+  return nativeOrFetch<DeliverableActionResult>({
+    command: "open_deliverable",
+    args: { action: "reveal", path },
+    fallback: async () => {
+      const response = await fetch("/api/kanban/deliverable", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "reveal", path }),
+      });
+      const data = await response.json().catch(() => null) as DeliverableActionResult | null;
+      if (!response.ok || !data?.ok) return { ok: false, error: data?.error || "Could not show that file." };
+      return data;
+    },
+  });
+}
+
+function RevealInFolderButton({ path, label }: { path: string; label: string }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function reveal() {
+    setBusy(true);
+    setError("");
+    const result = await revealGeneratedArtifact(path).catch((cause: unknown) => ({
+      ok: false,
+      error: cause instanceof Error ? cause.message : "Could not show that file.",
+    }));
+    setBusy(false);
+    if (!result?.ok) setError(result?.error || "Could not show that file.");
+  }
+
+  return (
+    <>
+      <button className={styles.actionButton} disabled={busy} onClick={() => void reveal()} type="button">
+        {busy ? <span className={styles.actionSpinner} aria-hidden="true" /> : <FolderOpen aria-hidden="true" />}
+        {label}
+      </button>
+      {error ? <p className={styles.errorText} role="alert">{error}</p> : null}
+    </>
+  );
+}
 
 type ArtifactRendererInput = {
   card: ChatApplicationGenerationCardData;
@@ -71,9 +144,35 @@ function useDurationEstimate(card: ChatApplicationGenerationCardData) {
   return estimateMs;
 }
 
-function GenerationTiming({ card }: { card: ChatApplicationGenerationCardData }) {
+/**
+ * The prototype's full-width progress bar under the generating skeleton
+ * (Chat.dc.html 503). Renders nothing until we have a real duration estimate —
+ * a bar with no estimate behind it would be a fabricated progress signal.
+ */
+function GenerationProgress({ card }: { card: ChatApplicationGenerationCardData }) {
   const [now, setNow] = useState(() => Date.now());
   const estimateMs = useDurationEstimate(card);
+  useEffect(() => {
+    if (card.status !== "running" || typeof card.createdAt !== "number") return undefined;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [card.createdAt, card.status]);
+  if (card.status !== "running" || typeof card.createdAt !== "number" || !estimateMs) return null;
+  const progress = Math.min(96, Math.max(2, Math.round(((now - card.createdAt) / estimateMs) * 100)));
+  return (
+    <span className={styles.progressTrack} role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} aria-label="Estimated generation progress">
+      <span className={styles.progressFill} style={{ width: `${progress}%` }} />
+    </span>
+  );
+}
+
+function GenerationTiming({ card }: { card: ChatApplicationGenerationCardData }) {
+  const [now, setNow] = useState(() => Date.now());
+  // Called for its side effect, not its value: this hook records the completion
+  // metric that later feeds GenerationProgress's estimate. GenerationProgress
+  // only mounts while the card is running, so it can never record a completion —
+  // this always-rendered component is the one that does.
+  useDurationEstimate(card);
   useEffect(() => {
     if (card.status !== "running" || typeof card.createdAt !== "number") return undefined;
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -82,18 +181,7 @@ function GenerationTiming({ card }: { card: ChatApplicationGenerationCardData })
 
   if (typeof card.createdAt !== "number") return null;
   if (card.status === "running") {
-    const elapsedMs = now - card.createdAt;
-    const progress = estimateMs ? Math.min(96, Math.max(2, Math.round((elapsedMs / estimateMs) * 100))) : 0;
-    return (
-      <span className={styles.timing}>
-        / {durationLabel(elapsedMs)} elapsed
-        {estimateMs ? (
-          <span className={styles.progressTrack} aria-label={`Estimated progress ${progress}%`}>
-            <span className={styles.progressFill} style={{ width: `${progress}%` }} />
-          </span>
-        ) : null}
-      </span>
-    );
+    return <span className={styles.timing}> / {durationLabel(now - card.createdAt)} elapsed</span>;
   }
   if (typeof card.completedAt !== "number") return null;
   const label = card.status === "error" ? "failed after" : "generated in";
@@ -207,9 +295,9 @@ function ImageArtifactGallery({ card, fallback }: { card: ChatApplicationGenerat
   );
 }
 
-function ImagePreviewModal({ image, alt, onClose }: { image: ChatApplicationGenerationArtifact; alt: string; onClose: () => void }) {
+function ImagePreviewModal({ image, alt, onClose, dialogLabel = "Generated image preview" }: { image: ChatApplicationGenerationArtifact; alt: string; onClose: () => void; dialogLabel?: string }) {
   return (
-    <div className={styles.previewOverlay} role="dialog" aria-modal="true" aria-label="Generated image preview" onClick={onClose}>
+    <div className={styles.previewOverlay} role="dialog" aria-modal="true" aria-label={dialogLabel} onClick={onClose}>
       <button type="button" className={styles.previewClose} onClick={onClose} aria-label="Close preview">
         <X aria-hidden="true" />
       </button>
@@ -218,6 +306,36 @@ function ImagePreviewModal({ image, alt, onClose }: { image: ChatApplicationGene
         <img src={image.url} alt={alt} />
       </div>
     </div>
+  );
+}
+
+function SourceImageThumbnail({ card }: { card: ChatApplicationGenerationCardData }) {
+  const sourceImage = card.sourceArtifacts?.find((artifact) => (
+    artifact.kind === "image" && normalizeApplicationGenerationUrl(artifact.url)
+  ));
+  const [previewOpen, setPreviewOpen] = useState(false);
+  if (!sourceImage) return null;
+  const alt = sourceImage.label ? `Source image: ${sourceImage.label}` : "Source image";
+  return (
+    <>
+      <button
+        type="button"
+        className={styles.sourceThumbnail}
+        onClick={() => setPreviewOpen(true)}
+        aria-label="Open source image preview"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- source images use signed dynamic local/Tailnet URLs. */}
+        <img className={styles.sourceThumbnailImage} src={sourceImage.url} alt={alt} />
+      </button>
+      {previewOpen ? (
+        <ImagePreviewModal
+          image={sourceImage}
+          alt={alt}
+          dialogLabel="Source image preview"
+          onClose={() => setPreviewOpen(false)}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -237,6 +355,11 @@ export abstract class ApplicationGenerationCardAdapter {
     return "Open result";
   }
 
+  /** Label for the reveal-in-file-manager action (local artifacts only). */
+  protected revealLabel() {
+    return "Show in folder";
+  }
+
   protected renderArtifact(input: ArtifactRendererInput): ReactNode {
     void input;
     return null;
@@ -252,7 +375,13 @@ export abstract class ApplicationGenerationCardAdapter {
     return (
       <section className={styles.card} aria-label={card.title || this.title}>
         <header className={styles.header}>
-          <span className={styles.icon} aria-hidden="true">
+          {/* While generating, the tile takes the honey outline + honey glyph
+              (prototype Chat.dc.html 493-497). */}
+          <span
+            className={styles.icon}
+            aria-hidden="true"
+            style={card.status === "running" ? { borderColor: "var(--honey-line)", color: "var(--honey)" } : undefined}
+          >
             {this.renderIcon(card)}
           </span>
           <span className={styles.title}>
@@ -262,22 +391,38 @@ export abstract class ApplicationGenerationCardAdapter {
           <span className={`${styles.status} ${styles[card.status]}`}>{statusLabel(card.status)}</span>
         </header>
 
-        {card.status === "running" ? <div className={styles.skeleton} aria-hidden="true" /> : null}
+        {/* `cx-genskel` supplies the grid texture + honey/live shimmer sweep and
+            already honours prefers-reduced-motion. */}
+        {card.status === "running" ? (
+          <>
+            <div className={`${styles.skeleton} cx-genskel`} role="status" aria-label={`${statusLabel(card.status)} ${card.kind}`} />
+            <GenerationProgress card={card} />
+          </>
+        ) : null}
         {this.renderArtifact({ card, artifact })}
 
         {card.status === "error" ? <p className={styles.errorText}>{card.error || this.errorFallback()}</p> : null}
 
         <div className={styles.prompt}>
-          <strong>Prompt</strong>
-          <span>{card.prompt}</span>
+          <div className={styles.promptRow}>
+            <div className={styles.promptCopy}>
+              <strong>Prompt</strong>
+              <span>{card.prompt}</span>
+            </div>
+            <SourceImageThumbnail card={card} />
+          </div>
         </div>
 
         {artifactUrl ? (
           <div className={styles.actions}>
-            <a href={artifactUrl} target="_blank" rel="noreferrer">
-              <ExternalLink aria-hidden="true" />
-              {this.actionLabel(artifact)}
-            </a>
+            {revealablePathFromArtifactUrl(artifactUrl)
+              ? <RevealInFolderButton path={revealablePathFromArtifactUrl(artifactUrl)} label={this.revealLabel()} />
+              : (
+                <a href={artifactUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink aria-hidden="true" />
+                  {this.actionLabel(artifact)}
+                </a>
+              )}
           </div>
         ) : null}
       </section>

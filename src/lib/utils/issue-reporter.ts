@@ -4,7 +4,8 @@
 // without asking a lay user to open devtools.
 //
 // Always-on and anonymized: it sends only app/runtime health fields — never user
-// content, file paths, secrets, or Tailnet IPs. See workers/issues for the sink.
+// content, file paths, secrets, or Tailnet IPs. Official builds send this to the
+// hosted HivemindOS issue-report sink.
 
 const ISSUES_ENDPOINT = (process.env.NEXT_PUBLIC_HIVEMINDOS_ISSUES_URL?.trim()
   || "https://hivemindos-issues.hivemindos.workers.dev").replace(/\/$/, "");

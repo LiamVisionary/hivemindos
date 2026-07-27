@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "environment": "mainnet",
+  "date": "2026-07-21",
+  "activationStatus": "live",
+  "deployer": "0x0c9ed3fa03490dffba59c2b9c94a12f46efbb22c",
+  "governanceOwner": "0x6C41ac629EC899dA4bfBB4C8A5022b3A165fca7e",
+  "governanceWallet": "0x08D73e591c2D3f4EB7E243A2212682e376CA913e",
+  "feeRecipient": "0x08D73e591c2D3f4EB7E243A2212682e376CA913e",
+  "safe": "0xBeB2245F15ff9F596aB673C26dEc525e7aF44cfB",
+  "timelockDelaySeconds": 259200,
+  "supersededOapp": "0x7356B05c633Ad0EA0030075043172c493578987e",
+  "policy": {
+    "directBridgeFeeBps": 5,
+    "directBridgeFeeCapBps": 25,
+    "routedAppFeeBps": 45,
+    "hourlyLimitWei": "5000000000000000000000000000",
+    "dailyLimitWei": "10000000000000000000000000000",
+    "baseSourceConfirmations": 30,
+    "robinhoodSourceConfirmations": 1800,
+    "requiredDvns": ["LayerZero Labs", "Nethermind"],
+    "requiredDvnThreshold": "2-of-2"
+  },
+  "chains": {
+    "base": {
+      "chainId": 8453,
+      "layerZeroEid": 30184,
+      "layerZeroEndpoint": "0x1a44076050125825900e736c501f859c50fE728c",
+      "canonicalHive": "0xA382c83e2a3B79368f372c2EB9b6925ffAf45bA3",
+      "oftAdapter": "0x9e365A3aA8A6Dc4Be95A6900E1dB8Fadd2f221Ce",
+      "transactions": [
+        "0xff189933d1bc312cda95cefe32638213d5cf08bec588eff3844a318fddf37a83",
+        "0x1fcd0997862c0ee574afa353ae3069128a57d1cd5fcfdcdb4b54912a61c2cbc6",
+        "0xedce345655d9abaa32cd808b01cbb3ddda2f65f28f527986ddae31108f86c337",
+        "0x2c5104bff522007710a22617d17c8a7e286cfcc3b151dc8c8970d90badc4df2c",
+        "0x45b14c466b734d9badac00c467d19b6ef76a3a5f33c2b3a451efba0f2588db29",
+        "0x2306110487d1e8b388a17e29ff56aa429950561d5724db02c9b550469d5f48ce",
+        "0x4d3bcd7d3703082058f658402b3a074eb7e455913134ad19616dadd3c70b64bc",
+        "0x6cc166f0b94d84bdc68257e8f89d0972dbffeb2d813c1c81074c9ad4b68ad1ac",
+        "0x4602da32be269f7b9358514f5bcb49c5de342f598163a0a747b8a9476ea7692e",
+        "0xa6a088156a40666f5833b518295cebb33401ee7b33a6a91155fbc2830ad0c685",
+        "0x32b23f1ed942fa34622e782ac62d062cfb05250109d0a72a43b4fa233fdea81c"
+      ],
+      "broadcastReceipt": "contracts/broadcast/DeployAndBootstrapHiveMainnet.s.sol/8453/run-latest.json",
+      "sourceVerification": "Sourcify exact match"
+    },
+    "robinhood": {
+      "chainId": 4663,
+      "layerZeroEid": 30416,
+      "layerZeroEndpoint": "0x6F475642a6e85809B1c36Fa62763669b1b48DD5B",
+      "hiveOft": "0x26c7121e41e779327Adbd5682646dC5deb764539",
+      "transactions": [
+        "0x13317351b8a535fe609345b9df1019ff7392799c1988a7ba4f21c66bc1bc99b0",
+        "0x20d2cf07c3e161678afed46dc94100ea0e1785199656ef331ebfb5ea05af1d7a",
+        "0x3873c0bdb2c4b7e83a39b6918c3cea6dc3d74248f041aad68ac33e4f1249951b",
+        "0x5216766af7db2517446e4ee2c69d9f26f9ddfb34641a19c5a1ddba4a64f38a10",
+        "0xae83cf55de9cc6b9466a4da4b0d2024072892054af5965587aa18bc783da543d",
+        "0x7ebc8fe6461206278cc7e692f8d7ac753a929fd2f01419dae3dd4f055f7eb96f",
+        "0x6206fe259e4dd594a4b4521757f2883d2e20ed1342f465d925f17fbc266c22d0",
+        "0xf17c6eec16fd4ec44925dd24cdedae5aaa8ded7b43c97a71da901a96afe84de5",
+        "0x90d68ef50c09c556f3987f5d099f5c6bccc965e017d783eb88d063c8b7d6d941",
+        "0x3bf337bb84261d308c683d2234901fca52577597ce395df9827eafc0357d6e46",
+        "0xf3ca63ff82f52a1a550c07b5c15a9f842fbac4a912d8c81503de06d8414602a7"
+      ],
+      "broadcastReceipt": "contracts/broadcast/DeployAndBootstrapHiveMainnet.s.sol/4663/run-latest.json",
+      "sourceVerification": "Sourcify exact match (job 79f9cfae-2752-46cb-82a6-65e2f1d638ea)"
+    }
+  },
+  "canary": {
+    "status": "passed-exact-reconciliation",
+    "baseToRobinhood": {
+      "approvalTransaction": "0x297c9c15ee0b1c6f50cd8b99451394713026e9a6663afb1d79f2abb5561ff420",
+      "sourceTransaction": "0xc9eb87aaab7060a0e2d1c149bec3065702e68e5f23a23d78cd16db139ad76bc9",
+      "destinationTransaction": "0x2c2d223f70d592f590d75ac40d267fe8c3c78a2e59389eb92d1d645cd2514328",
+      "layerZeroGuid": "0x37d6f0dcbea9257e66406b732d8879fb67b3508dadab104a81ddb76bbd491ec9",
+      "amountSentWei": "1000000000000000000",
+      "amountReceivedWei": "999500000000000000"
+    },
+    "robinhoodToBase": {
+      "sourceTransaction": "0xf77b5263d520f2d62335b363ad87683ad78d7da44d99c20ab35200c78bbd9a14",
+      "destinationTransaction": "0x871d3f5da52456e944a77b5a5df6bbd8127da662aa873517ad72bfe07b8e5557",
+      "layerZeroGuid": "0xdcd3bc0f747e8ee44df470f2cee0bec97a2c5e16f9160e4eb1429f817ab51130",
+      "amountSentWei": "999500000000000000",
+      "amountReceivedWei": "999000000000000000"
+    },
+    "finalState": {
+      "baseAdapterBalanceWei": "1000000000000000",
+      "baseBridgeFeesAccruedWei": "500000000000000",
+      "baseNetBackingWei": "500000000000000",
+      "robinhoodCanaryWalletBalanceWei": "0",
+      "robinhoodOftContractFeeBalanceWei": "500000000000000",
+      "robinhoodTotalSupplyWei": "500000000000000",
+      "backingEqualsSupply": true
+    }
+  },
+  "verification": {
+    "deploymentVerifier": "Passed owner, pause state, 5 bps fee, peer, enforced options, delegate, send/receive libraries, directional 2-of-2 DVNs, and exact capacity on both chains.",
+    "canaryWatcher": "Corrected for LayerZero six-decimal shared-unit dust; live rerun exited with CANARY ALREADY COMPLETE and sent no transaction.",
+    "routedClientTests": "13 passed, 0 failed"
+  },
+  "cutover": {
+    "gateway": {
+      "status": "live-verified",
+      "url": "https://hivemindos-hive-bridge-gateway.hivemindos.workers.dev",
+      "version": "b23bde41-8626-43eb-80fd-6dabb1680542",
+      "liveReadOnlyBuyQuoteRequestId": "0xff4537c41ee195edd8ffecad09e10566aa467092b45bbf3dfb6e2fa97f393589",
+      "liveReadOnlyBuyQuoteTotalImpactPercent": 4.96
+    },
+    "pages": {
+      "status": "live-verified",
+      "productionUrl": "https://hivemindos-hive-bridge.pages.dev",
+      "deploymentId": "5e3122be-4fc3-4ccd-9cef-5962b15323f3",
+      "deploymentUrl": "https://5e3122be.hivemindos-hive-bridge.pages.dev"
+    },
+    "supersededPairPause": {
+      "status": "paused-both-chains",
+      "baseTransaction": "0xe8e07f2851615795c64eadf09a10b55537b70cdfea97e32b249597a7b3830aa0",
+      "robinhoodTransaction": "0xeb4bb3bed2601f7646ae2df725da9c0c189651b31c553ffc4d3028ac9f1708fd"
+    }
+  },
+  "rollback": {
+    "immediate": "Pause the replacement pair with the governance wallet, disable the gateway, and roll Pages back to deployment de6b770b-bc34-4cb3-9936-ef49d2f6c48a.",
+    "supersededPair": "The superseded pair is paused on both chains. Re-enabling it requires the owner timelock and is not an immediate rollback path."
+  }
+}

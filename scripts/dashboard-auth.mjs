@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { randomBytes } from "node:crypto";
-import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -50,7 +50,19 @@ function readEnvFile() {
 }
 
 function writeEnvFile(text) {
-  writeFileSync(envFile, text, { mode: 0o600 });
+  // Temp file + rename: .env.local has several independent writers
+  // (hive-env-add scope app/all, setup, other sessions), and an in-place
+  // truncate-and-write can interleave with them and corrupt the file.
+  const tmpFile = `${envFile}.${process.pid}.tmp`;
+  writeFileSync(tmpFile, text, { mode: 0o600 });
+  try {
+    renameSync(tmpFile, envFile);
+  } catch {
+    // Windows refuses the rename while another process holds the env file
+    // open; fall back to a direct write rather than losing the update.
+    writeFileSync(envFile, text, { mode: 0o600 });
+    rmSync(tmpFile, { force: true });
+  }
   secureEnvFile();
 }
 
@@ -110,7 +122,7 @@ function secret() {
 function copyExistingToken() {
   const token = readKey(DEVICE_TOKEN);
   if (!token) {
-    console.error(`${DEVICE_TOKEN} is missing from ${envFile}. Run: pnpm dashboard-auth reset-token`);
+    console.error(`${DEVICE_TOKEN} is missing from ${envFile}. Run: dashboard-auth reset-token`);
     process.exit(1);
   }
   copyTokenOrExit(token);
@@ -172,10 +184,13 @@ function printHelp() {
   console.log(`Dashboard auth helper
 
 Usage:
+  dashboard-auth status
+  dashboard-auth copy-token
+  dashboard-auth reset-token
+  dashboard-auth rotate-secret
+
+From the project folder you can also run:
   pnpm dashboard-auth status
-  pnpm dashboard-auth copy-token
-  pnpm dashboard-auth reset-token
-  pnpm dashboard-auth rotate-secret
 
 Commands:
   status         Check whether dashboard auth keys exist.

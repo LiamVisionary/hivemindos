@@ -1,0 +1,17 @@
+{
+  "upstreamName": "Google API Budget Guardrails",
+  "upstreamSlug": "google-api-budget-guardrails",
+  "hiveSlug": "google-api-budget-guardrails",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/ops/hivemindos/google-api-budget-guardrails",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-16T23:02:02Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional operations skills",
+  "sourcePath": "packaged-skills/optional/ops/hivemindos/google-api-budget-guardrails",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Replaces the originating project reference implementation with a generic your-project app-meter pattern and placeholder GCP identifiers.",
+    "Keeps the three-layer defense (app meter, per-day quota caps, billing budget), gcloud recipes, gotchas, and the bundled set-api-budget.sh helper."
+  ]
+}

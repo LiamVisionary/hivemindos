@@ -3,6 +3,10 @@ import "server-only";
 import { mkdir, readFile, rename, writeFile } from "fs/promises";
 import { homedir } from "@/lib/home-dir";
 import { dirname, join } from "path";
+import {
+  AGENT_PROFILES_STORAGE_KEY,
+  mergeSerializedAgentProfileSnapshot,
+} from "@/lib/config/agent-profile-configuration";
 
 export type DashboardStateValues = Record<string, string>;
 
@@ -38,12 +42,29 @@ function normalizeStateFile(value: unknown): DashboardStateFile {
 
 export async function readDashboardState(): Promise<DashboardStateFile> {
   try {
-    const rawState = await readFile(DASHBOARD_STATE_FILE, "utf8");
-    if (!rawState.trim()) return emptyState();
-    return normalizeStateFile(JSON.parse(rawState) as unknown);
+    return await readDashboardStateStrict();
   } catch {
     return emptyState();
   }
+}
+
+/**
+ * Like `readDashboardState`, but a read or parse failure of an EXISTING state
+ * file throws instead of masquerading as empty state. A missing file is still
+ * the empty state — absence is a legitimate fresh install, not an outage. For
+ * callers whose fallback on "empty" is dangerous (e.g. voice continuity treats
+ * "no prefs" as "cloud voice selected").
+ */
+export async function readDashboardStateStrict(): Promise<DashboardStateFile> {
+  let rawState: string;
+  try {
+    rawState = await readFile(DASHBOARD_STATE_FILE, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return emptyState();
+    throw error;
+  }
+  if (!rawState.trim()) return emptyState();
+  return normalizeStateFile(JSON.parse(rawState) as unknown);
 }
 
 async function writeDashboardState(state: DashboardStateFile) {
@@ -65,7 +86,11 @@ export async function updateDashboardState(input: {
     }
     for (const [key, value] of Object.entries(input.values ?? {})) {
       if (!key.trim() || typeof value !== "string") continue;
-      values[key] = value;
+      values[key] =
+        key === AGENT_PROFILES_STORAGE_KEY ||
+        key.endsWith(".agentProfiles.v1")
+          ? mergeSerializedAgentProfileSnapshot(values[key], value)
+          : value;
     }
     const next = {
       version: 1 as const,

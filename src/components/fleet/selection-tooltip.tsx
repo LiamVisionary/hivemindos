@@ -1,10 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import * as React from "react";
 import {
   AlertTriangle,
   Copy,
+  Cpu,
   GitBranch,
   LoaderCircle,
   MessageSquare,
@@ -40,8 +40,6 @@ import type {
 } from "./roster";
 import { FleetTaskPreviewRow } from "./task-preview-row";
 import styles from "./fleet-tokens.module.css";
-
-const USEPOD_RUNTIME_ICON_PATH = "/icons/runtimes/usepod.webp";
 
 type AgentAction = (machine: FleetMachine, agent: FleetAgent) => void;
 
@@ -506,10 +504,14 @@ function FleetMachineDetailPanel({
         {onOpenShell && machine.collectorUrl ? (
           <Tooltip>
             <TooltipTrigger asChild>
+              {/* aria-disabled (not disabled) when the machine's linkd has no
+                  shell service, so the explanatory tooltip still fires. */}
               <button
                 type="button"
+                aria-disabled={machine.remoteShell === false}
                 onClick={(event) => {
                   event.stopPropagation();
+                  if (machine.remoteShell === false) return;
                   onOpenShell(machine);
                 }}
                 aria-label={`Open terminal on ${machine.name}`}
@@ -525,7 +527,8 @@ function FleetMachineDetailPanel({
                   fontFamily: "var(--f-mono)",
                   fontSize: 9.5,
                   fontWeight: 800,
-                  cursor: "pointer",
+                  cursor: machine.remoteShell === false ? "not-allowed" : "pointer",
+                  opacity: machine.remoteShell === false ? 0.55 : undefined,
                 }}
               >
                 <SquareTerminal size={12} aria-hidden="true" />
@@ -533,7 +536,9 @@ function FleetMachineDetailPanel({
               </button>
             </TooltipTrigger>
             <TooltipContent>
-              Open a shell on {machine.name} over the hive link
+              {machine.remoteShell === false
+                ? `Remote shell isn't available on ${machine.name} yet — Windows machines don't support it.`
+                : `Open a shell on ${machine.name} over the hive link`}
             </TooltipContent>
           </Tooltip>
         ) : null}
@@ -577,22 +582,15 @@ function FleetMachineDetailPanel({
                   event.stopPropagation();
                   onOpenUsePodHost(machine);
                 }}
-                aria-label={`Rent ${machine.name} compute through UsePod`}
+                aria-label={`Rent ${machine.name} compute through Hive Compute`}
                 className={styles.rosterUsePodHostButton}
                 style={{ minHeight: 28, padding: "7px 9px" }}
               >
-                <Image
-                  src={USEPOD_RUNTIME_ICON_PATH}
-                  alt=""
-                  aria-hidden="true"
-                  width={15}
-                  height={15}
-                  unoptimized
-                />
+                <Cpu size={15} aria-hidden="true" />
                 <span>Rent compute</span>
               </button>
             </TooltipTrigger>
-            <TooltipContent>Run usepod-agent on this machine</TooltipContent>
+            <TooltipContent>Run Hive Compute on this machine</TooltipContent>
           </Tooltip>
         ) : null}
       </div>

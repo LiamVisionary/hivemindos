@@ -87,6 +87,9 @@ export function BIcon({ name, color = "currentColor", size = 16, sw = 1.7 }: { n
     case "sync": return (<svg {...props}><path d="M3.5 12a8.5 8.5 0 0 1 14.5-6M20.5 12a8.5 8.5 0 0 1-14.5 6" /><path d="M18 3v3.5h-3.5M6 21v-3.5h3.5" /></svg>);
     case "refresh": return (<svg {...props}><path d="M3.5 12a8.5 8.5 0 0 1 2.6-6.1" /><path d="M3 4v4h4" /><path d="M20.5 12a8.5 8.5 0 0 1-2.6 6.1" /><path d="M21 20v-4h-4" /></svg>);
     case "plug": return (<svg {...props}><path d="M9 3v6M15 3v6M7 9h10v3a5 5 0 0 1-10 0zM12 17v4" /></svg>);
+    case "folder": return (<svg {...props}><path d="M3 6.5h7l2 2h9v9.5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>);
+    case "browser": return (<svg {...props}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 9h18M7 6.5h.01M10 6.5h.01" /></svg>);
+    case "copy": return (<svg {...props}><rect x="8" y="8" width="11" height="11" rx="2" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></svg>);
     case "check": return (<svg {...props}><path d="M20 6 9 17l-5-5" /></svg>);
     case "plus": return (<svg {...props}><path d="M12 5v14M5 12h14" /></svg>);
     case "shield": return (<svg {...props}><path d="M12 3l7 4v5c0 4.2-2.9 7.4-7 9-4.1-1.6-7-4.8-7-9V7z" /><path d="M9 12l2 2 4-4" /></svg>);

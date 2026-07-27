@@ -118,6 +118,13 @@ function startMockCollector() {
   }));
 }
 
+// The spawned dashboard's API auth gate (src/proxy.ts) 401s tokenless /api
+// requests. Give the child deterministic throwaway credentials (explicit
+// process env beats .env.local in Next) and send the matching device token.
+const THROWAWAY_AUTH_SECRET = "throwaway-fleet-app-icons-secret-not-a-real-credential";
+const THROWAWAY_DEVICE_TOKEN = "throwaway-fleet-app-icons-device-token";
+const dashboardHeaders = { "x-hivemindos-device-token": THROWAWAY_DEVICE_TOKEN };
+
 async function waitForDashboard(dashboard, baseUrl, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   let lastError = "";
@@ -132,6 +139,7 @@ async function waitForDashboard(dashboard, baseUrl, timeoutMs) {
         `${baseUrl}/api/fleet/app-icon?url=not-a-url`,
         {
           cache: "no-store",
+          headers: dashboardHeaders,
           signal: AbortSignal.timeout(5_000),
         },
       );
@@ -160,6 +168,8 @@ const dashboard = spawn(
       HOME: tempHome,
       HIVEMIND_LINK_APP_PEERS: "127.0.0.1",
       NEXT_TELEMETRY_DISABLED: "1",
+      HIVEMINDOS_DASHBOARD_AUTH_SECRET: THROWAWAY_AUTH_SECRET,
+      HIVEMINDOS_DASHBOARD_DEVICE_TOKEN: THROWAWAY_DEVICE_TOKEN,
     },
     stdio: ["ignore", "pipe", "pipe"],
   },
@@ -181,6 +191,7 @@ try {
 
   const response = await fetch(`${baseUrl}/api/fleet/apps?refresh=1&wait=1`, {
     cache: "no-store",
+    headers: dashboardHeaders,
     signal: AbortSignal.timeout(120_000),
   });
   assert.equal(
@@ -209,6 +220,7 @@ try {
 
   const iconResponse = await fetch(`${baseUrl}${iconApp.iconUrl}`, {
     cache: "no-store",
+    headers: dashboardHeaders,
     signal: AbortSignal.timeout(15_000),
   });
   assert.equal(

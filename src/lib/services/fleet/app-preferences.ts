@@ -11,6 +11,27 @@ export type AppModelPreference = {
   model: string;
 };
 
+/**
+ * How to reach an app's video generation over MCP (used by the chat
+ * generate_video bridge when the app exposes video as an MCP tool rather than a
+ * REST route). All HivemindOS-side — declares the connection without touching
+ * the service.
+ */
+export type AppMcpVideoDescriptor = {
+  /** MCP endpoint URL, e.g. https://host.ts.net:8789/mcp */
+  url: string;
+  /** Shared-hive-env key holding the Bearer token, e.g. "MEDIA_STUDIO_TOKEN". */
+  authEnvKey?: string;
+  /** HTTP base that serves the ComfyUI-style /upload/image ingest + media files, e.g. http://host:8788 */
+  uploadBase?: string;
+  /** Video generation tool name (default "media_generate_video"). */
+  tool?: string;
+  /** Job-poll tool name (default "media_get_job"). */
+  jobTool?: string;
+  /** Optional workflow id passed to the video tool. */
+  workflowId?: string;
+};
+
 export type ConnectedAppPreference = {
   appId: string;
   appName?: string;
@@ -18,6 +39,15 @@ export type ConnectedAppPreference = {
   priority?: boolean;
   /** Natural-prose routing hint, e.g. "Use this app for anime-style images". */
   usageNotes?: string;
+  /**
+   * Capability tags this app can do, e.g. ["video", "image-to-video"]. A
+   * HivemindOS-side overlay so a user/agent can declare what a connected app
+   * does WITHOUT modifying the service — surfaced to agents in the connected-app
+   * roster. Kept short/lowercased.
+   */
+  capabilities?: string[];
+  /** How to reach this app's video generation over MCP, when applicable. */
+  mcpVideo?: AppMcpVideoDescriptor;
   preferredModels?: AppModelPreference[];
   updatedAt?: number;
 };
@@ -27,6 +57,8 @@ export type AppPreferenceCarrier = {
   name?: string;
   priority?: boolean;
   usageNotes?: string;
+  capabilities?: string[];
+  mcpVideo?: AppMcpVideoDescriptor;
   preferredModels?: AppModelPreference[];
 };
 
@@ -47,16 +79,56 @@ function normalizeModelPreferences(value: unknown): AppModelPreference[] {
     .slice(0, 16);
 }
 
+function normalizeMcpVideo(value: unknown): AppMcpVideoDescriptor | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const record = value as Record<string, unknown>;
+  const url = cleanText(record.url);
+  if (!/^https?:\/\//i.test(url)) return undefined;
+  const descriptor: AppMcpVideoDescriptor = { url };
+  const authEnvKey = cleanText(record.authEnvKey);
+  if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(authEnvKey)) descriptor.authEnvKey = authEnvKey;
+  const uploadBase = cleanText(record.uploadBase);
+  if (/^https?:\/\//i.test(uploadBase)) descriptor.uploadBase = uploadBase.replace(/\/+$/, "");
+  const tool = cleanText(record.tool);
+  if (tool) descriptor.tool = tool;
+  const jobTool = cleanText(record.jobTool);
+  if (jobTool) descriptor.jobTool = jobTool;
+  const workflowId = cleanText(record.workflowId);
+  if (workflowId) descriptor.workflowId = workflowId;
+  return descriptor;
+}
+
+function normalizeCapabilities(value: unknown): string[] {
+  const raw = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(/[,\n]/)
+      : [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const entry of raw) {
+    const tag = cleanText(entry).toLowerCase().slice(0, 40);
+    if (!tag || seen.has(tag)) continue;
+    seen.add(tag);
+    out.push(tag);
+    if (out.length >= 12) break;
+  }
+  return out;
+}
+
 export function normalizeAppPreference(value: unknown): ConnectedAppPreference | null {
   if (!value || typeof value !== "object") return null;
   const record = value as Record<string, unknown>;
   const appId = cleanText(record.appId);
   if (!appId) return null;
+  const capabilities = normalizeCapabilities(record.capabilities);
   return {
     appId,
     appName: cleanText(record.appName) || undefined,
     priority: record.priority === true || undefined,
     usageNotes: cleanText(record.usageNotes).slice(0, 2_000) || undefined,
+    capabilities: capabilities.length ? capabilities : undefined,
+    mcpVideo: normalizeMcpVideo(record.mcpVideo),
     preferredModels: normalizeModelPreferences(record.preferredModels),
     updatedAt: typeof record.updatedAt === "number" ? record.updatedAt : undefined,
   };
@@ -131,7 +203,7 @@ export async function saveAppPreference(input: unknown): Promise<ConnectedAppPre
   preference.updatedAt = Date.now();
   const preferences = await readAppPreferences();
   const next = preferences.filter((entry) => entry.appId !== preference.appId);
-  const isEmpty = !preference.priority && !preference.usageNotes && !(preference.preferredModels?.length);
+  const isEmpty = !preference.priority && !preference.usageNotes && !(preference.capabilities?.length) && !preference.mcpVideo && !(preference.preferredModels?.length);
   if (!isEmpty) next.push(preference);
   await writeAppPreferences(next);
   return preference;
@@ -157,6 +229,8 @@ export function applyAppPreferences<T extends AppPreferenceCarrier>(
       ...app,
       priority: preference.priority === true,
       usageNotes: preference.usageNotes,
+      capabilities: preference.capabilities?.length ? preference.capabilities : undefined,
+      mcpVideo: preference.mcpVideo,
       preferredModels: preference.preferredModels?.length ? preference.preferredModels : undefined,
     };
   });

@@ -8,14 +8,14 @@ export type AeonNowState = "working" | "scheduled" | "paused" | "idle";
 export interface AeonNow { state: AeonNowState; skill?: string; progress?: number; since?: string; next?: string; }
 
 export interface AeonAgent {
-  id: string; name: string; repo: string | null; mode: "GitHub" | "Local path" | "A2A";
+  id: string; name: string; repo: string | null; mode: "GitHub" | "Local path";
   branch: string; localPath: string; machine: string;
   onDuty: number; skills: number; runs: number; handoffs: number; successRate: number;
   now: AeonNow; tagline: string;
 }
 
 export type SkillState = "on-duty" | "paused" | "manual" | "ready" | "available";
-export type SkillSource = "aeon.yml" | "aeon-skill-folder" | "shared-brain" | "aeon-a2a";
+export type SkillSource = "aeon.yml" | "aeon-skill-folder" | "aeon-cli" | "shared-brain";
 export interface AeonSkill {
   slug: string; name: string; cat: AeonCategoryId; source: SkillSource;
   state: SkillState; schedule: string; scheduleLabel: string; model: string; desc: string;
@@ -60,7 +60,6 @@ export const CAT: Record<AeonCategoryId, AeonCategory> =
 export const AEON_AGENTS: AeonAgent[] = [];
 export const AEON_SKILLS: AeonSkill[] = [];
 export const AEON_RUNS: AeonRun[] = [];
-export const RUN_LOG_SAMPLE = "";
 export const AEON_OUTPUTS: AeonOutput[] = [];
 export const AEON_DELIVERABLES: AeonDeliverable[] = [];
 export const AEON_SECRETS: AeonSecret[] = [];
@@ -106,8 +105,13 @@ export type ConvertBriefMode = (typeof CONVERT_BRIEF_OPTIONS)[number]["value"];
 export const CONVERT_MODEL_OPTIONS = [
   { value: "", label: "AEON default" },
   { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
-  { value: "claude-opus-4-1", label: "Claude Opus 4.1" },
-  { value: "bankr", label: "Bankr gateway" },
+  { value: "claude-sonnet-5", label: "Claude Sonnet 5" },
+  { value: "claude-opus-4-7", label: "Claude Opus 4.7" },
+  { value: "claude-opus-4-8", label: "Claude Opus 4.8" },
+  { value: "claude-fable-5", label: "Claude Fable 5" },
+  { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
+  { value: "grok-composer-2.5-fast", label: "Grok Composer 2.5 Fast" },
+  { value: "grok-build", label: "Grok Build" },
 ];
 
 export const AEON_LANES = [

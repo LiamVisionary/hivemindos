@@ -11,7 +11,7 @@ const RECENT_DIRECTORIES_PATH = "Projects/HivemindOS/Brain Access/recent-directo
 const LEGACY_KANBAN_FOLDER = "Kanban";
 const LEGACY_PROJECT_KANBAN_FOLDERS = [
   "Projects/HivemindOS/Kanban",
-  "Projects/Omni-Agent Hivemind/Kanban",
+  "Projects/HivemindOS/Legacy Pre-Rename Archive/Kanban",
 ];
 const MAX_RECENT_DIRECTORIES = 40;
 const RECENT_DIRECTORIES_CACHE_MS = 30_000;

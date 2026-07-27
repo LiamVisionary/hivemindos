@@ -8,6 +8,7 @@ import type { AgentWalletTokenBalance } from "@/lib/types/agent-wallet";
 import { DEFAULT_BASE_HIVE_TOKEN_ADDRESS, HIVE_STAKING_TIERS } from "@/lib/config/hive-staking";
 import { isBaseHiveTokenLike, isEvmAddress, shortenEvmAddress, stakeHiveWithBrowserWallet, type BrowserEthereumProvider } from "@/lib/services/hive-staking-client";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+import BankrStakeCard from "./BankrStakeCard";
 import styles from "./stake.module.css";
 
 type WalletWindow = Window & {
@@ -108,10 +109,10 @@ type LoadWalletsOptions = {
 // Why-stake benefits, paired with Fleet-style icon tiles. Glyphs match the
 // fr-/Reserve mock: sparkle, network, promote (arrow-up), shield.
 const STAKE_BENEFITS = [
-  { Icon: Sparkles, text: "Early zero-human company workflow drops" },
-  { Icon: Share2, text: "Governance signaling and roadmap weight" },
-  { Icon: ArrowUpFromLine, text: "Bounty boosting and curator eligibility" },
-  { Icon: Shield, text: "Marketplace trust, badges, and Honey multipliers" },
+  { Icon: Sparkles, text: "Optional wallet-linked community identity" },
+  { Icon: Share2, text: "Non-binding governance signaling" },
+  { Icon: ArrowUpFromLine, text: "Contributor and curator eligibility" },
+  { Icon: Shield, text: "Community status and marketplace reputation context" },
 ];
 
 function walletKey(wallet: Pick<PersonalWallet, "network" | "address">) {
@@ -250,6 +251,7 @@ export default function StakePageClient({ stakingContractAddress, demoMode = fal
   const [draft, setDraft] = useState<StakeDraft | null>(null);
   const [stakeStatuses, setStakeStatuses] = useState<Record<string, StakeStatusRow>>(() => demoActive ? STAKE_DEMO_STATUSES : {});
   const [contractCooldownSeconds, setContractCooldownSeconds] = useState<number>();
+  const [contractTotalStakedHive, setContractTotalStakedHive] = useState<number | null>(demoActive ? 1_420_000_000 : null);
   const nativeDesktopRuntime = useMemo(() => isTauriDesktopRuntime(), []);
 
   const hiveRows = useMemo<HiveWalletRow[]>(() => wallets
@@ -295,16 +297,21 @@ export default function StakePageClient({ stakingContractAddress, demoMode = fal
       .map((wallet) => wallet.address);
     if (!addresses.length) {
       setStakeStatuses({});
-      return;
     }
     const response = await fetch("/api/hive/stake/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ addresses }),
     }).catch(() => null);
-    const data = await response?.json().catch(() => null) as { ok?: boolean; cooldownSeconds?: number; statuses?: StakeStatusRow[] } | null;
+    const data = await response?.json().catch(() => null) as {
+      ok?: boolean;
+      cooldownSeconds?: number;
+      totalStakedHive?: number;
+      statuses?: StakeStatusRow[];
+    } | null;
     if (!response?.ok || !data?.ok || !Array.isArray(data.statuses)) return;
     if (Number.isFinite(data.cooldownSeconds)) setContractCooldownSeconds(data.cooldownSeconds);
+    if (Number.isFinite(data.totalStakedHive)) setContractTotalStakedHive(data.totalStakedHive ?? null);
     setStakeStatuses(Object.fromEntries(data.statuses.map((row) => [row.address.toLowerCase(), row])));
   }, []);
 
@@ -462,15 +469,15 @@ export default function StakePageClient({ stakingContractAddress, demoMode = fal
           confirmation: "STAKE_HIVE",
         }),
       });
-      const result = await response.json().catch(() => null) as { ok?: boolean; stakeHash?: string; error?: string } | null;
+      const result = await response.json().catch(() => null) as { ok?: boolean; approveHash?: string; stakeHash?: string; error?: string } | null;
       if (!response.ok || !result?.ok) throw new Error(result?.error || "Could not stake HIVE.");
       setDraft((current) => current?.rowKey === key ? {
         ...current,
         busy: false,
         error: "",
-        message: `Stake sent${result.stakeHash ? ` (${shortenEvmAddress(result.stakeHash)})` : ""}. Refresh after it confirms.`,
+        message: `Stake confirmed${result.stakeHash ? ` (${shortenEvmAddress(result.stakeHash)})` : ""}. Refreshing wallet state...`,
       } : current);
-      window.setTimeout(() => void refreshAll(), 5000);
+      window.setTimeout(() => void refreshAll(), 1000);
     } catch (stakeError) {
       setDraft((current) => current?.rowKey === key ? {
         ...current,
@@ -501,9 +508,9 @@ export default function StakePageClient({ stakingContractAddress, demoMode = fal
         ...current,
         busy: false,
         error: "",
-        message: `Stake sent${result.stakeHash ? ` (${shortenEvmAddress(result.stakeHash)})` : ""}. Refresh after it confirms.`,
+        message: `Stake confirmed${result.stakeHash ? ` (${shortenEvmAddress(result.stakeHash)})` : ""}. Refreshing wallet state...`,
       } : current);
-      window.setTimeout(() => void refreshAll(), 5000);
+      window.setTimeout(() => void refreshAll(), 1000);
     } catch (stakeError) {
       setDraft((current) => current?.rowKey === key ? {
         ...current,
@@ -524,6 +531,8 @@ export default function StakePageClient({ stakingContractAddress, demoMode = fal
           <Link href="/?view=wallet"><ArrowLeft aria-hidden="true" /> Wallets</Link>
           <div className={styles.topStats}>
             <span><b>{formatHive(totalStakedHive)}</b> staked</span>
+            {contractTotalStakedHive != null ? <span><b>{formatHive(contractTotalStakedHive)}</b> vault</span> : null}
+            <span><b>Optional</b> community signal</span>
             <span><b>{formatHive(totalHive)}</b> detected</span>
             <span><b>{currentTier ? currentTier.label : "—"}</b> tier</span>
           </div>
@@ -533,8 +542,8 @@ export default function StakePageClient({ stakingContractAddress, demoMode = fal
         <section className={styles.hero}>
           <div className={styles.heroCopy}>
             <p className={`${styles.eyebrow} ${styles.eyebrowHoney}`}><Hexagon aria-hidden="true" /> HIVE staking</p>
-            <h1>Stake HIVE to unlock community status, alpha rooms, and curation rights.</h1>
-            <p className={styles.lede}>Staking is not a payment. Your HIVE stays yours while it is locked in the Base staking contract — benefits simply pause when you unstake.</p>
+            <h1>Stake HIVE for optional community identity and status.</h1>
+            <p className={styles.lede}>Staking is not a payment or investment product. Your HIVE stays yours while it is locked in the Base staking contract. Tiers are social and access signals only: they do not promise yield, company ownership, discounts, or revenue rights.</p>
             <div className={styles.benefits}>
               {STAKE_BENEFITS.map(({ Icon, text }) => (
                 <span key={text} className={styles.benefit}>
@@ -568,7 +577,8 @@ export default function StakePageClient({ stakingContractAddress, demoMode = fal
               <div><span>Detected</span><strong>{formatHive(totalHive)}</strong></div>
               <div><span>Unstaking</span><strong>{formatHive(totalPendingUnstakeHive)}</strong></div>
               <div><span>Cooldown</span><strong>{formatCooldown(unstakeCooldownSeconds)}</strong></div>
-              <div><span>Wallets</span><strong>{hiveRows.length} with HIVE</strong></div>
+              <div><span>Purpose</span><strong>Community signal</strong></div>
+              <div><span>Financial return</span><strong>None promised</strong></div>
             </div>
           </aside>
         </section>
@@ -621,7 +631,7 @@ export default function StakePageClient({ stakingContractAddress, demoMode = fal
             <div>
               <p className={styles.eyebrow}>Connected wallets</p>
               <h2>Stake available HIVE</h2>
-              <p className={styles.panelIntro}>Balances are pulled from the same personal Base wallets shown in the Wallets view. Staking locks HIVE in the Base contract — it never leaves your custody.</p>
+              <p className={styles.panelIntro}>Balances are pulled from the same personal Base wallets shown in the Wallets view. Staking locks HIVE in the Base contract, waits for approval and stake confirmation, and never transfers ownership away from you.</p>
             </div>
             <div className={styles.actions}>
               {!nativeDesktopRuntime ? (
@@ -720,6 +730,8 @@ export default function StakePageClient({ stakingContractAddress, demoMode = fal
             )}
           </div>
         </section>
+
+        {!demoActive ? <BankrStakeCard /> : null}
       </div>
     </main>
   );

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Startup Customer Acquisition Sprint"
+  short_description: "Plan weekly first-customer GTM sprints."
+  default_prompt: "Use $startup-customer-acquisition-sprint to create a one-week plan to get our next batch of startup customers."

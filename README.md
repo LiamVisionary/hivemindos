@@ -15,6 +15,8 @@
 >
 > It supports modern agent runtimes like Hermes, OpenClaw, OpenCode, Codex, Claude Code, and Aeon, includes full MiroShark simulation integration, and can provision agent wallets on Base and Solana so agents can hold funds, pay for tools, and operate with their own controlled budgets.
 
+Agents do not get credit just for saying done. HivemindOS evaluates managed work, verifies the evidence that matters, and uses a separate reviewer for consequential results. If the system cannot observe the work, it says so instead of inventing a pass.
+
 Clone it, run one setup command, and get a local-first dashboard for the agents already living on your laptop, desktop, VPS, or spare machines. No public ports required.
 
 ![HivemindOS cyber-bee agent network hero](public/readme/hivemindos-hero.png)
@@ -38,11 +40,12 @@ Clone it, run one setup command, and get a local-first dashboard for the agents 
 - **Move shared env between agent machines** with Hivemind Sync helpers, without copying secrets by hand.
 - **Send handoff files to a machine, runtime, or agent** with `hive-transfer` envelopes in the shared vault.
 - **Assign work to agents** through a shared Kanban board with retries, stale-work recovery, and human handoff.
+- **Evaluate completed agent work** across chat, the Work Board, companies, schedules, and managed runtime tasks, with trusted evidence and separate reviewers for consequential results.
 - **Attach signed code provenance** with GitLawb Code Proof for project-linked work.
 - **Create and import schedules** so supported runtimes can keep working in the background.
 - **Run MiroShark simulations** from the same control room.
 - **Give agents controlled Base and Solana wallets** so they can pay for approved tools, APIs, transactions, and actions.
-- **Earn Honey from regular agent usage** and convert it into HIVE, the HivemindOS token, to help fund agent compute.
+- **Record reviewed ecosystem contribution as Honey** without treating it as cash, a revenue claim, or an automatic path to HIVE.
 
 ## Quick Start
 
@@ -96,14 +99,16 @@ http://localhost:5020
 The dashboard is protected by a local device unlock token because its API can read env values, manage runtime config, and perform wallet actions. Setup stores the token in `.env.local` as `HIVEMINDOS_DASHBOARD_DEVICE_TOKEN`, offers to copy it to your clipboard, and prints the recovery commands:
 
 ```bash
-pnpm dashboard-auth copy-token
-pnpm dashboard-auth reset-token
-pnpm dashboard-auth rotate-secret
+dashboard-auth copy-token
+dashboard-auth reset-token
+dashboard-auth rotate-secret
 ```
 
-Use `copy-token` when you need to paste the token into the unlock screen again. Use `reset-token` if the token is lost, then restart the dashboard so it reloads `.env.local`. Use `rotate-secret` when you also want to invalidate existing browser sessions after restart.
+Use `copy-token` when you need to paste the token into the unlock screen again. Use `reset-token` if the token is lost, then restart the dashboard so it reloads `.env.local`. Use `rotate-secret` when you also want to invalidate existing browser sessions after restart. If the installed `dashboard-auth` helper is not on PATH yet, run the same commands from the cloned repo as `pnpm dashboard-auth <command>`.
 
-Setup checks Node.js and pnpm/Corepack, installs dependencies, installs the hive env helpers, installs the lightweight machine monitor where supported, prepares GitLawb Code Proof where available, starts the dashboard when possible, and can open the dashboard for you. Production dashboard builds are skipped by default; use `./setup.sh --build` when you explicitly want one. On macOS/Linux use `setup.sh`; on native Windows use `setup.ps1`.
+In the macOS desktop app, enrolled Touch ID is detected automatically and can unlock the dashboard without a separate passkey registration step. In a browser, unlock once with the token, open **Security** in the dashboard navigation, and choose **Add this device**. Supported devices can then use Face ID, Touch ID, Windows Hello, or another built-in user-verifying passkey. The token remains visible as the optional recovery or preference fallback. Browser passkeys require HTTPS or a localhost dashboard URL and are registered for the exact dashboard hostname, so a different hostname may need its own enrollment.
+
+Setup checks Node.js and pnpm/Corepack, installs dependencies, installs the hive env helpers and dashboard auth recovery command, installs the lightweight machine monitor where supported, prepares GitLawb Code Proof where available, starts the dashboard when possible, and can open the dashboard for you. Production dashboard builds are skipped by default; use `./setup.sh --build` when you explicitly want one. On macOS/Linux use `setup.sh`; on native Windows use `setup.ps1`.
 
 GitLawb setup is proof-ready by default, not full node hosting by default. On macOS/Linux, interactive setup offers to install `gl`, `git-remote-gitlawb`, and the `gitlawb-node` binary, then offers to create a local DID without registering with a public node. HivemindOS does not start a GitLawb node, install Docker/Postgres, expose repo hosting, or enable federation/IPFS/Arweave/staking during first setup. Full local node setup stays lazy and is surfaced from Integrations or project linking when a project needs local GitLawb repo hosting.
 
@@ -133,30 +138,28 @@ hive-env-add ANTHROPIC_API_KEY=...
 hive-env-remove OLD_API_KEY
 ```
 
-## Honey, HIVE, And Compute
+## Honey, HIVE, Cloud Credits, And Compute
 
-HivemindOS includes an opt-in rewards loop for normal agent usage:
+HivemindOS keeps three concepts separate:
 
-1. The dashboard watches supported local runtimes while Honey rewards are enabled.
-2. When a runtime reports real token usage, HivemindOS submits only the token delta to the official Honey ledger.
-3. The ledger credits Honey to your workspace.
-4. Available Honey can be exchanged for HIVE.
-5. HIVE can be used to fund Bankr LLM credits for future agent compute.
+1. Honey is an optional, non-transferable record of reviewed ecosystem contribution.
+2. Hivemind Cloud credits are purchased, spend-only service value for managed agents and hosted compute.
+3. HIVE is an optional external token used for community identity and explicitly supported payment paths.
 
-Honey is the in-app reward meter. HIVE is the Bankr-launched token behind the reward economy. The official ledger is the source of truth, so editing the frontend display does not mint spendable HIVE. Rewards are capped by the official HIVE reward pool, which is funded from 5% of creator fees, and observed runtime usage is deduped and capped server-side.
+Honey is not cash, company ownership, a claim on revenue, or automatically convertible to HIVE. Official Honey-to-HIVE exchange and claim routes fail closed unless HivemindOS separately enables an authorized hosted conversion policy. Buying Cloud credits never mints Honey or HIVE, and neither local UI state nor a client request can create official spendable value.
 
-Privacy stays local-first. Honey rewards are disabled by default; you enable them from the Wallets view. When enabled, HivemindOS sends usage metadata such as workspace id, agent id, token count, model label, timestamp, source, and event id. Prompts, responses, files, wallet keys, and machine details are not sent to the Honey ledger.
+Privacy stays local-first. Honey contribution tracking is disabled by default; you enable it from the Wallets view. When enabled, HivemindOS sends usage metadata such as workspace id, agent id, token count, model label, timestamp, source, and event id. Prompts, responses, files, wallet keys, and machine details are not sent to the Honey ledger.
 
-Hermes CLI sessions are credited from Hermes' own persisted token counters when the dashboard is running. OpenClaw exposes token usage through its `/usage`, `/status`, CLI, and transcript usage surfaces; HivemindOS only credits OpenClaw once it can read real usage fields, not from text-length guesses. If you fork the reward backend to run your own ledger, that fork is no longer the official HIVE-compatible Honey ledger.
+Hermes CLI sessions are measured from Hermes' own persisted token counters when the dashboard is running. OpenClaw exposes token usage through its `/usage`, `/status`, CLI, and transcript usage surfaces; HivemindOS only records OpenClaw usage once it can read real usage fields, not from text-length guesses. A self-hosted ledger is operator-controlled and is not an official HivemindOS balance or entitlement source.
 
-For spoof-proof Honey, use reward compute mode. Keep using Hermes, OpenClaw, or another OpenAI-compatible client directly, but set its provider endpoint to the HivemindOS reward gateway:
+For server-verified usage records, use the hosted compute gateway. Keep using Hermes, OpenClaw, or another OpenAI-compatible client directly, but set its provider endpoint to the HivemindOS gateway:
 
 ```txt
 OPENAI_BASE_URL=https://hivemindos-compute-gateway.hivemindos.workers.dev/v1
 OPENAI_API_KEY=hive-v1.<workspace-id>.<bankr-llm-key>
 ```
 
-Your workspace id is stored at `~/.hivemindos/install-id` after setup. The gateway forwards the request through Bankr, reads the provider-returned token usage, signs the Honey receipt server-side, and credits official Honey without requiring the dashboard chat surface.
+Your workspace id is stored at `~/.hivemindos/install-id` after setup. The gateway forwards the request through Bankr, reads the provider-returned token usage, and signs the usage receipt server-side without requiring the dashboard chat surface.
 
 ### Local OpenAI-Compatible Runtimes
 
@@ -185,6 +188,11 @@ Provider credentials belong in shared env keys such as `BANKR_LLM_KEY`, `BANKR_A
 | Feature | What it does |
 |---|---|
 | **Fleet dashboard** | Tracks machines, agents, runtimes, health, tasks, logs, and capabilities in one place |
+| **Zero Human Companies** | Runs company cockpits through a HivemindOS crew by default or an optional saved AEON workspace and skill, with explicit goals, governance, stop controls, and run history |
+| **Founder Mode** | Turns one outcome into a reviewable company blueprint with crew, capabilities, compute, budgets, approvals, a first Lab, and proof requirements |
+| **Hivemind Labs** | Runs bounded, evidence-backed company experiments and graduates reviewable methods through preview-first, explicitly confirmed Hive Skill Fusion |
+| **Outcome proof packs** | Shows deliverables, eval receipts, provenance, signed work receipts, and explicit verification gaps for consequential work |
+| **[Agent evaluations](docs/for-users/features/agent-evaluations.md)** | Checks whether managed work deserves credit, verifies authoritative evidence, and records accepted, rejected, needs evidence, error, or unobserved outcomes |
 | **Tailscale agent network** | Connects agents across your machines through your private Tailscale VPN |
 | **Machine monitor** | Lightweight local service that reports agent status and runtime health to the dashboard |
 | **Runtime adapters** | Supports Hermes, OpenClaw, OpenCode, Codex, Claude Code, Aeon, MiroShark, and generic machine-backed agents through a neutral adapter layer |
@@ -202,7 +210,7 @@ Provider credentials belong in shared env keys such as `BANKR_LLM_KEY`, `BANKR_A
 | **Agent chat bridge** | Sends chat to supported runtimes through a local safety and redaction proxy |
 | **MiroShark integration** | Runs and tracks MiroShark simulations from the HivemindOS dashboard |
 | **Agent wallets** | Provisions controlled Base and Solana wallets for agents that need budgets or payment rails |
-| **Honey rewards and HIVE compute** | Lets opt-in users earn Honey from measured agent token usage, exchange it for HIVE, and fund Bankr LLM compute with HIVE-backed credits |
+| **Honey contribution records** | Lets opt-in users record reviewed ecosystem contribution while keeping Honey separate from purchased Cloud credits and optional HIVE payment paths |
 | **Alerts** | Surfaces auth failures, stuck work, runtime issues, and handoff problems in one inbox |
 | **Skill shelf** | Shares skills across Codex, Claude, Hermes, Gemini, OpenClaw, and Aeon |
 | **Local-first storage** | Keeps runtime profiles, vault paths, and local URLs on your machine |
@@ -214,9 +222,9 @@ Provider credentials belong in shared env keys such as `BANKR_LLM_KEY`, `BANKR_A
 | **Hermes** | Local HTTP/runtime adapter, session visibility from `~/.hermes`, chat bridge, tasks, logs, and process snapshots |
 | **OpenClaw** | Gateway adapter with WebSocket chat and model selection through the generic runtime bridge |
 | **OpenCode** | CLI runtime profile with installed-status and provider/model selection; dashboard chat bridge is not enabled yet |
-| **Codex** | CLI runtime profile with installed-status and provider/model selection; dashboard chat bridge is not enabled yet |
-| **Claude Code** | CLI runtime profile with installed-status and provider/model selection; dashboard chat bridge is not enabled yet |
-| **Aeon** | Background-runtime adapter for `aeon.yml`, GitHub Actions-backed skills, run history, outputs, memory, and optional A2A skill calls |
+| **Codex** | CLI runtime profile with authentication readiness, managed background tasks, run logs, model selection, and completion evaluation. Dashboard chat bridge is not enabled yet. |
+| **Claude Code** | CLI runtime profile with authentication readiness, managed background tasks, run logs, model selection, and completion evaluation. Dashboard chat bridge is not enabled yet. |
+| **Aeon** | Optional AEON v0.1 control plane for CLI-backed skills, packs, MCP, Strategy/Soul, gateways, chains/reactive work, self-healing health, OKF knowledge, provenance, outputs, notifications, and Zero Human Company execution |
 | **MiroShark** | Companion integration for simulation workflows and dashboard visibility |
 | **Generic machines** | Read-only machine snapshots through the local monitor |
 
@@ -239,7 +247,7 @@ Plaintext secrets do not belong in the shared vault. If GPG is configured, `hive
 
 ## Shared Env
 
-For the focused docs page, see [Shared Env](docs/whole-brain/shared-env.md).
+For the focused docs page, see [Shared Env](docs/for-users/whole-brain/shared-env.md).
 
 Setup installs `hive-env-add`, `hive-env-remove`, `hive-env-delete`, `hive-env-check`, and `hive-env-run` into `~/.local/bin`. GnuPG is optional; when it is installed and a recipient or public key is configured, `hive-env-add` refreshes the encrypted `hive.env.gpg` backup in the shared notes folder.
 
@@ -286,7 +294,9 @@ The Brain workspace can hold:
 - reusable skills
 - runtime instructions
 
-Shared Brain Memory gives agents a local-first remember/recall/answer layer through `/api/brain/memory` and the installed `hive-brain` CLI. Raw or non-managed agents can run `hive-brain answer "<query>"`; the CLI discovers the running local API when available and falls back to local vault/index search when it is not. Setup also installs `hive-brain-hook` and registers it as a Claude Code `UserPromptSubmit` hook, so raw Claude prompts can receive relevant shared-brain context even when they are not routed through the HivemindOS app. Default recall is tiered: it checks typed Agent Memory first, returns that distilled layer when the hit is strong, and otherwise augments with relevant markdown from the full shared vault through the generated lexical index at `Operations/Brain Services/Full Vault Search Index.jsonl`. Typed recall now includes deterministic entity/alias boosts, temporal recall for "before"/"used to"/"as of" style queries, `action` memories for durable assistant/agent receipts, and soft retrieval telemetry that can reorder crowded results without hiding new memories. `--scope agent-memory` narrows recall to the typed/proven memory write layer, while `--scope full-vault` forces broad vault recall, including `Operations/Secure` reference/status notes for credential names and set/missing status without storing plaintext secret values. When reviewed context replaces stale memory, `hive-brain evolve` or API action `evolve` writes a new active note and preserves prior versions through `supersedes`/`supersededBy` chain metadata instead of deleting history. In live local typed-memory benchmarks, indexed recall measured p50/p95 of `2.69ms/3.15ms` at 100 memories, `4.37ms/5.26ms` at 500 memories, and `19.20ms/31.33ms` at 1500 memories with synthetic Top-1/Top-3/MRR relevance of `1.0`. On a 28,549-file reference vault, the generated full-vault lexical index built 25,995 indexed notes in about 9.2s, then improved five-query median full-vault recall from `2,285ms` to `118ms` with identical top-1 results. A seven-query quality benchmark found no relevance regression and measured cached indexed median latency of `27.75ms` versus `4,506.20ms` for the old `rg`-first baseline. That gives HivemindOS agents rich, provenance-aware memory and broad private vault context at a fraction of the latency and privacy cost of network-bound memory stacks.
+Shared Brain Memory gives agents a local-first remember/recall/answer layer through `/api/brain/memory` and the installed `hive-brain` CLI. Raw or non-managed agents can run `hive-brain answer "<query>"`; the CLI discovers the running local API when available and falls back to local vault/index search when it is not. Setup also installs `hive-brain-hook` and registers it as a Claude Code `UserPromptSubmit` hook, so raw Claude prompts can receive relevant shared-brain context even when they are not routed through the HivemindOS app. Default recall is tiered: it checks typed Agent Memory first, returns that distilled layer when the hit is strong, and otherwise augments with relevant markdown from the full shared vault through the generated lexical index at `Operations/Brain Services/Full Vault Search Index.jsonl`. Markdown remains authoritative; cross-process writes use staged recovery, and typed/full-vault indexes publish checksummed checkpoints, compressed artifacts, and content-addressed deltas while preserving complete legacy JSONL mirrors. Agent Memory retains at most 256 generated generations with a checkpoint every 32; full-vault search retains 32 with a checkpoint every 4. `hive-brain generations` and health report the exact retained replay horizon after pruning. Durable records use canonical `memoryKey` heads and content hashes so current recall returns one active truth per key without exact duplicate bodies, while `hive-brain evolve` preserves prior versions as Markdown history. `hive-brain replay` and `compare` inspect retained historical recall, and deliberately scoped brain capsules provide optional encrypted portability with read-only search and Brain Review-gated imports. Routine run receipts and retries use a separate bounded local operational journal instead of crowding durable recall. Review-gated pattern mining can propose recurring learnings, reusable skills, and stable jobs, but it never applies them automatically. `--scope agent-memory` narrows recall to the typed/proven memory write layer, while `--scope full-vault` forces broad vault recall, including `Operations/Secure` reference/status notes for credential names and set/missing status without storing plaintext secret values.
+
+Benchmark snapshot: a 1,000-query live memory matrix reached `0.90/0.98/0.94` Top-1/Top-3/MRR; exact current-title recall was `1.00`, unsupported questions abstained `10/10`, operational routing passed `40/40`, and temporal Top-1 reached `0.96`. An authenticated 400-request API run measured `6.75ms` p50 and `12.12ms` p95. A 1,500-memory synthetic scale fixture held Top-1 at `1.00` with `27.16ms` p50, and an eight-case live full-vault test measured a `15.39x` direct-index speedup with the same expected Top-1 in every case. Across 2,036 evidence-labeled LoCoMo and LongMemEval questions, HivemindOS retrieved the source session in the Top-50 `99.80%` of the time. Complete GPT-5.4 Mini OAuth answer-and-judge runs at Top-50 scored `76.62%` on LoCoMo, `53.40%` on LongMemEval, `41.12%` on BEAM 1M, and `37.04%` on BEAM 10M; these are not direct comparisons with differently configured published runs. The 47-event pattern fixture reached precision/recall `1.00/1.00`; autonomous production promotion remains disabled pending real-world review data. See [Shared Brain Memory Benchmarks](docs/for-users/features/shared-brain-benchmarks.md) for the complete scorecard and limitations.
 
 Neo4j is optional and derived: `/api/brain/neo4j/*` can connect to an existing graph through env keys, sync HivemindOS-derived nodes with `MERGE`, and run read-only Cypher queries. The Obsidian vault remains canonical, and plaintext Neo4j credentials stay out of notes and dashboard state.
 
@@ -294,7 +304,7 @@ The shared brain can also export Agent Memory and conversation mirrors as an Ope
 
 Compiled Knowledge gives agents a second retrieval lane for reviewed source material and durable synthesis. `/api/brain/knowledge` and the `hivemind-mcp` tools can compile findings into `Synthesis/Compiled Knowledge/<domain>/`, then search entity/concept/summary pages, fetch exact nodes, follow backlinks, inspect graph shape, and scan wiki health. In the deterministic 720-page compiled-wiki benchmark, HivemindOS measured `67.18ms` median compiled search, `39.45ms` graph overview, `31.71ms` node lookup, and `32.44ms` backlink lookup while keeping the source files as normal Obsidian markdown.
 
-Packaged skills ship from `packaged-skills/`. Setup auto-installs foundational Hive skills such as `hive-assimilate`, `hive-pulse`, `hive-capability-search`, and the Hive Fusion skills into the shared brain, along with curated third-party Obsidian Native Brain Pack skills. `hive-pulse` bundles a pinned MIT licensed last-30-days research engine and installs a `hive-pulse` command shim so agents can run social, market, GitHub, and web signal briefs without a separate upstream install. Optional packaged skills stay in `packaged-skills/optional/` until the user installs them. See [Packaged Skills](docs/packaged-skills/index.md), [Token And Cost Savings](docs/features/token-and-cost-savings.md), and the [slash command reference](docs/slash-commands.md) for the agent-facing catalog surfaces.
+Packaged skills ship from `packaged-skills/`. Setup auto-installs foundational Hive skills such as `hive-assimilate`, `hive-pulse`, `hive-capability-search`, and the Hive Fusion skills into the shared brain, along with curated third-party Obsidian Native Brain Pack skills. `hive-pulse` bundles a pinned MIT licensed last-30-days research engine and installs a `hive-pulse` command shim so agents can run social, market, GitHub, and web signal briefs without a separate upstream install. Setup also installs `hive-capability-search` for shell-based agents; app-routed, phone-hosted, or no-shell agents should use already-injected capability-search context, an authenticated `/api/context-index` bridge, or exposed MCP/context-index tools instead. Optional packaged skills stay in `packaged-skills/optional/` until the user installs them. See [Packaged Skills](docs/for-users/packaged-skills/index.md), [Token And Cost Savings](docs/for-users/features/token-and-cost-savings.md), and the [slash command reference](docs/for-users/slash-commands.md) for the agent-facing catalog surfaces.
 
 HivemindOS can auto-detect common local Obsidian vault locations, validate an explicit vault path, and fall back to local Kanban storage at `~/.hivemindos/kanban` if the vault is unavailable.
 
@@ -302,7 +312,7 @@ Setup also seeds the first brain foundation: an AI ready vault contract under `O
 
 For multi-machine sharing, Hivemind Sync can pair Syncthing over Tailscale so trusted machines each keep a local copy of the same vault. No Obsidian Sync subscription is required. If you already use Obsidian Sync, iCloud Drive, Dropbox, Git, or another provider, select that external sync owner in Brain so HivemindOS does not auto-pair Syncthing on top of it. When setup finds another Syncthing-capable collector and the Brain setting allows HivemindOS Syncthing, it can pair the shared vault and write/read a small test note to verify that sync is actually flowing.
 
-For the full brain model, see [Whole Brain](docs/whole-brain/index.md). For the sync and networking model, see [Hivemind Sync](docs/features/hivemind-sync.md) and [Syncing And Tailscale Architecture](docs/syncing-and-tailscale.md). For artifact handoffs, see [Hivemind Sync Handoff Transfers](docs/targeted-file-transfers.md).
+For the full brain model, see [Whole Brain](docs/for-users/whole-brain/index.md). For the sync and networking model, see [Hivemind Sync](docs/for-users/features/hivemind-sync.md) and [Syncing And Tailscale Architecture](docs/for-users/syncing-and-tailscale.md). For artifact handoffs, see [Hivemind Sync Handoff Transfers](docs/for-users/targeted-file-transfers.md).
 
 ## Multi-Machine Setup
 
@@ -311,18 +321,29 @@ On each additional machine that runs agents:
 ```bash
 git clone https://github.com/LiamVisionary/hivemindos.git
 cd hivemindos
-./scripts/install-telemetry-collector.sh
+./setup.sh --collector-only
 ```
 
-The script installs the lightweight machine monitor and starts the services needed for dashboard discovery, Hivemind Sync env readiness, and optional Syncthing brain sync.
+On Windows, use:
 
-For app-managed Link mode instead of a system Tailscale install, use either normal setup or the collector-only command:
+```powershell
+git clone https://github.com/LiamVisionary/hivemindos.git
+cd hivemindos
+powershell -ExecutionPolicy Bypass -File .\setup.ps1 -CollectorOnly
+```
+
+Collector-only setup installs the lightweight machine monitor and chooses app-managed Hivemind Link by default. It starts the services needed for dashboard discovery without installing or running another dashboard on that machine.
+
+The first run builds `hivemind-linkd`, starts a localhost-only collector, and prints a Tailscale authorization URL. Open that URL on the main HivemindOS hub—or any device signed into the same Tailscale account as the hub—approve the machine, and return to Fleet Hive. The new collector appears automatically after Link connects.
+
+To choose a different network mode explicitly:
 
 ```bash
-HIVE_LINK_ENABLED=true ./scripts/install-telemetry-collector.sh
+./setup.sh --system-tailscale
+./setup.sh --local
 ```
 
-The first run builds `bin/hivemind-linkd`, starts a localhost-only collector, and prints a Tailscale sign-in URL when the embedded app node needs authorization. Remote HivemindOS traffic then travels over Tailscale's encrypted device links, while the collector itself stays on `127.0.0.1`.
+Remote HivemindOS traffic in Link mode travels over Tailscale's encrypted device links, while the collector itself stays on `127.0.0.1`.
 
 In Link mode, remote collectors are reached through the local sidecar URL shape
 `http://127.0.0.1:8788/peer/<tailnet-host%3A8787>/...`. Keep that `/peer/...`
@@ -334,7 +355,7 @@ Use `./setup.sh --system-tailscale` only when you want the older full Tailnet se
 ## Private By Default
 
 - The machine monitor is read-only by default.
-- The dashboard API requires a signed local session or device token before non-public routes can read secrets, mutate config, or touch wallet actions.
+- The dashboard API requires a signed local session, a verified dashboard passkey, or the device token before non-public routes can read secrets, mutate config, or touch wallet actions. On macOS, the desktop shell offers a Touch ID-gated unlock path while preserving the token as an explicit preference and recovery fallback.
 - Remote machines should stay private to Tailscale or Hivemind Link.
 - In Hivemind Link mode, the collector binds to localhost and the `hivemind-linkd` sidecar is the only Tailnet-facing entry point.
 - Chat requests pass through a local agent security proxy before reaching runtimes.
@@ -343,7 +364,7 @@ Use `./setup.sh --system-tailscale` only when you want the older full Tailnet se
 - Agent profiles and local runtime URLs are not synced by the app.
 - Broad API keys should not be placed into shared folders.
 
-More detail: [docs/tailscale-fleet-telemetry.md](docs/tailscale-fleet-telemetry.md)
+More detail: [Tailscale Fleet Telemetry](docs/for-users/architecture/tailscale-fleet-telemetry.md)
 
 ## Advanced Setup
 
@@ -369,7 +390,7 @@ HIVE_SHARED_SKILLS=false ./setup.sh
 HIVE_GITLAWB_SETUP=true HIVE_GITLAWB_IDENTITY=true ./setup.sh
 ```
 
-More detail: [docs/integrations/gitlawb.md](docs/integrations/gitlawb.md)
+More detail: [docs/for-users/integrations/gitlawb.md](docs/for-users/integrations/gitlawb.md)
 
 ## Development
 
@@ -407,6 +428,10 @@ If you ship a modified build, rename it, replace the prominent HivemindOS brand
 assets, and make the fork or service relationship clear. See
 [TRADEMARK.md](TRADEMARK.md) for the brand policy.
 
-## Provenance
+## Attributions
 
 HivemindOS packages agent-control patterns, runtime adapter code, HivemindOS workflow templates, MiroShark companion integration, and local-first fleet telemetry into a standalone open-source dashboard. The AI SDK route and chat UI patterns were adapted from public Next.js agent examples. Some workflow templates were inspired by `shannhk/hermes-agent-control-room`.
+
+Thanks to [AgentRQ](https://github.com/agentrq/agentrq) for the Apache-2.0 task-orchestration ideas behind HivemindOS' MCP-native Work Board additions: claimable tasks, status updates, task comments, human approval requests, and event-driven agent coordination.
+
+Thanks to [mr-gigabee/gigabee](https://github.com/mr-gigabee/gigabee) for the MIT-licensed decentralized inference-marketplace reference that informed Hive Compute's worker registration, queued job dispatch, token streaming, earnings-accounting shape, and local Ollama worker setup.

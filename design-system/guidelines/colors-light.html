@@ -1,0 +1,26 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Light theme — hive-paper" subtitle="Warm paper palette (data-theme=hive-light)" -->
+<!DOCTYPE html>
+<html lang="en" data-theme="hive-light">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; background: var(--background); font-family: var(--font-body); }
+  .row { display: flex; gap: 10px; padding: 18px; flex-wrap: wrap; }
+  .sw { flex: 1 1 0; min-width: 92px; }
+  .chip { height: 62px; border-radius: var(--radius-sm); border: 1px solid var(--hairline); }
+  .name { color: var(--fg-2); font-size: 11px; font-weight: 600; margin-top: 8px; }
+  .val { color: var(--fg-4); font-family: var(--font-mono); font-size: 10px; margin-top: 2px; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw"><div class="chip" style="background:var(--background)"></div><div class="name">background</div><div class="val">#f1ede3</div></div>
+    <div class="sw"><div class="chip" style="background:var(--panel)"></div><div class="name">panel</div><div class="val">#fbf8f1</div></div>
+    <div class="sw"><div class="chip" style="background:var(--accent)"></div><div class="name">accent</div><div class="val">#b07f1c</div></div>
+    <div class="sw"><div class="chip" style="background:var(--honey)"></div><div class="name">honey</div><div class="val">#b07f1c</div></div>
+    <div class="sw"><div class="chip" style="background:var(--live)"></div><div class="name">live (olive)</div><div class="val">#88926e</div></div>
+    <div class="sw"><div class="chip" style="background:var(--foreground)"></div><div class="name">foreground</div><div class="val">#221d14</div></div>
+  </div>
+</body>
+</html>

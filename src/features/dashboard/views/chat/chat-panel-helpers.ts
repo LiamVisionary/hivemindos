@@ -1,4 +1,8 @@
 import { HIVEMIND_OS_RUNTIME } from "@/lib/types/agent-runtime";
+import { compactCapabilityContinuation } from "@/features/dashboard/chat-transcript-helpers";
+import { isAgentColdStartProcessEvent } from "@/lib/services/chat/agent-cold-start";
+import { normalizeChatPermissionMode } from "@/lib/types/chat-permissions";
+import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 
 type ChatAgentLike = {
   id?: string;
@@ -38,6 +42,8 @@ type ChatMessageLike = {
   agentPrompt?: {
     question?: unknown;
     choices?: unknown;
+    allowFreeText?: unknown;
+    response?: unknown;
   };
 };
 
@@ -45,6 +51,41 @@ type ProcessEventLike = {
   label?: unknown;
   detail?: unknown;
 };
+
+export type ChatPromptUi = {
+  displayText: string;
+  options: Array<{
+    label: string;
+    value: string;
+    permissionMode?: ChatPermissionMode;
+    suppressUserMessage?: boolean;
+  }>;
+  allowFreeText?: boolean;
+  response?: {
+    label: string;
+    value?: string;
+    respondedAt?: number;
+  };
+};
+
+export function isHiddenChatProcessEvent(event: ProcessEventLike = {}) {
+  if (isAgentColdStartProcessEvent(event)) return true;
+  const label = String(event?.label ?? "").trim();
+  const detail = String(event?.detail ?? "").trim();
+  if (/assistant started writing|assistant wrote in session|agent replied|queued chat request/i.test(label)) return true;
+  if (/^Attached .+ session$/i.test(label)) return true;
+  if (/^Runtime session active$/i.test(label)) return true;
+  if (/^Runtime event$/i.test(label) || /^Runtime event$/i.test(detail)) return true;
+  // Raw runtime lifecycle markers with no payload duplicate the real tool
+  // steps rendered around them, and the stream keepalive is plumbing.
+  if (/^(?:chat\.)?tool\.(?:generating|pending|started?|progress|running|completed|done)$/i.test(label) && !detail) return true;
+  if (/stream still working$/i.test(label)) return true;
+  return false;
+}
+
+export function chatProcessTimerIsActive(streamActive: boolean, processEventsActive: boolean) {
+  return streamActive && processEventsActive;
+}
 
 const PROVIDER_LABELS: Record<string, string> = {
   "openai-codex": "OpenAI Codex",
@@ -145,6 +186,99 @@ export function agentMenuStatusLabel(machine: ChatMachineLike, agent: ChatAgentL
   return `${agent?.name ?? "Agent"} / needs chat URL`;
 }
 
+export type ChatAgentUsageStat = { lastUsedAt: number; threadCount: number };
+
+/**
+ * Per-agent recency/volume, derived from the same sidebar rows the chat history
+ * renders. `threadCount` counts every thread row the agent owns — including the
+ * placeholder row for a freshly opened, still-empty chat, because opening a
+ * thread with an agent is itself a use of that agent.
+ */
+export function chatAgentUsageStats(rows: Array<{ agentId?: string; updatedAt?: unknown }> = []) {
+  const stats = new Map<string, ChatAgentUsageStat>();
+  for (const row of rows) {
+    const agentId = String(row?.agentId ?? "").trim();
+    if (!agentId) continue;
+    const updatedAtValue = Number(row?.updatedAt ?? 0);
+    const updatedAt = Number.isFinite(updatedAtValue) && updatedAtValue > 0 ? updatedAtValue : 0;
+    const current = stats.get(agentId);
+    if (current) {
+      current.threadCount += 1;
+      current.lastUsedAt = Math.max(current.lastUsedAt, updatedAt);
+      continue;
+    }
+    stats.set(agentId, { lastUsedAt: updatedAt, threadCount: 1 });
+  }
+  return stats;
+}
+
+export type AgentMenuGroupKey = "recent" | "frequent" | "all";
+
+export const AGENT_MENU_GROUP_LABELS: Record<AgentMenuGroupKey, string> = {
+  recent: "Recent",
+  frequent: "Most used",
+  all: "All agents",
+};
+
+const AGENT_MENU_RECENT_LIMIT = 4;
+const AGENT_MENU_FREQUENT_MIN_THREADS = 2;
+
+function compareAgentNames(a: string, b: string) {
+  return a.localeCompare(b, undefined, { sensitivity: "base", numeric: true }) || a.localeCompare(b);
+}
+
+/**
+ * Orders the agent picker: a short most-recently-used run, then the agents you
+ * chat with most, then everything else alphabetically. Ranking runs over the
+ * unfiltered list so a search never reshuffles which group an agent belongs to.
+ */
+export function rankAgentMenuRows<T extends { agent?: ChatAgentLike }>(
+  rows: T[],
+  usage: Map<string, ChatAgentUsageStat>,
+  options?: { recentLimit?: number; frequentMinThreads?: number },
+): Array<T & { menuGroup: AgentMenuGroupKey }> {
+  const recentLimit = options?.recentLimit ?? AGENT_MENU_RECENT_LIMIT;
+  const frequentMinThreads = options?.frequentMinThreads ?? AGENT_MENU_FREQUENT_MIN_THREADS;
+  const decorated = rows.map((row, index) => {
+    const agentId = String(row?.agent?.id ?? "").trim();
+    const stat = usage.get(agentId);
+    return {
+      row,
+      index,
+      name: String(row?.agent?.name ?? agentId).trim(),
+      lastUsedAt: stat?.lastUsedAt ?? 0,
+      threadCount: stat?.threadCount ?? 0,
+    };
+  });
+
+  const recent = decorated
+    .filter((item) => item.lastUsedAt > 0)
+    .sort((a, b) => b.lastUsedAt - a.lastUsedAt || compareAgentNames(a.name, b.name) || a.index - b.index)
+    .slice(0, Math.max(0, recentLimit));
+  const recentIndexes = new Set(recent.map((item) => item.index));
+
+  const rest = decorated.filter((item) => !recentIndexes.has(item.index));
+  const frequent = rest
+    .filter((item) => item.threadCount >= frequentMinThreads)
+    .sort((a, b) => (
+      b.threadCount - a.threadCount
+      || b.lastUsedAt - a.lastUsedAt
+      || compareAgentNames(a.name, b.name)
+      || a.index - b.index
+    ));
+  const frequentIndexes = new Set(frequent.map((item) => item.index));
+
+  const remaining = rest
+    .filter((item) => !frequentIndexes.has(item.index))
+    .sort((a, b) => compareAgentNames(a.name, b.name) || a.index - b.index);
+
+  return [
+    ...recent.map((item) => ({ ...item.row, menuGroup: "recent" as const })),
+    ...frequent.map((item) => ({ ...item.row, menuGroup: "frequent" as const })),
+    ...remaining.map((item) => ({ ...item.row, menuGroup: "all" as const })),
+  ];
+}
+
 export function messageKey(message: ChatMessageLike, index: number) {
   const role = String(message?.role ?? "message");
   const source = String(message?.sourceSessionId ?? "");
@@ -155,8 +289,13 @@ export function messageKey(message: ChatMessageLike, index: number) {
 
 export function messageText(message: ChatMessageLike, chatDisplayContent?: (message: ChatMessageLike) => string) {
   const display = chatDisplayContent?.(message);
-  if (typeof display === "string" && display.trim()) return display;
-  return String(message?.content ?? message?.text ?? message?.body ?? "").trim();
+  if (typeof display === "string" && display.trim()) return compactCapabilityContinuation(display);
+  return compactCapabilityContinuation(String(message?.content ?? message?.text ?? message?.body ?? "").trim());
+}
+
+export function isSilentCommandApprovalMessage(message: ChatMessageLike) {
+  if (message?.role !== "user") return false;
+  return /^Approved: run this pending local command now\.\s+Command:\s+\S[\s\S]*$/.test(messageText(message));
 }
 
 export function isChatScrollNearBottom(node: HTMLElement) {
@@ -181,23 +320,76 @@ function plainPromptOptionText(value: string) {
 
 function promptOptionButtonLabel(value: string) {
   const text = plainPromptOptionText(value);
-  const parentheticalIndex = text.search(/\s+\(/);
-  return parentheticalIndex > 0 ? text.slice(0, parentheticalIndex).trim() : text;
+  const detailIndexes = [text.search(/\s+\(/), text.search(/\s+[—–]\s+/)].filter((index) => index > 0);
+  const detailIndex = detailIndexes.length ? Math.min(...detailIndexes) : -1;
+  return detailIndex > 0 ? text.slice(0, detailIndex).trim() : text;
 }
 
-export function promptUiFromMessage(message: ChatMessageLike, content: string) {
+function markdownDecisionPrompt(lines: string[]): ChatPromptUi | null {
+  const firstOptionIndex = lines.findIndex((line) => /^\s*[-*+]\s+\S/.test(line));
+  if (firstOptionIndex <= 0) return null;
+  const question = lines.slice(0, firstOptionIndex).join("\n").trim();
+  if (!/(?:\b(?:which|what)\b[\s\S]{0,120}\b(?:prefer|choose|select|want)\b|\b(?:choose|select|pick)\b[\s\S]{0,120})[?:]?\s*$/i.test(question)) return null;
+  const options: Array<{ label: string; value: string }> = [];
+  let optionEndIndex = firstOptionIndex;
+  for (; optionEndIndex < lines.length; optionEndIndex += 1) {
+    const line = lines[optionEndIndex] ?? "";
+    const match = line.match(/^\s*[-*+]\s+(.+?)\s*$/);
+    if (!match) break;
+    const value = plainPromptOptionText(match[1] ?? "");
+    if (value) options.push({ label: promptOptionButtonLabel(value), value });
+  }
+  if (options.length < 2 || options.length > 6) return null;
+  const trailingText = lines.slice(optionEndIndex).join("\n").trim();
+  return {
+    displayText: [question, trailingText].filter(Boolean).join("\n\n"),
+    options,
+  };
+}
+
+export function promptUiFromMessage(message: ChatMessageLike, content: string): ChatPromptUi | null {
   const structuredPrompt = message?.agentPrompt;
+  const structuredResponse = structuredPrompt?.response && typeof structuredPrompt.response === "object"
+    ? structuredPrompt.response as { label?: unknown; value?: unknown; respondedAt?: unknown }
+    : null;
+  const response = structuredResponse && typeof structuredResponse.label === "string" && structuredResponse.label.trim()
+    ? {
+      label: structuredResponse.label.trim(),
+      value: typeof structuredResponse.value === "string" ? structuredResponse.value.trim() : undefined,
+      respondedAt: typeof structuredResponse.respondedAt === "number" ? structuredResponse.respondedAt : undefined,
+    }
+    : undefined;
   const structuredChoices = Array.isArray(structuredPrompt?.choices)
-    ? structuredPrompt.choices.map((choice) => plainPromptOptionText(String(choice))).filter(Boolean)
+    ? structuredPrompt.choices.map((choice) => {
+      if (typeof choice === "string") {
+        const value = plainPromptOptionText(choice);
+        return value ? { label: promptOptionButtonLabel(value), value } : null;
+      }
+      if (!choice || typeof choice !== "object") return null;
+      const record = choice as { label?: unknown; value?: unknown; permissionMode?: unknown; suppressUserMessage?: unknown };
+      const value = plainPromptOptionText(String(record.value ?? record.label ?? ""));
+      if (!value) return null;
+      const label = promptOptionButtonLabel(String(record.label ?? value));
+      return {
+        label,
+        value,
+        permissionMode: normalizeChatPermissionMode(record.permissionMode),
+        ...(record.suppressUserMessage === true ? { suppressUserMessage: true } : {}),
+      };
+    }).filter((choice): choice is { label: string; value: string; permissionMode?: ChatPermissionMode; suppressUserMessage?: boolean } => Boolean(choice))
     : [];
   if (structuredPrompt?.question && structuredChoices.length) {
     return {
       displayText: String(structuredPrompt.question).trim() || content,
-      options: structuredChoices.map((choice) => ({ label: promptOptionButtonLabel(choice), value: choice })),
+      options: structuredChoices,
+      allowFreeText: structuredPrompt.allowFreeText !== false,
+      response,
     };
   }
 
   const lines = content.split(/\r?\n/);
+  const markdownDecision = markdownDecisionPrompt(lines);
+  if (markdownDecision) return markdownDecision;
   const optionsIndex = lines.findIndex((line) => /^options?\s*:?\s*$/i.test(line.trim()));
   if (optionsIndex < 0) return null;
   const options: Array<{ label: string; value: string }> = [];
@@ -224,6 +416,7 @@ export function promptUiFromMessage(message: ChatMessageLike, content: string) {
 export function processText(events: ProcessEventLike[] = []) {
   return events
     .slice(-12)
+    .filter((event) => !isHiddenChatProcessEvent(event))
     .map((event) => {
       const label = String(event?.label ?? "event").trim();
       const detail = String(event?.detail ?? "").trim();

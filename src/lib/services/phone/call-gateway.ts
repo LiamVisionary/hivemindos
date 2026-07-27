@@ -3,6 +3,7 @@ import { homedir } from "@/lib/home-dir";
 import { isAbsolute, join, relative, resolve } from "path";
 import { listArchivedMiroSharkRuns } from "@/lib/services/miroshark/archive";
 import {
+  buildByokAgentCallInstructions,
   createByokAgentCall,
   createInAppCall,
   readManagedVoiceConfig,
@@ -10,12 +11,14 @@ import {
   voiceConfigPayload,
   voiceProvidersFromManagedConfig,
 } from "@/lib/services/phone/realtime-voice";
+import { toolsForVoiceToolBundle } from "@/lib/services/phone/voice-tool-bundles";
 import {
   LOCAL_TTS_RUNTIME,
   discoverLocalTtsCandidates,
   isLocalTtsProviderId,
   resolveLocalTtsCallConfig,
 } from "@/lib/services/phone/local-tts";
+import { normalizeGeminiLiveModel } from "@/lib/services/phone/cloud-voice-transports";
 import { appendVoiceRunEvent, completeVoiceRun, createVoiceRun } from "@/lib/services/phone/voice-runs";
 
 const GATEWAY_PORTS = [5000, 5001, 5002];
@@ -29,6 +32,7 @@ export type GatewayCallPayload = {
   voiceRuntime?: string;
   voiceModelId?: string;
   voiceId?: string;
+  voiceKeyEnv?: string;
   runtimeAgent?: RuntimeAgentVoiceBridge;
 };
 
@@ -52,6 +56,7 @@ export type AgentCallIdentity = {
   voiceRuntime?: string;
   voiceModelId?: string;
   voiceId?: string;
+  voiceKeyEnv?: string;
   soulPrompt?: string;
   skillProfilePrompt?: string;
   preferredSkillSlugs?: string[];
@@ -308,7 +313,7 @@ async function readAeonContext(agent: AgentCallIdentity) {
     readBoundedAeonFile(root, "CLAUDE.md", 900),
     readBoundedAeonFile(root, "memory/MEMORY.md", 900),
     readBoundedAeonFile(root, "aeon.yml", 8_000, { sanitize: false }),
-    readBoundedAeonFile(root, "skills.json", 300_000, { sanitize: false }),
+    readBoundedAeonFile(root, "catalog/skills.json", 300_000, { sanitize: false }),
     readBoundedAeonFile(root, "soul/SOUL.md", 700),
     readBoundedAeonFile(root, "soul/STYLE.md", 700),
     readRecentMiroSharkContext(agent),
@@ -334,7 +339,6 @@ async function buildAeonCallBriefing(input: AgentCallInput) {
   const repoName = clean(input.agent.aeonRepoName);
   const branch = clean(input.agent.aeonBranch);
   const mode = clean(input.agent.aeonMode);
-  const a2aUrl = clean(input.agent.a2aUrl);
   const localPath = clean(input.agent.aeonLocalPath) || clean(input.agent.localDataDir);
   const preferredSkillSlugs = cleanList(input.agent.preferredSkillSlugs);
   const aeonContext = await readAeonContext(input.agent);
@@ -342,11 +346,10 @@ async function buildAeonCallBriefing(input: AgentCallInput) {
     `[greeting] Start the call with exactly: "I'm Aeon, variation ${agentName}."`,
     "You are AEON, an autonomous background agent, not a generic HivemindOS phone caller.",
     "Answer as this AEON variation. Be concise, aware of your repo, skills, memory, and current work.",
-    "AEON context model: identity comes from CLAUDE.md; persistent context comes from memory/MEMORY.md, memory/topics, logs, and issues; available work comes from aeon.yml schedules/chains and skills.json.",
+    "AEON context model: identity comes from CLAUDE.md plus soul/SOUL.md and soul/STYLE.md; persistent context comes from memory; available work comes from aeon.yml, the skills directory, catalog/skills.json, packs, chains, and reactive rules.",
     repo || repoName ? `Repository: ${[repoName, repo].filter(Boolean).join(" / ")}.` : "",
     branch ? `Branch: ${branch}.` : "",
     mode ? `Mode: ${mode}.` : "",
-    a2aUrl ? `A2A endpoint: ${a2aUrl}.` : "",
     localPath ? `Local AEON workspace: ${localPath}.` : "",
     machineName ? `Host machine: ${machineName}.` : "",
     preferredSkillSlugs.length ? `Preferred Hivemind skills: ${preferredSkillSlugs.join(", ")}.` : "",
@@ -381,6 +384,7 @@ export async function buildAgentCallPayload(input: AgentCallInput): Promise<Gate
     voiceRuntime: clean(input.agent.voiceRuntime) || undefined,
     voiceModelId: clean(input.agent.voiceModelId) || undefined,
     voiceId: clean(input.agent.voiceId) || undefined,
+    voiceKeyEnv: clean(input.agent.voiceKeyEnv) || undefined,
   };
 }
 
@@ -586,6 +590,49 @@ async function startAgentByokCall(input: AgentCallInput, hubUrl: string, idPrefi
       },
     };
   }
+  if (payload.voiceRuntime === "gemini-live") {
+    const geminiModel = normalizeGeminiLiveModel(payload.voiceModelId);
+    const geminiVoiceRun = await createVoiceRun({
+      title: payload.title || clean(input.agent.name) || "Gemini Live agent call",
+      mode: "byok",
+      recipeId: "agent-runtime-bridge",
+      toolBundleId: "agent-call-default",
+      agent: input.agent,
+      machine: input.machine,
+      provider: {
+        id: "gemini-live",
+        label: "Gemini Live",
+        model: geminiModel,
+        voice: clean(payload.voiceId) || undefined,
+        transport: "direct-ws",
+      },
+      initialContext: { briefing: payload.briefing || "", callMode: "gemini-live" },
+    });
+    const geminiRuntimeAgent = buildRuntimeAgentVoiceBridge(input, hubUrl, geminiVoiceRun.id);
+    return {
+      ok: true,
+      gateway: "hivemindos",
+      result: {
+        ok: true,
+        call: {
+          id: `${idPrefix}_gemini_${Date.now()}`,
+          mode: "gemini-live",
+          callerName: payload.title,
+          voiceReady: true,
+          geminiLive: {
+            provider: "gemini-live",
+            model: geminiModel,
+            voice: clean(payload.voiceId) || undefined,
+            keyEnv: clean(payload.voiceKeyEnv) || undefined,
+            instructions: buildByokAgentCallInstructions({ briefing: payload.briefing || "", runtimeAgent: geminiRuntimeAgent }),
+            tools: toolsForVoiceToolBundle("agent-call-default"),
+          },
+          runtimeAgent: geminiRuntimeAgent,
+          voiceRun: voiceRunCallPayload(geminiVoiceRun),
+        },
+      },
+    };
+  }
   const resolvedVoice = resolveVoice(payload.voiceProviderId, voiceProviders, managed);
   const voiceRun = await createVoiceRun({
     title: payload.title || clean(input.agent.name) || "BYOK agent call",
@@ -685,16 +732,7 @@ export async function readGatewayVoiceConfig(origin?: string): Promise<GatewayCa
 }
 
 export async function readGatewayVoiceDeviceStatus(): Promise<GatewayCallResult> {
-  return {
-    ok: true,
-    gateway: "hivemindos",
-    result: {
-      ok: true,
-      count: 0,
-      device: null,
-      apns: { configured: false, missing: ["HivemindOS in-app agent calls do not require the Claw gateway APNs device registry."] },
-    },
-  };
+  return gatewayJson("/voice/devices/status");
 }
 
 export function ringStoredPrompt(scriptId: string) {

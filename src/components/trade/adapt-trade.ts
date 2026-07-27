@@ -1,0 +1,238 @@
+/* adapt-trade.ts — pure mappers that turn the app's REAL payloads (wallet token
+   balances, Alpaca portfolio, market rows, the spend-ledger activity feed) into
+   the Trade desk's view shapes. No React, no fetching — TradePanel does the I/O
+   and calls these. */
+
+import { trAmt } from "./format";
+import type { DeskActivity, DeskHolding, DeskPortfolio } from "./trade-context";
+import type { WalletActivityRecord, CryptoMarketRow, StockMarketRow } from "@/features/dashboard/views/trade/trade-api";
+import type { AlpacaPosition, AlpacaPortfolio } from "@/features/dashboard/views/trade/trade-api";
+
+export function truncateAddress(address: string): string {
+  const a = (address || "").trim();
+  return a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a;
+}
+
+export function relativeTime(ms: number, now: number): string {
+  const diff = Math.max(0, now - ms);
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "now";
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d`;
+}
+
+export function hoursAgo(ms: number, now: number): number {
+  return Math.max(0, now - ms) / 3_600_000;
+}
+
+// ── activity ─────────────────────────────────────────────────────────────────
+const STOCK_TARGET = /^(alpaca|robinhood-agentic|xstocks|robinhood-chain|plume-options):/i;
+// Stable "cash" tokens — a swap INTO one reads as a sell, OUT of one as a buy.
+const STABLE_SYMBOLS = new Set(["USDC", "USDT", "DAI", "USDS", "USDE", "PYUSD"]);
+
+export function swapDirection(sellToken: string, buyToken: string): "buy" | "sell" | "swap" {
+  const sellStable = STABLE_SYMBOLS.has((sellToken || "").toUpperCase());
+  const buyStable = STABLE_SYMBOLS.has((buyToken || "").toUpperCase());
+  if (buyStable && !sellStable) return "sell"; // gave up a token for cash
+  if (sellStable && !buyStable) return "buy"; // spent cash to acquire a token
+  return "swap";
+}
+
+function activityDisplay(record: WalletActivityRecord): { kind: string; text: string; via: string; src: "crypto" | "stocks" } {
+  // Guard literal "null"/"undefined" strings (and blanks) from a sparse ledger
+  // record so a row never renders the text "null".
+  const raw = (record.target || "").trim();
+  const target = raw === "null" || raw === "undefined" ? "" : raw;
+  const isStockTrade = record.kind === "trade" && STOCK_TARGET.test(target);
+  if (isStockTrade) {
+    // "alpaca:NVDA buy (paper)" → kind "Buy"/"Sell", text "NVDA buy …", via venue.
+    const [venue, rest = ""] = target.split(":");
+    if (venue.toLowerCase() === "plume-options") {
+      const action = rest.trim().split(/\s+/).slice(1).join(" ");
+      const label = action ? action.replace(/(^|-)([a-z])/g, (_, separator: string, letter: string) => `${separator ? " " : ""}${letter.toUpperCase()}`) : "Option action";
+      return { kind: label, text: rest.trim() || "Plume option action", via: "Plume", src: "stocks" };
+    }
+    const side = /sell/i.test(rest) ? "Sell" : "Buy";
+    const via = venue.toLowerCase() === "xstocks" ? "xStocks" : venue.toLowerCase() === "robinhood-chain" ? "Robinhood Chain" : venue.toLowerCase() === "robinhood-agentic" ? "Robinhood Agentic" : "Alpaca";
+    return { kind: side, text: rest.trim() || "Stock trade", via, src: "stocks" };
+  }
+  switch (record.kind) {
+    case "trade": {
+      // A swap carries its real legs now — label it by direction with the moved
+      // token + amount ("Sold 12.5 HIVE"), not the old bare "USDC swap" fallback.
+      const swap = record.swap;
+      if (swap?.sellToken && swap?.buyToken) {
+        const dir = swapDirection(swap.sellToken, swap.buyToken);
+        const text = dir === "sell" ? `Sold ${trAmt(swap.sellToken, swap.sellAmount)} ${swap.sellToken}`
+          : dir === "buy" ? `Bought ${trAmt(swap.buyToken, swap.buyAmount)} ${swap.buyToken}`
+          : `Swapped ${trAmt(swap.sellToken, swap.sellAmount)} ${swap.sellToken} → ${trAmt(swap.buyToken, swap.buyAmount)} ${swap.buyToken}`;
+        return { kind: dir === "sell" ? "Sell" : dir === "buy" ? "Buy" : "Swap", text, via: "DEX", src: "crypto" };
+      }
+      return { kind: "Swap", text: target || `${record.asset} swap`, via: "DEX", src: "crypto" };
+    }
+    case "send": return { kind: "Send", text: target ? `Sent to ${target}` : `Sent ${record.asset}`, via: "Base", src: "crypto" };
+    case "x402": return { kind: "Pay", text: target ? `Paid ${target}` : "Paid an API", via: "x402", src: "crypto" };
+    case "x402-private": return { kind: "Private", text: target ? `Privately paid ${target}` : "Private API pay", via: "Veil", src: "crypto" };
+    case "veil-transfer": return { kind: "Private", text: target ? `Private transfer to ${target}` : "Private transfer", via: "Veil", src: "crypto" };
+    case "platform-fee": return { kind: "Fee", text: "Platform fee", via: "Platform", src: "crypto" };
+    default: return { kind: "Activity", text: target || record.kind, via: record.asset, src: "crypto" };
+  }
+}
+
+export function mapActivity(records: WalletActivityRecord[], now: number): DeskActivity[] {
+  // Platform fees and paid-API (company treasury) spend are internal accounting,
+  // not a user trade action — keep them out of the activity feed (panel + "View all").
+  return records.filter((record) => record.kind !== "platform-fee" && record.kind !== "api").map((record) => {
+    const display = activityDisplay(record);
+    // Guard the timestamp like the activity route does — a legacy record missing
+    // createdAtMs must not render "NaNd" or corrupt the day sort/grouping.
+    const ms = Number(record.createdAtMs) || Date.parse(record.createdAt) || now;
+    const swap = record.swap?.sellToken && record.swap?.buyToken
+      ? { ...record.swap, direction: swapDirection(record.swap.sellToken, record.swap.buyToken) }
+      : undefined;
+    return {
+      id: record.id,
+      kind: display.kind,
+      text: display.text,
+      via: display.via,
+      wid: record.agentId,
+      when: relativeTime(ms, now),
+      hrs: hoursAgo(ms, now),
+      usd: Number(record.amountUsd) || 0,
+      state: record.status === "executed" ? "filled" : record.status === "failed" ? "failed" : String(record.status || "filled"),
+      src: display.src,
+      swap,
+    };
+  });
+}
+
+// ── crypto portfolio ─────────────────────────────────────────────────────────
+type BalanceToken = { symbol?: string; name?: string; balance?: number; valueUsd?: number | null; priceChange24hPct?: number | null; tokenAddress?: string; iconUrl?: string | null };
+
+export function cryptoBalancesFrom(tokens: BalanceToken[]): Record<string, number> {
+  const map: Record<string, number> = {};
+  for (const token of tokens) {
+    const symbol = String(token.symbol || "").trim();
+    if (symbol) map[symbol] = Number(token.balance) || 0;
+  }
+  return map;
+}
+
+export function buildCryptoPortfolio(tokens: BalanceToken[], history: number[]): DeskPortfolio {
+  const rows: DeskHolding[] = tokens
+    .map((token) => {
+      const sym = String(token.symbol || "").trim();
+      // Key on the mint/contract — two distinct mints can share a symbol on-chain.
+      const id = String(token.tokenAddress || "").trim() || sym;
+      return {
+        id,
+        sym,
+        name: String(token.name || token.symbol || "").trim(),
+        amount: Number(token.balance) || 0,
+        usd: Number(token.valueUsd) || 0,
+        chg: Number(token.priceChange24hPct) || 0,
+        logoUrl: token.iconUrl ?? null,
+      };
+    })
+    .filter((row) => row.sym && row.usd > 0)
+    .sort((a, b) => b.usd - a.usd);
+  const total = rows.reduce((sum, row) => sum + row.usd, 0);
+  // Each holding's 24h $ change, from its CURRENT value + 24h % move. Two fixes
+  // over the naive Σ(usd·chg/100):
+  //   1. Compounding form usd·c/(100+c) — the change from yesterday's price
+  //      (usd/(1+c/100)) to today's. The linear usd·c/100 overstates a big mover
+  //      by ~(1+c/100)×, so a thin-pool token DexScreener reports as e.g. +4000%
+  //      24h alone inflated the headline by tens of thousands of dollars and drove
+  //      total−dayChange negative — the "+$82k · −102.80% today" on a $2,236 wallet.
+  //   2. Clamp c to a sane band: a HELD token whose reported 24h% is past ~[-90,+900]
+  //      is almost always a low-liquidity / stale-price artifact, not a real move —
+  //      don't let one dominate "today". The clamp also keeps 100+c well clear of 0.
+  const dayChange = rows.reduce((sum, row) => {
+    const c = Math.max(-90, Math.min(900, row.chg));
+    return sum + (row.usd * c) / (100 + c);
+  }, 0);
+  const prior = total - dayChange; // portfolio value ~24h ago; clamp keeps it > 0 when total > 0
+  const dayPct = prior > 0 ? (dayChange / prior) * 100 : 0;
+  return { rows, total, dayChange, dayPct, history };
+}
+
+/**
+ * Real crypto portfolio value history: sum, per time-bucket, of each held
+ * token's quantity × its price history. Aligns series by index (all are
+ * downsampled to a common length upstream) and only includes tokens we actually
+ * have a price series for — so it's a real curve, never a synthetic one. Returns
+ * [] when no held token has a series.
+ */
+export function cryptoPortfolioHistory(balances: Record<string, number>, marketRows: CryptoMarketRow[]): number[] {
+  // Case-insensitive join: held balances are keyed by the raw on-chain symbol,
+  // market rows by the canonical registry key — match either casing.
+  const byUpper: Record<string, number> = {};
+  for (const [sym, amount] of Object.entries(balances)) byUpper[sym.toUpperCase()] = amount;
+  const heldAmount = (sym: string) => balances[sym] || byUpper[sym.toUpperCase()] || 0;
+  const series = marketRows
+    .filter((row) => heldAmount(row.symbol) > 0 && row.history.length >= 2)
+    .map((row) => ({ amount: heldAmount(row.symbol), history: row.history }));
+  if (!series.length) return [];
+  const length = Math.min(...series.map((s) => s.history.length));
+  const out: number[] = [];
+  for (let i = 0; i < length; i++) {
+    let sum = 0;
+    for (const s of series) sum += s.amount * s.history[s.history.length - length + i];
+    out.push(sum);
+  }
+  return out;
+}
+
+// ── stock portfolio ──────────────────────────────────────────────────────────
+export function buildStockPortfolio(portfolio: AlpacaPortfolio | null, snapshotChg: Record<string, number>, equityHistory: number[]): DeskPortfolio {
+  const positions: AlpacaPosition[] = portfolio?.positions ?? [];
+  const rows: DeskHolding[] = positions
+    .map((position) => {
+      const chg = snapshotChg[position.symbol];
+      return {
+        id: position.symbol,
+        sym: position.symbol,
+        name: position.symbol,
+        amount: position.qty,
+        shares: position.qty,
+        usd: position.marketValue,
+        // Prefer the live 24h change; fall back to since-entry P/L% when no snapshot.
+        chg: Number.isFinite(chg) ? chg : (position.unrealizedPlPct || 0) * 100,
+      };
+    })
+    .sort((a, b) => b.usd - a.usd);
+  const total = portfolio?.account.portfolioValue ?? rows.reduce((sum, row) => sum + row.usd, 0);
+  const dayChange = rows.reduce((sum, row) => sum + (row.usd * row.chg) / 100, 0);
+  // Base the day % on the invested position total (not account value incl. cash),
+  // so a position-level dollar delta isn't diluted by an unrelated cash balance.
+  const positionsTotal = rows.reduce((sum, row) => sum + row.usd, 0);
+  const dayPct = positionsTotal > 0 ? (dayChange / positionsTotal) * 100 : 0;
+  // Pending (not-yet-filled) orders shown as pending position rows, on top, so a
+  // just-submitted buy is visible before it fills and flips to a real holding.
+  // A notional order shows its $ notional; a share order its qty.
+  const pendingRows: DeskHolding[] = (portfolio?.openOrders ?? []).map((order) => ({
+    id: `order:${order.id}`,
+    sym: order.symbol,
+    name: order.symbol,
+    amount: order.qty ?? 0,
+    shares: order.qty ?? undefined,
+    usd: order.notionalUsd ?? 0,
+    chg: 0,
+    pending: true,
+    status: order.status,
+    side: order.side === "sell" ? "sell" : "buy",
+    orderId: order.id,
+  }));
+  return { rows: [...pendingRows, ...rows], total, dayChange, dayPct, history: equityHistory };
+}
+
+export function moverFromCrypto(row: CryptoMarketRow) {
+  return { sym: row.symbol, name: row.name, price: row.price, chg: row.change24h, history: row.history };
+}
+
+export function moverFromStock(row: StockMarketRow, name: string) {
+  return { sym: row.symbol, name, price: row.price, chg: row.change24h, history: row.history };
+}

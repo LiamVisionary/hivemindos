@@ -1,0 +1,21 @@
+{
+  "upstreamName": "skeuomorphic-ui",
+  "upstreamSlug": "skeuomorphic-ui",
+  "hiveSlug": "skeuomorphic-ui",
+  "sourceLabel": "mengto",
+  "sourceUrl": "https://github.com/MengTo/Skills/blob/6ad391b6c78cc716327180d72db3f7fa26bc3fdd/agent-skills/web-design/skeuomorphic-ui/SKILL.md",
+  "repository": "https://github.com/MengTo/Skills",
+  "installCommand": "npx skills add https://github.com/MengTo/Skills --skill skeuomorphic-ui",
+  "importedAt": "2026-07-07T16:32:45.736Z",
+  "refreshedAt": "2026-07-07T16:33:23.330Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/design/mengto/skeuomorphic-ui",
+  "packageGroup": "design",
+  "upstreamCategory": "web-design",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "6ad391b6c78cc716327180d72db3f7fa26bc3fdd",
+  "normalized": "verbatim-frontmatter",
+  "description": "Create skeuomorphic web UI surfaces with layered gradients, stacked inner and outer shadows, reflective gradient borders, micro texture, and embossed text or icon details. Use when asked for pressed, carved, tactile, realistic, soft-plastic, soft-metal, or premium physical interface styling."
+}

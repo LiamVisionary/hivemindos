@@ -1,0 +1,213 @@
+/* list-view.module.css — self-scoped tokens + interactive states for the Fleet
+   list view. The list view is rendered inside two different hosts (the new
+   fleet-hive `.fr-root` and the legacy `.root`), so it re-declares every colour
+   token it needs on its own `.root` selector rather than inheriting them. The
+   values mirror `src/components/fleet-hive/fleet-hive.css` so the list matches
+   the Hive palette exactly, and a `[data-theme="hive-light"]` block mirrors the
+   warm-paper light theme. Only :hover / :focus-within / keyframes live here;
+   the rest of the styling is inline `var(...)` in list-view.tsx. */
+
+.root {
+  /* type */
+  --lv-display: "Space Grotesk", system-ui, sans-serif;
+  --lv-body: "Geist", "Inter", system-ui, sans-serif;
+  --lv-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* warm-neutral dark (matches fleet-hive) */
+  --lv-bg: #0c0d11;
+  --lv-bg-soft: #101116;
+  --lv-panel: #14161c;
+  --lv-panel-2: #181b22;
+  --lv-hex-inner: #0f1116;
+  --lv-line: rgba(238, 232, 220, 0.07);
+  --lv-line-2: rgba(238, 232, 220, 0.13);
+  --lv-line-3: rgba(238, 232, 220, 0.2);
+  --lv-tint: rgba(238, 232, 220, 0.03);
+  --lv-tint-2: rgba(238, 232, 220, 0.05);
+
+  --lv-fg: #f3f0e9;
+  --lv-fg-2: #a7a39a;
+  --lv-fg-3: #76726a;
+  --lv-fg-4: #545049;
+
+  --lv-honey: #e7b45c;
+  --lv-honey-2: #f0c879;
+  --lv-honey-ink: #1a1305;
+  --lv-honey-soft: rgba(231, 180, 92, 0.13);
+  --lv-honey-line: rgba(231, 180, 92, 0.34);
+
+  --lv-live: #6fcdba;
+  --lv-live-soft: rgba(111, 205, 186, 0.12);
+  --lv-live-line: rgba(111, 205, 186, 0.3);
+
+  --lv-danger: #e58e85;
+  --lv-danger-soft: rgba(229, 142, 133, 0.1);
+  --lv-danger-line: rgba(229, 142, 133, 0.3);
+
+  color: var(--lv-fg);
+  font-family: var(--lv-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+  /* When embedded in a shrink-to-fit flex/grid cell (the legacy Classic shell),
+     min-width:auto would let the rows' nowrap content force the parent wider
+     than the viewport. Pin to 0 so the list fits its host and the task text
+     ellipsizes instead. */
+  min-width: 0;
+  max-width: 100%;
+}
+
+.root :global(*) {
+  box-sizing: border-box;
+}
+
+:global([data-theme="hive-light"]) .root {
+  --lv-bg: #f1ede3;
+  --lv-bg-soft: #f6f2e9;
+  --lv-panel: #fbf8f1;
+  --lv-panel-2: #f4efe4;
+  --lv-hex-inner: #f6f2e9;
+  --lv-line: rgba(54, 46, 30, 0.1);
+  --lv-line-2: rgba(54, 46, 30, 0.16);
+  --lv-line-3: rgba(54, 46, 30, 0.26);
+  --lv-tint: rgba(54, 46, 30, 0.03);
+  --lv-tint-2: rgba(54, 46, 30, 0.05);
+
+  --lv-fg: #221d14;
+  --lv-fg-2: #5e574b;
+  --lv-fg-3: #867d6e;
+  --lv-fg-4: #a59b89;
+
+  --lv-honey: #936811; --lv-honey-fill: #e6bb5c;
+  --lv-honey-2: #936811;
+  --lv-honey-ink: #fff8ec;
+  --lv-honey-soft: rgba(176, 127, 28, 0.14);
+  --lv-honey-line: rgba(176, 127, 28, 0.4);
+
+  --lv-live: #4f7c66;
+  --lv-live-soft: rgba(79, 124, 102, 0.12);
+  --lv-live-line: rgba(79, 124, 102, 0.34);
+
+  --lv-danger: #c0524d;
+  --lv-danger-soft: rgba(192, 82, 77, 0.12);
+  --lv-danger-line: rgba(192, 82, 77, 0.34);
+}
+
+/* scroll area */
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* rows clip + ellipsize rather than forcing the card wider than its host */
+  overflow-x: hidden;
+}
+.scroll::-webkit-scrollbar {
+  width: 10px;
+}
+.scroll::-webkit-scrollbar-thumb {
+  background: var(--lv-line-2);
+  border-radius: 8px;
+  border: 3px solid var(--lv-bg);
+}
+
+/* search field */
+.searchWrap {
+  transition: box-shadow 0.14s ease, border-color 0.14s ease;
+}
+.searchWrap:focus-within {
+  border-color: var(--lv-honey-line) !important;
+  box-shadow: 0 0 0 3px rgba(231, 180, 92, 0.16);
+}
+:global([data-theme="hive-light"]) .searchWrap:focus-within {
+  box-shadow: 0 0 0 3px rgba(176, 127, 28, 0.18);
+}
+.searchInput::placeholder {
+  color: var(--lv-fg-4);
+}
+
+/* pressable chrome */
+.press {
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.press:hover {
+  filter: brightness(1.08);
+}
+.paginationButton:focus-visible {
+  outline: 2px solid var(--lv-honey);
+  outline-offset: 2px;
+}
+.paginationButton:hover {
+  color: var(--lv-honey) !important;
+  filter: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* clickable machine header */
+.machineHeader {
+  transition: background 0.12s ease;
+}
+.machineHeader:hover {
+  background: var(--lv-tint);
+}
+
+/* agent row */
+.agentRow {
+  transition: background 0.12s ease;
+}
+.agentRow:hover {
+  background: var(--lv-panel-2);
+}
+
+/* add-agent row */
+.addRow {
+  transition: background 0.12s ease;
+}
+.addRow:hover {
+  background: var(--lv-honey-soft);
+}
+
+/* expanded action buttons */
+.actionBtn {
+  transition: filter 0.12s ease, background 0.12s ease;
+}
+.actionBtn:hover {
+  filter: brightness(1.22);
+}
+
+/* status dot */
+.dot {
+  border-radius: 50%;
+  background: currentColor;
+  display: inline-block;
+}
+.dotLive {
+  animation: lv-pulse 2.4s ease-in-out infinite;
+}
+@keyframes lv-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(111, 205, 186, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(111, 205, 186, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dotLive {
+    animation: none;
+  }
+  .press,
+  .agentRow,
+  .addRow,
+  .actionBtn,
+  .machineHeader,
+  .searchWrap {
+    transition: none;
+  }
+}

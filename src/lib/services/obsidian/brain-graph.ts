@@ -11,7 +11,7 @@ const ACCESS_LOG_PATH = `${DEFAULT_SHARED_VAULT.brainServicesFolder}/access-log.
 const LEGACY_ACCESS_LOG_PATH = "Projects/HivemindOS/Brain Access/access-log.jsonl";
 const OBSIDIAN_CLI = process.env.OBSIDIAN_CLI_PATH ?? "obsidian";
 const MAX_NOTE_BYTES = 524_288;
-const MAX_GRAPH_NOTES = 260;
+const MAX_GRAPH_NOTES = 420;
 const GRAPH_CACHE_TTL_MS = 30_000;
 const SKIPPED_DIRS = new Set([".git", ".obsidian", ".trash", "node_modules"]);
 const execFileAsync = promisify(execFile);
@@ -178,7 +178,10 @@ async function readNotes(root: string): Promise<{ notes: NoteRecord[]; truncated
   return { notes, truncated: paths.length >= MAX_GRAPH_NOTES };
 }
 
-export async function readAccessEvents(root: string): Promise<BrainAccessEvent[]> {
+export async function readAccessEvents(
+  root: string,
+  options: { limit?: number | null } = {},
+): Promise<BrainAccessEvent[]> {
   const logPath = accessLogFile(root);
   const legacyLogPath = resolve(root, LEGACY_ACCESS_LOG_PATH);
   assertInside(root, legacyLogPath);
@@ -186,7 +189,7 @@ export async function readAccessEvents(root: string): Promise<BrainAccessEvent[]
     await readFile(logPath, "utf-8").catch(() => ""),
     legacyLogPath !== logPath ? await readFile(legacyLogPath, "utf-8").catch(() => "") : "",
   ].filter(Boolean).join("\n");
-  return raw
+  const events = raw
     .split("\n")
     .filter(Boolean)
     .map((line) => {
@@ -197,8 +200,9 @@ export async function readAccessEvents(root: string): Promise<BrainAccessEvent[]
       }
     })
     .filter((event): event is BrainAccessEvent => Boolean(event?.notePath && event.accessedAt))
-    .sort((a, b) => Date.parse(b.accessedAt) - Date.parse(a.accessedAt))
-    .slice(0, 500);
+    .sort((a, b) => Date.parse(b.accessedAt) - Date.parse(a.accessedAt));
+  const limit = options.limit === undefined ? 500 : options.limit;
+  return limit === null ? events : events.slice(0, Math.max(0, limit));
 }
 
 export async function buildBrainGraph(vaultPath?: string, options: { force?: boolean } = {}): Promise<BrainGraph> {

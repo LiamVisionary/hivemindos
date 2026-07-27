@@ -1,0 +1,21 @@
+{
+  "upstreamName": "Nansen Top Wallet Research",
+  "upstreamSlug": "nansen-top-wallet-research",
+  "hiveSlug": "nansen-top-wallet-research",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/crypto/hivemindos/nansen-top-wallet-research",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-08T12:30:00Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional crypto skills",
+  "sourcePath": "packaged-skills/optional/crypto/hivemindos/nansen-top-wallet-research",
+  "status": "optional",
+  "references": [
+    "https://docs.nansen.ai/guides/templates/complex-use-cases/use-case-4-copytrading-top-performing-wallets"
+  ],
+  "hivemindAdaptations": [
+    "Converts copytrade-named source material into watch-only HivemindOS token research.",
+    "Requires a token address and preserves normal trade confirmation boundaries.",
+    "Avoids redistribution of raw Smart Money feeds and trader rankings."
+  ]
+}

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import { createPortal } from "react-dom";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
+import { MachineInitModal } from "./MachineInitModal";
 import { maskedSecretValueClass, secretInputProps } from "@/components/ui/secret-input-props";
 import type { ComponentType, Dispatch, ElementType, FormEvent, SetStateAction } from "react";
 import type { SetupCellProps, SetupStep } from "@/components/cells/SetupCell";
@@ -82,14 +82,12 @@ type DashboardModalsProps = {
 };
 
 export function DashboardModals(props: DashboardModalsProps) {
-  const { Button, Check, ChevronLeft, Copy, CopyPlus, FileText, FolderOpen, HETZNER_IMAGE_OPTIONS, HETZNER_LOCATION_OPTIONS, HETZNER_SERVER_TYPE_OPTIONS, LoaderCircle, Plus, SetupCell, copyMachineInitCommand, copySetupCommand, displayAgents, duplicateAgent, duplicateAgentDraft, fleetClass, initializeMachineProject, kanbanClass, loadMachineDirectories, machineDirectoryBrowser, machineInitCopiedKey, machineInitDraft, machineInitOpen, machineInitStatus, machineInitToken, machineInitTokenStatus, openHetznerEnvFile, saveHetznerToken, selectedHetznerServerType, setDuplicateAgentDraft, setMachineDirectoryBrowser, setMachineInitDraft, setMachineInitOpen, setMachineInitToken, setMachineInitTokenStatus, setSetupMachineKey, setupCollectorCommand, setupCommandCopied, setupMachine } = props;
-  const [machineInitView, setMachineInitView] = useState<"env" | "create">("env");
+  const { Button, Check, ChevronLeft, Copy, CopyPlus, FolderOpen, HETZNER_IMAGE_OPTIONS, HETZNER_LOCATION_OPTIONS, HETZNER_SERVER_TYPE_OPTIONS, SetupCell, copyMachineInitCommand, copySetupCommand, displayAgents, duplicateAgent, duplicateAgentDraft, fleetClass, initializeMachineProject, kanbanClass, loadMachineDirectories, machineDirectoryBrowser, machineInitCopiedKey, machineInitDraft, machineInitOpen, machineInitStatus, machineInitToken, machineInitTokenStatus, openHetznerEnvFile, saveHetznerToken, selectedHetznerServerType, setDuplicateAgentDraft, setMachineDirectoryBrowser, setMachineInitDraft, setMachineInitOpen, setMachineInitToken, setMachineInitTokenStatus, setSetupMachineKey, setupCollectorCommand, setupCommandCopied, setupMachine } = props;
   const portalTarget = typeof document === "undefined" ? null : document.body;
 
   if (!portalTarget) return null;
 
   const closeMachineInitModal = () => {
-    setMachineInitView("env");
     setMachineInitOpen(false);
   };
 
@@ -144,204 +142,27 @@ export function DashboardModals(props: DashboardModalsProps) {
       })() : null}
 
       {machineInitOpen ? (
-        <div
-          className={fleetClass("setupModalBackdrop")}
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) closeMachineInitModal();
-          }}
-        >
-          <section className={fleetClass("setupModal")} role="dialog" aria-modal="true" aria-labelledby="machine-init-title">
-            <div className={fleetClass("setupModalHeader")}>
-              <div>
-                <p className="eyebrow">Initialize machine</p>
-                <h2 id="machine-init-title">New Hetzner agent box</h2>
-                <p>Initializes a Hetzner VPS with the runtime agent of your choice and HivemindOS, then prepares it to join your fleet.</p>
-              </div>
-              <CloseIconButton aria-label="Close machine initializer" onClick={closeMachineInitModal} />
-            </div>
-
-            {!machineInitStatus.result ? (
-              <div className={fleetClass("machineInitSteps")} aria-label="Machine initializer steps">
-                <span className={fleetClass("machineInitStep", machineInitView === "env" && "active", machineInitTokenStatus.validated && "done")}>
-                  <Check aria-hidden="true" />
-                  Env setup
-                </span>
-                <span className={fleetClass("machineInitStep", machineInitView === "create" && "active")}>
-                  <Plus aria-hidden="true" />
-                  Machine
-                </span>
-              </div>
-            ) : null}
-
-            {!machineInitStatus.result && machineInitView === "env" ? (
-              <section className={fleetClass("machineInitEmpty")}>
-                <div>
-                  <strong>Connect Hetzner Cloud</strong>
-                  <p>Paste your HCLOUD_TOKEN and validate it with Hetzner Cloud. Once the token passes a live API check, this app saves it locally and unlocks machine creation.</p>
-                </div>
-                <label className={fleetClass("agentSettingsField")}>
-                  <span>HCLOUD_TOKEN</span>
-                  <input
-                    {...secretInputProps}
-                    value={machineInitToken}
-                    onChange={(event) => {
-                      setMachineInitToken(event.target.value);
-                      setMachineInitTokenStatus({});
-                    }}
-                    placeholder="Paste token"
-                    className={maskedSecretValueClass}
-                  />
-                </label>
-                <div className={fleetClass("machineInitTokenActions")}>
-                  <Button type="button" variant="secondary" onClick={saveHetznerToken} disabled={Boolean(machineInitTokenStatus.busyAction) || !machineInitToken.trim()}>
-                    {machineInitTokenStatus.busyAction === "save" ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <Check aria-hidden="true" />}
-                    {machineInitTokenStatus.busyAction === "save" ? "Validating" : "Validate and save"}
-                  </Button>
-                  <Button type="button" variant="ghost" onClick={openHetznerEnvFile} disabled={Boolean(machineInitTokenStatus.busyAction)}>
-                    {machineInitTokenStatus.busyAction === "open" ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <FileText aria-hidden="true" />}
-                    Open env file
-                  </Button>
-                </div>
-                {machineInitTokenStatus.error || machineInitTokenStatus.message ? (
-                  <p className={machineInitTokenStatus.error ? fleetClass("machineInitTokenError") : fleetClass("machineInitTokenOk")}>
-                    {machineInitTokenStatus.error ?? machineInitTokenStatus.message}
-                  </p>
-                ) : null}
-                <div className={fleetClass("setupModalActions", "machineInitViewActions")}>
-                  <Button type="button" onClick={() => setMachineInitView("create")} disabled={!machineInitTokenStatus.validated || Boolean(machineInitTokenStatus.busyAction)}>
-                    <Check aria-hidden="true" />
-                    Next
-                  </Button>
-                </div>
-              </section>
-            ) : null}
-
-            {machineInitView === "create" || machineInitStatus.result ? (
-            <form className={fleetClass("machineInitForm")} onSubmit={initializeMachineProject}>
-              <label className={fleetClass("agentSettingsField")}>
-                <span>Machine name</span>
-                <input
-                  value={machineInitDraft.projectName}
-                  onChange={(event) => setMachineInitDraft((current) => ({ ...current, projectName: event.target.value }))}
-                  placeholder="seo-worker-1"
-                  required
-                />
-              </label>
-              <label className={fleetClass("agentSettingsField")}>
-                <span>Server type</span>
-                <select
-                  value={machineInitDraft.serverType}
-                  onChange={(event) => setMachineInitDraft((current) => ({ ...current, serverType: event.target.value }))}
-                >
-                  {HETZNER_SERVER_TYPE_OPTIONS.map((option) => (
-                    <option value={option.value} key={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label className={fleetClass("agentSettingsField")}>
-                <span>Location</span>
-                <select
-                  value={machineInitDraft.serverLocation}
-                  onChange={(event) => setMachineInitDraft((current) => ({ ...current, serverLocation: event.target.value }))}
-                >
-                  {HETZNER_LOCATION_OPTIONS.map((option) => (
-                    <option value={option.value} key={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label className={fleetClass("agentSettingsField")}>
-                <span>Image</span>
-                <select
-                  value={machineInitDraft.serverImage}
-                  onChange={(event) => setMachineInitDraft((current) => ({ ...current, serverImage: event.target.value }))}
-                >
-                  {HETZNER_IMAGE_OPTIONS.map((option) => (
-                    <option value={option.value} key={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label className={fleetClass("agentSettingsField")}>
-                <span>Runtime agent</span>
-                <select
-                  value={machineInitDraft.runtimeAgent}
-                  onChange={(event) => setMachineInitDraft((current) => ({ ...current, runtimeAgent: event.target.value as AgentRuntime }))}
-                >
-                  <option value="hermes">Hermes</option>
-                  <option value="openclaw">OpenClaw</option>
-                  <option value="aeon">Aeon</option>
-                </select>
-              </label>
-              <div className={fleetClass("machineInitCost")}>
-                <span>Estimated compute</span>
-                <strong>from €{selectedHetznerServerType.monthlyEur.toFixed(2)}/mo</strong>
-                <dl className={fleetClass("machineInitSpecs")} aria-label={`${selectedHetznerServerType.label} compute specs`}>
-                  <div>
-                    <dt>vCPU</dt>
-                    <dd>{selectedHetznerServerType.cores}</dd>
-                  </div>
-                  <div>
-                    <dt>RAM</dt>
-                    <dd>{selectedHetznerServerType.memoryGb} GB</dd>
-                  </div>
-                  <div>
-                    <dt>SSD</dt>
-                    <dd>{selectedHetznerServerType.diskGb} GB</dd>
-                  </div>
-                  <div>
-                    <dt>CPU</dt>
-                    <dd>{selectedHetznerServerType.cpu}</dd>
-                  </div>
-                </dl>
-                <p>{selectedHetznerServerType.detail}. Public IPv4, VAT, location premiums, and current availability can change; verify with the generated live Hetzner commands before provisioning.</p>
-              </div>
-              <div className={fleetClass("setupModalActions")}>
-                {!machineInitStatus.result ? (
-                  <Button type="button" variant="secondary" onClick={() => setMachineInitView("env")} disabled={machineInitStatus.busy}>
-                    <ChevronLeft aria-hidden="true" />
-                    Back
-                  </Button>
-                ) : null}
-                <Button type="submit" disabled={machineInitStatus.busy}>
-                  {machineInitStatus.busy ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <Plus aria-hidden="true" />}
-                  {machineInitStatus.busy ? "Initializing" : "Initialize"}
-                </Button>
-              </div>
-            </form>
-            ) : null}
-
-            {machineInitStatus.error ? (
-              <div className={fleetClass("machineInitError")}>{machineInitStatus.error}</div>
-            ) : null}
-
-            {machineInitStatus.result ? (
-              <div className={fleetClass("machineInitResult")}>
-                <div>
-                  <strong>{machineInitStatus.result.serverName}</strong>
-                  <span>{machineInitStatus.result.projectDir}</span>
-                </div>
-                {[
-                  ["editEnv", "Add token", machineInitStatus.result.commands.editEnv],
-                  ["listServerTypes", "Server types", machineInitStatus.result.commands.listServerTypes],
-                  ["listLocations", "Locations", machineInitStatus.result.commands.listLocations],
-                  ["provision", "Provision", machineInitStatus.result.commands.provision],
-                  ["verify", "Verify SSH", machineInitStatus.result.commands.verify],
-                  ["bootstrap", "Bootstrap HivemindOS", machineInitStatus.result.commands.bootstrap],
-                  ["destroy", "Destroy", machineInitStatus.result.commands.destroy],
-                ].filter((item): item is [string, string, string] => Boolean(item)).map(([key, label, command]) => (
-                  <div key={key} className={fleetClass("machineInitCommand")}>
-                    <span>{label}</span>
-                    <pre>{command}</pre>
-                    <Button type="button" size="sm" variant="secondary" onClick={() => copyMachineInitCommand(key, command)}>
-                      {machineInitCopiedKey === key ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-                      {machineInitCopiedKey === key ? "Copied" : "Copy"}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </section>
-        </div>
+        <MachineInitModal
+          onClose={closeMachineInitModal}
+          draft={machineInitDraft}
+          setDraft={setMachineInitDraft}
+          token={machineInitToken}
+          setToken={setMachineInitToken}
+          tokenStatus={machineInitTokenStatus}
+          setTokenStatus={setMachineInitTokenStatus}
+          saveHetznerToken={saveHetznerToken}
+          openHetznerEnvFile={openHetznerEnvFile}
+          serverTypeOptions={HETZNER_SERVER_TYPE_OPTIONS}
+          locationOptions={HETZNER_LOCATION_OPTIONS}
+          imageOptions={HETZNER_IMAGE_OPTIONS}
+          selectedServerType={selectedHetznerServerType}
+          initializeMachineProject={initializeMachineProject}
+          initStatus={machineInitStatus}
+          copyCommand={copyMachineInitCommand}
+          copiedKey={machineInitCopiedKey}
+          secretInputProps={secretInputProps}
+          maskedSecretValueClass={maskedSecretValueClass}
+        />
       ) : null}
 
       {setupMachine ? (

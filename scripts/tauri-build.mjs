@@ -83,6 +83,7 @@ const backgroundHelpers =
     : [];
 const standaloneDir = join(nextBuildDir, "standalone");
 const standaloneServer = join(standaloneDir, "server.js");
+const embeddedRuntimeScripts = ["hive-env-add", "xai-oauth-token-broker"];
 const embeddedFingerprintFile = join(
   nextBuildDir,
   ".hivemindos-embedded-fingerprint.json",
@@ -176,6 +177,7 @@ function resolveBuildHeapMb(requestedHeapMb, memoryLimitMb) {
 }
 
 const embeddedFingerprintInputs = [
+  "browser-extension",
   "components.json",
   "next.config.ts",
   "package.json",
@@ -193,6 +195,7 @@ const skippedFingerprintDirs = new Set([
   ".next-tauri",
   ".next-tauri-build",
   ".next-tauri-static-build",
+  "browser-extension/dist",
   "node_modules",
   "out",
   "src-tauri/target",
@@ -426,6 +429,7 @@ function packagedEmbeddedResourcesAreReusable(fingerprint) {
 
   if (
     !existsSync(join(serverResourceDir, "server.js")) ||
+    !existsSync(join(serverResourceDir, "public", "browser-extension", "manifest.json")) ||
     !existsSync(join(nodeResourceDir, nodeBinaryName))
   ) {
     return false;
@@ -482,6 +486,33 @@ function copyNodeBinary() {
 
 function chmodExecutable(path) {
   chmodSync(path, 0o755);
+}
+
+// Bundle the canonical brain content (skills, packaged skills, For Users / For
+// Investors docs) + the sync engine into resources/brain-seed/ so the packaged
+// app can seed/refresh the user's vault on first run after an update — the
+// release bundle otherwise ships no setup scripts or brain content. The layout
+// mirrors what scripts/hive-brain-sync.mjs expects as its --content-base.
+function stageBrainSeed() {
+  const brainSeedDir = join(resourcesDir, "brain-seed");
+  rmSync(brainSeedDir, { force: true, recursive: true });
+  mkdirSync(brainSeedDir, { recursive: true });
+  const copyTree = (srcRel, destRel) => {
+    const src = join(projectRoot, srcRel);
+    if (!existsSync(src)) return;
+    const dest = join(brainSeedDir, destRel);
+    mkdirSync(dirname(dest), { recursive: true });
+    cpSync(src, dest, { recursive: true });
+  };
+  copyTree("skills", "skills");
+  copyTree("packaged-skills/auto-install", "packaged-skills/auto-install");
+  copyTree("docs/for-users", "docs/for-users");
+  copyTree("docs/for-investors", "docs/for-investors");
+  copyFileSync(
+    join(projectRoot, "scripts", "hive-brain-sync.mjs"),
+    join(brainSeedDir, "hive-brain-sync.mjs"),
+  );
+  console.log("Staged brain-seed (skills, packaged skills, docs, sync engine) into resources/brain-seed/");
 }
 
 function runQuiet(command, args) {
@@ -991,6 +1022,12 @@ function copyRequiredRuntimePackages() {
     "caniuse-lite",
     "postcss",
     "styled-jsx",
+    // The Lottie loading animation route (/loading/dotlottie-player.wasm) reads
+    // node_modules/@lottiefiles/dotlottie-web/dist/dotlottie-player.wasm at
+    // runtime. Next's trace keeps it only under .pnpm, which materialize+prune
+    // deletes — so the packaged server 500s on that route. Stage the package so
+    // its dist/*.wasm lands at the top-level node_modules path the route expects.
+    "@lottiefiles/dotlottie-web",
     // Wallet/trading routes are imported by shared chat/status modules at
     // route-load time. Stage the root packages and their dependency closure so
     // production chat cannot crash before the route handler starts.
@@ -1084,10 +1121,16 @@ function runEmbeddedNextBuild(fingerprint) {
       NODE_OPTIONS:
         `${process.env.NODE_OPTIONS ?? ""} --max-old-space-size=${buildHeapMb}`.trim(),
     };
-    // Use webpack like the static build does. Turbopack rejects this codebase's
-    // `:global {}` CSS module block and the API routes' dynamic execFile/fs
-    // patterns; webpack tolerates them.
-    const nextBuildArgs = ["exec", "next", "build", "--webpack"];
+    // Build with Turbopack (the Next 16 default). Webpack needs 14-20 GB to
+    // compile all ~250 API routes (it OOMs CI); Turbopack peaks ~5 GB. The old
+    // ":global {} / dynamic execFile" rationale for forcing --webpack was stale
+    // and inaccurate (0 such occurrences). The one real Turbopack gotcha: it
+    // statically resolves an execFile/spawn binary STRING-LITERAL as a module,
+    // so keep binary names behind an opaque indirection (see
+    // scheduler/skill-action/route.ts). Turbopack's standalone trace also omits
+    // a couple of Next runtime deps — ensureStandaloneFrameworkDeps() backfills
+    // them below.
+    const nextBuildArgs = ["exec", "next", "build"];
     if (process.platform === "win32") {
       // Windows can't exec the bash run-with-memory-limit.sh wrapper (the static
       // path handles this the same way). Run next directly via cmd; the
@@ -1114,7 +1157,109 @@ function runEmbeddedNextBuild(fingerprint) {
     );
   }
 
+  completeTurbopackStandalone();
+
   writeEmbeddedFingerprint(embeddedFingerprintFile, fingerprint);
+}
+
+// Turbopack's `output: "standalone"` (Next 16.2.x) produces an INCOMPLETE
+// standalone and must be backfilled, or the packaged server.js boots but fails
+// at runtime. Two gaps, both confirmed by booting the standalone:
+//   (a) Compiled server chunks under <distDir>/server are not copied — only ~2
+//       of ~1400 land, so page rendering dies with
+//       `Cannot find module '../chunks/ssr/[turbopack]_runtime.js'`.
+//   (b) Several Next framework runtime deps are missing from standalone
+//       node_modules: @swc/helpers + @next/env (server won't even boot),
+//       styled-jsx + scheduler + client-only (pages 500 at render).
+// Webpack's standalone is complete; since we build with Turbopack we complete it
+// here. Validated on a real build: homepage HTTP 200 + API routes respond.
+const STANDALONE_FRAMEWORK_DEPS = [
+  "@swc/helpers",
+  "@next/env",
+  "styled-jsx",
+  "scheduler",
+  "client-only",
+  "server-only",
+];
+const STANDALONE_BOOT_CRITICAL_DEPS = new Set(["@swc/helpers", "@next/env"]);
+
+function resolvePnpmPackageDir(pkg) {
+  const hoisted = join(projectRoot, "node_modules", ...pkg.split("/"));
+  if (existsSync(join(hoisted, "package.json"))) return hoisted;
+  const pnpmRoot = join(projectRoot, "node_modules", ".pnpm");
+  if (!existsSync(pnpmRoot)) return null;
+  const prefix = `${pkg.replace("/", "+")}@`;
+  const match = readdirSync(pnpmRoot).find((d) => d.startsWith(prefix));
+  if (!match) return null;
+  const dir = join(pnpmRoot, match, "node_modules", ...pkg.split("/"));
+  return existsSync(join(dir, "package.json")) ? dir : null;
+}
+
+function completeTurbopackStandalone() {
+  // (a) Copy the full compiled server tree (chunks the standalone trace missed)
+  // into the standalone, skipping .map files the runtime doesn't need.
+  const distName = basename(nextBuildDir);
+  const fullServer = join(nextBuildDir, "server");
+  const standaloneServerDir = join(standaloneDir, distName, "server");
+  if (existsSync(fullServer)) {
+    cpSync(fullServer, standaloneServerDir, {
+      recursive: true,
+      dereference: true,
+      filter: (src) => !src.endsWith(".map"),
+    });
+    console.log(
+      `[embedded] completed standalone server chunks from ${distName}/server`,
+    );
+  }
+  // (b) Stage the framework runtime deps the trace omits.
+  const destRoot = join(standaloneDir, "node_modules");
+  for (const pkg of STANDALONE_FRAMEWORK_DEPS) {
+    const dest = join(destRoot, ...pkg.split("/"));
+    if (existsSync(join(dest, "package.json"))) continue;
+    const src = resolvePnpmPackageDir(pkg);
+    if (!src) {
+      if (STANDALONE_BOOT_CRITICAL_DEPS.has(pkg)) {
+        throw new Error(
+          `Could not locate ${pkg} to stage into the Next standalone; ` +
+            `the packaged server.js will not boot without it.`,
+        );
+      }
+      console.warn(`[embedded] ${pkg} not found to stage into standalone (skipping)`);
+      continue;
+    }
+    mkdirSync(dirname(dest), { recursive: true });
+    cpSync(src, dest, { recursive: true, dereference: true });
+    console.log(`[embedded] staged ${pkg} into standalone node_modules`);
+  }
+}
+
+function copyEmbeddedRuntimeScripts() {
+  const runtimeScriptsDir = join(serverResourceDir, "scripts");
+  mkdirSync(runtimeScriptsDir, { recursive: true });
+  for (const scriptName of embeddedRuntimeScripts) {
+    const source = join(projectRoot, "scripts", scriptName);
+    const destination = join(runtimeScriptsDir, scriptName);
+    if (!existsSync(source)) {
+      throw new Error(`Missing embedded runtime script: ${source}`);
+    }
+    copyFileSync(source, destination);
+    chmodSync(destination, 0o755);
+  }
+}
+
+function stageBrowserExtensionResources() {
+  run(process.execPath, ["scripts/build-browser-extension.mjs"]);
+  const source = join(projectRoot, "browser-extension", "dist");
+  for (const requiredFile of ["manifest.json", "background.js", "content.js", "sidepanel.html"]) {
+    if (!existsSync(join(source, requiredFile))) {
+      throw new Error(`Browser extension build is missing ${requiredFile}.`);
+    }
+  }
+  const destination = join(serverResourceDir, "public", "browser-extension");
+  rmSync(destination, { force: true, recursive: true });
+  mkdirSync(dirname(destination), { recursive: true });
+  cpSync(source, destination, { recursive: true, dereference: true });
+  console.log("[embedded] staged the HivemindOS browser extension");
 }
 
 function copyEmbeddedNextResources(fingerprint) {
@@ -1134,6 +1279,7 @@ function copyEmbeddedNextResources(fingerprint) {
   if (existsSync(publicDir)) {
     cpSync(publicDir, join(serverResourceDir, "public"), { recursive: true });
   }
+  stageBrowserExtensionResources();
 
   scrubPackagedResources();
   materializeResourceSymlinks(serverResourceDir);
@@ -1143,6 +1289,7 @@ function copyEmbeddedNextResources(fingerprint) {
   pruneMaterializedPnpmStore();
   prunePackagedBuildArtifacts();
   optimizePackagedPngAssets();
+  copyEmbeddedRuntimeScripts();
   copyNodeBinary();
   writeEmbeddedFingerprint(packagedFingerprintFile, fingerprint);
 
@@ -1157,6 +1304,9 @@ function buildEmbeddedNextResources() {
   rmSync(staticResourceDir, { force: true, recursive: true });
   writeEmbeddedStaticStub();
   buildBackgroundHelpers();
+  // Always (re)stage brain-seed — it's cheap and must be present even when the
+  // heavy standalone resources are reused from a prior build.
+  stageBrainSeed();
 
   if (packagedEmbeddedResourcesAreReusable(fingerprint)) {
     console.log(

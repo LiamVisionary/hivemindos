@@ -3,10 +3,11 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import {
+  AlertTriangle,
   AudioLines,
+  Camera,
+  CameraOff,
   Check,
-  ChevronDown,
-  ChevronUp,
   Crown,
   FileText,
   Mic,
@@ -14,59 +15,65 @@ import {
   Settings2,
   X,
 } from "lucide-react";
-import { listenForQueenVoiceToggle } from "@/lib/native/queen-voice-events";
+import { ChatMarkdown } from "@/features/dashboard/ChatMarkdown";
+import { AgentResponseLoader } from "@/features/chat/chat-composer";
+import type { AgentVoiceFailureDetail } from "@/features/dashboard/hooks/use-agent-voice-failure-notifications";
+import type { DashboardScreenContext } from "@/features/dashboard/screen-context";
+import { DEFAULT_QUEEN_BEE_NAME } from "@/lib/config/queen-bee-personality";
+import { emitQueenVoiceState, listenForQueenVoiceToggle } from "@/lib/native/queen-voice-events";
 import { QueenVoiceGlow } from "./QueenVoiceGlow";
+import { VoiceWaveform } from "./VoiceWaveform";
 import { HIVE_CHAT_TRANSCRIPT_BOTTOM_OFFSET } from "./hive-chat-layout";
 import { useQueenClapActivation } from "./use-queen-clap-activation";
+import { useQueenBeeGeminiLive } from "./use-queen-bee-gemini-live";
 import { useQueenBeeRealtime } from "./use-queen-bee-realtime";
+import { useQueenCamera } from "./use-queen-camera";
 import {
   useQueenBeeVoice,
   type QueenVoicePhase,
+  type QueenVoiceWorkingStage,
 } from "./use-queen-bee-voice";
+import {
+  playQueenVoiceActivationSound,
+  primeQueenVoiceActivationSound,
+  QUEEN_VOICE_ACTIVATION_SESSION_START_DELAY_MS,
+  preloadQueenVoiceActivationSound,
+} from "./activation-sound";
+import { parseUserSlashCommandDisplay } from "./queen-command-display";
+import { queenVoiceHistoryFromTurns } from "./queen-chat-routing";
 import { useQueenChat, type QueenChatTurn } from "./queen-chat-store";
 import styles from "./queen-voice.module.css";
 
-const QUEEN_VOICE_ACTIVATION_SOUND_SRC = "/audio/sfx/scifi-ping.wav";
 const QUEEN_VOICE_OPENING_LINE =
   "Hey Liam, I'm here. What should we work on first?";
 
-// Spoken while a tool call runs (the 10-15s dead-air pause), so the user knows
-// Queen Bee is working rather than stuck. One is picked per pause and held.
-const QUEEN_THINKING_FILLERS = [
-  "Let me check…",
-  "On it…",
-  "Let me see…",
-  "Searching your hive…",
-  "One sec, looking that up…",
-];
+// Thinking pauses render the chat route's animated loader (bee + rotating
+// phrases — AgentResponseLoader) instead of a held filler line.
 
-function playQueenVoiceActivationSound() {
-  if (typeof Audio === "undefined") return;
-  const audio = new Audio(QUEEN_VOICE_ACTIVATION_SOUND_SRC);
-  audio.volume = 0.72;
-  void audio.play().catch(() => undefined);
-}
+function UserTurnText({ text }: { text: string }) {
+  const command = parseUserSlashCommandDisplay(text);
+  if (!command) return text;
 
-// A softer cue the moment Queen Bee starts working a tool call.
-function playQueenThinkingSound() {
-  if (typeof Audio === "undefined") return;
-  const audio = new Audio(QUEEN_VOICE_ACTIVATION_SOUND_SRC);
-  audio.volume = 0.4;
-  audio.playbackRate = 0.82;
-  void audio.play().catch(() => undefined);
+  return (
+    <>
+      <span className={styles.commandBadge}>{command.name}</span>
+      {command.suffix}
+    </>
+  );
 }
 
 function statusLabel(
   phase: QueenVoicePhase,
   muted: boolean,
   speechDetected: boolean,
+  queenName: string,
 ) {
   if (muted) return "Mic muted";
   if (phase === "starting") return "Connecting...";
   if (phase === "listening")
-    return speechDetected ? "Listening..." : "Your turn - speak to Queen Bee";
-  if (phase === "thinking") return "Queen Bee is thinking...";
-  if (phase === "speaking") return "Queen Bee is speaking";
+    return speechDetected ? "Listening..." : `Your turn - speak to ${queenName}`;
+  if (phase === "thinking") return `${queenName} is thinking...`;
+  if (phase === "speaking") return `${queenName} is speaking`;
   return "Voice chat hit a snag";
 }
 
@@ -86,102 +93,313 @@ function clapWakeTitle(status: string, error: string) {
   return "Enable clap wake";
 }
 
+// A card with a "Reply `confirm`" / "Reply `CONFIRM_SWAP`" line needs a yes/no
+// decision: we auto-open its modal and give it Confirm/Deny buttons.
+function needsConfirmation(detail?: string | null): boolean {
+  return !!detail && /\breply\s+`?(?:confirm|CONFIRM_|SEND_|APPROVE_)/i.test(detail);
+}
+// Transaction-related (a pending confirmation, a Bankr/swap/trade card, or an
+// on-chain tx) gets a transaction label instead of the generic "what she found".
+function isTransactionDetail(detail?: string | null): boolean {
+  return (
+    !!detail
+    && (needsConfirmation(detail)
+      || /\*\*(?:bankr action|swap\b|trade\b|transaction)/i.test(detail)
+      || /\b0x[a-fA-F0-9]{16,}\b/.test(detail))
+  );
+}
+function detailBadgeLabel(detail?: string | null): string {
+  return isTransactionDetail(detail) ? "Show transaction info" : "Show what she found";
+}
+function detailModalTitle(detail: string, queenName: string): string {
+  return isTransactionDetail(detail) ? "Transaction" : `What ${queenName} found`;
+}
+
 function TranscriptTurns({
   turns,
   minimized,
-  onToggleMinimize,
   thinking,
-  thinkingLabel,
+  brainLabel,
+  queenName,
+  working,
   onShowDetail,
+  onCollapse,
+  onInteractionActiveChange,
 }: {
   turns: QueenChatTurn[];
   minimized: boolean;
-  onToggleMinimize: () => void;
   thinking: boolean;
-  thinkingLabel: string;
+  /** Subtle "which brain answers" tag next to Queen Bee's name, e.g. "gpt-5.5 · ChatGPT". */
+  brainLabel: string;
+  queenName: string;
+  /** Live stages of the in-flight voice turn (tool calls, fleet scan, ...). */
+  working: QueenVoiceWorkingStage[];
   onShowDetail: (detail: string) => void;
+  onCollapse: () => void;
+  onInteractionActiveChange: (active: boolean) => void;
 }) {
   const panelRef = React.useRef<HTMLDivElement | null>(null);
+  const pointerInsideRef = React.useRef(false);
+  const pointerSelectingTextRef = React.useRef(false);
+  const textSelectionInsideRef = React.useRef(false);
+
+  const hasSelectionInsideTranscript = React.useCallback(() => {
+    const panel = panelRef.current;
+    const selection = window.getSelection?.();
+    if (!panel || !selection || selection.isCollapsed) return false;
+    const { anchorNode, focusNode } = selection;
+    return Boolean(
+      (anchorNode && panel.contains(anchorNode))
+      || (focusNode && panel.contains(focusNode)),
+    );
+  }, []);
+
+  const syncInteractionActive = React.useCallback(() => {
+    onInteractionActiveChange(
+      pointerInsideRef.current
+      || pointerSelectingTextRef.current
+      || textSelectionInsideRef.current,
+    );
+  }, [onInteractionActiveChange]);
+
+  const handlePointerEnter = React.useCallback(() => {
+    pointerInsideRef.current = true;
+    syncInteractionActive();
+  }, [syncInteractionActive]);
+
+  const handlePointerLeave = React.useCallback(() => {
+    pointerInsideRef.current = false;
+    syncInteractionActive();
+  }, [syncInteractionActive]);
+
+  const handlePointerDown = React.useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    pointerSelectingTextRef.current = true;
+    syncInteractionActive();
+  }, [syncInteractionActive]);
+
+  // The down-tail collapse control lives INSIDE this panel, so at click time the
+  // pointer is over the transcript and has already latched the interaction hold
+  // on (handlePointerEnter → transcriptInteractionActive=true). That hold keeps
+  // transcriptExpanded true, so a plain onCollapse() set nothing visible and the
+  // down-tail "did nothing" (2026-07-10). Drop the local pointer/selection
+  // latches and clear the shared interaction signal BEFORE collapsing so the
+  // manual gesture wins; a trailing pointerup/selectionchange re-sync then reads
+  // the refs as down and can't immediately re-open the bubble.
+  const handleCollapse = React.useCallback(() => {
+    pointerInsideRef.current = false;
+    pointerSelectingTextRef.current = false;
+    textSelectionInsideRef.current = false;
+    onInteractionActiveChange(false);
+    onCollapse();
+  }, [onCollapse, onInteractionActiveChange]);
+
+  // Spring open/close: keep the bubble mounted through its exit animation.
+  // `wantOpen` is the desired state; `closing` holds the bubble one beat longer
+  // so transcriptCollapse can finish; `rendered` (derived) is DOM presence.
+  const wantOpen = !minimized && (turns.length > 0 || thinking);
+  const [closing, setClosing] = React.useState(false);
+  const [prevWantOpen, setPrevWantOpen] = React.useState(wantOpen);
+
+  // Adjust derived state during render when the desired open-state flips — the
+  // React-sanctioned alternative to a cascading setState-in-effect. Turning off
+  // begins the exit; turning back on cancels any in-flight close.
+  if (prevWantOpen !== wantOpen) {
+    setPrevWantOpen(wantOpen);
+    setClosing(!wantOpen);
+  }
+  const rendered = wantOpen || closing;
 
   React.useEffect(() => {
-    if (minimized) return;
+    if (!closing) return;
+    // Slightly longer than the transcriptCollapse duration (200ms). The setState
+    // lives in the timer callback (not the effect body), so no cascading render,
+    // and it still fires under reduced-motion (no reliance on animationend).
+    const timer = setTimeout(() => setClosing(false), 230);
+    return () => clearTimeout(timer);
+  }, [closing]);
+
+  React.useEffect(() => {
+    if (closing) return;
     const panel = panelRef.current;
     if (panel) panel.scrollTop = panel.scrollHeight;
-  }, [turns, minimized, thinking]);
+  }, [turns, thinking, working, closing, rendered]);
 
-  if (!turns.length && !thinking) return null;
+  React.useEffect(() => {
+    if (!rendered) {
+      pointerInsideRef.current = false;
+      pointerSelectingTextRef.current = false;
+      textSelectionInsideRef.current = false;
+      onInteractionActiveChange(false);
+      return undefined;
+    }
+    const refreshTextSelection = () => {
+      textSelectionInsideRef.current = hasSelectionInsideTranscript();
+      syncInteractionActive();
+    };
+    const finishSelection = () => {
+      pointerSelectingTextRef.current = false;
+      refreshTextSelection();
+    };
+    window.addEventListener("pointerup", finishSelection);
+    window.addEventListener("pointercancel", finishSelection);
+    document.addEventListener("selectionchange", refreshTextSelection);
+    return () => {
+      window.removeEventListener("pointerup", finishSelection);
+      window.removeEventListener("pointercancel", finishSelection);
+      document.removeEventListener("selectionchange", refreshTextSelection);
+      pointerInsideRef.current = false;
+      pointerSelectingTextRef.current = false;
+      textSelectionInsideRef.current = false;
+      onInteractionActiveChange(false);
+    };
+  }, [rendered, hasSelectionInsideTranscript, onInteractionActiveChange, syncInteractionActive]);
+
+  // Collapsed (and exit finished): the history is gone; the triangle tab on the
+  // input pill is the only control (see the .fr-chat-tab in PersistentHiveChat).
+  if (!rendered) return null;
   return (
     <div
-      className={`${styles.transcriptPanel} ${minimized ? styles.transcriptPanelMinimized : ""}`}
+      className={`${styles.transcriptPanel} ${closing ? styles.transcriptPanelClosing : styles.transcriptPanelOpen}`}
+      onPointerEnter={handlePointerEnter}
+      onPointerLeave={handlePointerLeave}
+      onPointerDown={handlePointerDown}
     >
+      <div ref={panelRef} className={styles.transcriptScroll} aria-live="polite">
+        {turns.slice(-3).map((turn) => (
+          <div key={turn.id} className={styles.turn}>
+            <span
+              className={`${styles.turnWho} ${turn.who === "queen" ? styles.turnWhoQueen : styles.turnWhoYou}`}
+            >
+              {turn.who === "queen" ? queenName : "You"}
+              {/* Per-turn truth first: typed turns are tagged with the brain
+                  the chat-turn response says actually answered; the static
+                  voice-plan tag only applies to voice-sourced turns. */}
+              {turn.who === "queen" && (turn.brain || (turn.source === "voice" && brainLabel)) ? (
+                <span className={styles.brainTag}>{turn.brain || brainLabel}</span>
+              ) : null}
+            </span>
+            <div
+              className={`${styles.turnText} ${turn.live ? styles.turnTextLive : ""} ${turn.pending && !turn.text ? styles.turnTextThinking : ""}`}
+            >
+              {turn.pending && !turn.text ? (
+                // steady label keeps the bubble height stable while the dots
+                // animation cycles through its empty frame
+                <>Thinking<span className={styles.thinkingDots} aria-hidden="true" /></>
+              ) : turn.who === "queen" ? (
+                // Queen replies are markdown (code spans like `CONFIRM_SWAP`, bold,
+                // lists, links); the user's own echo stays plain text.
+                <>
+                  {turn.text ? <ChatMarkdown text={turn.text} /> : null}
+                  {turn.live && turn.working ? (
+                    // Typed tool phase: the same bee thinking-loader as the chat
+                    // route, with the specific tool status as a working chip —
+                    // one thinking language across voice and text.
+                    <div className={styles.turnWorking}>
+                      <AgentResponseLoader />
+                      <div className={styles.workingChips} aria-live="polite">
+                        <span className={styles.workingChip}>
+                          <span
+                            className={`${styles.workingChipDot} ${styles.workingChipDotActive}`}
+                            aria-hidden="true"
+                          />
+                          {turn.working}
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <UserTurnText text={turn.text} />
+                  {/* Live captions keep transcribing for a beat after the user
+                      stops (the model's trailing words land late); animated
+                      dots say "still finalizing" so the pause reads as work,
+                      not a dropped word. */}
+                  {turn.live && turn.text && !turn.text.endsWith("...") ? (
+                    <span className={styles.thinkingDots} aria-hidden="true" />
+                  ) : null}
+                </>
+              )}
+            </div>
+            {/* The configured brain was skipped this turn — say which one and
+                why, so a silent swap to a fallback model (or the on-device
+                planner) never reads as "your selected model answered". */}
+            {turn.who === "queen" && turn.brainFallback ? (
+              <div className={styles.brainFallbackNote} role="status">
+                <AlertTriangle size={12} aria-hidden="true" />
+                <span>
+                  {turn.brainFallback.label} didn’t answer — {turn.brainFallback.error}
+                  {turn.brain ? ` Replied with ${turn.brain}.` : ""}
+                </span>
+              </div>
+            ) : null}
+            {turn.detail ? (
+              <button
+                type="button"
+                className={styles.detailButton}
+                onClick={() => onShowDetail(turn.detail ?? "")}
+              >
+                <FileText size={12} aria-hidden="true" />
+                {detailBadgeLabel(turn.detail)}
+              </button>
+            ) : null}
+          </div>
+        ))}
+        {thinking ? (
+          <div className={styles.turn}>
+            <span className={`${styles.turnWho} ${styles.turnWhoQueen}`}>
+              {queenName}
+              {brainLabel ? <span className={styles.brainTag}>{brainLabel}</span> : null}
+            </span>
+            {/* The chat route's thinking loader (bee lottie + rotating
+                animated phrases) — one thinking language across the app. */}
+            <AgentResponseLoader />
+            {working.length ? (
+              // Compact live activity: what she is actually doing right now
+              // (thinking with which agent, tool calls, fleet scan, routing).
+              <div className={styles.workingChips} aria-live="polite">
+                {working.slice(-4).map((stage, index) => (
+                  <span
+                    key={`${stage.label}-${index}`}
+                    className={`${styles.workingChip} ${stage.done ? styles.workingChipDone : ""}`}
+                  >
+                    <span
+                      className={`${styles.workingChipDot} ${stage.done ? "" : styles.workingChipDotActive}`}
+                      aria-hidden="true"
+                    />
+                    {stage.label}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      {/* Down-tail on the bubble's bottom edge — points toward the input and
+          collapses the history. Outlined so it reads against the page. */}
       <button
         type="button"
-        className={styles.minimizeButton}
-        onClick={onToggleMinimize}
-        aria-label={minimized ? "Expand chat history" : "Minimize chat history"}
-        aria-pressed={minimized}
-        title={minimized ? "Expand chat history" : "Minimize chat history"}
+        className={styles.bubbleTail}
+        onClick={handleCollapse}
+        aria-label="Hide chat history"
+        title="Hide chat history"
       >
-        {minimized ? (
-          <ChevronUp size={16} aria-hidden="true" />
-        ) : (
-          <ChevronDown size={16} aria-hidden="true" />
-        )}
+        <svg width="30" height="13" viewBox="0 0 30 13" fill="none" aria-hidden="true">
+          <path d="M2.5 1.5 L15 10.5 L27.5 1.5" />
+        </svg>
       </button>
-      {minimized ? null : (
-        <div
-          ref={panelRef}
-          className={styles.transcriptScroll}
-          aria-live="polite"
-        >
-          {turns.slice(-3).map((turn) => (
-            <div key={turn.id} className={styles.turn}>
-              <span
-                className={`${styles.turnWho} ${turn.who === "queen" ? styles.turnWhoQueen : styles.turnWhoYou}`}
-              >
-                {turn.who === "queen" ? "Queen Bee" : "You"}
-              </span>
-              <p
-                className={`${styles.turnText} ${turn.live ? styles.turnTextLive : ""} ${turn.pending && !turn.text ? styles.turnTextThinking : ""}`}
-              >
-                {turn.pending && !turn.text ? (
-                  // steady label keeps the bubble height stable while the dots
-                  // animation cycles through its empty frame
-                  <>Thinking<span className={styles.thinkingDots} aria-hidden="true" /></>
-                ) : (
-                  turn.text
-                )}
-              </p>
-              {turn.detail ? (
-                <button
-                  type="button"
-                  className={styles.detailButton}
-                  onClick={() => onShowDetail(turn.detail ?? "")}
-                >
-                  <FileText size={12} aria-hidden="true" />
-                  Show what she found
-                </button>
-              ) : null}
-            </div>
-          ))}
-          {thinking ? (
-            <div className={styles.turn}>
-              <span className={`${styles.turnWho} ${styles.turnWhoQueen}`}>
-                Queen Bee
-              </span>
-              <p className={`${styles.turnText} ${styles.turnTextThinking}`}>
-                {thinkingLabel || "Checking"}
-                <span className={styles.thinkingDots} aria-hidden="true" />
-              </p>
-            </div>
-          ) : null}
-        </div>
-      )}
     </div>
   );
 }
 
-function VoicePicker({ onVoiceChanged }: { onVoiceChanged: () => void }) {
+function VoicePicker({
+  onVoiceChanged,
+  queenName,
+}: {
+  onVoiceChanged: () => void;
+  queenName: string;
+}) {
   const [voices, setVoices] = React.useState<string[]>([]);
   const [voice, setVoice] = React.useState("");
   const [saving, setSaving] = React.useState("");
@@ -224,9 +442,9 @@ function VoicePicker({ onVoiceChanged }: { onVoiceChanged: () => void }) {
     <div
       className={styles.voicePicker}
       role="listbox"
-      aria-label="Queen Bee voice"
+      aria-label={`${queenName} voice`}
     >
-      <span className={styles.voicePickerTitle}>Queen Bee voice</span>
+      <span className={styles.voicePickerTitle}>{queenName} voice</span>
       {voices.map((option) => (
         <button
           key={option}
@@ -260,34 +478,131 @@ export function QueenBeeVoiceOverlay({
   clapWakeEnabled = false,
   onClapWakeEnabledChange,
   onDriveDashboard,
+  onVoiceFailure,
   openSpaceRightInset = 0,
+  queenName = DEFAULT_QUEEN_BEE_NAME,
+  screenContext,
 }: {
   clapWakeEnabled?: boolean;
   onClapWakeEnabledChange?: (enabled: boolean) => void;
   onDriveDashboard?: (
     command: string,
-    opts?: { onModalOpen?: () => void },
+    opts?: { onModalOpen?: () => void; screenContext?: DashboardScreenContext },
   ) => Promise<string>;
+  onVoiceFailure?: (detail: AgentVoiceFailureDetail) => void;
   openSpaceRightInset?: number;
+  queenName?: string;
+  screenContext?: DashboardScreenContext;
 } = {}) {
   const [open, setOpen] = React.useState(false);
   const [muted, setMuted] = React.useState(false);
   const [voicePickerOpen, setVoicePickerOpen] = React.useState(false);
-  const [minimized, setMinimized] = React.useState(false);
+  const [armedVoiceSessionNonce, setArmedVoiceSessionNonce] = React.useState(-1);
+  // The shared Queen conversation (typed + voice live here together). The
+  // history-collapsed flag lives in the store so the input's toggle tab and
+  // this transcript overlay share one source of truth.
+  const chat = useQueenChat();
+  const { setHistoryMinimized, setTranscriptInteractionActive, setVoiceChatActive } = chat;
   // Bumping the nonce restarts the realtime session (e.g. new voice).
   const [sessionNonce, setSessionNonce] = React.useState(0);
   const [realtimeFailedNonce, setRealtimeFailedNonce] = React.useState(-1);
+  // The resolved voice engine for a given session nonce. Local/cloud TTS run the
+  // non-realtime pipeline, Gemini Live runs its bidi socket, and the default is
+  // OpenAI Realtime speech-to-speech. Tagged with the nonce it was resolved for
+  // so a new open reads `null` until ITS fetch lands, gating every voice hook.
+  const [resolvedVoiceMode, setResolvedVoiceMode] = React.useState<
+    {
+      nonce: number;
+      mode: "realtime" | "pipeline" | "gemini-live";
+      inputTranscriptionMode: "realtime" | "recorded";
+    } | null
+  >(null);
   const sessionNonceRef = React.useRef(sessionNonce);
   React.useEffect(() => {
     sessionNonceRef.current = sessionNonce;
   }, [sessionNonce]);
-  const realtimeMode = realtimeFailedNonce !== sessionNonce;
+  const voiceSessionArmed = open && armedVoiceSessionNonce === sessionNonce;
+  // Which brain answers spoken turns — shown as a subtle tag by her name.
+  const [brainLabel, setBrainLabel] = React.useState("");
+  React.useEffect(() => {
+    setVoiceChatActive(open);
+  }, [open, setVoiceChatActive]);
+  React.useEffect(() => () => setVoiceChatActive(false), [setVoiceChatActive]);
+  React.useEffect(() => {
+    if (!open) return undefined;
+    const nonce = sessionNonce;
+    const timer = window.setTimeout(() => {
+      setArmedVoiceSessionNonce(nonce);
+    }, QUEEN_VOICE_ACTIVATION_SESSION_START_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [open, sessionNonce]);
+  // Re-resolved on each open and session restart so a freshly-changed Calls
+  // setting takes effect without restarting the app.
+  React.useEffect(() => {
+    if (!open || !voiceSessionArmed) return;
+    let cancelled = false;
+    const nonce = sessionNonce;
+    void fetch("/api/queen-bee/voice", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { localTtsSelected?: boolean; pipelineSelected?: boolean; voiceMode?: "realtime" | "pipeline" | "gemini-live"; inputTranscriptionMode?: "realtime" | "recorded"; brainLabel?: string | null } | null) => {
+        if (!cancelled) {
+          setBrainLabel(typeof data?.brainLabel === "string" ? data.brainLabel : "");
+          setResolvedVoiceMode({
+            nonce,
+            // voiceMode carries Gemini Live explicitly; pipelineSelected covers
+            // older servers that only knew local/cloud TTS pipeline routing.
+            // A failed settings read (null data) resolves to the pipeline, not
+            // realtime: the user may have a local voice selected we can't see,
+            // and the pipeline's speak paths re-check per turn and report a
+            // voiceUnavailable outage instead of substituting a cloud voice.
+            mode: data
+              ? data.voiceMode ?? ((data.pipelineSelected ?? data.localTtsSelected) ? "pipeline" : "realtime")
+              : "pipeline",
+            inputTranscriptionMode: data?.inputTranscriptionMode ?? "realtime",
+          });
+        }
+      })
+      .catch(() => {
+        // Same voice-continuity rule as a non-ok settings read above: never
+        // let "couldn't read the settings" open a realtime cloud-voice session.
+        if (!cancelled) setResolvedVoiceMode({ nonce, mode: "pipeline", inputTranscriptionMode: "realtime" });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, sessionNonce, voiceSessionArmed]);
+  const voiceModeForOpen =
+    resolvedVoiceMode?.nonce === sessionNonce ? resolvedVoiceMode.mode : null;
+  const voiceSessionOpen = open && voiceSessionArmed;
+  const recordedInputForOpen =
+    resolvedVoiceMode?.nonce === sessionNonce &&
+    resolvedVoiceMode.inputTranscriptionMode === "recorded";
+  const realtimeMode =
+    voiceModeForOpen === "realtime" && realtimeFailedNonce !== sessionNonce;
+  const geminiLiveMode = voiceModeForOpen === "gemini-live";
 
   const resetVoiceSessionUi = React.useCallback(() => {
     setMuted(false);
     setVoicePickerOpen(false);
-    setMinimized(false);
+    setHistoryMinimized(false);
     setSessionNonce((current) => current + 1);
+  }, [setHistoryMinimized]);
+
+  React.useEffect(() => {
+    preloadQueenVoiceActivationSound();
+    const primeActivationSound = () => primeQueenVoiceActivationSound();
+    window.addEventListener("pointerdown", primeActivationSound, {
+      capture: true,
+      once: true,
+    });
+    window.addEventListener("keydown", primeActivationSound, {
+      capture: true,
+      once: true,
+    });
+    return () => {
+      window.removeEventListener("pointerdown", primeActivationSound, true);
+      window.removeEventListener("keydown", primeActivationSound, true);
+    };
   }, []);
 
   const openQueenVoiceChat = React.useCallback(() => {
@@ -327,43 +642,118 @@ export function QueenBeeVoiceOverlay({
   const driveDashboard = React.useCallback(
     async (command: string) => {
       if (!onDriveDashboard) return "The dashboard isn't available to drive right now.";
-      return onDriveDashboard(command, { onModalOpen: () => setMinimized(true) });
+      return onDriveDashboard(command, {
+        onModalOpen: () => setHistoryMinimized(true),
+        screenContext,
+      });
     },
-    [onDriveDashboard],
+    [onDriveDashboard, screenContext, setHistoryMinimized],
   );
   const realtime = useQueenBeeRealtime(
-    open && realtimeMode,
+    voiceSessionOpen && realtimeMode,
     muted,
     handleRealtimeFailed,
     onDriveDashboard ? driveDashboard : undefined,
     QUEEN_VOICE_OPENING_LINE,
+    screenContext,
   );
-  const pipeline = useQueenBeeVoice(
-    open && !realtimeMode,
+  const geminiLive = useQueenBeeGeminiLive(
+    voiceSessionOpen && geminiLiveMode,
     muted,
     QUEEN_VOICE_OPENING_LINE,
+    onDriveDashboard ? driveDashboard : undefined,
+    screenContext,
   );
-  const voiceState = realtimeMode ? realtime : pipeline;
+  // Spoken turns converse over the SHARED chat history (typed + voice), so a
+  // voice reply continues whatever was last said in the text pill. Read via a
+  // ref so the callback identity is stable across store updates.
+  const chatTurnsRef = React.useRef(chat.turns);
+  React.useEffect(() => {
+    chatTurnsRef.current = chat.turns;
+  }, [chat.turns]);
+  const getSharedVoiceHistory = React.useCallback(
+    () => queenVoiceHistoryFromTurns(chatTurnsRef.current),
+    [],
+  );
+  const pipeline = useQueenBeeVoice(
+    voiceSessionOpen && voiceModeForOpen !== null && !realtimeMode && !geminiLiveMode,
+    muted,
+    QUEEN_VOICE_OPENING_LINE,
+    voiceModeForOpen === "pipeline",
+    getSharedVoiceHistory,
+    recordedInputForOpen,
+  );
+  const voiceState = geminiLiveMode ? geminiLive : realtimeMode ? realtime : pipeline;
+  // Live camera for advanced voice mode: only the two realtime backends can see
+  // frames (the pipeline/fake-audio path cannot), so the camera is gated to
+  // them. Frames stream into whichever realtime session is active.
+  const cameraCapable = realtimeMode || geminiLiveMode;
+  const activeSendVideoFrame = geminiLiveMode ? geminiLive.sendVideoFrame : realtime.sendVideoFrame;
+  const camera = useQueenCamera(
+    React.useCallback((frame: string) => { activeSendVideoFrame?.(frame); }, [activeSendVideoFrame]),
+    geminiLiveMode ? 1000 : 2500,
+  );
+  const cameraStop = camera.stop;
+  const cameraActive = camera.active;
+  React.useEffect(() => {
+    if ((!voiceSessionOpen || !cameraCapable) && cameraActive) cameraStop();
+  }, [voiceSessionOpen, cameraCapable, cameraActive, cameraStop]);
+  const lastVoiceFailureRef = React.useRef("");
+  React.useEffect(() => {
+    const message = voiceState.error || (voiceModeForOpen === "pipeline" ? pipeline.voiceNotice : "");
+    if (!open || !message) {
+      lastVoiceFailureRef.current = "";
+      return;
+    }
+    if (lastVoiceFailureRef.current === message) return;
+    lastVoiceFailureRef.current = message;
+    onVoiceFailure?.({
+      agentName: queenName,
+      agentRole: "queen",
+      message,
+    });
+  }, [onVoiceFailure, open, pipeline.voiceNotice, queenName, voiceModeForOpen, voiceState.error]);
+  const voiceThinking = open && voiceState.phase === "thinking";
 
-  // The shared Queen conversation (typed + voice live here together).
-  const chat = useQueenChat();
   const { upsertTurn: chatUpsertTurn, removeTurn: chatRemoveTurn } = chat;
 
   // Bridge voice turns into the shared store (append-only diff). Namespace ids
   // per voice session so turns from different sessions never collide, and mirror
   // the hooks' echo-drops by removing ids that vanished since the last tick.
   const voiceSeenRef = React.useRef<Set<string>>(new Set());
-  const voiceSessionRef = React.useRef(0);
+  // RANDOM namespace, re-minted per session. It must be unique across overlay
+  // remounts AND hook restarts: with a resettable numeric counter, a session
+  // restarted mid-conversation (dev Fast Refresh, error recovery) re-issued
+  // turn ids from 1 under the SAME namespace — its rows then patched an
+  // earlier session's history rows in place and the diff removed/re-appended
+  // others, scrambling who/text/order in the shared chat.
+  const voiceSessionKeyRef = React.useRef("");
   const prevSessionNonceRef = React.useRef(sessionNonce);
-  const prevRealtimeModeRef = React.useRef(realtimeMode);
+  const prevVoiceModeRef = React.useRef(voiceModeForOpen);
+  const prevVoiceSerialRef = React.useRef(-1);
   React.useEffect(() => {
-    if (sessionNonce !== prevSessionNonceRef.current || realtimeMode !== prevRealtimeModeRef.current) {
+    // A NEW namespace is minted only while a session is genuinely (re)starting
+    // — overlay open and the voice mode resolved. Re-minting while closed (the
+    // toggle-close nonce bump) or before the mode resolves would re-mirror the
+    // previous session's stale rows under fresh ids, duplicating history.
+    if (
+      open &&
+      voiceModeForOpen !== null &&
+      (!voiceSessionKeyRef.current ||
+        sessionNonce !== prevSessionNonceRef.current ||
+        voiceModeForOpen !== prevVoiceModeRef.current ||
+        voiceState.sessionSerial !== prevVoiceSerialRef.current)
+    ) {
       prevSessionNonceRef.current = sessionNonce;
-      prevRealtimeModeRef.current = realtimeMode;
-      voiceSessionRef.current += 1;
+      prevVoiceModeRef.current = voiceModeForOpen;
+      prevVoiceSerialRef.current = voiceState.sessionSerial;
+      voiceSessionKeyRef.current = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
       voiceSeenRef.current = new Set();
     }
-    const sid = voiceSessionRef.current;
+    // Nothing mirrored yet this overlay instance (e.g. remounted while
+    // closed): stay hands-off so finished history is never rewritten.
+    if (!voiceSessionKeyRef.current) return;
+    const sid = voiceSessionKeyRef.current;
     const currentIds = new Set<string>();
     for (const turn of voiceState.turns) {
       const storeId = `voice-${sid}-${turn.id}`;
@@ -374,6 +764,8 @@ export function QueenBeeVoiceOverlay({
         text: turn.text,
         live: turn.live,
         detail: turn.detail,
+        brain: turn.brain,
+        brainFallback: turn.brainFallback,
         source: "voice",
       });
     }
@@ -381,27 +773,55 @@ export function QueenBeeVoiceOverlay({
       if (!currentIds.has(prevId)) chatRemoveTurn(prevId);
     }
     voiceSeenRef.current = currentIds;
-  }, [voiceState.turns, sessionNonce, realtimeMode, chatUpsertTurn, chatRemoveTurn]);
+  }, [voiceState.turns, voiceState.sessionSerial, sessionNonce, open, voiceModeForOpen, chatUpsertTurn, chatRemoveTurn]);
 
-  // When Queen Bee starts working a tool call she goes silent for several
-  // seconds; cue a soft sound and a held filler line so the pause reads as
-  // "working", not "stuck".
-  const [thinkingFiller, setThinkingFiller] = React.useState("");
   const [detailContent, setDetailContent] = React.useState<string | null>(null);
-  const prevPhaseRef = React.useRef<QueenVoicePhase>("starting");
+  // Auto-open the transaction modal when a card needing a decision arrives, then
+  // auto-close it once the user responds (by voice, typed, or a modal button).
+  // `autoShownRef` tracks the last card we auto-opened so dismissing it doesn't
+  // immediately re-open it; `detailForTurnRef` is the turn the modal is showing.
+  const autoShownRef = React.useRef<string | null>(null);
+  const detailForTurnRef = React.useRef<string | null>(null);
+  const closeDetail = React.useCallback(() => {
+    detailForTurnRef.current = null;
+    setDetailContent(null);
+  }, []);
+  const handleDetailAction = React.useCallback(
+    (say: string) => {
+      detailForTurnRef.current = null;
+      setDetailContent(null);
+      // Same path as speaking/typing it: the route's confirm rails finalize the
+      // pending draft. Speaking still works; this just gives an on-screen option.
+      void chat.sendText(say);
+    },
+    [chat],
+  );
   React.useEffect(() => {
-    const previous = prevPhaseRef.current;
-    prevPhaseRef.current = voiceState.phase;
-    if (voiceState.phase === "thinking" && previous !== "thinking") {
-      setThinkingFiller(
-        QUEEN_THINKING_FILLERS[
-          Math.floor(Math.random() * QUEEN_THINKING_FILLERS.length)
-        ],
-      );
-      playQueenThinkingSound();
+    const turns = chat.turns;
+    // Auto-close once the user has FINISHED responding to the shown transaction.
+    // The interim caption row is a live "you" turn added the instant speech
+    // starts; only a finalized (committed) user turn should dismiss the modal,
+    // otherwise it closes mid-utterance. Symmetric with the auto-open guard below.
+    if (detailForTurnRef.current) {
+      const shownIdx = turns.findIndex((t) => t.id === detailForTurnRef.current);
+      if (shownIdx >= 0 && turns.slice(shownIdx + 1).some((t) => t.who === "you" && !t.live && !t.pending)) {
+        detailForTurnRef.current = null;
+        setDetailContent(null);
+        return;
+      }
     }
-  }, [voiceState.phase]);
-
+    // Auto-open the newest finalized transaction card that still needs a decision.
+    for (let i = turns.length - 1; i >= 0; i -= 1) {
+      const turn = turns[i];
+      if (turn.who !== "queen" || turn.live || turn.pending) continue;
+      if (!needsConfirmation(turn.detail)) continue;
+      if (autoShownRef.current === turn.id) break; // already shown or dismissed
+      autoShownRef.current = turn.id;
+      detailForTurnRef.current = turn.id;
+      setDetailContent(turn.detail ?? null);
+      break;
+    }
+  }, [chat.turns]);
   React.useEffect(() => {
     let unlisten: (() => void) | undefined;
     let disposed = false;
@@ -422,17 +842,24 @@ export function QueenBeeVoiceOverlay({
     };
   }, [toggleQueenVoiceChat]);
 
+  // Mirror the open/closed state out to peripheral controls (the "Message the
+  // hive" pill's voice toggle) so they reflect whether voice mode is active —
+  // including closes via Escape, the overlay's own controls, or clap-wake.
+  React.useEffect(() => {
+    emitQueenVoiceState(open);
+  }, [open]);
+
   React.useEffect(() => {
     if (!open && detailContent === null) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       // The details modal closes first; a second Escape ends a live voice chat.
-      if (detailContent !== null) setDetailContent(null);
+      if (detailContent !== null) closeDetail();
       else if (open) setOpen(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, detailContent]);
+  }, [open, detailContent, closeDetail]);
 
   if (typeof document === "undefined") return null;
   // Always-mounted: the transcript shows for typed turns too, not just voice.
@@ -450,23 +877,28 @@ export function QueenBeeVoiceOverlay({
           right: openSpaceRightInset,
         }}
         role="dialog"
-        aria-label="Queen Bee voice chat"
+        aria-label={`${queenName} voice chat`}
       >
         <TranscriptTurns
           turns={chat.turns}
-          minimized={minimized}
-          onToggleMinimize={() => setMinimized((current) => !current)}
-          thinking={open && voiceState.phase === "thinking"}
-          thinkingLabel={thinkingFiller}
+          minimized={!(chat.transcriptExpanded || voiceThinking)}
+          thinking={voiceThinking}
+          brainLabel={brainLabel}
+          queenName={queenName}
+          // Live stages only exist on the pipeline hook; the realtime session
+          // streams its own tool audio cues.
+          working={voiceModeForOpen === "pipeline" ? pipeline.working : []}
           onShowDetail={setDetailContent}
+          onCollapse={() => setHistoryMinimized(true)}
+          onInteractionActiveChange={setTranscriptInteractionActive}
         />
         {detailContent !== null ? (
           <div
             className={styles.detailBackdrop}
             role="dialog"
             aria-modal="true"
-            aria-label="Queen Bee details"
-            onClick={() => setDetailContent(null)}
+            aria-label={`${queenName} details`}
+            onClick={closeDetail}
           >
             <div
               className={styles.detailModal}
@@ -475,23 +907,46 @@ export function QueenBeeVoiceOverlay({
               <div className={styles.detailModalHeader}>
                 <span className={styles.detailModalTitle}>
                   <Crown size={14} aria-hidden="true" />
-                  What Queen Bee found
+                  {detailModalTitle(detailContent, queenName)}
                 </span>
                 <button
                   type="button"
                   className={styles.detailModalClose}
-                  onClick={() => setDetailContent(null)}
+                  onClick={closeDetail}
                   aria-label="Close details"
                 >
                   <X size={14} aria-hidden="true" />
                 </button>
               </div>
-              <div className={styles.detailModalBody}>{detailContent}</div>
+              <div className={styles.detailModalBody}>
+                <ChatMarkdown text={detailContent} />
+              </div>
+              {needsConfirmation(detailContent) ? (
+                <div className={styles.detailModalActions}>
+                  <button
+                    type="button"
+                    className={`${styles.detailAction} ${styles.detailActionConfirm}`}
+                    onClick={() => handleDetailAction("confirm")}
+                  >
+                    <Check size={15} aria-hidden="true" />
+                    Confirm
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.detailAction} ${styles.detailActionDeny}`}
+                    onClick={() => handleDetailAction("cancel")}
+                  >
+                    <X size={15} aria-hidden="true" />
+                    Deny
+                  </button>
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
-        {voicePickerOpen ? (
+        {voicePickerOpen && voiceModeForOpen === "realtime" ? (
           <VoicePicker
+            queenName={queenName}
             onVoiceChanged={() => {
               // Restart the session so the new voice takes effect now.
               setVoicePickerOpen(false);
@@ -500,26 +955,60 @@ export function QueenBeeVoiceOverlay({
           />
         ) : null}
         {open ? (
+          <>
+            {cameraCapable ? (
+              // Preview stays mounted (visibility toggled) so the ref is bound
+              // before getUserMedia resolves and sets srcObject.
+              <video
+                ref={camera.videoRef}
+                autoPlay
+                muted
+                playsInline
+                style={{
+                  display: cameraActive ? "block" : "none",
+                  width: 184,
+                  height: 138,
+                  objectFit: "cover",
+                  borderRadius: 12,
+                  border: "1px solid var(--line-2)",
+                  background: "#000",
+                  alignSelf: "center",
+                  marginBottom: 8,
+                }}
+              />
+            ) : null}
           <div className={styles.controlBar}>
             <span className={styles.statusBadge}>
               <Crown size={14} aria-hidden="true" />
               <span
                 className={`${styles.statusDot} ${statusDotClass(voiceState.phase)}`}
               />
-              {statusLabel(voiceState.phase, muted, voiceState.speechDetected)}
+              {statusLabel(voiceState.phase, muted, voiceState.speechDetected, queenName)}
             </span>
+            <VoiceWaveform
+              analyserRef={voiceState.micAnalyserRef}
+              muted={muted}
+            />
+
             {voiceState.phase === "error" && voiceState.error ? (
               <p className={styles.errorText}>{voiceState.error}</p>
             ) : null}
-            <button
-              type="button"
-              className={`${styles.controlButton} ${voicePickerOpen ? styles.controlButtonActive : ""}`}
-              onClick={() => setVoicePickerOpen((current) => !current)}
-              aria-label="Queen Bee voice settings"
-            >
-              <Settings2 size={14} aria-hidden="true" />
-              Voice
-            </button>
+            {voiceModeForOpen === "pipeline" && pipeline.voiceNotice ? (
+              // Voice continuity: her selected local voice is down, replies
+              // are text-only until it recovers - keep that visible.
+              <p className={styles.voiceNotice}>{pipeline.voiceNotice}</p>
+            ) : null}
+            {voiceModeForOpen === "realtime" ? (
+              <button
+                type="button"
+                className={`${styles.controlButton} ${voicePickerOpen ? styles.controlButtonActive : ""}`}
+                onClick={() => setVoicePickerOpen((current) => !current)}
+                aria-label={`${queenName} voice settings`}
+              >
+                <Settings2 size={14} aria-hidden="true" />
+                Voice
+              </button>
+            ) : null}
             <button
               type="button"
               className={`${styles.controlButton} ${clapWakeEnabled ? styles.controlButtonWakeActive : ""}`}
@@ -531,6 +1020,19 @@ export function QueenBeeVoiceOverlay({
               <AudioLines size={14} aria-hidden="true" />
               Clap
             </button>
+            {cameraCapable ? (
+              <button
+                type="button"
+                className={`${styles.controlButton} ${cameraActive ? styles.controlButtonActive : ""}`}
+                onClick={camera.toggle}
+                aria-label={cameraActive ? "Turn camera off" : "Turn camera on"}
+                aria-pressed={cameraActive}
+                title={camera.error || (cameraActive ? "Camera on — she can see what you point at" : `Show the camera to ${queenName}`)}
+              >
+                {cameraActive ? <Camera size={14} aria-hidden="true" /> : <CameraOff size={14} aria-hidden="true" />}
+                Camera
+              </button>
+            ) : null}
             <button
               type="button"
               className={`${styles.controlButton} ${muted ? styles.controlButtonActive : ""}`}
@@ -552,6 +1054,7 @@ export function QueenBeeVoiceOverlay({
               End
             </button>
           </div>
+          </>
         ) : null}
       </div>
     </>,

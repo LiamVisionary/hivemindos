@@ -1,0 +1,129 @@
+<!-- @dsCard group="Components" viewport="700x680" name="Card patterns — hive cells" subtitle="Machine · Agent · Wallet · Setup — one card, one job" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../../styles.css" />
+<style>
+  body { margin: 0; background: var(--background); font-family: var(--font-body); color: var(--foreground); padding: 22px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 660px; }
+  .cell-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .cell-name { font-family: var(--font-display); font-weight: 700; font-size: 16px; }
+  .cell-sub { color: var(--fg-3); font-family: var(--font-mono); font-size: 11px; margin-top: 4px; }
+  .metric-lab { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 10.5px; color: var(--fg-3); margin-bottom: 5px; }
+  .agent-row { display: flex; align-items: center; gap: 11px; }
+  .big-num { font-family: var(--font-mono); font-weight: 600; font-size: 24px; color: var(--honey); }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .between { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .muted { color: var(--fg-3); font-size: 12px; line-height: 1.5; }
+</style>
+</head>
+<body>
+  <div id="root" class="grid"></div>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="../../_ds_bundle.js"></script>
+  <script type="text/babel" data-presets="react">
+    const NS = window.HivemindOSDesignSystem_65eabf;
+    const { Card, CardContent, Badge, StatusDot, Button, ProgressBar, HexCell } = NS;
+
+    function MachineCell() {
+      return (
+        <Card>
+          <CardContent style={{ display: "grid", gap: 14 }}>
+            <div className="cell-head">
+              <div>
+                <div className="cell-name">atlas</div>
+                <div className="cell-sub">macOS 15.3 · M3 Max</div>
+              </div>
+              <Badge variant="secondary" mono>Primary</Badge>
+            </div>
+            <div>
+              <div className="metric-lab"><span>CPU</span><span>38%</span></div>
+              <ProgressBar value={38} thickness={3} tone="honey" />
+              <div className="metric-lab" style={{ marginTop: 9 }}><span>RAM</span><span>62%</span></div>
+              <ProgressBar value={62} thickness={3} tone="honey" />
+            </div>
+            <div className="between">
+              <StatusDot tone="working" label="3 agents · 2 working" />
+              <Button size="sm" variant="outline">Details</Button>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    function AgentCell() {
+      return (
+        <Card>
+          <CardContent style={{ display: "grid", gap: 14 }}>
+            <div className="agent-row">
+              <HexCell tone="live" pulse size={48}>
+                <img src="../../assets/bees/worker-bee-code.png" alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+              </HexCell>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="between">
+                  <span className="cell-name" style={{ fontSize: 15 }}>Hermes-α</span>
+                  <Badge variant="success">Working</Badge>
+                </div>
+                <div className="cell-sub">Lead · Hermes runtime</div>
+              </div>
+            </div>
+            <p className="muted" style={{ margin: 0 }}>Refactoring the swarm agent bridge to stream over Tailscale SSH.</p>
+            <div className="between">
+              <StatusDot tone="working" label="2m" />
+              <Button size="sm">Chat</Button>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    function WalletCell() {
+      return (
+        <Card>
+          <CardContent style={{ display: "grid", gap: 12 }}>
+            <div className="between">
+              <div>
+                <div className="cell-name" style={{ fontSize: 15 }}>Hermes-research</div>
+                <div className="cell-sub">on nimbus · Base</div>
+              </div>
+              <Badge variant="warning">Low compute</Badge>
+            </div>
+            <div className="big-num">0.12 ETH</div>
+            <div className="row" style={{ color: "var(--fg-2)", fontSize: 12.5 }}>
+              <StatusDot tone="warning" pulse={false} /><span>3 days left at current burn</span>
+            </div>
+            <div className="between" style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
+              <span className="muted">Can spend on approved tools</span>
+              <Button size="sm">Add funds</Button>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    function SetupCell() {
+      return (
+        <Card style={{ borderColor: "var(--honey-line)", background: "linear-gradient(150deg, var(--honey-soft), transparent 55%), var(--surface)" }}>
+          <CardContent style={{ display: "grid", gap: 12 }}>
+            <div className="row">
+              <img src="../../assets/brand/honey-hive-icon.png" alt="" style={{ width: 34, height: 34, objectFit: "contain" }} />
+              <Badge variant="honey" mono>Needs setup</Badge>
+            </div>
+            <div className="cell-name" style={{ fontSize: 15 }}>Connect a shared brain</div>
+            <p className="muted" style={{ margin: 0 }}>Connect an Obsidian vault to give agents a common place for memory, handoffs, and shared project context.</p>
+            <div><Button size="sm">Connect a vault</Button></div>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    function Demo() {
+      return (<><MachineCell /><AgentCell /><WalletCell /><SetupCell /></>);
+    }
+    ReactDOM.createRoot(document.getElementById("root")).render(<Demo />);
+  </script>
+</body>
+</html>

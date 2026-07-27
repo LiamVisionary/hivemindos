@@ -30,7 +30,8 @@ if (!/^\d+\.\d+\.\d+$/.test(version)) {
 
 const PLATFORM_ASSETS = {
   "darwin-aarch64": "HivemindOS-updater-macos-apple-silicon.app.tar.gz",
-  "darwin-x86_64": "HivemindOS-updater-macos-intel.app.tar.gz",
+  // darwin-x86_64 (macOS Intel) discontinued 2026-06-30 — see the release
+  // workflow matrix. Existing Intel installs no longer receive auto-updates.
   "windows-x86_64": "HivemindOS-windows-x64-setup.exe",
   "linux-x86_64": "HivemindOS-linux-x64.AppImage",
 };

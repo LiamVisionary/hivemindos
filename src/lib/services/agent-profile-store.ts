@@ -1,6 +1,11 @@
 import "server-only";
 
-import { mutateDashboardStateValue, readDashboardState } from "@/lib/services/dashboard-state";
+import {
+  mutateDashboardStateValue,
+  readDashboardState,
+  readDashboardStateStrict,
+} from "@/lib/services/dashboard-state";
+import { mergeAgentProfileSnapshot } from "@/lib/config/agent-profile-configuration";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 
 /**
@@ -13,14 +18,17 @@ import type { AgentProfile } from "@/lib/types/agent-runtime";
 const AGENT_PROFILES_KEY = "hivemindos.agentProfiles.v1";
 const AGENT_PROFILES_SUFFIX = ".agentProfiles.v1";
 
+function filterProfiles(parsed: unknown): AgentProfile[] {
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter((item): item is AgentProfile => (
+    Boolean(item) && typeof item === "object" && typeof (item as AgentProfile).id === "string"
+  ));
+}
+
 function parseProfiles(raw: string | null): AgentProfile[] {
   if (!raw) return [];
   try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((item): item is AgentProfile => (
-      Boolean(item) && typeof item === "object" && typeof (item as AgentProfile).id === "string"
-    ));
+    return filterProfiles(JSON.parse(raw) as unknown);
   } catch {
     return [];
   }
@@ -37,12 +45,51 @@ export async function readStoredAgentProfiles(): Promise<AgentProfile[]> {
   return parseProfiles(state.values[resolveProfilesKey(state.values)] ?? null);
 }
 
+/**
+ * Strict variant: a state-file read/parse failure or a corrupt stored
+ * profiles value throws instead of reading as "no profiles". For callers that
+ * must not mistake a store outage for an empty profile list (voice continuity:
+ * "no queen profile" implies "cloud voice selected", which must never be
+ * inferred from a failed read of the ~26MB dashboard-state file).
+ */
+export async function readStoredAgentProfilesStrict(): Promise<AgentProfile[]> {
+  const state = await readDashboardStateStrict();
+  const raw = state.values[resolveProfilesKey(state.values)] ?? null;
+  if (!raw) return [];
+  return filterProfiles(JSON.parse(raw) as unknown);
+}
+
 export async function upsertStoredAgentProfile(agent: AgentProfile): Promise<AgentProfile> {
   const state = await readDashboardState();
   const key = resolveProfilesKey(state.values);
+  let saved = agent;
   await mutateDashboardStateValue(key, (current) => {
     const profiles = parseProfiles(current);
-    return JSON.stringify([...profiles.filter((item) => item.id !== agent.id), agent]);
+    const merged = mergeAgentProfileSnapshot(
+      profiles,
+      [...profiles.filter((item) => item.id !== agent.id), agent],
+    );
+    saved = merged.find((item) => item.id === agent.id) ?? agent;
+    return JSON.stringify(merged);
   });
-  return agent;
+  return saved;
+}
+
+/**
+ * Remove one stored agent profile by id — e.g. a deleted company's cloned CEO
+ * queen (company-queen.ts). Runs inside the same write queue as upserts so a
+ * concurrent profile edit can't resurrect the removed entry mid-write. No-op
+ * (returns false) when the id is not present.
+ */
+export async function removeStoredAgentProfile(id: string): Promise<boolean> {
+  const state = await readDashboardState();
+  const key = resolveProfilesKey(state.values);
+  let removed = false;
+  await mutateDashboardStateValue(key, (current) => {
+    const profiles = parseProfiles(current);
+    const next = profiles.filter((item) => item.id !== id);
+    removed = next.length !== profiles.length;
+    return JSON.stringify(next);
+  });
+  return removed;
 }

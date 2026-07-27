@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "provenance": "authored",
+  "license": "MIT (same as this repository)",
+  "verifiedOn": "2026-07-11",
+  "note": "B2B social content-system building blocks: the voice-foundation asset list, content-engine plays, repurposing targets (one newsletter section fanned out across channels), pinned-comment and video-script skeletons, the weekly creation/engagement/analytics rhythm, and outreach-tooling caps. Complements gtm/linkedin/templates.json (hook shapes, DM spine, sell-by-chat, warming stages live there — not duplicated here). This bank is authored, not measured — reach multipliers and reply figures are rules of thumb, and agents must not present anything here as 'proven'. A fuller playbook lives in the shared skills shelf as the b2b-social-gtm skill. Hard rules that travel with every row: platform terms prohibit unauthorized automation/scraping, every outbound item is a human-approved draft, caps are ceilings not targets, and voice/brief foundation files are private user context that is never published. Slots are UPPERCASE so an unfilled template trips the placeholder check in src/lib/services/deliverables/acceptance-contracts.ts.",
+  "count": 25,
+  "taxonomy": {
+    "contentTracks": ["proof", "framework", "story"],
+    "foundationAssets": ["about-me", "voice", "newsletter-voice", "brand-brief"]
+  },
+  "foundationAssets": [
+    { "id": "BF01", "asset": "about-me", "holds": "positioning: who you help, what outcome, why you specifically", "readBy": "every content and outreach generator, before anything is written" },
+    { "id": "BF02", "asset": "voice", "holds": "writing patterns: sentence length, vocabulary, rhythm, banned phrases", "readBy": "every generator; the quality gap with vs without it is large" },
+    { "id": "BF03", "asset": "newsletter-voice", "holds": "email-specific structure: opening, section format, CTA patterns", "readBy": "newsletter and repurposing generators" },
+    { "id": "BF04", "asset": "brand-brief", "holds": "offer, exact ICP titles and signals, proof points with numbers, outreach history", "readBy": "outreach and network-mining plays" }
+  ],
+  "contentPlays": [
+    { "id": "BP01", "play": "hook-first drafting", "how": "generate ten hook candidates before writing any body; pick the strongest, then draft" },
+    { "id": "BP02", "play": "content matrix", "how": "cross topic areas with formats to bank roughly ninety post ideas, each tagged with track (proof, framework, story) and format" },
+    { "id": "BP03", "play": "score against own history", "how": "score a draft against the account's top performers, not generic best practice, before any high-stakes post" },
+    { "id": "BP04", "play": "visual formats", "how": "carousels and document posts tend to out-reach text-only posts by a wide margin (rule of thumb, not measured); produce the asset per post" },
+    { "id": "BP05", "play": "pipeline analytics", "how": "track profile visits, connection requests, and DM conversations per post, not just likes; double down on the two best posts weekly" },
+    { "id": "BP06", "play": "network mining", "how": "scan existing connections for ICP matches before hunting cold contacts; most operators already have hundreds" },
+    { "id": "BP07", "play": "niche mapping", "how": "identify the ten to fifteen thought leaders the ICP already follows and the content gaps nobody owns; engage there consistently" }
+  ],
+  "skeletons": [
+    { "id": "BS01", "name": "Pinned comment", "template": "[ONE LINE THAT EXTENDS THE POST OR NAMES THE RESOURCE] [LINK TO THE LEAD MAGNET OR RESOURCE]", "why": "Links in the post body suppress reach; the pinned comment carries the link instead. Under one hundred fifty characters, posted immediately after publishing, then pinned." },
+    { "id": "BS02", "name": "Short-form video script", "template": "[COLD OPEN THAT DROPS INTO THE POINT MID ACTION]\n\n[FIRST POINT WITH A SPECIFIC NUMBER OR EXAMPLE]\n[SECOND POINT]\n[THIRD POINT]\n\n[ONE SENTENCE CTA]", "why": "Thirty to sixty seconds; the cold open replaces any intro; three points maximum." }
+  ],
+  "repurposeTargets": [
+    { "id": "BR01", "target": "linkedin-post", "spec": "900-1300 characters, hook then body then CTA, no links in body" },
+    { "id": "BR02", "target": "x-thread", "spec": "5-7 tweets, hook tweet first, one unit of value per tweet" },
+    { "id": "BR03", "target": "short-video-script", "spec": "30-60 seconds, cold open, three points, CTA" },
+    { "id": "BR04", "target": "pinned-comment", "spec": "under 150 characters, carries the lead-magnet link for the LinkedIn post" },
+    { "id": "BR05", "target": "email-subjects", "spec": "five subject-line variants for the newsletter edition" }
+  ],
+  "weeklyRhythm": [
+    { "id": "BW01", "when": "Monday, ~25 minutes", "do": "generate hooks, draft the week's three posts, score each against history, produce visuals, schedule for Tue/Thu/Sat" },
+    { "id": "BW02", "when": "Tuesday-Thursday, ~10 minutes/day", "do": "human-approved comments on 5-10 ICP accounts, reply to positive DMs, send 3-5 approved connection requests" },
+    { "id": "BW03", "when": "Friday, ~15 minutes", "do": "review pipeline analytics, mine the best post's engagers for ICP matches, draft connection notes, repurpose the best post to other channels" }
+  ],
+  "toolingCaps": [
+    { "id": "BC01", "action": "connection requests per day", "cap": "20" },
+    { "id": "BC02", "action": "profile fetches per day", "cap": "100" },
+    { "id": "BC03", "action": "prospect searches per day", "cap": "15" },
+    { "id": "BC04", "action": "enrichment lookups", "cap": "dedup against the last 30 days so the same profile is never paid for twice" }
+  ]
+}

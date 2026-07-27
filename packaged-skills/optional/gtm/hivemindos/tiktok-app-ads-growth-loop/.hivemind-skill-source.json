@@ -1,0 +1,19 @@
+{
+  "upstreamName": "TikTok App Ads Growth Loop",
+  "upstreamSlug": "tiktok-app-ads-growth-loop",
+  "hiveSlug": "tiktok-app-ads-growth-loop",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/gtm/hivemindos/tiktok-app-ads-growth-loop",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-12T16:49:36Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional GTM skills",
+  "sourcePath": "packaged-skills/optional/gtm/hivemindos/tiktok-app-ads-growth-loop",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Turns the supplied TikTok app-growth article into a reusable, attribution-first paid-acquisition workflow.",
+    "Corrects time-sensitive setup conflicts: Smart+ App currently uses automatic placements and needs a longer learning window than a universal two-day verdict.",
+    "Combines six-creative testing, contribution-LTV economics, Spark Ads authorization, funnel diagnosis, and approval-gated scaling.",
+    "Removes fake comment seeding, fabricated praise, indiscriminate criticism suppression, non-consensual face swapping, and misleading before-and-after tactics in favor of authentic community operations and current TikTok policy."
+  ]
+}

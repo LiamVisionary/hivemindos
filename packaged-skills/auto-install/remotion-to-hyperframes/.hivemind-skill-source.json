@@ -1,0 +1,28 @@
+{
+  "upstreamName": "remotion-to-hyperframes",
+  "upstreamSlug": "remotion-to-hyperframes",
+  "hiveSlug": "remotion-to-hyperframes",
+  "sourceLabel": "HeyGen HyperFrames",
+  "sourceUrl": "https://github.com/heygen-com/hyperframes/blob/3351fb1a6d7f0202d07db9bf9ad335fd0d1ec344/skills/remotion-to-hyperframes/SKILL.md",
+  "repository": "https://github.com/heygen-com/hyperframes",
+  "installCommand": "Bundled with HivemindOS",
+  "importedAt": "2026-07-12T09:00:50.019Z",
+  "refreshedAt": "2026-07-12T09:11:42.002Z",
+  "provider": "packaged-auto-install",
+  "providerLabel": "HivemindOS auto-installed packaged skills",
+  "sourcePath": "packaged-skills/auto-install/remotion-to-hyperframes",
+  "packageGroup": "media",
+  "status": "auto-install",
+  "license": "Apache-2.0",
+  "commit": "3351fb1a6d7f0202d07db9bf9ad335fd0d1ec344",
+  "sourceArchiveSha256": "5371981bb828588789bd682c31f374204a0ba85af4d2c2052a7cff2cf011edfc",
+  "upstreamSourceUrl": "https://github.com/heygen-com/hyperframes",
+  "normalized": "hivemindos-augmented-upstream",
+  "description": "Port an existing Remotion (React) composition to HyperFrames HTML. Use ONLY when the user explicitly asks to port/convert/migrate/translate a Remotion source. Do NOT use: (a) authoring a new HyperFrames composition; (b) Remotion mentioned in passing; (c) Remotion code shared as reference only; (d) 'same video as my Remotion one' without explicit migrate request — treat as fresh build. Doubt → `/general-video`. One-way, Remotion-only: no reverse export (HyperFrames→Remotion or any framework), no non-Remotion source (After Effects, Framer Motion, plain React/CSS) → out of scope, re-create via `/general-video`. Flags unsupported patterns (useState, useEffect, async calculateMetadata, third-party React libs, `@remotion/lambda`) and recommends runtime interop over lossy translation. Unsure whether to port vs. build fresh, or only a passing Remotion mention? → /hyperframes.",
+  "hivemindAdaptations": [
+    "All nineteen upstream HyperFrames router, domain, and workflow skills are bundled as sibling auto-install skills.",
+    "The 40 MB hyperframes-animation binary showcase asset directory is excluded; authoring rules, adapters, scripts, and HTML examples remain bundled.",
+    "Mutable skills installers and curl-to-shell commands are disabled by HivemindOS policy; agents use the bundled skills and require explicit approval before installing or updating a CLI.",
+    "Raw authentication output is never relayed; HivemindOS reports only provider/key names and set or missing status."
+  ]
+}

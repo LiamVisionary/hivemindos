@@ -30,6 +30,7 @@ let vaultWriteQueue = Promise.resolve();
 function publicInfo(record: VaultRecord): AgentWalletVaultInfo {
   return {
     agentId: record.agentId,
+    name: record.name,
     address: record.address,
     network: record.network,
     custodyMode: record.custodyMode,
@@ -139,6 +140,7 @@ function withVaultWriteLock<T>(operation: () => Promise<T>): Promise<T> {
 
 export async function storeWalletSecret(params: {
   agentId: string;
+  name?: string;
   address: string;
   network: string;
   secret: string;
@@ -151,6 +153,7 @@ export async function storeWalletSecret(params: {
     const tag = cipher.getAuthTag();
     const info: AgentWalletVaultInfo = {
       agentId: params.agentId,
+      name: params.name?.trim() || undefined,
       address: params.address,
       network: params.network,
       custodyMode: "local",

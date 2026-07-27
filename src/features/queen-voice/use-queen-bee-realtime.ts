@@ -1,7 +1,20 @@
 "use client";
 
 import * as React from "react";
+import { fetchAgentStatusAnswer } from "@/features/dashboard/agent-status-fetch";
+import type { DashboardScreenContext } from "@/features/dashboard/screen-context";
+import {
+  isHivemindFastContextCommand,
+  isWalletReadinessCommand,
+} from "@/lib/services/queen-bee/queen-brain";
 import { isLikelyEcho } from "./echo-detection";
+import {
+  actingWalletSourceFromContext,
+  fetchHivemindFastContext,
+  fetchWalletReadiness,
+  fetchXAccountRead,
+  withScreenContext,
+} from "./queen-fast-context";
 import {
   closeRealtimeSttSocket,
   pcm16ToBase64,
@@ -9,6 +22,14 @@ import {
   resampleToPcm16,
 } from "./realtime-stt";
 import type { QueenVoicePhase, QueenVoiceTurn } from "./use-queen-bee-voice";
+import {
+  createStreamOutputAnalyser,
+  useQueenVoiceLevelPump,
+} from "@/lib/audio/queen-voice-amplitude";
+import {
+  voiceTaskApprovalPrompt,
+  voiceTaskSubmissionAuthorized,
+} from "@/lib/services/queen-bee/voice-task-approval";
 
 type RealtimeSessionInfo = {
   ok?: boolean;
@@ -83,8 +104,10 @@ function parseFunctionCall(
 
 // Returns the spoken summary fed back to the model, plus an optional richer
 // `detail` (markdown) the overlay can surface in a "what she found" modal.
-async function askHivemindAgent(
+export async function askHivemindAgent(
   args: Record<string, unknown>,
+  screenContext?: DashboardScreenContext,
+  options: { preferBuiltInCapability?: boolean } = {},
 ): Promise<{ speech: string; detail: string }> {
   const message = typeof args.message === "string" ? args.message.trim() : "";
   if (!message)
@@ -92,11 +115,24 @@ async function askHivemindAgent(
       speech: "The relayed request was empty, so nothing was done.",
       detail: "",
     };
+  if (isWalletReadinessCommand(message)) {
+    const result = await fetchWalletReadiness(screenContext);
+    return { speech: result, detail: result };
+  }
+  if (isHivemindFastContextCommand(message)) {
+    const result = await fetchHivemindFastContext(message, screenContext);
+    return { speech: result, detail: result };
+  }
   try {
     const response = await fetch("/api/queen-bee/voice", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ action: "agent-turn", message }),
+      body: JSON.stringify({
+        action: "agent-turn",
+        message: withScreenContext(message, screenContext),
+        actingWallet: actingWalletSourceFromContext(screenContext),
+        preferBuiltInCapability: options.preferBuiltInCapability === true,
+      }),
       cache: "no-store",
       signal: AbortSignal.timeout(60_000),
     });
@@ -125,7 +161,7 @@ async function askHivemindAgent(
   }
 }
 
-async function driveDashboard(
+export async function driveDashboard(
   args: Record<string, unknown>,
   pilot: ((command: string) => Promise<string>) | undefined,
 ) {
@@ -140,7 +176,7 @@ async function driveDashboard(
   }
 }
 
-async function rememberPreference(args: Record<string, unknown>) {
+export async function rememberPreference(args: Record<string, unknown>) {
   const preference =
     typeof args.preference === "string" ? args.preference.trim() : "";
   if (!preference) return "Nothing was saved: the preference was empty.";
@@ -165,9 +201,21 @@ async function rememberPreference(args: Record<string, unknown>) {
   }
 }
 
-async function createHiveTask(args: Record<string, unknown>) {
+export async function createHiveTask(
+  args: Record<string, unknown>,
+  approval: { latestUserTranscript?: string; lastQueenUtterance?: string } = {},
+) {
   const message = typeof args.message === "string" ? args.message.trim() : "";
   if (!message) return "No task was created: the work request was empty.";
+  const history = approval.lastQueenUtterance
+    ? [{ who: "queen" as const, text: approval.lastQueenUtterance }]
+    : [];
+  if (!voiceTaskSubmissionAuthorized(approval.latestUserTranscript || "", history)) {
+    return voiceTaskApprovalPrompt({
+      title: typeof args.title === "string" ? args.title : "",
+      message,
+    });
+  }
   try {
     const response = await fetch("/api/queen-bee/voice", {
       method: "POST",
@@ -194,6 +242,14 @@ async function createHiveTask(args: Record<string, unknown>) {
   }
 }
 
+export async function readAgentStatus(args: Record<string, unknown>) {
+  // Shared with the typed chat executor: reads live fleet telemetry and, when a
+  // matched agent is unhealthy, appends a nudge to OFFER a create_hive_task fix.
+  // The Queen relays the result and only creates the task once the user agrees.
+  const agentName = typeof args.agentName === "string" ? args.agentName : "";
+  return fetchAgentStatusAnswer(agentName);
+}
+
 /**
  * Full speech-to-speech Queen Bee session over OpenAI Realtime (WebRTC):
  * semantic turn detection, live captions for both sides, and a
@@ -206,16 +262,32 @@ export function useQueenBeeRealtime(
   onFailed?: () => void,
   onDriveDashboard?: (command: string) => Promise<string>,
   openingLine = "",
+  screenContext?: DashboardScreenContext,
 ) {
   const [phase, setPhase] = React.useState<QueenVoicePhase>("starting");
   const [error, setError] = React.useState("");
   const [turns, setTurns] = React.useState<QueenVoiceTurn[]>([]);
   const [speechDetected, setSpeechDetected] = React.useState(false);
   const [failed, setFailed] = React.useState(false);
+  // Bumped per (re)connect alongside the `turns` reset; the overlay's history
+  // bridge keys its id namespace on this — see useQueenBeeVoice.sessionSerial.
+  const [sessionSerial, setSessionSerial] = React.useState(0);
   const mutedRef = React.useRef(muted);
   const trackRef = React.useRef<MediaStreamTrack | null>(null);
+  // Analyser built off her remote WebRTC audio track, read by the fleet
+  // voice-reactive animation while she speaks. Analysis only — the <audio>
+  // element still does the actual playback.
+  const queenOutputAnalyserRef = React.useRef<AnalyserNode | null>(null);
+  useQueenVoiceLevelPump(queenOutputAnalyserRef, phase === "speaking");
+  // Analyser on the MIC input (tapped off the caption context), exposed for
+  // the control bar's live input waveform.
+  const micAnalyserRef = React.useRef<AnalyserNode | null>(null);
   const onFailedRef = React.useRef(onFailed);
   const onDriveDashboardRef = React.useRef(onDriveDashboard);
+  const screenContextRef = React.useRef(screenContext);
+  // Set by the live session effect; lets the overlay's camera loop push webcam
+  // frames into the running realtime conversation as silent image context.
+  const sendVideoFrameRef = React.useRef<((base64Jpeg: string) => void) | null>(null);
 
   React.useEffect(() => {
     onFailedRef.current = onFailed;
@@ -224,6 +296,10 @@ export function useQueenBeeRealtime(
   React.useEffect(() => {
     onDriveDashboardRef.current = onDriveDashboard;
   }, [onDriveDashboard]);
+
+  React.useEffect(() => {
+    screenContextRef.current = screenContext;
+  }, [screenContext]);
 
   React.useEffect(() => {
     mutedRef.current = muted;
@@ -238,6 +314,7 @@ export function useQueenBeeRealtime(
     let nextTurnId = 1;
     let connectTimeout = 0;
     let localStream: MediaStream | null = null;
+    let queenOutputTap: { analyser: AnalyserNode; dispose: () => void } | null = null;
     const handledFunctionCalls = new Set<string>();
     const peer = new RTCPeerConnection();
     const channel = peer.createDataChannel("oai-events");
@@ -282,6 +359,7 @@ export function useQueenBeeRealtime(
     // instant her response ends).
     let lastQueenUtterance = "";
     let lastQueenEndedAt = 0;
+    let lastFinalUserTranscript = "";
     let liveUserTurnId = 0;
     let liveUserText = "";
     let speechActive = false;
@@ -311,6 +389,19 @@ export function useQueenBeeRealtime(
           : { type: "response.create" },
       );
     };
+    // Push a webcam frame into the conversation as silent visual context. We do
+    // NOT trigger a response here — the frame simply becomes recent context the
+    // model can reference when the user next speaks ("what am I holding?").
+    sendVideoFrameRef.current = (base64Jpeg: string) => {
+      send({
+        type: "conversation.item.create",
+        item: {
+          type: "message",
+          role: "user",
+          content: [{ type: "input_image", image_url: `data:image/jpeg;base64,${base64Jpeg}` }],
+        },
+      });
+    };
 
     let sessionInfo: RealtimeSessionInfo = {};
     const openingText = openingLine.trim();
@@ -322,7 +413,9 @@ export function useQueenBeeRealtime(
 
     async function startCaptionStream() {
       try {
-        const socket = await prepareRealtimeSttSession();
+        // Continuous mode: live pre-commit deltas are the whole point here —
+        // this stream captions the user WHILE they talk to the s2s session.
+        const { socket } = await prepareRealtimeSttSession("continuous");
         if (cancelled || !localStream) {
           closeRealtimeSttSocket(socket);
           return;
@@ -362,6 +455,11 @@ export function useQueenBeeRealtime(
         if (!AudioContextClass) return;
         captionContext = new AudioContextClass();
         const source = captionContext.createMediaStreamSource(localStream);
+        // Side-tap for the control bar's live mic waveform (analysis only).
+        const micAnalyser = captionContext.createAnalyser();
+        micAnalyser.fftSize = 1024;
+        source.connect(micAnalyser);
+        micAnalyserRef.current = micAnalyser;
         captionProcessor = captionContext.createScriptProcessor(4096, 1, 1);
         const silentGain = captionContext.createGain();
         silentGain.gain.value = 0;
@@ -510,6 +608,7 @@ export function useQueenBeeRealtime(
         } else {
           addTurn("you", finalTranscript);
         }
+        lastFinalUserTranscript = finalTranscript;
         liveUserTurnId = 0;
         liveUserText = "";
         // With create_response:false the server no longer auto-replies, so the
@@ -555,21 +654,44 @@ export function useQueenBeeRealtime(
         handledFunctionCalls.add(call.callId);
         setPhase("thinking");
         let output: string;
+        const addPendingDetail = (detail: string) => {
+          const trimmed = detail.trim();
+          if (!trimmed) return;
+          pendingQueenDetail = pendingQueenDetail
+            ? `${pendingQueenDetail}\n\n---\n\n${trimmed}`
+            : trimmed;
+        };
+        const liveScreenContext = screenContextRef.current;
         if (call.name === "create_hive_task") {
-          output = await createHiveTask(call.args);
-        } else if (call.name === "ask_hivemind_agent") {
-          const result = await askHivemindAgent(call.args);
+          output = await createHiveTask(call.args, {
+            latestUserTranscript: lastFinalUserTranscript,
+            lastQueenUtterance,
+          });
+        } else if (call.name === "ask_hivemind_agent" || call.name === "use_hive_capability") {
+          const result = await askHivemindAgent(call.args, liveScreenContext, {
+            preferBuiltInCapability: call.name === "use_hive_capability",
+          });
           output = result.speech;
           // Hold the findings for the spoken turn this tool call triggers.
-          if (result.detail.trim()) {
-            pendingQueenDetail = pendingQueenDetail
-              ? `${pendingQueenDetail}\n\n---\n\n${result.detail.trim()}`
-              : result.detail.trim();
-          }
+          addPendingDetail(result.detail);
         } else if (call.name === "drive_dashboard") {
           output = await driveDashboard(call.args, onDriveDashboardRef.current);
         } else if (call.name === "remember_preference") {
           output = await rememberPreference(call.args);
+        } else if (call.name === "read_wallet_readiness") {
+          output = await fetchWalletReadiness(liveScreenContext);
+          addPendingDetail(output);
+        } else if (call.name === "read_hivemind_context") {
+          output = await fetchHivemindFastContext(
+            String(call.args.query ?? ""),
+            liveScreenContext,
+          );
+          addPendingDetail(output);
+        } else if (call.name === "read_x_account") {
+          output = await fetchXAccountRead(call.args);
+          addPendingDetail(output);
+        } else if (call.name === "read_agent_status") {
+          output = await readAgentStatus(call.args);
         } else {
           output = `Unknown tool: ${call.name}`;
         }
@@ -586,7 +708,8 @@ export function useQueenBeeRealtime(
     });
 
     peer.addEventListener("track", (event) => {
-      audio.srcObject = event.streams[0] ?? new MediaStream([event.track]);
+      const stream = event.streams[0] ?? new MediaStream([event.track]);
+      audio.srcObject = stream;
       void audio.play().catch((playError) => {
         fail(
           playError instanceof Error
@@ -594,6 +717,12 @@ export function useQueenBeeRealtime(
             : "Reply audio was blocked by the webview.",
         );
       });
+      // Tap her remote audio for the fleet voice-reactive animation. Best-effort:
+      // a blocked analysis context just leaves the pulse idle, playback is
+      // unaffected. Verify on-device (WKWebView may keep the context suspended).
+      queenOutputTap?.dispose();
+      queenOutputTap = createStreamOutputAnalyser(stream);
+      queenOutputAnalyserRef.current = queenOutputTap?.analyser ?? null;
     });
     peer.addEventListener("connectionstatechange", () => {
       if (cancelled) return;
@@ -610,6 +739,7 @@ export function useQueenBeeRealtime(
         setPhase("starting");
         setError("");
         setTurns([]);
+        setSessionSerial((serial) => serial + 1);
         setFailed(false);
         const startedAt = performance.now();
         const mark = (label: string) =>
@@ -712,6 +842,10 @@ export function useQueenBeeRealtime(
       }
       closeRealtimeSttSocket(captionSocket);
       void captionContext?.close().catch(() => undefined);
+      queenOutputTap?.dispose();
+      queenOutputTap = null;
+      queenOutputAnalyserRef.current = null;
+      micAnalyserRef.current = null;
       localStream?.getTracks().forEach((track) => track.stop());
       trackRef.current = null;
       audio.pause();
@@ -720,5 +854,9 @@ export function useQueenBeeRealtime(
     };
   }, [active, openingLine]);
 
-  return { phase, error, turns, speechDetected, failed };
+  const sendVideoFrame = React.useCallback((base64Jpeg: string) => {
+    if (base64Jpeg) sendVideoFrameRef.current?.(base64Jpeg);
+  }, []);
+
+  return { phase, error, turns, speechDetected, failed, micAnalyserRef, sessionSerial, sendVideoFrame };
 }

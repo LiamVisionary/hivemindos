@@ -17,6 +17,7 @@ export async function POST(request: NextRequest) {
       body?: unknown;
       policy?: Partial<AgentWalletConfig>;
       confirmation?: string;
+      companyTaskId?: string;
     };
     const agentId = body.agentId?.trim();
     const url = body.url?.trim();
@@ -26,17 +27,35 @@ export async function POST(request: NextRequest) {
     const stored = await getWalletSecret(agentId);
     if (!stored) return NextResponse.json({ ok: false, error: "No local wallet exists for this agent." }, { status: 404 });
 
-    const policy = normalizePolicy(body.policy, stored.info.network);
+    // Personal (`user:`) wallets never auto-spend: force auto-pay off so x402
+    // always needs an explicit confirmation. An explicit pay-from-my-wallet
+    // still works; the no-human auto path does not.
+    const policy = normalizePolicy(body.policy, stored.info.network, agentId.startsWith("user:"));
     const result = await executeX402Fetch({
       agentId,
       network: stored.info.network,
       secret: stored.secret,
+      fromAddress: stored.info.address,
       url,
       method: body.method,
       headers: body.headers,
       body: body.body,
       policy,
       confirmation: body.confirmation,
+      companyTaskId: body.companyTaskId?.trim() || undefined,
+      approvalContext: {
+        summary: "This is a generic x402 paid HTTP request from the wallet API.",
+        whyNow: "The endpoint requested payment and the wallet governance policy requires review before spending.",
+        impact: "Approving lets the request retry with an x402 payment. Rejecting keeps the paid HTTP call blocked.",
+        requestedAction: "Approve only if this URL, method, and amount are expected.",
+        evidence: [
+          `URL: ${url}`,
+          `Method: ${body.method || "GET"}`,
+          `Wallet: ${agentId}`,
+          `Network: ${stored.info.network}`,
+        ],
+        source: "Wallet x402 API",
+      },
     });
     return NextResponse.json({ ok: true, result });
   } catch (error) {
@@ -44,7 +63,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function normalizePolicy(policy: Partial<AgentWalletConfig> | undefined, network: string): X402FetchPolicy {
+function normalizePolicy(policy: Partial<AgentWalletConfig> | undefined, network: string, isPersonalWallet = false): X402FetchPolicy {
   const provider = policy?.provider === "veil" && policy.veilAutoPrivateX402 === false
     ? "x402"
     : policy?.provider ?? "manual";
@@ -54,7 +73,7 @@ function normalizePolicy(policy: Partial<AgentWalletConfig> | undefined, network
     network: policy?.network || network,
     maxPaymentUsd: positiveMoney(policy?.maxPaymentUsd, 0.5),
     approvalRequiredOverUsd: positiveMoney(policy?.approvalRequiredOverUsd, 0),
-    autoPayEnabled: Boolean(policy?.autoPayEnabled),
+    autoPayEnabled: Boolean(policy?.autoPayEnabled) && !isPersonalWallet,
     x402BaseUrl: policy?.x402BaseUrl ?? "",
   };
 }

@@ -1,0 +1,46 @@
+{
+  "upstreamName": "video-analyzer",
+  "upstreamSlug": "video-analyzer",
+  "hiveSlug": "video-analyzer",
+  "sourceLabel": "mikefutia",
+  "catalogSource": "Mike Futia",
+  "catalogCategory": "Media",
+  "catalogTags": [
+    "claude vision",
+    "gemini",
+    "video analysis"
+  ],
+  "sourceUrl": "https://github.com/mikefutia/claude-vision/blob/0665eb3f782f92cd50179e61ac66e6c504cd754e/SKILL.md",
+  "repository": "https://github.com/mikefutia/claude-vision",
+  "installCommand": "Install from the HivemindOS Skill Browser; dependency setup and every video upload remain separately approval-gated.",
+  "importedAt": "2026-07-16T00:33:19.879Z",
+  "refreshedAt": "2026-07-16T00:41:22.821Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/media/mikefutia/video-analyzer",
+  "packageGroup": "media",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "0665eb3f782f92cd50179e61ac66e6c504cd754e",
+  "sourceArchiveSha256": "eba0e7725f035c52fa401e0cdd83229249241949c572d0e8ded4b56f5f46e2fb",
+  "upstreamSourceUrl": "https://github.com/mikefutia/claude-vision",
+  "normalized": "portable-frontmatter-and-external-upload-safety-hardened-by-importer",
+  "description": "Use when the user explicitly wants a local video sent to Google Gemini for a structured, timestamped report covering scenes, visible text, audio, visual details, and key moments. Requires approval for the specific upload, a named Gemini API credential, and the pinned google-genai dependency; prefer local-only video analysis when external upload is unnecessary.",
+  "securityVerdict": "Conditionally approved for optional HivemindOS packaging at commit 0665eb3f782f92cd50179e61ac66e6c504cd754e with pinned SDK, explicit per-video upload approval, and best-effort remote-file deletion.",
+  "auditSummary": {
+    "auditedAt": "2026-07-16T00:30:39Z",
+    "sourceReview": "All 4 upstream files and both commits reviewed; no subprocess, dynamic evaluation, usage-reporting SDK, updater, persistent service, arbitrary env-file read, or broad filesystem scan found.",
+    "licenseReview": "Upstream README declares MIT, but the repository contains no standalone license file and GitHub reports no detected license.",
+    "dependencyReview": "google-genai==1.64.0 wheel SHA-256 78a4d2deeb33b15ad78eaa419f6f431755e7f0e03771254f8000d70f717e940b; 33-package Python 3.12 resolution passed pip check; pip-audit found no runtime dependency vulnerabilities; Bandit found no source issues.",
+    "dynamicRuntime": "No live video was uploaded. The consent gate, supported credential fallback, inline path, Files API path, and best-effort deletion are exercised with a mocked Google client in the focused package test.",
+    "privacyBoundary": "Each approved run sends the complete selected video and prompt to Google; Files API cleanup is best-effort and Google's documented 48-hour retention may apply if deletion fails."
+  },
+  "hivemindAdaptations": [
+    "Packages the skill as optional media content instead of auto-installing or auto-running it.",
+    "Pins the audited commit, source archive, google-genai version, and audited wheel hash; updates require a fresh audit.",
+    "Requires explicit approval for the specific video upload and enforces a --confirm-upload script gate.",
+    "Uses project/shared-hive credential lookup by supported key name without printing values or editing shell profiles.",
+    "Replaces global and --break-system-packages advice with an approval-gated isolated Python environment.",
+    "Uses stable gemini-3-flash and deletes large Files API uploads after analysis when possible."
+  ]
+}

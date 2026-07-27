@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AgentProfile, AgentRuntime } from "@/lib/types/agent-runtime";
 import type { KanbanStatus } from "@/lib/types/kanban";
 import { KANBAN_STATUSES } from "@/lib/types/kanban";
+import { confirmUserAction } from "@/lib/utils/confirm-user-action";
 import type { MachineGroup } from "@/features/dashboard/dashboard-types";
 import { isMobileMachineOs } from "@/features/fleet/fleet-identity";
 import type { DashboardRouteTarget } from "@/features/dashboard/dashboard-navigation";
@@ -21,6 +22,7 @@ import {
 
 export type RunVoiceCommandOptions = { onModalOpen?: () => void; screenContext?: DashboardScreenContext };
 import { BeeFlightController } from "@/features/dashboard/bee-pilot/bee-flight";
+import { revealKanbanTaskWithBee } from "@/features/dashboard/bee-pilot/reveal-kanban-task";
 import { beeClick, beeType, findRenderedElement, scrollElementIntoView, wait, waitForElement } from "@/features/dashboard/bee-pilot/dom-actions";
 
 export type BeePilotDeps = {
@@ -39,6 +41,8 @@ export type BeePilotDeps = {
   setSchedulerDraftOpen: (open: boolean) => void;
   openSkillBrowser: () => void;
   setChatText: (text: string) => void;
+  /** Opens a task's conversation modal by id; returns false when unknown. */
+  openKanbanTaskConversation?: (taskId: string) => boolean;
   screenContext?: DashboardScreenContext;
 };
 
@@ -152,6 +156,17 @@ export function useBeePilot(deps: BeePilotDeps) {
   const [phase, setPhase] = useState<BeePilotPhase>("idle");
   const [status, setStatus] = useState("");
   const runIdRef = useRef(0);
+
+  // Deep-link landing shared by "open task" flows (notifications, palette,
+  // voice): fly to the task's card — scrolling the board to its column and the
+  // column to the card — then open its conversation.
+  const revealKanbanTask = useCallback(async (taskId: string): Promise<boolean> => {
+    return revealKanbanTaskWithBee({
+      bee,
+      taskId,
+      openConversation: () => depsRef.current.openKanbanTaskConversation?.(taskId) ?? false,
+    });
+  }, [bee]);
 
   const navigateWithBee = useCallback(async (target: DashboardRouteTarget) => {
     const current = depsRef.current;
@@ -286,6 +301,9 @@ export function useBeePilot(deps: BeePilotDeps) {
           if (params.send === "true") {
             const send = await waitForElement('[data-bee-send][aria-label="Send"]', 2_000);
             if (send) {
+              if (!(await confirmUserAction(`Bee Pilot is ready to send this message to ${agent.name}.\n\nAllow this one action?`))) {
+                return "The message is drafted, but it was not sent.";
+              }
               setStatus(`Sending the message to ${agent.name}...`);
               await beeClick(bee, send);
             }
@@ -320,6 +338,9 @@ export function useBeePilot(deps: BeePilotDeps) {
         await wait(380);
         const confirm = await waitForElement(dataBeeSelector(`wallet-create-${agent.id}`), 2_000);
         if (!confirm) return `${agent.name} already has a wallet, so I opened it instead.`;
+        if (!(await confirmUserAction(`Bee Pilot is ready to create a wallet for ${agent.name}.\n\nAllow this one action?`))) {
+          return "The wallet card is open, but no wallet was created.";
+        }
         setStatus(`Confirming ${agent.name}'s new wallet...`);
         await beeClick(bee, confirm);
         return null;
@@ -363,6 +384,7 @@ export function useBeePilot(deps: BeePilotDeps) {
         if (!task) return `I couldn't find a task matching "${params.task ?? ""}".`;
         setStatus(`Opening "${task.title ?? task.id}"...`);
         await navigateWithBee({ view: "kanban", taskId: task.id });
+        await revealKanbanTask(task.id);
         return null;
       }
       case "create-schedule": {
@@ -383,6 +405,9 @@ export function useBeePilot(deps: BeePilotDeps) {
       case "queen-task": {
         const message = params.message?.trim() || params.title?.trim();
         if (!message) return "There was no work request to delegate.";
+        if (!(await confirmUserAction(`Bee Pilot is ready to delegate “${params.title || message}” to the hive.\n\nAllow this one action?`))) {
+          return "The work request was not delegated.";
+        }
         setStatus("Delegating to the hive...");
         await flyToScreenCenter(bee);
         await bee.bounce();
@@ -411,7 +436,7 @@ export function useBeePilot(deps: BeePilotDeps) {
       default:
         return "That action isn't supported yet.";
     }
-  }, [bee, navigateWithBee]);
+  }, [bee, navigateWithBee, revealKanbanTask]);
 
   const resolvePlan = useCallback(async (
     command: string,
@@ -563,5 +588,5 @@ export function useBeePilot(deps: BeePilotDeps) {
     setStatus("");
   }, []);
 
-  return { bee, open, setOpen, input, setInput, phase, status, runCommand, runVoiceCommand, dismissStatus };
+  return { bee, open, setOpen, input, setInput, phase, status, runCommand, runVoiceCommand, dismissStatus, revealKanbanTask };
 }

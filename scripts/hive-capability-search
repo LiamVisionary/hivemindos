@@ -1,0 +1,363 @@
+#!/usr/bin/env node
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { register } from "node:module";
+import { fileURLToPath } from "node:url";
+
+register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
+
+const SCRIPT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const DEVICE_TOKEN_KEY = "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN";
+const AUTH_HEADER = "x-hivemindos-device-token";
+const VALID_KINDS = new Set([
+  "skill",
+  "tool-schema",
+  "api-route",
+  "connected-app",
+  "app-endpoint",
+  "connector",
+  "artifact",
+  "runtime",
+  "doc",
+  "workspace-file",
+  "code-symbol",
+  "code-route",
+  "repo-architecture",
+]);
+
+function usage() {
+  console.error(`Usage:
+  hive-capability-search "task or goal" [--json] [--limit N] [--kind KIND|--kinds a,b]
+  hive-capability-search "task or goal" --live [--api http://127.0.0.1:5020]
+
+Options:
+  --json                 Emit machine-readable JSON.
+  --limit N              Limit returned hits (default: 12).
+  --kind KIND            Filter to one kind; repeatable.
+  --kinds a,b            Filter to multiple kinds.
+  --vault PATH           Use a specific Obsidian vault path.
+  --root PATH            Use a specific HivemindOS checkout/workspace root.
+  --no-providers         Skip runtime-provider skill inventory.
+  --no-apps              In --live mode, skip connected app discovery.
+  --live                 Try authenticated /api/context-index first, then fall back locally.
+  --api URL              Dashboard origin for --live mode.
+  --require-api          Fail instead of falling back when --live cannot reach the API.
+
+Examples:
+  hive-capability-search "send the latest Base news to Telegram"
+  hive-capability-search --json --kinds skill,tool-schema "create a workflow"
+  hive-capability-search --live "generate an image with the best connected app"
+`);
+}
+
+function expandHome(value) {
+  if (!value) return value;
+  if (value === "~") return os.homedir();
+  if (value.startsWith("~/") || value.startsWith("~\\")) return path.join(os.homedir(), value.slice(2));
+  return value;
+}
+
+function parseKinds(value) {
+  const kinds = String(value || "").split(",").map((kind) => kind.trim()).filter(Boolean);
+  const invalid = kinds.filter((kind) => !VALID_KINDS.has(kind));
+  if (invalid.length) throw new Error(`Invalid context-index kind: ${invalid.join(", ")}`);
+  return kinds;
+}
+
+function numericLimit(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 12;
+  return Math.min(Math.max(Math.trunc(parsed), 1), 200);
+}
+
+function parseArgs(argv) {
+  const input = {
+    queryParts: [],
+    kinds: [],
+    limit: 12,
+    json: false,
+    live: false,
+    requireApi: false,
+    includeRuntimeProviders: true,
+    includeConnectedApps: true,
+    root: expandHome(process.env.HIVE_ENV_PROJECT_ROOT) || SCRIPT_ROOT,
+    vaultPath: undefined,
+    apiBase: undefined,
+  };
+
+  for (let index = 2; index < argv.length; index += 1) {
+    const arg = argv[index];
+    const next = argv[index + 1];
+    if (arg === "--help" || arg === "-h") {
+      input.help = true;
+    } else if (arg === "--json") {
+      input.json = true;
+    } else if (arg === "--live") {
+      input.live = true;
+    } else if (arg === "--api") {
+      input.live = true;
+      if (next && !next.startsWith("--")) {
+        input.apiBase = next;
+        index += 1;
+      }
+    } else if (arg === "--require-api") {
+      input.live = true;
+      input.requireApi = true;
+    } else if (arg === "--no-api") {
+      input.live = false;
+      input.requireApi = false;
+    } else if (arg === "--providers") {
+      input.includeRuntimeProviders = true;
+    } else if (arg === "--no-providers") {
+      input.includeRuntimeProviders = false;
+    } else if (arg === "--apps") {
+      input.includeConnectedApps = true;
+    } else if (arg === "--no-apps") {
+      input.includeConnectedApps = false;
+    } else if (arg === "--limit" || arg === "-n") {
+      input.limit = numericLimit(next);
+      index += 1;
+    } else if (arg === "--kind") {
+      input.kinds.push(...parseKinds(next));
+      index += 1;
+    } else if (arg === "--kinds") {
+      input.kinds.push(...parseKinds(next));
+      index += 1;
+    } else if (arg === "--vault") {
+      input.vaultPath = expandHome(next);
+      index += 1;
+    } else if (arg === "--root" || arg === "--workspace-root") {
+      input.root = expandHome(next);
+      index += 1;
+    } else if (arg.startsWith("--")) {
+      throw new Error(`Unknown option: ${arg}`);
+    } else {
+      input.queryParts.push(arg);
+    }
+  }
+
+  input.query = input.queryParts.join(" ").trim();
+  input.kinds = [...new Set(input.kinds)];
+  return input;
+}
+
+function envFileValue(filePath, key) {
+  try {
+    const line = fs.readFileSync(filePath, "utf8").split(/\r?\n/).find((entry) => entry.startsWith(`${key}=`));
+    return line?.slice(key.length + 1).trim().replace(/^["']|["']$/g, "") ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function candidateDeviceTokens(root) {
+  return [...new Set([
+    process.env[DEVICE_TOKEN_KEY]?.trim(),
+    envFileValue(path.join(root, ".env.local"), DEVICE_TOKEN_KEY),
+    envFileValue(path.join(SCRIPT_ROOT, ".env.local"), DEVICE_TOKEN_KEY),
+    envFileValue(path.join(os.homedir(), ".hivemindos", ".env"), DEVICE_TOKEN_KEY),
+  ].filter((value) => value && value.length >= 24))];
+}
+
+function candidateApiBases(input) {
+  const values = [
+    input.apiBase,
+    process.env.HIVEMINDOS_DASHBOARD_URL,
+    process.env.HIVEMINDOS_APP_URL,
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.PORT ? `http://127.0.0.1:${process.env.PORT}` : "",
+    "http://127.0.0.1:5020",
+    "http://127.0.0.1:5021",
+  ].filter(Boolean);
+  return [...new Set(values.map((value) => String(value).replace(/\/+$/, "")))];
+}
+
+function apiBody(input) {
+  return {
+    query: input.query,
+    limit: input.limit,
+    kinds: input.kinds.length ? input.kinds : undefined,
+    vaultPath: input.vaultPath,
+    includeRuntimeProviders: input.includeRuntimeProviders,
+    includeConnectedApps: input.includeConnectedApps,
+  };
+}
+
+async function searchDashboardApi(input) {
+  const bases = candidateApiBases(input);
+  const tokens = candidateDeviceTokens(input.root);
+  const attempts = [];
+  for (const base of bases) {
+    const credentials = tokens.length ? tokens : [""];
+    for (const token of credentials) {
+      const url = new URL("/api/context-index", base);
+      const payload = JSON.stringify(apiBody(input));
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            ...(token ? { [AUTH_HEADER]: token } : {}),
+          },
+          body: payload,
+          signal: AbortSignal.timeout(2500),
+        });
+        const text = await response.text();
+        let parsed = null;
+        try {
+          parsed = text ? JSON.parse(text) : null;
+        } catch {
+          parsed = null;
+        }
+        if (response.ok && parsed?.ok !== false) {
+          return { source: "dashboard-api", sourceDetail: base, result: parsed, warnings: [] };
+        }
+        attempts.push(`${base}: HTTP ${response.status}${parsed?.error ? ` ${parsed.error}` : ""}`);
+        if (response.status !== 401 && response.status !== 403) break;
+      } catch (error) {
+        attempts.push(`${base}: ${error instanceof Error ? error.message : "request failed"}`);
+        break;
+      }
+    }
+  }
+  const message = attempts.length ? attempts.join("; ") : "no dashboard API candidates";
+  throw new Error(message);
+}
+
+async function searchLocalIndex(input) {
+  const root = path.resolve(input.root || SCRIPT_ROOT);
+  if (!fs.existsSync(root)) throw new Error(`HivemindOS root does not exist: ${root}`);
+  process.chdir(root);
+  const [{ searchContextIndex }, { localAdminPrincipal }] = await Promise.all([
+    import("../src/lib/services/context-index.ts"),
+    import("../src/lib/types/principal.ts"),
+  ]);
+  const result = await searchContextIndex({
+    query: input.query,
+    limit: input.limit,
+    kinds: input.kinds.length ? input.kinds : undefined,
+    vaultPath: input.vaultPath,
+    includeRuntimeProviders: input.includeRuntimeProviders,
+    principal: localAdminPrincipal("local-user", "fallback"),
+  });
+  return { source: "local-index", sourceDetail: root, result, warnings: [] };
+}
+
+function locatorFor(item) {
+  if (item.route) return item.methods?.length ? `${item.methods.join(",")} ${item.route}` : item.route;
+  if (item.path) return item.path;
+  if (item.load?.target) return item.load.target;
+  return item.id;
+}
+
+function compact(value, max = 220) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  return text.length > max ? `${text.slice(0, max - 3)}...` : text;
+}
+
+function toPayload(input, search, apiError) {
+  const result = search.result;
+  const gaps = [];
+  if (search.source === "local-index") {
+    gaps.push(input.live && apiError
+      ? `Live dashboard context-index unavailable: ${compact(apiError.message, 180)}`
+      : "Local mode does not refresh connected apps; use --live or an app-routed /api/context-index call when connected endpoint freshness matters.");
+  }
+  if (!input.query) gaps.push("No query supplied; results are broad index entries, not task-ranked capabilities.");
+  return {
+    ok: true,
+    task: input.query || "(no query)",
+    source: search.source,
+    sourceDetail: search.sourceDetail,
+    generatedAt: result.generatedAt,
+    root: result.root,
+    vaultPath: result.vaultPath,
+    totalMatches: result.totalMatches ?? result.items?.length ?? 0,
+    totals: result.totals,
+    selected: (result.items ?? []).map((item) => ({
+      id: item.id,
+      kind: item.kind,
+      title: item.title,
+      summary: item.summary,
+      locator: locatorFor(item),
+      score: item.score,
+    })),
+    items: result.items ?? [],
+    delivery: {
+      cli: "hive-capability-search",
+      api: "/api/context-index",
+      noCli: "Use already-injected capability-search context, an authenticated dashboard/phone bridge to /api/context-index, or the runtime's exposed context-index/MCP tool. If none are available, synthesize from visible skills/tools and mark retrieval as unavailable.",
+    },
+    gaps,
+    warnings: search.warnings,
+  };
+}
+
+function printText(payload) {
+  const lines = [
+    "Hive capability search",
+    `task: ${payload.task}`,
+    `source: ${payload.source}${payload.sourceDetail ? ` (${payload.sourceDetail})` : ""}`,
+    `matches: ${payload.totalMatches}`,
+    "",
+    "selected:",
+  ];
+  if (!payload.selected.length) {
+    lines.push("- none");
+  } else {
+    for (const item of payload.selected) {
+      lines.push(`- ${item.kind}: ${item.title}`);
+      lines.push(`  summary: ${compact(item.summary, 260)}`);
+      lines.push(`  proof: ${item.locator}`);
+    }
+  }
+  lines.push("", "delivery:");
+  lines.push("- CLI: hive-capability-search \"<task>\"");
+  lines.push("- App/API: POST /api/context-index with the task query");
+  lines.push("- No CLI: use injected capability-search context or an exposed context-index/MCP tool; otherwise mark the retrieval gap");
+  if (payload.gaps.length) {
+    lines.push("", "gaps:");
+    for (const gap of payload.gaps) lines.push(`- ${gap}`);
+  }
+  console.log(lines.join("\n"));
+}
+
+async function main() {
+  let input;
+  try {
+    input = parseArgs(process.argv);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : "Invalid arguments.");
+    usage();
+    process.exit(2);
+  }
+  if (input.help) {
+    usage();
+    return;
+  }
+
+  let search;
+  let apiError = null;
+  if (input.live) {
+    try {
+      search = await searchDashboardApi(input);
+    } catch (error) {
+      apiError = error instanceof Error ? error : new Error("Live dashboard search failed.");
+      if (input.requireApi) throw apiError;
+    }
+  }
+  if (!search) search = await searchLocalIndex(input);
+
+  const payload = toPayload(input, search, apiError);
+  if (input.json) {
+    console.log(JSON.stringify(payload, null, 2));
+  } else {
+    printText(payload);
+  }
+}
+
+main().catch((error) => {
+  console.error(`hive-capability-search: ${error instanceof Error ? error.message : "failed"}`);
+  process.exit(1);
+});

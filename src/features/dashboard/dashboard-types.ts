@@ -1,4 +1,5 @@
 import type { AgentProfile, AgentRuntime, RuntimeCapabilities, SharedVaultConfig } from "@/lib/types/agent-runtime";
+import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 import type { AgentNotification, AgentNotificationSummary } from "@/lib/types/agent-notifications";
 import type { KanbanBoard, KanbanLinkedDirectory, KanbanMachineTarget, KanbanTask, KanbanTaskAttachment } from "@/lib/types/kanban";
 import type { GBrainStatus } from "@/lib/services/brain/gbrain";
@@ -7,6 +8,12 @@ import type { QmdStatus } from "@/lib/services/brain/qmd";
 import type { SyntoStatus } from "@/lib/services/brain/synto";
 import type { TradingBrainStatus } from "@/lib/services/brain/trading-brain";
 import type { ChatApplicationGenerationCard, ChatImageGeneration } from "@/features/dashboard/chat-application-generation";
+import type { ChatResponseBilling } from "@/lib/types/chat-billing";
+import type { CapabilityApprovalPlan } from "@/lib/types/capability-approval";
+import type { EvaluationHumanFeedback } from "@/lib/types/evaluation";
+import type { LocalModelDownloadJob, LocalModelHardwareSnapshot, LocalModelInstallCatalogStatus, LocalOpenAICompatibleServer, LocalRuntimeSetupStatus } from "@/lib/config/local-model-install-catalog";
+import type { FleetMachinePolicySummary } from "@/lib/types/fleet-machine-policy";
+import type { ChatAppArtifact } from "@/lib/services/chat/chat-app-artifact";
 
 export type GatewayStatus = {
   ok?: boolean;
@@ -40,6 +47,21 @@ export type RuntimeIntegrationStatus = {
     detail: string;
   }>;
   diagnostics: string[];
+  /** Present when Queen Bee voice turns are bypassing this agent's configured
+   *  model (runtime turn failing → the OpenAI fallback model answering). */
+  queenVoiceBrain?: {
+    degraded: boolean;
+    agentId?: string;
+    agentName?: string;
+    runtime?: string;
+    provider?: string;
+    model?: string;
+    fallbackModel?: string;
+    lastError?: string;
+    lastFailureAt?: string;
+    lastSuccessAt?: string;
+    consecutiveFailures?: number;
+  };
   modelSelection?: {
     provider: string;
     model: string;
@@ -108,9 +130,31 @@ export type RuntimeIntegrationStatus = {
         sizeBytes?: number | null;
         format?: string | null;
         remote?: boolean;
+        source?: "lm-studio" | "lm-link" | "openai-server";
+        sourceLabel?: string;
+        serverId?: string;
+        baseUrl?: string;
+        chatPath?: string;
+        statusPath?: string;
+        canLoad?: boolean;
+        canUnload?: boolean;
       }>;
+      servers?: LocalOpenAICompatibleServer[];
+      catalog?: LocalModelInstallCatalogStatus[];
+      downloads?: LocalModelDownloadJob[];
+      hardware?: LocalModelHardwareSnapshot;
+      setup?: LocalRuntimeSetupStatus;
       error?: string;
       checkedAt?: string;
+    };
+    hiveCompute?: {
+      status?: string;
+      message?: string;
+      modelCount?: number;
+      checkedAt?: string;
+      gatewayConfigured?: boolean;
+      workerInstalled?: boolean;
+      workerReady?: boolean;
     };
   };
 };
@@ -277,16 +321,25 @@ export type ChatMessage = {
   surface?: "chat" | "kanban" | "scheduler";
   sourceSessionId?: string;
   sourceIndex?: number;
-  processEvents?: Array<{ at?: number; label: string; detail?: string; status?: string }>;
+  feedback?: EvaluationHumanFeedback;
+  processEvents?: Array<{ at?: number; label: string; detail?: string; status?: string; runId?: string }>;
+  billing?: ChatResponseBilling;
   attachments?: ChatAttachment[];
   applicationGeneration?: ChatApplicationGenerationCard;
   imageGeneration?: ChatImageGeneration;
+  capabilityApproval?: CapabilityApprovalPlan;
+  appArtifact?: ChatAppArtifact;
   agentPrompt?: {
     id: string;
     type: "clarify" | "approval" | "sudo" | "secret" | "prompt";
     question: string;
-    choices?: string[];
+    choices?: Array<string | { label: string; value: string; permissionMode?: ChatPermissionMode; suppressUserMessage?: boolean }>;
     allowFreeText?: boolean;
+    response?: {
+      label: string;
+      value?: string;
+      respondedAt?: number;
+    };
   };
 };
 
@@ -359,6 +412,13 @@ export type AgentSchedule = {
   pastRunLimit?: number;
   sharedSchedulePath?: string;
   sharedRunFolder?: string;
+  /**
+   * When true, this loop is meant to run on every fleet machine (fan-out): the
+   * replication engine keeps a copy of its cron on each machine, and its
+   * per-machine copies count as one intended schedule, not duplicates.
+   * Default/absent = pinned to its designated machine only.
+   */
+  runOnAllMachines?: boolean;
 };
 
 export type ScheduleDraft = {
@@ -373,6 +433,7 @@ export type ScheduleDraft = {
   steps: SchedulerStep[];
   usePastRuns: boolean;
   pastRunLimit: number;
+  runOnAllMachines: boolean;
 };
 
 export type SkillBrowserSkill = {
@@ -397,7 +458,16 @@ export type SkillBrowserSkill = {
   audience?: string;
 };
 
-export type SkillBrowserView = "catalog" | "installed" | "packs" | "audit" | "write" | "fusion";
+export type SkillBrowserView = "catalog" | "bankr" | "installed" | "packs" | "audit" | "write" | "fusion";
+
+export type SkillBrowserAttachmentTarget = {
+  selectedSlugs: string[];
+  onChange: (slugs: string[]) => void;
+  eyebrow?: string;
+  title?: string;
+  description?: string;
+  statusLabel?: string;
+};
 
 export type HermesUpdateSkillLike = {
   slug: string;
@@ -529,6 +599,22 @@ export type MachineSystemStats = {
   arch?: string;
   osRelease?: string;
   uptimeSec?: number;
+  // Extended resource telemetry (collector v0.19+; older collectors omit
+  // these, so every field stays optional and the UI degrades gracefully).
+  swapUsedGb?: number | null;
+  swapTotalGb?: number | null;
+  cacheGb?: number | null;
+  tempC?: number | null;
+  diskReadMBs?: number | null;
+  diskWriteMBs?: number | null;
+  netRxMBs?: number | null;
+  netTxMBs?: number | null;
+  procCount?: number | null;
+  topProcesses?: Array<{ name: string; rssMb: number }>;
+  /** Rolling recent samples (cpu%/ram%/net MB-s) accumulated by the collector for sparklines. */
+  history?: { cpu: number[]; ram: number[]; netRx: number[]; netTx: number[] };
+  /** Round-trip latency to the collector /health endpoint (ms), measured by the discovery probe. */
+  rttMs?: number | null;
 };
 
 export type MachineGroup = {
@@ -551,7 +637,10 @@ export type MachineGroup = {
   agents: AgentProfile[];
   version?: AppVersion;
   machineId?: string;
-  capabilities?: AgentProfile["collectorCapabilities"];
+  capabilities?: AgentProfile["collectorCapabilities"] & {
+    appBuilder?: boolean;
+    appBuilderContractVersion?: string;
+  };
   envSync?: {
     ready?: boolean;
     user?: string;
@@ -559,6 +648,7 @@ export type MachineGroup = {
     error?: string;
   };
   system?: MachineSystemStats;
+  fleetPolicy?: FleetMachinePolicySummary;
   lastSeenAt?: number;
   bridgeRepair?: {
     status: "queued" | "running" | "succeeded" | "failed";
@@ -566,6 +656,9 @@ export type MachineGroup = {
     message: string;
     nextAttemptAt?: number;
   };
+  // Peers whose collector reports this machine unreachable over the tailnet
+  // (reverse-reachability signal from fleet discovery).
+  reportedUnreachableBy?: string[];
 };
 
 export type MachineDirectoryEntry = {
@@ -588,6 +681,9 @@ export type MachineDirectoryBrowser = {
 
 export type ChatTreeItem = {
   key: string;
+  /** Owning agent id. Every producer in `use-chat-tree-controller` sets this;
+   *  it was missing from this type only because that file is `@ts-nocheck`. */
+  agentId?: string;
   title: string;
   subtitle: string;
   updatedAt?: number;
@@ -602,6 +698,8 @@ export type ChatTreeFolder = {
   label: string;
   path?: string;
   active?: boolean;
+  /** Epoch ms this folder was created, for user-created project folders only. */
+  createdAt?: number;
   chats: ChatTreeItem[];
   onStartChat?: () => void;
 };
@@ -612,7 +710,8 @@ export type ChatTreeMachine = {
   detail: string;
   folders: ChatTreeFolder[];
   onStartChat?: () => void;
-  onCreateFolder?: () => void;
+  onCreateProject?: () => void;
+  onImportProject?: () => void;
 };
 
 export type DiscoveredMachine = {
@@ -620,14 +719,19 @@ export type DiscoveredMachine = {
   collector: MachineGroup["collector"];
   collectorHost?: string;
   machineId?: string;
+  // The machine's self-declared system tailnet node (collector /health
+  // `tailnetSelf`) — lets merging fold a rename-orphaned system node.
+  tailnetSelf?: { name?: string | null; dnsName?: string | null };
   agents: AgentProfile[];
   snapshots: AgentSnapshot[];
   version?: AppVersion;
-  capabilities?: AgentProfile["collectorCapabilities"];
+  capabilities?: MachineGroup["capabilities"];
   envSync?: MachineGroup["envSync"];
   system?: MachineSystemStats;
+  fleetPolicy?: FleetMachinePolicySummary;
   lastSeenAt?: number;
   bridgeRepair?: MachineGroup["bridgeRepair"];
+  reportedUnreachableBy?: string[];
 };
 
 export type AppVersion = {
@@ -1000,7 +1104,7 @@ export type MiroSharkSurfaceView = "x" | "reddit" | "polymarket" | "timeline";
 
 export type MiroSharkWorkspaceMode = "new" | "run";
 
-export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "trade" | "vault" | "integrations" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "messaging" | "chat" | "more" | "env" | "my-apps" | "phone" | "aeon" | "fusion" | "governance";
+export type DashboardView = "agents" | "kanban" | "scheduler" | "swarm" | "history" | "wallet" | "trade" | "socials" | "marketplace" | "vault" | "integrations" | "beeline" | "maintenance" | "sessions" | "tools" | "memory" | "files" | "notifications" | "messaging" | "chat" | "more" | "env" | "my-apps" | "mini-apps" | "phone" | "aeon" | "fusion" | "governance" | "cloud" | "compute" | "podcast" | "credit-admin";
 
 export type WorkView = Extract<DashboardView, "kanban" | "scheduler" | "swarm" | "history">;
 

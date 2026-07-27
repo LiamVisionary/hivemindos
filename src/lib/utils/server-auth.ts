@@ -1,16 +1,20 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
+import { DASHBOARD_AUTH_HEADER } from "@/lib/utils/internal-api-auth";
+import { localAdminPrincipal, type PrincipalContext } from "@/lib/types/principal";
+
 export const DASHBOARD_SESSION_COOKIE = "hivemindos_session";
-export const DASHBOARD_AUTH_HEADER = "x-hivemindos-device-token";
+export { DASHBOARD_AUTH_HEADER };
 
 const SESSION_VERSION = "v1";
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 const MIN_SECRET_LENGTH = 32;
 const MIN_TOKEN_LENGTH = 24;
 
-type AuthResult = {
+export type AuthResult = {
   userId: string | null;
+  principal?: PrincipalContext;
   reason?: string;
 };
 
@@ -37,6 +41,14 @@ function nativeBootstrapToken() {
 
 function userId() {
   return process.env.OPENCLAW_NEXT_USER_ID?.trim() || "local-user";
+}
+
+function authResult(source: "session" | "device-token"): AuthResult {
+  const id = userId();
+  return {
+    userId: id,
+    principal: localAdminPrincipal(id, source),
+  };
 }
 
 export function dashboardAuthConfigured() {
@@ -175,18 +187,51 @@ function bearerToken(request: Request) {
   return match?.[1]?.trim() ?? "";
 }
 
+// Positive-verdict cache. The middleware runs verifyAuth on every /api
+// request, and each miss costs 1–3 HMAC computations for a deterministic
+// answer (same secret + same credential always verifies the same). Cache ONLY
+// successful verdicts — failures are never cached, so junk tokens can't pin
+// memory or delay a newly-valid credential — with a short TTL so a rotated
+// secret or device token stops being honored within minutes, and a hard size
+// cap as a backstop.
+const VERIFIED_CREDENTIAL_TTL_MS = 5 * 60_000;
+const VERIFIED_CREDENTIAL_MAX = 128;
+const verifiedCredentials = new Map<string, number>();
+
+function verifiedRecently(credential: string, now: number) {
+  const at = verifiedCredentials.get(credential);
+  return at !== undefined && now - at < VERIFIED_CREDENTIAL_TTL_MS;
+}
+
+function rememberVerified(credential: string, now: number) {
+  if (verifiedCredentials.size >= VERIFIED_CREDENTIAL_MAX) {
+    const oldest = verifiedCredentials.keys().next().value;
+    if (oldest !== undefined) verifiedCredentials.delete(oldest);
+  }
+  verifiedCredentials.set(credential, now);
+}
+
 export async function verifyAuth(request: Request): Promise<AuthResult> {
   const status = dashboardAuthStatus();
   if (!status.ok) return { userId: null, reason: status.reason };
+  const now = Date.now();
 
   const sessionValue = requestCookie(request, DASHBOARD_SESSION_COOKIE);
-  if (sessionValue && await verifyDashboardSessionCookie(sessionValue)) {
-    return { userId: userId() };
+  if (sessionValue) {
+    if (verifiedRecently(`session:${sessionValue}`, now)) return authResult("session");
+    if (await verifyDashboardSessionCookie(sessionValue)) {
+      rememberVerified(`session:${sessionValue}`, now);
+      return authResult("session");
+    }
   }
 
   const headerToken = request.headers.get(DASHBOARD_AUTH_HEADER)?.trim() || bearerToken(request);
-  if (await verifyDeviceToken(headerToken)) {
-    return { userId: userId() };
+  if (headerToken) {
+    if (verifiedRecently(`device:${headerToken}`, now)) return authResult("device-token");
+    if (await verifyDeviceToken(headerToken)) {
+      rememberVerified(`device:${headerToken}`, now);
+      return authResult("device-token");
+    }
   }
 
   return { userId: null, reason: "Dashboard authentication is required." };
@@ -199,4 +244,12 @@ export function unauthorizedJson(reason = "Dashboard authentication is required.
 export async function requireAuth(request: Request) {
   const auth = await verifyAuth(request);
   return auth.userId ? null : unauthorizedJson(auth.reason);
+}
+
+export async function requireAuthContext(request: Request) {
+  const auth = await verifyAuth(request);
+  if (!auth.userId || !auth.principal) {
+    return { auth, response: unauthorizedJson(auth.reason) };
+  }
+  return { auth, principal: auth.principal, response: null };
 }

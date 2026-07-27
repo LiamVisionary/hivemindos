@@ -1,0 +1,14 @@
+{
+  "id": "company-driver-stall",
+  "expectation": {
+    "requiredKeywords": ["lease", "dashboard", "driver"],
+    "forbiddenKeywords": ["payment failure", "wipe"],
+    "requiredEvidence": ["lease stale", "launched companies=2"]
+  },
+  "diagnosis": {
+    "problem": "Launched companies are not dispatching work.",
+    "rootCause": "The machine-wide driver lease is stale and no dashboard accepted the restart request.",
+    "report": "Restore a dashboard process, then verify the company driver renews its lease.",
+    "toolCalls": [{ "source": "driver-state", "result": "lease stale" }, { "source": "companies", "result": "launched companies=2" }]
+  }
+}

@@ -3,8 +3,14 @@ import "server-only";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { executeX402Fetch, type X402FetchPolicy, type X402FetchResult } from "@/lib/services/wallet/x402-agent-fetch";
+import {
+  HIVEMINDOS_MIROSHARK_X402_PROXY_BASE_URL,
+  MIROSHARK_X402_SIMULATION_PRICE_USD,
+  MIROSHARK_X402_UPSTREAM_BASE_URL,
+} from "@/lib/config/miroshark-x402";
 
-export const MIROSHARK_X402_BASE_URL = "https://x402.miroshark.xyz";
+export const MIROSHARK_X402_BASE_URL = MIROSHARK_X402_UPSTREAM_BASE_URL;
+export const MIROSHARK_X402_RUN_BASE_URL = HIVEMINDOS_MIROSHARK_X402_PROXY_BASE_URL;
 
 export type MiroSharkX402PredictionMarket = string | {
   question: string;
@@ -22,7 +28,6 @@ export type MiroSharkX402RunRequest = {
   deepResearch?: unknown;
   prediction_market?: unknown;
   predictionMarket?: unknown;
-  affiliate?: unknown;
   policy?: Partial<AgentWalletConfig>;
   confirmation?: unknown;
 };
@@ -33,7 +38,6 @@ export type MiroSharkX402RunPayload = {
   article?: string;
   deep_research?: boolean;
   prediction_market?: MiroSharkX402PredictionMarket;
-  affiliate?: string;
 };
 
 export type MiroSharkX402RunResult = {
@@ -42,7 +46,6 @@ export type MiroSharkX402RunResult = {
 };
 
 const RUN_ID_PATTERN = /^run_[a-zA-Z0-9_-]+$/;
-const EVM_ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 
 function optionalString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -117,11 +120,6 @@ export function normalizeMiroSharkX402RunPayload(input: MiroSharkX402RunRequest)
   const predictionMarket = normalizePredictionMarket(input.prediction_market ?? input.predictionMarket);
   if (predictionMarket) payload.prediction_market = predictionMarket;
 
-  const affiliate = optionalString(input.affiliate);
-  if (affiliate) {
-    if (!EVM_ADDRESS_PATTERN.test(affiliate)) throw new Error("affiliate must be a valid EVM 0x address.");
-    payload.affiliate = affiliate;
-  }
   return payload;
 }
 
@@ -135,10 +133,10 @@ function normalizePolicy(policy: Partial<AgentWalletConfig> | undefined, network
     enabled: Boolean(policy?.enabled),
     provider: policy?.provider ?? "manual",
     network: policy?.network || network,
-    maxPaymentUsd: positiveMoney(policy?.maxPaymentUsd, 1),
+    maxPaymentUsd: positiveMoney(policy?.maxPaymentUsd, MIROSHARK_X402_SIMULATION_PRICE_USD),
     approvalRequiredOverUsd: positiveMoney(policy?.approvalRequiredOverUsd, 0),
     autoPayEnabled: Boolean(policy?.autoPayEnabled),
-    x402BaseUrl: policy?.x402BaseUrl || MIROSHARK_X402_BASE_URL,
+    x402BaseUrl: MIROSHARK_X402_RUN_BASE_URL,
   };
 }
 
@@ -153,11 +151,26 @@ export async function runMiroSharkX402(input: MiroSharkX402RunRequest): Promise<
     agentId,
     network: stored.info.network,
     secret: stored.secret,
-    url: `${MIROSHARK_X402_BASE_URL}/run`,
+    fromAddress: stored.info.address,
+    url: `${MIROSHARK_X402_RUN_BASE_URL}/run`,
     method: "POST",
     body: payload,
     policy: normalizePolicy(input.policy, stored.info.network),
     confirmation: optionalString(input.confirmation),
+    skipPlatformFee: true,
+    approvalContext: {
+      summary: "This pays the hosted MiroShark x402 run endpoint for one simulation run.",
+      whyNow: "The simulation request reached a paid x402 endpoint and the wallet governance policy requires review before spending.",
+      impact: "Approving lets the run submit with x402 payment. Rejecting stops this paid simulation request.",
+      requestedAction: "Approve only if this MiroShark simulation should be paid from the selected local wallet.",
+      evidence: [
+        `Endpoint: ${MIROSHARK_X402_RUN_BASE_URL}/run`,
+        `Wallet: ${agentId}`,
+        `Network: ${stored.info.network}`,
+      ],
+      missingContext: [],
+      source: "MiroShark x402 simulation",
+    },
   });
   return { result, miroshark: result.bodyJson };
 }

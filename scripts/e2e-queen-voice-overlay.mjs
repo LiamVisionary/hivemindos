@@ -89,13 +89,11 @@ const result = await page.evaluate(() => {
   const glowFrame = document.querySelector("[data-queen-glow-frame]");
   const glowRootRect = glowRoot?.getBoundingClientRect();
   const glowFrameRect = glowFrame?.getBoundingClientRect();
-  const glowFrameInset = Number(glowFrame?.getAttribute("data-queen-glow-inset"));
-  const glowFrameRadius = Number(glowFrame?.getAttribute("data-queen-glow-radius"));
-  const glowLayers = document.querySelectorAll("[data-queen-glow-layer]").length;
+  const glowFrameBoxShadow = glowFrame ? getComputedStyle(glowFrame).boxShadow : "";
   const statusText = dialog?.textContent ?? "";
   return {
     overlayMounted: Boolean(dialog),
-    glowLayers,
+    glowFrameBoxShadow,
     glowRootRect: glowRootRect
       ? {
           top: glowRootRect.top,
@@ -110,8 +108,6 @@ const result = await page.evaluate(() => {
           left: glowFrameRect.left,
           width: glowFrameRect.width,
           height: glowFrameRect.height,
-          inset: glowFrameInset,
-          radius: glowFrameRadius,
         }
       : null,
     viewport: { width: window.innerWidth, height: window.innerHeight },
@@ -134,17 +130,17 @@ const glowCoversViewport =
   && Math.abs(result.glowRootRect.left) <= 1
   && result.glowRootRect.width >= result.viewport.width - 2
   && result.glowRootRect.height >= result.viewport.height - 2;
-const glowFrameFollowsAppChrome =
+const glowFramePurpleGlow =
   result.glowFrameRect
-  && result.glowFrameRect.inset >= 8
-  && result.glowFrameRect.inset <= 14
-  && result.glowFrameRect.radius >= 32
-  && result.glowFrameRect.radius <= 48
+  && /inset/.test(result.glowFrameBoxShadow || "")
+  && /(124,\s*77,\s*255|184,\s*91,\s*255|99,\s*110,\s*241)/.test(
+    result.glowFrameBoxShadow || "",
+  )
   && result.glowFrameRect.width >= result.viewport.width - 2
   && result.glowFrameRect.height >= result.viewport.height - 2;
 
-if (!result.overlayMounted || result.glowLayers < 3 || !glowCoversViewport || !glowFrameFollowsAppChrome) {
-  console.error("FAIL: overlay did not mount or glow layers missing.");
+if (!result.overlayMounted || !glowCoversViewport || !glowFramePurpleGlow) {
+  console.error("FAIL: overlay did not mount or perimeter glow missing.");
   process.exit(1);
 }
-console.log("PASS: overlay mounted with glow and control bar.");
+console.log("PASS: overlay mounted with perimeter glow and control bar.");

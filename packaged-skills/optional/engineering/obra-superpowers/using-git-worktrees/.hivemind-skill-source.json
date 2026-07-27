@@ -1,0 +1,20 @@
+{
+  "upstreamName": "using-git-worktrees",
+  "upstreamSlug": "using-git-worktrees",
+  "hiveSlug": "using-git-worktrees",
+  "sourceLabel": "obra-superpowers",
+  "sourceUrl": "https://github.com/obra/superpowers/blob/d884ae04edebef577e82ff7c4e143debd0bbec99/skills/using-git-worktrees/SKILL.md",
+  "repository": "https://github.com/obra/superpowers",
+  "installCommand": "npx skills add https://github.com/obra/superpowers --skill using-git-worktrees",
+  "importedAt": "2026-07-11T12:24:08.768Z",
+  "refreshedAt": "2026-07-11T12:41:15.452Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional packaged skills",
+  "sourcePath": "packaged-skills/optional/engineering/obra-superpowers/using-git-worktrees",
+  "packageGroup": "engineering",
+  "status": "optional",
+  "license": "MIT",
+  "commit": "d884ae04edebef577e82ff7c4e143debd0bbec99",
+  "normalized": "hivemindos-augmented-upstream",
+  "description": "Use when consequential repository work needs an isolated checkout and the project worktree policy permits creating one."
+}

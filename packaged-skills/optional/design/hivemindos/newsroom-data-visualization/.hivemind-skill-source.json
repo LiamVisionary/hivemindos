@@ -1,0 +1,20 @@
+{
+  "upstreamName": "Newsroom Data Visualization",
+  "upstreamSlug": "newsroom-data-visualization",
+  "hiveSlug": "newsroom-data-visualization",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/design/hivemindos/newsroom-data-visualization",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-06-25T06:07:40Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional design skills",
+  "sourcePath": "packaged-skills/optional/design/hivemindos/newsroom-data-visualization",
+  "status": "optional",
+  "relatedPublicReference": "https://github.com/alexmcdonnell-airtable/hyperagent-public-skills",
+  "relatedPublicReferenceLicense": "No license detected on 2026-06-25; not vendored or copied.",
+  "hivemindAdaptations": [
+    "Turns publication-grade charting into a provider-neutral HivemindOS skill.",
+    "Adds source freshness, uncertainty, chart honesty, and private-dataset safeguards.",
+    "Composes with HivemindOS frontend/reporting skills."
+  ]
+}

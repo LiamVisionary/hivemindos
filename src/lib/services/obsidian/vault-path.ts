@@ -1,6 +1,6 @@
 import { constants } from "fs";
 import { accessSync, readdirSync, statSync } from "fs";
-import { homedir } from "@/lib/home-dir";
+import { activeHiveWorkspaceId, expandHomePath, resolveHiveWorkspace } from "@/lib/services/hive-workspaces";
 import { basename, join, resolve } from "path";
 
 export const GENERIC_OBSIDIAN_VAULT_PATH = "~/Documents/Obsidian/hivemindos-vault";
@@ -10,12 +10,12 @@ const OBSIDIAN_ROOT_CANDIDATES = [
   "~/Library/Mobile Documents/iCloud~md~obsidian/Documents",
 ];
 
-export function expandHomePath(path: string): string {
-  return path === "~" || path.startsWith("~/") ? join(homedir(), path.slice(2)) : path;
-}
+export { expandHomePath };
 
 export function configuredObsidianVaultPath(): string {
-  return process.env.NEXT_PUBLIC_OBSIDIAN_VAULT_PATH?.trim() || GENERIC_OBSIDIAN_VAULT_PATH;
+  const explicitVault = process.env.NEXT_PUBLIC_OBSIDIAN_VAULT_PATH?.trim();
+  if (explicitVault) return explicitVault;
+  return resolveHiveWorkspace(activeHiveWorkspaceId()).vaultPath;
 }
 
 function isDirectory(path: string): boolean {

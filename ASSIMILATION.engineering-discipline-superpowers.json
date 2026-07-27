@@ -1,0 +1,56 @@
+{
+  "created_at": "2026-07-11T12:33:20.872615+00:00",
+  "request": "Add a HivemindOS-native Engineering Discipline skill pack and Work Board workflow, using packaged bundled and optional skills as source of truth augmented from obra/superpowers.",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "obra/superpowers",
+      "source_path": "skills/verification-before-completion/SKILL.md",
+      "target_path": "packaged-skills/optional/engineering/obra-superpowers/verification-before-completion/SKILL.md",
+      "reuse_type": "adapted_code",
+      "note": "pinned donor method with HivemindOS authority and evidence policy preface"
+    },
+    {
+      "source_repo": "obra/superpowers",
+      "source_path": "skills/systematic-debugging",
+      "target_path": "packaged-skills/optional/engineering/obra-superpowers/systematic-debugging",
+      "reuse_type": "adapted_code",
+      "note": "selected supporting resources with application-specific TypeScript example excluded"
+    },
+    {
+      "source_repo": "obra/superpowers",
+      "source_path": "skills/brainstorming/SKILL.md",
+      "target_path": "packaged-skills/optional/engineering/obra-superpowers/brainstorming/SKILL.md",
+      "reuse_type": "adapted_code",
+      "note": "scoped design method with upstream visual web server excluded"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/import-packaged-skills.mjs",
+      "target_path": "scripts/import-packaged-skills.mjs",
+      "reuse_type": "config_adapted",
+      "note": "extended canonical pinned importer rather than creating a second skill source"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/skills/skill-os.ts",
+      "target_path": "src/lib/services/skills/skill-os.ts",
+      "reuse_type": "adapted_code",
+      "note": "extended existing Skill Browser pack installer with manifest resolution and safe managed refresh archives"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/loops/loop-templates.ts",
+      "target_path": "src/lib/services/loops/loop-templates.ts",
+      "reuse_type": "adapted_code",
+      "note": "extended existing LoopSpec verifier gates for Engineering Discipline"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/components/task-modal/task-templates.ts",
+      "target_path": "src/components/task-modal/task-templates.ts",
+      "reuse_type": "config_adapted",
+      "note": "reused existing quick-add template path to create a real loop-backed task"
+    }
+  ]
+}

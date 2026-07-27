@@ -1,32 +1,28 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
+// Partially typed 2026-07-02; the typing pass ran out of session mid-file and the remaining errors are deferred (see CHANGELOG).
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
+import { AudioLines } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 import { ChatMarkdown } from "@/features/dashboard/ChatMarkdown";
+import { useQueenChat } from "@/features/queen-voice/queen-chat-store";
+import {
+  brainNodeActivityWeight,
+  brainNodeClusterKey,
+  brainNodeStructuralWeight,
+  buildBrainSemanticLinks,
+} from "./brain-graph-semantics";
 import styles from "./BrainGraphExplorer.module.css";
+import { SHARED_BRAIN_VOICE_DEMO_LINES } from "./shared-brain-voice-demo";
+
+const BrainSynapseCanvas = dynamic(() => import("./BrainSynapseCanvas"), { ssr: false });
 
 const graphClass = (...classes) => classes.map((className) => styles[className]).filter(Boolean).join(" ");
 
-const GRAPH_W = 700;
-const GRAPH_H = 540;
-const GRAPH_MIN_SCALE = 0.55;
-const GRAPH_MAX_SCALE = 3;
+const MAX_VISIBLE_NODES = 160;
 const BRAIN_ASK_PROMPT = "Help me reason about what matters, what is stale, and what action should come next.";
-const NODE_ANCHORS = [
-  { x: 50, y: 50 },
-  { x: 30, y: 27 },
-  { x: 15, y: 44 },
-  { x: 72, y: 25 },
-  { x: 80, y: 50 },
-  { x: 50, y: 75 },
-  { x: 70, y: 72 },
-  { x: 34, y: 70 },
-  { x: 21, y: 61 },
-  { x: 60, y: 36 },
-  { x: 88, y: 38 },
-  { x: 44, y: 90 },
-];
 
 function uniqueNodesById(nodes: any[]) {
   const unique = new Map<string, any>();
@@ -34,77 +30,6 @@ function uniqueNodesById(nodes: any[]) {
     if (node?.id && !unique.has(node.id)) unique.set(node.id, node);
   }
   return [...unique.values()];
-}
-
-function hashUnit(value: string, salt = 0) {
-  let hash = 2166136261 + salt;
-  for (const char of value) {
-    hash ^= char.charCodeAt(0);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0) / 4294967295;
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function nodeLayoutScore(node: any, graphNow: number) {
-  const degree = (node.incoming ?? 0) + (node.outgoing ?? 0);
-  const touched = Date.parse(node.modifiedAt ?? "");
-  const recentBoost = Number.isFinite(touched) && touched > graphNow - 14 * 24 * 60 * 60 * 1000 ? 10 : 0;
-  return degree * 1.2 + recentBoost;
-}
-
-function buildNodeCloudLayout(nodes: any[], graphNow: number) {
-  const ranked = [...nodes].sort((a, b) => (
-    nodeLayoutScore(b, graphNow) - nodeLayoutScore(a, graphNow)
-    || String(a.id).localeCompare(String(b.id))
-  ));
-  const positions = new Map<string, { x: number; y: number }>();
-  const overflowTotal = Math.max(1, ranked.length - NODE_ANCHORS.length);
-
-  ranked.forEach((node, index) => {
-    const anchor = NODE_ANCHORS[index];
-    if (anchor) {
-      positions.set(node.id, {
-        x: 30 + (anchor.x / 100) * (GRAPH_W - 60),
-        y: 28 + (anchor.y / 100) * (GRAPH_H - 56),
-      });
-      return;
-    }
-    const localIndex = index - NODE_ANCHORS.length;
-    const ring = Math.sqrt((localIndex + 1) / (overflowTotal + 1));
-    const angle = localIndex * 2.399963 + hashUnit(node.id, 13) * 0.85;
-    const degreePull = Math.min(0.24, ((node.incoming ?? 0) + (node.outgoing ?? 0)) / 90);
-    const spreadX = 42 - degreePull * 24 + hashUnit(node.id, 29) * 8;
-    const spreadY = 36 - degreePull * 20 + hashUnit(node.id, 43) * 8;
-    const xPct = clamp(50 + Math.cos(angle) * spreadX * ring + (hashUnit(node.id, 61) - 0.5) * 7, 8, 92);
-    const yPct = clamp(52 + Math.sin(angle) * spreadY * ring + (hashUnit(node.id, 79) - 0.5) * 7, 8, 92);
-    positions.set(node.id, {
-      x: 30 + (xPct / 100) * (GRAPH_W - 60),
-      y: 28 + (yPct / 100) * (GRAPH_H - 56),
-    });
-  });
-
-  return { positions, width: GRAPH_W, height: GRAPH_H };
-}
-
-function splitLabel(label: string) {
-  if (label.length <= 16) return [label];
-  const words = label.split(" ");
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    if ((current + " " + word).trim().length > 16 && current) {
-      lines.push(current);
-      current = word;
-    } else {
-      current = (current + " " + word).trim();
-    }
-  }
-  if (current) lines.push(current);
-  return lines.slice(0, 2);
 }
 
 function actionTone(action: string) {
@@ -199,16 +124,12 @@ export function BrainGraphExplorer(props: any) {
     brainGraph,
     brainGraphLoading,
     brainGraphStatus,
-    brainPan,
-    endBrainPan,
     formatBrainDate,
     inspectBrainNode,
-    moveBrainPan,
     refreshBrainGraph,
     selectedAgent,
     selectedBrainNode,
     setActiveView,
-    setBrainPan,
     setChatAttachments,
     setChatDirectories,
     setQuickAddDrafts,
@@ -219,13 +140,14 @@ export function BrainGraphExplorer(props: any) {
     setText,
     sharedVault,
     startAgentChat,
-    startBrainPan,
     vaultClass,
   } = props;
+  const { speakScript } = useQueenChat();
   const [brainGraphFilter, setBrainGraphFilter] = useState("all");
   const [brainGraphQuery, setBrainGraphQuery] = useState("");
   const [brainContextNodeIds, setBrainContextNodeIds] = useState<string[]>([]);
-  const brainGraphCanvasRef = useRef<HTMLDivElement | null>(null);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [voiceDemoState, setVoiceDemoState] = useState<"idle" | "playing" | "failed">("idle");
   const graphNow = Date.parse(brainGraph?.generatedAt ?? "") || 0;
   const brainFilterModes = [
     { id: "all", label: "All" },
@@ -304,26 +226,58 @@ export function BrainGraphExplorer(props: any) {
     const filteredNodes = brainGraph.nodes.filter((node) => matchesFilter(node) && matchesQuery(node));
     const shouldKeepSelectedVisible = brainGraphFilter === "stale" && selectedBrainNode && matchesQuery(selectedBrainNode);
     if (shouldKeepSelectedVisible && !filteredNodes.some((node) => node.id === selectedBrainNode.id)) {
-      return [selectedBrainNode, ...filteredNodes].slice(0, 96);
+      return [selectedBrainNode, ...filteredNodes].slice(0, MAX_VISIBLE_NODES);
     }
-    return filteredNodes.slice(0, 96);
+    return filteredNodes.slice(0, MAX_VISIBLE_NODES);
   }, [brainGraph, brainGraphFilter, brainGraphQuery, graphNow, neighborsById, selectedBrainNode]);
-  const brainLayout = useMemo(() => buildNodeCloudLayout(visibleBrainNodes, graphNow), [graphNow, visibleBrainNodes]);
-  const brainGraphScale = clamp(brainPan?.scale ?? 1, GRAPH_MIN_SCALE, GRAPH_MAX_SCALE);
-  const brainViewportPoint = (point) => ({
-    x: (brainPan?.x ?? 0) + point.x * brainGraphScale,
-    y: (brainPan?.y ?? 0) + point.y * brainGraphScale,
-  });
   const visibleIds = useMemo(() => new Set(visibleBrainNodes.map((node) => node.id)), [visibleBrainNodes]);
-  const selectedBrainTargetIds = useMemo(() => {
-    if (!brainGraph || !selectedBrainNode) return new Set<string>();
-    const targetIds = new Set<string>();
-    for (const link of brainGraph.links) {
-      if (link.source === selectedBrainNode.id && brainLayout.positions.has(link.target)) targetIds.add(link.target);
-      if (link.target === selectedBrainNode.id && brainLayout.positions.has(link.source)) targetIds.add(link.source);
+  const synapseNodes = useMemo(() => visibleBrainNodes.map((node) => {
+    const degree = (node.incoming ?? 0) + (node.outgoing ?? 0);
+    const recentAt = Date.parse(node.modifiedAt ?? node.lastAccessedAt ?? "");
+    const recent = Number.isFinite(recentAt) && recentAt > graphNow - 14 * 24 * 60 * 60 * 1000;
+    const unresolved = node.id.startsWith("unresolved:");
+    const staleHub = degree >= 3 && !node.accessCount && !recent;
+    const tone = unresolved
+      ? "unresolved"
+      : node.accessCount
+        ? "touched"
+        : staleHub ? "stale" : recent ? "recent" : "plain";
+    return {
+      activity: brainNodeActivityWeight(node, graphNow),
+      cluster: brainNodeClusterKey(node),
+      id: node.id,
+      label: node.label,
+      meta: node.accessCount
+        ? `${node.accessCount} read${node.accessCount === 1 ? "" : "s"}`
+        : `${degree} link${degree === 1 ? "" : "s"}`,
+      weight: brainNodeStructuralWeight(node),
+      tone,
+    };
+  }), [graphNow, visibleBrainNodes]);
+  const wikiSynapseLinks = useMemo(() => (
+    (brainGraph?.links ?? [])
+      .filter((link) => visibleIds.has(link.source) && visibleIds.has(link.target))
+      .map((link) => ({ kind: "wiki", source: link.source, target: link.target }))
+  ), [brainGraph, visibleIds]);
+  const semanticLinks = useMemo(() => buildBrainSemanticLinks(visibleBrainNodes, wikiSynapseLinks), [visibleBrainNodes, wikiSynapseLinks]);
+  const canvasLinks = useMemo(() => [...wikiSynapseLinks, ...semanticLinks], [semanticLinks, wikiSynapseLinks]);
+  const neighborIds = useMemo(() => {
+    if (!selectedBrainNode) return [];
+    const ids = new Set<string>();
+    for (const link of wikiSynapseLinks) {
+      if (link.source === selectedBrainNode.id) ids.add(link.target);
+      if (link.target === selectedBrainNode.id) ids.add(link.source);
     }
-    return targetIds;
-  }, [brainGraph, brainLayout.positions, selectedBrainNode]);
+    return [...ids];
+  }, [selectedBrainNode, wikiSynapseLinks]);
+  const handleNodeClick = useCallback((nodeId) => {
+    const node = brainNodesById.get(nodeId);
+    if (node) {
+      setInspectorOpen(true);
+      void inspectBrainNode(node);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brainNodesById]);
   const seedBrainChat = (nodes) => {
     const usableNodes = nodes.filter((node) => !node.id.startsWith("unresolved:"));
     if (!usableNodes.length) return;
@@ -377,282 +331,216 @@ export function BrainGraphExplorer(props: any) {
     setBrainGraphQuery(data.note?.title ?? node.label);
     void refreshBrainGraph(true);
   };
-  const panBrainGraphWithWheel = useCallback((event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const rect = event.currentTarget.getBoundingClientRect();
-    if (!rect.width || !rect.height) return;
-    const pointerX = clamp((event.clientX - rect.left) / rect.width, 0, 1) * GRAPH_W;
-    const pointerY = clamp((event.clientY - rect.top) / rect.height, 0, 1) * GRAPH_H;
-    const deltaMultiplier = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 120 : 1;
-    const normalizedDeltaY = event.deltaY * deltaMultiplier;
-    const zoomFactor = Math.exp(-normalizedDeltaY * 0.0012);
-    setBrainPan((current) => {
-      const currentScale = clamp(current.scale ?? 1, GRAPH_MIN_SCALE, GRAPH_MAX_SCALE);
-      const nextScale = clamp(currentScale * zoomFactor, GRAPH_MIN_SCALE, GRAPH_MAX_SCALE);
-      if (Math.abs(nextScale - currentScale) < 0.001) return current;
-      const focalX = (pointerX - (current.x ?? 0)) / currentScale;
-      const focalY = (pointerY - (current.y ?? 0)) / currentScale;
-      return {
-        x: pointerX - focalX * nextScale,
-        y: pointerY - focalY * nextScale,
-        scale: nextScale,
-      };
-    });
-  }, [setBrainPan]);
-  useEffect(() => {
-    const canvas = brainGraphCanvasRef.current;
-    if (!canvas) return undefined;
-    canvas.addEventListener("wheel", panBrainGraphWithWheel, { passive: false });
-    return () => canvas.removeEventListener("wheel", panBrainGraphWithWheel);
-  }, [panBrainGraphWithWheel]);
   const recentEvents = brainGraph?.recentAccesses.slice(0, 7) ?? [];
+  const playSharedBrainVoiceDemo = useCallback(async () => {
+    if (voiceDemoState === "playing") return;
+    setVoiceDemoState("playing");
+    const played = await speakScript(SHARED_BRAIN_VOICE_DEMO_LINES);
+    setVoiceDemoState(played ? "idle" : "failed");
+  }, [speakScript, voiceDemoState]);
 
   return (
-    <div className={graphClass("fade")}>
-      <div className={graphClass("toolbar")}>
-        <div className={graphClass("search")}>
-          <Network aria-hidden="true" />
-          <input
-            type="search"
-            value={brainGraphQuery}
-            onChange={(event) => setBrainGraphQuery(event.target.value)}
-            placeholder="Search notes, folders, tags, previews"
-            aria-label="Search shared brain graph"
-          />
-        </div>
-        <span className={graphClass("visibleCount")}>{visibleBrainNodes.length} shown</span>
-      </div>
-      <div className={graphClass("filters")} aria-label="Graph filters">
-        {brainFilterModes.map((mode) => (
+    <div className={graphClass("stage", "fade")}>
+      <BrainSynapseCanvas
+        className={graphClass("canvasLayer", brainGraphLoading && "canvasDimmed")}
+        labelClassName={styles.nodeLabel}
+        nodes={synapseNodes}
+        links={canvasLinks}
+        selectedId={selectedBrainNode?.id ?? null}
+        neighborIds={neighborIds}
+        contextIds={brainContextNodeIds}
+        onNodeClick={handleNodeClick}
+      />
+
+      <div className={graphClass("hudTop")}>
+        <div className={graphClass("hudRow")}>
+          <div className={graphClass("search")}>
+            <Network aria-hidden="true" />
+            <input
+              type="search"
+              value={brainGraphQuery}
+              onChange={(event) => setBrainGraphQuery(event.target.value)}
+              placeholder="Search notes, folders, tags, previews"
+              aria-label="Search shared brain graph"
+            />
+          </div>
           <button
-            key={mode.id}
             type="button"
-            className={graphClass(brainGraphFilter === mode.id && "isActive")}
-            onClick={() => setBrainGraphFilter(mode.id)}
+            className={graphClass("hudIconButton")}
+            aria-label={brainGraphLoading ? "Refreshing brain graph" : "Refresh brain graph"}
+            title={brainGraphLoading ? "Refreshing brain graph" : "Refresh brain graph"}
+            onClick={() => refreshBrainGraph(true)}
+            disabled={brainGraphLoading}
           >
-            {mode.label}
+            {brainGraphLoading ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
           </button>
-        ))}
-      </div>
-      <div className={vaultClass("brainWorkspace")}>
-        <section className={vaultClass("brainGraphPanel")} aria-label="Shared brain graph">
-          <div ref={brainGraphCanvasRef} className={vaultClass("brainGraphCanvas")}>
+          {process.env.NODE_ENV === "development" ? (
             <button
               type="button"
-              className={vaultClass("brainGraphRefreshButton")}
-              aria-label={brainGraphLoading ? "Refreshing brain graph" : "Refresh brain graph"}
-              title={brainGraphLoading ? "Refreshing brain graph" : "Refresh brain graph"}
-              onClick={() => refreshBrainGraph(true)}
-              disabled={brainGraphLoading}
+              className={graphClass("hudIconButton", "devSpeechButton")}
+              onClick={() => void playSharedBrainVoiceDemo()}
+              disabled={voiceDemoState === "playing"}
+              aria-label={voiceDemoState === "playing" ? "Shared Brain voice demo is speaking" : "Play Shared Brain voice demo"}
+              title="Uses Queen Bee's selected voice without the screen glow"
             >
-              {brainGraphLoading ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
+              {voiceDemoState === "playing" ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <AudioLines aria-hidden="true" />}
+              <span>{voiceDemoState === "playing" ? "Speaking..." : voiceDemoState === "failed" ? "Retry voice" : "Speak demo"}</span>
             </button>
-            {visibleBrainNodes.length ? (
-              <>
-                <svg
-                  viewBox={`0 0 ${GRAPH_W} ${GRAPH_H}`}
-                  role="img"
-                  aria-label="Obsidian memory graph"
-                  onPointerDown={startBrainPan}
-                  onPointerMove={moveBrainPan}
-                  onPointerUp={endBrainPan}
-                  onPointerCancel={endBrainPan}
-                  className={vaultClass("draggable", brainGraphLoading && "dimmed")}
-                >
-                  <defs>
-                    <filter id="brainGlow" x="-40%" y="-40%" width="180%" height="180%">
-                      <feGaussianBlur stdDeviation="4" result="blur" />
-                      <feMerge>
-                        <feMergeNode in="blur" />
-                        <feMergeNode in="SourceGraphic" />
-                      </feMerge>
-                    </filter>
-                  </defs>
-                  {brainGraph?.links
-                    .filter((link) => visibleIds.has(link.source) && visibleIds.has(link.target))
-                    .map((link, index) => {
-                      const source = brainLayout.positions.get(link.source);
-                      const target = brainLayout.positions.get(link.target);
-                      if (!source || !target) return null;
-                      const sourcePoint = brainViewportPoint(source);
-                      const targetPoint = brainViewportPoint(target);
-                      const lit = selectedBrainNode && (link.source === selectedBrainNode.id || link.target === selectedBrainNode.id);
-                      return (
-                        <line
-                          key={`${link.source}-${link.target}-${index}`}
-                          x1={sourcePoint.x}
-                          y1={sourcePoint.y}
-                          x2={targetPoint.x}
-                          y2={targetPoint.y}
-                          className={vaultClass(lit ? "brainEdgeActive" : "brainEdge")}
-                        />
-                      );
-                    })}
-                  {visibleBrainNodes.map((node) => {
-                    const layoutPosition = brainLayout.positions.get(node.id);
-                    if (!layoutPosition) return null;
-                    const position = brainViewportPoint(layoutPosition);
-                    const selected = selectedBrainNode?.id === node.id;
-                    const target = !selected && selectedBrainTargetIds.has(node.id);
-                    const unresolved = node.id.startsWith("unresolved:");
-                    const recentAt = Date.parse(node.modifiedAt ?? node.lastAccessedAt ?? "");
-                    const recent = Number.isFinite(recentAt) && recentAt > graphNow - 14 * 24 * 60 * 60 * 1000;
-                    const staleHub = node.incoming + node.outgoing >= 3 && !node.accessCount && !recent;
-                    const dim = selectedBrainNode && !selected && !target;
-                    const labelLines = splitLabel(node.label);
-                    const radius = 7 + Math.min(15, (node.accessCount || node.incoming + node.outgoing) * 0.5);
-                    const labelY = position.y + radius + 13;
-                    return (
-                      <g
-                        key={node.id}
-                        role="button"
-                        tabIndex={0}
-                        data-brain-node-id={node.id}
-                        aria-label={selected ? `Open ${node.label} in Obsidian` : `Inspect ${node.label}`}
-                        className={`${vaultClass("brainNode", selected && "selected", target && "target", unresolved && "unresolved")} ${graphClass(
-                          brainContextNodeIds.includes(node.id) && "nodeContext",
-                          recent && "nodeRecent",
-                          node.accessCount && "nodeAgentTouched",
-                          staleHub && "nodeStaleHub",
-                          dim && "nodeDimmed",
-                        )}`}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            void inspectBrainNode(node);
-                          }
-                        }}
-                      >
-                        <circle
-                          cx={position.x}
-                          cy={position.y}
-                          r={radius}
-                          filter={selected ? "url(#brainGlow)" : undefined}
-                        />
-                        {node.accessCount ? <circle className={vaultClass("brainNodeCore")} cx={position.x} cy={position.y} r={Math.max(2.4, radius * 0.34)} /> : null}
-                        <text x={position.x} y={labelY} textAnchor="middle">
-                          {labelLines.map((line, index) => (
-                            <tspan key={`${line}-${index}`} x={position.x} dy={index === 0 ? 0 : 12}>{line}</tspan>
-                          ))}
-                        </text>
-                        <text x={position.x} y={labelY + labelLines.length * 12 + 1} textAnchor="middle" className={vaultClass("brainNodeMeta")}>
-                          {node.accessCount ? `${node.accessCount} reads` : `${node.incoming + node.outgoing} links`}
-                        </text>
-                      </g>
-                    );
-                  })}
-                </svg>
-                <div className={vaultClass("brainLegend")} aria-hidden="true">
-                  <span><i className={vaultClass("legendSelected")} />hot note</span>
-                  <span><i className={vaultClass("legendTarget")} />size = reads</span>
-                </div>
-                {brainGraphLoading ? <BrainGraphLoader compact /> : null}
-              </>
-            ) : brainGraphLoading ? (
-              <BrainGraphLoader />
-            ) : (
-              <div className={vaultClass("brainEmpty")}>
-                <Hexagon aria-hidden="true" />
-                <strong>No notes match</strong>
-                <span>{brainGraphStatus || "Try a different filter or search."}</span>
-              </div>
-            )}
-          </div>
-        </section>
+          ) : null}
+          <span className={graphClass("visibleCount")}>
+            {visibleBrainNodes.length} neurons · {wikiSynapseLinks.length} wiki-links · {semanticLinks.length} associations
+          </span>
+        </div>
+        <div className={graphClass("filters")} aria-label="Graph filters">
+          {brainFilterModes.map((mode) => (
+            <button
+              key={mode.id}
+              type="button"
+              className={graphClass(brainGraphFilter === mode.id && "isActive")}
+              onClick={() => setBrainGraphFilter(mode.id)}
+            >
+              {mode.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-        <aside className={vaultClass("brainInspector")}>
-          <div className={vaultClass("brainInspectorHeader")}>
-            <span><BrainCircuit aria-hidden="true" /> Note inspector</span>
-            <small>{selectedAgent?.name ?? "Dashboard"} accessor</small>
+      <div className={graphClass("legend")} aria-hidden="true">
+        <span><i className={graphClass("legendSize")} />size = wiki-link degree</span>
+        <span><i className={graphClass("legendAssociation")} />faint fibers = folder/tag associations</span>
+        <span><i className={graphClass("legendHoney")} />agent-touched</span>
+        <span><i className={graphClass("legendTeal")} />recently changed</span>
+        <span><i className={graphClass("legendDanger")} />unresolved link</span>
+        <span><i className={graphClass("legendPulse")} />firing = wiki-link traffic</span>
+      </div>
+      {visibleBrainNodes.length && brainGraphStatus ? (
+        <p className={graphClass("statusLine")}>{brainGraphStatus}</p>
+      ) : null}
+
+      {!visibleBrainNodes.length && !brainGraphLoading ? (
+        <div className={graphClass("centerOverlay")}>
+          <div className={vaultClass("brainEmpty")}>
+            <Hexagon aria-hidden="true" />
+            <strong>No notes match</strong>
+            <span>{brainGraphStatus || "Try a different filter or search."}</span>
           </div>
-          {selectedBrainNode ? (
-            <div className={graphClass("inspectorBody")}>
-              <h3>{selectedBrainNode.label}</h3>
-              <p className={graphClass("nodePath")}>{selectedBrainNode.folder}</p>
-              {selectedBrainNode.preview ? (
-                <ChatMarkdown
-                  text={selectedBrainNode.preview}
-                  className={graphClass("preview", "previewMarkdown")}
-                  headingClassName={graphClass("previewHeading")}
-                />
-              ) : null}
-              <dl className={graphClass("inspectorStats")}>
-                <InspectorStat label="Incoming" value={selectedBrainNode.incoming} />
-                <InspectorStat label="Outgoing" value={selectedBrainNode.outgoing} />
-                <InspectorStat label="Accesses" value={selectedBrainNode.accessCount} />
-                <InspectorDateStat label="Last seen" value={selectedBrainNode.lastAccessedAt} fallbackFormat={formatBrainDate} />
-                <InspectorDateStat label="Modified" value={selectedBrainNode.modifiedAt} fallbackFormat={formatBrainDate} />
-                <InspectorStat label="Lines" value={selectedBrainNode.lineCount ?? "-"} />
-              </dl>
-              {selectedBrainNode.tags.length ? (
-                <div className={graphClass("tagRow")}>
-                  <strong>Tags</strong>
-                  {selectedBrainNode.tags.map((tag) => <span key={tag}>#{tag}</span>)}
-                </div>
-              ) : null}
-              <div className={graphClass("actionGrid")}>
-                {!selectedBrainNode.id.startsWith("unresolved:") ? (
-                  <>
-                    <button type="button" className={graphClass("brainActionButton", "primaryAction")} onClick={() => seedBrainChat([selectedBrainNode])}><Sparkles aria-hidden="true" />Ask</button>
-                    <button type="button" className={graphClass("brainActionButton")} onClick={() => toggleBrainContextNode(selectedBrainNode)}><FileText aria-hidden="true" />{brainContextNodeIds.includes(selectedBrainNode.id) ? "Detach" : "Attach"}</button>
-                    <button type="button" className={graphClass("brainActionButton")} onClick={() => createBrainTask(selectedBrainNode)}><Check aria-hidden="true" />Task</button>
-                    <button type="button" className={graphClass("brainActionButton")} onClick={() => convertNoteToSkill(selectedBrainNode)}><Download aria-hidden="true" />Skill</button>
-                  </>
-                ) : (
-                  <button type="button" className={graphClass("brainActionButton", "primaryAction")} onClick={() => void createMissingBrainNote(selectedBrainNode)}><FileText aria-hidden="true" />Create Note</button>
-                )}
+        </div>
+      ) : null}
+      {brainGraphLoading ? (
+        <div className={graphClass("centerOverlay", visibleBrainNodes.length && "centerOverlayCompact")}>
+          <BrainGraphLoader compact={Boolean(visibleBrainNodes.length)} />
+        </div>
+      ) : null}
+
+      {!inspectorOpen ? (
+        <button
+          type="button"
+          className={graphClass("inspectorReveal")}
+          onClick={() => setInspectorOpen(true)}
+        >
+          <BrainCircuit aria-hidden="true" />
+          Inspector
+        </button>
+      ) : (
+      <aside className={graphClass("inspector")}>
+        <div className={graphClass("inspectorTop")}>
+          <span><BrainCircuit aria-hidden="true" /> Note inspector</span>
+          <div className={graphClass("inspectorTopRight")}>
+            <small>{selectedAgent?.name ?? "Dashboard"} accessor</small>
+            <button
+              type="button"
+              className={graphClass("hudIconButton", "inspectorHide")}
+              aria-label="Hide note inspector"
+              title="Hide note inspector"
+              onClick={() => setInspectorOpen(false)}
+            >
+              <span aria-hidden="true" className={graphClass("chevron")} />
+            </button>
+          </div>
+        </div>
+        {selectedBrainNode ? (
+          <div className={graphClass("inspectorBody")}>
+            <h3>{selectedBrainNode.label}</h3>
+            <p className={graphClass("nodePath")}>{selectedBrainNode.folder}</p>
+            {selectedBrainNode.preview ? (
+              <ChatMarkdown
+                text={selectedBrainNode.preview}
+                className={graphClass("preview", "previewMarkdown")}
+                headingClassName={graphClass("previewHeading")}
+              />
+            ) : null}
+            <dl className={graphClass("inspectorStats")}>
+              <InspectorStat label="Incoming" value={selectedBrainNode.incoming} />
+              <InspectorStat label="Outgoing" value={selectedBrainNode.outgoing} />
+              <InspectorStat label="Accesses" value={selectedBrainNode.accessCount} />
+              <InspectorDateStat label="Last seen" value={selectedBrainNode.lastAccessedAt} fallbackFormat={formatBrainDate} />
+              <InspectorDateStat label="Modified" value={selectedBrainNode.modifiedAt} fallbackFormat={formatBrainDate} />
+              <InspectorStat label="Lines" value={selectedBrainNode.lineCount ?? "-"} />
+            </dl>
+            {selectedBrainNode.tags.length ? (
+              <div className={graphClass("tagRow")}>
+                <strong>Tags</strong>
+                {selectedBrainNode.tags.map((tag) => <span key={tag}>#{tag}</span>)}
               </div>
-              {brainContextNodes.length ? (
-                <div className={graphClass("contextTray")}>
-                  <div>
-                    <strong>Chat context</strong>
-                    <span>{brainContextNodes.length} selected note{brainContextNodes.length === 1 ? "" : "s"}</span>
-                  </div>
-                  <Button type="button" size="sm" variant="secondary" onClick={() => seedBrainChat(brainContextNodes)}><Sparkles aria-hidden="true" />Ask selected</Button>
-                </div>
-              ) : null}
-              <div className={graphClass("linkLists")}>
-                <BrainLinkList title={`Backlinks · ${selectedBacklinkNodes.length}`} icon={GitBranch} nodes={selectedBacklinkNodes} onInspect={inspectBrainNode} empty="No backlinks in the loaded graph." />
-                <BrainLinkList title={`Outgoing · ${selectedOutgoingNodes.length}`} icon={GitBranch} nodes={selectedOutgoingNodes} onInspect={inspectBrainNode} empty="No outgoing links in the loaded graph." />
-                {relatedTagNodes.length ? <BrainLinkList title="Related tags" icon={Cell} nodes={relatedTagNodes} onInspect={inspectBrainNode} /> : null}
-              </div>
-              <div className={vaultClass("brainAccessList")}>
-                <strong>Access history</strong>
-                {(selectedBrainNode.recentAccesses.length ? selectedBrainNode.recentAccesses : recentEvents).map((event) => (
-                  <article key={event.id}>
-                    <Bot aria-hidden="true" style={{ color: actionTone(event.action) }} />
-                    <div>
-                      <span>{event.agentName} on {event.machineName}</span>
-                      <small>{formatBrainDate(event.accessedAt)} - {event.action} - {event.notePath}</small>
-                    </div>
-                  </article>
-                ))}
-                {!selectedBrainNode.recentAccesses.length && !recentEvents.length ? <p>No agent access history yet.</p> : null}
-              </div>
-            </div>
-          ) : (
-            <div className={graphClass("recentAccess")}>
-              <div className="eyebrow">Recent access</div>
-              {recentEvents.map((event, index) => (
-                <article key={event.id} style={{ borderTop: index ? "1px solid var(--brain-line, rgba(238, 232, 220, 0.08))" : 0 }}>
-                  <span style={{ background: actionTone(event.action) }} />
-                  <div>
-                    <strong>{event.notePath}</strong>
-                    <small>{event.agentName} - {event.action} - {event.machineName}</small>
-                  </div>
-                  <time>{formatBrainDate(event.accessedAt)}</time>
-                </article>
-              ))}
-              {!recentEvents.length ? (
-                <p>Select a node to see its provenance and links.</p>
+            ) : null}
+            <div className={graphClass("actionGrid")}>
+              {!selectedBrainNode.id.startsWith("unresolved:") ? (
+                <>
+                  <button type="button" className={graphClass("brainActionButton", "primaryAction")} onClick={() => seedBrainChat([selectedBrainNode])}><Sparkles aria-hidden="true" />Ask</button>
+                  <button type="button" className={graphClass("brainActionButton")} onClick={() => toggleBrainContextNode(selectedBrainNode)}><FileText aria-hidden="true" />{brainContextNodeIds.includes(selectedBrainNode.id) ? "Detach" : "Attach"}</button>
+                  <button type="button" className={graphClass("brainActionButton")} onClick={() => createBrainTask(selectedBrainNode)}><Check aria-hidden="true" />Task</button>
+                  <button type="button" className={graphClass("brainActionButton")} onClick={() => convertNoteToSkill(selectedBrainNode)}><Download aria-hidden="true" />Skill</button>
+                </>
               ) : (
-                <p>Select a node to see its provenance and links.</p>
+                <button type="button" className={graphClass("brainActionButton", "primaryAction")} onClick={() => void createMissingBrainNote(selectedBrainNode)}><FileText aria-hidden="true" />Create Note</button>
               )}
             </div>
-          )}
-        </aside>
-      </div>
+            {brainContextNodes.length ? (
+              <div className={graphClass("contextTray")}>
+                <div>
+                  <strong>Chat context</strong>
+                  <span>{brainContextNodes.length} selected note{brainContextNodes.length === 1 ? "" : "s"}</span>
+                </div>
+                <Button type="button" size="sm" variant="secondary" onClick={() => seedBrainChat(brainContextNodes)}><Sparkles aria-hidden="true" />Ask selected</Button>
+              </div>
+            ) : null}
+            <div className={graphClass("linkLists")}>
+              <BrainLinkList title={`Backlinks · ${selectedBacklinkNodes.length}`} icon={GitBranch} nodes={selectedBacklinkNodes} onInspect={inspectBrainNode} empty="No backlinks in the loaded graph." />
+              <BrainLinkList title={`Outgoing · ${selectedOutgoingNodes.length}`} icon={GitBranch} nodes={selectedOutgoingNodes} onInspect={inspectBrainNode} empty="No outgoing links in the loaded graph." />
+              {relatedTagNodes.length ? <BrainLinkList title="Related tags" icon={Cell} nodes={relatedTagNodes} onInspect={inspectBrainNode} /> : null}
+            </div>
+            <div className={vaultClass("brainAccessList")}>
+              <strong>Access history</strong>
+              {(selectedBrainNode.recentAccesses.length ? selectedBrainNode.recentAccesses : recentEvents).map((event) => (
+                <article key={event.id}>
+                  <Bot aria-hidden="true" style={{ color: actionTone(event.action) }} />
+                  <div>
+                    <span>{event.agentName} on {event.machineName}</span>
+                    <small>{formatBrainDate(event.accessedAt)} - {event.action} - {event.notePath}</small>
+                  </div>
+                </article>
+              ))}
+              {!selectedBrainNode.recentAccesses.length && !recentEvents.length ? <p>No agent access history yet.</p> : null}
+            </div>
+          </div>
+        ) : (
+          <div className={graphClass("recentAccess")}>
+            <div className="eyebrow">Recent access</div>
+            {recentEvents.map((event, index) => (
+              <article key={event.id} style={{ borderTop: index ? "1px solid var(--brain-line, rgba(238, 232, 220, 0.08))" : 0 }}>
+                <span style={{ background: actionTone(event.action) }} />
+                <div>
+                  <strong>{event.notePath}</strong>
+                  <small>{event.agentName} - {event.action} - {event.machineName}</small>
+                </div>
+                <time>{formatBrainDate(event.accessedAt)}</time>
+              </article>
+            ))}
+            <p>Select a neuron to see its provenance and links.</p>
+          </div>
+        )}
+      </aside>
+      )}
     </div>
   );
 }

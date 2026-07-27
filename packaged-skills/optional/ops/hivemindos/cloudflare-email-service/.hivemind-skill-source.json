@@ -1,0 +1,16 @@
+{
+  "upstreamName": "Cloudflare Email Service",
+  "upstreamSlug": "cloudflare-email-service",
+  "hiveSlug": "cloudflare-email-service",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/ops/hivemindos/cloudflare-email-service",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-16T23:02:02Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional operations skills",
+  "sourcePath": "packaged-skills/optional/ops/hivemindos/cloudflare-email-service",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Packages the retrieval-first Cloudflare Email Service guide with its five reference files for sending, REST API, routing, CLI/MCP setup, and deliverability."
+  ]
+}

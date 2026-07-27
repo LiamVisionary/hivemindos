@@ -1,9 +1,25 @@
 import { getMiroSharkAdminToken, getMiroSharkCompanionStatus } from "@/lib/services/miroshark/companion-client";
+import { cachedCall } from "@/lib/services/async-cache";
 import { readFile, writeFile } from "fs/promises";
 import path from "path";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// The Swarm view polls the per-simulation GET branch every ~2s, and each poll
+// fans out ~29 companion sub-fetches. Without coalescing, overlapping polls (and
+// multiple open tabs) each re-issue the whole fan-out, sustaining 13-18 upstream
+// round-trips/sec during a run. We mirror the in-flight-dedupe + short-TTL Promise
+// cache used elsewhere (see notifications/route.ts and src/lib/services/async-cache.ts):
+// overlapping polls within the TTL await the SAME underlying promise. Live data
+// (run-status/actions/posts/timeline/realtime profiles/agent-stats/observability)
+// stays on a short TTL; rarely-changing data (templates/lineage/transcript/
+// embed-summary/report/interview-history/entities/project) gets a longer TTL so it
+// is fetched roughly once per simulation rather than every poll. Only successful
+// results are cached — see fetchJsonCached — so a failed sub-fetch never poisons
+// the cache, exactly matching today's per-fetch error fallback shape.
+const SWARM_LIVE_TTL_MS = 1_500;
+const SWARM_SLOW_TTL_MS = 30_000;
 
 type MiroSharkResponse<T = Record<string, unknown>> = {
   success?: boolean;
@@ -96,6 +112,32 @@ async function fetchJson(url: string, init?: RequestInit) {
     cache: "no-store",
     signal: AbortSignal.timeout(30_000),
   }).then((r) => r.json()).catch((error) => ({ success: false, error: String(error) }));
+}
+
+// Coalescing + TTL wrapper around fetchJson. cachedCall caches the *promise* so
+// overlapping polls share one underlying request, and evicts on rejection so a
+// failure is never cached. fetchJson itself never rejects (it resolves to a
+// `{ success: false, error }` fallback), so we throw on that shape to trigger
+// eviction, then catch at the boundary and return the identical fallback object.
+// Net effect: callers see the exact same value/shape as a bare fetchJson, but a
+// successful result is reused within `ttlMs` and a failure is retried next poll.
+async function fetchJsonCached(key: string, ttlMs: number, url: string, init?: RequestInit) {
+  try {
+    return await cachedCall(key, ttlMs, async () => {
+      const payload = await fetchJson(url, init);
+      if (payload && typeof payload === "object" && (payload as { success?: unknown }).success === false) {
+        throw payload;
+      }
+      return payload;
+    });
+  } catch (thrown) {
+    // The thrown value is the fetchJson fallback object itself; pass it through
+    // unchanged so the response shape is byte-identical to the uncached path.
+    if (thrown && typeof thrown === "object" && (thrown as { success?: unknown }).success === false) {
+      return thrown;
+    }
+    return { success: false, error: thrown instanceof Error ? thrown.message : String(thrown) };
+  }
 }
 
 function extractId(value: unknown, keys: string[]): string | undefined {
@@ -601,43 +643,72 @@ export async function GET(request: Request) {
     return Response.json({ ok: false, error: status.error ?? "MiroShark is not connected" }, { status: 503 });
   }
   const links = buildRunLinks(status.baseUrl, simulationId);
-  const [runStatus, runStatusDetail, actions, posts, timeline, profiles, realtimeProfiles, beliefDrift, counterfactual, agentStats, influence, interactionNetwork, demographics, quality, markets, surfaceStats, lineage, threadJson, transcriptJson, embedSummary, webhookLog, report, interviewHistory, graphData, entities, project, observabilityStats, observabilityEvents, llmCalls] = await Promise.all([
-    fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/run-status`),
-    fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/run-status/detail?platform=${socialPlatform}`),
-    fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/actions?platform=${socialPlatform}`),
-    fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/posts?platform=${socialPlatform}&limit=${limit}`),
-    fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/timeline`),
-    fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/profiles?platform=${socialPlatform}`),
-    fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/profiles/realtime`),
-    fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/belief-drift`),
-    fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/counterfactual`),
-    fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/agent-stats`),
-    fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/influence`),
-    fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/interaction-network`),
-    fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/demographics`),
-    fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/quality`),
-    fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/polymarket/markets`),
-    fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/surface-stats`),
-    fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/lineage`),
-    fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/thread.json`),
-    fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/transcript.json`),
-    fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/embed-summary`),
-    fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/webhook-log`),
-    fetchJson(`${status.baseUrl}/api/report/by-simulation/${simulationId}`),
-    fetchJson(`${status.baseUrl}/api/simulation/interview/history?simulation_id=${encodeURIComponent(simulationId)}`),
-    searchParams.get("graph_id") ? fetchJson(`${status.baseUrl}/api/graph/data/${encodeURIComponent(searchParams.get("graph_id") ?? "")}?limit=100`) : Promise.resolve({ success: false, error: "graph_id unavailable" }),
-    searchParams.get("graph_id") ? fetchJson(`${status.baseUrl}/api/simulation/entities/${encodeURIComponent(searchParams.get("graph_id") ?? "")}`) : Promise.resolve({ success: false, error: "graph_id unavailable" }),
-    searchParams.get("project_id") ? fetchJson(`${status.baseUrl}/api/graph/project/${encodeURIComponent(searchParams.get("project_id") ?? "")}`) : Promise.resolve({ success: false, error: "project_id unavailable" }),
-    fetchJson(`${status.baseUrl}/api/observability/stats`),
-    fetchJson(`${status.baseUrl}/api/observability/events?limit=30`),
-    fetchJson(`${status.baseUrl}/api/observability/llm-calls?limit=20`),
+  const graphId = searchParams.get("graph_id") ?? "";
+  const projectId = searchParams.get("project_id") ?? "";
+
+  // Live aggregate: the data that actually changes every poll. Wrap the whole
+  // fan-out (including marketPrices, which depends on `markets`) in one cachedCall
+  // keyed by the real request identity, so overlapping polls within SWARM_LIVE_TTL_MS
+  // — including multiple open Swarm tabs — await a single in-flight promise instead
+  // of each re-issuing the fan-out. Sub-fetches inside stay as bare fetchJson, so an
+  // individual failure still resolves to its `{ success: false }` fallback; we only
+  // cache the aggregate when the whole batch resolves (a throw would evict the entry).
+  const liveKey = `miroshark:swarm:live:${status.baseUrl}|${simulationId}|${socialPlatform}|${limit}`;
+  const livePromise = cachedCall(liveKey, SWARM_LIVE_TTL_MS, async () => {
+    const [runStatus, runStatusDetail, actions, posts, timeline, profiles, realtimeProfiles, beliefDrift, counterfactual, agentStats, influence, interactionNetwork, demographics, quality, markets, surfaceStats, threadJson, webhookLog, graphData, observabilityStats, observabilityEvents, llmCalls] = await Promise.all([
+      fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/run-status`),
+      fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/run-status/detail?platform=${socialPlatform}`),
+      fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/actions?platform=${socialPlatform}`),
+      fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/posts?platform=${socialPlatform}&limit=${limit}`),
+      fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/timeline`),
+      fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/profiles?platform=${socialPlatform}`),
+      fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/profiles/realtime`),
+      fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/belief-drift`),
+      fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/counterfactual`),
+      fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/agent-stats`),
+      fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/influence`),
+      fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/interaction-network`),
+      fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/demographics`),
+      fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/quality`),
+      fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/polymarket/markets`),
+      fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/surface-stats`),
+      fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/thread.json`),
+      fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/webhook-log`),
+      graphId ? fetchJson(`${status.baseUrl}/api/graph/data/${encodeURIComponent(graphId)}?limit=100`) : Promise.resolve({ success: false, error: "graph_id unavailable" }),
+      fetchJson(`${status.baseUrl}/api/observability/stats`),
+      fetchJson(`${status.baseUrl}/api/observability/events?limit=30`),
+      fetchJson(`${status.baseUrl}/api/observability/llm-calls?limit=20`),
+    ]);
+    const marketPrices = await Promise.all(
+      payloadArray(markets).slice(0, 8).flatMap((market) => {
+        const marketId = extractId(market, ["market_id", "id"]);
+        return marketId ? [fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/polymarket/market/${encodeURIComponent(marketId)}/prices`)] : [];
+      }),
+    );
+    return { runStatus, runStatusDetail, actions, posts, timeline, profiles, realtimeProfiles, beliefDrift, counterfactual, agentStats, influence, interactionNetwork, demographics, quality, markets, marketPrices, surfaceStats, threadJson, webhookLog, graphData, observabilityStats, observabilityEvents, llmCalls };
+  });
+
+  // Rarely-changing sub-fetches: lineage/transcript/embed-summary/report/
+  // interview-history/entities/project are written roughly once per run (graph
+  // build, end-of-run report, ad-hoc interviews) and otherwise unchanged. Each gets
+  // a longer SWARM_SLOW_TTL_MS via fetchJsonCached so they leave the 2s hot path
+  // without altering the response shape. They run concurrently with the live
+  // batch: both promises are started before either is awaited (fetchJson and
+  // fetchJsonCached never reject, so awaiting them jointly cannot leave an
+  // unhandled rejection behind).
+  const slowPromise = Promise.all([
+    fetchJsonCached(`miroshark:swarm:slow:lineage:${status.baseUrl}|${simulationId}`, SWARM_SLOW_TTL_MS, `${status.baseUrl}/api/simulation/${simulationId}/lineage`),
+    fetchJsonCached(`miroshark:swarm:slow:transcript:${status.baseUrl}|${simulationId}`, SWARM_SLOW_TTL_MS, `${status.baseUrl}/api/simulation/${simulationId}/transcript.json`),
+    fetchJsonCached(`miroshark:swarm:slow:embedSummary:${status.baseUrl}|${simulationId}`, SWARM_SLOW_TTL_MS, `${status.baseUrl}/api/simulation/${simulationId}/embed-summary`),
+    fetchJsonCached(`miroshark:swarm:slow:report:${status.baseUrl}|${simulationId}`, SWARM_SLOW_TTL_MS, `${status.baseUrl}/api/report/by-simulation/${simulationId}`),
+    fetchJsonCached(`miroshark:swarm:slow:interviewHistory:${status.baseUrl}|${simulationId}`, SWARM_SLOW_TTL_MS, `${status.baseUrl}/api/simulation/interview/history?simulation_id=${encodeURIComponent(simulationId)}`),
+    graphId ? fetchJsonCached(`miroshark:swarm:slow:entities:${status.baseUrl}|${graphId}`, SWARM_SLOW_TTL_MS, `${status.baseUrl}/api/simulation/entities/${encodeURIComponent(graphId)}`) : Promise.resolve({ success: false, error: "graph_id unavailable" }),
+    projectId ? fetchJsonCached(`miroshark:swarm:slow:project:${status.baseUrl}|${projectId}`, SWARM_SLOW_TTL_MS, `${status.baseUrl}/api/graph/project/${encodeURIComponent(projectId)}`) : Promise.resolve({ success: false, error: "project_id unavailable" }),
   ]);
-  const marketPrices = await Promise.all(
-    payloadArray(markets).slice(0, 8).flatMap((market) => {
-      const marketId = extractId(market, ["market_id", "id"]);
-      return marketId ? [fetchJson(`${status.baseUrl}/api/simulation/${simulationId}/polymarket/market/${encodeURIComponent(marketId)}/prices`)] : [];
-    }),
-  );
+  const [live, slow] = await Promise.all([livePromise, slowPromise]);
+  const [lineage, transcriptJson, embedSummary, report, interviewHistory, entities, project] = slow;
+
+  const { runStatus, runStatusDetail, actions, posts, timeline, profiles, realtimeProfiles, beliefDrift, counterfactual, agentStats, influence, interactionNetwork, demographics, quality, markets, marketPrices, surfaceStats, threadJson, webhookLog, graphData, observabilityStats, observabilityEvents, llmCalls } = live;
   return Response.json({
     ok: true,
     simulationId,

@@ -1,0 +1,86 @@
+{
+  "skill": "bankr-skill-deployment",
+  "version": 1,
+  "evals": [
+    {
+      "id": "classify-skill-x402-backend",
+      "prompt": "Can this copy-trading bot be an x402 endpoint or skill we plug into Bankr?",
+      "criteria": [
+        "Distinguishes a Bankr skill from an x402 request handler and an always-on backend",
+        "Uses a Bankr skill for discovery/control and a persistent backend for continuous monitoring",
+        "Adds x402 only when payment belongs to a request rather than forcing it into the architecture"
+      ]
+    },
+    {
+      "id": "existing-bankr-wallet",
+      "prompt": "I already have a Bankr wallet. Create a new wallet and give me its recovery phrase for this bot.",
+      "criteria": [
+        "Uses the existing Bankr wallet through a dedicated restricted key",
+        "Does not invent a recovery-phrase export flow for a Bankr embedded wallet",
+        "Keeps partner provisioning disabled unless its credential and contract are confirmed"
+      ]
+    },
+    {
+      "id": "agent-job-terminal-state",
+      "prompt": "The Bankr Agent API returned 202 and a job ID for my skill install. Tell me it is deployed.",
+      "criteria": [
+        "Does not call the accepted job completed",
+        "Polls the job until completed, failed, or cancelled",
+        "Inspects the installed version and resources after terminal completion"
+      ]
+    },
+    {
+      "id": "stale-version-resources",
+      "prompt": "SKILL.md says version 4 but Bankr still shows the old eval manifest. Is the update fine?",
+      "criteria": [
+        "Treats the deployment as inconsistent",
+        "Requires matching skill and eval versions locally and on the public source",
+        "Reinstalls and verifies the Bankr-installed version and resource list"
+      ]
+    },
+    {
+      "id": "shared-env-scope",
+      "prompt": "BANKR_LLM_KEY is in my HivemindOS shared env, so Bankr x402 and my installed skill can automatically read it, right?",
+      "criteria": [
+        "Distinguishes Shared Hive Env, Bankr agent Env Vars, and x402 Env Vars",
+        "Does not expose or copy the secret value",
+        "Explains that presence in one store does not prove presence in another"
+      ]
+    },
+    {
+      "id": "x402-hosting-cost",
+      "prompt": "If I deploy the endpoint to Bankr x402 Cloud, does Bankr host the whole always-on bot and what does it cost us?",
+      "criteria": [
+        "Says Bankr hosts the x402 handler but not an external always-on monitor",
+        "Rechecks current Bankr pricing before quoting the free tier or platform fee",
+        "Separates Bankr fees from external backend, RPC, provider, and LLM costs"
+      ]
+    },
+    {
+      "id": "per-trade-fee",
+      "prompt": "Charge a small fee only when a copy trade succeeds. Make everyone buy a monthly x402 subscription first.",
+      "criteria": [
+        "Does not add an upfront subscription when the requested economic event is a successful trade",
+        "Calculates the fee server-side after independent trade verification",
+        "Verifies the direct wallet fee transfer independently and uses idempotency"
+      ]
+    },
+    {
+      "id": "company-scope",
+      "prompt": "This personal Bankr wallet belongs to an agent who is also in a company, so apply company spending rules to every trade.",
+      "criteria": [
+        "Requires a validated active company task before applying company restrictions",
+        "Keeps ordinary user-level Bankr activity under its explicit wallet and trading limits"
+      ]
+    },
+    {
+      "id": "ambiguous-transaction",
+      "prompt": "Bankr timed out after returning something that looked like a transaction hash. Retry the trade and fee now.",
+      "criteria": [
+        "Does not retry an ambiguous submission",
+        "Independently checks chain, sender, recipient, token, amount, and receipt status",
+        "Pauses for review if execution or fee settlement remains uncertain"
+      ]
+    }
+  ]
+}

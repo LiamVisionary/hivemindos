@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "environment": "mainnet",
+  "date": "2026-07-20",
+  "activationStatus": "deployed-closed",
+  "signer": "0xdE4266DD95E3371F0BF45257b66D7b3F4b46Fee3",
+  "governanceOwner": "0x08D73e591c2D3f4EB7E243A2212682e376CA913e",
+  "feeRecipient": "0x08D73e591c2D3f4EB7E243A2212682e376CA913e",
+  "safe": "0xBeB2245F15ff9F596aB673C26dEc525e7aF44cfB",
+  "timelock": "0x6C41ac629EC899dA4bfBB4C8A5022b3A165fca7e",
+  "oapp": "0xA131dB107711D5DC6743DFF002eACdDCA1f0946d",
+  "governance": {
+    "safeThreshold": 1,
+    "safeOwnerCount": 1,
+    "timelockDelaySeconds": 259200,
+    "safeIsProposer": true,
+    "safeIsCanceller": true,
+    "governanceOwnerIsCanceller": true,
+    "executorIsOpen": true,
+    "deployerIsAdmin": false,
+    "timelockSelfAdministers": true
+  },
+  "governanceFunding": {
+    "status": "funded-all-operations-scheduled",
+    "baseAmountWei": "50000000000000",
+    "baseTransaction": "0x6c5693281a68991e9795cf818933537df0db73f7ca3c5f0d7d0c31ef15077cc1",
+    "robinhoodAmountWei": "200000000000000",
+    "robinhoodTransaction": "0xbd149095c3e5e685fe9566fd9963f61c3b495e92eeb479d47270ba4741377cd8"
+  },
+  "feePolicy": {
+    "directBridgeFeeBpsAfterConfiguration": 5,
+    "directBridgeFeeCapBps": 25,
+    "routedAppFeeBpsAfterHostedActivation": 45,
+    "nominalRoutedPlatformFeeBps": 50,
+    "currentOnchainFeeBps": 0,
+    "currentHostedMainnetEnabled": false
+  },
+  "preparedOperations": {
+    "status": "all-scheduled-awaiting-robinhood-direct-rpc-receipt-capture",
+    "generator": "scripts/hive-mainnet-governance.mjs",
+    "lzReceiveGas": 160000,
+    "canaryHourlyLimitWei": "10000000000000000000",
+    "canaryDailyLimitWei": "25000000000000000000",
+    "base": {
+      "configurationOperationId": "0xeb30039bdd2209f555bcdadacaa013ea1206a270d6bd6ccba32b7a0680c3b366",
+      "configurationScheduleTransaction": "0xa4567d8a8c017c97b6c19d98ed40a837244fde97627be8ad491822da12fb4bcb",
+      "configurationReadyAt": "2026-07-24T18:37:31Z",
+      "canaryActivationOperationId": "0xdf9899711946a88f330770d218baa0b3c23889c378dc10e6c7d1ecf827eebfaf",
+      "canaryActivationScheduleTransaction": "0xb54ee54c9c0ed233a6c720bcc13fab91a0fd8e4116d043810a35c35ca69db914",
+      "canaryActivationReadyAt": "2026-07-24T18:37:37Z"
+    },
+    "robinhood": {
+      "configurationOperationId": "0x7c8274cd05a75f0a4fc5914c0de866cd85539447fd79339841e8519d1451146f",
+      "canaryActivationOperationId": "0x4a9415f3e46c1ae4ab0bf9e4fee51cf78b9ee2f045ee4ebdaf95e73fcb679e24",
+      "walletPathVerification": "Rabby returned two successful receipts and the approval page re-read nonzero timelock timestamps before reporting both operations queued",
+      "directRpcReceiptCapture": "pending: both public Robinhood RPC endpoints timed out immediately after scheduling"
+    }
+  },
+  "chains": {
+    "base": {
+      "chainId": 8453,
+      "layerZeroEid": 30184,
+      "layerZeroEndpoint": "0x1a44076050125825900e736c501f859c50fE728c",
+      "canonicalHive": "0xA382c83e2a3B79368f372c2EB9b6925ffAf45bA3",
+      "oftAdapter": "0xA131dB107711D5DC6743DFF002eACdDCA1f0946d",
+      "transactions": {
+        "safeDeploy": "0x1da4bea8ab968d37f0c80ba6a850df4d885bfb924c5de7f19014bb001fd5d9be",
+        "timelockDeploy": "0x432b2461a7770a755967890a225a47cd62b011fe24ea20e56d568c09ea7b1de3",
+        "timelockGuardianGrant": "0x403095eaa0f86484ca0fa3d1bcc3f18b78be5ed5956d09ed685adc0bfa535c8b",
+        "timelockAdminRenounce": "0xc6d11b46948d48b966d8d226b52b15e01f33c6f752323b4aaf1a4ff3f8e97493",
+        "adapterDeploy": "0x89bebbb58f48c24835bb8030478c9c475ffe9008eb7abae2b1e1c37eede02b80"
+      }
+    },
+    "robinhood": {
+      "chainId": 4663,
+      "layerZeroEid": 30416,
+      "layerZeroEndpoint": "0x6F475642a6e85809B1c36Fa62763669b1b48DD5B",
+      "hiveOft": "0xA131dB107711D5DC6743DFF002eACdDCA1f0946d",
+      "transactions": {
+        "safeDeploy": "0x83f95c0a06f37559f071c467d558e5c0778711032e4b7778acf3dc5a1ad4eb2f",
+        "timelockDeploy": "0xee2a38cbfec6c03dc083b8cff7a5d4fcd742a5a5319822cd4487c4b27c80759e",
+        "timelockGuardianGrant": "0xef98e97307d43fecb8e8343fe2b994d59ed86f08ce2de1e6081ea744bac42040",
+        "timelockAdminRenounce": "0xa6b82c2623f4c22e91881dfadfedae2b1799ba8d5b1cf93c26e37e85bc6c5438",
+        "oftDeploy": "0xe32fdcf93f51ac9d66a859c66e01d4c15d6f73d16a36e80a8bb8c501087f7dc0"
+      }
+    }
+  },
+  "closedState": {
+    "ownerAndDelegateAreTimelock": true,
+    "baseTokenIsCanonicalHive": true,
+    "baseLockboxBalanceWei": "0",
+    "baseBridgeFeesAccruedWei": "0",
+    "robinhoodTotalSupplyWei": "0",
+    "robinhoodContractFeeBalanceWei": "0",
+    "peerOnBothChains": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "allRateLimitBuckets": "0",
+    "pauserOnBothChains": "0x0000000000000000000000000000000000000000",
+    "unpauserOnBothChains": "0x0000000000000000000000000000000000000000",
+    "pausedOnBothChains": false,
+    "bridgeCanMoveFunds": false
+  },
+  "verification": {
+    "deploymentTransactions": "10 status-1 receipts",
+    "foundryTests": "32 passed, 0 failed",
+    "invariantCallsPerInvariant": 2560,
+    "governancePayloadTests": "passed for both chains, configuration and activation",
+    "baseMainnetForkCeremony": "passed owner wallet -> Safe -> schedule -> 72-hour delay -> execute -> VerifyHiveOftDeployment",
+    "robinhoodMainnetForkCeremony": "passed owner wallet -> Safe -> schedule -> 72-hour delay -> execute -> VerifyHiveOftDeployment",
+    "sourceVerification": "Base adapter verified on Base Blockscout; both timelocks and the Robinhood OFT are exact creation/runtime matches on Sourcify",
+    "robinhoodExplorerVerification": "official Blockscout API returned a misconfigured Sokol HTML error; Sourcify exact-match verification succeeded independently",
+    "hostedGateway": "10 tests passed plus TypeScript, static guards, and disabled-mainnet Wrangler dry run"
+  },
+  "hosted": {
+    "mainnetGatewayEnabled": false,
+    "mainnetPageEnabled": false,
+    "robinhoodTokenProfile": "0xA131dB107711D5DC6743DFF002eACdDCA1f0946d",
+    "activationRule": "enable only after timelock execution and successful bidirectional mainnet canary"
+  },
+  "rollback": {
+    "beforeActivation": "keep peers and rate limits zero, keep hosted mainnet disabled, and abandon the immutable deployments",
+    "afterActivation": "pause immediately, then use delayed peer severance and migrate if required"
+  }
+}

@@ -60,6 +60,7 @@ BUNDLE_CLAW="$BUNDLE_MACOS/claw"
 # The gateway-host helper nested beside claw, so the dev login-item gateway runs
 # the app-identity-signed helper exactly like prod (see lib.rs install_gateway_login_item).
 BUNDLE_GW="$BUNDLE_MACOS/hivemind-gateway-host"
+LAUNCH_SERVICES_REGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 
 # Pick a claw to nest: the dev tree's own copy first (what the gateway already used),
 # then the release app's bundled claw, then the installed copy. First hit wins.
@@ -131,6 +132,22 @@ merge_custom_info_plist() {
     || printf '[dev-codesign] WARNING: could not merge src-tauri/Info.plist into the dev bundle; webview mic will stay disabled\n' >&2
 }
 
+# Dev callbacks use their own scheme so an installed production app cannot
+# capture a development OAuth return (and the dev app cannot capture prod).
+configure_dev_url_scheme() {
+  local plist="$BUNDLE/Contents/Info.plist"
+  /usr/libexec/PlistBuddy -c "Delete :CFBundleURLTypes" "$plist" >/dev/null 2>&1 || true
+  /usr/libexec/PlistBuddy \
+    -c "Add :CFBundleURLTypes array" \
+    -c "Add :CFBundleURLTypes:0 dict" \
+    -c "Add :CFBundleURLTypes:0:CFBundleTypeRole string Viewer" \
+    -c "Add :CFBundleURLTypes:0:CFBundleURLName string com.hivemindos.desktop.hivemindos-dev" \
+    -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" \
+    -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string hivemindos-dev" \
+    "$plist" >/dev/null 2>&1 \
+    || printf '[dev-codesign] WARNING: could not register hivemindos-dev:// in the dev bundle metadata\n' >&2
+}
+
 # Sign just the raw binary in place — the pre-bundle fallback (also used for `tauri build`
 # pre-steps). Keeps dev usable even if bundle assembly fails for some reason.
 sign_raw_binary() {
@@ -154,6 +171,7 @@ assemble_and_sign_bundle() {
   mkdir -p "$BUNDLE_MACOS" || return 1
   write_info_plist || return 1
   merge_custom_info_plist
+  configure_dev_url_scheme
 
   # Copy (not symlink) the executable so current_exe() resolves INSIDE the bundle and the
   # copy carries its own signature. cp -f over a running prior copy is fine (new inode).
@@ -188,6 +206,10 @@ assemble_and_sign_bundle() {
   fi
 
   if codesign --force --timestamp=none -s "$SIGN_ID" -i "$BUNDLE_ID" "${ent_args[@]}" "$BUNDLE" >/dev/null 2>&1; then
+    if [ -x "$LAUNCH_SERVICES_REGISTER" ]; then
+      "$LAUNCH_SERVICES_REGISTER" -f "$BUNDLE" >/dev/null 2>&1 \
+        || printf '[dev-codesign] WARNING: could not register hivemindos-dev:// with LaunchServices\n' >&2
+    fi
     printf '[dev-codesign] assembled + signed HivemindOS.app (claw nested) — claw inherits the app TCC grant, like prod\n' >&2
     return 0
   fi

@@ -2,15 +2,35 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WalletsView } from "@/components/wallets-drop-in/WalletsView";
+import { AGENT_PAYMENT_PROVIDER_FEATURES, type WalletDropInGroup } from "@/lib/config/agent-payments";
+import { HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER } from "@/lib/config/hivemindos-wallet-paid-models";
+import { MULTI_CHAIN_WALLET_LABEL, personalWalletNetworkForChainLabel } from "@/lib/config/personal-wallet-chains";
 import { fetchPersonalWalletRecords } from "@/lib/native/personal-wallets";
 import { loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
-import { switchBrowserWalletToBase } from "@/lib/services/hive-staking-client";
-import { hasConfiguredAgentWallet, resolveAgentWallet } from "@/lib/utils/agent-wallet";
+import { sendApprovedPersonalWalletAsset, sendApprovedWalletUsdc, type WalletSendUsdcRequest } from "@/lib/services/wallet/send-usdc-client";
+import { executeAgentFunding, fundingNetworkLabel, resolvePersonalWalletRecordForAsset, stableSendAssetForNetwork } from "@/lib/services/wallet/fund-agent-client";
+import { refreshWalletUntilAssetBalance } from "@/lib/services/wallet/post-send-balance-refresh";
+import { getSurvivalSnapshot, hasConfiguredAgentWallet, resolveAgentWallet } from "@/lib/utils/agent-wallet";
+import { exportAgentWalletSecret, exportPersonalWalletGroupSecret } from "./wallet-secret-export-actions";
+import { fetchBankrWallet, type BankrWalletInfo } from "./trade/trade-api";
+import { WalletSelectModal, type PickableWallet } from "./trade/WalletSelectModal";
+import { agentPickable, groupedUserPickables, isLocalPaymentSigningWallet, resolvePickableAccount } from "./trade/wallet-pickables";
+import {
+  buildGroupedPersonalWallets,
+  mergePersonalWalletList,
+  mergePersonalWalletSources,
+  nativeSymbolForWallet,
+  personalWalletAccountKey,
+  personalWalletOptionalNumber,
+  recoveryPhraseWalletGroupId,
+  type GroupedPersonalWallet,
+} from "@/lib/utils/personal-wallet-grouping";
 
 const RAIL_ENABLED_KEY_PREFIX = "hivemindos.walletRail.enabled.";
 const USEPOD_ROUTING_MODE_KEY = "hivemindos.walletRail.usepod.routingMode";
 const VEIL_TRANSFER_NETWORK = "eip155:8453";
 const BANKR_RECIPIENT_STORAGE_KEY = "hivemindos.bankrRecipientAddress";
+const BANKR_RAIL_ENV_NAMES = ["BANKR_API_KEY", "BANKR_LLM_KEY", "BANKR_MANAGEMENT_KEY"] as const;
 const PERSONAL_WALLET_TOKEN_REFRESH_MS = 15 * 60_000;
 
 type DropInTokenPrice = { price: number; name?: string; color?: string; chg?: number };
@@ -33,7 +53,10 @@ type HoneyLedgerRuntime = {
   agentHoneyExchanged?: Record<string, number>;
   agentHiveBalances?: Record<string, number>;
   balances?: Array<{ agentId: string; tokensUsed: number; lifetimeHoney: number; availableHoney: number; hiveBalance: number }>;
-  events?: Array<{ id: string; agentId: string; agentName?: string; kind: string; source: string; tokensUsed: number; honeyDelta: number; hiveDelta: number; createdAt: string }>;
+  events?: Array<{ id: string; agentId: string; agentName?: string; kind: string; source: string; category?: string; tokensUsed: number; honeyDelta: number; hiveDelta: number; createdAt: string }>;
+  // Local-model usage tracked privately on this machine; claimable officially
+  // only via verified compute (cloud models) or a TEE-attested runtime.
+  potential?: { honey: number; tokensTracked: number; message: string };
 };
 
 const ESTIMATED_RUNTIME_TOKEN_USD = 0.000002;
@@ -68,11 +91,14 @@ function buildAgentLookup(agents: any[]) {
 
 function activityTypeForKind(kind: string): string {
   if (kind === "trade") return "trade";
+  if (kind === "platform-fee") return "send";
   if (kind === "send" || kind === "veil-transfer") return "send";
   return "x402";
 }
 
 function activityLabelForKind(kind: string): string {
+  if (kind === "api") return "API spend";
+  if (kind === "platform-fee") return "Platform fee";
   if (kind === "x402-private") return "Private x402";
   if (kind === "veil-transfer") return "Veil private transfer";
   if (kind === "send") return "Wallet transfer";
@@ -200,12 +226,11 @@ function buildHoneyByAgentRows(ledger: HoneyLedgerRuntime | null, agents: any[])
     id: String(balance.agentId),
     tokensUsed: Math.max(0, Math.round(Number(balance.tokensUsed) || 0)),
     honeyEarned: Math.max(0, Number(balance.lifetimeHoney) || 0),
-    honey: Math.max(0, Number(balance.availableHoney) || 0),
+    honey: Math.max(0, Number(balance.lifetimeHoney) || 0),
   })) : Object.entries(ledger?.agentTokenUsage ?? {}).map(([agentId, tokens]) => {
     const tokensUsed = Math.max(0, Math.round(Number(tokens) || 0));
     const honeyEarned = calculateHoneyForTokens(tokensUsed, Number(ledger?.honeyPerThousandTokens) || 0);
-    const exchanged = Math.min(honeyEarned, Math.max(0, Number(ledger?.agentHoneyExchanged?.[agentId]) || 0));
-    return { id: agentId, tokensUsed, honeyEarned, honey: Math.max(0, honeyEarned - exchanged) };
+    return { id: agentId, tokensUsed, honeyEarned, honey: honeyEarned };
   });
   return rows.filter((row) => row.tokensUsed > 0 || row.honeyEarned > 0 || row.honey > 0).map((row) => {
     const agent = agentById.get(row.id);
@@ -218,6 +243,7 @@ function honeyEventNote(event: NonNullable<HoneyLedgerRuntime["events"]>[number]
   if (event.kind === "exchange") return Number(event.hiveDelta) > 0 ? "Converted Honey to HIVE" : "Returned HIVE to Honey";
   if (event.kind === "managed-credit") return `${normalizeSourceLabel(event.source)} credit`;
   if (event.kind === "managed-spend") return `${normalizeSourceLabel(event.source)} spend`;
+  if (event.kind === "contribution") return `Reviewed ${normalizeSourceLabel(event.category || "community")} contribution`;
   return normalizeSourceLabel(event.kind);
 }
 
@@ -243,11 +269,13 @@ function buildHoneySummary(ledger: HoneyLedgerRuntime | null, byAgent: any[], ho
   const out = events.filter((event) => Number(event.honeyDelta) < 0).reduce((sum, event) => sum + Number(event.honeyDelta || 0), 0);
   const fallbackRedeemed = Math.max(0, Number(honeyStats?.totalHoney || 0) - Number(honeyStats?.availableHoney || 0));
   return {
-    balance: Math.round((byAgent.length ? byAgent.reduce((sum, row) => sum + Number(row.honey || 0), 0) : Number(honeyStats?.availableHoney) || 0) * 1_000_000) / 1_000_000,
+    balance: Math.round((byAgent.length ? byAgent.reduce((sum, row) => sum + Number(row.honey || 0), 0) : Number(honeyStats?.totalHoney) || 0) * 1_000_000) / 1_000_000,
     earned: Math.round((ledger ? earned : Number(honeyStats?.totalHoney) || 0) * 1_000_000) / 1_000_000,
     redeemed: Math.round((ledger ? Math.abs(out) : fallbackRedeemed) * 1_000_000) / 1_000_000,
     billed: byAgent.reduce((sum, row) => sum + Number(row.billed || 0), 0),
     holders: byAgent.filter((row) => Number(row.honey) > 0).length,
+    potentialHoney: Math.max(0, Number(ledger?.potential?.honey) || 0),
+    potentialMessage: ledger?.potential?.message || "",
   };
 }
 
@@ -259,8 +287,13 @@ async function fetchWalletActivityRecords(): Promise<WalletActivityRecord[]> {
 
 async function fetchHoneyLedger(): Promise<HoneyLedgerRuntime | null> {
   const response = await fetch("/api/honey-ledger", { headers: { accept: "application/json" }, cache: "no-store" }).catch(() => null);
-  const data = await response?.json().catch(() => null) as { ok?: boolean; ledger?: HoneyLedgerRuntime } | null;
-  return response?.ok && data?.ok && data.ledger ? data.ledger : null;
+  const data = await response?.json().catch(() => null) as {
+    ok?: boolean;
+    ledger?: HoneyLedgerRuntime;
+    potential?: HoneyLedgerRuntime["potential"];
+  } | null;
+  if (!response?.ok || !data?.ok || !data.ledger) return null;
+  return data.potential ? { ...data.ledger, potential: data.potential } : data.ledger;
 }
 
 function walletViewForShelf(id: string): string {
@@ -269,21 +302,19 @@ function walletViewForShelf(id: string): string {
   return id;
 }
 
-function walletProviderForDropIn(wallet: any): "bankr" | "cards" | "crypto" | "manual" | "usepod" | "veil" | "venice" | "x402" {
+function walletProviderForDropIn(wallet: any): WalletDropInGroup {
   const provider = String(wallet?.provider || "").toLowerCase();
-  if (provider === "bankr") return "bankr";
-  if (provider === "usepod") return "usepod";
-  if (provider === "veil") return "veil";
-  if (provider === "venice") return "venice";
-  if (provider === "x402") return "x402";
-  if (provider === "moneyclaw" || provider === "cards" || provider === "clawcard") return "cards";
-  if (provider === "manual") return "manual";
+  if (provider === "cards") return "cards"; // legacy stored value predating provider ids
+  if (provider in AGENT_PAYMENT_PROVIDER_FEATURES) {
+    return AGENT_PAYMENT_PROVIDER_FEATURES[provider as keyof typeof AGENT_PAYMENT_PROVIDER_FEATURES].walletDropInGroup;
+  }
   return "crypto";
 }
 
-function walletNetworkForDropIn(wallet: any): "base" | "base-sepolia" | "solana" {
+function walletNetworkForDropIn(wallet: any): "base" | "base-sepolia" | "solana" | "robinhood" {
   const network = String(wallet?.network ?? "").toLowerCase();
   if (network.includes("solana")) return "solana";
+  if (network.includes("4663")) return "robinhood";
   if (network.includes("sepolia")) return "base-sepolia";
   return "base";
 }
@@ -293,21 +324,11 @@ function walletBalanceUsd(wallet: any): number {
 }
 
 function chainToNetwork(chain: string): string {
-  const normalized = chain.toLowerCase();
-  if (normalized.includes("solana")) return "solana:mainnet";
-  if (normalized.includes("sepolia")) return "eip155:84532";
-  return "eip155:8453";
+  return personalWalletNetworkForChainLabel(chain);
 }
 
-function personalWalletNetworkLabel(network: string): string {
-  if (network.includes("solana")) return "Solana mainnet";
-  if (network.includes("84532")) return "Base Sepolia";
-  if (network.includes("eip155")) return "Base mainnet";
-  return network || "Base mainnet";
-}
-
-function nativeSymbolForWallet(network: string): string {
-  return network.includes("solana") ? "SOL" : "ETH";
+function walletId(wallet: any): string {
+  return String(wallet?.id || wallet?.agentId || "");
 }
 
 function tokenSymbol(token: any): string {
@@ -316,10 +337,10 @@ function tokenSymbol(token: any): string {
 
 function tokenPriceUsd(token: any): number {
   const balance = Number(token?.balance ?? 0) || 0;
-  const explicit = Number(token?.priceUsd);
-  if (Number.isFinite(explicit) && explicit >= 0) return explicit;
-  const value = Number(token?.valueUsd);
-  if (balance > 0 && Number.isFinite(value) && value >= 0) return value / balance;
+  const explicit = personalWalletOptionalNumber(token?.priceUsd);
+  if (explicit != null && explicit > 0) return explicit;
+  const value = personalWalletOptionalNumber(token?.valueUsd);
+  if (balance > 0 && value != null && value > 0) return value / balance;
   return NaN;
 }
 
@@ -371,165 +392,21 @@ function parseUsePodTokenFromInput(value: string): string {
   }
 }
 
-function personalWalletHoldings(wallet: any): Array<[string, number]> {
-  const tokens = Array.isArray(wallet?.tokens) ? wallet.tokens : [];
-  const rows = tokens
-    .map((token: any): [string, number] => [String(token?.symbol || "").toUpperCase(), Number(token?.balance ?? 0) || 0])
-    .filter((row: [string, number]) => Boolean(row[0]) && row[1] > 0);
-  if (rows.length) return rows;
-  if (Number(wallet?.nativeBalance) > 0) return [[nativeSymbolForWallet(String(wallet?.network || "")), Number(wallet.nativeBalance)]];
-  if (Number(wallet?.currentBalanceUsd) > 0) return [["USDC", Number(wallet.currentBalanceUsd)]];
-  return [];
-}
-
-function personalWalletFromDashboardState(agentId: string, wallet: any): any | null {
-  if (!agentId.startsWith("user:")) return null;
-  const address = String(wallet?.walletAddress || wallet?.vaultAddress || wallet?.address || "").trim();
-  const network = String(wallet?.network || "").trim();
-  if (!address || !network) return null;
-  const custodyMode = wallet?.custodyMode === "watch" ? "watch" : "local";
-  return {
-    agentId,
-    id: agentId,
-    name: recoveryPhraseWalletName({ id: agentId, agentId, name: wallet?.name, network }, 1),
-    address,
-    network,
-    custodyMode,
-    importedFrom: isRecoveryPhrasePersonalWallet({ id: agentId, agentId }) ? "recovery-phrase" : custodyMode === "local" ? "private-key" : "watch",
-    currentBalanceUsd: Number(wallet?.currentBalanceUsd ?? wallet?.onchainBalanceUsd ?? 0) || 0,
-    nativeBalance: Number(wallet?.nativeBalance ?? 0) || 0,
-    tokens: Array.isArray(wallet?.tokens) ? wallet.tokens : [],
-    portfolioVersion: 0,
-    lastOnchainSyncAt: Number(wallet?.lastOnchainSyncAt ?? 0) || 0,
-    createdAt: Number(wallet?.updatedAt ?? 0) || 0,
-    updatedAt: Number(wallet?.updatedAt ?? 0) || 0,
-  };
-}
-
-function personalWalletAccountKey(wallet: any): string {
-  const network = String(wallet?.network || "").trim();
-  const address = String(wallet?.address || "").trim().toLowerCase();
-  return network && address ? `${network}:${address}` : "";
-}
-
-function mergePersonalWalletRecord(base: any, next: any): any {
-  if (!base) return next;
-  const baseUpdated = Number(base.updatedAt ?? base.lastOnchainSyncAt ?? 0) || 0;
-  const nextUpdated = Number(next.updatedAt ?? next.lastOnchainSyncAt ?? 0) || 0;
-  const preferNextBalance = nextUpdated >= baseUpdated || Number(base.currentBalanceUsd ?? 0) <= 0;
-  return {
-    ...base,
-    ...next,
-    id: base.id || next.id,
-    agentId: base.agentId || next.agentId,
-    name: next.name || base.name,
-    custodyMode: base.custodyMode === "local" || next.custodyMode === "local" ? "local" : "watch",
-    importedFrom: base.importedFrom !== "watch" ? base.importedFrom : next.importedFrom,
-    currentBalanceUsd: preferNextBalance && Number(next.currentBalanceUsd ?? 0) > 0 ? Number(next.currentBalanceUsd) : Number(base.currentBalanceUsd ?? 0) || Number(next.currentBalanceUsd ?? 0) || 0,
-    nativeBalance: preferNextBalance && Number(next.nativeBalance ?? 0) > 0 ? Number(next.nativeBalance) : Number(base.nativeBalance ?? 0) || Number(next.nativeBalance ?? 0) || 0,
-    tokens: Array.isArray(next.tokens) && next.tokens.length ? next.tokens : Array.isArray(base.tokens) ? base.tokens : [],
-    lastOnchainSyncAt: Math.max(Number(base.lastOnchainSyncAt ?? 0) || 0, Number(next.lastOnchainSyncAt ?? 0) || 0),
-    updatedAt: Math.max(baseUpdated, nextUpdated),
-  };
-}
-
-function mergePersonalWalletSources(wallets: any[] | null, walletsByAgent: Record<string, any> | undefined) {
-  const merged = new Map<string, any>();
-  const add = (wallet: any) => {
-    const key = personalWalletAccountKey(wallet);
-    if (!key) return;
-    merged.set(key, mergePersonalWalletRecord(merged.get(key), wallet));
-  };
-  (Array.isArray(wallets) ? wallets : []).forEach(add);
-  Object.entries(walletsByAgent ?? {})
-    .map(([agentId, wallet]) => personalWalletFromDashboardState(agentId, wallet))
-    .filter(Boolean)
-    .forEach(add);
-  return [...merged.values()];
-}
-
-function mergePersonalWalletList(wallets: any[]) {
-  const merged = new Map<string, any>();
-  wallets.forEach((wallet) => {
-    const key = personalWalletAccountKey(wallet);
-    if (key) merged.set(key, mergePersonalWalletRecord(merged.get(key), wallet));
-  });
-  return [...merged.values()];
+function mergeWalletsByAgentWithFresh(base: Record<string, any> | undefined, fresh: Record<string, any>) {
+  const next = { ...(base ?? {}) };
+  for (const [agentId, wallet] of Object.entries(fresh)) {
+    const existing = next[agentId];
+    const existingUpdated = Number(existing?.updatedAt ?? existing?.lastOnchainSyncAt ?? 0) || 0;
+    const freshUpdated = Number(wallet?.updatedAt ?? wallet?.lastOnchainSyncAt ?? 0) || 0;
+    if (!existing || freshUpdated >= existingUpdated) next[agentId] = wallet;
+  }
+  return next;
 }
 
 function personalWalletNeedsTokenRefresh(wallet: any) {
   const tokens = Array.isArray(wallet?.tokens) ? wallet.tokens : [];
   const lastSync = Number(wallet?.lastOnchainSyncAt ?? 0) || 0;
   return !tokens.length || Date.now() - lastSync > PERSONAL_WALLET_TOKEN_REFRESH_MS;
-}
-
-const RECOVERY_PHRASE_PERSONAL_WALLET_SUFFIX = /:(?:eip155-\d+|solana-[a-z0-9-]+)$/i;
-
-function isRecoveryPhrasePersonalWallet(wallet: any): boolean {
-  const id = String(wallet?.id || wallet?.agentId || "");
-  return wallet?.importedFrom === "recovery-phrase" || RECOVERY_PHRASE_PERSONAL_WALLET_SUFFIX.test(id);
-}
-
-function personalWalletGroupKey(wallet: any, index: number): string {
-  const id = String(wallet?.id || wallet?.agentId || "");
-  if (isRecoveryPhrasePersonalWallet(wallet)) return id.replace(RECOVERY_PHRASE_PERSONAL_WALLET_SUFFIX, "") || id;
-  return id || `${String(wallet?.network || "wallet")}:${String(wallet?.address || index)}`;
-}
-
-function personalWalletChainRank(wallet: any): number {
-  const network = String(wallet?.network || "").toLowerCase();
-  if (network.includes("eip155")) return 0;
-  if (network.includes("solana")) return 1;
-  return 2;
-}
-
-function combinePersonalWalletHoldings(wallets: any[]): Array<[string, number]> {
-  const totals = new Map<string, number>();
-  wallets.flatMap(personalWalletHoldings).forEach(([symbol, amount]) => {
-    totals.set(symbol, (totals.get(symbol) ?? 0) + amount);
-  });
-  return [...totals.entries()].filter(([, amount]) => amount > 0);
-}
-
-function recoveryPhraseWalletName(wallet: any, count: number): string {
-  const fallback = `My ${personalWalletNetworkLabel(String(wallet?.network || ""))} wallet`;
-  const name = String(wallet?.name || fallback).trim();
-  return count > 1 && isRecoveryPhrasePersonalWallet(wallet)
-    ? name.replace(/\s+(?:Base|Solana)$/i, "") || "My wallet"
-    : name;
-}
-
-function buildDropInPersonalWallets(wallets: any[] | null) {
-  if (!Array.isArray(wallets)) return [];
-  const groups = new Map<string, any[]>();
-  wallets.forEach((wallet, index) => {
-    const key = personalWalletGroupKey(wallet, index);
-    groups.set(key, [...(groups.get(key) ?? []), wallet]);
-  });
-  return [...groups.entries()].map(([groupId, group], index) => {
-    const sorted = [...group].sort((a, b) => personalWalletChainRank(a) - personalWalletChainRank(b));
-    const primary = sorted[0] ?? {};
-    const addressRows = sorted
-      .map((wallet) => [personalWalletNetworkLabel(String(wallet.network || "")), wallet.address || ""] as [string, string])
-      .filter(([, address], rowIndex, rows) => address && rows.findIndex(([chain, existing]) => chain === rows[rowIndex][0] && existing === address) === rowIndex);
-    const spendWallet = sorted.find((wallet) => wallet.custodyMode === "local" && String(wallet.network || "").includes("eip155")) ?? sorted.find((wallet) => wallet.custodyMode === "local") ?? primary;
-    return {
-      id: groupId || primary.id || primary.agentId || `user-wallet-${index}`,
-      spendId: spendWallet.id || spendWallet.agentId || groupId,
-      name: recoveryPhraseWalletName(primary, sorted.length),
-      icon: sorted.some((wallet) => wallet.custodyMode === "local") ? "shield" : "eye",
-      kind: sorted.some((wallet) => wallet.custodyMode === "local") ? "Local wallet" : "Watch wallet",
-      canSpend: sorted.some((wallet) => wallet.custodyMode === "local"),
-      network: addressRows.length > 1 ? `${addressRows.length} chains` : personalWalletNetworkLabel(String(primary.network || "")),
-      token: nativeSymbolForWallet(String(primary.network || "")),
-      addr: primary.address || addressRows[0]?.[1] || "",
-      primary: index === 0,
-      gas: Number(primary.nativeBalance ?? 0) || 0,
-      source: primary.importedFrom || primary.custodyMode || "wallet ledger",
-      holdings: combinePersonalWalletHoldings(sorted),
-      addresses: addressRows.length ? addressRows : [[personalWalletNetworkLabel(String(primary.network || "")), primary.address || ""]],
-    };
-  });
 }
 
 // Configured-wallet detection is shared with the Trade tab's wallet picker via
@@ -569,9 +446,77 @@ function hasHiveEnvKey(props: any, key: string): boolean {
   });
 }
 
+function firstPresentHiveEnvKey(props: any, keys: readonly string[]): string {
+  return keys.find((key) => hasHiveEnvKey(props, key)) ?? "";
+}
+
 function shortPublicRef(value: unknown): string {
   const text = stringValue(value);
   return text.length > 18 ? `${text.slice(0, 8)}...${text.slice(-6)}` : text;
+}
+
+function shortWalletAddress(value: unknown): string {
+  const text = stringValue(value);
+  if (!text) return "";
+  return text.length > 18 ? `${text.slice(0, 8)}...${text.slice(-6)}` : text;
+}
+
+function fundingDetail(network: string, address: string): string {
+  return [network ? fundingNetworkLabel(network) : "", shortWalletAddress(address)].filter(Boolean).join(" · ");
+}
+
+function walletAddress(value: any): string {
+  return firstStringValue(value?.walletAddress, value?.vaultAddress, value?.address);
+}
+
+function findPersonalWalletById(personalWallets: any[] | null, walletId: string) {
+  return (Array.isArray(personalWallets) ? personalWallets : []).find((wallet) => firstStringValue(wallet?.id, wallet?.agentId) === walletId);
+}
+
+function buildLlmFundingSourceMeta(agent: any, wallet: any, agentsById: Map<string, any>, walletsByAgent: Record<string, any>, personalWallets: any[] | null) {
+  const config = agent?.hivemindosModels ?? {};
+  const configuredId = firstStringValue(config.walletVaultId);
+  const creditAccountId = firstStringValue(config.creditAccountId);
+  const usesHivemindosModels = agent?.provider === HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER || Boolean(configuredId || creditAccountId);
+  if (!usesHivemindosModels) return null;
+  if ((config.fundingMode === "credits" || creditAccountId) && !configuredId) {
+    return {
+      id: creditAccountId || agent.id,
+      title: "Hosted model credits",
+      detail: firstStringValue(config.lastCreditBalanceLabel) || "Tap to choose a crypto funding wallet.",
+    };
+  }
+  const sourceId = configuredId || agent.id;
+  const configuredAddress = firstStringValue(config.walletAddress);
+  const configuredNetwork = firstStringValue(config.walletNetwork);
+  if (!configuredId || sourceId === agent.id) {
+    const address = configuredAddress || walletAddress(wallet);
+    const network = configuredNetwork || firstStringValue(wallet?.network);
+    return {
+      id: sourceId,
+      title: "This agent wallet",
+      detail: fundingDetail(network, address) || "Tap to choose a different funding wallet.",
+    };
+  }
+  if (sourceId.startsWith("user:")) {
+    const personal = findPersonalWalletById(personalWallets, sourceId);
+    const address = configuredAddress || firstStringValue(personal?.address);
+    const network = configuredNetwork || firstStringValue(personal?.network);
+    return {
+      id: sourceId,
+      title: firstStringValue(config.fundingWalletLabel, personal?.name, "Personal wallet"),
+      detail: fundingDetail(network, address) || "Personal wallet",
+    };
+  }
+  const sourceAgent = agentsById.get(sourceId);
+  const sourceWallet = sourceAgent ? resolveAgentWallet(sourceAgent, walletsByAgent[sourceId] ?? sourceAgent.wallet) : null;
+  const address = configuredAddress || walletAddress(sourceWallet);
+  const network = configuredNetwork || firstStringValue(sourceWallet?.network);
+  return {
+    id: sourceId,
+    title: firstStringValue(config.fundingWalletLabel, sourceAgent?.name, "Agent wallet"),
+    detail: fundingDetail(network, address) || "Agent wallet",
+  };
 }
 
 function normalizedRailStatus(value: string, credentialPresent: boolean): string {
@@ -628,20 +573,23 @@ function buildRailRuntimeOverrides(props: any, agents: any[], railEnabledOverrid
   const veilCred = hasHiveEnvKey(props, "VEIL_KEY");
   const veniceEnv = firstStringValue(...agents.map((agent) => agent?.venice?.apiKeyEnvName), "VENICE_API_KEY");
   const veniceCred = hasHiveEnvKey(props, veniceEnv) || agents.some((agent) => agent?.venice?.lastKeyPresent === true || agent?.venice?.walletVaultId || agent?.venice?.walletAddress);
-  const bankrCred = hasHiveEnvKey(props, "BANKR_API_KEY");
+  const bankrEnv = firstPresentHiveEnvKey(props, BANKR_RAIL_ENV_NAMES);
+  const bankrCred = Boolean(bankrEnv);
   return {
     moneyclaw: { enabled: railEnabled("moneyclaw", moneyReady, railEnabledOverrides), setup: moneyReady ? "ready" : "needs", env: moneyClawEnv, cred: moneyCred, health: moneyError || (moneyCred ? "Configured" : `Missing ${moneyClawEnv}`) },
     x402: { enabled: railEnabled("x402", true, railEnabledOverrides), setup: "ready", cred: true, health: "Operational" },
     veil: { enabled: railEnabled("veil", veilCred, railEnabledOverrides), setup: veilCred ? "ready" : "needs", cred: veilCred, health: veilCred ? "Configured" : "Missing VEIL_KEY" },
     usepod: { enabled: railEnabled("usepod", usePodReady, railEnabledOverrides), setup: usePodReady ? "ready" : "needs", cred: usePod.credentialPresent, caps: [usePodModelCap, "Provider x402", "Price ceilings"], health: usePodHealth },
     venice: { enabled: railEnabled("venice", veniceCred, railEnabledOverrides), setup: veniceCred ? "ready" : "needs", env: veniceEnv, cred: veniceCred, health: veniceCred ? "Configured" : `Missing ${veniceEnv}` },
-    bankr: { enabled: railEnabled("bankr", bankrCred, railEnabledOverrides), setup: bankrCred ? "ready" : "needs", cred: bankrCred, health: bankrCred ? "Configured" : "Missing BANKR_API_KEY" },
+    bankr: { enabled: railEnabled("bankr", bankrCred, railEnabledOverrides), setup: bankrCred ? "ready" : "needs", env: bankrEnv || "BANKR_API_KEY", cred: bankrCred, health: bankrCred ? `Configured via ${bankrEnv}` : `Missing ${BANKR_RAIL_ENV_NAMES.join(", ")}` },
   };
 }
 
-function buildDropInRuntimeData(props: any, personalWallets: any[] | null, railEnabledOverrides: Record<string, boolean>, usePodRoutingMode: string, walletActivity: WalletActivityRecord[] | null, honeyLedger: HoneyLedgerRuntime | null) {
+function buildDropInRuntimeData(props: any, personalWallets: any[] | null, railEnabledOverrides: Record<string, boolean>, usePodRoutingMode: string, walletActivity: WalletActivityRecord[] | null, honeyLedger: HoneyLedgerRuntime | null, bankrWallet: BankrWalletInfo | null) {
   const agents = Array.isArray(props?.displayAgents) ? props.displayAgents : [];
+  const agentsById = buildAgentLookup(agents);
   const walletsByAgent = props?.walletsByAgent ?? {};
+  const walletActionsByAgent = props?.walletActionsByAgent ?? {};
   const machineGroups = new Map<string, any[]>();
   const walletMeta: Record<string, any> = {};
   const balances: Record<string, Array<[string, number]>> = {};
@@ -682,6 +630,8 @@ function buildDropInRuntimeData(props: any, personalWallets: any[] | null, railE
       const maxPay = Number(wallet?.maxPaymentUsd ?? wallet?.spendLimitUsd ?? wallet?.maxPayUsd ?? Math.max(10, burn * 2)) || 10;
       const enabled = wallet?.enabled !== false && !wallet?.disabled;
       const configured = hasConfiguredAgentWallet(agent, wallet);
+      const action = walletActionsByAgent[agent.id] ?? {};
+      const llmFundingSource = buildLlmFundingSourceMeta(agent, wallet, agentsById, walletsByAgent, personalWallets);
 
       const row = {
         id: agent.id,
@@ -714,6 +664,12 @@ function buildDropInRuntimeData(props: any, personalWallets: any[] | null, railE
         veilAutoSend: wallet?.veilAutoSendEnabled === true,
         assetSpendCaps: wallet?.assetSpendCaps ?? {},
         notes: wallet?.notes || "",
+        actionBusy: Boolean(action.busy),
+        actionMessage: action.message || "",
+        actionError: action.error || "",
+        llmFundingSource: llmFundingSource?.title || "",
+        llmFundingSourceDetail: llmFundingSource?.detail || "",
+        llmFundingSourceId: llmFundingSource?.id || "",
       };
       balances[agent.id] = balanceRows;
       rewards[agent.id] = { gas: Number(wallet?.nativeBalance ?? wallet?.gasBalance ?? 0) || 0, used: usageTokensByAgent.get(agent.id) ?? (Number(wallet?.tokensUsed ?? 0) || 0) };
@@ -733,7 +689,10 @@ function buildDropInRuntimeData(props: any, personalWallets: any[] | null, railE
       versionState: "current",
       agents: machineAgents,
     })),
-    myWallets: buildDropInPersonalWallets(personalWallets),
+    myWallets: buildGroupedPersonalWallets(personalWallets),
+    bankrWallet: bankrWallet?.configured
+      ? { configured: true, address: bankrWallet.address || "", balanceUsd: Number(bankrWallet.balanceUsd) || 0, tokens: Array.isArray(bankrWallet.tokens) ? bankrWallet.tokens : [] }
+      : null,
     walletMeta,
     balances,
     rewards,
@@ -758,17 +717,22 @@ function WalletPanelComponent(props: any) {
   const [railEnabledOverrides, setRailEnabledOverrides] = useState<Record<string, boolean>>({});
   const [usePodRoutingMode, setUsePodRoutingMode] = useState("");
   const [bankrRecipientAddress, setBankrRecipientAddress] = useState("");
+  const [bankrWallet, setBankrWallet] = useState<BankrWalletInfo | null>(null);
+  const [freshWalletsByAgent, setFreshWalletsByAgent] = useState<Record<string, any>>({});
+  const [llmFundingAgentId, setLlmFundingAgentId] = useState("");
   const refreshedUsePodAgentIds = useRef<Set<string>>(new Set());
   const refreshedPersonalWalletKeys = useRef<Set<string>>(new Set());
+  const refreshedAgentWalletKeys = useRef<Set<string>>(new Set());
   const vaultPath = props?.sharedVault?.enabled ? String(props.sharedVault.vaultPath || "").trim() : "";
-  const activeView = props.activeView, displayAgents = props.displayAgents, refreshRuntimeIntegrations = props.refreshRuntimeIntegrations, refreshRuntimeUsage = props.refreshRuntimeUsage, selectedAgent = props.selectedAgent;
+  const activeView = props.activeView, displayAgents = props.displayAgents, refreshRuntimeIntegrations = props.refreshRuntimeIntegrations, refreshRuntimeUsage = props.refreshRuntimeUsage, refreshWalletBalance = props.refreshWalletBalance, selectedAgent = props.selectedAgent;
   const refreshRuntimeUsageRef = useRef(refreshRuntimeUsage);
   useEffect(() => {
     refreshRuntimeUsageRef.current = refreshRuntimeUsage;
   }, [refreshRuntimeUsage]);
   const fetchPersonalWallets = useCallback(() => fetchPersonalWalletRecords(vaultPath), [vaultPath]);
-  const refreshPersonalWalletBalances = useCallback(async (targets: any[]) => {
-    const refreshed = (await Promise.all(targets.map(async (wallet) => {
+  const effectiveWalletsByAgent = useMemo(() => mergeWalletsByAgentWithFresh(props.walletsByAgent, freshWalletsByAgent), [freshWalletsByAgent, props.walletsByAgent]);
+  const readPersonalWalletBalances = useCallback(async (targets: any[]) => {
+    return (await Promise.all(targets.map(async (wallet) => {
       const address = String(wallet?.address || "").trim();
       const network = String(wallet?.network || "").trim();
       if (!address || !network) return null;
@@ -788,7 +752,9 @@ function WalletPanelComponent(props: any) {
         lastOnchainSyncAt: Number(data.balance.fetchedAt) || Date.now(),
         updatedAt: Date.now(),
       };
-    }))).filter(Boolean);
+    }))).filter(Boolean) as any[];
+  }, []);
+  const persistPersonalWalletBalances = useCallback(async (refreshed: any[]) => {
     if (!refreshed.length) return;
     setPersonalWallets((current) => mergePersonalWalletList([...(Array.isArray(current) ? current : []), ...refreshed]));
     await fetch("/api/wallet/personal", {
@@ -797,9 +763,63 @@ function WalletPanelComponent(props: any) {
       body: JSON.stringify({ vaultPath: vaultPath || undefined, wallets: refreshed }),
     }).catch(() => null);
   }, [vaultPath]);
+  const refreshPersonalWalletBalances = useCallback(async (targets: any[]) => {
+    const refreshed = await readPersonalWalletBalances(targets);
+    await persistPersonalWalletBalances(refreshed);
+    return refreshed;
+  }, [persistPersonalWalletBalances, readPersonalWalletBalances]);
   const loadPersonalWallets = useCallback(async () => setPersonalWallets(await fetchPersonalWallets()), [fetchPersonalWallets]);
+  const resolvePersonalWalletBalanceTargets = useCallback(async (source: any) => {
+    const ids = new Set<string>([
+      String(source?.spendId || ""),
+      String(source?.id || ""),
+      ...(Array.isArray(source?.accounts) ? source.accounts.map((account: any) => String(account?.id || "")) : []),
+    ].map((value) => value.trim()).filter(Boolean));
+    const addresses = new Set<string>([
+      String(source?.addr || ""),
+      ...(Array.isArray(source?.addresses) ? source.addresses.map((row: any) => String(row?.[1] || "")) : []),
+      ...(Array.isArray(source?.accounts) ? source.accounts.map((account: any) => String(account?.address || "")) : []),
+    ].map((value) => value.trim().toLowerCase()).filter(Boolean));
+    if (!ids.size && !addresses.size) return [];
+    const matchesSource = (wallet: any) => {
+      const id = String(wallet?.id || wallet?.agentId || "").trim();
+      const address = String(wallet?.address || "").trim().toLowerCase();
+      return ids.size ? Boolean(id && ids.has(id)) : Boolean(address && addresses.has(address));
+    };
+    let targets = mergePersonalWalletSources(personalWallets, effectiveWalletsByAgent).filter(matchesSource);
+    if (!targets.length) {
+      const latest = await fetchPersonalWallets();
+      targets = mergePersonalWalletSources(latest, effectiveWalletsByAgent).filter(matchesSource);
+      if (!targets.length) setPersonalWallets(latest);
+    }
+    return targets;
+  }, [effectiveWalletsByAgent, fetchPersonalWallets, personalWallets]);
+  const invalidatePersonalWalletBalance = useCallback(async (source: any) => {
+    const targets = await resolvePersonalWalletBalanceTargets(source);
+    if (!targets.length) return;
+    const keys = new Set(targets.map(personalWalletAccountKey).filter(Boolean));
+    const invalidated = targets.map((wallet) => ({ ...wallet, lastOnchainSyncAt: 0, updatedAt: Date.now() }));
+    setPersonalWallets((current) => (Array.isArray(current) ? current : []).map((wallet) => (
+      keys.has(personalWalletAccountKey(wallet)) ? { ...wallet, lastOnchainSyncAt: 0 } : wallet
+    )));
+    await fetch("/api/wallet/personal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vaultPath: vaultPath || undefined, wallets: invalidated }),
+    }).catch(() => null);
+  }, [resolvePersonalWalletBalanceTargets, vaultPath]);
+  const refreshPersonalWalletSourceBalance = useCallback(async (source: any) => {
+    const targets = await resolvePersonalWalletBalanceTargets(source);
+    if (!targets.length) { await loadPersonalWallets(); return []; }
+    return refreshPersonalWalletBalances(targets);
+  }, [loadPersonalWallets, refreshPersonalWalletBalances, resolvePersonalWalletBalanceTargets]);
   const loadWalletActivity = useCallback(async () => setWalletActivity(await fetchWalletActivityRecords()), []);
   const loadHoneyLedger = useCallback(async () => setHoneyLedger(await fetchHoneyLedger()), []);
+  const loadBankrWallet = useCallback(async () => {
+    const info = await fetchBankrWallet();
+    setBankrWallet(info);
+    return info;
+  }, []);
   useEffect(() => {
     let ignore = false;
     void fetchPersonalWallets().then((wallets) => { if (!ignore) setPersonalWallets(wallets); });
@@ -807,7 +827,7 @@ function WalletPanelComponent(props: any) {
   }, [fetchPersonalWallets]);
   useEffect(() => {
     if (activeView !== "wallet" || !Array.isArray(personalWallets) || !personalWallets.length) return;
-    const targets = mergePersonalWalletSources(personalWallets, props.walletsByAgent)
+    const targets = mergePersonalWalletSources(personalWallets, effectiveWalletsByAgent)
       .filter(personalWalletNeedsTokenRefresh)
       .filter((wallet) => {
         const key = personalWalletAccountKey(wallet);
@@ -816,12 +836,35 @@ function WalletPanelComponent(props: any) {
         return true;
       });
     if (targets.length) void refreshPersonalWalletBalances(targets);
-  }, [activeView, personalWallets, props.walletsByAgent, refreshPersonalWalletBalances]);
+  }, [activeView, effectiveWalletsByAgent, personalWallets, refreshPersonalWalletBalances]);
+  useEffect(() => {
+    if (activeView !== "wallet" || !refreshWalletBalance) return;
+    const targets = (Array.isArray(displayAgents) ? displayAgents : []).filter((agent: any) => {
+      const wallet = effectiveWalletsByAgent?.[agent.id];
+      const address = String(wallet?.walletAddress || wallet?.vaultAddress || wallet?.address || "").trim();
+      const network = String(wallet?.network || "eip155:8453").trim();
+      if (!address || !network) return false;
+      const key = `${agent.id}:${network}:${address.toLowerCase()}`;
+      if (refreshedAgentWalletKeys.current.has(key)) return false;
+      refreshedAgentWalletKeys.current.add(key);
+      return true;
+    });
+    if (!targets.length) return;
+    let ignore = false;
+    void Promise.all(targets.map(async (agent: any) => [agent.id, await refreshWalletBalance(agent.id)] as const))
+      .then((rows) => {
+        if (ignore) return;
+        const fresh = Object.fromEntries(rows.filter(([, wallet]) => Boolean(wallet)));
+        if (Object.keys(fresh).length) setFreshWalletsByAgent((current) => mergeWalletsByAgentWithFresh(current, fresh));
+      });
+    return () => { ignore = true; };
+  }, [activeView, displayAgents, effectiveWalletsByAgent, refreshWalletBalance]);
   useEffect(() => {
     if (activeView !== "wallet") return;
     let ignore = false;
     void fetchWalletActivityRecords().then((records) => { if (!ignore) setWalletActivity(records); });
     void fetchHoneyLedger().then((ledger) => { if (!ignore) setHoneyLedger(ledger); });
+    void fetchBankrWallet().then((info) => { if (!ignore) setBankrWallet(info); });
     void refreshRuntimeUsageRef.current?.();
     return () => { ignore = true; };
   }, [activeView]);
@@ -865,51 +908,141 @@ function WalletPanelComponent(props: any) {
     honeyStats: props.honeyStats,
     moneyClawStatusByEnvName: props.moneyClawStatusByEnvName,
     runtimeUsage: props.runtimeUsage,
-    walletsByAgent: props.walletsByAgent,
-  }), [displayAgents, props.RUNTIME_LABELS, props.hiveEnv, props.honeyLedgerEnabled, props.honeyStats, props.moneyClawStatusByEnvName, props.runtimeUsage, props.walletsByAgent]);
-  const mergedPersonalWallets = useMemo(() => mergePersonalWalletSources(personalWallets, props.walletsByAgent), [personalWallets, props.walletsByAgent]);
-  const runtimeData = useMemo(() => buildDropInRuntimeData(runtimeDataSource, mergedPersonalWallets, railEnabledOverrides, usePodRoutingMode, walletActivity, honeyLedger), [runtimeDataSource, mergedPersonalWallets, railEnabledOverrides, usePodRoutingMode, walletActivity, honeyLedger]);
+    walletActionsByAgent: props.walletActionsByAgent,
+    walletsByAgent: effectiveWalletsByAgent,
+  }), [displayAgents, effectiveWalletsByAgent, props.RUNTIME_LABELS, props.hiveEnv, props.honeyLedgerEnabled, props.honeyStats, props.moneyClawStatusByEnvName, props.runtimeUsage, props.walletActionsByAgent]);
+  const mergedPersonalWallets = useMemo(() => mergePersonalWalletSources(personalWallets, effectiveWalletsByAgent), [effectiveWalletsByAgent, personalWallets]);
+  const llmFundingPickables = useMemo<PickableWallet[]>(() => {
+    const userPickables = groupedUserPickables(mergedPersonalWallets, { accountFilter: isLocalPaymentSigningWallet });
+    const agentPickables = (Array.isArray(displayAgents) ? displayAgents : []).flatMap((agent: any) => {
+      const pickable = agentPickable(agent, effectiveWalletsByAgent);
+      if (!hasConfiguredAgentWallet(agent, pickable.wallet)) return [];
+      if ((pickable.wallet as unknown as { setupRequired?: boolean }).setupRequired) return [];
+      if (!isLocalPaymentSigningWallet(pickable.wallet)) return [];
+      return [{ ...pickable, statusOverride: { tone: "ok" as const, text: "Agent wallet" } }];
+    });
+    return [...userPickables, ...agentPickables];
+  }, [displayAgents, effectiveWalletsByAgent, mergedPersonalWallets]);
+  const llmFundingTarget = useMemo(
+    () => (Array.isArray(displayAgents) ? displayAgents : []).find((agent: any) => agent.id === llmFundingAgentId),
+    [displayAgents, llmFundingAgentId],
+  );
+  const llmFundingCurrentId = firstStringValue(llmFundingTarget?.hivemindosModels?.walletVaultId, llmFundingAgentId);
+  const setLlmFundingSource = useCallback(async (selectedId: string) => {
+    const target = (Array.isArray(displayAgents) ? displayAgents : []).find((agent: any) => agent.id === llmFundingAgentId);
+    const picked = resolvePickableAccount(llmFundingPickables, selectedId);
+    if (!target || !picked) return;
+    props.updateWalletAction?.(target.id, { busy: true, error: "", message: "Updating LLM funding source..." });
+    try {
+      const response = await fetch("/api/hivemindos/models/wallet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "link",
+          walletVaultId: picked.id,
+          agentId: target.id,
+          agentName: target.name,
+          vaultPath: vaultPath || undefined,
+        }),
+      });
+      const data = await response.json().catch(() => null) as { ok?: boolean; error?: string; wallet?: { vaultId: string; address: string; network: string; kind?: "personal" | "agent" } } | null;
+      if (!response.ok || !data?.ok || !data.wallet) {
+        throw new Error(data?.error || `Could not update LLM funding source (HTTP ${response.status}).`);
+      }
+      await props.updateAgentProfile?.(target.id, {
+        provider: HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER,
+        hivemindosModels: {
+          ...(target.hivemindosModels ?? {}),
+          fundingMode: "wallet",
+          walletVaultId: data.wallet.vaultId,
+          walletAddress: data.wallet.address,
+          walletNetwork: data.wallet.network,
+          fundingWalletKind: data.wallet.kind ?? (picked.kind === "user" ? "personal" : "agent"),
+          fundingWalletLabel: picked.name,
+          lastCheckedAt: new Date().toISOString(),
+          lastTestStatus: "ready",
+          lastStatusMessage: "LLM funding source updated.",
+        },
+      });
+      props.updateWalletAction?.(target.id, { busy: false, error: "", message: "LLM funding source updated." });
+    } catch (error) {
+      props.updateWalletAction?.(target.id, { busy: false, error: error instanceof Error ? error.message : "Could not update LLM funding source.", message: "" });
+    } finally {
+      setLlmFundingAgentId("");
+    }
+  }, [displayAgents, llmFundingAgentId, llmFundingPickables, props, vaultPath]);
+  const runtimeData = useMemo(() => buildDropInRuntimeData(runtimeDataSource, mergedPersonalWallets, railEnabledOverrides, usePodRoutingMode, walletActivity, honeyLedger, bankrWallet), [runtimeDataSource, mergedPersonalWallets, railEnabledOverrides, usePodRoutingMode, walletActivity, honeyLedger, bankrWallet]);
   const walletActions = useMemo(() => ({
     bankrRewards: { honeyStats: props.honeyStats, honeyLedgerEnabled: props.honeyLedgerEnabled },
     bankrRecipientAddress,
     walletVaultBackup: { status: props.walletVaultBackupStatus, busy: props.walletVaultBackupBusy, message: props.walletVaultBackupMessage },
     formatHiveAmount: props.formatHiveAmount,
-    onConnectBankrWallet: async () => {
-      const provider = (window as any).ethereum;
-      if (!provider) throw new Error("No browser wallet found. Paste your Bankr receiving address instead.");
-      const accounts = await provider.request({ method: "eth_requestAccounts" }) as string[];
-      const address = accounts.find((account) => /^0x[a-fA-F0-9]{40}$/.test(account));
-      if (!address) throw new Error("Wallet connected, but no EVM address was returned.");
-      await switchBrowserWalletToBase(provider);
-      setBankrRecipientAddress(address);
-      await saveDashboardStateValue(BANKR_RECIPIENT_STORAGE_KEY, address);
-      return address;
-    },
-    onClaimBankrHive: async (recipientAddress: string) => {
-      const address = recipientAddress.trim();
-      if (!/^0x[a-fA-F0-9]{40}$/.test(address)) return { ok: false, error: "Enter a valid Bankr EVM receiving address first." };
-      setBankrRecipientAddress(address);
-      await saveDashboardStateValue(BANKR_RECIPIENT_STORAGE_KEY, address);
-      const result = await props.claimAllHoneyToBankrHive?.(address);
-      await loadHoneyLedger();
-      return result;
-    },
     onReturnAllHiveToHoney: async () => {
       const result = await props.returnAllHiveToHoney?.();
       await loadHoneyLedger();
       return result;
     },
+    onLoadHoneyWalletLinkStatus: async () => {
+      const response = await fetch("/api/honey-ledger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "wallet-link-status" }),
+      });
+      return response.json().catch(() => ({ ok: false, error: `HONEY wallet status failed (${response.status}).` }));
+    },
+    onLinkHoneyWallet: async (address: string) => {
+      const response = await fetch("/api/honey-ledger", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "link-wallet", address }),
+      });
+      return response.json().catch(() => ({ ok: false, error: `HONEY wallet verification failed (${response.status}).` }));
+    },
+    onLinkTelegramHoney: async (code: string) => {
+      const response = await fetch("/api/honey-community", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "link-telegram", code }),
+      });
+      return response.json().catch(() => ({ ok: false, error: `Telegram HONEY link failed (${response.status}).` }));
+    },
+    onCreateTelegramHoneyLinkIntent: async () => {
+      const response = await fetch("/api/honey-community", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "link-telegram-intent" }),
+      });
+      return response.json().catch(() => ({ ok: false, error: `Telegram link request failed (${response.status}).` }));
+    },
+    onLoadHoneyContributionStatus: async () => {
+      const response = await fetch("/api/honey-community", { cache: "no-store" });
+      return response.json().catch(() => ({ ok: false, error: `HONEY contribution status failed (${response.status}).` }));
+    },
     onRunWalletVaultBackupAction: (action: "refresh" | "restore") => props.runWalletVaultBackupAction?.(action),
     onToggleAgentSpend: (agentId: string, enabled: boolean) => props.updateWallet?.(agentId, { enabled }),
     onUpdateAgentWallet: (agentId: string, patch: any) => props.updateWallet?.(agentId, patch),
     onCreateAgentWallet: (agentId: string, network: string) => props.createLocalWallet?.(agentId, chainToNetwork(network)),
-    onRefreshAgentWallet: (agentId: string) => props.refreshWalletBalance?.(agentId),
+    onRefreshAgentWallet: async (agentId: string) => {
+      const refreshed = await refreshWalletBalance?.(agentId);
+      if (refreshed) setFreshWalletsByAgent((current) => mergeWalletsByAgentWithFresh(current, { [agentId]: refreshed }));
+      return refreshed;
+    },
     onResetAgentRunway: (agentId: string) => props.resetWalletBurnClock?.(agentId),
-    onCopyAgentPrompt: (agentId: string) => props.walletsByAgent?.[agentId] ? props.copyPaymentPrompt?.(props.walletsByAgent[agentId]) : undefined,
-    onExportAgentWallet: (agentId: string) => props.exportWalletSecrets?.({ agentIds: [agentId], label: props.displayAgents?.find((agent: any) => agent.id === agentId)?.name || agentId }),
+    onCopyAgentPrompt: (agentId: string) => effectiveWalletsByAgent?.[agentId] ? props.copyPaymentPrompt?.(effectiveWalletsByAgent[agentId]) : undefined,
+    onOpenLlmFundingSource: (agentId: string) => setLlmFundingAgentId(agentId),
+    onExportAgentWallet: (agentId: string, confirmation?: string) => {
+      const agent = props.displayAgents?.find((item: any) => item.id === agentId);
+      if (!agent) return { ok: false, error: "Could not find this agent wallet." };
+      return exportAgentWalletSecret(agent, props.exportWalletSecrets, props.updateWalletAction, { confirmation });
+    },
+    onExportPersonalWallet: (walletId: string, confirmation?: string) => {
+      const group = buildGroupedPersonalWallets(mergedPersonalWallets).find((wallet) => wallet.id === walletId || wallet.spendId === walletId);
+      if (!group) return { ok: false, error: "Could not find this personal wallet." };
+      return exportPersonalWalletGroupSecret(group, props.exportWalletSecrets, props.updateWalletAction, { confirmation });
+    },
     onSendAgentPayment: async (input: any) => {
-      const wallet = props.walletsByAgent?.[input.agentId] || {};
-      const recipientWallet = input.recipientAgentId ? props.walletsByAgent?.[input.recipientAgentId] : null;
+      const wallet = effectiveWalletsByAgent?.[input.agentId] || {};
+      const recipientWallet = input.recipientAgentId ? effectiveWalletsByAgent?.[input.recipientAgentId] : null;
       const recipient = input.toAddress || recipientWallet?.walletAddress || recipientWallet?.vaultAddress || recipientWallet?.address || "";
       const provider = walletProviderForDropIn(wallet);
       const asset = String(input.asset || "USDC").toUpperCase();
@@ -917,28 +1050,36 @@ function WalletPanelComponent(props: any) {
       const amountUsd = Number(input.amountUsd);
       const directEnabled = wallet.enabled !== false && !wallet.disabled, autoPayEnabled = Boolean(wallet.autoPayEnabled ?? wallet.autoUse ?? wallet.allowAutoUse);
       const veilAutoSendEnabled = wallet.veilAutoSendEnabled === true;
+      const walletStableAsset = stableSendAssetForNetwork(String(wallet.network || ""));
       if (!recipient) throw new Error("Recipient address is required.");
       if (!Number.isFinite(amount) || amount <= 0) throw new Error("Amount must be greater than zero.");
-      if (provider !== "veil" && asset !== "USDC") throw new Error("This rail sends USDC only.");
-      props.updateWalletAction?.(input.agentId, { busy: true, error: "", message: provider === "veil" ? "Submitting Veil private transfer..." : "Sending USDC..." });
+      if (provider !== "veil" && asset !== walletStableAsset) throw new Error(`This wallet sends ${walletStableAsset} on ${fundingNetworkLabel(String(wallet.network || ""))}.`);
+      props.updateWalletAction?.(input.agentId, { busy: true, error: "", message: provider === "veil" ? "Submitting Veil private transfer..." : `Sending ${asset}...` });
       const endpoint = provider === "veil" ? "/api/wallet/veil/transfer" : "/api/wallet/send";
       const maxAssetAmount = Number(wallet.assetSpendCaps?.[asset] ?? (asset === "ETH" ? 0.01 : wallet.maxPaymentUsd) ?? amount);
       const body = endpoint === "/api/wallet/veil/transfer"
         ? { agentId: input.agentId, enabled: directEnabled, provider: "veil", network: VEIL_TRANSFER_NETWORK, asset, recipientAddress: recipient, amount: input.amount, amountUsd: asset === "USDC" ? amount : Number.isFinite(amountUsd) && amountUsd > 0 ? amountUsd : undefined, maxPaymentUsd: wallet.maxPaymentUsd, maxAssetAmount, confirmation: input.confirmation, autoSendEnabled: veilAutoSendEnabled, autoShield: true, duplicateGuardEnabled: wallet.duplicatePaymentGuardEnabled !== false, duplicateGuardSeconds: wallet.duplicatePaymentGuardSeconds }
         : { agentId: input.agentId, toAddress: recipient, amountUsd: amount, maxPaymentUsd: wallet.maxPaymentUsd, autoPayEnabled, confirmation: input.confirmation };
-      const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => null);
-      const data = await response?.json().catch(() => null) as { ok?: boolean; signature?: string; transfer?: { transactionHash?: string }; shield?: { transactionHash?: string }; status?: string; error?: string } | null;
-      if (!response?.ok || !data?.ok) {
+      let data: { ok?: boolean; signature?: string; transfer?: { transactionHash?: string }; shield?: { transactionHash?: string }; status?: string; error?: string } | null;
+      if (endpoint === "/api/wallet/send") {
+        data = await sendApprovedWalletUsdc(body as WalletSendUsdcRequest);
+      } else {
+        data = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+          .then((response) => response.json())
+          .catch(() => null) as { ok?: boolean; signature?: string; transfer?: { transactionHash?: string }; shield?: { transactionHash?: string }; status?: string; error?: string } | null;
+      }
+      if (!data?.ok) {
         props.updateWalletAction?.(input.agentId, { busy: false, error: data?.error ?? "Payment failed.", message: "" });
         throw new Error(data?.error || "Payment failed.");
       }
       const tx = data.signature || data.transfer?.transactionHash || data.shield?.transactionHash || "";
       props.updateWalletAction?.(input.agentId, { busy: false, error: "", message: tx ? `Sent. Transaction: ${tx}` : data.status === "shielding" ? "Shielding started. HivemindOS will finish the private send after Veil accepts the deposit." : "Sent.", confirmation: "" });
-      await Promise.all([props.refreshWalletBalance?.(input.agentId), loadWalletActivity()]);
+      const [refreshed] = await Promise.all([refreshWalletBalance?.(input.agentId), loadWalletActivity()]);
+      if (refreshed) setFreshWalletsByAgent((current) => mergeWalletsByAgentWithFresh(current, { [input.agentId]: refreshed }));
       return data;
     },
     onSaveRailConfig: async (input: any) => {
-      const firstAgentId = props.displayAgents?.[0]?.id || Object.keys(props.walletsByAgent || {})[0] || "";
+      const firstAgentId = props.displayAgents?.[0]?.id || Object.keys(effectiveWalletsByAgent || {})[0] || "";
       if (input.rail?.id) {
         setRailEnabledOverrides((current) => ({ ...current, [input.rail.id]: Boolean(input.enabled) }));
         await saveDashboardStateValue(`${RAIL_ENABLED_KEY_PREFIX}${input.rail.id}`, input.enabled ? "1" : "0");
@@ -967,31 +1108,135 @@ function WalletPanelComponent(props: any) {
       return { ok: true };
     },
     onFundAgent: async (input: any) => {
-      if (String(input.asset || "").toUpperCase() !== "USDC") throw new Error("Agent funding is wired for USDC transfers only.");
-      if (input.source?.canSpend === false) throw new Error("This personal wallet is watch-only. Reimport it locally before funding agents.");
-      const wallet = props.walletsByAgent?.[input.agentId] || {};
-      const toAddress = wallet.walletAddress || wallet.vaultAddress || wallet.address || "";
-      if (!toAddress) throw new Error("That agent does not have a deposit address yet.");
-      const response = await fetch("/api/wallet/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId: input.source?.spendId || input.source?.id, toAddress, amountUsd: Number(input.amount), autoPayEnabled: false, confirmation: input.confirmation, maxPaymentUsd: Number(input.amount) || undefined }) }).catch(() => null);
-      const data = await response?.json().catch(() => null) as { ok?: boolean; signature?: string; error?: string } | null;
-      if (!response?.ok || !data?.ok) throw new Error(data?.error || "Could not fund agent.");
-      await Promise.all([loadPersonalWallets(), props.refreshWalletBalance?.(input.agentId), loadWalletActivity()]);
-      return data;
+      const data = await executeAgentFunding({
+        source: input.source,
+        recipientAgentId: input.agentId,
+        recipientWallet: effectiveWalletsByAgent?.[input.agentId],
+        asset: input.asset,
+        amountUsd: Number(input.amount),
+        confirmation: input.confirmation,
+        personalWallets: mergedPersonalWallets,
+      });
+      const [recipientWallet] = await Promise.all([refreshWalletBalance?.(input.agentId), refreshPersonalWalletSourceBalance(input.source), loadWalletActivity()]);
+      if (recipientWallet) {
+        setFreshWalletsByAgent((current) => mergeWalletsByAgentWithFresh(current, { [input.agentId]: recipientWallet }));
+      }
+      return {
+        ...data,
+        recipientWallet,
+        recipientBalanceUsd: Number(recipientWallet?.currentBalanceUsd ?? recipientWallet?.onchainBalanceUsd),
+      };
     },
     onSendPersonalWallet: async (input: any) => {
-      if (String(input.asset || "").toUpperCase() !== "USDC") throw new Error("Personal wallet send is wired for USDC transfers only.");
+      const asset = String(input.asset || "USDC").toUpperCase();
       if (input.source?.canSpend === false) throw new Error("This personal wallet is watch-only. Reimport it locally before sending.");
-      const response = await fetch("/api/wallet/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId: input.source?.spendId || input.source?.id, toAddress: input.toAddress, amountUsd: Number(input.amount), autoPayEnabled: false, confirmation: input.confirmation, maxPaymentUsd: Number(input.amount) || undefined }) }).catch(() => null);
-      const data = await response?.json().catch(() => null) as { ok?: boolean; signature?: string; error?: string } | null;
-      if (!response?.ok || !data?.ok) throw new Error(data?.error || "Could not send USDC.");
-      await Promise.all([loadPersonalWallets(), loadWalletActivity()]);
+      const sourceWallet = mergedPersonalWallets.find((wallet: any) => walletId(wallet) === input.sourceAccountId)
+        ?? resolvePersonalWalletRecordForAsset(input.source, asset, mergedPersonalWallets);
+      const sourceAgentId = String(sourceWallet?.id || sourceWallet?.agentId || "");
+      if (!sourceAgentId) throw new Error(`No local ${asset} wallet is available to send from.`);
+      const sourceToken = (Array.isArray(sourceWallet?.tokens) ? sourceWallet.tokens : []).find((token: any) => tokenSymbol(token) === asset && Number(token?.balance) > 0);
+      const data = await sendApprovedPersonalWalletAsset({ agentId: sourceAgentId, toAddress: input.toAddress, asset, assetAmount: String(input.amount), tokenAddress: String(sourceToken?.tokenAddress || "").trim() || undefined, confirmation: "SEND_TOKEN" });
+      if (!data?.ok) throw new Error(data?.error || `Could not send ${asset}.`);
+      const recipientAccount = input.recipientAccount;
+      const recipientStartingBalance = Math.max(0, Number(input.recipientStartingBalance) || 0);
+      const sentAmount = Math.max(0, Number(input.amount) || 0);
+      const recipientBalanceSync = recipientAccount && sentAmount > 0
+        ? (async () => {
+            const targets = await resolvePersonalWalletBalanceTargets(recipientAccount);
+            if (!targets.length) {
+              await invalidatePersonalWalletBalance(recipientAccount);
+              return { synced: false };
+            }
+            return refreshWalletUntilAssetBalance({
+              asset,
+              address: String(recipientAccount.address || input.toAddress),
+              network: String(recipientAccount.network || ""),
+              minimumBalance: recipientStartingBalance + sentAmount,
+              read: () => readPersonalWalletBalances(targets),
+              persist: persistPersonalWalletBalances,
+              invalidate: () => invalidatePersonalWalletBalance(recipientAccount),
+            });
+          })()
+        : input.recipient
+          ? refreshPersonalWalletSourceBalance(input.recipient).then(() => ({ synced: true }))
+          : Promise.resolve({ synced: true });
+      const [recipientSync] = await Promise.all([
+        recipientBalanceSync,
+        refreshPersonalWalletSourceBalance(input.source),
+        loadWalletActivity(),
+      ]);
+      return { ...data, balanceSyncPending: !recipientSync.synced };
+    },
+    onRefreshPersonalWallet: async (source: any) => refreshPersonalWalletSourceBalance(source),
+    onRefreshBankrWallet: loadBankrWallet,
+    onRenamePersonalWallet: async (input: any) => {
+      const name = String(input?.name || "").trim();
+      if (!name) throw new Error("Enter a name for this wallet.");
+      const source = input?.source || {};
+      // A "my wallet" card groups one record per chain; match every underlying
+      // record by address so a multi-chain wallet is renamed consistently.
+      const addresses = new Set([
+        String(source.addr || "").toLowerCase(),
+        ...(Array.isArray(source.addresses) ? source.addresses.map((row: any) => String(row?.[1] || "").toLowerCase()) : []),
+      ].filter(Boolean));
+      const targets = mergedPersonalWallets.filter((wallet: any) => addresses.has(String(wallet?.address || "").toLowerCase()));
+      if (!targets.length) throw new Error("Could not find this wallet to rename.");
+      const now = Date.now();
+      const renamed = targets.map((wallet: any) => ({ ...wallet, name, updatedAt: now }));
+      // (1) Ledger source — drives the optimistic My-wallets list + /api/wallet/personal GET.
+      setPersonalWallets((current) => mergePersonalWalletList([...(Array.isArray(current) ? current : []), ...renamed]));
+      // (2) Dashboard-state source. The card name resolves through mergePersonalWalletSources,
+      // where a non-generic dashboard-state name (e.g. the generated "My Base mainnet wallet"
+      // fallback for a nameless stored wallet) wins over the ledger name — so without writing
+      // the new name here too, the rename is reverted on the next re-merge. updateWallet also
+      // persists walletsByAgent to dashboard state, so the rename survives a reload.
+      for (const wallet of targets) {
+        const agentId = String(wallet?.id || wallet?.agentId || "");
+        if (agentId && effectiveWalletsByAgent?.[agentId]) props.updateWallet?.(agentId, { name });
+      }
+      // (3) Persist to the wallet ledger so every other consumer sees the new name on reload.
+      const writable = renamed.filter((wallet: any) => String(wallet?.id || "").startsWith("user:") && wallet.address && wallet.network);
+      if (writable.length) {
+        const response = await fetch("/api/wallet/personal", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vaultPath: vaultPath || undefined, wallets: writable }) }).catch(() => null);
+        const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+        if (!response?.ok || !data?.ok) throw new Error(data?.error || "Could not save the wallet name.");
+      }
+      return { ok: true, name };
+    },
+    onCreateWallet: async (input: any) => {
+      const chain = String(input.chain || MULTI_CHAIN_WALLET_LABEL);
+      const multiChain = chain === MULTI_CHAIN_WALLET_LABEL;
+      const response = await fetch("/api/wallet/create", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId: `user:${globalThis.crypto?.randomUUID?.() || Date.now()}`, createKind: multiChain ? "multi-chain" : "single-network", network: multiChain ? undefined : chainToNetwork(chain), name: input.name, vaultPath: vaultPath || undefined }) }).catch(() => null);
+      const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+      if (!response?.ok || !data?.ok) throw new Error(data?.error || "Could not create wallet.");
+      await loadPersonalWallets();
       return data;
     },
     onImportWallet: async (input: any) => {
       const secret = String(input.secret || "").trim();
-      const response = await fetch("/api/wallet/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId: input.wallet?.id || `user:${globalThis.crypto?.randomUUID?.() || Date.now()}`, network: chainToNetwork(input.chain || "Base"), name: input.name, secret, importKind: secret.split(/\s+/).length >= 12 ? "recovery-phrase" : "private-key", vaultPath: vaultPath || undefined }) }).catch(() => null);
+      const chain = String(input.chain || MULTI_CHAIN_WALLET_LABEL);
+      const multiChainImport = chain === MULTI_CHAIN_WALLET_LABEL;
+      const recoveryPhrase = secret.split(/\s+/).length >= 12;
+      const accountIndex = Number.isInteger(Number(input.accountIndex)) && Number(input.accountIndex) >= 0 ? Number(input.accountIndex) : 0;
+      if (multiChainImport && !recoveryPhrase) {
+        throw new Error("Multi-chain import requires the wallet's recovery phrase. Choose one chain to import a raw private key.");
+      }
+      const newWalletId = `user:${globalThis.crypto?.randomUUID?.() || Date.now()}`;
+      const agentId = input.wallet?.id || (recoveryPhrase ? recoveryPhraseWalletGroupId(newWalletId, accountIndex) : newWalletId);
+      const response = await fetch("/api/wallet/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId, network: multiChainImport ? undefined : chainToNetwork(chain), name: input.name, secret, importKind: recoveryPhrase ? "recovery-phrase" : "private-key", importTarget: multiChainImport ? "multi-chain" : "single-network", accountIndex, vaultPath: vaultPath || undefined }) }).catch(() => null);
       const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string } | null;
       if (!response?.ok || !data?.ok) throw new Error(data?.error || "Could not import wallet.");
+      await loadPersonalWallets();
+      return data;
+    },
+    onAddWalletChain: async (input: { source: GroupedPersonalWallet; chain: string }) => {
+      // Extend an existing wallet onto a new chain from its vault-stored secret
+      // (no seed re-entry). Any of the group's account ids resolves the family.
+      const agentId = String(input.source?.accounts?.[0]?.id || input.source?.id || "");
+      if (!agentId) throw new Error("Could not resolve this wallet's stored records.");
+      const response = await fetch("/api/wallet/add-chain", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ agentId, network: chainToNetwork(input.chain), name: input.source?.name, vaultPath: vaultPath || undefined }) }).catch(() => null);
+      const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string } | null;
+      if (!response?.ok || !data?.ok) throw new Error(data?.error || "Could not add the chain to this wallet.");
       await loadPersonalWallets();
       return data;
     },
@@ -1008,7 +1253,7 @@ function WalletPanelComponent(props: any) {
       nextUrl.searchParams.set("view", "chat");
       window.location.assign(nextUrl.toString());
     },
-  }), [bankrRecipientAddress, loadHoneyLedger, loadPersonalWallets, loadWalletActivity, props, refreshUsePodTargets, vaultPath]);
+  }), [bankrRecipientAddress, effectiveWalletsByAgent, invalidatePersonalWalletBalance, loadBankrWallet, loadHoneyLedger, loadPersonalWallets, loadWalletActivity, mergedPersonalWallets, persistPersonalWalletBalances, props, readPersonalWalletBalances, refreshPersonalWalletSourceBalance, refreshUsePodTargets, refreshWalletBalance, resolvePersonalWalletBalanceTargets, vaultPath]);
   const navigateFromDropInShelf = useCallback((id: string) => {
     if (typeof window === "undefined") return;
     const nextView = walletViewForShelf(id);
@@ -1020,6 +1265,18 @@ function WalletPanelComponent(props: any) {
   return (
     <section aria-label="Wallets" style={{ position: "fixed", inset: 0, zIndex: 90, background: "#0c0d11" }}>
       <WalletsView runtimeData={runtimeData} actions={walletActions} onNavigate={navigateFromDropInShelf} />
+      {llmFundingAgentId ? (
+        <WalletSelectModal
+          pickables={llmFundingPickables}
+          getSurvivalSnapshot={getSurvivalSnapshot}
+          currentId={llmFundingCurrentId}
+          onConfirm={setLlmFundingSource}
+          onClose={() => setLlmFundingAgentId("")}
+          title="LLM Funding Source"
+          subtitle="Choose which local wallet pays HivemindOS Models for this agent. Personal wallets and configured agent wallets can both be used."
+          confirmLabel="Use for LLM calls"
+        />
+      ) : null}
     </section>
   );
 }

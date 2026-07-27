@@ -1,0 +1,18 @@
+{
+  "webhooks": {
+    "hive-copy-trading": {
+      "description": "Verified HivemindOS copy-trading signals — paper mode",
+      "readOnly": true,
+      "allowedRecipients": {
+        "evm": [],
+        "solana": []
+      },
+      "allowedIps": [],
+      "rateLimit": {
+        "perMinute": 5,
+        "perDay": 100
+      },
+      "maxPayloadBytes": 4096
+    }
+  }
+}

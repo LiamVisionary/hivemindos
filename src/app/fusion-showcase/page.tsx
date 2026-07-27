@@ -77,7 +77,7 @@ const fusionSkills: FusionSkillCard[] = [
     slug: "hive-workflow-fusion",
     description: "Builds and runs an adaptive execution graph for a multi-step task, choosing operators, sequencing handoffs, verifying artifacts, and requiring real delivery receipts.",
     signal: "End-to-end orchestration",
-    accent: "#b07f1c",
+    accent: "#e6bb5c",
     kind: "workflow",
   },
   {

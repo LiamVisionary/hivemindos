@@ -1,0 +1,18 @@
+{
+  "upstreamName": "Product Analytics Audit",
+  "upstreamSlug": "product-analytics-audit",
+  "hiveSlug": "product-analytics-audit",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/research/hivemindos/product-analytics-audit",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-16T23:02:02Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional research skills",
+  "sourcePath": "packaged-skills/optional/research/hivemindos/product-analytics-audit",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Removes the personal audit reference and app-specific env key names in favor of YOUR_APP_* placeholders.",
+    "Generalizes runtime-specific credential discovery and chat-delivery notes.",
+    "Genericizes the cross-domain PostHog identity handoff reference to placeholder domains while keeping the implementation pattern intact."
+  ]
+}

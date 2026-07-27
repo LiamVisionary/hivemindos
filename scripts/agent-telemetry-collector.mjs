@@ -23,7 +23,7 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
-import { constants, watch } from "node:fs";
+import { constants, readFileSync, watch } from "node:fs";
 import { connect } from "node:net";
 import {
   arch,
@@ -59,9 +59,100 @@ import {
 import { agentDid, signWorkReceipt } from "./agent-identity.mjs";
 import { createConfigureSyncthingFolder } from "./syncthing-configure.mjs";
 import { createSyncthingRepair } from "./syncthing-repair.mjs";
-import bonjourService from "bonjour-service";
+import {
+  portableStateManifest,
+  portableStateRuntimes,
+  packPortableState,
+  importPortableTar,
+  backupPortableState,
+  restorePortableState,
+  listBackups,
+  reconcilePortableState,
+  unpackTarToDir,
+} from "./lib/runtime-portable-state.mjs";
+import { createHostedAppsCache } from "./lib/hosted-apps-cache.mjs";
+import { APP_BUILDER_CONTRACT_VERSION, runLocalAppBuilderAction } from "./lib/app-builder.mjs";
+import { reconcileAppBuilderRuntimesAtBoot } from "./lib/app-builder-boot-reconcile.mjs";
+import { createAsyncTtlCache } from "./lib/async-ttl-cache.mjs";
+import { createCollectorMaintenance } from "./lib/collector-maintenance.mjs";
+import { collectorUpdateCommand } from "./lib/collector-update-command.mjs";
+import { readCollectorAppVersion } from "./lib/collector-source-version.mjs";
+import { startSelfReloadWatcher } from "./lib/collector-self-reload.mjs";
+import { resolveHiveEnvAddCommand } from "./lib/hive-env-add-command.mjs";
+import { launchCollectorUpdate } from "./lib/collector-update-launcher.mjs";
+import {
+  recordCollectorTelemetry,
+  safeTelemetryText,
+  summarizeHermesDbSessionTimeline,
+  summarizeHermesProcessPayload,
+} from "./lib/hermes-api-proxy-telemetry.mjs";
+import { createHermesCliStreamProtocol } from "./lib/hermes-cli-stream-protocol.mjs";
+import {
+  hermesApiMessages,
+  hermesApiSelectionMatchesAgent,
+  hermesApiSessionHeaders,
+  hermesSessionIdFromResponse,
+} from "./lib/hermes-api-request-routing.mjs";
+import { discoverLocalOpenAiServers } from "./lib/local-openai-server-discovery.mjs";
+import { createCollectorMessagingChannelBridge } from "./lib/collector-messaging-channels.mjs";
+import {
+  hermesProfileName,
+  readHermesModelSelection,
+  setHermesModelAssignment,
+} from "./lib/hermes-model-settings.mjs";
+import {
+  hermesAgentUsesCodex,
+  repairHermesCodexAuth,
+} from "./lib/hermes-codex-auth-recovery.mjs";
+import { resolvePreferredOpenAiAgentSelection } from "./lib/openai-provider-routing.mjs";
+import { mapWithConcurrency, processResourceStats } from "./lib/fd-safety.mjs";
+import { readCodexRuntimeIntegrationStatus } from "./lib/codex-app-server-models.mjs";
+// systemStats also accumulates a short rolling cpu/ram/net history (while /health
+// is actively polled) so the dashboard Telemetry sparklines show a real trend.
+import { systemStats } from "./lib/system-stats.mjs";
+import { tailnetSelfNode, tailnetSelfOwner, tailscaleStatusJson } from "./lib/tailnet-self.mjs";
+import {
+  createSyncthingApiKeyResolver,
+  defaultSyncthingConfigCandidates,
+} from "./lib/syncthing-api-key.mjs";
+import { isMacosProtectedAppDataPath } from "./lib/macos-privacy-paths.mjs";
+import {
+  FleetMachinePolicyError,
+  claimFleetPolicyMaster,
+  effectiveFleetAccess,
+  fleetMachinePolicyFailureSummary,
+  fleetMachinePolicyHealthSummary,
+  fleetMachinePolicyPrompt,
+  fleetMachinePolicyPublicView,
+  fleetPolicyNeedsIsolatedHermes,
+  readFleetMachinePolicy,
+  releaseFleetPolicyMaster,
+  resolveFleetAccessRequest,
+  updateFleetMachinePolicy,
+} from "./lib/fleet-machine-policy.mjs";
+import { fleetPolicySpawnEnv, prepareFleetSharedEnvChat } from "./lib/fleet-shared-env-access.mjs";
+// NOTE: bonjour-service is imported LAZILY inside advertiseHubMdns() (its only use),
+// not at top level. A -SkipDeps app-driven collector install (Windows) has no
+// node_modules, and a failed top-level import would crash the whole collector at
+// startup — so /health never comes up and the setup wizard hangs waiting for it.
 
-const { Bonjour } = bonjourService;
+// Last-resort process guards. In the 2026-07-03 NYC incident a spawn EBADF
+// thrown inside the /health exec path became an unhandled rejection that
+// killed the daemon, and every fleet watchdog probe re-triggered it after
+// relaunch — a crash loop that lasted hours. This daemon is fleet-critical:
+// log the failure loudly (stack included) and keep serving.
+process.on("uncaughtException", (error, origin) => {
+  console.error(
+    `[collector] ${origin || "uncaughtException"} (kept alive):`,
+    error?.stack || error,
+  );
+});
+process.on("unhandledRejection", (reason) => {
+  console.error(
+    "[collector] unhandledRejection (kept alive):",
+    reason instanceof Error ? reason.stack : reason,
+  );
+});
 
 const execFileAsync = promisify(execFile);
 const collectorOnly = /^(1|true|yes)$/i.test(
@@ -69,10 +160,13 @@ const collectorOnly = /^(1|true|yes)$/i.test(
 );
 const port = Number(process.env.AGENT_TELEMETRY_PORT || 8787);
 const host = process.env.AGENT_TELEMETRY_HOST || "0.0.0.0";
-const appDir = resolve(join(fileURLToPath(import.meta.url), "..", ".."));
+const collectorSourcePath = fileURLToPath(import.meta.url);
+const appDir = resolve(join(collectorSourcePath, "..", ".."));
+const hermesHivemindStreamBridge = join(appDir, "scripts", "hermes-hivemind-stream.py");
 const collectorStartedAtMs = Date.now();
 const collectorStartedAt = new Date(collectorStartedAtMs).toISOString();
 const defaultHermesDir = process.env.HERMES_HOME || join(homedir(), ".hermes");
+const hermesAgentProjectDir = join(defaultHermesDir, "hermes-agent");
 const defaultOpenClawDir =
   process.env.OPENCLAW_HOME || join(homedir(), ".openclaw");
 const defaultAeonDir =
@@ -85,6 +179,22 @@ const HERMES_EMPTY_TRANSCRIPT_MESSAGE =
 const chatTimeoutMs = Number(
   process.env.AGENT_TELEMETRY_CHAT_TIMEOUT_MS || 20 * 60_000,
 );
+const collectorMaintenance = createCollectorMaintenance({
+  reservationTtlMs: Number(
+    process.env.AGENT_TELEMETRY_UPDATE_RESERVATION_TTL_MS ||
+      Math.max(10 * 60_000, chatTimeoutMs + 2 * 60_000),
+  ),
+});
+const activeCollectorChatRuns = collectorMaintenance.activeChatRuns;
+const activeCollectorUpdateReservation = collectorMaintenance.activeUpdateReservation;
+const beginCollectorChatRun = collectorMaintenance.beginChatRun;
+const collectorMaintenanceState = collectorMaintenance.state;
+const releaseCollectorUpdateReservation = collectorMaintenance.releaseUpdate;
+const reserveCollectorUpdate = collectorMaintenance.reserveUpdate;
+const skillInventoryCache = createAsyncTtlCache({
+  ttlMs: Number(process.env.AGENT_TELEMETRY_SKILL_INVENTORY_CACHE_MS || 60_000),
+  load: () => scanInstalledSkills(),
+});
 const sessionDiscoveryTimeoutMs = Number(
   process.env.AGENT_TELEMETRY_SESSION_DISCOVERY_TIMEOUT_MS || 15_000,
 );
@@ -96,12 +206,42 @@ const hermesApiPort = Number(
     8642,
 );
 const hermesApiBaseUrl = `http://${hermesApiHost}:${hermesApiPort}`;
+// The Hermes gateway's api_server (port 8642) requires a Bearer matching its
+// API_SERVER_KEY on every request, even on loopback. The gateway authoritatively
+// loads that key from ${HERMES_HOME:-~/.hermes}/.env at startup; this collector
+// runs under launchd whose plist never sets it, so reading the same file is the
+// only way to stay in sync across key rotations and plist regens. Without it the
+// gateway 401s every forwarded /chat with "rejected invalid API key".
+function readApiServerKeyFromHermesEnv() {
+  try {
+    const text = readFileSync(join(defaultHermesDir, ".env"), "utf8");
+    for (const line of text.split(/\r?\n/)) {
+      const match = line.match(/^\s*API_SERVER_KEY\s*=\s*(.*)$/);
+      if (!match) continue;
+      let value = match[1].trim();
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      if (value) return value;
+    }
+  } catch {
+    // No ~/.hermes/.env (e.g. a machine without Hermes) — fall through to "".
+  }
+  return "";
+}
 const hermesApiKey =
   process.env.AGENT_TELEMETRY_HERMES_API_KEY ||
   process.env.API_SERVER_KEY ||
+  readApiServerKeyFromHermesEnv() ||
   "";
 const hermesApiStartTimeoutMs = Number(
   process.env.AGENT_TELEMETRY_HERMES_API_START_TIMEOUT_MS || 15_000,
+);
+const hermesApiHealthTimeoutMs = Number(
+  process.env.AGENT_TELEMETRY_HERMES_API_HEALTH_TIMEOUT_MS || 2_500,
 );
 const hermesChatMode = (
   process.env.AGENT_TELEMETRY_HERMES_CHAT_MODE || "api"
@@ -210,6 +350,9 @@ const skillProviderRoots = [
     ],
   },
 ];
+
+const allowCollectorAppDataReads =
+  process.env.AGENT_TELEMETRY_ALLOW_APP_DATA_READS === "1";
 const skippedSkillDirs = new Set([
   ".git",
   "node_modules",
@@ -238,6 +381,19 @@ const maxSkillFiles = Number(
 const maxSkillFileBytes = Number(
   process.env.AGENT_TELEMETRY_MAX_SKILL_FILE_BYTES || 5 * 1024 * 1024,
 );
+// Skill scans must be bounded: on the 2026-07-03 NYC box a runaway mirror left
+// 28k skill dirs, and summarizing every SKILL.md via one big Promise.all pegged
+// the process fd table in bursts (libuv opens queue ahead of reads/closes), so
+// concurrent child spawns died with EBADF — including /health's git exec.
+const skillScanConcurrency = Number(
+  process.env.AGENT_TELEMETRY_SKILL_SCAN_CONCURRENCY || 16,
+);
+const maxSkillScanFiles = Number(
+  process.env.AGENT_TELEMETRY_MAX_SKILL_SCAN_FILES || 10_000,
+);
+const skillScanWarnThreshold = Number(
+  process.env.AGENT_TELEMETRY_SKILL_SCAN_WARN_THRESHOLD || 2_000,
+);
 const skillAutoSyncPollMs = Number(
   process.env.AGENT_TELEMETRY_SKILL_AUTO_SYNC_POLL_MS || 10_000,
 );
@@ -253,16 +409,28 @@ const appVersionCacheMs = Number(
 const installedRuntimesCacheMs = Number(
   process.env.AGENT_TELEMETRY_RUNTIME_PROBE_CACHE_MS || 300_000,
 );
+// /snapshot is polled independently by the dashboard, the fleet watchdog, and
+// peer collectors; each uncached hit re-scans every agent (files + sqlite + a
+// ps sweep per agent). A few seconds of staleness is invisible to 30s+ pollers
+// but collapses overlapping bursts into one computation.
+const snapshotCacheMs = Number(
+  process.env.AGENT_TELEMETRY_SNAPSHOT_CACHE_MS || 4_000,
+);
+const psScanCacheMs = Number(
+  process.env.AGENT_TELEMETRY_PS_SCAN_CACHE_MS || 3_500,
+);
 const hostedAppProbeTimeoutMs = Number(
   process.env.AGENT_TELEMETRY_APP_PROBE_TIMEOUT_MS || 900,
 );
 const hostedAppScanTimeoutMs = Number(
   process.env.AGENT_TELEMETRY_APP_SCAN_TIMEOUT_MS || 4_000,
 );
+// 22000 = Syncthing BEP: a TLS-only sync protocol, never an app. Probing it
+// makes syncthing journal a TLS-handshake warning pair on every sweep.
 const excludedHostedAppPorts = new Set(
   String(
     process.env.AGENT_TELEMETRY_APP_EXCLUDE_PORTS ||
-      `${port},22,53,631,5353,5900`,
+      `${port},22,53,631,5353,5900,22000`,
   )
     .split(",")
     .map((value) => Number(value.trim()))
@@ -286,14 +454,71 @@ const skillAutoSyncSignatures = new Map();
 let machineIdPromise = null;
 let healthPayloadCache = null;
 let healthPayloadPromise = null;
+let snapshotAllCache = null;
+let snapshotAllPromise = null;
+let psScanCache = null;
+let psScanPromise = null;
 let appVersionCache = null;
 let appVersionPromise = null;
 let installedRuntimesCache = null;
 let installedRuntimesPromise = null;
 const hostedAppAssetUrls = new Map();
+const slashCommandCatalogCache = new Map();
+const slashCommandCatalogCacheMs = Number(
+  process.env.AGENT_TELEMETRY_SLASH_COMMAND_CACHE_MS || 60_000,
+);
+
+const HERMES_SLASH_COMMAND_CATALOG_SCRIPT = String.raw`
+import json
+from hermes_cli.commands import COMMAND_REGISTRY, _is_gateway_available, _iter_plugin_command_entries, _resolve_config_gates
+
+commands = []
+seen = set()
+overrides = _resolve_config_gates()
+
+def add(name, description, category, args_hint=None, aliases=None):
+    clean = str(name or "").strip().lstrip("/")
+    if not clean or clean in seen:
+        return
+    seen.add(clean)
+    commands.append({
+        "name": clean,
+        "description": str(description or f"Run /{clean}"),
+        "category": str(category or "Other"),
+        "argsHint": str(args_hint).strip() if args_hint else None,
+        "aliases": [str(alias) for alias in (aliases or []) if str(alias).strip()],
+    })
+
+for command in COMMAND_REGISTRY:
+    if _is_gateway_available(command, overrides):
+        add(command.name, command.description, command.category, command.args_hint, command.aliases)
+
+for name, description, args_hint in _iter_plugin_command_entries():
+    add(name, description, "Plugins", args_hint)
+
+try:
+    from agent.skill_commands import scan_skill_commands
+    for slash_name, info in sorted(scan_skill_commands().items()):
+        add(slash_name, info.get("description", "Hermes skill"), "Skills")
+except Exception:
+    pass
+
+print(json.dumps({"commands": commands}))
+`;
 
 function expandHome(path) {
   return path?.replace(/^~(?=$|\/)/, homedir());
+}
+
+// Demo/capture fixtures (remotion capture-real-ux.mjs) seed agent profiles
+// with localDataDir "/capture/<id>" alongside *.capture.invalid telemetry
+// hosts. The filesystem root is unwritable, so letting that placeholder
+// become HERMES_HOME kills every chat turn inside pathlib mkdir — treat it
+// as unset so callers fall back to the runtime's real home dir.
+function sanitizeLocalDataDir(value) {
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!raw || raw === "/capture" || raw.startsWith("/capture/")) return "";
+  return raw;
 }
 
 function validPort(value) {
@@ -351,24 +576,66 @@ async function stableMachineId() {
   return machineIdPromise;
 }
 
-function safeAgentEnv(value) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  return Object.fromEntries(
-    Object.entries(value).filter(
-      ([key, entry]) =>
-        /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && typeof entry === "string",
-    ),
-  );
+const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+function cleanProcessEnvValue(value) {
+  if (typeof value !== "string") return undefined;
+  return value.replace(/\0/g, "");
 }
 
-function runtimeProcessEnv(extra = {}) {
+function sanitizeProcessEnvEntries(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const env = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (!ENV_KEY_PATTERN.test(key)) continue;
+    const cleaned = cleanProcessEnvValue(entry);
+    if (cleaned !== undefined) env[key] = cleaned;
+  }
+  return env;
+}
+
+function safeAgentEnv(value) {
+  return sanitizeProcessEnvEntries(value);
+}
+
+function runtimeProcessEnv(extra = {}, options = {}) {
+  const inherited = { ...process.env };
+  for (const key of options.excludeKeys ?? []) delete inherited[key];
   const pathParts = [dirname(process.execPath), process.env.PATH].filter(
     Boolean,
   );
-  return {
-    ...process.env,
+  return sanitizeProcessEnvEntries({
+    ...inherited,
     PATH: pathParts.join(delimiter),
     ...extra,
+  });
+}
+
+function hermesSafeFileSearchRoots(hermesHome = defaultHermesDir, fleetPolicy = null) {
+  const sharedBrainAllowed = !fleetPolicy?.authority
+    || effectiveFleetAccess(fleetPolicy).sharedBrain === "allow";
+  const explicit = process.env.HERMES_SAFE_FILE_SEARCH_ROOTS?.trim();
+  if (explicit && sharedBrainAllowed) return explicit;
+  return [
+    sharedBrainAllowed ? defaultSyncPath : "",
+    appDir,
+    sharedBrainAllowed ? join(homedir(), "Documents") : "",
+    sharedBrainAllowed ? join(homedir(), ".hivemindos") : "",
+    hermesHome,
+  ]
+    .map((root) => resolve(expandHome(root)))
+    .filter(Boolean)
+    .filter((root, index, roots) => roots.indexOf(root) === index)
+    .join(delimiter);
+}
+
+function hermesPrivacyGuardEnv(hermesHome = defaultHermesDir, fleetPolicy = null) {
+  return {
+    HERMES_SAFE_FILE_SEARCH_ROOTS: hermesSafeFileSearchRoots(hermesHome, fleetPolicy),
+    HERMES_ALLOW_HOME_WIDE_FILE_SEARCH:
+      process.env.HERMES_ALLOW_HOME_WIDE_FILE_SEARCH || "0",
+    HERMES_ALLOW_MACOS_APP_DATA_SEARCH:
+      process.env.HERMES_ALLOW_MACOS_APP_DATA_SEARCH || "0",
   };
 }
 
@@ -391,24 +658,14 @@ async function readSharedHiveEnvForSpawn() {
     if (value.length >= 2 && ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'")))) {
       value = value.slice(1, -1);
     }
+    value = cleanProcessEnvValue(value) ?? "";
     if (value) values[key] = value;
   }
   return values;
 }
 
-function hermesContextEnv(agentEnv, context) {
-  const dashboardContext = typeof context === "string" ? context.trim() : "";
-  if (!dashboardContext) return agentEnv;
-  const existingPrompt =
-    typeof agentEnv.HERMES_EPHEMERAL_SYSTEM_PROMPT === "string"
-      ? agentEnv.HERMES_EPHEMERAL_SYSTEM_PROMPT.trim()
-      : "";
-  return {
-    ...agentEnv,
-    HERMES_EPHEMERAL_SYSTEM_PROMPT: [existingPrompt, dashboardContext]
-      .filter(Boolean)
-      .join("\n\n"),
-  };
+async function currentFleetMachinePolicy() {
+  return readFleetMachinePolicy({ machineId: await stableMachineId().catch(() => "") });
 }
 
 function stripHermesCliMetadata(value) {
@@ -425,99 +682,6 @@ function isHermesCliNoiseLine(value) {
   return /tirith security scanner enabled but not available/i.test(
     String(value || ""),
   );
-}
-
-function couldBeSessionIdPrefix(value) {
-  const candidate = String(value || "")
-    .replace(/^\s+/, "")
-    .toLowerCase();
-  return (
-    "session_id:".startsWith(candidate) || candidate.startsWith("session_id:")
-  );
-}
-
-function createHermesCliOutputSanitizer(write) {
-  let pendingLineStart = "";
-  let filteringLineStart = true;
-
-  function emit(value) {
-    if (value) write(value);
-  }
-
-  function process(input) {
-    let text = String(input || "");
-    while (text) {
-      if (filteringLineStart) {
-        pendingLineStart += text;
-        text = "";
-
-        const prefix = pendingLineStart.match(/^\s*session_id:\s*\S+\s*/i);
-        if (prefix) {
-          const rest = pendingLineStart.slice(prefix[0].length);
-          pendingLineStart = "";
-          if (rest.startsWith("\r\n")) {
-            text = rest.slice(2);
-            filteringLineStart = true;
-          } else if (rest.startsWith("\n") || rest.startsWith("\r")) {
-            text = rest.slice(1);
-            filteringLineStart = true;
-          } else {
-            text = rest;
-            filteringLineStart = false;
-          }
-          continue;
-        }
-
-        const newline = pendingLineStart.match(/\r?\n/);
-        if (newline?.index !== undefined) {
-          const end = newline.index + newline[0].length;
-          const line = pendingLineStart.slice(0, end);
-          const rest = pendingLineStart.slice(end);
-          if (
-            !/^\s*session_id:\s*\S+\s*\r?\n$/i.test(line) &&
-            !isHermesCliNoiseLine(line)
-          )
-            emit(line);
-          pendingLineStart = "";
-          text = rest;
-          filteringLineStart = true;
-          continue;
-        }
-
-        if (!couldBeSessionIdPrefix(pendingLineStart)) {
-          emit(pendingLineStart);
-          pendingLineStart = "";
-          filteringLineStart = false;
-        }
-        continue;
-      }
-
-      const newlineIndex = text.search(/\r?\n/);
-      if (newlineIndex === -1) {
-        emit(text);
-        text = "";
-        continue;
-      }
-      const newlineText = text.slice(newlineIndex).startsWith("\r\n")
-        ? "\r\n"
-        : text.slice(newlineIndex, newlineIndex + 1);
-      const end = newlineIndex + newlineText.length;
-      const line = text.slice(0, end);
-      if (!isHermesCliNoiseLine(line)) emit(line);
-      text = text.slice(end);
-      filteringLineStart = true;
-    }
-  }
-
-  function flush() {
-    if (!pendingLineStart) return;
-    const sanitized = pendingLineStart.replace(/^\s*session_id:\s*\S+\s*/i, "");
-    if (sanitized && !isHermesCliNoiseLine(sanitized)) emit(sanitized);
-    pendingLineStart = "";
-    filteringLineStart = true;
-  }
-
-  return { process, flush };
 }
 
 function slugify(value) {
@@ -847,8 +1011,10 @@ async function processCwd(pid) {
 async function projectSearchRoots(startDir) {
   let current = resolve(startDir || ".");
   const home = homedir();
+  if (isMacosProtectedAppDataPath(current)) return [];
   const roots = [];
   for (let depth = 0; depth < 8; depth += 1) {
+    if (isMacosProtectedAppDataPath(current)) break;
     roots.push(current);
     const parent = dirname(current);
     if (
@@ -925,7 +1091,7 @@ async function importHermesAgentSoul(agent) {
   if (agent.runtime !== "hermes" || agent.soulPrompt?.trim()) {
     return agent;
   }
-  const profileDir = expandHome(agent.localDataDir || "");
+  const profileDir = expandHome(sanitizeLocalDataDir(agent.localDataDir));
   if (!profileDir) return agent;
   const soul = await readHermesSoul(profileDir);
   return soul ? { ...agent, soulPrompt: soul } : agent;
@@ -992,6 +1158,9 @@ async function isImageUrl(url) {
       });
     }
     const contentType = response.headers.get("content-type") || "";
+    // Only headers matter here — drop the body so the probe socket is
+    // released immediately instead of dangling until the abort timeout.
+    await response.body?.cancel().catch(() => {});
     return (
       response.ok &&
       (contentType.startsWith("image/") ||
@@ -1024,7 +1193,10 @@ async function iconFromManifest(baseUrl, html) {
     const response = await fetch(manifestUrl, {
       signal: AbortSignal.timeout(hostedAppProbeTimeoutMs),
     });
-    if (!response.ok) return "";
+    if (!response.ok) {
+      await response.body?.cancel().catch(() => {});
+      return "";
+    }
     const manifest = await response.json();
     const icons = Array.isArray(manifest?.icons) ? manifest.icons : [];
     const icon =
@@ -1067,9 +1239,14 @@ async function probeHostedApp(listener, scheme) {
   });
   const contentType = response.headers.get("content-type") || "";
   const server = response.headers.get("server") || "";
-  const text = contentType.includes("text/html")
-    ? await response.text().catch(() => "")
-    : "";
+  let text = "";
+  if (contentType.includes("text/html")) {
+    text = await response.text().catch(() => "");
+  } else {
+    // Non-HTML bodies are never read; cancel so discovery doesn't hold one
+    // socket per probed listener until the abort timeout fires.
+    await response.body?.cancel().catch(() => {});
+  }
   const title = titleFromHtml(text, `${listener.process} on ${listener.port}`);
   const iconUrl =
     (await discoverHostedAppIcon(url, text)) ||
@@ -1170,6 +1347,8 @@ async function probeServiceHealth(listener, scheme) {
     serviceKind,
   };
 }
+
+const discoverHostedAppsCached = createHostedAppsCache(() => discoverHostedApps());
 
 async function discoverHostedApps() {
   const listeners = await localTcpListeners();
@@ -1311,6 +1490,15 @@ function runtimeCapabilitiesFor(runtime) {
       setup: true,
     };
   }
+  if (runtime === "codex") {
+    return {
+      status: true,
+      runs: true,
+      backgroundTasks: true,
+      codexRuntime: true,
+      modelSelection: true,
+    };
+  }
   if (runtime === HIVE_RUNTIME_ID) {
     return {
       status: true,
@@ -1355,28 +1543,51 @@ async function configuredRuntimeAgents() {
   return importHermesAgentSouls(agents.map(normalizeRuntimeAgent));
 }
 
-async function detectedOpenClawAgent() {
+async function detectedOpenClawAgents(coveredAgentIds = new Set()) {
   const configPath = join(defaultOpenClawDir, "openclaw.json");
   const configReadable = await access(configPath, constants.R_OK)
     .then(() => true)
     .catch(() => false);
-  if (!configReadable) return null;
+  if (!configReadable) return [];
   const config = await readOpenClawConfig();
-  const modelRef = defaultOpenClawAgentModel(config);
-  const parsed = modelRef ? splitOpenClawModelRef(modelRef) : null;
-  return normalizeRuntimeAgent({
-    id: `openclaw-${hostname()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")}`,
-    name: "OpenClaw",
-    runtime: "openclaw",
-    gatewayUrl: "ws://127.0.0.1:18789",
-    agentId: "main",
-    localDataDir: defaultOpenClawDir,
-    provider: parsed?.provider,
-    model: parsed?.model,
-    beeRole: "queen",
-    workerClass: "general",
+  const configured = Array.isArray(asRecord(config.agents).list)
+    ? asRecord(config.agents).list.map(asRecord)
+    : [];
+  const entries = configured.length ? configured : [{ id: "main" }];
+  const defaultModelRef = defaultOpenClawAgentModel(config);
+  const hostSlug = hostname()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-");
+  return entries.flatMap((entry) => {
+    const agentId = String(entry.id || "main").trim();
+    if (!agentId || coveredAgentIds.has(agentId)) return [];
+    const modelRef =
+      (typeof entry.model === "string" && entry.model.trim()) ||
+      defaultModelRef;
+    const parsed = modelRef ? splitOpenClawModelRef(modelRef) : null;
+    const agentDir =
+      typeof entry.agentDir === "string" && entry.agentDir.trim()
+        ? entry.agentDir.trim()
+        : agentId === "main"
+          ? defaultOpenClawDir
+          : join(defaultOpenClawDir, "agents", agentId);
+    return [
+      normalizeRuntimeAgent({
+        id: agentId === "main" ? `openclaw-${hostSlug}` : `openclaw-${agentId}`,
+        name:
+          (typeof entry.name === "string" && entry.name.trim()) ||
+          (agentId === "main" ? "OpenClaw" : agentId),
+        runtime: "openclaw",
+        gatewayUrl: "ws://127.0.0.1:18789",
+        agentId,
+        localDataDir: agentDir,
+        provider: parsed?.provider,
+        model: parsed?.model,
+        // Queen is a dashboard-level choice — a detected runtime must never self-declare it.
+        beeRole: "worker",
+        workerClass: "general",
+      }),
+    ];
   });
 }
 
@@ -1783,6 +1994,14 @@ async function deleteRuntimeAgent(input) {
 }
 
 function jsonResponse(response, status, payload) {
+  // Handler catch blocks land here after headers (or a partial body) may have
+  // already gone out; a second writeHead throws ERR_HTTP_HEADERS_SENT and
+  // killed the whole daemon in the 2026-07-03 NYC incident (env-sync export).
+  // Just close out whatever is left of the response instead.
+  if (response.headersSent) {
+    if (!response.writableEnded) response.end();
+    return;
+  }
   response
     .writeHead(status, { "content-type": "application/json" })
     .end(JSON.stringify(payload));
@@ -1989,13 +2208,18 @@ function streamingChatProcessPayload(value) {
   return null;
 }
 
+// execFile can THROW synchronously (spawn EBADF/EMFILE when the process runs
+// out of file descriptors) instead of rejecting, so a .catch() chained on its
+// promise never fires. During the 2026-07-03 NYC incident that throw escaped
+// through readAppVersion → /health and killed the daemon. Wrap the whole body
+// so ANY failure — sync or async — returns the fallback.
 async function execJson(cmd, args, fallback) {
-  const { stdout } = await execFileAsync(cmd, args, {
-    timeout: 5000,
-    maxBuffer: 1_200_000,
-  }).catch(() => ({ stdout: "" }));
-  if (!stdout.trim()) return fallback;
   try {
+    const { stdout } = await execFileAsync(cmd, args, {
+      timeout: 5000,
+      maxBuffer: 1_200_000,
+    });
+    if (!stdout.trim()) return fallback;
     return JSON.parse(stdout);
   } catch {
     return fallback;
@@ -2007,36 +2231,27 @@ async function execText(cmd, args, fallback = "") {
 }
 
 async function execTextAt(cwd, cmd, args, fallback = "") {
-  const { stdout } = await execFileAsync(cmd, args, {
-    cwd,
-    timeout: 5000,
-    maxBuffer: 300_000,
-  }).catch(() => ({ stdout: fallback }));
-  return stdout.trim();
+  try {
+    const { stdout } = await execFileAsync(cmd, args, {
+      cwd,
+      timeout: 5000,
+      maxBuffer: 300_000,
+    });
+    return stdout.trim();
+  } catch {
+    return typeof fallback === "string" ? fallback.trim() : fallback;
+  }
 }
 
 async function readAppVersion() {
-  const [commit, branch, dirty, remoteCommit, projects] = await Promise.all([
-    execText("git", ["rev-parse", "HEAD"]),
-    execText("git", ["rev-parse", "--abbrev-ref", "HEAD"]),
-    execText("git", ["status", "--porcelain"]),
-    execText("git", ["ls-remote", "origin", "main"]),
-    readProjectCheckouts(),
-  ]);
-  const latestCommit = remoteCommit.split(/\s+/)[0] || commit;
-  return {
+  // Handles git and git-free (archive-bootstrapped) checkouts; see
+  // scripts/lib/collector-source-version.mjs.
+  return readCollectorAppVersion({
     appDir,
-    commit,
-    shortCommit: commit.slice(0, 7),
-    branch,
-    dirty: dirty.length > 0,
-    latestCommit,
-    latestShortCommit: latestCommit.slice(0, 7),
-    updateCommand: collectorOnly
-      ? `cd ${JSON.stringify(appDir)} && ./scripts/update-hivemindos.sh --collector-only`
-      : `cd ${JSON.stringify(appDir)} && git pull --ff-only && pnpm install --frozen-lockfile && ./scripts/install-telemetry-collector.sh`,
-    projects,
-  };
+    collectorOnly,
+    execText,
+    readProjectCheckouts,
+  });
 }
 
 async function readProjectRegistryProjects() {
@@ -2055,7 +2270,11 @@ async function readProjectRegistryProjects() {
 
 async function readProjectCheckouts() {
   const projects = (await readProjectRegistryProjects()).slice(0, 25);
-  const checkouts = await Promise.all(projects.map(projectCheckoutStatus));
+  // Each status runs up to 4 git children at once; a bounded pool keeps the
+  // /health version refresh from bursting ~100 spawns (~300 pipe fds) at once.
+  const checkouts = await mapWithConcurrency(projects, 6, (project) =>
+    projectCheckoutStatus(project),
+  );
   return checkouts.filter(Boolean);
 }
 
@@ -2138,30 +2357,12 @@ function safeFolderId(value) {
   );
 }
 
-function syncthingConfigCandidates() {
-  return [
+const readSyncthingApiKey = createSyncthingApiKeyResolver({
+  configCandidates: [
     process.env.SYNCTHING_CONFIG_PATH,
-    join(
-      homedir(),
-      "Library",
-      "Application Support",
-      "Syncthing",
-      "config.xml",
-    ),
-    join(homedir(), ".local", "state", "syncthing", "config.xml"),
-    join(homedir(), ".config", "syncthing", "config.xml"),
-  ].filter(Boolean);
-}
-
-async function readSyncthingApiKey() {
-  if (process.env.SYNCTHING_API_KEY) return process.env.SYNCTHING_API_KEY;
-  for (const path of syncthingConfigCandidates()) {
-    const raw = await readFile(path, "utf8").catch(() => "");
-    const match = raw.match(/<apikey>([^<]+)<\/apikey>/i);
-    if (match?.[1]) return match[1].trim();
-  }
-  return "";
-}
+    ...(allowCollectorAppDataReads ? defaultSyncthingConfigCandidates() : []),
+  ].filter(Boolean),
+});
 
 async function resolveSyncthingBin() {
   if (process.env.SYNCTHING_BIN) return process.env.SYNCTHING_BIN;
@@ -2190,31 +2391,10 @@ async function syncthingInstalled() {
 }
 
 async function resolveHiveEnvAdd() {
-  // On Windows hive-env-add is a Python script with no extension, so it can't be
-  // spawned directly; setup.ps1 installs a hive-env-add.cmd wrapper. Prefer the
-  // .cmd there (run via shell — see runHiveEnvImport) so env writes work.
-  const isWin = process.platform === "win32";
-  const candidates = [
-    process.env.HIVE_ENV_ADD_BIN,
-    ...(isWin ? [join(homedir(), ".local", "bin", "hive-env-add.cmd")] : []),
-    join(homedir(), ".local", "bin", "hive-env-add"),
-    ...(isWin ? [join(appDir, "scripts", "hive-env-add.cmd")] : []),
-    join(appDir, "scripts", "hive-env-add"),
-  ].filter(Boolean);
-  for (const path of candidates) {
-    try {
-      await access(path, constants.X_OK);
-      return { ready: true, command: path, shell: isWin && path.toLowerCase().endsWith(".cmd") };
-    } catch {
-      // try next
-    }
-  }
-  return {
-    ready: false,
-    command: "hive-env-add",
-    error:
-      "hive-env-add is not installed or executable. Run setup on this machine.",
-  };
+  // Cross-platform command + base argv (Windows Python-launcher handling lives
+  // in the lib module). Callers spread `envSync.args` before their own flags
+  // and pass `shell: Boolean(envSync.shell)`.
+  return resolveHiveEnvAddCommand({ appDir });
 }
 
 function encodeEnvEntries(entries) {
@@ -2239,6 +2419,7 @@ function runHiveEnvImport({ entries, scope = "agent", runtime = "generic" }) {
     const child = spawn(
       envSync.command,
       [
+        ...envSync.args,
         "--import-stdin",
         "--scope",
         scope,
@@ -2249,8 +2430,9 @@ function runHiveEnvImport({ entries, scope = "agent", runtime = "generic" }) {
       ],
       {
         stdio: ["pipe", "ignore", "pipe"],
-        // .cmd wrappers (Windows) must run through the shell to be spawnable.
+        // .cmd wrappers (Windows fallback) must run through the shell to be spawnable.
         shell: Boolean(envSync.shell),
+        windowsHide: true,
       },
     );
     let errorText = "";
@@ -2296,9 +2478,20 @@ function runHiveEnvE2eSync({ key, value, scope = "all", runtime = "generic" }) {
       );
       return;
     }
+    // The shell fallback joins argv into one unescaped cmd.exe line, so a
+    // caller-supplied value must not be able to break out of the assignment.
+    if (envSync.shell && !/^[A-Za-z0-9._:@/+-]*$/.test(value)) {
+      rejectSync(
+        new Error(
+          "E2E env value contains characters that cannot be passed safely through the Windows shell fallback.",
+        ),
+      );
+      return;
+    }
     const child = spawn(
       envSync.command,
       [
+        ...envSync.args,
         `${key}=${value}`,
         "--scope",
         scope,
@@ -2308,6 +2501,8 @@ function runHiveEnvE2eSync({ key, value, scope = "all", runtime = "generic" }) {
       ],
       {
         stdio: ["ignore", "pipe", "pipe"],
+        shell: Boolean(envSync.shell),
+        windowsHide: true,
       },
     );
     let output = "";
@@ -2365,10 +2560,12 @@ async function runEnvSyncMaintenance(reason) {
     }
     const { stdout } = await execFileAsync(
       envSync.command,
-      ["--sync-maintenance"],
+      [...envSync.args, "--sync-maintenance"],
       {
         timeout: 240_000,
         maxBuffer: 1_000_000,
+        shell: Boolean(envSync.shell),
+        windowsHide: true,
       },
     );
     const lines = stdout.trim().split("\n").filter(Boolean);
@@ -2477,11 +2674,9 @@ function reliabilityRecordFreshness(record) {
 }
 
 async function tailnetPeerHosts() {
-  const { stdout } = await execFileAsync("tailscale", ["status", "--json"], {
-    timeout: 5000,
-    maxBuffer: 1_500_000,
-  });
-  const status = JSON.parse(stdout);
+  // Shared multi-candidate CLI resolution: a bare "tailscale" is not on PATH
+  // for LaunchAgent/scheduled-task collectors (macOS GUI app, sparse PATH).
+  const status = await tailscaleStatusJson();
   const peers = Object.values(status?.Peer ?? {});
   const hosts = [];
   for (const peer of peers) {
@@ -2492,6 +2687,69 @@ async function tailnetPeerHosts() {
     if (host) hosts.push(host);
   }
   return hosts;
+}
+
+// The tailnet owner (LoginName) of THIS node, used to gate cross-machine runtime
+// state transfers to the node owner's own fleet. Mirrors the trust model of
+// hivemind-linkd shell.go requireTailnetSelfUser. Lives in lib/tailnet-self.mjs
+// so it resolves the tailscale CLI from its known install locations — a bare
+// "tailscale" is ENOENT under the sparse PATH of a LaunchAgent/scheduled-task
+// collector, which made this gate fail closed for every linkd-stamped request
+// (surfaced in the dashboard as remote task-permission approvals erroring out).
+async function selfTailnetOwner() {
+  return tailnetSelfOwner();
+}
+
+// Gate for cross-machine runtime-state transfers (the first authenticated
+// mutation endpoints on this collector). Trust model:
+//   - A request carrying x-hivemind-link-user / x-tailscale-user came through a
+//     hivemind-linkd / tailscale-serve front, which DELETES any inbound copy and
+//     re-stamps the value from a verified WhoIs — so the header is unforgeable.
+//     Allow only when it matches THIS node's own tailnet owner (same-user fleet).
+//   - A request with NO such header from loopback is the local app/script on
+//     this machine — trusted (same user, same box).
+//   - A request with NO such header from a non-loopback address is a raw tailnet
+//     dial that bypassed the identity front (e.g. collector bound 0.0.0.0 with no
+//     linkd). FAIL CLOSED — we cannot attribute it.
+async function requireLinkOwner(request) {
+  const user = String(
+    request.headers["x-hivemind-link-user"] || request.headers["x-tailscale-user"] || "",
+  ).trim();
+  if (user) {
+    const self = await selfTailnetOwner();
+    if (!self) {
+      return { ok: false, status: 503, error: "Runtime-state transfer unavailable: this node's tailnet owner is unknown." };
+    }
+    if (user.toLowerCase() !== self.toLowerCase()) {
+      return { ok: false, status: 403, error: "Runtime-state transfer is limited to this node's owner." };
+    }
+    return { ok: true, user, via: "linkd" };
+  }
+  if (isLoopbackRemote(request)) {
+    return { ok: true, user: "local", via: "loopback" };
+  }
+  return {
+    ok: false,
+    status: 403,
+    error: "Runtime-state transfer requires a hivemind-linkd-fronted tailnet identity.",
+  };
+}
+
+async function fleetPolicyCaller(request) {
+  const auth = await requireLinkOwner(request);
+  if (!auth.ok) return auth;
+  if (auth.via === "loopback") {
+    const machineId = await stableMachineId().catch(() => "");
+    if (!machineId) return { ok: false, status: 503, error: "This hub's stable machine identity is unavailable." };
+    return { ok: true, caller: { id: `machine:${machineId}`, label: hostname() } };
+  }
+  const node = String(
+    request.headers["x-hivemind-link-node"] || request.headers["x-tailscale-node"] || "",
+  ).replace(/[\r\n\0]/g, " ").trim().toLowerCase();
+  if (!node) {
+    return { ok: false, status: 403, error: "Machine policy changes require an attributed Hivemind Link node." };
+  }
+  return { ok: true, caller: { id: `tailnet-node:${node}`, label: node } };
 }
 
 async function runReliabilitySync(reason) {
@@ -2514,7 +2772,10 @@ async function runReliabilitySync(reason) {
           `http://${host}:${reliabilityPeerPort || port}/reliability/openrouter`,
           { signal: AbortSignal.timeout(reliabilityPeerTimeoutMs) },
         );
-        if (!peerResponse.ok) continue;
+        if (!peerResponse.ok) {
+          await peerResponse.body?.cancel().catch(() => {});
+          continue;
+        }
         payload = await peerResponse.json();
       } catch {
         continue;
@@ -2583,6 +2844,201 @@ function startReliabilitySync() {
   }, reliabilitySyncIntervalMs);
 }
 
+// ---------------------------------------------------------------------------
+// Runtime-state sync (Mechanism C) — off by default. Pull-only: each machine
+// pulls every same-owner peer's portable runtime state and reconciles it into
+// its OWN runtime dirs (backup-first, 3-way merge, conflict-copies). No machine
+// writes another's disk; every transport is linkd-owner-gated (requireLinkOwner
+// on the peer's export endpoint). Mirrors runReliabilitySync's loop/gossip shape.
+// ---------------------------------------------------------------------------
+const runtimeStateSyncConfigPath = join(homedir(), ".hivemindos", "runtime-state-sync.json");
+const runtimeStateSyncIntervalMs = Number(
+  process.env.AGENT_TELEMETRY_RUNTIME_SYNC_INTERVAL_MS || 10 * 60_000,
+);
+const runtimeStatePeerPort = Number(process.env.AGENT_TELEMETRY_RUNTIME_SYNC_PEER_PORT || 0);
+let runtimeStateSyncConfig = null;
+let runtimeStateSyncRunning = false;
+let runtimeStateSyncTimer = null;
+let runtimeStateSyncStatus = {
+  enabled: false,
+  intervalMs: runtimeStateSyncIntervalMs,
+  lastRunAt: null,
+  lastReason: null,
+  lastSummary: null,
+  lastError: null,
+};
+
+function isRuntimeStateSyncEnabled() {
+  return runtimeStateSyncConfig?.enabled === true;
+}
+
+function syncableRuntimes(config = runtimeStateSyncConfig) {
+  const all = portableStateRuntimes();
+  const wanted = Array.isArray(config?.runtimes) && config.runtimes.length ? config.runtimes : all;
+  return all.filter((r) => wanted.includes(r));
+}
+
+async function readRuntimeStateSyncConfig() {
+  const raw = await readFile(runtimeStateSyncConfigPath, "utf-8").catch(() => "");
+  if (!raw.trim()) return { enabled: false, runtimes: [] };
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      enabled: parsed.enabled === true,
+      runtimes: Array.isArray(parsed.runtimes) ? parsed.runtimes.map(String) : [],
+    };
+  } catch {
+    return { enabled: false, runtimes: [] };
+  }
+}
+
+async function writeRuntimeStateSyncConfig(config) {
+  await mkdir(dirname(runtimeStateSyncConfigPath), { recursive: true, mode: 0o700 });
+  await writeFile(runtimeStateSyncConfigPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600 });
+}
+
+// Pull one peer's export for one runtime and reconcile it locally.
+async function reconcileRuntimeFromPeer(runtime, host, selfMachineId, seen) {
+  let response;
+  try {
+    response = await fetch(
+      `http://${host}:${runtimeStatePeerPort || port}/runtimes/${runtime}/export-runtime-state`,
+      { method: "POST", signal: AbortSignal.timeout(30_000) },
+    );
+  } catch {
+    return null; // peer offline / not reachable
+  }
+  if (!response.ok) {
+    // 403/404/etc — not a same-owner runtime-state collector. Cancel the body
+    // so the socket doesn't dangle for the full 30s abort window.
+    await response.body?.cancel().catch(() => {});
+    return null;
+  }
+  const peerMachineId = String(response.headers.get("x-hivemind-machine-id") || "").trim();
+  if (peerMachineId) {
+    if (peerMachineId === selfMachineId || seen.has(peerMachineId)) {
+      await response.body?.cancel().catch(() => {});
+      return null;
+    }
+    seen.add(peerMachineId);
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const tmpTar = join(
+    homedir(),
+    ".hivemindos",
+    "runtime-sync-tmp",
+    `${runtime}-${randomBytes(6).toString("hex")}.tar.gz`,
+  );
+  await mkdir(dirname(tmpTar), { recursive: true, mode: 0o700 });
+  await writeFile(tmpTar, buffer);
+  const snapDir = join(dirname(tmpTar), `snap-${randomBytes(6).toString("hex")}`);
+  try {
+    await unpackTarToDir(tmpTar, snapDir);
+    const result = await reconcilePortableState(runtime, snapDir, {
+      peerKey: peerMachineId || host,
+      peerLabel: String(host).split(".")[0] || host,
+      sharedVaultPath: defaultSyncPath,
+    });
+    return result;
+  } finally {
+    await rm(tmpTar, { force: true });
+    await rm(snapDir, { recursive: true, force: true });
+  }
+}
+
+async function runRuntimeStateSync(reason) {
+  if (runtimeStateSyncRunning) return runtimeStateSyncStatus;
+  runtimeStateSyncConfig = runtimeStateSyncConfig ?? (await readRuntimeStateSyncConfig());
+  if (!isRuntimeStateSyncEnabled()) return runtimeStateSyncStatus;
+  runtimeStateSyncRunning = true;
+  try {
+    const [selfMachineId, hosts] = await Promise.all([
+      stableMachineId().catch(() => ""),
+      tailnetPeerHosts().catch(() => []),
+    ]);
+    const runtimes = syncableRuntimes();
+    const seen = new Set();
+    let adopted = 0;
+    let deleted = 0;
+    let conflicts = 0;
+    let peersConsulted = 0;
+    for (const runtime of runtimes) {
+      const perRuntimeSeen = new Set(seen);
+      for (const host of hosts) {
+        const result = await reconcileRuntimeFromPeer(runtime, host, selfMachineId, perRuntimeSeen).catch(
+          () => null,
+        );
+        if (!result) continue;
+        peersConsulted += 1;
+        adopted += result.adopted.length;
+        deleted += result.deleted.length;
+        conflicts += result.conflicts.length;
+      }
+    }
+    runtimeStateSyncStatus = {
+      ...runtimeStateSyncStatus,
+      enabled: true,
+      lastRunAt: new Date().toISOString(),
+      lastReason: reason,
+      lastSummary: { runtimes, peersConsulted, adopted, deleted, conflicts },
+      lastError: null,
+    };
+    if (adopted || deleted || conflicts) {
+      console.log(
+        `runtime-state sync (${reason}): adopted ${adopted}, deleted ${deleted}, conflicts ${conflicts} across ${runtimes.length} runtime(s)`,
+      );
+    }
+  } catch (error) {
+    runtimeStateSyncStatus = {
+      ...runtimeStateSyncStatus,
+      lastRunAt: new Date().toISOString(),
+      lastReason: reason,
+      lastError: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    runtimeStateSyncRunning = false;
+  }
+  return runtimeStateSyncStatus;
+}
+
+function stopRuntimeStateSync() {
+  if (runtimeStateSyncTimer) clearInterval(runtimeStateSyncTimer);
+  runtimeStateSyncTimer = null;
+}
+
+function startRuntimeStateSync() {
+  stopRuntimeStateSync();
+  runtimeStateSyncStatus = { ...runtimeStateSyncStatus, enabled: isRuntimeStateSyncEnabled() };
+  if (!isRuntimeStateSyncEnabled()) return;
+  setTimeout(() => {
+    void runRuntimeStateSync("startup");
+  }, 60_000);
+  runtimeStateSyncTimer = setInterval(() => {
+    void runRuntimeStateSync("interval");
+  }, runtimeStateSyncIntervalMs);
+}
+
+async function configureRuntimeStateSync(input) {
+  runtimeStateSyncConfig = {
+    enabled: input.enabled === true,
+    runtimes: Array.isArray(input.runtimes) ? input.runtimes.map(String) : [],
+    updatedAt: new Date().toISOString(),
+  };
+  await writeRuntimeStateSyncConfig(runtimeStateSyncConfig);
+  startRuntimeStateSync();
+  return {
+    ok: true,
+    host: hostname(),
+    enabled: isRuntimeStateSyncEnabled(),
+    runtimes: syncableRuntimes(runtimeStateSyncConfig),
+  };
+}
+
+async function initializeRuntimeStateSync() {
+  runtimeStateSyncConfig = await readRuntimeStateSyncConfig();
+  startRuntimeStateSync();
+}
+
 function startSyncthingDetached() {
   const runner = join(appDir, "scripts", "run-syncthing.sh");
   const child = spawn(runner, [], {
@@ -2594,6 +3050,37 @@ function startSyncthingDetached() {
     },
   });
   child.unref();
+}
+
+async function startSyncthingViaServiceManager() {
+  // The installer-managed service must stay the single owner of the Syncthing
+  // database: a raw detached spawn races the unit for the DB lock and leaves
+  // the loser crash-looping (hel1-2 reached 400k+ restarts). Only fall back
+  // to a detached spawn when no service-manager path works.
+  if (process.platform === "darwin") {
+    await execFileAsync(
+      "launchctl",
+      ["kickstart", `gui/${process.getuid()}/com.hivemindos.syncthing`],
+      { timeout: 10_000 },
+    );
+    return;
+  }
+  if (process.platform === "linux") {
+    await execFileAsync(
+      "systemctl",
+      ["--user", "start", "hivemindos-syncthing.service"],
+      {
+        timeout: 10_000,
+        env: {
+          ...process.env,
+          XDG_RUNTIME_DIR:
+            process.env.XDG_RUNTIME_DIR || `/run/user/${process.getuid()}`,
+        },
+      },
+    );
+    return;
+  }
+  throw new Error(`no syncthing service manager on ${process.platform}`);
 }
 
 async function syncthingFetch(path, options = {}) {
@@ -2637,9 +3124,13 @@ async function waitForSyncthing() {
     } catch {
       if (attempt === 0) {
         try {
-          startSyncthingDetached();
+          await startSyncthingViaServiceManager();
         } catch {
-          // setup normally owns service startup; keep polling.
+          try {
+            startSyncthingDetached();
+          } catch {
+            // setup normally owns service startup; keep polling.
+          }
         }
       }
       await sleep(1_000);
@@ -2952,6 +3443,86 @@ async function resolveHermesBin() {
   return "hermes";
 }
 
+async function resolveHermesPython() {
+  const candidates = [
+    process.env.HERMES_PYTHON,
+    process.platform === "win32"
+      ? join(hermesAgentProjectDir, "venv", "Scripts", "python.exe")
+      : join(hermesAgentProjectDir, "venv", "bin", "python"),
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      await access(candidate, constants.X_OK);
+      return candidate;
+    } catch {
+      // try next
+    }
+  }
+  throw new Error("Hermes' Python runtime was not found.");
+}
+
+async function resolveHermesStreamingLaunch(args) {
+  // Explicit HERMES_BIN overrides are commonly test doubles or custom wrappers;
+  // preserve them unless their owner also supplies the matching Python runtime.
+  if (process.env.HERMES_BIN && !process.env.HERMES_PYTHON) {
+    return { command: await resolveHermesBin(), args };
+  }
+  try {
+    return {
+      command: await resolveHermesPython(),
+      args: [hermesHivemindStreamBridge, ...args],
+    };
+  } catch {
+    return { command: await resolveHermesBin(), args };
+  }
+}
+
+async function repairHermesCodexAuthBeforeChat(agent, hermesHome) {
+  if (!hermesAgentUsesCodex(agent)) return;
+  try {
+    const result = await repairHermesCodexAuth({
+      hermesHome,
+      projectDir: hermesAgentProjectDir,
+      pythonPath: await resolveHermesPython(),
+      execFileAsync,
+    });
+    if (result.status === "repaired") {
+      console.info(
+        `[collector] Recovered Hermes Codex auth for ${hermesHome} from the current Codex CLI login.`,
+      );
+    }
+  } catch (error) {
+    console.warn(
+      `[collector] Hermes Codex auth preflight could not run for ${hermesHome}:`,
+      error instanceof Error ? error.message : error,
+    );
+  }
+}
+
+async function resolveBillingSafeOpenAiAgent(agent, hermesHome, sharedHiveEnv) {
+  const fallbackSelection = await readHermesModelConfig(hermesHome);
+  const selection = resolvePreferredOpenAiAgentSelection({
+    agent,
+    processEnv: process.env,
+    sharedEnv: sharedHiveEnv,
+    fallbackSelection,
+  });
+  if (selection.redirectedFromApiKey) {
+    const agentId = safeTelemetryText(agent.id || agent.agentId || "", 120);
+    console.warn(
+      `[collector] Blocked API-key billing for ${agentId || "an agent"} because ChatGPT OAuth is configured; routing ${selection.requestedProvider || "openai"}/${selection.requestedModel || "default"} through openai-codex instead.`,
+    );
+    void recordCollectorTelemetry("openai.oauth_billing_guard.enforced", {
+      agentId: agentId || null,
+      requestedProvider: safeTelemetryText(selection.requestedProvider, 120),
+      requestedModel: safeTelemetryText(selection.requestedModel, 160),
+      effectiveProvider: "openai-codex",
+      effectiveModel: safeTelemetryText(selection.profile.model || "", 160),
+    });
+  }
+  return selection;
+}
+
 async function resolveChatWorkingDirectory(input) {
   const candidate = typeof input === "string" ? expandHome(input.trim()) : "";
   if (!candidate) return appDir;
@@ -2967,23 +3538,73 @@ function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-async function runHermes(args, timeout = 10_000) {
+async function runHermes(args, timeout = 10_000, envExtra = {}) {
   const { stdout, stderr } = await execFileAsync(
     await resolveHermesBin(),
     args,
     {
       timeout,
       maxBuffer: 2_000_000,
-      env: { ...process.env },
+      env: { ...process.env, ...envExtra },
     },
   );
   return `${stdout}${stderr ? `\n${stderr}` : ""}`.trim();
 }
 
+async function runHermesStdout(args, timeout = 10_000, envExtra = {}) {
+  const { stdout } = await execFileAsync(await resolveHermesBin(), args, {
+    timeout,
+    maxBuffer: 2_000_000,
+    env: { ...process.env, ...envExtra },
+  });
+  return stdout.trim();
+}
+
+async function hermesSlashCommandCatalog(agent = {}) {
+  const hermesHome = expandHome(
+    sanitizeLocalDataDir(agent.localDataDir) || defaultHermesDir,
+  );
+  const cached = slashCommandCatalogCache.get(hermesHome);
+  if (cached && Date.now() - cached.at < slashCommandCatalogCacheMs) {
+    return cached.commands;
+  }
+  const { stdout } = await execFileAsync(
+    await resolveHermesPython(),
+    ["-c", HERMES_SLASH_COMMAND_CATALOG_SCRIPT],
+    {
+      timeout: 10_000,
+      maxBuffer: 2_000_000,
+      env: { ...process.env, HERMES_HOME: hermesHome },
+    },
+  );
+  const parsed = JSON.parse(stdout);
+  const commands = (Array.isArray(parsed?.commands) ? parsed.commands : [])
+    .filter((command) => command && typeof command === "object")
+    .map((command) => ({
+      name: String(command.name || "").trim().replace(/^\/+/, ""),
+      description: String(command.description || "").trim(),
+      category: String(command.category || "Other").trim(),
+      argsHint:
+        typeof command.argsHint === "string" && command.argsHint.trim()
+          ? command.argsHint.trim()
+          : null,
+      aliases: Array.isArray(command.aliases)
+        ? command.aliases
+            .filter((alias) => typeof alias === "string" && alias.trim())
+            .map((alias) => alias.trim())
+        : [],
+    }))
+    .filter((command) => command.name);
+  slashCommandCatalogCache.set(hermesHome, { at: Date.now(), commands });
+  return commands;
+}
+
 async function hermesIntegrationStatus(agent = {}) {
-  const hermesHome = expandHome(agent.localDataDir || defaultHermesDir);
+  const hermesHome = expandHome(
+    sanitizeLocalDataDir(agent.localDataDir) || defaultHermesDir,
+  );
   const diagnostics = [];
-  const [version, tools, config] = await Promise.all([
+  const [version, tools, config, modelSelection] = await Promise.all([
     runHermes(["--version"]).catch((error) => {
       diagnostics.push(
         error instanceof Error ? error.message : "Hermes version check failed.",
@@ -2992,6 +3613,21 @@ async function hermesIntegrationStatus(agent = {}) {
     }),
     runHermes(["tools", "list"]).catch(() => ""),
     readFile(join(hermesHome, "config.yaml"), "utf8").catch(() => ""),
+    resolveHermesPython()
+      .then((pythonPath) =>
+        readHermesModelSelection({
+          hermesHome,
+          projectDir: hermesAgentProjectDir,
+          pythonPath,
+          execFileAsync,
+        }),
+      )
+      .catch((error) => {
+        diagnostics.push(
+          `Hermes model inventory unavailable: ${error instanceof Error ? error.message : "model discovery failed."}`,
+        );
+        return undefined;
+      }),
   ]);
   const toolEnabled = (name) =>
     new RegExp(`✓\\s+enabled\\s+${escapeRegExp(name)}\\b`).test(tools);
@@ -3020,8 +3656,17 @@ async function hermesIntegrationStatus(agent = {}) {
       codexRuntime: true,
       kanbanDecompose: true,
       setup: true,
+      modelSelection: true,
     },
+    modelSelection,
     integrations: {
+      modelSelection: {
+        supported: true,
+        enabled: Boolean(modelSelection?.providers?.length),
+        detail: modelSelection?.providers?.length
+          ? `Hermes reported ${modelSelection.providers.length} configured provider${modelSelection.providers.length === 1 ? "" : "s"}.`
+          : "Hermes did not report any configured model providers.",
+      },
       sessionSearch: {
         supported: true,
         enabled: sessionStoreReadable,
@@ -3104,6 +3749,15 @@ async function hermesIntegrationStatus(agent = {}) {
     diagnostics,
   };
 }
+
+const collectorMessagingChannels = createCollectorMessagingChannelBridge({
+  defaultHermesDir,
+  expandHome,
+  getHostname: hostname,
+  localAgents,
+  runHermesStdout,
+  sanitizeLocalDataDir,
+});
 
 function asRecord(value) {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -3327,6 +3981,16 @@ async function openClawIntegrationStatus(agent = {}) {
   };
 }
 
+async function codexIntegrationStatus(agent = {}) {
+  const command = await resolveCliRuntimeCommand(process.env.CODEX_BIN, "codex");
+  return readCodexRuntimeIntegrationStatus({
+    command,
+    env: runtimeProcessEnv(),
+    configuredModel: String(agent.model || "").trim(),
+    capabilities: runtimeCapabilitiesFor("codex"),
+  });
+}
+
 function localOpenAiBase(agent = {}) {
   return (
     String(agent.gatewayUrl || "http://127.0.0.1:1234")
@@ -3337,7 +4001,7 @@ function localOpenAiBase(agent = {}) {
 
 function localOpenAiProviderName(agent = {}) {
   const provider = String(agent.provider || "openai-compatible").trim();
-  if (provider === "lm-studio") return "LM Studio";
+  if (provider === "lm-studio") return "Local";
   if (provider === "ollama") return "Ollama";
   if (provider === "vllm") return "vLLM";
   if (provider === "llamacpp") return "llama.cpp";
@@ -3347,6 +4011,278 @@ function localOpenAiProviderName(agent = {}) {
 function localOpenAiHeaders(agent = {}) {
   const token = String(agent.token || "").trim();
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+const LOCAL_MODEL_INSTALL_CATALOG = [
+  {
+    id: "swarm-scout-12b-q4-k-m",
+    displayName: "Swarm Scout 12B",
+    provider: "huggingface",
+    hfRepo: "LiamVisionary/swarm-sovereign-scout-12b-GGUF",
+    sourceUrl: "https://huggingface.co/LiamVisionary/swarm-sovereign-scout-12b-GGUF",
+    quantization: "Q4_K_M",
+    filename: "swarm-sovereign-scout-Q4_K_M.gguf",
+    params: "12B",
+    sizeGb: 7.4,
+    minRamGb: 16,
+    description:
+      "Coding and agentic local model tuned for terminal workflows, reasoning, and autonomous task loops.",
+    roles: ["chat"],
+    capabilities: ["text-generation", "tool-use", "coding"],
+    tags: ["coding", "agentic", "reasoning", "GGUF"],
+    matchKeys: [
+      "swarm-scout-12b-q4-k-m",
+      "swarm-sovereign-scout-Q4_K_M.gguf",
+      "swarm-sovereign-scout-Q4_K_M",
+      "LiamVisionary/swarm-sovereign-scout-12b-GGUF",
+      "swarm-sovereign-scout-12b-GGUF:Q4_K_M",
+    ],
+  },
+  {
+    id: "synto-qwen3-5-9b-q4-k-m",
+    displayName: "Syntho Qwen3.5 9B",
+    provider: "huggingface",
+    hfRepo: "lmstudio-community/Qwen3.5-9B-GGUF",
+    sourceUrl: "https://huggingface.co/lmstudio-community/Qwen3.5-9B-GGUF",
+    quantization: "Q4_K_M",
+    filename: "Qwen3.5-9B-Q4_K_M.gguf",
+    params: "9B",
+    sizeGb: 5.6,
+    minRamGb: 16,
+    contextLength: 262144,
+    description:
+      "Low-resource Syntho option for lighter machines; fastest local setup, with more review expected.",
+    roles: ["synto", "synthesis"],
+    capabilities: ["text-generation", "structured-output", "synthesis"],
+    tags: ["synto", "qwen3.5", "local", "low-resource", "GGUF"],
+    matchKeys: [
+      "synto-qwen3-5-9b-q4-k-m",
+      "Qwen3.5-9B-Q4_K_M.gguf",
+      "Qwen3.5-9B-Q4_K_M",
+      "lmstudio-community/Qwen3.5-9B-GGUF",
+      "Qwen3.5-9B-GGUF:Q4_K_M",
+    ],
+  },
+  {
+    id: "synto-qwen3-30b-a3b-q4-k-m",
+    displayName: "Syntho Qwen3 30B A3B",
+    provider: "huggingface",
+    hfRepo: "unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF",
+    sourceUrl:
+      "https://huggingface.co/unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF",
+    quantization: "Q4_K_M",
+    filename: "Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf",
+    params: "30B A3B",
+    sizeGb: 18.6,
+    minRamGb: 32,
+    contextLength: 131072,
+    description:
+      "Recommended local Syntho tier from the temp-vault trial: strong synthesis quality at a practical memory cost.",
+    roles: ["synto", "synthesis"],
+    capabilities: ["text-generation", "structured-output", "synthesis"],
+    tags: ["synto", "qwen3", "moe", "recommended", "GGUF"],
+    matchKeys: [
+      "synto-qwen3-30b-a3b-q4-k-m",
+      "Qwen3-30B-A3B-Instruct-2507-Q4_K_M.gguf",
+      "Qwen3-30B-A3B-Instruct-2507-Q4_K_M",
+      "unsloth/Qwen3-30B-A3B-Instruct-2507-GGUF",
+      "Qwen3-30B-A3B-Instruct-2507-GGUF:Q4_K_M",
+      "qwen3:30b",
+    ],
+  },
+  {
+    id: "synto-qwen3-6-27b-q4-k-m",
+    displayName: "Syntho Qwen3.6 27B",
+    provider: "huggingface",
+    hfRepo: "lmstudio-community/Qwen3.6-27B-GGUF",
+    sourceUrl: "https://huggingface.co/lmstudio-community/Qwen3.6-27B-GGUF",
+    quantization: "Q4_K_M",
+    filename: "Qwen3.6-27B-Q4_K_M.gguf",
+    params: "27B",
+    sizeGb: 16.6,
+    minRamGb: 32,
+    contextLength: 262144,
+    description:
+      "Experimental Syntho option; quality is promising only when reasoning/thinking output is disabled.",
+    roles: ["synto", "synthesis"],
+    capabilities: ["text-generation", "structured-output", "synthesis"],
+    tags: ["synto", "qwen3.6", "experimental", "GGUF"],
+    matchKeys: [
+      "synto-qwen3-6-27b-q4-k-m",
+      "Qwen3.6-27B-Q4_K_M.gguf",
+      "Qwen3.6-27B-Q4_K_M",
+      "lmstudio-community/Qwen3.6-27B-GGUF",
+      "Qwen3.6-27B-GGUF:Q4_K_M",
+      "qwen3.6:27b",
+    ],
+  },
+  {
+    id: "synto-qwen3-6-35b-a3b-q4-k-m",
+    displayName: "Syntho Qwen3.6 35B A3B",
+    provider: "huggingface",
+    hfRepo: "lmstudio-community/Qwen3.6-35B-A3B-GGUF",
+    sourceUrl:
+      "https://huggingface.co/lmstudio-community/Qwen3.6-35B-A3B-GGUF",
+    quantization: "Q4_K_M",
+    filename: "Qwen3.6-35B-A3B-Q4_K_M.gguf",
+    params: "35B A3B",
+    sizeGb: 21.2,
+    minRamGb: 32,
+    contextLength: 262144,
+    description:
+      "High-ceiling local Syntho candidate for larger machines; keep review on until it beats the 30B tier in fixtures.",
+    roles: ["synto", "synthesis"],
+    capabilities: ["text-generation", "structured-output", "synthesis"],
+    tags: ["synto", "qwen3.6", "moe", "high-ceiling", "GGUF"],
+    matchKeys: [
+      "synto-qwen3-6-35b-a3b-q4-k-m",
+      "Qwen3.6-35B-A3B-Q4_K_M.gguf",
+      "Qwen3.6-35B-A3B-Q4_K_M",
+      "lmstudio-community/Qwen3.6-35B-A3B-GGUF",
+      "Qwen3.6-35B-A3B-GGUF:Q4_K_M",
+      "qwen3.6:35b-a3b",
+    ],
+  },
+];
+
+const activeLocalModelDownloadStates = new Set(["queued", "downloading"]);
+const localModelDownloadJobs = new Map();
+
+function localModelCatalogEntry(id) {
+  return LOCAL_MODEL_INSTALL_CATALOG.find((entry) => entry.id === id);
+}
+
+function lmStudioDownloadArgsForCatalogEntry(entry) {
+  return ["get", `${entry.sourceUrl}@${entry.quantization}`, "--gguf", "-y"];
+}
+
+function cloneLocalModelDownloadJob(job) {
+  return { ...job };
+}
+
+function patchLocalModelDownloadJob(jobId, patch = {}) {
+  const record = localModelDownloadJobs.get(jobId);
+  if (!record) return;
+  record.job = { ...record.job, ...patch, updatedAt: new Date().toISOString() };
+}
+
+function snapshotLocalModelDownloadJobs() {
+  return [...localModelDownloadJobs.values()]
+    .map((record) => cloneLocalModelDownloadJob(record.job))
+    .sort((left, right) =>
+      String(right.startedAt || "").localeCompare(String(left.startedAt || "")),
+    )
+    .slice(0, 12);
+}
+
+function activeLocalModelDownload(modelId) {
+  return [...localModelDownloadJobs.values()].find(
+    (record) =>
+      record.job.modelId === modelId &&
+      activeLocalModelDownloadStates.has(record.job.state),
+  );
+}
+
+function parseLocalModelDownloadProgress(message) {
+  const match = String(message || "").match(/(\d+(?:\.\d+)?)\s*%/);
+  if (!match) return undefined;
+  const progressPercent = Number(match[1]);
+  return Number.isFinite(progressPercent)
+    ? Math.max(0, Math.min(100, progressPercent))
+    : undefined;
+}
+
+function rememberLocalModelDownloadOutput(jobId, chunk) {
+  const record = localModelDownloadJobs.get(jobId);
+  if (!record) return;
+  const lines = String(chunk || "")
+    .split(/\r?\n|\r/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (!lines.length) return;
+  record.log.push(...lines);
+  if (record.log.length > 20) record.log.splice(0, record.log.length - 20);
+  const message = lines.at(-1) || "";
+  patchLocalModelDownloadJob(jobId, {
+    message,
+    progressPercent:
+      parseLocalModelDownloadProgress(message) ?? record.job.progressPercent,
+  });
+}
+
+function latestLocalModelDownloadMessage(record) {
+  return record?.log?.at(-1) || record?.job?.message;
+}
+
+function localModelHardwareSnapshot() {
+  const bytesToGb = (value) => Math.round((value / 1_000_000_000) * 10) / 10;
+  const currentPlatform = platform();
+  const currentArch = arch();
+  return {
+    totalRamGb: bytesToGb(totalmem()),
+    freeRamGb: bytesToGb(freemem()),
+    platform: currentPlatform,
+    arch: currentArch,
+    appleSilicon: currentPlatform === "darwin" && currentArch === "arm64",
+  };
+}
+
+function normalizeCatalogMatch(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function lmStudioModelMatchesCatalogEntry(model, entry) {
+  const rawHaystack = [
+    model.key,
+    model.displayName,
+    model.paramsString || "",
+    model.format || "",
+  ]
+    .join(" ")
+    .toLowerCase();
+  const compactHaystack = normalizeCatalogMatch(rawHaystack);
+  return entry.matchKeys.some((matchKey) => {
+    const rawNeedle = String(matchKey || "").toLowerCase();
+    const compactNeedle = normalizeCatalogMatch(matchKey);
+    return (
+      rawHaystack.includes(rawNeedle) ||
+      Boolean(compactNeedle && compactHaystack.includes(compactNeedle))
+    );
+  });
+}
+
+function annotateLocalModelInstallCatalog(models = []) {
+  return LOCAL_MODEL_INSTALL_CATALOG.map((entry) => {
+    const installed = models.find(
+      (model) =>
+        model.source !== "openai-server" && !model.remote && lmStudioModelMatchesCatalogEntry(model, entry),
+    );
+    return {
+      ...entry,
+      installed: Boolean(installed),
+      loaded: Boolean(installed?.loaded),
+      installedModelKey: installed?.key,
+      loadedInstanceIds: installed?.loadedInstanceIds,
+    };
+  });
+}
+
+function localModelHubStatus(models = []) {
+  return {
+    catalog: annotateLocalModelInstallCatalog(models),
+    downloads: snapshotLocalModelDownloadJobs(),
+    hardware: localModelHardwareSnapshot(),
+  };
+}
+
+function localModelRuntimeEnv() {
+  return runtimeProcessEnv({
+    PATH: [join(homedir(), ".lmstudio", "bin"), process.env.PATH]
+      .filter(Boolean)
+      .join(delimiter),
+  });
 }
 
 async function resolveLmsBin() {
@@ -3368,15 +4304,213 @@ async function resolveLmsBin() {
   return "lms";
 }
 
+async function execLocalRuntimeText(command, args = [], timeout = 8_000, env = runtimeProcessEnv()) {
+  const { stdout, stderr } = await execFileAsync(command, args, {
+    timeout,
+    maxBuffer: 4_000_000,
+    env,
+  });
+  return [stdout, stderr]
+    .map((chunk) => String(chunk || "").trim())
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+}
+
+async function runLmsText(args, timeout = 15_000) {
+  return execLocalRuntimeText(await resolveLmsBin(), args, timeout, localModelRuntimeEnv());
+}
+
+function compactLocalRuntimeOutput(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function compactLocalRuntimeError(error, fallback) {
+  return (error instanceof Error ? compactLocalRuntimeOutput(error.message) : fallback).slice(0, 280) || fallback;
+}
+
+function localRuntimeOutputSaysRunning(value) {
+  if (/\b(not running|not started|stopped|offline|down)\b/i.test(String(value || ""))) return false;
+  return /\b(running|started|listening|ready)\b/i.test(String(value || ""));
+}
+
+function lmStudioInstallCommandForPlatform(currentPlatform = platform()) {
+  if (currentPlatform === "win32") return "irm https://lmstudio.ai/install.ps1 | iex";
+  if (currentPlatform === "darwin" || currentPlatform === "linux") return "curl -fsSL https://lmstudio.ai/install.sh | bash";
+  return "";
+}
+
+function ollamaInstallCommandForPlatform(currentPlatform = platform()) {
+  return currentPlatform === "linux" ? "curl -fsSL https://ollama.com/install.sh | sh" : "";
+}
+
+function localOpenAiStatusUrl(agent = {}) {
+  const baseUrl = localOpenAiBase(agent);
+  const statusPath = String(agent.statusPath || "/v1/models");
+  return `${baseUrl}${statusPath.startsWith("/") ? statusPath : `/${statusPath}`}`;
+}
+
+function localOpenAiServerPort(agent = {}) {
+  try {
+    const parsed = new URL(localOpenAiBase(agent));
+    return parsed.port || (parsed.protocol === "https:" ? "443" : "80");
+  } catch {
+    return "1234";
+  }
+}
+
+async function probeLocalOpenAiModels(agent = {}, timeoutMs = 4_000) {
+  try {
+    const payload = await fetchJsonWithTimeout(
+      localOpenAiStatusUrl(agent),
+      { headers: localOpenAiHeaders(agent) },
+      timeoutMs,
+    );
+    const models = Array.isArray(payload.data)
+      ? payload.data.map((model) => String(model?.id || "").trim()).filter(Boolean)
+      : [];
+    return { ok: true, modelCount: models.length, models };
+  } catch (error) {
+    return { ok: false, error: compactLocalRuntimeError(error, "OpenAI endpoint is not reachable.") };
+  }
+}
+
+async function waitForLocalOpenAiModels(agent = {}, timeoutMs = 30_000) {
+  const started = Date.now();
+  let lastProbe = { ok: false, error: "OpenAI endpoint is not reachable yet." };
+  while (Date.now() - started < timeoutMs) {
+    lastProbe = await probeLocalOpenAiModels(agent);
+    if (lastProbe.ok) return lastProbe;
+    await new Promise((resolveWait) => setTimeout(resolveWait, 900));
+  }
+  return lastProbe;
+}
+
+async function localRuntimeSetupStatus(agent = {}) {
+  const hardware = localModelHardwareSnapshot();
+  const lmInstallCommand = lmStudioInstallCommandForPlatform(hardware.platform);
+  let lmsPresent = false;
+  let lmsVersion = "";
+  let lmsError = "";
+  try {
+    lmsVersion = compactLocalRuntimeOutput(await runLmsText(["--version"], 5_000));
+    lmsPresent = true;
+  } catch (error) {
+    lmsError = compactLocalRuntimeError(error, "LM Studio CLI is not installed.");
+  }
+  let daemonRunning = false;
+  let serverRunning = false;
+  if (lmsPresent) {
+    try {
+      daemonRunning = localRuntimeOutputSaysRunning(await runLmsText(["daemon", "status"], 5_000));
+    } catch {
+      daemonRunning = false;
+    }
+    try {
+      serverRunning = localRuntimeOutputSaysRunning(await runLmsText(["server", "status"], 5_000));
+    } catch {
+      serverRunning = false;
+    }
+  }
+  const lmProbe = await probeLocalOpenAiModels(agent);
+  const lmStudio = {
+    id: "lm-studio",
+    label: "LM Studio",
+    present: lmsPresent,
+    ready: lmProbe.ok,
+    running: lmProbe.ok || serverRunning,
+    version: lmsVersion || undefined,
+    detail: lmProbe.ok
+      ? `OpenAI endpoint is ready${typeof lmProbe.modelCount === "number" ? ` with ${lmProbe.modelCount} model${lmProbe.modelCount === 1 ? "" : "s"}` : ""}.`
+      : lmsPresent
+        ? daemonRunning
+          ? "LM Studio is installed and the daemon is running, but the local OpenAI server is stopped."
+          : "LM Studio is installed, but the daemon/server are not ready."
+        : "LM Studio is not installed yet.",
+    error: lmProbe.ok ? undefined : lmsPresent ? lmProbe.error : lmsError,
+    installable: Boolean(lmInstallCommand),
+    installCommand: lmInstallCommand || undefined,
+    manualInstallUrl: "https://lmstudio.ai/download",
+  };
+
+  let ollamaPresent = false;
+  let ollamaVersion = "";
+  let ollamaError = "";
+  try {
+    ollamaVersion = compactLocalRuntimeOutput(await execLocalRuntimeText("ollama", ["--version"], 5_000));
+    ollamaPresent = true;
+  } catch (error) {
+    ollamaError = compactLocalRuntimeError(error, "Ollama CLI is not installed.");
+  }
+  let ollamaReady = false;
+  try {
+    await fetchJsonWithTimeout("http://127.0.0.1:11434/api/tags", {}, 4_000);
+    ollamaReady = true;
+    ollamaPresent = true;
+  } catch (error) {
+    if (ollamaPresent) ollamaError = compactLocalRuntimeError(error, "Ollama API is not reachable.");
+  }
+  const ollamaInstallCommand = ollamaInstallCommandForPlatform(hardware.platform);
+  const ollama = {
+    id: "ollama",
+    label: "Ollama",
+    present: ollamaPresent,
+    ready: ollamaReady,
+    running: ollamaReady,
+    version: ollamaVersion || undefined,
+    detail: ollamaReady ? "Ollama API is reachable." : ollamaPresent ? "Ollama is installed, but its local API is not reachable." : "Ollama is not installed.",
+    error: ollamaReady ? undefined : ollamaError,
+    installable: Boolean(ollamaInstallCommand),
+    installCommand: ollamaInstallCommand || undefined,
+    manualInstallUrl: "https://ollama.com/download",
+  };
+
+  let llamaPresent = false;
+  let llamaVersion = "";
+  let llamaError = "";
+  try {
+    llamaVersion = compactLocalRuntimeOutput(await execLocalRuntimeText("llama-server", ["--version"], 5_000));
+    llamaPresent = true;
+  } catch (error) {
+    llamaError = compactLocalRuntimeError(error, "llama.cpp server CLI is not installed.");
+  }
+  const llamaCpp = {
+    id: "llama-cpp",
+    label: "llama.cpp",
+    present: llamaPresent,
+    ready: false,
+    running: false,
+    version: llamaVersion || undefined,
+    detail: llamaPresent ? "llama-server is installed; start an OpenAI-compatible server to use it as a custom Local endpoint." : "llama.cpp is not installed.",
+    error: llamaPresent ? undefined : llamaError,
+    installable: false,
+    manualInstallUrl: "https://github.com/ggml-org/llama.cpp",
+  };
+
+  return {
+    recommendedProvider: "lm-studio",
+    recommendedLabel: "LM Studio",
+    recommendationReason: "Best fit for this Local provider because HivemindOS can install GGUF models, load/unload them, start the OpenAI-compatible server, and control LM Link through lms.",
+    ready: lmStudio.ready,
+    installable: Boolean(lmStudio.installable),
+    installCommand: lmStudio.installCommand,
+    manualInstallUrl: lmStudio.manualInstallUrl,
+    serverUrl: localOpenAiBase(agent),
+    hardware,
+    providers: [lmStudio, ollama, llamaCpp],
+    checkedAt: new Date().toISOString(),
+  };
+}
+
 async function runLmsJson(args, timeout = 15_000) {
   const { stdout } = await execFileAsync(await resolveLmsBin(), args, {
     timeout,
     maxBuffer: 8_000_000,
-    env: runtimeProcessEnv({
-      PATH: [join(homedir(), ".lmstudio", "bin"), process.env.PATH]
-        .filter(Boolean)
-        .join(delimiter),
-    }),
+    env: localModelRuntimeEnv(),
   });
   const trimmed = stdout.trim();
   if (!trimmed) return [];
@@ -3440,6 +4574,11 @@ function normalizeLmStudioInventory(payload = {}) {
           ? Number(model.size_bytes ?? model.sizeBytes)
           : null,
         format: model.format ?? null,
+        remote: Boolean(model.deviceIdentifier),
+        source: model.deviceIdentifier ? "lm-link" : "lm-studio",
+        sourceLabel: model.deviceIdentifier ? "LM Link" : "LM Studio",
+        canLoad: true,
+        canUnload: true,
       };
     })
     .filter(Boolean);
@@ -3453,8 +4592,9 @@ function normalizeLmStudioInventory(payload = {}) {
 
 function markLoadedLmStudioModels(models, loadedModels = []) {
   const loadedRefs = new Set(
-    loadedModels.flatMap((model) =>
-      [
+    loadedModels.flatMap((model) => {
+      if (typeof model === "string") return [model.trim()].filter(Boolean);
+      return [
         model?.identifier,
         model?.modelKey,
         model?.key,
@@ -3462,8 +4602,8 @@ function markLoadedLmStudioModels(models, loadedModels = []) {
         model?.displayName,
       ]
         .map((value) => String(value || "").trim())
-        .filter(Boolean),
-    ),
+        .filter(Boolean);
+    }),
   );
   return models.map((model) =>
     loadedRefs.has(model.key) || loadedRefs.has(model.displayName)
@@ -3478,15 +4618,225 @@ function markLoadedLmStudioModels(models, loadedModels = []) {
   );
 }
 
+function loadedModelsFromLmLinkStatus(payload) {
+  return (Array.isArray(payload?.peers) ? payload.peers : []).flatMap((peer) =>
+    Array.isArray(peer?.loadedModels) ? peer.loadedModels : [],
+  );
+}
+
 async function readLmStudioCliInventory() {
-  const [models, loaded] = await Promise.all([
+  const [models, loaded, linkStatus] = await Promise.all([
     runLmsJson(["ls", "--json"]),
     runLmsJson(["ps", "--json"]).catch(() => []),
+    runLmsJson(["link", "status", "--json"]).catch(() => null),
   ]);
   return markLoadedLmStudioModels(
     normalizeLmStudioInventory(models),
-    Array.isArray(loaded) ? loaded : [],
+    [
+      ...(Array.isArray(loaded) ? loaded : []),
+      ...loadedModelsFromLmLinkStatus(linkStatus),
+    ],
   );
+}
+
+async function startLocalModelDownload(input = {}) {
+  const modelId = String(input.modelId || input.model || "").trim();
+  const entry = localModelCatalogEntry(modelId);
+  if (!entry)
+    return { ok: false, error: "Choose a model from the local install catalog." };
+  const active = activeLocalModelDownload(entry.id);
+  if (active) {
+    return {
+      ok: true,
+      message: `${entry.displayName} is already ${active.job.state}.`,
+      job: cloneLocalModelDownloadJob(active.job),
+    };
+  }
+  const now = new Date().toISOString();
+  const jobId = `${entry.id}-${Date.now()}`;
+  const job = {
+    jobId,
+    modelId: entry.id,
+    displayName: entry.displayName,
+    state: "queued",
+    message: "Queued in LM Studio",
+    startedAt: now,
+    updatedAt: now,
+  };
+  localModelDownloadJobs.set(jobId, { job, log: [] });
+  const child = spawn(await resolveLmsBin(), lmStudioDownloadArgsForCatalogEntry(entry), {
+    stdio: ["ignore", "pipe", "pipe"],
+    env: localModelRuntimeEnv(),
+  });
+  const record = localModelDownloadJobs.get(jobId);
+  if (record) record.child = child;
+  patchLocalModelDownloadJob(jobId, {
+    state: "downloading",
+    message: "Downloading with LM Studio",
+  });
+  child.stdout?.on("data", (chunk) => rememberLocalModelDownloadOutput(jobId, chunk));
+  child.stderr?.on("data", (chunk) => rememberLocalModelDownloadOutput(jobId, chunk));
+  child.on("error", (error) => {
+    patchLocalModelDownloadJob(jobId, {
+      state: "failed",
+      error: error instanceof Error ? error.message : "LM Studio download failed.",
+      message: "Download failed",
+    });
+  });
+  child.on("close", (code, signal) => {
+    const current = localModelDownloadJobs.get(jobId);
+    if (current?.job?.state === "cancelled") return;
+    if (code === 0) {
+      patchLocalModelDownloadJob(jobId, {
+        state: "completed",
+        progressPercent: 100,
+        message: "Download complete",
+      });
+      return;
+    }
+    patchLocalModelDownloadJob(jobId, {
+      state: "failed",
+      error:
+        latestLocalModelDownloadMessage(current) ||
+        `LM Studio exited with ${code ?? signal ?? "an error"}.`,
+      message: "Download failed",
+    });
+  });
+  return {
+    ok: true,
+    message: `Started downloading ${entry.displayName} in LM Studio.`,
+    job: cloneLocalModelDownloadJob(localModelDownloadJobs.get(jobId)?.job || job),
+  };
+}
+
+async function cancelLocalModelDownload(input = {}) {
+  const jobId = String(input.jobId || "").trim();
+  const modelId = String(input.modelId || input.model || "").trim();
+  const record = jobId
+    ? localModelDownloadJobs.get(jobId)
+    : [...localModelDownloadJobs.values()].find(
+        (candidate) =>
+          candidate.job.modelId === modelId &&
+          activeLocalModelDownloadStates.has(candidate.job.state),
+      );
+  if (!record) return { ok: false, error: "No active local model download was found." };
+  record.child?.kill("SIGTERM");
+  patchLocalModelDownloadJob(record.job.jobId, {
+    state: "cancelled",
+    message: "Download cancelled",
+  });
+  return {
+    ok: true,
+    message: `Cancelled ${record.job.displayName || record.job.modelId}.`,
+    job: cloneLocalModelDownloadJob(record.job),
+  };
+}
+
+async function installLocalModelRuntime() {
+  const installCommand = lmStudioInstallCommandForPlatform();
+  if (!installCommand) {
+    return {
+      ok: false,
+      error: "This platform does not have an in-app LM Studio installer yet. Use https://lmstudio.ai/download, then refresh Local models.",
+    };
+  }
+  if (platform() === "win32") {
+    await execFileAsync("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", installCommand], {
+      timeout: 900_000,
+      maxBuffer: 8_000_000,
+      env: runtimeProcessEnv(),
+    });
+  } else {
+    await execFileAsync("bash", ["-lc", installCommand], {
+      timeout: 900_000,
+      maxBuffer: 8_000_000,
+      env: runtimeProcessEnv(),
+    });
+  }
+  return { ok: true, message: "LM Studio installed. Start the Local server before loading a model." };
+}
+
+async function startLocalModelRuntime(agent = {}) {
+  const setup = await localRuntimeSetupStatus(agent);
+  const lmStudio = setup.providers.find((provider) => provider.id === "lm-studio");
+  if (!lmStudio?.present) return { ok: false, error: "Install LM Studio before starting the Local server." };
+  const lmsBin = await resolveLmsBin();
+  await execFileAsync(lmsBin, ["daemon", "up"], {
+    timeout: 120_000,
+    maxBuffer: 2_000_000,
+    env: localModelRuntimeEnv(),
+  }).catch(() => undefined);
+  let startError = "";
+  await execFileAsync(lmsBin, ["server", "start", "--port", localOpenAiServerPort(agent), "--bind", "127.0.0.1"], {
+    timeout: 120_000,
+    maxBuffer: 2_000_000,
+    env: localModelRuntimeEnv(),
+  }).catch((error) => {
+    startError = compactLocalRuntimeError(error, "LM Studio server start failed.");
+  });
+  const probe = await waitForLocalOpenAiModels(agent, 30_000);
+  if (probe.ok) {
+    return {
+      ok: true,
+      message: `Local server is ready at ${localOpenAiBase(agent)}${typeof probe.modelCount === "number" ? ` with ${probe.modelCount} model${probe.modelCount === 1 ? "" : "s"}` : ""}.`,
+    };
+  }
+  return {
+    ok: false,
+    error: `LM Studio server did not become ready at ${localOpenAiBase(agent)}. ${probe.error || startError || ""}`.trim(),
+  };
+}
+
+async function verifyLocalModelLoad(agent = {}, model = "", loadMessage = "Loaded model in LM Studio.") {
+  const started = await startLocalModelRuntime(agent);
+  if (started.ok === false) return started;
+  const probe = await waitForLocalOpenAiModels(agent, 20_000);
+  if (!probe.ok) {
+    return { ok: false, error: `Loaded ${model}, but the OpenAI endpoint could not be verified. ${probe.error || ""}`.trim() };
+  }
+  return { ok: true, message: `${loadMessage} ${started.message || "Local server verified."}` };
+}
+
+async function smokeTestLocalModel(agent = {}, input = {}) {
+  const baseUrl = typeof input.baseUrl === "string" ? input.baseUrl.trim().replace(/\/+$/, "") : "";
+  const testAgent = baseUrl
+    ? {
+        ...agent,
+        gatewayUrl: baseUrl,
+        chatPath: typeof input.chatPath === "string" && input.chatPath.trim() ? input.chatPath.trim() : "/v1/chat/completions",
+        statusPath: typeof input.statusPath === "string" && input.statusPath.trim() ? input.statusPath.trim() : "/v1/models",
+      }
+    : agent;
+  const model = String(input.model || agent.model || "").trim();
+  if (!model) return { ok: false, error: "Choose a loaded model before running a smoke test." };
+  if (input.startServer !== false) {
+    const server = await startLocalModelRuntime(agent);
+    if (server.ok === false) return server;
+  } else {
+    const probe = await probeLocalOpenAiModels(testAgent);
+    if (!probe.ok) return { ok: false, error: probe.error || "Local model server is not reachable." };
+  }
+  const chatPath = String(testAgent.chatPath || "/v1/chat/completions");
+  const response = await fetch(`${localOpenAiBase(testAgent)}${chatPath.startsWith("/") ? chatPath : `/${chatPath}`}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...localOpenAiHeaders(testAgent) },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: "Reply with OK." },
+        { role: "user", content: "ping" },
+      ],
+      max_tokens: 8,
+      temperature: 0,
+    }),
+    signal: AbortSignal.timeout(45_000),
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    const error = typeof data?.error === "string" ? data.error : data?.error?.message || `Smoke test returned ${response.status}`;
+    return { ok: false, error };
+  }
+  return { ok: true, message: `${model} answered the Local smoke test.` };
 }
 
 async function localOpenAiIntegrationStatus(agent = {}) {
@@ -3496,6 +4846,7 @@ async function localOpenAiIntegrationStatus(agent = {}) {
   const baseUrl = localOpenAiBase(agent);
   const diagnostics = [];
   let lmStudioModels = [];
+  let localServers = [];
   let openAiModels = [];
   let inventoryError = "";
   let inventorySource = "";
@@ -3530,6 +4881,43 @@ async function localOpenAiIntegrationStatus(agent = {}) {
       }
     }
   }
+  try {
+    localServers = await discoverLocalOpenAiServers(agent, {
+      baseUrlForAgent: localOpenAiBase,
+      fetchJsonWithTimeout,
+    });
+    const known = new Set(lmStudioModels.map((model) => model.key));
+    for (const server of localServers) {
+      for (const serverModel of server.models || []) {
+        const id = String(serverModel.id || "").trim();
+        if (!id || known.has(id) || serverModel.type === "embedding") continue;
+        known.add(id);
+        lmStudioModels.push({
+          key: id,
+          displayName: serverModel.displayName || id,
+          type: serverModel.type || "llm",
+          loaded: true,
+          loadedInstanceIds: [id],
+          paramsString: server.label,
+          format: "OpenAI",
+          remote: false,
+          source: "openai-server",
+          sourceLabel: server.label,
+          serverId: server.id,
+          baseUrl: server.baseUrl,
+          chatPath: server.chatPath,
+          statusPath: server.statusPath,
+          canLoad: false,
+          canUnload: false,
+        });
+      }
+    }
+  } catch (error) {
+    if (!inventoryError)
+      diagnostics.push(
+        `Local server discovery unavailable: ${error instanceof Error ? error.message : "Server discovery failed."}`,
+      );
+  }
   if (!lmStudioModels.length) {
     try {
       const statusPath = String(agent.statusPath || "/v1/models");
@@ -3556,9 +4944,13 @@ async function localOpenAiIntegrationStatus(agent = {}) {
     ? llmModels.map((model) => ({
         id: model.key,
         name: model.displayName,
-        subtitle: model.loaded ? "Loaded" : "Downloaded",
+        subtitle: model.source === "openai-server"
+          ? "Serving"
+          : model.remote ? "Available" : model.loaded ? "Loaded" : "Downloaded",
         group: model.paramsString || undefined,
-        badge: model.loaded ? "Loaded" : undefined,
+        badge: model.source === "openai-server"
+          ? "Server"
+          : model.remote ? "LM Link" : model.loaded ? "Loaded" : undefined,
       }))
     : openAiModels.map((id) => ({ id }));
   const fallbackModel = String(agent.model || "").trim();
@@ -3596,6 +4988,9 @@ async function localOpenAiIntegrationStatus(agent = {}) {
             lmStudio: {
               baseUrl,
               models: lmStudioModels,
+              servers: localServers,
+              ...localModelHubStatus(lmStudioModels),
+              setup: await localRuntimeSetupStatus(agent).catch(() => undefined),
               error: inventoryError || undefined,
               checkedAt: new Date().toISOString(),
             },
@@ -3618,8 +5013,13 @@ async function runLocalOpenAiIntegrationAction(action, input = {}, agent = {}) {
   if (String(agent.provider || "") !== "lm-studio")
     return {
       ok: false,
-      error: `${localOpenAiProviderName(agent)} does not expose load/unload controls here yet.`,
+      error: `${localOpenAiProviderName(agent)} does not expose local model controls here yet.`,
     };
+  if (action === "install-local-runtime") return installLocalModelRuntime();
+  if (action === "start-local-runtime") return startLocalModelRuntime(agent);
+  if (action === "smoke-test-local-model") return smokeTestLocalModel(agent, input);
+  if (action === "download-model") return startLocalModelDownload(input);
+  if (action === "cancel-download") return cancelLocalModelDownload(input);
   if (action === "load-model") {
     const model = String(input.model || "").trim();
     if (!model) return { ok: false, error: "Model is required." };
@@ -3631,13 +5031,9 @@ async function runLocalOpenAiIntegrationAction(action, input = {}, agent = {}) {
     await execFileAsync(await resolveLmsBin(), args, {
       timeout: 180_000,
       maxBuffer: 2_000_000,
-      env: runtimeProcessEnv({
-        PATH: [join(homedir(), ".lmstudio", "bin"), process.env.PATH]
-          .filter(Boolean)
-          .join(delimiter),
-      }),
+      env: localModelRuntimeEnv(),
     });
-    return { ok: true, message: `Loaded ${model} in LM Studio.` };
+    return verifyLocalModelLoad(agent, model, `Loaded ${model} in LM Studio.`);
   }
   if (action === "unload-model") {
     const instanceId = String(input.instanceId || input.model || "").trim();
@@ -3646,15 +5042,11 @@ async function runLocalOpenAiIntegrationAction(action, input = {}, agent = {}) {
     await execFileAsync(await resolveLmsBin(), ["unload", instanceId], {
       timeout: 60_000,
       maxBuffer: 2_000_000,
-      env: runtimeProcessEnv({
-        PATH: [join(homedir(), ".lmstudio", "bin"), process.env.PATH]
-          .filter(Boolean)
-          .join(delimiter),
-      }),
+      env: localModelRuntimeEnv(),
     });
     return { ok: true, message: `Unloaded ${instanceId} from LM Studio.` };
   }
-  return { ok: false, error: `Unsupported Local OpenAI action: ${action}` };
+  return { ok: false, error: `Unsupported Local action: ${action}` };
 }
 
 async function runOpenClawIntegrationAction(action, input = {}) {
@@ -3689,55 +5081,29 @@ async function runOpenClawIntegrationAction(action, input = {}) {
   };
 }
 
-function hermesAgentProfileDir(agent = {}) {
-  const raw =
-    typeof agent.localDataDir === "string" ? agent.localDataDir.trim() : "";
-  if (!raw) return "";
-  const dir = expandHome(raw);
-  return dir && dir !== defaultHermesDir ? dir : "";
-}
-
-// Rewrites only the top-level `model:` block of an agent profile's
-// config.yaml. The shared gateway home's config is never touched here — the
-// gateway default model is owned by the gateway, not by HivemindOS.
-async function setHermesProfileModelConfig(profileDir, provider, model) {
-  const configPath = join(profileDir, "config.yaml");
-  const raw = await readFile(configPath, "utf8").catch(() => "");
-  const modelBlock = [
-    "model:",
-    `  default: ${yamlScalar(model)}`,
-    `  provider: ${yamlScalar(provider)}`,
-  ].join("\n");
-  let next;
-  if (/^model:[ \t]*\n/m.test(raw)) {
-    next = raw.replace(
-      /^model:[ \t]*\n(?:[ \t]+[^\n]*\n?)*/m,
-      `${modelBlock}\n`,
-    );
-  } else {
-    next = raw.trim() ? `${modelBlock}\n${raw}` : `${modelBlock}\n`;
-  }
-  await mkdir(profileDir, { recursive: true, mode: 0o700 });
-  await writeFile(configPath, next, { mode: 0o600 });
-}
-
 async function runHermesIntegrationAction(action, input = {}, agent = {}) {
   if (action === "set-model") {
     const provider = String(input.provider || "").trim();
     const model = String(input.model || "").trim();
     if (!provider || !model)
       return { ok: false, error: "Provider and model are required." };
-    const profileDir = hermesAgentProfileDir(agent);
-    if (!profileDir)
-      return {
-        ok: false,
-        error:
-          "This Hermes agent shares the gateway home, and HivemindOS never changes the gateway default model. Create a profile agent to give it its own model.",
-      };
-    await setHermesProfileModelConfig(profileDir, provider, model);
+    const hermesHome = expandHome(
+      sanitizeLocalDataDir(agent.localDataDir) || defaultHermesDir,
+    );
+    await setHermesModelAssignment({
+      hermesHome,
+      projectDir: hermesAgentProjectDir,
+      pythonPath: await resolveHermesPython(),
+      provider,
+      model,
+      execFileAsync,
+    });
+    const profile = hermesProfileName(hermesHome, defaultHermesDir);
     return {
       ok: true,
-      message: `Hermes model set to ${provider}/${model} for this agent profile only. Gateway default unchanged.`,
+      message: profile
+        ? `Hermes model set to ${provider}/${model} for profile ${profile}. New sessions use it.`
+        : `Hermes default model set to ${provider}/${model}. New sessions use it.`,
     };
   }
   if (action === "enable-tool") {
@@ -3755,19 +5121,10 @@ async function runHermesIntegrationAction(action, input = {}, agent = {}) {
     return { ok: true, message: `Disabled Hermes ${tool}.` };
   }
   if (action === "xai-login") {
-    const child = spawn(
-      await resolveHermesBin(),
-      ["login", "--provider", "xai-oauth"],
-      {
-        detached: true,
-        stdio: "ignore",
-        env: runtimeProcessEnv(),
-      },
-    );
-    child.unref();
     return {
-      ok: true,
-      message: "Started Hermes xAI OAuth login on this machine.",
+      ok: false,
+      error:
+        "xAI OAuth sign-in is handled by the HivemindOS dashboard OAuth flow. Open Agent Settings, choose xAI, then use the OAuth lane.",
     };
   }
   if (action === "hermes-update") {
@@ -3812,16 +5169,6 @@ async function runHermesIntegrationAction(action, input = {}, agent = {}) {
     return { ok: true, output };
   }
   return { ok: false, error: `Unsupported Hermes action: ${action}` };
-}
-
-function normalizeNangoBaseUrl(input) {
-  const value =
-    String(input || "http://localhost:3003").trim() || "http://localhost:3003";
-  const parsed = new URL(value);
-  parsed.pathname = "";
-  parsed.search = "";
-  parsed.hash = "";
-  return parsed.toString().replace(/\/+$/, "");
 }
 
 function collectorRunProcess(command, args, stdin, timeoutMs) {
@@ -3870,8 +5217,8 @@ function collectorRunProcess(command, args, stdin, timeoutMs) {
 
 // Minimal mirror of src/lib/services/runtime-install-catalog.ts for the
 // standalone collector (which cannot import the TS catalog). Keep the package
-// names in sync with the catalog. Only runtimes with a real in-app installer
-// appear here; openclaw/hermes/aeon are handled by their own flows.
+// names and fixed installer URLs in sync with the catalog. Only runtimes with
+// a real in-app installer appear here; aeon is handled by its own flow.
 const COLLECTOR_RUNTIME_INSTALL = {
   "claude-code": { kind: "npm", pkg: "@anthropic-ai/claude-code" },
   codex: { kind: "npm", pkg: "@openai/codex" },
@@ -3879,6 +5226,20 @@ const COLLECTOR_RUNTIME_INSTALL = {
   openhands: { kind: "uv", pkg: "openhands", python: "3.12" },
   aider: { kind: "uv", pkg: "aider-chat" },
   evo: { kind: "uv", pkg: "evo-hq-cli" },
+  hermes: {
+    kind: "script",
+    unixUrl: "https://hermes-agent.nousresearch.com/install.sh",
+    windowsUrl: "https://hermes-agent.nousresearch.com/install.ps1",
+    unixArgs: [],
+    windowsArgs: [],
+  },
+  openclaw: {
+    kind: "script",
+    unixUrl: "https://openclaw.ai/install.sh",
+    windowsUrl: "https://openclaw.ai/install.ps1",
+    unixArgs: ["--no-onboard"],
+    windowsArgs: ["-NoOnboard"],
+  },
 };
 
 // Builds the OS-appropriate, server-side install invocation for a fixed runtime
@@ -3897,8 +5258,39 @@ function powershellEncoded(script) {
   };
 }
 
-function buildRuntimeInstallInvocation(spec) {
+async function buildRuntimeInstallInvocation(spec) {
   const isWin = process.platform === "win32";
+  if (spec.kind === "script") {
+    const rawUrl = isWin ? spec.windowsUrl : spec.unixUrl;
+    const url = new URL(rawUrl);
+    if (url.protocol !== "https:") throw new Error("Runtime installers must use HTTPS.");
+    const download = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+    if (!download.ok) throw new Error(`Installer download failed with HTTP ${download.status}.`);
+    const script = await download.text();
+    if (!script.trim()) throw new Error("The downloaded runtime installer was empty.");
+    if (Buffer.byteLength(script, "utf8") > 4 * 1024 * 1024)
+      throw new Error("The runtime installer was unexpectedly large.");
+    if (isWin) {
+      const scriptBase64 = Buffer.from(script, "utf8").toString("base64");
+      const renderedArgs = (spec.windowsArgs || [])
+        .map((arg) => {
+          if (!/^-[A-Za-z][A-Za-z0-9-]*$/.test(arg))
+            throw new Error("Invalid PowerShell installer argument.");
+          return arg;
+        })
+        .join(" ");
+      return powershellEncoded([
+        "$ErrorActionPreference='Stop'",
+        `$installer=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${scriptBase64}'))`,
+        `& ([ScriptBlock]::Create($installer))${renderedArgs ? ` ${renderedArgs}` : ""}`,
+      ].join("\n"));
+    }
+    return {
+      command: "bash",
+      args: ["-s", "--", ...(spec.unixArgs || [])],
+      stdin: script,
+    };
+  }
   if (spec.kind === "npm") {
     if (isWin) {
       return powershellEncoded(`$ErrorActionPreference='Stop'\nnpm install -g ${spec.pkg}\n`);
@@ -3941,18 +5333,58 @@ function buildRuntimeInstallInvocation(spec) {
   };
 }
 
+async function collectorOpenClawCommand() {
+  const commandName = process.platform === "win32" ? "openclaw.cmd" : "openclaw";
+  const candidates = [
+    process.env.OPENCLAW_BIN,
+    join(homedir(), ".npm-global", "bin", commandName),
+    join(homedir(), ".local", "bin", commandName),
+    commandName,
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    if (!candidate.includes("/") && !candidate.includes("\\")) return candidate;
+    if (await access(candidate, constants.X_OK).then(() => true).catch(() => false)) return candidate;
+  }
+  return commandName;
+}
+
+async function configureCollectorOpenClawCodexPluginTrust() {
+  const command = await collectorOpenClawCommand();
+  await collectorRunProcess(command, ["plugins", "inspect", "codex", "--json"], "", 15_000);
+  const current = await collectorRunProcess(command, ["config", "get", "plugins.allow", "--json"], "", 15_000)
+    .catch(() => ({ stdout: "[]", stderr: "" }));
+  let parsed = [];
+  try {
+    const value = JSON.parse(current.stdout || "[]");
+    if (Array.isArray(value)) parsed = value.filter((entry) => typeof entry === "string" && entry.trim()).map((entry) => entry.trim());
+  } catch {}
+  const allow = [...new Set([...parsed, "codex"])];
+  if (allow.length === parsed.length && allow.every((entry, index) => entry === parsed[index])) return "";
+  await collectorRunProcess(command, ["config", "set", "plugins.allow", JSON.stringify(allow), "--strict-json"], "", 20_000);
+  await mkdir(join(homedir(), ".hivemindos"), { recursive: true, mode: 0o700 });
+  await writeFile(
+    join(homedir(), ".hivemindos", "openclaw-codex-plugin-trust.json"),
+    `${JSON.stringify({ pluginId: "codex", managedBy: "hivemindos" }, null, 2)}\n`,
+    { mode: 0o600 },
+  );
+  return "OpenClaw Codex plugin explicitly trusted.";
+}
+
 async function collectorInstallRuntime(runtimeName) {
   const spec = COLLECTOR_RUNTIME_INSTALL[runtimeName];
   if (!spec) return { ok: false, error: `${runtimeName} cannot be installed by this collector.` };
-  const { command, args, stdin } = buildRuntimeInstallInvocation(spec);
   try {
+    const { command, args, stdin } = await buildRuntimeInstallInvocation(spec);
     // Heavy uv installs (e.g. OpenHands: CPython 3.12 + a large dep tree) can run
     // well past several minutes on a cold cache, so allow up to 15 minutes.
     const result = await collectorRunProcess(command, args, stdin, 900_000);
+    const postInstall = runtimeName === "openclaw"
+      ? await configureCollectorOpenClawCodexPluginTrust().catch(() => "")
+      : "";
     return {
       ok: true,
       message: `${runtimeName} installed.`,
-      output: `${result.stdout}${result.stderr}`.trim().slice(0, 1500),
+      output: [`${result.stdout}${result.stderr}`.trim(), postInstall].filter(Boolean).join("\n").slice(-1500),
     };
   } catch (error) {
     return {
@@ -3976,150 +5408,20 @@ async function collectorSaveRuntimeAuth(env, value) {
   }
 }
 
-function nangoSetupScript(baseUrl) {
-  const normalized = normalizeNangoBaseUrl(baseUrl);
-  const portValue = new URL(normalized).port || "3003";
-  return [
-    "set -euo pipefail",
-    'log() { printf \'\\n[%s] %s\\n\' "$(date -u +%H:%M:%S)" "$*"; }',
-    'run_as_root() { if [ "$(id -u)" = "0" ]; then "$@"; elif command -v sudo >/dev/null 2>&1; then sudo "$@"; else echo \'This setup needs root or passwordless sudo to install packages.\' >&2; exit 10; fi; }',
-    "log 'Checking system packages'",
-    "if ! command -v git >/dev/null 2>&1; then",
-    "  command -v apt-get >/dev/null 2>&1 || { echo 'git is missing and apt-get is unavailable.' >&2; exit 11; }",
-    "  run_as_root apt-get update",
-    "  run_as_root apt-get install -y git",
-    "fi",
-    "if ! command -v docker >/dev/null 2>&1; then",
-    "  command -v apt-get >/dev/null 2>&1 || { echo 'docker is missing and apt-get is unavailable.' >&2; exit 12; }",
-    "  run_as_root apt-get update",
-    "  run_as_root apt-get install -y docker.io docker-compose-plugin",
-    "  run_as_root systemctl enable --now docker >/dev/null 2>&1 || true",
-    "fi",
-    "DOCKER='docker'",
-    "if ! docker ps >/dev/null 2>&1; then",
-    "  if command -v sudo >/dev/null 2>&1 && sudo docker ps >/dev/null 2>&1; then DOCKER='sudo docker'; else echo 'Docker is installed, but this user cannot run docker.' >&2; exit 13; fi",
-    "fi",
-    'NANGO_DIR="${NANGO_DIR:-$HOME/nango}"',
-    'log "Preparing Nango checkout at $NANGO_DIR"',
-    'if [ ! -d "$NANGO_DIR/.git" ]; then',
-    '  rm -rf "$NANGO_DIR"',
-    '  git clone https://github.com/NangoHQ/nango.git "$NANGO_DIR"',
-    "else",
-    "  # Prior runs perl-edit the tracked docker-compose.yaml in place, so a plain",
-    "  # git pull --ff-only would refuse on the dirty tree. Restore tracked files and",
-    "  # clear the .bak first, then fast-forward; if history diverged, reset to upstream.",
-    '  git -C "$NANGO_DIR" checkout -- docker-compose.yaml >/dev/null 2>&1 || true',
-    '  rm -f "$NANGO_DIR/docker-compose.yaml.bak"',
-    '  if ! git -C "$NANGO_DIR" pull --ff-only; then',
-    "    log 'Fast-forward not possible; resetting Nango checkout to upstream'",
-    "    git -C \"$NANGO_DIR\" reset --hard '@{u}'",
-    "  fi",
-    "fi",
-    'cd "$NANGO_DIR"',
-    "if [ ! -f .env ]; then cp .env.example .env; fi",
-    "if [ -f docker-compose.yaml ]; then",
-    "  perl -0pi.bak -e 's/\\x27(?:\\$\\{NANGO_DB_PORT:-\\d+\\}|\\d+):5432\\x27/\\x2715432:5432\\x27/g; s/\\x27[^\\x27]*:6379\\x27/\\x2716379:6379\\x27/g' docker-compose.yaml",
-    "fi",
-    "set_env() {",
-    '  key="$1"',
-    '  value="$2"',
-    '  if grep -q "^${key}=" .env; then',
-    '    tmp="$(mktemp)"',
-    '    awk -v key="$key" -v value="$value" \'BEGIN{line=key "=" value} $0 ~ "^" key "=" {print line; next} {print}\' .env > "$tmp"',
-    '    cat "$tmp" > .env',
-    '    rm -f "$tmp"',
-    "  else",
-    '    printf \'%s=%s\\n\' "$key" "$value" >> .env',
-    "  fi",
-    "}",
-    "remove_env() {",
-    '  key="$1"',
-    '  if grep -q "^${key}=" .env; then',
-    '    tmp="$(mktemp)"',
-    '    awk -v key="$key" \'$0 !~ "^" key "=" {print}\' .env > "$tmp"',
-    '    cat "$tmp" > .env',
-    '    rm -f "$tmp"',
-    "  fi",
-    "}",
-    `set_env NANGO_SERVER_URL ${shellQuote(normalized)}`,
-    `set_env SERVER_PORT ${shellQuote(portValue)}`,
-    "remove_env NANGO_DB_PORT",
-    "remove_env NANGO_REDIS_PORT",
-    "log 'Starting Nango containers'",
-    "$DOCKER compose down --remove-orphans >/dev/null 2>&1 || true",
-    "$DOCKER compose up -d",
-    "log 'Nango setup command finished'",
-  ].join("\n");
-}
-
-async function checkNangoHealthFromCollector(baseUrl) {
-  const url = `${normalizeNangoBaseUrl(baseUrl)}/health`;
-  const started = Date.now();
-  try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(3500) });
-    const text = await response.text().catch(() => "");
-    return {
-      ok: response.ok,
-      checkedAt: new Date().toISOString(),
-      url,
-      latencyMs: Date.now() - started,
-      status: response.status,
-      result: text.slice(0, 120),
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      checkedAt: new Date().toISOString(),
-      url,
-      latencyMs: Date.now() - started,
-      error:
-        error instanceof Error ? error.message : "Nango health check failed.",
-    };
-  }
-}
-
-async function waitForNangoHealthFromCollector(baseUrl) {
-  let health = await checkNangoHealthFromCollector(baseUrl);
-  if (health.ok) return health;
-  for (const delay of [2000, 4000, 8000, 12000, 20000, 30000]) {
-    await sleep(delay);
-    health = await checkNangoHealthFromCollector(baseUrl);
-    if (health.ok) return health;
-  }
-  return health;
-}
-
-async function setupNangoIntegrationHost(baseUrl) {
-  const normalized = normalizeNangoBaseUrl(baseUrl);
-  const script = nangoSetupScript(normalized);
-  const result = await collectorRunProcess("bash", ["-s"], script, 360_000);
-  const health = await waitForNangoHealthFromCollector(normalized);
-  const error = health.ok
-    ? undefined
-    : health.error ||
-      (health.status
-        ? `Nango health check returned HTTP ${health.status}.`
-        : "Nango health check did not become ready after setup.");
-  return {
-    ok: health.ok,
-    method: "collector-api",
-    target: hostname(),
-    baseUrl: normalized,
-    stdout: result.stdout.slice(-20_000),
-    stderr: result.stderr.slice(-20_000),
-    health,
-    command: script,
-    ...(error ? { error } : {}),
-  };
-}
-
-function startUpdate() {
-  const command = `cd ${shellQuote(appDir)} && mkdir -p .next && { echo "--- update $(date -u +%Y-%m-%dT%H:%M:%SZ) ---"; node ./scripts/pull-with-changelog-preserve.mjs; if command -v corepack >/dev/null 2>&1; then corepack prepare pnpm@8.6.12 --activate; hash -r 2>/dev/null || true; fi; CI=true NODE_OPTIONS="\${NODE_OPTIONS:+\$NODE_OPTIONS }--no-deprecation" pnpm install --frozen-lockfile; pnpm build; ./setup.sh; AGENT_TELEMETRY_PORT="\${AGENT_TELEMETRY_PORT:-8787}" ./scripts/install-telemetry-collector.sh; } >> .next/agent-update.log 2>&1`;
-  const child = spawn("sh", ["-lc", command], {
-    detached: true,
-    stdio: "ignore",
+function startUpdate(reservationToken) {
+  const updateLogDir = join(homedir(), ".hivemindos", "logs");
+  const updateLogPath = join(updateLogDir, "agent-update.log");
+  const command = collectorUpdateCommand({
+    appDir,
+    collectorOnly,
+    logPath: updateLogPath,
   });
-  child.unref();
+  launchCollectorUpdate({
+    command,
+    appDir,
+    reservationToken,
+    releaseReservation: releaseCollectorUpdateReservation,
+  });
   return command;
 }
 
@@ -4291,15 +5593,21 @@ async function findSkillFiles(rootPath, maxDepth) {
   const root = resolve(expandHome(rootPath));
   await access(root, constants.R_OK).catch(() => null);
   const found = [];
+  let truncated = false;
 
   async function walk(current, depth) {
-    if (depth > maxDepth) return;
+    if (depth > maxDepth || truncated) return;
     const entries = await readdir(current, { withFileTypes: true }).catch(
       () => [],
     );
     for (const entry of entries) {
+      if (truncated) return;
       if (entry.name === "SKILL.md") {
         found.push(join(current, entry.name));
+        if (found.length >= maxSkillScanFiles) {
+          truncated = true;
+          return;
+        }
         continue;
       }
       if (!entry.isDirectory() || skippedSkillDirs.has(entry.name)) continue;
@@ -4308,6 +5616,15 @@ async function findSkillFiles(rootPath, maxDepth) {
   }
 
   await walk(root, 0);
+  if (truncated) {
+    console.error(
+      `[collector] skill scan CAPPED at ${maxSkillScanFiles} SKILL.md files under ${root} — remaining skills are NOT reported. A count this size almost certainly means runaway skill mirrors; run scripts/cleanup-recursive-aeon-skill-mirrors.mjs (dry-run by default, --apply to execute).`,
+    );
+  } else if (found.length >= skillScanWarnThreshold) {
+    console.warn(
+      `[collector] skill scan found ${found.length} SKILL.md files under ${root} (warn threshold ${skillScanWarnThreshold}) — check for runaway skill mirrors (scripts/cleanup-recursive-aeon-skill-mirrors.mjs).`,
+    );
+  }
   return found;
 }
 
@@ -4376,7 +5693,7 @@ async function skillSummaryForProvider(provider, skillPath, options = {}) {
   return summary;
 }
 
-async function listInstalledSkills(options = {}) {
+async function scanInstalledSkills(options = {}) {
   const providers = await Promise.all(
     skillProviderRoots.map(async (provider) => {
       const skillFiles = [
@@ -4390,10 +5707,13 @@ async function listInstalledSkills(options = {}) {
           ).flat(),
         ),
       ];
-      const skills = await Promise.all(
-        skillFiles.map((skillPath) =>
-          skillSummaryForProvider(provider, skillPath, options),
-        ),
+      // Bounded pool, NOT Promise.all: each summary opens SKILL.md (+ source
+      // metadata), and a pathological skills dir (NYC: 28k mirrors) must never
+      // peg the fd table — child spawns in that window die with EBADF.
+      const skills = await mapWithConcurrency(
+        skillFiles,
+        skillScanConcurrency,
+        (skillPath) => skillSummaryForProvider(provider, skillPath, options),
       );
       return {
         id: provider.id,
@@ -4412,6 +5732,11 @@ async function listInstalledSkills(options = {}) {
     }),
   );
   return { ok: true, host: hostname(), providers };
+}
+
+async function listInstalledSkills(options = {}) {
+  if (options.includeSourceFiles) return scanInstalledSkills(options);
+  return skillInventoryCache.get({ force: options.force === true });
 }
 
 function e2eSkillProvider(providerId) {
@@ -4747,7 +6072,7 @@ async function writeSkillAutoSyncConfig(config) {
 }
 
 async function configuredProviderInventory(providerIds) {
-  const inventory = await listInstalledSkills();
+  const inventory = await listInstalledSkills({ force: true });
   const wanted = new Set(providerIds);
   return {
     ...inventory,
@@ -5015,11 +6340,31 @@ function dateMsFrom(value) {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-async function processSeen(agent) {
-  const { stdout } = await execFileAsync("ps", ["-axo", "command="], {
+// One ps sweep serves every agent in a snapshot burst — snapshotFor runs per
+// agent, and an uncached ps spawn per agent multiplied across pollers was a
+// measurable share of collector CPU.
+async function scanProcessCommands() {
+  if (psScanCache && Date.now() - psScanCache.at < psScanCacheMs) {
+    return psScanCache.stdout;
+  }
+  if (psScanPromise) return psScanPromise;
+  psScanPromise = execFileAsync("ps", ["-axo", "command="], {
     timeout: 4000,
     maxBuffer: 800_000,
-  }).catch(() => ({ stdout: "" }));
+  })
+    .then(({ stdout }) => {
+      psScanCache = { stdout, at: Date.now() };
+      return stdout;
+    })
+    .catch(() => "")
+    .finally(() => {
+      psScanPromise = null;
+    });
+  return psScanPromise;
+}
+
+async function processSeen(agent) {
+  const stdout = await scanProcessCommands();
   const needles = [agent.id, agent.agentId, agent.name]
     .filter(Boolean)
     .map((value) => String(value).toLowerCase())
@@ -5036,7 +6381,7 @@ async function processSeen(agent) {
 // Reads model.default / model.provider / model.base_url from a Hermes
 // config.yaml's top-level `model:` block (no YAML dependency). Lets the
 // collector report a Hermes agent's real provider/model instead of leaving the
-// dashboard to fall back to a default (which surfaced as a wrong "Local OpenAI"
+// dashboard to fall back to a default (which surfaced as a wrong "Local"
 // provider for codex agents).
 async function readHermesModelConfig(configDir) {
   const raw = await readFile(join(configDir, "config.yaml"), "utf8").catch(
@@ -5075,6 +6420,15 @@ const RESERVED_HERMES_PROFILE_SLUGS = new Set([
   "hermes",
   "runtime-capability-probe",
 ]);
+
+function isReservedHermesProfileAgent(agent = {}) {
+  if (agent.runtime !== "hermes") return false;
+  const dataDir = expandHome(sanitizeLocalDataDir(agent.localDataDir));
+  const profileSlug = dataDir
+    .replace(/[\\/]+$/, "")
+    .match(/(?:^|[\\/])profiles[\\/]([^\\/]+)$/)?.[1];
+  return RESERVED_HERMES_PROFILE_SLUGS.has(profileSlug);
+}
 
 async function detectedHermesProfileAgents(coveredAgentIds) {
   const entries = await readdir(hermesProfilesDir, {
@@ -5144,10 +6498,12 @@ async function localAgents() {
     );
     agents.push(...(await detectedHermesProfileAgents(coveredHermesProfiles)));
   }
-  const openClawAgent = await detectedOpenClawAgent();
-  if (openClawAgent && !agents.some((agent) => agent.runtime === "openclaw")) {
-    agents.push(openClawAgent);
-  }
+  const coveredOpenClawAgentIds = new Set(
+    configuredAgents
+      .filter((agent) => agent.runtime === "openclaw")
+      .map((agent) => agent.agentId),
+  );
+  agents.push(...(await detectedOpenClawAgents(coveredOpenClawAgentIds)));
   const aeonConfig = join(defaultAeonDir, "aeon.yml");
   const aeonAvailable = await access(aeonConfig, constants.R_OK)
     .then(() => true)
@@ -5170,12 +6526,11 @@ async function localAgents() {
         notifications: true,
         setup: true,
       },
-      gatewayUrl: process.env.AEON_A2A_URL || "http://127.0.0.1:41241",
-      a2aUrl: process.env.AEON_A2A_URL || "http://127.0.0.1:41241",
+      gatewayUrl: "",
       aeonLocalPath: defaultAeonDir,
       aeonRepo: process.env.AEON_REPO || "",
       aeonBranch: process.env.AEON_BRANCH || "main",
-      aeonMode: process.env.AEON_A2A_URL ? "a2a" : "github",
+      aeonMode: process.env.AEON_REPO ? "github" : "local",
       agentId: "local-aeon",
       localDataDir: defaultAeonDir,
       machineName: hostname(),
@@ -5274,78 +6629,9 @@ async function createWorkReceipt(body) {
   return { ...receipt, storedAt };
 }
 
-async function darwinRamUsedBytes() {
-  const { stdout } = await execFileAsync("vm_stat", [], { timeout: 4_000 });
-  const pageSize = Number(
-    /page size of (\d+) bytes/.exec(stdout)?.[1] || 16_384,
-  );
-  const pages = (label) =>
-    Number(new RegExp(`${label}:\\s+(\\d+)`).exec(stdout)?.[1] || 0);
-  // Approximates Activity Monitor's "Memory Used": active + wired + compressed.
-  return (
-    (pages("Pages active") +
-      pages("Pages wired down") +
-      pages("Pages occupied by compressor")) *
-    pageSize
-  );
-}
-
-async function linuxRamUsedBytes() {
-  const meminfo = await readFile("/proc/meminfo", "utf8");
-  const kb = (label) =>
-    Number(new RegExp(`^${label}:\\s+(\\d+) kB`, "m").exec(meminfo)?.[1] || 0);
-  const totalKb = kb("MemTotal");
-  const availableKb = kb("MemAvailable");
-  if (!totalKb || !availableKb)
-    throw new Error("MemAvailable missing from /proc/meminfo.");
-  return (totalKb - availableKb) * 1024;
-}
-
-async function rootDiskUsage() {
-  // On macOS "/" is the sealed system volume; user data lives on the Data volume.
-  const target = platform() === "darwin" ? "/System/Volumes/Data" : "/";
-  const { stdout } = await execFileAsync("df", ["-kP", target], {
-    timeout: 4_000,
-  });
-  const parts = (stdout.trim().split("\n").at(-1) || "").split(/\s+/);
-  const totalKb = Number(parts[1] || 0);
-  const usedKb = Number(parts[2] || 0);
-  if (!totalKb) return null;
-  return { totalKb, usedKb };
-}
-
-async function systemStats() {
-  const toGb = (bytes) => Math.round((bytes / 1024 ** 3) * 10) / 10;
-  const clampPct = (value) => Math.max(0, Math.min(100, Math.round(value)));
-  const cores = cpus();
-  const coreCount = cores.length || 1;
-  const load1m = loadavg()[0];
-  const ramTotal = totalmem();
-  const ramUsed =
-    platform() === "darwin"
-      ? await darwinRamUsedBytes().catch(() => ramTotal - freemem())
-      : platform() === "linux"
-        ? await linuxRamUsedBytes().catch(() => ramTotal - freemem())
-        : ramTotal - freemem();
-  const disk = await rootDiskUsage().catch(() => null);
-  return {
-    checkedAt: Date.now(),
-    cpuPct: clampPct((load1m / coreCount) * 100),
-    cpuCores: coreCount,
-    cpuModel: cores[0]?.model?.trim() || "",
-    loadAvg1m: Math.round(load1m * 100) / 100,
-    ramPct: ramTotal ? clampPct((ramUsed / ramTotal) * 100) : 0,
-    ramUsedGb: toGb(ramUsed),
-    ramTotalGb: toGb(ramTotal),
-    diskPct: disk ? clampPct((disk.usedKb / disk.totalKb) * 100) : null,
-    diskUsedGb: disk ? toGb(disk.usedKb * 1024) : null,
-    diskTotalGb: disk ? toGb(disk.totalKb * 1024) : null,
-    platform: platform(),
-    arch: arch(),
-    osRelease: release(),
-    uptimeSec: Math.round(osUptime()),
-  };
-}
+// Host resource telemetry for the /health `system` object lives in a sibling
+// module so this legacy file stops growing (CLAUDE.md file-size rule).
+// systemStats is imported at the top from ./lib/system-stats.mjs.
 
 // Path candidates use a fast executable check; bare command names fall back
 // to a PATH spawn (some CLIs take ~10s cold, hence the generous timeout).
@@ -5373,6 +6659,7 @@ function cliRuntimeCandidates(envBin, command) {
   return [
     envBin,
     join(homedir(), ".local", "bin", command),
+    join(homedir(), ".npm-global", "bin", command),
     join(homedir(), `.${command}`, "bin", command),
     join(
       homedir(),
@@ -5389,12 +6676,20 @@ function cliRuntimeCandidates(envBin, command) {
   ];
 }
 
+async function resolveCliRuntimeCommand(envBin, command) {
+  for (const candidate of cliRuntimeCandidates(envBin, command).filter(Boolean)) {
+    if (await binaryInstalled(candidate)) return candidate;
+  }
+  return "";
+}
+
 async function detectOpenClawInstalled() {
   const runnable = await anyBinaryInstalled([
     process.env.OPENCLAW_BIN,
     "/usr/local/bin/openclaw",
     "/usr/bin/openclaw",
     join(homedir(), ".local", "bin", "openclaw"),
+    join(homedir(), ".npm-global", "bin", "openclaw"),
     join(homedir(), ".volta", "bin", "openclaw"),
     "openclaw",
   ]);
@@ -5405,15 +6700,18 @@ async function detectOpenClawInstalled() {
 }
 
 async function detectAeonInstalled() {
-  if (process.env.AEON_REPO) return true;
-  return access(join(defaultAeonDir, "aeon.yml"), constants.R_OK)
-    .then(() => true)
-    .catch(() => false);
+  const [hasConfig, hasCatalog, hasCli, hasRootCli] = await Promise.all([
+    access(join(defaultAeonDir, "aeon.yml"), constants.R_OK).then(() => true).catch(() => false),
+    access(join(defaultAeonDir, "catalog", "skills.json"), constants.R_OK).then(() => true).catch(() => false),
+    access(join(defaultAeonDir, "apps", "cli", "aeon"), constants.X_OK).then(() => true).catch(() => false),
+    access(join(defaultAeonDir, "aeon"), constants.X_OK).then(() => true).catch(() => false),
+  ]);
+  return hasConfig && hasCatalog && (hasCli || hasRootCli);
 }
 
 // Installed runtime CLIs, independent of whether any agent uses them yet —
 // the dashboard gates create-agent runtime cards on this list.
-async function installedRuntimes() {
+async function installedRuntimes(options = {}) {
   const now = Date.now();
   if (
     installedRuntimesCache &&
@@ -5422,7 +6720,12 @@ async function installedRuntimes() {
     return installedRuntimesCache.value;
   }
   if (installedRuntimesPromise) {
-    // Serve a stale list rather than blocking /health on CLI probes.
+    // Health is a liveness path, so it must not wait behind cold CLI probes.
+    // The collector already reports configured agent runtimes; this inventory
+    // fills in additional installed CLIs as soon as the background probe ends.
+    if (options.waitForRefresh === false) {
+      return installedRuntimesCache ? installedRuntimesCache.value : [];
+    }
     return installedRuntimesCache
       ? installedRuntimesCache.value
       : installedRuntimesPromise;
@@ -5462,6 +6765,9 @@ async function installedRuntimes() {
   })().finally(() => {
     installedRuntimesPromise = null;
   });
+  if (options.waitForRefresh === false) {
+    return installedRuntimesCache ? installedRuntimesCache.value : [];
+  }
   return installedRuntimesCache
     ? installedRuntimesCache.value
     : installedRuntimesPromise;
@@ -5478,16 +6784,31 @@ async function collectorHealthPayload() {
   if (healthPayloadPromise) return healthPayloadPromise;
 
   healthPayloadPromise = (async () => {
-    const [syncthing, envSync, agents, machineId, version, system, installed] =
-      await Promise.all([
-        syncthingInstalled(),
-        resolveHiveEnvAdd(),
-        localAgents(),
-        stableMachineId(),
-        appVersion(),
-        systemStats().catch(() => null),
-        installedRuntimes().catch(() => []),
-      ]);
+    const [
+      syncthing,
+      envSync,
+      agents,
+      machineId,
+      version,
+      system,
+      installed,
+      processStats,
+      tailnetSelf,
+      fleetPolicyState,
+    ] = await Promise.all([
+      syncthingInstalled(),
+      resolveHiveEnvAdd(),
+      localAgents(),
+      stableMachineId(),
+      appVersion(),
+      systemStats().catch(() => null),
+      installedRuntimes({ waitForRefresh: false }).catch(() => []),
+      processResourceStats().catch(() => null),
+      tailnetSelfNode().catch(() => null),
+      currentFleetMachinePolicy()
+        .then((policy) => ({ policy }))
+        .catch(() => ({ policy: null })),
+    ]);
     const runtimes = [
       ...new Set([...agents.map((agent) => agent.runtime), ...installed]),
     ];
@@ -5495,15 +6816,20 @@ async function collectorHealthPayload() {
       ok: true,
       host: hostname(),
       machineId,
+      tailnetSelf,
       mode: collectorOnly ? "collector-only" : "full",
       collectorStartedAt,
       collectorStartedAtMs,
       version,
       system,
+      process: processStats,
+      fleetPolicy: fleetPolicyState.policy
+        ? fleetMachinePolicyHealthSummary(fleetPolicyState.policy)
+        : fleetMachinePolicyFailureSummary(),
       envSync: {
         ready: envSync.ready,
         user: currentUsername(),
-        command: envSync.command,
+        command: [envSync.command, ...envSync.args].join(" "),
         error: envSync.error,
         maintenance: envSyncMaintenanceStatus,
       },
@@ -5512,15 +6838,19 @@ async function collectorHealthPayload() {
         collectorOnly,
         directoryBrowsing: true,
         envHttpSync: true,
-        nangoSetup: true,
         runtimes,
         runtimeIntegrations: true,
         runtimeAgentCreation: true,
-        hostedApps: true,
+        hostedApps: true, appBuilder: true, appBuilderContractVersion: APP_BUILDER_CONTRACT_VERSION,
         skillInventory: true,
         skillAutoSync: true,
         fileTransfers: true,
         workReceipts: true,
+        machinePolicy: true,
+        remoteShell: process.platform !== "win32", // mirrors linkd's GOOS shell gate; flip when Windows linkd ships shell support
+        runtimeState: true,
+        runtimeStateRuntimes: portableStateRuntimes(),
+        runtimeStateSync: isRuntimeStateSyncEnabled(),
         syncthing: syncthing.installed,
         defaultSyncPath,
       },
@@ -5533,7 +6863,7 @@ async function collectorHealthPayload() {
   return healthPayloadPromise;
 }
 
-async function sendHermesChat(body) {
+async function sendHermesChat(body, options = {}) {
   if (process.env.AGENT_TELEMETRY_CHAT_DISABLED === "1") {
     return {
       ok: false,
@@ -5555,43 +6885,166 @@ async function sendHermesChat(body) {
       : "");
   if (!text) return { ok: false, status: 400, error: "Message is required." };
 
-  const agent = body.agent && typeof body.agent === "object" ? body.agent : {};
+  const requestedAgent =
+    body.agent && typeof body.agent === "object" ? body.agent : {};
   const hermesHome = expandHome(
-    agent.localDataDir || body.localDataDir || defaultHermesDir,
+    sanitizeLocalDataDir(requestedAgent.localDataDir) ||
+      sanitizeLocalDataDir(body.localDataDir) ||
+      defaultHermesDir,
   );
-  const agentEnv = hermesContextEnv(safeAgentEnv(body.agentEnv), body.context);
-  const args = hermesCliArgs(agent, ["-z", text]);
-  const { stdout, stderr } = await execFileAsync(
-    await resolveHermesBin(),
-    args,
-    {
+  const [fleetPolicy, sharedHiveEnv] = await Promise.all([
+    currentFleetMachinePolicy(),
+    readSharedHiveEnvForSpawn(),
+  ]);
+  const { agentEnv, sharedEnvBlock } = prepareFleetSharedEnvChat(fleetPolicy, sharedHiveEnv, safeAgentEnv(body.agentEnv), body.context);
+  if (sharedEnvBlock) {
+    return {
+      ...sharedEnvBlock,
+      status: 403,
+      host: hostname(),
+    };
+  }
+  const openAiSelection = await resolveBillingSafeOpenAiAgent(requestedAgent, hermesHome, sharedHiveEnv);
+  const agent = openAiSelection.profile;
+  await repairHermesCodexAuthBeforeChat(agent, hermesHome);
+  const spawnEnv = fleetPolicySpawnEnv(fleetPolicy, sharedHiveEnv, {
+    ...agentEnv,
+    ...hermesModelHostEnv(body, agent),
+    HERMES_HOME: hermesHome,
+    PAGER: "cat",
+    ...hermesPrivacyGuardEnv(hermesHome, fleetPolicy),
+  });
+  const bin = await resolveHermesBin();
+  const env = runtimeProcessEnv(spawnEnv.extra, { excludeKeys: spawnEnv.excludedKeys });
+  // Tie the hermes CLI lifetime to the HTTP caller: queen-bee delegates abort
+  // at 240s while chatTimeoutMs is 20 min, and every abandoned `hermes -z`
+  // kept running as a zombie worker burning CPU/memory (the 2026-07-03 hel1-2
+  // pile-up amplifier). execFile's AbortSignal support SIGTERMs the child when
+  // the /chat response closes early. AGENT_TELEMETRY_CHAT_ABORT_KILL=0
+  // restores the old detached behavior.
+  const abortSignal =
+    process.env.AGENT_TELEMETRY_CHAT_ABORT_KILL === "0"
+      ? undefined
+      : options.signal;
+  const abortedResult = () => ({
+    ok: false,
+    status: 499,
+    error: "Chat canceled: the requesting client disconnected.",
+    host: hostname(),
+  });
+  const runHermes = async (cliArgs) => {
+    const { stdout, stderr } = await execFileAsync(bin, cliArgs, {
       timeout: chatTimeoutMs,
       maxBuffer: 3_000_000,
-      env: runtimeProcessEnv({
-        ...agentEnv,
-        ...hermesModelHostEnv(body, agent),
-        HERMES_HOME: hermesHome,
-        PAGER: "cat",
-      }),
-    },
-  );
-  const content = stdout.trim() || stderr.trim();
+      env,
+      ...(abortSignal ? { signal: abortSignal } : {}),
+    });
+    return (stdout.trim() || stderr.trim());
+  };
+
+  // `hermes -z` can exit 0 with NO stdout/stderr (a silent failure) when the agent's
+  // model/provider combo is invalid (e.g. an unsupported model id) or a tool loop ends
+  // without emitting final text. Treat empty output as a failure to recover from — first
+  // retry with the agent's DEFAULT config (no -m/--provider, which is the robust path), and
+  // only then report an honest error instead of returning ok:true with empty text.
+  const primaryArgs = hermesCliArgs(agent, ["-z", text]);
+  const fallbackArgs = ["-z", text];
+  const scopedModelRun =
+    JSON.stringify(primaryArgs) !== JSON.stringify(fallbackArgs);
+  let content = "";
+  let primaryError = "";
+  try {
+    content = await runHermes(primaryArgs);
+  } catch (error) {
+    if (!abortSignal?.aborted && !scopedModelRun) throw error;
+    const maybe = error && typeof error === "object" ? error : {};
+    primaryError = String(
+      (maybe.stderr || "").trim() ||
+        (maybe.stdout || "").trim() ||
+        maybe.message ||
+        "",
+    );
+  }
+  if (abortSignal?.aborted) return abortedResult();
+  // The agent's selected model/provider being unrunnable is a configuration
+  // error the user must SEE — answering anyway from the default hermes config
+  // silently serves a different (possibly paid) model while the dashboard
+  // claims the selected one (the 2026-07-05 Swarm Sovereign Scout → gpt-5.5
+  // incident). Config-shaped failures return the real error; only a silent
+  // empty run keeps the fallback, and then the swap is declared in the payload.
+  const configShapedError =
+    /unknown provider|unknown model|unsupported model|no such model|invalid provider|not a valid model/i.test(
+      primaryError,
+    );
+  if (scopedModelRun && configShapedError) {
+    return {
+      ok: false,
+      status: 502,
+      error:
+        `The agent's selected model (${agent.provider || "?"} / ${agent.model || "?"}) cannot run on this machine's hermes config: ${primaryError}` +
+        " Fix the agent's provider/model selection (or this machine's hermes providers) instead of relying on a silent default-model fallback.",
+      host: hostname(),
+    };
+  }
+  let modelFallback = null;
+  if (!content && scopedModelRun && !openAiSelection.oauthProtected) {
+    content = await runHermes(fallbackArgs).catch(() => "");
+    if (abortSignal?.aborted) return abortedResult();
+    if (content) {
+      modelFallback = {
+        requestedProvider: agent.provider || "",
+        requestedModel: agent.model || "",
+        reason: primaryError || "the selected model produced no output",
+        note: "Answered by this machine's default hermes model config, NOT the agent's selected model.",
+      };
+    }
+  }
+  if (!content) {
+    return {
+      ok: false,
+      status: 502,
+      error:
+        primaryError ||
+        (openAiSelection.oauthProtected
+          ? "The OAuth-protected OpenAI run produced no output. HivemindOS blocked the unscoped Hermes fallback because it could use an API-key-billed default provider."
+          : "Hermes produced no output (silent failure). Check the agent's model/provider config or simplify the prompt."),
+      host: hostname(),
+    };
+  }
   return {
     ok: true,
     text: content,
     choices: [{ message: { role: "assistant", content } }],
     host: hostname(),
+    ...(openAiSelection.redirectedFromApiKey
+      ? {
+          billingGuard: {
+            auth: "oauth", provider: "openai-codex", model: agent.model,
+            reason: "ChatGPT OAuth is configured and API-key billing was not explicitly selected.",
+          },
+        }
+      : {}),
+    ...(modelFallback
+      ? {
+          modelFallback,
+          warning: `Model fallback: the selected ${modelFallback.requestedProvider}/${modelFallback.requestedModel} failed (${modelFallback.reason}); this reply came from the machine's default hermes model.`,
+        }
+      : {}),
   };
 }
 
 async function hermesApiHealthy() {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 800);
+  const timer = setTimeout(() => controller.abort(), hermesApiHealthTimeoutMs);
   try {
     const response = await fetch(`${hermesApiBaseUrl}/health`, {
       headers: hermesApiHeaders(),
       signal: controller.signal,
     });
+    // Consume the body: an unread fetch body keeps its socket out of the pool
+    // until GC, and this probe runs in a 300ms startup poll loop — a steady
+    // fd leak (see the 2026-07-03 NYC EBADF incident).
+    await response.body?.cancel().catch(() => {});
     return response.ok;
   } catch {
     return false;
@@ -5615,6 +7068,7 @@ async function ensureHermesApiServer(hermesHome) {
         API_SERVER_PORT: String(hermesApiPort),
         ...(hermesApiKey ? { API_SERVER_KEY: hermesApiKey } : {}),
         PAGER: "cat",
+        ...hermesPrivacyGuardEnv(hermesHome),
       }),
       stdio: ["ignore", "inherit", "inherit"],
     });
@@ -5636,40 +7090,6 @@ async function ensureHermesApiServer(hermesHome) {
   })();
 
   return hermesApiStartPromise;
-}
-
-function apiServerMessages(body, text, requestMarker = "") {
-  const markerMessage = requestMarker
-    ? [
-        {
-          role: "system",
-          content: `HivemindOS request marker: ${requestMarker}`,
-        },
-      ]
-    : [];
-  if (Array.isArray(body.messages) && body.messages.length > 0) {
-    return [
-      ...markerMessage,
-      ...body.messages
-        .filter((message) => message && typeof message === "object")
-        .map((message) => {
-          const content = normalizeMessageContent(message.content);
-          return {
-            role:
-              message.role === "assistant" || message.role === "system"
-                ? message.role
-                : "user",
-            content,
-          };
-        })
-        .filter((message) =>
-          Array.isArray(message.content)
-            ? message.content.length > 0
-            : message.content.trim(),
-        ),
-    ];
-  }
-  return [...markerMessage, { role: "user", content: text }];
 }
 
 // Hermes' built-in lmstudio provider reads LM_BASE_URL at request time, so a
@@ -5913,7 +7333,15 @@ async function listRecentHermesApiSessions(hermesHome, sinceMs = 0) {
 
 async function readRuntimeSession(runtime, options = {}) {
   if (runtime !== "hermes") return null;
-  const hermesHome = expandHome(options.localDataDir || defaultHermesDir);
+  const hermesHome = expandHome(
+    sanitizeLocalDataDir(options.localDataDir) || defaultHermesDir,
+  );
+  // RESERVED profiles (e.g. the fleet-watchdog's runtime-capability-probe) are
+  // excluded from the agent roster, but a dashboard may still hold a stale
+  // persisted agent pointing at one and poll its sessions. Never serve them, so
+  // health-probe turns can't surface in the chat tree via that back door.
+  const hermesHomeSlug = hermesHome.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || "";
+  if (RESERVED_HERMES_PROFILE_SLUGS.has(hermesHomeSlug)) return null;
   const sessionId = options.sessionId || "";
   const sinceMs = Number(options.sinceMs || 0);
   if (sessionId) {
@@ -5940,22 +7368,25 @@ async function readRuntimeSession(runtime, options = {}) {
   return session ? { ...session, runtime: "hermes" } : null;
 }
 
-async function waitForHermesCliSession(hermesHome, sinceMs, text) {
+async function findHermesCliSession(hermesHome, sinceMs, text) {
   const needle = text.trim().slice(0, 80);
+  const sessions = await listRecentHermesDbSessions(hermesHome, sinceMs);
+  const matched = sessions.find(
+    (session) =>
+      !needle ||
+      session.messages.some(
+        (message) =>
+          message.role === "user" && message.content.includes(needle),
+      ),
+  );
+  return matched ?? sessions.find((session) => !session.endedAt) ?? null;
+}
+
+async function waitForHermesCliSession(hermesHome, sinceMs, text) {
   const deadline = Date.now() + sessionDiscoveryTimeoutMs;
   while (Date.now() < deadline) {
-    const sessions = await listRecentHermesDbSessions(hermesHome, sinceMs);
-    const matched = sessions.find(
-      (session) =>
-        !needle ||
-        session.messages.some(
-          (message) =>
-            message.role === "user" && message.content.includes(needle),
-        ),
-    );
-    if (matched) return matched;
-    const openSession = sessions.find((session) => !session.endedAt);
-    if (openSession) return openSession;
+    const session = await findHermesCliSession(hermesHome, sinceMs, text);
+    if (session) return session;
     await sleep(250);
   }
   return null;
@@ -5999,16 +7430,60 @@ async function waitForHermesApiSession(
   return null;
 }
 
-async function proxyHermesApiChat(body, response, text, hermesHome) {
+async function proxyHermesApiChat(body, response, text, hermesHome, fleetPolicy = null) {
   const requestStartedAt = Date.now();
   const requestMarker = `hivemindos-${requestStartedAt.toString(36)}-${randomBytes(4).toString("hex")}`;
-  if (!(await ensureHermesApiServer(hermesHome))) return false;
+  const runtimeSessionId = safeTelemetryText(
+    body.runtimeSessionId || body.hermesSessionId || "",
+    160,
+  );
+  const chatStorageKey = safeTelemetryText(
+    body.chatStorageKey || body.threadId || "",
+    160,
+  );
+  const agent =
+    body.agent && typeof body.agent === "object" && !Array.isArray(body.agent)
+      ? body.agent
+      : {};
+  const hasMultimodal = messagesHaveMultimodalContent(body.messages);
+  const telemetryBase = {
+    requestMarker,
+    runtimeSessionId: runtimeSessionId || null,
+    agentId: safeTelemetryText(agent.id || "", 120) || null,
+    agentName: safeTelemetryText(agent.name || "", 120) || null,
+    runtime: "hermes",
+    bridge: "api-server",
+    model: safeTelemetryText(agent.model || "hermes-agent", 160),
+    provider: safeTelemetryText(agent.provider || "", 120) || null,
+    messageLength: text.length,
+    bodyMessageCount: Array.isArray(body.messages) ? body.messages.length : 0,
+    hasMultimodal,
+    usesDefaultHermesHome:
+      resolve(hermesHome || defaultHermesDir) === resolve(defaultHermesDir),
+  };
+  const emitTelemetry = (type, payload = {}) =>
+    recordCollectorTelemetry(
+      `agent_runtime.hermes_api_proxy.${type}`,
+      {
+        ...telemetryBase,
+        ...payload,
+        elapsedMs: Date.now() - requestStartedAt,
+      },
+      { runId: runtimeSessionId || requestMarker, threadId: chatStorageKey },
+    );
+  void emitTelemetry("request.start");
+  if (!(await ensureHermesApiServer(hermesHome))) {
+    await emitTelemetry("server.unavailable");
+    return false;
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), chatTimeoutMs);
   let sessionTimer = null;
   let heartbeatTimer = null;
   let emittedSession = false;
   let sessionLookupInFlight = false;
+  let observedHermesSessionId = "";
+  let streamCompleted = false;
 
   const ensureHeaders = () => {
     if (response.headersSent || response.writableEnded) return;
@@ -6030,10 +7505,21 @@ async function proxyHermesApiChat(body, response, text, hermesHome) {
         hermesHome,
         requestStartedAt - 2_000,
         text,
-        requestMarker,
       );
       if (!session || emittedSession || response.writableEnded) return;
       emittedSession = true;
+      observedHermesSessionId = session.sessionId || observedHermesSessionId;
+      void emitTelemetry("session.detected", {
+        hermesSessionId: observedHermesSessionId,
+        sessionSource: safeTelemetryText(session.source || "hermes", 80),
+        sessionMessageCount: session.messages.length,
+        sessionStartedOffsetMs: session.startedAt
+          ? Math.round(session.startedAt - requestStartedAt)
+          : null,
+        sessionUpdatedOffsetMs: session.updatedAt
+          ? Math.round(session.updatedAt - requestStartedAt)
+          : null,
+      });
       ensureHeaders();
       response.write(
         ssePayload({
@@ -6053,7 +7539,13 @@ async function proxyHermesApiChat(body, response, text, hermesHome) {
   }
 
   try {
-    response.on("close", () => controller.abort());
+    response.on("close", () => {
+      controller.abort();
+      if (!streamCompleted)
+        void emitTelemetry("client.closed", {
+          hermesSessionId: observedHermesSessionId || null,
+        });
+    });
     ensureHeaders();
     response.write(": waiting for Hermes API stream\n\n");
     heartbeatTimer = setInterval(() => {
@@ -6064,22 +7556,77 @@ async function proxyHermesApiChat(body, response, text, hermesHome) {
       void emitSession().catch(() => undefined);
     }, 1_000);
 
+    const upstreamStartedAt = Date.now();
+    void emitTelemetry("model_request.start", {
+      endpoint: "/v1/chat/completions",
+    });
+    const policyPrompt = fleetMachinePolicyPrompt(fleetPolicy);
+    const policyAwareBody = policyPrompt
+      ? {
+          ...body,
+          messages: [
+            { role: "system", content: policyPrompt },
+            ...(Array.isArray(body.messages) && body.messages.length
+              ? body.messages
+              : [{ role: "user", content: text }]),
+          ],
+        }
+      : body;
     const upstream = await fetch(`${hermesApiBaseUrl}/v1/chat/completions`, {
       method: "POST",
-      headers: hermesApiHeaders({ "Content-Type": "application/json" }),
+      headers: hermesApiHeaders({
+        "Content-Type": "application/json",
+        ...hermesApiSessionHeaders(body, { authenticated: Boolean(hermesApiKey) }),
+      }),
       body: JSON.stringify({
-        model: body.agent?.model || "hermes-agent",
-        provider: body.agent?.provider || undefined,
+        model: agent.model || "hermes-agent",
+        provider: agent.provider || undefined,
         stream: true,
-        messages: apiServerMessages(body, text, requestMarker),
+        messages: hermesApiMessages(policyAwareBody, text, normalizeMessageContent),
       }),
       signal: controller.signal,
     });
+    const upstreamHermesSessionId = hermesSessionIdFromResponse(upstream.headers);
+    if (upstreamHermesSessionId) {
+      observedHermesSessionId = upstreamHermesSessionId;
+      if (!emittedSession) {
+        emittedSession = true;
+        void emitTelemetry("session.detected", {
+          hermesSessionId: observedHermesSessionId,
+          sessionSource: "api-response-header",
+        });
+        ensureHeaders();
+        response.write(
+          ssePayload({
+            session: {
+              id: observedHermesSessionId,
+              runtime: "hermes",
+              source: "api-response-header",
+            },
+          }),
+        );
+      }
+    }
+    void emitTelemetry("model_request.response", {
+      status: upstream.status,
+      ok: upstream.ok,
+      responseMs: Date.now() - upstreamStartedAt,
+      contentType: safeTelemetryText(
+        upstream.headers.get("content-type") || "",
+        120,
+      ) || null,
+    });
     if (!upstream.ok || !upstream.body) {
       const errorText = await upstream.text().catch(() => "");
+      await emitTelemetry("model_request.error", {
+        status: upstream.status || 502,
+        responseMs: Date.now() - upstreamStartedAt,
+        errorLength: errorText.length,
+      });
       const fallbackMessage = messagesHaveMultimodalContent(body.messages)
         ? "Hermes rejected the attached media."
         : `Hermes API returned ${upstream.status || 502}.`;
+      streamCompleted = true;
       response.end(
         ssePayload({ error: errorText || fallbackMessage }) +
           "data: [DONE]\n\n",
@@ -6094,20 +7641,48 @@ async function proxyHermesApiChat(body, response, text, hermesHome) {
     let buffer = "";
     let wroteContent = false;
     let wroteDone = false;
-    const hasMultimodal = messagesHaveMultimodalContent(body.messages);
+    let upstreamChunkCount = 0;
+    let upstreamByteCount = 0;
+    let sseEventCount = 0;
+    let contentDeltaCount = 0;
+    let outputLength = 0;
+    let processPayloadCount = 0;
+    let processToolCallCount = 0;
+    let firstByteElapsedMs = null;
+    let firstContentElapsedMs = null;
+    let firstProcessElapsedMs = null;
+    let doneSignalElapsedMs = null;
+    const processToolNames = new Set();
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
+      upstreamChunkCount += 1;
+      upstreamByteCount += value?.byteLength ?? value?.length ?? 0;
+      if (firstByteElapsedMs === null) {
+        firstByteElapsedMs = Date.now() - requestStartedAt;
+        void emitTelemetry("model_stream.first_byte", {
+          responseMs: Date.now() - upstreamStartedAt,
+          upstreamChunkCount,
+          upstreamByteCount,
+        });
+      }
       buffer += decoder.decode(value, { stream: true });
       const events = buffer.split("\n\n");
       buffer = events.pop() ?? "";
       for (const eventText of events) {
+        sseEventCount += 1;
         const dataLine = eventText
           .split("\n")
           .find((line) => line.startsWith("data:"));
         if (!dataLine) continue;
         const raw = dataLine.replace(/^data:\s*/, "");
         if (raw === "[DONE]") {
+          doneSignalElapsedMs = Date.now() - requestStartedAt;
+          void emitTelemetry("model_stream.done_signal", {
+            upstreamChunkCount,
+            upstreamByteCount,
+            sseEventCount,
+          });
           if (hasMultimodal && !wroteContent) {
             ensureHeaders();
             response.write(
@@ -6129,18 +7704,57 @@ async function proxyHermesApiChat(body, response, text, hermesHome) {
                 ? parsed.error.message
                 : "";
           if (errorMessage.trim()) {
+            void emitTelemetry("model_stream.error_event", {
+              errorLength: errorMessage.length,
+              upstreamChunkCount,
+              sseEventCount,
+            });
             ensureHeaders();
             response.write(ssePayload({ error: errorMessage }));
             wroteDone = true;
             continue;
           }
           const content = streamingChatContent(parsed);
+          const processPayload = streamingChatProcessPayload(parsed);
+          const processSummary = summarizeHermesProcessPayload(
+            processPayload || parsed,
+          );
+          if (
+            processSummary &&
+            (processPayload ||
+              processSummary.toolCallCount ||
+              processSummary.statusType ||
+              processSummary.hasReasoning ||
+              processSummary.usage)
+          ) {
+            processPayloadCount += 1;
+            processToolCallCount += processSummary.toolCallCount || 0;
+            for (const toolName of processSummary.toolNames || []) {
+              processToolNames.add(toolName);
+            }
+            if (firstProcessElapsedMs === null)
+              firstProcessElapsedMs = Date.now() - requestStartedAt;
+            void emitTelemetry("process_event", {
+              processPayloadCount,
+              ...processSummary,
+            });
+          }
           if (content) {
             wroteContent = true;
+            contentDeltaCount += 1;
+            outputLength += content.length;
+            if (firstContentElapsedMs === null) {
+              firstContentElapsedMs = Date.now() - requestStartedAt;
+              void emitTelemetry("model_stream.first_content", {
+                contentLength: content.length,
+                responseMs: Date.now() - upstreamStartedAt,
+                upstreamChunkCount,
+                sseEventCount,
+              });
+            }
             ensureHeaders();
             response.write(ssePayload({ choices: [{ delta: { content } }] }));
           } else {
-            const processPayload = streamingChatProcessPayload(parsed);
             if (processPayload) {
               ensureHeaders();
               response.write(ssePayload(processPayload));
@@ -6171,12 +7785,54 @@ async function proxyHermesApiChat(body, response, text, hermesHome) {
       wroteDone = true;
     }
     await emitSession();
-    if (!wroteContent && !emittedSession && !response.headersSent) return false;
+    if (!wroteContent && !emittedSession && !response.headersSent) {
+      await emitTelemetry("model_stream.empty_fallback", {
+        upstreamChunkCount,
+        upstreamByteCount,
+        sseEventCount,
+        wroteDone,
+      });
+      return false;
+    }
     ensureHeaders();
+    streamCompleted = true;
     response.write("data: [DONE]\n\n");
     if (!response.writableEnded) response.end();
+    const sessionTimeline = observedHermesSessionId
+      ? await summarizeHermesDbSessionTimeline(
+          hermesHome,
+          observedHermesSessionId,
+          requestStartedAt,
+        )
+      : null;
+    await emitTelemetry("model_stream.completed", {
+      hermesSessionId: observedHermesSessionId || null,
+      firstByteElapsedMs,
+      firstContentElapsedMs,
+      firstProcessElapsedMs,
+      doneSignalElapsedMs,
+      responseMs: Date.now() - upstreamStartedAt,
+      upstreamChunkCount,
+      upstreamByteCount,
+      sseEventCount,
+      contentDeltaCount,
+      outputLength,
+      processPayloadCount,
+      processToolCallCount,
+      processToolNames: [...processToolNames].slice(0, 30),
+      wroteContent,
+      wroteDone,
+      sessionTimeline,
+    });
     return true;
-  } catch {
+  } catch (error) {
+    streamCompleted = true;
+    await emitTelemetry("model_stream.failed", {
+      hermesSessionId: observedHermesSessionId || null,
+      aborted: controller.signal.aborted,
+      errorName: safeTelemetryText(error?.name || "", 80) || null,
+      errorMessage: safeTelemetryText(error?.message || "", 180) || null,
+    });
     if (!response.writableEnded) {
       response.write(
         ssePayload({ error: "Hermes API streaming interrupted." }),
@@ -6191,7 +7847,11 @@ async function proxyHermesApiChat(body, response, text, hermesHome) {
   }
 }
 
-async function streamHermesChat(body, response) {
+async function streamHermesChat(body, response, options = {}) {
+  const releaseCollectorChatRun =
+    typeof options.releaseCollectorChatRun === "function"
+      ? options.releaseCollectorChatRun
+      : () => undefined;
   if (process.env.AGENT_TELEMETRY_CHAT_DISABLED === "1") {
     response.writeHead(403, {
       "content-type": "text/event-stream",
@@ -6203,6 +7863,7 @@ async function streamHermesChat(body, response) {
         error: "Collector chat bridge is disabled on this machine.",
       }) + "data: [DONE]\n\n",
     );
+    releaseCollectorChatRun();
     return;
   }
 
@@ -6229,37 +7890,60 @@ async function streamHermesChat(body, response) {
     response.end(
       ssePayload({ error: "Message is required." }) + "data: [DONE]\n\n",
     );
+    releaseCollectorChatRun();
     return;
   }
-  const agent = body.agent && typeof body.agent === "object" ? body.agent : {};
+  const requestedAgent =
+    body.agent && typeof body.agent === "object" ? body.agent : {};
   const hermesHome = expandHome(
-    agent.localDataDir || body.localDataDir || defaultHermesDir,
+    sanitizeLocalDataDir(requestedAgent.localDataDir) ||
+      sanitizeLocalDataDir(body.localDataDir) ||
+      defaultHermesDir,
   );
-  const agentEnv = hermesContextEnv(safeAgentEnv(body.agentEnv), body.context);
-  // The Hermes gateway API server always runs turns on the gateway's own
-  // default model and ignores per-request model/provider. Agents with their
-  // own model selection or profile home must therefore use the CLI path,
-  // which honors HERMES_HOME plus `-m/--provider`. The gateway default is
-  // never rewritten to work around this.
-  const agentScopedModel = Boolean(
-    (typeof agent.model === "string" && agent.model.trim()) ||
-    (typeof agent.provider === "string" && agent.provider.trim()) ||
-    hermesHome !== defaultHermesDir,
-  );
+  const [fleetPolicy, sharedHiveEnv] = await Promise.all([
+    currentFleetMachinePolicy(),
+    readSharedHiveEnvForSpawn(),
+  ]);
+  const { agentEnv, sharedEnvBlock } = prepareFleetSharedEnvChat(fleetPolicy, sharedHiveEnv, safeAgentEnv(body.agentEnv), body.context);
+  if (sharedEnvBlock) {
+    jsonResponse(response, 403, {
+      ...sharedEnvBlock,
+      host: hostname(),
+    });
+    releaseCollectorChatRun();
+    return;
+  }
+  const openAiSelection = await resolveBillingSafeOpenAiAgent(requestedAgent, hermesHome, sharedHiveEnv);
+  const agent = openAiSelection.profile;
+  await repairHermesCodexAuthBeforeChat(agent, hermesHome);
+  // The Hermes gateway API server runs its configured default model and
+  // ignores per-request model/provider. An explicit selection does not need a
+  // cold CLI process when it already matches that live gateway. Distinct
+  // profile homes or genuinely different selections still use the CLI path,
+  // which honors HERMES_HOME plus `-m/--provider`.
+  const gatewaySelection =
+    hermesHome === defaultHermesDir
+      ? await readHermesModelConfig(defaultHermesDir)
+      : null;
+  const agentNeedsScopedCli =
+    hermesHome !== defaultHermesDir ||
+    !hermesApiSelectionMatchesAgent(agent, gatewaySelection) ||
+    fleetPolicyNeedsIsolatedHermes(fleetPolicy);
   if (
     body.forceHermesCli !== true &&
-    !agentScopedModel &&
+    !agentNeedsScopedCli &&
     hermesChatMode === "api" &&
-    (await proxyHermesApiChat(body, response, text, hermesHome))
-  )
+    (await proxyHermesApiChat({ ...body, agent }, response, text, hermesHome, fleetPolicy))
+  ) {
+    releaseCollectorChatRun();
     return;
+  }
 
   const runtimeSessionId = normalizeHermesSessionId(
     body.runtimeSessionId || body.hermesSessionId || "",
   );
   const args = hermesCliArgs(agent, [
     "chat",
-    "-Q",
     "-q",
     text,
     "--accept-hooks",
@@ -6269,32 +7953,35 @@ async function streamHermesChat(body, response) {
   if (
     runtimeSessionId &&
     body.disableHermesResume !== true &&
+    (!fleetPolicy.authority || effectiveFleetAccess(fleetPolicy).chatHistory === "allow") &&
     isHermesCliSessionId(runtimeSessionId)
   )
     args.push("--resume", runtimeSessionId);
   const cwd = await resolveChatWorkingDirectory(body.workingDirectory);
   const requestStartedAt = Date.now();
 
-  // Latest shared creds (provider keys) win over the collector's startup env.
-  const sharedHiveEnv = await readSharedHiveEnvForSpawn();
-  const child = spawn(await resolveHermesBin(), args, {
+  // Latest shared creds (provider keys) win only when this machine's master-hub
+  // policy allows shared-env access. ASK/DENY strips inherited copies too.
+  const spawnEnv = fleetPolicySpawnEnv(fleetPolicy, sharedHiveEnv, {
+    ...agentEnv,
+    ...hermesModelHostEnv(body, agent),
+    HERMES_HOME: hermesHome,
+    HERMES_ACCEPT_HOOKS: "1",
+    PAGER: "cat",
+    ...hermesPrivacyGuardEnv(hermesHome, fleetPolicy),
+  });
+  const launch = await resolveHermesStreamingLaunch(args);
+  const child = spawn(launch.command, launch.args, {
     cwd,
-    env: runtimeProcessEnv({
-      ...sharedHiveEnv,
-      ...agentEnv,
-      ...hermesModelHostEnv(body, agent),
-      HERMES_HOME: hermesHome,
-      HERMES_ACCEPT_HOOKS: "1",
-      PAGER: "cat",
-    }),
+    env: runtimeProcessEnv(spawnEnv.extra, { excludeKeys: spawnEnv.excludedKeys }),
     stdio: ["ignore", "pipe", "pipe"],
   });
 
   let stdout = "";
   let stderr = "";
-  let streamedStdout = "";
   let settled = false;
   let emittedSession = false;
+  let emittedHermesSessionId = "";
   let sessionLookupInFlight = false;
   let sessionTimer = null;
   response.writeHead(200, {
@@ -6303,10 +7990,26 @@ async function streamHermesChat(body, response) {
     connection: "keep-alive",
     "x-hermes-stream-source": "cli-chat",
   });
+  const streamProtocol = createHermesCliStreamProtocol({
+    onAssistantDelta: (content) => {
+      if (!settled && !response.writableEnded && !response.destroyed) {
+        response.write(ssePayload({ choices: [{ delta: { content } }] }));
+      }
+    },
+    onAssistantReset: (content) => {
+      if (!settled && !response.writableEnded && !response.destroyed) {
+        response.write(ssePayload({ type: "assistant.reset", content }));
+      }
+    },
+    onProcessEvent: (event) => {
+      if (!settled && !response.writableEnded && !response.destroyed) {
+        response.write(ssePayload(event));
+      }
+    },
+  });
 
   const finish = (payload = null) => {
     if (settled) return;
-    stdoutSanitizer.flush();
     settled = true;
     clearTimeout(timeout);
     if (sessionTimer) clearInterval(sessionTimer);
@@ -6315,13 +8018,6 @@ async function streamHermesChat(body, response) {
       response.end("data: [DONE]\n\n");
     }
   };
-  const stdoutSanitizer = createHermesCliOutputSanitizer((content) => {
-    if (!content || settled || response.writableEnded || response.destroyed)
-      return;
-    streamedStdout += content;
-    response.write(ssePayload({ choices: [{ delta: { content } }] }));
-  });
-
   async function emitSession() {
     if (
       emittedSession ||
@@ -6347,6 +8043,7 @@ async function streamHermesChat(body, response) {
       )
         return;
       emittedSession = true;
+      emittedHermesSessionId = session.sessionId;
       response.write(
         ssePayload({
           session: {
@@ -6396,7 +8093,7 @@ async function streamHermesChat(body, response) {
   child.stdout.on("data", (chunk) => {
     const textChunk = chunk.toString("utf8");
     stdout += textChunk;
-    stdoutSanitizer.process(textChunk);
+    streamProtocol.push(textChunk);
   });
 
   child.stderr.on("data", (chunk) => {
@@ -6404,36 +8101,42 @@ async function streamHermesChat(body, response) {
   });
 
   child.on("error", (error) => {
+    releaseCollectorChatRun();
     finish({
       error: error instanceof Error ? error.message : "Hermes chat failed",
     });
   });
 
   child.on("close", (code) => {
+    releaseCollectorChatRun();
     if (settled) return;
-    stdoutSanitizer.flush();
-    const content = stripHermesCliMetadata(stdout);
-    const errorText = stripHermesCliMetadata(stderr);
-    if (code === 0) {
-      if (!streamedStdout.trim() && content) {
-        response.write(ssePayload({ choices: [{ delta: { content } }] }));
-      } else if (!streamedStdout.trim() && errorText) {
-        response.write(
-          ssePayload({ choices: [{ delta: { content: errorText } }] }),
-        );
+    streamProtocol.flush();
+    void (async () => {
+      const content = stripHermesCliMetadata(stdout);
+      const errorText = stripHermesCliMetadata(stderr);
+      if (code === 0) {
+        const completedSession = emittedHermesSessionId
+          ? await readHermesDbSession(hermesHome, emittedHermesSessionId).catch(() => null)
+          : await findHermesCliSession(hermesHome, requestStartedAt - 2_000, sessionMatchText).catch(() => null);
+        const finalAssistantText = [...(completedSession?.messages ?? [])]
+          .reverse()
+          .find((message) => message.role === "assistant" && message.content.trim())
+          ?.content.trim();
+        const snapshot = streamProtocol.snapshot();
+        const finalContent = finalAssistantText || (!snapshot.sawAssistantDelta ? content || errorText : "");
+        streamProtocol.reconcileFinal(finalContent);
+        finish();
+        return;
       }
-      finish();
-      return;
-    }
-    finish({
-      error: errorText || `Hermes exited with code ${code ?? "unknown"}.`,
-    });
+      finish({ error: errorText || `Hermes exited with code ${code ?? "unknown"}.` });
+    })();
   });
 }
 
 async function snapshotFor(agent) {
   const dataDir = expandHome(
-    agent.localDataDir || (agent.runtime === "hermes" ? defaultHermesDir : ""),
+    sanitizeLocalDataDir(agent.localDataDir) ||
+      (agent.runtime === "hermes" ? defaultHermesDir : ""),
   );
   const [hermesTasks, fileTasks, running] = await Promise.all([
     agent.runtime === "hermes" && dataDir
@@ -6474,6 +8177,9 @@ async function snapshotFor(agent) {
   };
 }
 
+// Both readers resolve (with what arrived) on stream error too: without an
+// "error" listener a mid-body ECONNRESET is an unhandled stream error — an
+// uncaughtException — and the awaiting handler would hang forever.
 function readBody(request) {
   return new Promise((resolveBody) => {
     let body = "";
@@ -6481,6 +8187,7 @@ function readBody(request) {
       body += chunk;
     });
     request.on("end", () => resolveBody(body));
+    request.on("error", () => resolveBody(body));
   });
 }
 
@@ -6491,6 +8198,7 @@ function readBodyBuffer(request) {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
     });
     request.on("end", () => resolveBody(Buffer.concat(chunks)));
+    request.on("error", () => resolveBody(Buffer.concat(chunks)));
   });
 }
 
@@ -6544,6 +8252,9 @@ function proxyAppWebSocket(request, socket, head) {
     closeBoth();
   });
   socket.on("error", closeBoth);
+  // A clean client close emits "close" without "error"; without this the
+  // upstream socket leaks when the client goes away mid-handshake.
+  socket.on("close", closeBoth);
 }
 
 async function proxyAppHttp(request, response, targetUrl) {
@@ -6618,7 +8329,27 @@ async function proxyAppHttp(request, response, targetUrl) {
   });
 }
 
-const telemetryServer = createServer(async (request, response) => {
+// A rejection escaping the async request handler used to become a
+// process-killing unhandledRejection (2026-07-03 NYC incident — /health was
+// one such path). Fail the one request instead; never the daemon.
+const telemetryServer = createServer((request, response) => {
+  handleCollectorRequest(request, response).catch((error) => {
+    console.error(
+      `[collector] request failed: ${request.method} ${request.url}`,
+      error?.stack || error,
+    );
+    try {
+      jsonResponse(response, 500, {
+        ok: false,
+        error: "Internal collector error.",
+      });
+    } catch {
+      response.destroy();
+    }
+  });
+});
+
+async function handleCollectorRequest(request, response) {
   const requestUrl = new URL(request.url || "/", "http://127.0.0.1");
   const pathname = requestUrl.pathname;
   response.setHeader("access-control-allow-origin", "*");
@@ -6628,8 +8359,91 @@ const telemetryServer = createServer(async (request, response) => {
     response.writeHead(204).end();
     return;
   }
+  if (pathname === "/ready" && request.method === "GET") {
+    jsonResponse(response, 200, {
+      ok: true,
+      host: hostname(),
+      collectorStartedAt,
+    });
+    return;
+  }
   if (pathname === "/health") {
     jsonResponse(response, 200, await collectorHealthPayload());
+    return;
+  }
+  if (pathname === "/fleet-policy") {
+    const auth = await fleetPolicyCaller(request);
+    if (!auth.ok) {
+      jsonResponse(response, auth.status || 403, { ok: false, error: auth.error });
+      return;
+    }
+    try {
+      const machineId = await stableMachineId();
+      let policy;
+      if (request.method === "GET") {
+        policy = await readFleetMachinePolicy({ machineId });
+      } else if (request.method === "POST") {
+        const rawBody = await readBody(request);
+        const body = rawBody ? JSON.parse(rawBody) : {};
+        if (body.action === "claim-master") {
+          policy = await claimFleetPolicyMaster({ caller: auth.caller, machineId });
+        } else if (body.action === "update") {
+          policy = await updateFleetMachinePolicy({
+            caller: auth.caller,
+            machineId,
+            access: body.access,
+            performance: body.performance,
+          });
+        } else if (body.action === "release-master") {
+          policy = await releaseFleetPolicyMaster({ caller: auth.caller, machineId });
+        } else if (body.action === "resolve-access") {
+          policy = await resolveFleetAccessRequest({
+            caller: auth.caller,
+            machineId,
+            capability: body.capability,
+            decision: body.decision,
+          });
+        } else {
+          throw new FleetMachinePolicyError("Unknown machine policy action.");
+        }
+        healthPayloadCache = null;
+      } else {
+        jsonResponse(response, 405, { ok: false, error: "Method not allowed." });
+        return;
+      }
+      jsonResponse(response, 200, {
+        ok: true,
+        host: hostname(),
+        machineId,
+        ...fleetMachinePolicyPublicView(policy, auth.caller),
+      });
+    } catch (error) {
+      jsonResponse(response, error instanceof FleetMachinePolicyError ? error.status : 500, {
+        ok: false,
+        error: error instanceof Error ? error.message : "Could not manage machine policy.",
+      });
+    }
+    return;
+  }
+  if (pathname === "/slash-commands" && request.method === "POST") {
+    try {
+      const rawBody = await readBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      const commands = await hermesSlashCommandCatalog(
+        body.agent && typeof body.agent === "object" ? body.agent : {},
+      );
+      jsonResponse(response, 200, {
+        runtime: "hermes",
+        source: "hermes-command-registry",
+        commands,
+        totalCommands: commands.length,
+      });
+    } catch {
+      jsonResponse(response, 503, {
+        ok: false,
+        error: "Hermes command inventory is unavailable.",
+      });
+    }
     return;
   }
   if (pathname.startsWith("/app-assets/") && request.method === "GET") {
@@ -6719,7 +8533,9 @@ const telemetryServer = createServer(async (request, response) => {
   }
   if (pathname === "/apps" && request.method === "GET") {
     try {
-      const apps = await discoverHostedApps();
+      const apps = await discoverHostedAppsCached(
+        requestUrl.searchParams.get("refresh") === "1",
+      );
       jsonResponse(response, 200, {
         ok: true,
         host: hostname(),
@@ -6739,18 +8555,99 @@ const telemetryServer = createServer(async (request, response) => {
     }
     return;
   }
-  if (pathname === "/update" && request.method === "POST") {
-    const version = await appVersion({ force: true });
-    const command = startUpdate();
-    jsonResponse(response, 202, {
+  if (pathname === "/app-builder" && request.method === "POST") {
+    const auth = await requireLinkOwner(request);
+    if (!auth.ok) {
+      jsonResponse(response, auth.status || 403, { ok: false, error: auth.error });
+      return;
+    }
+    try {
+      const rawBody = await readBody(request);
+      const body = rawBody ? JSON.parse(rawBody) : {};
+      jsonResponse(response, 200, { ok: true, ...(await runLocalAppBuilderAction(body)) });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not run local app-builder action.";
+      jsonResponse(response, /requires CONFIRM_APP_/.test(message) ? 409 : 400, { ok: false, error: message });
+    }
+    return;
+  }
+  if (pathname === "/maintenance/readiness" && request.method === "GET") {
+    jsonResponse(response, 200, {
       ok: true,
-      accepted: true,
       host: hostname(),
-      version,
-      message:
-        "Update started. The collector and dashboard may briefly restart.",
-      command,
+      ...collectorMaintenanceState(),
     });
+    return;
+  }
+  if (pathname === "/maintenance/reserve-update" && request.method === "POST") {
+    const maintenanceRequestId = String(
+      request.headers["x-hivemind-maintenance-request-id"] || "",
+    );
+    const reservation = reserveCollectorUpdate(maintenanceRequestId);
+    jsonResponse(response, reservation.status, {
+      ...reservation,
+      host: hostname(),
+    });
+    return;
+  }
+  if (pathname === "/maintenance/reserve-update" && request.method === "DELETE") {
+    const reservationToken = String(
+      request.headers["x-hivemind-maintenance-reservation"] || "",
+    );
+    const released = releaseCollectorUpdateReservation(reservationToken);
+    jsonResponse(response, released ? 200 : 409, {
+      ok: released,
+      released,
+      host: hostname(),
+      ...collectorMaintenanceState(),
+      ...(released ? {} : { error: "The maintenance reservation was not active." }),
+    });
+    return;
+  }
+  if (pathname === "/update" && request.method === "POST") {
+    const requestedReservationToken = String(
+      request.headers["x-hivemind-maintenance-reservation"] || "",
+    );
+    const activeReservation = activeCollectorUpdateReservation();
+    const reservation = activeReservation
+      ? activeReservation.token === requestedReservationToken
+        ? { ok: true, reservationToken: activeReservation.token }
+        : {
+            ok: false,
+            status: 409,
+            error: "Maintenance is already reserved by another update request.",
+          }
+      : reserveCollectorUpdate();
+    if (!reservation.ok) {
+      jsonResponse(response, reservation.status || 409, {
+        ...reservation,
+        host: hostname(),
+      });
+      return;
+    }
+    try {
+      const version = await appVersion({ force: true });
+      const command = startUpdate(reservation.reservationToken);
+      jsonResponse(response, 202, {
+        ok: true,
+        accepted: true,
+        host: hostname(),
+        version,
+        message:
+          "Update started. The collector and dashboard may briefly restart.",
+        command,
+      });
+    } catch (error) {
+      releaseCollectorUpdateReservation(reservation.reservationToken);
+      jsonResponse(response, 500, {
+        ok: false,
+        host: hostname(),
+        error:
+          error instanceof Error
+            ? error.message
+            : "Could not start agent bridge maintenance.",
+      });
+    }
     return;
   }
   if (pathname === "/env" && request.method === "POST") {
@@ -6763,6 +8660,28 @@ const telemetryServer = createServer(async (request, response) => {
           ok: false,
           error: "No valid env variables were provided.",
         });
+        return;
+      }
+      // Per-machine secrets must never be SET BY A REMOTE PEER. This /env
+      // endpoint exists only for relayed fleet pushes, and hive-env-add's
+      // apply path doesn't gate on LOCAL_ONLY_KEYS, so without this a peer's
+      // scope-all push overwrites this machine's own dashboard auth
+      // token/secret (each hub generates + verifies its own in .env.local) —
+      // which silently breaks this machine's phone pairing / API auth (observed
+      // 2026-07-05). Mirror the relevant hive-env-add LOCAL_ONLY_KEYS here and
+      // drop them from any inbound push.
+      const REMOTE_REJECTED_KEYS = new Set([
+        "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN",
+        "HIVEMINDOS_DASHBOARD_AUTH_SECRET",
+      ]);
+      const rejected = Object.keys(entries).filter((key) =>
+        REMOTE_REJECTED_KEYS.has(key) || key.startsWith("USEPOD_HOST_"),
+      );
+      for (const key of rejected) delete entries[key];
+      if (!Object.keys(entries).length) {
+        // Every pushed key was a per-machine secret we won't accept remotely —
+        // ack it (so the peer's retry queue clears) but write nothing.
+        jsonResponse(response, 200, { ok: true, updated: 0, rejected: rejected.length });
         return;
       }
       await runHiveEnvImport({
@@ -6780,6 +8699,7 @@ const telemetryServer = createServer(async (request, response) => {
       jsonResponse(response, 200, {
         ok: true,
         updated: Object.keys(entries).length,
+        ...(rejected.length ? { rejected: rejected.length } : {}),
       });
     } catch (error) {
       jsonResponse(response, 500, {
@@ -6788,25 +8708,6 @@ const telemetryServer = createServer(async (request, response) => {
           error instanceof Error
             ? error.message
             : "Could not import env variables.",
-      });
-    }
-    return;
-  }
-  if (pathname === "/integrations/nango/setup" && request.method === "POST") {
-    try {
-      const rawBody = await readBody(request);
-      const body = rawBody ? JSON.parse(rawBody) : {};
-      const result = await setupNangoIntegrationHost(
-        String(body.baseUrl || "http://localhost:3003"),
-      );
-      jsonResponse(response, result.ok ? 200 : 502, result);
-    } catch (error) {
-      jsonResponse(response, 500, {
-        ok: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Could not set up Nango on this collector.",
       });
     }
     return;
@@ -6867,10 +8768,12 @@ const telemetryServer = createServer(async (request, response) => {
         : "generic";
       const { stdout } = await execFileAsync(
         envSync.command,
-        ["--export-json", "--scope", scope, "--runtime", runtime],
+        [...envSync.args, "--export-json", "--scope", scope, "--runtime", runtime],
         {
           timeout: 12_000,
           maxBuffer: 1_000_000,
+          shell: Boolean(envSync.shell),
+          windowsHide: true,
         },
       );
       const payload = JSON.parse(stdout);
@@ -7036,10 +8939,11 @@ const telemetryServer = createServer(async (request, response) => {
     try {
       const includeSourceFiles =
         requestUrl.searchParams.get("includeSourceFiles") === "true";
+      const force = requestUrl.searchParams.get("refresh") === "1";
       jsonResponse(
         response,
         200,
-        await listInstalledSkills({ includeSourceFiles }),
+        await listInstalledSkills({ includeSourceFiles, force }),
       );
     } catch (error) {
       jsonResponse(response, 500, {
@@ -7081,6 +8985,152 @@ const telemetryServer = createServer(async (request, response) => {
     }
     return;
   }
+  const runtimeStateMatch = pathname.match(
+    /^\/runtimes\/([^/]+)\/(export-runtime-state|import-runtime-state|backup-runtime-state|restore-runtime-state|runtime-state-backups)$/,
+  );
+  if (runtimeStateMatch) {
+    const runtimeName = runtimeStateMatch[1];
+    const op = runtimeStateMatch[2];
+    const manifest = portableStateManifest(runtimeName);
+    if (!manifest) {
+      jsonResponse(response, 404, {
+        ok: false,
+        error: `${runtimeName} has no portable-state manifest.`,
+      });
+      return;
+    }
+    const auth = await requireLinkOwner(request);
+    if (!auth.ok) {
+      jsonResponse(response, auth.status || 403, { ok: false, error: auth.error });
+      return;
+    }
+    try {
+      if (op === "export-runtime-state" && request.method === "POST") {
+        // Pack the redacted portable subset and stream it back as a gzip tar.
+        const pack = await packPortableState(runtimeName, { sharedVaultPath: defaultSyncPath });
+        try {
+          const buffer = await readFile(pack.tarPath);
+          response.writeHead(200, {
+            "content-type": "application/gzip",
+            "content-length": buffer.length,
+            "x-hivemind-runtime": runtimeName,
+            "x-hivemind-machine-id": await stableMachineId().catch(() => ""),
+            "x-hivemind-file-count": String(pack.fileCount),
+            "x-hivemind-redactions": String(pack.redactions),
+          });
+          response.end(buffer);
+        } finally {
+          await rm(dirname(pack.tarPath), { recursive: true, force: true });
+        }
+        return;
+      }
+      if (op === "import-runtime-state" && request.method === "POST") {
+        // Overlay an incoming gzip-tar onto this machine's runtime home,
+        // backing up the current subset first. Used by clone-seeding.
+        const body = await readBodyBuffer(request);
+        if (!body || body.length === 0) {
+          jsonResponse(response, 400, { ok: false, error: "A gzip tar body is required." });
+          return;
+        }
+        const tmpPath = join(
+          homedir(),
+          ".hivemindos",
+          "runtime-import-tmp",
+          `${runtimeName}-${randomBytes(6).toString("hex")}.tar.gz`,
+        );
+        await mkdir(dirname(tmpPath), { recursive: true, mode: 0o700 });
+        await writeFile(tmpPath, body);
+        try {
+          const result = await importPortableTar(runtimeName, tmpPath, {
+            sharedVaultPath: defaultSyncPath,
+          });
+          jsonResponse(response, 200, { ...result, host: hostname() });
+        } finally {
+          await rm(tmpPath, { force: true });
+        }
+        return;
+      }
+      if (op === "backup-runtime-state" && request.method === "POST") {
+        const result = await backupPortableState(runtimeName, { sharedVaultPath: defaultSyncPath });
+        jsonResponse(response, 200, { ok: true, ...result, host: hostname() });
+        return;
+      }
+      if (op === "restore-runtime-state" && request.method === "POST") {
+        const rawBody = await readBody(request);
+        const body = rawBody ? JSON.parse(rawBody) : {};
+        const backups = await listBackups(runtimeName);
+        const name = String(body.backup || backups[backups.length - 1] || "");
+        if (!name || !backups.includes(name)) {
+          jsonResponse(response, 404, { ok: false, error: "No matching runtime-state backup found." });
+          return;
+        }
+        const backupPath = join(homedir(), ".hivemindos", "runtime-backups", runtimeName, name);
+        const result = await restorePortableState(runtimeName, backupPath);
+        jsonResponse(response, 200, { ...result, backup: name, host: hostname() });
+        return;
+      }
+      if (op === "runtime-state-backups" && request.method === "GET") {
+        jsonResponse(response, 200, {
+          ok: true,
+          host: hostname(),
+          runtime: runtimeName,
+          backups: await listBackups(runtimeName),
+        });
+        return;
+      }
+      jsonResponse(response, 405, { ok: false, error: "Method not allowed." });
+    } catch (error) {
+      jsonResponse(response, 500, {
+        ok: false,
+        error: error instanceof Error ? error.message : "Runtime-state operation failed.",
+      });
+    }
+    return;
+  }
+  if (pathname === "/runtimes/state-sync") {
+    const auth = await requireLinkOwner(request);
+    if (!auth.ok) {
+      jsonResponse(response, auth.status || 403, { ok: false, error: auth.error });
+      return;
+    }
+    runtimeStateSyncConfig = runtimeStateSyncConfig ?? (await readRuntimeStateSyncConfig());
+    if (request.method === "GET") {
+      jsonResponse(response, 200, {
+        ok: true,
+        host: hostname(),
+        enabled: isRuntimeStateSyncEnabled(),
+        runtimes: syncableRuntimes(),
+        status: runtimeStateSyncStatus,
+      });
+      return;
+    }
+    if (request.method === "POST") {
+      try {
+        const rawBody = await readBody(request);
+        const body = rawBody ? JSON.parse(rawBody) : {};
+        jsonResponse(response, 200, await configureRuntimeStateSync(body));
+      } catch (error) {
+        jsonResponse(response, 400, {
+          ok: false,
+          error: error instanceof Error ? error.message : "Could not configure runtime-state sync.",
+        });
+      }
+      return;
+    }
+    jsonResponse(response, 405, { ok: false, error: "Method not allowed." });
+    return;
+  }
+  if (pathname === "/runtimes/state-sync/run" && request.method === "POST") {
+    const auth = await requireLinkOwner(request);
+    if (!auth.ok) {
+      jsonResponse(response, auth.status || 403, { ok: false, error: auth.error });
+      return;
+    }
+    runtimeStateSyncConfig = runtimeStateSyncConfig ?? (await readRuntimeStateSyncConfig());
+    const status = await runRuntimeStateSync("manual");
+    jsonResponse(response, 200, { ok: true, host: hostname(), status });
+    return;
+  }
   const runtimeIntegrationMatch = pathname.match(
     /^\/runtimes\/([^/]+)\/integrations$/,
   );
@@ -7089,6 +9139,24 @@ const telemetryServer = createServer(async (request, response) => {
       const rawBody = await readBody(request);
       const body = rawBody ? JSON.parse(rawBody) : {};
       const runtimeName = runtimeIntegrationMatch[1];
+      if (
+        COLLECTOR_RUNTIME_INSTALL[runtimeName] &&
+        body.action === "install-runtime"
+      ) {
+        jsonResponse(response, 200, await collectorInstallRuntime(runtimeName));
+        return;
+      }
+      if (
+        COLLECTOR_RUNTIME_INSTALL[runtimeName] &&
+        body.action === "runtime-auth"
+      ) {
+        jsonResponse(
+          response,
+          200,
+          await collectorSaveRuntimeAuth(body.input?.env, body.input?.value),
+        );
+        return;
+      }
       if (runtimeName === "openclaw") {
         if (body.action) {
           jsonResponse(
@@ -7126,19 +9194,17 @@ const telemetryServer = createServer(async (request, response) => {
         });
         return;
       }
-      if (COLLECTOR_RUNTIME_INSTALL[runtimeName]) {
-        if (body.action === "install-runtime") {
-          jsonResponse(response, 200, await collectorInstallRuntime(runtimeName));
-          return;
-        }
-        if (body.action === "runtime-auth") {
-          jsonResponse(
-            response,
-            200,
-            await collectorSaveRuntimeAuth(body.input?.env, body.input?.value),
-          );
-          return;
-        }
+      if (runtimeName === "codex" && !body.action) {
+        jsonResponse(response, 200, {
+          ok: true,
+          status: await codexIntegrationStatus(body.agent || {}),
+        });
+        return;
+      }
+      if (
+        COLLECTOR_RUNTIME_INSTALL[runtimeName] &&
+        runtimeName !== "hermes"
+      ) {
         const installed = await installedRuntimes().catch(() => []);
         jsonResponse(response, 200, {
           ok: true,
@@ -7187,11 +9253,43 @@ const telemetryServer = createServer(async (request, response) => {
     }
     return;
   }
+  if (pathname === "/messaging-channels") {
+    try {
+      if (request.method === "GET") {
+        jsonResponse(response, 200, await collectorMessagingChannels.list());
+        return;
+      }
+      if (request.method === "POST") {
+        const rawBody = await readBody(request);
+        const body = rawBody ? JSON.parse(rawBody) : {};
+        if (body.action === "send" || body.action === "test") {
+          const result = await collectorMessagingChannels.send(body);
+          jsonResponse(response, result.ok ? 200 : 400, result);
+          return;
+        }
+        jsonResponse(
+          response,
+          200,
+          await collectorMessagingChannels.list(body.agent || {}),
+        );
+        return;
+      }
+      jsonResponse(response, 405, { ok: false, error: "Method not allowed." });
+    } catch (error) {
+      jsonResponse(response, 500, {
+        ok: false,
+        error: error instanceof Error ? error.message : "Messaging channel bridge failed.",
+      });
+    }
+    return;
+  }
   if (pathname === "/schedules") {
     const agents = await localAgents();
     const schedules = (
       await Promise.all(
-        agents.map((agent) => scanRuntimeSchedules(agent, agent.localDataDir)),
+        agents.map((agent) =>
+          scanRuntimeSchedules(agent, sanitizeLocalDataDir(agent.localDataDir)),
+        ),
       )
     ).flat();
     jsonResponse(response, 200, { ok: true, host: hostname(), schedules });
@@ -7416,16 +9514,34 @@ const telemetryServer = createServer(async (request, response) => {
     return;
   }
   if (pathname === "/chat" && request.method === "POST") {
+    const maintenance = collectorMaintenanceState();
+    if (maintenance.updateStarting) {
+      jsonResponse(response, 503, {
+        ok: false,
+        error: "This agent bridge is starting maintenance. Retry after it reconnects.",
+        ...maintenance,
+      });
+      return;
+    }
+    const releaseCollectorChatRun = beginCollectorChatRun();
     try {
       const rawBody = await readBody(request);
       const body = rawBody ? JSON.parse(rawBody) : {};
       if (body.stream === true) {
-        await streamHermesChat(body, response);
+        await streamHermesChat(body, response, { releaseCollectorChatRun });
         return;
       }
-      const result = await sendHermesChat(body);
+      // "close" with the response still unwritten = the caller disconnected
+      // mid-run; kill the spawned hermes CLI (see sendHermesChat).
+      const chatAbort = new AbortController();
+      response.on("close", () => {
+        if (!response.writableEnded) chatAbort.abort();
+      });
+      const result = await sendHermesChat(body, { signal: chatAbort.signal });
       jsonResponse(response, result.ok ? 200 : result.status || 500, result);
+      releaseCollectorChatRun();
     } catch (error) {
+      releaseCollectorChatRun();
       jsonResponse(response, 500, {
         ok: false,
         error: error instanceof Error ? error.message : "Hermes chat failed",
@@ -7439,14 +9555,52 @@ const telemetryServer = createServer(async (request, response) => {
   }
   const rawBody = request.method === "POST" ? await readBody(request) : "{}";
   const body = rawBody ? JSON.parse(rawBody) : {};
-  const agents = body.agent
-    ? [body.agent]
-    : body.agents || (await localAgents());
-  const snapshots = await Promise.all(
-    agents.map((agent) => snapshotFor(agent)),
-  );
-  jsonResponse(response, 200, { ok: true, snapshot: snapshots[0], snapshots });
-});
+  if (body.agent || body.agents) {
+    const agents = (body.agent ? [body.agent] : body.agents).filter(
+      (agent) => !isReservedHermesProfileAgent(agent),
+    );
+    const snapshots = await Promise.all(
+      agents.map((agent) => snapshotFor(agent)),
+    );
+    jsonResponse(response, 200, {
+      ok: true,
+      snapshot: snapshots[0] ?? null,
+      snapshots,
+    });
+    return;
+  }
+  // Default all-local-agents snapshot: TTL + in-flight coalescing, because the
+  // dashboard, fleet watchdog, and peer collectors each poll this endpoint on
+  // their own clocks and every uncached hit re-scans all agents.
+  if (
+    snapshotAllCache &&
+    Date.now() - snapshotAllCache.at < snapshotCacheMs
+  ) {
+    jsonResponse(response, 200, snapshotAllCache.payload);
+    return;
+  }
+  if (!snapshotAllPromise) {
+    snapshotAllPromise = (async () => {
+      const agents = await localAgents();
+      const snapshots = await Promise.all(
+        agents.map((agent) => snapshotFor(agent)),
+      );
+      const payload = { ok: true, snapshot: snapshots[0], snapshots };
+      snapshotAllCache = { payload, at: Date.now() };
+      return payload;
+    })().finally(() => {
+      snapshotAllPromise = null;
+    });
+  }
+  try {
+    jsonResponse(response, 200, await snapshotAllPromise);
+  } catch (error) {
+    jsonResponse(response, 500, {
+      ok: false,
+      error: error instanceof Error ? error.message : "snapshot failed",
+    });
+  }
+}
 
 telemetryServer.on("upgrade", (request, socket, head) => {
   const requestUrl = new URL(request.url || "/", "http://127.0.0.1");
@@ -7484,6 +9638,11 @@ async function advertiseHubMdns() {
       /* tailscale not present / not up — advertise without the suffix */
     }
     const machineId = await stableMachineId().catch(() => "");
+    // Lazy-load bonjour-service here (see the top-of-file note): a missing package
+    // (no node_modules on a -SkipDeps install) throws into this function's try/catch
+    // and just disables mDNS advertising, instead of crashing the collector.
+    const bonjourModule = await import("bonjour-service");
+    const Bonjour = (bonjourModule.default ?? bonjourModule).Bonjour;
     const bonjour = new Bonjour();
     bonjour.publish({
       name: `HivemindOS ${hostname()}`,
@@ -7508,61 +9667,25 @@ async function advertiseHubMdns() {
   }
 }
 
+// The keep-alive guards above must not mask a failed bind: a collector that
+// can't listen should exit so launchd's KeepAlive relaunches it, not linger
+// alive-but-deaf. (The port stays pinned — fleet discovery depends on it.)
+telemetryServer.on("error", (error) => {
+  console.error(
+    "[collector] server error (exiting for relaunch):",
+    error?.stack || error,
+  );
+  process.exit(1);
+});
+
 telemetryServer.listen(port, host, () => {
   console.log(`agent telemetry collector listening on ${host}:${port}`);
   void initializeSkillAutoSync();
   void advertiseHubMdns();
   void installedRuntimes().catch(() => {});
+  void reconcileAppBuilderRuntimesAtBoot({ readProjects: readProjectRegistryProjects, expandHome }).catch(() => {});
   startEnvSyncMaintenance();
   startReliabilitySync();
-  startSelfReloadWatcher();
+  void initializeRuntimeStateSync();
+  void startSelfReloadWatcher({ selfPath: collectorSourcePath });
 });
-
-// launchd's WatchPaths is unreliable for in-place edits, so the collector
-// watches its own source instead: on a real code change it exits cleanly and
-// launchd's KeepAlive relaunches it with the new code — no manual kickstart.
-//
-// IMPORTANT: gate on CONTENT HASH, not raw fs events. fs.watch fires on mtime
-// touches, atomic-save renames, and Syncthing/editor writes that don't change
-// content; reacting to every event sent this into a restart LOOP (hundreds of
-// reloads) that knocked the collector offline and broke in-flight voice calls.
-// A startup grace period also breaks any tight relaunch loop.
-async function startSelfReloadWatcher() {
-  if (process.env.AGENT_TELEMETRY_DISABLE_SELF_RELOAD === "1") return;
-  let selfPath;
-  try {
-    selfPath = fileURLToPath(import.meta.url);
-  } catch {
-    return;
-  }
-  const hashSelf = async () => {
-    try {
-      return createHash("sha256").update(await readFile(selfPath)).digest("hex");
-    } catch {
-      return "";
-    }
-  };
-  const baselineHash = await hashSelf();
-  if (!baselineHash) return;
-  const startedAt = Date.now();
-  let pending = null;
-  let reloading = false;
-  try {
-    watch(selfPath, { persistent: false }, () => {
-      if (reloading) return;
-      if (pending) clearTimeout(pending);
-      pending = setTimeout(async () => {
-        pending = null;
-        // Ignore events right after launch so a misbehaving write can't loop us.
-        if (Date.now() - startedAt < 5_000) return;
-        const nextHash = await hashSelf();
-        if (!nextHash || nextHash === baselineHash) return; // content unchanged
-        reloading = true;
-        console.log("[collector] source changed — exiting for KeepAlive reload");
-        process.exit(0);
-      }, 1_000);
-    });
-  } catch {
-    // Auto-reload is a convenience; never block startup on it.
-  }
-}

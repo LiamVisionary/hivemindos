@@ -33,6 +33,15 @@ const appProxyContextCookie = "hivemind_link_app_proxy"
 const appProxyContextQuery = "__hive_app_proxy"
 const defaultLogMaxBytes = 2 * 1024 * 1024
 const defaultStatusTimeout = 3 * time.Second
+const tailnetHealthPath = "/_hivemind/health"
+const tailnetVersionPath = "/_hivemind/version"
+
+// Stamped by build-hivemind-linkd.sh via -ldflags so stale daemons are
+// detectable fleet-wide; "unknown" means an unstamped local build.
+var (
+	buildCommit = "unknown"
+	buildTime   = "unknown"
+)
 
 type config struct {
 	hostname        string
@@ -106,7 +115,12 @@ func parseConfig() config {
 	flag.BoolVar(&cfg.ephemeral, "ephemeral", defaultBoolFromEnv("HIVE_LINK_EPHEMERAL", false), "register as an ephemeral Tailscale node so stale registrations self-delete when offline")
 	flag.DurationVar(&cfg.statusTimeout, "status-timeout", defaultStatusTimeoutFromEnv(), "maximum time spent waiting for embedded Tailscale status")
 	flag.BoolVar(&cfg.shellEnabled, "shell", defaultBoolFromEnv("HIVE_LINK_SHELL_ENABLED", true), "serve the remote shell API to this node's tailnet owner")
+	showVersion := flag.Bool("version", false, "print build version info as JSON and exit")
 	flag.Parse()
+	if *showVersion {
+		_ = json.NewEncoder(os.Stdout).Encode(versionPayload())
+		os.Exit(0)
+	}
 	return cfg
 }
 
@@ -342,6 +356,51 @@ func newProxy(target *url.URL, lc *local.Client) http.Handler {
 		http.Error(w, fmt.Sprintf("hivemind-linkd proxy error: %v", err), http.StatusBadGateway)
 	}
 	return proxy
+}
+
+func versionPayload() map[string]any {
+	return map[string]any{
+		"service": "hivemind-linkd",
+		"commit":  buildCommit,
+		"builtAt": buildTime,
+		"go":      runtime.Version(),
+	}
+}
+
+// healthPayload reports whether the embedded tailscale backend is actually
+// usable, unlike the historical /health which returned ok unconditionally.
+// Always served with HTTP 200: "ok": false with a body means the daemon is up
+// but the tailnet is not (auth needed, control-plane trouble); no response at
+// all means the daemon itself is down.
+func healthPayload(ctx context.Context, lc *local.Client, timeout time.Duration) map[string]any {
+	payload := map[string]any{
+		"service": "hivemind-linkd",
+		"commit":  buildCommit,
+		"builtAt": buildTime,
+	}
+	if lc == nil {
+		payload["ok"] = false
+		payload["error"] = "local tailscale client unavailable"
+		return payload
+	}
+	if timeout <= 0 {
+		timeout = defaultStatusTimeout
+	}
+	statusCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	status, err := lc.Status(statusCtx)
+	if err != nil {
+		payload["ok"] = false
+		payload["error"] = err.Error()
+		return payload
+	}
+	payload["ok"] = status.BackendState == "Running"
+	payload["backendState"] = status.BackendState
+	payload["authNeeded"] = status.AuthURL != "" || status.BackendState == "NeedsLogin"
+	if status.AuthURL != "" {
+		payload["authUrl"] = status.AuthURL
+	}
+	return payload
 }
 
 func statusPayload(ctx context.Context, lc *local.Client, timeout time.Duration) map[string]any {
@@ -906,8 +965,13 @@ func appPortalScript(hostPort string, appProxyPrefix string) string {
 
 func serveControl(ctx context.Context, ln net.Listener, lc *local.Client, ts *tsnet.Server, statusTimeout time.Duration, shell *shellManager) *http.Server {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "service": "hivemind-linkd"})
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		_ = json.NewEncoder(w).Encode(healthPayload(r.Context(), lc, statusTimeout))
+	})
+	mux.HandleFunc("/version", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		_ = json.NewEncoder(w).Encode(versionPayload())
 	})
 	mux.HandleFunc("/status", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("content-type", "application/json")
@@ -917,6 +981,8 @@ func serveControl(ctx context.Context, ln net.Listener, lc *local.Client, ts *ts
 		// Local-only access for the dashboard's own machine; the listener is
 		// bound to loopback so no extra auth applies here.
 		mux.Handle(shellPathPrefix, shell.handler())
+	} else {
+		mux.HandleFunc(shellPathPrefix, serveShellUnavailable)
 	}
 	mux.HandleFunc("/peer/", servePeerProxy(ts))
 	mux.HandleFunc("/", servePeerRefererFallback(ts))
@@ -989,17 +1055,42 @@ func main() {
 	}()
 
 	collectorProxy := newProxy(target, lc)
-	var tailnetHandler http.Handler = collectorProxy
+	// File receive rides the same self-user gate as the shell, but does not
+	// depend on the shell manager, so it works on shell-disabled hosts too.
+	fileHandler := requireTailnetSelfUser(lc, cfg.statusTimeout, serveFileReceive())
+	var shellHandler http.Handler
 	if shell != nil {
-		shellHandler := requireTailnetSelfUser(lc, cfg.statusTimeout, shell.handler())
-		tailnetHandler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if strings.HasPrefix(r.URL.Path, shellPathPrefix) {
-				shellHandler.ServeHTTP(w, r)
-				return
-			}
-			collectorProxy.ServeHTTP(w, r)
-		})
+		shellHandler = requireTailnetSelfUser(lc, cfg.statusTimeout, shell.handler())
 	}
+	tailnetHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Peer-facing health/version so remote watchdogs can verify this
+		// daemon (and detect stale builds) without loopback access. No
+		// user gate: reachable only from inside the tailnet, and the
+		// payload carries no secrets.
+		if r.URL.Path == tailnetHealthPath {
+			w.Header().Set("content-type", "application/json")
+			_ = json.NewEncoder(w).Encode(healthPayload(r.Context(), lc, cfg.statusTimeout))
+			return
+		}
+		if r.URL.Path == tailnetVersionPath {
+			w.Header().Set("content-type", "application/json")
+			_ = json.NewEncoder(w).Encode(versionPayload())
+			return
+		}
+		if r.URL.Path == fileReceivePath {
+			fileHandler.ServeHTTP(w, r)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, shellPathPrefix) {
+			if shellHandler != nil {
+				shellHandler.ServeHTTP(w, r)
+			} else {
+				serveShellUnavailable(w, r)
+			}
+			return
+		}
+		collectorProxy.ServeHTTP(w, r)
+	})
 
 	log.Printf("hivemind-linkd proxying Tailnet %s to %s as %s (shell=%t)", cfg.listenAddr, cfg.target, cfg.hostname, shell != nil)
 	if err := http.Serve(ln, tailnetHandler); err != nil && !strings.Contains(err.Error(), "use of closed network connection") && !errors.Is(err, net.ErrClosed) {

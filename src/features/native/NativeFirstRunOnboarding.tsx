@@ -1,31 +1,66 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactElement, type SVGProps } from "react";
 import Image from "next/image";
-import { Check, ChevronLeft, Copy, LoaderCircle, Lock, Network, RefreshCcw, ShieldCheck, Sparkles, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
 import { NATIVE_SETUP_DEMO_ENABLED, NATIVE_SETUP_RERUN_EVENT, readNativeSetupStatus, runNativeSetup, type NativeDetectedAgentRuntime, type NativeSetupStatus } from "@/lib/native/setup";
-import { requestGuidedTour } from "@/lib/native/guided-tour";
+import { CLAWBANK_OPEN_EVENT } from "@/features/dashboard/ClawBankOnboardingModal";
 import { runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode } from "@/lib/config/runtime-icons";
 import { grantNativePrivateFilesystemAccess } from "@/lib/native/dashboard-bootstrap";
 import { dashboardStateValue, loadDashboardStateSnapshot, removeDashboardStateValue, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
+import styles from "./NativeFirstRunOnboarding.module.css";
 
 const DISMISS_KEY = "hivemindos.nativeFirstRun.dismissed.v3";
 const LEGACY_DISMISS_KEY = "hivemindos.nativeFirstRun.dismissed.v2";
 const DISMISS_FALLBACK_KEY = `${DISMISS_KEY}.localFallback`;
+// Matches NATIVE_SETUP_PROGRESS_EVENT in src-tauri/src/setup.rs. Setup now runs
+// hidden (no console window) and streams its output here so the wizard shows
+// live progress + surfaces a non-zero exit instead of spinning forever.
+const NATIVE_SETUP_PROGRESS_EVENT = "native-setup-progress";
+
+const APP_LOGO_PATH = "/hivemindos-logo.png";
 
 type InstallMode = "local" | "link" | "system-tailscale";
-type WizardStep = "mode" | "agents" | "run" | "pairing";
+type WizardStep = "welcome" | "scope" | "agents" | "plan" | "running" | "done";
 
 const ALL_AGENT_IDS = ["codex", "claude", "hermes", "gemini", "openclaw", "aeon"];
 const DEMO_RUN_MESSAGES = [
-  "Starting setup. If your system needs permission, a Terminal window will open for that part.",
+  "Starting setup — it runs in the background. Approve any permission prompts that appear.",
   "Checking selected agents.",
   "Setup has started. Follow any permission prompts that appear.",
 ];
+
+// Seven honeycomb cells in the running emblem (matches .cell.c0..c6 in the CSS).
+const EMBLEM_CELLS = 7;
+
+// Real setup milestones parsed from the streamed hidden-setup output, so the emblem
+// and meter reflect ACTUAL progress instead of a cosmetic timer (which raced through the
+// quick early steps then stalled on the genuinely-slow collector step). Each entry maps
+// to how many of the EMBLEM_CELLS are filled once a matching line has streamed, and to a
+// human phase label. Order matters: the highest matched cell wins.
+const SETUP_MILESTONES: Array<{ re: RegExp; cell: number; label: string }> = [
+  { re: /Downloading HivemindOS setup files|Unpacking setup files/i, cell: 1, label: "Downloading setup files… this can take a few minutes." },
+  { re: /HivemindOS (Windows )?setup\b|Node (found|is missing)|Downloading Node/i, cell: 2, label: "Checking dependencies…" },
+  { re: /Python (found|ready)|hive-env-add installed|hive-pulse installed/i, cell: 3, label: "Installing hive tools…" },
+  { re: /shared skill projection|hive-brain-sync|shared skills/i, cell: 4, label: "Syncing shared brain + skills…" },
+  { re: /MCP registration|Registered into \d+ harness|Runtime skill and memory hints/i, cell: 5, label: "Registering agents + MCP…" },
+  { re: /\bReady\b|Dashboard:|Local-only mode is ready/i, cell: 6, label: "Almost there…" },
+];
+
+function setupMilestoneCells(lines: string[]): number {
+  return SETUP_MILESTONES.reduce((max, m) => (lines.some((line) => m.re.test(line)) ? Math.max(max, m.cell) : max), 0);
+}
+
+function setupPhaseLabel(lines: string[], settled: boolean): string {
+  if (settled) return "Hive assembled.";
+  const cells = setupMilestoneCells(lines);
+  // Cell 6 = "Ready" printed, but the collector /health check (settled) can take a while.
+  // Name that slow tail so it doesn't read as a stall.
+  if (cells >= 6) return "Bringing the agent collector online…";
+  const current = [...SETUP_MILESTONES].reverse().find((m) => lines.some((line) => m.re.test(line)));
+  return current?.label ?? "Starting setup…";
+}
 
 // "this Mac" / "this PC" / "this computer", from the platform reported by native_setup_status.
 function deviceNoun(platform: string | undefined) {
@@ -34,50 +69,35 @@ function deviceNoun(platform: string | undefined) {
   return "computer";
 }
 
-function installModes(device: string): Array<{
-  id: InstallMode;
-  title: string;
-  detail: string;
-  badge: string | null;
-  command: string;
-}> {
-  return [
-    {
-      id: "local",
-      title: `Just this ${device}`,
-      detail: "Everything stays on this computer. You can add your other devices later.",
-      badge: null,
-      command: "./setup.sh --local-only",
-    },
-    {
-      id: "link",
-      title: `This ${device} + my other devices`,
-      detail: "Your computers stay in sync automatically. HivemindOS handles the connection — nothing extra to install.",
-      badge: "Recommended",
-      command: "./setup.sh --link",
-    },
-    {
-      id: "system-tailscale",
-      title: "Full Tailnet Hive",
-      detail: "Always-on folder sync between machines, on top of everything above.",
-      badge: "Advanced",
-      command: "./setup.sh --system-tailscale",
-    },
-  ];
+function modeCommand(mode: InstallMode) {
+  if (mode === "local") return "./setup.sh --local-only";
+  if (mode === "system-tailscale") return "./setup.sh --system-tailscale";
+  return "./setup.sh --link";
 }
 
-function stepHeaders(device: string, isMac: boolean, isWindows: boolean): Record<WizardStep, { title: string; subtitle: string }> {
-  return {
-    mode: { title: "Welcome to HivemindOS", subtitle: "One quick question: which computers should be in your hive?" },
-    agents: { title: "Connect your AI helpers", subtitle: `We found these on your ${device}. They'll share what they know through the hive.` },
-    // On Windows, "run" is the first screen: setup.ps1 makes the mode and import choices itself.
-    run: isWindows
-      ? { title: "Welcome to HivemindOS", subtitle: "One click and your hive sets itself up." }
-      : { title: "You're all set", subtitle: "HivemindOS takes care of everything from here." },
-    pairing: isMac
-      ? { title: "You're all set", subtitle: "Your phone reaches this Mac automatically — even when the app is closed." }
-      : { title: "All set", subtitle: "Setup is running in the background." },
-  };
+type PlanRow = { icon: ReactElement; label: string; detail: string; opt?: boolean };
+
+// The checklist shown on the "plan" step. The optional Link/Tailnet row only
+// appears for multi-machine modes, mirroring how setup.sh wires networking.
+function planRows(mode: InstallMode): PlanRow[] {
+  const rows: PlanRow[] = [
+    { icon: <IconNode />, label: "Check Node.js 20+", detail: "setup scripts + collector" },
+    { icon: <IconBox />, label: "Skip source dependencies", detail: "no workspace pnpm install" },
+    { icon: <IconWrench />, label: "Install hive env helpers", detail: "hive-env-add · hive-transfer · hive-update" },
+    { icon: <IconPulse />, label: "Start the machine monitor", detail: "collector · 127.0.0.1:8787" },
+  ];
+  if (mode !== "local") {
+    rows.push(
+      mode === "system-tailscale"
+        ? { icon: <IconLink />, label: "Join your Tailnet (system Tailscale)", detail: "tailscaled · SSH · Syncthing", opt: true }
+        : { icon: <IconLink />, label: "Connect Hivemind Link", detail: "app-managed tailnet · localhost-bound", opt: true },
+    );
+  }
+  rows.push(
+    { icon: <IconBrain />, label: "Seed the shared brain & skills", detail: "shared vault + skill shelf" },
+    { icon: <IconWindow />, label: "Use the packaged dashboard", detail: "bundled app server" },
+  );
+  return rows;
 }
 
 function agentIconId(agentId: string) {
@@ -85,28 +105,15 @@ function agentIconId(agentId: string) {
   return agentId;
 }
 
-function AgentIcon({ agent, compact = false }: { agent: NativeDetectedAgentRuntime; compact?: boolean }) {
+function AgentIcon({ agent }: { agent: NativeDetectedAgentRuntime }) {
   const iconId = agentIconId(agent.id);
   const icon = runtimeIconPath(iconId);
   const mode = runtimeIconRenderMode(iconId);
-  const iconSize = compact ? "h-5 w-5" : "h-7 w-7";
-  const fallbackSize = compact ? "h-5 w-5 text-[0.6rem]" : "h-7 w-7 text-[0.68rem]";
   if (icon && mode === "mask") {
-    return <span aria-hidden="true" className={`${iconSize} bg-current`} style={{ WebkitMask: `url(${icon}) center / contain no-repeat`, mask: `url(${icon}) center / contain no-repeat` }} />;
+    return <span aria-hidden="true" className="h-4 w-4 bg-current" style={{ WebkitMask: `url(${icon}) center / contain no-repeat`, mask: `url(${icon}) center / contain no-repeat` }} />;
   }
-  if (icon) return <Image src={icon} alt="" width={compact ? 20 : 28} height={compact ? 20 : 28} className={`${iconSize} object-contain`} unoptimized />;
-  return <span className={`grid ${fallbackSize} place-items-center rounded-full bg-[rgba(148,163,184,0.15)] font-semibold`}>{runtimeIconFallback(iconId, agent.label)}</span>;
-}
-
-function StepDots({ step, steps }: { step: WizardStep; steps: WizardStep[] }) {
-  const activeIndex = steps.indexOf(step);
-  return (
-    <div className="flex items-center gap-1.5" aria-hidden="true">
-      {steps.map((item, index) => (
-        <span key={item} className={`h-1.5 rounded-full transition-all ${index <= activeIndex ? "w-7 bg-[var(--accent-strong)]" : "w-2 bg-[rgba(148,163,184,0.28)]"}`} />
-      ))}
-    </div>
-  );
+  if (icon) return <Image src={icon} alt="" width={16} height={16} className="h-4 w-4 object-contain" unoptimized />;
+  return <span className="grid h-4 w-4 place-items-center rounded-full bg-[rgba(148,163,184,0.18)] text-[0.55rem] font-semibold">{runtimeIconFallback(iconId, agent.label)}</span>;
 }
 
 function readLocalDismissal() {
@@ -139,14 +146,30 @@ export function NativeFirstRunOnboarding() {
   const demoMode = NATIVE_SETUP_DEMO_ENABLED;
   const [status, setStatus] = useState<NativeSetupStatus | null>(null);
   const [open, setOpen] = useState(false);
-  const [rawStep, setStep] = useState<WizardStep>("mode");
+  const [rawStep, setStep] = useState<WizardStep>("welcome");
   const [mode, setMode] = useState<InstallMode>("link");
   const [skillAgents, setSkillAgents] = useState<string[]>(ALL_AGENT_IDS);
   const [memoryAgents, setMemoryAgents] = useState<string[]>(ALL_AGENT_IDS);
   const [running, setRunning] = useState(false);
   const [runStatus, setRunStatus] = useState("");
-  const [stepHeight, setStepHeight] = useState<number | null>(null);
-  const stepContentRef = useRef<HTMLDivElement | null>(null);
+  const [runError, setRunError] = useState("");
+  const [launchedCommand, setLaunchedCommand] = useState("");
+  const [copied, setCopied] = useState("");
+  // Live setup output streamed from the hidden launcher (native-setup-progress),
+  // plus a captured non-zero exit so the wizard can show an error instead of
+  // spinning. Kept short (tail) since it's a live activity feed, not a full log.
+  const [setupLines, setSetupLines] = useState<string[]>([]);
+  const [setupProcessDone, setSetupProcessDone] = useState(false);
+  const [setupExitError, setSetupExitError] = useState("");
+  // Safety valve for the process-done gate below: if the collector is healthy
+  // but NO setup output has streamed at all for a sustained stretch (a broken
+  // event bridge or an older hidden launcher), fall back to the old
+  // collector-only gate instead of spinning forever.
+  const [setupEventlessFallback, setSetupEventlessFallback] = useState(false);
+  // ClawBank may already be configured (re-run setup, credential replicated from
+  // another machine). When it is, the final button finishes instead of opening
+  // the ClawBank registration modal.
+  const [clawbankConfigured, setClawbankConfigured] = useState(false);
 
   const detectedAgents = useMemo(() => status?.detected_agents?.length
     ? status.detected_agents
@@ -155,20 +178,22 @@ export function NativeFirstRunOnboarding() {
   const device = deviceNoun(status?.platform);
   const isWindows = status?.platform === "windows";
   const isMac = device === "Mac";
-  const modes = useMemo(() => installModes(device), [device]);
-  const headers = useMemo(() => stepHeaders(device, isMac, isWindows), [device, isMac, isWindows]);
-  // setup.ps1 ignores mode and import selections, so Windows skips straight to the run step.
-  const wizardSteps = useMemo<WizardStep[]>(() => isWindows ? ["run", "pairing"] : ["mode", "agents", "run", "pairing"], [isWindows]);
+  const scope: "local" | "multi" = mode === "local" ? "local" : "multi";
+  const sysTs = mode === "system-tailscale";
+  // setup.ps1 ignores mode and import selections, so Windows skips the scope/agents/plan steps.
+  const wizardSteps = useMemo<WizardStep[]>(() => isWindows ? ["welcome", "running", "done"] : ["welcome", "scope", "agents", "plan", "running", "done"], [isWindows]);
   const step = wizardSteps.includes(rawStep) ? rawStep : wizardSteps[0];
-  const selectedMode = modes.find((item) => item.id === mode) ?? modes[1];
-  const stepShellStyle = stepHeight === null ? undefined : { height: `min(${stepHeight + 40}px, calc(100vh - 15rem))` };
-  // The local collector starts only near the END of setup.ps1, so its check
-  // flips to installed once setup has actually finished. Gate the "pairing"
-  // step's "all set / take the tour" UI on it — otherwise the tour appears the
-  // instant setup is *launched* (while the terminal is still mid-install), which
-  // reads as "done" when it is not.
+  const stepIndex = wizardSteps.indexOf(step);
+  // The local collector starts only near the END of setup, so its check flips to
+  // installed once setup has actually finished. But a machine RE-RUNNING setup
+  // already has a collector listening — often a stale process serving old code —
+  // so the collector answering is not proof this setup run did anything: gated on
+  // the collector alone, re-run setup showed the completed screen in under a
+  // second while the hidden script was still mid-download (seen live on a
+  // Windows PC). "Done" therefore requires the hidden setup process to have
+  // actually exited cleanly AND the collector to be up.
   const collectorReady = Boolean(status?.checks?.find((check) => check.id === "collector")?.installed);
-  const setupSettled = demoMode || collectorReady;
+  const setupSettled = demoMode || setupEventlessFallback || (collectorReady && setupProcessDone && !setupExitError);
 
   const refreshStatus = useCallback(async () => {
     if (!demoMode && !isTauriDesktopRuntime()) return;
@@ -181,8 +206,29 @@ export function NativeFirstRunOnboarding() {
     }
   }, [demoMode]);
 
+  // Check ClawBank readiness when the success screen appears. Errors fall back
+  // to offering setup — the ClawBank modal re-checks and shows "already
+  // connected" itself, so a false negative here never re-registers an account.
   useEffect(() => {
-    const handle = window.setTimeout(() => {
+    if (step !== "done") return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const res = await fetch("/api/clawbank", { cache: "no-store", signal: controller.signal });
+        const data = await res.json().catch(() => null) as { configured?: boolean } | null;
+        if (data?.configured) setClawbankConfigured(true);
+      } catch {
+        // Offer setup as usual.
+      }
+    })();
+    return () => controller.abort();
+  }, [step]);
+
+  useEffect(() => {
+    // Run synchronously on mount rather than via setTimeout(…, 0): deferring to a
+    // macrotask let the first-run wizard open AFTER the daily/weekly popups on a
+    // busy main thread. Opening the decision inline makes setup surface first.
+    const run = () => {
       if (demoMode) {
         setOpen(true);
         void refreshStatus();
@@ -192,27 +238,105 @@ export function NativeFirstRunOnboarding() {
       void refreshStatus();
       const locallyDismissed = readLocalDismissal();
       setOpen(!locallyDismissed);
-      void loadDashboardStateSnapshot().then((snapshot) => {
+      void loadDashboardStateSnapshot().then(async (snapshot) => {
         const dismissedInDashboardState = dashboardStateValue(snapshot, DISMISS_KEY) === "1";
         const legacyDismissed = dashboardStateValue(snapshot, LEGACY_DISMISS_KEY) === "1";
         const dismissed = dismissedInDashboardState || locallyDismissed;
         if (legacyDismissed && !dismissed) void removeDashboardStateValue(LEGACY_DISMISS_KEY);
+        // Auto-recover: a stale dismiss flag must not permanently suppress setup
+        // on a machine that genuinely has no collector. The flag lives in
+        // ~/.hivemindos/dashboard-state.json, which survives reinstall + "delete
+        // all app data" (those only clear the OS app-data dir) — so a
+        // once-dismissed, never-set-up machine could otherwise never re-prompt.
+        // Only override when we POSITIVELY read a status whose collector check is
+        // not installed; on any read error, honor the dismissal as before.
+        if (dismissed) {
+          let knownNotInstalled = false;
+          try {
+            const freshStatus = await readNativeSetupStatus({ demoMode });
+            if (freshStatus) {
+              knownNotInstalled = !freshStatus.checks?.find((c) => c.id === "collector")?.installed;
+            }
+          } catch { /* unknown — fall through and honor the dismissal */ }
+          if (knownNotInstalled) {
+            clearLocalDismissal();
+            void removeDashboardStateValue(DISMISS_KEY);
+            setOpen(true);
+            return;
+          }
+        }
         setOpen(!dismissed);
         if (dismissed && !dismissedInDashboardState) void saveDashboardStateValue(DISMISS_KEY, "1");
       });
-    }, 0);
-    return () => window.clearTimeout(handle);
+    };
+    run();
   }, [demoMode, refreshStatus]);
 
-  // While the "pairing" step waits for setup to finish, keep refreshing status
-  // so the screen flips from "finishing setup" to "all set" the moment the
-  // local collector comes up.
+  // While the running step waits for setup to finish, keep refreshing status so
+  // the screen flips to "done" the moment the local collector comes up.
   useEffect(() => {
-    if (step !== "pairing" || setupSettled) return;
+    if (step !== "running" || setupSettled) return;
     if (!demoMode && !isTauriDesktopRuntime()) return;
     const id = window.setInterval(() => { void refreshStatus(); }, 4000);
     return () => window.clearInterval(id);
   }, [step, setupSettled, demoMode, refreshStatus]);
+
+  // If the hidden setup launcher exits but the collector never appears, stop
+  // presenting the modal as busy. This covers older setup scripts that printed
+  // "finished" after swallowing a collector failure.
+  useEffect(() => {
+    if (step !== "running" || setupSettled || setupExitError || !setupProcessDone) return;
+    const id = window.setTimeout(() => {
+      setSetupExitError("Setup finished, but the local agent bridge did not come online.");
+    }, 6000);
+    return () => window.clearTimeout(id);
+  }, [step, setupSettled, setupExitError, setupProcessDone]);
+
+  // Once setup has settled, briefly hold the full emblem, then reveal "done".
+  useEffect(() => {
+    if (step !== "running" || !setupSettled) return;
+    const id = window.setTimeout(() => setStep("done"), 720);
+    return () => window.clearTimeout(id);
+  }, [step, setupSettled]);
+
+  // Arm the eventless fallback: collector healthy, zero streamed output, no
+  // exit signal — after a sustained minute of that, trust the collector check
+  // alone rather than spinning forever on a silent event bridge.
+  useEffect(() => {
+    if (step !== "running" || !collectorReady || setupProcessDone || setupExitError || setupLines.length > 0) return;
+    const id = window.setTimeout(() => setSetupEventlessFallback(true), 60_000);
+    return () => window.clearTimeout(id);
+  }, [step, collectorReady, setupProcessDone, setupExitError, setupLines.length]);
+
+  // Stream the hidden setup launcher's output into the wizard: live activity
+  // lines + a captured non-zero exit (so a failed setup shows an error instead
+  // of spinning forever now that there is no visible console window).
+  useEffect(() => {
+    if (!isTauriDesktopRuntime()) return;
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
+    void import("@tauri-apps/api/event").then(({ listen }) => listen<{ kind?: string; line?: string; exitCode?: number | null }>(NATIVE_SETUP_PROGRESS_EVENT, (event) => {
+      const p = event.payload ?? {};
+      if (p.kind === "start") { setSetupLines([]); setSetupProcessDone(false); setSetupExitError(""); setSetupEventlessFallback(false); return; }
+      if (p.kind === "line" && typeof p.line === "string") {
+        const line = p.line;
+        setSetupLines((current) => [...current.slice(-149), line]);
+        return;
+      }
+      if (p.kind === "done") {
+        setSetupProcessDone(true);
+        void refreshStatus();
+        if (p.exitCode != null && p.exitCode !== 0) {
+          setSetupExitError(`Setup exited with code ${p.exitCode}.`);
+        }
+      }
+    })).then((unlisten) => {
+      const safeUnlisten = createSafeTauriUnlisten(unlisten);
+      if (cancelled) { safeUnlisten(); return; }
+      cleanup = safeUnlisten;
+    }).catch(() => undefined);
+    return () => { cancelled = true; cleanup?.(); };
+  }, [refreshStatus]);
 
   useEffect(() => {
     if (!isTauriDesktopRuntime()) return;
@@ -221,8 +345,9 @@ export function NativeFirstRunOnboarding() {
     void import("@tauri-apps/api/event").then(({ listen }) => listen(NATIVE_SETUP_RERUN_EVENT, () => {
       clearLocalDismissal();
       void removeDashboardStateValue(DISMISS_KEY);
-      setStep("mode");
+      setStep("welcome");
       setRunStatus("");
+      setRunError("");
       setOpen(true);
       void refreshStatus();
     })).then((unlisten) => {
@@ -239,29 +364,13 @@ export function NativeFirstRunOnboarding() {
     };
   }, [refreshStatus]);
 
-  useLayoutEffect(() => {
-    if (!open) return;
-    const node = stepContentRef.current;
-    if (!node) return;
-    const updateHeight = () => setStepHeight(Math.ceil(node.scrollHeight));
-    updateHeight();
-
-    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updateHeight);
-    observer?.observe(node);
-    window.addEventListener("resize", updateHeight);
-    return () => {
-      observer?.disconnect();
-      window.removeEventListener("resize", updateHeight);
-    };
-  }, [open, step, status, skillAgents, memoryAgents, running, runStatus]);
-
   if (!open || !status) return null;
 
   // setup.ps1 has no mode/import flags (it detects Tailscale and seeds vault/skills itself),
   // so the Windows backup command mirrors build_setup_invocation in src-tauri/src/setup.rs.
   const commandPreview = isWindows
-    ? "powershell -ExecutionPolicy Bypass -File setup.ps1 -SkipDashboard -SkipBuild"
-    : `${selectedMode.command} ${skillAgents.length ? `--import-skills=${skillAgents.join(",")} --share-skills=all` : "--no-shared-skills"} --skip-dashboard${memoryAgents.length ? `\n./scripts/import-agent-memory.sh --sources ${memoryAgents.join(",")}` : ""}`;
+    ? "powershell -ExecutionPolicy Bypass -File setup.ps1 -SkipDeps -SkipDashboard -SkipBuild"
+    : `${modeCommand(mode)} --skip-deps ${skillAgents.length ? `--import-skills=${skillAgents.join(",")} --share-skills=all` : "--no-shared-skills"} --skip-dashboard${memoryAgents.length ? `\n./scripts/import-agent-memory.sh --sources ${memoryAgents.join(",")}` : ""}`;
 
   function toggleAgent(id: string) {
     const active = skillAgents.includes(id) || memoryAgents.includes(id);
@@ -293,13 +402,18 @@ export function NativeFirstRunOnboarding() {
     setRunning(false);
   }
 
-  async function launchSetup() {
+  async function launchSetup(): Promise<boolean> {
+    setRunError("");
+    setSetupProcessDone(false);
+    setSetupExitError("");
+    setSetupLines([]);
     if (demoMode) {
       await launchDemoSetup();
+      setLaunchedCommand("demo");
       return true;
     }
     setRunning(true);
-    setRunStatus("Starting setup. If your system needs permission, a Terminal window will open for that part.");
+    setRunStatus("Starting setup — it runs in the background. Approve any permission prompts that appear.");
     const result = await runNativeSetup({
       installMode: mode,
       skillAgents,
@@ -309,259 +423,385 @@ export function NativeFirstRunOnboarding() {
       startDashboard: false,
       installCollector: true,
       buildDashboard: false,
-      installDeps: true,
+      installDeps: false,
       force: false,
     }, { demoMode });
     setRunning(false);
     if (result?.ok) {
       grantNativePrivateFilesystemAccess();
+      setLaunchedCommand(result.command ?? modeCommand(mode));
       void persistDismissal();
+      setRunStatus("Setup has started. Follow any permission prompts that appear.");
+      return true;
     }
-    setRunStatus(result?.ok ? "Setup has started. Follow any permission prompts that appear." : result?.error ?? "Could not start setup.");
-    return Boolean(result?.ok);
+    setRunError(result?.error ?? "Could not start setup.");
+    return false;
   }
 
-  async function copySetupCommand() {
-    try {
-      await navigator.clipboard.writeText(commandPreview);
-      setRunStatus("Backup command copied.");
-    } catch {
-      setRunStatus("Could not copy automatically. You can select the command text below.");
+  // From the welcome step: Mac/Linux moves into scope selection; Windows (no
+  // mode/agents choices) launches immediately and jumps to the running step.
+  async function beginSetup() {
+    if (isWindows) {
+      if (await launchSetup()) setStep("running");
+      return;
+    }
+    setStep("scope");
+  }
+
+  async function runFromPlan() {
+    if (await launchSetup()) setStep("running");
+  }
+
+  async function retrySetup() {
+    if (await launchSetup()) setStep("running");
+  }
+
+  function copy(key: string, value: string) {
+    try { void navigator.clipboard?.writeText(value); } catch { /* clipboard may be unavailable */ }
+    setCopied(key);
+    window.setTimeout(() => setCopied((current) => (current === key ? "" : current)), 1600);
+  }
+
+  const tone = step === "running" ? "live" : undefined;
+  const rows = planRows(mode);
+  const filled = step === "running" ? (setupSettled ? EMBLEM_CELLS : setupMilestoneCells(setupLines)) : 0;
+  const meterPct = Math.round((filled / EMBLEM_CELLS) * 100);
+  const phaseLabel = setupExitError ? "Setup needs attention." : setupPhaseLabel(setupLines, setupSettled);
+
+  const runLog: Array<{ k: "logOk" | "logRun" | "logDim"; t: string }> = [];
+  if (step === "running") {
+    // Live activity tail from the hidden setup launcher (real setup output),
+    // newest emphasized. Falls back to a starting message before the first line.
+    const activity = setupLines.map((line) => line.trim()).filter((line) => line.length > 0).slice(-7);
+    if (activity.length === 0) {
+      runLog.push({ k: "logRun", t: setupExitError ? "✗ setup stopped" : "→ starting setup…" });
+    } else {
+      activity.forEach((line, index) => runLog.push({ k: index === activity.length - 1 && !setupSettled && !setupExitError ? "logRun" : "logDim", t: line }));
+    }
+    if (setupSettled) {
+      runLog.push({ k: "logOk", t: "✓ collector online · 127.0.0.1:8787" });
     }
   }
+  const effectiveRunStatus = setupExitError
+    ? `${setupExitError} Use Retry setup, or expand “Run it yourself” to repair manually.`
+    : runStatus;
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[radial-gradient(circle_at_top,rgba(20,184,166,0.18),rgba(2,6,23,0.82)_34%,rgba(2,6,23,0.92))] p-4 backdrop-blur-md">
-      <section className="flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-[rgba(148,163,184,0.20)] bg-[rgba(8,13,22,0.96)] text-[var(--foreground)] shadow-2xl">
-        <header className="shrink-0 flex items-start justify-between gap-4 border-b border-[rgba(148,163,184,0.14)] p-4">
-          <div className="flex min-w-0 gap-3">
-            <Image src="/hivemindos-logo.png" alt="" width={44} height={44} className="h-11 w-11 rounded-lg object-cover" unoptimized />
-            <div className="min-w-0">
-              <div className="mb-2 inline-flex items-center gap-2 rounded-md border border-[rgba(45,212,191,0.26)] bg-[rgba(20,184,166,0.12)] px-2.5 py-1 text-xs font-medium text-[var(--accent-strong)]">
-                <ShieldCheck aria-hidden="true" className="h-3.5 w-3.5" />
-                Guided setup
-              </div>
-              <h2 className="text-xl font-semibold tracking-normal">{headers[step].title}</h2>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-[var(--muted)]">{headers[step].subtitle}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <StepDots step={step} steps={wizardSteps} />
-            <CloseIconButton aria-label="Dismiss native setup" onClick={dismiss} />
-          </div>
+    <div className={styles.stage}>
+      <div className={styles.backdrop} aria-hidden="true" />
+      <div className={styles.comb} aria-hidden="true" />
+      <div className={styles.scrim} aria-hidden="true" />
+
+      <section className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="native-setup-title">
+        {step !== "running" ? (
+          <button className={styles.close} type="button" aria-label="Dismiss setup" onClick={dismiss}><IconClose /></button>
+        ) : null}
+
+        <header className={styles.hero} data-tone={tone}>
+          <span className={styles.mark}><Image src={APP_LOGO_PATH} alt="" aria-hidden="true" width={50} height={50} unoptimized /></span>
+          <span className={styles.heroText}>
+            <span className={styles.eyebrow}>HivemindOS · Setup</span>
+            <span className={styles.heroTitle}>Get your hive running</span>
+          </span>
+          <span className={styles.rail} aria-hidden="true">
+            {wizardSteps.map((item, index) => (
+              <i key={item} data-on={index <= stepIndex ? "true" : undefined} data-live={step === "running" && item === "running" ? "true" : undefined} />
+            ))}
+          </span>
         </header>
 
-        <div className="native-setup-step-shell min-h-0 p-4" style={stepShellStyle}>
-          <div key={step} ref={stepContentRef} className={`native-setup-step ${step === "mode" ? "" : "min-h-[360px]"}`}>
-          {step === "mode" ? (
-            <div className="space-y-3">
-              <div className="grid gap-3 sm:grid-cols-2">
-                {modes.filter((item) => item.id !== "system-tailscale").map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={`flex min-h-[180px] w-full flex-col items-start justify-between gap-4 rounded-lg border p-5 text-left transition-all hover:-translate-y-0.5 ${mode === item.id ? "border-[rgba(45,212,191,0.58)] bg-[rgba(20,184,166,0.13)]" : "border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.42)]"}`}
-                    onClick={() => { setMode(item.id); setStep("agents"); }}
-                  >
-                    <span className="flex w-full items-center justify-between gap-2">
-                      <span className="grid h-10 w-10 place-items-center rounded-lg border border-[rgba(148,163,184,0.18)] bg-[rgba(2,6,23,0.30)] text-[var(--accent-strong)]">
-                        {item.id === "local" ? <Lock aria-hidden="true" className="h-5 w-5" /> : <Network aria-hidden="true" className="h-5 w-5" />}
-                      </span>
-                      {item.badge ? (
-                        <span className="rounded-md border border-[rgba(45,212,191,0.30)] bg-[rgba(20,184,166,0.14)] px-2 py-1 text-xs font-medium text-[var(--accent-strong)]">{item.badge}</span>
-                      ) : null}
-                    </span>
-                    <span>
-                      <span className="block text-lg font-semibold">{item.title}</span>
-                      <span className="mt-2 block text-sm leading-6 text-[var(--muted)]">{item.detail}</span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-              <button
-                type="button"
-                className="flex w-full items-center justify-between gap-3 rounded-lg border border-[rgba(148,163,184,0.14)] bg-[rgba(15,23,42,0.28)] px-4 py-3 text-left text-sm text-[var(--muted)] transition-colors hover:border-[rgba(45,212,191,0.38)] hover:text-[var(--foreground)]"
-                onClick={() => { setMode("system-tailscale"); setStep("agents"); }}
-              >
-                <span>
-                  <span className="font-medium text-[var(--foreground)]">Power user?</span> Get the Full Tailnet Hive: always-on folder sync via Tailscale.
-                </span>
-                <span aria-hidden="true" className="shrink-0 text-[var(--accent-strong)]">→</span>
-              </button>
-              <p className="text-xs leading-5 text-[var(--muted)]">
-                Not sure? Pick “{modes[1].title}.” You can change this anytime by running setup again.
-              </p>
-            </div>
+        <div className={styles.body}>
+          {step === "welcome" ? <WelcomeStep /> : null}
+          {step === "scope" ? (
+            <ScopeStep
+              device={device}
+              scope={scope}
+              sysTs={sysTs}
+              onScope={(next) => setMode(next === "local" ? "local" : (sysTs ? "system-tailscale" : "link"))}
+              onSysTs={(value) => setMode(value ? "system-tailscale" : "link")}
+            />
           ) : null}
-
           {step === "agents" ? (
-            <div className="space-y-4">
-              <div className="rounded-lg border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.42)] p-4">
-                <p className="text-sm leading-6 text-[var(--muted)]">
-                  Everything is already turned on. Tap a helper only if you want to leave it out.
-                </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {detectedAgents.map((agent) => {
-                    const active = skillAgents.includes(agent.id) || memoryAgents.includes(agent.id);
-                    return (
-                      <button
-                        key={agent.id}
-                        type="button"
-                        title={agent.installed ? undefined : `Not found on this ${device}`}
-                        className={`inline-flex min-h-7 max-w-full shrink-0 items-center justify-center gap-1.5 overflow-hidden rounded-full border px-2.5 py-1 text-left text-xs font-medium leading-tight transition-all hover:-translate-y-px hover:shadow-[0_0_0_3px_rgba(45,212,191,0.08)] focus-visible:border-[var(--button-ring)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color-mix(in_srgb,var(--button-ring)_45%,transparent)] ${active ? "border-transparent bg-[var(--button-primary)] text-[var(--button-primary-foreground)] hover:brightness-105" : "border-transparent bg-[var(--button-secondary)] text-[var(--button-secondary-foreground)] hover:border-[rgba(94,234,212,0.18)] hover:bg-[color-mix(in_srgb,var(--button-secondary)_88%,var(--button-primary))] hover:text-[var(--foreground)]"} ${agent.installed ? "" : "opacity-60"}`}
-                        aria-pressed={active}
-                        onClick={() => toggleAgent(agent.id)}
-                      >
-                        <AgentIcon agent={agent} compact />
-                        <span className="min-w-0 [overflow-wrap:anywhere]">{agent.label}</span>
-                        {active ? <Check aria-hidden="true" className="h-3 w-3 shrink-0" /> : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <p className="text-xs leading-5 text-[var(--muted)]">
-                Don’t worry about getting this perfect — you can run setup again anytime.
-              </p>
-            </div>
+            <AgentsStep device={device} agents={detectedAgents} skillAgents={skillAgents} memoryAgents={memoryAgents} onToggle={toggleAgent} />
           ) : null}
-
-          {step === "run" ? (
-            <div className="rounded-lg border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.46)] p-5">
-              <div className="flex items-center gap-3">
-                <Sparkles aria-hidden="true" className="h-6 w-6 text-[var(--accent-strong)]" />
-                <div>
-                  <h3 className="text-lg font-semibold">{isWindows ? "HivemindOS sets everything up for you" : "That’s it — HivemindOS does the rest"}</h3>
-                  <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-                    Click <span className="font-medium text-[var(--foreground)]">Start setup</span> below. If your {device} asks for permission along the way, just click OK or Allow.
-                  </p>
-                </div>
-              </div>
-              <details className="mt-5 rounded-md border border-[rgba(148,163,184,0.16)] bg-[rgba(2,6,23,0.36)] p-3 text-xs text-[var(--muted)]">
-                <summary className="cursor-pointer text-sm font-medium text-[var(--foreground)]">Setup didn’t start? Run it yourself</summary>
-                <p className="mt-3 leading-5">Copy this command and paste it into {isWindows ? "PowerShell" : "the Terminal app"}:</p>
-                <pre className="mt-2 overflow-auto whitespace-pre-wrap rounded-md bg-[rgba(2,6,23,0.50)] p-3">{commandPreview}</pre>
-                <Button type="button" variant="secondary" className="mt-3" onClick={() => void copySetupCommand()}>
-                  <Copy aria-hidden="true" />
-                  Copy command
-                </Button>
-              </details>
-              {runStatus ? <p className="mt-3 text-sm text-[var(--muted)]">{runStatus}</p> : null}
-            </div>
+          {step === "plan" ? <PlanStep rows={rows} mode={mode} runError={runError} /> : null}
+          {step === "running" ? (
+            <RunningStep filled={filled} meterPct={meterPct} settled={setupSettled} phaseLabel={phaseLabel} runLog={runLog} runStatus={effectiveRunStatus} commandPreview={commandPreview} isWindows={isWindows} copied={copied} onCopy={copy} />
           ) : null}
-
-          {step === "pairing" ? (
-            <div className="rounded-lg border border-[rgba(148,163,184,0.18)] bg-[rgba(15,23,42,0.46)] p-5">
-              <div className="flex items-center gap-3">
-                {setupSettled ? (
-                  <Check aria-hidden="true" className="h-6 w-6 text-[var(--accent-strong)]" />
-                ) : (
-                  <LoaderCircle aria-hidden="true" className="h-6 w-6 animate-spin text-[var(--muted)]" />
-                )}
-                <div>
-                  <h3 className="text-lg font-semibold">{setupSettled ? "You're all set" : "Finishing setup…"}</h3>
-                  <p className="mt-1 text-sm leading-6 text-[var(--muted)]">
-                    {setupSettled ? (
-                      <>
-                        You can close this window — HivemindOS finishes up in the background.
-                        {isMac
-                          ? " Your phone can reach this Mac automatically, even when the app is closed. The first time it opens a file, just tap “Allow” on the one-time prompt."
-                          : " If a window pops up asking for permission, just click OK or Allow."}
-                      </>
-                    ) : (
-                      "Setup is still running in the other window — this can take a few minutes while it installs dependencies and the local agent bridge. This screen updates on its own when it finishes."
-                    )}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : null}
-          </div>
+          {step === "done" ? <DoneStep scope={scope} isMac={isMac} isWindows={isWindows} /> : null}
         </div>
 
-        <footer className="shrink-0 flex flex-col gap-3 border-t border-[rgba(148,163,184,0.14)] p-4 sm:flex-row sm:items-center sm:justify-between">
-          {step === wizardSteps[0] ? <span aria-hidden="true" /> : (
-            <Button type="button" variant="ghost" onClick={() => setStep(wizardSteps[Math.max(0, wizardSteps.indexOf(step) - 1)])}>
-              <ChevronLeft aria-hidden="true" />
-              Back
-            </Button>
-          )}
-          <div className="flex flex-wrap gap-2">
-            {step === "agents" ? (
-              <Button type="button" variant="ghost" onClick={() => void refreshStatus()}>
-                <RefreshCcw aria-hidden="true" />
-                Scan again
-              </Button>
-            ) : null}
-            {step === "run" ? (
-              <Button type="button" onClick={async () => { if (await launchSetup()) setStep("pairing"); }} disabled={running}>
-                {running ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <Sparkles aria-hidden="true" />}
-                Start setup
-              </Button>
-            ) : step === "pairing" ? (
-              setupSettled ? (
-                <>
-                  <Button type="button" variant="secondary" onClick={dismiss}>
-                    I’ll explore on my own
-                  </Button>
-                  <Button type="button" onClick={() => { dismiss(); requestGuidedTour(); }}>
-                    <Sparkles aria-hidden="true" />
-                    Show me around
-                  </Button>
-                </>
-              ) : (
-                <Button type="button" variant="ghost" onClick={dismiss}>
-                  <X aria-hidden="true" />
-                  Close — I’ll come back
-                </Button>
-              )
+        <footer className={styles.foot}>
+          {step === "welcome" ? <p className={styles.disclaimer}>Everything runs locally. HivemindOS never opens a public port during setup.</p> : null}
+          <div className={styles.footActions}>
+            {step === "welcome" ? (
+              <>
+                <button className={`${styles.btn} ${styles.ghost} ${styles.grow}`} type="button" onClick={dismiss}>Maybe later</button>
+                <button className={`${styles.btn} ${styles.primary}`} type="button" onClick={() => void beginSetup()} disabled={running}>
+                  {running ? <><IconSpinner /> Starting…</> : <>Begin setup <IconArrow /></>}
+                </button>
+              </>
+            ) : step === "scope" ? (
+              <>
+                <button className={`${styles.btn} ${styles.text} ${styles.grow}`} type="button" onClick={() => setStep("welcome")}><IconChevL /> Back</button>
+                <button className={`${styles.btn} ${styles.primary}`} type="button" onClick={() => setStep("agents")}>Continue <IconArrow /></button>
+              </>
             ) : step === "agents" ? (
-              <Button type="button" onClick={() => setStep("run")}>
-                <Sparkles aria-hidden="true" />
-                Continue
-              </Button>
-            ) : null}
-            {step !== "pairing" ? (
-              <Button type="button" variant="secondary" onClick={dismiss}>
-                <X aria-hidden="true" />
-                Set up later
-              </Button>
-            ) : null}
+              <>
+                <button className={`${styles.btn} ${styles.text} ${styles.grow}`} type="button" onClick={() => setStep("scope")}><IconChevL /> Back</button>
+                <button className={`${styles.btn} ${styles.ghost}`} type="button" onClick={() => void refreshStatus()}><IconRefresh /> Scan again</button>
+                <button className={`${styles.btn} ${styles.primary}`} type="button" onClick={() => setStep("plan")}>Continue <IconArrow /></button>
+              </>
+            ) : step === "plan" ? (
+              <>
+                <button className={`${styles.btn} ${styles.text} ${styles.grow}`} type="button" onClick={() => setStep("agents")}><IconChevL /> Back</button>
+                <button className={`${styles.btn} ${styles.primary}`} type="button" onClick={() => void runFromPlan()} disabled={running}>
+                  {running ? <><IconSpinner /> Starting…</> : <>Run setup <IconArrow /></>}
+                </button>
+              </>
+            ) : step === "running" ? (
+              <>
+                <button className={`${styles.btn} ${styles.text} ${styles.grow}`} type="button" onClick={dismiss}>{setupExitError ? "Close" : "Close — finishes in the background"}</button>
+                {setupExitError ? (
+                  <button className={`${styles.btn} ${styles.primary}`} type="button" onClick={() => void retrySetup()} disabled={running}>
+                    {running ? <><IconSpinner /> Starting…</> : <><IconRefresh /> Retry setup</>}
+                  </button>
+                ) : (
+                  <button className={`${styles.btn} ${styles.primary}`} type="button" data-tone="live" disabled><IconSpinner /> Working…</button>
+                )}
+              </>
+            ) : (
+              <button className={`${styles.btn} ${styles.primary} ${styles.grow}`} type="button" data-tone="live" onClick={() => { dismiss(); if (!clawbankConfigured) window.dispatchEvent(new Event(CLAWBANK_OPEN_EVENT)); }}>{clawbankConfigured ? "Finish" : "Next"} <IconArrow /></button>
+            )}
           </div>
         </footer>
       </section>
-      <style jsx>{`
-        .native-setup-step-shell {
-          overflow-x: hidden;
-          overflow-y: auto;
-          transition: height 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
-        }
-
-        .native-setup-step {
-          animation: nativeSetupStepIn 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
-        }
-
-        @keyframes nativeSetupStepIn {
-          from {
-            opacity: 0;
-            transform: translateY(10px) scale(0.992);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          .native-setup-step-shell {
-            transition: none;
-          }
-
-          .native-setup-step {
-            animation: none;
-          }
-        }
-      `}</style>
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Step views
+// ---------------------------------------------------------------------------
+
+function WelcomeStep() {
+  return (
+    <div className={styles.step}>
+      <h2 id="native-setup-title" className={styles.title}>Welcome to the hive.</h2>
+      <p className={styles.lede}>
+        HivemindOS is one private control room for every agent you run — across this machine and any others you trust.
+        Setup takes about a minute and runs entirely on your computer.
+      </p>
+      <ul className={styles.caps}>
+        <li className={styles.cap}><span className={styles.capIcon}><IconMesh /></span><span className={styles.capText}><strong>One comb for every agent</strong><small>Hermes, OpenClaw, Aeon, Codex — all on a single dashboard.</small></span></li>
+        <li className={styles.cap}><span className={styles.capIcon}><IconBrain /></span><span className={styles.capText}><strong>A shared Obsidian brain</strong><small>Memory, handoffs, skills, and work boards in one local vault.</small></span></li>
+        <li className={styles.cap}><span className={styles.capIcon}><IconShield /></span><span className={styles.capText}><strong>Local-first &amp; private</strong><small>No public ports. Nothing leaves your machines without you.</small></span></li>
+      </ul>
+    </div>
+  );
+}
+
+function ScopeStep({ device, scope, sysTs, onScope, onSysTs }: {
+  device: string;
+  scope: "local" | "multi";
+  sysTs: boolean;
+  onScope: (next: "local" | "multi") => void;
+  onSysTs: (value: boolean) => void;
+}) {
+  return (
+    <div className={styles.step}>
+      <h2 id="native-setup-title" className={`${styles.title} ${styles.sm}`}>Where should your hive live?</h2>
+      <p className={styles.lede}>You can add more machines later — this just sets how setup wires networking today.</p>
+      <div className={styles.choices}>
+        <button type="button" className={styles.choice} data-sel={scope === "local" ? "true" : undefined} onClick={() => onScope("local")}>
+          <span className={styles.choiceIcon}><IconLaptop /></span>
+          <span className={styles.choiceBody}>
+            <span className={styles.choiceHead}><strong>Just this {device}</strong></span>
+            <small>Local-first. Skips Tailscale entirely — every agent and file stays on this computer.</small>
+          </span>
+          <span className={styles.radio} aria-hidden="true"><i /></span>
+        </button>
+        <button type="button" className={styles.choice} data-sel={scope === "multi" ? "true" : undefined} onClick={() => onScope("multi")}>
+          <span className={styles.choiceIcon}><IconMesh /></span>
+          <span className={styles.choiceBody}>
+            <span className={styles.choiceHead}><strong>Across my machines</strong><span className={styles.badge}>Recommended</span></span>
+            <small>Connect agents on your other computers over Hivemind Link — an app-managed private link. No public ports.</small>
+          </span>
+          <span className={styles.radio} aria-hidden="true"><i /></span>
+        </button>
+      </div>
+      {scope === "multi" ? (
+        <button type="button" className={styles.adv} onClick={() => onSysTs(!sysTs)}>
+          <span className={styles.toggle} role="switch" aria-checked={sysTs} data-on={sysTs ? "true" : undefined}><i /></span>
+          <span className={styles.advText}>
+            <strong>Use full system Tailscale</strong>
+            <small>For Tailscale SSH, rsync repair, and Syncthing brain sync. Otherwise Hivemind Link keeps the collector on localhost.</small>
+          </span>
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function AgentsStep({ device, agents, skillAgents, memoryAgents, onToggle }: {
+  device: string;
+  agents: NativeDetectedAgentRuntime[];
+  skillAgents: string[];
+  memoryAgents: string[];
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <div className={styles.step}>
+      <h2 id="native-setup-title" className={`${styles.title} ${styles.sm}`}>Connect your AI helpers.</h2>
+      <p className={styles.lede}>We found these on your {device}. They&rsquo;ll share what they know through the hive — tap one only to leave it out.</p>
+      <div className={styles.agents}>
+        <div className={styles.agentChips}>
+          {agents.map((agent) => {
+            const active = skillAgents.includes(agent.id) || memoryAgents.includes(agent.id);
+            return (
+              <button
+                key={agent.id}
+                type="button"
+                className={styles.agentChip}
+                data-on={active ? "true" : undefined}
+                data-found={agent.installed ? undefined : "false"}
+                title={agent.installed ? undefined : `Not found on this ${device}`}
+                aria-pressed={active}
+                onClick={() => onToggle(agent.id)}
+              >
+                <AgentIcon agent={agent} />
+                <span>{agent.label}</span>
+                {active ? <IconCheck width="13" height="13" /> : null}
+              </button>
+            );
+          })}
+        </div>
+        <p className={styles.agentNote}>Everything is on by default. You can run setup again anytime to change this.</p>
+      </div>
+    </div>
+  );
+}
+
+function PlanStep({ rows, mode, runError }: { rows: PlanRow[]; mode: InstallMode; runError: string }) {
+  const summary = mode === "local" ? "local-only mode" : mode === "system-tailscale" ? "multi-machine mode · system Tailscale" : "multi-machine mode · Hivemind Link";
+  return (
+    <div className={styles.step}>
+      <h2 id="native-setup-title" className={`${styles.title} ${styles.sm}`}>Here&rsquo;s what setup will do.</h2>
+      <p className={styles.lede}>No prompts, no surprises. You can re-run any of this later from the dashboard.</p>
+      <ul className={styles.plan}>
+        {rows.map((row) => (
+          <li className={styles.planRow} key={row.label} data-opt={row.opt ? "true" : undefined}>
+            <span className={styles.hex}>{row.icon}</span>
+            <span className={styles.planText}><strong>{row.label}</strong><small>{row.detail}</small></span>
+          </li>
+        ))}
+      </ul>
+      <div className={styles.summary}>
+        <IconShield />
+        <span>Running in <b>{summary}</b></span>
+      </div>
+      {runError ? <p className={styles.error} role="alert">{runError}</p> : null}
+    </div>
+  );
+}
+
+function RunningStep({ filled, meterPct, settled, phaseLabel, runLog, runStatus, commandPreview, isWindows, copied, onCopy }: {
+  filled: number;
+  meterPct: number;
+  settled: boolean;
+  phaseLabel: string;
+  runLog: Array<{ k: "logOk" | "logRun" | "logDim"; t: string }>;
+  runStatus: string;
+  commandPreview: string;
+  isWindows: boolean;
+  copied: string;
+  onCopy: (key: string, value: string) => void;
+}) {
+  const cells = Array.from({ length: EMBLEM_CELLS });
+  return (
+    <div className={styles.run}>
+      <div className={styles.emblem} aria-hidden="true">
+        {cells.map((_, i) => {
+          const state = i < filled ? "done" : i === filled && !settled ? "active" : settled ? "done" : "idle";
+          return <span key={i} className={`${styles.cell} ${styles[`c${i}`]}`} data-state={state}><IconCheck /></span>;
+        })}
+      </div>
+      <div className={styles.runMeta}>
+        <span className={styles.liveTag}><span className={styles.liveDot} /> Building your hive</span>
+        <h2 id="native-setup-title" className={`${styles.title} ${styles.sm}`}>{phaseLabel}</h2>
+      </div>
+      <div className={styles.meter}><i style={{ width: `${settled ? 100 : Math.max(meterPct, 8)}%` }} /></div>
+      <div className={styles.log}>
+        {runLog.map((line, i) => (
+          <div className={styles.logLine} key={i}><span className={styles[line.k]}>{line.t}</span></div>
+        ))}
+      </div>
+      <p className={styles.lede} style={{ fontSize: 12.5, textAlign: "center" }}>
+        {runStatus || "Setting up your machine in the background — this usually takes several minutes, and the first download can be the slowest stretch. Progress shows above and this screen updates on its own when it finishes, so feel free to do something else and check back."}
+      </p>
+      <details className={styles.detail}>
+        <summary className={styles.detailSummary}>Setup didn&rsquo;t start? Run it yourself</summary>
+        <div className={styles.detailBody}>
+          <p>Paste this into {isWindows ? "PowerShell" : "the Terminal app"}:</p>
+          <pre className={styles.pre}>{commandPreview}</pre>
+          <button className={styles.copy} type="button" data-done={copied === "cmd" ? "true" : undefined} onClick={() => onCopy("cmd", commandPreview)}>
+            {copied === "cmd" ? <IconCheck width="13" height="13" /> : <IconCopy />}{copied === "cmd" ? "Copied" : "Copy command"}
+          </button>
+        </div>
+      </details>
+    </div>
+  );
+}
+
+function DoneStep({ scope, isMac, isWindows }: {
+  scope: "local" | "multi";
+  isMac: boolean;
+  isWindows: boolean;
+}) {
+  return (
+    <div className={`${styles.step} ${styles.center}`}>
+      <div className={styles.mkWrap} aria-hidden="true">
+        <span className={styles.mkRing} /><span className={styles.mkRing} data-delay="true" /><span className={styles.mkGlow} />
+        <svg className={styles.mkSvg} viewBox="0 0 52 52" width="62" height="62">
+          <circle className={styles.mkCircle} cx="26" cy="26" r="23" fill="none" stroke="currentColor" strokeWidth="2.4" />
+          <path className={styles.mkTick} d="M15 27 L23 34.5 L38 18" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </div>
+      <h2 id="native-setup-title" className={styles.title}>Your hive is live.</h2>
+      <p className={styles.lede}>
+        The dashboard is running locally. HivemindOS finishes up in the background.
+        {isMac ? " Your phone can reach this Mac automatically, even when the app is closed — just tap “Allow” on the one-time prompt the first time it opens a file." : ""}
+      </p>
+      {scope === "multi" ? (
+        <p className={styles.lede} style={{ fontSize: 12.5, color: "var(--fg-3)" }}>
+          Adding another machine? Run <code>{isWindows ? "setup.ps1" : "./setup.sh"}</code> there too and it joins this hive automatically.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Inline icons (stroke-based, inherit currentColor) — ported from the design.
+// ---------------------------------------------------------------------------
+
+const stroke = { fill: "none" as const, stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+
+function IconClose(p: SVGProps<SVGSVGElement>) { return <svg width="15" height="15" viewBox="0 0 24 24" {...stroke} strokeWidth={1.9} {...p}><path d="M6 6l12 12M18 6 6 18" /></svg>; }
+function IconCheck(p: SVGProps<SVGSVGElement>) { return <svg width="16" height="16" viewBox="0 0 24 24" {...stroke} strokeWidth={2.2} {...p}><path d="M5 12.5 10 17.5 19 7" /></svg>; }
+function IconArrow(p: SVGProps<SVGSVGElement>) { return <svg width="15" height="15" viewBox="0 0 24 24" {...stroke} {...p}><path d="M5 12h14M13 6l6 6-6 6" /></svg>; }
+function IconChevL(p: SVGProps<SVGSVGElement>) { return <svg width="16" height="16" viewBox="0 0 24 24" {...stroke} {...p}><path d="M15 6l-6 6 6 6" /></svg>; }
+function IconCopy(p: SVGProps<SVGSVGElement>) { return <svg width="13" height="13" viewBox="0 0 24 24" {...stroke} {...p}><rect x="9" y="9" width="11" height="11" rx="2.2" /><path d="M5 15V6a2 2 0 0 1 2-2h8" /></svg>; }
+function IconSpinner(p: SVGProps<SVGSVGElement>) { return <svg className={styles.spin} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" {...p}><path d="M12 3a9 9 0 1 0 9 9" /></svg>; }
+function IconRefresh(p: SVGProps<SVGSVGElement>) { return <svg width="14" height="14" viewBox="0 0 24 24" {...stroke} {...p}><path d="M20 11a8 8 0 1 0-1.6 5M20 5v6h-6" /></svg>; }
+
+function IconLaptop(p: SVGProps<SVGSVGElement>) { return <svg width="20" height="20" viewBox="0 0 24 24" {...stroke} {...p}><rect x="4" y="5" width="16" height="11" rx="2" /><path d="M2.5 20h19M9.5 16h5" /></svg>; }
+function IconMesh(p: SVGProps<SVGSVGElement>) { return <svg width="20" height="20" viewBox="0 0 24 24" {...stroke} {...p}><circle cx="6" cy="6" r="2.4" /><circle cx="18" cy="6" r="2.4" /><circle cx="12" cy="18" r="2.4" /><path d="M8.2 7.3 15.8 16.7M15.8 7.3 8.2 16.7M8.4 6h7.2" /></svg>; }
+function IconNode(p: SVGProps<SVGSVGElement>) { return <svg width="14" height="14" viewBox="0 0 24 24" {...stroke} {...p}><path d="M12 3 4.5 7v10L12 21l7.5-4V7z M12 12v9M12 12 4.7 7.6M12 12l7.3-4.4" /></svg>; }
+function IconBox(p: SVGProps<SVGSVGElement>) { return <svg width="14" height="14" viewBox="0 0 24 24" {...stroke} {...p}><path d="M21 8 12 3 3 8v8l9 5 9-5z M3 8l9 5 9-5M12 13v8" /></svg>; }
+function IconWrench(p: SVGProps<SVGSVGElement>) { return <svg width="14" height="14" viewBox="0 0 24 24" {...stroke} {...p}><path d="M14.5 6a3.8 3.8 0 0 0 4.9 4.9l-6.3 6.3a2.3 2.3 0 0 1-3.3-3.3z M5 19l3-3" /></svg>; }
+function IconPulse(p: SVGProps<SVGSVGElement>) { return <svg width="14" height="14" viewBox="0 0 24 24" {...stroke} {...p}><path d="M3 12h4l2-6 4 13 2-7h6" /></svg>; }
+function IconBrain(p: SVGProps<SVGSVGElement>) { return <svg width="14" height="14" viewBox="0 0 24 24" {...stroke} {...p}><path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-1 5.8V15a3 3 0 0 0 4 2.8M15 4a3 3 0 0 1 3 3 3 3 0 0 1 1 5.8V15a3 3 0 0 1-4 2.8M9 4a2.4 2.4 0 0 1 3 0M9 17.8a2.4 2.4 0 0 0 3 0M12 5v13" /></svg>; }
+function IconWindow(p: SVGProps<SVGSVGElement>) { return <svg width="14" height="14" viewBox="0 0 24 24" {...stroke} {...p}><rect x="3" y="4" width="18" height="16" rx="2.2" /><path d="M3 8.5h18" /></svg>; }
+function IconLink(p: SVGProps<SVGSVGElement>) { return <svg width="14" height="14" viewBox="0 0 24 24" {...stroke} {...p}><path d="M9.5 14.5 14.5 9.5M8 11 6 13a3.5 3.5 0 0 0 5 5l2-2M16 13l2-2a3.5 3.5 0 0 0-5-5l-2 2" /></svg>; }
+function IconShield(p: SVGProps<SVGSVGElement>) { return <svg width="14" height="14" viewBox="0 0 24 24" {...stroke} {...p}><path d="M12 3 5 6v6c0 4 3 6.5 7 9 4-2.5 7-5 7-9V6z" /></svg>; }

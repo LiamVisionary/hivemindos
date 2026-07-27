@@ -1,10 +1,10 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
-import { Bot, BrainCircuit, Phone, PlugZap, Settings2, ShieldCheck } from "lucide-react";
+import { Bot, BrainCircuit, Network, Phone, PlugZap, Settings2, ShieldCheck } from "lucide-react";
+import type { HivemindosModelsAgentConfig, UsePodAgentConfig, VeniceAgentConfig } from "@/lib/types/agent-runtime";
+import { isFreeHivemindosWalletPaidModel } from "@/lib/config/hivemindos-wallet-paid-models";
 
 const TEXT_COMMIT_DELAY_MS = 200;
 
@@ -14,6 +14,7 @@ export const PANEL_ICONS: Record<string, ComponentType<{ size?: number; "aria-hi
   memory: BrainCircuit,
   tools: Settings2,
   calls: Phone,
+  ministry: Network,
   security: ShieldCheck,
 };
 
@@ -23,6 +24,7 @@ const PANEL_DETAILS: Record<string, string> = {
   memory: "Shared brain and folders",
   tools: "Runtime integrations",
   calls: "Scheduled phone calls",
+  ministry: "Orchestrator and experts",
   security: "Guards and redaction",
 };
 
@@ -42,7 +44,7 @@ export function panelDetail(panel: string) {
   return PANEL_DETAILS[panel] ?? "";
 }
 
-export function hasUsePodSetup(config = {}) {
+export function hasUsePodSetup(config: UsePodAgentConfig = {}) {
   return Boolean(
     config.depositAddress
       || config.depositCode
@@ -54,11 +56,11 @@ export function hasUsePodSetup(config = {}) {
   );
 }
 
-export function isUsePodSetupReady(config = {}) {
+export function isUsePodSetupReady(config: UsePodAgentConfig = {}) {
   return config.lastTestStatus === "ready";
 }
 
-export function hasVeniceSetup(config = {}) {
+export function hasVeniceSetup(config: VeniceAgentConfig = {}) {
   return Boolean(
     config.walletVaultId
       || config.walletAddress
@@ -69,8 +71,39 @@ export function hasVeniceSetup(config = {}) {
   );
 }
 
-export function isVeniceSetupReady(config = {}) {
+export function isVeniceSetupReady(config: VeniceAgentConfig = {}) {
   return config.lastTestStatus === "ready";
+}
+
+function moneyValue(value: unknown) {
+  const raw = typeof value === "number"
+    ? value
+    : typeof value === "string"
+      ? Number(value.replace(/[$,\s]/g, ""))
+      : NaN;
+  return Number.isFinite(raw) ? raw : 0;
+}
+
+export function hasHivemindosModelsSetup(config: HivemindosModelsAgentConfig = {}) {
+  return Boolean(
+    config.creditAccountId
+      || config.walletVaultId
+      || config.walletAddress
+      || config.lastCreditBalanceUsd
+      || config.lastTestStatus
+      || config.lastCheckedAt,
+  );
+}
+
+export function isHivemindosModelsSetupReady(config: HivemindosModelsAgentConfig = {}, model?: string | null) {
+  // The free model (also the provider default when no model is set) needs no
+  // funding; only wallet-paid routes require credits or a wallet.
+  if (isFreeHivemindosWalletPaidModel(model)) return true;
+  const fundedCredits = Boolean(
+    moneyValue(config.lastCreditBalanceUsd) > 0
+      || moneyValue(config.lastCreditBalanceLabel) > 0,
+  );
+  return Boolean((config.creditAccountId && fundedCredits) || (config.walletVaultId && config.walletAddress));
 }
 
 function useBufferedTextField<E extends HTMLInputElement | HTMLTextAreaElement>({

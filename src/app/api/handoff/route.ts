@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { chooseBeeAssignment, inferWorkerClass } from "@/lib/services/orchestration/bee-roles";
 import type { AgentProfile, BeeWorkerClass } from "@/lib/types/agent-runtime";
 import { canonicalLocalCollectorUrl } from "@/lib/services/local-collector-url";
-import { rememberActionAgentMemory } from "@/lib/services/obsidian/agent-memory";
+import { recordAgentOperationalEvent } from "@/lib/services/obsidian/agent-memory/events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
       ],
     };
     if (!normalized.dryRun) {
-      await recordHandoffActionMemory({
+      await recordHandoffOperationalEvent({
         action: normalized.action,
         machineName: machineName(resolution.machine),
         selectedAgent: selectedAgent?.agent,
@@ -205,7 +205,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function recordHandoffActionMemory(input: {
+async function recordHandoffOperationalEvent(input: {
   action: HandoffAction;
   machineName: string;
   selectedAgent?: AgentProfile;
@@ -216,7 +216,7 @@ async function recordHandoffActionMemory(input: {
   note: string;
 }) {
   const subject = input.task || input.note || "HivemindOS handoff";
-  await rememberActionAgentMemory({
+  await recordAgentOperationalEvent({
     title: `Handoff ${input.action} to ${input.machineName}`,
     content: [
       `HivemindOS completed a ${input.action} handoff to ${input.machineName}.`,
@@ -227,14 +227,15 @@ async function recordHandoffActionMemory(input: {
       `Subject: ${subject.replace(/\s+/g, " ").slice(0, 220)}.`,
     ].filter(Boolean).join("\n"),
     source: "Handoff receipt",
+    operationKey: `handoff/${input.action}/${input.workerClass}`,
+    outcome: "success",
+    taskId: input.transfer?.id,
     agentName: "HivemindOS Handoff",
     agentId: "hivemindos-handoff",
     runtime: "hivemindos",
     project: "HivemindOS",
     tags: ["handoff", "receipt"],
     entities: ["Handoff", "HivemindOS", input.machineName],
-    actorRole: "agent",
-    memoryOrigin: "system-receipt",
   }).catch(() => undefined);
 }
 

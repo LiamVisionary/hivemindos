@@ -5,12 +5,15 @@ import { dirname, join } from "node:path";
 
 import type { HoneyTreasuryConfig } from "@/lib/types/agent-wallet";
 import { calculateHoneyForTokens, createDefaultHoneyTreasuryConfig } from "@/lib/utils/agent-wallet";
+import { applyHoneyMultiplier } from "@/lib/config/hive-staking";
+import { honeyComputeGatewayUrl, honeyLedgerUrl, isHoneyEconomyEnabled } from "@/lib/services/wallet/honey-economy-config";
+import { getLocalHoneyMultiplierBpsCached } from "@/lib/services/wallet/honey-staking-multiplier";
 
 export type HoneyLedgerEvent = {
   id: string;
   agentId: string;
   agentName?: string;
-  kind: "usage" | "exchange" | "managed-credit" | "managed-spend";
+  kind: "usage" | "exchange" | "managed-credit" | "managed-spend" | "contribution";
   source:
     | "chat"
     | "kanban-chat"
@@ -23,10 +26,15 @@ export type HoneyLedgerEvent = {
     | "managed-agent-stripe"
     | "managed-agent-x402"
     | "managed-agent-bankr"
-    | "managed-agent-wallet";
+    | "managed-agent-wallet"
+    | "community";
+  category?: string;
   tokensUsed: number;
   honeyDelta: number;
   hiveDelta: number;
+  // Stake-tier reward multiplier applied at mint (basis points, 10000 = 1.00x).
+  // Absent on pre-multiplier events and non-usage kinds.
+  multiplierBps?: number;
   createdAt: string;
 };
 
@@ -88,20 +96,54 @@ class HoneyClaimError extends Error {
 }
 
 export async function readHoneyLedger(): Promise<HoneyLedger> {
-  const remote = getRemoteLedgerConfig();
+  const remote = await getRemoteLedgerConfig();
   if (remote) {
     const remoteLedger = await readRemoteHoneyLedger(remote).catch(() => null);
     if (remoteLedger) return remoteLedger;
   }
 
-  const fallback = createDefaultLedger();
+  return readLocalHoneyLedgerFile();
+}
+
+// The private on-machine ledger, regardless of the official-economy flag. Used
+// for the potential-Honey summary once the official (hosted) ledger is live.
+export async function readLocalHoneyLedgerFile(): Promise<HoneyLedger> {
   try {
     const raw = await readFile(LEDGER_PATH, "utf8");
     const parsed = JSON.parse(raw) as Partial<HoneyLedger>;
     return normalizeLedger(parsed);
   } catch {
-    return fallback;
+    return createDefaultLedger();
   }
+}
+
+export type PotentialHoneySummary = {
+  honey: number;
+  tokensTracked: number;
+  message: string;
+};
+
+// Shown wherever potential Honey is displayed. Local usage is private by
+// design (never reported), so it can only become OFFICIAL Honey through a
+// verifiable path.
+export const POTENTIAL_HONEY_CLAIM_MESSAGE =
+  "Potential Honey is tracked privately on this machine for local-model usage. Earn official Honey for the same work by routing cloud models through verified compute, or by running a TEE-attested runtime.";
+
+// What the local ledger has recorded that never reached the official ledger.
+// Informational only: potential Honey is not claimable, transferable, or
+// importable — the official ledger mints exclusively from verified usage.
+export async function localPotentialHoneySummary(): Promise<PotentialHoneySummary> {
+  const ledger = await readLocalHoneyLedgerFile();
+  const tokensTracked = Object.values(ledger.agentTokenUsage).reduce((total, tokens) => total + Math.max(0, Number(tokens) || 0), 0);
+  const honey = Object.values(ledger.agentTokenUsage).reduce(
+    (total, tokens) => total + calculateHoneyForTokens(Math.max(0, Number(tokens) || 0), ledger.honeyPerThousandTokens),
+    0,
+  );
+  return {
+    honey: Math.round(honey * 1_000_000) / 1_000_000,
+    tokensTracked,
+    message: POTENTIAL_HONEY_CLAIM_MESSAGE,
+  };
 }
 
 export async function recordHoneyUsage(input: {
@@ -116,7 +158,7 @@ export async function recordHoneyUsage(input: {
   const ledger = await readHoneyLedger();
   if (tokensUsed <= 0) return { ledger, event: null };
 
-  const remote = getRemoteLedgerConfig();
+  const remote = await getRemoteLedgerConfig();
   if (remote) {
     const model = input.model ?? "hivemindos/private-runtime";
     const timestamp = new Date().toISOString();
@@ -153,7 +195,10 @@ export async function recordHoneyUsage(input: {
     }
   }
 
-  const targetHoneyDelta = calculateHoneyForTokens(tokensUsed, ledger.honeyPerThousandTokens);
+  // Local mint honors the same stake-tier multiplier semantics as the official
+  // gateway path: cap-limited tokens stay absolute, Honey per token scales.
+  const multiplierBps = getLocalHoneyMultiplierBpsCached();
+  const targetHoneyDelta = applyHoneyMultiplier(calculateHoneyForTokens(tokensUsed, ledger.honeyPerThousandTokens), multiplierBps);
   const remainingPool = Math.max(0, ledger.rewardPoolHive - ledger.rewardPoolEmittedHive);
   const honeyDelta = Math.min(targetHoneyDelta, remainingPool);
   const event: HoneyLedgerEvent = {
@@ -165,6 +210,7 @@ export async function recordHoneyUsage(input: {
     tokensUsed,
     honeyDelta,
     hiveDelta: 0,
+    multiplierBps,
     createdAt: new Date().toISOString(),
   };
 
@@ -190,7 +236,7 @@ export async function recordObservedHoneyUsage(input: {
   const ledger = await readHoneyLedger();
   if (!input.eventId.trim() || tokensUsed <= 0) return { ledger, event: null };
 
-  const remote = getRemoteLedgerConfig();
+  const remote = await getRemoteLedgerConfig();
   if (remote) {
     const remoteResult = await recordRemoteHoneyObservation(remote, {
       eventId: input.eventId,
@@ -219,7 +265,8 @@ export async function recordObservedHoneyUsage(input: {
   }
 
   if (ledger.events.some((event) => event.id === input.eventId)) return { ledger, event: null };
-  const targetHoneyDelta = calculateHoneyForTokens(tokensUsed, ledger.honeyPerThousandTokens);
+  const multiplierBps = getLocalHoneyMultiplierBpsCached();
+  const targetHoneyDelta = applyHoneyMultiplier(calculateHoneyForTokens(tokensUsed, ledger.honeyPerThousandTokens), multiplierBps);
   const remainingPool = Math.max(0, ledger.rewardPoolHive - ledger.rewardPoolEmittedHive);
   const honeyDelta = Math.min(targetHoneyDelta, remainingPool);
   const event: HoneyLedgerEvent = {
@@ -231,6 +278,7 @@ export async function recordObservedHoneyUsage(input: {
     tokensUsed,
     honeyDelta,
     hiveDelta: 0,
+    multiplierBps,
     createdAt: input.timestamp ?? new Date().toISOString(),
   };
 
@@ -244,7 +292,7 @@ export async function recordObservedHoneyUsage(input: {
 }
 
 export async function exchangeHoneyForHive(agentId?: string) {
-  const remote = getRemoteLedgerConfig();
+  const remote = await getRemoteLedgerConfig();
   if (remote) {
     const remoteResult = await exchangeRemoteHoneyForHive(remote, agentId).catch(() => null);
     if (remoteResult) return remoteResult;
@@ -286,7 +334,7 @@ export async function exchangeHoneyForHive(agentId?: string) {
 }
 
 export async function returnHiveToHoney(agentId?: string) {
-  const remote = getRemoteLedgerConfig();
+  const remote = await getRemoteLedgerConfig();
   if (remote) {
     const remoteResult = await returnRemoteHiveToHoney(remote, agentId).catch(() => null);
     if (remoteResult) return remoteResult;
@@ -336,14 +384,14 @@ export async function returnHiveToHoney(agentId?: string) {
 export async function claimHoneyToBankrHive(input: { agentId?: string; recipientAddress?: string } = {}): Promise<BankrHoneyClaim> {
   const ledger = await readHoneyLedger();
   const amount = claimableHiveAmount(ledger, input.agentId);
-  if (amount <= 0) throw new HoneyClaimError("No Honey is ready to claim.", 400);
+  if (amount <= 0) throw new HoneyClaimError("No Honey conversion is available.", 400);
 
   const recipientAddress = normalizeEvmAddress(
     input.recipientAddress || process.env.HONEY_BANKR_RECIPIENT_ADDRESS || process.env.BANKR_RECIPIENT_ADDRESS,
   );
   if (!recipientAddress) throw new HoneyClaimError("Enter a Bankr EVM receiving address before claiming HIVE.", 400);
 
-  const remote = getRemoteLedgerConfig();
+  const remote = await getRemoteLedgerConfig();
   if (remote) return claimRemoteHoneyToBankrHive(remote, { agentId: input.agentId, recipientAddress });
 
   const tokenAddress = (process.env.HIVE_TOKEN_ADDRESS?.trim() || ledger.hiveTokenAddress?.trim() || "");
@@ -380,7 +428,7 @@ export async function recordManagedHoneyBillingEvent(input: Omit<ManagedHoneyBil
     timestamp: input.timestamp ?? new Date().toISOString(),
   });
 
-  const remote = getRemoteLedgerConfig();
+  const remote = await getRemoteLedgerConfig();
   if (remote) {
     const remoteResult = await recordRemoteManagedHoneyBillingEvent(remote, event).catch(() => null);
     if (remoteResult) return remoteResult;
@@ -462,6 +510,11 @@ type RemoteLedgerConfig = {
   billingSigningSecret?: string;
   readToken?: string;
   adminToken?: string;
+  // Value-moving operations (exchange / return / claim) are signed server-side by the
+  // compute gateway, which authenticates the workspace by its Bankr LLM key. The app
+  // never holds HONEY_LEDGER_SECRET, so it reaches those routes only through the gateway.
+  gatewayUrl?: string;
+  bankrKey?: string;
 };
 
 type RemoteUsageReceipt = {
@@ -476,17 +529,32 @@ type RemoteUsageReceipt = {
   signature?: string;
 };
 
-function getRemoteLedgerConfig(): RemoteLedgerConfig | null {
-  const url = process.env.HONEY_LEDGER_REMOTE_URL?.trim().replace(/\/+$/, "");
-  if (!url) return null;
+// Gated behind the remote Honey-economy kill-switch. When disabled (the default), this
+// returns null and every honey flow falls back to the local ledger — identical to the
+// pre-economy behavior. The official worker URLs are baked in (public, non-secret) so
+// the packaged app needs no env to reach them once the flag is flipped on.
+async function getRemoteLedgerConfig(): Promise<RemoteLedgerConfig | null> {
+  if (!(await isHoneyEconomyEnabled())) return null;
   return {
-    url,
+    url: honeyLedgerUrl(),
     signingSecret: process.env.HONEY_LEDGER_SIGNING_SECRET?.trim(),
     billingSigningSecret: process.env.HONEY_BILLING_SIGNING_SECRET?.trim() || process.env.HONEY_LEDGER_SIGNING_SECRET?.trim(),
     issuerId: process.env.HONEY_LEDGER_ISSUER_ID?.trim() || "hivemindos",
     readToken: process.env.HONEY_LEDGER_READ_TOKEN?.trim(),
     adminToken: process.env.HONEY_LEDGER_ADMIN_TOKEN?.trim(),
+    gatewayUrl: honeyComputeGatewayUrl(),
+    bankrKey: (process.env.BANKR_LLM_KEY || process.env.BANKR_API_KEY || process.env.BANKR_MANAGEMENT_KEY)?.trim(),
   };
+}
+
+// The reward key carries the workspace identity to the gateway, which extracts the
+// workspaceId and the Bankr key, then verifies the key owns that workspace before signing.
+function honeyRewardKey(remote: RemoteLedgerConfig, workspaceId: string) {
+  return remote.bankrKey ? `hive-v1.${workspaceId}.${remote.bankrKey}` : "";
+}
+
+function honeyGatewayConfigured(remote: RemoteLedgerConfig) {
+  return Boolean(remote.gatewayUrl && remote.bankrKey);
 }
 
 async function readRemoteHoneyLedger(remote: RemoteLedgerConfig): Promise<HoneyLedger | null> {
@@ -581,10 +649,12 @@ async function recordRemoteHoneyObservation(
 }
 
 async function exchangeRemoteHoneyForHive(remote: RemoteLedgerConfig, agentId?: string) {
-  const response = await fetch(`${remote.url}/exchange`, {
+  if (!honeyGatewayConfigured(remote)) return null;
+  const workspaceId = await getWorkspaceId();
+  const response = await fetch(`${remote.gatewayUrl}/honey/exchange`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ workspaceId: await getWorkspaceId(), agentId }),
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${honeyRewardKey(remote, workspaceId)}` },
+    body: JSON.stringify({ agentId }),
     signal: AbortSignal.timeout(REMOTE_HONEY_TIMEOUT_MS),
   });
   if (!response.ok) return null;
@@ -598,10 +668,12 @@ async function exchangeRemoteHoneyForHive(remote: RemoteLedgerConfig, agentId?: 
 }
 
 async function returnRemoteHiveToHoney(remote: RemoteLedgerConfig, agentId?: string) {
-  const response = await fetch(`${remote.url}/return-to-honey`, {
+  if (!honeyGatewayConfigured(remote)) return null;
+  const workspaceId = await getWorkspaceId();
+  const response = await fetch(`${remote.gatewayUrl}/honey/return`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ workspaceId: await getWorkspaceId(), agentId }),
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${honeyRewardKey(remote, workspaceId)}` },
+    body: JSON.stringify({ agentId }),
     signal: AbortSignal.timeout(REMOTE_HONEY_TIMEOUT_MS),
   });
   if (!response.ok) return null;
@@ -618,11 +690,14 @@ async function claimRemoteHoneyToBankrHive(
   remote: RemoteLedgerConfig,
   input: { agentId?: string; recipientAddress: string },
 ): Promise<BankrHoneyClaim> {
-  const response = await fetch(`${remote.url}/claim-bankr-hive`, {
+  if (!honeyGatewayConfigured(remote)) {
+    throw new HoneyClaimError("Official Honey claims require the HivemindOS compute gateway and a Bankr LLM key.", 400);
+  }
+  const workspaceId = await getWorkspaceId();
+  const response = await fetch(`${remote.gatewayUrl}/honey/claim`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${honeyRewardKey(remote, workspaceId)}` },
     body: JSON.stringify({
-      workspaceId: await getWorkspaceId(),
       agentId: input.agentId,
       recipientAddress: input.recipientAddress,
     }),
@@ -706,7 +781,7 @@ async function recordLocalManagedHoneyBillingEvent(input: ManagedHoneyBillingEve
   }
 
   const amount = roundHive(input.honeyAmount);
-  if (amount <= 0) throw new HoneyClaimError("Managed Honey billing amount must be greater than zero.", 400);
+  if (amount <= 0) throw new HoneyClaimError("Hivemind Cloud credit amount must be greater than zero.", 400);
   const balances = [...(ledger.balances ?? [])];
   const balanceIndex = balances.findIndex((balance) => balance.agentId === input.agentId);
   const existing = balanceIndex >= 0
@@ -725,7 +800,7 @@ async function recordLocalManagedHoneyBillingEvent(input: ManagedHoneyBillingEve
     };
   const managedBalance = Math.max(0, Number(existing.managedHoneyBalance ?? 0));
   if (input.kind === "debit" && managedBalance < amount) {
-    throw new HoneyClaimError("Insufficient managed HONEY credits.", 402);
+    throw new HoneyClaimError("Insufficient Hivemind Cloud credits.", 402);
   }
 
   const nextBalance = {
@@ -798,10 +873,10 @@ function canonicalManagedBillingEvent(event: Omit<ManagedHoneyBillingEvent, "sig
 
 function normalizeManagedBillingEvent(input: ManagedHoneyBillingEvent): ManagedHoneyBillingEvent {
   const honeyAmount = roundHive(input.honeyAmount);
-  if (!input.eventId.trim()) throw new HoneyClaimError("Missing managed Honey billing event id.", 400);
-  if (!input.agentId.trim()) throw new HoneyClaimError("Missing managed Honey billing agent id.", 400);
-  if (input.kind !== "credit" && input.kind !== "debit") throw new HoneyClaimError("Unsupported managed Honey billing kind.", 400);
-  if (honeyAmount <= 0) throw new HoneyClaimError("Managed Honey billing amount must be greater than zero.", 400);
+  if (!input.eventId.trim()) throw new HoneyClaimError("Missing Hivemind Cloud credit billing event id.", 400);
+  if (!input.agentId.trim()) throw new HoneyClaimError("Missing Hivemind Cloud credit billing agent id.", 400);
+  if (input.kind !== "credit" && input.kind !== "debit") throw new HoneyClaimError("Unsupported Hivemind Cloud credit billing kind.", 400);
+  if (honeyAmount <= 0) throw new HoneyClaimError("Hivemind Cloud credit amount must be greater than zero.", 400);
   return {
     ...input,
     eventId: input.eventId.trim(),

@@ -1,0 +1,61 @@
+HivemindOS native document reader
+=================================
+
+This executable is written in Rust and is bundled without Python. Its locked
+dependency graph is recorded in native/document-reader/Cargo.lock.
+
+Primary document-parsing components
+-----------------------------------
+
+Calamine 0.36.0 (MIT)
+Source: https://github.com/tafia/calamine
+Crate source commit: 2872ac1c7c02d03fc8549239f5ce629f6b08e54a
+
+lopdf 0.44.0 (MIT)
+Source: https://github.com/J-F-Liu/lopdf
+Crate source commit: 8c454dd93d9c37e608c552a2b304d1d31d1cb2e1
+
+quick-xml 0.41.0 (MIT)
+Source: https://github.com/tafia/quick-xml
+Crate source commit: 4deda08abeffdc188c269360229cf47e12a77a9f
+
+csv 1.4.0 (MIT or Unlicense; HivemindOS uses the MIT option)
+Source: https://github.com/BurntSushi/rust-csv
+Crate source commit: 4a3997e91d668ea1d8595bdef15625a77cf2308a
+
+msg_parser 0.3.6 (MIT)
+Source: https://github.com/marirs/msg-parser-rs
+Crate source commit: c47e3186db94fb1a62c6ad2915ddb5c1c4a95f33
+
+html-to-markdown-rs 3.8.3 (MIT)
+Source: https://github.com/xberg-io/html-to-markdown
+Crate source commit: 41376152bb4a24ec53788a7c6537d75afb5360f4
+
+The selected source paths were statically audited before assimilation. The
+reader performs local file conversion only and contains no network client,
+shell execution, dynamic code loading, or credential access.
+
+Transitive crates use permissive MIT, Apache-2.0, BSD, Zlib, Unlicense, CC0,
+BSL, and Unicode licenses as declared by the locked Cargo metadata. No GPL,
+AGPL, proprietary, or source-available dependency is linked into the reader.
+
+MIT License
+-----------
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

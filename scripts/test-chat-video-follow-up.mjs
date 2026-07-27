@@ -1,0 +1,198 @@
+#!/usr/bin/env node
+import { register } from "node:module";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+process.env.NODE_ENV = "production";
+register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
+
+const followUpModule = await import(
+  "../src/lib/services/chat/video-generation-follow-up.ts"
+).catch(() => null);
+assert.equal(
+  typeof followUpModule?.resolveVideoGenerationFollowUp,
+  "function",
+  "video generation needs a reusable prior-session follow-up resolver",
+);
+
+const nativeRequestModule = await import(
+  "../src/app/api/chat/agent-runtime/native-video-generation-request.ts"
+).catch(() => null);
+assert.equal(
+  typeof nativeRequestModule?.prepareNativeVideoGenerationRequest,
+  "function",
+  "the native video route needs one preparation boundary for explicit and follow-up turns",
+);
+
+const sourcePath = "/Users/test/bee.jpg";
+const previousPrompt = "create a video of this bee flying around";
+const sourceUrl = `/api/chat/generated-media?path=${encodeURIComponent(sourcePath)}&exp=9999999999999&sig=${"a".repeat(64)}`;
+const sessionMessages = [
+  {
+    index: 0,
+    role: "user",
+    content: `${previousPrompt} Attached file references:\n- bee.jpg (kind: file; path: ${sourcePath}; type: image/jpeg)`,
+    createdAt: 100,
+  },
+  {
+    index: 1,
+    role: "assistant",
+    content: `Generated video: ${previousPrompt}`,
+    createdAt: 200,
+    applicationGeneration: {
+      id: "video-1",
+      kind: "video",
+      status: "ready",
+      prompt: previousPrompt,
+      sourceArtifacts: [{ kind: "image", url: sourceUrl, label: "bee.jpg", mimeType: "image/jpeg" }],
+      artifacts: [{ kind: "video", url: "/generated/bee.mp4" }],
+    },
+  },
+];
+
+const terseFollowUp = followUpModule.resolveVideoGenerationFollowUp(
+  "now with a sunset, faster wings, and a wider camera move",
+  sessionMessages,
+);
+assert.ok(terseFollowUp, "a terse modifier after a completed video should resolve as regeneration");
+assert.match(terseFollowUp.prompt, /Generate a new video from the same source image/i);
+assert.match(terseFollowUp.prompt, /create a video of this bee flying around/i, "the previous prompt remains context");
+assert.match(terseFollowUp.prompt, /sunset, faster wings, and a wider camera move/i, "the new modifiers are preserved");
+assert.deepEqual(terseFollowUp.inputImages, [{
+  path: sourcePath,
+  mimeType: "image/jpeg",
+  name: "bee.jpg",
+}]);
+
+const explicitFollowUp = followUpModule.resolveVideoGenerationFollowUp(
+  "now regenerate it with softer motion and no camera shake",
+  sessionMessages,
+);
+assert.ok(explicitFollowUp, "an explicit regenerate-it follow-up should reuse the prior source image");
+assert.match(explicitFollowUp.prompt, /softer motion and no camera shake/i);
+
+const legacySessionMessages = sessionMessages.map((message) => (
+  message.applicationGeneration
+    ? { ...message, applicationGeneration: { ...message.applicationGeneration, sourceArtifacts: undefined } }
+    : message
+));
+const legacyFollowUp = followUpModule.resolveVideoGenerationFollowUp("now with a close-up", legacySessionMessages);
+assert.equal(
+  legacyFollowUp?.inputImages?.[0]?.path,
+  sourcePath,
+  "older sessions recover the source path from the original attachment reference",
+);
+
+const textToVideoAfterOlderImage = [
+  ...sessionMessages,
+  { index: 2, role: "user", content: "generate a video of a brand new abstract galaxy", createdAt: 300 },
+  {
+    index: 3,
+    role: "assistant",
+    content: "Generated video: abstract galaxy",
+    createdAt: 400,
+    applicationGeneration: { id: "video-2", kind: "video", status: "ready", prompt: "an abstract galaxy" },
+  },
+];
+assert.equal(
+  followUpModule.resolveVideoGenerationFollowUp("now with blue stars", textToVideoAfterOlderImage),
+  null,
+  "a source-less newer video must not borrow an unrelated image from an older turn",
+);
+
+assert.equal(
+  followUpModule.resolveVideoGenerationFollowUp("what model generated that?", sessionMessages),
+  null,
+  "an ordinary question after a video must remain a normal chat turn",
+);
+
+const signedSourceUrl = "/api/chat/generated-media?path=source.jpg&exp=1&sig=test";
+const explicitPrepared = await nativeRequestModule.prepareNativeVideoGenerationRequest({
+  userPrompt: `${previousPrompt} Attached file references:\n- bee.jpg (kind: file; path: ${sourcePath}; type: image/jpeg)`,
+  mediaArtifacts: [{
+    id: "image-1",
+    kind: "image",
+    name: "bee.jpg",
+    mimeType: "image/jpeg",
+    sizeBytes: 100,
+    path: sourcePath,
+  }],
+  sessionMessages: [],
+  signMediaUrl: async () => signedSourceUrl,
+});
+assert.equal(explicitPrepared?.prompt, previousPrompt, "the visible/generation prompt excludes attachment bookkeeping");
+assert.deepEqual(explicitPrepared?.sourceArtifacts, [{
+  kind: "image",
+  url: signedSourceUrl,
+  label: "bee.jpg",
+  mimeType: "image/jpeg",
+}]);
+
+const followUpPrepared = await nativeRequestModule.prepareNativeVideoGenerationRequest({
+  userPrompt: "now with glowing fireflies",
+  mediaArtifacts: [],
+  sessionMessages,
+  signMediaUrl: async () => signedSourceUrl,
+});
+assert.match(followUpPrepared?.prompt ?? "", /glowing fireflies/i);
+assert.equal(followUpPrepared?.inputImages[0]?.path, sourcePath);
+assert.equal(followUpPrepared?.sourceArtifacts[0]?.url, signedSourceUrl);
+
+const routeSource = readFileSync(new URL("../src/app/api/chat/agent-runtime/route.ts", import.meta.url), "utf8");
+assert.doesNotMatch(routeSource, /videoCreationClarification|streamVideoCreationClarification/, "chat must not use a keyword interceptor to take over ambiguous video turns");
+assert.doesNotMatch(routeSource, /prepareNativeVideoGenerationRequest\(\{|streamNativeVideoGeneration\(\{/, "chat must let the agent decide whether a turn authorizes video generation before dispatching a tool");
+
+const runtimeSource = readFileSync(new URL("../src/app/api/chat/agent-runtime/stream-openai-compatible.ts", import.meta.url), "utf8");
+assert.doesNotMatch(runtimeSource, /forceVideoGenerationToolCall|forced_generate_video/, "the runtime must not synthesize a video tool call from keywords");
+assert.match(runtimeSource, /tool_choice:\s*"auto"/, "the model should choose whether the offered video tool is appropriate");
+
+const retrievalSource = readFileSync(new URL("../src/lib/services/chat/task-retrieval-context.ts", import.meta.url), "utf8");
+assert.match(retrievalSource, /Interpret the user's conversational intent before acting/);
+assert.match(retrievalSource, /discussion, brainstorming, hypotheticals, capability questions/);
+
+const packagedHyperframes = readFileSync(new URL("../packaged-skills/auto-install/hyperframes/SKILL.md", import.meta.url), "utf8");
+const packagedHyperframesMetadata = JSON.parse(readFileSync(
+  new URL("../packaged-skills/auto-install/hyperframes/.hivemind-skill-source.json", import.meta.url),
+  "utf8",
+));
+const packagedProductLaunch = readFileSync(
+  new URL("../packaged-skills/auto-install/product-launch-video/SKILL.md", import.meta.url),
+  "utf8",
+);
+const packagedWebsiteCapabilities = readFileSync(
+  new URL("../packaged-skills/auto-install/website-to-video/references/capabilities.md", import.meta.url),
+  "utf8",
+);
+const packagedAnimateTextAdapter = readFileSync(
+  new URL("../packaged-skills/auto-install/hyperframes-animation/adapters/animate-text.md", import.meta.url),
+  "utf8",
+);
+const skillsLock = JSON.parse(readFileSync(new URL("../skills-lock.json", import.meta.url), "utf8"));
+assert.match(packagedHyperframes, /HivemindOS method boundary/);
+assert.match(packagedHyperframes, /Cloud AI video generation/);
+assert.match(packagedHyperframes, /Local AI video generation/);
+assert.match(packagedHyperframes, /HTML \/ HyperFrames rendering/);
+assert.match(packagedHyperframes, /I'm thinking about generating a video/);
+assert.match(packagedHyperframes, /Do not treat the presence of words such as “generate” or “video” as authorization/);
+assert.match(packagedHyperframes, /bundled as sibling skills under `packaged-skills\/auto-install\/<slug>\/SKILL\.md`/);
+assert.match(packagedHyperframes, /never run `npx skills add`, `npx skills update`/);
+assert.doesNotMatch(packagedHyperframes, /Just this workflow|All workflows at once|After they run it/, "the bundled router must not tell users to install its own workflows");
+assert.match(packagedProductLaunch, /HivemindOS Integration/);
+assert.match(packagedProductLaunch, /already bundled/);
+assert.doesNotMatch(packagedWebsiteCapabilities, /npx skills add heygen-com\/hyperframes/, "packaged references must not reinstall the bundled suite");
+assert.doesNotMatch(packagedAnimateTextAdapter, /npx skills add pixel-point\/animate-text/, "external skill installation must remain an explicit user decision");
+assert.equal(packagedHyperframesMetadata.provider, "packaged-auto-install");
+assert.equal(packagedHyperframesMetadata.upstreamSourceUrl, "https://github.com/heygen-com/hyperframes");
+assert.equal(packagedHyperframesMetadata.sourceArchiveSha256, "5371981bb828588789bd682c31f374204a0ba85af4d2c2052a7cff2cf011edfc");
+assert.equal(
+  skillsLock.skills.hyperframes.packagedPath,
+  "packaged-skills/auto-install/hyperframes/SKILL.md",
+  "the reproducibility lock should follow the auto-installed package",
+);
+assert.equal(
+  skillsLock.skills["product-launch-video"].packagedPath,
+  "packaged-skills/auto-install/product-launch-video/SKILL.md",
+  "the selected launch workflow must be present without a follow-up install",
+);
+
+console.log("Video routing is agent-decided, HyperFrames is auto-installed, and source-image follow-ups remain reusable.");

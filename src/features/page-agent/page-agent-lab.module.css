@@ -1,0 +1,602 @@
+/*
+ * Page Agent lab styles. Self-contained (this route renders outside the
+ * dashboard shell, so it does not rely on fleet theme tokens being in scope).
+ * Honey-leaning neutrals to match the hive identity; dark-mode aware.
+ */
+
+.lab {
+  --pa-ink: #1a1712;
+  --pa-ink-2: #524a3c;
+  --pa-paper: #faf7f0;
+  --pa-card: #fffdf8;
+  --pa-line: #e4dcc9;
+  --pa-honey: #c8891a;
+  --pa-honey-deep: #9a6410;
+
+  min-height: 100vh;
+  box-sizing: border-box;
+  padding: clamp(20px, 5vw, 56px);
+  background:
+    radial-gradient(120% 90% at 100% -10%, rgba(200, 137, 26, 0.08), transparent 55%),
+    var(--pa-paper);
+  color: var(--pa-ink);
+  font-family:
+    "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, ui-serif, serif;
+}
+
+.head {
+  max-width: 720px;
+  margin: 0 auto 32px;
+}
+
+.title {
+  font-size: clamp(26px, 4vw, 38px);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin: 0 0 10px;
+}
+
+.sub {
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--pa-ink-2);
+  margin: 0 0 12px;
+}
+
+.status {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12.5px;
+  color: var(--pa-honey-deep);
+  margin: 0;
+}
+
+.grid {
+  max-width: 720px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+@media (max-width: 640px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card {
+  background: var(--pa-card);
+  border: 1px solid var(--pa-line);
+  border-radius: 14px;
+  padding: 20px 22px;
+}
+
+.cardTitle {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pa-honey-deep);
+  margin: 0 0 14px;
+}
+
+.field {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.field > span {
+  display: block;
+  font-size: 13px;
+  color: var(--pa-ink-2);
+  margin-bottom: 5px;
+}
+
+.field input,
+.field select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 11px;
+  font-size: 15px;
+  border: 1px solid var(--pa-line);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--pa-ink);
+}
+
+.field input:focus,
+.field select:focus {
+  outline: 2px solid var(--pa-honey);
+  outline-offset: 1px;
+  border-color: var(--pa-honey);
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+  color: var(--pa-ink);
+  margin-bottom: 18px;
+}
+
+.primary {
+  appearance: none;
+  border: none;
+  background: var(--pa-honey);
+  color: #fff;
+  font-weight: 600;
+  font-size: 15px;
+  padding: 10px 18px;
+  border-radius: 9px;
+  cursor: pointer;
+}
+
+.primary:hover {
+  background: var(--pa-honey-deep);
+}
+
+.counterRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ghost {
+  appearance: none;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--pa-line);
+  background: #fff;
+  border-radius: 9px;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--pa-ink);
+}
+
+.ghost:hover {
+  border-color: var(--pa-honey);
+  color: var(--pa-honey-deep);
+}
+
+.count {
+  font-variant-numeric: tabular-nums;
+  font-size: 26px;
+  font-weight: 600;
+  min-width: 48px;
+  text-align: center;
+}
+
+.result {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.result > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.result dt {
+  color: var(--pa-ink-2);
+}
+
+.result dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.empty {
+  font-size: 14px;
+  color: var(--pa-ink-2);
+  font-style: italic;
+  margin: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .lab {
+    --pa-ink: #ece5d6;
+    --pa-ink-2: #a99f8a;
+    --pa-paper: #16130e;
+    --pa-card: #201b14;
+    --pa-line: #37301f;
+  }
+
+  .field input,
+  .field select,
+  .ghost {
+    background: #16130e;
+  }
+}
+
+/* ===========================================================================
+   Chat surface — mirrors the app's "Message the hive" pill (fleet-hive .fr-chat)
+   + the Queen transcript bubbles (queen-voice.module.css), re-declared here
+   because this route renders outside .fr-root / the dashboard shell. The one
+   deliberate deviation: a PURPLE glow/identity on the input instead of honey.
+   Frosted-dark glass (as in the Queen overlay) reads over any page background.
+   =========================================================================== */
+
+.dock {
+  --pa-purple: #8d6fff;
+  --pa-purple-soft: rgba(141, 111, 255, 0.32);
+  --pa-purple-line: rgba(141, 111, 255, 0.62);
+  --pa-glass: color-mix(in srgb, #14161c 62%, transparent);
+  --pa-glass-line: rgba(238, 232, 220, 0.13);
+  --pa-turn-text: rgba(235, 239, 250, 0.95);
+
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 26px;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+
+/* Right-anchored placement — used in the real dashboard so the Page Agent pill
+   does not collide with the bottom-centre "Message the hive" pill. */
+.dockRight {
+  left: auto;
+  right: 22px;
+  align-items: flex-end;
+}
+
+/* ---- transcript (Queen bubble match) ---- */
+.transcript {
+  pointer-events: auto;
+  width: min(640px, calc(100vw - 48px));
+  padding: 12px 18px 16px;
+  border-radius: 18px;
+  background: var(--pa-glass);
+  border: 1px solid var(--pa-glass-line);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  animation: paTranscriptPop 300ms cubic-bezier(0.2, 0.85, 0.3, 1) both;
+}
+
+@keyframes paTranscriptPop {
+  0% { opacity: 0; transform: translateY(10px) scale(0.94); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.transcriptScroll {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 42vh;
+  overflow-y: auto;
+}
+
+.turnGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.turn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.who {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(200, 208, 232, 0.62);
+}
+
+.whoYou {
+  color: #8d9fff;
+}
+
+.whoAgent {
+  color: #ffba71;
+}
+
+.turnText {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--pa-turn-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.turnTextThinking {
+  color: rgba(255, 186, 113, 0.9);
+  font-style: italic;
+  animation: paThinkingBreath 1.4s ease-in-out infinite;
+}
+
+.turnTextError {
+  color: rgba(251, 113, 133, 0.95);
+}
+
+@keyframes paThinkingBreath {
+  0%, 100% { opacity: 0.62; }
+  50% { opacity: 1; }
+}
+
+/* ---- input pill (.fr-chat shape, PURPLE glow) ---- */
+.chat {
+  position: relative;
+  isolation: isolate; /* own stacking context so glow < skin < content resolves cleanly */
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 8px 0 18px;
+  border-radius: 99px;
+  transition: width 0.46s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.chat:hover,
+.chat:focus-within,
+.chatBusy {
+  width: min(560px, calc(100vw - 48px));
+}
+
+/* Frosted-dark body of the pill (the "skin"), sits above the glow. */
+.chatSkin {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: 99px;
+  background: color-mix(in srgb, #14161c 66%, transparent);
+  border: 1px solid var(--pa-glass-line);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow:
+    0 22px 50px -22px rgba(0, 0, 0, 0.6),
+    0 1px 0 rgba(255, 255, 255, 0.03) inset;
+  transition: border-color 0.3s;
+  pointer-events: none;
+}
+
+.chat:hover .chatSkin,
+.chat:focus-within .chatSkin,
+.chatBusy .chatSkin {
+  border-color: var(--pa-purple-line);
+}
+
+/* Animated, blurred gradient GLOW behind the pill — a soft moving purple halo,
+   mirroring page-agent's own panel glow (a blurred sweeping gradient). The
+   16px blur + a wider-than-pill box spread the colours into a diffuse aura;
+   the background-position sweep makes it drift (no gaps, unlike a translate). */
+.chatGlow {
+  position: absolute;
+  inset: 0; /* exact pill box — the glow IS the box-shadow, which follows the
+               rounded border, so it can never read as a rectangle/square */
+  z-index: 0;
+  border-radius: 99px;
+  background: transparent;
+  /* static base glow (shown when animation is off, e.g. reduced motion) */
+  box-shadow:
+    0 0 12px 1px rgba(124, 77, 255, 0.6),
+    0 0 30px 7px rgba(124, 77, 255, 0.34),
+    0 0 58px 16px rgba(124, 77, 255, 0.16);
+  opacity: 0.5;
+  animation: paGlowPulse 3.6s ease-in-out infinite;
+  transition: opacity 0.35s;
+  pointer-events: none;
+}
+
+.chat:hover .chatGlow,
+.chat:focus-within .chatGlow,
+.chatBusy .chatGlow {
+  opacity: 1;
+}
+
+/* Living glow: the halo (a rounded box-shadow) cycles purple -> magenta ->
+   indigo. Colour-shifting a box-shadow keeps the halo perfectly round at every
+   frame — no blurred rectangle to leak square edges. */
+@keyframes paGlowPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 12px 1px rgba(124, 77, 255, 0.6),
+      0 0 30px 7px rgba(124, 77, 255, 0.34),
+      0 0 58px 16px rgba(124, 77, 255, 0.16);
+  }
+  33% {
+    box-shadow:
+      0 0 13px 1px rgba(184, 91, 255, 0.62),
+      0 0 33px 8px rgba(184, 91, 255, 0.36),
+      0 0 62px 18px rgba(184, 91, 255, 0.17);
+  }
+  66% {
+    box-shadow:
+      0 0 12px 1px rgba(99, 110, 241, 0.6),
+      0 0 30px 7px rgba(99, 110, 241, 0.32),
+      0 0 58px 16px rgba(99, 110, 241, 0.15);
+  }
+}
+
+/* Content rides above both layers. */
+.orb,
+.chatLabel,
+.chatField {
+  position: relative;
+  z-index: 2;
+}
+
+.orb {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+}
+
+.orbRing {
+  position: absolute;
+  inset: 0;
+  border-radius: 99px;
+  background: radial-gradient(circle at 50% 50%, var(--pa-purple-soft), transparent 70%);
+  animation: paBreathe 3.4s ease-in-out infinite;
+}
+
+.orbCore {
+  width: 9px;
+  height: 9px;
+  border-radius: 99px;
+  background: var(--pa-purple);
+  box-shadow: 0 0 10px var(--pa-purple);
+}
+
+@keyframes paBreathe {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.12); opacity: 1; }
+}
+
+.chatLabel {
+  font-size: 13.5px;
+  color: rgba(235, 239, 250, 0.72);
+  white-space: nowrap;
+  flex: 0 0 auto;
+  transition: opacity 0.2s;
+}
+
+.chat:hover .chatLabel,
+.chat:focus-within .chatLabel,
+.chatBusy .chatLabel {
+  display: none;
+}
+
+.chatField {
+  flex: 1 1 auto;
+  min-width: 0;
+  opacity: 0;
+  width: 0;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat:hover .chatField,
+.chat:focus-within .chatField,
+.chatBusy .chatField {
+  opacity: 1;
+  width: auto;
+  pointer-events: auto;
+  transition: opacity 0.3s 0.12s;
+}
+
+.chatInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: rgba(235, 239, 250, 0.98);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 14px;
+}
+
+.chatInput::placeholder {
+  color: rgba(200, 208, 232, 0.5);
+}
+
+.chatSend,
+.chatStop {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 99px;
+  border: 0;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform 0.16s, filter 0.16s, opacity 0.16s;
+}
+
+.chatSend {
+  background: var(--pa-purple);
+  color: #12071f;
+}
+
+.chatSend:hover:not(:disabled) {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+.chatSend:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.chatStop {
+  background: transparent;
+  border: 1px solid var(--pa-purple-line);
+  color: var(--pa-purple);
+}
+
+.chatStop:hover {
+  background: var(--pa-purple-soft);
+  transform: translateY(-1px);
+}
+
+/* ---- whole-page perimeter glow (replaces page-agent's built-in mask frame) ---- */
+.runFrame {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  /* static base (also shown under reduced motion) — soft purple inner glow */
+  box-shadow:
+    inset 0 0 42px 2px rgba(124, 77, 255, 0.5),
+    inset 0 0 110px 16px rgba(124, 77, 255, 0.22);
+}
+
+.runFrameActive {
+  opacity: 1;
+  animation: paFramePulse 3.6s ease-in-out infinite;
+}
+
+/* Same purple -> magenta -> indigo cycle as the pill glow, but as an INSET
+   shadow so it hugs the viewport edges softly (no hard frame line). */
+@keyframes paFramePulse {
+  0%, 100% {
+    box-shadow:
+      inset 0 0 42px 2px rgba(124, 77, 255, 0.5),
+      inset 0 0 110px 16px rgba(124, 77, 255, 0.22);
+  }
+  33% {
+    box-shadow:
+      inset 0 0 46px 3px rgba(184, 91, 255, 0.52),
+      inset 0 0 120px 18px rgba(184, 91, 255, 0.24);
+  }
+  66% {
+    box-shadow:
+      inset 0 0 42px 2px rgba(99, 110, 241, 0.5),
+      inset 0 0 110px 16px rgba(99, 110, 241, 0.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .transcript,
+  .orbRing,
+  .chatGlow,
+  .runFrameActive,
+  .turnTextThinking {
+    animation: none;
+  }
+}

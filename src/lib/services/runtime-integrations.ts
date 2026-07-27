@@ -6,11 +6,24 @@ import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import type { AgentProfile, AgentRuntime, RuntimeCapabilities } from "@/lib/types/agent-runtime";
 import { MODEL_PROVIDER_GATEWAYS } from "@/lib/config/model-provider-gateways";
+import { HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER } from "@/lib/config/hivemindos-wallet-paid-models";
 import { RUNTIME_CAPABILITIES } from "@/lib/types/agent-runtime";
 import { getRuntimeAdapter } from "@/lib/services/runtime-adapters/registry";
-import { discoverLmStudioProviderModels, localOpenAIProviderProfile, runLmStudioAction } from "@/lib/services/runtime-adapters/openai-compatible";
+import { discoverLmStudioProviderModels, localModelHubStatus, localOpenAIProviderProfile, localRuntimeSetupStatus, runLmStudioAction } from "@/lib/services/runtime-adapters/openai-compatible";
+import type { LocalModelDownloadJob, LocalModelHardwareSnapshot, LocalModelInstallCatalogStatus, LocalOpenAICompatibleServer, LocalRuntimeSetupStatus } from "@/lib/config/local-model-install-catalog";
 import { bankrLlmAccessStatus, bankrLlmModelOptions, isBankrLlmLowCreditError, listBankrLlmModels } from "@/lib/services/bankr-llm";
+import {
+  hivemindosWalletPaidModelOptions,
+} from "@/lib/services/hivemindos-wallet-paid-models";
+import {
+  readHiveComputeMarketplaceStatus,
+} from "@/lib/services/hive-compute-marketplace";
+import { HIVE_COMPUTE_PROVIDER_SLUG } from "@/lib/config/hive-compute-marketplace";
 import { mergeRuntimeSessions, previewSessionText } from "@/lib/services/runtime-session-utils";
+import { sanitizeProcessEnv } from "@/lib/utils/safe-process-env";
+import { startXaiOAuthLogin } from "@/lib/services/xai-oauth";
+import { runtimeInstallSpec } from "@/lib/services/runtime-install-catalog";
+import { installRuntimeBinary } from "@/lib/services/runtime-installer";
 import type { RuntimeModelSelection } from "./runtime-adapters/types";
 
 const execFileAsync = promisify(execFile);
@@ -46,6 +59,9 @@ export type RuntimeIntegrationStatus = {
     detail: string;
   }>;
   diagnostics: string[];
+  /** Present when Queen Bee voice turns are bypassing this agent's configured
+   *  model (runtime turn failing → the OpenAI fallback model answering). */
+  queenVoiceBrain?: import("@/lib/services/queen-bee/voice-brain-status").QueenVoiceBrainStatus;
   modelSelection?: RuntimeModelSelection;
   providerStatus?: {
     usePod?: {
@@ -101,9 +117,45 @@ export type RuntimeIntegrationStatus = {
         paramsString?: string | null;
         sizeBytes?: number | null;
         format?: string | null;
+        remote?: boolean;
+        source?: "lm-studio" | "lm-link" | "openai-server";
+        sourceLabel?: string;
+        serverId?: string;
+        baseUrl?: string;
+        chatPath?: string;
+        statusPath?: string;
+        canLoad?: boolean;
+        canUnload?: boolean;
       }>;
+      servers?: LocalOpenAICompatibleServer[];
+      catalog?: LocalModelInstallCatalogStatus[];
+      downloads?: LocalModelDownloadJob[];
+      hardware?: LocalModelHardwareSnapshot;
+      setup?: LocalRuntimeSetupStatus;
       error?: string;
       checkedAt?: string;
+    };
+    hivemindosModels?: {
+      status?: string;
+      message?: string;
+      modelCount?: number;
+      checkedAt?: string;
+    };
+    hiveCompute?: {
+      status?: string;
+      message?: string;
+      modelCount?: number;
+      checkedAt?: string;
+      gatewayConfigured?: boolean;
+      workerInstalled?: boolean;
+      workerReady?: boolean;
+      liveWorkers?: number;
+      liveModels?: string[];
+      keyRelayModels?: string[];
+      fallbackConfigured?: boolean;
+      pendingJobs?: number;
+      capacityLabel?: string;
+      capacityTone?: "live" | "fallback" | "empty";
     };
   };
 };
@@ -299,12 +351,13 @@ async function augmentGatewayModelProviders(
   if (!agent) return { modelSelection, providerStatus };
   const bankrGateway = MODEL_PROVIDER_GATEWAYS.bankr;
   const lmStudioGateway = MODEL_PROVIDER_GATEWAYS["lm-studio"];
+  const walletPaidGateway = MODEL_PROVIDER_GATEWAYS[HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER];
   // Run the independent gateway probes concurrently: Bankr model discovery +
   // Bankr access status (network) and LM Studio discovery (`lms ls`/REST,
   // memoized per resolved endpoint) no longer serialize, so the settings status
   // sweep waits the slowest probe instead of their sum.
   const lmStudioProfile = localOpenAIProviderProfile(agent);
-  const [bankr, bankrAccess, lmStudio] = await Promise.all([
+  const [bankr, bankrAccess, lmStudio, hiveCompute] = await Promise.all([
     listBankrLlmModels(agent).catch((error) => ({
       models: [],
       error: error instanceof Error ? error.message : "Bankr LLM model discovery failed.",
@@ -320,15 +373,26 @@ async function augmentGatewayModelProviders(
     ).catch((error) => ({
       runtimeProfile: lmStudioProfile,
       lmStudioModels: [],
-      modelDiscoveryError: error instanceof Error ? error.message : "Local OpenAI model discovery failed.",
+      servers: [],
+      modelDiscoveryError: error instanceof Error ? error.message : "Local model discovery failed.",
       lmStudioModelSource: "",
       models: [],
     })),
+    readHiveComputeMarketplaceStatus().catch((error) => ({
+      error: error instanceof Error ? error.message : "Hive Compute status failed.",
+      models: [],
+      routing: { ready: false, message: "Hive Compute status failed.", chatPath: "/api/hive-compute/chat/completions" },
+      gateway: { configured: false },
+      workerModule: { installed: false },
+      earning: { ready: false },
+    })),
   ]);
+  const lmStudioSetup = await localRuntimeSetupStatus(lmStudioProfile).catch(() => undefined);
   if (bankr.error) diagnostics.push(`Bankr LLM models unavailable: ${bankr.error}`);
   if (bankrAccess.error) diagnostics.push(`Bankr access status unavailable: ${bankrAccess.error}`);
-  if (lmStudio.modelDiscoveryError) diagnostics.push(`Local OpenAI model discovery unavailable: ${lmStudio.modelDiscoveryError}`);
-  const providers = [...(modelSelection?.providers ?? [])];
+  if (lmStudio.modelDiscoveryError) diagnostics.push(`Local model discovery unavailable: ${lmStudio.modelDiscoveryError}`);
+  if ("error" in hiveCompute && hiveCompute.error) diagnostics.push(`Hive Compute unavailable: ${hiveCompute.error}`);
+  const providers = (modelSelection?.providers ?? []).filter((provider) => provider.slug !== HIVE_COMPUTE_PROVIDER_SLUG);
   const lmStudioModels = lmStudio.models.length
     ? lmStudio.models
     : agent.provider === "lm-studio" && agent.model?.trim()
@@ -343,9 +407,9 @@ async function augmentGatewayModelProviders(
         ? {
           id,
           name: model.displayName,
-          subtitle: model.loaded ? "Loaded" : model.remote ? "Available" : "Downloaded",
+          subtitle: model.source === "openai-server" ? "Serving" : model.loaded ? "Loaded" : model.remote ? "Available" : "Downloaded",
           group: model.paramsString || undefined,
-          badge: model.remote ? "LM Link" : "Local",
+          badge: model.source === "openai-server" ? "Server" : model.remote ? "LM Link" : "Local",
         }
         : { id };
     }),
@@ -370,6 +434,19 @@ async function augmentGatewayModelProviders(
   const existingIndex = providers.findIndex((provider) => provider.slug === "bankr");
   if (existingIndex >= 0) providers[existingIndex] = { ...providers[existingIndex], ...bankrProvider };
   else providers.push(bankrProvider);
+  const walletPaidModels = hivemindosWalletPaidModelOptions();
+  const walletPaidProvider = {
+    slug: walletPaidGateway.slug,
+    name: walletPaidGateway.name,
+    models: walletPaidModels,
+    totalModels: walletPaidModels.length,
+    isCurrent: agent.provider === HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER,
+    isUserDefined: false,
+    source: "/api/hivemindos/models/models",
+  };
+  const walletPaidIndex = providers.findIndex((provider) => provider.slug === HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER);
+  if (walletPaidIndex >= 0) providers[walletPaidIndex] = { ...providers[walletPaidIndex], ...walletPaidProvider };
+  else providers.push(walletPaidProvider);
   const nextProviderStatus = {
     ...providerStatus,
     bankr: {
@@ -384,8 +461,33 @@ async function augmentGatewayModelProviders(
     lmStudio: {
       baseUrl: lmStudio.runtimeProfile.gatewayUrl?.trim().replace(/\/+$/, ""),
       models: lmStudio.lmStudioModels,
+      servers: lmStudio.servers,
+      ...localModelHubStatus(lmStudio.lmStudioModels),
+      setup: lmStudioSetup,
       error: lmStudio.modelDiscoveryError || undefined,
       checkedAt: new Date().toISOString(),
+    },
+    hivemindosModels: {
+      status: "ready",
+      message: "Free Swarm Sovereign Scout by default; hosted credits or an x402 wallet unlock wallet-paid routes.",
+      modelCount: walletPaidModels.length,
+      checkedAt: new Date().toISOString(),
+    },
+    hiveCompute: {
+      status: !("error" in hiveCompute) && hiveCompute.routing.ready ? "ready" : "setup",
+      message: "error" in hiveCompute ? hiveCompute.error : hiveCompute.routing.message,
+      modelCount: !("error" in hiveCompute) ? (hiveCompute.gateway.models?.count ?? 0) : 0,
+      checkedAt: new Date().toISOString(),
+      gatewayConfigured: !("error" in hiveCompute) && hiveCompute.gateway.configured,
+      workerInstalled: !("error" in hiveCompute) && hiveCompute.workerModule.installed,
+      workerReady: !("error" in hiveCompute) && hiveCompute.earning.ready,
+      liveWorkers: !("error" in hiveCompute) ? hiveCompute.gateway.capacity?.liveWorkers : undefined,
+      liveModels: !("error" in hiveCompute) ? hiveCompute.gateway.capacity?.liveModels : undefined,
+      keyRelayModels: !("error" in hiveCompute) ? hiveCompute.gateway.capacity?.keyRelayModels : undefined,
+      fallbackConfigured: !("error" in hiveCompute) ? hiveCompute.gateway.capacity?.fallbackConfigured : undefined,
+      pendingJobs: !("error" in hiveCompute) ? hiveCompute.gateway.capacity?.pendingJobs : undefined,
+      capacityLabel: !("error" in hiveCompute) ? hiveCompute.gateway.capacity?.statusLabel : undefined,
+      capacityTone: !("error" in hiveCompute) ? hiveCompute.gateway.capacity?.statusTone : undefined,
     },
   };
   return {
@@ -405,8 +507,14 @@ export async function searchRuntimeSessions(runtime: AgentRuntime, query: string
 }
 
 export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action: string, input: Record<string, unknown> = {}, agent?: AgentProfile) {
-  if ((action === "load-model" || action === "unload-model") && agent?.provider === "lm-studio") {
-    return runLmStudioAction(agent, action, input);
+  if (action === "install-runtime") {
+    const spec = runtimeInstallSpec(runtime);
+    if (spec?.inAppInstall) return installRuntimeBinary(spec.runtime);
+  }
+  if ((action === "load-model" || action === "unload-model" || action === "download-model" || action === "cancel-download" || action === "install-local-runtime" || action === "start-local-runtime" || action === "smoke-test-local-model") && agent?.provider === "lm-studio") {
+    const result = await runLmStudioAction(agent, action, input);
+    catalogCache.clear();
+    return result;
   }
   if (runtime === "openclaw" && action === "set-model") {
     const provider = String(input.provider ?? "").trim();
@@ -436,13 +544,13 @@ export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action:
     return { ok: true, message: `Disabled Hermes ${tool}.` };
   }
   if (action === "xai-login") {
-    const child = spawn("hermes", ["login", "--provider", "xai-oauth"], {
-      detached: true,
-      stdio: "ignore",
-      env: { ...process.env },
-    });
-    child.unref();
-    return { ok: true, message: "Started Hermes xAI OAuth login in a separate process." };
+    const { authorizeUrl } = await startXaiOAuthLogin();
+    return {
+      ok: true,
+      authorizeUrl,
+      statusEndpoint: "/api/xai-oauth",
+      message: "Open the xAI sign-in page in your browser to connect Grok.",
+    };
   }
   if (action === "hermes-update") {
     const output = await runHermes(["update"], 300_000);
@@ -462,7 +570,20 @@ export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action:
     // route through the collector's local signing proxy, which injects the
     // SIWX header. Point the provider's base_url there with no key_env.
     const veniceProxyBase = provider === "venice" ? veniceWalletProxyBase(agent) : null;
-    if (MODEL_PROVIDER_GATEWAYS[provider]?.hermes) {
+    const gateway = MODEL_PROVIDER_GATEWAYS[provider];
+    if (gateway && !gateway.hermes) {
+      // Dashboard-internal gateways (hivemindos-models: custom wallet-agent
+      // headers against the local app origin) cannot be expressed as a hermes
+      // provider block — writing one anyway creates a base_url-less entry the
+      // CLI rejects with "Unknown provider". Dashboard chat executes these
+      // server-side (isHivemindosWalletPaidModelProfile in stream-http-runtime),
+      // so record NOTHING in the hermes config and say where the model runs.
+      return {
+        ok: true,
+        message: `${provider}/${model} is served by HivemindOS itself for ${agent?.name || "this agent"} — dashboard chats use it directly; no hermes CLI config was changed. Runs driven through the hermes CLI outside the dashboard keep the CLI's own default model.`,
+      };
+    }
+    if (gateway?.hermes) {
       await addHermesProvider(provider, model, profileEnv, veniceProxyBase ? { base_url: veniceProxyBase, key_env: "" } : undefined);
     } else await addHermesModel(provider, model, undefined, profileEnv);
     if (profileEnv) {
@@ -499,7 +620,7 @@ export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action:
     const child = spawn("hermes", ["-z", prompt], {
       detached: true,
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env },
+      env: sanitizeProcessEnv(),
     });
     const write = (chunk: Buffer) => void writeFile(logPath, chunk.toString(), { flag: "a" }).catch(() => undefined);
     child.stdout.on("data", write);
@@ -609,7 +730,7 @@ print(json.dumps(payload))
 `;
   const { stdout } = await execFileAsync(HERMES_PYTHON, ["-c", script], {
     cwd: HERMES_AGENT_DIR,
-    env: { ...process.env, PYTHONPATH: HERMES_AGENT_DIR },
+    env: sanitizeProcessEnv(process.env, { PYTHONPATH: HERMES_AGENT_DIR }),
     timeout: 20_000,
     maxBuffer: 5_000_000,
   });
@@ -954,14 +1075,13 @@ async function loadHiveEnv() {
     value = value.replaceAll("\0", "");
     if (value) values[key] = value;
   }
-  return { ...values, ...process.env };
+  return sanitizeProcessEnv({ ...values, ...process.env });
 }
 
 async function hermesProcessEnv() {
-  return {
-    ...await loadHiveEnv(),
+  return sanitizeProcessEnv(await loadHiveEnv(), {
     PYTHONPATH: HERMES_AGENT_DIR,
-  };
+  });
 }
 
 async function runHermesPython(script: string, values: Record<string, string | number>, env?: Record<string, string>) {
@@ -972,7 +1092,7 @@ async function runHermesPython(script: string, values: Record<string, string | n
   }
   const { stdout } = await execFileAsync(HERMES_PYTHON, ["-c", rendered], {
     cwd: HERMES_AGENT_DIR,
-    env: { ...(await hermesProcessEnv()), ...(env ?? {}) },
+    env: sanitizeProcessEnv({ ...(await hermesProcessEnv()), ...(env ?? {}) }),
     timeout: 20_000,
     maxBuffer: 2_000_000,
   });

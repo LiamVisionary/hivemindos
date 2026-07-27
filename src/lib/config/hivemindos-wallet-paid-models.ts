@@ -1,0 +1,155 @@
+import {
+  hiveComputeHostedRouteModel,
+  isHiveComputeHostedModelId,
+  normalizeHiveComputeModel,
+} from "@/lib/config/hive-compute-marketplace";
+
+export const HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER = "hivemindos-models";
+export const HIVEMINDOS_WALLET_PAID_MODELS_NAME = "HivemindOS";
+export const HIVEMINDOS_FREE_MODEL_ID = "hivemindos/swarm-sovereign-scout";
+export const HIVEMINDOS_FREE_MODEL_UPSTREAM = "swarm-sovereign-scout-12b";
+export const HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_MODEL = HIVEMINDOS_FREE_MODEL_ID;
+export const HIVEMINDOS_WALLET_PAID_MODEL_AGENT_SLUG_ENV = "HIVEMINDOS_WALLET_PAID_MODEL_AGENT_SLUG";
+export const HIVEMINDOS_WALLET_PAID_MODEL_AGENT_SLUG_PUBLIC_ENV = "NEXT_PUBLIC_HIVEMINDOS_WALLET_PAID_MODEL_AGENT_SLUG";
+export const HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_UPSTREAM_MODEL = "gpt-5.4-mini";
+export const HIVEMINDOS_MODEL_CREDIT_TOP_UP_CONFIRMATION = "FUND_HIVEMINDOS_CREDITS";
+// Hosted model credits are one pool per install, not per agent: every agent's
+// balance lookup, chat billing, and top-up resolves this shared account id.
+// Legacy per-agent tokens (agent:<id> / draft hmos-model-credits:<uuid>) are
+// adopted into the pool on first use by the vault's pooled resolver.
+export const HIVEMINDOS_SHARED_MODEL_CREDIT_ACCOUNT_ID = "shared:hivemindos-models";
+// Custom gateway models picked from the dynamic list are stored as
+// "hivemindos/custom:<upstream-id>" so the profile stays a single string.
+export const HIVEMINDOS_CUSTOM_MODEL_PREFIX = "hivemindos/custom:";
+const CUSTOM_UPSTREAM_MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$/;
+const HIVEMINDOS_COMPUTE_FIRST_MODEL_BY_ID: Record<string, string> = {
+  "hivemindos/auto": "hive-compute/auto",
+  "hivemindos/fast": "hive-compute/fast",
+  "hivemindos/deep": "hive-compute/deep",
+};
+
+export type HivemindosWalletPaidModelOption = {
+  id: string;
+  name: string;
+  subtitle: string;
+  group: string;
+  badge: string;
+  upstreamModel: string;
+  tier: "free" | "paid";
+  disabled?: boolean;
+  disabledReason?: string;
+};
+
+export const HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS: HivemindosWalletPaidModelOption[] = [
+  {
+    id: HIVEMINDOS_FREE_MODEL_ID,
+    name: "Swarm Sovereign Scout",
+    subtitle: "Free daily allowance · Scout 12B",
+    group: "HivemindOS",
+    badge: "Free",
+    upstreamModel: HIVEMINDOS_FREE_MODEL_UPSTREAM,
+    tier: "free",
+  },
+  {
+    id: "hivemindos/auto",
+    name: "Auto",
+    subtitle: "Best available GPU first · OpenRouter fallback",
+    group: "HivemindOS",
+    badge: "SALE",
+    upstreamModel: HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_UPSTREAM_MODEL,
+    tier: "paid",
+  },
+  {
+    id: "hivemindos/fast",
+    name: "Fast",
+    subtitle: "Low-latency GPU first · OpenRouter fast fallback",
+    group: "HivemindOS",
+    badge: "SALE",
+    upstreamModel: "gpt-5.4-nano",
+    tier: "paid",
+  },
+  {
+    id: "hivemindos/deep",
+    name: "Deep",
+    subtitle: "Large-context GPU first · OpenRouter deep fallback",
+    group: "HivemindOS",
+    badge: "SALE",
+    upstreamModel: "claude-opus-4.8",
+    tier: "paid",
+  },
+  {
+    id: "hivemindos/frontier",
+    name: "Frontier",
+    subtitle: "Highest-quality wallet-paid route",
+    group: "HivemindOS",
+    badge: "Wallet",
+    upstreamModel: "gpt-5.5",
+    tier: "paid",
+  },
+  {
+    id: "hivemindos/research",
+    name: "Research",
+    subtitle: "Deeper reasoning wallet-paid route",
+    group: "HivemindOS",
+    badge: "Wallet",
+    upstreamModel: "claude-opus-4.8",
+    tier: "paid",
+  },
+];
+
+export function hivemindosWalletPaidModelIds() {
+  return HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS.map((model) => model.id);
+}
+
+export function isCustomHivemindosWalletPaidModel(model: string | undefined | null) {
+  const trimmed = model?.trim() || "";
+  if (!trimmed.startsWith(HIVEMINDOS_CUSTOM_MODEL_PREFIX)) return false;
+  return CUSTOM_UPSTREAM_MODEL_RE.test(trimmed.slice(HIVEMINDOS_CUSTOM_MODEL_PREFIX.length));
+}
+
+export function customHivemindosWalletPaidModelId(upstreamModel: string) {
+  return `${HIVEMINDOS_CUSTOM_MODEL_PREFIX}${upstreamModel.trim()}`;
+}
+
+export function normalizeHivemindosWalletPaidModel(model: string | undefined | null) {
+  const trimmed = model?.trim() || "";
+  if (isHiveComputeHostedModelId(trimmed)) return trimmed;
+  if (HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS.some((option) => option.id === trimmed)) return trimmed;
+  if (isCustomHivemindosWalletPaidModel(trimmed)) return trimmed;
+  return HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_MODEL;
+}
+
+export function upstreamHivemindosWalletPaidModel(model: string | undefined | null) {
+  const normalized = normalizeHivemindosWalletPaidModel(model);
+  if (isHiveComputeHostedModelId(normalized)) return normalizeHiveComputeModel(normalized);
+  if (isCustomHivemindosWalletPaidModel(normalized)) {
+    return normalized.slice(HIVEMINDOS_CUSTOM_MODEL_PREFIX.length);
+  }
+  return HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS.find((option) => option.id === normalized)?.upstreamModel
+    || HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_UPSTREAM_MODEL;
+}
+
+// Free tier vs wallet-paid: only the bundled free model rides the free rail.
+// Custom gateway models are always paid; the hosted gateway is the authority
+// on free-tier allowances either way.
+export function isFreeHivemindosWalletPaidModel(model: string | undefined | null) {
+  return normalizeHivemindosWalletPaidModel(model) === HIVEMINDOS_FREE_MODEL_ID;
+}
+
+export function hiveComputeRouteForHivemindosModel(model: string | undefined | null) {
+  return hiveComputeHostedRouteModel(normalizeHivemindosWalletPaidModel(model));
+}
+
+export function preferredHiveComputeModelForHivemindosModel(model: string | undefined | null) {
+  const normalized = normalizeHivemindosWalletPaidModel(model);
+  return HIVEMINDOS_COMPUTE_FIRST_MODEL_BY_ID[normalized] || "";
+}
+
+export function isComputeFirstHivemindosModel(model: string | undefined | null) {
+  return Boolean(preferredHiveComputeModelForHivemindosModel(model));
+}
+
+export function normalizeHivemindosWalletPaidSlug(slug: string | undefined | null) {
+  const normalized = (slug || "default").trim().toLowerCase();
+  return /^[a-z0-9][a-z0-9-]{0,62}$/.test(normalized) ? normalized : "default";
+}

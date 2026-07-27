@@ -1,0 +1,18 @@
+{
+  "webhooks": {
+    "hive-copy-trading": {
+      "description": "Verified HivemindOS copy-trading signals — live Base swaps",
+      "readOnly": false,
+      "allowedRecipients": {
+        "evm": ["0xREPLACE_WITH_YOUR_BANKR_EVM_WALLET"],
+        "solana": []
+      },
+      "allowedIps": [],
+      "rateLimit": {
+        "perMinute": 5,
+        "perDay": 100
+      },
+      "maxPayloadBytes": 4096
+    }
+  }
+}

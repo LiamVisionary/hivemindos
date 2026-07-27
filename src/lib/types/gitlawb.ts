@@ -42,7 +42,7 @@ export type GitLawbProofStatus = "ready" | "linked" | "verified" | "unavailable"
 
 export type GitLawbProof = {
   id: string;
-  kind: "issue" | "pull-request" | "commit" | "ref" | "task" | "agent-memory";
+  kind: "issue" | "pull-request" | "commit" | "ref" | "task" | "agent-memory" | "company-governance";
   status: GitLawbProofStatus;
   actorDid?: string;
   repo?: string;
@@ -53,6 +53,21 @@ export type GitLawbProof = {
   verifiedAt?: number;
   error?: string;
   metadata?: Record<string, unknown>;
+};
+
+export type AppBuilderProjectReference = {
+  backend: "local" | "managed";
+  contractVersion: string;
+  templateId: "nextjs" | "static";
+  status: "creating" | "stopped" | "starting" | "running" | "stopping" | "error";
+  localProjectId?: string;
+  managedAgentId?: string;
+  managedProjectId?: string;
+  hostingSiteId?: string;
+  hostingUrl?: string;
+  hostingVersionId?: string;
+  hostingDeploymentId?: string;
+  hostingAccessMode?: "private" | "workspace" | "link" | "public";
 };
 
 export type GitLawbStatus = {
@@ -68,6 +83,7 @@ export type HivemindProject = {
   localPath?: string;
   vaultNotePath?: string;
   preferredMachineKey?: string;
+  appBuilder?: AppBuilderProjectReference;
   gitlawbRepo?: GitLawbRepoLink;
   allowedAgentIds: string[];
   createdAt: number;

@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "provenance": "authored",
+  "license": "MIT (same as this repository)",
+  "verifiedOn": "2026-07-11",
+  "note": "Reddit GTM building blocks: post/comment skeletons, response-timing windows, and buying-intent search patterns. This bank is authored, not measured — no template here has a performance claim attached, and agents must not present them as 'proven' or 'high-converting'. A fuller step-by-step Reddit GTM playbook lives in the shared skills shelf as the reddit-gtm skill; this bank is only the rows agents sample from. Hard rules that travel with every row: obey each subreddit's own rules over any template here, never put links in comments, and never post/comment autonomously without human review. Slots are UPPERCASE so an unfilled template trips the placeholder check in src/lib/services/deliverables/acceptance-contracts.ts.",
+  "count": 13,
+  "taxonomy": {
+    "templateKinds": ["post", "comment"],
+    "postGoals": ["engagement", "authority", "research", "narrative"]
+  },
+  "templates": [
+    { "id": "RGT01", "kind": "post", "goal": "engagement", "name": "Relatable frustration", "template": "[COMMON FRUSTRATION IN THIS COMMUNITY]\n\n[TWO OR THREE SENTENCES OF CONTEXT]\n\n[OPEN QUESTION ASKING FOR ADVICE OR EXPERIENCES]", "why": "Shared pain plus an open question invites replies instead of judgment; the post asks, it does not pitch." },
+    { "id": "RGT02", "kind": "post", "goal": "authority", "name": "Experiment write-up", "template": "[WHAT YOU TRIED AND FOR HOW LONG]\n\n[WHAT ACTUALLY HAPPENED WITH REAL NUMBERS]\n\n[WHAT YOU WOULD DO DIFFERENTLY]", "why": "Specifics are the entry fee: a write-up without real numbers reads as content marketing and gets called out." },
+    { "id": "RGT03", "kind": "post", "goal": "research", "name": "Opinion collector", "template": "What's the best [TOOL OR APPROACH] you've used for [SPECIFIC PROBLEM]?\n\n[OPTIONAL ONE OR TWO SENTENCES OF CONTEXT]\n\n[INVITATION TO CONTRIBUTE]", "why": "People volunteer opinions freely; the comment volume compounds visibility and the thread can rank in search." },
+    { "id": "RGT04", "kind": "post", "goal": "narrative", "name": "Problem-to-lesson story", "template": "I had this problem: [SPECIFIC ISSUE]\n\nWhat didn't work:\n- [FAILED ATTEMPT] — [FAILURE REASON]\n- [SECOND FAILED ATTEMPT] — [FAILURE REASON]\n\nWhat worked:\n[WORKING APPROACH] — [SPECIFIC RESULT]\n\nMy advice:\n1. [ACTIONABLE STEP]\n2. [ACTIONABLE STEP]\n3. [ACTIONABLE STEP]", "why": "The lesson has to stand on its own for readers who never look you up; any product mention is one sentence at most." },
+    { "id": "RGC01", "kind": "comment", "goal": "authority", "name": "Value-first reply with one mention", "template": "Here are a few things to try:\n1. [GENERIC SOLUTION OR TIP]\n2. [GENERIC SOLUTION OR TIP]\n3. There are also tools like [YOUR PRODUCT] that help with this\n4. [GENERIC SOLUTION OR TIP]\n5. [GENERIC SOLUTION OR TIP]", "why": "Four of the five items help regardless of your product, the single mention is mid-list not first, and there is no link — interested readers click the profile instead." }
+  ],
+  "responseWindows": [
+    { "id": "RW01", "range": "0-30 minutes after post", "value": "highest" },
+    { "id": "RW02", "range": "30 minutes to 2 hours", "value": "good" },
+    { "id": "RW03", "range": "2+ hours", "value": "lower; still worthwhile if the thread is gaining traction" }
+  ],
+  "keywordQueryPatterns": [
+    { "id": "KQ01", "pattern": "[CATEGORY] tool" },
+    { "id": "KQ02", "pattern": "[CATEGORY] software" },
+    { "id": "KQ03", "pattern": "best [CATEGORY] software" },
+    { "id": "KQ04", "pattern": "[COMPETITOR] alternative" },
+    { "id": "KQ05", "pattern": "[CATEGORY] alternative to [COMPETITOR]" }
+  ]
+}

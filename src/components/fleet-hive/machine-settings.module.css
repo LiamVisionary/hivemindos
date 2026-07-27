@@ -1,0 +1,293 @@
+.root {
+  display: grid;
+  gap: 18px;
+  animation: fr-fade-up 0.3s ease;
+}
+
+.header,
+.titleRow,
+.tabs,
+.policyRow,
+.toggleRow,
+.thresholdRow,
+.authorityCard,
+.releaseConfirm > div {
+  display: flex;
+  align-items: center;
+}
+
+.header {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg-3);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.back:hover {
+  color: var(--fg);
+}
+
+.titleRow {
+  gap: 11px;
+}
+
+.titleIcon {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--honey-line);
+  border-radius: 11px;
+  background: var(--honey-soft);
+  color: var(--honey);
+}
+
+.eyebrow {
+  color: var(--fg-3);
+  font-family: var(--f-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.titleRow h2 {
+  margin: 3px 0 0;
+  color: var(--fg);
+  font-family: var(--f-display);
+  font-size: 25px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.tabs {
+  align-items: stretch;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: var(--panel);
+}
+
+.tab {
+  min-width: 0;
+  flex: 1 1 0;
+  padding: 8px 7px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--fg-3);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: capitalize;
+  cursor: pointer;
+}
+
+.tab[data-active="true"] {
+  background: var(--bg);
+  color: var(--fg);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+.error,
+.notice,
+.loading,
+.routingState,
+.authorityCard,
+.releaseConfirm {
+  padding: 11px 13px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.error {
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+  background: var(--danger-soft);
+  color: var(--fg);
+}
+
+.notice {
+  border-color: color-mix(in srgb, var(--live) 35%, transparent);
+  background: color-mix(in srgb, var(--live) 9%, transparent);
+  color: var(--fg-2);
+}
+
+.loading,
+.hint,
+.intro {
+  color: var(--fg-3);
+}
+
+.section {
+  display: grid;
+  gap: 16px;
+}
+
+.intro,
+.hint,
+.releaseConfirm p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.policyRows,
+.thresholds {
+  display: grid;
+  border-top: 1px solid var(--line);
+}
+
+.policyRow,
+.toggleRow,
+.thresholdRow {
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.policyRow > span,
+.toggleRow > span,
+.thresholdRow > span,
+.routingState,
+.authorityCard > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.policyRow strong,
+.toggleRow strong,
+.thresholdRow strong,
+.routingState strong,
+.authorityCard strong {
+  color: var(--fg);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.policyRow small,
+.toggleRow small,
+.thresholdRow small,
+.routingState span,
+.authorityCard span {
+  color: var(--fg-3);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.policyRow select,
+.thresholdRow select {
+  min-width: 100px;
+  max-width: 145px;
+  padding: 7px 26px 7px 9px;
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+  background: var(--bg);
+  color: var(--fg-2);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.policyRow select:disabled,
+.thresholdRow select:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.routingState[data-eligible="true"] {
+  border-color: color-mix(in srgb, var(--live) 35%, transparent);
+  background: color-mix(in srgb, var(--live) 8%, transparent);
+}
+
+.routingState[data-eligible="false"] {
+  border-color: var(--honey-line);
+  background: var(--honey-soft);
+}
+
+.toggleRow input {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  accent-color: var(--honey);
+}
+
+.authorityCard {
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--panel);
+}
+
+.authorityCard > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--honey);
+}
+
+.authorityFacts {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  border-top: 1px solid var(--line);
+}
+
+.authorityFacts > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 11.5px;
+}
+
+.authorityFacts dt {
+  color: var(--fg-3);
+}
+
+.authorityFacts dd {
+  margin: 0;
+  color: var(--fg-2);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.releaseConfirm {
+  display: grid;
+  gap: 12px;
+  background: var(--danger-soft);
+}
+
+.releaseConfirm > div {
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 520px) {
+  .policyRow,
+  .thresholdRow {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .policyRow select,
+  .thresholdRow select {
+    width: 100%;
+    max-width: none;
+  }
+}

@@ -1,15 +1,19 @@
 import { NextRequest } from "next/server";
 
-import { SHELL_SESSION_PATTERN, shellBaseFromCollectorUrl, shellSessionUrl } from "./shell-target";
+import { errorJson } from "@/lib/utils/api-response";
+import {
+  SHELL_SESSION_PATTERN,
+  shellBaseFromCollectorUrl,
+  shellEnvelopeFromUpstream,
+  shellSessionUrl,
+} from "./shell-target";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const SHELL_ACTIONS = new Set(["command", "stdin", "interrupt", "kill"]);
 
-function badRequest(error: string) {
-  return Response.json({ ok: false, error }, { status: 400 });
-}
+const badRequest = (error: string) => errorJson(error);
 
 function resolveTarget(collectorUrl: string | undefined, session: string | undefined) {
   if (!session || !SHELL_SESSION_PATTERN.test(session)) {
@@ -31,7 +35,8 @@ export async function GET(request: NextRequest) {
       cache: "no-store",
       signal: AbortSignal.timeout(10_000),
     });
-    return Response.json(await upstream.json(), { status: upstream.status });
+    const result = shellEnvelopeFromUpstream(await upstream.text(), upstream.status);
+    return Response.json(result.payload, { status: result.status });
   } catch (error) {
     return Response.json(
       { ok: false, error: error instanceof Error ? error.message : "shell history request failed" },
@@ -75,7 +80,8 @@ export async function POST(request: NextRequest) {
       cache: "no-store",
       signal: AbortSignal.timeout(10_000),
     });
-    return Response.json(await upstream.json(), { status: upstream.status });
+    const result = shellEnvelopeFromUpstream(await upstream.text(), upstream.status);
+    return Response.json(result.payload, { status: result.status });
   } catch (error) {
     return Response.json(
       { ok: false, error: error instanceof Error ? error.message : "shell action failed" },

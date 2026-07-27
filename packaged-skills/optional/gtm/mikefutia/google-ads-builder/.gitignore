@@ -1,0 +1,7 @@
+# Skill run output (generated per-project by the skill)
+search-ads-run/
+
+# Python
+__pycache__/
+*.pyc
+.DS_Store

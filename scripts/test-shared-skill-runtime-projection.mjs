@@ -23,7 +23,13 @@ try {
   mkdirSync(join(home, ".codex", "skills"), { recursive: true });
   skill("agent-reach", "Shared X and web research router.");
   skill("collision", "Shared copy that should not overwrite an unmanaged local skill.");
+  skill("hyperframes", "Existing managed package whose update checksum must survive seeding.");
   skill("managed-old", "Shared copy that should replace a managed projection.");
+
+  writeFileSync(join(vault, "Skills", "hyperframes", ".hivemind-skill-source.json"), JSON.stringify({
+    provider: "packaged-auto-install",
+    sourceChecksum: "preserve-for-checksum-aware-sync",
+  }));
 
   const collisionDir = join(home, ".codex", "skills", "collision");
   mkdirSync(collisionDir, { recursive: true });
@@ -67,6 +73,25 @@ try {
   assert.match(read(join(managedDir, "SKILL.md")), /name: managed-old/);
   assert.match(read(join(home, ".codex", "AGENTS.md")), /primary skill source/);
   assert.match(result.stdout + result.stderr, /skipped 1 unmanaged local skill collision/);
+  assert.equal(
+    JSON.parse(read(join(vault, "Skills", "hyperframes", ".hivemind-skill-source.json"))).sourceChecksum,
+    "preserve-for-checksum-aware-sync",
+    "the seeder must not erase update provenance before hive-brain-sync compares checksums",
+  );
+
+  const hyperframesMetadata = JSON.parse(read(join(
+    vault,
+    "Skills",
+    "product-launch-video",
+    ".hivemind-skill-source.json",
+  )));
+  assert.equal(hyperframesMetadata.provider, "packaged-auto-install");
+  assert.equal(hyperframesMetadata.commit, "3351fb1a6d7f0202d07db9bf9ad335fd0d1ec344");
+  assert.equal(
+    hyperframesMetadata.sourceArchiveSha256,
+    "5371981bb828588789bd682c31f374204a0ba85af4d2c2052a7cff2cf011edfc",
+    "shared-brain setup must preserve the shipped HyperFrames provenance",
+  );
 
   console.log("shared skill runtime projection checks passed");
 } finally {

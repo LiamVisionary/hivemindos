@@ -1,3 +1,22 @@
+import { AGENT_COLD_START_EVENT_LABEL, AGENT_COLD_START_EVENT_TYPE } from "@/lib/services/chat/agent-cold-start";
+
+// Chats on a machine-level leaf ("Unsorted chats") are general chats with no
+// working directory; they must never inherit the machine's appDir or the
+// agent's data dir as an implicit project folder.
+export function isUnsortedChatLeafKey(leafKey?: string) {
+  return Boolean(leafKey?.startsWith("machine-"));
+}
+
+// Working-directory pair for one chat send. `record` is what the dashboard
+// stores and displays ("" = no folder); `request` is what the runtime host
+// receives — "~" so a no-folder chat runs in the OS home directory (every
+// chat runtime host expands it) instead of a project checkout.
+export function chatWorkingDirectoryTargets(directoryPath: string, leafKey: string, agentDataDir?: string) {
+  if (!directoryPath && isUnsortedChatLeafKey(leafKey)) return { record: "", request: "~" };
+  const record = directoryPath || agentDataDir || "";
+  return { record, request: record };
+}
+
 export function runtimePromptFromPayload(parsed: any) {
   const event = parsed?.event && typeof parsed.event === "object" ? parsed.event : null;
   const source = parsed?.clarify ?? parsed?.prompt ?? event ?? parsed;
@@ -7,7 +26,20 @@ export function runtimePromptFromPayload(parsed: any) {
   if (!question) return null;
   const rawChoices = source?.choices ?? source?.options;
   const choices = Array.isArray(rawChoices)
-    ? rawChoices.map((choice) => typeof choice === "string" ? choice : String(choice?.label ?? choice?.value ?? "")).filter(Boolean)
+    ? rawChoices.map((choice) => {
+      if (typeof choice === "string") return choice;
+      if (!choice || typeof choice !== "object") return "";
+      const label = String(choice.label ?? choice.value ?? "").trim();
+      const value = String(choice.value ?? choice.label ?? "").trim();
+      const permissionMode = String(choice.permissionMode ?? "").trim();
+      const suppressUserMessage = choice.suppressUserMessage === true;
+      return label || value ? {
+        label: label || value,
+        value: value || label,
+        permissionMode,
+        ...(suppressUserMessage ? { suppressUserMessage: true } : {}),
+      } : "";
+    }).filter(Boolean)
     : [];
   const promptType = /approval/i.test(type)
     ? "approval"
@@ -25,6 +57,11 @@ export function runtimePromptFromPayload(parsed: any) {
     choices,
     allowFreeText: source?.allowFreeText !== false,
   };
+}
+
+export function runtimePromptFromSessionMessage(message: any) {
+  if (String(message?.role ?? "").trim().toLowerCase() !== "assistant") return null;
+  return runtimePromptFromPayload(message?.raw);
 }
 
 export function processLabelFromComment(eventText: string) {
@@ -54,6 +91,17 @@ export function processLabelFromRuntimeEvent(parsed: any) {
   const message = String(source?.message ?? source?.label ?? source?.title ?? source?.name ?? source?.content ?? source?.delta ?? "").trim();
   const toolName = String(source?.tool ?? source?.toolName ?? source?.name ?? source?.command ?? "").trim();
   if (/^chat\.(text|session|done)$/.test(type)) return null;
+  if (type === AGENT_COLD_START_EVENT_TYPE) {
+    return { label: AGENT_COLD_START_EVENT_LABEL, detail: message || undefined, status: "running" };
+  }
+  if (/approval/i.test(type)) {
+    const commandLine = String(source?.commandLine ?? "").trim();
+    return {
+      label: message || "Permission required",
+      detail: commandLine || String(source?.detail ?? "").trim() || undefined,
+      status: "running",
+    };
+  }
   if (/thinking|reasoning/i.test(type)) return { label: type.includes("reason") ? "Reasoning" : "Thinking", detail: message || undefined };
   const rawStatus = String(source?.status ?? "").trim().toLowerCase();
   const status = rawStatus === "completed" || rawStatus === "failed" || rawStatus === "running" ? rawStatus : undefined;
@@ -76,7 +124,11 @@ export function processLabelFromRuntimeEvent(parsed: any) {
     const statusPayload = parsed.status;
     const label = String(statusPayload.message ?? statusPayload.label ?? statusPayload.type ?? "Runtime status").trim();
     const detail = String(statusPayload.detail ?? statusPayload.phase ?? "").trim();
-    return { label, detail: detail || undefined };
+    const rawNestedStatus = String(statusPayload.status ?? "").trim().toLowerCase();
+    const nestedStatus = rawNestedStatus === "completed" || rawNestedStatus === "failed" || rawNestedStatus === "running"
+      ? rawNestedStatus
+      : undefined;
+    return { label, detail: detail || undefined, status: nestedStatus };
   }
   if (type && !/^chat\.text$/i.test(type)) {
     return { label: message || type.replace(/^chat\./, "").replace(/[._-]+/g, " "), detail: message && message !== type ? type : undefined };
@@ -94,6 +146,13 @@ export function processLabelFromSessionMessage(message: any) {
   if (!content) return null;
   if (role === "user" || role === "assistant") return null;
   if (role === "tool") {
+    if (message?.type === "process") {
+      const [labelLine, ...detailLines] = content.split("\n");
+      const label = labelLine?.trim() || "Runtime event";
+      const detail = detailLines.join(" ").replace(/\s+/g, " ").trim().slice(0, 180);
+      const failed = /\b(error|failed|failure|timed out|http\s+5\d\d)\b/i.test(`${label} ${detail}`);
+      return { label, detail: detail || undefined, status: failed ? "failed" : undefined };
+    }
     if (/^Runtime event$/i.test(content)) return null;
     if (/\[Command interrupted\]/i.test(content)) return { label: "Command interrupted" };
     if (/Tool execution skipped/i.test(content)) return { label: "Tool execution skipped", detail: compactProcessDetail(content) };
@@ -116,6 +175,13 @@ export function nextChatTextDelta(incoming: string, current: string) {
   if (incoming.startsWith(current)) return incoming.slice(current.length);
   if (current.endsWith(incoming)) return "";
   return incoming;
+}
+
+export function isChatTransportInterruption(error: unknown) {
+  const name = error instanceof Error ? error.name.trim() : "";
+  const message = error instanceof Error ? error.message.trim() : String(error ?? "");
+  return /^(?:aborterror|networkerror)$/i.test(name)
+    || /(?:load failed|failed to fetch|networkerror|network error|request aborted|fetch.*aborted|operation was aborted|cancelled|canceled)/i.test(message);
 }
 
 export function compactRepeatedAssistantText(value: string) {

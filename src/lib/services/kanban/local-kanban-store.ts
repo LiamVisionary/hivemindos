@@ -2,6 +2,11 @@ import { mkdir, open, readFile, rename, writeFile } from "fs/promises";
 import { existsSync, statSync } from "fs";
 import { homedir } from "@/lib/home-dir";
 import { isAbsolute, join, sep } from "path";
+import {
+  invalidateKanbanShardCache,
+  readBoardViaShards,
+  writeBoardViaShards,
+} from "@/lib/services/kanban/board-shards";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { sanitizeGitLawbProof } from "@/lib/services/gitlawb/gitlawb-service";
 import { verifiedWorkReceiptProofsByTask } from "@/lib/services/gitlawb/work-receipts";
@@ -16,7 +21,29 @@ import {
   recordLoopAntiPatterns,
   recordLoopExperiment,
 } from "@/lib/services/kanban/loop-optimizer";
+import {
+  classifyKanbanFailure,
+  isRetryableFailureReason,
+  normalizeFailureReason,
+} from "@/lib/services/kanban/kanban-failure-classification";
+import {
+  formatOutreachCompletionBlock,
+  formatOutreachCompletionHumanBlock,
+  validateOutreachCompletion,
+} from "@/lib/services/kanban/outreach-safeguards";
 import { withMutationQueue } from "@/lib/services/kanban/mutation-queue";
+import {
+  deliverableId,
+  deliverableLabel,
+  extractKanbanDeliverables,
+  normalizeDeliverableKind,
+  simpleStableHash,
+} from "@/lib/services/kanban/deliverable-extraction";
+import {
+  sanitizeClientLoopReceipts,
+} from "@/lib/services/evaluation/control-plane";
+import { coerceKanbanText, untrustedCompletionIntegrityReceipts, type KanbanIntegrityProbes } from "@/lib/services/kanban/completion-integrity";
+import { evaluateKanbanCompletion } from "@/lib/services/evaluation/kanban-completion";
 import {
   gitLawbProofForProject,
   readProjectRegistry,
@@ -28,7 +55,6 @@ import type {
   KanbanBoardMeta,
   KanbanComment,
   KanbanDeliverable,
-  KanbanDeliverableKind,
   KanbanEvent,
   KanbanFailureReason,
   KanbanLoopReceipt,
@@ -65,6 +91,8 @@ type CreateTaskInput = {
   linkedDirectories?: KanbanTask["linkedDirectories"];
   deliverables?: KanbanTask["deliverables"];
   targetMachine?: KanbanTask["targetMachine"];
+  requestedMachine?: string;
+  requestedAgent?: string;
   projectId?: string;
   proofs?: KanbanTask["proofs"];
   loop?: KanbanTask["loop"];
@@ -73,6 +101,7 @@ type CreateTaskInput = {
   idempotencyKey?: string;
   maxRuntimeMs?: number;
   maxAttempts?: number;
+  capabilityApprovalMode?: KanbanTask["capabilityApprovalMode"];
   /** Origin tag, e.g. "flow:<runId>:<nodeId>" so completion can advance an agent flow. */
   source?: string;
 };
@@ -101,6 +130,7 @@ type PatchTaskInput = Partial<
     | "undoRequestedBy"
     | "maxRuntimeMs"
     | "maxAttempts"
+    | "capabilityApprovalMode"
   >
 > & {
   loop?: KanbanTask["loop"] | null;
@@ -127,6 +157,16 @@ type FinishRunInput = {
   failureReason?: KanbanFailureReason;
 };
 
+type AutonomousRerouteInput = {
+  reason: string;
+  failedAgentName?: string;
+  nextAssignee: string;
+  nextRuntime?: string;
+  targetMachine?: KanbanTask["targetMachine"];
+  /** The claim lock the failing pickup held. When set, reroute refuses to clobber a DIFFERENT run's live claim. */
+  failedClaimLock?: string;
+};
+
 type ClaimNextTaskInput = ClaimTaskInput & {
   tenant?: string;
   assignee?: string;
@@ -136,6 +176,11 @@ type ClaimNextTaskInput = ClaimTaskInput & {
 export type KanbanStorageOptions = {
   vaultPath?: string | null;
   kanbanFolder?: string | null;
+  /** Internal-only: receipts were produced by the in-process loop runner. */
+  trustedLoopReceipts?: boolean;
+  /** Test seam: integrity probes for UNTRUSTED completions (see completion-integrity.ts).
+   *  Never populated from HTTP input — the route builds options server-side. */
+  integrityProbes?: KanbanIntegrityProbes;
 };
 
 export type KanbanStorageInfo = {
@@ -146,7 +191,7 @@ export type KanbanStorageInfo = {
   fallbackReason?: string;
 };
 
-function withBoardMutation<T>(
+export function withBoardMutation<T>(
   slugInput: string | null | undefined,
   options: KanbanStorageOptions,
   operation: () => Promise<T>,
@@ -326,7 +371,10 @@ export async function readBoard(
 ): Promise<KanbanBoard> {
   const slug = normalizeBoardSlug(slugInput);
   const storage = resolveKanbanStorage(slug, options);
-  if (!existsSync(storage.file)) {
+  // Shard engine first: merge-friendly per-task/per-machine storage that also
+  // folds external kanban.json edits and Syncthing conflict copies back in.
+  const sharded = await readBoardViaShards(storage.file, slug);
+  if (!sharded && !existsSync(storage.file)) {
     const defaultVaultBoard = await readDefaultVaultBoardIfPopulated(
       slug,
       options,
@@ -350,7 +398,10 @@ export async function readBoard(
     await writeBoard(board, options);
     return hydrateBoardProjectProofs(board, options);
   }
-  const board = normalizeBoard(await readBoardFile(storage.file), slug);
+  const board = normalizeBoard(
+    sharded ?? (await readBoardFile(storage.file)),
+    slug,
+  );
   if (storage.source === "obsidian" && board.tasks.length === 0) {
     const defaultVaultBoard = await readDefaultVaultBoardIfPopulated(
       slug,
@@ -438,6 +489,8 @@ function normalizeBoard(parsed: KanbanBoard, slug: string): KanbanBoard {
 }
 
 function normalizeTask(task: KanbanTask): KanbanTask {
+  const result = coerceKanbanText(task.result) || undefined;
+  const body = coerceKanbanText(task.body);
   const storedDeliverables = Array.isArray(task.deliverables)
     ? (task.deliverables
         .map(normalizeDeliverable)
@@ -446,17 +499,19 @@ function normalizeTask(task: KanbanTask): KanbanTask {
   const normalizedStatus = normalizeKanbanStatus(task.status);
   const extractedDeliverables =
     normalizedStatus === "done"
-      ? extractTaskDeliverables(task, task.result, task.updatedAt)
+      ? extractTaskDeliverables({ ...task, result, body }, result, task.updatedAt)
       : [];
   return {
     ...task,
+    result,
+    body,
     status: normalizedStatus,
     attachments: Array.isArray(task.attachments) ? task.attachments : [],
     linkedDirectories: Array.isArray(task.linkedDirectories)
       ? task.linkedDirectories
       : [],
     deliverables: filterSourceDeliverables(
-      task,
+      { ...task, body },
       storedDeliverables.length ? storedDeliverables : extractedDeliverables,
     ),
     targetMachine: task.targetMachine?.key ? task.targetMachine : null,
@@ -467,6 +522,7 @@ function normalizeTask(task: KanbanTask): KanbanTask {
     loop: normalizeLoopSpec(task.loop, task.maxAttempts, task.maxRuntimeMs),
     loopReceipts: normalizeLoopReceipts(task.loopReceipts),
     claimLock: cleanOptional(task.claimLock),
+    capabilityApprovalMode: task.capabilityApprovalMode === "ask" ? "ask" : undefined,
     currentRunId: cleanOptional(task.currentRunId),
     attempt: positiveInteger(task.attempt) ?? 1,
     maxAttempts:
@@ -561,6 +617,7 @@ export async function archiveBoard(
   const archivedDir = join(storage.boardsRoot, "_archived");
   await mkdir(archivedDir, { recursive: true, mode: 0o700 });
   await rename(from, join(archivedDir, `${slug}-${Date.now()}`));
+  invalidateKanbanShardCache(storage.file);
 }
 
 export async function createTask(
@@ -607,25 +664,22 @@ export async function createTask(
     source: cleanOptional(input.source),
     skills: input.skills ?? [],
     attachments: Array.isArray(input.attachments) ? input.attachments : [],
-    linkedDirectories: Array.isArray(input.linkedDirectories)
-      ? input.linkedDirectories
-      : [],
+    linkedDirectories: Array.isArray(input.linkedDirectories) ? input.linkedDirectories : [],
     deliverables: Array.isArray(input.deliverables) ? input.deliverables : [],
     targetMachine: input.targetMachine?.key ? input.targetMachine : null,
+    requestedMachine: cleanOptional(input.requestedMachine),
+    requestedAgent: cleanOptional(input.requestedAgent),
     projectId: cleanOptional(input.projectId),
     proofs: Array.isArray(input.proofs)
       ? input.proofs.map((proof) => sanitizeGitLawbProof(proof))
       : [],
     loop,
     loopReceipts: normalizeLoopReceipts(input.loopReceipts),
-    maxRuntimeMs:
-      positiveNumber(input.maxRuntimeMs) ?? loop?.budget?.maxRuntimeMs,
+    maxRuntimeMs: positiveNumber(input.maxRuntimeMs) ?? loop?.budget?.maxRuntimeMs,
     attempt: 1,
-    maxAttempts:
-      positiveInteger(input.maxAttempts) ??
-      loopMaxAttempts(loop) ??
-      DEFAULT_MAX_ATTEMPTS,
+    maxAttempts: positiveInteger(input.maxAttempts) ?? loopMaxAttempts(loop) ?? DEFAULT_MAX_ATTEMPTS,
     idempotencyKey: cleanOptional(input.idempotencyKey),
+    capabilityApprovalMode: input.capabilityApprovalMode === "ask" ? "ask" : undefined,
     createdAt: now,
     updatedAt: now,
   };
@@ -644,15 +698,21 @@ export async function createTask(
   });
 }
 
-export async function patchTask(
-  slug: string | null,
+// Apply a single patch to an already-loaded board, mutating it in place and
+// returning the changed task. Shared by patchTask (single write) and
+// bulkPatchTasks (one write for K patches, status-less patches only — status
+// moves route through applyMoveToBoard). `integrityReceipts` are the
+// server-run untrusted-completion verdicts patchTask computed BEFORE the
+// mutation queue (network probes must not hold the board lock); they merge
+// LAST so a same-id forgery in the patch is overwritten, and a hardFail among
+// them parks the task needs-human instead of completing it.
+function applyPatchToBoard(
+  board: KanbanBoard,
   taskId: string,
   patch: PatchTaskInput,
-  options: KanbanStorageOptions = {},
-) {
-  return withBoardMutation(slug, options, async () => {
-  const board = await readBoard(slug, options);
-  const projectsById = await projectMapForKanban(options);
+  projectsById: Map<string, HivemindProject>,
+  integrityReceipts: KanbanLoopReceipt[] = [],
+): { task: KanbanTask; completionBlocked?: { missingGateIds: string[]; missingGateTitles: string[] } } {
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
   const fromStatus = task.status;
@@ -660,6 +720,17 @@ export async function patchTask(
     patch.status && KANBAN_STATUSES.includes(patch.status)
       ? patch.status
       : undefined;
+  // Patch-to-done is a completion too — same misattribution guard as completeTask.
+  if (nextStatus === "done") {
+    assertResultNotMisattributed(board, taskId, patch.result ?? task.result);
+    const outreachBlock = validateOutreachCompletion(
+      task,
+      patch.result ?? task.result,
+    );
+    if (outreachBlock) {
+      throw new Error(formatOutreachCompletionBlock(outreachBlock));
+    }
+  }
   const retryingWorking =
     nextStatus === "working" && isRetryBlockerResult(task.result);
   const changedBase = {
@@ -680,6 +751,11 @@ export async function patchTask(
         : (patch.targetMachine ?? task.targetMachine),
     projectId:
       patch.projectId === "" ? undefined : (patch.projectId ?? task.projectId),
+    capabilityApprovalMode: patch.capabilityApprovalMode === "ask"
+      ? "ask"
+      : patch.capabilityApprovalMode === "automatic"
+        ? undefined
+        : task.capabilityApprovalMode,
     proofs: Array.isArray(patch.proofs)
       ? patch.proofs.map((proof) => sanitizeGitLawbProof(proof))
       : task.proofs,
@@ -694,7 +770,7 @@ export async function patchTask(
             )
           : task.loop,
     loopReceipts: patch.loopReceipts
-      ? normalizeLoopReceipts(patch.loopReceipts)
+      ? sanitizeClientLoopReceipts(task.loop, normalizeLoopReceipts(patch.loopReceipts))
       : task.loopReceipts,
     result: retryingWorking
       ? (patch.result ?? "")
@@ -734,15 +810,51 @@ export async function patchTask(
     ...changedBase,
     proofs: mergedProjectProofs(changedBase, projectsById),
   };
+  // Server-run integrity receipts merge LAST so they overwrite a same-id
+  // forgery submitted in the same patch (mirrors completeTask).
+  if (integrityReceipts.length) {
+    changed.loopReceipts = mergeLoopReceipts(changed.loopReceipts, integrityReceipts);
+  }
+  let completionBlocked: { missingGateIds: string[]; missingGateTitles: string[] } | undefined;
   if (changed.status === "done") {
-    changed.deliverables = mergeDeliverables(
-      changed.deliverables,
-      extractTaskDeliverables(
-        changed,
-        changed.result,
-        changed.completedAt ?? changed.updatedAt,
-      ),
-    );
+    const gateBlock = loopCompletionBlock(changed.loop, changed.loopReceipts ?? [], changed.result);
+    if (gateBlock?.hardFailed && fromStatus !== "done") {
+      // Affirmatively-false evidence (a fabricated/dead claimed-live URL, a
+      // placeholder deliverable, or a stored hard-fail from a prior attempt)
+      // on a task ENTERING done: park it needs-human with the receipts —
+      // exactly like the untrusted completeTask path — instead of completing,
+      // or throwing a 400 the agent would just retry blind. A task already
+      // done keeps the throw below so a later patch cannot silently un-complete
+      // a card a human moved to Done via the moveTask override.
+      completionBlocked = gateBlock;
+      const blockNote = loopGateBlockNote(gateBlock.missingGateTitles.join(", "));
+      const output = typeof changed.result === "string" ? changed.result.trim() : "";
+      changed.status = "needs-human";
+      changed.result = output ? `${output}\n\n${blockNote}` : blockNote;
+      changed.loop = applyLoopReceipts(changed.loop, changed.loopReceipts ?? []);
+      changed.completedAt = undefined;
+      changed.deliverables = mergeDeliverables(
+        task.deliverables,
+        extractTaskDeliverables(task, patch.result ?? task.result, changed.updatedAt),
+      );
+      board.events.unshift(
+        event("loop.eval-blocked", `${changed.title} needs eval evidence before completion`, taskId, {
+          missingGateIds: gateBlock.missingGateIds,
+          missingGateTitles: gateBlock.missingGateTitles,
+        }),
+      );
+    } else if (gateBlock) {
+      throw new Error(`Completion rejected: missing passing eval receipts for ${gateBlock.missingGateTitles.join(", ")}.`);
+    } else {
+      changed.deliverables = mergeDeliverables(
+        changed.deliverables,
+        extractTaskDeliverables(
+          changed,
+          changed.result,
+          changed.completedAt ?? changed.updatedAt,
+        ),
+      );
+    }
   } else if (nextStatus && nextStatus !== "done" && !patch.deliverables) {
     changed.deliverables = [];
   }
@@ -751,21 +863,23 @@ export async function patchTask(
     changed.claimExpiresAt = undefined;
     changed.lastHeartbeatAt =
       nextStatus === "ready" ? undefined : changed.lastHeartbeatAt;
+    // Keyed to changed.status, not nextStatus: an integrity-parked patch-to-done
+    // finishes its run "blocked", not "completed".
     if (
       task.currentRunId &&
-      ["done", "needs-human", "archived"].includes(nextStatus)
+      ["done", "needs-human", "archived"].includes(changed.status)
     ) {
       finishActiveRun(
         board,
         task.id,
-        nextStatus === "done"
+        changed.status === "done"
           ? "completed"
-          : nextStatus === "needs-human"
+          : changed.status === "needs-human"
             ? "blocked"
             : "reclaimed",
         {
           summary: patch.result ?? task.result,
-          reason: nextStatus,
+          reason: changed.status,
         },
       );
       changed.currentRunId = undefined;
@@ -785,7 +899,7 @@ export async function patchTask(
     event(
       nextStatus && nextStatus !== fromStatus ? "task.moved" : "task.updated",
       nextStatus && nextStatus !== fromStatus
-        ? `Moved ${changed.title} from ${fromStatus} to ${nextStatus}`
+        ? `Moved ${changed.title} from ${fromStatus} to ${changed.status}`
         : `Updated ${changed.title}`,
       taskId,
     ),
@@ -794,24 +908,25 @@ export async function patchTask(
     createVisualHandoffChild(board, changed, changed.result);
     promoteReadyChildren(board, "dependency.auto-promote");
   }
-  await writeBoard(touch(board), options);
-  return { board, task: changed };
-  });
+  return { task: changed, completionBlocked };
 }
 
-export async function moveTask(
-  slug: string | null,
+// Apply a single status move to an already-loaded board, mutating it in place
+// and returning the moved task. Shared by moveTask (single write) and
+// bulkPatchTasks (one write for K moves). Behavior is identical to the inlined
+// single-task path.
+function applyMoveToBoard(
+  board: KanbanBoard,
   taskId: string,
   status: KanbanStatus,
-  options: KanbanStorageOptions = {},
-) {
-  return withBoardMutation(slug, options, async () => {
-  const board = await readBoard(slug, options);
+): KanbanTask {
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
   board.tasks = moveTaskBetweenColumns(board.tasks, taskId, status);
   const moved = board.tasks.find((item) => item.id === taskId);
-  if (moved && status === "ready") {
+  // Ideas is the parked backlog: a card sent back there must release its
+  // claim/assignee just like Ready, or it keeps a stale agent session around.
+  if (moved && (status === "ready" || status === "ideas")) {
     moved.assignee = undefined;
     moved.tenant = undefined;
     moved.agentSession = null;
@@ -847,7 +962,7 @@ export async function moveTask(
   }
   if (
     task.currentRunId &&
-    ["ready", "needs-human", "done", "archived"].includes(
+    ["ideas", "ready", "needs-human", "done", "archived"].includes(
       moved?.status ?? status,
     )
   ) {
@@ -871,8 +986,55 @@ export async function moveTask(
   );
   if (moved?.status === "done")
     promoteReadyChildren(board, "dependency.auto-promote");
-  await writeBoard(touch(board), options);
-  return { board, task: board.tasks.find((item) => item.id === taskId)! };
+  return board.tasks.find((item) => item.id === taskId)!;
+}
+
+export async function patchTask(
+  slug: string | null,
+  taskId: string,
+  patch: PatchTaskInput,
+  options: KanbanStorageOptions = {},
+) {
+  // A patch that sets status:"done" is an untrusted completion too — agents
+  // PATCH straight to done over HTTP/MCP (the human override is status-only
+  // moveTask, which stays gate-free). Run the live-URL/deliverable integrity
+  // evaluators BEFORE the mutation queue exactly like completeTask; a hardFail
+  // among the receipts parks the card needs-human in applyPatchToBoard.
+  const integrityReceipts =
+    patch.status === "done" && !options.trustedLoopReceipts
+      ? await untrustedCompletionIntegrityReceipts({
+          submittedText: coerceKanbanText(patch.result),
+          readStoredResult: async () =>
+            coerceKanbanText(
+              (await readBoard(slug, options)).tasks.find((item) => item.id === taskId)?.result,
+            ),
+          probes: options.integrityProbes,
+        })
+      : [];
+  return withBoardMutation(slug, options, async () => {
+    const board = await readBoard(slug, options);
+    const projectsById = await projectMapForKanban(options);
+    const { task: changed, completionBlocked } = applyPatchToBoard(board, taskId, patch, projectsById, integrityReceipts);
+    await writeBoard(touch(board), options);
+    return {
+      board,
+      task: changed,
+      ...(completionBlocked ? { blocked: true, missingGateIds: completionBlocked.missingGateIds } : {}),
+    };
+  });
+}
+
+export async function moveTask(
+  slug: string | null,
+  taskId: string,
+  status: KanbanStatus,
+  options: KanbanStorageOptions = {},
+) {
+  return withBoardMutation(slug, options, async () => {
+    const board = await readBoard(slug, options);
+    const moved = applyMoveToBoard(board, taskId, status);
+    await writeBoard(touch(board), options);
+    return { board, task: moved };
   });
 }
 
@@ -1049,32 +1211,133 @@ export async function heartbeatTask(
   });
 }
 
+/**
+ * Completion integrity: a substantial result that is byte-identical to a
+ * DIFFERENT task's result is a misattributed agent-session output, not work —
+ * two tasks cannot honestly produce the same multi-hundred-char text. (Live
+ * 2026-07-05/06: clusters of tasks "completed" seconds after claim with the
+ * same Bankr wallet-portfolio dump, twice, poisoning the done column.) Throws
+ * so every completion path — autonomous pickup, dashboard, API patch — rejects
+ * the write and the task stays claimed/working for an honest attempt.
+ */
+// Human-facing note stored on a card parked by a completion gate block: names
+// the failing/missing checks and tells the owner what to do next. Shared by
+// completeTask and the patch-to-done park path so the Needs You card reads
+// identically however the completion arrived (issue triage regexes this text).
+function loopGateBlockNote(gateTitles: string): string {
+  return `⚠ Loop gate block — missing passing eval receipts: ${gateTitles}.\nACTION NEEDED: The crew finished this but its automated checks (${gateTitles}) haven't passed yet. Review the output above; if it looks right, move the card forward, or use Discuss to have the crew fix the checks.`;
+}
+
+function assertResultNotMisattributed(board: KanbanBoard, taskId: string, result: string | undefined): void {
+  const normalized = (result ?? "").trim();
+  if (normalized.length < 200) return;
+  const twin = board.tasks.find((item) => item.id !== taskId && (item.result ?? "").trim() === normalized);
+  if (twin) {
+    throw new Error(
+      `Completion rejected: the result is byte-identical to task ${twin.id} ("${twin.title.slice(0, 60)}") — that is a misattributed session output, not this task's work. Re-run the task and return ITS deliverable.`,
+    );
+  }
+}
+
 export async function completeTask(
   slug: string | null,
   taskId: string,
   input: FinishRunInput = {},
   options: KanbanStorageOptions = {},
 ) {
+  // Untrusted (HTTP/MCP) completions run the live-URL/deliverable integrity gates
+  // over the result BEFORE the mutation queue; a hardFail receipt parks the task
+  // needs-human below. See completion-integrity.ts for the full rationale.
+  const integrityReceipts = options.trustedLoopReceipts ? [] : await untrustedCompletionIntegrityReceipts({
+    submittedText: coerceKanbanText(input.result ?? input.summary),
+    readStoredResult: async () =>
+      coerceKanbanText((await readBoard(slug, options)).tasks.find((item) => item.id === taskId)?.result),
+    probes: options.integrityProbes,
+  });
   return withBoardMutation(slug, options, async () => {
   const board = await readBoard(slug, options);
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
   const now = Date.now();
-  const result = input.result ?? input.summary ?? task.result;
-  const loopReceipts = mergeLoopReceipts(task.loopReceipts, input.loopReceipts);
-  const gateBlock = loopCompletionBlock(task.loop, loopReceipts);
-  if (gateBlock) {
-    const summary = `${input.summary ?? result ?? "Completion blocked."} Missing passing eval receipts: ${gateBlock.missingGateTitles.join(", ")}.`;
+  const result =
+    coerceKanbanText(input.result ?? input.summary ?? task.result) || undefined;
+  assertResultNotMisattributed(board, taskId, result);
+  const outreachBlock = validateOutreachCompletion(task, result);
+  if (outreachBlock) {
+    // This routes the task to needs-human (parked for the owner), so store the
+    // human-facing ask — not the worker-facing "re-run or revise" directive.
+    const blockNote = formatOutreachCompletionHumanBlock(outreachBlock);
+    const preservedResult = result?.trim()
+      ? `${result.trim()}\n\n${blockNote}`
+      : blockNote;
     finishActiveRun(board, taskId, "blocked", {
       ...input,
-      summary,
-      reason: summary,
+      summary: input.summary ?? result ?? outreachBlock.reason,
+      reason: blockNote,
     });
     const changed: KanbanTask = {
       ...task,
       status: "needs-human",
-      result: summary,
+      result: preservedResult,
+      // The owner reviewing this parked card needs the actual work product on the
+      // shelf — per-lead preview URLs especially (live 2026-07-06: a send batch's
+      // customer-facing URLs vanished and the Deliverables shelf showed empty).
+      deliverables: mergeDeliverables(
+        task.deliverables,
+        extractTaskDeliverables(task, result, now),
+      ),
+      claimLock: undefined,
+      claimExpiresAt: undefined,
+      currentRunId: undefined,
+      updatedAt: now,
+    };
+    board.tasks = board.tasks.map((item) =>
+      item.id === taskId ? changed : item,
+    );
+    board.events.unshift(
+      event(
+        "task.outreach-evidence-blocked",
+        `${task.title} needs outreach sent/blocked evidence before completion`,
+        task.id,
+        {
+          reason: outreachBlock.reason,
+          requiredFields: outreachBlock.requiredFields,
+        },
+        input.runId ?? task.currentRunId,
+      ),
+    );
+    await writeBoard(touch(board), options);
+    return { board, task: changed, blocked: true, outreachEvidenceBlocked: true };
+  }
+  const submittedReceipts = options.trustedLoopReceipts
+    ? input.loopReceipts
+    : sanitizeClientLoopReceipts(task.loop, input.loopReceipts);
+  // Server-run integrity receipts merge LAST so they overwrite a same-id forgery.
+  const loopReceipts = mergeLoopReceipts(task.loopReceipts, [...normalizeLoopReceipts(submittedReceipts), ...integrityReceipts]);
+  const gateBlock = loopCompletionBlock(task.loop, loopReceipts, result);
+  if (gateBlock) {
+    // Preserve the real worker output (and any artifacts/passed-gate progress) instead of
+    // overwriting it with the missing-receipts summary — a human needs to see what was
+    // actually produced before they can unblock it.
+    const blockNote = loopGateBlockNote(gateBlock.missingGateTitles.join(", "));
+    const preservedResult = result?.trim()
+      ? `${result.trim()}\n\n${blockNote}`
+      : `${input.summary?.trim() || "Completion blocked."} ${blockNote}`;
+    finishActiveRun(board, taskId, "blocked", {
+      ...input,
+      summary: input.summary ?? result,
+      reason: blockNote,
+    });
+    const changed: KanbanTask = {
+      ...task,
+      status: "needs-human",
+      result: preservedResult,
+      loop: applyLoopReceipts(task.loop, loopReceipts),
       loopReceipts,
+      deliverables: mergeDeliverables(
+        task.deliverables,
+        extractTaskDeliverables(task, result, now),
+      ),
       claimLock: undefined,
       claimExpiresAt: undefined,
       currentRunId: undefined,
@@ -1103,13 +1366,25 @@ export async function completeTask(
       missingGateIds: gateBlock.missingGateIds,
     };
   }
-  finishActiveRun(board, taskId, "completed", input);
+  const evaluation = await evaluateKanbanCompletion({
+    task,
+    receipts: loopReceipts,
+    result: result ?? "",
+    runId: input.runId ?? task.currentRunId ?? `task-${task.id}`,
+    startedAt: board.runs.find((run) => run.id === (input.runId ?? task.currentRunId))?.startedAt,
+    completedAt: now,
+  });
+  finishActiveRun(board, taskId, "completed", {
+    ...input,
+    metadata: { ...input.metadata, evaluation },
+  });
   const changed: KanbanTask = {
     ...task,
     status: "done",
     result,
     loop: applyLoopReceipts(task.loop, loopReceipts),
     loopReceipts,
+    evaluation,
     deliverables: mergeDeliverables(
       task.deliverables,
       extractTaskDeliverables(task, result, now),
@@ -1259,6 +1534,23 @@ export async function failTask(
     input.reason ??
     input.result ??
     "Task failed.";
+  if (task.status === "done" || task.status === "archived") {
+    // A stale worker (duplicate pickup, late timeout) must never reopen finished
+    // work — e.g. the agent already completed the task itself mid-chat. Record
+    // the failed run for the audit trail and leave the task untouched.
+    const run = finishActiveRun(board, taskId, "failed", { ...input, summary, failureReason });
+    board.events.unshift(
+      event(
+        "task.stale-failure-ignored",
+        `Ignored a stale failure for already-finished ${task.title}`,
+        task.id,
+        { failureReason, summary },
+        run?.id ?? input.runId ?? task.currentRunId,
+      ),
+    );
+    await writeBoard(touch(board), options);
+    return { board, task, run, retried: false, failureReason };
+  }
   const run = finishActiveRun(board, taskId, "failed", {
     ...input,
     summary,
@@ -1291,6 +1583,77 @@ export async function failTask(
   );
   await writeBoard(touch(board), options);
   return { board, task: changed, run, retried, failureReason };
+  });
+}
+
+export async function rerouteTaskForAutonomousPickup(
+  slug: string | null,
+  taskId: string,
+  input: AutonomousRerouteInput,
+  options: KanbanStorageOptions = {},
+) {
+  return withBoardMutation(slug, options, async () => {
+  const board = await readBoard(slug, options);
+  const task = board.tasks.find((item) => item.id === taskId);
+  if (!task) throw new Error("Task not found.");
+  if (task.status === "done" || task.status === "archived") {
+    throw new Error("Completed or archived tasks cannot be autonomously rerouted.");
+  }
+  // Two dispatch sweeps can race one task: each reroute briefly re-readies it, the
+  // other sweep claims it, and an unguarded reroute here would fail the winner's
+  // live run and steal the task back (seen interleaving live 2026-07-05, WEBS).
+  // When the caller identifies its own claim, refuse to reroute over anyone else's.
+  if (input.failedClaimLock && task.claimLock && task.claimLock !== input.failedClaimLock) {
+    throw new Error("Task is claimed by another worker; refusing to reroute over a live claim.");
+  }
+  const nextAssignee = input.nextAssignee.trim();
+  if (!nextAssignee) throw new Error("Autonomous reroute requires a next assignee.");
+  const now = Date.now();
+  const reason = input.reason.trim() || "Autonomous pickup failed.";
+  const failureReason = classifyKanbanFailure(reason);
+  const failedRun = finishActiveRun(board, taskId, "failed", {
+    summary: reason,
+    error: reason,
+    failureReason,
+  });
+  const changed: KanbanTask = {
+    ...task,
+    status: "ready",
+    assignee: nextAssignee,
+    targetMachine: input.targetMachine === undefined ? task.targetMachine : input.targetMachine,
+    // The reroute reason lives in the failed run + event below — never in
+    // task.result, where it would squat over real output if the next worker
+    // completes without an explicit result (seen live 2026-07-02).
+    agentSession: null,
+    claimLock: undefined,
+    claimExpiresAt: undefined,
+    lastHeartbeatAt: undefined,
+    currentRunId: undefined,
+    lastFailureReason: failureReason,
+    updatedAt: now,
+    completedAt: undefined,
+  };
+  board.tasks = board.tasks.map((item) =>
+    item.id === taskId ? changed : item,
+  );
+  board.events.unshift(
+    event(
+      "task.autonomous-rerouted",
+      `Rerouted ${task.title} to ${nextAssignee}`,
+      task.id,
+      {
+        reason,
+        failedAgentName: input.failedAgentName,
+        nextAssignee,
+        nextRuntime: input.nextRuntime,
+        targetMachine: changed.targetMachine,
+        failureReason,
+      },
+      failedRun?.id ?? task.currentRunId,
+    ),
+  );
+  await writeBoard(touch(board), options);
+  return { board, task: changed, run: failedRun, failureReason };
   });
 }
 
@@ -1360,10 +1723,72 @@ export async function unblockTask(
   });
 }
 
+/**
+ * Resolve a needs-human task with the human's answer: the answer lands in the
+ * task body (autonomous pickups prompt from the body, so the next worker run
+ * actually sees it), a comment records it on the timeline, and the card moves
+ * back to "ready" with assignee + targetMachine preserved so the SAME agent
+ * that asked picks it back up. Callers with a delegated target should schedule
+ * an immediate autonomous pickup after this returns.
+ */
+export async function answerHumanTask(
+  slug: string | null,
+  taskId: string,
+  input: { answer: string; author?: string; stampLabel?: string; resetAttempts?: boolean },
+  options: KanbanStorageOptions = {},
+) {
+  return withBoardMutation(slug, options, async () => {
+  const board = await readBoard(slug, options);
+  const task = board.tasks.find((item) => item.id === taskId);
+  if (!task) throw new Error("Task not found.");
+  if (task.status !== "needs-human")
+    throw new Error(`Task is '${task.status}'; answer only applies to Needs You tasks.`);
+  const answer = input.answer.trim();
+  if (!answer) throw new Error("An answer is required.");
+  const now = Date.now();
+  const author = input.author?.trim() || "dashboard";
+  const stampedAnswer = `— ${input.stampLabel?.trim() || "Human answer"} (${new Date(now).toISOString()}) —\n${answer}`;
+  const changed: KanbanTask = {
+    ...task,
+    status: "ready",
+    body: task.body?.trim() ? `${task.body.replace(/\s+$/, "")}\n\n${stampedAnswer}` : stampedAnswer,
+    claimLock: undefined,
+    claimExpiresAt: undefined,
+    lastHeartbeatAt: undefined,
+    currentRunId: undefined,
+    // An infrastructure rescue restores the attempt budget: the spent attempts
+    // never exercised the work, so the re-run must not strand on its first blip.
+    attempt: input.resetAttempts ? 1 : task.attempt,
+    updatedAt: now,
+  };
+  board.tasks = board.tasks.map((item) =>
+    item.id === taskId ? changed : item,
+  );
+  const comment: KanbanComment = {
+    id: `c_${now.toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+    taskId,
+    author,
+    body: answer,
+    createdAt: now,
+  };
+  board.comments.push(comment);
+  board.events.unshift(
+    event(
+      "task.human-answered",
+      `${author === "dashboard" ? "You" : author} answered ${task.title}; back to ${task.assignee?.trim() || "the queue"}`,
+      taskId,
+      { answer: answer.slice(0, 300) },
+    ),
+  );
+  await writeBoard(touch(board), options);
+  return { board, task: changed };
+  });
+}
+
 export async function promoteTask(
   slug: string | null,
   taskId: string,
-  input: { force?: boolean; reason?: string; dryRun?: boolean } = {},
+  input: { force?: boolean; reason?: string; dryRun?: boolean; actor?: "agent" | "human" } = {},
   options: KanbanStorageOptions = {},
 ) {
   return withBoardMutation(slug, options, async () => {
@@ -1373,6 +1798,15 @@ export async function promoteTask(
   if (!["ideas", "needs-human"].includes(task.status))
     throw new Error(
       `Task is '${task.status}'; promote only applies to Ideas or Needs You tasks.`,
+    );
+  // A parked 'Needs You' card is waiting on a human decision. Promote is exposed to
+  // agents via the MCP work_board tool, so without this an agent (or a prompt-injected
+  // one) could move its own approval card back to Ready and resume with no human answer,
+  // defeating the whole park-for-approval gate. A human unblocks it via the `answer`
+  // action instead. Idea promotion is unaffected.
+  if (task.status === "needs-human" && input.actor === "agent")
+    throw new Error(
+      "This task is waiting on a human decision — an agent can't promote it back to Ready. A human must answer or approve it first.",
     );
   const blockingParents = unfinishedParentIds(board, taskId);
   if (blockingParents.length && !input.force)
@@ -1461,29 +1895,38 @@ export async function bulkPatchTasks(
   patch: PatchTaskInput,
   options: KanbanStorageOptions = {},
 ) {
-  const results: Array<{
-    taskId: string;
-    ok: boolean;
-    task?: KanbanTask;
-    error?: string;
-  }> = [];
-  let latestBoard: KanbanBoard | null = null;
-  for (const taskId of [...new Set(ids)]) {
-    try {
-      const result = patch.status
-        ? await moveTask(slug, taskId, patch.status, options)
-        : await patchTask(slug, taskId, patch, options);
-      latestBoard = result.board;
-      results.push({ taskId, ok: true, task: result.task });
-    } catch (error) {
-      results.push({
-        taskId,
-        ok: false,
-        error: error instanceof Error ? error.message : "Task update failed.",
-      });
+  return withBoardMutation(slug, options, async () => {
+    const board = await readBoard(slug, options);
+    // Only patches (not pure status moves) consult the project map; compute it
+    // once per board instead of once per card.
+    const projectsById = patch.status
+      ? new Map<string, HivemindProject>()
+      : await projectMapForKanban(options);
+    const results: Array<{
+      taskId: string;
+      ok: boolean;
+      task?: KanbanTask;
+      error?: string;
+    }> = [];
+    let applied = 0;
+    for (const taskId of [...new Set(ids)]) {
+      try {
+        const task = patch.status
+          ? applyMoveToBoard(board, taskId, patch.status)
+          : applyPatchToBoard(board, taskId, patch, projectsById).task;
+        applied += 1;
+        results.push({ taskId, ok: true, task });
+      } catch (error) {
+        results.push({
+          taskId,
+          ok: false,
+          error: error instanceof Error ? error.message : "Task update failed.",
+        });
+      }
     }
-  }
-  return { board: latestBoard ?? (await readBoard(slug, options)), results };
+    if (applied) await writeBoard(touch(board), options);
+    return { board, results };
+  });
 }
 
 export async function deleteTask(
@@ -1566,14 +2009,51 @@ export async function addLink(
   });
 }
 
-async function writeBoard(
+// On-disk history caps. These are deliberately larger than the read-path caps
+// in trimKanbanBoardForResponse (events 160, runs 80, comments 120) so nothing
+// the dashboard can surface is ever lost — the read path re-sorts newest-first
+// and slices to its own caps regardless. events/runs are stored newest-first
+// (always .unshift), so we keep the head; comments are stored oldest-first
+// (.push), so we keep the tail.
+const MAX_PERSISTED_EVENTS = 500;
+const MAX_PERSISTED_RUNS = 200;
+const MAX_PERSISTED_COMMENTS = 1000;
+
+function trimBoardHistoryForWrite(board: KanbanBoard): KanbanBoard {
+  if (
+    board.events.length <= MAX_PERSISTED_EVENTS &&
+    board.runs.length <= MAX_PERSISTED_RUNS &&
+    board.comments.length <= MAX_PERSISTED_COMMENTS
+  ) {
+    return board;
+  }
+  return {
+    ...board,
+    events:
+      board.events.length > MAX_PERSISTED_EVENTS
+        ? board.events.slice(0, MAX_PERSISTED_EVENTS)
+        : board.events,
+    runs:
+      board.runs.length > MAX_PERSISTED_RUNS
+        ? board.runs.slice(0, MAX_PERSISTED_RUNS)
+        : board.runs,
+    comments:
+      board.comments.length > MAX_PERSISTED_COMMENTS
+        ? board.comments.slice(-MAX_PERSISTED_COMMENTS)
+        : board.comments,
+  };
+}
+
+export async function writeBoard(
   board: KanbanBoard,
   options: KanbanStorageOptions = {},
 ) {
   const storage = resolveKanbanStorage(board.meta.slug, options);
   const dir = boardDirFor(storage.root, storage.boardsRoot, board.meta.slug);
   await mkdir(dir, { recursive: true, mode: 0o700 });
-  const data = JSON.stringify(board, null, 2) + "\n";
+  const trimmed = trimBoardHistoryForWrite(board);
+  if (await writeBoardViaShards(storage.file, trimmed)) return;
+  const data = JSON.stringify(trimmed, null, 2) + "\n";
   const tmp = `${storage.file}.tmp.${process.pid}.${Date.now()}`;
   await writeFile(tmp, data, { mode: 0o600 });
   await rename(tmp, storage.file);
@@ -1596,7 +2076,7 @@ function emptyBoard(slug: string): KanbanBoard {
   };
 }
 
-function event(
+export function event(
   kind: string,
   message: string,
   taskId?: string,
@@ -1614,7 +2094,7 @@ function event(
   };
 }
 
-function touch(board: KanbanBoard) {
+export function touch(board: KanbanBoard) {
   return { ...board, meta: { ...board.meta, updatedAt: Date.now() } };
 }
 
@@ -1638,59 +2118,6 @@ function positiveNumber(value?: number | null) {
 function positiveInteger(value?: number | null) {
   const numeric = Number(value);
   return Number.isInteger(numeric) && numeric > 0 ? numeric : undefined;
-}
-
-function normalizeFailureReason(
-  value?: string | null,
-): KanbanFailureReason | undefined {
-  if (!value) return undefined;
-  const normalized = value.trim().toLowerCase().replace(/_/g, "-");
-  return [
-    "agent-error",
-    "timeout",
-    "runtime-offline",
-    "runtime-recovery",
-    "local-directory-error",
-    "manual",
-  ].includes(normalized)
-    ? (normalized as KanbanFailureReason)
-    : undefined;
-}
-
-function classifyKanbanFailure(value?: string | null): KanbanFailureReason {
-  const normalized = value?.toLowerCase() ?? "";
-  if (
-    /local directory|workdir|workspace path|folder|enoent|permission denied/.test(
-      normalized,
-    )
-  )
-    return "local-directory-error";
-  if (/orphan|recover|reclaim|daemon restart|runtime recovery/.test(normalized))
-    return "runtime-recovery";
-  if (
-    /offline|unreachable|connection refused|network|econnrefused|not available/.test(
-      normalized,
-    )
-  )
-    return "runtime-offline";
-  if (
-    /timeout|timed out|expired|stale|heartbeat|no progress|without worker progress/.test(
-      normalized,
-    )
-  )
-    return "timeout";
-  if (/manual|cancelled|canceled|user requested/.test(normalized))
-    return "manual";
-  return "agent-error";
-}
-
-function isRetryableFailureReason(reason: KanbanFailureReason) {
-  return [
-    "timeout",
-    "runtime-offline",
-    "runtime-recovery",
-    "local-directory-error",
-  ].includes(reason);
 }
 
 function transitionTaskAfterFailure(
@@ -1739,120 +2166,11 @@ function transitionTaskAfterFailure(
   };
 }
 
-function simpleStableHash(value: string) {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(36);
-}
-
-function deliverableId(target: string) {
-  return `d_${simpleStableHash(target)}`;
-}
-
-function normalizeDeliverableKind(
-  kind?: string,
-  path?: string,
-  url?: string,
-): KanbanDeliverableKind {
-  if (
-    kind &&
-    [
-      "website",
-      "video",
-      "image",
-      "audio",
-      "document",
-      "directory",
-      "file",
-      "url",
-    ].includes(kind)
-  ) {
-    return kind as KanbanDeliverableKind;
-  }
-  if (url && !url.startsWith("file:")) return "url";
-  if (path && existsSync(path)) {
-    try {
-      if (statSync(path).isDirectory()) return "directory";
-    } catch {
-      // Fall through to extension-based detection.
-    }
-  }
-  const target = (path || url || "").toLowerCase().split(/[?#]/)[0];
-  if (/\.(?:html?)$/.test(target)) return "website";
-  if (/\.(?:mp4|mov|m4v|webm|avi|mkv)$/.test(target)) return "video";
-  if (/\.(?:png|jpe?g|gif|webp|svg|avif)$/.test(target)) return "image";
-  if (/\.(?:mp3|wav|m4a|aac|flac|ogg)$/.test(target)) return "audio";
-  if (/\.(?:pdf|docx?|pptx?|xlsx?|csv|txt|md)$/.test(target)) return "document";
-  return path ? "file" : "url";
-}
-
-function deliverableLabel(target: string, kind: KanbanDeliverableKind) {
-  const clean = target
-    .replace(/^file:\/\//, "")
-    .split(/[?#]/)[0]
-    .replace(/\/+$/, "");
-  return clean.split(/[\\/]/).filter(Boolean).at(-1) || kind;
-}
-
-function deliverableFromTarget(
-  target: string,
-  label?: string,
-  createdAt = Date.now(),
-): KanbanDeliverable | null {
-  const trimmed = target.trim().replace(/[),.;:]+$/, "");
-  if (!trimmed) return null;
-  if (/^https?:\/\//i.test(trimmed)) {
-    if (/^https?:\/\/(?:www\.)?w3\.org\/2000\/svg\b/i.test(trimmed))
-      return null;
-    const kind = normalizeDeliverableKind(undefined, undefined, trimmed);
-    return {
-      id: deliverableId(trimmed),
-      label: label?.trim() || deliverableLabel(trimmed, kind),
-      kind,
-      url: trimmed,
-      createdAt,
-    };
-  }
-  const fileUrl = trimmed.match(/^file:\/\/(.+)/i)?.[1];
-  const path = decodeURIComponent(fileUrl || trimmed);
-  if (!isAbsolute(path)) return null;
-  const kind = normalizeDeliverableKind(undefined, path);
-  return {
-    id: deliverableId(path),
-    label: label?.trim() || deliverableLabel(path, kind),
-    kind,
-    path,
-    exists: existsSync(path),
-    createdAt,
-  };
-}
-
-function extractKanbanDeliverables(
-  text: string,
-  createdAt = Date.now(),
-): KanbanDeliverable[] {
-  const deliverables = new Map<string, KanbanDeliverable>();
-  const lines = text.split(/\r?\n/);
-  for (const line of lines) {
-    const labeled = line.match(
-      /^\s*(?:[-*]\s*)?([^:\n]{3,80}?)\s*:\s*(file:\/\/\/[^\s]+|https?:\/\/[^\s]+|\/[^\s"'<>]+(?:\s+[^\s"'<>]+)*?)(?:\s*)$/i,
-    );
-    if (labeled) {
-      const item = deliverableFromTarget(labeled[2], labeled[1], createdAt);
-      if (item) deliverables.set(item.path || item.url || item.id, item);
-    }
-  }
-  const targetPattern =
-    /(?:file:\/\/\/[^\s"'<>]+|https?:\/\/[^\s"'<>]+|\/(?:Users|Volumes|tmp|var|private|home|opt)\/[^\s"'<>]+(?:\s[^\s"'<>]+)*?(?=\s{2,}|\n|$|[),.;]))/gi;
-  for (const match of text.matchAll(targetPattern)) {
-    const item = deliverableFromTarget(match[0], undefined, createdAt);
-    if (item) deliverables.set(item.path || item.url || item.id, item);
-  }
-  return [...deliverables.values()].slice(0, 12);
-}
+// A per-lead batch legitimately carries dozens of deliverables (N leads × a
+// preview + an offer URL). The old cap of 12 silently dropped everything past
+// the internal files recorded first — live 2026-07-06: 3 sent pitches, 6
+// customer-facing URLs sliced off, Deliverables shelf empty.
+const MERGED_DELIVERABLE_CAP = 40;
 
 function mergeDeliverables(
   existing: KanbanDeliverable[] | undefined,
@@ -1871,7 +2189,12 @@ function mergeDeliverables(
     const key = item.path || item.url || item.id;
     if (!merged.has(key)) merged.set(key, item);
   }
-  return [...merged.values()].slice(0, 12);
+  const all = [...merged.values()];
+  if (all.length <= MERGED_DELIVERABLE_CAP) return all;
+  // Overflow: customer-facing URLs are the product — internal files lose first.
+  const urls = all.filter((item) => item.url && !item.path);
+  const files = all.filter((item) => !(item.url && !item.path));
+  return [...urls, ...files].slice(0, MERGED_DELIVERABLE_CAP);
 }
 
 function extractTaskDeliverables(

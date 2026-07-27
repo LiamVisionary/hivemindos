@@ -1,0 +1,18 @@
+{
+  "upstreamName": "Local Review Response Templates",
+  "upstreamSlug": "local-review-response-templates",
+  "hiveSlug": "local-review-response-templates",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/gtm/hivemindos/local-review-response-templates",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-16T23:02:02Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional GTM skills",
+  "sourcePath": "packaged-skills/optional/gtm/hivemindos/local-review-response-templates",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Generalizes lead-gen pipeline integration notes so the template system composes with any outbound workflow, such as the packaged small-business-preview-engine skill.",
+    "Replaces personal writing-style skill references with the humanizer skill and a generic brand voice guide.",
+    "Keeps truthful keyword injection, non-defensive negative-review handling, and the no-auto-posting boundary."
+  ]
+}

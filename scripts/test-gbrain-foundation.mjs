@@ -4,8 +4,10 @@ import { join } from "node:path";
 
 const root = process.cwd();
 const read = (path) => readFileSync(join(root, path), "utf8");
+// Whitespace-normalized so formatter line-wrapping can't fail a semantic token.
+const squish = (value) => value.replace(/\s+/g, " ");
 const has = (path, needle, label = needle) => {
-  assert.ok(read(path).includes(needle), `${path} should contain ${label}`);
+  assert.ok(squish(read(path)).includes(squish(needle)), `${path} should contain ${label}`);
 };
 
 const agentRuntime = read("src/lib/types/agent-runtime.ts");
@@ -18,14 +20,26 @@ for (const token of [
   'brainServicesFolder: process.env.NEXT_PUBLIC_OBSIDIAN_BRAIN_SERVICES_FOLDER ?? "Operations/Brain Services"',
   "tradingBrainEnabled: false",
   'skillpackLocation: process.env.NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION ?? "Skills/GBrain"',
-  'cliPath: process.env.NEXT_PUBLIC_SYNTO_CLI_PATH ?? "synto"',
-  'compareHeavyModel: process.env.NEXT_PUBLIC_SYNTO_COMPARE_HEAVY_MODEL ?? "llama3.1:8b"',
-  'sourceAccessMode: "deny"',
   'providerPolicy: "balanced-cloud"',
   'searchMode: "balanced"',
   'enabled: false',
 ]) {
-  assert.ok(agentRuntime.includes(token), `agent runtime default missing ${token}`);
+  assert.ok(squish(agentRuntime).includes(squish(token)), `agent runtime default missing ${token}`);
+}
+
+// The synto defaults were extracted to a shared config module (2026-07-10);
+// the runtime defaults must still compose it, and the tokens live there now.
+assert.ok(
+  squish(agentRuntime).includes(squish("synto: DEFAULT_SYNTO_CONFIG")),
+  "agent runtime defaults must compose the shared synto config",
+);
+const syntoConfig = read("src/lib/config/synto-config.ts");
+for (const token of [
+  'cliPath: process.env.NEXT_PUBLIC_SYNTO_CLI_PATH ?? "synto"',
+  'compareHeavyModel: process.env.NEXT_PUBLIC_SYNTO_COMPARE_HEAVY_MODEL ?? "llama3.1:8b"',
+  'sourceAccessMode: "deny"',
+]) {
+  assert.ok(squish(syntoConfig).includes(squish(token)), `synto config default missing ${token}`);
 }
 
 const storage = read("src/features/dashboard/dashboard-storage.ts");
@@ -89,11 +103,12 @@ has("src/features/dashboard/views/VaultPanel.tsx", "selectVaultPanel", "Vault pa
 has("src/features/dashboard/views/VaultPanel.tsx", "Install GBrain", "GBrain install action");
 has("src/features/dashboard/views/VaultPanel.tsx", "Install Syntho", "Syntho install action");
 has("src/features/dashboard/views/VaultPanel.tsx", "Run pipeline", "Syntho pipeline action");
-has("src/features/dashboard/views/VaultPanel.tsx", "Compare model", "Syntho compare model control");
+has("src/features/dashboard/views/VaultPanel.tsx", "value={sharedVault.synto.compareHeavyModel}", "Syntho compare model control");
 has("src/features/dashboard/views/VaultPanel.tsx", "brainServiceSections", "Brain Services segmented section navigation");
 has("src/features/dashboard/views/VaultPanel.tsx", "brainServiceOverviewCards", "Brain Services overview card deck");
 has("src/features/dashboard/views/VaultPanel.tsx", "tradingBrainEnabled", "Trading Brain enable toggle");
-has("src/features/dashboard/views/VaultPanel.tsx", "Model backend needs attention", "Syntho model repair guidance");
+has("src/features/dashboard/views/VaultPanel.tsx", "SyntoModelTierSettings", "Syntho model tier settings wiring");
+has("src/features/dashboard/views/SyntoModelTierSettings.tsx", "LmStudioModelManager", "Syntho local model repair/load flow");
 has("src/features/dashboard/brain-modules.tsx", "Advanced actions", "Brain module advanced disclosure");
 has("src/features/dashboard/brain-modules.tsx", "brainServicePrimaryActions", "Brain module primary actions");
 has("src/features/dashboard/DashboardApp.tsx", 'vaultPanelMode !== "brain-services"', "Brain Services status refresh gate");

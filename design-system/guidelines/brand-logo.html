@@ -1,0 +1,27 @@
+<!-- @dsCard group="Brand" viewport="700x220" name="Logo & mark" subtitle="Full lockup, app mark, favicon usage" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; background: var(--background); font-family: var(--font-body); }
+  .wrap { display: flex; gap: 34px; align-items: center; padding: 22px 26px; }
+  .lock img { height: 120px; display: block; }
+  .marks { display: flex; gap: 20px; align-items: center; }
+  .marks img { border-radius: 20px; }
+  .word { font-family: var(--font-display); font-weight: 700; color: var(--foreground); font-size: 22px; letter-spacing: -0.4px; }
+  .cap { color: var(--fg-4); font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; margin-top: 6px; text-align: center; }
+  .col { display: grid; justify-items: center; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="marks">
+      <div class="col"><img src="../assets/logo/app-icon-1024.png" alt="App icon" style="height:78px" /><div class="cap">App mark</div></div>
+      <div class="col"><img src="../assets/logo/icon-192.png" alt="Favicon" style="height:44px" /><div class="cap">Favicon</div></div>
+      <div class="col"><div class="word">HivemindOS</div><div class="cap">Wordmark · Space Grotesk</div></div>
+    </div>
+  </div>
+</body>
+</html>

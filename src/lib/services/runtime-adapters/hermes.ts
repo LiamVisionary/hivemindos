@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { homedir } from "@/lib/home-dir";
 import { dirname, join, resolve } from "node:path";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import { sanitizeProcessEnv } from "@/lib/utils/safe-process-env";
 import type { RuntimeAdapter, RuntimeSchedule, RuntimeScheduleAction } from "./types";
 
 type ParsedSchedule = {
@@ -10,6 +11,7 @@ type ParsedSchedule = {
   name: string;
   every: string;
   nextRunMs?: number;
+  lastRunMs?: number;
   message: string;
   enabled: boolean;
 };
@@ -43,7 +45,7 @@ async function listHermesSchedules(profile: AgentProfile): Promise<RuntimeSchedu
       enabled: parsed.enabled,
       nextRunMs: parsed.nextRunMs,
       source: `~/.hermes/cron/${entry.name}`,
-      lastRunMs: fileStat?.mtimeMs,
+      lastRunMs: parsed.lastRunMs ?? fileStat?.mtimeMs,
       metadata: { path },
     }));
   }
@@ -64,6 +66,7 @@ function parseScheduleContent(raw: string, filename: string): ParsedSchedule[] {
         name: stringFrom(job.name) || stringFrom(job.title) || filename.replace(/\.[^.]+$/, ""),
         every: scheduleText(job),
         nextRunMs: dateMsFrom(job.next_run_at) ?? dateMsFrom(job.nextRunAt),
+        lastRunMs: dateMsFrom(job.last_run_at) ?? dateMsFrom(job.lastRunAt),
         message: message || raw.slice(0, 1200),
         enabled: job.enabled !== false,
       };
@@ -75,6 +78,7 @@ function parseScheduleContent(raw: string, filename: string): ParsedSchedule[] {
     name: stringFrom(parsed.name) || stringFrom(parsed.title) || firstLine || filename.replace(/\.[^.]+$/, ""),
     every: scheduleText(parsed),
     nextRunMs: dateMsFrom(parsed.next_run_at) ?? dateMsFrom(parsed.nextRunAt),
+    lastRunMs: dateMsFrom(parsed.last_run_at) ?? dateMsFrom(parsed.lastRunAt),
     message: stringFrom(parsed.message) || stringFrom(parsed.prompt) || stringFrom(parsed.task) || raw.slice(0, 1200),
     enabled,
   }];
@@ -169,7 +173,7 @@ async function runHermesScheduleAction(_profile: AgentProfile | undefined, actio
     const id = `hermes-schedule-${Date.now().toString(36)}`;
     const logPath = join(homedir(), ".hivemindos", "runtime-runs", `${id}.log`);
     await mkdir(dirname(logPath), { recursive: true });
-    const child = spawn("hermes", ["-z", prompt], { detached: true, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env } });
+    const child = spawn("hermes", ["-z", prompt], { detached: true, stdio: ["ignore", "pipe", "pipe"], env: sanitizeProcessEnv() });
     const append = (chunk: Buffer) => void writeFile(logPath, chunk.toString(), { flag: "a" }).catch(() => undefined);
     child.stdout.on("data", append);
     child.stderr.on("data", append);

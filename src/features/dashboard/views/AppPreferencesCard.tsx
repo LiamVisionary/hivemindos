@@ -2,15 +2,28 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Clapperboard, ImageIcon, LoaderCircle, Star } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
 export type AppPreferenceRecord = {
   appId: string;
   appName?: string;
   priority?: boolean;
   usageNotes?: string;
+  capabilities?: string[];
   preferredModels?: Array<{ task: string; model: string }>;
 };
+
+function parseCapabilities(value: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of value.split(/[,\n]/)) {
+    const tag = raw.trim().toLowerCase().slice(0, 40);
+    if (!tag || seen.has(tag)) continue;
+    seen.add(tag);
+    out.push(tag);
+    if (out.length >= 12) break;
+  }
+  return out;
+}
 
 type AppModelOption = {
   id: string;
@@ -69,6 +82,7 @@ const MODEL_TASK_LABELS: Array<{ task: "image" | "video"; label: string; icon: t
 export function AppPreferencesCard({ app, preference, onSaved }: AppPreferencesCardProps) {
   const [priority, setPriority] = useState(preference?.priority === true);
   const [usageNotes, setUsageNotes] = useState(preference?.usageNotes ?? "");
+  const [capabilities, setCapabilities] = useState((preference?.capabilities ?? []).join(", "));
   const [preferredModels, setPreferredModels] = useState<Array<{ task: string; model: string }>>(preference?.preferredModels ?? []);
   const [models, setModels] = useState<AppModelOption[] | null>(null);
   const [saving, setSaving] = useState(false);
@@ -84,10 +98,12 @@ export function AppPreferencesCard({ app, preference, onSaved }: AppPreferencesC
     setSeededPreference(preference);
     setPriority(preference?.priority === true);
     setUsageNotes(preference?.usageNotes ?? "");
+    setCapabilities((preference?.capabilities ?? []).join(", "));
     setPreferredModels(preference?.preferredModels ?? []);
   }
 
   const notesDirty = usageNotes !== (preference?.usageNotes ?? "");
+  const capabilitiesDirty = parseCapabilities(capabilities).join(", ") !== (preference?.capabilities ?? []).join(", ");
 
   useEffect(() => {
     if (!generative || !app.apiBaseUrl) return;
@@ -132,9 +148,14 @@ export function AppPreferencesCard({ app, preference, onSaved }: AppPreferencesC
     appName: app.name,
     priority,
     usageNotes: usageNotes.trim() || undefined,
+    capabilities: parseCapabilities(capabilities),
     preferredModels,
     ...overrides,
-  }), [app.id, app.name, priority, usageNotes, preferredModels]);
+  }), [app.id, app.name, priority, usageNotes, capabilities, preferredModels]);
+
+  const saveCapabilities = () => {
+    void persist(buildPreference({}));
+  };
 
   const togglePriority = () => {
     const next = !priority;
@@ -163,107 +184,94 @@ export function AppPreferencesCard({ app, preference, onSaved }: AppPreferencesC
   }, [models]);
 
   return (
-    <div className="grid gap-3 rounded-md border border-[rgba(251,191,36,0.18)] bg-[rgba(10,14,21,0.55)] p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-sm font-bold">
-          <Star aria-hidden="true" className={`h-4 w-4 ${priority ? "fill-[#fbbf24] text-[#fbbf24]" : "text-[var(--muted)]"}`} />
+    <div className="fa-pref">
+      <div className="fa-pref-head">
+        <h4 className="fa-pref-title">
+          <Star aria-hidden="true" data-on={priority ? "" : undefined} />
           Agent preferences
-        </div>
-        <div className="flex items-center gap-2">
-          {saving ? <LoaderCircle aria-hidden="true" className="h-3.5 w-3.5 animate-spin text-[var(--muted)]" /> : null}
-          {saveState === "saved" ? <span className="text-[10px] font-black uppercase text-[var(--accent-strong)]">Saved</span> : null}
-          {saveState === "error" ? <span className="text-[10px] font-black uppercase text-[#fca5a5]">Save failed</span> : null}
-          <Button
-            type="button"
-            size="sm"
-            variant={priority ? "default" : "secondary"}
-            className="h-8 px-2.5 text-xs"
-            onClick={togglePriority}
-            disabled={saving}
-          >
-            <Star aria-hidden="true" className={`h-3.5 w-3.5 ${priority ? "fill-current" : ""}`} />
+        </h4>
+        <div className="fa-pref-status">
+          {saving ? <LoaderCircle aria-hidden="true" className="fa-spin" style={{ width: 14, height: 14, color: "var(--fg-3)" }} /> : null}
+          {saveState === "saved" ? <span className="fa-pref-flag" data-tone="ok">Saved</span> : null}
+          {saveState === "error" ? <span className="fa-pref-flag" data-tone="error">Save failed</span> : null}
+          <button type="button" className="fa-act" data-active={priority ? "" : undefined} onClick={togglePriority} disabled={saving}>
+            <Star aria-hidden="true" data-on={priority ? "" : undefined} />
             {priority ? "Priority app" : "Make priority"}
-          </Button>
+          </button>
         </div>
       </div>
 
-      <p className="m-0 text-xs leading-5 text-[var(--muted)]">
+      <p className="fa-pref-lead">
         Tell agents when to pick this app. Capability search and image routing read these hints, so a request like &quot;generate a realistic image&quot; lands on the right app.
       </p>
 
-      <div className="grid gap-1.5">
-        <label htmlFor={`app-usage-notes-${app.id}`} className="text-xs font-bold text-[var(--foreground)]">
-          Use this app for...
-        </label>
+      <div className="fa-pref-field">
+        <label htmlFor={`app-usage-notes-${app.id}`} className="fa-pref-label">Use this app for</label>
         <textarea
           id={`app-usage-notes-${app.id}`}
+          className="fb-textarea"
           value={usageNotes}
           onChange={(event) => setUsageNotes(event.target.value)}
           placeholder="e.g. Use this app for realistic photo-style images; avoid it for anime."
           rows={3}
-          className="w-full resize-y rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(2,6,23,0.44)] px-3 py-2 text-sm leading-5 text-[var(--foreground)] placeholder:text-[var(--muted)] focus:border-[rgba(94,234,212,0.4)] focus:outline-none"
+          style={{ resize: "vertical" }}
         />
         {notesDirty ? (
-          <Button type="button" size="sm" variant="secondary" className="h-8 w-fit px-2.5 text-xs" onClick={saveNotes} disabled={saving}>
-            Save notes
-          </Button>
+          <button type="button" className="fa-act" style={{ width: "fit-content" }} onClick={saveNotes} disabled={saving}>Save notes</button>
+        ) : null}
+      </div>
+
+      <div className="fa-pref-field">
+        <label htmlFor={`app-capabilities-${app.id}`} className="fa-pref-label">What this app can do</label>
+        <input
+          id={`app-capabilities-${app.id}`}
+          className="fb-field"
+          value={capabilities}
+          onChange={(event) => setCapabilities(event.target.value)}
+          placeholder="e.g. video, image-to-video"
+        />
+        <p className="fa-pref-hint">
+          Comma-separated capability tags. Agents see these in the connected-app roster so they know what this app does — even when the app doesn&apos;t advertise it itself.
+        </p>
+        {capabilitiesDirty ? (
+          <button type="button" className="fa-act" style={{ width: "fit-content" }} onClick={saveCapabilities} disabled={saving}>Save capabilities</button>
         ) : null}
       </div>
 
       {generative && app.apiBaseUrl ? (
-        <div className="grid gap-3">
+        <div className="fa-pref-models">
           {modelsLoading ? (
-            <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
-              <LoaderCircle aria-hidden="true" className="h-3.5 w-3.5 animate-spin" />
-              Discovering models from the app...
+            <div className="fa-pref-spinner">
+              <LoaderCircle aria-hidden="true" className="fa-spin" />
+              Discovering models from the app…
             </div>
           ) : null}
           {!modelsLoading && models !== null && models.length === 0 ? (
-            <p className="m-0 text-xs leading-5 text-[var(--muted)]">
-              This app did not publish a model list. Agents will use the app default.
-            </p>
+            <p className="fa-pref-hint">This app did not publish a model list. Agents will use the app default.</p>
           ) : null}
           {MODEL_TASK_LABELS.map(({ task, label, icon: Icon }) => {
             const options = modelsByTask.get(task) ?? [];
             if (!options.length) return null;
             const selected = preferredModels.find((entry) => entry.task === task)?.model ?? "";
             return (
-              <div key={task} className="grid gap-1.5">
-                <span className="flex items-center gap-1.5 text-xs font-bold text-[var(--foreground)]">
-                  <Icon aria-hidden="true" className="h-3.5 w-3.5 text-[var(--accent-strong)]" />
+              <div key={task} className="fa-pref-field">
+                <span className="fa-pref-model-label">
+                  <Icon aria-hidden="true" />
                   {label}
                 </span>
                 {options.length <= 6 ? (
-                  <div className="flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setTaskModel(task, "")}
-                      className={`rounded-md border px-2.5 py-1.5 text-xs font-bold transition ${selected === ""
-                        ? "border-[rgba(94,234,212,0.45)] bg-[rgba(20,184,166,0.14)] text-[var(--accent-strong)]"
-                        : "border-[rgba(148,163,184,0.18)] bg-[rgba(2,6,23,0.40)] text-[var(--muted)] hover:border-[rgba(148,163,184,0.34)]"}`}
-                    >
+                  <div className="fa-pref-chips">
+                    <button type="button" className="fa-pref-chip" data-active={selected === "" ? "" : undefined} onClick={() => setTaskModel(task, "")}>
                       App default
                     </button>
                     {options.map((model) => (
-                      <button
-                        type="button"
-                        key={model.id}
-                        onClick={() => setTaskModel(task, model.id)}
-                        title={model.id}
-                        className={`max-w-[16rem] truncate rounded-md border px-2.5 py-1.5 text-xs font-bold transition ${selected === model.id
-                          ? "border-[rgba(94,234,212,0.45)] bg-[rgba(20,184,166,0.14)] text-[var(--accent-strong)]"
-                          : "border-[rgba(148,163,184,0.18)] bg-[rgba(2,6,23,0.40)] text-[var(--muted)] hover:border-[rgba(148,163,184,0.34)]"}`}
-                      >
+                      <button type="button" key={model.id} className="fa-pref-chip" data-active={selected === model.id ? "" : undefined} title={model.id} onClick={() => setTaskModel(task, model.id)}>
                         {model.label}
                       </button>
                     ))}
                   </div>
                 ) : (
-                  <select
-                    value={selected}
-                    onChange={(event) => setTaskModel(task, event.target.value)}
-                    className="w-full rounded-md border border-[rgba(148,163,184,0.18)] bg-[rgba(2,6,23,0.44)] px-3 py-2 text-sm text-[var(--foreground)] focus:border-[rgba(94,234,212,0.4)] focus:outline-none"
-                  >
+                  <select className="fb-select" value={selected} onChange={(event) => setTaskModel(task, event.target.value)}>
                     <option value="">App default</option>
                     {options.map((model) => (
                       <option key={model.id} value={model.id}>{model.label}</option>

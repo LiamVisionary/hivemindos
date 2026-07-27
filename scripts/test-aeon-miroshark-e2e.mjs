@@ -16,6 +16,12 @@ const workspaceRoot = await mkdtemp(join(tmpdir(), "hivemindos-aeon-workspace-")
 const aeonWorkspacePath = join(workspaceRoot, "aeon-miroshark-e2e");
 const port = await freePort(5021);
 const localToken = crypto.randomBytes(24).toString("hex");
+// The spawned dashboard's API auth gate (src/proxy.ts) 401s tokenless /api
+// requests. Give the child deterministic throwaway credentials (explicit
+// process env beats .env.local in Next) and send the matching device token.
+const dashboardAuthSecret = "throwaway-aeon-miroshark-e2e-secret-not-a-real-credential";
+const dashboardDeviceToken = crypto.randomBytes(24).toString("hex");
+const dashboardHeaders = { "x-hivemindos-device-token": dashboardDeviceToken };
 const discoveredMiroSharkBaseUrl = await discoverMiroSharkBaseUrl();
 const existingSimulationId = process.env.HIVE_AEON_MIROSHARK_E2E_SIMULATION_ID?.trim();
 const scenario = `AEON MiroShark hivenet e2e ${new Date().toISOString()}: users debate whether HivemindOS should route AEON verdicts and MiroShark simulation artifacts into the shared vault.`;
@@ -28,6 +34,8 @@ const server = spawn("pnpm", ["dev", "--port", String(port), "--hostname", "127.
     ...process.env,
     PORT: String(port),
     NEXT_PUBLIC_OBSIDIAN_VAULT_PATH: vaultRoot,
+    HIVEMINDOS_DASHBOARD_AUTH_SECRET: dashboardAuthSecret,
+    HIVEMINDOS_DASHBOARD_DEVICE_TOKEN: dashboardDeviceToken,
     HIVE_AEON_BRAIN_LOCAL_TOKEN: localToken,
     HIVE_AEON_HIVE_ALLOW_PUBLIC_REHEARSAL: "true",
     HIVE_AEON_BRAIN_VISIBILITY_CACHE_TTL_MS: "0",
@@ -47,10 +55,10 @@ server.stderr.on("data", (chunk) => { serverLog += chunk.toString(); });
 try {
   await waitForServer(port);
 
-  const status = await getJson(`http://127.0.0.1:${port}/api/miroshark/status?refresh=1`, 120_000);
+  const status = await getJson(`http://127.0.0.1:${port}/api/miroshark/status?refresh=1`, 120_000, dashboardHeaders);
   if (status.ok !== true) {
-    const apps = await getJson(`http://127.0.0.1:${port}/api/fleet/apps?refresh=1`, 120_000).catch((error) => ({ error: error instanceof Error ? error.message : String(error) }));
-    const discover = await getJson(`http://127.0.0.1:${port}/api/fleet/discover?includeSnapshots=0`, 120_000).catch((error) => ({ error: error instanceof Error ? error.message : String(error) }));
+    const apps = await getJson(`http://127.0.0.1:${port}/api/fleet/apps?refresh=1`, 120_000, dashboardHeaders).catch((error) => ({ error: error instanceof Error ? error.message : String(error) }));
+    const discover = await getJson(`http://127.0.0.1:${port}/api/fleet/discover?includeSnapshots=0`, 120_000, dashboardHeaders).catch((error) => ({ error: error instanceof Error ? error.message : String(error) }));
     throw new Error(`MiroShark should be discovered and connected.\nstatus=${JSON.stringify(status).slice(0, 1800)}\napps=${JSON.stringify(apps).slice(0, 1800)}\ndiscover=${JSON.stringify(discover).slice(0, 1800)}`);
   }
   await assertMiroSharkApiReady(status.baseUrl);
@@ -61,7 +69,7 @@ try {
     path: aeonWorkspacePath,
     name: "aeon-miroshark-e2e",
     cache: true,
-  }, {}, 900_000);
+  }, dashboardHeaders, 900_000);
   assert(clone.ok === true, `AEON clone route failed: ${JSON.stringify(clone).slice(0, 1200)}`);
   assert(clone.agent?.useSharedVault === true, "Cloned AEON agent should have shared brain injection enabled.");
   assert(clone.agent?.aeonLocalPath || clone.agent?.localDataDir, "Cloned AEON agent should include a local workspace path.");
@@ -126,8 +134,8 @@ async function waitForServer(port) {
   throw new Error(`Next dev server did not become ready on ${port}. Last error: ${lastError}\n${serverLog.slice(-3000)}`);
 }
 
-async function getJson(url, timeoutMs) {
-  const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(timeoutMs) });
+async function getJson(url, timeoutMs, headers = undefined) {
+  const response = await fetch(url, { cache: "no-store", headers, signal: AbortSignal.timeout(timeoutMs) });
   const payload = await response.json().catch(() => ({}));
   assert(response.ok, `GET ${url} failed with HTTP ${response.status}: ${payload.error ?? ""}`);
   return payload;

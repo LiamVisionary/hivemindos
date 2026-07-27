@@ -131,7 +131,7 @@ try {
   assert.match(mcpSource, /crypto_risk_monitor/);
   assert.match(mcpSource, /crosschain-swap/);
 
-  const docs = await readFile(new URL("../docs/features/wallets-honey-and-x402.md", import.meta.url), "utf8");
+  const docs = await readFile(new URL("../docs/for-users/features/wallets-honey-and-x402.md", import.meta.url), "utf8");
   assert.match(docs, /Clear signing is a review layer/);
   assert.match(docs, /Agent identity is local-first/);
   assert.match(docs, /Risk monitoring is an offline control review/);

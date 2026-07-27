@@ -1,0 +1,19 @@
+{
+  "upstreamName": "Research Call Tracker",
+  "upstreamSlug": "research-call-tracker",
+  "hiveSlug": "research-call-tracker",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/research/hivemindos/research-call-tracker",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-11T00:00:00Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional research skills",
+  "sourcePath": "packaged-skills/optional/research/hivemindos/research-call-tracker",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Clean-room HivemindOS-authored implementation of the published-call accountability pattern from public research-workflow writeups; no upstream text is vendored.",
+    "Ledgers live in the user's shared brain vault under Operations/Research/ and are seeded from bundled templates when absent.",
+    "Publish-time fail-closed rule: a call with no tracker row is a blocker to surface, not a detail to skip.",
+    "Win rate is computed from Closed rows only, and historical rows are never rewritten to improve the record."
+  ]
+}

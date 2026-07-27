@@ -1,0 +1,58 @@
+.page {
+  position: relative;
+  min-height: 100dvh;
+  overflow: hidden;
+  color: #f8f3e7;
+  background:
+    radial-gradient(circle at 12% 3%, rgba(220, 163, 42, 0.15), transparent 31rem),
+    linear-gradient(145deg, #090a0c, #11130f 56%, #090a0c);
+}
+
+.glow {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.2;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.024) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.024) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: linear-gradient(to bottom, black, transparent 82%);
+}
+
+.shell {
+  position: relative;
+  z-index: 1;
+  width: min(820px, calc(100% - 40px));
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 36px 0 72px;
+}
+
+.back {
+  display: inline-flex;
+  margin-bottom: 34px;
+  color: #d9aa3b;
+  font: 700 13px/1.3 Geist, system-ui, sans-serif;
+  text-decoration: none;
+}
+
+.back:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.reviewNote {
+  margin: 42px 0 0;
+  padding-top: 22px;
+  border-top: 1px solid rgba(235, 189, 83, 0.22);
+  color: #8f8a80;
+  font: 12px/1.6 Geist, system-ui, sans-serif;
+}
+
+@media (max-width: 600px) {
+  .shell {
+    width: min(100% - 32px, 820px);
+    padding-top: 24px;
+  }
+}

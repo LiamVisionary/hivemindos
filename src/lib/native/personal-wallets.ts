@@ -1,4 +1,5 @@
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+import { mergePersonalWalletList } from "@/lib/utils/personal-wallet-grouping";
 
 export type NativePersonalWalletsPayload = {
   ok?: boolean;
@@ -21,18 +22,39 @@ export async function readNativePersonalWallets(input: {
   }
 }
 
-/**
- * Load personal (user) wallets the same way the Wallets screen does: the native
- * Tauri bridge first (static desktop has no /api server), then the HTTP route.
- * Returns [] when neither source has wallets.
- */
-export async function fetchPersonalWalletRecords(vaultPath?: string): Promise<Array<Record<string, unknown>>> {
-  const native = await readNativePersonalWallets({ vaultPath });
-  if (native?.ok && Array.isArray(native.wallets)) return native.wallets;
+async function fetchHttpPersonalWalletRecords(vaultPath?: string): Promise<Array<Record<string, unknown>>> {
   const query = vaultPath ? `?vaultPath=${encodeURIComponent(vaultPath)}` : "";
   const response = await fetch(`/api/wallet/personal${query}`, { headers: { accept: "application/json" }, cache: "no-store" }).catch(() => null);
   const data = (await response?.json().catch(() => null)) as { ok?: boolean; wallets?: Array<Record<string, unknown>> } | null;
   return response?.ok && data?.ok && Array.isArray(data.wallets) ? data.wallets : [];
+}
+
+/**
+ * Load personal (user) wallets the same way the Wallets screen does: the native
+ * Tauri bridge first (static desktop has no /api server), merged with the HTTP
+ * route when available so ledger names can repair older native vault metadata.
+ * Returns [] when neither source has wallets.
+ */
+export async function fetchPersonalWalletRecords(vaultPath?: string): Promise<Array<Record<string, unknown>>> {
+  const native = await readNativePersonalWallets({ vaultPath });
+  const nativeWallets = native?.ok && Array.isArray(native.wallets) ? native.wallets : null;
+  const httpWallets = await fetchHttpPersonalWalletRecords(vaultPath);
+  return nativeWallets ? mergePersonalWalletList([...nativeWallets, ...httpWallets]) : httpWallets;
+}
+
+/** Persist refreshed personal-wallet snapshots to the canonical wallet ledger. */
+export async function persistPersonalWalletRecords(
+  wallets: Array<Record<string, unknown>>,
+  vaultPath?: string,
+): Promise<boolean> {
+  if (!wallets.length) return true;
+  const response = await fetch("/api/wallet/personal", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ vaultPath: vaultPath || undefined, wallets }),
+  }).catch(() => null);
+  const data = (await response?.json().catch(() => null)) as { ok?: boolean } | null;
+  return Boolean(response?.ok && data?.ok);
 }
 
 export type PersonalWalletBalance = {
@@ -51,23 +73,45 @@ export type PersonalWalletBalance = {
  * failure (e.g. no /api server in a static desktop build) so callers fall back
  * to the stored value.
  */
-export async function fetchPersonalWalletBalance(address: string, network: string): Promise<PersonalWalletBalance | null> {
-  if (!address.trim() || !network.trim()) return null;
+export type PersonalWalletBalanceResult =
+  | { ok: true; balance: PersonalWalletBalance }
+  | { ok: false; error: string };
+
+/**
+ * Error-aware variant of {@link fetchPersonalWalletBalance}. Surfaces WHY a read
+ * failed (RPC timeout, rate limit, no /api server, …) so a caller can show a real
+ * error + retry instead of silently rendering a $0.00 that's indistinguishable
+ * from an empty wallet. The route already returns a friendly `error` string.
+ */
+export async function fetchPersonalWalletBalanceResult(address: string, network: string): Promise<PersonalWalletBalanceResult> {
+  if (!address.trim() || !network.trim()) return { ok: false, error: "This wallet has no address to read an on-chain balance from." };
   const response = await fetch("/api/wallet/balance", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ address, network }),
   }).catch(() => null);
-  const data = (await response?.json().catch(() => null)) as {
+  if (!response) return { ok: false, error: "Could not reach the wallet balance service." };
+  const data = (await response.json().catch(() => null)) as {
     ok?: boolean;
+    error?: string;
     balance?: { tokenBalance: number; nativeBalance: number; totalValueUsd?: number | null; tokens?: Array<Record<string, unknown>>; fetchedAt: number };
   } | null;
-  if (!response?.ok || !data?.ok || !data.balance) return null;
+  if (!response.ok || !data?.ok || !data.balance) {
+    return { ok: false, error: (data?.error && String(data.error).trim()) || `Balance read failed (HTTP ${response.status}).` };
+  }
   const totalValueUsd = Number(data.balance.totalValueUsd);
   return {
-    currentBalanceUsd: Number.isFinite(totalValueUsd) && totalValueUsd >= 0 ? totalValueUsd : Number(data.balance.tokenBalance) || 0,
-    nativeBalance: Number(data.balance.nativeBalance) || 0,
-    tokens: Array.isArray(data.balance.tokens) ? data.balance.tokens : [],
-    lastOnchainSyncAt: Number(data.balance.fetchedAt) || Date.now(),
+    ok: true,
+    balance: {
+      currentBalanceUsd: Number.isFinite(totalValueUsd) && totalValueUsd >= 0 ? totalValueUsd : Number(data.balance.tokenBalance) || 0,
+      nativeBalance: Number(data.balance.nativeBalance) || 0,
+      tokens: Array.isArray(data.balance.tokens) ? data.balance.tokens : [],
+      lastOnchainSyncAt: Number(data.balance.fetchedAt) || Date.now(),
+    },
   };
+}
+
+export async function fetchPersonalWalletBalance(address: string, network: string): Promise<PersonalWalletBalance | null> {
+  const result = await fetchPersonalWalletBalanceResult(address, network);
+  return result.ok ? result.balance : null;
 }

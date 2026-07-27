@@ -42,6 +42,7 @@ export type BrainModuleDefinition = {
   title: string;
   description: ReactNode;
   install?: BrainModuleInstallDefinition;
+  setup?: ReactNode;
   stats?: BrainModuleStat[];
   badges?: ReactNode[];
   primaryAction?: BrainModuleAction;
@@ -142,6 +143,12 @@ export class BrainModule {
                 </Button>
               ))}
             </div>
+          </div>
+        ) : null}
+
+        {installState !== "installing" && installState !== "success" && brainModule.setup ? (
+          <div className={vaultClass("brainServiceSetup")}>
+            {brainModule.setup}
           </div>
         ) : null}
 

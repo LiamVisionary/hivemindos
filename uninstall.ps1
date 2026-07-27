@@ -177,6 +177,21 @@ if ($gbrainDataDir.StartsWith('~\') -or $gbrainDataDir.StartsWith('~/')) {
   $gbrainDataDir = Join-Path $UserHome $gbrainDataDir.Substring(2)
 }
 
+function Get-HivemindStartupFolder {
+  $startupFolder = [Environment]::GetFolderPath([Environment+SpecialFolder]::Startup)
+  if (-not $startupFolder) {
+    $startupFolder = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Startup"
+  }
+  return $startupFolder
+}
+
+function Remove-HivemindStartupLauncher($Name) {
+  $startupFolder = Get-HivemindStartupFolder
+  if (-not $startupFolder) { return }
+  $safeName = $Name -replace '[\\/:*?"<>|]', '-'
+  Remove-Item (Join-Path $startupFolder "$safeName.vbs") -Force -ErrorAction SilentlyContinue
+}
+
 function Remove-EmptyVaultFolder($RelativePath) {
   $path = Join-Path $vaultPath $RelativePath
   if ((Test-Path $path) -and -not (Get-ChildItem $path -Force -ErrorAction SilentlyContinue)) {
@@ -208,6 +223,46 @@ if (Ask-YesNo "Stop HivemindOS Link sidecar processes?" $true) {
   Ok "Stopped HivemindOS Link sidecar processes"
 }
 
+if (Ask-YesNo "Remove the 'HivemindOS Telemetry Collector' and 'HivemindOS Update' scheduled tasks, Startup launcher, and run-collector launcher files?" $true) {
+  Unregister-ScheduledTask -TaskName "HivemindOS Telemetry Collector" -Confirm:$false -ErrorAction SilentlyContinue
+  # One-shot task registered by scripts/start-hivemindos-update-task.ps1 when a
+  # remote/self update runs; not created by setup, but ours to remove.
+  Unregister-ScheduledTask -TaskName "HivemindOS Update" -Confirm:$false -ErrorAction SilentlyContinue
+  Remove-HivemindStartupLauncher "HivemindOS Telemetry Collector"
+  $hiveHome = Join-Path $UserHome ".hivemindos"
+  Remove-Item (Join-Path $hiveHome "run-collector.cmd") -Force -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $hiveHome "run-collector-hidden.ps1") -Force -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $hiveHome "run-collector-hidden.vbs") -Force -ErrorAction SilentlyContinue
+  Ok "Removed the HivemindOS collector/update tasks, startup launcher, and launcher files"
+}
+
+if (Ask-YesNo "Remove the 'HivemindOS Link' scheduled task, Startup launcher, run-linkd launcher files, and installed sidecar binary?" $true) {
+  Unregister-ScheduledTask -TaskName "HivemindOS Link" -Confirm:$false -ErrorAction SilentlyContinue
+  Remove-HivemindStartupLauncher "HivemindOS Link"
+  $hiveHome = Join-Path $UserHome ".hivemindos"
+  Remove-Item (Join-Path $hiveHome "run-linkd.cmd") -Force -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $hiveHome "run-linkd-hidden.ps1") -Force -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $hiveHome "run-linkd-hidden.vbs") -Force -ErrorAction SilentlyContinue
+  Remove-Item (Join-Path $hiveHome "bin\hivemind-linkd.exe") -Force -ErrorAction SilentlyContinue
+  Ok "Removed the HivemindOS Link task/startup launcher, launcher files, and installed sidecar binary"
+  Warn "Tailscale sign-in state stays in ~/.hivemindos/link; a later prompt offers to remove it"
+}
+
+if (Ask-YesNo "Stop and remove the optional HivemindOS OpenSRE root-cause sidecar Scheduled Task?" $true) {
+  & (Join-Path $Root "scripts\install-opensre-sidecar.ps1") -Uninstall
+}
+
+if (Ask-YesNo "Remove the optional OpenSRE isolated runtime under ~/.hivemindos/opensre? (Incident records under ~/.hivemindos/ops/incidents are preserved.)" $false) {
+  Remove-Item (Join-Path ([Environment]::GetFolderPath("UserProfile")) ".hivemindos\opensre") -Recurse -Force -ErrorAction SilentlyContinue
+  Ok "Removed the optional OpenSRE isolated runtime"
+}
+
+if (Ask-YesNo "Remove bundled HivemindOS Link collector runtimes from ~/.hivemindos/link-runtime?" $true) {
+  $linkRuntimeDir = Join-Path $UserHome ".hivemindos\link-runtime"
+  Remove-Item $linkRuntimeDir -Recurse -Force -ErrorAction SilentlyContinue
+  Ok "Removed $linkRuntimeDir"
+}
+
 if (Ask-YesNo "Remove HivemindOS collector environment file ~/.hivemindos/collector.env?" $false) {
   $collectorEnv = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".hivemindos\collector.env"
   Remove-Item $collectorEnv -Force -ErrorAction SilentlyContinue
@@ -219,6 +274,28 @@ if (Ask-YesNo "Remove HivemindOS GitLawb config/status cache from ~/.hivemindos/
   Remove-Item (Join-Path $gitlawbDir "status.json") -Force -ErrorAction SilentlyContinue
   Remove-Item (Join-Path $gitlawbDir "setup-status.json") -Force -ErrorAction SilentlyContinue
   Ok "Removed HivemindOS GitLawb status cache"
+}
+
+$openClawCodexTrustMarker = Join-Path $UserHome ".hivemindos\openclaw-codex-plugin-trust.json"
+if ((Test-Path $openClawCodexTrustMarker) -and (Ask-YesNo "Remove the HivemindOS-added Codex entry from OpenClaw's plugin allowlist?" $false)) {
+  $openClawConfig = Join-Path $UserHome ".openclaw\openclaw.json"
+  if (Test-Path $openClawConfig) {
+    try {
+      $config = Get-Content $openClawConfig -Raw | ConvertFrom-Json -AsHashtable
+      if ($config.ContainsKey("plugins") -and $config["plugins"] -is [System.Collections.IDictionary] -and $config["plugins"].ContainsKey("allow")) {
+        $config["plugins"]["allow"] = @($config["plugins"]["allow"] | Where-Object { $_ -ne "codex" })
+        if ($config["plugins"]["allow"].Count -eq 0) { $config["plugins"].Remove("allow") }
+        if ($config["plugins"].Count -eq 0) { $config.Remove("plugins") }
+        Set-Content -Path $openClawConfig -Value ($config | ConvertTo-Json -Depth 100)
+      }
+      Remove-Item $openClawCodexTrustMarker -Force -ErrorAction SilentlyContinue
+      Ok "Removed the HivemindOS-added Codex plugin trust entry"
+    } catch {
+      Warn "OpenClaw config was not readable; left the plugin trust marker in place"
+    }
+  } else {
+    Warn "OpenClaw config was not found; left the plugin trust marker in place"
+  }
 }
 
 if (Ask-YesNo "Remove fallback HivemindOS project registry ~/.hivemindos/projects.json?" $false) {
@@ -344,6 +421,42 @@ if (Ask-YesNo "Remove dashboard auth secret and device token from .env.local and
   }
 }
 
+if (Ask-YesNo "Remove registered dashboard passkeys from ~/.hivemindos/dashboard-passkeys.json?" $false) {
+  $dashboardPasskeyStore = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".hivemindos\dashboard-passkeys.json"
+  Remove-Item $dashboardPasskeyStore -Force -ErrorAction SilentlyContinue
+  Ok "Removed registered dashboard passkeys"
+}
+
+if (Ask-YesNo "Delete Beeline local credentials from the operating-system credential store and remove their local metadata?" $false) {
+  $beelineCandidates = @(
+    (Join-Path $env:LOCALAPPDATA "HivemindOS\HivemindOS.exe"),
+    (Join-Path $env:ProgramFiles "HivemindOS\HivemindOS.exe"),
+    (Join-Path $Root "src-tauri\target\release\HivemindOS.exe"),
+    (Join-Path $Root "src-tauri\target\debug\HivemindOS.exe")
+  )
+  $beelineBroker = $beelineCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+  if (-not $beelineBroker) {
+    $installedCommand = Get-Command "HivemindOS.exe" -ErrorAction SilentlyContinue
+    if ($installedCommand) { $beelineBroker = $installedCommand.Source }
+  }
+  if ($beelineBroker) {
+    try {
+      $brokerResponse = '{"action":"delete-all"}' | & $beelineBroker --beeline-credential-broker 2>$null | Out-String | ConvertFrom-Json
+      if (-not $brokerResponse.ok) { throw "Native broker rejected credential deletion." }
+      $beelineRoot = Join-Path $UserHome ".hivemindos\beeline"
+      Remove-Item (Join-Path $beelineRoot "local-credentials.json") -Force -ErrorAction SilentlyContinue
+      Remove-Item (Join-Path $beelineRoot "local-credentials.lock") -Force -ErrorAction SilentlyContinue
+      Remove-Item (Join-Path $beelineRoot "local-credential-audit.jsonl") -Force -ErrorAction SilentlyContinue
+      Remove-Item (Join-Path $beelineRoot "browser-use-locks") -Recurse -Force -ErrorAction SilentlyContinue
+      Ok "Deleted Beeline local credentials and secret-free local metadata"
+    } catch {
+      Warn "The native broker could not delete Beeline credentials; metadata was preserved so the credential-store entries are not orphaned"
+    }
+  } else {
+    Warn "No HivemindOS native executable was found; open the desktop app and delete Beeline credentials before uninstalling"
+  }
+}
+
 if (Ask-YesNo "Remove optional GBrain service note from the Obsidian vault?" $false) {
   $gbrainServiceNote = Join-Path $vaultPath (Join-Path $brainServicesFolder "GBrain.md")
   Remove-Item $gbrainServiceNote -Force -ErrorAction SilentlyContinue
@@ -462,6 +575,9 @@ if (Ask-YesNo "Remove empty canonical HivemindOS vault folders created by setup?
     "$brainServicesFolder/Queen Bee/inbox",
     "$brainServicesFolder/Queen Bee/nodes",
     "$brainServicesFolder/Queen Bee",
+    "$brainServicesFolder/Index Generations/agent-memory",
+    "$brainServicesFolder/Index Generations/full-vault",
+    "$brainServicesFolder/Index Generations",
     "Operations/Brain Services/Queen Bee",
     $brainServicesFolder,
     "$synthesisFolder/pack",
@@ -503,14 +619,30 @@ if (Ask-YesNo "Remove local Hivemind Link Tailscale state from ~/.hivemindos/lin
   Ok "Removed $linkState"
 }
 
+if (Ask-YesNo "Remove the isolated local web research runtime, browser, OCR models, screenshots, and cache under ~/.hivemindos?" $true) {
+  $profileRoot = [Environment]::GetFolderPath("UserProfile")
+  @(
+    (Join-Path $profileRoot ".hivemindos\integrations\web-research"),
+    (Join-Path $profileRoot ".hivemindos\integrations\web-research-state.json"),
+    (Join-Path $profileRoot ".hivemindos\web-research")
+  ) | ForEach-Object {
+    if (Test-Path $_) { Remove-Item $_ -Recurse -Force }
+  }
+  Ok "Removed the local web research runtime and HivemindOS-owned artifacts"
+}
+
 if (Ask-YesNo "Remove .env.local from this checkout?" $false) {
   Remove-Item ".env.local" -Force -ErrorAction SilentlyContinue
   Ok "Removed .env.local"
 }
 
-if (Ask-YesNo "Remove hive env, transfer, handoff, Hivemind MCP, update, brain, brain hook, and Hive Pulse commands from ~/.local/bin if they point to this checkout?" $true) {
+if (Ask-YesNo "Remove the HivemindOS MCP server from agent harness configs (Claude, Codex, Gemini, OpenClaw, Hermes, Aeon)?" $true) {
+  & node (Join-Path $Root "scripts\register-mcp-clients.mjs") --remove --targets all
+}
+
+if (Ask-YesNo "Remove hive env, transfer, handoff, Hivemind MCP, update, brain, workspace, Hive Pulse, quant research, capability search, and dashboard auth commands from ~/.local/bin if they point to this checkout?" $true) {
   $binDir = Join-Path ([Environment]::GetFolderPath("UserProfile")) ".local\bin"
-  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-handoff", "hivemind-mcp", "hive-update", "hive-brain", "hive-brain-hook", "hive-pulse")) {
+  foreach ($commandName in @("hive-env-add", "hive-env-remove", "hive-env-delete", "hive-env-run", "hive-env-check", "hive-transfer", "hive-handoff", "hivemind-mcp", "hive-update", "hive-brain", "hive-brain-hook", "hive-workspace", "hive-workspace-switch", "hive-workspace-add", "hive-pulse", "hive-quant-research", "hive-capability-search", "dashboard-auth")) {
     $shimPath = Join-Path $binDir "$commandName.cmd"
     if (Test-Path $shimPath) {
       $content = Get-Content $shimPath -Raw

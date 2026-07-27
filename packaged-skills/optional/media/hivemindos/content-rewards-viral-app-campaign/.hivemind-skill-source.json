@@ -1,0 +1,19 @@
+{
+  "upstreamName": "Content Rewards Viral App Campaign",
+  "upstreamSlug": "content-rewards-viral-app-campaign",
+  "hiveSlug": "content-rewards-viral-app-campaign",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/media/hivemindos/content-rewards-viral-app-campaign",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-06-21T09:58:02Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional media skills",
+  "sourcePath": "packaged-skills/optional/media/hivemindos/content-rewards-viral-app-campaign",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Turns the supplied Content Rewards creator-clipping playbook into a reusable app campaign workflow.",
+    "Centers the app's clippable aha moment before format mining, creator recruiting, or payout design.",
+    "Adds creator-course brief structure, content-bank format cards, influencer web version requirements, Discord operations, and weekly optimization loops.",
+    "Requires verification for current platform claims and approval gates for spend, contracts, publishing, outreach, and payouts."
+  ]
+}

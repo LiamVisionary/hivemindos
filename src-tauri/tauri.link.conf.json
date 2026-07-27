@@ -1,0 +1,44 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "HivemindOS Link",
+  "mainBinaryName": "HivemindOS",
+  "identifier": "com.hivemindos.link",
+  "build": {
+    "beforeDevCommand": null,
+    "beforeBuildCommand": null,
+    "frontendDist": "link-static"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "HivemindOS Link",
+        "width": 820,
+        "height": 720,
+        "minWidth": 620,
+        "minHeight": 620,
+        "center": true,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ]
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": []
+      }
+    }
+  },
+  "bundle": {
+    "createUpdaterArtifacts": false,
+    "externalBin": [],
+    "resources": {
+      "link-runtime/": "link-runtime/"
+    },
+    "macOS": {
+      "bundleName": "HivemindOS Link",
+      "entitlements": "LinkEntitlements.plist"
+    }
+  }
+}

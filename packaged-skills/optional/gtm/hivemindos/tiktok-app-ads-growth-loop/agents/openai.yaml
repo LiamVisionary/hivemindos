@@ -1,0 +1,4 @@
+interface:
+  display_name: "TikTok App Ads Growth Loop"
+  short_description: "Plan and optimize measured TikTok app campaigns"
+  default_prompt: "Use $tiktok-app-ads-growth-loop to design an attribution-ready TikTok app ads test with six creative variants, unit economics, launch gates, and kill/scale rules."

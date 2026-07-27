@@ -11,7 +11,7 @@ import { getRuntimeAdapter } from "@/lib/services/runtime-adapters/registry";
 import { getRuntimeIntegrationStatus } from "@/lib/services/runtime-integrations";
 import type { RuntimeRun } from "@/lib/services/runtime-adapters/types";
 import { normalizeAgentTelemetryUrl } from "@/lib/utils/agent-telemetry-url";
-import { canonicalLocalCollectorUrl, normalizeCollectorUrl } from "@/lib/services/local-collector-url";
+import { canonicalLocalCollectorUrl, isFleetCollectorUrl, normalizeCollectorUrl } from "@/lib/services/local-collector-url";
 
 export const runtime = "nodejs";
 
@@ -98,6 +98,10 @@ async function collectorUrlForSnapshot(agent: AgentWithLocal) {
 async function readRemoteSnapshot(agent: AgentWithLocal): Promise<AgentSnapshot | null> {
   const baseUrl = await collectorUrlForSnapshot(agent);
   if (!baseUrl) return null;
+  // SSRF guard: a client-supplied agent telemetryUrl must resolve to a fleet
+  // host before we POST its snapshot request server-side. Non-fleet hosts are
+  // simply not probed (same "no remote snapshot" contract as an empty baseUrl).
+  if (!isFleetCollectorUrl(baseUrl)) return null;
   try {
     const response = await fetch(`${normalizeCollectorUrl(baseUrl)}/snapshot`, {
       method: "POST",

@@ -1,11 +1,45 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import http from "node:http";
+import { register } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
 
-const TOOLS = [
+import { APP_BUILDER_CONFIRMATIONS } from "./lib/app-builder.mjs";
+
+register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
+
+const CRITICAL_EXECUTION_ANNOTATIONS = {
+  send_usdc: { token: "SEND_USDC" },
+  dex_swap: { token: "CONFIRM_SWAP" },
+  stock_trade: { tokens: ["CONFIRM_BUY", "CONFIRM_SELL"] },
+  hyperliquid_trade: {
+    tokens: [
+      "CONFIRM_HYPERLIQUID_ORDER",
+      "CONFIRM_HYPERLIQUID_BUILDER",
+      "CONFIRM_HYPERLIQUID_CANCEL",
+      "CONFIRM_HYPERLIQUID_ACCOUNT",
+      "CONFIRM_HYPERLIQUID_TRANSFER",
+      "CONFIRM_HYPERLIQUID_TWAP",
+    ],
+  },
+  clawbank_send_usdc: { token: "CLAWBANK_SEND_USDC" },
+  clawbank_trade: { token: "CONFIRM_CLAWBANK_SWAP" },
+  clawbank_money_transfer: { token: "CONFIRM_CLAWBANK_TRANSFER" },
+  clawbank_call: { token: "CONFIRM_CLAWBANK_CALL" },
+};
+
+function criticalExecutionAnnotations(toolName) {
+  return {
+    destructiveHint: true,
+    "hivemindos/risk": "critical",
+    "hivemindos/sideEffects": ["wallet", "payment", "network"],
+    "hivemindos/confirmation": CRITICAL_EXECUTION_ANNOTATIONS[toolName],
+  };
+}
+
+const MANUAL_TOOLS = [
   {
     name: "list_hivemind_machines",
     description: "List connected HivemindOS machines and their available agents.",
@@ -35,7 +69,8 @@ const TOOLS = [
     name: "crypto_capabilities",
     description: "List HivemindOS crypto/payment rail readiness for Bankr, x402, Veil Cash, MoneyClaw, and UsePod without spending.",
     inputSchema: cryptoSchema([]),
-  },
+  }, { name: "x_api", description: "Call the managed HivemindOS X API gateway with hosted credits. Writes require confirmation \"CONFIRM_X_API_CALL\".", inputSchema: { type: "object", required: ["creditAccountId", "path"], properties: { creditAccountId: { type: "string" }, connectionId: { type: "string" }, slug: { type: "string" }, method: { type: "string", enum: ["GET", "POST", "PUT", "PATCH", "DELETE"] }, path: { type: "string" }, query: { type: "object" }, json: { type: "object" }, confirmation: { type: "string" } } } },
+  { name: "slack_send_message", description: "Post a message to Slack as the connected user (chat:write). Requires confirmation \"CONFIRM_SLACK_SEND\". Defaults to the connected user's own DM when no channel is given. Only usable when Slack is connected.", inputSchema: { type: "object", required: ["text"], properties: { text: { type: "string" }, channel: { type: "string" }, confirmation: { type: "string" } } } },
   {
     name: "select_crypto_rail",
     description: "Select the best configured crypto/payment rail for an intent without executing the spend.",
@@ -60,6 +95,30 @@ const TOOLS = [
     name: "crypto_risk_monitor",
     description: "Run a DARC-style offline crypto control review over wallet policy, identity, env-key presence, repo, DNS, multisig, and endpoint exposure.",
     inputSchema: cryptoRiskSchema([]),
+  },
+  {
+    name: "send_usdc",
+    description: "EXECUTE an on-chain stablecoin transfer from a HivemindOS wallet (governed /api/wallet/send): USDC on Base/Solana, USDG on Robinhood Chain. Moves REAL funds. Requires confirmation \"SEND_USDC\". Personal (user:) wallets always require explicit confirmation and never auto-send; agent wallets honor their Spend policy/caps. Get the human's go-ahead before calling. Consider prepare_crypto_action first to preview.",
+    inputSchema: sendUsdcSchema(),
+    annotations: criticalExecutionAnnotations("send_usdc"),
+  },
+  {
+    name: "dex_swap",
+    description: "EXECUTE a token swap on the local DEX rail (0x on Base or Robinhood Chain, Jupiter on Solana) from a HivemindOS wallet (governed /api/trading/swap). Moves REAL funds, hard-capped at $10 per swap. Requires confirmation \"CONFIRM_SWAP\". Get the human's go-ahead before calling.",
+    inputSchema: dexSwapSchema(),
+    annotations: criticalExecutionAnnotations("dex_swap"),
+  },
+  {
+    name: "stock_trade",
+    description: "EXECUTE or validate a stock buy or sell from a HivemindOS wallet (governed /api/trading) — Alpaca brokerage, Robinhood Agentic brokerage through the official OAuth MCP, on-chain xStocks, or Robinhood Chain Stock Token swaps via USDG/0x; the venue is resolved from the wallet, never client-supplied. Moves REAL funds unless the wallet is Alpaca paper. Requires confirmation \"CONFIRM_BUY\" for buys or \"CONFIRM_SELL\" for sells. Get the human's go-ahead before calling.",
+    inputSchema: stockTradeSchema(),
+    annotations: criticalExecutionAnnotations("stock_trade"),
+  },
+  {
+    name: "hyperliquid_trade",
+    description: "Quote, approve builder fees, trade spot/perps, manage orders, adjust account settings, transfer funds, or run TWAPs on Hyperliquid from a governed local wallet. State-changing actions move real exchange state or funds and require action-specific confirmation.",
+    inputSchema: hyperliquidTradeSchema(),
+    annotations: criticalExecutionAnnotations("hyperliquid_trade"),
   },
   {
     name: "compile_brain_knowledge",
@@ -101,7 +160,151 @@ const TOOLS = [
     description: "Explain whether a write is allowed under HivemindOS personal, agent-to-agent, or human-collective shared-brain contribution rules.",
     inputSchema: sharedContractSchema(),
   },
+  {
+    name: "clawbank_status",
+    description: "Read ClawBank connection and wallet status through the local dashboard.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "clawbank_list_tools",
+    description: "List available ClawBank tools and schemas through the local dashboard.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "clawbank_read",
+    description: "Run a read-only ClawBank tool after inspecting its schema.",
+    inputSchema: clawbankReadSchema(),
+  },
+  {
+    name: "clawbank_send_usdc",
+    description: "EXECUTE a gas-sponsored USDC transfer from the ClawBank self-custody wallet on Base. Moves REAL funds and requires confirmation \"CLAWBANK_SEND_USDC\".",
+    inputSchema: clawbankSendUsdcSchema(),
+    annotations: criticalExecutionAnnotations("clawbank_send_usdc"),
+  },
+  {
+    name: "clawbank_trade",
+    description: "EXECUTE a one-off ClawBank spot swap against USDC from the self-custody wallet. Moves REAL funds and requires confirmation \"CONFIRM_CLAWBANK_SWAP\".",
+    inputSchema: clawbankTradeSchema(),
+    annotations: criticalExecutionAnnotations("clawbank_trade"),
+  },
+  {
+    name: "clawbank_money_transfer",
+    description: "EXECUTE an on-chain USDC transfer from the ClawBank custodial bank-rails account. Moves REAL funds and requires confirmation \"CONFIRM_CLAWBANK_TRANSFER\".",
+    inputSchema: clawbankMoneyTransferSchema(),
+    annotations: criticalExecutionAnnotations("clawbank_money_transfer"),
+  },
+  {
+    name: "clawbank_call",
+    description: "EXECUTE a state-changing ClawBank discovered tool by name. May move real funds or file legal/entity actions and requires confirmation \"CONFIRM_CLAWBANK_CALL\".",
+    inputSchema: clawbankCallSchema(),
+    annotations: criticalExecutionAnnotations("clawbank_call"),
+  },
 ];
+
+const TOOLS = mergeToolDescriptors(
+  MANUAL_TOOLS,
+  await loadHiveActionMcpTools(),
+);
+const HIVE_ACTION_MCP_TOOL_BY_NAME = new Map(TOOLS.map((tool) => [tool.name, tool]));
+const EXECUTION_TOOL_NAMES = new Set(["send_usdc", "dex_swap", "stock_trade", "hyperliquid_trade", "clawbank_send_usdc", "clawbank_trade", "clawbank_money_transfer", "clawbank_call"]);
+const HYPERLIQUID_READ_ACTIONS = new Set(["", "quote", "status", "positions", "open-orders", "fills", "fees", "order-status"]);
+const HYPERLIQUID_CONFIRMATION_BY_ACTION = new Map([
+  ["approve-builder", "CONFIRM_HYPERLIQUID_BUILDER"],
+  ["order", "CONFIRM_HYPERLIQUID_ORDER"],
+  ["modify", "CONFIRM_HYPERLIQUID_ORDER"],
+  ["cancel", "CONFIRM_HYPERLIQUID_CANCEL"],
+  ["cancel-by-cloid", "CONFIRM_HYPERLIQUID_CANCEL"],
+  ["schedule-cancel", "CONFIRM_HYPERLIQUID_CANCEL"],
+  ["leverage", "CONFIRM_HYPERLIQUID_ACCOUNT"],
+  ["margin", "CONFIRM_HYPERLIQUID_ACCOUNT"],
+  ["usd-class", "CONFIRM_HYPERLIQUID_TRANSFER"],
+  ["usd-send", "CONFIRM_HYPERLIQUID_TRANSFER"],
+  ["spot-send", "CONFIRM_HYPERLIQUID_TRANSFER"],
+  ["withdraw", "CONFIRM_HYPERLIQUID_TRANSFER"],
+  ["twap-order", "CONFIRM_HYPERLIQUID_TWAP"],
+  ["twap-cancel", "CONFIRM_HYPERLIQUID_TWAP"],
+]);
+
+async function loadHiveActionMcpTools() {
+  if (process.env.HIVE_MCP_DISABLE_HIVE_ACTION_IMPORT === "1") {
+    return [];
+  }
+  try {
+    const { listHiveActions, listMcpHiveActions } = await import(
+      new URL("../src/lib/services/hive-actions/index.ts", import.meta.url).href
+    );
+    return listMcpHiveActions(listHiveActions());
+  } catch {
+    return [];
+  }
+}
+
+function mergeToolDescriptors(manualTools, hiveActionTools) {
+  const hiveActionByName = new Map(
+    hiveActionTools.map((tool) => [tool.name, tool]),
+  );
+  const manualNames = new Set(manualTools.map((tool) => tool.name));
+  return [
+    ...manualTools.map((tool) => hiveActionByName.get(tool.name) || tool),
+    ...hiveActionTools.filter((tool) => !manualNames.has(tool.name)),
+  ];
+}
+
+function requireHiveActionExecutionPreflight(name, args = {}) {
+  if (!EXECUTION_TOOL_NAMES.has(name)) return;
+  if (name === "hyperliquid_trade" && HYPERLIQUID_READ_ACTIONS.has(String(args.action || "").toLowerCase())) return;
+  const tool = HIVE_ACTION_MCP_TOOL_BY_NAME.get(name);
+  const annotations = tool?.annotations || {};
+  const sideEffects = Array.isArray(annotations["hivemindos/sideEffects"])
+    ? annotations["hivemindos/sideEffects"]
+    : [];
+  const hasWalletPaymentMetadata = sideEffects.includes("wallet") && sideEffects.includes("payment");
+  const isCriticalDestructive =
+    annotations.destructiveHint === true && annotations["hivemindos/risk"] === "critical";
+  if (!tool || !hasWalletPaymentMetadata || !isCriticalDestructive) {
+    throw new Error(
+      `${name} is missing critical wallet/payment Hive action metadata; refusing MCP execution.`,
+    );
+  }
+
+  const expected = expectedConfirmationsForExecutionTool(name, args, annotations["hivemindos/confirmation"]);
+  const supplied = typeof args.confirmation === "string" ? args.confirmation.trim() : "";
+  if (!expected.includes(supplied)) {
+    throw new Error(
+      `${name} requires confirmation ${formatConfirmationTokens(expected)} before MCP execution.`,
+    );
+  }
+}
+
+function expectedConfirmationsForExecutionTool(name, args, confirmation) {
+  if (!confirmation || confirmation === true) {
+    throw new Error(`${name} is missing Hive action confirmation metadata; refusing MCP execution.`);
+  }
+  const tokens = [
+    typeof confirmation.token === "string" ? confirmation.token : null,
+    ...(Array.isArray(confirmation.tokens) ? confirmation.tokens : []),
+  ].filter((token) => typeof token === "string" && token.length > 0);
+  if (tokens.length === 0) {
+    throw new Error(`${name} has no valid Hive action confirmation token; refusing MCP execution.`);
+  }
+  if (name === "hyperliquid_trade") {
+    const action = typeof args.action === "string" ? args.action.toLowerCase() : "";
+    const expected = HYPERLIQUID_CONFIRMATION_BY_ACTION.get(action);
+    if (expected && tokens.includes(expected)) return [expected];
+    return tokens;
+  }
+  if (name !== "stock_trade") return tokens;
+
+  const side = typeof args.side === "string" ? args.side.toLowerCase() : "";
+  if (side === "buy" && tokens.includes("CONFIRM_BUY")) return ["CONFIRM_BUY"];
+  if (side === "sell" && tokens.includes("CONFIRM_SELL")) return ["CONFIRM_SELL"];
+  return tokens;
+}
+
+function formatConfirmationTokens(tokens) {
+  if (tokens.length === 1) return `"${tokens[0]}"`;
+  return tokens.map((token) => `"${token}"`).join(" or ");
+}
 
 function handoffSchema(required) {
   return {
@@ -128,7 +331,7 @@ function cryptoSchema(required) {
         description: "Natural payment intent to route.",
       },
       agentId: { type: "string", description: "Agent wallet/profile id, when the action belongs to a specific agent." },
-      preferredProvider: { type: "string", enum: ["bankr", "moneyclaw", "x402", "usepod", "venice", "veil"], description: "Optional explicit provider preference." },
+      preferredProvider: { type: "string", enum: ["bankr", "moneyclaw", "x402", "usepod", "venice", "veil", "hyperliquid"], description: "Optional explicit provider preference." },
       wallet: { type: "object", description: "Current agent wallet policy from the dashboard, including provider, Spend, caps, network, and auto-use settings." },
       amountUsd: { type: "number", description: "USD-denominated amount or cap for the intended action." },
       asset: { type: "string", enum: ["USDC", "ETH"], description: "Asset for private transfers." },
@@ -300,6 +503,159 @@ function sharedContractSchema() {
   };
 }
 
+function sendUsdcSchema() {
+  return {
+    type: "object",
+    required: ["agentId", "toAddress", "amountUsd", "confirmation"],
+    properties: {
+      agentId: { type: "string", description: "Wallet/profile id to send FROM. A personal wallet id (user:…) sends from the user's own wallet; an agent id sends from that agent's wallet." },
+      toAddress: { type: "string", description: "Recipient address (0x… on Base/Robinhood Chain, or a Solana address when using a Solana wallet)." },
+      amountUsd: { type: "number", description: "USD amount to send (USDC/USDG is treated as 1:1 with USD)." },
+      confirmation: { type: "string", description: "Must be \"SEND_USDC\". Only supply with explicit human authorization; personal wallets never auto-send." },
+      approvalToken: { type: "string", description: "Governance approval token, only if a prior call returned pending_approval." },
+    },
+  };
+}
+
+function dexSwapSchema() {
+  return {
+    type: "object",
+    required: ["agentId", "sellToken", "buyToken", "amountHuman", "confirmation"],
+    properties: {
+      agentId: { type: "string", description: "Wallet/profile id to swap from (user:… for a personal wallet)." },
+      sellToken: { type: "string", description: "Token to sell — symbol (USDC, USDT, WETH, ETH, HIVE on Base; SOL, USDC, USDT on Solana) or a token address/mint." },
+      buyToken: { type: "string", description: "Token to buy." },
+      amountHuman: { type: "number", description: "Amount in sell-token units (e.g. 5 = 5 USDC). Capped at ~$10 of value." },
+      confirmation: { type: "string", description: "Must be \"CONFIRM_SWAP\"." },
+      approvalToken: { type: "string" },
+    },
+  };
+}
+
+function stockTradeSchema() {
+  return {
+    type: "object",
+    required: ["agentId", "side", "ticker", "confirmation"],
+    properties: {
+      agentId: { type: "string", description: "Wallet/profile id to trade from. The venue (Alpaca, xStocks, or Robinhood Chain) is resolved from this wallet." },
+      side: { type: "string", enum: ["buy", "sell"], description: "Trade side." },
+      ticker: { type: "string", description: "Stock ticker (e.g. AAPL), supported xStock symbol, or canonical Robinhood Chain stock-token ticker." },
+      notionalUsd: { type: "number", description: "USD notional to trade. Provide this or qty." },
+      qty: { type: "number", description: "Share count (Alpaca only). Provide this or notionalUsd." },
+      confirmation: { type: "string", description: "Must be \"CONFIRM_BUY\" for a buy or \"CONFIRM_SELL\" for a sell." },
+      approvalToken: { type: "string" },
+    },
+  };
+}
+
+function hyperliquidTradeSchema() {
+  return {
+    type: "object",
+    properties: {
+      action: { type: "string", enum: ["status", "positions", "open-orders", "fills", "fees", "order-status", "quote", "approve-builder", "order", "cancel", "cancel-by-cloid", "modify", "schedule-cancel", "leverage", "margin", "usd-class", "usd-send", "spot-send", "withdraw", "twap-order", "twap-cancel"] },
+      agentId: { type: "string" },
+      coin: { type: "string" },
+      marketType: { type: "string", enum: ["perp", "spot"] },
+      assetId: { type: "number" },
+      side: { type: "string", enum: ["long", "short", "buy", "sell"] },
+      orderType: { type: "string", enum: ["market", "limit", "trigger"] },
+      notionalUsd: { type: "number" },
+      size: { type: "number" },
+      limitPrice: { type: "number" },
+      timeInForce: { type: "string" },
+      triggerPx: { type: "number" },
+      triggerType: { type: "string", enum: ["tp", "sl"] },
+      triggerIsMarket: { type: "boolean" },
+      grouping: { type: "string" },
+      clientOrderId: { type: "string" },
+      reduceOnly: { type: "boolean" },
+      slippageBps: { type: "number" },
+      orderId: {},
+      oid: {},
+      cloid: { type: "string" },
+      fastCancel: { type: "boolean" },
+      alwaysPlace: { type: "boolean" },
+      scheduleCancelTime: {},
+      leverage: { type: "number" },
+      marginMode: { type: "string", enum: ["cross", "isolated"] },
+      marginDeltaUsd: { type: "number" },
+      transferType: { type: "string" },
+      amount: { type: "number" },
+      amountUsd: { type: "number" },
+      destination: { type: "string" },
+      token: { type: "string" },
+      toPerp: { type: "boolean" },
+      twapMinutes: { type: "number" },
+      twapRandomize: { type: "boolean" },
+      twapId: {},
+      confirmation: { type: "string" },
+      approvalToken: { type: "string" },
+    },
+  };
+}
+
+function clawbankReadSchema() {
+  return {
+    type: "object",
+    required: ["tool"],
+    properties: {
+      tool: { type: "string" },
+      args: { type: "object" },
+    },
+  };
+}
+
+function clawbankSendUsdcSchema() {
+  return {
+    type: "object",
+    required: ["toAddress", "amount", "confirmation"],
+    properties: {
+      toAddress: { type: "string" },
+      amount: {},
+      confirmation: { type: "string", description: "Must be \"CLAWBANK_SEND_USDC\"." },
+    },
+  };
+}
+
+function clawbankTradeSchema() {
+  return {
+    type: "object",
+    required: ["baseToken", "side", "amountUsdc", "confirmation"],
+    properties: {
+      baseToken: { type: "string" },
+      side: { type: "string", enum: ["buy", "sell"] },
+      amountUsdc: { type: "number" },
+      maxSlippageBps: { type: "number" },
+      confirmation: { type: "string", description: "Must be \"CONFIRM_CLAWBANK_SWAP\"." },
+    },
+  };
+}
+
+function clawbankMoneyTransferSchema() {
+  return {
+    type: "object",
+    required: ["chain", "toAddress", "amount", "confirmation"],
+    properties: {
+      chain: { type: "string" },
+      toAddress: { type: "string" },
+      amount: {},
+      confirmation: { type: "string", description: "Must be \"CONFIRM_CLAWBANK_TRANSFER\"." },
+    },
+  };
+}
+
+function clawbankCallSchema() {
+  return {
+    type: "object",
+    required: ["tool", "confirmation"],
+    properties: {
+      tool: { type: "string" },
+      args: { type: "object" },
+      confirmation: { type: "string", description: "Must be \"CONFIRM_CLAWBANK_CALL\"." },
+    },
+  };
+}
+
 function readEnvValue(filePath, key) {
   const raw = fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : "";
   const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -307,9 +663,19 @@ function readEnvValue(filePath, key) {
   return match?.[1]?.trim().replace(/^['"]|['"]$/g, "") || "";
 }
 
+// The launcher (~/.local/bin/hivemind-mcp) execs this script with
+// HIVE_ENV_PROJECT_ROOT pointing at the checkout. When a harness (Claude Code,
+// Codex, Gemini, …) starts the MCP server its cwd is the user's project, not the
+// checkout, so token/URL discovery must use the repo root the launcher passes
+// rather than cwd. This keeps the device token OUT of each harness's MCP config.
+function projectRoot() {
+  return process.env.HIVE_ENV_PROJECT_ROOT || process.cwd();
+}
+
 function dashboardToken() {
   return process.env.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN
     || process.env.HIVE_E2E_DASHBOARD_TOKEN
+    || readEnvValue(path.join(projectRoot(), ".env.local"), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN")
     || readEnvValue(path.join(process.cwd(), ".env.local"), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN");
 }
 
@@ -319,6 +685,12 @@ function candidateApiBases() {
   if (process.env.NEXT_PUBLIC_APP_URL) values.push(process.env.NEXT_PUBLIC_APP_URL);
   if (process.env.DASHBOARD_URL) values.push(process.env.DASHBOARD_URL);
   if (process.env.PORT) values.push(`http://127.0.0.1:${process.env.PORT}`);
+  // Honor a custom URL/port persisted in the checkout's .env.local.
+  const rootEnv = path.join(projectRoot(), ".env.local");
+  const rootUrl = readEnvValue(rootEnv, "HIVEMINDOS_APP_URL") || readEnvValue(rootEnv, "NEXT_PUBLIC_APP_URL");
+  if (rootUrl) values.push(rootUrl);
+  const rootPort = readEnvValue(rootEnv, "PORT");
+  if (rootPort) values.push(`http://127.0.0.1:${rootPort}`);
   for (const port of [5020, 5021, 5022, 5023, 5024, 5025]) values.push(`http://127.0.0.1:${port}`);
   return [...new Set(values.map((value) => String(value).replace(/\/+$/, "")))];
 }
@@ -347,6 +719,7 @@ function requestJson(base, route, method = "GET", body) {
         if (res.statusCode < 200 || res.statusCode >= 300 || parsed?.ok === false) {
           const error = new Error(parsed?.error || `${base} returned HTTP ${res.statusCode}`);
           error.payload = parsed;
+          error.statusCode = res.statusCode;
           reject(error);
           return;
         }
@@ -367,19 +740,482 @@ async function callDashboard(route, method, body) {
       return await requestJson(base, route, method, body);
     } catch (error) {
       lastError = error;
-      if (error?.payload?.needsUserInput) throw error;
+      // An explicit JSON {ok:false} from a reachable base is authoritative — the
+      // request reached the real dashboard and was rejected for a business reason
+      // (validation, governance, a broker rejection). Surface it immediately rather
+      // than sweeping to the next port and masking it with a connection error.
+      // Only 5xx / non-JSON / connection failures mean "wrong or sick base, try next".
+      const status = error?.statusCode;
+      const reachedRealApi = error?.payload?.ok === false && (status === undefined || status < 500);
+      if (error?.payload?.needsUserInput || reachedRealApi) throw error;
     }
   }
   throw lastError || new Error("No HivemindOS dashboard API could be reached.");
 }
 
+function localCollectorBase() {
+  const port = Number(process.env.AGENT_TELEMETRY_PORT || 8787);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("AGENT_TELEMETRY_PORT must be a valid local collector port.");
+  }
+  return `http://127.0.0.1:${port}`;
+}
+
+async function callAppBuilder(args = {}) {
+  try {
+    return await callDashboard("/api/app-builder", "POST", args);
+  } catch (error) {
+    if (String(args.backend || "local") !== "local" || error?.payload) throw error;
+    return requestJson(localCollectorBase(), "/app-builder", "POST", args);
+  }
+}
+
+const WORK_BOARD_CREATE_KEYS = [
+  "title",
+  "body",
+  "status",
+  "priority",
+  "assignee",
+  "tenant",
+  "workspace",
+  "skills",
+  "attachments",
+  "linkedDirectories",
+  "deliverables",
+  "targetMachine",
+  "projectId",
+  "proofs",
+  "loop",
+  "loopReceipts",
+  "parents",
+  "idempotencyKey",
+  "maxRuntimeMs",
+  "maxAttempts",
+  "vaultPath",
+  "kanbanFolder",
+];
+
+const WORK_BOARD_FINISH_KEYS = [
+  "taskId",
+  "summary",
+  "result",
+  "metadata",
+  "loopReceipts",
+  "error",
+  "reason",
+  "failureReason",
+  "runId",
+  "vaultPath",
+  "kanbanFolder",
+];
+
+async function callWorkBoard(args = {}) {
+  const action = String(args.action || "list");
+  if (action === "list") {
+    return callDashboard(
+      routeWithQuery("/api/kanban", {
+        board: args.board,
+        include_archived: args.includeArchived,
+        include_boards: args.includeBoards,
+        boards_only: args.boardsOnly,
+        tenant: args.tenant,
+        assignee: args.assignee,
+        q: args.query,
+        vaultPath: args.vaultPath,
+        kanbanFolder: args.kanbanFolder,
+      }),
+      "GET",
+    );
+  }
+  if (action === "create-task") {
+    return callDashboard(
+      routeWithQuery("/api/kanban", { board: args.board }),
+      "POST",
+      {
+        board: args.board,
+        source: args.source || "mcp:work-board",
+        ...definedArgs(args, WORK_BOARD_CREATE_KEYS),
+      },
+    );
+  }
+  if (action === "claim-next") {
+    return callDashboard(routeWithQuery("/api/kanban", { board: args.board }), "POST", {
+      action: "claim-next",
+      board: args.board,
+      assignee: args.assignee,
+      runtime: args.runtime,
+      ttlMs: args.ttlMs,
+      claimer: args.claimer,
+      tenant: args.tenant,
+      targetMachineKey: args.targetMachineKey,
+      vaultPath: args.vaultPath,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  if (action === "heartbeat") {
+    return callDashboard(routeWithQuery("/api/kanban", { board: args.board }), "POST", {
+      action: "heartbeat",
+      board: args.board,
+      taskId: args.taskId,
+      note: args.note,
+      claimLock: args.claimLock,
+      vaultPath: args.vaultPath,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  if (action === "comment") {
+    return callDashboard(routeWithQuery("/api/kanban", { board: args.board }), "POST", {
+      action: "comment",
+      board: args.board,
+      taskId: args.taskId,
+      body: args.body || args.note,
+      author: args.author || args.claimer || "mcp-agent",
+      vaultPath: args.vaultPath,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  if (action === "complete" || action === "fail") {
+    return callDashboard(routeWithQuery("/api/kanban", { board: args.board }), "POST", {
+      action,
+      board: args.board,
+      ...definedArgs(args, WORK_BOARD_FINISH_KEYS),
+    });
+  }
+  if (action === "block") {
+    return callDashboard(routeWithQuery("/api/kanban", { board: args.board }), "POST", {
+      action: "block",
+      board: args.board,
+      taskId: args.taskId,
+      reason: args.reason || args.summary || args.body || "Blocked pending human input.",
+      vaultPath: args.vaultPath,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  if (action === "promote") {
+    return callDashboard(routeWithQuery("/api/kanban", { board: args.board }), "POST", {
+      action: "promote",
+      board: args.board,
+      taskId: args.taskId,
+      force: args.force,
+      dryRun: args.dryRun,
+      reason: args.reason,
+      // Agents call work_board; a parked Needs-You card can only be released by a human.
+      actor: "agent",
+      vaultPath: args.vaultPath,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  throw new Error(`Unknown work_board action: ${action}`);
+}
+
+async function callQueenBee(args = {}) {
+  const action = String(args.action || "state");
+  if (action === "state") {
+    return callDashboard(
+      routeWithQuery("/api/queen-bee", {
+        vaultPath: args.vaultPath,
+        brainServicesFolder: args.brainServicesFolder,
+        kanbanFolder: args.kanbanFolder,
+      }),
+      "GET",
+    );
+  }
+  if (action === "queue-task") {
+    return callDashboard("/api/queen-bee", "POST", {
+      message: args.message,
+      source: args.source || "mcp:queen-bee",
+      mode: args.mode,
+      priority: args.priority,
+      loop: args.loop,
+      taskTitle: args.taskTitle || args.title,
+      agentId: args.agentId,
+      machineId: args.machineId,
+      skills: args.skills,
+      vaultPath: args.vaultPath,
+      brainServicesFolder: args.brainServicesFolder,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  if (action === "decompose-prd") {
+    return callDashboard("/api/queen-bee", "POST", {
+      action: "decompose-prd",
+      prd: args.prd || args.message,
+      title: args.title || args.taskTitle,
+      source: args.source || "mcp:queen-bee",
+      priority: args.priority,
+      projectId: args.projectId,
+      maxTasks: args.maxTasks,
+      preview: args.preview,
+      vaultPath: args.vaultPath,
+      brainServicesFolder: args.brainServicesFolder,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  if (action === "flow") return callQueenBeeFlow(args);
+  throw new Error(`Unknown queen_bee action: ${action}`);
+}
+
+async function callQueenBeeFlow(args = {}) {
+  const flowAction = String(args.flowAction || "list-templates");
+  const readActions = new Set(["list-templates", "get-template", "list-runs", "get-run"]);
+  if (readActions.has(flowAction)) {
+    return callDashboard(
+      routeWithQuery("/api/queen-bee/flow", {
+        action: flowAction,
+        id: args.templateId,
+        runId: args.runId,
+        vaultPath: args.vaultPath,
+      }),
+      "GET",
+    );
+  }
+  return callDashboard("/api/queen-bee/flow", "POST", {
+    action: flowAction,
+    templateId: args.templateId,
+    runId: args.runId,
+    spec: args.spec,
+    state: args.state,
+    result: args.result,
+    approved: args.approved,
+    vaultPath: args.vaultPath,
+  });
+}
+
+async function callWorkEvent(args = {}) {
+  const action = String(args.action || "list");
+  if (action === "list") return callDashboard("/api/work-events", "GET");
+  if (action === "create-event") {
+    return callDashboard("/api/work-events", "POST", {
+      action: "create-event",
+      name: args.eventName || args.name,
+      payloadGuidelines: args.payloadGuidelines,
+    });
+  }
+  if (action === "create-trigger") {
+    return callDashboard("/api/work-events", "POST", {
+      action: "create-trigger",
+      eventName: args.eventName || args.name,
+      board: args.board,
+      title: args.title,
+      body: args.body,
+      assignee: args.assignee,
+      tenant: args.tenant,
+      priority: args.priority,
+      status: args.status,
+      skills: args.skills,
+      targetMachine: args.targetMachine,
+      emitEventName: args.emitEventName,
+      enabled: args.enabled,
+      idempotencyKey: args.idempotencyKey,
+    });
+  }
+  if (action === "publish") {
+    return callDashboard("/api/work-events", "POST", {
+      action: "publish",
+      eventName: args.eventName || args.name,
+      payload: args.payload,
+      faq: args.faq,
+      source: args.source || "mcp:work-event",
+      vaultPath: args.vaultPath,
+      kanbanFolder: args.kanbanFolder,
+    });
+  }
+  throw new Error(`Unknown work_event action: ${action}`);
+}
+
+async function callAgentChallenge(args = {}) {
+  const action = String(args.action || "list");
+  if (action === "list") {
+    return callDashboard(
+      routeWithQuery("/api/agent-challenges", {
+        vaultPath: args.vaultPath,
+        challengesFolder: args.challengesFolder,
+      }),
+      "GET",
+    );
+  }
+  if (action === "get") {
+    return callDashboard(
+      routeWithQuery("/api/agent-challenges", {
+        id: args.challengeId || args.id,
+        vaultPath: args.vaultPath,
+        challengesFolder: args.challengesFolder,
+      }),
+      "GET",
+    );
+  }
+  return callDashboard("/api/agent-challenges", "POST", {
+    source: args.source || "mcp:agent-challenge",
+    ...args,
+    action,
+  });
+}
+
+async function requestHumanApproval(args = {}) {
+  const title = String(args.title || "Human approval requested").trim();
+  const body = formatApprovalRequest(args);
+  return callDashboard(routeWithQuery("/api/kanban", { board: args.board }), "POST", {
+    board: args.board,
+    title,
+    body,
+    status: "needs-human",
+    priority: args.priority || "high",
+    assignee: "human",
+    source: "mcp:human-approval",
+    idempotencyKey: args.idempotencyKey,
+    vaultPath: args.vaultPath,
+    kanbanFolder: args.kanbanFolder,
+  });
+}
+
+function routeWithQuery(route, params = {}) {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === "") continue;
+    search.set(key, String(value));
+  }
+  const query = search.toString();
+  return query ? `${route}?${query}` : route;
+}
+
+function definedArgs(args, keys) {
+  const output = {};
+  for (const key of keys) {
+    if (args[key] !== undefined) output[key] = args[key];
+  }
+  return output;
+}
+
+const NANSEN_ROUTE_BY_ACTION = {
+  "token-brief": "/api/nansen/token-brief",
+  "wallet-brief": "/api/nansen/wallet-brief",
+  "hyperliquid-brief": "/api/nansen/hyperliquid-brief",
+  "market-scout": "/api/nansen/market-scout",
+  "simple-template": "/api/nansen/simple-template",
+  "complex-template": "/api/nansen/complex-template",
+  agent: "/api/nansen/agent",
+};
+
+const NANSEN_BODY_KEYS = [
+  "template",
+  "chain",
+  "chains",
+  "tokenAddress",
+  "tokenSymbol",
+  "address",
+  "entityName",
+  "date",
+  "timeframe",
+  "filters",
+  "includeLabels",
+  "includeTransactions",
+  "includeHistoricalBalances",
+  "includePnlSummary",
+  "aggregateByEntity",
+  "labelType",
+  "premiumLabels",
+  "includeTrades",
+  "includeIndicators",
+  "includeLeaderboard",
+  "text",
+  "mode",
+  "conversationId",
+];
+
+async function callNansenIntelligence(args = {}) {
+  const action = String(args.action || "status");
+  if (action === "status") return callDashboard("/api/nansen/status", "GET");
+  const route = NANSEN_ROUTE_BY_ACTION[action];
+  if (!route) throw new Error(`Unknown nansen_intelligence action: ${action}`);
+  const body = definedArgs(args, NANSEN_BODY_KEYS);
+  const billing = nansenBillingContext(args);
+  if (billing) body.billing = billing;
+  return callDashboard(route, "POST", body);
+}
+
+function nansenBillingContext(args = {}) {
+  const billing = isObject(args.billing) ? { ...args.billing } : {};
+  for (const key of ["creditSlug", "idempotencyKey", "legacyAccountIds"]) {
+    if (args[key] !== undefined && billing[key] === undefined) billing[key] = args[key];
+  }
+  return Object.keys(billing).length ? billing : null;
+}
+
+function isObject(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function formatApprovalRequest(args = {}) {
+  const lines = [
+    args.request || "An agent requested human approval.",
+    args.context ? `\nContext:\n${args.context}` : "",
+    args.approvalKind ? `\nApproval kind: ${args.approvalKind}` : "",
+    args.relatedTaskId ? `Related Work Board task: ${args.relatedTaskId}` : "",
+    Array.isArray(args.options) && args.options.length
+      ? `\nOptions:\n${args.options.map((option) => `- ${option}`).join("\n")}`
+      : "",
+    args.requestedBy ? `\nRequested by: ${args.requestedBy}` : "",
+    "\nThis card records a requested decision only. It does not grant approval, execute the action, or bypass HivemindOS policy gates.",
+  ];
+  return lines.filter(Boolean).join("\n");
+}
+
 async function callTool(name, args = {}) {
+  if (name === "web_search") {
+    const response = await callDashboard("/api/web-research/search", "POST", args);
+    return response.result ?? response;
+  }
+  if (name === "web_fetch") {
+    const response = await callDashboard("/api/web-research/fetch", "POST", args);
+    return response.result ?? response;
+  }
+  if (name === "web_crawl") {
+    const response = await callDashboard("/api/web-research/crawl", "POST", args);
+    return response.result ?? response;
+  }
+  if (name === "web_screenshot") {
+    const response = await callDashboard("/api/web-research/screenshot", "POST", {
+      ...args,
+      includeImageData: true,
+    });
+    return response.result ?? response;
+  }
+  if (name === "app_builder") {
+    const requiredConfirmation = {
+      create: APP_BUILDER_CONFIRMATIONS.createProject,
+      adopt: APP_BUILDER_CONFIRMATIONS.createProject,
+      files_write: APP_BUILDER_CONFIRMATIONS.writeFile,
+      files_rename: APP_BUILDER_CONFIRMATIONS.renameFile,
+      files_delete: APP_BUILDER_CONFIRMATIONS.deleteFile,
+      install: APP_BUILDER_CONFIRMATIONS.installDependencies,
+      start: APP_BUILDER_CONFIRMATIONS.startRuntime,
+      stop: APP_BUILDER_CONFIRMATIONS.stopRuntime,
+      test_deploy: APP_BUILDER_CONFIRMATIONS.temporaryDeploy,
+      hosting_publish: APP_BUILDER_CONFIRMATIONS.publishHosting,
+      hosting_create: APP_BUILDER_CONFIRMATIONS.createHostingSite,
+      hosting_save_version: APP_BUILDER_CONFIRMATIONS.saveHostingVersion,
+      hosting_deploy_version: APP_BUILDER_CONFIRMATIONS.deployHostingVersion,
+      hosting_rollback: APP_BUILDER_CONFIRMATIONS.rollbackHosting,
+      hosting_access_set: APP_BUILDER_CONFIRMATIONS.changeHostingAccess,
+      hosting_access_token: APP_BUILDER_CONFIRMATIONS.changeHostingAccess,
+      hosting_bindings_set: APP_BUILDER_CONFIRMATIONS.changeHostingBindings,
+      hosting_environment_set: APP_BUILDER_CONFIRMATIONS.changeHostingEnvironment,
+      hosting_renew: APP_BUILDER_CONFIRMATIONS.renewHosting,
+      hosting_unpublish: APP_BUILDER_CONFIRMATIONS.unpublishHosting,
+    }[String(args.action || "")];
+    if (requiredConfirmation && args.confirmation !== requiredConfirmation) {
+      throw new Error(`app_builder ${args.action} requires confirmation ${requiredConfirmation}.`);
+    }
+    return callAppBuilder(args);
+  }
   if (name === "list_hivemind_machines") {
     const data = await callDashboard("/api/fleet/discover?includeSnapshots=0&fresh=1", "GET");
     return {
       ok: true,
       machines: (data.machines || []).filter((machine) => machine.collector === "ready").map((machine) => ({
+        key: machine.key,
         name: machine.device?.name || machine.key,
+        collectorUrl: machine.device?.collectorUrl,
         os: machine.device?.os,
         self: machine.device?.self === true,
         runtimes: machine.capabilities?.runtimes || [],
@@ -392,10 +1228,129 @@ async function callTool(name, args = {}) {
       })),
     };
   }
+  if (name === "work_board") {
+    return callWorkBoard(args);
+  }
+  if (name === "queen_bee") {
+    return callQueenBee(args);
+  }
+  if (name === "work_event") {
+    return callWorkEvent(args);
+  }
+  if (name === "agent_challenge") {
+    return callAgentChallenge(args);
+  }
+  if (name === "request_human_approval") {
+    return requestHumanApproval(args);
+  }
+  if (name === "investigate_incident") {
+    const action = String(args.action || "investigate");
+    if (action === "status") return callDashboard("/api/ops/investigations?action=status", "GET");
+    if (action === "list") {
+      return callDashboard(`/api/ops/investigations?action=list&limit=${encodeURIComponent(String(args.limit || 100))}`, "GET");
+    }
+    if (action === "get") {
+      if (!args.incidentId) throw new Error("investigate_incident get requires incidentId.");
+      return callDashboard(`/api/ops/investigations?action=get&incidentId=${encodeURIComponent(String(args.incidentId))}`, "GET");
+    }
+    if (action === "retry") {
+      if (!args.incidentId) throw new Error("investigate_incident retry requires incidentId.");
+      return callDashboard("/api/ops/investigations", "POST", { action: "retry", incidentId: args.incidentId });
+    }
+    if (action !== "investigate") throw new Error(`Unknown investigate_incident action: ${action}`);
+    if (!args.summary) throw new Error("investigate_incident requires summary.");
+    return callDashboard("/api/ops/investigations", "POST", {
+      action: "investigate",
+      enqueue: args.enqueue !== false,
+      incident: definedArgs(args, [
+        "summary",
+        "description",
+        "severity",
+        "source",
+        "target",
+        "symptoms",
+        "evidence",
+        "remediationAttempts",
+        "correlationId",
+      ]),
+    });
+  }
   if (name === "crypto_capabilities") {
     return callDashboard("/api/crypto/capabilities", "POST", {
       action: "status",
       ...cryptoArgs(args),
+    });
+  }
+  if (name === "x_api") {
+    const method = String(args.method || "GET").toUpperCase(); if (method !== "GET" && args.confirmation !== "CONFIRM_X_API_CALL") throw new Error("x_api write calls require confirmation CONFIRM_X_API_CALL.");
+    return callDashboard("/api/integrations/x-managed", "POST", { action: "proxy", creditAccountId: args.creditAccountId, connectionId: args.connectionId, slug: args.slug, method, path: args.path, query: args.query, json: args.json, confirmation: args.confirmation }); }
+  if (name === "beeline_profiles") {
+    const query = args.query ? `?query=${encodeURIComponent(String(args.query))}` : "";
+    return callDashboard(`/api/beeline/actions${query}`, "GET");
+  }
+  if (name === "beeline_open_browser") {
+    if (args.confirmation !== "CONFIRM_BEELINE_BROWSER") throw new Error("beeline_open_browser requires confirmation CONFIRM_BEELINE_BROWSER.");
+    return callDashboard("/api/beeline/actions", "POST", args);
+  }
+  if (name === "beeline_browser_use") {
+    if (args.confirmation !== "CONFIRM_BEELINE_BROWSER_ACTION") throw new Error("beeline_browser_use requires confirmation CONFIRM_BEELINE_BROWSER_ACTION.");
+    return callDashboard("/api/beeline/actions", "POST", args);
+  }
+  if (name === "beeline_local_credentials") {
+    return callDashboard(`/api/beeline/local-credentials?profileId=${encodeURIComponent(String(args.profileId || ""))}`, "GET");
+  }
+  if (name === "beeline_local_credential_use") {
+    return callDashboard("/api/beeline/local-credentials", "POST", args);
+  }
+  if (name === "beeline_connections") {
+    return callDashboard(`/api/beeline/broker?profileId=${encodeURIComponent(String(args.profileId || ""))}`, "GET");
+  }
+  if (name === "beeline_calendar_list") {
+    return callDashboard("/api/beeline/broker", "POST", { ...args, action: "calendar-list" });
+  }
+  if (name === "beeline_calendar_create") {
+    if (args.confirmation !== "CONFIRM_BEELINE_CALENDAR") throw new Error("beeline_calendar_create requires confirmation CONFIRM_BEELINE_CALENDAR.");
+    return callDashboard("/api/beeline/broker", "POST", { ...args, action: "calendar-create" });
+  }
+  if (name === "beeline_mcp_read") {
+    return callDashboard("/api/beeline/broker", "POST", { ...args, action: "mcp-read" });
+  }
+  if (name === "beeline_mcp_call") {
+    if (args.confirmation !== "CONFIRM_BEELINE_MCP_ACTION") throw new Error("beeline_mcp_call requires confirmation CONFIRM_BEELINE_MCP_ACTION.");
+    return callDashboard("/api/beeline/broker", "POST", { ...args, action: "mcp-call" });
+  }
+  if (name === "slack_send_message") {
+    if (args.confirmation !== "CONFIRM_SLACK_SEND") throw new Error("slack_send_message requires confirmation CONFIRM_SLACK_SEND.");
+    return callDashboard("/api/integrations/slack/send", "POST", { text: args.text, channel: args.channel, confirmation: args.confirmation }); }
+  if (name === "google_slides_read") {
+    return callDashboard("/api/integrations/google/slides", "POST", { mode: "read", ...args }); }
+  if (name === "google_slides_edit") {
+    if (args.confirmation !== "CONFIRM_GOOGLE_SLIDES_EDIT") throw new Error("google_slides_edit requires confirmation CONFIRM_GOOGLE_SLIDES_EDIT.");
+    return callDashboard("/api/integrations/google/slides", "POST", { mode: "edit", ...args }); }
+  if (name === "monid_read") {
+    return callDashboard("/api/integrations/monid", "POST", { mode: "read", ...args }); }
+  if (name === "monid_run") {
+    if (args.confirmation !== "CONFIRM_MONID_RUN") throw new Error("monid_run requires confirmation CONFIRM_MONID_RUN.");
+    return callDashboard("/api/integrations/monid", "POST", { mode: "run", ...args }); }
+  if (name === "company_api_preflight") {
+    return callDashboard("/api/companies", "POST", {
+      action: "consume-api-usage",
+      id: args.companyId,
+      providerKey: args.providerKey,
+      operationId: args.operationId,
+      requestCount: args.requestCount,
+      amountUsd: args.amountUsd,
+      source: args.source || "hivemind-mcp:company-api-preflight",
+      idempotencyKey: args.idempotencyKey,
+    }); }
+  if (name === "azure_resources") {
+    return callDashboard("/api/integrations/azure/resources", "POST", {
+      action: args.action || "subscriptions",
+      subscriptionId: args.subscriptionId,
+      resourceGroup: args.resourceGroup,
+      resourceId: args.resourceId,
+      apiVersion: args.apiVersion,
+      top: args.top,
     });
   }
   if (name === "select_crypto_rail") {
@@ -410,6 +1365,16 @@ async function callTool(name, args = {}) {
       ...cryptoArgs(args),
     });
   }
+  if (name === "nansen_intelligence") {
+    return callNansenIntelligence(args);
+  }
+  if (name === "robinhood_agentic_read") {
+    return callDashboard("/api/integrations/robinhood-mcp", "POST", {
+      action: "read",
+      tool: args.tool,
+      arguments: args.arguments,
+    });
+  }
   if (name === "review_crypto_action") {
     return callDashboard("/api/crypto/clear-signing", "POST", clearSigningArgs(args));
   }
@@ -418,6 +1383,86 @@ async function callTool(name, args = {}) {
   }
   if (name === "crypto_risk_monitor") {
     return callDashboard("/api/crypto/risk-monitor", "POST", cryptoRiskArgs(args));
+  }
+  if (name === "send_usdc") {
+    requireHiveActionExecutionPreflight(name, args);
+    return callDashboard("/api/wallet/send", "POST", {
+      agentId: args.agentId,
+      toAddress: args.toAddress,
+      amountUsd: args.amountUsd,
+      confirmation: args.confirmation,
+      approvalToken: args.approvalToken,
+    });
+  }
+  if (name === "dex_swap") {
+    requireHiveActionExecutionPreflight(name, args);
+    return callDashboard("/api/trading/swap", "POST", {
+      action: "execute",
+      agentId: args.agentId,
+      sellToken: args.sellToken,
+      buyToken: args.buyToken,
+      amountHuman: args.amountHuman,
+      confirmation: args.confirmation,
+      approvalToken: args.approvalToken,
+    });
+  }
+  if (name === "stock_trade") {
+    requireHiveActionExecutionPreflight(name, args);
+    return callDashboard("/api/trading", "POST", {
+      action: "execute",
+      agentId: args.agentId,
+      side: args.side,
+      ticker: args.ticker || args.symbol,
+      notionalUsd: args.notionalUsd ?? args.amountUsd,
+      qty: args.qty ?? args.quantity,
+      confirmation: args.confirmation,
+      approvalToken: args.approvalToken,
+    });
+  }
+  if (name === "hyperliquid_trade") {
+    const action = args.action || (args.confirmation === "CONFIRM_HYPERLIQUID_BUILDER" ? "approve-builder" : args.confirmation === "CONFIRM_HYPERLIQUID_ORDER" ? "order" : "quote");
+    requireHiveActionExecutionPreflight(name, { ...args, action });
+    return callDashboard("/api/trading/hyperliquid", "POST", {
+      action,
+      agentId: args.agentId,
+      coin: args.coin,
+      marketType: args.marketType,
+      assetId: args.assetId,
+      side: args.side,
+      orderType: args.orderType,
+      notionalUsd: args.notionalUsd,
+      size: args.size,
+      limitPrice: args.limitPrice,
+      timeInForce: args.timeInForce,
+      triggerPx: args.triggerPx,
+      triggerType: args.triggerType,
+      triggerIsMarket: args.triggerIsMarket,
+      grouping: args.grouping,
+      clientOrderId: args.clientOrderId,
+      reduceOnly: args.reduceOnly,
+      slippageBps: args.slippageBps,
+      orderId: args.orderId,
+      oid: args.oid,
+      cloid: args.cloid,
+      fastCancel: args.fastCancel,
+      alwaysPlace: args.alwaysPlace,
+      scheduleCancelTime: args.scheduleCancelTime,
+      leverage: args.leverage,
+      marginMode: args.marginMode,
+      marginDeltaUsd: args.marginDeltaUsd,
+      transferType: args.transferType,
+      amount: args.amount,
+      amountUsd: args.amountUsd,
+      destination: args.destination,
+      token: args.token,
+      toPerp: args.toPerp,
+      twapMinutes: args.twapMinutes,
+      twapRandomize: args.twapRandomize,
+      twapId: args.twapId,
+      aggregateByTime: args.aggregateByTime,
+      confirmation: args.confirmation,
+      approvalToken: args.approvalToken,
+    });
   }
   if (name === "compile_brain_knowledge") {
     return callDashboard("/api/brain/knowledge", "POST", {
@@ -454,6 +1499,114 @@ async function callTool(name, args = {}) {
       operation: args.operation,
       readonly: args.readonly,
       optedInDomain: args.optedInDomain,
+    });
+  }
+  if (name === "clawbank_status") {
+    return callDashboard("/api/clawbank", "GET");
+  }
+  if (name === "clawbank_list_tools") {
+    return callDashboard("/api/clawbank/run", "GET");
+  }
+  if (name === "clawbank_read") {
+    return callDashboard("/api/clawbank/run", "POST", {
+      tool: args.tool,
+      args: clawbankToolArgs(args.args),
+      mode: "read",
+    });
+  }
+  if (name === "clawbank_send_usdc") {
+    requireHiveActionExecutionPreflight(name, args);
+    return callDashboard("/api/clawbank/wallet", "POST", {
+      action: "send_usdc",
+      toAddress: args.toAddress,
+      amount: args.amount,
+      confirmation: args.confirmation,
+    });
+  }
+  if (name === "clawbank_trade") {
+    requireHiveActionExecutionPreflight(name, args);
+    return callDashboard("/api/clawbank/trading", "POST", {
+      action: "swap",
+      baseToken: args.baseToken,
+      side: args.side,
+      amountUsdc: args.amountUsdc,
+      maxSlippageBps: args.maxSlippageBps,
+      confirmation: args.confirmation,
+    });
+  }
+  if (name === "clawbank_money_transfer") {
+    requireHiveActionExecutionPreflight(name, args);
+    return callDashboard("/api/clawbank/money", "POST", {
+      action: "transfer",
+      chain: args.chain,
+      toAddress: args.toAddress,
+      amount: args.amount,
+      confirmation: args.confirmation,
+    });
+  }
+  if (name === "clawbank_call") {
+    requireHiveActionExecutionPreflight(name, args);
+    return callDashboard("/api/clawbank/run", "POST", {
+      tool: args.tool,
+      args: clawbankToolArgs(args.args),
+      confirmation: args.confirmation,
+    });
+  }
+  if (name === "code_search_graph") {
+    return callDashboard("/api/code-intelligence", "POST", {
+      action: "search-graph",
+      query: args.query,
+      namePattern: args.namePattern,
+      label: args.label,
+      filePattern: args.filePattern,
+      limit: args.limit,
+      repoPath: args.repoPath,
+    });
+  }
+  if (name === "code_trace_path") {
+    return callDashboard("/api/code-intelligence", "POST", {
+      action: "trace-path",
+      functionName: args.functionName,
+      direction: args.direction,
+      depth: args.depth,
+      repoPath: args.repoPath,
+    });
+  }
+  if (name === "code_get_architecture") {
+    return callDashboard("/api/code-intelligence", "POST", {
+      action: "get-architecture",
+      path: args.path,
+      aspects: args.aspects,
+      repoPath: args.repoPath,
+    });
+  }
+  if (name === "code_get_snippet") {
+    return callDashboard("/api/code-intelligence", "POST", {
+      action: "get-code-snippet",
+      qualifiedName: args.qualifiedName,
+      filePath: args.filePath,
+      startLine: args.startLine,
+      endLine: args.endLine,
+      includeNeighbors: args.includeNeighbors,
+      repoPath: args.repoPath,
+    });
+  }
+  if (name === "code_detect_changes") {
+    return callDashboard("/api/code-intelligence", "POST", {
+      action: "detect-changes",
+      baseRef: args.baseRef,
+      since: args.since,
+      scope: args.scope,
+      depth: args.depth,
+      repoPath: args.repoPath,
+    });
+  }
+  if (name === "code_index_repository") {
+    return callDashboard("/api/code-intelligence", "POST", {
+      action: "index-repository",
+      repoPath: args.repoPath,
+      mode: args.mode,
+      persistence: args.persistence,
     });
   }
   const actionByTool = {
@@ -515,6 +1668,10 @@ function knowledgeArgs(args) {
   return output;
 }
 
+function clawbankToolArgs(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
 function expandHome(value) {
   const text = String(value || "");
   if (text === "~") return os.homedir();
@@ -554,7 +1711,19 @@ async function handle(message) {
       return;
     }
     if (message.method === "tools/call") {
-      const result = await callTool(message.params?.name, message.params?.arguments || {});
+      const toolName = message.params?.name;
+      const result = await callTool(toolName, message.params?.arguments || {});
+      if (toolName === "web_screenshot" && result?.imageData && result?.mimeType) {
+        const { imageData, ...metadata } = result;
+        respond(id, {
+          content: [
+            { type: "image", data: imageData, mimeType: metadata.mimeType },
+            { type: "text", text: JSON.stringify(metadata, null, 2) },
+          ],
+          structuredContent: metadata,
+        });
+        return;
+      }
       respond(id, {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         structuredContent: result,

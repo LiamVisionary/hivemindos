@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
+import { createFacilitatorConfig } from "@coinbase/x402";
 import { x402ResourceServer, HTTPFacilitatorClient } from "@x402/core/server";
 import {
   x402HTTPResourceServer,
@@ -15,7 +16,14 @@ import {
 } from "@x402/core/http";
 import type { Network } from "@x402/core/types";
 import { registerExactEvmScheme } from "@x402/evm/exact/server";
+import {
+  BUILDER_CODE,
+  builderCodeResourceServerExtension,
+  declareBuilderCodeExtension,
+} from "@x402/extensions/builder-code";
 import type { NextRequest } from "next/server";
+
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
 import { homedir } from "@/lib/home-dir";
 import {
@@ -34,59 +42,124 @@ import {
   type ManagedAgentQuote,
 } from "@/lib/services/managed-agent-billing";
 import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
+import {
+  normalizeX402BuilderCodeForNetwork,
+  X402_SELLER_BUILDER_CODE_ENV_KEYS,
+  x402BuilderCodeFromEnvForNetwork,
+} from "@/lib/services/wallet/x402-builder-code";
 
 const DEFAULT_SLUG = "default";
+const BASE_MAINNET_NETWORK = "eip155:8453";
+const BASE_SEPOLIA_NETWORK = "eip155:84532";
 const DEFAULT_NETWORK = "eip155:8453";
+const CDP_FACILITATOR_URL = "https://api.cdp.coinbase.com/platform/v2/x402";
+const TESTNET_FACILITATOR_URL = "https://x402.org/facilitator";
 const DEFAULT_PRICE_USD = 0.05;
 const DEFAULT_TIMEOUT_MS = 600_000;
 const DEFAULT_MAX_MESSAGES = 64;
 const DEFAULT_MAX_CONTENT_CHARS = 200_000;
-const RECEIPT_PATH = join(homedir(), ".hivemindos", "paid-agent-gateway", "receipts.jsonl");
+export const PAID_AGENT_RECEIPT_PATH = join(homedir(), ".hivemindos", "paid-agent-gateway", "receipts.jsonl");
 const SELLER_MODE_ENV = "HIVEMINDOS_PAID_AGENT_SELLER_MODE";
 
 type PaidAgentSellerMode = "hosted" | "self-hosted" | "development";
+
+/** Seller-mode gate shared by every LOCAL x402 seller surface (paid agents + company offers). */
+export type PaidAgentSellerGate = {
+  sellerMode: PaidAgentSellerMode;
+  requestedEnabled: boolean;
+  localGatewayAllowed: boolean;
+  enabled: boolean;
+};
+
+export function paidAgentSellerGate(): PaidAgentSellerGate {
+  const requestedEnabled = booleanEnv("HIVEMINDOS_PAID_AGENT_GATEWAY_ENABLED", false);
+  const sellerMode = paidAgentSellerMode();
+  const localGatewayAllowed = sellerModeAllowsLocalGateway(sellerMode);
+  return { sellerMode, requestedEnabled, localGatewayAllowed, enabled: requestedEnabled && localGatewayAllowed };
+}
+
+/**
+ * The env-configured seller payment identity (payTo, facilitator, attribution).
+ * Company product offers reuse the exact same payment config as the default
+ * paid-agent entry, so one seller setup powers both surfaces.
+ */
+export type X402SellerPaymentConfig = {
+  network: Network;
+  payTo: string;
+  facilitatorUrl: string;
+  facilitatorBearer?: string;
+  cdpApiKeyId?: string;
+  cdpApiKeySecret?: string;
+  builderCode?: string;
+  maxTimeoutSeconds: number;
+};
+
+export function sellerPaymentConfigFromEnv(): X402SellerPaymentConfig {
+  const testnetMode = paidAgentTestnetMode();
+  const network = networkEnv(process.env.HIVEMINDOS_PAID_AGENT_NETWORK || defaultPaidAgentNetwork(testnetMode));
+  return {
+    network,
+    payTo: process.env.HIVEMINDOS_PAID_AGENT_PAY_TO?.trim() || "",
+    facilitatorUrl: process.env.HIVEMINDOS_PAID_AGENT_FACILITATOR_URL?.trim() || defaultFacilitatorUrl(testnetMode),
+    facilitatorBearer: process.env.HIVEMINDOS_PAID_AGENT_FACILITATOR_BEARER?.trim() || undefined,
+    cdpApiKeyId: process.env.HIVEMINDOS_PAID_AGENT_CDP_API_KEY_ID?.trim() || process.env.CDP_API_KEY_ID?.trim() || undefined,
+    cdpApiKeySecret: process.env.HIVEMINDOS_PAID_AGENT_CDP_API_KEY_SECRET?.trim() || process.env.CDP_API_KEY_SECRET?.trim() || undefined,
+    builderCode: x402BuilderCodeFromEnvForNetwork(network, X402_SELLER_BUILDER_CODE_ENV_KEYS),
+    maxTimeoutSeconds: positiveInteger(process.env.HIVEMINDOS_PAID_AGENT_MAX_TIMEOUT_SECONDS, 600),
+  };
+}
+
+export function missingSellerPaymentConfig(config: X402SellerPaymentConfig & { priceUsd: number }): string[] {
+  const missing: string[] = [];
+  if (!config.payTo.trim()) missing.push("HIVEMINDOS_PAID_AGENT_PAY_TO");
+  if (!config.facilitatorUrl.trim()) missing.push("HIVEMINDOS_PAID_AGENT_FACILITATOR_URL");
+  if (usesCdpFacilitator(config) && !config.cdpApiKeyId) missing.push("CDP_API_KEY_ID");
+  if (usesCdpFacilitator(config) && !config.cdpApiKeySecret) missing.push("CDP_API_KEY_SECRET");
+  if (config.priceUsd <= 0) missing.push("HIVEMINDOS_PAID_AGENT_PRICE_USD");
+  return missing;
+}
 
 export const PAID_AGENT_RUNTIME_MATRIX = [
   {
     runtime: HIVEMIND_OS_RUNTIME,
     status: "recommended",
-    rails: ["x402", "managed-HONEY", "HIVE-funded-Bankr", "UsePod"],
+    rails: ["x402", "cloud-credits", "HIVE-funded-Bankr", "UsePod"],
     notes: "Best default for OpenAI-compatible model hosts, local runtimes, Bankr LLM, Venice, UsePod, OpenRouter, and Hive Fusion.",
   },
   {
     runtime: "hermes",
     status: "allowed-with-profile",
-    rails: ["x402", "managed-HONEY"],
+    rails: ["x402", "cloud-credits"],
     notes: "Use for curated chat/workflow agents; expose wallet tools or workspace actions only when the paid-agent profile explicitly enables them.",
   },
   {
     runtime: "openclaw",
     status: "allowed-with-gateway",
-    rails: ["x402", "managed-HONEY"],
+    rails: ["x402", "cloud-credits"],
     notes: "Good for a dedicated OpenClaw HTTP gateway, not for raw local workspace side effects.",
   },
   {
     runtime: "codex",
     status: "internal-by-default",
-    rails: ["managed-HONEY"],
+    rails: ["cloud-credits"],
     notes: "Keep as managed jobs with explicit workspace/task scope instead of public per-call chat.",
   },
   {
     runtime: "claude-code",
     status: "internal-by-default",
-    rails: ["managed-HONEY"],
+    rails: ["cloud-credits"],
     notes: "Keep as managed jobs with explicit workspace/task scope instead of public per-call chat.",
   },
   {
     runtime: "opencode",
     status: "internal-by-default",
-    rails: ["managed-HONEY"],
+    rails: ["cloud-credits"],
     notes: "Keep as managed jobs with explicit workspace/task scope instead of public per-call chat.",
   },
   {
     runtime: "openhands",
     status: "internal-by-default",
-    rails: ["managed-HONEY"],
+    rails: ["cloud-credits"],
     notes: "Keep as managed jobs with explicit workspace/task scope instead of public per-call chat.",
   },
 ] as const;
@@ -95,16 +168,16 @@ export const PAID_AGENT_MODEL_PROVIDER_MATRIX = [
   {
     provider: "lm-studio",
     rail: "x402",
-    notes: "Local OpenAI-compatible models behind HivemindOS; charge externally per call.",
+    notes: "OpenAI-compatible local models behind HivemindOS; charge externally per call.",
   },
   {
     provider: "bankr",
-    rail: "HIVE-funded Bankr credits or managed HONEY",
+    rail: "HIVE-funded Bankr credits or Hivemind Cloud credits",
     notes: "Useful when the operator or user funds Bankr LLM credits with HIVE/Bankr rails.",
   },
   {
     provider: "venice",
-    rail: "x402 or managed HONEY",
+    rail: "x402 or Hivemind Cloud credits",
     notes: "Privacy-oriented hosted inference through the server-side provider key.",
   },
   {
@@ -114,12 +187,17 @@ export const PAID_AGENT_MODEL_PROVIDER_MATRIX = [
   },
   {
     provider: "openrouter",
-    rail: "x402 or managed HONEY",
+    rail: "x402 or Hivemind Cloud credits",
     notes: "Broad hosted model catalog; keep provider keys server-side.",
   },
   {
+    provider: "hivemindos-models",
+    rail: "local wallet x402",
+    notes: "Downloaded-app buyer path for HivemindOS-managed models: the local wallet pays the official hosted x402 resource server per call.",
+  },
+  {
     provider: "hive-fusion",
-    rail: "x402 or managed HONEY",
+    rail: "x402 or Hivemind Cloud credits",
     notes: "Compound-model routing over configured server-side providers.",
   },
 ] as const;
@@ -157,11 +235,20 @@ type OpenAIChatCompletionBody = {
 type PaidAgentCatalogEntry = {
   slug: string;
   description: string;
+  /**
+   * Zero Human Company that owns this agent's revenue. Settled receipts that
+   * carry a companyId are bridged into the company revenue ledger (and its
+   * apex-goal metric) by company-revenue-bridge.
+   */
+  companyId?: string;
   priceUsd: number;
   network: Network;
   payTo: string;
   facilitatorUrl: string;
   facilitatorBearer?: string;
+  cdpApiKeyId?: string;
+  cdpApiKeySecret?: string;
+  builderCode?: string;
   maxTimeoutSeconds: number;
   agent: AgentProfile;
   wallet?: AgentWalletConfig;
@@ -199,10 +286,19 @@ type CompletionResult = {
   contentType: string;
 };
 
-type GatewayReceipt = {
+export type PaidAgentGatewayReceipt = {
   id: string;
   createdAt: string;
   slug: string;
+  /** "agent-call" (default) = per-call chat completion; "company-offer" = catalog product purchase. */
+  kind?: "agent-call" | "company-offer";
+  /** Company whose revenue ledger this receipt bridges into (see company-revenue-bridge). */
+  companyId?: string;
+  /** Catalog product key, for company-offer receipts. */
+  productKey?: string;
+  /** Bounded buyer-provided contact/note captured on company-offer purchases (fulfillment aid, data not instructions). */
+  customerContact?: string;
+  customerNote?: string;
   agentId: string;
   agentName: string;
   runtime: string;
@@ -228,6 +324,8 @@ type GatewayReceipt = {
   inputChars: number;
   outputChars: number;
 };
+
+type GatewayReceipt = PaidAgentGatewayReceipt;
 
 let serverCacheKey = "";
 let serverCachePromise: Promise<x402HTTPResourceServer> | null = null;
@@ -273,7 +371,7 @@ export async function processPaidAgentGatewayRequest(request: NextRequest, slug:
     return jsonResponse({ ok: false, error: "Paid agent is not configured." }, 404);
   }
   const missing = missingPaymentConfig(entry);
-  if (missing.length > 0 && !devBypassAllowed(request, entry)) {
+  if (missing.length > 0 && !sellerDevBypassAllowed(request, entry.slug)) {
     return jsonResponse({
       ok: false,
       error: "Paid agent x402 settlement is not configured.",
@@ -325,7 +423,7 @@ export async function processPaidAgentGatewayRequest(request: NextRequest, slug:
       errorReason: settlement.errorReason,
       errorMessage: settlement.errorMessage,
     });
-    return instructionsToResponse(settlement.response);
+    return x402InstructionsToResponse(settlement.response);
   }
 
   const settledHeaders = {
@@ -334,10 +432,12 @@ export async function processPaidAgentGatewayRequest(request: NextRequest, slug:
     "Content-Type": body.stream === true ? "text/event-stream" : "application/json",
   };
   const honey = await mirrorManagedHoneyIfEnabled(entry, receiptId, settlement, completion);
-  await writeReceipt({
+  const receipt: PaidAgentGatewayReceipt = {
     id: receiptId,
     createdAt: new Date().toISOString(),
     slug: entry.slug,
+    kind: "agent-call",
+    companyId: entry.companyId,
     agentId: profile.id,
     agentName: profile.name,
     runtime: String(profile.runtime),
@@ -357,7 +457,9 @@ export async function processPaidAgentGatewayRequest(request: NextRequest, slug:
     durationMs: Date.now() - startedAt,
     inputChars: messages.reduce((total, message) => total + messageText(message).length, 0),
     outputChars: completion.content.length,
-  });
+  };
+  await appendPaidAgentGatewayReceipt(receipt);
+  await bridgeReceiptToCompanyRevenue(receipt);
   await recordPaidGatewayTelemetry("paid_agent_gateway.completed", entry, startedAt, {
     receiptId,
     stream: body.stream === true,
@@ -378,10 +480,7 @@ async function loadPaidAgentCatalog(): Promise<{
   missing: string[];
   entries: PaidAgentCatalogEntry[];
 }> {
-  const requestedEnabled = booleanEnv("HIVEMINDOS_PAID_AGENT_GATEWAY_ENABLED", false);
-  const sellerMode = paidAgentSellerMode();
-  const localGatewayAllowed = sellerModeAllowsLocalGateway(sellerMode);
-  const enabled = requestedEnabled && localGatewayAllowed;
+  const { requestedEnabled, sellerMode, localGatewayAllowed, enabled } = paidAgentSellerGate();
   const catalogJson = await optionalJsonFromEnv("HIVEMINDOS_PAID_AGENT_CATALOG_JSON", "HIVEMINDOS_PAID_AGENT_CATALOG_PATH");
   const rawEntries = rawCatalogEntries(catalogJson);
   const entries = rawEntries.length > 0
@@ -406,12 +505,9 @@ async function defaultEntryFromEnv(): Promise<PaidAgentCatalogEntry> {
   return {
     slug,
     description: process.env.HIVEMINDOS_PAID_AGENT_DESCRIPTION?.trim() || "Paid HivemindOS agent",
+    companyId: process.env.HIVEMINDOS_PAID_AGENT_COMPANY_ID?.trim() || undefined,
     priceUsd: positiveMoney(process.env.HIVEMINDOS_PAID_AGENT_PRICE_USD, DEFAULT_PRICE_USD),
-    network: networkEnv(process.env.HIVEMINDOS_PAID_AGENT_NETWORK),
-    payTo: process.env.HIVEMINDOS_PAID_AGENT_PAY_TO?.trim() || "",
-    facilitatorUrl: process.env.HIVEMINDOS_PAID_AGENT_FACILITATOR_URL?.trim() || "",
-    facilitatorBearer: process.env.HIVEMINDOS_PAID_AGENT_FACILITATOR_BEARER?.trim() || undefined,
-    maxTimeoutSeconds: positiveInteger(process.env.HIVEMINDOS_PAID_AGENT_MAX_TIMEOUT_SECONDS, 600),
+    ...sellerPaymentConfigFromEnv(),
     agent,
     wallet: objectFromUnknown<AgentWalletConfig>(await optionalJsonFromEnv("HIVEMINDOS_PAID_AGENT_WALLET_JSON")),
     sharedVault: objectFromUnknown<SharedVaultConfig>(await optionalJsonFromEnv("HIVEMINDOS_PAID_AGENT_SHARED_VAULT_JSON")),
@@ -425,6 +521,10 @@ async function defaultEntryFromEnv(): Promise<PaidAgentCatalogEntry> {
 async function entryFromRaw(raw: unknown, index: number): Promise<PaidAgentCatalogEntry> {
   const record = isRecord(raw) ? raw : {};
   const slug = normalizeSlug(stringField(record.slug) || `${DEFAULT_SLUG}-${index + 1}`);
+  const testnetMode = paidAgentTestnetMode();
+  const network = networkEnv(stringField(record.network) || process.env.HIVEMINDOS_PAID_AGENT_NETWORK || defaultPaidAgentNetwork(testnetMode));
+  const configuredBuilderCode = normalizeX402BuilderCodeForNetwork(network, stringField(record.builderCode), `${slug}.builderCode`)
+    ?? x402BuilderCodeFromEnvForNetwork(network, X402_SELLER_BUILDER_CODE_ENV_KEYS);
   const agent = await loadAgentProfile(slug, {
     agent: record.agent,
     runtime: stringField(record.runtime),
@@ -435,11 +535,15 @@ async function entryFromRaw(raw: unknown, index: number): Promise<PaidAgentCatal
   return {
     slug,
     description: stringField(record.description) || `Paid HivemindOS agent ${index + 1}`,
+    companyId: stringField(record.companyId) || process.env.HIVEMINDOS_PAID_AGENT_COMPANY_ID?.trim() || undefined,
     priceUsd: positiveMoney(record.priceUsd, DEFAULT_PRICE_USD),
-    network: networkEnv(stringField(record.network)),
+    network,
     payTo: stringField(record.payTo) || process.env.HIVEMINDOS_PAID_AGENT_PAY_TO?.trim() || "",
-    facilitatorUrl: stringField(record.facilitatorUrl) || process.env.HIVEMINDOS_PAID_AGENT_FACILITATOR_URL?.trim() || "",
+    facilitatorUrl: stringField(record.facilitatorUrl) || process.env.HIVEMINDOS_PAID_AGENT_FACILITATOR_URL?.trim() || defaultFacilitatorUrl(testnetMode),
     facilitatorBearer: stringField(record.facilitatorBearer) || process.env.HIVEMINDOS_PAID_AGENT_FACILITATOR_BEARER?.trim() || undefined,
+    cdpApiKeyId: stringField(record.cdpApiKeyId) || process.env.HIVEMINDOS_PAID_AGENT_CDP_API_KEY_ID?.trim() || process.env.CDP_API_KEY_ID?.trim() || undefined,
+    cdpApiKeySecret: stringField(record.cdpApiKeySecret) || process.env.HIVEMINDOS_PAID_AGENT_CDP_API_KEY_SECRET?.trim() || process.env.CDP_API_KEY_SECRET?.trim() || undefined,
+    builderCode: configuredBuilderCode,
     maxTimeoutSeconds: positiveInteger(record.maxTimeoutSeconds, 600),
     agent,
     wallet: objectFromUnknown<AgentWalletConfig>(record.wallet),
@@ -543,15 +647,15 @@ async function verifyPaymentOrBypass(
   entry: PaidAgentCatalogEntry,
   body: OpenAIChatCompletionBody,
 ): Promise<PaymentContext | { response: Response }> {
-  if (devBypassAllowed(request, entry)) return { kind: "dev-bypass" };
+  if (sellerDevBypassAllowed(request, entry.slug)) return { kind: "dev-bypass" };
   const server = await paidAgentX402Server(entry, request.nextUrl.pathname);
-  const context = requestContext(request, body);
+  const context = x402SellerRequestContext(request, body);
   const result = await server.processHTTPRequest(context, {
     appName: "HivemindOS paid agent",
     currentUrl: request.url,
     testnet: entry.network !== DEFAULT_NETWORK,
   });
-  if (result.type === "payment-error") return { response: instructionsToResponse(result.response) };
+  if (result.type === "payment-error") return { response: x402InstructionsToResponse(result.response) };
   if (result.type === "no-payment-required") return { kind: "dev-bypass" };
   return { kind: "x402", context, result, server };
 }
@@ -565,6 +669,7 @@ async function paidAgentX402Server(entry: PaidAgentCatalogEntry, path: string): 
     entry.priceUsd,
     entry.facilitatorUrl,
     entry.maxTimeoutSeconds,
+    entry.builderCode,
   ].join("|");
   if (serverCachePromise && serverCacheKey === key) return serverCachePromise;
   serverCacheKey = key;
@@ -573,42 +678,55 @@ async function paidAgentX402Server(entry: PaidAgentCatalogEntry, path: string): 
 }
 
 async function createPaidAgentX402Server(entry: PaidAgentCatalogEntry, path: string): Promise<x402HTTPResourceServer> {
-  const facilitator = new HTTPFacilitatorClient({
-    url: entry.facilitatorUrl,
-    ...(entry.facilitatorBearer ? {
-      createAuthHeaders: async () => ({
-        verify: { Authorization: `Bearer ${entry.facilitatorBearer}` },
-        settle: { Authorization: `Bearer ${entry.facilitatorBearer}` },
-        supported: { Authorization: `Bearer ${entry.facilitatorBearer}` },
-      }),
-    } : {}),
+  return createX402SellerHttpServer({
+    path,
+    description: `${entry.description} (${entry.slug})`,
+    priceUsd: entry.priceUsd,
+    payment: entry,
+    unpaidBody: () => ({ ok: false, error: "Payment required.", agent: publicAgentInfo(entry) }),
+    settlementFailedBody: (message) => ({ ok: false, error: message, agent: publicAgentInfo(entry) }),
   });
+}
+
+export type X402SellerRoute = {
+  path: string;
+  description: string;
+  priceUsd: number;
+  payment: X402SellerPaymentConfig;
+  unpaidBody: () => unknown;
+  settlementFailedBody: (message: string) => unknown;
+};
+
+/** The single construction site for LOCAL x402 resource servers (paid agents + company offers). */
+export async function createX402SellerHttpServer(route: X402SellerRoute): Promise<x402HTTPResourceServer> {
+  const { payment } = route;
+  const facilitator = new HTTPFacilitatorClient(facilitatorConfigFor(payment));
   const resourceServer = registerExactEvmScheme(new x402ResourceServer(facilitator), {
-    networks: [entry.network],
+    networks: [payment.network],
   });
+  if (payment.builderCode) {
+    resourceServer.registerExtension(builderCodeResourceServerExtension);
+  }
   const httpServer = new x402HTTPResourceServer(resourceServer, {
-    [`POST ${path}`]: {
+    [`POST ${route.path}`]: {
       accepts: {
         scheme: "exact",
-        network: entry.network,
-        payTo: entry.payTo,
-        price: formatUsdPrice(entry.priceUsd),
-        maxTimeoutSeconds: entry.maxTimeoutSeconds,
+        network: payment.network,
+        payTo: payment.payTo,
+        price: formatUsdPrice(route.priceUsd),
+        maxTimeoutSeconds: payment.maxTimeoutSeconds,
       },
-      resource: path,
-      description: `${entry.description} (${entry.slug})`,
+      resource: route.path,
+      description: route.description,
       mimeType: "application/json",
+      extensions: builderCodeRouteExtensions(payment.builderCode),
       unpaidResponseBody: () => ({
         contentType: "application/json",
-        body: { ok: false, error: "Payment required.", agent: publicAgentInfo(entry) },
+        body: route.unpaidBody(),
       }),
       settlementFailedResponseBody: (_context, settleResult) => ({
         contentType: "application/json",
-        body: {
-          ok: false,
-          error: settleResult.errorMessage || settleResult.errorReason || "x402 settlement failed.",
-          agent: publicAgentInfo(entry),
-        },
+        body: route.settlementFailedBody(settleResult.errorMessage || settleResult.errorReason || "x402 settlement failed."),
       }),
     },
   });
@@ -624,9 +742,12 @@ async function callAgentRuntime(
 ): Promise<CompletionResult> {
   const response = await fetch(new URL("/api/chat/agent-runtime", request.url), {
     method: "POST",
+    // Self-fetches 401 without the server's own device token since the API
+    // auth gate moved to src/proxy.ts.
     headers: {
       "Content-Type": "application/json",
       "X-HivemindOS-Paid-Agent-Gateway": entry.slug,
+      ...internalApiAuthHeaders(),
     },
     body: JSON.stringify({
       agent: profile,
@@ -700,7 +821,7 @@ async function mirrorManagedHoneyIfEnabled(
       retailUsd: entry.priceUsd,
       honeyAmount,
       honeyCreditsPerUsd: config.honeyCreditsPerUsd,
-      explanation: "x402 per-call settlement mirrored into managed HONEY for operator accounting.",
+      explanation: "x402 per-call settlement mirrored into Hivemind Cloud credits for operator accounting.",
     };
     const transaction = settlement?.transaction || receiptId;
     const credit = await recordManagedAgentCredit({
@@ -724,12 +845,12 @@ async function mirrorManagedHoneyIfEnabled(
   } catch (error) {
     return {
       mirrored: false,
-      error: error instanceof Error ? error.message : "Managed HONEY mirror failed.",
+      error: error instanceof Error ? error.message : "Hivemind Cloud credit mirror failed.",
     };
   }
 }
 
-function requestContext(request: NextRequest, body: OpenAIChatCompletionBody): HTTPRequestContext {
+export function x402SellerRequestContext(request: NextRequest, body: unknown): HTTPRequestContext {
   const adapter = nextRequestAdapter(request, body);
   return {
     adapter,
@@ -739,7 +860,7 @@ function requestContext(request: NextRequest, body: OpenAIChatCompletionBody): H
   };
 }
 
-function nextRequestAdapter(request: NextRequest, body: OpenAIChatCompletionBody): HTTPAdapter {
+function nextRequestAdapter(request: NextRequest, body: unknown): HTTPAdapter {
   const url = new URL(request.url);
   return {
     getHeader: (name) => request.headers.get(name) ?? undefined,
@@ -765,7 +886,7 @@ function queryParams(url: URL): Record<string, string | string[]> {
   return params;
 }
 
-function instructionsToResponse(instructions: HTTPResponseInstructions): Response {
+export function x402InstructionsToResponse(instructions: HTTPResponseInstructions): Response {
   const headers = new Headers(instructions.headers);
   if (instructions.isHtml) {
     headers.set("Content-Type", headers.get("Content-Type") || "text/html; charset=utf-8");
@@ -805,6 +926,7 @@ function openAICompletionPayload(input: {
         rail: "x402",
         priceUsd: input.entry.priceUsd,
         network: input.entry.network,
+        builderCode: input.entry.builderCode,
       },
     },
   };
@@ -880,6 +1002,7 @@ function publicAgentInfo(entry: PaidAgentCatalogEntry) {
     description: entry.description,
     priceUsd: entry.priceUsd,
     network: entry.network,
+    testnet: entry.network !== BASE_MAINNET_NETWORK,
     runtime: entry.agent.runtime,
     provider: entry.agent.provider ?? "",
     model: entry.agent.model ?? "",
@@ -887,22 +1010,60 @@ function publicAgentInfo(entry: PaidAgentCatalogEntry) {
     allowedModels: entry.allowedModels,
     honeyLedgerEnabled: entry.honeyLedgerEnabled,
     mirrorManagedHoney: entry.mirrorManagedHoney,
+    builderCode: entry.builderCode,
+    cdpFacilitatorConfigured: usesCdpFacilitator(entry) ? Boolean(entry.cdpApiKeyId && entry.cdpApiKeySecret) : undefined,
   };
 }
 
 function missingPaymentConfig(entry: PaidAgentCatalogEntry) {
-  const missing: string[] = [];
-  if (!entry.payTo.trim()) missing.push("HIVEMINDOS_PAID_AGENT_PAY_TO");
-  if (!entry.facilitatorUrl.trim()) missing.push("HIVEMINDOS_PAID_AGENT_FACILITATOR_URL");
-  if (entry.priceUsd <= 0) missing.push("HIVEMINDOS_PAID_AGENT_PRICE_USD");
-  return missing;
+  return missingSellerPaymentConfig(entry);
 }
 
-function devBypassAllowed(request: NextRequest, entry: PaidAgentCatalogEntry) {
+function paidAgentTestnetMode() {
+  return booleanEnv("HIVEMINDOS_PAID_AGENT_TESTNET_MODE", false);
+}
+
+function defaultPaidAgentNetwork(testnetMode: boolean): Network {
+  return (testnetMode ? BASE_SEPOLIA_NETWORK : DEFAULT_NETWORK) as Network;
+}
+
+function defaultFacilitatorUrl(testnetMode: boolean) {
+  return testnetMode ? TESTNET_FACILITATOR_URL : CDP_FACILITATOR_URL;
+}
+
+function builderCodeRouteExtensions(builderCode?: string): Record<string, unknown> | undefined {
+  return builderCode ? { [BUILDER_CODE]: declareBuilderCodeExtension(builderCode) } : undefined;
+}
+
+function facilitatorConfigFor(entry: Pick<X402SellerPaymentConfig, "facilitatorUrl" | "facilitatorBearer" | "cdpApiKeyId" | "cdpApiKeySecret">) {
+  if (usesCdpFacilitator(entry)) {
+    return createFacilitatorConfig(entry.cdpApiKeyId, entry.cdpApiKeySecret);
+  }
+  return {
+    url: entry.facilitatorUrl,
+    ...(entry.facilitatorBearer ? {
+      createAuthHeaders: async () => ({
+        verify: { Authorization: `Bearer ${entry.facilitatorBearer}` },
+        settle: { Authorization: `Bearer ${entry.facilitatorBearer}` },
+        supported: { Authorization: `Bearer ${entry.facilitatorBearer}` },
+      }),
+    } : {}),
+  };
+}
+
+function usesCdpFacilitator(entry: Pick<PaidAgentCatalogEntry, "facilitatorUrl">) {
+  return normalizeUrl(entry.facilitatorUrl) === CDP_FACILITATOR_URL;
+}
+
+function normalizeUrl(value: string) {
+  return value.trim().replace(/\/+$/, "");
+}
+
+export function sellerDevBypassAllowed(request: NextRequest, slug: string) {
   if (process.env.NODE_ENV === "production") return false;
   if (paidAgentSellerMode() !== "development") return false;
   if (!booleanEnv("HIVEMINDOS_PAID_AGENT_DEV_BYPASS", false)) return false;
-  return request.headers.get("x-hivemindos-paid-agent-dev-bypass") === entry.slug;
+  return request.headers.get("x-hivemindos-paid-agent-dev-bypass") === slug;
 }
 
 function paidAgentSellerMode(): PaidAgentSellerMode {
@@ -932,9 +1093,26 @@ async function optionalJsonFromEnv(jsonKey: string, ...pathKeys: string[]): Prom
   return undefined;
 }
 
-async function writeReceipt(receipt: GatewayReceipt) {
-  await mkdir(dirname(RECEIPT_PATH), { recursive: true, mode: 0o700 });
-  await appendFile(RECEIPT_PATH, `${JSON.stringify(receipt)}\n`, "utf8");
+export async function appendPaidAgentGatewayReceipt(receipt: PaidAgentGatewayReceipt) {
+  await mkdir(dirname(PAID_AGENT_RECEIPT_PATH), { recursive: true, mode: 0o700 });
+  await appendFile(PAID_AGENT_RECEIPT_PATH, `${JSON.stringify(receipt)}\n`, "utf8");
+}
+
+/**
+ * Settled receipts attributed to a company land in its revenue ledger (and its
+ * apex-goal metric) immediately; the receipt sweep in company-revenue-bridge is
+ * the idempotent backstop for anything this inline path misses. Dynamic import:
+ * the bridge statically imports this module, so a static import here would be a
+ * cycle. Never fails the paid response over ledger bookkeeping.
+ */
+export async function bridgeReceiptToCompanyRevenue(receipt: PaidAgentGatewayReceipt) {
+  if (!receipt.companyId) return;
+  try {
+    const { recordPaidAgentReceiptAsCompanyRevenue } = await import("@/lib/services/company-revenue-bridge");
+    await recordPaidAgentReceiptAsCompanyRevenue(receipt);
+  } catch {
+    // Swept later; see company-revenue-bridge.
+  }
 }
 
 async function recordPaidGatewayTelemetry(

@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-07-14T18:30:02.688050+00:00",
+  "request": "Improve the chat capability approval system thoroughly and keep retesting varied prompts until capability mappings are robust.",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/chat/task-retrieval-context.ts",
+      "target_path": "src/lib/services/chat/capability-approval.ts",
+      "reuse_type": "adapted_code",
+      "note": "extended the existing batched Context Index and connected-app retrieval path with typed approval intents, canonical deduplication, availability-aware ranking, and collision filters"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/types/capability-approval.ts",
+      "target_path": "src/lib/services/chat/capability-approval.ts",
+      "reuse_type": "adapted_code",
+      "note": "reused the canonical plan, item, candidate, decision, and continuation-marker contract at the ranking and normalization boundary"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/features/dashboard/hooks/use-chat-tree-controller.tsx",
+      "target_path": "src/lib/services/chat/runtime-session-message-merge.ts",
+      "reuse_type": "adapted_code",
+      "note": "extracted the established runtime hydration merge behavior into a focused helper that preserves the pending approval card and its preceding user request"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-chat-thread-actions.mjs",
+      "target_path": "scripts/test-capability-approval.mjs",
+      "reuse_type": "test_adapted",
+      "note": "followed the repository Node contract-test style for deterministic mapping, hydration, setup decisions, alternatives, removal, and continuation regressions"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/context-index.ts",
+      "target_path": "scripts/eval-capability-approval-live.mjs",
+      "reuse_type": "test_adapted",
+      "note": "exercised the production Context Index corpus through a repeatable live capability-selection matrix"
+    }
+  ]
+}

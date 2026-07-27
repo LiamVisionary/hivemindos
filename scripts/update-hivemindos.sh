@@ -9,6 +9,7 @@ SKIP_INSTALL="false"
 BUILD_DASHBOARD="false"
 SKIP_COLLECTOR="false"
 SKIP_DASHBOARD="false"
+SKIP_BRAIN_SYNC="false"
 COLLECTOR_ONLY="${HIVE_COLLECTOR_ONLY:-}"
 
 info() { printf "\033[1;36m%s\033[0m\n" "$*"; }
@@ -29,6 +30,8 @@ Options:
   --build            Run a production dashboard build before restarting.
   --skip-collector   Do not restart the telemetry collector.
   --skip-dashboard   Do not restart the dashboard dev server.
+  --skip-brain-sync  Do not refresh the shared vault with the latest bundled
+                     brain content (skills, packaged skills, docs).
   --collector-only   Update only the agent bridge: git pull, ensure the
                      collector dependency, restart the collector. Skips the
                      workspace pnpm install, dashboard build, and dashboard
@@ -53,6 +56,7 @@ while (( $# > 0 )); do
     --skip-build) BUILD_DASHBOARD="false" ;;
     --skip-collector) SKIP_COLLECTOR="true" ;;
     --skip-dashboard|--no-dashboard) SKIP_DASHBOARD="true" ;;
+    --skip-brain-sync) SKIP_BRAIN_SYNC="true" ;;
     --collector-only) COLLECTOR_ONLY="true" ;;
     --full) COLLECTOR_ONLY="false" ;;
     -h|--help)
@@ -279,6 +283,24 @@ else
   info "Installing dependencies"
   NODE_OPTIONS="${NODE_OPTIONS:+$NODE_OPTIONS }--no-deprecation" pnpm_run install --frozen-lockfile
   ok "Dependencies installed"
+fi
+
+# Refresh the HivemindOS MCP tool registration in installed agent harnesses.
+# Re-running here self-heals the recorded `node` path (a Node upgrade changes it)
+# and picks up harnesses installed since the last run. No-op for harnesses that
+# aren't installed; never writes secrets (token comes from the checkout).
+if [[ "$COLLECTOR_ONLY" != "true" ]]; then
+  info "Refreshing HivemindOS MCP tool registration in installed agent harnesses"
+  node "$ROOT/scripts/register-mcp-clients.mjs" --targets all || warn "MCP client registration refresh reported issues"
+fi
+
+# Push the latest bundled brain content (skills, packaged skills, For Users /
+# For Investors docs) into the user's shared vault so existing installs get brain
+# improvements as they ship — not just on first setup. Checksum-managed: updates
+# managed-unedited content, preserves user edits, never duplicates. Default-on.
+if [[ "$COLLECTOR_ONLY" != "true" && "$SKIP_BRAIN_SYNC" != "true" ]]; then
+  info "Syncing the shared brain with the latest bundled content"
+  node "$ROOT/scripts/hive-brain-sync.mjs" --content-base "$ROOT" || warn "Brain sync reported issues; continuing"
 fi
 
 if [[ "$BUILD_DASHBOARD" == "true" ]]; then

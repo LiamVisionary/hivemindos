@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-slack-session-capture"
+description = "Enables the slack_session_capture command without any pre-configured scope."
+commands.allow = ["slack_session_capture"]
+
+[[permission]]
+identifier = "deny-slack-session-capture"
+description = "Denies the slack_session_capture command without any pre-configured scope."
+commands.deny = ["slack_session_capture"]

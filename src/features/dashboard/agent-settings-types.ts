@@ -1,14 +1,17 @@
-import type { AdaptiveOpenRouterConfig, AdaptiveRoutingConfig, AgentCallPreferences, AgentRuntime, BeeWorkerClass, CustomWorkerClassProfile, ResearchMethod, UsePodAgentConfig, VeniceAgentConfig, WorkerTaskPreference } from "@/lib/types/agent-runtime";
+import type { AdaptiveOpenRouterConfig, AdaptiveRoutingConfig, AgentCallPreferences, AgentRuntime, BeeAgentRole, BeeWorkerClass, CustomWorkerClassProfile, HivemindosModelsAgentConfig, ResearchMethod, UsePodAgentConfig, VeniceAgentConfig, WorkerTaskPreference } from "@/lib/types/agent-runtime";
 
 export type AgentCreateDraft = {
   name: string;
   runtime: AgentRuntime;
+  /** Preset by guided flows (e.g. "Create Queen Bee"); runtime matrix default otherwise. */
+  beeRole?: BeeAgentRole;
   provider?: string;
   model?: string;
   adaptiveOpenRouter?: AdaptiveOpenRouterConfig;
   adaptiveRouting?: AdaptiveRoutingConfig;
   usePod?: UsePodAgentConfig;
   venice?: VeniceAgentConfig;
+  hivemindosModels?: HivemindosModelsAgentConfig;
   calls?: AgentCallPreferences;
   workerClass: BeeWorkerClass;
   customWorkerClass?: CustomWorkerClassProfile;
@@ -23,7 +26,7 @@ export type AgentCreateDraft = {
   aeonLocalPath?: string;
   aeonRepo?: string;
   aeonBranch?: string;
-  aeonMode?: "github" | "a2a" | "local";
+  aeonMode?: "github" | "local";
   a2aUrl?: string;
 };
 
@@ -33,7 +36,7 @@ export type RuntimeModelDraft = {
   contextLength: string;
 };
 
-export type AgentSettingsPanel = "role" | "connection" | "memory" | "tools" | "calls" | "security";
+export type AgentSettingsPanel = "role" | "connection" | "memory" | "tools" | "calls" | "ministry" | "security";
 
 export type AgentWorkerClassView = "presets" | "create";
 

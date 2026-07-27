@@ -22,6 +22,13 @@ const {
   measureTimeDomainClapFrame,
   nextQueenClapDetectorState,
 } = await import("../src/features/queen-voice/clap-activation.ts");
+const {
+  QUEEN_VOICE_ACTIVATION_SESSION_START_DELAY_MS,
+  QUEEN_VOICE_ACTIVATION_SOUND_SRC,
+  playQueenVoiceActivationSound,
+  primeQueenVoiceActivationSound,
+  preloadQueenVoiceActivationSound,
+} = await import("../src/features/queen-voice/activation-sound.ts");
 
 let passed = 0;
 function check(label, fn) {
@@ -240,6 +247,8 @@ const ROOT = new URL("../", import.meta.url);
 const read = (rel) => readFileSync(new URL(rel, ROOT), "utf8");
 const dashboard = read("src/features/dashboard/DashboardApp.tsx");
 const overlay = read("src/features/queen-voice/QueenBeeVoiceOverlay.tsx");
+const activationSound = read("src/features/queen-voice/activation-sound.ts");
+const layout = read("src/app/layout.tsx");
 const hook = read("src/features/queen-voice/use-queen-clap-activation.ts");
 const realtimeHook = read("src/features/queen-voice/use-queen-bee-realtime.ts");
 const pipelineHook = read("src/features/queen-voice/use-queen-bee-voice.ts");
@@ -263,6 +272,31 @@ check("clap activation opens the existing Queen voice overlay path", () => {
   assert.match(overlay, /paused:\s*open/);
 });
 
+check("Queen Bee voice activation sound is preloaded and reused", () => {
+  assert.equal(QUEEN_VOICE_ACTIVATION_SOUND_SRC, "/audio/sfx/scifi-ping.wav");
+  assert.equal(QUEEN_VOICE_ACTIVATION_SESSION_START_DELAY_MS, 2700);
+  assert.match(layout, /rel="preload" as="audio" href=\{QUEEN_VOICE_ACTIVATION_SOUND_SRC\} type="audio\/wav"/);
+  assert.match(overlay, /QUEEN_VOICE_ACTIVATION_SESSION_START_DELAY_MS/);
+  assert.match(overlay, /voiceSessionArmed/);
+  assert.match(overlay, /armedVoiceSessionNonce === sessionNonce/);
+  assert.match(overlay, /setArmedVoiceSessionNonce\(nonce\)/);
+  assert.match(overlay, /if \(!open \|\| !voiceSessionArmed\) return/);
+  assert.match(overlay, /const voiceSessionOpen = open && voiceSessionArmed/);
+  assert.match(overlay, /preloadQueenVoiceActivationSound\(\)/);
+  assert.match(overlay, /primeQueenVoiceActivationSound\(\)/);
+  assert.match(overlay, /playQueenVoiceActivationSound\(\)/);
+  assert.match(activationSound, /activationBuffer/);
+  assert.match(activationSound, /decodeAudioData\(encoded\)/);
+  assert.match(activationSound, /latencyHint: "interactive"/);
+  assert.match(activationSound, /audio\.preload = "auto"/);
+  assert.match(activationSound, /fallbackAudio\(\)\?\.load\(\)/);
+  assert.match(activationSound, /source\.start\(context\.currentTime \+ QUEEN_VOICE_ACTIVATION_START_DELAY_SECONDS\)/);
+  assert.doesNotMatch(overlay, /new Audio\(QUEEN_VOICE_ACTIVATION_SOUND_SRC\)/);
+  assert.doesNotThrow(preloadQueenVoiceActivationSound);
+  assert.doesNotThrow(primeQueenVoiceActivationSound);
+  assert.doesNotThrow(playQueenVoiceActivationSound);
+});
+
 check("Queen Bee Calls settings expose the same Clap wake toggle", () => {
   assert.match(settingsModal, /queenClapWakeEnabled/);
   assert.match(settingsModal, /onQueenClapWakeEnabledChange/);
@@ -280,7 +314,62 @@ check("Queen Bee starts each voice session with one opening line", () => {
   assert.match(realtimeHook, /JSON\.stringify\(openingText\)/);
   assert.match(pipelineHook, /addTurn\("queen", openingText\)/);
   assert.match(pipelineHook, /history\.push\(\{ who: "queen", text: openingText \}\)/);
-  assert.match(pipelineHook, /playSpokenReply\(openingText/);
+  // The opening line speaks through the barge-in wrapper, which delegates to
+  // the shared spoken-reply pipeline.
+  assert.match(pipelineHook, /speakReplyWithBargeIn\(openingText\)/);
+  assert.match(pipelineHook, /return await playSpokenReply\(/);
+});
+
+check("pipeline hook captures continuously with pre-roll flush", () => {
+  // One session-long mic pump fills the pre-roll ring buffer through
+  // thinking/speaking; per-turn code arms it instead of swapping handlers.
+  assert.match(pipelineHook, /const preRoll:\s*\{ at: number; pcm: Int16Array \}\[\]/);
+  assert.match(pipelineHook, /flushPreRollTo\(socket, flushSinceMs\)/);
+  assert.match(pipelineHook, /sttLiveSocket = socket/);
+  // A barge-in hands the interrupting words to the next listening turn.
+  assert.match(
+    pipelineHook,
+    /pendingFlushSinceMs = performance\.now\(\) - BARGE_IN_FLUSH_LOOKBACK_MS/,
+  );
+  // A stale prewarmed socket is replaced, never adopted dead — closed sockets
+  // AND ones that idled past the age cap (half-dead upstream reads OPEN).
+  assert.match(
+    pipelineHook,
+    /\(session\.socket\.readyState !== WebSocket\.OPEN \|\| prewarmTooOld\) &&\s*!cancelled/,
+  );
+  assert.match(pipelineHook, /STT_PREWARM_MAX_AGE_MS/);
+  // A stalled mint cannot strand a listening turn: arming is deadlined and
+  // falls back to the recorder path for that turn only.
+  assert.match(
+    pipelineHook,
+    /raceSttArmDeadline\(promise, listeningStartedAt, STT_ARM_TIMEOUT_MS\)/,
+  );
+  assert.match(pipelineHook, /armTimedOut\(sessionPromise\)/);
+  // Live words-while-speaking: server-VAD turns run a parallel caption
+  // stream (the turn model transcribes only after end-of-speech); the
+  // authoritative transcript wins, and a lost/empty one falls back to the
+  // caption so visible words never vanish. The stream comes from the
+  // caption-source capability matrix (free native/web speech before the
+  // paid OpenAI session), and the recorder fallback path uses free sources
+  // both for live captions and as the key-free transcript at commit.
+  assert.match(pipelineHook, /captionStream = startTurnCaptionStream\(\{/);
+  assert.match(pipelineHook, /captionStream\?\.push\(pcm\)/);
+  assert.match(
+    pipelineHook,
+    /finalText\.trim\(\) \|\| \(mutedRef\.current \? "" : captionStream\?\.text\(\) \|\| ""\)/,
+  );
+  assert.match(pipelineHook, /startLocalCaptionStream\(\{/);
+  assert.match(pipelineHook, /const captionTranscript = captions\.text\(\)/);
+  const captionSource = read("src/features/queen-voice/caption-source.ts");
+  // Preference order is load-bearing: browser speech before the paid one.
+  // macOS native speech is intentionally excluded by product preference.
+  assert.doesNotMatch(captionSource, /id: "native-speech"/);
+  const order = ["web-speech", "openai-realtime"].map((id) =>
+    captionSource.indexOf(`id: "${id}"`),
+  );
+  assert.ok(order.every((at) => at >= 0), "caption matrix lists all sources");
+  assert.deepStrictEqual([...order].sort((a, b) => a - b), order,
+    "caption matrix prefers free sources before openai-realtime");
 });
 
 check("clap hook stays local and tears down the microphone stream", () => {

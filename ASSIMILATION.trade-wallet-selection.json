@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-07-12T03:20:58.393691+00:00",
+  "request": "Fix the Trade route acting wallet name and chain icon, make wallet-modal chain badges selectable, and default grouped wallet selection to Base",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/utils/personal-wallet-grouping.ts",
+      "target_path": "src/lib/utils/personal-wallet-grouping.ts",
+      "reuse_type": "adapted_code",
+      "note": "extended the canonical grouped-wallet naming and chain rank helpers"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/components/wallets-drop-in/WalletPickerCard.tsx",
+      "target_path": "src/components/wallets-drop-in/WalletPickerCard.tsx",
+      "reuse_type": "adapted_code",
+      "note": "converted existing grouped chain tags into exact account controls"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/components/trade/TradeView.tsx",
+      "target_path": "src/components/trade/TradeView.tsx",
+      "reuse_type": "adapted_code",
+      "note": "reused canonical chain badge helpers in the acting-wallet identity control"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "scripts/test-personal-wallet-grouping.mjs",
+      "target_path": "scripts/test-trade-wallet-selection.mjs",
+      "reuse_type": "test_adapted",
+      "note": "adapted existing direct-module and source-contract regression style"
+    }
+  ]
+}

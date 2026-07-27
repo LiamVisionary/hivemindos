@@ -1,18 +1,49 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck
 "use client";
 
+import type { ComponentType, ReactNode } from "react";
+import type { AgentProfile, SharedVaultConfig } from "@/lib/types/agent-runtime";
+import type { VaultSyncStatus } from "@/features/dashboard/dashboard-types";
 import styles from "./BrainConfigPanel.module.css";
 
-const configClass = (...classes) => classes.map((className) => styles[className]).filter(Boolean).join(" ");
+const configClass = (...classes: string[]) => classes.map((className) => styles[className]).filter(Boolean).join(" ");
 
-function statusCopy(status: any, success: string, pending: string, failurePrefix: string) {
+type PathCheckStatus = { ok?: boolean; reason?: string; error?: string } | null;
+
+type BrainConfigButton = ComponentType<{
+  type?: "button" | "submit" | "reset";
+  size?: string;
+  variant?: string;
+  disabled?: boolean;
+  onClick?: () => void;
+  children?: ReactNode;
+}>;
+
+type FolderConfigKey = "inboxFolder" | "sharedNotePath" | "kanbanFolder" | "notificationsFolder" | "synthesisFolder" | "brainServicesFolder";
+
+type BrainConfigPanelProps = {
+  Button: BrainConfigButton;
+  DEFAULT_SHARED_VAULT: SharedVaultConfig;
+  checkControlRoomStatus: () => void;
+  checkVaultStatus: () => void;
+  controlRoomStatus: PathCheckStatus;
+  displayAgents: AgentProfile[];
+  pairSyncthingVaultSync: () => void;
+  runVaultTailnetSync: (dryRun: boolean) => void;
+  setVaultPanelMode: (mode: string) => void;
+  sharedVault: SharedVaultConfig;
+  updateSharedVault: (patch: Partial<SharedVaultConfig>) => void;
+  vaultStatus: PathCheckStatus;
+  vaultSyncPending: string;
+  vaultSyncStatus: VaultSyncStatus | null;
+};
+
+function statusCopy(status: PathCheckStatus, success: string, pending: string, failurePrefix: string) {
   if (!status) return { tone: "", text: pending };
   if (status.ok) return { tone: "statusOk", text: success };
   return { tone: "statusBad", text: `${failurePrefix} ${status.reason ?? status.error ?? "check the configured path."}` };
 }
 
-export function BrainConfigPanel(props: any) {
+export function BrainConfigPanel(props: BrainConfigPanelProps) {
   const {
     Button,
     DEFAULT_SHARED_VAULT,
@@ -47,7 +78,7 @@ export function BrainConfigPanel(props: any) {
     : sharedVault.syncProvider === "manual"
       ? "Manual"
       : "External";
-  const folders = [
+  const folders: Array<[string, FolderConfigKey, string]> = [
     ["Inbox", "inboxFolder", sharedVault.inboxFolder],
     ["Shared note", "sharedNotePath", sharedVault.sharedNotePath],
     ["Kanban", "kanbanFolder", sharedVault.kanbanFolder ?? DEFAULT_SHARED_VAULT.kanbanFolder],
@@ -105,7 +136,8 @@ export function BrainConfigPanel(props: any) {
               <select
                 value={sharedVault.syncProvider}
                 onChange={(event) => {
-                  const syncProvider = event.target.value;
+                  // DOM boundary: the <option> values below are exactly this union.
+                  const syncProvider = event.target.value as SharedVaultConfig["syncProvider"];
                   updateSharedVault({
                     syncProvider,
                     syncthingAutoPairEnabled: syncProvider === "syncthing" ? sharedVault.syncthingAutoPairEnabled : false,
@@ -220,6 +252,24 @@ export function BrainConfigPanel(props: any) {
             />
             Auto-import markdown note tasks into Work Ideas
           </label>
+
+          <article className={configClass("card")}>
+            <label className={configClass("card", "toggle")} style={{ marginBottom: 6 }}>
+              <input
+                type="checkbox"
+                checked={sharedVault.runtimeStateSyncEnabled ?? false}
+                onChange={(event) => updateSharedVault({ runtimeStateSyncEnabled: event.target.checked })}
+              />
+              Sync agent runtimes across machines
+            </label>
+            <p style={{ margin: 0, fontSize: 12, opacity: 0.75 }}>
+              Off by default. When on, this machine keeps each runtime&apos;s skills, memories and
+              non-secret config reconciled with your other machines (last-writer-wins, with conflict
+              copies — never a silent overwrite). Provider API keys travel via the shared hive env, and
+              login tokens, session history and caches are never copied. Enable it on each machine you
+              want kept in sync.
+            </p>
+          </article>
 
           <article className={configClass("card")}>
             <label className={configClass("label")}>

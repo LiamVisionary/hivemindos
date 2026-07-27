@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "provenance": "authored",
+  "license": "MIT (same as this repository)",
+  "verifiedOn": "2026-07-10",
+  "note": "Closing lines, shared across deliverable kinds. This bank is authored, not measured — no line here has a performance claim attached, and agents must not present them as 'proven' or 'high-converting'. Slots are UPPERCASE so an unfilled CTA trips the placeholder check in src/lib/services/deliverables/acceptance-contracts.ts.",
+  "count": 18,
+  "taxonomy": {
+    "styles": ["direct", "low-friction", "curiosity", "deadline", "qualifying", "reciprocal"],
+    "appliesTo": ["video", "website", "email"],
+    "awarenessLevels": ["Unaware", "Problem", "Solution", "Product", "Most"]
+  },
+  "ctas": [
+    { "id": "C01", "style": "direct", "text": "[ACTION] now — [SPECIFIC FIRST OUTCOME] takes about [DURATION].", "appliesTo": ["video", "website", "email"], "awareness": ["Product", "Most"], "why": "Names the action and shrinks the perceived time cost in the same breath." },
+    { "id": "C02", "style": "direct", "text": "Start with [SMALLEST UNIT]. If it doesn't [PROMISE], stop.", "appliesTo": ["website", "email"], "awareness": ["Product"], "why": "An explicit exit lowers the risk of entry." },
+    { "id": "C03", "style": "low-friction", "text": "No [COMMON REQUIREMENT] needed. Just [SINGLE STEP].", "appliesTo": ["website", "email"], "awareness": ["Solution", "Product"], "why": "Removes the objection the viewer was already forming." },
+    { "id": "C04", "style": "low-friction", "text": "Reply with one word: [WORD]. I'll send [ARTIFACT].", "appliesTo": ["email", "video"], "awareness": ["Solution", "Product"], "why": "The lowest-effort commitment that still produces a reply." },
+    { "id": "C05", "style": "low-friction", "text": "You don't have to decide today. [SMALLER ACTION] and see.", "appliesTo": ["website", "email"], "awareness": ["Problem", "Solution"], "why": "Defers the decision the reader is resisting while still moving them." },
+    { "id": "C06", "style": "curiosity", "text": "The rest of [ARTIFACT] is at [DESTINATION]. It's the part I couldn't fit here.", "appliesTo": ["video"], "awareness": ["Solution"], "why": "Frames the click as completion rather than as a purchase." },
+    { "id": "C07", "style": "curiosity", "text": "I broke down [SUBJECT] properly in [DESTINATION] — including the part I got wrong.", "appliesTo": ["video", "email"], "awareness": ["Solution"], "why": "The admission is the incentive." },
+    { "id": "C08", "style": "deadline", "text": "[CHANGE] on [DATE]. After that, [CONSEQUENCE].", "appliesTo": ["website", "email", "video"], "awareness": ["Product", "Most"], "why": "Urgency anchored to an external event, which survives a skeptical reader." },
+    { "id": "C09", "style": "deadline", "text": "I close this at [COUNT], not on a timer. [REMAINING] left.", "appliesTo": ["website", "email"], "awareness": ["Most"], "why": "Rejects the fake countdown explicitly, which is the only way a real cap stays believable." },
+    { "id": "C10", "style": "qualifying", "text": "If you're [DISQUALIFIER], this will waste your money. If you're [QUALIFIER], [ACTION].", "appliesTo": ["website", "video"], "awareness": ["Product", "Most"], "why": "Turning people away is the strongest signal that you are not desperate." },
+    { "id": "C11", "style": "qualifying", "text": "Only do this if you've already [PREREQUISITE].", "appliesTo": ["video", "email"], "awareness": ["Product"], "why": "Implies a sequence, which makes the offer feel like a step rather than a pitch." },
+    { "id": "C12", "style": "qualifying", "text": "This solves [NARROW PROBLEM]. It will not solve [ADJACENT PROBLEM].", "appliesTo": ["website"], "awareness": ["Product", "Most"], "why": "A stated limitation makes the stated capability credible." },
+    { "id": "C13", "style": "reciprocal", "text": "Take [ARTIFACT] whether or not you ever [ACTION].", "appliesTo": ["email", "website"], "awareness": ["Problem", "Solution"], "why": "Unconditional value given before anything is asked." },
+    { "id": "C14", "style": "reciprocal", "text": "I'll do the first [UNIT OF WORK] free. If it's useful, we keep going.", "appliesTo": ["email", "website"], "awareness": ["Solution", "Product"], "why": "Shifts proof of value from claim to demonstration." },
+    { "id": "C15", "style": "reciprocal", "text": "Steal this. Attribution optional.", "appliesTo": ["video", "email"], "awareness": ["Unaware", "Problem"], "why": "Generosity as positioning; costs nothing and buys attention from cold audiences." },
+    { "id": "C16", "style": "direct", "text": "Two options: [OPTION A] or [OPTION B]. Both beat [STATUS QUO].", "appliesTo": ["website", "email"], "awareness": ["Product", "Most"], "why": "Replaces a yes/no decision with an either/or, and disqualifies inaction." },
+    { "id": "C17", "style": "curiosity", "text": "There's a version of this that works for [EDGE CASE]. Ask me about it.", "appliesTo": ["email", "video"], "awareness": ["Product"], "why": "Invites a self-selecting reply from the highest-intent segment." },
+    { "id": "C18", "style": "low-friction", "text": "Don't buy anything. Just [SINGLE STEP] and judge for yourself.", "appliesTo": ["video", "website"], "awareness": ["Problem", "Solution"], "why": "Explicitly disclaiming the sale is the fastest way to be heard by an ad-literate audience." }
+  ]
+}

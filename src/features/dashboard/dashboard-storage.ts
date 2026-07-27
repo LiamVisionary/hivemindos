@@ -1,14 +1,22 @@
 import { DEFAULT_SHARED_VAULT, RUNTIME_CAPABILITIES, RUNTIME_KINDS, buildAgentCallPreferences, normalizeAgentRuntime, type AgentProfile, type AgentRuntime, type AgentRuntimeKind, type CustomWorkerClassProfile, type RuntimeCapabilities, type SharedVaultConfig } from "@/lib/types/agent-runtime";
 import { beeRoleIconPath } from "@/lib/config/bee-role-icons";
 import { beeWorkerPreset, renderBeeSoulTemplate } from "@/lib/config/bee-worker-presets";
+import { ONBOARDING_BRAIN_LOOPS } from "@/lib/config/brain-loops";
 import { RESEARCH_STORM_SKILL_SLUG, normalizeResearchMethod } from "@/lib/config/research-methods";
 import { createDefaultAgentWallet, createDefaultHoneyTreasuryConfig, stripUnfundedWalletBalance } from "@/lib/utils/agent-wallet";
+import { normalizeAgentLocalDataDir } from "@/lib/utils/agent-local-data-dir";
 import { normalizeAgentTelemetryUrl } from "@/lib/utils/agent-telemetry-url";
 import { isAutomationTranscriptText } from "@/lib/utils/automation-transcript";
 import type { AgentWalletConfig, HoneyTreasuryConfig } from "@/lib/types/agent-wallet";
 import type { AgentSchedule, AgentSnapshot, AgentTask, ChatCustomFolder, ChatMessage, DiscoveredMachine, HermesUpdateSkillLike, RuntimeIntegrationKey, RuntimeIntegrationStatus, RuntimeSetupDefinition, StoredSharedVaultConfig, WorkerClassDraft } from "@/features/dashboard/dashboard-types";
 import { imageGenerationToApplicationGeneration, normalizeApplicationGenerationUrl, type ChatApplicationGenerationArtifact, type ChatApplicationGenerationCard } from "@/features/dashboard/chat-application-generation";
 import { dashboardStateValue, type DashboardStateSnapshot } from "@/lib/services/dashboard-state-client";
+import { normalizeChatResponseBilling } from "@/lib/types/chat-billing";
+import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
+import type { CapabilityApprovalPlan, CapabilityCandidate, CapabilityDecision } from "@/lib/types/capability-approval";
+import { normalizeEvaluationHumanFeedback } from "@/lib/types/evaluation";
+import { queenBeeNameOrDefault } from "@/lib/config/queen-bee-personality";
+import { normalizeChatAppArtifact } from "@/lib/services/chat/chat-app-artifact";
 
 const STORAGE_KEY = "hivemindos.agentProfiles.v1";
 const VAULT_STORAGE_KEY = "hivemindos.sharedVault.v1";
@@ -35,7 +43,12 @@ const STORAGE_SUFFIXES = {
   fleetSnapshots: ".fleetSnapshots.v1",
 };
 const runtimeCapabilitiesByRuntime = RUNTIME_CAPABILITIES as Record<string, RuntimeCapabilities>;
+type StoredAgentPromptChoice = NonNullable<NonNullable<ChatMessage["agentPrompt"]>["choices"]>[number];
 const runtimeKindsByRuntime = RUNTIME_KINDS as Record<string, AgentRuntimeKind | undefined>;
+
+export function parseStoredChatMessageFeedback(value: unknown) {
+  return normalizeEvaluationHumanFeedback(value);
+}
 
 function normalizeVaultRelativePath(path?: string) {
   return path?.trim().replace(/[\\/]+$/g, "");
@@ -74,12 +87,12 @@ export function seedAgents(): AgentProfile[] {
 
 export function normalizeAgentProfile(agent: AgentProfile): AgentProfile {
   const runtime = normalizeAgentRuntime(agent.runtime);
+  const beeRole = agent.beeRole ?? "worker";
+  const name = beeRole === "queen"
+    ? queenBeeNameOrDefault(agent.name, agent.queenNameCustomized)
+    : agent.name;
   const workerClass = agent.workerClass ?? "general";
   const workerPreset = beeWorkerPreset(workerClass);
-  const beeRole = runtime === "openclaw" && agent.beeRole === "queen"
-    ? "worker"
-    : agent.beeRole;
-  const inferredQueen = beeRole === "queen" || (runtime !== "openclaw" && /queen|orchestrat|lead|main/i.test(agent.name));
   const customWorkerClasses = agent.customWorkerClasses?.length
     ? agent.customWorkerClasses
     : agent.customWorkerClass
@@ -91,24 +104,31 @@ export function normalizeAgentProfile(agent: AgentProfile): AgentProfile {
     && !selectedCustomWorkerClassId
     && agent.researchMethod === undefined
     && !preferredSkillSlugs.includes(RESEARCH_STORM_SKILL_SLUG);
+  const localDataDir = normalizeAgentLocalDataDir(agent.localDataDir);
   return {
     ...agent,
+    name,
     runtime,
-    localDataDir: runtime === "hermes" && agent.id === "hermes-orchestrator" && !agent.localDataDir
+    statusPath: runtime === "hermes" && agent.statusPath?.trim() === "/status"
+      ? "/health"
+      : agent.statusPath,
+    localDataDir: runtime === "hermes" && agent.id === "hermes-orchestrator" && !localDataDir
       ? "~/.hermes"
-      : agent.localDataDir,
+      : localDataDir,
     runtimeKind: agent.runtimeKind ?? runtimeKindsByRuntime[runtime],
     runtimeCapabilities: mergeRuntimeCapabilities(runtime, agent.runtimeCapabilities),
     a2aUrl: runtime === "aeon" ? agent.a2aUrl ?? agent.gatewayUrl : agent.a2aUrl,
     telemetryUrl: normalizeAgentTelemetryUrl(agent.telemetryUrl),
     aeonBranch: runtime === "aeon" ? agent.aeonBranch ?? "main" : agent.aeonBranch,
     aeonMode: runtime === "aeon" ? agent.aeonMode ?? "github" : agent.aeonMode,
-    beeRole: beeRole ?? (inferredQueen ? "queen" : "worker"),
+    // Queen is an explicit, list-level choice (auto-crowned by model strength
+    // in useQueenCrown when absent) — never inferred per-agent from the name.
+    beeRole,
     workerClass,
     customWorkerClasses,
     selectedCustomWorkerClassId,
     customWorkerClass: customWorkerClasses?.find((workerClass: CustomWorkerClassProfile) => workerClass.id === selectedCustomWorkerClassId) ?? agent.customWorkerClass,
-    soulPrompt: agent.soulPrompt ?? renderBeeSoulTemplate(workerPreset.soulTemplate, agent.name),
+    soulPrompt: agent.soulPrompt ?? renderBeeSoulTemplate(workerPreset.soulTemplate, name),
     skillProfilePrompt: agent.skillProfilePrompt ?? workerPreset.taskProfile,
     preferredSkillSlugs: migrateResearchSkills ? [RESEARCH_STORM_SKILL_SLUG, ...preferredSkillSlugs] : preferredSkillSlugs,
     researchMethod: workerClass === "research" ? normalizeResearchMethod(agent.researchMethod) : agent.researchMethod,
@@ -350,6 +370,38 @@ export function parseStoredSchedules(snapshot: DashboardStateSnapshot = {}): Age
   }
 }
 
+// Bounds the persisted schedule snapshot so the dashboard-state blob stays
+// small, but must comfortably exceed a real fleet's automation count — 120 was
+// clipping users with hundreds of (mostly inactive, Aeon-seeded) schedules to
+// 120 rows in the list. A schedule row is ~1KB, so 1000 caps the snapshot near
+// ~1MB while showing every automation a normal fleet has.
+const MAX_PERSISTED_SCHEDULES = 1000;
+const PINNED_SCHEDULE_IDS = new Set(ONBOARDING_BRAIN_LOOPS.map((loop) => loop.scheduleId));
+
+export function compactSchedulesForPersist(schedules: AgentSchedule[]): AgentSchedule[] {
+  if (schedules.length <= MAX_PERSISTED_SCHEDULES) return schedules;
+  const selected = schedules.slice(0, MAX_PERSISTED_SCHEDULES);
+  const selectedIds = new Set(selected.map((schedule) => schedule.id));
+  const scheduleOrder = new Map(schedules.map((schedule, index) => [schedule.id, index]));
+
+  for (const schedule of schedules.slice(MAX_PERSISTED_SCHEDULES)) {
+    if (!PINNED_SCHEDULE_IDS.has(schedule.id) || selectedIds.has(schedule.id)) continue;
+    let replaceIndex = -1;
+    for (let index = selected.length - 1; index >= 0; index -= 1) {
+      if (!PINNED_SCHEDULE_IDS.has(selected[index].id)) {
+        replaceIndex = index;
+        break;
+      }
+    }
+    if (replaceIndex < 0) break;
+    selectedIds.delete(selected[replaceIndex].id);
+    selected[replaceIndex] = schedule;
+    selectedIds.add(schedule.id);
+  }
+
+  return selected.sort((left, right) => (scheduleOrder.get(left.id) ?? 0) - (scheduleOrder.get(right.id) ?? 0));
+}
+
 export function parseStoredChatFolders(snapshot: DashboardStateSnapshot = {}): ChatCustomFolder[] {
   const raw = readStoredValue(snapshot, CHAT_FOLDER_STORAGE_KEY, STORAGE_SUFFIXES.chatFolders);
   if (!raw) return [];
@@ -377,6 +429,9 @@ function normalizedChatMessageContent(message: Pick<ChatMessage, "content">) {
 
 function sameVisibleChatMessage(left: ChatMessage | undefined, right: ChatMessage | undefined) {
   if (!left || !right) return false;
+  if (left.capabilityApproval || right.capabilityApproval) {
+    return Boolean(left.capabilityApproval?.id && left.capabilityApproval.id === right.capabilityApproval?.id);
+  }
   return left.role === right.role && normalizedChatMessageContent(left) === normalizedChatMessageContent(right);
 }
 
@@ -391,7 +446,18 @@ function dedupeChatTranscript(messages: ChatMessage[]) {
   const output: ChatMessage[] = [];
   for (let index = 0; index < messages.length; index += 1) {
     const message = messages[index];
-    if (sameVisibleChatMessage(output.at(-1), message)) continue;
+    if (sameVisibleChatMessage(output.at(-1), message)) {
+      const previous = output.at(-1);
+      if (previous && ((message.billing && !previous.billing) || message.feedback || message.appArtifact)) {
+        output[output.length - 1] = {
+          ...previous,
+          billing: message.billing ?? previous.billing,
+          feedback: message.feedback ?? previous.feedback,
+          appArtifact: message.appArtifact ?? previous.appArtifact,
+        } as ChatMessage;
+      }
+      continue;
+    }
     if (message.role === "user" && message.content.trim()) {
       const previousUserIndex = findLastChatMessageIndex(output, (item) => sameVisibleChatMessage(item, message));
       const between = previousUserIndex >= 0 ? output.slice(previousUserIndex + 1) : [];
@@ -410,7 +476,17 @@ function dedupeChatTranscript(messages: ChatMessage[]) {
       const previousAssistantIndex = findLastChatMessageIndex(output, (item) => sameVisibleChatMessage(item, message));
       const previousUser = [...output.slice(0, previousAssistantIndex)].reverse().find((item) => item.role === "user");
       const currentUser = [...output].reverse().find((item) => item.role === "user");
-      if (previousAssistantIndex >= 0 && sameVisibleChatMessage(previousUser, currentUser)) continue;
+      if (previousAssistantIndex >= 0 && sameVisibleChatMessage(previousUser, currentUser)) {
+        if ((message.billing && !output[previousAssistantIndex]?.billing) || message.feedback || message.appArtifact) {
+          output[previousAssistantIndex] = {
+            ...output[previousAssistantIndex],
+            billing: message.billing ?? output[previousAssistantIndex]?.billing,
+            feedback: message.feedback ?? output[previousAssistantIndex]?.feedback,
+            appArtifact: message.appArtifact ?? output[previousAssistantIndex]?.appArtifact,
+          };
+        }
+        continue;
+      }
     }
     output.push(message);
   }
@@ -421,6 +497,8 @@ function chatMessageHasPersistableContent(message: ChatMessage) {
   return Boolean(
     message.content.trim()
     || message.attachments?.length
+    || message.capabilityApproval
+    || message.appArtifact
     || message.agentPrompt
     || message.applicationGeneration
     || message.imageGeneration
@@ -519,12 +597,105 @@ function parseStoredApplicationGeneration(message: ChatMessage): ChatApplication
     modelName: typeof card.modelName === "string" ? card.modelName : undefined,
     machineName: typeof card.machineName === "string" ? card.machineName : undefined,
     machineSpecs: typeof card.machineSpecs === "string" ? card.machineSpecs : undefined,
+    sourceArtifacts: Array.isArray(card.sourceArtifacts)
+      ? card.sourceArtifacts.map(parseStoredApplicationGenerationArtifact).filter((artifact): artifact is ChatApplicationGenerationArtifact => Boolean(artifact))
+      : undefined,
     artifacts: Array.isArray(card.artifacts)
       ? card.artifacts.map(parseStoredApplicationGenerationArtifact).filter((artifact): artifact is ChatApplicationGenerationArtifact => Boolean(artifact))
       : undefined,
     error: typeof card.error === "string" ? card.error : undefined,
     createdAt: typeof card.createdAt === "number" ? card.createdAt : undefined,
     completedAt: typeof card.completedAt === "number" ? card.completedAt : undefined,
+  };
+}
+
+function parseStoredAgentPromptChoice(choice: unknown): StoredAgentPromptChoice | null {
+  if (typeof choice === "string") return choice;
+  if (!choice || typeof choice !== "object") return null;
+  const record = choice as { label?: unknown; value?: unknown; permissionMode?: unknown; suppressUserMessage?: unknown };
+  const label = typeof record.label === "string" ? record.label.trim() : "";
+  const value = typeof record.value === "string" ? record.value.trim() : "";
+  if (!label && !value) return null;
+  const permissionMode = ["manual", "accept-edits", "plan", "auto", "bypass"].includes(String(record.permissionMode))
+    ? record.permissionMode as ChatPermissionMode
+    : undefined;
+  return {
+    label: label || value,
+    value: value || label,
+    permissionMode,
+    ...(record.suppressUserMessage === true ? { suppressUserMessage: true } : {}),
+  };
+}
+
+function parseStoredAgentPrompt(message: ChatMessage, agentId: string): ChatMessage["agentPrompt"] {
+  if (!message.agentPrompt || typeof message.agentPrompt !== "object" || typeof message.agentPrompt.question !== "string") return undefined;
+  const response = message.agentPrompt.response && typeof message.agentPrompt.response === "object" && typeof message.agentPrompt.response.label === "string"
+    ? {
+      label: message.agentPrompt.response.label.trim(),
+      value: typeof message.agentPrompt.response.value === "string" ? message.agentPrompt.response.value.trim() : undefined,
+      respondedAt: typeof message.agentPrompt.response.respondedAt === "number" ? message.agentPrompt.response.respondedAt : undefined,
+    }
+    : undefined;
+  return {
+    id: typeof message.agentPrompt.id === "string" ? message.agentPrompt.id : `${agentId}-${message.createdAt ?? Date.now()}`,
+    type: ["clarify", "approval", "sudo", "secret", "prompt"].includes(message.agentPrompt.type) ? message.agentPrompt.type : "prompt",
+    question: message.agentPrompt.question,
+    choices: Array.isArray(message.agentPrompt.choices) ? message.agentPrompt.choices.map(parseStoredAgentPromptChoice).filter((choice): choice is StoredAgentPromptChoice => Boolean(choice)) : undefined,
+    allowFreeText: message.agentPrompt.allowFreeText !== false,
+    response: response?.label ? response : undefined,
+  };
+}
+
+function parseStoredCapabilityApproval(message: ChatMessage): CapabilityApprovalPlan | undefined {
+  const raw = message.capabilityApproval;
+  if (!raw || typeof raw !== "object" || raw.version !== 1 || typeof raw.id !== "string" || typeof raw.task !== "string" || !Array.isArray(raw.items)) return undefined;
+  const items = raw.items.flatMap((item, itemIndex) => {
+    if (!item || typeof item !== "object" || !Array.isArray(item.candidates)) return [];
+    const candidates = item.candidates.flatMap((candidate): CapabilityCandidate[] => {
+      if (!candidate || typeof candidate.id !== "string" || typeof candidate.name !== "string") return [];
+      if (candidate.availability !== "ready" && candidate.availability !== "setup-required") return [];
+      return [{
+        id: candidate.id,
+        name: candidate.name,
+        summary: typeof candidate.summary === "string" ? candidate.summary : "",
+        kind: typeof candidate.kind === "string" ? candidate.kind : "capability",
+        availability: candidate.availability,
+        locator: typeof candidate.locator === "string" ? candidate.locator : undefined,
+      }];
+    }).slice(0, 5);
+    if (!candidates.length) return [];
+    const selectedCapabilityId = candidates.some((candidate) => candidate.id === item.selectedCapabilityId)
+      ? item.selectedCapabilityId
+      : candidates[0].id;
+    const decision: CapabilityDecision = item.decision === "remove" || item.decision === "reject" || item.decision === "approve-setup" || item.decision === "use"
+      ? item.decision
+      : candidates.find((candidate) => candidate.id === selectedCapabilityId)?.availability === "setup-required" ? "approve-setup" : "use";
+    return [{
+      id: typeof item.id === "string" ? item.id : `${raw.id}-${itemIndex}`,
+      intent: typeof item.intent === "string" ? item.intent : "capability",
+      label: typeof item.label === "string" ? item.label : "Capability",
+      reason: typeof item.reason === "string" ? item.reason : "",
+      candidates,
+      selectedCapabilityId,
+      decision,
+      githubUrl: typeof item.githubUrl === "string" ? item.githubUrl : undefined,
+      instructions: typeof item.instructions === "string" ? item.instructions : undefined,
+    }];
+  });
+  if (!items.length || typeof raw.agentId !== "string" || typeof raw.chatStorageKey !== "string") return undefined;
+  return {
+    version: 1,
+    reviewMode: raw.status === "approved" && raw.reviewMode === "automatic" ? "automatic" : "ask",
+    id: raw.id,
+    task: raw.task,
+    agentId: raw.agentId,
+    agentName: typeof raw.agentName === "string" ? raw.agentName : raw.agentId,
+    chatStorageKey: raw.chatStorageKey,
+    chatLeaf: typeof raw.chatLeaf === "string" ? raw.chatLeaf : `agent-${raw.agentId}`,
+    status: raw.status === "approved" || raw.status === "cancelled" ? raw.status : "pending",
+    items,
+    createdAt: typeof raw.createdAt === "number" ? raw.createdAt : Date.now(),
+    resolvedAt: typeof raw.resolvedAt === "number" ? raw.resolvedAt : undefined,
   };
 }
 
@@ -552,6 +723,8 @@ function parseChatMessagesValue(raw: string | null): Record<string, ChatMessage[
           surface: message.surface === "chat" || message.surface === "kanban" || message.surface === "scheduler" ? message.surface : undefined,
           sourceSessionId: typeof message.sourceSessionId === "string" ? message.sourceSessionId : undefined,
           sourceIndex: typeof message.sourceIndex === "number" ? message.sourceIndex : undefined,
+          feedback: parseStoredChatMessageFeedback(message.feedback),
+          billing: normalizeChatResponseBilling(message.billing),
           processEvents: Array.isArray(message.processEvents)
             ? message.processEvents
               .filter((event) => event && typeof event.label === "string" && event.label.trim())
@@ -565,15 +738,9 @@ function parseChatMessagesValue(raw: string | null): Record<string, ChatMessage[
           attachments: Array.isArray(message.attachments) ? message.attachments : undefined,
           applicationGeneration: parseStoredApplicationGeneration(message),
           imageGeneration: parseStoredImageGeneration(message),
-          agentPrompt: message.agentPrompt && typeof message.agentPrompt === "object" && typeof message.agentPrompt.question === "string"
-            ? {
-              id: typeof message.agentPrompt.id === "string" ? message.agentPrompt.id : `${agentId}-${message.createdAt ?? Date.now()}`,
-              type: ["clarify", "approval", "sudo", "secret", "prompt"].includes(message.agentPrompt.type) ? message.agentPrompt.type : "prompt",
-              question: message.agentPrompt.question,
-              choices: Array.isArray(message.agentPrompt.choices) ? message.agentPrompt.choices.filter((choice) => typeof choice === "string") : undefined,
-              allowFreeText: message.agentPrompt.allowFreeText === true,
-            }
-            : undefined,
+          capabilityApproval: parseStoredCapabilityApproval(message),
+          appArtifact: normalizeChatAppArtifact(message.appArtifact),
+          agentPrompt: parseStoredAgentPrompt(message, agentId),
         })).slice(-120),
       ])
       .filter(([, messages]) => !isAutomationChatTranscript(messages)));
@@ -672,17 +839,34 @@ export function formatHiveAmount(value: number): string {
   return value.toLocaleString(undefined, { maximumFractionDigits: value < 1 ? 6 : 2 });
 }
 
+/**
+ * Collectors have no authority to declare a Queen Bee — the queen is a
+ * dashboard-level choice, and old collectors in the field still self-declare
+ * their detected OpenClaw runtime as one. Demote any discovered "queen" to a
+ * worker before the fleet renders or persists it.
+ */
+export function sanitizeDiscoveredAgentRoles(machines: DiscoveredMachine[]): DiscoveredMachine[] {
+  return machines.map((machine) => (
+    machine.agents?.some((agent) => agent.beeRole === "queen")
+      ? {
+        ...machine,
+        agents: machine.agents.map((agent) => (agent.beeRole === "queen" ? { ...agent, beeRole: "worker" as const } : agent)),
+      }
+      : machine
+  ));
+}
+
 export function parseStoredDiscoveredMachines(snapshot: DashboardStateSnapshot = {}): DiscoveredMachine[] {
   const raw = readStoredValue(snapshot, DISCOVERED_MACHINES_STORAGE_KEY, STORAGE_SUFFIXES.discoveredMachines);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as DiscoveredMachine[];
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((machine) => (
+    return sanitizeDiscoveredAgentRoles(parsed.filter((machine) => (
       machine?.device
       && typeof machine.device.name === "string"
       && typeof machine.collector === "string"
-    ));
+    )));
   } catch {
     return [];
   }
@@ -710,6 +894,24 @@ export function parseStoredFleetSnapshots(snapshot: DashboardStateSnapshot = {})
   } catch {
     return {};
   }
+}
+
+// Persisted seed only — the in-session map stays complete. The fleet merge
+// never evicts, so ephemeral per-PID agents accumulate forever; this key once
+// reached 30MB (2,822 agents), and every dashboard-state save rewrites the
+// whole store, which froze the desktop app (native invokes serialize on the
+// UI-process main thread). Keep only the most recently checked snapshots.
+const FLEET_SNAPSHOTS_PERSIST_LIMIT = 128;
+
+export function compactFleetSnapshotsForPersist(snapshots: Record<string, AgentSnapshot>): Record<string, AgentSnapshot> {
+  return Object.fromEntries(Object.entries(snapshots)
+    .filter(([, snapshot]) => snapshot?.tasks?.length > 0)
+    .sort(([, a], [, b]) => (b?.checkedAt ?? 0) - (a?.checkedAt ?? 0))
+    .slice(0, FLEET_SNAPSHOTS_PERSIST_LIMIT)
+    .map(([agentId, snapshot]) => [agentId, {
+      ...snapshot,
+      tasks: snapshot.tasks.slice(0, 12),
+    }]));
 }
 
 export function parseStoredMachineNameAliases(snapshot: DashboardStateSnapshot = {}): Record<string, string> {

@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-07-15T16:32:31.776495+00:00",
+  "request": "Implement all seven evolved copy-trading improvements: fast risk gate, precomputed intelligence, Sol adjudication, calibration, realistic EVO scoring, counterfactuals, and conservative promotion.",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/quant-research-validator.py",
+      "target_path": "src/lib/services/copy-trading/evolution.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the existing circular block bootstrap and cost-aware paired promotion gates to copy-trade deltas."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-cloud-services",
+      "source_path": "workers/token-autopsy-gateway/src/autopsy.ts",
+      "target_path": "src/lib/services/copy-trading/risk-intelligence.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted staged evidence collection and explicit missing-evidence semantics for post-fill token review."
+    },
+    {
+      "source_repo": "GoPlusSecurity/goplus-sdk-node",
+      "source_path": "src/gen/api/TokenControllerV1Api.js",
+      "target_path": "src/lib/services/copy-trading/risk-intelligence.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the official Base token-security endpoint and parameter contract to the native fetch path."
+    },
+    {
+      "source_repo": "GoPlusSecurity/goplus-sdk-node",
+      "source_path": "src/gen/api/TokenSecurityAPIForSolanaBetaApi.js",
+      "target_path": "src/lib/services/copy-trading/risk-intelligence.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the official Solana token-security endpoint and response contract to the native fetch path."
+    },
+    {
+      "source_repo": "GoPlusSecurity/goplus-sdk-node",
+      "source_path": "__tests__/SolanaTokenSecurity.test.js",
+      "target_path": "scripts/test-copy-trading.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Adapted Solana authority and status response fixtures into normalization and hard-vs-caution tests."
+    }
+  ]
+}

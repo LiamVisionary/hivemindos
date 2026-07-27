@@ -1,0 +1,345 @@
+.closeButton,
+.primaryButton,
+.secondaryButton,
+.readyStatus,
+.removeButton,
+.confirmRemoveButton {
+  font-weight: 500;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(2, 6, 12, 0.72);
+  backdrop-filter: blur(12px);
+}
+
+.dialog {
+  width: min(620px, 100%);
+  max-height: min(760px, calc(100dvh - 40px));
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  border-radius: 14px;
+  background: var(--surface-strong, #10151d);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.48);
+  color: var(--foreground);
+}
+
+.dialogHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.titleGroup {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.titleGroup p,
+.sectionHeading p {
+  margin: 0 0 4px;
+  color: var(--accent-strong);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.titleGroup h2 {
+  margin: 0;
+  font-size: clamp(18px, 3vw, 23px);
+  line-height: 1.2;
+}
+
+.titleIcon,
+.passkeyIcon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--accent-strong);
+}
+
+.titleIcon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+}
+
+.titleIcon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.closeButton {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.closeButton svg {
+  width: 17px;
+  height: 17px;
+}
+
+.body {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+
+.intro,
+.notice,
+.message {
+  margin: 0;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.intro {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.primaryButton,
+.secondaryButton,
+.readyStatus,
+.removeButton,
+.confirmRemoveButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.primaryButton,
+.secondaryButton,
+.readyStatus {
+  min-height: 40px;
+  padding: 9px 13px;
+  font-size: 13px;
+}
+
+.primaryButton {
+  border: 1px solid color-mix(in srgb, var(--accent) 52%, transparent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--accent-strong);
+}
+
+.secondaryButton {
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  color: var(--foreground);
+}
+
+.readyStatus {
+  border: 1px solid color-mix(in srgb, var(--accent) 52%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-strong);
+  cursor: default;
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.removeButton:disabled,
+.confirmRemoveButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.primaryButton svg,
+.secondaryButton svg,
+.readyStatus svg,
+.removeButton svg,
+.confirmRemoveButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.notice,
+.message {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.message {
+  color: var(--foreground);
+}
+
+.sectionHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 2px;
+}
+
+.sectionHeading strong {
+  font-size: 14px;
+}
+
+.sectionHeading > svg {
+  width: 17px;
+  height: 17px;
+  color: var(--muted);
+}
+
+.passkeyList {
+  display: grid;
+  gap: 9px;
+}
+
+.passkeyRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.passkeyIcon {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+}
+
+.passkeyIcon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.passkeyCopy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.passkeyCopy strong,
+.passkeyCopy span {
+  overflow-wrap: anywhere;
+}
+
+.passkeyCopy strong {
+  font-size: 13px;
+}
+
+.passkeyCopy span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.removeButton,
+.confirmRemoveButton {
+  min-height: 32px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.confirmRemoveButton {
+  border-color: color-mix(in srgb, var(--danger) 48%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+}
+
+.emptyState {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  padding: 22px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.emptyState svg {
+  width: 24px;
+  height: 24px;
+  color: var(--accent-strong);
+}
+
+.emptyState strong {
+  color: var(--foreground);
+  font-size: 13px;
+}
+
+.emptyState span {
+  max-width: 390px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.spin {
+  animation: security-spin 900ms linear infinite;
+}
+
+@keyframes security-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 560px) {
+  .backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .dialog {
+    width: 100%;
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px));
+    border-radius: 16px 16px 0 0;
+  }
+
+  .dialogHeader,
+  .body {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .passkeyRow {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .removeButton,
+  .confirmRemoveButton {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+  }
+}

@@ -5,5 +5,7 @@
 /gen/schemas
 /resources/*
 !/resources/README.md
+!/resources/third-party/
+!/resources/third-party/document-reader-NOTICE.txt
 /static/*
 !/static/README.md

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowUpRight, Check, ChevronDown, Copy, Cpu, LoaderCircle, Plus, PlugZap, RefreshCcw, Search, ShieldCheck, X } from "lucide-react";
+import { ArrowUpRight, Check, ChevronDown, Copy, Cpu, LoaderCircle, Plus, PlugZap, RefreshCcw, Search, ShieldCheck } from "lucide-react";
 import { Transaction } from "@solana/web3.js";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
@@ -14,7 +14,6 @@ type GuidedUsePodSetupProps = {
   fleetClass?: (...classes: string[]) => string;
   requireCurrentSetup?: boolean;
   recoverSavedSetup?: boolean;
-  onCancel: () => void;
   onComplete: (patch: Partial<AgentProfile>) => void | Promise<void>;
 };
 
@@ -268,7 +267,6 @@ export function GuidedUsePodSetup({
   existingWallets = [],
   requireCurrentSetup = false,
   recoverSavedSetup = true,
-  onCancel,
   onComplete,
 }: GuidedUsePodSetupProps) {
   const initialStep = initialUsePodSetupStep(agent?.usePod);
@@ -866,9 +864,6 @@ export function GuidedUsePodSetup({
           <h2>{headerCopy.title}</h2>
           <p>{headerCopy.body}</p>
         </div>
-        <button type="button" className={styles.x} aria-label="Close UsePod setup" onClick={onCancel}>
-          <X aria-hidden="true" />
-        </button>
       </header>
 
       {setupView === "setup" && !registering && !showingSuccess ? (

@@ -24,11 +24,16 @@ async function postDashboardState(body: { values?: DashboardStateSnapshot; remov
       return false;
     }
   }
+  const payload = JSON.stringify(body);
   const response = await fetch(DASHBOARD_STATE_ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    keepalive: true,
+    body: payload,
+    // keepalive caps request bodies at 64KB and REJECTS larger ones outright,
+    // so with it always on, big values (agent profiles ~91KB) silently never
+    // saved from browser contexts. Keep it only where it helps: small writes
+    // that must survive page unload.
+    keepalive: payload.length < 60_000,
   }).catch(() => null);
   const data = await response?.json().catch(() => null) as { ok?: boolean } | null;
   return Boolean(response?.ok && data?.ok);

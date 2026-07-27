@@ -1,0 +1,1033 @@
+/* Unified task conversation modal + board notice styles.
+   Lives in its own module because kanban-board.module.css is at its legacy
+   size allowance; new kanban styles should land here. Raw color values match
+   the kanban board palette (the modal portals to <body>, outside the
+   .workBoardPanel token scope). */
+
+/* The feed does NOT scroll on its own: the modal body is the single
+   scrollview (see .convoScrollBody), so entries flow in the page scroll. */
+.convoFeed {
+  display: grid;
+  gap: 8px;
+  margin-top: 2px;
+  align-content: start;
+}
+
+/* Single scroller for the whole conversation: overrides the kanban-board
+   module's .kanbanChatBody (fixed grid rows + overflow hidden) and lets the
+   .kanbanModalBody scroll carry everything — composer, banner, and feed.
+   Doubled class so it wins regardless of module bundle order. */
+.convoScrollBody.convoScrollBody {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+}
+
+/* Compact, content-sized composer. Kills the modal-wide 150px textarea
+   minimum and the manual resize handle (whose dragging made the box cover
+   the feed and let entry dots paint over the input); the ComposerField
+   autoGrow prop sizes the box to its text instead. */
+.convoComposer.convoComposer textarea {
+  min-height: 78px;
+  max-height: 320px;
+  resize: none;
+  overflow-y: auto;
+}
+
+/* Structured control-plane task brief: routing key-values as a definition
+   grid, small-caps section titles, and the company-memory digest as a
+   timeline — instead of the raw dispatch-prompt dump. */
+.briefView {
+  display: grid;
+  gap: 12px;
+}
+
+.briefSection {
+  display: grid;
+  gap: 8px;
+}
+
+.briefSection + .briefSection {
+  border-top: 1px solid rgba(238, 232, 220, 0.08);
+  padding-top: 12px;
+}
+
+.briefTitle {
+  margin: 0;
+  color: #a8a294;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.briefFields {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 5px 16px;
+  margin: 0;
+}
+
+.briefFields > div {
+  display: contents;
+}
+
+.briefFields dt {
+  color: #76726a;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.7;
+  white-space: nowrap;
+}
+
+.briefFields dd {
+  margin: 0;
+  color: #dfe6ee;
+  font-size: 12.5px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.briefProse {
+  display: grid;
+  gap: 8px;
+}
+
+.briefProse p {
+  margin: 0;
+  color: #c6d1df;
+  font-size: 12.5px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.briefActivity {
+  list-style: none;
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+}
+
+.briefActivity li {
+  display: grid;
+  grid-template-columns: max-content max-content minmax(0, 1fr);
+  gap: 9px;
+  align-items: baseline;
+}
+
+.briefActivity time {
+  color: #76726a;
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 10.5px;
+}
+
+.briefActivityKind {
+  border: 1px solid rgba(238, 232, 220, 0.18);
+  border-radius: 999px;
+  padding: 0 7px;
+  color: #a8a294;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  line-height: 15px;
+}
+
+.briefActivityKind.done {
+  border-color: rgba(111, 205, 186, 0.34);
+  color: #9fe0d3;
+}
+
+.briefActivityKind.blocked {
+  border-color: rgba(229, 142, 133, 0.4);
+  color: #f0b3ad;
+}
+
+.briefActivityKind.dispatched {
+  border-color: rgba(231, 180, 92, 0.36);
+  color: #f0c879;
+}
+
+.briefActivityText {
+  color: #c6d1df;
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.briefGuidanceToggle {
+  justify-self: start;
+  border: 1px solid rgba(238, 232, 220, 0.14);
+  border-radius: 6px;
+  background: transparent;
+  color: #76726a;
+  padding: 3px 9px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+
+.briefGuidanceToggle:hover,
+.briefGuidanceToggle:focus-visible {
+  border-color: rgba(111, 205, 186, 0.35);
+  color: #9fe0d3;
+  outline: none;
+}
+
+:global(:root[data-theme="hive-light"]) .briefGuidanceToggle {
+  border-color: var(--comb-line);
+  color: var(--muted);
+}
+
+:global(:root[data-theme="hive-light"]) .briefGuidanceToggle:hover,
+:global(:root[data-theme="hive-light"]) .briefGuidanceToggle:focus-visible {
+  border-color: rgba(13, 142, 126, 0.4);
+  color: #0d5a4e;
+}
+
+:global(:root[data-theme="hive-light"]) .briefSection + .briefSection {
+  border-top-color: var(--comb-line);
+}
+
+:global(:root[data-theme="hive-light"]) .briefTitle,
+:global(:root[data-theme="hive-light"]) .briefFields dt,
+:global(:root[data-theme="hive-light"]) .briefActivity time {
+  color: var(--muted);
+}
+
+:global(:root[data-theme="hive-light"]) .briefFields dd,
+:global(:root[data-theme="hive-light"]) .briefProse p,
+:global(:root[data-theme="hive-light"]) .briefActivityText {
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .briefActivityKind {
+  border-color: var(--comb-line);
+  color: var(--muted);
+}
+
+:global(:root[data-theme="hive-light"]) .briefActivityKind.done {
+  border-color: rgba(13, 142, 126, 0.4);
+  color: #0d5a4e;
+}
+
+:global(:root[data-theme="hive-light"]) .briefActivityKind.blocked {
+  border-color: rgba(178, 58, 72, 0.4);
+  color: #a83244;
+}
+
+:global(:root[data-theme="hive-light"]) .briefActivityKind.dispatched {
+  border-color: rgba(140, 94, 10, 0.4);
+  color: #8c5e0a;
+}
+
+/* Events list flows in the modal-body scroll too (kills .modalEvents's own
+   520px scrollview). */
+.convoNoScroll.convoNoScroll {
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+}
+
+.convoEntry {
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(238, 232, 220, 0.12);
+  border-radius: 8px;
+  background: rgba(16, 17, 22, 0.48);
+  padding: 10px 11px;
+}
+
+.convoEntry.user {
+  border-color: rgba(111, 205, 186, 0.22);
+  background: rgba(111, 205, 186, 0.08);
+}
+
+.convoEntry.note {
+  border-color: rgba(231, 180, 92, 0.22);
+  background: rgba(231, 180, 92, 0.06);
+}
+
+.convoEntry.result {
+  border-color: rgba(111, 205, 186, 0.3);
+  background: rgba(111, 205, 186, 0.05);
+}
+
+.convoEntry.system,
+.convoEntry.brief {
+  border-style: dashed;
+  background: rgba(16, 17, 22, 0.32);
+}
+
+.convoEntryHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.convoEntryHead strong {
+  color: #f8fafc;
+  font-size: 12px;
+}
+
+.convoEntryHead time {
+  color: #76726a;
+  flex: 0 0 auto;
+  font-size: 10px;
+}
+
+.convoKind {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 7px;
+  border: 1px solid rgba(238, 232, 220, 0.16);
+  border-radius: 999px;
+  padding: 1px 7px;
+  color: #a8a294;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+.convoEntry.result .convoKind {
+  border-color: rgba(111, 205, 186, 0.34);
+  color: #9fe0d3;
+}
+
+.convoEntry.note .convoKind {
+  border-color: rgba(231, 180, 92, 0.34);
+  color: #f0c879;
+}
+
+/* Readable body: real line-height, wrapping code, spaced paragraphs. Fixes
+   the wall-of-text rendering that plain <p>{comment.body}</p> produced. */
+.convoBody {
+  margin: 0;
+  color: #c6d1df;
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.convoBody p {
+  margin: 0;
+}
+
+.convoBody p + p,
+.convoBody ul + p,
+.convoBody ol + p,
+.convoBody pre + p {
+  margin-top: 9px;
+}
+
+.convoBody ul,
+.convoBody ol {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.convoBody code {
+  overflow-wrap: anywhere;
+}
+
+.convoComposerHint {
+  margin: 2px 0 0;
+  color: #76726a;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.convoEmpty {
+  border: 1px dashed rgba(238, 232, 220, 0.16);
+  border-radius: 8px;
+  padding: 16px 12px;
+  color: #76726a;
+  font-size: 12px;
+  text-align: center;
+}
+
+/* Informational board banner (non-error): shown when the board adjusts or
+   cancels a move on the user's behalf. */
+.kanbanNotice {
+  border: 1px solid rgba(111, 205, 186, 0.4);
+  border-radius: 6px;
+  background: rgba(111, 205, 186, 0.09);
+  color: #9fe0d3;
+  padding: 10px 12px;
+  font-size: 12.5px;
+}
+
+/* Advanced per-card controls (machine picker, attachments) stay reachable but
+   quiet until pointed at, keeping the default card simple. */
+.cardQuietMeta {
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
+}
+
+.cardQuietMeta:hover,
+.cardQuietMeta:focus-within {
+  opacity: 1;
+}
+
+/* The human-facing ask on a Needs You card: what to decide or do, extracted
+   from the agent's result, shown instead of boilerplate body text. */
+.needsYouCallout {
+  display: grid;
+  gap: 3px;
+  border: 1px solid rgba(229, 142, 133, 0.38);
+  border-left-width: 3px;
+  border-radius: 7px;
+  background: rgba(229, 142, 133, 0.08);
+  padding: 8px 10px;
+}
+
+.needsYouCallout strong {
+  color: #f0b3ad;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.needsYouCallout span {
+  color: #e7d9d4;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* Same ask, banner-sized, at the top of the conversation modal. */
+.needsYouBanner {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(229, 142, 133, 0.42);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: rgba(229, 142, 133, 0.09);
+  padding: 10px 12px;
+}
+
+.needsYouBanner strong {
+  color: #f0b3ad;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.needsYouBanner span {
+  color: #f1e7e3;
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+/* Interactive body of a Needs-You callout: link chips, one-click decision
+   options, and the API-key form. Shared by the card callout (compact) and the
+   conversation banner. */
+.needsYouActions {
+  display: grid;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.needsYouActions.compact {
+  gap: 6px;
+}
+
+.needsYouLinks,
+.needsYouOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.needsYouLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid rgba(238, 232, 220, 0.18);
+  border-radius: 999px;
+  background: rgba(9, 13, 20, 0.45);
+  color: #9fe0d3;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.needsYouLink:hover,
+.needsYouLink:focus-visible {
+  border-color: rgba(111, 205, 186, 0.5);
+  background: rgba(111, 205, 186, 0.14);
+  outline: none;
+}
+
+.needsYouOption {
+  border: 1px solid rgba(229, 142, 133, 0.45);
+  border-radius: 8px;
+  background: rgba(229, 142, 133, 0.12);
+  color: #f4ded9;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.needsYouOption:hover:not(:disabled),
+.needsYouOption:focus-visible {
+  border-color: rgba(229, 142, 133, 0.75);
+  background: rgba(229, 142, 133, 0.24);
+  outline: none;
+}
+
+.needsYouOption:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.needsYouKeyForm {
+  display: grid;
+  gap: 6px;
+}
+
+.needsYouKeyItem {
+  display: grid;
+  gap: 4px;
+}
+
+.needsYouKeyRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.needsYouKeyRow input {
+  border: 1px solid rgba(238, 232, 220, 0.18);
+  border-radius: 7px;
+  background: rgba(9, 13, 20, 0.55);
+  color: #f3f0e9;
+  padding: 5px 9px;
+  font-size: 11.5px;
+}
+
+.needsYouKeyRow input:focus-visible {
+  border-color: rgba(111, 205, 186, 0.5);
+  outline: none;
+}
+
+.needsYouKeyNameWrap {
+  position: relative;
+  display: flex;
+  flex: 0 1 248px;
+  min-width: 160px;
+  gap: 5px;
+}
+
+.needsYouKeyName {
+  flex: 1 1 auto;
+  min-width: 120px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+}
+
+.needsYouKeyValue {
+  flex: 1 1 200px;
+  min-width: 150px;
+}
+
+.needsYouKeyRow button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid rgba(111, 205, 186, 0.4);
+  border-radius: 7px;
+  background: rgba(111, 205, 186, 0.15);
+  color: #9fe0d3;
+  padding: 5px 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.needsYouKeyRow button:hover:not(:disabled),
+.needsYouKeyRow button:focus-visible {
+  border-color: rgba(111, 205, 186, 0.6);
+  background: rgba(111, 205, 186, 0.24);
+  outline: none;
+}
+
+.needsYouKeyRow button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.needsYouIconButton,
+.needsYouClearSelected {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 30px;
+  width: 30px;
+  min-height: 30px;
+  padding: 0;
+}
+
+.needsYouIconButton svg,
+.needsYouClearSelected svg {
+  width: 15px;
+  height: 15px;
+}
+
+.needsYouSelectedKey {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid rgba(111, 205, 186, 0.42);
+  border-radius: 7px;
+  background: rgba(111, 205, 186, 0.13);
+  color: #b7eee4;
+  padding: 3px 4px 3px 9px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+}
+
+.needsYouSelectedKey span {
+  min-width: 0;
+  flex: 1 1 auto;
+  color: inherit;
+  font: inherit;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.needsYouClearSelected {
+  flex-basis: 24px;
+  width: 24px;
+  min-height: 24px;
+  border-color: rgba(238, 232, 220, 0.16);
+  background: rgba(9, 13, 20, 0.32);
+}
+
+.needsYouKeyMenu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  min-width: min(320px, calc(100vw - 32px));
+  border: 1px solid rgba(111, 205, 186, 0.34);
+  border-radius: 8px;
+  background: rgba(13, 16, 25, 0.98);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.36);
+  padding: 7px;
+}
+
+.needsYouKeySearch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(238, 232, 220, 0.16);
+  border-radius: 7px;
+  background: rgba(9, 13, 20, 0.5);
+  padding: 5px 7px;
+}
+
+.needsYouKeySearch svg {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  color: #9fe0d3;
+}
+
+.needsYouKeyRow .needsYouKeySearch input {
+  min-width: 0;
+  flex: 1 1 auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.needsYouKeyOptions {
+  display: grid;
+  gap: 3px;
+  max-height: 210px;
+  overflow-y: auto;
+  padding-top: 6px;
+}
+
+.needsYouKeyOptions button {
+  justify-content: flex-start;
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #e8f6f2;
+  padding: 6px 7px;
+  text-align: left;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.needsYouKeyOptions button:hover,
+.needsYouKeyOptions button:focus-visible,
+.needsYouKeyOptions button[aria-selected="true"] {
+  background: rgba(111, 205, 186, 0.16);
+  color: #9fe0d3;
+}
+
+.needsYouKeyLoading,
+.needsYouKeyEmpty {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 6px 0 0;
+  color: rgba(241, 231, 227, 0.72);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.needsYouMapping {
+  margin: 0;
+  color: rgba(241, 231, 227, 0.74);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.needsYouMapping code {
+  color: #9fe0d3;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+}
+
+.needsYouSpin {
+  animation: needs-you-spin 0.9s linear infinite;
+}
+
+@keyframes needs-you-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .needsYouSpin {
+    animation: none;
+  }
+}
+
+.needsYouHint {
+  margin: 0;
+  color: rgba(241, 231, 227, 0.72);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.needsYouError {
+  margin: 0;
+  color: #f0b3ad;
+  font-size: 11px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* Artifact paths pulled out of result prose: filename chip + open actions. */
+.convoArtifacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.convoArtifact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(238, 232, 220, 0.16);
+  border-radius: 6px;
+  background: rgba(9, 13, 20, 0.5);
+  padding: 3px 6px;
+}
+
+.convoArtifact code {
+  color: #9fe0d3;
+  font-size: 10.5px;
+  overflow-wrap: anywhere;
+}
+
+.convoArtifact button {
+  border: 1px solid rgba(111, 205, 186, 0.28);
+  border-radius: 5px;
+  background: rgba(111, 205, 186, 0.08);
+  color: #9fe0d3;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.convoArtifact button:hover,
+.convoArtifact button:focus-visible {
+  border-color: rgba(111, 205, 186, 0.5);
+  background: rgba(111, 205, 186, 0.16);
+  outline: none;
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouCallout,
+:global(:root[data-theme="hive-light"]) .needsYouBanner {
+  border-color: rgba(178, 58, 72, 0.4);
+  background: rgba(178, 58, 72, 0.07);
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouCallout strong,
+:global(:root[data-theme="hive-light"]) .needsYouBanner strong {
+  color: #a83244;
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouCallout span,
+:global(:root[data-theme="hive-light"]) .needsYouBanner span {
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouLink {
+  border-color: rgba(13, 142, 126, 0.35);
+  background: rgba(13, 142, 126, 0.08);
+  color: #0d5a4e;
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouOption {
+  border-color: rgba(178, 58, 72, 0.42);
+  background: rgba(178, 58, 72, 0.08);
+  color: #8c2a3a;
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouOption:hover:not(:disabled),
+:global(:root[data-theme="hive-light"]) .needsYouOption:focus-visible {
+  border-color: rgba(178, 58, 72, 0.65);
+  background: rgba(178, 58, 72, 0.16);
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouKeyRow input {
+  border-color: var(--comb-line);
+  background: var(--surface-strong);
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouKeyRow button {
+  border-color: rgba(13, 142, 126, 0.35);
+  background: rgba(13, 142, 126, 0.08);
+  color: #0d5a4e;
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouSelectedKey {
+  border-color: rgba(13, 142, 126, 0.35);
+  background: rgba(13, 142, 126, 0.08);
+  color: #0d5a4e;
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouClearSelected {
+  border-color: var(--comb-line);
+  background: rgba(255, 255, 255, 0.48);
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouKeyMenu {
+  border-color: rgba(13, 142, 126, 0.28);
+  background: var(--surface-strong);
+  box-shadow: 0 18px 38px rgba(78, 61, 35, 0.2);
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouKeySearch {
+  border-color: var(--comb-line);
+  background: rgba(255, 255, 255, 0.52);
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouKeySearch svg,
+:global(:root[data-theme="hive-light"]) .needsYouMapping code {
+  color: #0d5a4e;
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouKeyOptions button {
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouKeyOptions button:hover,
+:global(:root[data-theme="hive-light"]) .needsYouKeyOptions button:focus-visible,
+:global(:root[data-theme="hive-light"]) .needsYouKeyOptions button[aria-selected="true"] {
+  background: rgba(13, 142, 126, 0.1);
+  color: #0d5a4e;
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouKeyLoading,
+:global(:root[data-theme="hive-light"]) .needsYouKeyEmpty,
+:global(:root[data-theme="hive-light"]) .needsYouMapping {
+  color: var(--muted-foreground, rgba(60, 50, 40, 0.7));
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouHint {
+  color: var(--muted-foreground, rgba(60, 50, 40, 0.7));
+}
+
+:global(:root[data-theme="hive-light"]) .needsYouError {
+  color: #a83244;
+}
+
+:global(:root[data-theme="hive-light"]) .convoArtifact {
+  border-color: var(--comb-line);
+  background: var(--surface-strong);
+}
+
+:global(:root[data-theme="hive-light"]) .convoArtifact code {
+  color: #0d5a4e;
+}
+
+:global(:root[data-theme="hive-light"]) .convoArtifact button {
+  border-color: rgba(13, 142, 126, 0.35);
+  background: rgba(13, 142, 126, 0.08);
+  color: #0d5a4e;
+}
+
+/* Small count on the card's conversation button so a card with recorded
+   results/notes advertises that there is something to read. */
+.convoCountBadge {
+  min-width: 13px;
+  border-radius: 999px;
+  background: rgba(111, 205, 186, 0.18);
+  color: #9fe0d3;
+  padding: 0 4px;
+  font-size: 9px;
+  font-weight: 750;
+  line-height: 13px;
+  text-align: center;
+}
+
+/* One-click resolutions on Needs You cards: no arrow-decoding required. */
+.cardQuickActions {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.cardQuickActions button {
+  border: 1px solid rgba(231, 180, 92, 0.3);
+  border-radius: 6px;
+  background: rgba(231, 180, 92, 0.08);
+  color: #f0c879;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+
+.cardQuickActions button:hover,
+.cardQuickActions button:focus-visible {
+  border-color: rgba(231, 180, 92, 0.55);
+  background: rgba(231, 180, 92, 0.16);
+  outline: none;
+}
+
+.cardQuickActions button:last-child {
+  border-color: rgba(111, 205, 186, 0.3);
+  background: rgba(111, 205, 186, 0.08);
+  color: #9fe0d3;
+}
+
+.cardQuickActions button:last-child:hover,
+.cardQuickActions button:last-child:focus-visible {
+  border-color: rgba(111, 205, 186, 0.55);
+  background: rgba(111, 205, 186, 0.16);
+}
+
+/* Column lights up while a card is dragged over it, so drag-and-drop
+   visibly responds before the drop. */
+.laneDropTarget {
+  outline: 1.5px dashed rgba(111, 205, 186, 0.55);
+  outline-offset: -4px;
+  background-color: rgba(111, 205, 186, 0.05) !important;
+  transition: background-color 0.12s ease;
+}
+
+:global(:root[data-theme="hive-light"]) .convoCountBadge {
+  background: rgba(13, 142, 126, 0.14);
+  color: #0d5a4e;
+}
+
+:global(:root[data-theme="hive-light"]) .cardQuickActions button {
+  border-color: rgba(140, 94, 10, 0.35);
+  background: rgba(212, 180, 111, 0.14);
+  color: #6a4505;
+}
+
+:global(:root[data-theme="hive-light"]) .cardQuickActions button:last-child {
+  border-color: rgba(13, 142, 126, 0.35);
+  background: rgba(13, 142, 126, 0.08);
+  color: #0d5a4e;
+}
+
+:global(:root[data-theme="hive-light"]) .laneDropTarget {
+  outline-color: rgba(13, 142, 126, 0.5);
+  background-color: rgba(13, 142, 126, 0.05) !important;
+}
+
+:global(:root[data-theme="hive-light"]) .convoEntry {
+  border-color: var(--comb-line);
+  background: var(--surface);
+}
+
+:global(:root[data-theme="hive-light"]) .convoEntry.user {
+  border-color: rgba(13, 142, 126, 0.3);
+  background: rgba(13, 142, 126, 0.08);
+}
+
+:global(:root[data-theme="hive-light"]) .convoEntry.note {
+  border-color: rgba(140, 94, 10, 0.28);
+  background: rgba(212, 180, 111, 0.12);
+}
+
+:global(:root[data-theme="hive-light"]) .convoEntry.result {
+  border-color: rgba(13, 142, 126, 0.34);
+  background: rgba(13, 142, 126, 0.05);
+}
+
+:global(:root[data-theme="hive-light"]) .convoEntryHead strong,
+:global(:root[data-theme="hive-light"]) .convoBody {
+  color: var(--foreground);
+}
+
+:global(:root[data-theme="hive-light"]) .convoEntryHead time,
+:global(:root[data-theme="hive-light"]) .convoComposerHint,
+:global(:root[data-theme="hive-light"]) .convoEmpty,
+:global(:root[data-theme="hive-light"]) .convoKind {
+  color: var(--muted);
+}
+
+:global(:root[data-theme="hive-light"]) .convoEntry.result .convoKind {
+  color: #0d5a4e;
+  border-color: rgba(13, 142, 126, 0.34);
+}
+
+:global(:root[data-theme="hive-light"]) .convoEntry.note .convoKind {
+  color: #8c5e0a;
+  border-color: rgba(140, 94, 10, 0.3);
+}
+
+:global(:root[data-theme="hive-light"]) .kanbanNotice {
+  border-color: rgba(13, 142, 126, 0.4);
+  background: rgba(13, 142, 126, 0.08);
+  color: #0d5a4e;
+}

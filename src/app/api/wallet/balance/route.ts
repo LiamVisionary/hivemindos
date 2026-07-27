@@ -8,7 +8,7 @@ function walletBalanceErrorMessage(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || "");
   const lower = message.toLowerCase();
   if (lower.includes("over rate limit") || lower.includes("rate limit") || lower.includes("too many request") || lower.includes("429")) {
-    return "Base RPC providers are temporarily rate limiting balance reads. Try Refresh again in a moment.";
+    return "Wallet RPC providers are temporarily rate limiting balance reads. Try Refresh again in a moment.";
   }
   if (lower.includes("fetch failed") || lower.includes("timeout") || lower.includes("etimedout") || lower.includes("econnreset")) {
     return "Could not reach the wallet balance providers. Try Refresh again in a moment.";

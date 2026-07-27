@@ -2,9 +2,12 @@
 
 import * as React from "react";
 import { Btn, Card, Icon, Pill, SectionHead, TONE, type Tone, aeonStyles as styles } from "./parts";
-import { RUN_LOG_SAMPLE, type AeonOutput, type AeonRun } from "./aeon-data";
+import { type AeonOutput, type AeonRun } from "./aeon-data";
+import { Spinner } from "@/features/dashboard/views/zero-human-companies/primitives";
 
-function RunRow({ run, open, onOpen }: { run: AeonRun; open: boolean; onOpen: (id: string | null) => void }) {
+type RunLogState = { loading?: boolean; text?: string; error?: string };
+
+function RunRow({ run, open, log, onOpen }: { run: AeonRun; open: boolean; log?: RunLogState; onOpen: (id: string | null) => void }) {
   const tone: Tone = run.status === "completed" ? "green" : run.status === "failed" ? "rose" : "honey";
   const live = run.status === "active";
   return (
@@ -19,28 +22,38 @@ function RunRow({ run, open, onOpen }: { run: AeonRun; open: boolean; onOpen: (i
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <Pill tone={tone} dot={live}>{run.status}</Pill>
-          <Btn size="sm" variant="ghost" icon="file" onClick={() => onOpen(open ? null : run.id)}>Logs</Btn>
+          <Btn size="sm" variant="ghost" icon={log?.loading ? undefined : "file"} onClick={() => onOpen(open ? null : run.id)}>{log?.loading ? <><Spinner />Loading</> : "Logs"}</Btn>
         </div>
       </div>
       {open && (
         <pre className={styles.scroll} style={{ margin: 0, padding: "12px 14px", maxHeight: 200, overflow: "auto", whiteSpace: "pre-wrap",
-          fontSize: 11.5, lineHeight: 1.65, fontFamily: "var(--f-mono)", color: "var(--fg-3)", background: "rgba(2,6,23,0.5)", borderTop: "1px solid var(--line)" }}>{RUN_LOG_SAMPLE}</pre>
+          fontSize: 11.5, lineHeight: 1.65, fontFamily: "var(--f-mono)", color: log?.error ? "var(--danger-2)" : "var(--fg-3)", background: "rgba(2,6,23,0.5)", borderTop: "1px solid var(--line)" }}>{log?.error || log?.text || (log?.loading ? "" : "No run log was returned.")}</pre>
       )}
     </div>
   );
 }
 
-export function AeonActivity({ runs, outputs }: { runs: AeonRun[]; outputs: AeonOutput[] }) {
+export function AeonActivity({ runs, outputs, onLoadRunLog }: { runs: AeonRun[]; outputs: AeonOutput[]; onLoadRunLog?: (runId: string) => Promise<string> }) {
   const [openRun, setOpenRun] = React.useState<string | null>(null);
+  const [logs, setLogs] = React.useState<Record<string, RunLogState>>({});
   const ok = runs.filter((r) => r.status === "completed").length;
   const fail = runs.filter((r) => r.status === "failed").length;
+  const openLog = React.useCallback((runId: string | null) => {
+    setOpenRun(runId);
+    if (!runId || logs[runId] || !onLoadRunLog) return;
+    setLogs((current) => ({ ...current, [runId]: { loading: true } }));
+    void onLoadRunLog(runId).then(
+      (text) => setLogs((current) => ({ ...current, [runId]: { text } })),
+      (error) => setLogs((current) => ({ ...current, [runId]: { error: error instanceof Error ? error.message : "Could not load the AEON run log." } })),
+    );
+  }, [logs, onLoadRunLog]);
   return (
     <div style={{ display: "grid", gap: 14, gridTemplateColumns: "1fr 1fr" }}>
       <Card>
         <SectionHead eyebrow="Runs" title="Recent runs" icon="activity"
           action={<div style={{ display: "flex", gap: 6 }}><Pill tone="green">{ok} ok</Pill><Pill tone="rose">{fail} failed</Pill></div>} />
         <div className={styles.scroll} style={{ display: "grid", gap: 8, maxHeight: 560, overflow: "auto", paddingRight: 4 }}>
-          {runs.map((r) => <RunRow key={r.id} run={r} open={openRun === r.id} onOpen={setOpenRun} />)}
+          {runs.map((r) => <RunRow key={r.id} run={r} open={openRun === r.id} log={logs[r.id]} onOpen={openLog} />)}
         </div>
       </Card>
 

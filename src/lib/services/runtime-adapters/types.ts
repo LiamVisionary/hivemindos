@@ -1,4 +1,5 @@
 import type { AgentProfile, AgentRuntime, AgentRuntimeKind, RuntimeCapabilities } from "@/lib/types/agent-runtime";
+import type { EvaluationResult } from "@/lib/types/evaluation";
 
 export type RuntimeAdapterContext = {
   requestUrl?: string;
@@ -8,7 +9,7 @@ export type RuntimeAdapterContext = {
 };
 
 export type RuntimeScheduleAction = "run-now" | "enable" | "disable";
-export type RuntimeSkillConfigAction = "enable" | "disable" | "schedule" | "var" | "model" | "automate";
+export type RuntimeSkillConfigAction = "enable" | "disable" | "schedule" | "var" | "model" | "harness" | "automate";
 
 export type RuntimeSchedule = {
   id: string;
@@ -37,6 +38,7 @@ export type RuntimeRun = {
   createdAt?: string;
   updatedAt?: string;
   conclusion?: string | null;
+  evaluation?: EvaluationResult;
 };
 
 export type RuntimeRunLog = {
@@ -44,6 +46,7 @@ export type RuntimeRunLog = {
   summary: string;
   logs: string;
   url?: string;
+  evaluation?: EvaluationResult;
 };
 
 export type RuntimeSkillMetrics = {
@@ -80,6 +83,12 @@ export type RuntimeSkill = {
   schedule?: string;
   var?: string;
   model?: string;
+  harness?: string;
+  tags?: string[];
+  requires?: Array<{ key: string; optional?: boolean }>;
+  mcp?: Array<{ slug: string; optional?: boolean }>;
+  pack?: string;
+  packName?: string;
   source?: string;
   path?: string;
   checksum?: string;

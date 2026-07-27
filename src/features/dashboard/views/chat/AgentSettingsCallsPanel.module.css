@@ -8,6 +8,7 @@
 .setupCard,
 .voiceBlock,
 .localTtsCard,
+.ttsMachineCard,
 .eventRow {
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -72,6 +73,12 @@
 .muted,
 .localTtsCard small,
 .localTtsCard p,
+.localTtsLoading span,
+.launchHead span,
+.ttsMachineTop small,
+.capacityLine,
+.ttsPopoverHint,
+.launchStatus,
 .setupCard p {
   color: var(--fg-4);
   font-size: 11.5px;
@@ -86,6 +93,12 @@
   color: var(--live);
   font-family: var(--f-mono);
   overflow-wrap: anywhere;
+}
+
+.inlineLoading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .alarm {
@@ -136,16 +149,38 @@
 }
 
 .day {
+  appearance: none;
   display: grid;
   place-items: center;
   width: 30px;
   height: 26px;
-  border: 1px solid var(--honey-line);
+  border: 1px solid var(--line-2);
   border-radius: 7px;
-  background: var(--honey-soft);
-  color: var(--honey);
+  background: var(--panel);
+  color: var(--fg-4);
+  cursor: pointer;
   font-family: var(--f-mono);
   font-size: 10px;
+  line-height: 1;
+  padding: 0;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.day[data-on] {
+  border-color: var(--honey-line);
+  background: var(--honey-soft);
+  color: var(--honey);
+}
+
+.day:hover,
+.day:focus-visible {
+  border-color: var(--honey-line);
+  color: var(--honey);
+  outline: none;
+}
+
+.day:active {
+  transform: translateY(1px);
 }
 
 .alarmActions {
@@ -288,19 +323,16 @@
   display: grid;
   gap: 8px;
   color: inherit;
-  cursor: pointer;
   padding: 12px;
   text-align: left;
 }
 
-.localTtsCard:hover,
 .localTtsCard[data-selected] {
   border-color: var(--honey-line);
   background: var(--honey-soft);
 }
 
-.localTtsCard:disabled {
-  cursor: not-allowed;
+.localTtsCard[data-unavailable] {
   opacity: 0.62;
 }
 
@@ -333,12 +365,561 @@
   font-weight: 700;
 }
 
+.localTtsInlineControls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+  padding-top: 12px;
+}
+
+.localTtsModelActions,
+.localTtsLoadedList {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.localTtsModelActions {
+  align-self: end;
+}
+
+.localTtsModelActions span {
+  color: var(--fg-4);
+  font-family: var(--f-mono);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.localTtsLoadedList {
+  grid-column: 1 / -1;
+}
+
+.localTtsLoading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  border: 1px solid var(--honey-line);
+  border-radius: var(--radius-sm);
+  background: var(--honey-soft);
+  color: var(--honey);
+  padding: 12px;
+}
+
+.localTtsLoading[data-tone="error"] {
+  border-color: color-mix(in srgb, var(--danger) 36%, var(--line));
+  background: color-mix(in srgb, var(--danger) 12%, var(--panel));
+  color: var(--danger);
+}
+
+.localTtsLoading div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.localTtsLoading strong {
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.localTtsEmpty {
+  display: grid;
+  gap: 12px;
+}
+
+.localTtsLaunchPanel {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  padding: 12px;
+}
+
+.launchHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.launchHead div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.launchHead strong,
+.ttsMachineTop strong {
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.ttsMachineGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+}
+
+.ttsMachineCard {
+  display: grid;
+  gap: 11px;
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  padding: 12px;
+}
+
+.ttsMachineCard[data-capacity="ready"] {
+  border-color: var(--honey-line);
+}
+
+.ttsMachineTop {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.ttsMachineTop > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ttsMachineIcon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--honey);
+}
+
+.resourceStrip {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.resourceStrip div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 78%, transparent);
+  padding: 8px;
+}
+
+.resourceStrip dt,
+.resourceStrip dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+.resourceStrip dt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--fg-4);
+  font-size: 10.5px;
+  text-transform: uppercase;
+}
+
+.resourceStrip dd {
+  color: var(--fg);
+  font-family: var(--f-mono);
+  font-size: 11px;
+}
+
+.capacityLine,
+.ttsPopoverHint,
+.launchStatus {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.ttsLaunchActions {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
+
+.ttsModelPopover {
+  display: grid;
+  gap: 9px;
+  width: min(330px, 100%);
+  border: 1px solid var(--honey-line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+  padding: 10px;
+}
+
 .messageOk {
   color: var(--live);
 }
 
 .messageError {
   color: var(--danger);
+}
+
+/* ---- Queen Bee Ministry --------------------------------------------- */
+.ministryPanel {
+  display: grid;
+  gap: 14px;
+}
+
+.ministryHero,
+.ministryTopologyHead,
+.ministryBenchTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ministryHero {
+  border: 1px solid var(--honey-line);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(circle at 80% 12%, color-mix(in srgb, var(--honey) 18%, transparent), transparent 28%),
+    linear-gradient(180deg, var(--honey-soft), transparent 82%);
+  padding: 15px;
+}
+
+.ministryHero :global(.as-phead) {
+  margin: 0;
+}
+
+.ministryEnable {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.ministryDial {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.ministryDialButton {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 3px 7px;
+  align-content: start;
+  min-height: 58px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--fg-3);
+  cursor: pointer;
+  padding: 9px;
+  text-align: left;
+}
+
+.ministryDialButton[data-on] {
+  border-color: var(--honey-line);
+  background: var(--honey-soft);
+  color: var(--honey);
+}
+
+.ministryDialButton span,
+.ministryBenchCard strong,
+.ministryTopologyHead strong,
+.ministryDragCard strong,
+.ministrySlot strong {
+  color: var(--fg);
+  font-size: 12.5px;
+  font-weight: 750;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.ministryDialButton small,
+.ministryBenchTop small,
+.ministryTopologyHead small,
+.ministryDragCard span,
+.ministrySlot small {
+  color: var(--fg-4);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.ministryDialButton small {
+  grid-column: 2;
+}
+
+.ministryGrid {
+  display: grid;
+  grid-template-columns: minmax(250px, 0.84fr) minmax(300px, 1.16fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.ministryBench,
+.ministryTopology {
+  display: grid;
+  gap: 10px;
+}
+
+.ministryBenchCard,
+.ministryTopology {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  padding: 12px;
+}
+
+.ministryBenchCard {
+  display: grid;
+  gap: 10px;
+}
+
+.ministryBenchTop {
+  align-items: center;
+}
+
+.ministryBenchTop > div,
+.ministryTopologyHead > div,
+.ministrySlot > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ministryMark,
+.ministrySlotOrb {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+  color: var(--honey);
+}
+
+.ministryMark {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  font-family: var(--f-mono);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.ministryProviderIcon {
+  display: block;
+  width: 19px;
+  height: 19px;
+  background-color: currentColor;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.ministryProviderIcon[data-mode="image"] {
+  background-color: transparent;
+}
+
+.ministryPickerGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.ministryDragCard {
+  appearance: none;
+  display: grid;
+  grid-template-columns: auto minmax(0, 0.8fr) minmax(0, 1.2fr);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 42px;
+  border: 1px dashed var(--line-2);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--fg-3);
+  cursor: grab;
+  font: inherit;
+  padding: 9px 10px;
+  text-align: left;
+  touch-action: none;
+  user-select: none;
+}
+
+.ministryDragCard:active {
+  cursor: grabbing;
+}
+
+.ministryDragCard:not([data-disabled]):hover,
+.ministryDragCard:not([data-disabled]):focus-visible,
+.ministryDragCard[data-dragging] {
+  border-color: var(--honey-line);
+  color: var(--honey);
+}
+
+.ministryDragCard[data-disabled] {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.ministryTopology {
+  min-height: 390px;
+}
+
+.ministryMap {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.ministryCoreSlot {
+  display: grid;
+  justify-items: center;
+}
+
+.ministryCoreSlot .ministrySlot {
+  width: min(280px, 100%);
+  min-height: 110px;
+  text-align: center;
+}
+
+.ministryConnectors {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  min-height: 34px;
+  padding: 0 9%;
+}
+
+.ministryConnectors span {
+  position: relative;
+  min-height: 34px;
+}
+
+.ministryConnectors span::before {
+  content: "";
+  position: absolute;
+  inset: 0 50% auto auto;
+  width: 1px;
+  height: 100%;
+  border-left: 1px dashed var(--line-2);
+}
+
+.ministryConnectors span::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 42%;
+  border-top: 1px dashed var(--line-2);
+  transform-origin: left center;
+}
+
+.ministryConnectors span:first-child::after {
+  transform: rotate(-20deg);
+}
+
+.ministryConnectors span:nth-child(2)::after {
+  width: 0;
+}
+
+.ministryConnectors span:last-child::after {
+  transform: rotate(20deg);
+}
+
+.ministryExperts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.ministrySlot {
+  appearance: none;
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 8px;
+  width: 100%;
+  min-height: 128px;
+  border: 1px solid var(--honey-line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 86%, var(--honey-soft));
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 12px 10px;
+  text-align: center;
+}
+
+.ministrySlot[data-empty] {
+  border-color: var(--line-2);
+  background: var(--panel);
+}
+
+.ministrySlot[data-kind="agent"] {
+  border-color: color-mix(in srgb, var(--live) 46%, var(--line-2));
+}
+
+.ministrySlot:hover,
+.ministrySlot:focus-visible,
+.ministrySlot[data-selected],
+.ministrySlot[data-drag-over] {
+  border-color: var(--honey);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--honey) 36%, transparent), 0 0 0 5px color-mix(in srgb, var(--honey) 14%, transparent);
+}
+
+.ministrySlot[data-drag-over] {
+  background: color-mix(in srgb, var(--panel) 74%, var(--honey-soft));
+}
+
+.ministrySlotOrb {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+}
+
+.ministrySlotLabel {
+  color: var(--fg-4);
+  font-family: var(--f-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ministryDragPreview { position: fixed; left: 0; top: 0; z-index: 10000; pointer-events: none; border: 1px solid var(--honey-line); border-radius: 999px; background: var(--panel-2); color: var(--honey); font-family: var(--f-mono); font-size: 11px; font-weight: 750; padding: 8px 10px; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.32); }
+
+/* ChatGPT OAuth connect block: .as-info is a horizontal flex row, so the
+   text, button, and fallback link stack inside their own column. */
+.oauthConnect {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.oauthConnect a {
+  color: var(--honey);
 }
 
 @media (max-width: 760px) {
@@ -355,4 +936,539 @@
   .alarmActions {
     align-items: flex-start;
   }
+
+  .ttsMachineTop,
+  .resourceStrip {
+    grid-template-columns: 1fr;
+  }
+
+  .ministryDial,
+  .ministryGrid,
+  .ministryPickerGrid,
+  .ministryExperts {
+    grid-template-columns: 1fr;
+  }
+
+  .ministryHero,
+  .ministryTopologyHead,
+  .ministryBenchTop {
+    align-items: flex-start;
+  }
+
+  .ministryTopology {
+    min-height: 0;
+  }
+
+  .ministryConnectors {
+    display: none;
+  }
+
+  .ministryCoreSlot .ministrySlot {
+    width: 100%;
+  }
+
+  .ttsMachineIcon {
+    display: none;
+  }
+}
+
+/* ---- Section toggle (Phone calls / Voice) ---------------------------- */
+.sectionTabs {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--panel-2);
+}
+
+.sectionTab,
+.segTab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 8px 15px;
+  background: transparent;
+  color: var(--fg-2);
+  font-family: var(--f-body);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.sectionTab[data-on],
+.segTab[data-on] {
+  border-color: var(--honey-line);
+  background: var(--honey-soft);
+  color: var(--honey);
+}
+
+/* ---- Voice section header ------------------------------------------- */
+.voiceHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.voiceChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--honey-line);
+  border-radius: 999px;
+  padding: 3px 9px;
+  background: var(--honey-soft);
+  color: var(--honey);
+  font-family: var(--f-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+/* ---- Runtime + provider pickers ------------------------------------- */
+.pickerGroup {
+  display: grid;
+  gap: 7px;
+}
+
+.pickerLabel {
+  color: var(--fg-3);
+  font-size: 11.5px;
+}
+
+.pickerHint {
+  color: var(--fg-4);
+  font-size: 11px;
+}
+
+.segmented {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--panel-2);
+}
+
+.providerGrid {
+  composes: providerGrid from "./AgentSettingsVoiceProviderCards.module.css";
+}
+
+.providerCard {
+  composes: providerCard from "./AgentSettingsVoiceProviderCards.module.css";
+}
+
+.providerCardHead {
+  composes: providerCardHead from "./AgentSettingsVoiceProviderCards.module.css";
+}
+
+.providerCardSub {
+  composes: providerCardSub from "./AgentSettingsVoiceProviderCards.module.css";
+}
+
+/* ---- Provider auth block (OAuth / API key) -------------------------- */
+.authBlock {
+  display: grid;
+  gap: 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 13px;
+}
+
+.authHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.authTabs {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--panel-2);
+}
+
+.authTab {
+  min-width: 64px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 6px 14px;
+  background: transparent;
+  color: var(--fg-3);
+  font-family: var(--f-body);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s, border-color 0.14s;
+}
+
+.authTab[data-on] {
+  border-color: var(--honey-line);
+  background: var(--honey-soft);
+  color: var(--honey);
+}
+
+.authLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg-3);
+  font-size: 11.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.authLine[data-tone="live"] {
+  color: var(--live);
+}
+
+.authSignin {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.authSignin p {
+  margin: 0;
+  color: var(--fg-3);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.authSignin a {
+  color: var(--honey);
+}
+
+.voiceRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.voiceRow select {
+  flex: 1;
+  min-width: 0;
+}
+
+.authKeyChoice {
+  display: grid;
+  gap: 9px;
+}
+
+.authKeyInput {
+  display: grid;
+  gap: 7px;
+}
+
+.authKeyInput > span {
+  color: var(--fg-3);
+  font-size: 11.5px;
+}
+
+.authKeyRow {
+  display: flex;
+  gap: 8px;
+}
+
+.authKeyRow input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---- Local TTS compact host list ------------------------------------ */
+.localTtsHosts {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 11px 12px;
+}
+
+.localTtsHostsHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--fg-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.localTtsHostRow {
+  display: grid;
+  gap: 9px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  padding: 9px 11px;
+}
+
+.localTtsHostRow[data-selected] {
+  border-color: var(--honey-line);
+  background: var(--honey-soft);
+}
+
+.localTtsHostRow[data-off] {
+  opacity: 0.62;
+}
+
+.localTtsHostPick {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.localTtsHostPick:disabled {
+  cursor: default;
+}
+
+.localTtsHostIcon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--fg-4);
+}
+
+.localTtsHostRow[data-selected] .localTtsHostIcon {
+  color: var(--honey);
+}
+
+.localTtsHostMeta {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.localTtsHostMeta strong {
+  color: var(--fg);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+
+.localTtsHostMeta small {
+  color: var(--fg-4);
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+}
+
+.localTtsCheck {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: var(--honey);
+  color: #1a1305;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.localTtsHostControls {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 9px;
+  align-items: end;
+  border-top: 1px solid var(--line);
+  padding-top: 9px;
+}
+
+.localTtsHostState {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.localTtsHostState span {
+  color: var(--fg-4);
+  font-family: var(--f-mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+.localTtsLaunchRows {
+  display: grid;
+  gap: 8px;
+}
+
+.localTtsLaunchRows .localTtsHostRow {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+/* ---- Advanced brain disclosure -------------------------------------- */
+.advanced {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  display: grid;
+  gap: 12px;
+}
+
+.advancedToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
+  font-family: var(--f-body);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0;
+}
+
+.advancedChevron {
+  transition: transform 0.18s;
+  transform: rotate(-90deg);
+}
+
+.advancedChevron[data-open] {
+  transform: rotate(0deg);
+}
+
+.advancedSummary {
+  margin-left: auto;
+  color: var(--fg-4);
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+}
+
+/* ---- Daily-briefing time popover ------------------------------------ */
+.timePickerWrap {
+  position: relative;
+  width: max-content;
+}
+
+.time {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.time:hover {
+  color: var(--honey);
+}
+
+.timeScrim {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.timePop {
+  position: fixed;
+  z-index: 1000;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--honey-line);
+  border-radius: 10px;
+  background: var(--panel-hi);
+  box-shadow: 0 20px 46px -18px rgba(0, 0, 0, 0.72);
+}
+
+.timeSteppers {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.timeStepCol {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+}
+
+.timeStepCol button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 26px;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  background: var(--panel-2);
+  color: var(--fg-3);
+  cursor: pointer;
+  transition: border-color 0.14s, color 0.14s;
+}
+
+.timeStepCol button:hover {
+  border-color: var(--honey-line);
+  color: var(--honey);
+}
+
+.timeStepCol span {
+  min-width: 50px;
+  text-align: center;
+  color: var(--fg);
+  font-family: var(--f-display);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.timeColon {
+  color: var(--fg-3);
+  font-family: var(--f-display);
+  font-size: 28px;
+  font-weight: 600;
+}
+
+.timeAmpm {
+  display: grid;
+  gap: 5px;
+  margin-left: 5px;
+}
+
+.ampmBtn {
+  min-width: 46px;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  padding: 6px 10px;
+  background: var(--panel-2);
+  color: var(--fg-3);
+  font-family: var(--f-mono);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s, border-color 0.14s;
+}
+
+.ampmBtn[data-on] {
+  border-color: var(--honey-line);
+  background: var(--honey-soft);
+  color: var(--honey);
 }

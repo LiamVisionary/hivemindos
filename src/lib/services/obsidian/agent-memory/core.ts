@@ -1,16 +1,27 @@
 import { constants } from "fs";
-import { access, appendFile, mkdir, readdir, readFile, stat, writeFile } from "fs/promises";
-import { createHash } from "crypto";
-import { basename, dirname, join, relative, resolve, sep } from "path";
-import { readGitLawbStatus, sanitizeGitLawbProof } from "@/lib/services/gitlawb/gitlawb-service";
-import { rebuildFullVaultSearchIndex, searchFullVaultSearchIndex } from "@/lib/services/obsidian/full-vault-search-index";
-import { appendAgentMemoryEntityIndex, extractAgentMemoryEntities } from "@/lib/services/obsidian/agent-memory/entities";
-import { bm25ScoresForRecords, recordVisibleForRecall, scoreAgentMemory } from "@/lib/services/obsidian/agent-memory/scoring";
-import { appendAgentMemoryUsage, withAgentMemoryUsage } from "@/lib/services/obsidian/agent-memory/usage";
+import { access, mkdir, readdir, readFile, stat } from "fs/promises";
+import { createHash, randomUUID } from "crypto";
+import { basename, join, relative, resolve, sep } from "path";
+import { listBrainIndexGenerations, publishBrainIndexGeneration, readBrainIndexArtifact, readBrainIndexGeneration } from "@/lib/services/obsidian/brain-index-generations";
+import { contentAddressForText } from "@/lib/services/obsidian/content-address";
+import { fullVaultSearchIndexStatus, rebuildFullVaultSearchIndex, searchFullVaultSearchIndex } from "@/lib/services/obsidian/full-vault-search-index";
+import { agentMemoryEmbeddingsCoverage, backfillAgentMemoryEmbeddings, fullVaultSemanticScores, semanticScoresForRecords, upsertAgentMemoryEmbedding } from "@/lib/services/obsidian/agent-memory/embeddings";
+import { canonicalMemoryKey, selectCanonicalMemoryHeads } from "@/lib/services/obsidian/agent-memory/canonical";
+import { distinctiveMemoryTokens, findExplicitCorrectionCandidates, tokenSetSimilarity } from "@/lib/services/obsidian/agent-memory/corrections";
+import { recordAgentOperationalEvent } from "@/lib/services/obsidian/agent-memory/events";
+import { AGENT_MEMORY_ENTITY_INDEX_PATH, extractAgentMemoryEntities, serializeAgentMemoryEntityIndex } from "@/lib/services/obsidian/agent-memory/entities";
+import { extractRecallQuery, meaningfulMatchCount, queryWordsForRecall } from "@/lib/services/obsidian/agent-memory/query";
+import { AGENT_MEMORY_PROOF_INDEX_PATH, appendMemoryProof, createMemoryProofReceipt, safeGitLawbStatus } from "@/lib/services/obsidian/agent-memory/proofs";
+import { adaptiveConversationExcerptBudget, isAggregationRecallQuery, queryCenteredMemoryExcerpt, queryFocusedConversationExcerpt } from "@/lib/services/obsidian/agent-memory/excerpt";
+import { detectSensitiveContent, redactSensitiveText } from "@/lib/services/obsidian/agent-memory/redact";
+import { AGENT_MEMORY_ANSWER_MIN_SCORE, bm25ScoresForRecords, recordVisibleForRecall, scoreAgentMemory, temporalRecallMode, withAgentMemorySearchMetadata } from "@/lib/services/obsidian/agent-memory/scoring";
+import { AGENT_MEMORY_RETRIEVALS_PATH, appendAgentMemoryUsage, withAgentMemoryUsage } from "@/lib/services/obsidian/agent-memory/usage";
+import { cacheVaultQueryRecords, getCachedVaultQueryRecords, readCachedVaultRecord } from "@/lib/services/obsidian/agent-memory/vault-record-cache";
+import { AGENT_MEMORY_TRANSACTION_JOURNAL_PATH, commitAgentMemoryFileTransaction, completeAgentMemoryFileTransaction, recoverAgentMemoryFileTransactions, withAgentMemoryWriteLock } from "@/lib/services/obsidian/agent-memory/write-transactions";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { listFilesMatchingTerms, searchTermsFromQuery } from "@/lib/services/search/ripgrep-search";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
-import type { GitLawbProof, GitLawbProofStatus, GitLawbStatus } from "@/lib/types/gitlawb";
+import type { GitLawbProofStatus } from "@/lib/types/gitlawb";
 import {
   AGENT_MEMORY_ACTOR_ROLES,
   AGENT_MEMORY_COGNITIVE_STAGES,
@@ -18,11 +29,13 @@ import {
   AGENT_MEMORY_ORIGINS,
   AGENT_MEMORY_SOURCE_TYPES,
   AGENT_MEMORY_TYPES,
+  normalizeAgentMemorySourceType as normalizeSourceType,
   type AgentMemoryActorRole,
   type AgentMemoryChainItem,
   type AgentMemoryCognitiveStage,
   type AgentMemoryEvolutionType,
   type AgentMemoryHit,
+  type AgentOperationalEvent,
   type AgentMemoryOrigin,
   type AgentMemoryProofMode,
   type AgentMemoryRecord,
@@ -33,9 +46,9 @@ import {
   type RecallAgentMemoryInput,
   type RebuildAgentMemoryIndexInput,
   type RecordAgentMemoryUsageInput,
+  type RecordAgentOperationalEventInput,
   type RememberAgentMemoryInput,
 } from "@/lib/services/obsidian/agent-memory/types";
-
 export {
   AGENT_MEMORY_ACTOR_ROLES,
   AGENT_MEMORY_COGNITIVE_STAGES,
@@ -50,6 +63,7 @@ export type {
   AgentMemoryCognitiveStage,
   AgentMemoryEvolutionType,
   AgentMemoryHit,
+  AgentOperationalEvent,
   AgentMemoryOrigin,
   AgentMemoryProofMode,
   AgentMemoryRecord,
@@ -60,16 +74,16 @@ export type {
   RecallAgentMemoryInput,
   RebuildAgentMemoryIndexInput,
   RecordAgentMemoryUsageInput,
+  RecordAgentOperationalEventInput,
   RememberAgentMemoryInput,
 };
 
 const MEMORY_FOLDER = "Memory/Distillations/Agent Memory";
 const INDEX_PATH = `${DEFAULT_SHARED_VAULT.brainServicesFolder}/Agent Memory Index.jsonl`;
-const PROOF_INDEX_PATH = `${DEFAULT_SHARED_VAULT.brainServicesFolder}/Agent Memory Proofs.jsonl`;
 const MAX_MEMORY_FILES = 1500;
 const MAX_VAULT_NOTE_FILES = 5000;
 const MAX_MEMORY_BYTES = 128 * 1024;
-const MAX_VAULT_NOTE_BYTES = 256 * 1024;
+const MAX_VAULT_NOTE_BYTES = 1024 * 1024;
 const VAULT_RECORD_CACHE_TTL_MS = 30_000;
 const TIERED_MEMORY_STRONG_SCORE = 32;
 const TIERED_MEMORY_USABLE_SCORE = 24;
@@ -87,9 +101,14 @@ const VAULT_NOTE_EXCLUDE_PREFIXES = [
   "Operations/Brain Services/Agent Memory Entity Index.jsonl",
   "Operations/Brain Services/Agent Memory Retrievals.jsonl",
   "Operations/Brain Services/Agent Memory Proofs.jsonl",
+  "Operations/Brain Services/Agent Memory Embeddings.jsonl",
   "Operations/Vault Migrations/",
   "Archive/",
 ];
+// A conflicting write this similar to an existing active memory is treated as
+// a duplicate and rejected with an evolve hint unless allowDuplicate is set.
+const DUPLICATE_BLOCK_SCORE = 60;
+const DUPLICATE_BLOCK_MIN_MATCHED = 3;
 const VAULT_NOTE_TYPE_MAP: Array<[RegExp, AgentMemoryType]> = [
   [/decision/i, "decision"],
   [/preference/i, "preference"],
@@ -106,57 +125,10 @@ const VAULT_NOTE_TYPE_MAP: Array<[RegExp, AgentMemoryType]> = [
 const VALID_MEMORY_TYPES = new Set<AgentMemoryType>(AGENT_MEMORY_TYPES);
 const VALID_COGNITIVE_STAGES = new Set<AgentMemoryCognitiveStage>(AGENT_MEMORY_COGNITIVE_STAGES);
 const VALID_EVOLUTION_TYPES = new Set<AgentMemoryEvolutionType>(AGENT_MEMORY_EVOLUTION_TYPES);
-const VALID_SOURCE_TYPES = new Set<AgentMemorySourceType>(AGENT_MEMORY_SOURCE_TYPES);
 const VALID_ACTOR_ROLES = new Set<AgentMemoryActorRole>(AGENT_MEMORY_ACTOR_ROLES);
 const VALID_MEMORY_ORIGINS = new Set<AgentMemoryOrigin>(AGENT_MEMORY_ORIGINS);
 const AUTO_PROOF_TYPES = new Set<AgentMemoryType>(["instruction", "decision", "commitment", "preference", "artifact", "action"]);
 const memoryIndexCache = new Map<string, MemoryIndexCacheEntry>();
-const vaultRecordsCache = new Map<string, VaultRecordsCacheEntry>();
-
-type AgentMemoryProofReceipt = GitLawbProof & {
-  kind: "agent-memory";
-  metadata: {
-    source: "agent-memory";
-    memoryId: string;
-    memoryType: AgentMemoryType;
-    memoryTitle: string;
-    notePath: string;
-    contentHash: string;
-    recordHash: string;
-    cognitiveStage?: AgentMemoryCognitiveStage;
-    supersedes?: string[];
-    supersededBy?: string[];
-    evolutionRootId?: string;
-    evolutionType?: AgentMemoryEvolutionType;
-    evolutionReason?: string;
-    evidenceCount?: number;
-    sourceType?: AgentMemorySourceType;
-    metaTags?: string[];
-    entities?: string[];
-    aliases?: string[];
-    actorRole?: AgentMemoryActorRole;
-    memoryOrigin?: AgentMemoryOrigin;
-    previousProofHash?: string;
-    agentName?: string;
-    agentId?: string;
-    runtime?: string;
-    machineName?: string;
-    machineId?: string;
-    tailnetId?: string;
-    tailnetName?: string;
-    tailnetDnsName?: string;
-    collectorUrl?: string;
-    sessionId?: string;
-    project?: string;
-    createdAt: string;
-    checkedAt: string;
-    gitlawbCliInstalled: boolean;
-    gitlawbNodeBindMode?: string;
-    gitlawbNodeHealthy?: boolean;
-    error?: string;
-    proofHash?: string;
-  };
-};
 
 type AgentMemoryIndexEntry = {
   action?: string;
@@ -164,6 +136,8 @@ type AgentMemoryIndexEntry = {
   memoryType?: string;
   title?: string;
   content?: string;
+  contentHash?: string;
+  memoryKey?: string;
   status?: AgentMemoryRecord["status"];
   cognitiveStage?: string;
   supersedes?: string[];
@@ -209,11 +183,6 @@ type MemoryIndexCacheEntry = {
   records: AgentMemoryRecord[];
 };
 
-type VaultRecordsCacheEntry = {
-  cachedAt: number;
-  records: AgentMemoryRecord[];
-};
-
 function toVaultPath(root: string, path: string) {
   return relative(root, path).split(sep).join("/");
 }
@@ -242,15 +211,6 @@ function compactContent(value: string, maxLength = 180) {
 
 function sha256(value: string) {
   return `sha256:${createHash("sha256").update(value).digest("hex")}`;
-}
-
-function canonicalJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
-  if (!value || typeof value !== "object") return JSON.stringify(value);
-  const entries = Object.entries(value as Record<string, unknown>)
-    .filter(([, entryValue]) => entryValue !== undefined)
-    .sort(([left], [right]) => left.localeCompare(right));
-  return `{${entries.map(([key, entryValue]) => `${JSON.stringify(key)}:${canonicalJson(entryValue)}`).join(",")}}`;
 }
 
 function normalizeMemoryType(value?: string): AgentMemoryType {
@@ -282,15 +242,6 @@ function normalizeEvolutionType(value?: string) {
     throw new Error(`Unsupported memory evolution type "${value}". Use one of: ${AGENT_MEMORY_EVOLUTION_TYPES.join(", ")}.`);
   }
   return normalized as AgentMemoryEvolutionType;
-}
-
-function normalizeSourceType(value?: string) {
-  if (!value?.trim()) return undefined;
-  const normalized = value.trim().toLowerCase().replace(/[^a-z]+/g, "-");
-  if (!VALID_SOURCE_TYPES.has(normalized as AgentMemorySourceType)) {
-    throw new Error(`Unsupported memory source type "${value}". Use one of: ${AGENT_MEMORY_SOURCE_TYPES.join(", ")}.`);
-  }
-  return normalized as AgentMemorySourceType;
 }
 
 function normalizeActorRole(value?: string) {
@@ -332,6 +283,9 @@ function normalizeMemoryIds(values?: string[]) {
 }
 
 function shouldWriteProof(type: AgentMemoryType, confidence: number, mode?: AgentMemoryProofMode) {
+  // GitLawb has never been installed in this deployment; receipts are a local
+  // hash chain. HIVEMINDOS_MEMORY_PROOFS=off skips them entirely.
+  if (process.env.HIVEMINDOS_MEMORY_PROOFS?.trim().toLowerCase() === "off") return false;
   if (mode === true) return true;
   if (mode !== "auto") return false;
   return AUTO_PROOF_TYPES.has(type) || (type === "fact" && confidence >= 0.85);
@@ -415,6 +369,9 @@ function shouldSkipVaultPath(root: string, fullPath: string, isDirectory: boolea
   const name = basename(fullPath);
   if (VAULT_NOTE_EXCLUDE_PARTS.has(name)) return true;
   if (name.startsWith(".") && name !== ".") return true;
+  // Obsidian/Syncthing conflict copies duplicate the original note and pollute
+  // recall; they must be resolved by hand, not surfaced as memories.
+  if (name.includes(".sync-conflict-")) return true;
   if (rel === MEMORY_FOLDER || rel.startsWith(`${MEMORY_FOLDER}/`)) return true;
   if (isDirectory && VAULT_NOTE_EXCLUDE_PREFIXES.some((prefix) => prefix.endsWith("/") && (rel === prefix.slice(0, -1) || rel.startsWith(prefix)))) return true;
   if (!isDirectory && VAULT_NOTE_EXCLUDE_PREFIXES.some((prefix) => rel === prefix || rel.startsWith(prefix))) return true;
@@ -445,12 +402,22 @@ function recordFromMarkdown(root: string, file: string, markdown: string): Agent
   const { fields, body } = parseFrontmatter(markdown);
   if (fields.get("type") !== "agent-memory") return null;
   const memoryType = normalizeMemoryType(String(fields.get("memoryType") ?? "context"));
+  const title = String(fields.get("title") ?? basename(file, ".md"));
+  const project = typeof fields.get("project") === "string" ? String(fields.get("project")) : undefined;
   const now = new Date().toISOString();
+  const content = bodyContent(body);
   return {
     id: String(fields.get("id") ?? basename(file, ".md")),
     type: memoryType,
-    title: String(fields.get("title") ?? basename(file, ".md")),
-    content: bodyContent(body),
+    title,
+    content,
+    contentHash: typeof fields.get("contentHash") === "string" ? String(fields.get("contentHash")) : contentAddressForText(content),
+    memoryKey: canonicalMemoryKey({
+      explicitKey: typeof fields.get("memoryKey") === "string" ? String(fields.get("memoryKey")) : undefined,
+      type: memoryType,
+      title,
+      project,
+    }),
     confidence: normalizeConfidence(Number(fields.get("confidence") ?? 0.7)),
     status: fields.get("status") === "superseded" || fields.get("status") === "archived" ? fields.get("status") as AgentMemoryRecord["status"] : "active",
     cognitiveStage: typeof fields.get("cognitiveStage") === "string" ? normalizeCognitiveStage(String(fields.get("cognitiveStage"))) : undefined,
@@ -493,7 +460,7 @@ function recordFromMarkdown(root: string, file: string, markdown: string): Agent
     tailnetDnsName: typeof fields.get("tailnetDnsName") === "string" ? String(fields.get("tailnetDnsName")) : undefined,
     collectorUrl: typeof fields.get("collectorUrl") === "string" ? String(fields.get("collectorUrl")) : undefined,
     sessionId: typeof fields.get("sessionId") === "string" ? String(fields.get("sessionId")) : undefined,
-    project: typeof fields.get("project") === "string" ? String(fields.get("project")) : undefined,
+    project,
     createdAt: typeof fields.get("createdAt") === "string" ? String(fields.get("createdAt")) : now,
     updatedAt: typeof fields.get("updatedAt") === "string" ? String(fields.get("updatedAt")) : now,
     notePath: toVaultPath(root, file),
@@ -531,6 +498,7 @@ function recordFromVaultMarkdown(root: string, file: string, markdown: string, m
     type: memoryType,
     title,
     content,
+    contentHash: contentAddressForText(content),
     confidence: 0.62,
     status: "active",
     tags: normalizeTags(tags),
@@ -539,7 +507,13 @@ function recordFromVaultMarkdown(root: string, file: string, markdown: string, m
     memoryOrigin: "vault-note",
     source: `Vault note: ${notePath}`,
     project: notePath.startsWith("Projects/") ? notePath.split("/")[1] : undefined,
-    createdAt: typeof fields.get("created") === "string" ? String(fields.get("created")) : updatedAt,
+    createdAt: typeof fields.get("createdAt") === "string"
+      ? String(fields.get("createdAt"))
+      : typeof fields.get("startedAt") === "string"
+        ? String(fields.get("startedAt"))
+        : typeof fields.get("created") === "string"
+          ? String(fields.get("created"))
+          : updatedAt,
     updatedAt,
     notePath,
   };
@@ -551,6 +525,20 @@ function cleanIndexString(value: unknown) {
 
 function cleanStringArray(value: unknown) {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string" && Boolean(entry.trim())) : undefined;
+}
+
+function sensitiveMemorySurface(input: RememberAgentMemoryInput, content: string) {
+  return [
+    input.title,
+    content,
+    input.memoryKey,
+    input.source,
+    input.collectorUrl,
+    ...(input.tags ?? []),
+    ...(input.metaTags ?? []),
+    ...(input.entities ?? []),
+    ...(input.aliases ?? []),
+  ].filter(Boolean).join("\n");
 }
 
 function recordFromIndexEntry(entry: AgentMemoryIndexEntry): AgentMemoryRecord | null {
@@ -568,6 +556,13 @@ function recordFromIndexEntry(entry: AgentMemoryIndexEntry): AgentMemoryRecord |
     type: memoryType,
     title,
     content,
+    contentHash: cleanIndexString(entry.contentHash) ?? contentAddressForText(content),
+    memoryKey: canonicalMemoryKey({
+      explicitKey: cleanIndexString(entry.memoryKey),
+      type: memoryType,
+      title,
+      project: cleanIndexString(entry.project),
+    }),
     confidence: normalizeConfidence(Number(entry.confidence ?? 0.7)),
     status,
     cognitiveStage: entry.cognitiveStage ? normalizeCognitiveStage(entry.cognitiveStage) : undefined,
@@ -624,12 +619,14 @@ function recordFromIndexEntry(entry: AgentMemoryIndexEntry): AgentMemoryRecord |
 
 function indexEntryForRecord(record: AgentMemoryRecord) {
   return {
-    timestamp: new Date().toISOString(),
+    timestamp: record.updatedAt,
     action: "remember",
     id: record.id,
     memoryType: record.type,
     title: record.title,
     content: record.content,
+    contentHash: record.contentHash ?? contentAddressForText(record.content),
+    memoryKey: record.memoryKey,
     status: record.status,
     cognitiveStage: record.cognitiveStage,
     supersedes: record.supersedes,
@@ -669,18 +666,25 @@ function indexEntryForRecord(record: AgentMemoryRecord) {
   };
 }
 
-async function readMemoryRecordsFromIndex(root: string) {
-  const file = join(root, INDEX_PATH);
-  assertInside(root, file);
+async function readMemoryRecordsFromIndex(root: string, generationId?: string) {
+  const artifact = await readBrainIndexArtifact({
+    root,
+    kind: "agent-memory",
+    artifact: "memories",
+    generationId,
+    legacyPath: INDEX_PATH,
+  });
+  if (!artifact) return null;
+  const file = artifact.generation?.manifestPath ?? join(root, INDEX_PATH);
   const st = await stat(file).catch(() => null);
   if (!st || !st.isFile()) return null;
+  const contentSize = Buffer.byteLength(artifact.contents, "utf8");
   const cached = memoryIndexCache.get(root);
-  if (cached && cached.file === file && cached.mtimeMs === st.mtimeMs && cached.size === st.size) {
+  if (!generationId && cached && cached.file === file && cached.mtimeMs === st.mtimeMs && cached.size === contentSize) {
     return cached.records;
   }
-  const raw = await readFile(file, "utf8").catch(() => "");
   const byId = new Map<string, AgentMemoryRecord>();
-  for (const line of raw.split("\n")) {
+  for (const line of artifact.contents.split("\n")) {
     if (!line.trim()) continue;
     try {
       const record = recordFromIndexEntry(JSON.parse(line) as AgentMemoryIndexEntry);
@@ -690,7 +694,7 @@ async function readMemoryRecordsFromIndex(root: string) {
     }
   }
   const records = [...byId.values()];
-  memoryIndexCache.set(root, { file, mtimeMs: st.mtimeMs, size: st.size, records });
+  if (!generationId) memoryIndexCache.set(root, { file, mtimeMs: st.mtimeMs, size: contentSize, records });
   return records.length ? records : null;
 }
 
@@ -726,55 +730,87 @@ async function candidateVaultFiles(root: string, query?: string): Promise<string
   return walkVaultMarkdown(root);
 }
 
+function cachedVaultRecord(root: string, file: string) {
+  return readCachedVaultRecord(root, file, MAX_VAULT_NOTE_BYTES, (markdown, mtimeMs) => recordFromVaultMarkdown(root, file, markdown, mtimeMs));
+}
+
 async function readVaultNoteRecords(root: string, query?: string) {
   const cacheKey = `${root}::${searchTermsFromQuery(query).join(" ")}`;
-  const cached = vaultRecordsCache.get(cacheKey);
+  const cached = getCachedVaultQueryRecords(cacheKey);
   if (cached && Date.now() - cached.cachedAt <= VAULT_RECORD_CACHE_TTL_MS) return cached.records;
   const indexed = query?.trim()
     ? await searchFullVaultSearchIndex({ root, query, limit: 400 }).catch(() => null)
     : null;
   if (indexed?.hits.length) {
     const records: AgentMemoryRecord[] = [];
+    const topSearchScore = Math.max(0, indexed.hits[0]?.score ?? 0);
     for (const hit of indexed.hits) {
       const file = join(root, hit.path);
       assertInside(root, file);
       if (shouldSkipVaultPath(root, file, false)) continue;
-      const st = await stat(file).catch(() => null);
-      if (!st || st.size > MAX_VAULT_NOTE_BYTES) continue;
-      const markdown = await readFile(file, "utf8").catch(() => "");
-      const record = recordFromVaultMarkdown(root, file, markdown, st.mtimeMs);
-      if (record) {
-        record.searchScore = hit.score;
-        record.searchCollection = hit.collection;
-        records.push(record);
+      const baseRecord = await cachedVaultRecord(root, file);
+      if (baseRecord) {
+        records.push(withAgentMemorySearchMetadata(baseRecord, {
+          searchScore: hit.score,
+          searchScoreNormalized: topSearchScore > 0 ? Math.max(0, hit.score) / topSearchScore : undefined,
+          searchCollection: hit.collection,
+        }));
       }
     }
-    vaultRecordsCache.set(cacheKey, { cachedAt: Date.now(), records });
+    cacheVaultQueryRecords(cacheKey, records);
     return records;
   }
   const files = await candidateVaultFiles(root, query);
   const records: AgentMemoryRecord[] = [];
   for (const file of files) {
-    const st = await stat(file).catch(() => null);
-    if (!st || st.size > MAX_VAULT_NOTE_BYTES) continue;
-    const markdown = await readFile(file, "utf8").catch(() => "");
-    const record = recordFromVaultMarkdown(root, file, markdown, st.mtimeMs);
+    const record = await cachedVaultRecord(root, file);
     if (record) records.push(record);
   }
-  vaultRecordsCache.set(cacheKey, { cachedAt: Date.now(), records });
+  cacheVaultQueryRecords(cacheKey, records);
   return records;
 }
 
-async function readMemoryRecords(root: string) {
-  const indexedRecords = await readMemoryRecordsFromIndex(root);
+async function readMemoryRecords(root: string, generationId?: string) {
+  const indexedRecords = await readMemoryRecordsFromIndex(root, generationId);
   if (indexedRecords?.length) return indexedRecords;
+  if (generationId) throw new Error(`Could not read verified Agent Memory generation ${generationId}.`);
   return readMemoryRecordsFromMarkdown(root);
+}
+
+// Aggregation queries pad recall with recent sessions; bound the supplement so
+// large live vaults never pay an unbounded conversation-folder read.
+const AGGREGATION_CONVERSATION_SUPPLEMENT_CAP = 150;
+
+async function recentConversationNoteRecords(root: string, excludePaths: ReadonlySet<string>, cap: number) {
+  const folder = join(root, "Memory/Conversations");
+  const files = await walkMarkdown(root, folder).catch(() => [] as string[]);
+  const withTimes: Array<{ file: string; mtimeMs: number }> = [];
+  for (const file of files) {
+    const st = await stat(file).catch(() => null);
+    if (st?.isFile()) withTimes.push({ file, mtimeMs: st.mtimeMs });
+  }
+  withTimes.sort((left, right) => right.mtimeMs - left.mtimeMs);
+  const records: AgentMemoryRecord[] = [];
+  for (const { file } of withTimes) {
+    if (records.length >= cap) break;
+    const record = await cachedVaultRecord(root, file);
+    if (record && !excludePaths.has(record.notePath)) records.push(record);
+  }
+  return records;
 }
 
 async function readFullVaultRecords(root: string, memoryRecords: AgentMemoryRecord[], query?: string) {
   const vaultRecords = await readVaultNoteRecords(root, query);
   const byPath = new Map<string, AgentMemoryRecord>();
   for (const record of vaultRecords) byPath.set(record.notePath, record);
+  // Counting/aggregation questions need paraphrased instances that share no
+  // vocabulary with the query, which the term-matched shortlist cannot supply.
+  // Recent conversation sessions join the candidate pool; hitsFromRecords only
+  // surfaces them when genuine evidence also matched.
+  if (isAggregationRecallQuery(query)) {
+    const supplement = await recentConversationNoteRecords(root, new Set(byPath.keys()), AGGREGATION_CONVERSATION_SUPPLEMENT_CAP);
+    for (const record of supplement) byPath.set(record.notePath, record);
+  }
   for (const record of memoryRecords) byPath.set(record.notePath, record);
   return [...byPath.values()];
 }
@@ -786,30 +822,57 @@ function normalizeRecallScope(value?: string) {
   return "tiered";
 }
 
-function hitsFromRecords(records: AgentMemoryRecord[], input: RecallAgentMemoryInput, limit: number) {
+function hitsFromRecords(records: AgentMemoryRecord[], input: RecallAgentMemoryInput, limit: number, semanticScores?: Map<string, number>, referenceNow?: number) {
   const type = input.type ? normalizeMemoryType(input.type) : null;
   const tags = normalizeTags(input.tags);
   const project = input.project?.trim().toLowerCase();
-  const candidateRecords = records
-    .filter((record) => recordVisibleForRecall(record, input))
+  const visibleRecords = records
+    .filter((record) => recordVisibleForRecall(record, input, referenceNow))
     .filter((record) => !type || record.type === type)
     .filter((record) => !project || record.project?.toLowerCase() === project)
     .filter((record) => !tags.length || tags.every((tag) => record.tags.includes(tag)));
+  const candidateRecords = temporalRecallMode(input) === "current"
+    ? selectCanonicalMemoryHeads(visibleRecords).records
+    : visibleRecords;
   const lexicalScores = bm25ScoresForRecords(candidateRecords, input);
-  return candidateRecords
+  // Two-pass assembly: select the hit set first, then render excerpts only for
+  // returned hits so the per-hit budget can adapt to the final hit count (a
+  // 10-session archive affords much fuller sessions than a 10,000-note vault).
+  const scoredHits = candidateRecords
     .map((record) => {
-      const scored = scoreAgentMemory(record, input, lexicalScores.get(record.id));
+      const scored = scoreAgentMemory(record, input, lexicalScores.get(record.id), semanticScores?.get(record.id), referenceNow);
       return {
         ...record,
         score: scored.score,
         matched: scored.matched,
         scoreDetails: scored.scoreDetails,
-        excerpt: compactContent(record.content, 320),
       };
-    })
+    });
+  const matchedHits = scoredHits
     .filter((hit) => !input.query?.trim() || hit.matched.length > 0)
     .sort((left, right) => right.score - left.score || Date.parse(right.createdAt) - Date.parse(left.createdAt))
     .slice(0, limit);
+  // Aggregation/counting questions ("how many weddings have I attended") are
+  // answered by instances scattered across sessions that often share no
+  // vocabulary with the query ("Emma's ceremony"). When genuine evidence
+  // matched, fill the remaining budget with the newest conversation sessions
+  // so paraphrased instances stay reachable. Zero-evidence queries still
+  // return nothing, preserving unsupported-question abstention.
+  const includedIds = new Set(matchedHits.map((hit) => hit.id));
+  const paddedConversations = input.query?.trim() && matchedHits.length && matchedHits.length < limit && isAggregationRecallQuery(input.query)
+    ? scoredHits
+      .filter((hit) => !includedIds.has(hit.id) && hit.matched.length === 0 && hit.notePath.startsWith("Memory/Conversations/"))
+      .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
+      .slice(0, limit - matchedHits.length)
+    : [];
+  const selected = [...matchedHits, ...paddedConversations];
+  const conversationBudget = adaptiveConversationExcerptBudget(input.query, selected.length);
+  return selected.map((hit) => ({
+    ...hit,
+    excerpt: redactSensitiveText(hit.notePath.startsWith("Memory/Conversations/")
+      ? queryFocusedConversationExcerpt(hit.content, input.query, conversationBudget)
+      : queryCenteredMemoryExcerpt(hit.content, input.query, 320)),
+  }));
 }
 
 function chainItemForRecord(record: AgentMemoryRecord): AgentMemoryChainItem {
@@ -868,6 +931,8 @@ function memoryMarkdown(record: AgentMemoryRecord) {
       id: record.id,
       memoryType: record.type,
       title: record.title,
+      contentHash: record.contentHash ?? contentAddressForText(record.content),
+      memoryKey: record.memoryKey,
       status: record.status,
       confidence: record.confidence,
       cognitiveStage: record.cognitiveStage,
@@ -912,6 +977,8 @@ function memoryMarkdown(record: AgentMemoryRecord) {
     "## Metadata",
     "",
     `- Type: ${record.type}`,
+    `- Content Hash: ${record.contentHash ?? contentAddressForText(record.content)}`,
+    record.memoryKey ? `- Memory Key: ${record.memoryKey}` : "",
     `- Confidence: ${record.confidence.toFixed(2)}`,
     record.cognitiveStage ? `- Cognitive Stage: ${record.cognitiveStage}` : "",
     record.evolutionType ? `- Evolution Type: ${record.evolutionType}` : "",
@@ -939,199 +1006,123 @@ function memoryMarkdown(record: AgentMemoryRecord) {
   ].filter((line) => line !== "").join("\n");
 }
 
-async function appendIndex(root: string, record: AgentMemoryRecord) {
-  const file = join(root, INDEX_PATH);
-  assertInside(root, file);
-  await mkdir(dirname(file), { recursive: true });
-  await appendFile(file, `${JSON.stringify(indexEntryForRecord(record))}\n`, "utf8");
-}
-
-async function readPreviousProofHash(root: string) {
-  const file = join(root, PROOF_INDEX_PATH);
-  assertInside(root, file);
-  const raw = await readFile(file, "utf8").catch(() => "");
-  const lastLine = raw.trim().split("\n").filter(Boolean).at(-1);
-  if (!lastLine) return undefined;
-  try {
-    const parsed = JSON.parse(lastLine) as { proofHash?: unknown; metadata?: { proofHash?: unknown } };
-    return typeof parsed.proofHash === "string"
-      ? parsed.proofHash
-      : typeof parsed.metadata?.proofHash === "string"
-        ? parsed.metadata.proofHash
-        : undefined;
-  } catch {
-    return sha256(lastLine);
-  }
-}
-
-function memoryRecordHash(record: AgentMemoryRecord) {
-  return sha256(canonicalJson({
-    id: record.id,
-    type: record.type,
-    title: record.title,
-    contentHash: sha256(record.content.trim()),
-    confidence: record.confidence,
-    status: record.status,
-    cognitiveStage: record.cognitiveStage,
-    supersedes: record.supersedes,
-    supersededBy: record.supersededBy,
-    evolutionRootId: record.evolutionRootId,
-    evolutionType: record.evolutionType,
-    evolutionReason: record.evolutionReason,
-    evidenceCount: record.evidenceCount,
-    sourceType: record.sourceType,
-    metaTags: record.metaTags,
-    tags: record.tags,
-    source: record.source,
-    agentName: record.agentName,
-    agentId: record.agentId,
-    runtime: record.runtime,
-    machineName: record.machineName,
-    machineId: record.machineId,
-    tailnetId: record.tailnetId,
-    tailnetName: record.tailnetName,
-    tailnetDnsName: record.tailnetDnsName,
-    collectorUrl: record.collectorUrl,
-    sessionId: record.sessionId,
-    project: record.project,
-    createdAt: record.createdAt,
-    notePath: record.notePath,
+async function publishAgentMemoryGeneration(root: string, records: AgentMemoryRecord[], reason: string) {
+  const memoryLines = records.map((record) => JSON.stringify(indexEntryForRecord(record)));
+  const memoryContents = memoryLines.length ? `${memoryLines.join("\n")}\n` : "";
+  const entityIndex = serializeAgentMemoryEntityIndex(records);
+  const sources = await Promise.all(records.map(async (record) => {
+    const markdown = await readFile(join(root, record.notePath), "utf8").catch(() => memoryMarkdown(record));
+    return { path: record.notePath, sha256: sha256(markdown) };
   }));
-}
-
-async function safeGitLawbStatus(): Promise<GitLawbStatus | null> {
-  try {
-    return await readGitLawbStatus({ cache: true });
-  } catch {
-    return null;
-  }
-}
-
-function proofStatusForGitLawb(status: GitLawbStatus | null): GitLawbProofStatus {
-  if (status?.identity.did) return "verified";
-  if (status?.cli.installed) return "ready";
-  return "unavailable";
-}
-
-async function createMemoryProofReceipt(root: string, record: AgentMemoryRecord): Promise<AgentMemoryProofReceipt> {
-  const [status, previousProofHash] = await Promise.all([
-    safeGitLawbStatus(),
-    readPreviousProofHash(root),
-  ]);
-  const actorDid = status?.identity.did;
-  const checkedAt = new Date().toISOString();
-  const contentHash = sha256(record.content.trim());
-  const recordHash = memoryRecordHash(record);
-  const proofId = `gitlawb-memory-${record.id}`;
-  const proofStatus = proofStatusForGitLawb(status);
-  const metadata: AgentMemoryProofReceipt["metadata"] = {
-    source: "agent-memory",
-    memoryId: record.id,
-    memoryType: record.type,
-    memoryTitle: record.title,
-    notePath: record.notePath,
-    contentHash,
-    recordHash,
-    cognitiveStage: record.cognitiveStage,
-    supersedes: record.supersedes,
-    supersededBy: record.supersededBy,
-    evolutionRootId: record.evolutionRootId,
-    evolutionType: record.evolutionType,
-    evolutionReason: record.evolutionReason,
-    evidenceCount: record.evidenceCount,
-    sourceType: record.sourceType,
-    metaTags: record.metaTags,
-    previousProofHash,
-    agentName: record.agentName,
-    agentId: record.agentId,
-    runtime: record.runtime,
-    machineName: record.machineName,
-    machineId: record.machineId,
-    tailnetId: record.tailnetId,
-    tailnetName: record.tailnetName,
-    tailnetDnsName: record.tailnetDnsName,
-    collectorUrl: record.collectorUrl,
-    sessionId: record.sessionId,
-    project: record.project,
-    createdAt: record.createdAt,
-    checkedAt,
-    gitlawbCliInstalled: Boolean(status?.cli.installed),
-    gitlawbNodeBindMode: status?.node.bindMode,
-    gitlawbNodeHealthy: status?.node.healthy,
-    error: actorDid ? undefined : status?.identity.error ?? status?.cli.error ?? "GitLawb DID is not available; receipt is locally chained but not DID-backed.",
-  };
-  const baseReceipt: AgentMemoryProofReceipt = sanitizeGitLawbProof({
-    id: proofId,
+  const generation = await publishBrainIndexGeneration({
+    root,
     kind: "agent-memory",
-    status: proofStatus,
-    actorDid,
-    title: record.title,
-    verifiedAt: actorDid ? Date.now() : undefined,
-    error: metadata.error,
-    metadata,
-  }) as AgentMemoryProofReceipt;
-  const proofHash = sha256(canonicalJson(baseReceipt));
-  return sanitizeGitLawbProof({
-    ...baseReceipt,
+    artifacts: [
+      { name: "memories", contents: memoryContents, records: records.length, legacyPath: INDEX_PATH },
+      { name: "entities", contents: entityIndex.contents, records: entityIndex.rows, legacyPath: AGENT_MEMORY_ENTITY_INDEX_PATH },
+    ],
+    sources,
     metadata: {
-      ...baseReceipt.metadata,
-      proofHash,
+      reason,
+      markdownAuthority: true,
+      memorySchema: "hivemindos.agent-memory.v1",
+      contentAddressSchema: "hivemindos.content-address.v1",
     },
-  }) as AgentMemoryProofReceipt;
+  });
+  memoryIndexCache.delete(root);
+  return generation;
 }
 
-async function appendProof(root: string, receipt: AgentMemoryProofReceipt) {
-  const file = join(root, PROOF_INDEX_PATH);
-  assertInside(root, file);
-  await mkdir(dirname(file), { recursive: true });
-  await appendFile(file, `${JSON.stringify({
-    timestamp: new Date().toISOString(),
-    ...receipt,
-    proofHash: receipt.metadata.proofHash,
-  })}\n`, "utf8");
-  return toVaultPath(root, file);
+async function repairRecoveredAgentMemoryTransactions(root: string, transactionIds: string[]) {
+  if (!transactionIds.length) return undefined;
+  const records = await readMemoryRecordsFromMarkdown(root);
+  const generation = await publishAgentMemoryGeneration(root, records, "transaction-recovery");
+  for (const transactionId of transactionIds) {
+    await completeAgentMemoryFileTransaction(root, transactionId, "transaction-recovery", true);
+  }
+  return generation;
 }
 
-export async function rebuildAgentMemoryIndex(input: RebuildAgentMemoryIndexInput = {}) {
+async function rebuildAgentMemoryIndexLocked(input: RebuildAgentMemoryIndexInput = {}) {
   const root = resolveObsidianVaultPath(input.vaultPath, { requireWritable: true });
   await access(root, constants.R_OK | constants.W_OK);
   const records = await readMemoryRecordsFromMarkdown(root);
-  const file = join(root, INDEX_PATH);
-  assertInside(root, file);
-  await mkdir(dirname(file), { recursive: true });
   const startedAt = new Date().toISOString();
-  const lines = records.map((record) => JSON.stringify({
-    ...indexEntryForRecord(record),
-    indexedFrom: "markdown-rebuild",
-    rebuiltAt: startedAt,
-  }));
-  await appendFile(file, lines.length ? `${lines.join("\n")}\n` : "", "utf8");
-  for (const record of records) await appendAgentMemoryEntityIndex(root, record);
-  memoryIndexCache.delete(root);
-  const [st, fullVaultIndex] = await Promise.all([
+  const generation = await publishAgentMemoryGeneration(root, records, "markdown-rebuild");
+  const file = join(root, INDEX_PATH);
+  const [st, fullVaultIndex, embeddings] = await Promise.all([
     stat(file).catch(() => null),
     input.includeFullVault === false ? Promise.resolve(undefined) : rebuildFullVaultSearchIndex({ root }),
+    backfillAgentMemoryEmbeddings(root, records).catch(() => undefined),
   ]);
   return {
     vaultPath: root,
     indexPath: INDEX_PATH,
     scanned: records.length,
-    appended: lines.length,
+    appended: records.length,
     bytes: st?.size ?? 0,
+    generation,
     fullVaultIndex,
+    embeddings,
     rebuiltAt: startedAt,
   };
 }
 
-export async function rememberAgentMemory(input: RememberAgentMemoryInput) {
+export async function rebuildAgentMemoryIndex(input: RebuildAgentMemoryIndexInput = {}) {
+  const root = resolveObsidianVaultPath(input.vaultPath, { requireWritable: true });
+  return withAgentMemoryWriteLock(root, async () => {
+    const recovery = await recoverAgentMemoryFileTransactions(root);
+    await repairRecoveredAgentMemoryTransactions(root, recovery.recoveredTransactionIds);
+    return rebuildAgentMemoryIndexLocked({ ...input, vaultPath: root });
+  });
+}
+
+async function rememberAgentMemoryLocked(input: RememberAgentMemoryInput) {
   const content = input.content?.trim();
   if (!content) throw new Error("Memory content is required.");
   const root = resolveObsidianVaultPath(input.vaultPath, { requireWritable: true });
   await access(root, constants.R_OK | constants.W_OK);
   const type = normalizeMemoryType(input.type);
+  // Fail closed on high-confidence secret shapes; the vault syncs across
+  // machines and recall feeds model context.
+  const sensitive = detectSensitiveContent(sensitiveMemorySurface(input, content));
+  if (sensitive.blockers.length && input.allowSensitiveContent !== true) {
+    throw new Error(`Memory content looks like it contains ${sensitive.blockers.join(", ")}. Store credential status by name only (never values or raw Tailnet IPs), or pass allowSensitiveContent: true if this is a false positive.`);
+  }
   const now = new Date().toISOString();
-  const hash = createHash("sha256").update(`${type}\n${content}`).digest("hex").slice(0, 10);
+  // Salt with time+uuid: ids embed a second-resolution timestamp, so two
+  // same-content writes in the same second would otherwise collide on id.
+  const hash = createHash("sha256").update(`${type}\n${content}\n${now}\n${randomUUID()}`).digest("hex").slice(0, 10);
   const title = input.title?.trim() || compactContent(content, 80);
+  const memoryKey = canonicalMemoryKey({ explicitKey: input.memoryKey, type, title, project: input.project });
+  const contentHash = contentAddressForText(content);
+  const existingRecords = await readMemoryRecords(root);
+  const existingCanonicalHead = existingRecords
+    .filter((record) => record.status === "active" && record.memoryKey === memoryKey)
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
+  if (existingCanonicalHead) {
+    return {
+      vaultPath: root,
+      blocked: true as const,
+      blockReason: `A canonical memory head already exists for ${memoryKey}: "${existingCanonicalHead.title}" (${existingCanonicalHead.id}). Evolve that head instead (hive-brain evolve --memory-id ${existingCanonicalHead.id} --content "..." --reason "...") or choose a different --memory-key for a genuinely separate fact.`,
+      canonicalHeadConflict: existingCanonicalHead,
+      possibleConflicts: [existingCanonicalHead],
+      sensitiveWarnings: sensitive.warnings.length ? sensitive.warnings : undefined,
+    };
+  }
+  const exactContentHead = existingRecords
+    .filter((record) => record.status === "active" && (record.contentHash ?? contentAddressForText(record.content)) === contentHash)
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0];
+  if (exactContentHead && input.allowDuplicate !== true) {
+    return {
+      vaultPath: root,
+      blocked: true as const,
+      blockReason: `An active memory with the same content hash already exists: "${exactContentHead.title}" (${exactContentHead.id}, ${contentHash}). Use evolve for that memory, or pass allowDuplicate/--allow-duplicate only when a separate duplicate is intentional.`,
+      exactContentDuplicate: exactContentHead,
+      possibleConflicts: [exactContentHead],
+      sensitiveWarnings: sensitive.warnings.length ? sensitive.warnings : undefined,
+    };
+  }
   const id = `mem-${now.replace(/[^0-9]/g, "").slice(0, 14)}-${hash}`;
   const folder = join(root, MEMORY_FOLDER, type);
   const file = join(folder, `${now.slice(0, 10)}-${safeSlug(title)}-${hash}.md`);
@@ -1155,6 +1146,8 @@ export async function rememberAgentMemory(input: RememberAgentMemoryInput) {
     type,
     title,
     content,
+    contentHash,
+    memoryKey,
     confidence: normalizeConfidence(input.confidence),
     status: "active",
     cognitiveStage: normalizeCognitiveStage(input.cognitiveStage),
@@ -1191,6 +1184,29 @@ export async function rememberAgentMemory(input: RememberAgentMemoryInput) {
     scope: "agent-memory",
   })).hits.filter((hit) => hit.score >= 24);
 
+  // Duplicate gate: a very similar active memory means this should almost
+  // always be an evolve, not a sibling write. Explicit allowDuplicate opts out.
+  // Absolute score is not enough — different topics sharing operational
+  // vocabulary (tailnet/queue/env/...) can score high, so a block also
+  // requires the conflict to cover most of the new content's terms.
+  const topConflict = possibleConflicts[0];
+  const conflictTermCount = queryWordsForRecall(extractRecallQuery(content).query).length;
+  const requiredConflictMatches = Math.max(DUPLICATE_BLOCK_MIN_MATCHED, Math.ceil(Math.min(conflictTermCount, 32) * 0.55));
+  if (
+    input.allowDuplicate !== true
+    && topConflict
+    && topConflict.score >= DUPLICATE_BLOCK_SCORE
+    && meaningfulMatchCount(topConflict.matched) >= requiredConflictMatches
+  ) {
+    return {
+      vaultPath: root,
+      blocked: true as const,
+      blockReason: `A very similar active ${topConflict.type} memory already exists: "${topConflict.title}" (${topConflict.id}, score ${topConflict.score}). Evolve it instead (hive-brain evolve --memory-id ${topConflict.id} --content "..." --reason "...") or retry with allowDuplicate/--allow-duplicate if this is genuinely a new fact.`,
+      possibleConflicts,
+      sensitiveWarnings: sensitive.warnings.length ? sensitive.warnings : undefined,
+    };
+  }
+
   const proofReceipt = shouldWriteProof(type, record.confidence, input.proof)
     ? await createMemoryProofReceipt(root, record)
     : undefined;
@@ -1198,26 +1214,47 @@ export async function rememberAgentMemory(input: RememberAgentMemoryInput) {
     record.proofId = proofReceipt.id;
     record.proofStatus = proofReceipt.status;
     record.proofHash = proofReceipt.metadata.proofHash;
-    record.proofPath = PROOF_INDEX_PATH;
+    record.proofPath = AGENT_MEMORY_PROOF_INDEX_PATH;
     record.actorDid = proofReceipt.actorDid;
   }
 
-  await writeFile(file, memoryMarkdown(record), { encoding: "utf8", mode: 0o600 });
+  const transaction = await commitAgentMemoryFileTransaction({
+    root,
+    operation: "remember",
+    files: [{ path: record.notePath, contents: memoryMarkdown(record), mode: 0o600 }],
+  });
   if (proofReceipt) {
-    record.proofPath = await appendProof(root, proofReceipt);
+    record.proofPath = await appendMemoryProof(root, proofReceipt);
   }
-  await appendIndex(root, record);
-  await appendAgentMemoryEntityIndex(root, record);
-  return { vaultPath: root, record, possibleConflicts, proof: proofReceipt };
+  const generation = await publishAgentMemoryGeneration(root, [...existingRecords, record], "remember");
+  await completeAgentMemoryFileTransaction(root, transaction.transactionId, "remember");
+  const embedding = await upsertAgentMemoryEmbedding(root, record).catch(() => ({ embedded: false as const, reason: "embed-failed" as const }));
+  return {
+    vaultPath: root,
+    record,
+    possibleConflicts,
+    proof: proofReceipt,
+    embedding,
+    transactionId: transaction.transactionId,
+    generation,
+    sensitiveWarnings: sensitive.warnings.length ? sensitive.warnings : undefined,
+  };
+}
+
+export async function rememberAgentMemory(input: RememberAgentMemoryInput) {
+  const root = resolveObsidianVaultPath(input.vaultPath, { requireWritable: true });
+  return withAgentMemoryWriteLock(root, async () => {
+    const recovery = await recoverAgentMemoryFileTransactions(root);
+    await repairRecoveredAgentMemoryTransactions(root, recovery.recoveredTransactionIds);
+    return rememberAgentMemoryLocked({ ...input, vaultPath: root });
+  });
 }
 
 export async function rememberActionAgentMemory(input: RememberAgentMemoryInput) {
-  return rememberAgentMemory({
+  return recordAgentOperationalEvent({
     ...input,
-    type: "action",
     actorRole: input.actorRole ?? "assistant",
     memoryOrigin: input.memoryOrigin ?? "assistant-action",
-    proof: input.proof ?? "auto",
     tags: normalizeTags(["action", ...(input.tags ?? [])]),
   });
 }
@@ -1243,9 +1280,13 @@ function mergeEvolutionTags(input: EvolveAgentMemoryInput, previous: AgentMemory
   ]);
 }
 
-export async function evolveAgentMemory(input: EvolveAgentMemoryInput) {
+async function evolveAgentMemoryLocked(input: EvolveAgentMemoryInput) {
   const content = input.content?.trim();
   if (!content) throw new Error("Evolved memory content is required.");
+  const sensitive = detectSensitiveContent(sensitiveMemorySurface(input, content));
+  if (sensitive.blockers.length && input.allowSensitiveContent !== true) {
+    throw new Error(`Evolved memory content looks like it contains ${sensitive.blockers.join(", ")}. Store credential status by name only (never values or raw Tailnet IPs), or pass allowSensitiveContent: true if this is a false positive.`);
+  }
   const root = resolveObsidianVaultPath(input.vaultPath, { requireWritable: true });
   await access(root, constants.R_OK | constants.W_OK);
   const memoryRecords = await readMemoryRecords(root);
@@ -1253,8 +1294,16 @@ export async function evolveAgentMemory(input: EvolveAgentMemoryInput) {
   const primary = previousRecords[0];
   const type = input.type ? normalizeMemoryType(input.type) : primary.type;
   const now = new Date().toISOString();
-  const hash = createHash("sha256").update(`${type}\n${content}`).digest("hex").slice(0, 10);
+  // Salt with time+uuid: ids embed a second-resolution timestamp, so two
+  // same-content writes in the same second would otherwise collide on id.
+  const hash = createHash("sha256").update(`${type}\n${content}\n${now}\n${randomUUID()}`).digest("hex").slice(0, 10);
   const title = input.title?.trim() || primary.title || compactContent(content, 80);
+  const memoryKey = canonicalMemoryKey({
+    explicitKey: input.memoryKey ?? primary.memoryKey,
+    type,
+    title,
+    project: input.project ?? primary.project,
+  });
   const id = `mem-${now.replace(/[^0-9]/g, "").slice(0, 14)}-${hash}`;
   const folder = join(root, MEMORY_FOLDER, type);
   const file = join(folder, `${now.slice(0, 10)}-${safeSlug(title)}-${hash}.md`);
@@ -1279,6 +1328,8 @@ export async function evolveAgentMemory(input: EvolveAgentMemoryInput) {
     type,
     title,
     content,
+    contentHash: contentAddressForText(content),
+    memoryKey,
     confidence: normalizeConfidence(input.confidence ?? Math.max(...previousRecords.map((item) => item.confidence), 0.7)),
     status: "active",
     cognitiveStage: normalizeCognitiveStage(input.cognitiveStage, "system2"),
@@ -1318,7 +1369,7 @@ export async function evolveAgentMemory(input: EvolveAgentMemoryInput) {
     record.proofId = proofReceipt.id;
     record.proofStatus = proofReceipt.status;
     record.proofHash = proofReceipt.metadata.proofHash;
-    record.proofPath = PROOF_INDEX_PATH;
+    record.proofPath = AGENT_MEMORY_PROOF_INDEX_PATH;
     record.actorDid = proofReceipt.actorDid;
   }
 
@@ -1329,27 +1380,42 @@ export async function evolveAgentMemory(input: EvolveAgentMemoryInput) {
     updatedAt: now,
   }));
 
-  for (const superseded of supersededRecords) {
-    const supersededFile = join(root, superseded.notePath);
-    assertInside(root, supersededFile);
-    await writeFile(supersededFile, memoryMarkdown(superseded), { encoding: "utf8", mode: 0o600 });
-    await appendIndex(root, superseded);
-    await appendAgentMemoryEntityIndex(root, superseded);
-  }
-
-  await writeFile(file, memoryMarkdown(record), { encoding: "utf8", mode: 0o600 });
+  const transaction = await commitAgentMemoryFileTransaction({
+    root,
+    operation: "evolve",
+    files: [
+      ...supersededRecords.map((superseded) => ({ path: superseded.notePath, contents: memoryMarkdown(superseded), mode: 0o600 })),
+      { path: record.notePath, contents: memoryMarkdown(record), mode: 0o600 },
+    ],
+  });
   if (proofReceipt) {
-    record.proofPath = await appendProof(root, proofReceipt);
+    record.proofPath = await appendMemoryProof(root, proofReceipt);
   }
-  await appendIndex(root, record);
-  await appendAgentMemoryEntityIndex(root, record);
+  const supersededById = new Map(supersededRecords.map((item) => [item.id, item]));
+  const nextRecords = memoryRecords.map((item) => supersededById.get(item.id) ?? item).concat(record);
+  const generation = await publishAgentMemoryGeneration(root, nextRecords, "evolve");
+  await completeAgentMemoryFileTransaction(root, transaction.transactionId, "evolve");
+  const embedding = await upsertAgentMemoryEmbedding(root, record).catch(() => ({ embedded: false as const, reason: "embed-failed" as const }));
   return {
     vaultPath: root,
     record,
     superseded: supersededRecords,
     evolutionChain: traceEvolutionChain(record, new Map([...memoryRecords, record, ...supersededRecords].map((item) => [item.id, item]))).map(chainItemForRecord),
     proof: proofReceipt,
+    embedding,
+    transactionId: transaction.transactionId,
+    generation,
+    sensitiveWarnings: sensitive.warnings.length ? sensitive.warnings : undefined,
   };
+}
+
+export async function evolveAgentMemory(input: EvolveAgentMemoryInput) {
+  const root = resolveObsidianVaultPath(input.vaultPath, { requireWritable: true });
+  return withAgentMemoryWriteLock(root, async () => {
+    const recovery = await recoverAgentMemoryFileTransactions(root);
+    await repairRecoveredAgentMemoryTransactions(root, recovery.recoveredTransactionIds);
+    return evolveAgentMemoryLocked({ ...input, vaultPath: root });
+  });
 }
 
 export async function listAgentMemoryRecords(input: { vaultPath?: string } = {}) {
@@ -1357,6 +1423,12 @@ export async function listAgentMemoryRecords(input: { vaultPath?: string } = {})
   await access(root, constants.R_OK);
   const records = await withAgentMemoryUsage(root, await readMemoryRecords(root));
   return { vaultPath: root, records };
+}
+
+export async function listAgentMemoryGenerations(input: { vaultPath?: string } = {}) {
+  const root = resolveObsidianVaultPath(input.vaultPath);
+  await access(root, constants.R_OK);
+  return { vaultPath: root, ...(await listBrainIndexGenerations({ root, kind: "agent-memory" })) };
 }
 
 export async function recordAgentMemoryUsage(input: RecordAgentMemoryUsageInput) {
@@ -1384,27 +1456,53 @@ export async function recallAgentMemory(input: RecallAgentMemoryInput = {}) {
   const root = resolveObsidianVaultPath(input.vaultPath);
   await access(root, constants.R_OK);
   const limit = Math.min(Math.max(Math.trunc(Number(input.limit ?? 8)), 1), 50);
-  const scope = normalizeRecallScope(input.scope);
-  const memoryRecords = await withAgentMemoryUsage(root, await readMemoryRecords(root));
-  const memoryHits = attachEvolutionChains(hitsFromRecords(memoryRecords, input, limit), memoryRecords);
-  if (scope === "agent-memory" || (scope === "tiered" && shouldUseDistilledMemoryOnly(input, memoryHits))) {
-    await recordRetrievedHits(root, input, memoryHits);
+  const scope = input.generationId ? "agent-memory" : normalizeRecallScope(input.scope);
+  // Long prompts (hook/chat preflight) are reduced to salient terms so
+  // boilerplate stops matching every memory; short queries pass through.
+  const { query: effectiveQuery, derived } = extractRecallQuery(input.query);
+  const replayGeneration = input.generationId
+    ? await readBrainIndexGeneration({ root, kind: "agent-memory", generationId: input.generationId })
+    : null;
+  if (input.generationId && !replayGeneration) throw new Error(`Could not verify Agent Memory generation ${input.generationId}.`);
+  const replayReferenceNow = replayGeneration ? Date.parse(replayGeneration.manifest.createdAt) : undefined;
+  const baseInput: RecallAgentMemoryInput = derived ? { ...input, query: effectiveQuery } : input;
+  const effectiveInput = replayGeneration ? { ...baseInput, trackUsage: false } : baseInput;
+  const rawMemoryRecords = await readMemoryRecords(root, input.generationId);
+  const memoryRecords = replayGeneration ? rawMemoryRecords : await withAgentMemoryUsage(root, rawMemoryRecords);
+  const semanticScores = replayGeneration
+    ? new Map<string, number>()
+    : await semanticScoresForRecords(root, effectiveQuery, memoryRecords).catch(() => new Map<string, number>());
+  const memoryHits = attachEvolutionChains(hitsFromRecords(memoryRecords, effectiveInput, limit, semanticScores, replayReferenceNow), memoryRecords);
+  if (scope === "agent-memory" || (scope === "tiered" && shouldUseDistilledMemoryOnly(effectiveInput, memoryHits))) {
+    await recordRetrievedHits(root, effectiveInput, memoryHits);
     return {
       vaultPath: root,
-      query: input.query?.trim() || "",
+      query: effectiveQuery,
+      rawQuery: derived ? input.query?.trim().slice(0, 200) : undefined,
+      queryDerived: derived || undefined,
       recallScope: "agent-memory",
       augmentedFromVault: false,
+      generationId: replayGeneration?.manifest.generationId,
       hits: memoryHits,
     };
   }
-  const records = await readFullVaultRecords(root, memoryRecords, input.query);
-  const hits = attachEvolutionChains(hitsFromRecords(records, input, limit), memoryRecords);
-  await recordRetrievedHits(root, input, hits);
+  const records = await readFullVaultRecords(root, memoryRecords, effectiveQuery);
+  // Conversation archives answer many questions through paraphrase ("Emma's
+  // ceremony" for a weddings query) that lexical matching cannot reach. When a
+  // local/configured embeddings endpoint is available, lazily embed the vault
+  // candidates (content-hashed, so repeat recalls are cache hits) and merge
+  // semantic scores; every failure degrades to lexical-only recall.
+  const vaultSemanticScores = await fullVaultSemanticScores(root, effectiveQuery, records, semanticScores).catch(() => semanticScores);
+  const hits = attachEvolutionChains(hitsFromRecords(records, effectiveInput, limit, vaultSemanticScores, replayReferenceNow), memoryRecords);
+  await recordRetrievedHits(root, effectiveInput, hits);
   return {
     vaultPath: root,
-    query: input.query?.trim() || "",
+    query: effectiveQuery,
+    rawQuery: derived ? input.query?.trim().slice(0, 200) : undefined,
+    queryDerived: derived || undefined,
     recallScope: "full-vault",
     augmentedFromVault: scope === "tiered",
+    generationId: replayGeneration?.manifest.generationId,
     memoryHitCount: memoryHits.length,
     hits,
   };
@@ -1431,7 +1529,31 @@ function chainContext(hit: AgentMemoryHit) {
 }
 
 export async function answerFromAgentMemory(input: RecallAgentMemoryInput = {}) {
-  const result = await recallAgentMemory(input);
+  const recalled = await recallAgentMemory(input);
+  // Answer mode feeds model context (hook, chat preflight): drop noise-floor
+  // hits so weak incidental matches never reach a prompt.
+  const minScore = input.query?.trim()
+    ? Math.max(0, Math.trunc(Number(input.minScore ?? AGENT_MEMORY_ANSWER_MIN_SCORE)))
+    : 0;
+  // On informational queries (4+ meaningful terms) a single incidental word
+  // match is noise: require 2+ meaningful matches or a strong signal
+  // (exact phrase / semantic similarity).
+  const meaningfulQueryTerms = [...new Set(queryWordsForRecall(recalled.query ?? ""))];
+  const requireMultiMatch = minScore > 0 && meaningfulQueryTerms.length >= 4;
+  const requiredDirectMatches = recalled.queryDerived
+    ? 2
+    : Math.max(2, Math.ceil(meaningfulQueryTerms.length * 0.3));
+  const keptHits = recalled.hits.filter((hit) => {
+    if (minScore && hit.score < minScore) return false;
+    if (!requireMultiMatch) return true;
+    return meaningfulMatchCount(hit.matched) >= requiredDirectMatches || hit.matched.includes("exact-query") || hit.matched.includes("semantic");
+  });
+  const result = {
+    ...recalled,
+    hits: keptHits,
+    minScore: minScore || undefined,
+    droppedBelowMinScore: minScore ? recalled.hits.length - keptHits.length : 0,
+  };
   const answer = result.hits.length
     ? [
       `Found ${result.hits.length} relevant shared-brain memor${result.hits.length === 1 ? "y/note" : "ies/notes"}.`,
@@ -1461,4 +1583,240 @@ export async function answerFromAgentMemory(input: RecallAgentMemoryInput = {}) 
     `Content: ${hit.excerpt}`,
   ].filter(Boolean).join("\n")).join("\n\n");
   return { ...result, answer, context };
+}
+
+// --- Consolidation & health -------------------------------------------------
+
+const ARCHIVABLE_MEMORY_TYPES = new Set<AgentMemoryType>(["context", "event", "observation", "action"]);
+const STALE_ARCHIVE_AGE_MS = 120 * 86_400_000;
+const NEAR_DUPLICATE_SIMILARITY = 0.5;
+const MAX_CONSOLIDATION_RECORDS = 600;
+
+// Near-duplicate clusters among active memories of the same type; these are
+// the writes that should have been evolutions.
+export function findNearDuplicateGroups(records: AgentMemoryRecord[], minSimilarity = NEAR_DUPLICATE_SIMILARITY) {
+  const candidates = [...records]
+    .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))
+    .slice(0, MAX_CONSOLIDATION_RECORDS);
+  const tokens = candidates.map(distinctiveMemoryTokens);
+  const parents = candidates.map((_, index) => index);
+  const find = (index: number): number => (parents[index] === index ? index : (parents[index] = find(parents[index])));
+  for (let left = 0; left < candidates.length; left += 1) {
+    for (let right = left + 1; right < candidates.length; right += 1) {
+      if (candidates[left].type !== candidates[right].type) continue;
+      if (tokenSetSimilarity(tokens[left], tokens[right]) >= minSimilarity) parents[find(left)] = find(right);
+    }
+  }
+  const groups = new Map<number, AgentMemoryRecord[]>();
+  candidates.forEach((record, index) => {
+    const rootIndex = find(index);
+    groups.set(rootIndex, [...(groups.get(rootIndex) ?? []), record]);
+  });
+  return [...groups.values()]
+    .filter((group) => group.length > 1)
+    .map((group) => [...group].sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt)))
+    .sort((left, right) => right.length - left.length);
+}
+
+function staleArchiveCandidates(records: AgentMemoryRecord[]) {
+  const cutoff = Date.now() - STALE_ARCHIVE_AGE_MS;
+  return records.filter((record) => record.status === "active"
+    && ARCHIVABLE_MEMORY_TYPES.has(record.type)
+    && Date.parse(record.createdAt) < cutoff
+    && !(record.usage?.retrievalCount || record.usage?.finalAnswerCount));
+}
+
+async function archiveMemoryRecords(root: string, records: AgentMemoryRecord[]) {
+  return withAgentMemoryWriteLock(root, async () => {
+    const recovery = await recoverAgentMemoryFileTransactions(root);
+    await repairRecoveredAgentMemoryTransactions(root, recovery.recoveredTransactionIds);
+    const now = new Date().toISOString();
+    const selectedIds = new Set(records.map((record) => record.id));
+    const current = await readMemoryRecords(root);
+    const archived = current
+      .filter((record) => selectedIds.has(record.id))
+      .map((record) => ({ ...record, status: "archived" as const, updatedAt: now }));
+    if (!archived.length) return archived;
+    const transaction = await commitAgentMemoryFileTransaction({
+      root,
+      operation: "archive",
+      files: archived.map((record) => ({ path: record.notePath, contents: memoryMarkdown(record), mode: 0o600 })),
+    });
+    const archivedById = new Map(archived.map((record) => [record.id, record]));
+    await publishAgentMemoryGeneration(root, current.map((record) => archivedById.get(record.id) ?? record), "archive");
+    await completeAgentMemoryFileTransaction(root, transaction.transactionId, "archive");
+    return archived;
+  });
+}
+
+// Report-first maintenance pass: near-duplicate merge proposals (agents apply
+// them via evolve), stale-archive candidates (applied only with applyArchives),
+// compiled-wiki promotion candidates, and embeddings backfill.
+export async function consolidateAgentMemory(input: { vaultPath?: string; applyArchives?: boolean } = {}) {
+  const root = resolveObsidianVaultPath(input.vaultPath, { requireWritable: Boolean(input.applyArchives) });
+  await access(root, constants.R_OK);
+  const records = await withAgentMemoryUsage(root, await readMemoryRecords(root));
+  const durableRecords = records.filter((record) => record.type !== "action");
+  const active = durableRecords.filter((record) => record.status === "active");
+  const duplicateGroups = findNearDuplicateGroups(active).map((group) => {
+    const [canonical, ...older] = group;
+    return {
+      size: group.length,
+      type: canonical.type,
+      canonicalId: canonical.id,
+      canonicalTitle: canonical.title,
+      memberIds: group.map((record) => record.id),
+      memberTitles: group.map((record) => record.title),
+      memberPaths: group.map((record) => record.notePath),
+      suggestedAction: "evolve" as const,
+      evolveHint: `hive-brain evolve --memory-id ${canonical.id} --supersedes ${older.map((record) => record.id).join(",")} --content "<merged durable memory>" --reason "consolidate near-duplicates"`,
+    };
+  });
+  const correctionCandidates = findExplicitCorrectionCandidates(active);
+  const archiveCandidates = staleArchiveCandidates(active);
+  const archived = input.applyArchives ? await archiveMemoryRecords(root, archiveCandidates) : [];
+  const entityCounts = new Map<string, { entity: string; records: AgentMemoryRecord[] }>();
+  for (const record of active) {
+    for (const entity of record.entities ?? []) {
+      const key = entity.toLowerCase();
+      const current = entityCounts.get(key) ?? { entity, records: [] };
+      if (!current.records.some((existing) => existing.id === record.id)) current.records.push(record);
+      entityCounts.set(key, current);
+    }
+  }
+  const wikiCandidates = [...entityCounts.values()]
+    .filter(({ records: linked }) => linked.length >= 3)
+    .sort((left, right) => right.records.length - left.records.length)
+    .slice(0, 12)
+    .map(({ entity, records: linked }) => ({
+      entity,
+      memoryCount: linked.length,
+      memoryPaths: linked.map((record) => record.notePath),
+      compileHint: {
+        action: "compile",
+        title: entity,
+        summary: `Compiled from ${linked.length} typed Agent Memory notes.`,
+        content: linked.map((record) => `- ${record.title} ([[${record.notePath}]])`).join("\n"),
+        entities: [{ name: entity }],
+      },
+    }));
+  const embeddings = await backfillAgentMemoryEmbeddings(root, active).catch(() => undefined);
+  return {
+    vaultPath: root,
+    scanned: durableRecords.length,
+    active: active.length,
+    legacyOperationalIgnored: records.length - durableRecords.length,
+    duplicateGroups,
+    correctionCandidates,
+    archiveCandidates: archiveCandidates.map((record) => ({ id: record.id, title: record.title, type: record.type, createdAt: record.createdAt, notePath: record.notePath })),
+    archivedCount: archived.length,
+    archivedIds: archived.map((record) => record.id),
+    wikiCandidates,
+    embeddings,
+  };
+}
+
+async function jsonlFileStats(root: string, vaultRelativePath: string) {
+  const file = join(root, vaultRelativePath);
+  const st = await stat(file).catch(() => null);
+  if (!st?.isFile()) return { exists: false, bytes: 0, lines: 0 };
+  const raw = await readFile(file, "utf8").catch(() => "");
+  return { exists: true, bytes: st.size, lines: raw.split("\n").filter(Boolean).length, mtimeMs: st.mtimeMs };
+}
+
+// Observability for the memory layer: sizes, staleness, duplicate pressure,
+// proof/embedding status. Surfaced via API action "health" and `hive-brain health`.
+export async function healthAgentMemory(input: { vaultPath?: string } = {}) {
+  const root = resolveObsidianVaultPath(input.vaultPath);
+  await access(root, constants.R_OK);
+  const records = await withAgentMemoryUsage(root, await readMemoryRecords(root));
+  const durableRecords = records.filter((record) => record.type !== "action");
+  const active = durableRecords.filter((record) => record.status === "active");
+  const operationalLegacy = records.filter((record) => record.status === "active" && record.type === "action");
+  const canonicalHeads = selectCanonicalMemoryHeads(active);
+  const byType: Record<string, number> = {};
+  const byStatus: Record<string, number> = {};
+  for (const record of durableRecords) {
+    byType[record.type] = (byType[record.type] ?? 0) + 1;
+    byStatus[record.status] = (byStatus[record.status] ?? 0) + 1;
+  }
+  const [indexStats, entityStats, retrievalStats, proofStats, transactionStats, generations] = await Promise.all([
+    jsonlFileStats(root, INDEX_PATH),
+    jsonlFileStats(root, AGENT_MEMORY_ENTITY_INDEX_PATH),
+    jsonlFileStats(root, AGENT_MEMORY_RETRIEVALS_PATH),
+    jsonlFileStats(root, AGENT_MEMORY_PROOF_INDEX_PATH),
+    jsonlFileStats(root, AGENT_MEMORY_TRANSACTION_JOURNAL_PATH),
+    listBrainIndexGenerations({ root, kind: "agent-memory" }).catch(() => null),
+  ]);
+  const proofStatusCounts: Record<string, number> = {};
+  for (const record of durableRecords) {
+    if (record.proofStatus) proofStatusCounts[record.proofStatus] = (proofStatusCounts[record.proofStatus] ?? 0) + 1;
+  }
+  let retrievedTotal = 0;
+  let finalAnswerTotal = 0;
+  let neverRetrieved = 0;
+  for (const record of active) {
+    retrievedTotal += record.usage?.retrievalCount ?? 0;
+    finalAnswerTotal += record.usage?.finalAnswerCount ?? 0;
+    if (!record.usage?.retrievalCount && !record.usage?.finalAnswerCount) neverRetrieved += 1;
+  }
+  const duplicateGroups = findNearDuplicateGroups(active);
+  const [fullVaultIndex, embeddings, gitlawb] = await Promise.all([
+    fullVaultSearchIndexStatus(root).catch(() => null),
+    agentMemoryEmbeddingsCoverage(root, active).catch(() => null),
+    safeGitLawbStatus(),
+  ]);
+  const evolutionChains = new Set(durableRecords.filter((record) => record.evolutionRootId).map((record) => record.evolutionRootId));
+  return {
+    vaultPath: root,
+    generatedAt: new Date().toISOString(),
+    memories: {
+      total: durableRecords.length,
+      active: active.length,
+      byType,
+      byStatus,
+      evolvedChains: evolutionChains.size,
+      supersededCount: byStatus.superseded ?? 0,
+      neverRetrievedActive: neverRetrieved,
+      legacyOperationalActive: operationalLegacy.length,
+    },
+    usage: {
+      retrievedTotal,
+      finalAnswerTotal,
+      retrievalsFile: retrievalStats,
+    },
+    indexes: {
+      memoryIndex: { ...indexStats, uniqueRecords: records.length, bloatFactor: records.length ? Math.round((indexStats.lines / records.length) * 100) / 100 : 0 },
+      entityIndex: entityStats,
+      fullVaultIndex,
+      embeddings,
+      generations: {
+        currentGenerationId: generations?.currentGenerationId,
+        total: generations?.generations.length ?? 0,
+        invalid: generations?.generations.filter((generation) => !generation.verified).length ?? 0,
+        replayCoverage: generations?.coverage,
+      },
+    },
+    transactions: {
+      journal: transactionStats,
+    },
+    proofs: {
+      mode: process.env.HIVEMINDOS_MEMORY_PROOFS?.trim().toLowerCase() === "off" ? "off" : "auto",
+      file: proofStats,
+      byStatus: proofStatusCounts,
+      gitlawbCliInstalled: Boolean(gitlawb?.cli.installed),
+      gitlawbDid: Boolean(gitlawb?.identity.did),
+    },
+    duplicatePressure: {
+      groups: duplicateGroups.length,
+      largestGroup: duplicateGroups[0]?.length ?? 0,
+      affectedMemories: duplicateGroups.reduce((sum, group) => sum + group.length, 0),
+    },
+    canonicalHeads: {
+      heads: canonicalHeads.records.filter((record) => record.status === "active").length,
+      conflicts: canonicalHeads.conflicts.length,
+      affectedMemories: canonicalHeads.conflicts.reduce((sum, conflict) => sum + conflict.memberIds.length, 0),
+      groups: canonicalHeads.conflicts,
+    },
+  };
 }

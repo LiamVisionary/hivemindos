@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-07-10T11:57:05.080217+00:00",
+  "request": "Improve HivemindOS memory substantially and add a one-minute micro benchmark against Mem0 GPT-5 reference scores",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "mem0ai/memory-benchmarks",
+      "source_path": "benchmarks/locomo/run.py",
+      "target_path": "benchmarks/memory/micro-v1.json",
+      "reuse_type": "config_adapted",
+      "note": "Fixed LoCoMo task-family panel and Top-50 reference contract"
+    },
+    {
+      "source_repo": "mem0ai/memory-benchmarks",
+      "source_path": "benchmarks/longmemeval/run.py",
+      "target_path": "scripts/benchmark-standard-memory-micro.mjs",
+      "reuse_type": "adapted_code",
+      "note": "Four-suite orchestration and fixed question-id execution"
+    },
+    {
+      "source_repo": "mem0ai/memory-benchmarks",
+      "source_path": "benchmarks/beam/run.py",
+      "target_path": "scripts/benchmark-standard-memory-evaluate.py",
+      "reuse_type": "test_adapted",
+      "note": "Rubric-nugget scoring with bounded concurrent judges"
+    },
+    {
+      "source_repo": "mem0ai/memory-benchmarks",
+      "source_path": "benchmarks/locomo/prompts.py",
+      "target_path": "scripts/benchmark-standard-memory-evaluate.py",
+      "reuse_type": "adapted_code",
+      "note": "Pinned hash-verified answer and judge prompt loading"
+    }
+  ]
+}

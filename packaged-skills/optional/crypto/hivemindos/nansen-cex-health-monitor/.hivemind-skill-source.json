@@ -1,0 +1,21 @@
+{
+  "upstreamName": "Nansen CEX Health Monitor",
+  "upstreamSlug": "nansen-cex-health-monitor",
+  "hiveSlug": "nansen-cex-health-monitor",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/crypto/hivemindos/nansen-cex-health-monitor",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-08T12:30:00Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional crypto skills",
+  "sourcePath": "packaged-skills/optional/crypto/hivemindos/nansen-cex-health-monitor",
+  "status": "optional",
+  "references": [
+    "https://docs.nansen.ai/guides/templates/complex-use-cases/use-case-5-monitoring-cex-health"
+  ],
+  "hivemindAdaptations": [
+    "Routes CEX monitoring through HivemindOS Nansen intelligence.",
+    "Frames results as point-in-time exchange-risk research unless repeated snapshots exist.",
+    "Avoids proof-of-solvency claims from a single data pull."
+  ]
+}

@@ -2,16 +2,22 @@
 
 import { memo, useCallback, useEffect, useState } from "react";
 import type { ComponentType, Dispatch, ElementType, MutableRefObject, SetStateAction } from "react";
-import { AgentCallModal, type AgentCallLiveKit, type AgentCallLocalTts, type AgentCallPhase, type AgentCallRealtime, type AgentCallRuntimeAgent, type AgentCallVoiceRun } from "@/components/fleet/agent-call-modal";
+import { AgentCallModal, type AgentCallGeminiLive, type AgentCallLiveKit, type AgentCallLocalTts, type AgentCallPhase, type AgentCallRealtime, type AgentCallRuntimeAgent, type AgentCallVoiceRun } from "@/components/fleet/agent-call-modal";
 import type { FleetViewProps } from "@/components/fleet/FleetView";
+import type { OrbitalGraphPalette } from "@/components/fleet/orbital-graph";
 import { FleetHiveView } from "@/components/fleet-hive";
 import { useFrTheme } from "@/components/fleet-hive/use-fr-theme";
 import { dashboardStateValue, loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import type { AeonDeleteDepth, AeonDeleteProgress, AeonDeleteResult } from "@/components/fleet/roster";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
-import type { DashboardView, HivemindLinkClientStatus, MachineGroup } from "@/features/dashboard/dashboard-types";
+import { BrainReadinessBanner } from "@/components/fleet/brain-readiness-banner";
+import { fleetAgentChatBlocker, type FleetAgentChatBlocker } from "@/features/dashboard/agent-chat-readiness";
+import type { BrainReadiness } from "@/features/dashboard/hooks/use-brain-readiness";
+import type { DashboardView, HivemindLinkClientStatus, MachineGroup, RuntimeIntegrationStatus } from "@/features/dashboard/dashboard-types";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
+import { DEFAULT_QUEEN_BEE_NAME } from "@/lib/config/queen-bee-personality";
+import styles from "./AgentsPanel.module.css";
 
 type ClassNameBuilder = (...names: Array<string | false | null | undefined>) => string;
 type IconComponent = ElementType<{
@@ -26,7 +32,7 @@ type FleetViewData = {
   ticker: NonNullable<FleetViewProps["ticker"]>;
   edges: NonNullable<FleetViewProps["edges"]>;
 };
-type FleetHiveViewMode = "hive" | "graph" | "map" | "list";
+type FleetHiveViewMode = "hive" | "graph" | "map" | "list" | "companion";
 type FleetChatTone = "hive" | "legacy";
 
 type TailnetCleanupBanner = {
@@ -43,9 +49,12 @@ type TailnetCleanupBanner = {
 type AgentsPanelProps = {
   Button: ElementType;
   Check: IconComponent;
+  CircleAlert: IconComponent;
   ExternalLink: IconComponent;
   FleetView: ComponentType<FleetViewProps>;
+  Trash2: IconComponent;
   activeView: DashboardView;
+  brainReadiness?: BrainReadiness | null;
   tailnetCleanup?: TailnetCleanupBanner;
   addAgentToMachine: (machine: MachineGroup) => void;
   agents: AgentProfile[];
@@ -81,6 +90,7 @@ type AgentsPanelProps = {
   renameMachine: NonNullable<FleetViewProps["onRenameMachine"]>;
   requestDuplicateAgent: (agentId: string) => void;
   runMachineUpdate: (machine: MachineGroup) => void | Promise<void>;
+  runtimeModelSelectionsByRuntime: Partial<Record<AgentProfile["runtime"], NonNullable<RuntimeIntegrationStatus["modelSelection"]>>>;
   setActiveView: Dispatch<SetStateAction<DashboardView>>;
   setAgentRenameDraft: Dispatch<SetStateAction<string>>;
   setAgentRenameEditing: Dispatch<SetStateAction<boolean>>;
@@ -97,6 +107,7 @@ type AgentsPanelProps = {
   showHivemindLinkSignInBanner: boolean;
   startAgentChat: (agentId: string, options?: { fresh?: boolean }) => void;
   startAgentWorkChat: (agentId: string, task?: string) => void;
+  tailscaleStatus: string;
   walletsByAgent: Record<string, AgentWalletConfig>;
 };
 
@@ -111,9 +122,10 @@ type AgentPhoneCallResult = {
       callerName?: string;
       dashboardToken?: string;
       livekitUrl?: string;
-      mode?: "byok" | "cloud" | "local-tts";
+      mode?: "byok" | "cloud" | "local-tts" | "gemini-live";
       localTts?: AgentCallLocalTts;
       realtime?: AgentCallRealtime;
+      geminiLive?: AgentCallGeminiLive;
       runtimeAgent?: AgentCallRuntimeAgent;
       room?: string;
       voiceReady?: boolean;
@@ -167,9 +179,12 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
   const {
     Button,
     Check,
+    CircleAlert,
     ExternalLink,
     FleetView,
+    Trash2,
     activeView,
+    brainReadiness,
     tailnetCleanup,
     addAgentToMachine,
     agents,
@@ -197,6 +212,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
     renameMachine,
     requestDuplicateAgent,
     runMachineUpdate,
+    runtimeModelSelectionsByRuntime,
     setActiveView,
     setAgentRenameDraft,
     setAgentRenameEditing,
@@ -213,6 +229,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
     showHivemindLinkSignInBanner,
     startAgentChat,
     startAgentWorkChat,
+    tailscaleStatus,
     walletsByAgent,
   } = props;
   const [agentCallSession, setAgentCallSession] = useState<{
@@ -224,6 +241,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
     livekit?: AgentCallLiveKit;
     realtime?: AgentCallRealtime;
     localTts?: AgentCallLocalTts;
+    geminiLive?: AgentCallGeminiLive;
     runtimeAgent?: AgentCallRuntimeAgent;
     voiceRun?: AgentCallVoiceRun;
   } | null>(null);
@@ -235,7 +253,12 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
   // Fleet layout: the redesigned "hive" is the default; "classic" falls back to
   // the legacy three-column FleetView. The choice is persisted across sessions.
   const [fleetLayout, setFleetLayout] = useState<"hive" | "classic">("hive");
+  // An agent with no configured model (e.g. the default OpenClaw agent on the
+  // "HivemindOS models" provider before a wallet/model is set up) can't actually
+  // answer, so gate "Open chat" behind model setup instead of opening a dead chat.
+  const [chatBlockedAgent, setChatBlockedAgent] = useState<({ id: string; name: string } & FleetAgentChatBlocker) | null>(null);
   const [fleetHiveViewMode, setFleetHiveViewMode] = useState<FleetHiveViewMode>("hive");
+  const [fleetGraphPalette, setFleetGraphPalette] = useState<OrbitalGraphPalette>("classic");
   useEffect(() => {
     let cancelled = false;
     void loadDashboardStateSnapshot().then((snapshot) => {
@@ -259,9 +282,11 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
   }, [fleetHiveViewMode, fleetLayout, onChatOpenSpaceRightInsetChange]);
   useEffect(() => () => onChatOpenSpaceRightInsetChange?.(0), [onChatOpenSpaceRightInsetChange]);
   useEffect(() => {
-    const tone: FleetChatTone = fleetLayout === "hive" && fleetHiveViewMode === "graph" ? "legacy" : "hive";
+    const tone: FleetChatTone = fleetLayout === "hive" && fleetHiveViewMode === "graph" && fleetGraphPalette === "classic"
+      ? "legacy"
+      : "hive";
     onChatToneChange?.(tone);
-  }, [fleetHiveViewMode, fleetLayout, onChatToneChange]);
+  }, [fleetGraphPalette, fleetHiveViewMode, fleetLayout, onChatToneChange]);
   useEffect(() => () => onChatToneChange?.("hive"), [onChatToneChange]);
 
   const callAgentOnDashboard = useCallback(async (machine: FleetPanelMachine, fleetAgent: FleetPanelAgent): Promise<AgentPhoneCallResult> => {
@@ -289,6 +314,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
           voiceProviderId: profile?.calls?.voiceProviderId,
           voiceModelId: profile?.calls?.voiceModelId,
           voiceId: profile?.calls?.voiceId,
+          voiceKeyEnv: profile?.calls?.voiceKeyEnv,
           skillProfilePrompt: profile?.skillProfilePrompt,
           preferredSkillSlugs: profile?.preferredSkillSlugs,
           aeonRepo: profile?.aeonRepo,
@@ -343,6 +369,16 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
         } : current);
         return;
       }
+      if (call?.mode === "gemini-live" && call.geminiLive) {
+        setAgentCallSession((current) => current?.agent.id === fleetAgent.id ? {
+          ...current,
+          phase: "ringing",
+          geminiLive: call.geminiLive,
+          runtimeAgent: call.runtimeAgent,
+          voiceRun: call.voiceRun,
+        } : current);
+        return;
+      }
       if (livekit) {
         const notice = result.error ? "Dashboard audio joined the agent room, but setup reported a warning." : undefined;
         setAgentCallSession((current) => current?.agent.id === fleetAgent.id ? { ...current, livekit, notice, phase: "ringing", runtimeAgent: call?.runtimeAgent, voiceRun: call?.voiceRun } : current);
@@ -368,6 +404,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
     edges: fleetViewData.edges,
     hostedApps: fleetHostedApps,
     loading: fleetDiscoveryLoading,
+    tailnetLabel: tailscaleStatus,
     mastheadMode: "mobile",
     recentAgentArrival,
     onRecentAgentArrivalSeen,
@@ -381,6 +418,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
     updateStatusByMachine: fleetUpdateStatusByMachine,
     updateDetailByMachine: fleetUpdateDetailByMachine,
     walletsByAgent,
+    queenName: queenAgent?.name ?? DEFAULT_QUEEN_BEE_NAME,
     onUpdateMachine: (machine) => {
       const group = machineGroups.find((item) => item.key === machine.id);
       if (group) void runMachineUpdate(group);
@@ -393,7 +431,19 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
     onRenameMachine: renameMachine,
     onOpenCodeProof: () => setActiveView("integrations"),
     onFixSyncIssue,
-    onOpenChat: (_, agent) => startAgentChat(agent.id, { fresh: true }),
+    onOpenChat: (_, agent) => {
+      // Paid HivemindOS model routes still need funding, but the bundled free
+      // Scout model is intentionally chat-ready without an agent wallet.
+      const profile = displayAgents.find((item) => item.id === agent.id || item.agentId === agent.id)
+        ?? agents.find((item) => item.id === agent.id || item.agentId === agent.id);
+      const runtimeSelection = profile ? runtimeModelSelectionsByRuntime[profile.runtime] : undefined;
+      const blocker = fleetAgentChatBlocker(agent, runtimeSelection);
+      if (blocker) {
+        setChatBlockedAgent({ id: agent.id, name: agent.name, ...blocker });
+        return;
+      }
+      startAgentChat(agent.id, { fresh: true });
+    },
     onOpenTaskChat: (_, agent, chat) => startAgentWorkChat(agent.id, chat?.id ?? chat?.task ?? agent.task),
     onCallAgent: openAgentPhoneCall,
     onOpenWallet: (_, agent) => {
@@ -428,11 +478,20 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
     }),
   };
   const layoutToggle = <FleetLayoutToggle layout={fleetLayout} onChoose={chooseFleetLayout} />;
+  const tailnetCleanupCount = tailnetCleanup?.candidates.length ?? 0;
+  const tailnetCleanupHosts = tailnetCleanup?.candidates.map((candidate) => candidate.hostname).join(", ") ?? "";
+  const tailnetCleanupTitle = tailnetCleanup?.notice && tailnetCleanupCount === 0
+    ? "Tailnet cleanup updated"
+    : tailnetCleanupCount === 1
+      ? "Stale tailnet node"
+      : `${tailnetCleanupCount} stale tailnet nodes`;
+  const tailnetCleanupDetail = tailnetCleanup?.notice
+    || `Offline over ${tailnetCleanup?.staleAgeDays ?? 7} days${tailnetCleanupHosts ? `: ${tailnetCleanupHosts}` : ""}. Cleanup keeps Fleet free of retired registrations.`;
 
   return (
     <>
       {activeView === "agents" ? (
-        <section className={fleetClass("fleetConstellationPanel", "tabPanel")}>
+        <section className={fleetClass("fleetConstellationPanel", "tabPanel")} data-flush-banner={brainReadiness && brainReadiness.status !== "hidden" ? "" : undefined}>
           {showHivemindLinkConnectedBanner ? (
             <div className="relative mb-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[rgba(20,184,166,0.38)] bg-[rgba(20,184,166,0.12)] px-4 py-3 pr-12 text-sm text-[var(--foreground)]">
               <div>
@@ -479,41 +538,50 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
               />
             </div>
           ) : null}
+          {brainReadiness ? <BrainReadinessBanner readiness={brainReadiness} /> : null}
           {tailnetCleanup?.visible ? (
-            <div className="relative mb-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.10)] px-4 py-3 pr-12 text-sm text-[var(--foreground)]">
-              <div style={{ minWidth: 0 }}>
-                <strong>
-                  {tailnetCleanup.candidates.length === 1
-                    ? "1 stale tailnet node detected"
-                    : `${tailnetCleanup.candidates.length} stale tailnet nodes detected`}
-                </strong>
-                <p className="mt-1 text-[var(--muted)]" style={{ overflowWrap: "anywhere" }}>
-                  {tailnetCleanup.notice
-                    || `Old registrations offline for over ${tailnetCleanup.staleAgeDays} days: ${tailnetCleanup.candidates.map((candidate) => candidate.hostname).join(", ")}. Removing them keeps the fleet roster free of ghost machines.`}
-                </p>
+            <div className={styles.tailnetCleanupBanner} role="status" aria-live="polite">
+              <span className={styles.tailnetCleanupIcon} aria-hidden="true">
+                <CircleAlert className={styles.tailnetCleanupIconGlyph} />
+              </span>
+              <div className={styles.tailnetCleanupCopy}>
+                <div className={styles.tailnetCleanupHeader}>
+                  <strong>{tailnetCleanupTitle}</strong>
+                  {tailnetCleanupCount > 0 ? (
+                    <span>{tailnetCleanup.staleAgeDays}+ days offline</span>
+                  ) : null}
+                </div>
+                <p>{tailnetCleanupDetail}</p>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={tailnetCleanup.busy}
-                  onClick={() => tailnetCleanup.onCleanupNow()}
-                >
-                  {tailnetCleanup.busy ? "Cleaning..." : "Clean up now"}
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={tailnetCleanup.busy}
-                  onClick={() => tailnetCleanup.onAlwaysCleanup()}
-                  title="Also removes future stale hivemindos-* nodes automatically once a day"
-                >
-                  Always clean up automatically
-                </Button>
-              </div>
+              {tailnetCleanupCount > 0 ? (
+                <div className={styles.tailnetCleanupActions}>
+                  <Button
+                    type="button"
+                    size="xs"
+                    className={styles.tailnetCleanupAction}
+                    disabled={tailnetCleanup.busy}
+                    onClick={() => tailnetCleanup.onCleanupNow()}
+                  >
+                    <Trash2 aria-hidden="true" className={styles.tailnetCleanupButtonIcon} />
+                    {tailnetCleanup.busy ? "Cleaning..." : "Clean up"}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="outline"
+                    className={`${styles.tailnetCleanupAction} ${styles.tailnetCleanupActionSecondary}`}
+                    disabled={tailnetCleanup.busy}
+                    onClick={() => tailnetCleanup.onAlwaysCleanup()}
+                    title="Also removes future stale hivemindos-* nodes automatically once a day"
+                  >
+                    <Check aria-hidden="true" className={styles.tailnetCleanupButtonIcon} />
+                    Auto-clean daily
+                  </Button>
+                </div>
+              ) : null}
               <CloseIconButton
-                className="absolute right-2 top-2"
+                className={styles.tailnetCleanupClose}
+                size="sm"
                 aria-label="Dismiss stale tailnet node message"
                 onClick={() => tailnetCleanup.onDismiss()}
               />
@@ -521,11 +589,58 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
           ) : null}
           <div className={`${fleetClass("fleetViewport")} fleetViewportShell`} style={{ position: "relative" }}>
             {fleetLayout === "hive" ? (
-              <FleetHiveView {...fleetProps} layoutToggle={layoutToggle} onViewModeChange={setFleetHiveViewMode} />
+              <FleetHiveView
+                {...fleetProps}
+                layoutToggle={layoutToggle}
+                onViewModeChange={setFleetHiveViewMode}
+                onGraphPaletteChange={setFleetGraphPalette}
+              />
             ) : (
               <FleetView {...fleetProps} layoutToggle={layoutToggle} />
             )}
           </div>
+          {chatBlockedAgent ? (
+            <div
+              role="dialog"
+              aria-modal="true"
+              onClick={() => setChatBlockedAgent(null)}
+              style={{ position: "fixed", inset: 0, zIndex: 1200, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(4,5,8,0.62)", padding: 20 }}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{ width: "min(420px, 100%)", background: "var(--panel-2, var(--panel, #12151c))", border: "1px solid var(--line-2, var(--line, #2a2f3a))", borderRadius: 14, padding: "22px 22px 18px", boxShadow: "0 30px 80px -30px rgba(0,0,0,0.8)" }}
+              >
+                <h3 style={{ margin: "0 0 8px", fontSize: 16, color: "var(--foreground, #f4f7fb)" }}>{chatBlockedAgent.title}</h3>
+                <p style={{ margin: "0 0 18px", fontSize: 13.5, lineHeight: 1.5, color: "var(--fg-2, #a7b0c0)" }}>
+                  {chatBlockedAgent.kind === "funding" ? (
+                    <>The selected HivemindOS model for <strong style={{ color: "var(--foreground, #f4f7fb)" }}>{chatBlockedAgent.name}</strong> needs model credits. The free Scout model remains available without credits.</>
+                  ) : chatBlockedAgent.kind === "local-model" && chatBlockedAgent.runtimeDetected ? (
+                    <>Your local model server is online, but no chat model is selected for <strong style={{ color: "var(--foreground, #f4f7fb)" }}>{chatBlockedAgent.name}</strong>. Download or load a model, then select it below.</>
+                  ) : chatBlockedAgent.kind === "local-model" ? (
+                    <>Connect the local model server, then download or load and select a chat model for <strong style={{ color: "var(--foreground, #f4f7fb)" }}>{chatBlockedAgent.name}</strong>.</>
+                  ) : (
+                    <>Select a chat model for <strong style={{ color: "var(--foreground, #f4f7fb)" }}>{chatBlockedAgent.name}</strong> before starting a conversation.</>
+                  )}
+                </p>
+                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                  <button
+                    type="button"
+                    onClick={() => setChatBlockedAgent(null)}
+                    style={{ padding: "8px 14px", borderRadius: 9, border: "1px solid var(--line-2, #2a2f3a)", background: "transparent", color: "var(--fg-2, #a7b0c0)", font: "inherit", fontSize: 13, cursor: "pointer" }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { const blockedId = chatBlockedAgent.id; setChatBlockedAgent(null); setAgentSettingsPanel("role"); setAgentRoleModalId(blockedId); }}
+                    style={{ padding: "8px 14px", borderRadius: 9, border: "1px solid var(--honey-line, #caa24a)", background: "var(--honey, #e7b45c)", color: "var(--honey-ink, #241a06)", font: "inherit", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+                  >
+                    {chatBlockedAgent.kind === "funding" ? "Open model setup" : "Choose model"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
           {agentCallSession ? (
             <AgentCallModal
               machine={agentCallSession.machine}
@@ -536,6 +651,7 @@ function AgentsPanelComponent(props: AgentsPanelProps) {
               livekit={agentCallSession.livekit}
               realtime={agentCallSession.realtime}
               localTts={agentCallSession.localTts}
+              geminiLive={agentCallSession.geminiLive}
               runtimeAgent={agentCallSession.runtimeAgent}
               voiceRun={agentCallSession.voiceRun}
               onVoiceConnected={() => {

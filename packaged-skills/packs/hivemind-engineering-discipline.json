@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "hivemind-engineering-discipline",
+  "name": "HivemindOS Engineering Discipline",
+  "description": "A risk-scoped engineering workflow combining HivemindOS Work Board evidence gates with curated planning, TDD, debugging, isolation, review, and completion methods from obra/superpowers.",
+  "category": "Engineering",
+  "capabilities": ["chat", "shell", "filesystem"],
+  "audience": "Agents doing ambiguous, risky, multi-step, or regression-prone software work.",
+  "safety": "Installs local packaged files only. It never installs the upstream plugin, hooks, bootstrap, or brainstorming web server, and it grants no commit, push, merge, deletion, deployment, or agent-fan-out authority.",
+  "skills": [
+    { "path": "auto-install/engineering-discipline" },
+    { "path": "optional/engineering/obra-superpowers/brainstorming" },
+    { "path": "optional/engineering/obra-superpowers/dispatching-parallel-agents" },
+    { "path": "optional/engineering/obra-superpowers/executing-plans" },
+    { "path": "optional/engineering/obra-superpowers/finishing-a-development-branch" },
+    { "path": "optional/engineering/obra-superpowers/receiving-code-review" },
+    { "path": "optional/engineering/obra-superpowers/requesting-code-review" },
+    { "path": "optional/engineering/obra-superpowers/subagent-driven-development" },
+    { "path": "optional/engineering/obra-superpowers/systematic-debugging" },
+    { "path": "optional/engineering/obra-superpowers/test-driven-development" },
+    { "path": "optional/engineering/obra-superpowers/using-git-worktrees" },
+    { "path": "optional/engineering/obra-superpowers/verification-before-completion" },
+    { "path": "optional/engineering/obra-superpowers/writing-plans" }
+  ]
+}

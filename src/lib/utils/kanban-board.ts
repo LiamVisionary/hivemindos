@@ -33,6 +33,10 @@ export function filterKanbanTasks(
   });
 }
 
+export function activeKanbanTaskCount(tasks: KanbanTask[]) {
+  return tasks.filter((task) => task.status !== "done" && task.status !== "archived").length;
+}
+
 export function moveTaskBetweenColumns(tasks: KanbanTask[], taskId: string, toStatus: KanbanStatus) {
   const now = Date.now();
   return tasks.map((task) => (

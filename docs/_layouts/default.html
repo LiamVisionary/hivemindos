@@ -3,9 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0c0d11">
   <title>{% if page.title %}{{ page.title | escape }} | {% endif %}{{ site.title | escape }}</title>
   <meta name="description" content="{{ page.description | default: site.description | escape }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
   <link rel="icon" type="image/png" href="{{ '/assets/img/app-icon-1024.png' | relative_url }}">
   <link rel="apple-touch-icon" href="{{ '/assets/img/app-icon-1024.png' | relative_url }}">
   <link rel="stylesheet" href="{{ '/assets/css/site.css' | relative_url }}">
@@ -15,29 +19,41 @@
 
   <header class="siteHeader">
     <nav class="topNav" aria-label="Primary">
+      <button class="mobileNavButton" type="button" aria-label="Open documentation menu" aria-expanded="false" aria-controls="docs-navigation" data-nav-toggle>
+        <span></span><span></span><span></span>
+      </button>
       <a class="brandMark" href="{{ '/' | relative_url }}" aria-label="HivemindOS Docs home">
         <img class="brandIcon" src="{{ '/assets/img/app-icon-1024.png' | relative_url }}" alt="" width="40" height="40" aria-hidden="true">
-        <span>
-          <strong>HivemindOS</strong>
-          <small>Operator Docs</small>
-        </span>
+        <span class="brandName">HivemindOS</span>
+        <span class="brandDivider" aria-hidden="true"></span>
+        <span class="brandEdition">Docs</span>
       </a>
       <div class="topLinks">
         {% for link in site.data.navigation.top_links %}
           <a{% if page.url == link.url %} aria-current="page"{% endif %} href="{{ link.url | relative_url }}">{{ link.title }}</a>
         {% endfor %}
       </div>
-      <div class="searchShell">
-        <span class="searchIcon" aria-hidden="true"></span>
-        <input id="navSearch" type="search" placeholder="Filter docs..." autocomplete="off">
-        <kbd>/</kbd>
-      </div>
+      <a class="githubLink" href="https://github.com/LiamVisionary/hivemindos" aria-label="View HivemindOS on GitHub">
+        <span>GitHub</span>
+        <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" d="M8 .2a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38l-.01-1.49c-2.23.49-2.7-1.08-2.7-1.08-.37-.93-.9-1.18-.9-1.18-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.65-.89-3.65-3.96 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82a7.65 7.65 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.08-1.88 3.75-3.66 3.95.29.25.54.74.54 1.5l-.01 2.22c0 .21.14.46.55.38A8 8 0 0 0 8 .2Z"/></svg>
+      </a>
     </nav>
   </header>
 
+  <button class="navBackdrop" type="button" aria-label="Close documentation menu" data-nav-backdrop></button>
+
   <div class="docFrame">
-    <aside class="docSidebar" aria-label="Documentation navigation">
-      <div class="sidebarKicker">Documentation</div>
+    <aside id="docs-navigation" class="docSidebar" aria-label="Documentation navigation">
+      <div class="sidebarHeader">
+        <span class="sidebarKicker">Explore the docs</span>
+        <button class="sidebarClose" type="button" aria-label="Close documentation menu" data-nav-close>Close</button>
+      </div>
+      <label class="searchShell" for="navSearch">
+        <span class="searchIcon" aria-hidden="true"></span>
+        <input id="navSearch" type="search" placeholder="Filter pages" autocomplete="off">
+        <kbd>/</kbd>
+      </label>
+      <p class="searchEmpty" role="status" hidden>No matching pages.</p>
       <nav class="sideNav">
         {% for section in site.data.navigation.sections %}
           <section class="navSection">
@@ -77,8 +93,18 @@
     <main id="content" class="docMain" tabindex="-1">
       <article class="docContent">
         <div class="pageTools">
-          <p class="pageKicker">{{ page.section | default: site.title }}</p>
-          <button class="copyPageButton" type="button" data-copy-page>Copy link</button>
+          <p class="pageKicker">{{ page.section | default: "HivemindOS manual" }}</p>
+          <div class="pageToolActions">
+            {% if page.url contains '/for-investors/' %}
+              <button class="copyPageButton copyAiButton" type="button" title="Copy all investor documentation as an AI-ready Markdown bundle" data-copy-ai data-copy-ai-url="{{ '/for-investors/ai-context.txt' | relative_url }}">
+                <span class="copyAiIcon" aria-hidden="true">✦</span>
+                <span data-copy-ai-label>Copy for AI</span>
+              </button>
+            {% endif %}
+            <button class="copyPageButton" type="button" data-copy-page>
+              <span aria-hidden="true">⧉</span> Copy link
+            </button>
+          </div>
         </div>
         {{ content }}
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
@@ -93,12 +119,48 @@
         </nav>
       </article>
     </main>
+
+    <aside class="pageOutline" aria-label="On this page" hidden>
+      <p>On this page</p>
+      <nav data-page-outline></nav>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/{{ page.path }}">Improve this page ↗</a>
+    </aside>
   </div>
 
   <footer class="siteFooter">
-    <span>HivemindOS documentation</span>
-    <a href="https://github.com/LiamVisionary/hivemindos">GitHub</a>
+    <div>
+      <strong>HivemindOS</strong>
+      <span>Local-first infrastructure for agent teams.</span>
+    </div>
+    <div class="footerLinks">
+      <a href="{{ '/for-users/' | relative_url }}">User docs</a>
+      <a href="{{ '/for-users/architecture/' | relative_url }}">Architecture</a>
+      <a href="https://github.com/LiamVisionary/hivemindos">GitHub</a>
+    </div>
   </footer>
+
+  <dialog class="imageViewer" aria-label="Expanded media viewer" data-image-viewer>
+    <header class="imageViewerBar">
+      <div class="imageViewerHeading">
+        <strong data-viewer-title>Expanded image</strong>
+        <span>Scroll to pan · Esc to close</span>
+      </div>
+      <div class="imageViewerControls" aria-label="Image zoom controls">
+        <button type="button" data-viewer-fit>Fit</button>
+        <div class="imageViewerZoomGroup">
+          <button type="button" aria-label="Zoom out" data-viewer-zoom-out>−</button>
+          <output aria-live="polite" data-viewer-zoom>100%</output>
+          <button type="button" aria-label="Zoom in" data-viewer-zoom-in>+</button>
+        </div>
+        <button class="imageViewerClose" type="button" data-viewer-close>Close <span aria-hidden="true">×</span></button>
+      </div>
+    </header>
+    <div class="imageViewerViewport" tabindex="0" data-viewer-viewport>
+      <div class="imageViewerCanvas" data-viewer-canvas></div>
+    </div>
+    <p class="imageViewerCaption" data-viewer-caption hidden></p>
+  </dialog>
+
   <script type="module">
     import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
 
@@ -111,13 +173,6 @@
     const currentPath = normalizePath(window.location.href);
     const navLinks = Array.from(document.querySelectorAll(".sideNav a[href]"));
     const currentIndex = navLinks.findIndex((link) => normalizePath(link.href) === currentPath);
-    const primaryDocRoutes = [
-      '/whole-brain/',
-      '/features/hivemind-sync.html',
-      '/packaged-skills/',
-      '/slash-commands.html',
-      '/features/token-and-cost-savings.html'
-    ];
 
     if (currentIndex >= 0) {
       navLinks[currentIndex].classList.add("isActive");
@@ -127,7 +182,6 @@
       const pageNav = document.querySelector(".pageNav");
       const previous = navLinks[currentIndex - 1];
       const next = navLinks[currentIndex + 1];
-
       const wireCard = (card, link) => {
         if (!card || !link) {
           card?.remove();
@@ -139,48 +193,138 @@
 
       wireCard(document.querySelector("[data-page-prev]"), previous);
       wireCard(document.querySelector("[data-page-next]"), next);
-
-      if (pageNav && (previous || next)) {
-        pageNav.hidden = false;
-      }
+      if (pageNav && (previous || next)) pageNav.hidden = false;
     }
 
     const navSearch = document.querySelector("#navSearch");
+    const searchEmpty = document.querySelector(".searchEmpty");
     navSearch?.addEventListener("input", () => {
       const query = navSearch.value.trim().toLowerCase();
+      let visibleSections = 0;
       document.querySelectorAll(".navSection").forEach((section) => {
-        let sectionHasMatch = !query;
-        section.querySelectorAll(".navLink").forEach((link) => {
+        let sectionHasMatch = false;
+        section.querySelectorAll(":scope > .navLink").forEach((link) => {
           const matches = !query || link.textContent.toLowerCase().includes(query);
           link.hidden = !matches;
-          sectionHasMatch = sectionHasMatch || matches;
+          sectionHasMatch ||= matches;
+        });
+        section.querySelectorAll(".navGroup").forEach((group) => {
+          const summary = group.querySelector("summary")?.textContent.toLowerCase() || "";
+          const groupMatches = !query || summary.includes(query);
+          let childMatches = false;
+          group.querySelectorAll(".navLink").forEach((link) => {
+            const matches = groupMatches || link.textContent.toLowerCase().includes(query);
+            link.hidden = !matches;
+            childMatches ||= matches;
+          });
+          group.hidden = !(groupMatches || childMatches);
+          sectionHasMatch ||= groupMatches || childMatches;
+          if (query && childMatches) group.setAttribute("open", "");
         });
         section.hidden = !sectionHasMatch;
-        if (query) {
-          section.querySelectorAll("details").forEach((details) => details.setAttribute("open", ""));
-        }
+        if (sectionHasMatch) visibleSections += 1;
       });
+      if (searchEmpty) searchEmpty.hidden = visibleSections > 0;
     });
 
     window.addEventListener("keydown", (event) => {
-      if (event.key === "/" && document.activeElement !== navSearch) {
+      const activeElement = document.activeElement;
+      const isTyping = activeElement?.matches("input, textarea, select") || activeElement?.isContentEditable;
+      if (event.key === "/" && !isTyping) {
         event.preventDefault();
         navSearch?.focus();
       }
+      if (event.key === "Escape") closeNavigation();
     });
+
+    const navToggle = document.querySelector("[data-nav-toggle]");
+    const closeNavigation = () => {
+      document.body.classList.remove("navOpen");
+      navToggle?.setAttribute("aria-expanded", "false");
+    };
+    navToggle?.addEventListener("click", () => {
+      const isOpen = document.body.classList.toggle("navOpen");
+      navToggle.setAttribute("aria-expanded", String(isOpen));
+    });
+    document.querySelector("[data-nav-close]")?.addEventListener("click", closeNavigation);
+    document.querySelector("[data-nav-backdrop]")?.addEventListener("click", closeNavigation);
+    document.querySelectorAll(".sideNav a").forEach((link) => link.addEventListener("click", closeNavigation));
+
+    const copyTextToClipboard = async (text) => {
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return;
+        } catch {
+          // Fall through for embedded or permission-restricted browsers.
+        }
+      }
+      const copyField = document.createElement("textarea");
+      copyField.value = text;
+      copyField.setAttribute("readonly", "");
+      copyField.className = "clipboardCopyField";
+      document.body.appendChild(copyField);
+      copyField.select();
+      const copied = document.execCommand("copy");
+      copyField.remove();
+      if (!copied) throw new Error("Browser clipboard access is unavailable");
+    };
 
     document.querySelector("[data-copy-page]")?.addEventListener("click", async (event) => {
       const button = event.currentTarget;
+      const original = button.innerHTML;
       try {
-        await navigator.clipboard.writeText(window.location.href);
+        await copyTextToClipboard(window.location.href);
         button.textContent = "Copied";
-        window.setTimeout(() => {
-          button.textContent = "Copy link";
-        }, 1400);
       } catch {
         button.textContent = "Copy failed";
       }
+      window.setTimeout(() => { button.innerHTML = original; }, 1400);
     });
+
+    document.querySelector("[data-copy-ai]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const label = button.querySelector("[data-copy-ai-label]");
+      const originalLabel = label.textContent;
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      try {
+        const response = await fetch(button.dataset.copyAiUrl, { headers: { Accept: "text/plain" } });
+        if (!response.ok) throw new Error(`Investor context request failed with ${response.status}`);
+        const investorContext = await response.text();
+        if (!investorContext.includes("HIVEMINDOS_INVESTOR_DOCUMENTATION_BUNDLE") || !investorContext.includes("=== BEGIN DOCUMENT ===")) {
+          throw new Error("Investor context bundle is malformed");
+        }
+        await copyTextToClipboard(investorContext);
+        label.textContent = "Investor docs copied";
+      } catch {
+        label.textContent = "Copy failed";
+      } finally {
+        button.removeAttribute("aria-busy");
+        button.disabled = false;
+        window.setTimeout(() => { label.textContent = originalLabel; }, 1800);
+      }
+    });
+
+    const outline = document.querySelector(".pageOutline");
+    const outlineNav = document.querySelector("[data-page-outline]");
+    const headings = Array.from(document.querySelectorAll(".docContent h2"));
+    const usedIds = new Set();
+    headings.forEach((heading) => {
+      if (!heading.id) {
+        const baseId = heading.textContent.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "section";
+        let id = baseId;
+        let suffix = 2;
+        while (usedIds.has(id) || document.getElementById(id)) id = `${baseId}-${suffix++}`;
+        heading.id = id;
+      }
+      usedIds.add(heading.id);
+      const link = document.createElement("a");
+      link.href = `#${heading.id}`;
+      link.textContent = heading.textContent;
+      outlineNav?.appendChild(link);
+    });
+    if (outline && headings.length > 1) outline.hidden = false;
 
     const mermaidBlocks = document.querySelectorAll("code.language-mermaid");
     mermaidBlocks.forEach((code, index) => {
@@ -197,14 +341,14 @@
       securityLevel: "strict",
       theme: "base",
       themeVariables: {
-        background: "#fffdf8",
-        primaryColor: "#f8f3e8",
-        primaryTextColor: "#141716",
-        primaryBorderColor: "#1e2724",
-        lineColor: "#5f6d67",
-        secondaryColor: "#e6f3f0",
-        tertiaryColor: "#f7ead8",
-        fontFamily: "Avenir, Avenir Next, Gill Sans, Corbel, Trebuchet MS, sans-serif"
+        background: "#14161c",
+        primaryColor: "#211d16",
+        primaryTextColor: "#f3f0e9",
+        primaryBorderColor: "#e7b45c",
+        lineColor: "#a7a39a",
+        secondaryColor: "#15221f",
+        tertiaryColor: "#1b1e25",
+        fontFamily: "Geist, system-ui, sans-serif"
       }
     });
 
@@ -216,6 +360,135 @@
         node.textContent = `Diagram render failed: ${error instanceof Error ? error.message : "unknown error"}`;
       }
     }
+
+    const imageViewer = document.querySelector("[data-image-viewer]");
+    const viewerCanvas = document.querySelector("[data-viewer-canvas]");
+    const viewerViewport = document.querySelector("[data-viewer-viewport]");
+    const viewerTitle = document.querySelector("[data-viewer-title]");
+    const viewerCaption = document.querySelector("[data-viewer-caption]");
+    const viewerZoomLabel = document.querySelector("[data-viewer-zoom]");
+    const viewerZoomOut = document.querySelector("[data-viewer-zoom-out]");
+    const viewerZoomIn = document.querySelector("[data-viewer-zoom-in]");
+    let viewerScale = 1;
+    let viewerBaseWidth = 1;
+    let viewerBaseHeight = 1;
+    let viewerMedia = null;
+    let viewerSource = null;
+    let restoreViewerMedia = null;
+
+    const setViewerScale = (nextScale) => {
+      viewerScale = Math.min(4, Math.max(0.25, nextScale));
+      if (viewerMedia) viewerMedia.style.width = `${Math.round(viewerBaseWidth * viewerScale)}px`;
+      if (viewerZoomLabel) viewerZoomLabel.textContent = `${Math.round(viewerScale * 100)}%`;
+      if (viewerZoomOut) viewerZoomOut.disabled = viewerScale <= 0.25;
+      if (viewerZoomIn) viewerZoomIn.disabled = viewerScale >= 4;
+    };
+
+    const fitViewerMedia = () => {
+      if (!viewerViewport) return;
+      const availableWidth = Math.max(160, viewerViewport.clientWidth - 64);
+      const availableHeight = Math.max(120, viewerViewport.clientHeight - 64);
+      setViewerScale(Math.min(1, availableWidth / viewerBaseWidth, availableHeight / viewerBaseHeight));
+    };
+
+    const mediaSectionTitle = (source) => {
+      const headings = Array.from(document.querySelectorAll(".docContent h2, .docContent h3"));
+      const preceding = headings.filter((heading) => heading.compareDocumentPosition(source) & Node.DOCUMENT_POSITION_FOLLOWING);
+      return preceding.at(-1)?.textContent.trim() || "Expanded image";
+    };
+
+    const openMediaViewer = (source) => {
+      if (!imageViewer || !viewerCanvas || !viewerViewport) return;
+      restoreViewerMedia?.();
+      viewerCanvas.replaceChildren();
+      viewerSource = source;
+      viewerTitle.textContent = mediaSectionTitle(source);
+      const figureCaption = source.closest("figure")?.querySelector("figcaption")?.textContent.trim();
+      const imageAlt = source instanceof HTMLImageElement ? source.alt.trim() : "";
+      const caption = figureCaption || imageAlt;
+      viewerCaption.textContent = caption;
+      viewerCaption.hidden = !caption;
+
+      if (source instanceof HTMLImageElement) {
+        viewerMedia = source.cloneNode();
+        viewerMedia.removeAttribute("width");
+        viewerMedia.removeAttribute("height");
+        viewerMedia.className = "imageViewerMedia";
+        viewerMedia.alt = source.alt;
+        viewerBaseWidth = source.naturalWidth || source.getBoundingClientRect().width;
+        viewerBaseHeight = source.naturalHeight || source.getBoundingClientRect().height;
+        restoreViewerMedia = null;
+      } else {
+        const svg = source.querySelector("svg");
+        if (!svg) return;
+        const placeholder = document.createComment("diagram viewer placeholder");
+        const originalStyle = svg.getAttribute("style");
+        const originalClass = svg.getAttribute("class");
+        const renderedBounds = svg.getBoundingClientRect();
+        const viewBox = svg.viewBox?.baseVal;
+        viewerBaseWidth = viewBox?.width || renderedBounds.width;
+        viewerBaseHeight = viewBox?.height || renderedBounds.height;
+        svg.replaceWith(placeholder);
+        viewerMedia = svg;
+        viewerMedia.setAttribute("class", `${originalClass || ""} imageViewerMedia`.trim());
+        restoreViewerMedia = () => {
+          if (originalStyle === null) svg.removeAttribute("style");
+          else svg.setAttribute("style", originalStyle);
+          if (originalClass === null) svg.removeAttribute("class");
+          else svg.setAttribute("class", originalClass);
+          placeholder.replaceWith(svg);
+        };
+      }
+
+      viewerCanvas.appendChild(viewerMedia);
+      setViewerScale(1);
+      document.body.classList.add("mediaViewerOpen");
+      if (typeof imageViewer.showModal === "function") imageViewer.showModal();
+      else imageViewer.setAttribute("open", "");
+      requestAnimationFrame(() => {
+        viewerViewport.scrollLeft = Math.max(0, (viewerCanvas.scrollWidth - viewerViewport.clientWidth) / 2);
+        viewerViewport.scrollTop = Math.max(0, (viewerCanvas.scrollHeight - viewerViewport.clientHeight) / 2);
+        viewerViewport.focus({ preventScroll: true });
+      });
+    };
+
+    const registerZoomableMedia = (source, label) => {
+      if (source.closest("a")) return;
+      source.classList.add("zoomableMedia");
+      source.tabIndex = 0;
+      source.setAttribute("role", "button");
+      source.setAttribute("aria-label", label);
+      source.addEventListener("click", () => openMediaViewer(source));
+      source.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        openMediaViewer(source);
+      });
+    };
+
+    document.querySelectorAll(".docContent img").forEach((image) => {
+      registerZoomableMedia(image, `Open image full screen${image.alt ? `: ${image.alt}` : ""}`);
+    });
+    document.querySelectorAll(".docContent .mermaid:not(.mermaidError)").forEach((diagram) => {
+      registerZoomableMedia(diagram, `Open ${mediaSectionTitle(diagram)} diagram full screen`);
+    });
+
+    viewerZoomOut?.addEventListener("click", () => setViewerScale(viewerScale - 0.25));
+    viewerZoomIn?.addEventListener("click", () => setViewerScale(viewerScale + 0.25));
+    document.querySelector("[data-viewer-fit]")?.addEventListener("click", fitViewerMedia);
+    document.querySelector("[data-viewer-close]")?.addEventListener("click", () => imageViewer?.close());
+    viewerViewport?.addEventListener("click", (event) => {
+      if (event.target === viewerViewport || event.target === viewerCanvas) imageViewer?.close();
+    });
+    imageViewer?.addEventListener("close", () => {
+      restoreViewerMedia?.();
+      restoreViewerMedia = null;
+      viewerCanvas?.replaceChildren();
+      document.body.classList.remove("mediaViewerOpen");
+      viewerSource?.focus({ preventScroll: true });
+      viewerSource = null;
+      viewerMedia = null;
+    });
   </script>
 </body>
 </html>

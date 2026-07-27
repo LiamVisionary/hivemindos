@@ -1,4 +1,5 @@
 import { execFile, spawn } from "child_process";
+import { execFileHiveEnvAdd } from "@/lib/services/hive-env-command";
 import { constants } from "fs";
 import { access, mkdir } from "fs/promises";
 import { homedir } from "@/lib/home-dir";
@@ -42,7 +43,7 @@ function workspaceRoot(agent?: AgentProfile | null) {
 
 async function readHiveEnv() {
   try {
-    const { stdout } = await execFileAsync(join(process.cwd(), "scripts", "hive-env-add"), [
+    const { stdout } = await execFileHiveEnvAdd([
       "--export-json",
       "--scope",
       "agent",

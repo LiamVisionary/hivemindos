@@ -33,8 +33,22 @@ new dependencies (raw Telegram Bot API over fetch, viem for Base).
 | `/bounty <id>` | group/DM | bounty detail, pot, submissions, and status |
 | `/boost <id> <amount>` | group/DM | debit your internal balance and lock it into the bounty escrow |
 | `/submit <id> <url or note>` | group/DM | submit work for admin review |
+| `/linkhoney` | DM preferred | create a private one-time code that connects Telegram to a verified HivemindOS HONEY workspace |
+| `/honey` or `/honey balance` | anywhere; result is private | show one lifetime HONEY total, its source provenance, and today's recognition allowance |
+| `/honey @name <why>` or reply with `/honey <why>` | group/DM | give exactly 1 peer-recognition HONEY with a meaningful reason |
+| React to a member message with 🏆 | group | give the message author the same bounded 1-HONEY recognition without typing a command |
+| `/honeyaudit [@name]` or reply with `/honeyaudit` | admin | show recent typed-command/reaction attempts, outcomes, quota owner, and receipt ids |
+| `/missions` | group/DM | show open contribution missions and evidence requirements |
+| `/submit <hm_id> <evidence>` | group/DM | submit evidence for a HONEY mission |
+| `/honeyboard` | group/DM | current seasonal HONEY leaderboard with reviewed, peer, and legacy totals |
+| `/compute` | group/DM | explain eligible verified-compute contribution paths |
+| `/mission create …` `/review` | admin | create bounded HONEY missions and inspect the review queue |
 | `/accept <id> @user` `/refund <id> [dispute]` | admin | pay a winner, refund escrow, or mark a dispute |
 | `/pause` `/resume` `/approve <id>` `/reject <id>` `/botstats` `/bountystats` | admin | controls + solvency/checks |
+| `/warn` `/mute` `/ban` `/unban` (as replies) | admin, group | manual moderation actions |
+| `/trust` `/untrust` (as replies) | admin, group | manage the group's trusted-user allowlist |
+| `/modaudit @name` or reply with `/modaudit` | admin, group | show a member's recent moderation actions and privacy-safe rule evidence |
+| `/modmode audit\|enforce\|off` `/modstats` `/modhelp` | admin, group | moderation mode, metrics, and help |
 
 ## Custody modes (withdrawals)
 
@@ -89,8 +103,121 @@ holder identity/status badges, curator eligibility, bounty boosting, and
 early-access alpha rooms. Alpha rooms are early access and community status
 channels, including zero-human company monetization workflows; they are not
 permanent product lockouts. Paid product features should still have non-crypto
-paths such as card, fiat subscriptions, managed HONEY credits, or fiat-backed
+paths such as card, fiat subscriptions, Hivemind Cloud credits, or fiat-backed
 plans.
+
+## One HONEY with auditable sources
+
+Contribution missions are separate from HIVE bounties. HIVE bounties escrow a
+transferable token balance in this bot; HONEY records useful contribution.
+Mission awards, peer recognition, verified agent work, and the historical
+launch seed all add to one cumulative HONEY total. Source labels remain for
+auditability; they are not separate balances or classes of HONEY. Ordinary
+messages, ordinary reactions, referrals, and raw chat volume never earn HONEY.
+
+The `/honey` tip is a bounded recognition, not a transfer from the
+giver's balance. Any group member can recognize useful work with
+`/honey @name <why>`; the recipient earns exactly 1 HONEY and the reason must
+be 8–160 characters. No HivemindOS link is required on either side: the hosted
+ledger is keyed by hashed Telegram identity, so HONEY banks to the recipient's
+Telegram account immediately and transfers to their HivemindOS workspace
+automatically the moment they later connect with `/linkhoney` (the app-side
+link still requires a signature-verified wallet). `/honey balance` shows the
+banked amount even before linking. The hosted gateway lets each member give
+three recognitions per UTC day, permits only one recognition per pair per day
+in either direction, caps each recipient at 5 HONEY per day, and enforces a
+bounded season budget — these caps are the Sybil bound now that no wallet-link
+cooldown gates the giving side.
+
+The fast path is a native Telegram reaction: a member adds 🏆 to a message from
+the reaction menu. That reaction is the explicit recognition action; it sends
+the same identities and Telegram update id to the hosted gateway and posts a
+short confirmation only after the award succeeds. The confirmation names the
+giver whose daily quota changed, says whether the award came from a 🏆 reaction,
+and includes a receipt id. If the award is rejected, the bot removes that
+member's 🏆 reaction and replies under the original group message with the
+reason and receipt; a private message is only the fallback when the group reply
+cannot be delivered. If Telegram refuses the reaction cleanup, the group reply
+asks the member to remove it manually. Removing the reaction, adding another
+emoji, or reacting anonymously awards nothing. Message text is not sent to the
+gateway. The bot keeps only a bounded, in-memory index of recent message
+authors, so an older message that predates a bot restart falls back to replying
+with `/honey <why>`.
+
+Every typed recognition and 🏆 attempt first creates a bounded durable receipt
+at `~/.hivemindos/telegram-tip-bot-honey-audit.json`. Admins can inspect the ten
+most recent attempts in a chat with `/honeyaudit`, narrow it with
+`/honeyaudit @name`, or reply to a member with `/honeyaudit`. Each receipt shows
+command vs reaction, recorded/rejected/delivery-failed outcome, giver quota,
+Telegram message/update ids, and a privacy-safe error summary. It stores no
+message body or recognition reason. Command text tolerates accidental leading
+or trailing whitespace, and a failed Telegram error reply is surfaced to the
+runner instead of disappearing silently.
+
+The bot must never place the 🏆 reaction itself. Telegram clients animate every
+reaction placement, so a bot-seeded trophy plays the award animation under
+every comment and reads as an award that never happened — the trophy may only
+appear when a member actually gives one (guarded by the test suite). The bot
+must be a group administrator to receive member reaction updates and needs
+`can_delete_messages` to clean up a failed member reaction. Group reactions
+must allow 🏆 (or all emoji), Group Privacy must be disabled so it can observe
+message authors, and `message_reaction` must remain in the poller's
+`allowed_updates` list. Telegram's Bot API cannot change the group's allowed
+reaction set, so an admin enables that once in the group settings. The built-in
+reaction is intentionally used instead of a custom 🍯 emoji so the action does
+not require Premium or a group-specific emoji id.
+
+Peer-awarded HONEY and the one-time historical seed appear on `/honeyboard` and
+advance the same cumulative HONEY benefit tiers as every other HONEY source.
+The launch seed preserves the historical HIVE receiver ranking at 1 HONEY per
+1,000,000 HIVE received. It is idempotent and does not turn historical HIVE
+transfers into spendable value.
+
+The flow is:
+
+1. A member links a wallet to HivemindOS with the existing signature-verification flow.
+2. They connect Telegram from Wallets → Honey with tap-to-link: the app mints a
+   one-time intent and opens `t.me/<bot>?start=link_<intent>`; pressing Start
+   lets the bot redeem it with the Telegram-attested user id — no typed code.
+   Sending `/linkhoney` to the bot and entering its one-time code in
+   Wallets → Honey remains the fallback path.
+3. An admin creates a mission with a category, fixed HONEY amount, evidence type, deadline, and one or two required approvals.
+4. The member submits a URL, note, or allowlisted GitHub pull request with `/submit hm_…`.
+5. An admin who is not the contributor approves or rejects it. GitHub missions cannot be approved until a signed GitHub webhook confirms that the pull request merged.
+6. The hosted gateway reserves the seasonal budget, signs a contribution receipt, and sends it to the official ledger. Receipt ids, evidence hashes, and season allocations make retries idempotent.
+
+The gateway stores an HMAC hash of the Telegram numeric user id, not the raw id.
+The member's chosen Telegram label is public on the seasonal leaderboard.
+
+Bot runtime configuration:
+
+- `TELEGRAM_TIP_BOT_HONEY_COMMUNITY=true`
+- `TELEGRAM_TIP_BOT_HONEY_COMMUNITY_API_URL=https://<official-or-self-hosted-gateway>`
+- `TELEGRAM_TIP_BOT_HONEY_COMMUNITY_BOT_TOKEN=<same bearer secret configured on the gateway>`
+
+Hosted compute-gateway configuration:
+
+- Secret: `HONEY_COMMUNITY_BOT_TOKEN`
+- Secret: `HONEY_COMMUNITY_MIGRATION_TOKEN` (one-time historical seed only)
+- Secret: `HONEY_COMMUNITY_IDENTITY_SECRET`
+- Secret: `HONEY_COMMUNITY_GITHUB_WEBHOOK_SECRET`
+- `HONEY_COMMUNITY_GITHUB_REPOSITORIES=owner/repository[,owner/repository]`
+- `HONEY_COMMUNITY_SEASON_ID=<optional fixed season; defaults to current UTC quarter>`
+- `HONEY_COMMUNITY_SEASON_BUDGET=1000`
+- `HONEY_COMMUNITY_MAX_MISSION_REWARD=25`
+- `HONEY_COMMUNITY_PEER_DAILY_GIVER_LIMIT=3`
+- `HONEY_COMMUNITY_PEER_DAILY_RECIPIENT_LIMIT=5`
+- `HONEY_COMMUNITY_PEER_LINK_COOLDOWN_DAYS=7`
+- `HONEY_COMMUNITY_PEER_SEASON_BUDGET=5000`
+
+Configure the GitHub repository webhook to send pull-request events to the
+gateway's `/community/github/webhook` endpoint with the same webhook secret.
+Apply the ledger community-contribution migration before compute-gateway
+migrations `0013` and `0014`, deploy both Workers, then deploy the Telegram bot
+bundle. Preview the historical seed with
+`pnpm honey:seed-tip-leaderboard`; only after the migration is deployed and a
+backup exists, run the same command with `--apply` under the shared hive env.
+Secrets are never included in the repo or downloadable app.
 
 ## Telegram member tags
 
@@ -133,6 +260,82 @@ image rendering or upload fails, the bot falls back to Telegram Bot API 10.1
 `sendRichMessage` tables (`<table bordered striped>`), then simple HTML
 `sendMessage` output.
 
+## Automated moderation and sales routing
+
+The same long-polling process can moderate explicitly configured groups. It
+detects credential/wallet-drain scams, configured blocked domains, message
+floods, duplicate posts, external links from new members, and unsolicited
+project coverage/listing/promotion outreach. Detection is deterministic; no
+member messages are sent to an AI classifier.
+
+Sales outreach is handled separately from abuse. The bot first copies the
+inquiry, sender, and source-group context to the configured private sales
+inbox. It deletes the public message only after at least one destination
+accepts the copy. If delivery fails, the original remains visible and bot
+admins receive an alert. When no dedicated inbox is configured, the bot uses
+the configured admin DMs.
+
+Moderation history is stored separately from balances and treasury state at
+`~/.hivemindos/telegram-tip-bot-moderation.json`. It contains numeric Telegram
+identifiers, strike/member counters, modes, and a bounded action audit log; it
+does not retain ordinary message bodies. Flood and duplicate windows are
+short-lived in memory.
+
+Required bot setup:
+
+1. Keep BotFather group privacy disabled so the bot receives ordinary group
+   messages.
+2. Make the bot an administrator in each managed group.
+3. Grant `Delete messages` and `Ban users`/`Restrict members`. Without those
+   rights, audit and sales-copy routing still work, but enforcement cannot.
+4. If using a private sales group or channel, add the bot there and permit it
+   to post.
+
+Core shared-env configuration:
+
+- `TELEGRAM_TIP_BOT_MODERATION=true` enables the module.
+- `TELEGRAM_TIP_BOT_MODERATION_CHAT_IDS=-100...,-100...` is the explicit
+  group allowlist. The bot never auto-enrolls every group it can see.
+- `TELEGRAM_TIP_BOT_MODERATION_AUDIT_ONLY=true` observes, routes sales copies,
+  and alerts admins without deleting, muting, or banning. This defaults to
+  true. Switch it off after reviewing the audit period, or use
+  `/modmode enforce` separately in each group.
+- `TELEGRAM_TIP_BOT_MODERATION_SALES_CHAT_IDS=-100...` chooses one or more
+  private sales destinations. If omitted, configured bot-admin DMs are used.
+- `TELEGRAM_TIP_BOT_MODERATION_TRUSTED_USER_IDS=...` adds global trusted users;
+  `/trust` and `/untrust` manage a per-group allowlist.
+- `TELEGRAM_TIP_BOT_MODERATION_ALLOWED_DOMAINS=hivemindos.com,github.com`
+  exempts those domains from new-member link protection.
+- `TELEGRAM_TIP_BOT_MODERATION_BLOCKED_DOMAINS=example.invalid` immediately
+  treats a domain and its subdomains as high severity.
+
+Optional thresholds:
+
+- `TELEGRAM_TIP_BOT_MODERATION_NEW_MEMBER_MESSAGE_LIMIT=3`
+- `TELEGRAM_TIP_BOT_MODERATION_FLOOD_MAX_MESSAGES=5`
+- `TELEGRAM_TIP_BOT_MODERATION_FLOOD_WINDOW_SECONDS=10`
+- `TELEGRAM_TIP_BOT_MODERATION_DUPLICATE_MIN_CHARACTERS=32`
+- `TELEGRAM_TIP_BOT_MODERATION_DUPLICATE_MIN_OCCURRENCES=3`
+- `TELEGRAM_TIP_BOT_MODERATION_DUPLICATE_WINDOW_MINUTES=10`
+- `TELEGRAM_TIP_BOT_MODERATION_MUTE_MINUTES=60`
+- `TELEGRAM_TIP_BOT_MODERATION_BAN_AFTER_STRIKES=3`
+
+Automatic sales solicitations are routed and removed without banning the
+sender. Credential scams and blocked domains are high severity and plan an
+immediate ban. Repeated-message enforcement requires three distinct Telegram
+messages with at least 32 normalized characters inside the duplicate window;
+short conversational replies, update replays, and edits do not count toward
+duplicate or flood activity. Edits still pass through the content rules so an
+edited-in scam or blocked link remains enforceable. Other violations escalate
+from warning/deletion to temporary mute and then ban. Before any destructive
+action, the bot asks Telegram for the target's current membership and refuses
+to act on creators, administrators, the bot itself, or trusted users.
+
+Admins can run `/modaudit @name` (or reply to a member with `/modaudit`) to see
+the last five actions, current strikes/mute state, Telegram message/update ids,
+and privacy-safe duplicate/flood evidence. Message bodies and reversible
+message hashes are not retained.
+
 ## Guardrails
 
 - `TELEGRAM_TIP_BOT_MAX_WITHDRAWAL` — hard cap per request (human units, e.g. `5000`).
@@ -154,4 +357,7 @@ node --test scripts/test-telegram-tip-bot.mjs
 
 Covers tip atomicity, claim lifecycle/expiry, deposit idempotency, withdrawal
 review/refund flows, leaderboard windows, bounty lifecycle/refunds, rich-table
-escaping, and the liabilities invariant.
+escaping, moderation classification/escalation, per-group trust/modes, and the
+liabilities invariant, plus HONEY mission parsing, fixed peer-recognition
+policy, legacy HIVE conversion, identity-link wiring, and the one-HONEY
+cumulative tier contract.

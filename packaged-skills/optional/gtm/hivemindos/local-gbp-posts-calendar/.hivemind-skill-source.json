@@ -1,0 +1,18 @@
+{
+  "upstreamName": "Local GBP Posts Calendar",
+  "upstreamSlug": "local-gbp-posts-calendar",
+  "hiveSlug": "local-gbp-posts-calendar",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/gtm/hivemindos/local-gbp-posts-calendar",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-16T23:02:02Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional GTM skills",
+  "sourcePath": "packaged-skills/optional/gtm/hivemindos/local-gbp-posts-calendar",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Generalizes lead-gen pipeline integration notes so the calendar composes with any outbound workflow, such as the packaged small-business-preview-engine skill.",
+    "Replaces personal writing-style skill references with the humanizer skill and a generic brand voice guide.",
+    "Keeps the Bucket-B copy-only boundary: no auto-posting, no privileged data, placeholders for anything the client must make true."
+  ]
+}

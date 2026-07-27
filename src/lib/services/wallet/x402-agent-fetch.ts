@@ -1,15 +1,18 @@
 import "server-only";
 
 import { promises as fs } from "fs";
-import os from "os";
 import path from "path";
-import { wrapFetchWithPaymentFromConfig, type Network, type PaymentRequired, type PaymentRequirements } from "@x402/fetch";
+import { wrapFetchWithPayment, x402Client, type Network, type PaymentRequired, type PaymentRequirements } from "@x402/fetch";
 import { ExactEvmScheme } from "@x402/evm";
 import { ExactSvmScheme } from "@x402/svm";
+import { BuilderCodeClientExtension } from "@x402/extensions/builder-code";
 import { createKeyPairSignerFromBytes } from "@solana/kit";
+import { validateMnemonic } from "@scure/bip39";
+import { wordlist as englishWordlist } from "@scure/bip39/wordlists/english";
 import { base58 } from "@scure/base";
-import { privateKeyToAccount } from "viem/accounts";
+import { mnemonicToAccount, privateKeyToAccount } from "viem/accounts";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
+import type { ReasoningTrail } from "@/lib/types/reasoning-trail";
 import { homedir } from "@/lib/home-dir";
 import {
   evaluateSpend,
@@ -17,6 +20,15 @@ import {
   shouldEvaluateSpend,
 } from "@/lib/services/wallet/spend-governance";
 import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
+import {
+  X402_CLIENT_BUILDER_CODE_ENV_KEYS,
+  x402BuilderCodeFromEnvForNetwork,
+} from "@/lib/services/wallet/x402-builder-code";
+import {
+  assertTradingPlatformFeeReady,
+  collectTradingPlatformFee,
+  type PlatformFeeCollection,
+} from "@/lib/services/wallet/platform-fees";
 
 export type X402Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -29,6 +41,7 @@ export type X402FetchInput = {
   agentId: string;
   network: string;
   secret: string;
+  fromAddress: string;
   url: string;
   method?: string;
   headers?: Record<string, string>;
@@ -37,6 +50,17 @@ export type X402FetchInput = {
   confirmation?: string;
   /** Granted approval id, supplied when retrying an escalated x402 payment. */
   approvalToken?: string;
+  /** True when the caller already completed a concrete server-side user approval for this exact spend. */
+  approvalThresholdSatisfied?: boolean;
+  /** Human-facing context to attach if this paid request needs approval. */
+  approvalContext?: Partial<ReasoningTrail>;
+  /** Active Work Board company task id. Omit for ordinary user/agent spending. */
+  companyTaskId?: string;
+  /** Use plain fetch without x402 discovery/wrapping when an upstream bearer/prepaid token should decide access. */
+  skipPaymentDiscovery?: boolean;
+  /** True when the endpoint price already includes HivemindOS revenue, so the generic local platform fee should not be collected. */
+  skipPlatformFee?: boolean;
+  timeoutMs?: number;
 };
 
 export type X402PaymentDiscoveryInput = {
@@ -64,7 +88,12 @@ export type X402FetchResult = {
   network: string;
   amountUsd: number;
   paid: boolean;
+  paymentAttempted?: boolean;
+  paymentSettled?: boolean;
+  builderCode?: string;
+  platformFee?: PlatformFeeCollection;
   paymentResponse?: string;
+  responseHeaders: Record<string, string>;
   contentType: string;
   bodyPreview: string;
   bodyJson?: unknown;
@@ -78,12 +107,14 @@ type X402SpendRecord = {
   amountUsd: number;
   status: number;
   paid: boolean;
+  builderCode?: string;
   createdAt: string;
 };
 
 const spendLogPath = path.join(homedir(), ".hivemindos", "x402-spend-log.json");
-const supportedEvmNetworks = new Set(["eip155:8453", "eip155:84532"]);
+const supportedEvmNetworks = new Set(["eip155:8453", "eip155:84532", "eip155:4663"]);
 const supportedSvmNetworks = new Set(["solana:mainnet", "solana:devnet"]);
+const EVM_RECOVERY_PATH = "m/44'/60'/0'/0/0";
 
 const x402SvmNetworkByWalletNetwork: Record<string, string> = {
   "solana:mainnet": "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
@@ -139,6 +170,18 @@ export function x402Network(network: string): Network {
 function svmRpc(network: string) {
   if (network === "solana:devnet") return process.env.SOLANA_DEVNET_RPC_URL || "https://api.devnet.solana.com";
   return process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
+}
+
+function evmAccountFromLocalSecret(secret: string) {
+  const compact = secret.trim();
+  const prefixed = compact.startsWith("0x") ? compact : `0x${compact}`;
+  if (/^0x[a-fA-F0-9]{64}$/.test(prefixed)) return privateKeyToAccount(prefixed as `0x${string}`);
+
+  const mnemonic = compact.toLowerCase().replace(/\s+/g, " ");
+  if (!validateMnemonic(mnemonic, englishWordlist)) {
+    throw new Error("Stored EVM signer must be an EVM private key or recovery phrase.");
+  }
+  return mnemonicToAccount(mnemonic, { path: EVM_RECOVERY_PATH });
 }
 
 function selectRequirement(policy: X402FetchPolicy, confirmation?: string) {
@@ -212,6 +255,12 @@ async function responsePreview(response: Response) {
   return { contentType, bodyPreview: text.slice(0, 8000) };
 }
 
+function responseHeaderRecord(headers: Headers) {
+  const record: Record<string, string> = {};
+  for (const [key, value] of headers.entries()) record[key.toLowerCase()] = value;
+  return record;
+}
+
 /**
  * Tolerant pre-flight: returns the USD amount this call would pay, or null when
  * the endpoint does not require payment. The unpaid 402 carries no side effect,
@@ -238,59 +287,107 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
   if (!input.policy.enabled) throw new Error("This agent's wallet is not enabled.");
   if (input.policy.provider !== "x402") throw new Error("Set this agent's payment provider to x402 before paid HTTP calls.");
   if (!supportedEvmNetworks.has(input.network) && !supportedSvmNetworks.has(input.network)) {
-    throw new Error("x402 execution currently supports local Base, Base Sepolia, Solana mainnet, and Solana devnet wallets.");
+    throw new Error("x402 execution currently supports local Base, Base Sepolia, Robinhood Chain, Solana mainnet, and Solana devnet wallets.");
   }
   if (input.policy.network !== input.network) throw new Error("Stored wallet network does not match the x402 policy network.");
   assertPaidUrl(input.url, input.policy.x402BaseUrl);
 
-  // Governance pre-flight: company kill switch, cumulative budgets, approval
-  // escalation. Skipped for agents with no governance configured so default
-  // behaviour and request count are unchanged.
-  // resolveSpendGovernance also covers company members without their own wallet
-  // config so the company kill switch/budgets bind for them too.
-  const governance = await resolveSpendGovernance(input.agentId);
+  const method = parseX402Method(input.method);
+  if (input.skipPaymentDiscovery) {
+    const response = await fetch(input.url, {
+      method,
+      headers: {
+        ...redactHeaders(input.headers),
+        ...(input.body == null ? {} : { "Content-Type": "application/json" }),
+      },
+      body: input.body == null || method === "GET" ? undefined : JSON.stringify(input.body),
+      signal: AbortSignal.timeout(input.timeoutMs ?? 60_000),
+    });
+    const preview = await responsePreview(response);
+    return {
+      ok: response.ok,
+      status: response.status,
+      url: input.url,
+      method,
+      network: x402Network(input.network),
+      amountUsd: 0,
+      paid: false,
+      paymentAttempted: false,
+      paymentSettled: false,
+      paymentResponse: response.headers.get("PAYMENT-RESPONSE") ?? response.headers.get("X-PAYMENT-RESPONSE") ?? undefined,
+      responseHeaders: responseHeaderRecord(response.headers),
+      ...preview,
+    };
+  }
+
+  let discoveredAmountUsd: number | null | undefined;
+  const discoverAmount = async () => {
+    if (discoveredAmountUsd === undefined) {
+      discoveredAmountUsd = await discoverX402AmountUsd(input);
+    }
+    return discoveredAmountUsd;
+  };
+  const feePreflightAmountUsd = await discoverAmount();
+  if (!input.skipPlatformFee && feePreflightAmountUsd != null && feePreflightAmountUsd > 0) {
+    await assertTradingPlatformFeeReady({
+      source: "x402-paid-api",
+      network: input.network,
+      amountUsd: feePreflightAmountUsd,
+    });
+  }
+
+  // Governance pre-flight. Ordinary calls use only the selected wallet's own
+  // policy. Company policy is attached only by a validated active Work Board
+  // company task id; company membership by itself never changes a wallet call.
+  const governance = await resolveSpendGovernance(input.agentId, { companyTaskId: input.companyTaskId });
   let approvalGrantId: string | undefined;
   let spendCompanyId: string | undefined;
-  if (governance && (await shouldEvaluateSpend(governance.wallet, input.policy.maxPaymentUsd))) {
-    const preflightAmountUsd = await discoverX402AmountUsd(input);
-    // Always evaluate (amount 0 when undiscoverable) so the company kill switch
-    // blocks even when the paid amount can't be priced ahead of time.
+  if (governance && (await shouldEvaluateSpend(governance.wallet, input.policy.maxPaymentUsd, {
+    companyId: governance.companyId,
+  }))) {
+    const preflightAmountUsd = await discoverAmount();
+    // Always evaluate an explicit company task (amount 0 when undiscoverable)
+    // so its freeze switch binds even when the price cannot be discovered first.
     const decision = await evaluateSpend({
       wallet: governance.wallet,
       agentName: governance.agentName,
       kind: "x402",
-      asset: "USDC",
+      asset: stableAssetSymbol(input.network),
       amountUsd: preflightAmountUsd != null && preflightAmountUsd > 0 ? preflightAmountUsd : 0,
       target: input.url,
       approvalToken: input.approvalToken,
+      approvalThresholdSatisfied: input.approvalThresholdSatisfied,
+      explanation: input.approvalContext,
+      companyId: governance.companyId,
     });
     if (decision.decision !== "allow") throw new Error(decision.reason);
     approvalGrantId = decision.grant?.id;
     spendCompanyId = decision.companyId;
   }
 
-  const method = parseX402Method(input.method);
   let selectedAmountUsd = 0;
   let paid = false;
   const network = x402Network(input.network);
+  const builderCode = x402BuilderCodeFromEnvForNetwork(network, X402_CLIENT_BUILDER_CODE_ENV_KEYS);
   const scheme = supportedEvmNetworks.has(input.network)
-    ? new ExactEvmScheme(privateKeyToAccount(input.secret as `0x${string}`))
+    ? new ExactEvmScheme(evmAccountFromLocalSecret(input.secret))
     : new ExactSvmScheme(
       await createKeyPairSignerFromBytes(base58.decode(input.secret)),
       { rpcUrl: svmRpc(input.network) },
     );
+  const client = new x402Client((version: number, accepts: PaymentRequirements[]) => {
+    const selected = selectRequirement(input.policy, input.confirmation)(version, accepts);
+    selectedAmountUsd = amountFromRequirement(selected);
+    paid = true;
+    return selected;
+  }).register(network, scheme);
+  if (builderCode) {
+    client.registerExtension(new BuilderCodeClientExtension(builderCode));
+  }
 
   // Adapted from coinbase/x402's @x402/fetch wrapper: first request, parse 402
   // requirements, sign the selected payment, and retry with x402 payment headers.
-  const fetchWithPayment = wrapFetchWithPaymentFromConfig(fetch, {
-    schemes: [{ network, client: scheme }],
-    paymentRequirementsSelector: (version: number, accepts: PaymentRequirements[]) => {
-      const selected = selectRequirement(input.policy, input.confirmation)(version, accepts);
-      selectedAmountUsd = amountFromRequirement(selected);
-      paid = true;
-      return selected;
-    },
-  });
+  const fetchWithPayment = wrapFetchWithPayment(fetch, client);
 
   const response = await fetchWithPayment(input.url, {
     method,
@@ -299,9 +396,22 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
       ...(input.body == null ? {} : { "Content-Type": "application/json" }),
     },
     body: input.body == null || method === "GET" ? undefined : JSON.stringify(input.body),
-    signal: AbortSignal.timeout(60_000),
+    signal: AbortSignal.timeout(input.timeoutMs ?? 60_000),
   });
   const preview = await responsePreview(response);
+  const paymentResponse = response.headers.get("PAYMENT-RESPONSE") ?? response.headers.get("X-PAYMENT-RESPONSE") ?? undefined;
+  const paymentSettled = paid && response.status !== 402 && Boolean(paymentResponse);
+  const platformFee = !input.skipPlatformFee && paymentSettled && selectedAmountUsd > 0
+    ? await collectTradingPlatformFee({
+      agentId: input.agentId,
+      network: input.network,
+      secret: input.secret,
+      fromAddress: input.fromAddress,
+      amountUsd: selectedAmountUsd,
+      source: "x402-paid-api",
+      companyId: spendCompanyId,
+    })
+    : undefined;
   const result: X402FetchResult = {
     ok: response.ok,
     status: response.status,
@@ -309,11 +419,16 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
     method,
     network,
     amountUsd: selectedAmountUsd,
-    paid,
-    paymentResponse: response.headers.get("PAYMENT-RESPONSE") ?? response.headers.get("X-PAYMENT-RESPONSE") ?? undefined,
+    paid: paymentSettled,
+    paymentAttempted: paid,
+    paymentSettled,
+    builderCode,
+    platformFee,
+    paymentResponse,
+    responseHeaders: responseHeaderRecord(response.headers),
     ...preview,
   };
-  if (paid) {
+  if (paymentSettled) {
     await appendSpendRecord({
       agentId: input.agentId,
       url: input.url,
@@ -321,14 +436,15 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
       method,
       amountUsd: selectedAmountUsd,
       status: response.status,
-      paid,
+      paid: paymentSettled,
+      builderCode,
       createdAt: new Date().toISOString(),
     });
     await appendSpend({
       agentId: input.agentId,
       companyId: spendCompanyId,
       kind: "x402",
-      asset: "USDC",
+      asset: stableAssetSymbol(input.network),
       amountUsd: selectedAmountUsd,
       target: shortTarget(input.url),
       status: "executed",
@@ -341,7 +457,7 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
 export async function discoverX402Payment(input: X402PaymentDiscoveryInput): Promise<X402PaymentDiscovery> {
   if (!input.policy.enabled) throw new Error("This agent's wallet is not enabled.");
   if (!supportedEvmNetworks.has(input.policy.network) && !supportedSvmNetworks.has(input.policy.network)) {
-    throw new Error("x402 execution currently supports local Base, Base Sepolia, Solana mainnet, and Solana devnet wallets.");
+    throw new Error("x402 execution currently supports local Base, Base Sepolia, Robinhood Chain, Solana mainnet, and Solana devnet wallets.");
   }
   assertPaidUrl(input.url, input.policy.x402BaseUrl);
 
@@ -386,3 +502,7 @@ export function summarizeX402Policy(policy: AgentWalletConfig) {
 }
 
 export type { PaymentRequired };
+
+function stableAssetSymbol(network: string): "USDC" | "USDG" {
+  return network === "eip155:4663" ? "USDG" : "USDC";
+}

@@ -1,14 +1,17 @@
 import { beeWorkerPreset } from "@/lib/config/bee-worker-presets";
-import { searchContextIndex, type ContextConnectedApp, type ContextConnectedAppRoute, type ContextIndexItem } from "@/lib/services/context-index";
+import { searchContextIndexBatch, type ContextConnectedApp, type ContextConnectedAppRoute, type ContextIndexItem } from "@/lib/services/context-index";
+import { createContextXrayManifestFromContextIndex } from "@/lib/services/context-xray";
 import { applyAppPreferences, readAppPreferences, usageNoteAffinity } from "@/lib/services/fleet/app-preferences";
 import { generationMetricsContext } from "@/lib/services/generation-metrics";
+import { buildConnectedMcpCapabilityContext } from "@/lib/services/mcp/capability-context";
 import { untrustedContextMessage } from "@/lib/services/security/untrusted-context";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import type { BeeWorkerClass, SharedVaultConfig, WorkerTaskPreference } from "@/lib/types/agent-runtime";
 
 const CONNECTED_APPS_PREFLIGHT_TIMEOUT_MS = 250;
 const CONNECTED_APPS_CACHE_TTL_MS = 60_000;
 const CONNECTED_APPS_STALE_TTL_MS = 5 * 60_000;
-const CHAT_CAPABILITY_SEARCH_KINDS = ["skill", "tool-schema", "api-route", "connected-app", "app-endpoint", "runtime"] as const;
+const CHAT_CAPABILITY_SEARCH_KINDS = ["skill", "tool-schema", "api-route", "connected-app", "app-endpoint", "connector", "artifact", "runtime"] as const;
 
 let connectedAppsCache: { origin: string; apps: ContextConnectedApp[]; updatedAt: number } | null = null;
 let connectedAppsRefresh: Promise<ContextConnectedApp[] | undefined> | null = null;
@@ -27,6 +30,13 @@ function contextItemLocator(item: ContextIndexItem) {
   if (item.kind === "connected-app" || item.kind === "app-endpoint") {
     return "Dashboard can resolve current app URLs through /api/context-index or /api/fleet/apps for tool-capable runtimes; do not hard-code Tailnet endpoints.";
   }
+  if (item.kind === "connector") {
+    return "Use /api/hive-query for deterministic read-only connector metadata/status; credentials are resolved server-side by key name only.";
+  }
+  if (item.kind === "artifact") {
+    return "Load through /api/visual-artifacts; public views redact local paths.";
+  }
+  if (item.route && item.path) return `${item.route}; source: ${item.path}`;
   return item.path || item.route || item.load.note || "No direct locator.";
 }
 
@@ -114,6 +124,58 @@ function userAppPreferenceContext(apps: ContextConnectedApp[] | undefined, query
   return lines.join("\n");
 }
 
+const APP_ROSTER_LIMIT = 24;
+const GENERIC_APP_KINDS = new Set(["api", "app", "service", ""]);
+
+function appDoesText(app: ContextConnectedApp): string {
+  if (app.capabilities?.length) return `can: ${app.capabilities.join(", ")}`;
+  const description = app.description?.trim();
+  if (description) return description;
+  const routes = (app.apiRoutes ?? [])
+    .filter((route) => (route.method ?? "").toUpperCase() === "POST")
+    .concat(app.apiRoutes ?? [])
+    .map((route) => (route.summary?.trim() || route.path?.trim() || ""))
+    .filter(Boolean);
+  const unique = [...new Set(routes)].slice(0, 3);
+  if (unique.length) return `endpoints: ${unique.join("; ")}`;
+  return app.serviceKind?.trim() || app.kind?.trim() || "connected app";
+}
+
+function appRosterInterest(app: ContextConnectedApp): number {
+  let score = 0;
+  if (app.capabilities?.length) score += 4;
+  if (app.usageNotes?.trim()) score += 3;
+  if (app.priority) score += 3;
+  if (app.kind && !GENERIC_APP_KINDS.has(app.kind.toLowerCase())) score += 2;
+  if (app.serviceKind && !GENERIC_APP_KINDS.has(app.serviceKind.toLowerCase())) score += 2;
+  if ((app.apiRoutes ?? []).length) score += 1;
+  return score;
+}
+
+/**
+ * Task-routed roster of connected apps and their concrete capabilities. The
+ * outer retrieval gate keeps this inventory out of conversational turns; once
+ * a task needs capability discovery, the roster prevents a text-match miss from
+ * hiding a useful connected app.
+ */
+function connectedAppsRosterContext(apps: ContextConnectedApp[] | undefined): string {
+  const list = (apps ?? []).filter((app) => app.name || app.id);
+  if (!list.length) return "";
+  const ranked = list
+    .map((app, index) => ({ app, index, interest: appRosterInterest(app) }))
+    .sort((left, right) => right.interest - left.interest || left.index - right.index);
+  const shown = ranked.slice(0, APP_ROSTER_LIMIT);
+  const lines = ["Connected apps on this fleet (what each can do — resolve live URLs via the Apps APIs, don't hardcode addresses):"];
+  for (const { app } of shown) {
+    const name = (app.name ?? app.id ?? "Connected app").trim();
+    const machine = app.machineName?.trim() ? ` [${app.machineName.trim()}]` : "";
+    lines.push(`- ${name}${machine}: ${compactContextText(appDoesText(app), 160)}`);
+  }
+  const remaining = ranked.length - shown.length;
+  if (remaining > 0) lines.push(`- …and ${remaining} more connected app${remaining === 1 ? "" : "s"} (ask to list all).`);
+  return lines.join("\n");
+}
+
 type RuntimeCapabilityContext = {
   runtime?: string;
   hasRuntimeImageGeneration?: boolean;
@@ -190,23 +252,35 @@ function dashboardOriginFor(value: string) {
 function formatTaskRetrievalItem(hit: RetrievalHit, index: number) {
   const item = hit.item;
   const methods = item.methods?.length ? ` [${item.methods.join(", ")}]` : "";
+  const hiveActionId = item.id.startsWith("hive-action:") ? item.id.slice("hive-action:".length) : "";
   return [
     `${index + 1}. ${item.kind}: ${item.title}${methods}`,
+    `   capability id: ${item.id}`,
+    hiveActionId ? `   invoke: surface=hive_action; capabilityId=${hiveActionId}` : "",
     `   matched: ${hit.label}`,
     `   summary: ${compactContextText(item.summary, 260)}`,
     `   tags: ${safeContextTags(item) || "none"}`,
     `   locator: ${contextItemLocator(item)}`,
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 function taskRetrievalQueries(query: string) {
   const normalized = query.toLowerCase();
   const queries = [{ label: "full task", query }];
+  if (loopEngineeringRequest(query)) {
+    queries.push({
+      label: "loop engineering",
+      query: "loop engineering readiness /api/loops Work Board pattern registry eval gates receipts budgets code-fix app-build-harness research daily-brief evo benchmark LOOP.md STATE.md",
+    });
+  }
   if (/\b(x|twitter|tweet|tweets|post|social)\b/.test(normalized)) {
     queries.push({ label: "x research and writing", query: "x twitter search latest news social post x-post optimizer grok writer" });
   }
   if (/image|picture|photo|visual|render|generate|generation/.test(normalized)) {
     queries.push({ label: "image generation", query: "image generation open generative ai zimage z-image imagegen visual creative diffusion comfyui" });
+  }
+  if (/video|movie|clip|animation|reel|img2vid|i2v|animate/.test(normalized)) {
+    queries.push({ label: "video generation", query: "video generation cloud local HTML HyperFrames hypergen image to video img2vid i2v motion graphics connected app mcp seedance higgsfield kling runway comfyui" });
   }
   if (/telegram|message|send|deliver|delivery|notify|notification/.test(normalized)) {
     queries.push({ label: "delivery channel", query: "telegram message send notification delivery channel configure access bot" });
@@ -238,18 +312,43 @@ export function imageGenerationRequest(query: string) {
     || /\b(?:txt2img|text\s*to\s*image|image[-\s]?gen|image generation)\b/i.test(query);
 }
 
+export function videoGenerationRequest(query: string) {
+  return /\b(?:generate|create|make|render|produce|animate)\b[\s\S]{0,100}\b(?:video|movie|clip|animation|reel)\b/i.test(query)
+    || /\b(?:video|movie|clip|animation|reel|image[-\s]?to[-\s]?video|img2vid|text[-\s]?to[-\s]?video|txt2vid)\b[\s\S]{0,100}\b(?:generate|generation|create|make|render|produce|animate)\b/i.test(query)
+    || /\b(?:image[-\s]?to[-\s]?video|img2vid|text[-\s]?to[-\s]?video|txt2vid|video generation)\b/i.test(query);
+}
+
 export function localImageGenerationRequest(query: string) {
   return imageGenerationRequest(query) && /\b(?:local|locally|on this mac|this mac|my mac|self[-\s]?hosted|tailnet|comfyui|z[-\s]?image|zimage)\b/i.test(query);
 }
 
 export function requiresCapabilityRouting(query: string) {
-  return localImageGenerationRequest(query)
+  return loopEngineeringRequest(query)
+    || localImageGenerationRequest(query)
+    || videoGenerationRequest(query)
+    || /\b(?:build|create|make|develop|design|implement|code)\b[\s\S]{0,100}\b(?:website|web\s+(?:site|app)|app|application|page|frontend|backend|service|software)\b/i.test(query)
     || /\b(?:capabilit(?:y|ies)|connected app|tool|api|x402|wallet|payment|send|deliver|deploy|workflow|kanban|scheduler|miroshark|bankr|crypto|trade|trading|token|swap|portfolio)\b/i.test(query)
     || /\bwhat\b[\s\S]{0,40}\bcan you do\b|\bcan you do with\b/i.test(query);
 }
 
-function shouldRunTaskRetrieval(query: string) {
-  return Boolean(query.trim());
+export function loopEngineeringRequest(query: string) {
+  const normalized = query.toLowerCase();
+  if (/\bloop(?:ed|ing|s)?\b/.test(normalized)) return true;
+  if (/\b(?:keep|continue|retry|rerun|repeat|iterate)\b[\s\S]{0,100}\b(?:until|unless|passes?|green|clean|verified|fixed|done)\b/.test(normalized)) return true;
+  if (/\buntil\b[\s\S]{0,100}\b(?:tests?|checks?|lint|typecheck|receipts?|evidence|verified|passes?|green|clean|done)\b/.test(normalized)) return true;
+  if (/\b(?:every|daily|weekly|weekday|hourly|recurring|scheduled)\b[\s\S]{0,120}\b(?:brief|scan|report|check|deliver|monitor|summary)\b/.test(normalized)) return true;
+  if (/\b(?:smoke|judge|receipt|receipts|evidence|gate|gates|handoff|budget|attempts?)\b[\s\S]{0,120}\b(?:build|fix|repair|research|investigate|scan|deliver|ship)\b/.test(normalized)) return true;
+  if (/\b(?:build|fix|repair|research|investigate|scan|deliver|ship)\b[\s\S]{0,120}\b(?:smoke|judge|receipt|receipts|evidence|gate|gates|handoff|budget|attempts?)\b/.test(normalized)) return true;
+  return false;
+}
+
+export function shouldRunTaskRetrieval(query: string) {
+  const normalized = query.trim();
+  if (!normalized) return false;
+  if (requiresCapabilityRouting(normalized)) return true;
+  return /\b(?:analy[sz]e|audit|benchmark|browse|check|compare|debug|diagnose|edit|evaluate|explain\s+(?:this|the\s+(?:file|repo|code|document))|fetch|find|fix|grade|implement|inspect|investigate|look\s*up|monitor|open|optimi[sz]e|plan|publish|read|refactor|research|review|run|search|summari[sz]e|test|trace|update|verify|write)\b/i.test(normalized)
+    || /(?:^|\s)(?:https?:\/\/|\.?\/?[A-Za-z0-9_.-]+\/(?:[A-Za-z0-9_.-]+\/)*[A-Za-z0-9_.-]+|[A-Za-z0-9_-]+\.(?:ts|tsx|js|jsx|mjs|py|rs|go|sol|md|json|ya?ml))(?:\s|$)/i.test(normalized)
+    || /\b(?:latest|current|today|news|source|citation|repo(?:sitory)?|codebase|pull request|issue|commit|branch|test suite|typecheck|lint|terminal|shell|file|folder|document|spreadsheet|slides?|notes?|calendar|email|browser)\b/i.test(normalized);
 }
 
 const IMAGE_APP_HAYSTACK_PATTERN = /\b(?:image[-\s]?gen|image generation|txt2img|text to image|comfyui|diffusion|stable diffusion|open generative ai|local-?ai|z[-\s]?image|zimage|gpt-image|dall-?e)\b/;
@@ -357,10 +456,38 @@ function imageGenerationCapabilityContext(query: string, runtime?: RuntimeCapabi
   ].filter(Boolean).join("\n");
 }
 
+function videoGenerationCapabilityContext(query: string) {
+  if (!videoGenerationRequest(query)) return "";
+  return [
+    "Video generation capability routing:",
+    "- Interpret the user's conversational intent before acting. A concrete request to create, render, or deliver a video is actionable; discussion, brainstorming, hypotheticals, capability questions, and statements such as 'I'm thinking about video generation' are not authorization to generate or to interrupt with a method picker.",
+    "- For an actionable creation request, identify the production method: cloud AI video generation, local AI video generation, or HTML / HyperFrames rendering. If the method is genuinely unspecified by the request or prior context, ask one concise follow-up before selecting a capability or generating anything.",
+    "- Use the auto-installed HyperFrames router skill only after the user chooses HTML / HyperFrames, or when they explicitly name HyperFrames (including the common shorthand or typo 'hypergen'), HTML-based video, browser-rendered video, or motion graphics.",
+    "- Prefer connected video-generation apps, MCP servers, or media services discovered by Hive capability search before provider-specific fallbacks.",
+    "- If the user attached an image, use the current turn media artifact path/id as the image-to-video source input. Do not embed base64 in the model prompt.",
+    "- Tool-capable OpenAI-compatible runtimes may call the generate_video tool after the agent has established actionable cloud/local generation intent; the runtime will pass the prepared media artifact bytes/path to the selected connected video app.",
+    "- For connected apps and MCP servers, resolve fresh routes through HivemindOS APIs instead of hard-coding Tailnet or localhost endpoints.",
+    "- Do not claim a video was generated unless a tool/app route returns a video artifact or receipt.",
+  ].join("\n");
+}
+
+function loopEngineeringCapabilityContext(query: string) {
+  if (!loopEngineeringRequest(query)) return "";
+  return [
+    "Loop-shaped task routing:",
+    "- The user described repeat-until-clean, recurring, gated, judged, receipt-backed, budgeted, or handoff-driven work. Treat it as Work Board loop-engineering work even when they did not say the word loop.",
+    "- For loop-shaped requests, include a section labeled \"Work Board loop plan\" before any generic execution plan so the user sees how the task will be bounded, judged, retried, and audited.",
+    "- When asked how HivemindOS should track it, name the concrete Work Board loop task shape: template/pattern, acceptance gates, required receipts, attempt/runtime/token/cost budget, handoff rule, and readiness audit.",
+    "- Prefer /api/loops for loop task templates, create-task, readiness checks, and LOOP.md / STATE.md artifact exports; use /api/kanban for claim, heartbeat, complete, block, loop-discover, and loop-record lifecycle events.",
+    "- Do not claim execution if this chat bridge has no real tool call/app dispatch. Instead, describe the exact Work Board card and receipts HivemindOS should create or ask the user to run the HivemindOS loop/kanban path.",
+  ].join("\n");
+}
+
 async function fetchConnectedAppsForTaskRetrieval(origin: string) {
   const url = new URL("/api/fleet/apps", origin);
   const response = await fetch(url, {
     cache: "no-store",
+    headers: internalApiAuthHeaders(),
     signal: AbortSignal.timeout(CONNECTED_APPS_PREFLIGHT_TIMEOUT_MS),
   }).catch(() => null);
   if (!response?.ok) return undefined;
@@ -381,7 +508,7 @@ function refreshConnectedAppsForTaskRetrieval(origin: string) {
   return connectedAppsRefresh;
 }
 
-async function connectedAppsForTaskRetrieval(origin: string) {
+export async function connectedAppsForTaskRetrieval(origin: string) {
   const now = Date.now();
   const cached = connectedAppsCache?.origin === origin ? connectedAppsCache : null;
   if (cached && now - cached.updatedAt < CONNECTED_APPS_CACHE_TTL_MS) return cached.apps;
@@ -408,6 +535,10 @@ export async function buildTaskRetrievalContextResult(input: {
   sharedVault: SharedVaultConfig | null;
   runtime?: RuntimeCapabilityContext;
   agent?: AgentRetrievalProfile;
+  recordContextXray?: boolean;
+  runId?: string;
+  threadId?: string;
+  model?: string;
 }): Promise<TaskRetrievalContextResult> {
   const trimmed = input.query.trim();
   const baseTelemetry = {
@@ -435,17 +566,15 @@ export async function buildTaskRetrievalContextResult(input: {
   const imageIntent = imageGenerationRequest(trimmed);
   const localImageIntent = localImageGenerationRequest(trimmed);
   const generationPerformanceContext = await generationMetricsContext(trimmed).catch(() => "");
-  const results = await Promise.all(queries.map(async (entry) => {
-    const result = await searchContextIndex({
-      query: entry.query,
-      vaultPath: input.sharedVault?.vaultPath,
-      connectedApps,
-      includeRuntimeProviders: false,
-      kinds: [...CHAT_CAPABILITY_SEARCH_KINDS],
-      limit: 8,
-    }).catch(() => null);
-    return (result?.items ?? []).map((item): RetrievalHit => ({ item, label: entry.label }));
-  }));
+  const connectedMcpContext = buildConnectedMcpCapabilityContext();
+  const batchResults = await searchContextIndexBatch({
+    vaultPath: input.sharedVault?.vaultPath,
+    connectedApps,
+    includeRuntimeProviders: false,
+    kinds: [...CHAT_CAPABILITY_SEARCH_KINDS],
+  }, queries.map((entry) => ({ query: entry.query, limit: 8 }))).catch(() => []);
+  const results = queries.map((entry, index) =>
+    (batchResults[index]?.items ?? []).map((item): RetrievalHit => ({ item, label: entry.label })));
   const seen = new Set<string>();
   const dedupedHits = results.flat().filter((hit) => {
     if (seen.has(hit.item.id)) return false;
@@ -453,6 +582,15 @@ export async function buildTaskRetrievalContextResult(input: {
     return true;
   });
   const hits = rankHitsForAgent(dedupedHits, input.agent).slice(0, 22);
+  if (input.recordContextXray && (input.runId || input.threadId)) {
+    void createContextXrayManifestFromContextIndex({
+      runId: input.runId,
+      threadId: input.threadId,
+      model: input.model ?? input.runtime?.runtime,
+      query: trimmed,
+      items: hits.map((hit) => hit.item),
+    }).catch(() => undefined);
+  }
   const telemetry: TaskRetrievalTelemetry = {
     queryCount: queries.length,
     hitCount: hits.length,
@@ -473,12 +611,16 @@ export async function buildTaskRetrievalContextResult(input: {
     `- Queries run: ${queries.length}; retrieval hits: ${hits.length}; connected apps observed: ${connectedApps?.length ?? "unknown"}.`,
     retrievalSummary,
     "- For connected apps and app endpoints, tool-capable runtimes should resolve fresh URLs through the Apps view APIs instead of hard-coding local or Tailnet addresses.",
-    "- If a real HTTP/tool bridge is available, prefer the dashboard proxy POST /api/fleet/apps/request with { serviceKind or appId, method, path, body }; otherwise describe the route and ask for execution through HivemindOS.",
+    "- Use a dedicated native tool such as generate_image or generate_video when one is exposed for the user's exact intent. Otherwise, tool-capable runtimes should call invoke_hive_capability for retrieved MCP tools, connected-app endpoints, and Hive Actions. It resolves live targets and enforces read/write confirmation policy; do not invent provider-specific tool names.",
     input.agent?.workerClass
       ? `- Worker class lens: ${input.agent.workerClass}. Hits marked class-preferred or agent task preference match this agent's specialization; prefer them on ties, but any listed capability remains usable.`
       : "",
+    connectedAppsRosterContext(connectedApps),
+    connectedMcpContext ? untrustedContextMessage("Connected MCP capability inventory", connectedMcpContext).content : "",
     userAppPreferenceContext(connectedApps, trimmed),
+    loopEngineeringCapabilityContext(trimmed),
     imageGenerationCapabilityContext(trimmed, input.runtime, connectedApps),
+    videoGenerationCapabilityContext(trimmed),
     generationPerformanceContext,
     hits.length ? untrustedContextMessage("Hive capability search hits", hits.map(formatTaskRetrievalItem).join("\n")).content : "",
   ].filter(Boolean).join("\n");

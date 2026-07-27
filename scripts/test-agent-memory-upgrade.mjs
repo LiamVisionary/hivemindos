@@ -18,6 +18,10 @@ for (const path of [
   "src/lib/services/obsidian/agent-memory/entities.ts",
   "src/lib/services/obsidian/agent-memory/scoring.ts",
   "src/lib/services/obsidian/agent-memory/usage.ts",
+  "src/lib/services/obsidian/agent-memory/canonical.ts",
+  "src/lib/services/obsidian/agent-memory/events.ts",
+  "src/lib/services/obsidian/agent-memory/pattern-mining.ts",
+  "src/lib/services/brain-pattern-mining.ts",
   "src/lib/services/search/bm25-lite.ts",
 ]) {
   assert.ok(existsSync(join(root, path)), `missing agent memory upgrade file: ${path}`);
@@ -25,7 +29,7 @@ for (const path of [
 
 has("src/lib/services/obsidian/agent-memory.ts", "agent-memory/core", "public facade should re-export the split implementation");
 
-for (const token of ["\"action\"", "entities?: string[]", "aliases?: string[]", "actorRole?:", "memoryOrigin?:", "usage?: AgentMemoryUsageSummary", "scoreDetails?: AgentMemoryScoreDetails", "temporalMode?:", "trackUsage?:", "usageContext?:"]) {
+for (const token of ["\"action\"", "memoryKey?: string", "AgentOperationalEvent", "includeOperational?: boolean", "entities?: string[]", "aliases?: string[]", "actorRole?:", "memoryOrigin?:", "usage?: AgentMemoryUsageSummary", "scoreDetails?: AgentMemoryScoreDetails", "temporalMode?:", "trackUsage?:", "usageContext?:"]) {
   has("src/lib/services/obsidian/agent-memory/types.ts", token);
 }
 
@@ -48,16 +52,17 @@ for (const token of [
 }
 
 for (const token of [
-  "appendAgentMemoryEntityIndex(root, record)",
-  "for (const record of records) await appendAgentMemoryEntityIndex(root, record)",
+  "serializeAgentMemoryEntityIndex(records)",
+  "publishAgentMemoryGeneration(root, records",
   "entities: record.entities",
   "aliases: record.aliases",
   "actorRole: record.actorRole",
   "memoryOrigin: record.memoryOrigin",
   "rememberActionAgentMemory",
-  "type: \"action\"",
-  "actorRole: input.actorRole ?? \"assistant\"",
-  "memoryOrigin: input.memoryOrigin ?? \"assistant-action\"",
+  "recordAgentOperationalEvent",
+  "memoryKey: record.memoryKey",
+  "selectCanonicalMemoryHeads",
+  "A canonical memory head already exists",
 ]) {
   has("src/lib/services/obsidian/agent-memory/core.ts", token);
 }
@@ -67,13 +72,16 @@ for (const token of [
   "recordVisibleForRecall",
   "bm25ScoresForRecords",
   "scoreAgentMemory",
-  "before|used to|previously|formerly|at the time|back then",
+  "(?:as of|before)\\s+\\d{4}-\\d{2}-\\d{2}",
+  "used to|previously|formerly|at the time|back then|old|older|history|historical",
   "last week",
   "last month",
   "last year",
   "input.asOf",
   "record.status === \"active\"",
   "record.status === \"superseded\"",
+  "record.type === \"action\"",
+  "input.includeOperational",
   "entityMatchesForQuery",
   "scoreDetails.lexical",
   "scoreDetails.entity",
@@ -112,7 +120,9 @@ for (const token of [
 }
 
 for (const token of [
+  "record-operation",
   "remember-action",
+  "mine-patterns",
   "record-usage",
   "temporalMode",
   "asOf",
@@ -134,7 +144,29 @@ hasCollapsed(
   "trackUsage: true",
   "managed chat preflight should record retrieval usage",
 );
-has("src/app/api/queen-bee/route.ts", "rememberActionAgentMemory", "Queen Bee receipts should write action memories");
-has("src/app/api/handoff/route.ts", "rememberActionAgentMemory", "handoff receipts should write action memories");
+has("src/app/api/queen-bee/route.ts", "recordAgentOperationalEvent", "Queen Bee receipts should write operational events");
+has("src/app/api/handoff/route.ts", "recordAgentOperationalEvent", "handoff receipts should write operational events");
+
+for (const token of ["canonicalMemoryKey", "selectCanonicalMemoryHeads", "memoryKey"]) {
+  has("src/lib/services/obsidian/agent-memory/canonical.ts", token);
+}
+for (const token of ["operational-events.jsonl", "recordAgentOperationalEvent", "listAgentOperationalEvents"]) {
+  has("src/lib/services/obsidian/agent-memory/events.ts", token);
+}
+for (const token of ["mineOperationalPatterns", "recurring-failure", "repeated-operation", "temporal-routine", "distinctTaskCount"]) {
+  has("src/lib/services/obsidian/agent-memory/pattern-mining.ts", token);
+}
+for (const token of ["reviewOperationalPatterns", "enqueueProposals", "createBrainReviewProposal"]) {
+  has("src/lib/services/brain-pattern-mining.ts", token);
+}
+for (const token of ["record-operation", "mine-patterns", "--include-operational", "--memory-key"]) {
+  has("scripts/hive-brain", token);
+}
+for (const token of ["canonicalMemoryKey", "selectCanonicalMemoryHeads"]) {
+  has("scripts/lib/hive-brain-canonical.mjs", token);
+}
+for (const token of ["recordLocalOperationalEvent", "operational-events.jsonl", "durableMemoryWritten: false"]) {
+  has("scripts/lib/hive-brain-operational.mjs", token);
+}
 
 console.log("Agent Memory upgrade contract checks passed.");

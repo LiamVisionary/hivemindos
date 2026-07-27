@@ -70,6 +70,9 @@ function AnsiLine({ line }: { line: string }) {
 export function MachineTerminalModal({ machine, onClose }: MachineTerminalModalProps) {
   const session = React.useMemo(() => shellSessionIdForMachine(machine), [machine]);
   const collectorUrl = machine.collectorUrl ?? "";
+  // The machine's hivemind-linkd has no shell service (Windows builds compile
+  // it out) — render an explanatory state instead of wiring up a dead shell.
+  const shellUnavailable = machine.remoteShell === false;
 
   const [lines, setLines] = React.useState<string[]>([]);
   const [cwd, setCwd] = React.useState("");
@@ -98,6 +101,7 @@ export function MachineTerminalModal({ machine, onClose }: MachineTerminalModalP
   }, []);
 
   React.useEffect(() => {
+    if (shellUnavailable) return;
     let closed = false;
     const query = `collectorUrl=${encodeURIComponent(collectorUrl)}&session=${encodeURIComponent(session)}`;
     const source = new EventSource(`/api/fleet/shell/stream?${query}`);
@@ -140,7 +144,7 @@ export function MachineTerminalModal({ machine, onClose }: MachineTerminalModalP
       closed = true;
       source.close();
     };
-  }, [collectorUrl, session, appendChunk]);
+  }, [collectorUrl, session, appendChunk, shellUnavailable]);
 
   // Auto-stick to bottom when new lines arrive.
   React.useEffect(() => {
@@ -271,48 +275,63 @@ export function MachineTerminalModal({ machine, onClose }: MachineTerminalModalP
           />
         </div>
 
-        <div
-          ref={bufferRef}
-          className={styles.buffer}
-          onClick={() => {
-            if (!window.getSelection()?.toString()) inputRef.current?.focus();
-          }}
-        >
-          {lines.length === 0 ? (
-            <div className={styles.bufferEmpty}>
-              {connection === "connecting"
-                ? "Connecting to shell…"
-                : `Interactive shell at ${cwdLabel || "the working directory"}.\nType a command and press Enter.`}
+        {shellUnavailable ? (
+          <>
+            <div ref={bufferRef} className={styles.buffer}>
+              <div className={styles.bufferEmpty}>
+                {`Remote shell isn't available on ${machine.name} yet.\nIts hivemind-linkd doesn't include the shell service — Windows machines don't support it yet.`}
+              </div>
             </div>
-          ) : null}
-          {lines.map((line, i) => (
-            <AnsiLine key={i} line={line} />
-          ))}
-          <div className={styles.promptLine}>
-            <span className={styles.promptCwd}>{cwdLabel}</span>
-            <span className={styles.promptSigil}>{busy ? " … " : " $ "}</span>
-            <input
-              ref={inputRef}
-              className={styles.promptInput}
-              value={command}
-              onChange={(event) => setCommand(event.target.value)}
-              onKeyDown={onKeyDown}
-              placeholder={busy ? "running…" : ""}
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-            />
-          </div>
-        </div>
-
-        {connection === "error" || errorDetail ? (
-          <div className={`${styles.statusNote} ${styles.statusNoteError}`}>
-            {errorDetail || "Shell connection lost — retrying. The machine's link daemon may need an update or restart."}
-          </div>
+            <div className={styles.statusNote}>
+              The rest of the fleet panel still works for this machine — only the shell is unavailable.
+            </div>
+          </>
         ) : (
-          <div className={styles.statusNote}>
-            Shell runs inside hivemind-linkd on {machine.name} · Ctrl+C interrupts · Ctrl+L clears
-          </div>
+          <>
+            <div
+              ref={bufferRef}
+              className={styles.buffer}
+              onClick={() => {
+                if (!window.getSelection()?.toString()) inputRef.current?.focus();
+              }}
+            >
+              {lines.length === 0 ? (
+                <div className={styles.bufferEmpty}>
+                  {connection === "connecting"
+                    ? "Connecting to shell…"
+                    : `Interactive shell at ${cwdLabel || "the working directory"}.\nType a command and press Enter.`}
+                </div>
+              ) : null}
+              {lines.map((line, i) => (
+                <AnsiLine key={i} line={line} />
+              ))}
+              <div className={styles.promptLine}>
+                <span className={styles.promptCwd}>{cwdLabel}</span>
+                <span className={styles.promptSigil}>{busy ? " … " : " $ "}</span>
+                <input
+                  ref={inputRef}
+                  className={styles.promptInput}
+                  value={command}
+                  onChange={(event) => setCommand(event.target.value)}
+                  onKeyDown={onKeyDown}
+                  placeholder={busy ? "running…" : ""}
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                />
+              </div>
+            </div>
+
+            {connection === "error" || errorDetail ? (
+              <div className={`${styles.statusNote} ${styles.statusNoteError}`}>
+                {errorDetail || "Shell connection lost — retrying. The machine's link daemon may need an update or restart."}
+              </div>
+            ) : (
+              <div className={styles.statusNote}>
+                Shell runs inside hivemind-linkd on {machine.name} · Ctrl+C interrupts · Ctrl+L clears
+              </div>
+            )}
+          </>
         )}
       </section>
     </div>,

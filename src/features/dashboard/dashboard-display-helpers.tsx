@@ -10,10 +10,12 @@ import type {
 import {
   isLocalLinkDuplicateOfSelf,
   isLoopbackCollector,
+  isMacMachineOs,
   isMobileMachineOs,
   machineExactIdentity,
   machineIdentityFromParts,
   shouldPreserveMissingDiscoveredMachine,
+  tailnetSelfIdentityCandidates,
 } from "@/features/fleet/fleet-identity";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 
@@ -97,16 +99,15 @@ function deviceNounForOs(os?: string): string {
 }
 
 // Per-OS commands to repair / re-run setup for a machine's agent bridge.
-// Mac/Linux re-run the collector install script. Windows has no
-// install-telemetry-collector.ps1 yet, so it re-runs setup.ps1 (the closest
-// available Windows setup path); note setup.ps1 does not yet auto-install the
-// collector daemon on Windows — that path is still a follow-up.
+// Mac/Linux re-run the collector install script. Windows re-runs the sticky
+// collector-only setup path, which installs the scheduled collector and Link
+// sidecar without starting a source dashboard.
 function agentBridgeRepairCommands(machine: MachineGroup): string[] {
   if (isWindowsOs(machine.os)) {
     return [
       "cd $env:USERPROFILE\\hivemindos",
       "git pull --ff-only",
-      "powershell -ExecutionPolicy Bypass -File setup.ps1 -SkipDashboard -SkipBuild",
+      "powershell -ExecutionPolicy Bypass -File setup.ps1 -CollectorOnly",
     ];
   }
   return [
@@ -310,6 +311,34 @@ export function machineNetworkIssue(
       ],
     };
   }
+  if (
+    machine.online &&
+    machine.collector === "ready" &&
+    (machine.reportedUnreachableBy?.length ?? 0) > 0
+  ) {
+    const reporters = (machine.reportedUnreachableBy ?? []).join(", ");
+    const noun = deviceNounForOs(machine.os);
+    return {
+      label: "Peers can't reach this machine. Fix?",
+      title: "Fleet peers report this machine unreachable",
+      detail: `This dashboard reaches the machine, but ${reporters} report${(machine.reportedUnreachableBy?.length ?? 0) === 1 ? "s" : ""} it unreachable over the Tailnet — usually a dead or logged-out hivemind-linkd on this ${noun}, which makes the machine invisible to the rest of the fleet while looking healthy locally.`,
+      commands: [
+        `# On this ${noun}`,
+        'curl "http://${HIVE_LINK_CONTROL:-127.0.0.1:8788}/health"',
+        ...(isWindowsOs(machine.os)
+          ? []
+          : machine.os && !isMacMachineOs(machine.os)
+            ? ["systemctl --user restart hivemindos-linkd.service"]
+            : [
+                'launchctl kickstart -k "gui/$(id -u)/com.hivemindos.linkd.agent"',
+                "# If the agent is not loaded at all:",
+                'launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.hivemindos.linkd.agent.plist',
+              ]),
+        "# If linkd reports authNeeded, follow its authUrl or rerun:",
+        "cd ~/hivemindos && HIVE_LINK_ENABLED=true ./scripts/install-telemetry-collector.sh",
+      ],
+    };
+  }
   if (machine.envSync && machine.envSync.ready === false) {
     return {
       label: "Hivemind Sync env not ready. Fix?",
@@ -320,7 +349,7 @@ export function machineNetworkIssue(
       commands: isWindowsOs(machine.os)
         ? [
             "cd $env:USERPROFILE\\hivemindos",
-            "powershell -ExecutionPolicy Bypass -File setup.ps1 -SkipDashboard -SkipBuild",
+            "powershell -ExecutionPolicy Bypass -File setup.ps1 -CollectorOnly",
             "hive-env-add --reconcile",
           ]
         : [
@@ -492,12 +521,19 @@ export function discoveredMachineScore(machine: DiscoveredMachine) {
 
 function machineBaseCandidates(machine: DiscoveredMachine) {
   // Exact identity only (keeps tailscale's `-N` suffix): a `-1` node is a
-  // different physical machine with the same hostname, not a duplicate.
+  // different physical machine with the same hostname, not a duplicate. A
+  // ready collector additionally claims its self-reported system tailnet
+  // node (dnsName-only, see tailnetSelfIdentityCandidates), so a machine
+  // preserved from before a hostname rename still folds instead of living
+  // on as an offline ghost.
   const identity = machineExactIdentity(
     machine.device.name,
     machine.device.dnsName,
   );
-  return identity ? [identity] : [];
+  return [
+    ...(identity ? [identity] : []),
+    ...tailnetSelfIdentityCandidates(machine.tailnetSelf),
+  ];
 }
 
 function hasFreshReadyDuplicate(
@@ -542,10 +578,27 @@ export function dedupeDiscoveredMachines(machines: DiscoveredMachine[]) {
   return [...byIdentity.values()];
 }
 
+// Queen is dashboard-owned: never accept a queen claim from discovery (old
+// fleet collectors still self-declare their OpenClaw as one). Local twin of
+// dashboard-storage's sanitizeDiscoveredAgentRoles — this module region runs
+// standalone in the hermetic fleet-discovery-merge suite, so no cross-module
+// call is possible here; keep both in sync.
+function demoteDiscoveredQueenClaims(machines: DiscoveredMachine[]): DiscoveredMachine[] {
+  return machines.map((machine) => (
+    machine.agents?.some((agent) => agent.beeRole === "queen")
+      ? {
+        ...machine,
+        agents: machine.agents.map((agent) => (agent.beeRole === "queen" ? { ...agent, beeRole: "worker" as const } : agent)),
+      }
+      : machine
+  ));
+}
+
 export function mergeDiscoveredMachines(
   current: DiscoveredMachine[],
-  incoming: DiscoveredMachine[],
+  rawIncoming: DiscoveredMachine[],
 ) {
+  const incoming = demoteDiscoveredQueenClaims(rawIncoming);
   const currentByKey = new Map(
     current.map((machine) => [discoveredMachineIdentity(machine), machine]),
   );
@@ -666,6 +719,115 @@ export function mergeDiscoveredMachines(
   return dedupeDiscoveredMachines([...merged, ...preserved]);
 }
 
+// Collapse duplicate MachineGroup rows for the same physical machine (system
+// tailscale node + embedded linkd node, or a re-registered device) into one,
+// preferring the row with the richest signal and unioning agents.
+export function dedupeMachineGroups(items: MachineGroup[]) {
+  const byIdentity = new Map<string, MachineGroup>();
+  const score = (machine: MachineGroup) =>
+    (machine.self ? 10_000 : 0) +
+    (machine.collector === "ready" ? 1_000 : 0) +
+    machine.agents.length * 10 +
+    (machine.online ? 5 : 0);
+  const stableMachineId = (item: MachineGroup) => {
+    const machineId =
+      item.collector === "ready"
+        ? (item.machineId?.trim().toLowerCase() ?? "")
+        : "";
+    return /^hivemind-machine-[a-f0-9]{32}$/.test(machineId) ? machineId : "";
+  };
+  // Bridge machineId keys to name-identity keys: a bare tailscale device
+  // (no collector probe, so no machineId) must still merge with the
+  // discovered copy of the same machine, which is keyed by machineId.
+  // Identities claimed by more than one machineId are ambiguous (distinct
+  // physical machines whose names collide after -N stripping), so leave
+  // those unbridged rather than merging a shadow into the wrong machine.
+  const machineIdByNameIdentity = new Map<string, string>();
+  for (const item of items) {
+    const machineId = stableMachineId(item);
+    if (!machineId) continue;
+    // Register the exact name identity alongside machineIdentityFromParts:
+    // the self machine resolves to "self" there, but its own embedded link
+    // node can show up as a separate tailnet device whose only handle is
+    // the exact identity ("liamsmacbookpro") — without this entry that
+    // shadow never bridges to the real machine.
+    const identities = new Set(
+      [
+        machineIdentityFromParts(item),
+        machineExactIdentity(item.name, item.dnsName),
+      ].filter(Boolean),
+    );
+    for (const nameIdentity of identities) {
+      const claimed = machineIdByNameIdentity.get(nameIdentity);
+      machineIdByNameIdentity.set(
+        nameIdentity,
+        claimed && claimed !== machineId ? "" : machineId,
+      );
+    }
+  }
+  for (const item of items) {
+    const nameIdentity = machineIdentityFromParts(item);
+    const key =
+      stableMachineId(item) ||
+      machineIdByNameIdentity.get(nameIdentity) ||
+      nameIdentity;
+    const previous = byIdentity.get(key);
+    if (!previous) {
+      byIdentity.set(key, item);
+      continue;
+    }
+    const preferred = score(item) > score(previous) ? item : previous;
+    const agents = [...previous.agents, ...item.agents].filter(
+      (agent, index, all) =>
+        all.findIndex((candidate) => candidate.id === agent.id) === index,
+    );
+    byIdentity.set(key, { ...preferred, agents });
+  }
+  return [...byIdentity.values()];
+}
+
+// A rename-orphaned system tailnet node — e.g. the NYC MacBook whose system
+// node shares the "Liam's MacBook Pro" ComputerName with This Mac, so tailscale
+// suffixes it "-1" while its embedded link node re-registered under a distinct
+// name — shows up in `tailscaleDevices` as its own bridge-less device. Its real
+// collector reports that system node as `tailnetSelf`, so fleet discovery folds
+// the two into one DiscoveredMachine. But the fleet view rebuilds MachineGroups
+// straight from `tailscaleDevices`, which carries no `tailnetSelf`, so the orphan
+// resurfaces as an empty "pending" ghost machine. These two helpers fold it at
+// the group layer too, reusing the tailnetSelf claims the ready collectors
+// already reported through discovery (mirrors dedupeDiscoveredMachines).
+export function readyTailnetSelfShadowBases(
+  discoveredMachines: DiscoveredMachine[],
+): Set<string> {
+  const bases = new Set<string>();
+  for (const machine of discoveredMachines) {
+    if (machine.collector !== "ready") continue;
+    // A collector only ever claims its OWN system node. Excluding its own device
+    // identity keeps a machine whose system node shares its name (This Mac:
+    // tailnetSelf resolves to This Mac's own identity) from folding itself away.
+    const own = machineExactIdentity(
+      machine.device.name,
+      machine.device.dnsName,
+    );
+    for (const base of tailnetSelfIdentityCandidates(machine.tailnetSelf)) {
+      if (base && base !== own) bases.add(base);
+    }
+  }
+  return bases;
+}
+
+export function isTailnetSelfShadowGroup(
+  group: MachineGroup,
+  shadowBases: Set<string>,
+): boolean {
+  // Never fold self, nor a machine that answered as a ready collector — only a
+  // bridge-less duplicate a ready collector claims as its own system node.
+  if (group.self || group.collector === "ready" || shadowBases.size === 0)
+    return false;
+  const identity = machineExactIdentity(group.name, group.dnsName ?? "");
+  return Boolean(identity) && shadowBases.has(identity);
+}
+
 export function machineVersionState(
   machine: MachineGroup,
   latestCommit?: string,
@@ -707,14 +869,14 @@ export function setupCollectorCommand(os?: string) {
       `if (-not (Test-Path hivemindos)) { git clone ${REPO_CLONE_URL} hivemindos }`,
       "cd hivemindos",
       "git pull --ff-only",
-      "powershell -ExecutionPolicy Bypass -File setup.ps1",
+      "powershell -ExecutionPolicy Bypass -File setup.ps1 -CollectorOnly",
     ].join("\n");
   }
   return [
     `git clone ${REPO_CLONE_URL} hivemindos 2>/dev/null || true`,
     "cd hivemindos",
     "git pull --ff-only",
-    "./setup.sh",
+    "./setup.sh --collector-only",
   ].join("\n");
 }
 

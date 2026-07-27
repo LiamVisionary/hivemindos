@@ -113,6 +113,10 @@ function networkLabel(network: string) {
       return "Base mainnet";
     case "eip155:84532":
       return "Base Sepolia";
+    case "eip155:4663":
+      return "Robinhood Chain";
+    case "eip155:46630":
+      return "Robinhood Chain Testnet";
     case "solana:mainnet":
       return "Solana mainnet";
     case "solana:devnet":
@@ -658,7 +662,7 @@ export function AgentWalletCard({
             <WalletCards aria-hidden="true" />
             <div>
               <strong>Crypto</strong>
-              <span>{wallet.walletAddress ? shortenAddress(wallet.walletAddress) : "Local USDC wallet"}</span>
+              <span>{wallet.walletAddress ? shortenAddress(wallet.walletAddress) : "Local stablecoin wallet"}</span>
             </div>
             <small>{railText(cryptoRailState)}</small>
           </div>
@@ -891,7 +895,9 @@ export function AgentWalletCard({
               >
                 <option value="">Off</option>
                 <option value="alpaca">Alpaca (real brokerage)</option>
+                <option value="robinhood-agentic">Robinhood Agentic (brokerage MCP)</option>
                 <option value="xstocks">xStocks (on-chain)</option>
+                <option value="robinhood-chain">Robinhood Chain stock tokens</option>
               </select>
             </div>
             {wallet.tradingVenue === "alpaca" ? (
@@ -929,10 +935,9 @@ export function AgentWalletCard({
                 {wallet.alpacaPaper === false ? " LIVE mode places real brokerage orders." : " Paper mode is simulated — no real money."}
               </p>
             ) : wallet.tradingVenue === "xstocks" ? (
-              <p className={styles.sheetHelp}>
-                Swaps USDC → verified xStock tokens via Jupiter. Requires a Solana mainnet wallet.
-                {wallet.network !== "solana:mainnet" ? " This wallet is not on Solana mainnet, so on-chain buys will be rejected." : ""}
-              </p>
+              <p className={styles.sheetHelp}>Swaps USDC → verified xStock tokens via Jupiter. Requires a Solana mainnet wallet.{wallet.network !== "solana:mainnet" ? " This wallet is not on Solana mainnet, so on-chain buys will be rejected." : ""}</p>
+            ) : wallet.tradingVenue === "robinhood-chain" ? (
+              <p className={styles.sheetHelp}>Swaps USDG ↔ canonical Robinhood Stock Tokens through 0x on Robinhood Chain.{wallet.network !== "eip155:4663" ? " Use a Robinhood Chain wallet before placing Stock Token orders." : " Fund this wallet with USDG plus ETH gas before placing orders."}</p>
             ) : null}
             {veilRail && privateTransferAssets.includes("ETH") ? (
               <div className={styles.sheetField}>
@@ -987,7 +992,7 @@ export function AgentWalletCard({
             </div>
           </div>
           <p className={styles.sheetHelp}>
-            Daily/monthly budgets cap cumulative spend across every rail. Add this agent to a company from the Zero Human Company panel for a shared budget and kill switch.
+            Daily/monthly budgets cap cumulative spend across every rail. Company budgets and freeze switches additionally apply while this agent executes that company's active Work Board tasks.
           </p>
           <button
             type="button"
@@ -1374,6 +1379,7 @@ export function AgentWalletCard({
                         >
                           <option value="eip155:8453">Base mainnet</option>
                           <option value="eip155:84532">Base Sepolia</option>
+                          <option value="eip155:4663">Robinhood Chain</option>
                           <option value="solana:mainnet">Solana mainnet</option>
                           <option value="solana:devnet">Solana devnet</option>
                         </select>

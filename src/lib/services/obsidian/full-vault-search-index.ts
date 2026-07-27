@@ -1,15 +1,18 @@
 import "server-only";
 
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { constants } from "fs";
-import { access, mkdir, readdir, readFile, stat, writeFile } from "fs/promises";
+import { access, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from "fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "path";
+import { morphologicalTermVariants } from "@/lib/services/obsidian/agent-memory/query";
+import { listBrainIndexGenerations, publishBrainIndexGeneration, readBrainIndexArtifact } from "@/lib/services/obsidian/brain-index-generations";
 import { bm25TermCounts, bm25Tokens, scoreBm25Terms } from "@/lib/services/search/bm25-lite";
+import { contentAddressForText } from "@/lib/services/obsidian/content-address";
 
 export const FULL_VAULT_SEARCH_INDEX_PATH = "Operations/Brain Services/Full Vault Search Index.jsonl";
 
 const MAX_INDEXED_MARKDOWN_FILES = 50_000;
-const MAX_INDEXED_MARKDOWN_BYTES = 256 * 1024;
+const MAX_INDEXED_MARKDOWN_BYTES = 1024 * 1024;
 const MAX_INDEX_TERMS_PER_NOTE = 900;
 const MAX_SEARCH_RESULTS = 500;
 const VAULT_EXCLUDE_PARTS = new Set([".git", ".obsidian", ".trash", ".hivemindos-transfers", "node_modules"]);
@@ -19,10 +22,24 @@ const VAULT_EXCLUDE_PREFIXES = [
   "Operations/Brain Services/Agent Memory Entity Index.jsonl",
   "Operations/Brain Services/Agent Memory Retrievals.jsonl",
   "Operations/Brain Services/Agent Memory Proofs.jsonl",
+  "Operations/Brain Services/Agent Memory Embeddings.jsonl",
+  "Operations/Brain Services/Agent Memory Transactions.jsonl",
+  "Operations/Brain Services/Index Generations/",
   FULL_VAULT_SEARCH_INDEX_PATH,
   "Operations/Vault Migrations/",
   "Archive/",
 ];
+// An existing index older than this is rebuilt before answering, so notes
+// written after the last rebuild stop being invisible to indexed recall.
+// Override with HIVEMINDOS_FULL_VAULT_INDEX_TTL_MS (0 disables the check).
+const DEFAULT_INDEX_TTL_MS = 6 * 60 * 60 * 1000;
+
+function indexTtlMs() {
+  const raw = process.env.HIVEMINDOS_FULL_VAULT_INDEX_TTL_MS?.trim();
+  if (raw === undefined || raw === "") return DEFAULT_INDEX_TTL_MS;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_INDEX_TTL_MS;
+}
 const STOP_WORDS = new Set([
   "about", "after", "again", "agent", "agents", "also", "and", "are", "brain", "but", "can", "codex", "for", "from",
   "has", "have", "hive", "hivemindos", "into", "its", "memory", "note", "notes", "not", "our", "shared", "that",
@@ -51,6 +68,8 @@ export type FullVaultSearchIndexRecord = {
   mtimeMs: number;
   size: number;
   hash: string;
+  contentHash: string;
+  indexedByteLimit: number;
   documentLength: number;
   terms: Record<string, number>;
   excerpt: string;
@@ -100,6 +119,8 @@ function shouldSkipVaultPath(root: string, fullPath: string, isDirectory: boolea
   const name = basename(fullPath);
   if (VAULT_EXCLUDE_PARTS.has(name)) return true;
   if (name.startsWith(".") && name !== ".") return true;
+  // Sync-conflict copies are unresolved duplicates, not knowledge.
+  if (name.includes(".sync-conflict-")) return true;
   if (isDirectory && VAULT_EXCLUDE_PREFIXES.some((prefix) => prefix.endsWith("/") && (rel === prefix.slice(0, -1) || rel.startsWith(prefix)))) return true;
   if (!isDirectory && VAULT_EXCLUDE_PREFIXES.some((prefix) => rel === prefix || rel.startsWith(prefix))) return true;
   return false;
@@ -251,6 +272,8 @@ function recordFromMarkdown(root: string, file: string, markdown: string, mtimeM
     mtimeMs,
     size,
     hash: createHash("sha256").update(markdown).digest("hex"),
+    contentHash: contentAddressForText(body),
+    indexedByteLimit: MAX_INDEXED_MARKDOWN_BYTES,
     documentLength: tokens.length,
     terms: termCounts(tokens),
     excerpt: compact(body.replace(/^#\s+.+$/gm, " ")),
@@ -262,24 +285,92 @@ function indexPath(root: string) {
 }
 
 async function readIndex(root: string) {
-  const file = indexPath(root);
+  const artifact = await readBrainIndexArtifact({
+    root,
+    kind: "full-vault",
+    artifact: "search",
+    legacyPath: FULL_VAULT_SEARCH_INDEX_PATH,
+  });
+  if (!artifact) return null;
+  const file = artifact.generation?.manifestPath ?? indexPath(root);
   const st = await stat(file).catch(() => null);
   if (!st?.isFile()) return null;
+  const contentSize = Buffer.byteLength(artifact.contents, "utf8");
   const cached = indexCache.get(root);
-  if (cached && cached.file === file && cached.mtimeMs === st.mtimeMs && cached.size === st.size) return cached.records;
-  const raw = await readFile(file, "utf8").catch(() => "");
+  if (cached && cached.file === file && cached.mtimeMs === st.mtimeMs && cached.size === contentSize) return cached.records;
   const records: FullVaultSearchIndexRecord[] = [];
-  for (const line of raw.split("\n")) {
+  for (const line of artifact.contents.split("\n")) {
     if (!line.trim()) continue;
     try {
       const parsed = JSON.parse(line) as FullVaultSearchIndexRecord;
-      if (parsed.schema === "hivemindos.full-vault-search.v1" && parsed.path && parsed.terms) records.push(parsed);
+      if (
+        parsed.schema === "hivemindos.full-vault-search.v1" &&
+        parsed.path &&
+        parsed.terms &&
+        parsed.indexedByteLimit === MAX_INDEXED_MARKDOWN_BYTES
+      ) records.push(parsed);
     } catch {
       // Ignore corrupt rows; rebuild can repair the generated index.
     }
   }
-  indexCache.set(root, { file, mtimeMs: st.mtimeMs, size: st.size, records });
+  indexCache.set(root, { file, mtimeMs: st.mtimeMs, size: contentSize, records });
   return records.length ? records : null;
+}
+
+async function writeIndexFileAtomically(file: string, payload: string) {
+  await mkdir(dirname(file), { recursive: true });
+  const temporaryFile = `${file}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporaryFile, payload, { encoding: "utf8", mode: 0o600 });
+    await rename(temporaryFile, file);
+  } finally {
+    await unlink(temporaryFile).catch(() => undefined);
+  }
+}
+
+/**
+ * Pure line filter behind {@link removeFullVaultSearchIndexPaths}: drop every
+ * row whose `path` is in `paths`, keep everything else byte-for-byte. Lines
+ * that fail to parse are KEPT, matching the telemetry purge — a truncated or
+ * hand-edited row is not ours to discard.
+ */
+export function fullVaultIndexLinesWithoutPaths(raw: string, paths: Iterable<string>) {
+  const drop = new Set(paths);
+  let removed = 0;
+  const kept = raw.split("\n").filter((line) => {
+    if (!line.trim()) return false;
+    let parsed: { path?: unknown };
+    try {
+      parsed = JSON.parse(line) as { path?: unknown };
+    } catch {
+      return true;
+    }
+    if (typeof parsed.path !== "string" || !drop.has(parsed.path)) return true;
+    removed += 1;
+    return false;
+  });
+  return { removed, contents: kept.length ? `${kept.join("\n")}\n` : "" };
+}
+
+/**
+ * Drop generated search rows for notes a caller just deleted. Anything that
+ * removes vault markdown MUST call this in the same operation: a row carries
+ * the note's `excerpt`, `headings`, `tags`, and full term vector, so a stale
+ * row keeps a deleted note's content searchable — and answerable — until the
+ * next TTL rebuild (default 6h). Returns the number of rows removed.
+ */
+export async function removeFullVaultSearchIndexPaths(root: string, paths: Iterable<string>) {
+  const resolvedRoot = resolve(root);
+  const drop = new Set(paths);
+  if (!drop.size) return 0;
+  const file = indexPath(resolvedRoot);
+  const raw = await readFile(file, "utf8").catch(() => "");
+  if (!raw) return 0;
+  const result = fullVaultIndexLinesWithoutPaths(raw, drop);
+  if (!result.removed) return 0;
+  await writeIndexFileAtomically(file, result.contents);
+  indexCache.delete(resolvedRoot);
+  return result.removed;
 }
 
 export async function rebuildFullVaultSearchIndex(input: { root: string }) {
@@ -295,8 +386,18 @@ export async function rebuildFullVaultSearchIndex(input: { root: string }) {
     if (record) records.push(record);
   }
   const file = indexPath(root);
-  await mkdir(dirname(file), { recursive: true });
-  await writeFile(file, records.map((record) => JSON.stringify(record)).join("\n") + (records.length ? "\n" : ""), "utf8");
+  const payload = records.map((record) => JSON.stringify(record)).join("\n") + (records.length ? "\n" : "");
+  const generation = await publishBrainIndexGeneration({
+    root,
+    kind: "full-vault",
+    artifacts: [{ name: "search", contents: payload, records: records.length, legacyPath: FULL_VAULT_SEARCH_INDEX_PATH }],
+    sources: records.map((record) => ({ path: record.path, sha256: `sha256:${record.hash}` })),
+    metadata: {
+      searchMode: "bm25-lite",
+      schema: "hivemindos.full-vault-search.v1",
+      indexedByteLimit: MAX_INDEXED_MARKDOWN_BYTES,
+    },
+  });
   indexCache.delete(root);
   const st = await stat(file).catch(() => null);
   return {
@@ -305,6 +406,7 @@ export async function rebuildFullVaultSearchIndex(input: { root: string }) {
     scanned: files.length,
     indexed: records.length,
     bytes: st?.size ?? 0,
+    generation,
     rebuiltAt: new Date().toISOString(),
   };
 }
@@ -318,7 +420,33 @@ function collectionSummary(records: FullVaultSearchIndexRecord[]) {
 }
 
 async function readOrBuildIndex(root: string) {
+  const ttl = indexTtlMs();
+  if (ttl > 0) {
+    const st = await stat(indexPath(root)).catch(() => null);
+    if (st?.isFile() && Date.now() - st.mtimeMs > ttl) {
+      await rebuildFullVaultSearchIndex({ root }).catch(() => undefined);
+    }
+  }
   return await readIndex(root) ?? (await rebuildFullVaultSearchIndex({ root }), await readIndex(root)) ?? [];
+}
+
+export async function fullVaultSearchIndexStatus(root: string) {
+  const st = await stat(indexPath(resolve(root))).catch(() => null);
+  const records = st?.isFile() ? await readIndex(resolve(root)) : null;
+  const generations = await listBrainIndexGenerations({ root: resolve(root), kind: "full-vault" }).catch(() => null);
+  return {
+    exists: Boolean(st?.isFile()),
+    indexPath: FULL_VAULT_SEARCH_INDEX_PATH,
+    bytes: st?.size ?? 0,
+    ageMs: st ? Math.max(0, Date.now() - st.mtimeMs) : null,
+    ttlMs: indexTtlMs(),
+    stale: Boolean(st?.isFile() && indexTtlMs() > 0 && Date.now() - st.mtimeMs > indexTtlMs()),
+    indexed: records?.length ?? 0,
+    syncConflictEntries: records?.filter((record) => record.path.includes(".sync-conflict-")).length ?? 0,
+    currentGenerationId: generations?.currentGenerationId,
+    generations: generations?.generations.length ?? 0,
+    replayCoverage: generations?.coverage,
+  };
 }
 
 function recordMatchesFilters(record: FullVaultSearchIndexRecord, parsed: ParsedSearchQuery) {
@@ -330,6 +458,17 @@ function recordMatchesFilters(record: FullVaultSearchIndexRecord, parsed: Parsed
   return true;
 }
 
+function queryTermCoverageScore(parsed: ParsedSearchQuery, matched: Set<string>) {
+  if (parsed.terms.length <= 1) return 0;
+  const matchedTermCount = parsed.terms.filter((term) => matched.has(term)).length;
+  if (!matchedTermCount) return 0;
+  const coverage = matchedTermCount / parsed.terms.length;
+  let score = coverage * 6;
+  if (matchedTermCount === parsed.terms.length) score += 3;
+  if (parsed.terms.length >= 4 && coverage < 0.5) score -= (parsed.terms.length - matchedTermCount) * 0.75;
+  return score;
+}
+
 function bm25Score(record: FullVaultSearchIndexRecord, parsed: ParsedSearchQuery, documentCount: number, docFreq: Map<string, number>, averageLength: number) {
   const matched = new Set<string>();
   let score = 0;
@@ -338,19 +477,23 @@ function bm25Score(record: FullVaultSearchIndexRecord, parsed: ParsedSearchQuery
   const lowerPath = record.path.toLowerCase();
   const lowerExcerpt = record.excerpt.toLowerCase();
   for (const term of parsed.terms) {
-    const frequency = record.terms[term] ?? 0;
-    if (!frequency) continue;
+    // One slot per query term: index tokens are exact, so an inflected query
+    // ("weddings") must also try its stem variants ("wedding") before the
+    // term counts as unmatched. The original term keeps the matched credit.
+    const forms = [term, ...morphologicalTermVariants(term)];
+    const form = forms.find((candidate) => record.terms[candidate]);
+    if (!form) continue;
     score += scoreBm25Terms({
-      terms: [term],
+      terms: [form],
       documentTerms: record.terms,
       documentLength: record.documentLength,
       documentCount,
       docFreq,
       averageLength,
     });
-    if (lowerTitle.includes(term)) score += 3;
-    if (lowerHeadings.includes(term)) score += 1.5;
-    if (lowerPath.includes(term)) score += 1;
+    if (forms.some((candidate) => lowerTitle.includes(candidate))) score += 3;
+    if (forms.some((candidate) => lowerHeadings.includes(candidate))) score += 1.5;
+    if (forms.some((candidate) => lowerPath.includes(candidate))) score += 1;
     matched.add(term);
   }
   for (const phrase of parsed.phrases) {
@@ -362,6 +505,7 @@ function bm25Score(record: FullVaultSearchIndexRecord, parsed: ParsedSearchQuery
       matched.add(`"${phrase}"`);
     }
   }
+  score += queryTermCoverageScore(parsed, matched);
   if (parsed.collections.includes(record.collection)) score += 2;
   return { score: Math.round(score * 100) / 10, matched: [...matched] };
 }
@@ -375,7 +519,9 @@ export async function searchFullVaultSearchIndex(input: { root: string; query?: 
   const averageLength = records.reduce((sum, record) => sum + record.documentLength, 0) / documentCount;
   const docFreq = new Map<string, number>();
   for (const term of parsed.terms) {
-    docFreq.set(term, records.reduce((count, record) => count + (record.terms[term] ? 1 : 0), 0));
+    for (const form of [term, ...morphologicalTermVariants(term)]) {
+      if (!docFreq.has(form)) docFreq.set(form, records.reduce((count, record) => count + (record.terms[form] ? 1 : 0), 0));
+    }
   }
   const queryHasSearchTerms = parsed.terms.length || parsed.phrases.length;
   const hits: FullVaultSearchHit[] = records

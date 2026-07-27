@@ -1,0 +1,235 @@
+/* simulation.css — design tokens + base classes for the Simulation drop-in.
+   Everything is scoped under .sim-root so it never leaks into your app's global
+   styles. Warm-neutral "whisper hive" palette: one honey accent, a quiet teal
+   reserved for live/working signal. Dark by default; add data-sim-theme="light"
+   on the .sim-root element for warm paper. */
+
+/* Fonts (Space Grotesk / Geist / JetBrains Mono) are loaded app-wide via the
+   <link> in src/app/layout.tsx — no CSS @import here, so the offline/embedded
+   desktop build never depends on a runtime Google Fonts fetch. */
+
+.sim-root {
+  --f-display: "Space Grotesk", system-ui, sans-serif;
+  --f-body: "Geist", "Inter", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --bg: #0c0d11;
+  --bg-soft: #101116;
+  --panel: #14161c;
+  --panel-2: #181b22;
+  --panel-hi: #1e222b;
+  --line: rgba(238, 232, 220, 0.07);
+  --line-2: rgba(238, 232, 220, 0.13);
+  --line-3: rgba(238, 232, 220, 0.20);
+
+  --fg: #f3f0e9;
+  --fg-2: #a7a39a;
+  --fg-3: #76726a;
+  --fg-4: #545049;
+
+  --honey: #e7b45c;
+  --honey-2: #f0c879;
+  --honey-soft: rgba(231, 180, 92, 0.13);
+  --honey-line: rgba(231, 180, 92, 0.32);
+
+  --live: #6fcdba;
+  --live-soft: rgba(111, 205, 186, 0.14);
+
+  --danger: #e58e85;
+  --danger-soft: rgba(229, 142, 133, 0.13);
+
+  --radius: 14px;
+  --radius-sm: 9px;
+  --radius-lg: 20px;
+
+  color: var(--fg);
+  font-family: var(--f-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  background: var(--bg);
+}
+
+.sim-root[data-sim-theme="light"] {
+  --bg: #f1ede3;
+  --bg-soft: #f6f2e9;
+  --panel: #fbf8f1;
+  --panel-2: #f4efe4;
+  --panel-hi: #ffffff;
+  --line: rgba(54, 46, 30, 0.10);
+  --line-2: rgba(54, 46, 30, 0.16);
+  --line-3: rgba(54, 46, 30, 0.26);
+
+  --fg: #221d14;
+  --fg-2: #5e574b;
+  --fg-3: #867d6e;
+  --fg-4: #a59b89;
+
+  --honey: #936811; --honey-fill: #e6bb5c;
+  --honey-2: #936811;
+  --honey-soft: rgba(176, 127, 28, 0.12);
+  --honey-line: rgba(176, 127, 28, 0.34);
+
+  --live: #1d8e7c;
+  --live-soft: rgba(29, 142, 124, 0.12);
+
+  --danger: #c0524d;
+  --danger-soft: rgba(192, 82, 77, 0.12);
+}
+
+.sim-root *, .sim-root *::before, .sim-root *::after { box-sizing: border-box; }
+
+/* scrollbars */
+.sim-root .fr-scroll { scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; }
+.sim-root .fr-scroll::-webkit-scrollbar { width: 7px; height: 7px; }
+.sim-root .fr-scroll::-webkit-scrollbar-track { background: transparent; }
+.sim-root .fr-scroll::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 99px; border: 2px solid transparent; background-clip: padding-box; }
+.sim-root .fr-scroll::-webkit-scrollbar-thumb:hover { background: var(--line-3); background-clip: padding-box; }
+
+/* eyebrow + dot + meter */
+.sim-root .fr-eyebrow { font-family: var(--f-mono); font-size: 10px; font-weight: 500; letter-spacing: 0.16em; text-transform: uppercase; color: var(--fg-3); }
+.sim-root .fr-dot { display: inline-block; width: 7px; height: 7px; border-radius: 99px; background: currentColor; flex: 0 0 auto; }
+.sim-root .fr-dot.live { box-shadow: 0 0 0 0 currentColor; animation: fr-pulse 2.4s ease-in-out infinite; }
+@keyframes fr-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 50%, transparent); } 50% { box-shadow: 0 0 0 5px color-mix(in srgb, currentColor 0%, transparent); } }
+.sim-root .fr-meter { height: 3px; border-radius: 99px; background: var(--line-2); overflow: hidden; }
+.sim-root .fr-meter > i { display: block; height: 100%; border-radius: 99px; background: var(--fg-3); transition: width .5s cubic-bezier(.2,.7,.3,1); }
+
+/* segmented control */
+.sim-root .fb-seg { display: inline-flex; gap: 3px; padding: 4px; border: 1px solid var(--line-2); border-radius: 99px; background: color-mix(in srgb, var(--panel) 70%, transparent); }
+.sim-root .fb-seg button { border: 0; background: transparent; cursor: pointer; border-radius: 99px; padding: 8px 16px; font-family: var(--f-body); font-size: 12.5px; color: var(--fg-3); transition: color .16s, background .16s; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.sim-root .fb-seg button:hover { color: var(--fg); }
+.sim-root .fb-seg button[data-active] { background: var(--honey-fill, var(--honey)); color: #1a1305; font-weight: 500; }
+.sim-root .fb-seg.sub button[data-active] { background: var(--panel-hi); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line-3); }
+
+/* select */
+.sim-root .fb-select { width: 100%; box-sizing: border-box; padding: 9px 30px 9px 12px; border-radius: var(--radius-sm); border: 1px solid var(--line-2); background: var(--panel-2); color: var(--fg); font-family: var(--f-body); font-size: 12.5px; outline: none; appearance: none; cursor: pointer; transition: border-color .16s, box-shadow .16s; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2.4'><path d='M6 9l6 6 6-6'/></svg>"); background-repeat: no-repeat; background-position: right 11px center; }
+.sim-root .fb-select:focus { border-color: var(--honey-line); box-shadow: 0 0 0 3px var(--honey-soft); }
+
+/* buttons */
+.sim-root .fb-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border-radius: 99px; padding: 9px 15px; font-size: 12.5px; font-family: var(--f-body); cursor: pointer; border: 1px solid transparent; transition: filter .16s, border-color .16s, color .16s, background .16s; white-space: nowrap; }
+.sim-root .fb-btn.primary { background: var(--honey-fill, var(--honey)); color: #1a1305; font-weight: 500; }
+.sim-root .fb-btn.primary:hover { filter: brightness(1.06); }
+.sim-root .fb-btn.ghost { background: transparent; color: var(--fg-2); border-color: var(--line-2); }
+.sim-root .fb-btn.ghost:hover { border-color: var(--line-3); color: var(--fg); }
+.sim-root .fb-btn.sm { padding: 7px 12px; font-size: 12px; }
+
+/* badges */
+.sim-root .fb-badge { display: inline-flex; align-items: center; gap: 5px; font-family: var(--f-mono); font-size: 10px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 9px; border-radius: 99px; border: 1px solid var(--line-2); color: var(--fg-3); white-space: nowrap; flex: 0 0 auto; }
+.sim-root .fb-badge.live { color: var(--live); border-color: color-mix(in srgb, var(--live) 35%, transparent); background: var(--live-soft); }
+.sim-root .fb-badge.honey { color: var(--honey); border-color: var(--honey-line); background: var(--honey-soft); }
+.sim-root .fb-badge.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 38%, transparent); background: var(--danger-soft); }
+
+/* switch */
+.sim-root .fb-switch { position: relative; width: 38px; height: 22px; border-radius: 99px; flex: 0 0 auto; transition: .2s; cursor: pointer; }
+.sim-root .fb-switch > i { position: absolute; top: 2px; width: 16px; height: 16px; border-radius: 50%; transition: left .2s; }
+
+.sim-root .fb-fade { animation: fb-fadein .3s ease both; }
+@keyframes fb-fadein { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sim-root .fb-fade { animation: none; } }
+
+/* ── sim-specific ─────────────────────────────────────────────────────────── */
+.sim-root .sv-eyebrow { font-family: var(--f-mono); font-size: 9.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--fg-4); }
+.sim-root .sv-num { font-family: var(--f-display); font-weight: 600; letter-spacing: -0.02em; }
+.sim-root .sv-mono { font-family: var(--f-mono); }
+
+.sim-root .sv-metric { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 13px; min-width: 0; }
+.sim-root .sv-metric .v { font-family: var(--f-display); font-weight: 600; font-size: 19px; letter-spacing: -0.02em; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sim-root .sv-metric .k { font-family: var(--f-mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-4); margin-top: 7px; }
+
+.sim-root .sv-fac { display: inline-flex; align-items: center; font-family: var(--f-mono); font-size: 9px; font-weight: 600; letter-spacing: .1em; padding: 2px 6px; border-radius: 4px; border: 1px solid; }
+
+.sim-root .sv-agent { display: grid; grid-template-columns: auto 1fr auto; gap: 11px; align-items: center; padding: 9px 11px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel-2); }
+.sim-root .sv-agent .nm { font-size: 12.5px; font-weight: 500; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sim-root .sv-agent .ro { font-family: var(--f-mono); font-size: 9.5px; color: var(--fg-4); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.sim-root .sv-con { background: color-mix(in srgb, var(--bg) 60%, var(--panel)); border: 1px solid var(--line-2); border-radius: var(--radius-sm); padding: 9px 0; font-family: var(--f-mono); font-size: 11px; }
+.sim-root .sv-conline { display: grid; grid-template-columns: 92px 64px 1fr; gap: 10px; padding: 3px 14px; align-items: baseline; }
+.sim-root .sv-conline .who { color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sim-root .sv-conline .act { font-weight: 600; letter-spacing: .04em; }
+.sim-root .sv-conline .det { color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.sim-root .sv-runrow { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; width: 100%; text-align: left; padding: 12px 13px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel); color: var(--fg); cursor: pointer; transition: border-color .15s, background .15s; }
+.sim-root .sv-runrow:hover { border-color: var(--line-3); }
+.sim-root .sv-runrow[data-sel] { border-color: var(--honey-line); background: var(--honey-soft); }
+.sim-root .sv-runrow .nm { font-family: var(--f-display); font-weight: 600; font-size: 13px; letter-spacing: -0.01em; }
+.sim-root .sv-runrow .meta { font-family: var(--f-mono); font-size: 10px; color: var(--fg-4); margin-top: 3px; }
+
+.sim-root .sv-chip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--f-mono); font-size: 10.5px; padding: 4px 9px; border-radius: 99px; border: 1px solid var(--line-2); color: var(--fg-2); white-space: nowrap; }
+.sim-root .sv-tag { font-family: var(--f-mono); font-size: 9.5px; color: var(--fg-3); padding: 2px 8px; border-radius: 99px; border: 1px solid var(--line-2); background: var(--panel-2); white-space: nowrap; }
+.sim-root .sv-ladrow { display: grid; grid-template-columns: 56px 1fr; gap: 8px; align-items: center; font-family: var(--f-mono); font-size: 10px; padding: 1px 0; }
+
+@keyframes sv-scan { 0%,100% { opacity: .4; } 50% { opacity: 1; } }
+.sim-root .sv-livedot { animation: sv-pulse 2.2s ease-in-out infinite; }
+@keyframes sv-pulse { 0%,100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--live) 55%, transparent); } 50% { box-shadow: 0 0 0 5px transparent; } }
+
+/* ── slide-over (composer + publish) + form bits ──────────────────────────── */
+.so-backdrop { position: fixed; inset: 0; background: rgba(6,6,9,0.5); backdrop-filter: blur(2px); z-index: 60; animation: so-fade .18s ease both; }
+.so-panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 94vw); background: var(--bg-soft); border-left: 1px solid var(--line-2); box-shadow: -30px 0 60px -30px rgba(0,0,0,0.6); z-index: 61; display: flex; flex-direction: column; animation: so-slide .24s cubic-bezier(.2,.7,.3,1) both; color: var(--fg); font-family: var(--f-body); }
+.so-panel.wide { width: min(560px, 96vw); }
+@keyframes so-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes so-slide { from { transform: translateX(20px); opacity: .4; } to { transform: none; opacity: 1; } }
+.so-panel .so-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 18px 20px 14px; border-bottom: 1px solid var(--line); }
+.so-panel .so-body { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 16px; }
+.so-panel .so-foot { padding: 14px 20px; border-top: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--panel); }
+.so-panel .so-x { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line-2); background: transparent; color: var(--fg-3); cursor: pointer; flex: 0 0 auto; }
+.so-panel .so-x:hover { color: var(--fg); border-color: var(--line-3); }
+.so-panel .so-lbl { font-family: var(--f-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-4); display: block; margin-bottom: 7px; }
+.so-panel .so-row { display: flex; flex-direction: column; gap: 0; }
+.so-panel .so-seg { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--panel-2); }
+.so-panel .so-seg button { border: 0; background: transparent; cursor: pointer; border-radius: 6px; padding: 7px 12px; font-family: var(--f-body); font-size: 12px; color: var(--fg-3); }
+.so-panel .so-seg button[data-on] { background: var(--panel-hi); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line-3); }
+.so-panel .so-pill { padding: 6px 11px; border-radius: 99px; cursor: pointer; border: 1px solid var(--line); background: transparent; color: var(--fg-3); font-family: var(--f-mono); font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.so-panel .so-pill[data-on] { border-color: var(--honey-line); background: var(--honey-soft); color: var(--honey); }
+.so-panel .so-chip-x { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; padding: 8px 10px; border-radius: 7px; border: 1px solid var(--line-2); background: var(--panel-2); }
+.so-panel .fb-field, .so-panel .fb-textarea { width: 100%; box-sizing: border-box; padding: 9px 12px; border-radius: var(--radius-sm); border: 1px solid var(--line-2); background: var(--panel-2); color: var(--fg); font-family: var(--f-body); font-size: 12.5px; outline: none; transition: border-color .16s, box-shadow .16s; }
+.so-panel .fb-textarea { resize: vertical; min-height: 64px; font-size: 13px; line-height: 1.5; }
+.so-panel .fb-field:focus, .so-panel .fb-textarea:focus { border-color: var(--honey-line); box-shadow: 0 0 0 3px var(--honey-soft); }
+.so-panel .fb-mono { font-family: var(--f-mono); }
+
+/* run intelligence */
+.sim-root .intel-col { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 13px; }
+.sim-root .intel-li { display: grid; grid-template-columns: auto 1fr; gap: 9px; align-items: start; font-size: 12px; color: var(--fg-2); line-height: 1.45; }
+.sim-root .intel-li + .intel-li { margin-top: 9px; }
+
+/* ── running state (signal/belief/cost/pipeline) ──────────────────────────── */
+.sim-root .fr-run-big { font-family: var(--f-display); font-weight: 600; font-size: 32px; letter-spacing: -0.03em; line-height: 1; color: var(--fg); font-variant-numeric: tabular-nums; }
+.sim-root .fr-run-big .of { color: var(--fg-4); font-size: 18px; font-weight: 600; }
+.sim-root .fr-run-hstat { text-align: right; }
+.sim-root .fr-run-hstat .v { font-family: var(--f-mono); font-size: 15px; font-weight: 600; line-height: 1; }
+.sim-root .fr-run-hstat .k { font-family: var(--f-mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-4); margin-top: 5px; }
+
+.sim-root .fr-phases { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.sim-root .fr-phase { display: flex; gap: 9px; align-items: flex-start; padding: 9px 11px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: color-mix(in srgb, var(--bg) 40%, var(--panel)); }
+.sim-root .fr-phase.active { border-color: color-mix(in srgb, var(--live) 50%, transparent); background: color-mix(in srgb, var(--live) 8%, var(--panel)); }
+.sim-root .fr-phase.done { opacity: .6; }
+.sim-root .fr-phase .pd { flex: 0 0 auto; width: 18px; height: 18px; border-radius: 99px; display: grid; place-items: center; font-family: var(--f-mono); font-size: 9px; font-weight: 700; color: var(--fg-4); border: 1px solid var(--line-2); background: var(--panel-2); }
+.sim-root .fr-phase.active .pd { color: #06231d; background: var(--live); border-color: var(--live); animation: fr-pp 1.5s ease-in-out infinite; }
+.sim-root .fr-phase.done .pd { color: #06231d; background: color-mix(in srgb, var(--live) 75%, #fff); border-color: transparent; }
+.sim-root .fr-phase .pt b { display: block; font-family: var(--f-display); font-size: 11.5px; font-weight: 600; letter-spacing: -0.01em; color: var(--fg-2); }
+.sim-root .fr-phase.active .pt b { color: var(--fg); }
+.sim-root .fr-phase .pt em { font-family: var(--f-mono); font-size: 9px; font-style: normal; color: var(--fg-4); }
+@keyframes fr-pp { 0%,100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--live) 55%, transparent); } 50% { box-shadow: 0 0 0 5px transparent; } }
+
+.sim-root .fr-hex { display: grid; grid-template-columns: repeat(16, 1fr); gap: 4px; }
+.sim-root .fr-hex i { aspect-ratio: 1; border-radius: 3px; background: var(--line-2); display: block; transition: background .3s, box-shadow .3s; }
+.sim-root .fr-hex i.on { background: var(--fc); box-shadow: 0 0 5px color-mix(in srgb, var(--fc) 45%, transparent); }
+.sim-root .fr-hex i.spawn { animation: fr-sp 1.1s ease-in-out infinite; }
+@keyframes fr-sp { 0%,100% { opacity: .26; } 50% { opacity: .6; } }
+
+.sim-root .fr-rmetric { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 11px 12px; }
+.sim-root .fr-rmetric .v { font-family: var(--f-display); font-weight: 600; font-size: 18px; letter-spacing: -0.02em; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sim-root .fr-rmetric .b { font-family: var(--f-mono); font-size: 9.5px; color: var(--fg-4); margin-top: 4px; }
+.sim-root .fr-rmetric .k { font-family: var(--f-mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-4); margin-top: 6px; }
+
+.sim-root .fr-streamline { display: grid; align-items: baseline; font-family: var(--f-mono); padding: 4px 9px; border-radius: 6px; animation: fr-in .34s ease; }
+@keyframes fr-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+.sim-root .fr-locked { border: 1px solid var(--honey-line); border-radius: var(--radius); padding: 14px 16px; background: color-mix(in srgb, var(--honey-fill, var(--honey)) 6%, var(--panel)); display: grid; gap: 11px; }
+.sim-root .fr-skel { height: 9px; border-radius: 5px; background: linear-gradient(90deg, color-mix(in srgb, var(--fg-4) 16%, transparent) 25%, color-mix(in srgb, var(--fg-4) 34%, transparent) 50%, color-mix(in srgb, var(--fg-4) 16%, transparent) 75%); background-size: 200% 100%; animation: fr-shim 1.5s linear infinite; }
+@keyframes fr-shim { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.sim-root .fr-done { border: 1px solid color-mix(in srgb, var(--live) 45%, transparent); border-radius: var(--radius); padding: 14px 16px; background: color-mix(in srgb, var(--live) 8%, var(--panel)); display: flex; align-items: center; gap: 13px; flex-wrap: wrap; }
+
+.sim-root .fr-seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: 99px; overflow: hidden; }
+.sim-root .fr-seg button { font-family: var(--f-mono); font-size: 10.5px; padding: 5px 12px; background: transparent; color: var(--fg-4); border: 0; cursor: pointer; letter-spacing: .04em; }
+.sim-root .fr-seg button[data-on] { background: color-mix(in srgb, var(--live) 16%, transparent); color: var(--live); }
+
+@media (prefers-reduced-motion: reduce) { .sim-root .fr-phase.active .pd, .sim-root .fr-hex i.spawn, .sim-root .fr-skel, .sim-root .fr-streamline { animation: none; } }

@@ -1,21 +1,41 @@
-import { DEFAULT_BASE_HIVE_TOKEN_ADDRESS } from "@/lib/config/hive-staking";
+import { createPublicClient, custom, encodeFunctionData, fallback, http, parseUnits, webSocket } from "viem";
+import type { Address } from "viem";
+import {
+  BASE_CHAIN_ID_HEX,
+  BASE_HIVE_READ_RPC_URLS,
+  DEFAULT_BASE_HIVE_TOKEN_ADDRESS,
+  isHiveEvmAddress,
+} from "@/lib/config/hive-staking";
+import { base } from "@/lib/services/wallet/base-chain";
 
 export type BrowserEthereumProvider = {
   request: (input: { method: string; params?: unknown[] }) => Promise<unknown>;
 };
 
-export const BASE_CHAIN_ID_HEX = "0x2105";
+export { BASE_CHAIN_ID_HEX } from "@/lib/config/hive-staking";
 
-const HIVE_ERC20_APPROVE_ABI = [{
-  type: "function",
-  name: "approve",
-  stateMutability: "nonpayable",
-  inputs: [
-    { name: "spender", type: "address" },
-    { name: "amount", type: "uint256" },
-  ],
-  outputs: [{ name: "", type: "bool" }],
-}] as const;
+const HIVE_ERC20_ABI = [
+  {
+    type: "function",
+    name: "allowance",
+    stateMutability: "view",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" },
+    ],
+    outputs: [{ name: "amount", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "approve",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+] as const;
 
 const HIVE_STAKE_ABI = [{
   type: "function",
@@ -25,8 +45,8 @@ const HIVE_STAKE_ABI = [{
   outputs: [],
 }] as const;
 
-export function isEvmAddress(value: string): value is `0x${string}` {
-  return /^0x[a-fA-F0-9]{40}$/.test(value);
+export function isEvmAddress(value: string): value is Address {
+  return isHiveEvmAddress(value);
 }
 
 export function shortenEvmAddress(address: string) {
@@ -52,7 +72,7 @@ export async function switchBrowserWalletToBase(provider: BrowserEthereumProvide
         chainId: BASE_CHAIN_ID_HEX,
         chainName: "Base",
         nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-        rpcUrls: ["https://mainnet.base.org"],
+        rpcUrls: walletHttpRpcUrls(),
         blockExplorerUrls: ["https://basescan.org"],
       }],
     });
@@ -81,25 +101,37 @@ export async function stakeHiveWithBrowserWallet(params: {
   }
 
   await switchBrowserWalletToBase(params.provider);
-  const { encodeFunctionData, parseUnits } = await import("viem");
   const amountRaw = parseUnits(params.amountText, params.decimals ?? 18);
 
   params.onStatus?.("Approve HIVE staking in your wallet...");
-  const approveHash = await params.provider.request({
+  const approvalResult = await params.provider.request({
     method: "eth_sendTransaction",
     params: [{
       from,
       to: params.tokenAddress,
       data: encodeFunctionData({
-        abi: HIVE_ERC20_APPROVE_ABI,
+        abi: HIVE_ERC20_ABI,
         functionName: "approve",
         args: [params.stakingAddress, amountRaw],
       }),
     }],
   });
+  const approveHash = typeof approvalResult === "string" ? approvalResult : "";
+  if (!approveHash) throw new Error("Wallet did not return a HIVE approval transaction hash.");
 
-  params.onStatus?.(`Approval sent${typeof approveHash === "string" ? ` (${shortenEvmAddress(approveHash)})` : ""}. Confirm stake...`);
-  const stakeHash = await params.provider.request({
+  params.onStatus?.(`Approval sent (${shortenEvmAddress(approveHash)}). Waiting for confirmation...`);
+  await waitForBrowserWalletReceipt(params.provider, approveHash, "approval");
+  params.onStatus?.("Approval confirmed. Waiting for wallet RPC to read allowance...");
+  await waitForBrowserWalletAllowance({
+    provider: params.provider,
+    owner: from,
+    tokenAddress: params.tokenAddress,
+    spender: params.stakingAddress,
+    amountRaw,
+  });
+
+  params.onStatus?.("Allowance confirmed. Confirm stake in your wallet...");
+  const stakeResult = await params.provider.request({
     method: "eth_sendTransaction",
     params: [{
       from,
@@ -111,9 +143,94 @@ export async function stakeHiveWithBrowserWallet(params: {
       }),
     }],
   });
+  const stakeHash = typeof stakeResult === "string" ? stakeResult : "";
+  if (!stakeHash) throw new Error("Wallet did not return a HIVE stake transaction hash.");
+
+  params.onStatus?.(`Stake sent (${shortenEvmAddress(stakeHash)}). Waiting for confirmation...`);
+  await waitForBrowserWalletReceipt(params.provider, stakeHash, "stake");
+  params.onStatus?.("Stake confirmed.");
 
   return {
-    approveHash: typeof approveHash === "string" ? approveHash : "",
-    stakeHash: typeof stakeHash === "string" ? stakeHash : "",
+    approveHash,
+    stakeHash,
   };
+}
+
+function createHiveStakingBrowserClient(provider: BrowserEthereumProvider) {
+  const readTransports = BASE_HIVE_READ_RPC_URLS.map((url) => {
+    const options = { retryCount: 1, timeout: 10_000 };
+    return url.startsWith("wss://") ? webSocket(url, options) : http(url, options);
+  });
+  return createPublicClient({
+    chain: base,
+    transport: fallback([custom(provider), ...readTransports], {
+      rank: false,
+      retryCount: 1,
+    }),
+  });
+}
+
+function walletHttpRpcUrls() {
+  return BASE_HIVE_READ_RPC_URLS.filter((url) => url.startsWith("http"));
+}
+
+async function waitForBrowserWalletReceipt(provider: BrowserEthereumProvider, txHash: string, label: "approval" | "stake") {
+  const timeoutMs = 120_000;
+  const pollMs = 2_000;
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const receipt = await provider.request({
+      method: "eth_getTransactionReceipt",
+      params: [txHash],
+    }).catch(() => null);
+
+    if (receipt && typeof receipt === "object") {
+      const status = "status" in receipt ? receipt.status : undefined;
+      if (receiptStatusFailed(status)) {
+        throw new Error(`HIVE ${label} transaction failed.`);
+      }
+      return;
+    }
+
+    await sleep(pollMs);
+  }
+
+  throw new Error(`HIVE ${label} transaction is still pending. Wait for it to confirm, then refresh this page.`);
+}
+
+async function waitForBrowserWalletAllowance(params: {
+  provider: BrowserEthereumProvider;
+  owner: Address;
+  tokenAddress: Address;
+  spender: Address;
+  amountRaw: bigint;
+}) {
+  const timeoutMs = 90_000;
+  const pollMs = 2_000;
+  const startedAt = Date.now();
+  const client = createHiveStakingBrowserClient(params.provider);
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const allowance = await client.readContract({
+      address: params.tokenAddress,
+      abi: HIVE_ERC20_ABI,
+      functionName: "allowance",
+      args: [params.owner, params.spender],
+    }).catch(() => null);
+
+    if (allowance != null && allowance >= params.amountRaw) return;
+    await sleep(pollMs);
+  }
+
+  throw new Error("HIVE approval confirmed, but the wallet RPC has not returned the updated allowance yet. Refresh and press Stake again.");
+}
+
+function receiptStatusFailed(status: unknown) {
+  if (status === false || status === 0 || status === BigInt(0)) return true;
+  return typeof status === "string" && ["0", "0x0"].includes(status.toLowerCase());
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

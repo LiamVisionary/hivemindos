@@ -6,7 +6,7 @@ import { dirname, join, resolve } from "path";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { sanitizeGitLawbProof } from "@/lib/services/gitlawb/gitlawb-service";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
-import type { GitLawbProof, GitLawbRepoLink, HivemindProject, ProjectRegistry } from "@/lib/types/gitlawb";
+import type { AppBuilderProjectReference, GitLawbProof, GitLawbRepoLink, HivemindProject, ProjectRegistry } from "@/lib/types/gitlawb";
 
 const VAULT_PROJECTS_FILE = join("Operations", "Code Projects", "projects.json");
 const LOCAL_PROJECTS_FILE = join(homedir(), ".hivemindos", "projects.json");
@@ -57,10 +57,34 @@ function normalizeProject(value: unknown): HivemindProject | null {
     localPath: cleanOptional(item.localPath),
     vaultNotePath: cleanOptional(item.vaultNotePath),
     preferredMachineKey: cleanOptional(item.preferredMachineKey),
+    appBuilder: normalizeAppBuilderReference(item.appBuilder),
     gitlawbRepo: item.gitlawbRepo && typeof item.gitlawbRepo === "object" ? normalizeRepoLink(item.gitlawbRepo) : undefined,
     allowedAgentIds: Array.isArray(item.allowedAgentIds) ? item.allowedAgentIds.filter((agentId): agentId is string => typeof agentId === "string" && Boolean(agentId.trim())) : [],
     createdAt: positiveNumber(item.createdAt) ?? now,
     updatedAt: positiveNumber(item.updatedAt) ?? now,
+  };
+}
+
+function normalizeAppBuilderReference(value: unknown): AppBuilderProjectReference | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const item = value as Partial<AppBuilderProjectReference>;
+  const backend = item.backend === "local" || item.backend === "managed" ? item.backend : undefined;
+  const contractVersion = cleanOptional(item.contractVersion);
+  const status = ["creating", "stopped", "starting", "running", "stopping", "error"].includes(String(item.status))
+    ? item.status as AppBuilderProjectReference["status"]
+    : undefined;
+  const templateId = item.templateId === "nextjs" || item.templateId === "static" ? item.templateId : undefined;
+  if (!backend || !contractVersion || !templateId || !status) return undefined;
+  return {
+    backend,
+    contractVersion,
+    templateId,
+    status,
+    localProjectId: cleanOptional(item.localProjectId),
+    managedAgentId: cleanOptional(item.managedAgentId),
+    managedProjectId: cleanOptional(item.managedProjectId),
+    hostingSiteId: cleanOptional(item.hostingSiteId),
+    hostingUrl: cleanOptional(item.hostingUrl),
   };
 }
 

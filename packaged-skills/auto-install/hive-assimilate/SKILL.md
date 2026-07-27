@@ -35,7 +35,7 @@ When there is no pinned source:
 2. Search the shared brain with `hive-brain answer "<query>" --scope full-vault` before relying on prior context. Use `hive-brain recall "<query>" --scope full-vault --limit 8` when a hit list is more useful than a synthesized answer.
 3. If the task is about choosing available hive capabilities, load and use `hive-capability-search` from the shared skill shelf when available.
 4. Search the current project and any user-supplied project folders with `rg`, `rg --files`, docs, tests, and existing implementation paths.
-5. Search local/private assimilation indexes with `search_assimilation_index.py` when available.
+5. Search local/private assimilation indexes with `search_assimilation_index.py` when available. Before trusting a no-results answer, confirm the index exists and is fresh (`~/.codex/hive-assimilate/index/chunks.jsonl`, legacy `~/.codex/github-assimilator/index/chunks.jsonl`); a missing or stale index returns empty for everything. Re-index relevant repos with `index_github_repos.py` or fall back to bounded `rg` over project roots, and query with short capability keywords instead of the full request sentence.
 6. Search known user project roots only when relevant and bounded, such as `~/Documents/code/projects`, `~/Developer`, or a root named by the user. Avoid secret folders, vendored dependency folders, build outputs, and large binary trees.
 7. Search public GitHub live for the request and likely implementation terms.
 8. Rank candidates by task fit, pinned/user preference, safety, license compatibility, freshness, star count for public GitHub candidates, assimilation cost, and stack compatibility.
@@ -105,6 +105,15 @@ python3 /Users/liam/.codex/skills/hive-assimilate/scripts/search_assimilation_in
   "expo react native chatbot talking anime character voice"
 ```
 
+Check index freshness before treating local no-results as meaningful:
+
+```bash
+ls -l ~/.codex/hive-assimilate/index/chunks.jsonl \
+  ~/.codex/github-assimilator/index/chunks.jsonl
+```
+
+A tiny or months-old index silently starves every later run; in the June 2026 hivemind-os log, 8 of 15 local searches returned zero against a 17 KB index untouched for a month. Re-index before concluding the hive has nothing.
+
 Search public GitHub live and write candidate notes:
 
 ```bash
@@ -171,6 +180,13 @@ Verify the manifest before finalizing:
 python3 /Users/liam/.codex/skills/hive-assimilate/scripts/verify_assimilation_manifest.py
 ```
 
+Manifest rules:
+
+- Always pass `--request` to `write_assimilation_manifest.py` so the manifest event joins the run's other log entries.
+- The default output overwrites any existing `ASSIMILATION.json`. When the target project accumulates manifests from different requests, write `--output ASSIMILATION.<task-slug>.json` and verify that same file with `verify_assimilation_manifest.py ASSIMILATION.<task-slug>.json`.
+- Verification is not optional, and the verifier requires at least 3 substantive code/config entries. When genuine reuse is narrower than that, do not skip verification silently: log a `verification` event with decision `below-threshold` plus the reason, so the gap stays visible for review.
+- The verify script does not log on its own; record its pass/fail as a `verification` log event.
+
 ## Assimilation Logging
 
 Every build that uses this skill must leave two local logs in the target project:
@@ -211,11 +227,22 @@ Keep logs compact and structured:
 - Use notes only for short human context; the logger truncates long notes and descriptions by design.
 - A failed logger write is a failed prebuild gate. Fix the log error instead of silently continuing.
 - Normalize candidate decisions to a small vocabulary such as `selected`, `selected-donor`, `rejected`, `inspected`, `adapted_code`, `copied_code`, `not-assimilated`, or `reference-only`.
+- Keep `--phase` in a fixed vocabulary: `triage`, `shared-brain`, `local-search`, `public-search`, `prebuild-gate`, `audit`, `implementation`, `correction`, `verification`, `asset-reuse`, `assimilation-manifest`, `final`. Put the sub-topic of a follow-up tweak in `--note`, not in a new one-off phase; 67 invented phases such as `chat-composer-focus-ring-followup` made the June 2026 log nearly unanalyzable by machine.
+- Keep `--decision` in the same small vocabulary as candidate decisions. Never a sentence; summaries belong in `--reason` or `--note`.
+- Pass the same verbatim `--request` on every log call for a build — searches, follow-ups, and the manifest — so events group into one run. Empty or re-worded requests make events unattributable (observed: 21 of 48 manifest events had no request).
+- Never hand-append to `ASSIMILATION_LOG.jsonl` or `ASSIMILATION_LOG.md`; always write through `log_assimilation_decision.py`. Hand-appended entries introduced list-typed fields, camelCase keys, and out-of-order timestamps.
+- Log searches at the moment they run. A run whose log shows concrete reuse but zero search events fails this skill's log contract even when the reuse is real.
 
 Final answers for build tasks must include:
 
 - `Assimilated code`: concrete source repos/paths/notes and target files.
 - `Assimilation log`: `ASSIMILATION_LOG.md` plus important rejected candidates or unresolved search gaps.
+
+## Failure Recovery
+
+- A `blocked` prebuild gate is a step, not an ending. Broaden with `--max-queries 8 --per-query-limit 12 --min-fit-score 4`, decompose the request into capability sub-queries, and fall back to shared-brain and local-project reuse. If everything still misses, log an explicit `custom-implementation` decision listing the failed searches. Never leave `blocked` as a run's final search event.
+- When a repo-wide gate (full typecheck, size checks) is blocked by pre-existing unrelated diagnostics, run focused touched-path checks instead and state exactly what was and was not verified.
+- When live verification is blocked by the environment — app auth or token locks, browser URL policy, missing browsers, sandbox network denials — log the blocker once with a short canonical reason and name the check as user-verifiable. Before re-attempting an expensive verification path, grep the existing `ASSIMILATION_LOG.md` for the same blocker first: the June 2026 hivemind-os log re-discovered the same four environment blockers every day for a week.
 
 ## Minimum Concrete Reuse Threshold
 

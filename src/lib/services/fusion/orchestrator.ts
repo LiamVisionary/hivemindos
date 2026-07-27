@@ -7,6 +7,7 @@ import {
   extractQuestion,
   parseJudgeAnalysis,
 } from "./prompts";
+import { numberEnv } from "@/lib/config/env";
 import type { FusionAgentConfig } from "@/lib/types/agent-runtime";
 import type {
   FusionAnalysis,
@@ -44,6 +45,10 @@ export type RunFusionResult = {
 
 const JUDGE_TIMEOUT_MS = 60_000;
 const MEMBER_TIMEOUT_MS = 90_000;
+/** Successful panel responses that count as quorum (the judge accepts >=2). */
+const PANEL_QUORUM_SUCCESSES = 2;
+/** How long stragglers get after quorum before the panel releases without them. */
+const PANEL_STRAGGLER_GRACE_MS = 15_000;
 
 function withSystem(systemPrompt: string | undefined, messages: FusionMessage[]): FusionMessage[] {
   const trimmed = systemPrompt?.trim();
@@ -101,6 +106,105 @@ async function runMember(
       latencyMs: Date.now() - startedAt,
     };
   }
+}
+
+/**
+ * Fan out to the panel, releasing the barrier at quorum: once >=2 members
+ * succeed (or all-but-one settled with at least one success — requiring one
+ * success keeps a slow sole survivor from being cut into a guaranteed
+ * all-fail), stragglers get a bounded grace window instead of holding the
+ * user-facing answer for the full member timeout + retry (~181s). Unfinished
+ * members are marked timed-out (ok:false) in both their member.done event and
+ * the returned results, so participantsSucceeded/participantsTotal stay
+ * honest. A straggler that resolves after release is swallowed — its
+ * member.done was already emitted as timed-out, so emitting again would break
+ * the one-member.done-per-member contract.
+ */
+async function runPanelWithQuorumRelease(
+  call: FusionCaller,
+  participants: ResolvedFusionMember[],
+  messages: FusionMessage[],
+  signal: AbortSignal | undefined,
+  emit: (event: FusionEvent) => void,
+): Promise<FusionParticipantResult[]> {
+  const graceMs = Math.max(0, numberEnv("HIVEMINDOS_FUSION_STRAGGLER_GRACE_MS", PANEL_STRAGGLER_GRACE_MS));
+  const startedAt = Date.now();
+  const settled: Array<FusionParticipantResult | undefined> = participants.map(() => undefined);
+  let released = false;
+
+  for (const member of participants) emit({ type: "member.start", id: member.id, label: member.label });
+
+  const pending = participants.map((member, index) =>
+    runMember(call, member, messages, signal).then((result) => {
+      if (released) return;
+      settled[index] = result;
+      emit({
+        type: "member.done",
+        id: result.member.id,
+        label: result.member.label,
+        ok: result.ok,
+        chars: result.text.length,
+        latencyMs: result.latencyMs,
+        error: result.error,
+      });
+    }),
+  );
+
+  await new Promise<void>((resolve) => {
+    let settledCount = 0;
+    let successCount = 0;
+    let graceTimer: ReturnType<typeof setTimeout> | undefined;
+    const release = () => {
+      if (graceTimer !== undefined) clearTimeout(graceTimer);
+      resolve();
+    };
+    const onSettled = (ok: boolean) => {
+      settledCount += 1;
+      if (ok) successCount += 1;
+      if (settledCount >= participants.length) {
+        release();
+        return;
+      }
+      const quorum =
+        successCount >= PANEL_QUORUM_SUCCESSES ||
+        (settledCount >= participants.length - 1 && successCount >= 1);
+      if (quorum && graceTimer === undefined) graceTimer = setTimeout(release, graceMs);
+    };
+    for (let i = 0; i < pending.length; i += 1) {
+      // The assignment handler above runs first on the same chain, so
+      // settled[i] is populated by the time this counts it. Count rejections
+      // too: emit can throw (the SSE controller throws on enqueue once the
+      // client disconnects mid-panel), which rejects the chain AFTER
+      // settled[i] was assigned — without the rejection arm the barrier
+      // never resolves, runFusion hangs forever, and route-stream's finally
+      // never finalizes the runtime chat session.
+      const countSettled = () => onSettled(Boolean(settled[i]?.ok));
+      void pending[i].then(countSettled, countSettled);
+    }
+  });
+  released = true;
+
+  return participants.map((member, index) => {
+    const result = settled[index];
+    if (result) return result;
+    const timedOut: FusionParticipantResult = {
+      member,
+      ok: false,
+      text: "",
+      error: `Panel released at quorum; no response within the ${graceMs}ms straggler grace.`,
+      latencyMs: Date.now() - startedAt,
+    };
+    emit({
+      type: "member.done",
+      id: member.id,
+      label: member.label,
+      ok: false,
+      chars: 0,
+      latencyMs: timedOut.latencyMs,
+      error: timedOut.error,
+    });
+    return timedOut;
+  });
 }
 
 /**
@@ -163,23 +267,7 @@ export async function runFusion(input: RunFusionInput): Promise<RunFusionResult>
   emit({ type: "plan", plan: planMeta(plan, [], false) });
   const panelMessages = withSystem(input.systemPrompt, input.messages);
 
-  for (const member of plan.participants) emit({ type: "member.start", id: member.id, label: member.label });
-  const settled = await Promise.all(
-    plan.participants.map((member) =>
-      runMember(call, member, panelMessages, input.signal).then((result) => {
-        emit({
-          type: "member.done",
-          id: result.member.id,
-          label: result.member.label,
-          ok: result.ok,
-          chars: result.text.length,
-          latencyMs: result.latencyMs,
-          error: result.error,
-        });
-        return result;
-      }),
-    ),
-  );
+  const settled = await runPanelWithQuorumRelease(call, plan.participants, panelMessages, input.signal, emit);
 
   const succeeded = settled.filter((result) => result.ok);
   if (!succeeded.length) {
@@ -195,19 +283,41 @@ export async function runFusion(input: RunFusionInput): Promise<RunFusionResult>
   if (plan.judge && succeeded.length >= 2) {
     emit({ type: "judge.start", label: plan.judge.label });
     try {
-      const judgeResult = await call(
-        plan.judge,
-        [
-          { role: "system", content: JUDGE_SYSTEM_PROMPT },
-          { role: "user", content: buildJudgeUserPrompt(question, succeeded) },
-        ],
-        { signal: input.signal, timeoutMs: JUDGE_TIMEOUT_MS, temperature: 0 },
-      );
-      analysis = parseJudgeAnalysis(judgeResult.text);
-      judged = true;
-      emit({ type: "judge.done", analysis });
-      const summary = analysisSummary(analysis);
-      if (summary) emit({ type: "reasoning", delta: `${summary}\n` });
+      const judgeMessages: FusionMessage[] = [
+        { role: "system", content: JUDGE_SYSTEM_PROMPT },
+        { role: "user", content: buildJudgeUserPrompt(question, succeeded) },
+      ];
+      const judgeOptions = { signal: input.signal, timeoutMs: JUDGE_TIMEOUT_MS, temperature: 0 };
+      let judgeText = (await call(plan.judge, judgeMessages, judgeOptions)).text;
+      let parsed = parseJudgeAnalysis(judgeText);
+      // `raw` is only set when the reply fell back to unparseable prose (an
+      // empty reply falls back too, with raw undefined — hence the trim check).
+      // Retry exactly once with a corrective nudge before giving up.
+      if (parsed.raw !== undefined || !judgeText.trim()) {
+        judgeText = (
+          await call(
+            plan.judge,
+            [
+              ...judgeMessages,
+              { role: "assistant", content: judgeText },
+              { role: "user", content: "Return ONLY the JSON object described above — no prose, no markdown fences." },
+            ],
+            judgeOptions,
+          )
+        ).text;
+        parsed = parseJudgeAnalysis(judgeText);
+      }
+      if (parsed.raw !== undefined || !judgeText.trim()) {
+        // The judging stage did not actually happen; leave judged=false so
+        // meta and telemetry stay honest instead of reporting prose as analysis.
+        emit({ type: "judge.skipped", reason: "Judge did not return parseable JSON after a retry; synthesizing without cross-response analysis." });
+      } else {
+        analysis = parsed;
+        judged = true;
+        emit({ type: "judge.done", analysis });
+        const summary = analysisSummary(analysis);
+        if (summary) emit({ type: "reasoning", delta: `${summary}\n` });
+      }
     } catch (error) {
       emit({ type: "judge.skipped", reason: error instanceof Error ? error.message : String(error) });
     }

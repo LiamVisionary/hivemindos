@@ -22,6 +22,11 @@ warn() { printf "\033[1;33m!\033[0m %s\n" "$*"; }
 fail() { printf "\033[1;31m✗\033[0m %s\n" "$*"; }
 
 missing=()
+optional_setup_issues=()
+
+optional_setup_issue() {
+  optional_setup_issues+=("$1")
+}
 
 prompt_yes_no() {
   local prompt="$1"
@@ -253,7 +258,7 @@ Options:
   --no-shared-skills            Seed the shared shelf only; do not import from or advertise to agents.
   --non-interactive             Do not prompt. Uses explicit flags/env or safe defaults.
   --interactive                 Force prompts when running in a TTY.
-  --skip-deps                   Skip pnpm install.
+  --skip-deps                   Skip the workspace pnpm install.
   --build                       Run a production Next.js build during setup.
   --skip-build                  Deprecated no-op; production builds are skipped by default.
   --skip-collector              Skip collector service installation/restart.
@@ -675,6 +680,30 @@ tailscale_auth_url_from_output() {
   awk '/https:\/\/login\.tailscale\.com\/a\// { print $1; exit }'
 }
 
+copy_hivemind_auth_url_to_clipboard() {
+  local auth_url="$1"
+  if command -v pbcopy >/dev/null 2>&1; then
+    printf "%s" "$auth_url" | pbcopy
+  elif command -v wl-copy >/dev/null 2>&1; then
+    printf "%s" "$auth_url" | wl-copy
+  elif command -v xclip >/dev/null 2>&1; then
+    printf "%s" "$auth_url" | xclip -selection clipboard
+  else
+    return 1
+  fi
+}
+
+print_hivemind_fleet_auth_instructions() {
+  local auth_url="$1"
+  echo "1. Open this URL on your main HivemindOS hub, or on any device signed into the same Tailscale account as that hub:"
+  printf "  %s\n" "$auth_url"
+  if copy_hivemind_auth_url_to_clipboard "$auth_url"; then
+    echo "   The URL was copied to this machine's clipboard."
+  fi
+  echo "2. Approve this machine in Tailscale."
+  echo "3. Return to the Hive Fleet on the main hub. This machine will appear automatically after the connection is ready."
+}
+
 wait_for_tailscale_running() {
   local formula_cli="$1"
   local seconds="${2:-180}"
@@ -736,7 +765,7 @@ connect_existing_tailscale_cli() {
   auth_url="$(printf "%s\n" "$output" | tailscale_auth_url_from_output)"
   if [[ -n "$auth_url" ]]; then
     warn "Tailscale sign-in required."
-    printf "Open this URL on any device to sign in:\n  %s\n" "$auth_url"
+    print_hivemind_fleet_auth_instructions "$auth_url"
     wait_for_tailscale_auth_confirmation
     if wait_for_tailscale_running "$cli" 180; then
       return 0
@@ -758,7 +787,7 @@ connect_homebrew_tailscaled() {
   auth_url="$(printf "%s\n" "$output" | tailscale_auth_url_from_output)"
   if [[ -n "$auth_url" ]]; then
     warn "Tailscale sign-in required."
-    printf "Open this URL on any device to sign in:\n  %s\n" "$auth_url"
+    print_hivemind_fleet_auth_instructions "$auth_url"
     wait_for_tailscale_auth_confirmation
     if wait_for_tailscale_running "$formula_cli" 180; then
       return 0
@@ -1190,7 +1219,7 @@ install_hive_env_add() {
   local bin_dir="${HOME}/.local/bin"
   local command_name command_path script_path
   mkdir -p "$bin_dir"
-  for command_name in hive-env-add hive-env-remove hive-env-delete hive-env-run hive-env-check hive-transfer hive-handoff hivemind-mcp hive-update hive-brain hive-brain-hook hive-pulse; do
+  for command_name in hive-env-add hive-env-remove hive-env-delete hive-env-run hive-env-check hive-transfer hive-handoff hivemind-mcp hive-update hive-brain hive-brain-hook hive-workspace hive-workspace-switch hive-workspace-add hive-pulse hive-quant-research hive-capability-search dashboard-auth; do
     command_path="$bin_dir/$command_name"
     script_path="$ROOT/scripts/$command_name"
     chmod +x "$script_path"
@@ -1214,7 +1243,7 @@ run_helper() {
 }
 
 run_helper "$ROOT" "\$@" || true
-for root in "\$PWD" "\$HOME/hivemindos" "\$HOME/omni-agent-hivemind" "\$HOME/Documents/code/projects/hivemind-os"; do
+for root in "\$PWD" "\$HOME/hivemindos" "\$HOME/hivemind-os" "\$HOME/Documents/code/projects/hivemind-os"; do
   run_helper "\$root" "\$@" || true
 done
 found="\$(find "\$HOME" -maxdepth 6 -type f -path "*/scripts/\$command_name" 2>/dev/null | head -1 || true)"
@@ -1230,7 +1259,7 @@ EOF
   done
   case ":$PATH:" in
     *":$bin_dir:"*) ;;
-    *) warn "Add $bin_dir to PATH to run hive-env-add, hive-env-remove, hive-env-delete, hive-env-run, hive-env-check, hive-transfer, hive-handoff, hivemind-mcp, hive-update, hive-brain, hive-brain-hook, and hive-pulse from any folder" ;;
+    *) warn "Add $bin_dir to PATH to run hive-env-add, hive-env-remove, hive-env-delete, hive-env-run, hive-env-check, hive-transfer, hive-handoff, hivemind-mcp, hive-update, hive-brain, hive-brain-hook, hive-workspace, hive-workspace-switch, hive-workspace-add, hive-pulse, hive-quant-research, hive-capability-search, and dashboard-auth from any folder" ;;
   esac
 }
 install_pnpm_if_missing() {
@@ -1241,17 +1270,22 @@ install_pnpm_if_missing() {
   fi
   if command -v corepack >/dev/null 2>&1; then
     if ! setup_is_interactive || prompt_yes_no "pnpm is missing. Enable pnpm through Corepack now?" "yes"; then
-      info "pnpm not found; enabling pnpm through corepack"
-      corepack enable
-      corepack prepare pnpm@8.6.12 --activate
-      ok "pnpm enabled: $(pnpm_version)"
-      return 0
+      info "pnpm not found; preparing pnpm through Corepack"
+      corepack prepare pnpm@8.6.12 --activate >/dev/null 2>&1 || true
+      if corepack pnpm --version >/dev/null 2>&1; then
+        ok "pnpm available through Corepack: $(corepack pnpm --version)"
+        return 0
+      fi
+      warn "Corepack could not start pnpm; trying a user-local npm install"
     fi
   fi
   if command -v npm >/dev/null 2>&1; then
-    if setup_is_interactive && prompt_yes_no "pnpm is missing. Install pnpm globally with npm now?" "yes"; then
-      info "Installing pnpm with npm"
-      npm install -g pnpm
+    if ! setup_is_interactive || prompt_yes_no "pnpm is missing. Install pnpm for this user with npm now?" "yes"; then
+      local npm_user_prefix="${NPM_CONFIG_PREFIX:-$HOME/.npm-global}"
+      info "Installing pnpm for this user with npm"
+      mkdir -p "$npm_user_prefix"
+      NPM_CONFIG_PREFIX="$npm_user_prefix" npm install -g pnpm
+      export PATH="$npm_user_prefix/bin:$PATH"
       ok "pnpm installed: $(pnpm_version)"
       return 0
     fi
@@ -1333,6 +1367,19 @@ configure_shared_skills() {
   targets="$(normalize_agent_list "${targets:-none}")"
   info "→ Syncing the shared skill shelf and installing agent hooks… (this can take a moment)"
   ./scripts/seed-shared-skills.sh --import-sources "$imports" --share-targets "$targets"
+  # Push the full bundled brain (skills, packaged skills, and the For Users /
+  # For Investors docs) into the vault through the same checksum-managed engine
+  # that the update path uses, so setup and update stay consistent.
+  node "$ROOT/scripts/hive-brain-sync.mjs" --content-base "$ROOT" || warn "Brain sync reported issues; the shared shelf is still seeded"
+  # Tools, not just skills: register the HivemindOS MCP server into each targeted
+  # harness so its agents get HivemindOS tools (fleet, brain, crypto read/prepare,
+  # and the governed send/swap/stock execute tools) regardless of runtime. The
+  # device token stays out of the harness config — the server reads it from the
+  # checkout via HIVE_ENV_PROJECT_ROOT. Only installed harnesses are touched.
+  if [[ "$targets" != "none" ]]; then
+    info "→ Registering the HivemindOS MCP tool server into installed agent harnesses…"
+    node "$ROOT/scripts/register-mcp-clients.mjs" --targets "$targets" || warn "MCP client registration reported issues; harness tools may need a manual re-run"
+  fi
 }
 
 tailnet_peer_collector_urls() {
@@ -1546,11 +1593,21 @@ process.stdin.on("end", () => {
 install_node_if_missing || true
 
 load_homebrew_shellenv || true
-install_pnpm_if_missing || true
+needs_pnpm="false"
+if [[ "$CLI_COLLECTOR_ONLY" != "true" ]]; then
+  if [[ "$CLI_SKIP_DEPS" != "true" || "$CLI_BUILD_DASHBOARD" == "true" || "$CLI_SKIP_DASHBOARD" != "true" ]]; then
+    needs_pnpm="true"
+  fi
+fi
+if [[ "$needs_pnpm" == "true" ]]; then
+  install_pnpm_if_missing || true
 
-if command -v corepack >/dev/null 2>&1; then
-  corepack prepare pnpm@8.6.12 --activate >/dev/null 2>&1 || true
-  refresh_tool_paths
+  if command -v corepack >/dev/null 2>&1; then
+    corepack prepare pnpm@8.6.12 --activate >/dev/null 2>&1 || true
+    refresh_tool_paths
+  fi
+else
+  ok "Skipping pnpm setup; no workspace install, build, or dev dashboard requested"
 fi
 
 tailscale_ip=""
@@ -1689,6 +1746,79 @@ random_dashboard_secret() {
   node -e 'console.log(require("node:crypto").randomBytes(32).toString("hex"))'
 }
 
+install_gitlawb_github_release() {
+  local install_dir="$1"
+  local version="${GITLAWB_FALLBACK_VERSION:-v0.3.8}"
+  local platform="" asset="" temp_dir="" base_url=""
+  case "$(uname -s):$(uname -m)" in
+    Linux:x86_64|Linux:amd64) platform="x86_64-unknown-linux-musl" ;;
+    Linux:aarch64|Linux:arm64) platform="aarch64-unknown-linux-musl" ;;
+    Darwin:x86_64|Darwin:amd64) platform="x86_64-apple-darwin" ;;
+    Darwin:arm64|Darwin:aarch64) platform="aarch64-apple-darwin" ;;
+    *) return 1 ;;
+  esac
+  asset="gitlawb-${version}-${platform}.tar.gz"
+  base_url="https://github.com/gitlawb/releases/releases/download/${version}"
+  temp_dir="$(mktemp -d)"
+  if ! curl -fsSL "$base_url/$asset" -o "$temp_dir/$asset" 2>/dev/null \
+    || ! curl -fsSL "$base_url/$asset.sha256" -o "$temp_dir/$asset.sha256" 2>/dev/null; then
+    rm -rf "$temp_dir"
+    return 1
+  fi
+  if command -v sha256sum >/dev/null 2>&1; then
+    (cd "$temp_dir" && sha256sum -c "$asset.sha256" >/dev/null 2>&1) || { rm -rf "$temp_dir"; return 1; }
+  elif command -v shasum >/dev/null 2>&1; then
+    (cd "$temp_dir" && shasum -a 256 -c "$asset.sha256" >/dev/null 2>&1) || { rm -rf "$temp_dir"; return 1; }
+  else
+    rm -rf "$temp_dir"
+    return 1
+  fi
+  tar -xzf "$temp_dir/$asset" -C "$temp_dir"
+  local gl_bin remote_bin
+  gl_bin="$(find "$temp_dir" -type f -name gl | head -1)"
+  remote_bin="$(find "$temp_dir" -type f -name git-remote-gitlawb | head -1)"
+  if [[ -z "$gl_bin" || -z "$remote_bin" ]]; then
+    rm -rf "$temp_dir"
+    return 1
+  fi
+  mkdir -p "$install_dir"
+  cp "$gl_bin" "$install_dir/gl"
+  cp "$remote_bin" "$install_dir/git-remote-gitlawb"
+  chmod 755 "$install_dir/gl" "$install_dir/git-remote-gitlawb"
+  rm -rf "$temp_dir"
+}
+
+configure_openclaw_codex_plugin_trust() {
+  refresh_tool_paths
+  command -v openclaw >/dev/null 2>&1 || return 0
+  openclaw plugins inspect codex --json >/dev/null 2>&1 || return 0
+  local current_allow next_allow
+  current_allow="$(openclaw config get plugins.allow --json 2>/dev/null || printf '[]')"
+  if node -e '
+    try {
+      const value = JSON.parse(process.argv[1]);
+      process.exit(Array.isArray(value) && value.includes("codex") ? 0 : 1);
+    } catch { process.exit(1); }
+  ' "$current_allow"; then
+    return 0
+  fi
+  next_allow="$(node -e '
+    let value = [];
+    try { value = JSON.parse(process.argv[1]); } catch {}
+    const current = Array.isArray(value) ? value.filter((item) => typeof item === "string" && item.trim()).map((item) => item.trim()) : [];
+    process.stdout.write(JSON.stringify([...new Set([...current, "codex"])]));
+  ' "$current_allow")"
+  if openclaw config set plugins.allow "$next_allow" --strict-json >/dev/null 2>&1; then
+    mkdir -p "$HOME/.hivemindos"
+    printf '{\n  "pluginId": "codex",\n  "managedBy": "hivemindos"\n}\n' > "$HOME/.hivemindos/openclaw-codex-plugin-trust.json"
+    chmod 600 "$HOME/.hivemindos/openclaw-codex-plugin-trust.json" 2>/dev/null || true
+    ok "OpenClaw Codex plugin explicitly trusted"
+  else
+    warn "OpenClaw is installed, but its Codex plugin allowlist could not be updated"
+    optional_setup_issue "OpenClaw Codex plugin trust: open Runtime settings and retry setup."
+  fi
+}
+
 ensure_gitlawb_code_proof() {
   set_env_local "NEXT_PUBLIC_GITLAWB_PROOF_READY" "true"
   set_env_local "NEXT_PUBLIC_GITLAWB_NODE_URL" "${NEXT_PUBLIC_GITLAWB_NODE_URL:-http://127.0.0.1:7545}"
@@ -1709,21 +1839,33 @@ ensure_gitlawb_code_proof() {
 
     if [[ "$should_install" == "true" ]]; then
       if command -v curl >/dev/null 2>&1; then
-        local installer install_dir
+        local installer install_dir installer_status installed
         installer="$(mktemp)"
         install_dir="${GITLAWB_INSTALL_DIR:-$HOME/.local/bin}"
+        installed="false"
         mkdir -p "$install_dir"
-        if curl -fsSL https://gitlawb.com/install.sh -o "$installer" && GITLAWB_INSTALL_DIR="$install_dir" sh "$installer"; then
-          printf '{\n  "installDir": "%s",\n  "binaries": ["gl", "git-remote-gitlawb", "gitlawb-node"],\n  "installedAt": "%s"\n}\n' "$install_dir" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" > "$HOME/.hivemindos/gitlawb/installed-by-hivemindos.json"
-          ok "GitLawb CLI installed in $install_dir"
-          refresh_tool_paths
-          export PATH="$install_dir:$PATH"
+        installer_status="$(curl -L -sS -o "$installer" -w '%{http_code}' https://gitlawb.com/install.sh 2>/dev/null || true)"
+        if [[ "$installer_status" =~ ^2[0-9][0-9]$ ]] && GITLAWB_INSTALL_DIR="$install_dir" sh "$installer"; then
+          installed="true"
         else
-          warn "GitLawb CLI install failed; HivemindOS setup will continue without Code Proof CLI."
+          warn "GitLawb's primary installer is unavailable${installer_status:+ (HTTP $installer_status)}; trying its checksum-verified GitHub release"
+          if install_gitlawb_github_release "$install_dir"; then
+            installed="true"
+          fi
+        fi
+        if [[ "$installed" == "true" ]]; then
+          printf '{\n  "installDir": "%s",\n  "binaries": ["gl", "git-remote-gitlawb"],\n  "installedAt": "%s"\n}\n' "$install_dir" "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" > "$HOME/.hivemindos/gitlawb/installed-by-hivemindos.json"
+          ok "GitLawb CLI installed in $install_dir"
+          export PATH="$install_dir:$PATH"
+          refresh_tool_paths
+        else
+          warn "GitLawb CLI is optional and could not be installed; Code Proof remains available from Integrations later."
+          optional_setup_issue "Code Proof (GitLawb CLI): installer unavailable; retry from Integrations."
         fi
         rm -f "$installer"
       else
         warn "curl is unavailable; skipped GitLawb CLI install."
+        optional_setup_issue "Code Proof (GitLawb CLI): curl is unavailable."
       fi
     else
       warn "Skipping GitLawb CLI install; Code Proof can be enabled later from Integrations."
@@ -1778,6 +1920,7 @@ ensure_gitlawb_code_proof() {
           ok "GitLawb DID registered with $gitlawb_node"
         else
           warn "GitLawb DID registration did not complete; run 'GITLAWB_NODE=$gitlawb_node gl register' later."
+          optional_setup_issue "Code Proof (GitLawb registration): CLI and local identity are ready; network registration can be retried later."
         fi
       else
         warn "Skipping GitLawb DID registration; run 'GITLAWB_NODE=$gitlawb_node gl register' to join the network later."
@@ -1807,6 +1950,7 @@ set_env_local "NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION" "${NEXT_PUBLIC_GBRAIN_SKIL
 set_env_local "NEXT_PUBLIC_SYNTO_CLI_PATH" "${NEXT_PUBLIC_SYNTO_CLI_PATH:-synto}"
 set_env_local "NEXT_PUBLIC_SYNTO_COMPARE_HEAVY_MODEL" "${NEXT_PUBLIC_SYNTO_COMPARE_HEAVY_MODEL:-llama3.1:8b}"
 ensure_gitlawb_code_proof
+configure_openclaw_codex_plugin_trust
 
 dashboard_auth_secret="${HIVEMINDOS_DASHBOARD_AUTH_SECRET:-$(env_local_value HIVEMINDOS_DASHBOARD_AUTH_SECRET)}"
 dashboard_device_token="${HIVEMINDOS_DASHBOARD_DEVICE_TOKEN:-$(env_local_value HIVEMINDOS_DASHBOARD_DEVICE_TOKEN)}"
@@ -1862,6 +2006,9 @@ mkdir -p \
   "$shared_vault_path/$kanban_folder" \
   "$shared_vault_path/$notifications_folder" \
   "$shared_vault_path/$brain_services_folder" \
+  "$shared_vault_path/$brain_services_folder/Index Generations" \
+  "$shared_vault_path/$brain_services_folder/Index Generations/agent-memory" \
+  "$shared_vault_path/$brain_services_folder/Index Generations/full-vault" \
   "$shared_vault_path/$brain_services_folder/Queen Bee" \
   "$shared_vault_path/$brain_services_folder/Queen Bee/nodes" \
   "$shared_vault_path/$brain_services_folder/Queen Bee/inbox" \
@@ -1896,7 +2043,7 @@ if [[ ! -f "$shared_vault_path/$brain_services_folder/README.md" ]]; then
   cat > "$shared_vault_path/$brain_services_folder/README.md" <<'EOF'
 # Brain Services
 
-Status notes for HivemindOS brain services. Shared Brain Memory uses a generated full-vault lexical index by default at \`Operations/Brain Services/Full Vault Search Index.jsonl\`; QMD, GBrain, Neo4j, and Syntho can be connected from the dashboard without storing provider secrets in the vault.
+Status notes for HivemindOS brain services. Shared Brain Memory keeps Markdown authoritative while bounded verified checkpoints, compressed artifacts, content-addressed deltas, and visible replay coverage under \`Operations/Brain Services/Index Generations/\` back the complete typed-memory and full-vault JSONL mirrors. QMD, GBrain, Neo4j, and Syntho can be connected from the dashboard without storing provider secrets in the vault.
 EOF
 fi
 
@@ -1977,6 +2124,72 @@ node "$ROOT/scripts/seed-vault-foundation.mjs" \
 ensure_hive_pulse_python
 install_hive_env_add
 
+# Daily business report: a per-operator digest of their OWN companies (revenue,
+# spend, apex-goal progress, activity) written into DAILY-BRIEF.md each morning,
+# so the Queen has a standing "how are my companies doing" brief. Reads only the
+# local company store, so every user gets only their own companies. Non-fatal:
+# a failed install must never break setup.
+install_company_daily_report() {
+  local src="$ROOT/scripts/automations/hive-company-daily-report.py"
+  local automations_dir="$HOME/.hivemindos/automations"
+  local logs_dir="$HOME/.hivemindos/logs"
+  if [[ ! -f "$src" ]]; then
+    warn "Company daily report script missing at $src; skipping its install"
+    return 0
+  fi
+  mkdir -p "$automations_dir" "$logs_dir" || { warn "Could not create $automations_dir; skipping company daily report"; return 0; }
+  if ! cp "$src" "$automations_dir/hive-company-daily-report.py"; then
+    warn "Could not copy the company daily report script; skipping"
+    return 0
+  fi
+  chmod +x "$automations_dir/hive-company-daily-report.py" 2>/dev/null || true
+
+  if [[ "$(uname -s)" != "Darwin" ]]; then
+    info "→ Company daily report installed at $automations_dir; schedule it daily via cron/systemd (macOS installs a launchd job automatically)."
+    return 0
+  fi
+
+  local plist="$HOME/Library/LaunchAgents/com.hivemindos.company-daily-report.plist"
+  mkdir -p "$HOME/Library/LaunchAgents" || { warn "Could not create LaunchAgents dir; skipping company daily report schedule"; return 0; }
+  cat > "$plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.hivemindos.company-daily-report</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>-lc</string>
+    <string>export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:\$PATH"; export HIVE_COMPANY_REPORT_VAULT="$shared_vault_path"; exec python3 "$automations_dir/hive-company-daily-report.py"</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>8</integer>
+    <key>Minute</key>
+    <integer>5</integer>
+  </dict>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>StandardOutPath</key>
+  <string>$logs_dir/company-daily-report.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>$logs_dir/company-daily-report.err.log</string>
+  <key>WorkingDirectory</key>
+  <string>$HOME</string>
+</dict>
+</plist>
+EOF
+  if command -v launchctl >/dev/null 2>&1; then
+    launchctl unload "$plist" 2>/dev/null || true
+    launchctl load -w "$plist" 2>/dev/null || warn "Could not load the company daily report launchd job; load $plist manually"
+  fi
+  info "→ Company daily report scheduled daily at 08:05 (launchd com.hivemindos.company-daily-report)."
+}
+install_company_daily_report
+
 configure_shared_skills
 
 setup_cache_dir="$ROOT/.setup-cache"
@@ -2007,6 +2220,22 @@ else
   ok "Dependencies installed"
 fi
 
+if [[ "$CLI_COLLECTOR_ONLY" != "true" && "${HIVEMINDOS_SKIP_WEB_RESEARCH:-0}" != "1" ]]; then
+  install_web_research="true"
+  if setup_is_interactive && ! prompt_yes_no "Install the local keyless web research engine for search, fetch, crawl, screenshots, and PDF OCR?" "yes"; then
+    install_web_research="false"
+  fi
+  if [[ "$install_web_research" == "true" ]]; then
+    info "Installing the pinned local web research engine"
+    if node "$ROOT/scripts/install-web-research.mjs"; then
+      ok "Local web research is ready for every registered agent runtime"
+    else
+      warn "Local web research installation failed; other HivemindOS capabilities remain available"
+      optional_setup_issue "Web research: the pinned local Hound runtime or Chromium engine did not install."
+    fi
+  fi
+fi
+
 if [[ "$CLI_SKIP_COLLECTOR" == "true" ]]; then
   warn "Skipping local telemetry collector because --skip-collector was provided"
 else
@@ -2021,7 +2250,12 @@ else
   # machine that only ran HivemindOS setup (its coding agent runs here, reached
   # by the app over the tailnet). Non-fatal: a failure just leaves the app's
   # remote-agent features unavailable until it's retried.
-  ./scripts/install-claw-backend.sh || warn "HivemindOS Mobile backend install failed — the app's remote-agent features will be unavailable until it succeeds"
+  if [[ "$network_mode" == "local" ]]; then
+    ok "Skipping optional HivemindOS Mobile backend in local-only mode"
+  elif ! ./scripts/install-mobile-backend.sh; then
+    warn "HivemindOS Mobile backend install failed — desktop and local agent features are ready, but phone remote-agent features are unavailable"
+    optional_setup_issue "HivemindOS Mobile backend: published artifact unavailable; desktop setup is unaffected."
+  fi
   if [[ -f "$HOME/.hivemindos/collector.env" ]]; then
     # shellcheck disable=SC1091
     source "$HOME/.hivemindos/collector.env" >/dev/null 2>&1 || true
@@ -2039,6 +2273,16 @@ else
   else
     warn "Collector service was installed, but local health is not responding yet"
     warn "Local collector did not respond yet; skipping setup-time env and Syncthing reconciliation prompts"
+  fi
+fi
+
+if [[ "$CLI_COLLECTOR_ONLY" != "true" ]] && setup_is_interactive && prompt_yes_no "Install the optional pinned OpenSRE sidecar for read-only root-cause investigations? (Uses local Ollama by default.)" "no"; then
+  info "Installing optional OpenSRE root-cause sidecar"
+  if ./scripts/install-opensre-sidecar.sh; then
+    ok "OpenSRE sidecar installed with telemetry, prompt logging, and history disabled"
+  else
+    warn "OpenSRE sidecar install did not complete; HivemindOS will keep capturing incidents locally"
+    optional_setup_issue "OpenSRE sidecar: installation or health check failed; local incident capture remains available."
   fi
 fi
 
@@ -2145,7 +2389,15 @@ if [[ -n "$tailscale_ip" && "$dashboard_host" != "127.0.0.1" && "$dashboard_host
 fi
 
 echo
-ok "Ready"
+if (( ${#optional_setup_issues[@]} > 0 )); then
+  ok "Core setup ready"
+  warn "Optional features need attention:"
+  for item in "${optional_setup_issues[@]}"; do
+    echo "  - $item"
+  done
+else
+  ok "Ready"
+fi
 echo
 echo "Dashboard:"
 echo "  $local_url"
@@ -2153,8 +2405,8 @@ if [[ -n "$network_url" ]]; then
   echo "  $network_url"
 fi
 echo "  Unlock token: stored in .env.local and shared hive env as HIVEMINDOS_DASHBOARD_DEVICE_TOKEN"
-echo "  Copy token later: pnpm dashboard-auth copy-token"
-echo "  Reset lost token: pnpm dashboard-auth reset-token"
+echo "  Copy token later: dashboard-auth copy-token"
+echo "  Reset lost token: dashboard-auth reset-token"
 copy_dashboard_token_if_requested
 echo
 echo "Collector:"
@@ -2176,9 +2428,9 @@ echo "  GitLawb node: lazy; not started by setup"
 echo
 if [[ "$hivemind_link_enabled" == "true" ]]; then
   echo "On other machines that run agents, clone the repo and run:"
-  echo "  HIVE_LINK_ENABLED=true ./scripts/install-telemetry-collector.sh"
+  echo "  ./setup.sh --collector-only"
   echo
-  echo "Each machine links to your own Tailscale account through the embedded Hivemind Link node. The dashboard discovers Link peers through the local sidecar."
+  echo "Setup will ask you to authorize each collector from your main HivemindOS hub using the same Tailscale account. The Hive Fleet discovers approved Link peers automatically."
 elif [[ "$tailnet_sync_enabled" == "true" ]]; then
   echo "On other Tailscale machines that run agents, clone the repo and run only:"
   echo "  ./scripts/install-telemetry-collector.sh"

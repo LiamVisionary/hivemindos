@@ -1,0 +1,102 @@
+/* Keep full-size targets in the narrow rail, then pair the two icon utilities
+   once hover or keyboard focus opens enough horizontal room for both. */
+.fr-shelf[data-footer-tooltip-open="true"] {
+  width: 238px;
+  box-shadow: 34px 0 70px -34px rgba(0, 0, 0, 0.55);
+  background: color-mix(in srgb, var(--panel) 97%, transparent);
+}
+
+html[data-liquid-glass]:not([data-liquid-glass="disabled"]) .fr-shelf[data-footer-tooltip-open="true"] {
+  box-shadow: 34px 0 70px -34px rgba(0, 0, 0, 0.55), inset -1px 0 rgba(255, 255, 255, 0.05);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel-hi) 38%, transparent), transparent 54%),
+    color-mix(in srgb, var(--panel) 84%, transparent);
+}
+
+html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .fr-shelf.fr-shelf-app[data-footer-tooltip-open="true"] {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel-hi) 34%, transparent), transparent 58%),
+    color-mix(in srgb, var(--panel) 58%, transparent);
+}
+
+.fr-shelf[data-footer-tooltip-open="true"] :is(.fr-brand-name, .fr-nav-label, .fr-shelf-version) {
+  opacity: 1;
+  transform: none;
+}
+
+.fr-shelf-control-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.fr-shelf-control-row .fr-nav {
+  width: 100%;
+  justify-content: center;
+  padding: 0;
+}
+
+.fr-shelf:hover .fr-shelf-control-row,
+.fr-shelf[data-keyboard-focus="true"]:focus-within .fr-shelf-control-row,
+.fr-shelf[data-footer-tooltip-open="true"] .fr-shelf-control-row {
+  grid-template-columns: repeat(2, 44px);
+}
+
+/* Tear-off ghost: follows the pointer while a rail tab is dragged toward the
+   content area. "Armed" (pointer outside the rail) means releasing pops the
+   view out into its own window; the honey accent signals the live drop. */
+.fr-root .fr-nav-tear-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px 9px 11px;
+  border-radius: 12px;
+  border: 1px solid var(--line-2);
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+  color: var(--fg-2);
+  box-shadow: 0 14px 34px -14px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  user-select: none;
+  will-change: transform;
+}
+
+.fr-root .fr-nav-tear-ghost .fr-nav-ico {
+  display: inline-flex;
+  color: inherit;
+}
+
+.fr-nav-tear-ghost-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.fr-nav-tear-ghost-text strong {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.fr-nav-tear-ghost-text small {
+  font-size: 10.5px;
+  color: var(--fg-3);
+}
+
+.fr-root .fr-nav-tear-ghost[data-armed] {
+  border-color: color-mix(in srgb, var(--honey) 65%, var(--line-2));
+  box-shadow: 0 14px 34px -14px rgba(0, 0, 0, 0.6), 0 0 0 1px color-mix(in srgb, var(--honey) 30%, transparent);
+}
+
+.fr-root .fr-nav-tear-ghost[data-armed] .fr-nav-ico {
+  color: var(--honey);
+}
+
+.fr-root .fr-nav-tear-ghost[data-armed] .fr-nav-tear-ghost-text small {
+  color: var(--honey);
+}

@@ -1,12 +1,21 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
+import { homedir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const args = process.argv.slice(2);
 const nextArgs = [];
 let port = process.env.PORT || "5020";
 let hostname = process.env.HIVEMINDOS_DASHBOARD_HOST || "127.0.0.1";
-const rawBundler = (process.env.HIVEMINDOS_NEXT_DEV_BUNDLER || process.env.NEXT_DEV_BUNDLER || "webpack").trim().toLowerCase();
+// Default dev to Turbopack. On this app (243 routes, 4755-line DashboardApp)
+// webpack dev compiles route module-graphs on demand and holds them in the Node
+// heap (multi-GB RSS), which is slow AND tripped the memory cap below. Turbopack
+// compiles in a native engine: ~290ms ready, ~40MB Node RSS, far faster route
+// loads + HMR. Set HIVEMINDOS_NEXT_DEV_BUNDLER=webpack to fall back.
+const rawBundler = (process.env.HIVEMINDOS_NEXT_DEV_BUNDLER || process.env.NEXT_DEV_BUNDLER || "turbopack").trim().toLowerCase();
 
 for (let i = 0; i < args.length; i += 1) {
   const arg = args[i];
@@ -52,7 +61,6 @@ const bundlerArgs = (() => {
 })();
 const sourceMapArgs = process.env.NEXT_DEV_SOURCE_MAPS === "1" || hasSourceMapFlag ? [] : ["--disable-source-maps"];
 
-const command = "scripts/run-with-memory-limit.sh";
 const nodeOptionSet = new Set((process.env.NODE_OPTIONS ?? "").split(/\s+/).filter(Boolean));
 if (process.env.NEXT_DEV_EXPOSE_GC !== "0") {
   nodeOptionSet.add("--expose-gc");
@@ -62,11 +70,8 @@ if (maxOldSpaceMb !== "0" && ![...nodeOptionSet].some((option) => option.startsW
   nodeOptionSet.add(`--max-old-space-size=${maxOldSpaceMb}`);
 }
 const nodeOptions = [...nodeOptionSet].join(" ");
-const commandArgs = [
-  "--limit-mb",
-  process.env.MEMORY_LIMIT_MB || "5000",
-  "--",
-  "pnpm",
+
+const nextDevArgs = [
   "exec",
   "next",
   "dev",
@@ -78,6 +83,19 @@ const commandArgs = [
   hostname,
   ...nextArgs,
 ];
+// The OOM guard belongs to the *production* build (package.json `build` wraps
+// `next build` in run-with-memory-limit.sh). DEV does not need it and it actively
+// caused the misery: under webpack the dev process grew past the 5 GB RSS cap, got
+// killed mid-session, and was respawned into a full cold recompile ("always
+// recompiling" / stuck on the loading screen). Under Turbopack the Node process is
+// ~40 MB, so a cap is pointless. The dev memory cap is therefore OFF by default;
+// set MEMORY_LIMIT_MB=<mb> to opt back into the kill+respawn behavior.
+const rawMemoryLimitMb = (process.env.MEMORY_LIMIT_MB ?? "").trim();
+const memoryCapEnabled = /^\d+$/.test(rawMemoryLimitMb) && Number(rawMemoryLimitMb) > 0;
+const command = memoryCapEnabled ? "scripts/run-with-memory-limit.sh" : "pnpm";
+const commandArgs = memoryCapEnabled
+  ? ["--limit-mb", rawMemoryLimitMb, "--", "pnpm", ...nextDevArgs]
+  : nextDevArgs;
 
 // run-with-memory-limit.sh exits 137 after killing a Next dev server that
 // crossed the memory cap. Respawning here (instead of letting the whole dev
@@ -168,25 +186,56 @@ if (!warmRoutes.length && warmRoutesRaw !== "0") {
     "/stake",
     "/api/chat/agent-runtime",
     "/api/chat/image-generation",
+    "/api/queen-bee/chat",
     "/api/queen-bee/voice",
   );
 }
-const WARM_INTERVAL_MS = 20_000;
+// Re-ping cadence. Entry disposal is a WEBPACK dev behavior (onDemandEntries
+// evicts idle routes, so warmth decays); Turbopack keeps compiled modules for
+// the life of the process, so one warm pass after each (re)spawn suffices and
+// the perpetual 20s re-ping — a full /stake SSR plus three middleware runs,
+// forever — is pure background load on the single dev-server process. 0 = warm
+// once per spawn, no re-ping.
+const usingWebpack = bundlerArgs.includes("--webpack") || nextArgs.includes("--webpack");
+const WARM_INTERVAL_MS = Number(
+  process.env.HIVEMINDOS_DEV_WARM_INTERVAL_MS ?? (usingWebpack ? 20_000 : 0),
+);
 const WARM_STARTUP_RETRY_MS = 3_000;
 const WARM_STARTUP_RETRY_LIMIT = 100;
 let warmedSinceSpawn = false;
 let warmStartupAttempts = 0;
 let warmInFlight = false;
 
+// The API auth gate (src/proxy.ts) 401s tokenless /api requests BEFORE the
+// route module loads, which both fails the ok-check and defeats the warmup.
+// Same token resolution order as scripts/fleet-health-watchdog.mjs.
+function warmEnvFileValue(path, key) {
+  if (!existsSync(path)) return "";
+  const match = readFileSync(path, "utf8").match(new RegExp(`^\\s*(?:export\\s+)?${key}\\s*=\\s*(.+)\\s*$`, "m"));
+  let value = match?.[1]?.trim() ?? "";
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
+  return value.trim();
+}
+
+function warmDeviceToken() {
+  return (
+    process.env.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN
+    || warmEnvFileValue(resolve(dirname(fileURLToPath(import.meta.url)), "..", ".env.local"), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN")
+    || warmEnvFileValue(join(homedir(), ".hivemindos", ".env"), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN")
+  ).trim();
+}
+
 async function warmRoutesOnce() {
   if (!warmRoutes.length || warmInFlight) return false;
   warmInFlight = true;
+  const token = warmDeviceToken();
   let allOk = true;
   try {
     for (const route of warmRoutes) {
       try {
         const response = await fetch(`http://${warmHost}:${port}${route}`, {
           method: route.startsWith("/api/") ? "OPTIONS" : "HEAD",
+          headers: token ? { "x-hivemindos-device-token": token } : undefined,
           signal: AbortSignal.timeout(90_000),
         });
         if (!response.ok) allOk = false;
@@ -208,7 +257,11 @@ function kickWarmKeeper() {
     warmStartupAttempts += 1;
     if (await warmRoutesOnce()) {
       warmedSinceSpawn = true;
-      console.log(`Dev warm-keeper compiled ${warmRoutes.length} route(s); re-pinging every ${WARM_INTERVAL_MS / 1000}s.`);
+      console.log(
+        WARM_INTERVAL_MS > 0
+          ? `Dev warm-keeper compiled ${warmRoutes.length} route(s); re-pinging every ${WARM_INTERVAL_MS / 1000}s.`
+          : `Dev warm-keeper compiled ${warmRoutes.length} route(s); no re-ping needed under turbopack.`,
+      );
       return;
     }
     if (warmStartupAttempts < WARM_STARTUP_RETRY_LIMIT) {
@@ -218,7 +271,7 @@ function kickWarmKeeper() {
   if (warmRoutes.length) setTimeout(startupTick, WARM_STARTUP_RETRY_MS).unref();
 }
 
-if (warmRoutes.length) {
+if (warmRoutes.length && WARM_INTERVAL_MS > 0) {
   setInterval(() => {
     if (warmedSinceSpawn) void warmRoutesOnce();
   }, WARM_INTERVAL_MS).unref();

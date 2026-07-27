@@ -1,0 +1,14 @@
+{
+  "id": "tts-backend-wedge",
+  "expectation": {
+    "requiredKeywords": ["backend deadlock", "deep probe", "restart"],
+    "forbiddenKeywords": ["network outage", "rotate credentials"],
+    "requiredEvidence": ["synth returned 44B", "restart attempt 3"]
+  },
+  "diagnosis": {
+    "problem": "The TTS service accepted requests but repeatedly returned undersized audio.",
+    "rootCause": "A backend deadlock survived restart attempts while shallow health checks remained green.",
+    "report": "The deep probe found synth returned 44B after restart attempt 3. Compare the model worker stack before another restart.",
+    "toolCalls": [{ "source": "deep-probe", "result": "synth returned 44B" }, { "source": "watchdog", "result": "restart attempt 3" }]
+  }
+}

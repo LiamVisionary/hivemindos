@@ -4,9 +4,15 @@ import {
   readQueenBeeState,
   submitQueenBeeMessage,
 } from "@/lib/services/queen-bee/control-plane";
-import { rememberActionAgentMemory } from "@/lib/services/obsidian/agent-memory";
+import { recordAgentOperationalEvent } from "@/lib/services/obsidian/agent-memory/events";
 import { discoverQueenBeeFleetSnapshot } from "@/lib/services/queen-bee/fleet-snapshot";
 import { createQueenBeePrdTasks } from "@/lib/services/queen-bee/prd-decomposition";
+import {
+  createQueenBeePrdVisualPlan,
+  createQueenBeeVisualPlan,
+  visualPlanReceipt,
+} from "@/lib/services/visual-plan";
+import { DEFAULT_QUEEN_BEE_NAME } from "@/lib/config/queen-bee-personality";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,7 +51,7 @@ export async function POST(request: NextRequest) {
         fleetSnapshot,
       });
       if (!body.preview && Array.isArray(result.tasks) && result.tasks.length) {
-        await recordQueenBeeActionMemory(options.vaultPath, {
+        await recordQueenBeeOperationalEvent(options.vaultPath, {
           title: `Queen Bee decomposed ${result.tasks.length} PRD task${result.tasks.length === 1 ? "" : "s"}`,
           content: [
             `Queen Bee decomposed a PRD into ${result.tasks.length} Work Board task${result.tasks.length === 1 ? "" : "s"}.`,
@@ -53,9 +59,21 @@ export async function POST(request: NextRequest) {
             result.tasks.slice(0, 6).map((task: { id?: string; title?: string }) => `Task: ${task.id ?? "unknown"} - ${task.title ?? "Untitled"}.`).join("\n"),
           ].filter(Boolean).join("\n"),
           source: "Queen Bee PRD receipt",
+          operationKey: "queen-bee/prd-decomposition",
+          taskId: result.epic?.id,
         });
       }
-      return NextResponse.json({ ok: true, protocol: "hivemind-queen-bee", ...result });
+      const visualPlan = !body.preview && Array.isArray(result.tasks) && result.tasks.length
+        ? await createQueenBeePrdVisualPlan({
+          title: result.decomposition?.title ?? body.title ?? body.taskTitle,
+          source: result.decomposition?.source ?? body.source,
+          decomposition: result.decomposition,
+          epic: result.epic,
+          tasks: result.tasks,
+          vaultPath: options.vaultPath,
+        }).then(visualPlanReceipt, () => undefined)
+        : undefined;
+      return NextResponse.json({ ok: true, protocol: "hivemind-queen-bee", ...result, visualPlan });
     }
     const result = await submitQueenBeeMessage({
       ...options,
@@ -64,6 +82,7 @@ export async function POST(request: NextRequest) {
       mode: body.mode,
       priority: body.priority,
       loop: body.loop,
+      workspace: normalizeWorkspace(body.workspace),
       taskTitle: body.taskTitle,
       agentId: body.agentId,
       machineId: body.machineId,
@@ -71,7 +90,7 @@ export async function POST(request: NextRequest) {
       fleetSnapshot,
     });
     if (result.created) {
-      await recordQueenBeeActionMemory(options.vaultPath, {
+      await recordQueenBeeOperationalEvent(options.vaultPath, {
         title: `Queen Bee queued ${result.task.title}`,
         content: [
           result.receipt?.summary || "Queen Bee queued a Work Board task.",
@@ -81,28 +100,44 @@ export async function POST(request: NextRequest) {
           result.route?.delegation?.workerClass ? `Worker class: ${result.route.delegation.workerClass}.` : "",
         ].filter(Boolean).join("\n"),
         source: "Queen Bee receipt",
+        operationKey: `queen-bee/task-queued/${result.route?.delegation?.workerClass ?? "unassigned"}`,
+        taskId: result.task.id,
       });
     }
-    return NextResponse.json({ ok: true, ...result });
+    const visualPlan = result.created
+      ? await createQueenBeeVisualPlan({
+        title: result.task?.title ?? body.taskTitle,
+        message: body.message,
+        source: body.source,
+        mode: body.mode,
+        fingerprint: result.fingerprint,
+        task: result.task,
+        route: result.route,
+        receipt: result.receipt,
+        vaultPath: options.vaultPath,
+      }).then(visualPlanReceipt, () => undefined)
+      : undefined;
+    return NextResponse.json({ ok: true, ...result, visualPlan });
   } catch (error) {
     return errorResponse(error);
   }
 }
 
-async function recordQueenBeeActionMemory(vaultPath: string | undefined, input: { title: string; content: string; source: string }) {
-  await rememberActionAgentMemory({
+async function recordQueenBeeOperationalEvent(vaultPath: string | undefined, input: { title: string; content: string; source: string; operationKey: string; taskId?: string }) {
+  await recordAgentOperationalEvent({
     vaultPath,
     title: input.title,
     content: input.content,
     source: input.source,
-    agentName: "Queen Bee",
+    operationKey: input.operationKey,
+    outcome: "success",
+    taskId: input.taskId,
+    agentName: DEFAULT_QUEEN_BEE_NAME,
     agentId: "queen-bee",
     runtime: "hivemindos",
     project: "HivemindOS",
     tags: ["queen-bee", "receipt"],
     entities: ["Queen Bee", "Work Board", "HivemindOS"],
-    memoryOrigin: "system-receipt",
-    actorRole: "agent",
   }).catch(() => undefined);
 }
 
@@ -126,6 +161,12 @@ function publicState(result: Awaited<ReturnType<typeof readQueenBeeState>>) {
       receipts: result.paths.receipts,
     },
   };
+}
+
+function normalizeWorkspace(value: unknown) {
+  if (value === "scratch" || value === "worktree") return value;
+  if (typeof value === "string" && value.startsWith("dir:")) return value as `dir:${string}`;
+  return undefined;
 }
 
 function errorResponse(error: unknown) {

@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "environment": "testnet",
+  "date": "2026-07-20",
+  "mainnetTouched": false,
+  "signer": "0xdE4266DD95E3371F0BF45257b66D7b3F4b46Fee3",
+  "feePolicy": {
+    "directBridgeFeeBps": 5,
+    "directBridgeFeeCapBps": 25,
+    "routedAppFeeBps": 45,
+    "nominalRoutedPlatformFeeBps": 50,
+    "providerAndGasFeesAdditional": true,
+    "highVolumeDiscount": null
+  },
+  "configuration": {
+    "lzReceiveGas": 160000,
+    "hourlyLimitWei": "10000000000000000000000000",
+    "dailyLimitWei": "100000000000000000000000000",
+    "outboundAndInbound": true,
+    "governanceDelaySeconds": 0,
+    "governanceModel": "zero-delay testnet rehearsal through owning TimelockController"
+  },
+  "chains": {
+    "baseSepolia": {
+      "chainId": 84532,
+      "layerZeroEid": 40245,
+      "layerZeroEndpoint": "0x6EDCE65403992e310A62460808c4b910D972f10f",
+      "timelock": "0x686Bb659e895e86F082eA0bBb8864acC42935BA3",
+      "mockHive": "0x827781443C4B19c317bbA59b441EdEcCFa2cD23b",
+      "oftAdapter": "0xA131dB107711D5DC6743DFF002eACdDCA1f0946d",
+      "transactions": {
+        "timelockDeploy": "0x4057a84f938b234790bd58a678ab0af0a5a186bf474bf213d6d95e8cf6165fa8",
+        "timelockGuardianGrant": "0x9ffad6dddc6552b809f528b2d10251f41c80c511704754503aadcac460d736cf",
+        "timelockAdminRenounce": "0x4f141222780d4c6620c4cdd15bd79627072e7b8638b2803d74c94dec8b9dbceb",
+        "mockHiveDeploy": "0x8f21deb1be54807200f005292a581d9035346d51a13299f0d25a6cd062f75919",
+        "adapterDeploy": "0x11cdecc526e7e62c693ee872c44bdbc21429a7de816686d304c56b61b4016226",
+        "configurationSchedule": "0x855a51210d9b7a7c3bc68cff78b5a030166994d2234b50fc5652d18833efec79",
+        "configurationExecute": "0xe2b2766070beaeaf7ef792271fbc9a1a8a363e84ae23af6a15bb272f02f503ac"
+      }
+    },
+    "robinhoodTestnet": {
+      "chainId": 46630,
+      "layerZeroEid": 40451,
+      "layerZeroEndpoint": "0x3aCAAf60502791D199a5a5F0B173D78229eBFe32",
+      "timelock": "0x686Bb659e895e86F082eA0bBb8864acC42935BA3",
+      "hiveOft": "0xA131dB107711D5DC6743DFF002eACdDCA1f0946d",
+      "transactions": {
+        "timelockDeploy": "0x36ad70e70bf1b1f9c144cb7fa490959650750f532c0f251abdd20fc2214ac41e",
+        "timelockGuardianGrant": "0xb0817fba7b7413d5646a87a014471767e386eaa43df51b78722df55a3864c71e",
+        "timelockAdminRenounceFailed": "0x03e1cd0ace165d1338117ed7ac1977b828248035658850e528c93a3e4e705d3c",
+        "timelockAdminRenounceRecovery": "0x4c2b32977bc5809e8eb897e7247fc93c59e5479fda793c547ebde527d108a454",
+        "oftDeploy": "0xcf3e22bff6da6ec4a891e38608aa685400207906fedb55f4e8b5322094c9a76f",
+        "configurationSchedule": "0xe7ae0391ad8e090d5d4791096481afb02ed5dcad8b74bfdc8eafbc567ab6064c",
+        "configurationExecute": "0xb5bc03df322b36ac628b4e790ea4b8b4794d19b5aca631e6cc606b2ccc472ff0"
+      }
+    }
+  },
+  "hosted": {
+    "gatewayUrl": "https://hivemindos-hive-bridge-gateway-testnet.hivemindos.workers.dev",
+    "gatewayVersion": "0a02a603-9be3-4d36-ac88-4d8bc9bf34a7",
+    "pageUrl": "https://hivemindos-hive-bridge-testnet.pages.dev",
+    "pagesDeploymentUrl": "https://ecacfcac.hivemindos-hive-bridge-testnet.pages.dev",
+    "directBridgeSupported": true,
+    "routedTradeSupported": false,
+    "routedTradeUnsupportedReason": "Relay testnet does not list Robinhood testnet chain 46630",
+    "mainnetProfileEnabled": false
+  },
+  "smokeTest": {
+    "status": "passed",
+    "baseToRobinhood": {
+      "amountSentWei": "1000000000000000000000",
+      "amountReceivedWei": "999500000000000000000",
+      "approvalTx": "0x28cbf9910aede07abdb9ba90c7c80d57faa493c386aab0bc89c135db11da52b4",
+      "sourceTx": "0xa743b06f061b2f6f44116c35ff9f1f28fbb982beb12b5fc0a1bb2e55b8321e5d",
+      "layerZeroGuid": "0xfc5aaf7a7d0a8e41a6783eec3d95664fcb90a3ec3cd66d7d326377cc34d2818d",
+      "destinationTx": "0x0bc6b7f7dd813cecba76707fc713bb6dfaed60bd37a1e038e785f555dc62946f",
+      "layerZeroStatus": "DELIVERED"
+    },
+    "robinhoodToBase": {
+      "amountSentWei": "999500000000000000000",
+      "amountReceivedWei": "999000250000000000000",
+      "sourceTx": "0xd6508e9ccf151e760d0b92d64e20981c12c87d1abc9c2c66746a8c6f6d2e9115",
+      "layerZeroGuid": "0x5746581e8fcd597467c6f2b7db379a810e8b36177e6ce87ebc0076d3c31b1c56",
+      "destinationTx": "0xc321e89036e7a08d43cc54bbf8887ad06b402826463a3b873c298b9bfeca9c23",
+      "destinationExecution": "permissionless EndpointV2.lzReceive after committed verification",
+      "layerZeroStatus": "DELIVERED"
+    },
+    "finalReconciliation": {
+      "baseAdapterBalanceWei": "999750000000000000",
+      "baseAdapterFeesWei": "500000000000000000",
+      "netBaseBackingWei": "499750000000000000",
+      "robinhoodTotalSupplyWei": "499750000000000000",
+      "robinhoodOftFeeBalanceWei": "499750000000000000",
+      "robinhoodUserBalanceWei": "0",
+      "reverseInboundPayloadHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "backingExact": true
+    }
+  },
+  "verification": {
+    "foundryTests": "32 passed, 0 failed",
+    "invariantCallsPerInvariant": 2560,
+    "liveDeploymentVerifierBase": "passed",
+    "liveDeploymentVerifierRobinhood": "passed",
+    "routedClientTests": "9 passed, 0 failed",
+    "hostedGatewayTests": "10 passed, 0 failed plus TypeScript and static guards",
+    "livePageE2e": "passed with zero console errors",
+    "repositoryGate": "245 of 246 passed; all bridge checks passed; unrelated Socials drafting cadence assertion remained red",
+    "liveRoutedTestnet": "not executable because Relay lacks chain 46630; fail-closed behavior verified",
+    "mainnet": "not deployed"
+  },
+  "incidents": [
+    {
+      "chainId": 46630,
+      "issue": "RPC gas estimate exhausted the full gas limit on TimelockController admin renounce",
+      "resolution": "resubmitted the exact renounce with a 200000 gas limit and verified deployer DEFAULT_ADMIN_ROLE is false",
+      "runbookChange": "require --gas-estimate-multiplier 300 on Robinhood ceremony broadcasts and independent receipt/role verification"
+    },
+    {
+      "chainId": 84532,
+      "issue": "managed LayerZero executor remained waiting after reverse packet verification committed",
+      "resolution": "matched the Endpoint inbound payload hash to LayerZero's committed proof, simulated exact lzReceive, then executed permissionlessly; Endpoint cleared the payload and LayerZero reported DELIVERED"
+    }
+  ]
+}

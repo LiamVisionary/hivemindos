@@ -4,69 +4,49 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import {
-  BrainCircuit,
-  Check,
-  ChevronDown,
-  ChevronRight,
-  ChevronUp,
-  Download,
-  FolderOpen,
-  Minus,
-  Pencil,
-  PlugZap,
-  Plus,
-  Search,
-  Settings2,
-  ShieldCheck,
-  Sparkles,
-  Upload,
-} from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronRight, ChevronUp, KeyRound, Minus, PlugZap, Plus, Search, Sparkles, Upload } from "lucide-react";
 import { AgentBrowserModal } from "./AgentBrowserModal";
 import { AgentSettingsCallsPanel } from "./AgentSettingsCallsPanel";
+import { AgentSettingsMinistryPanel } from "./AgentSettingsMinistryPanel";
+import {
+  AgentSettingsAeonConnectionPanel,
+  AgentSettingsMemoryPanel,
+  AgentSettingsSecurityPanel,
+} from "./AgentSettingsConnectionPanels";
 import { AgentSettingsModalFrame } from "./AgentSettingsModalFrame";
+import { AgentSettingsQueenPersonalityPanel } from "./AgentSettingsQueenPersonalityPanel";
+import { AgentSettingsCustomInstructionsPanel } from "./AgentSettingsCustomInstructionsPanel";
 // AgentSettingsToolsPanel owns the Agent mailbox "Create mailbox" action.
 import { AgentSettingsToolsPanel } from "./AgentSettingsToolsPanel";
 import { AdaptiveProviderSettings } from "./AdaptiveProviderSettings";
 import { BankrLowCreditSetup } from "./BankrLowCreditSetup";
 import { GuidedProviderSetup } from "./GuidedProviderSetup";
+import { GuidedHivemindosModelsSetup } from "./GuidedHivemindosModelsSetup";
 import { GuidedUsePodSetup } from "./GuidedUsePodSetup";
 import { GuidedVeniceSetup } from "./GuidedVeniceSetup";
-import { LmStudioLoadProgress, LmStudioModelManager } from "./LmStudioModelManager";
+import { LmStudioModelManager } from "./LmStudioModelManager";
 import { MissingSharedEnvKeySetup } from "./MissingSharedEnvKeySetup";
 import { ModelPillSelector } from "./ModelPillSelector";
 import { ResearchMethodSettingsPanel } from "./ResearchMethodSettingsPanel";
 import { RuntimeInstallSetup } from "./RuntimeInstallSetup";
 import { WorkerTaskPreferencesEditor } from "./WorkerTaskPreferencesEditor";
+import honeyStyles from "@/features/env/hive-env-honey.module.css";
 import { WorkspaceModal } from "@/components/aeon";
 import { renderBeeSoulTemplate } from "@/lib/config/bee-worker-presets";
 import { normalizeResearchMethod } from "@/lib/config/research-methods";
 import { MODEL_PROVIDER_GATEWAYS } from "@/lib/config/model-provider-gateways";
+import { HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_MODEL, HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER } from "@/lib/config/hivemindos-wallet-paid-models";
 import { providerCatalogEntry } from "@/lib/config/provider-catalog";
 import { runtimeHasInstallSetup } from "@/lib/services/runtime-install-catalog";
-import { HIVEMIND_OS_RUNTIME, defaultAgentNameForRuntime, runtimeProfileFeature, runtimeSettingsFeature, type AgentRuntime } from "@/lib/types/agent-runtime";
+import { HIVEMIND_OS_RUNTIME, buildAgentCallPreferences, defaultAgentNameForRuntime, runtimeProfileFeature, runtimeSettingsFeature, type AgentRuntime } from "@/lib/types/agent-runtime";
 import { rememberMruRuntime } from "@/features/dashboard/agent-mru-runtime";
+import { XAI_OAUTH_DEFAULT_MODEL, XAI_PROVIDER_SLUG, modelProviderSelection, providerSortIndex, providerSupportsCredentialMode, runtimeProviderForCredentialMode } from "@/features/dashboard/model-provider-view";
 import { gateBankrModelsForCredits, selectBestRuntimeModel } from "./runtime-model-registry";
-import {
-  AsOrb,
-  Badge,
-  Btn,
-  Field,
-  GroupLabel,
-  PanelHead,
-  TextArea,
-  TextInput,
-  Toggle,
-  hasUsePodSetup,
-  hasVeniceSetup,
-  iconMark,
-  isUsePodSetupReady,
-  isVeniceSetupReady,
-  titleCaseId,
-} from "./AgentSettingsModalPrimitives";
+import { AsOrb, Badge, Btn, Field, GroupLabel, PanelHead, TextArea, TextInput, hasUsePodSetup, hasVeniceSetup, iconMark, isHivemindosModelsSetupReady, isUsePodSetupReady, isVeniceSetupReady, titleCaseId } from "./AgentSettingsModalPrimitives";
 
 const USEPOD_PROVIDER = MODEL_PROVIDER_GATEWAYS.usepod;
 const VENICE_PROVIDER = MODEL_PROVIDER_GATEWAYS.venice;
+const HIVEMINDOS_MODELS_PROVIDER = MODEL_PROVIDER_GATEWAYS[HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER];
 const BANKR_LLM_BASE_URL = "https://llm.bankr.bot";
 const BANKR_LLM_CHAT_PATH = "/v1/chat/completions";
 const BANKR_LLM_MODELS_PATH = "/v1/models";
@@ -118,6 +98,7 @@ export function AgentSettingsModal(props: any) {
     machineGroups,
     onAeonWorkspaceCreated,
     onQueenClapWakeEnabledChange,
+    notifyAgentVoiceFailure,
     openAgentSkillBrowser,
     openCustomWorkerClassCreator,
     providerIconPath,
@@ -137,6 +118,7 @@ export function AgentSettingsModal(props: any) {
     runtimeIntegrationMessage,
     runtimeIntegrationStatus,
     runtimeModelDraft,
+    runtimeModelSelection,
     runtimeModelProviders = [],
     runtimeModelSelectionsByRuntime,
     runtimeModelSelectionFresh,
@@ -166,6 +148,7 @@ export function AgentSettingsModal(props: any) {
     updateAgentSoulPrompt,
     updateAgentSkillProfile,
     uploadCustomWorkerImage,
+    walletsByAgent,
     workerCapabilityBadges,
   } = props;
 
@@ -173,13 +156,21 @@ export function AgentSettingsModal(props: any) {
   const modalOpen = Boolean(portalTarget && (roleModalAgent || agentCreateMachine));
   const activeRuntime = (agentSettingsRuntime || "hermes") as AgentRuntime;
   const runtimeSettings = runtimeSettingsFeature(activeRuntime);
-  const activePanels = agentCreateMachine ? runtimeSettings.createPanels : runtimeSettings.editPanels;
+  const runtimeActivePanels = agentCreateMachine ? runtimeSettings.createPanels : runtimeSettings.editPanels;
+  const isQueenSettings = !agentCreateMachine && roleModalAgent?.beeRole === "queen";
+  const activePanels = isQueenSettings && runtimeActivePanels.includes("calls") && !runtimeActivePanels.includes("ministry")
+    ? runtimeActivePanels.flatMap((panel) => (panel === "calls" ? [panel, "ministry"] : [panel]))
+    : runtimeActivePanels;
   const activePanel = activePanels.includes(agentSettingsPanel) ? agentSettingsPanel : activePanels[0];
   const isAutopilotSettings = runtimeSettings.kind === "autopilot";
   const runtimeLabel = RUNTIME_LABELS[activeRuntime] ?? activeRuntime;
-  const selectedProviderSlug = agentSettingsProvider || selectedRuntimeProvider?.slug || "";
+  const rawSelectedProviderSlug = agentSettingsProvider || runtimeModelSelection?.provider || selectedRuntimeProvider?.slug || "";
+  const selectedProviderView = modelProviderSelection(rawSelectedProviderSlug);
+  const selectedProviderSlug = selectedProviderView.displaySlug;
+  const selectedRuntimeProviderSlug = selectedProviderView.runtimeSlug || selectedProviderSlug;
   const openRouterSelected = selectedProviderSlug === "openrouter";
   const usePodSelected = selectedProviderSlug === "usepod";
+  const hivemindosModelsSelected = selectedProviderSlug === HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER;
   const bankrLlmSelected = selectedProviderSlug === "bankr";
   const lmStudioSelected = selectedProviderSlug === "lm-studio";
   const adaptiveProviderSelected = selectedProviderSlug === "adaptive";
@@ -196,6 +187,8 @@ export function AgentSettingsModal(props: any) {
   const [envHermesKeys, setEnvHermesKeys] = useState(() => new Set());
   const [envLoaded, setEnvLoaded] = useState(false);
   const [envRefreshKey, setEnvRefreshKey] = useState(0);
+  const [xaiOAuthConnected, setXaiOAuthConnected] = useState(false);
+  const [xaiOAuthStatusLoaded, setXaiOAuthStatusLoaded] = useState(false);
   const [fetchedProviderModels, setFetchedProviderModels] = useState(() => ({}));
   const [lmStudioEmptyDiscoveryGraceActive, setLmStudioEmptyDiscoveryGraceActive] = useState(false);
   const [lmStudioPendingLoadModelKeys, setLmStudioPendingLoadModelKeys] = useState<string[]>([]);
@@ -214,12 +207,22 @@ export function AgentSettingsModal(props: any) {
   const adaptiveRouting = agentCreateMachine ? agentCreateDraft.adaptiveRouting ?? {} : roleModalAgent?.adaptiveRouting ?? {};
   const usePodConfig = agentCreateMachine ? agentCreateDraft.usePod ?? {} : roleModalAgent?.usePod ?? {};
   const veniceConfig = agentCreateMachine ? agentCreateDraft.venice ?? {} : roleModalAgent?.venice ?? {};
+  const hivemindosModelsConfig = agentCreateMachine ? agentCreateDraft.hivemindosModels ?? {} : roleModalAgent?.hivemindosModels ?? {};
   const usePodSetupStarted = hasUsePodSetup(usePodConfig);
   const usePodSetupComplete = isUsePodSetupReady(usePodConfig);
   const usePodCreateBlocked = Boolean(agentCreateMachine && usePodSelected && !usePodSetupComplete);
   const veniceSelected = selectedProviderSlug === "venice";
   const veniceSetupComplete = isVeniceSetupReady(veniceConfig);
   const veniceCreateBlocked = Boolean(agentCreateMachine && veniceSelected && !veniceSetupComplete);
+  const hivemindosModelsSetupComplete = isHivemindosModelsSetupReady(
+    hivemindosModelsConfig,
+    agentCreateMachine ? agentCreateDraft.model : roleModalAgent?.model,
+  );
+  // The HivemindOS panel IS the model selector for this provider — it
+  // always renders inline while the provider is selected (no separate setup
+  // screen; funding lives in the panel's own modal).
+  const shouldShowHivemindosModelsSetup = hivemindosModelsSelected;
+  const hivemindosModelsCreateBlocked = Boolean(agentCreateMachine && hivemindosModelsSelected && !hivemindosModelsSetupComplete);
   const agentTaskPreferences = (agentCreateMachine ? agentCreateDraft.taskPreferences : roleModalAgent?.taskPreferences) ?? [];
   const researchSubclassSelected = agentSettingsWorkerClass === "research" && !agentSettingsCustomWorker;
   const selectedResearchMethod = normalizeResearchMethod(agentCreateMachine ? agentCreateDraft.researchMethod : roleModalAgent?.researchMethod);
@@ -232,6 +235,12 @@ export function AgentSettingsModal(props: any) {
   const bankrCreditStatus = runtimeIntegrationStatus?.providerStatus?.bankr;
   const bankrInitialCredits = bankrCreditStatus ? { ok: true, balanceUsd: bankrCreditStatus.creditsBalanceUsd, balanceLabel: bankrCreditStatus.balanceLabel ?? (bankrCreditStatus.creditsBalanceUsd === null ? "Unknown" : undefined), error: bankrCreditStatus.error } : undefined;
   const lmStudioStatus = runtimeIntegrationStatus?.providerStatus?.lmStudio;
+  const lmStudioActiveDownloadCount = (lmStudioStatus?.downloads ?? []).filter((download) => download.state === "queued" || download.state === "downloading").length;
+  // Queen voice brain degradation: voice turns are silently bypassing this
+  // agent's configured model and falling back to the OpenAI fallback model.
+  const queenVoiceBrainAlert = runtimeIntegrationStatus?.queenVoiceBrain?.degraded
+    ? runtimeIntegrationStatus.queenVoiceBrain
+    : null;
   const fetchedSelectedModels = fetchedProviderModels[selectedProviderSlug] ?? [];
   const effectiveSelectedModels = fetchedSelectedModels.length > (selectedRuntimeModels?.length ?? 0) ? fetchedSelectedModels : (selectedRuntimeModels ?? []);
   const runtimeModelOptions = adaptiveProviderSelected
@@ -246,9 +255,8 @@ export function AgentSettingsModal(props: any) {
   const lmStudioSelectedModelLoaded = Boolean(selectedLmStudioInventoryModel?.loaded || selectedRuntimeModelOption?.subtitle === "Loaded" || selectedRuntimeModelOption?.badge === "Loaded");
   const lmStudioSelectedModelLoading = Boolean(lmStudioSelected && selectedRuntimeModelId && lmStudioPendingLoadModelKeys.includes(selectedRuntimeModelId) && !lmStudioSelectedModelLoaded);
   const lmStudioSelectedModelNeedsLoad = Boolean(lmStudioSelected && selectedRuntimeModelId && selectedRuntimeModelId !== "adaptive" && (
-    selectedLmStudioInventoryModel ? !selectedLmStudioInventoryModel.loaded && !selectedLmStudioInventoryModel.remote : selectedRuntimeModelOption?.subtitle === "Downloaded" || selectedRuntimeModelOption?.subtitle === "Available"
+    selectedLmStudioInventoryModel ? !selectedLmStudioInventoryModel.loaded : selectedRuntimeModelOption?.subtitle === "Downloaded" || selectedRuntimeModelOption?.subtitle === "Available"
   ));
-  const selectedLmStudioModelLabel = selectedLmStudioInventoryModel?.displayName || selectedRuntimeModelOption?.name || selectedRuntimeModelId;
   const modelSelectableRuntime = Boolean(runtimeCapabilities(agentSettingsIntegrationTarget ?? roleModalAgent)?.modelSelection);
   const runtimeModelPanelAvailable = runtimeSettings.modelSource === "runtime" && (
     runtimeModelProviders.length > 0
@@ -260,20 +268,21 @@ export function AgentSettingsModal(props: any) {
   const runtimeCanAddCustomModel = runtimeCanAddModels && runtimeModelProviders.length > 0;
   const hideRuntimeSection = !agentCreateMachine && Boolean(runtimeSettings.hidesRuntimeSelectorWhenEditing);
   const runtimeSelectorEntries = Object.entries(RUNTIME_LABELS).filter(([runtime]) => runtime !== HIVEMIND_OS_RUNTIME || activeRuntime === HIVEMIND_OS_RUNTIME);
-  const isQueenSettings = !agentCreateMachine && roleModalAgent?.beeRole === "queen";
-  const showWorkerClassSection = !isAutopilotSettings && !(usePodSelected && !usePodSetupComplete) && !(veniceSelected && !veniceSetupComplete) && !isQueenSettings;
+  const showWorkerClassSection = !isAutopilotSettings && !(usePodSelected && !usePodSetupComplete) && !(veniceSelected && !veniceSetupComplete) && !(hivemindosModelsSelected && !hivemindosModelsSetupComplete) && !isQueenSettings;
   const agentStatus = agentCreateMachine ? "New profile" : roleModalAgent?.telemetryUrl ? "Connected" : "Local profile";
   const workerSubtitle = (agentSettingsCustomWorker?.label || agentSettingsWorkerPreset?.label || agentSettingsWorkerLabel || "").replace(/\s+bee$/i, "").trim();
   const aeonSettings = {
-    mode: agentCreateMachine ? agentCreateDraft.aeonMode || "github" : roleModalAgent?.aeonMode || "github",
+    mode: (agentCreateMachine ? agentCreateDraft.aeonMode : roleModalAgent?.aeonMode) === "local" ? "local" : "github",
     repo: agentCreateMachine ? agentCreateDraft.aeonRepo || "" : roleModalAgent?.aeonRepo || "",
     branch: agentCreateMachine ? agentCreateDraft.aeonBranch || "main" : roleModalAgent?.aeonBranch || "main",
     path: agentCreateMachine ? agentCreateDraft.aeonLocalPath || "~/.aeon" : roleModalAgent?.aeonLocalPath || roleModalAgent?.localDataDir || "",
-    a2aUrl: agentCreateMachine ? agentCreateDraft.a2aUrl || "http://127.0.0.1:41241" : roleModalAgent?.a2aUrl || roleModalAgent?.gatewayUrl || "http://127.0.0.1:41241",
   };
   const runtimeFolderValue = roleModalAgent ? isAutopilotSettings ? roleModalAgent.aeonLocalPath || roleModalAgent.localDataDir || "" : roleModalAgent.localDataDir || "" : "";
   const targetMachineRuntimes = agentCreateMachine?.capabilities?.runtimes ?? [];
-  const targetMachineHasRuntimeInventory = targetMachineRuntimes.length > 0;
+  // An explicit [] from a ready collector means "no runtimes installed", not
+  // "inventory unknown". Treat it as authoritative so a fresh machine opens
+  // the shared in-app downloader instead of falling back to local setup state.
+  const targetMachineHasRuntimeInventory = Array.isArray(agentCreateMachine?.capabilities?.runtimes);
   const activeRuntimeNeedsSetup = runtimeNotConfigured(activeRuntime) && runtimeHasInstallSetup(activeRuntime);
 
   function runtimeNotConfigured(runtime: string) {
@@ -293,7 +302,10 @@ export function AgentSettingsModal(props: any) {
     return Boolean(entry?.keyEnv) && !entry?.guidedSetup && !providerConfigured(slug);
   }
 
-  const selectedNeedsKey = providerNeedsKey(selectedProviderSlug);
+  const selectedUsesXaiOAuth = selectedProviderSlug === XAI_PROVIDER_SLUG && selectedProviderView.credentialMode === "oauth";
+  const selectedNeedsKey = !selectedUsesXaiOAuth && providerNeedsKey(selectedProviderSlug);
+  const selectedSupportsXaiOAuth = providerSupportsCredentialMode(selectedProviderSlug, "oauth");
+  const selectedNeedsXaiOAuthSetup = selectedSupportsXaiOAuth && selectedUsesXaiOAuth && (!xaiOAuthStatusLoaded || !xaiOAuthConnected);
   const existingUsePodAgents = (displayAgents ?? []).filter((agent) => agent.provider === "usepod" && hasUsePodSetup(agent.usePod));
   const unfinishedUsePodAgent = agentCreateMachine && !usePodSetupStarted ? existingUsePodAgents.find((agent) => !isUsePodSetupReady(agent.usePod)) ?? null : null;
   const completedUsePodWallets = unfinishedUsePodAgent ? [] : existingUsePodAgents.filter((agent) => isUsePodSetupReady(agent.usePod));
@@ -305,6 +317,73 @@ export function AgentSettingsModal(props: any) {
   const veniceDraftSetupTarget = agentCreateMachine ? { id: "new-venice-draft", name: displayName, provider: "venice", model: agentCreateDraft.model, venice: agentCreateDraft.venice } : null;
   const veniceSetupTarget = veniceDraftSetupTarget ?? agentSettingsIntegrationTarget;
   const veniceRequiresCurrentSetup = hasVeniceSetup(veniceConfig);
+  const hivemindosModelsDraftSetupTarget = agentCreateMachine ? {
+    id: "new-hivemindos-models-draft",
+    name: displayName,
+    provider: HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER,
+    model: agentCreateDraft.model || HIVEMINDOS_MODELS_PROVIDER?.defaultModel,
+    hivemindosModels: agentCreateDraft.hivemindosModels,
+  } : null;
+  const hivemindosModelsSetupTarget = hivemindosModelsDraftSetupTarget ?? agentSettingsIntegrationTarget;
+  function xaiOAuthHermesHomes() {
+    const targetAgent = agentSettingsIntegrationTarget ?? roleModalAgent ?? undefined;
+    return targetAgent?.runtime === "hermes" && targetAgent.localDataDir
+      ? [targetAgent.localDataDir]
+      : [];
+  }
+  function xaiOAuthStatusEndpoint() {
+    const params = new URLSearchParams({ sync: "1" });
+    for (const home of xaiOAuthHermesHomes()) params.append("hermesHome", home);
+    return `/api/xai-oauth?${params.toString()}`;
+  }
+  async function startXaiOAuthLogin() {
+    const response = await fetch("/api/xai-oauth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "start" }),
+    }).catch(() => null);
+    const data = await response?.json().catch(() => null);
+    if (!response?.ok || data?.ok === false) {
+      return { ok: false, error: data?.error || "Could not start xAI OAuth sign-in." };
+    }
+    return {
+      ok: true,
+      authorizeUrl: data?.authorizeUrl || data?.authorizationUrl,
+      statusEndpoint: data?.statusEndpoint || "/api/xai-oauth",
+      message: data?.message || "xAI sign-in opened in your browser. Finish the OAuth page to connect Grok.",
+    };
+  }
+  async function submitXaiOAuthCode(code: string) {
+    const response = await fetch("/api/xai-oauth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "submit-code", code }),
+    }).catch(() => null);
+    const data = await response?.json().catch(() => null);
+    if (!response?.ok || data?.ok === false) {
+      return { ok: false, error: data?.error || "Could not finish xAI OAuth with that code." };
+    }
+    return {
+      ok: true,
+      warnings: Array.isArray(data?.warnings) ? data.warnings : [],
+      statusEndpoint: data?.statusEndpoint || "/api/xai-oauth",
+      message: data?.message || "xAI OAuth connected. Refreshing models.",
+    };
+  }
+  function preferredXaiModelId() {
+    return /^grok[-\w.]+$/i.test(selectedRuntimeModelId || "")
+      ? selectedRuntimeModelId
+      : XAI_OAUTH_DEFAULT_MODEL;
+  }
+  function selectXaiCredentialMode(mode: "api-key" | "oauth") {
+    updateAgentRuntimeModel(runtimeProviderForCredentialMode(XAI_PROVIDER_SLUG, mode), preferredXaiModelId());
+  }
+  async function applyXaiOAuthProviderSelection() {
+    setXaiOAuthConnected(true);
+    setXaiOAuthStatusLoaded(true);
+    selectXaiCredentialMode("oauth");
+  }
+  const xaiOAuthStatusUrl = selectedSupportsXaiOAuth ? xaiOAuthStatusEndpoint() : "";
   const creditProviderBalances = {
     bankr: bankrCreditStatus?.balanceLabel ?? "",
     usepod: (() => {
@@ -315,6 +394,7 @@ export function AgentSettingsModal(props: any) {
       const value = runtimeIntegrationStatus?.providerStatus?.venice?.balanceUsd || veniceConfig.lastBalanceUsd || completedVeniceWallets.find((agent) => agent.venice?.lastBalanceUsd)?.venice?.lastBalanceUsd || "";
       return value && /^[\d\s,.]+$/.test(value) ? `$${value.trim()}` : value;
     })(),
+    [HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER]: hivemindosModelsConfig.lastCreditBalanceLabel || "",
   };
 
   const refreshSavedAgentSouls = useCallback(async () => {
@@ -388,7 +468,7 @@ export function AgentSettingsModal(props: any) {
     if (!modalOpen || !envLoaded) return;
     const liveCapable = (slug) => {
       const entry = providerCatalogEntry(slug);
-      if (!entry?.keyEnv || entry.virtual || slug === "openrouter") return false;
+      if (!entry?.keyEnv || entry.virtual) return false;
       return Boolean(entry.baseUrl) || slug === "usepod";
     };
     const targets = [...new Set(runtimeModelProviders.map((provider) => provider.slug))].filter((slug) => {
@@ -410,6 +490,25 @@ export function AgentSettingsModal(props: any) {
     });
     return () => { cancelled = true; };
   }, [modalOpen, envLoaded, runtimeModelProviders, envPresentKeys, fetchedProviderModels]);
+
+  useEffect(() => {
+    if (!modalOpen || !selectedSupportsXaiOAuth || !xaiOAuthStatusUrl) return;
+    let cancelled = false;
+    const resetTimer = window.setTimeout(() => {
+      if (!cancelled) setXaiOAuthStatusLoaded(false);
+    }, 0);
+    void (async () => {
+      const response = await fetch(xaiOAuthStatusUrl, { cache: "no-store" }).catch(() => null);
+      const data = response && response.ok ? await response.json().catch(() => null) : null;
+      if (cancelled) return;
+      setXaiOAuthConnected(Boolean(data?.usable || data?.login?.phase === "connected"));
+      setXaiOAuthStatusLoaded(true);
+    })();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(resetTimer);
+    };
+  }, [modalOpen, selectedSupportsXaiOAuth, xaiOAuthStatusUrl, envRefreshKey]);
 
   useEffect(() => {
     if (!modalOpen || !lmStudioSelected || lmStudioHasDiscoveredModels) {
@@ -439,6 +538,14 @@ export function AgentSettingsModal(props: any) {
     const interval = window.setInterval(refresh, 2500);
     return () => { window.clearTimeout(initial); window.clearInterval(interval); };
   }, [agentSettingsIntegrationTarget, lmStudioPendingLoadModelKeys, lmStudioSelected, modalOpen, refreshRuntimeIntegrations, runtimeIntegrationBusy]);
+
+  useEffect(() => {
+    if (!modalOpen || !lmStudioSelected || !lmStudioActiveDownloadCount || !agentSettingsIntegrationTarget) return;
+    const refresh = () => { if (runtimeIntegrationBusy !== "status") void refreshRuntimeIntegrations(agentSettingsIntegrationTarget); };
+    const initial = window.setTimeout(refresh, 900);
+    const interval = window.setInterval(refresh, 2500);
+    return () => { window.clearTimeout(initial); window.clearInterval(interval); };
+  }, [agentSettingsIntegrationTarget, lmStudioActiveDownloadCount, lmStudioSelected, modalOpen, refreshRuntimeIntegrations, runtimeIntegrationBusy]);
 
   useEffect(() => {
     if (!lmStudioPendingPrimaryAction || !selectedRuntimeModelId || !lmStudioSelectedModelLoaded || lmStudioSelectedModelLoading) return;
@@ -538,12 +645,10 @@ export function AgentSettingsModal(props: any) {
 
   async function loadLmStudioModel(modelKey: string, modelType?: string, pendingPrimaryAction: "save" | "create" | null = null) {
     if (!agentSettingsIntegrationTarget || !modelKey) return false;
-    const contextLength = runtimeModelDraft.contextLength.trim();
     setLmStudioPendingLoadModelKeys((current) => current.includes(modelKey) ? current : [...current, modelKey]);
     setLmStudioPendingPrimaryAction(pendingPrimaryAction);
     const result = await runRuntimeIntegrationAction("load-model", {
       model: modelKey,
-      contextLength: modelType === "embedding" || !contextLength ? undefined : Number(contextLength),
     }, {
       ...agentSettingsIntegrationTarget,
       provider: selectedProviderSlug,
@@ -554,6 +659,23 @@ export function AgentSettingsModal(props: any) {
       setLmStudioPendingPrimaryAction((current) => current === pendingPrimaryAction ? null : current);
     }
     return result?.ok !== false;
+  }
+
+  function selectLocalModel(modelKey: string, model?: { source?: string; baseUrl?: string; chatPath?: string; statusPath?: string }) {
+    const baseUrl = model?.source === "openai-server" ? model.baseUrl?.trim().replace(/\/+$/, "") : "";
+    if (activeRuntime === HIVEMIND_OS_RUNTIME && baseUrl) {
+      const patch = {
+        provider: selectedProviderSlug,
+        model: modelKey,
+        gatewayUrl: baseUrl,
+        chatPath: model?.chatPath || "/v1/chat/completions",
+        statusPath: model?.statusPath || "/v1/models",
+      };
+      if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, ...patch }));
+      else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, patch);
+      return;
+    }
+    updateAgentRuntimeModel(selectedProviderSlug, modelKey);
   }
 
   async function runPrimarySettingsAction() {
@@ -614,6 +736,12 @@ export function AgentSettingsModal(props: any) {
     void refreshRuntimeIntegrations({ ...(agentSettingsIntegrationTarget ?? {}), ...patch });
   }
 
+  async function applyHivemindosModelsSetupProfile(patch: Record<string, unknown>) {
+    if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, ...patch }));
+    else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, patch);
+    void refreshRuntimeIntegrations({ ...(agentSettingsIntegrationTarget ?? {}), ...patch });
+  }
+
   function openAeonGithubOauth() {
     if (aeonOauthConnecting) return;
     setAeonOauthConnecting(true);
@@ -665,7 +793,6 @@ export function AgentSettingsModal(props: any) {
           aeonRepo: current.aeonRepo || "",
           aeonBranch: current.aeonBranch || "main",
           aeonMode: current.aeonMode || "github",
-          a2aUrl: current.a2aUrl || "http://127.0.0.1:41241",
         } : {}),
       }));
       return;
@@ -681,7 +808,6 @@ export function AgentSettingsModal(props: any) {
           aeonLocalPath: roleModalAgent.aeonLocalPath || roleModalAgent.localDataDir || "~/.aeon",
           aeonBranch: roleModalAgent.aeonBranch || "main",
           aeonMode: roleModalAgent.aeonMode || "github",
-          a2aUrl: roleModalAgent.a2aUrl || "http://127.0.0.1:41241",
         } : {}),
       });
     }
@@ -758,6 +884,43 @@ export function AgentSettingsModal(props: any) {
     updateAgentRuntimeModel("venice", model);
     if (agentCreateMachine) {
       setAgentCreateDraft((current) => ({ ...current, ...patch, name: current.name.trim() ? current.name : defaultNameForRuntime(current.runtime, "venice") }));
+      setRuntimeModelSetupMode(null);
+      return;
+    }
+    if (roleModalAgent) {
+      updateAgentProfile(roleModalAgent.id, patch);
+      setRuntimeModelSetupMode(null);
+    }
+  }
+
+  function selectHivemindosModelsProvider() {
+    const currentModel = agentCreateMachine ? agentCreateDraft.model : roleModalAgent?.model;
+    const availableModels = runtimeModelProviders.find((provider) => provider.slug === HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER)?.models?.map((modelOption) => modelOption.id) ?? [];
+    const model = currentModel && availableModels.includes(currentModel) ? currentModel : HIVEMINDOS_MODELS_PROVIDER?.defaultModel || HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_MODEL;
+    const patch = {
+      provider: HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER,
+      model,
+      token: "",
+      hivemindosModels: {
+        fundingMode: hivemindosModelsConfig.fundingMode || "",
+        creditAccountId: hivemindosModelsConfig.creditAccountId || "",
+        walletVaultId: hivemindosModelsConfig.walletVaultId || "",
+        walletAddress: hivemindosModelsConfig.walletAddress || "",
+        walletNetwork: hivemindosModelsConfig.walletNetwork || "",
+        fundingWalletKind: hivemindosModelsConfig.fundingWalletKind || "",
+        fundingWalletLabel: hivemindosModelsConfig.fundingWalletLabel || "",
+        lastCheckoutSessionId: hivemindosModelsConfig.lastCheckoutSessionId || "",
+        lastCreditBalanceUsd: hivemindosModelsConfig.lastCreditBalanceUsd || "",
+        lastCreditBalanceLabel: hivemindosModelsConfig.lastCreditBalanceLabel || "",
+        lastCreditCheckedAt: hivemindosModelsConfig.lastCreditCheckedAt || "",
+        lastCheckedAt: hivemindosModelsConfig.lastCheckedAt || "",
+        lastTestStatus: hivemindosModelsConfig.lastTestStatus || "",
+        lastStatusMessage: hivemindosModelsConfig.lastStatusMessage || "",
+      },
+    };
+    updateAgentRuntimeModel(HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER, model);
+    if (agentCreateMachine) {
+      setAgentCreateDraft((current) => ({ ...current, ...patch, name: current.name.trim() ? current.name : defaultNameForRuntime(current.runtime, HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER) }));
       setRuntimeModelSetupMode(null);
       return;
     }
@@ -851,12 +1014,12 @@ export function AgentSettingsModal(props: any) {
   }
 
   function renderProviderModelPanel() {
-    if (!runtimeModelPanelAvailable && !usePodSelected && !veniceSelected) return null;
+    if (!runtimeModelPanelAvailable && !usePodSelected && !veniceSelected && !hivemindosModelsSelected) return null;
     const PROVIDER_TILE_LIMIT = 8;
-    const providerReady = (provider) => providerConfigured(provider.slug) || (provider.source !== "catalog" && provider.source !== "HivemindOS provider gateway" && (provider.totalModels || 0) > 0);
     const sortedProviders = [...runtimeModelProviders].sort((a, b) => {
-      const readyDelta = (providerReady(a) ? 0 : 1) - (providerReady(b) ? 0 : 1);
-      return readyDelta || String(a.name).localeCompare(String(b.name));
+      const selectedDelta = (a.slug === selectedProviderSlug ? 0 : 1) - (b.slug === selectedProviderSlug ? 0 : 1);
+      const orderDelta = providerSortIndex(a.slug) - providerSortIndex(b.slug);
+      return selectedDelta || orderDelta || String(a.slug).localeCompare(String(b.slug));
     });
     const visibleProviders = showAllProviders ? sortedProviders : sortedProviders.slice(0, PROVIDER_TILE_LIMIT);
     const hiddenProviderCount = Math.max(0, sortedProviders.length - PROVIDER_TILE_LIMIT);
@@ -899,9 +1062,11 @@ export function AgentSettingsModal(props: any) {
                   ? selectUsePodProvider
                   : provider.slug === "venice"
                     ? selectVeniceProvider
-                    : provider.slug === "bankr"
-                      ? selectBankrLlmProvider
-                      : () => updateAgentRuntimeModel(bestProviderModel === "adaptive" ? "openrouter" : provider.slug, bestProviderModel);
+                    : provider.slug === HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER
+                      ? selectHivemindosModelsProvider
+                      : provider.slug === "bankr"
+                        ? selectBankrLlmProvider
+                        : () => updateAgentRuntimeModel(bestProviderModel === "adaptive" ? "openrouter" : provider.slug, bestProviderModel);
                 return (
                   <button key={provider.slug} type="button" className="as-choice" data-active={selected || undefined} data-bee={`agent-provider-${provider.slug}`} aria-pressed={selected} onClick={selectProvider}>
                     <span className="t">
@@ -935,6 +1100,34 @@ export function AgentSettingsModal(props: any) {
           </div>
         ) : null}
 
+        {selectedSupportsXaiOAuth && !selectedNeedsKey && !selectedNeedsXaiOAuthSetup ? (
+          <section className={`${honeyStyles.scope} ${honeyStyles.card}`}>
+            <div className={honeyStyles.header}>
+              <div>
+                <p className="eyebrow">xAI connection</p>
+                <h3 className={honeyStyles.heading}>Choose how Grok connects</h3>
+                <p className={honeyStyles.subtext}>API key and OAuth stay available. Model picks use the selected connection.</p>
+              </div>
+              <span className={honeyStyles.pill}>{selectedUsesXaiOAuth ? "OAuth" : "API key"}</span>
+            </div>
+            <div className={honeyStyles.authMode} role="group" aria-label="xAI credential method">
+              <button type="button" className={honeyStyles.authModeButton} data-active={!selectedUsesXaiOAuth ? "" : undefined} aria-pressed={!selectedUsesXaiOAuth} onClick={() => selectXaiCredentialMode("api-key")}>
+                <KeyRound aria-hidden="true" />
+                API key
+              </button>
+              <button type="button" className={honeyStyles.authModeButton} data-active={selectedUsesXaiOAuth ? "" : undefined} aria-pressed={selectedUsesXaiOAuth} onClick={() => selectXaiCredentialMode("oauth")}>
+                <PlugZap aria-hidden="true" />
+                OAuth
+              </button>
+            </div>
+            <p className={honeyStyles.hint}>
+              {selectedUsesXaiOAuth
+                ? xaiOAuthStatusLoaded ? xaiOAuthConnected ? "Signed in with xAI OAuth." : "OAuth is selected. Connect your xAI account to use OAuth models." : "Checking xAI OAuth status."
+                : envLoaded && envPresentKeys.has("XAI_API_KEY") ? "Using XAI_API_KEY from the shared hive env." : "API key is selected. Add XAI_API_KEY to use API-key models."}
+            </p>
+          </section>
+        ) : null}
+
         {veniceSelected ? (
           <div className="as-block">
             <GroupLabel>Venice setup</GroupLabel>
@@ -959,8 +1152,19 @@ export function AgentSettingsModal(props: any) {
               existingWallets={completedUsePodWallets}
               fleetClass={fleetClass}
               requireCurrentSetup={usePodRequiresCurrentSetup}
-              onCancel={() => setRuntimeModelSetupMode(null)}
               onComplete={applyUsePodSetupProfile}
+            />
+          </div>
+        ) : shouldShowHivemindosModelsSetup ? (
+          <div className="as-block">
+            <GuidedHivemindosModelsSetup
+              key={hivemindosModelsSetupTarget?.id ?? "new-hivemindos-models"}
+              agent={hivemindosModelsSetupTarget}
+              busy={runtimeIntegrationBusy}
+              displayAgents={displayAgents}
+              walletsByAgent={walletsByAgent}
+              sharedVault={sharedVault}
+              onComplete={applyHivemindosModelsSetupProfile}
             />
           </div>
         ) : bankrSetupVisible && bankrNeedsKeySetup ? (
@@ -973,12 +1177,20 @@ export function AgentSettingsModal(props: any) {
           />
         ) : bankrSetupVisible && bankrLowCredits && !selectedRuntimeModels.length ? (
           <BankrLowCreditSetup diagnostic={bankrSetupDetail} initialCredits={bankrInitialCredits} onFunded={() => refreshRuntimeIntegrations(agentSettingsIntegrationTarget ?? undefined)} />
-        ) : selectedNeedsKey ? (
+        ) : selectedNeedsKey || selectedNeedsXaiOAuthSetup ? (
           <MissingSharedEnvKeySetup
             apiKeyName={selectedCatalogEntry.keyEnv}
             providerLabel={selectedCatalogEntry?.name}
             hermesProvider={selectedCatalogEntry?.slug}
             hermesKeyPresent={envHermesKeys.has(selectedCatalogEntry?.keyEnv)}
+            oauthLabel={selectedSupportsXaiOAuth ? "xAI OAuth" : undefined}
+            oauthDetail={selectedSupportsXaiOAuth ? "Use your xAI/Grok account with browser OAuth instead of storing XAI_API_KEY." : undefined}
+            oauthStatusEndpoint={selectedSupportsXaiOAuth ? xaiOAuthStatusEndpoint() : undefined}
+            initialAuthMode={selectedNeedsXaiOAuthSetup ? "oauth" : "api-key"}
+            onAuthModeChange={selectedSupportsXaiOAuth ? selectXaiCredentialMode : undefined}
+            onOAuthConnect={selectedSupportsXaiOAuth ? startXaiOAuthLogin : undefined}
+            onOAuthCodeSubmit={selectedSupportsXaiOAuth ? submitXaiOAuthCode : undefined}
+            onOAuthConnected={selectedSupportsXaiOAuth ? applyXaiOAuthProviderSelection : undefined}
             onSaved={async () => {
               await refreshRuntimeIntegrations(agentSettingsIntegrationTarget ?? undefined);
               setEnvRefreshKey((current) => current + 1);
@@ -986,27 +1198,32 @@ export function AgentSettingsModal(props: any) {
           />
         ) : !adaptiveProviderSelected ? (
           <div>
-            <GroupLabel>Model</GroupLabel>
-            {bankrLlmSelected && bankrLowCredits && selectedRuntimeModels.length ? (
-              <BankrLowCreditSetup diagnostic={bankrSetupDetail} variant="compact" initialCredits={bankrInitialCredits} onFunded={() => refreshRuntimeIntegrations(agentSettingsIntegrationTarget ?? undefined)} />
+            {!lmStudioSelected ? (
+              <>
+                <GroupLabel>Model</GroupLabel>
+                {bankrLlmSelected && bankrLowCredits && selectedRuntimeModels.length ? (
+                  <BankrLowCreditSetup diagnostic={bankrSetupDetail} variant="compact" initialCredits={bankrInitialCredits} onFunded={() => refreshRuntimeIntegrations(agentSettingsIntegrationTarget ?? undefined)} />
+                ) : null}
+                <ModelPillSelector
+                  models={runtimeModelOptions}
+                  selectedModelId={selectedRuntimeModelId}
+                  addModelDisabled={Boolean(runtimeIntegrationBusy)}
+                  canAddModel={runtimeCanAddCustomModel}
+                  emptyLabel={runtimeModelProviders.length ? "No models configured." : "Add a provider first. Models appear after a provider is connected."}
+                  onSelectModel={(modelId) => updateAgentRuntimeModel(modelId === "adaptive" && selectedProviderSlug === "openrouter" ? "openrouter" : selectedRuntimeProviderSlug, modelId)}
+                  onAddModel={() => setRuntimeModelSetupMode((current) => current === "model" ? null : "model")}
+                />
+              </>
             ) : null}
-            <ModelPillSelector
-              models={runtimeModelOptions}
-              selectedModelId={selectedRuntimeModelId}
-              addModelDisabled={Boolean(runtimeIntegrationBusy)}
-              canAddModel={runtimeCanAddCustomModel}
-              emptyLabel={lmStudioDiscoveryPending ? "Loading LM Studio models..." : runtimeModelProviders.length ? "No models configured." : "Add a provider first. Models appear after a provider is connected."}
-              onSelectModel={(modelId) => updateAgentRuntimeModel(modelId === "adaptive" && selectedProviderSlug === "openrouter" ? "openrouter" : selectedProviderSlug, modelId)}
-              onAddModel={() => setRuntimeModelSetupMode((current) => current === "model" ? null : "model")}
-            />
-            {lmStudioSelectedModelNeedsLoad ? (
+            {queenVoiceBrainAlert ? (
               <div className="as-info">
-                <span className="ic"><Download size={15} aria-hidden="true" /></span>
-                <p><strong>{selectedLmStudioModelLabel}</strong> {lmStudioSelectedModelLoading ? "is loading on the target machine." : "is downloaded. It will load before saving."}</p>
-                {lmStudioSelectedModelLoading ? <LmStudioLoadProgress label="Loading in LM Studio" /> : null}
-                <Btn sm disabled={runtimeIntegrationBusy === "load-model" || lmStudioSelectedModelLoading} onClick={() => selectedRuntimeModelId && void loadLmStudioModel(selectedRuntimeModelId, selectedLmStudioInventoryModel?.type)}>
-                  {runtimeIntegrationBusy === "load-model" || lmStudioSelectedModelLoading ? "Loading..." : "Load now"}
-                </Btn>
+                <span className="ic"><AlertTriangle size={15} aria-hidden="true" /></span>
+                <p>
+                  <strong>Voice turns are not using this model.</strong>{" "}
+                  {queenVoiceBrainAlert.lastError || "The runtime turn keeps failing."}{" "}
+                  Queen Bee is answering with the fallback model ({queenVoiceBrainAlert.fallbackModel || "gpt-4o-mini"}) until this is fixed
+                  {typeof queenVoiceBrainAlert.consecutiveFailures === "number" && queenVoiceBrainAlert.consecutiveFailures > 1 ? ` — ${queenVoiceBrainAlert.consecutiveFailures} failures in a row` : ""}.
+                </p>
               </div>
             ) : null}
             {lmStudioSelected ? (
@@ -1017,11 +1234,11 @@ export function AgentSettingsModal(props: any) {
                 lmStudioStatus={lmStudioStatus}
                 modelOptions={selectedRuntimeModels}
                 onLoadModel={loadLmStudioModel}
+                onSelectModel={selectLocalModel}
                 pendingLoadModelKeys={lmStudioPendingLoadModelKeys}
                 refreshRuntimeIntegrations={refreshRuntimeIntegrations}
                 runRuntimeIntegrationAction={runRuntimeIntegrationAction}
-                runtimeModelDraft={runtimeModelDraft}
-                setRuntimeModelDraft={setRuntimeModelDraft}
+                selectedModelId={selectedRuntimeModelId}
               />
             ) : null}
           </div>
@@ -1093,6 +1310,18 @@ export function AgentSettingsModal(props: any) {
   }
 
   function renderWorkerPanel() {
+    if (isQueenSettings) {
+      return (
+        <>
+          <AgentSettingsQueenPersonalityPanel
+            iconSrc={agentSettingsWorkerImage}
+            personality={currentSoulPrompt}
+            onChange={updateAgentSoulPrompt}
+          />
+          <AgentSettingsCustomInstructionsPanel />
+        </>
+      );
+    }
     if (!showWorkerClassSection) return null;
     if (agentWorkerClassView !== "presets") {
       return (
@@ -1218,64 +1447,13 @@ export function AgentSettingsModal(props: any) {
 
   function renderAeonConnection() {
     return (
-      <div className="as-panel-section">
-        <div>
-          <GroupLabel>Connection mode</GroupLabel>
-          <div className="as-mode-seg" role="tablist" aria-label="Connection mode">
-            {[
-              { id: "local", label: "Local repo", sub: "Use files on this Mac", Icon: FolderOpen },
-              { id: "github", label: "GitHub", sub: "Use repo and branch", Icon: Upload },
-              { id: "a2a", label: "A2A", sub: "Use gateway URL", Icon: PlugZap },
-            ].map((mode) => {
-              const active = aeonSettings.mode === mode.id;
-              return (
-                <button key={mode.id} type="button" data-active={active || undefined} onClick={() => updateAeonSettings({ aeonMode: mode.id })}>
-                  <mode.Icon size={15} aria-hidden="true" />
-                  <span>{mode.label}</span>
-                  <small>{mode.sub}</small>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        {aeonSettings.mode === "github" ? (
-          <div className="as-block accent">
-            <div className="as-github-connect">
-              <Upload size={17} aria-hidden="true" />
-              <div>
-                <strong>Connect with GitHub OAuth</strong>
-                <p>Saves GH_GLOBAL with repo, workflow, hook, org, and email access.</p>
-              </div>
-              <Btn variant="primary" sm disabled={aeonOauthConnecting} onClick={openAeonGithubOauth}>{aeonOauthConnecting ? "Opening..." : "Connect GitHub"}</Btn>
-            </div>
-            <details className="fb-disc" open={Boolean(aeonSettings.repo)}>
-              <summary>Advanced repo values</summary>
-              <div className="as-2col">
-                <Field label="GitHub repo"><TextInput className="fb-mono" value={aeonSettings.repo} onChange={(event) => updateAeonSettings({ aeonRepo: event.target.value })} placeholder="owner/repo" /></Field>
-                <Field label="Branch"><TextInput className="fb-mono" value={aeonSettings.branch} onChange={(event) => updateAeonSettings({ aeonBranch: event.target.value })} placeholder="main" /></Field>
-              </div>
-            </details>
-          </div>
-        ) : null}
-        {aeonSettings.mode === "a2a" ? (
-          <details className="fb-disc" open>
-            <summary>Advanced gateway URL</summary>
-            <Field label="A2A gateway URL"><TextInput className="fb-mono" value={aeonSettings.a2aUrl} onChange={(event) => updateAeonSettings({ a2aUrl: event.target.value, gatewayUrl: event.target.value })} placeholder="http://127.0.0.1:41241" /></Field>
-          </details>
-        ) : null}
-        {aeonSettings.mode === "local" ? (
-          <div className="as-block">
-            <div className="as-folder">
-              <span className="tile"><FolderOpen size={19} aria-hidden="true" /></span>
-              <div className="grow">
-                <span className="fb-eyebrow">AEON repo folder</span>
-                <code className="path">{aeonSettings.path || "Choose a folder"}</code>
-              </div>
-              <Btn sm onClick={() => void browseAgentRuntimeFolder?.()}><FolderOpen size={14} aria-hidden="true" />Browse</Btn>
-            </div>
-          </div>
-        ) : null}
-      </div>
+      <AgentSettingsAeonConnectionPanel
+        aeonOauthConnecting={aeonOauthConnecting}
+        aeonSettings={aeonSettings}
+        browseAgentRuntimeFolder={browseAgentRuntimeFolder}
+        openAeonGithubOauth={openAeonGithubOauth}
+        updateAeonSettings={updateAeonSettings}
+      />
     );
   }
 
@@ -1333,87 +1511,35 @@ export function AgentSettingsModal(props: any) {
   }
 
   function renderMemory() {
-    const shared = agentCreateMachine ? agentCreateDraft.useSharedVault : roleModalAgent?.useSharedVault !== false;
     return (
-      <div className="as-panel">
-        <PanelHead eyebrow="Memory" title="Brain and workspace" sub="Where this agent remembers, and the local folder it reads and writes." />
-        <div className="as-mem-card" data-on={shared || undefined}>
-          <div className="as-mem-head">
-            <span className="tile"><BrainCircuit size={19} aria-hidden="true" /></span>
-            <div className="grow">
-              <div className="t">Shared Obsidian brain</div>
-              <div className="s">{shared ? "One vault backs this agent's memory, tasks, and context." : "Off - this agent keeps its own isolated memory."}</div>
-            </div>
-            <Toggle on={shared} onChange={() => {
-              if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, useSharedVault: !shared }));
-              else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, { useSharedVault: !shared });
-            }} />
-          </div>
-          {shared ? (
-            <div className="as-mem-detail">
-              <div className="as-mem-path">
-                <FolderOpen size={15} aria-hidden="true" />
-                <code>{sharedVault?.enabled ? sharedVault.vaultPath || "Auto-detected vault" : "Shared brain is off in Vault settings"}</code>
-              </div>
-              <div className="as-mem-chips">
-                {["Memory", "Kanban", "Notifications", "Context"].map((label) => <span key={label} className="as-mem-chip"><Check size={11} aria-hidden="true" />{label}</span>)}
-              </div>
-            </div>
-          ) : null}
-        </div>
-        {!agentCreateMachine && roleModalAgent ? (
-          <div className="as-folder">
-            <span className="tile"><FolderOpen size={19} aria-hidden="true" /></span>
-            <div className="grow">
-              <span className="fb-eyebrow">{isAutopilotSettings ? "AEON repo folder" : "Runtime folder"}</span>
-              <code className="path">{runtimeFolderValue.trim() || "Managed by runtime"}</code>
-              <div className="desc">{isAutopilotSettings ? "The local AEON repo the dashboard reads and mirrors into Obsidian." : "Used as this agent's local memory and workspace folder."}</div>
-            </div>
-            <div className="acts">
-              <button type="button" className="fb-iconbtn" disabled={agentRuntimeFolderBrowsing} onClick={() => void browseAgentRuntimeFolder()} aria-label="Browse runtime folder"><FolderOpen size={15} aria-hidden="true" /></button>
-              <button type="button" className="fb-iconbtn" onClick={() => setAgentRuntimeFolderEditing((current) => !current)} aria-label="Edit runtime folder path"><Pencil size={15} aria-hidden="true" /></button>
-            </div>
-          </div>
-        ) : null}
-        {agentRuntimeFolderEditing && roleModalAgent ? (
-          <details className="fb-disc" open>
-            <summary>Advanced folder path</summary>
-            <div className="as-row">
-              <TextInput
-                className="fb-mono"
-                value={runtimeFolderValue}
-                onChange={(event) => {
-                  updateAgentProfile(roleModalAgent.id, isAutopilotSettings ? { aeonLocalPath: event.target.value, localDataDir: event.target.value } : { localDataDir: event.target.value });
-                  setAgentRuntimeFolderStatus("");
-                }}
-                placeholder={isAutopilotSettings ? "~/.aeon or ~/my-aeon-repo" : "Leave blank to use the runtime default"}
-              />
-              <Btn variant="primary" sm onClick={() => setAgentRuntimeFolderEditing(false)}><Check size={13} aria-hidden="true" />Done</Btn>
-            </div>
-          </details>
-        ) : null}
-        {agentRuntimeFolderStatus ? <p className="as-status">{agentRuntimeFolderStatus}</p> : null}
-      </div>
+      <AgentSettingsMemoryPanel
+        agentCreateDraft={agentCreateDraft}
+        agentCreateMachine={agentCreateMachine}
+        agentRuntimeFolderBrowsing={agentRuntimeFolderBrowsing}
+        agentRuntimeFolderEditing={agentRuntimeFolderEditing}
+        agentRuntimeFolderStatus={agentRuntimeFolderStatus}
+        browseAgentRuntimeFolder={browseAgentRuntimeFolder}
+        isAutopilotSettings={isAutopilotSettings}
+        roleModalAgent={roleModalAgent}
+        runtimeFolderValue={runtimeFolderValue}
+        setAgentCreateDraft={setAgentCreateDraft}
+        setAgentRuntimeFolderEditing={setAgentRuntimeFolderEditing}
+        setAgentRuntimeFolderStatus={setAgentRuntimeFolderStatus}
+        sharedVault={sharedVault}
+        updateAgentProfile={updateAgentProfile}
+      />
     );
   }
 
+  const agentCallSettings = buildAgentCallPreferences(agentCreateMachine ? agentCreateDraft.calls : roleModalAgent?.calls);
+  const updateAgentCalls = (patch) => {
+    const next = buildAgentCallPreferences({ ...agentCallSettings, ...patch });
+    if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, calls: next }));
+    else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, { calls: next });
+  };
+
   function renderSecurity() {
-    return (
-      <div className="as-panel">
-        <PanelHead eyebrow="Security" title="Guards and redaction" sub="Always-on protections that run locally before anything reaches a runtime." />
-        {[
-          ["Secret redaction", "Sensitive env values stay masked in runtime-facing prompts.", ShieldCheck],
-          ["Local-first paths", "Machine and directory access keeps collector boundaries intact.", FolderOpen],
-          ["Scoped tools", "Runtime actions appear only for capabilities the current adapter exposes.", Settings2],
-        ].map(([title, body, SecurityIcon]) => (
-          <article key={title} className="as-sec">
-            <span className="tile"><SecurityIcon size={19} aria-hidden="true" /></span>
-            <div><h5>{title}</h5><p>{body}</p></div>
-            <Badge tone="live"><Check size={11} aria-hidden="true" />Active</Badge>
-          </article>
-        ))}
-      </div>
-    );
+    return <AgentSettingsSecurityPanel />;
   }
 
   const panelContent = activePanel === "role"
@@ -1425,15 +1551,17 @@ export function AgentSettingsModal(props: any) {
         : activePanel === "tools"
           ? <AgentSettingsToolsPanel {...{ HERMES_UPDATE_INTEGRATION_KEYS, agentMailboxBusy, agentMailboxError, agentMailboxOverview, createMailboxForCurrentAgent, hermesUpdateRequired, refreshRuntimeIntegrations, roleModalAgent, runtimeCapabilities, runtimeIntegrationBusy, runtimeIntegrationStatus, runtimeSessionQuery, runtimeSessionResults, searchRuntimeSessionsForAgent, setRuntimeSessionQuery }} />
           : activePanel === "calls"
-            ? <AgentSettingsCallsPanel {...{ agentCreateDraft, agentCreateMachine, onQueenClapWakeEnabledChange, queenClapWakeEnabled, roleModalAgent, setAgentCreateDraft, updateAgentProfile }} />
-            : renderSecurity();
+            ? <AgentSettingsCallsPanel {...{ agentCreateDraft, agentCreateMachine, onQueenClapWakeEnabledChange, queenClapWakeEnabled, roleModalAgent, setAgentCreateDraft, updateAgentProfile }} onVoiceFailure={notifyAgentVoiceFailure} />
+            : activePanel === "ministry"
+              ? <AgentSettingsMinistryPanel {...{ agentCallSettings, displayAgents, roleModalAgent, updateAgentCalls }} />
+              : renderSecurity();
 
   const primaryActionBusy = runtimeIntegrationBusy === "create-agent" || runtimeIntegrationBusy === "load-model" || lmStudioSelectedModelLoading;
   const primaryActionLabel = (runtimeIntegrationBusy === "load-model" || lmStudioSelectedModelLoading) && lmStudioSelectedModelNeedsLoad
-    ? "Loading..."
+    ? "Loading model"
     : agentCreateMachine
       ? runtimeIntegrationBusy === "create-agent"
-        ? "Creating..."
+        ? "Creating agent"
         : lmStudioSelectedModelNeedsLoad
           ? "Load & Add Agent"
           : runtimeSettingsFeature(agentCreateDraft.runtime).createActionLabel || "Add agent"
@@ -1461,7 +1589,7 @@ export function AgentSettingsModal(props: any) {
         onPrimaryAction={runPrimarySettingsAction}
         panelContent={panelContent}
         primaryActionBusy={primaryActionBusy}
-        primaryActionDisabled={usePodCreateBlocked || veniceCreateBlocked || Boolean(agentCreateMachine && activeRuntimeNeedsSetup)}
+        primaryActionDisabled={usePodCreateBlocked || veniceCreateBlocked || hivemindosModelsCreateBlocked || Boolean(agentCreateMachine && activeRuntimeNeedsSetup)}
         primaryActionLabel={primaryActionLabel}
         roleModalAgent={roleModalAgent}
         runtimeLabel={runtimeLabel}

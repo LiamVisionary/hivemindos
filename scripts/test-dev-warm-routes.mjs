@@ -5,8 +5,8 @@ const source = readFileSync(new URL("./dev-server.mjs", import.meta.url), "utf8"
 
 assert.match(
   source,
-  /warmRoutes\.push\(\s*"\/stake",\s*"\/api\/chat\/agent-runtime",\s*"\/api\/chat\/image-generation",\s*"\/api\/queen-bee\/voice",/s,
-  "Default dev warm routes should keep the Stake page warm before heavy chat APIs.",
+  /warmRoutes\.push\(\s*"\/stake",\s*"\/api\/chat\/agent-runtime",\s*"\/api\/chat\/image-generation",\s*"\/api\/queen-bee\/chat",\s*"\/api\/queen-bee\/voice",/s,
+  "Default dev warm routes should keep the Stake page warm before heavy chat APIs, including Queen text chat.",
 );
 
 assert.match(

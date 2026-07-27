@@ -220,6 +220,11 @@ try {
   await writeFile(contractPath, ts.transpileModule(contractSource, {
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, moduleResolution: ts.ModuleResolutionKind.NodeNext },
   }).outputText, "utf8");
+  const contentAddressSource = await readFile(new URL("../src/lib/services/obsidian/content-address.ts", import.meta.url), "utf8");
+  const contentAddressPath = join(tmp, "content-address.mjs");
+  await writeFile(contentAddressPath, ts.transpileModule(contentAddressSource, {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022, moduleResolution: ts.ModuleResolutionKind.NodeNext },
+  }).outputText, "utf8");
 
   const compiled = await loadTs("../src/lib/services/obsidian/compiled-knowledge.ts", [
     [
@@ -229,6 +234,10 @@ try {
     [
       'import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";',
       "function resolveObsidianVaultPath(vaultPath) { return vaultPath; }",
+    ],
+    [
+      'import { contentAddressForText } from "@/lib/services/obsidian/content-address";',
+      `const { contentAddressForText } = await import(${JSON.stringify(pathToFileURL(contentAddressPath).href)});`,
     ],
     [
       'import { listFilesMatchingTerms, searchTermsFromQuery } from "@/lib/services/search/ripgrep-search";',

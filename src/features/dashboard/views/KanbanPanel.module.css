@@ -1,0 +1,103 @@
+.quickAddChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 2px 2px;
+}
+
+.quickAddChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  border: 1px solid var(--fc-line-2);
+  border-radius: 7px;
+  background: var(--fc-panel-2);
+  color: var(--fc-fg-2);
+  padding: 5px 7px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.template {
+  border-color: var(--fc-honey-line);
+  background: var(--fc-honey-soft);
+  color: var(--fc-honey);
+}
+
+.skill {
+  border-color: color-mix(in srgb, var(--fc-live) 32%, var(--fc-line-2));
+  color: var(--fc-live);
+}
+
+.quickAddChip svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+
+.quickAddChip button {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: currentColor;
+  cursor: pointer;
+  font: inherit;
+  line-height: 1;
+}
+
+.quickAddChip button:hover,
+.quickAddChip button:focus-visible {
+  border-color: currentColor;
+  outline: none;
+}
+
+.workBoardColumnHeader {
+  grid-template-columns: auto minmax(7ch, 1fr) auto !important;
+  align-items: start !important;
+}
+
+.workBoardColumnTitle {
+  min-width: 0;
+}
+
+.workBoardColumnTitle h3 {
+  overflow-wrap: break-word !important;
+  word-break: normal;
+}
+
+.workBoardColumnHeader .workBoardColumnTitle h3 {
+  letter-spacing: 0 !important;
+}
+
+.workBoardColumnTitle p {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.workBoardColumnActions {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 132px;
+  min-width: 0;
+}
+
+.workBoardColumnActions > * {
+  flex: 0 0 auto;
+}
+
+@media (max-width: 760px) {
+  .workBoardColumnActions {
+    max-width: 118px;
+  }
+}

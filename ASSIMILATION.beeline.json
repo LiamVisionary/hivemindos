@@ -1,0 +1,77 @@
+{
+  "created_at": "2026-07-14T22:32:43.034697+00:00",
+  "request": "Add Beeline family profiles with isolated integrations, OAuth accounts, MCPs, Chrome profiles, and agent-opaque credential use",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemind-cloud-services",
+      "source_path": "workers/x-api-gateway/src/index.ts",
+      "target_path": "src/lib/services/beeline/broker-client.ts",
+      "reuse_type": "adapted_code",
+      "note": "official hosted gateway URL validation and server-only token forwarding"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/app/api/integrations/x-managed/route.ts",
+      "target_path": "src/app/api/beeline/broker/route.ts",
+      "reuse_type": "adapted_code",
+      "note": "authenticated local-to-hosted broker boundary with profile capability checks"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/browser-use-runner.ts",
+      "target_path": "src/app/api/beeline/actions/route.ts",
+      "reuse_type": "adapted_code",
+      "note": "family-scoped real Chrome profile routing"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/features/integrations/IntegrationsView.tsx",
+      "target_path": "src/features/beeline/BeelineConnectionsPanel.tsx",
+      "reuse_type": "style_adapted",
+      "note": "OAuth launch refresh and connection management interactions"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/hive-actions/catalog.ts",
+      "target_path": "src/lib/services/hive-actions/beeline.ts",
+      "reuse_type": "config_adapted",
+      "note": "discoverable action metadata and confirmation contracts"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-agent-provider-integrations.mjs",
+      "target_path": "scripts/test-beeline-profiles.mjs",
+      "reuse_type": "test_adapted",
+      "note": "hermetic TypeScript boundary test structure"
+    },
+    {
+      "source_repo": "open-source-cooperative/keyring-rs",
+      "source_path": "keyring/src/v1.rs",
+      "target_path": "src-tauri/src/beeline_credentials/storage.rs",
+      "reuse_type": "adapted_code",
+      "note": "cross-platform Apple Keychain Windows Credential Manager and Linux Secret Service selection"
+    },
+    {
+      "source_repo": "browser-use/browser-use",
+      "source_path": "browser_use/skill_cli/main.py",
+      "target_path": "src-tauri/src/beeline_credentials/browser.rs",
+      "reuse_type": "adapted_code",
+      "note": "authenticated local daemon request protocol without secret command arguments"
+    },
+    {
+      "source_repo": "browser-use/browser-use",
+      "source_path": "browser_use/skill_cli/daemon.py",
+      "target_path": "src-tauri/src/beeline_credentials/browser.rs",
+      "reuse_type": "adapted_code",
+      "note": "one-command socket response handling and secret-echo sanitization"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/browser-use-runner.ts",
+      "target_path": "src/lib/services/browser-use-runner.ts",
+      "reuse_type": "adapted_code",
+      "note": "family session mutual exclusion using existing run-root and redacted logging conventions"
+    }
+  ]
+}

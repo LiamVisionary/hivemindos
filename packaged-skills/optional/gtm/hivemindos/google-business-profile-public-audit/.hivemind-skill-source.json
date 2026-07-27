@@ -1,0 +1,18 @@
+{
+  "upstreamName": "Google Business Profile Public Audit",
+  "upstreamSlug": "google-business-profile-public-audit",
+  "hiveSlug": "google-business-profile-public-audit",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/gtm/hivemindos/google-business-profile-public-audit",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-16T23:02:02Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional GTM skills",
+  "sourcePath": "packaged-skills/optional/gtm/hivemindos/google-business-profile-public-audit",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Generalizes the diagnosis-step integration into lead-gen pipeline phrasing so the gbp_audit artifact feeds any outbound workflow, such as the packaged small-business-preview-engine skill.",
+    "Removes internal case-library paths in favor of a generic workspace case-note convention.",
+    "Keeps the read-only public-data boundary, presence-only credential checks, and fabrication bans."
+  ]
+}

@@ -5,14 +5,16 @@ import { openNativeDirectory } from "@/lib/native/filesystem";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { NATIVE_SETUP_RERUN_EVENT, readNativeSetupStatus } from "@/lib/native/setup";
 import { renderBeeSoulTemplate, type BeeWorkerPreset } from "@/lib/config/bee-worker-presets";
+import { stampAgentProfileConfigurationPatch } from "@/lib/config/agent-profile-configuration";
 import { DEFAULT_RESEARCH_METHOD } from "@/lib/config/research-methods";
 import { isMobileMachineOs } from "@/features/fleet/fleet-identity";
 import { saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
-import { mruRuntime, rememberMruRuntime } from "@/features/dashboard/agent-mru-runtime";
-import { HIVEMIND_OS_RUNTIME, defaultAgentNameForRuntime, runtimeIntegrationFeature, runtimeLocalDataDirPatch, runtimePostCreateAction, runtimeProfileFeature, runtimeSettingsFeature, type AgentProfile, type AgentRuntime, type BeeWorkerClass } from "@/lib/types/agent-runtime";
+import { rememberMruRuntime } from "@/features/dashboard/agent-mru-runtime";
+import { DEFAULT_NEW_AGENT_RUNTIME, HIVEMIND_OS_RUNTIME, defaultAgentNameForRuntime, runtimeIntegrationFeature, runtimeLocalDataDirPatch, runtimePostCreateAction, runtimeProfileFeature, runtimeSettingsFeature, type AgentProfile, type AgentRuntime, type BeeWorkerClass } from "@/lib/types/agent-runtime";
 import { DEFAULT_MOBILE_AGENT_MODEL, mobileAgentMachineKey, mobileAgentProfileFromRecord, type MobileAgentHostRecord, type MobileAgentRecord } from "@/lib/types/mobile-agents";
 import type { AgentCreateDraft, AgentSettingsPanel, AgentWorkerClassView, RuntimeModelDraft, RuntimeModelSetupMode } from "@/features/dashboard/agent-settings-types";
 import type { DashboardView, DiscoveredMachine, MachineGroup, RuntimeEnvSyncResponse, RuntimeIntegrationStatus, RuntimeModelSelection, RuntimeSessionSearchResult, WorkerClassDraft } from "@/features/dashboard/dashboard-types";
+import { requestRuntimeIntegrationAction, requestRuntimeIntegrationStatus, type RuntimeIntegrationActionResult } from "@/features/dashboard/runtime-integration-client";
 
 type UseAgentControllerProps = {
   RUNTIME_LABELS: Record<string, string>;
@@ -116,13 +118,18 @@ export function useAgentController(props: UseAgentControllerProps) {
   function updateAgentProfile(agentId: string, patch: Partial<AgentProfile>) {
     setAgents((current) => {
       const existing = current.find((agent) => agent.id === agentId);
+      const discovered = displayAgents.find((agent) => agent.id === agentId);
+      const target = existing ?? discovered;
+      const stampedPatch = stampAgentProfileConfigurationPatch(patch);
+      const nextPatch = target?.beeRole === "queen" && typeof patch.name === "string"
+        ? { ...stampedPatch, queenNameCustomized: true }
+        : stampedPatch;
       if (existing) {
         return current.map((agent) => (
-          agent.id === agentId ? { ...agent, ...patch } : agent
+          agent.id === agentId ? { ...agent, ...nextPatch } : agent
         ));
       }
-      const discovered = displayAgents.find((agent) => agent.id === agentId);
-      return discovered ? [...current, { ...discovered, ...patch }] : current;
+      return discovered ? [...current, { ...discovered, ...nextPatch }] : current;
     });
   }
 
@@ -225,9 +232,9 @@ export function useAgentController(props: UseAgentControllerProps) {
         return;
       }
     }
-    // Adding an agent (not editing): prefer the runtime the user reached for
-    // most recently, falling back to the selected agent's runtime, then Hermes.
-    const selectedRuntime = mobileMachine ? HIVEMIND_OS_RUNTIME : runtime ?? mruRuntime() ?? selectedAgent?.runtime ?? "hermes";
+    // Adding an agent (not editing): Hermes is the approachable default while
+    // an explicitly chosen runtime card still opens that runtime directly.
+    const selectedRuntime = mobileMachine ? HIVEMIND_OS_RUNTIME : runtime ?? DEFAULT_NEW_AGENT_RUNTIME;
     setAgentRoleModalId("");
     setAgentRenameEditing(false);
     setAgentRuntimeFolderEditing(false);
@@ -260,6 +267,7 @@ export function useAgentController(props: UseAgentControllerProps) {
       runtime: selectedRuntime,
       provider: defaultProvider,
       model: mobileMachine ? DEFAULT_MOBILE_AGENT_MODEL : runtimeSettings.defaultModel || "",
+      hivemindosModels: undefined,
       calls: baseAgent.calls,
       workerClass: defaultWorkerClass,
       customWorkerClass: undefined,
@@ -274,7 +282,6 @@ export function useAgentController(props: UseAgentControllerProps) {
       aeonRepo: autopilotDefaults ? baseAgent.aeonRepo || "" : undefined,
       aeonBranch: autopilotDefaults ? baseAgent.aeonBranch || autopilotDefaults.branch : undefined,
       aeonMode: autopilotDefaults ? baseAgent.aeonMode || autopilotDefaults.mode : undefined,
-      a2aUrl: autopilotDefaults ? baseAgent.a2aUrl || autopilotDefaults.a2aUrlFallback : undefined,
     });
     if (mobileMachine) prefillMobileAgentModel(machine);
   }
@@ -338,29 +345,24 @@ export function useAgentController(props: UseAgentControllerProps) {
     const targetKey = runtimeIntegrationTargetKey(agent);
     setRuntimeIntegrationBusy("status");
     setRuntimeIntegrationMessage("");
-    const response = await fetch(`/api/runtimes/${agent.runtime}/integrations`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ agent }),
-    }).catch(() => null);
-    const data = await response?.json().catch(() => null) as { ok?: boolean; status?: RuntimeIntegrationStatus; error?: string } | null;
-    if (!response?.ok || !data?.ok || !data.status) {
+    const integrationStatus = await requestRuntimeIntegrationStatus(agent).catch((error) => {
       setRuntimeIntegrationBusy("");
-      setRuntimeIntegrationMessage(data?.error ?? "Could not read runtime integrations.");
-      return;
-    }
-    const status = { ...data.status, targetKey };
+      setRuntimeIntegrationMessage(error instanceof Error ? error.message : "Could not read runtime integrations.");
+      return null;
+    });
+    if (!integrationStatus) return;
+    const status = { ...integrationStatus, targetKey };
     setRuntimeIntegrationStatus(status);
-    if (data.status.modelSelection) {
+    if (integrationStatus.modelSelection) {
       setRuntimeModelSelectionsByRuntime((current) => ({
         ...current,
-        [data.status!.runtime]: data.status!.runtime === HIVEMIND_OS_RUNTIME
-          ? mergeRuntimeModelSelections(current[data.status!.runtime], data.status!.modelSelection!)
-          : data.status!.modelSelection,
+        [integrationStatus.runtime]: integrationStatus.runtime === HIVEMIND_OS_RUNTIME
+          ? mergeRuntimeModelSelections(current[integrationStatus.runtime], integrationStatus.modelSelection!)
+          : integrationStatus.modelSelection,
       }));
     }
     setRuntimeIntegrationBusy("");
-    const usePodStatus = data.status.providerStatus?.usePod;
+    const usePodStatus = integrationStatus.providerStatus?.usePod;
     if (agent.id && agent.provider === "usepod" && usePodStatus) {
       updateAgentProfile(agent.id, {
         usePod: {
@@ -380,7 +382,7 @@ export function useAgentController(props: UseAgentControllerProps) {
         },
       });
     }
-    const veniceStatus = data.status.providerStatus?.venice;
+    const veniceStatus = integrationStatus.providerStatus?.venice;
     if (agent.id && agent.provider === "venice" && veniceStatus) {
       updateAgentProfile(agent.id, {
         venice: {
@@ -402,8 +404,8 @@ export function useAgentController(props: UseAgentControllerProps) {
         },
       });
     }
-    if (runtimeIntegrationFeature(data.status.runtime).updateRequirementDetail === "hermes") {
-      setHermesUpdateRequiredDetail(hermesUpdateDetail(data.status));
+    if (runtimeIntegrationFeature(integrationStatus.runtime).updateRequirementDetail === "hermes") {
+      setHermesUpdateRequiredDetail(hermesUpdateDetail(integrationStatus));
     }
   }
 
@@ -412,16 +414,14 @@ export function useAgentController(props: UseAgentControllerProps) {
     if (!targetAgent) return { ok: false, error: "Agent profile is required." };
     setRuntimeIntegrationBusy(action);
     setRuntimeIntegrationMessage("");
-    const response = await fetch(`/api/runtimes/${targetAgent.runtime}/integrations`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ agent: targetAgent, action, input }),
-    }).catch(() => null);
-    const data = await response?.json().catch(() => null) as { ok?: boolean; message?: string; error?: string; logPath?: string; output?: string } | null;
+    const data: RuntimeIntegrationActionResult = await requestRuntimeIntegrationAction(targetAgent, action, input).catch((error) => ({
+      ok: false,
+      error: error instanceof Error ? error.message : "Runtime action failed.",
+    }));
     setRuntimeIntegrationBusy("");
-    if (!response?.ok || !data?.ok) {
-      setRuntimeIntegrationMessage(data?.error ?? "Runtime action failed.");
-      return { ok: false, error: data?.error ?? "Runtime action failed." };
+    if (!data.ok) {
+      setRuntimeIntegrationMessage(data.error ?? "Runtime action failed.");
+      return data;
     }
     setRuntimeIntegrationMessage(data.message ?? data.output ?? "Runtime action completed.");
     await refreshRuntimeIntegrations(targetAgent);
@@ -509,7 +509,6 @@ export function useAgentController(props: UseAgentControllerProps) {
     const autopilotRuntime = runtimeSettings.kind === "autopilot";
     const baseAgent = createAgentProfile(runtime, runtimeCount(agents, runtime) + 1);
     const autopilotLocalPath = autopilotDefaults ? agentCreateDraft.aeonLocalPath || autopilotDefaults.localPathFallback : "";
-    const autopilotGatewayUrl = autopilotDefaults ? agentCreateDraft.a2aUrl || baseAgent.a2aUrl || autopilotDefaults.a2aUrlFallback : baseAgent.gatewayUrl;
     const draft: AgentProfile = {
       ...baseAgent,
       name: agentCreateDraft.name.trim() || defaultAgentNameForRuntime(displayAgents.length ? displayAgents : agents, runtime, RUNTIME_LABELS, { provider: agentCreateDraft.provider }),
@@ -522,15 +521,16 @@ export function useAgentController(props: UseAgentControllerProps) {
       adaptiveRouting: agentCreateDraft.adaptiveRouting,
       usePod: agentCreateDraft.usePod,
       venice: agentCreateDraft.venice,
+      hivemindosModels: agentCreateDraft.hivemindosModels,
       calls: agentCreateDraft.calls,
       localDataDir: autopilotRuntime ? autopilotLocalPath : baseAgent.localDataDir || "",
       aeonLocalPath: autopilotRuntime ? autopilotLocalPath : undefined,
       aeonRepo: autopilotRuntime ? agentCreateDraft.aeonRepo || baseAgent.aeonRepo || "" : undefined,
       aeonBranch: autopilotRuntime ? agentCreateDraft.aeonBranch || autopilotDefaults?.branch : undefined,
       aeonMode: autopilotRuntime ? agentCreateDraft.aeonMode || autopilotDefaults?.mode : undefined,
-      a2aUrl: autopilotRuntime ? autopilotGatewayUrl : undefined,
-      gatewayUrl: autopilotRuntime ? autopilotGatewayUrl : baseAgent.gatewayUrl,
-      beeRole: "worker",
+      a2aUrl: undefined,
+      gatewayUrl: autopilotRuntime ? "" : baseAgent.gatewayUrl,
+      beeRole: agentCreateDraft.beeRole ?? baseAgent.beeRole,
       workerClass: agentCreateDraft.workerClass,
       customWorkerClass: agentCreateDraft.customWorkerClass,
       customWorkerClasses: agentCreateDraft.customWorkerClasses,

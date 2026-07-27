@@ -1,8 +1,10 @@
 export const RUNTIME_STREAM_EVENT_TYPES = {
   THINKING: "chat.thinking",
   REASONING: "chat.reasoning",
+  COLD_START: "chat.cold_start",
   MESSAGE_START: "chat.start",
   TEXT_DELTA: "chat.text",
+  TEXT_RESET: "chat.text.reset",
   DONE: "chat.done",
   ERROR: "chat.error",
   TOOL_GENERATING: "chat.tool.generating",
@@ -32,10 +34,18 @@ export function normalizeRuntimeStreamEvent(raw: RuntimeStreamEvent): RuntimeStr
     case "assistant.delta":
     case "text_delta":
       return { type: RUNTIME_STREAM_EVENT_TYPES.TEXT_DELTA, delta: String(rest.delta ?? rest.content ?? rest.text ?? "") };
+    case "assistant.reset":
+    case "text_reset":
+      return { type: RUNTIME_STREAM_EVENT_TYPES.TEXT_RESET, content: String(rest.content ?? rest.text ?? "") };
     case "thinking":
       return { type: RUNTIME_STREAM_EVENT_TYPES.THINKING, delta: String(rest.delta ?? rest.content ?? "") };
     case "reasoning":
       return { type: RUNTIME_STREAM_EVENT_TYPES.REASONING, delta: String(rest.delta ?? rest.content ?? "") };
+    case "cold_start":
+    case "cold-start":
+    case "runtime.cold_start":
+    case "runtime.cold-start":
+      return { type: RUNTIME_STREAM_EVENT_TYPES.COLD_START, ...rest };
     case "message.started":
     case "run.started":
       return { type: RUNTIME_STREAM_EVENT_TYPES.MESSAGE_START, ...rest };

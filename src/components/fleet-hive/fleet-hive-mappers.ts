@@ -78,6 +78,19 @@ export function mapFleetMachine(machine: FleetMachine): HiveMachine {
   };
 }
 
-export function mapFleetMachines(machines: FleetMachine[]): HiveMachine[] {
-  return machines.map(mapFleetMachine);
+/**
+ * Map machines, optionally joining in Work-Board-derived delegation health so a
+ * box that's silently failing every delegation stops reading as healthy-green.
+ * `health` is keyed by machine id (see machine-delegation-health.ts); omit it and
+ * the view behaves exactly as before.
+ */
+export function mapFleetMachines(
+  machines: FleetMachine[],
+  health?: Map<string, import("./machine-delegation-health").MachineDelegationHealth>,
+): HiveMachine[] {
+  return machines.map((machine) => {
+    const mapped = mapFleetMachine(machine);
+    const h = health?.get(machine.id);
+    return h ? { ...mapped, health: h } : mapped;
+  });
 }

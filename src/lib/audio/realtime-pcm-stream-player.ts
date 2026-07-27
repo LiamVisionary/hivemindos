@@ -1,5 +1,7 @@
 "use client";
 
+import { tapQueenOutput } from "@/lib/audio/queen-voice-amplitude";
+
 export type RealtimePcmPlaybackMetrics = {
   firstByteMs: number;
   firstAudioMs: number;
@@ -7,6 +9,8 @@ export type RealtimePcmPlaybackMetrics = {
   underruns: number;
   underrunMs: number;
   playbackTailMs: number;
+  /** Audio actually rendered to the output. 0 means the turn was silent. */
+  playedMs: number;
 };
 
 export type RealtimePcmStreamPlayerOptions = {
@@ -15,6 +19,13 @@ export type RealtimePcmStreamPlayerOptions = {
   startBufferMs?: number;
   maxBufferMs?: number;
   signal?: AbortSignal;
+  /**
+   * Reuse an already-unlocked AudioContext (e.g. the mic session's) instead of
+   * creating one. WKWebView only reliably runs contexts created/resumed under
+   * a user gesture, so long-lived sessions pass their own. The player never
+   * closes an external context.
+   */
+  context?: AudioContext;
   onFirstByte?: (elapsedMs: number) => void;
   onFirstAudio?: (elapsedMs: number) => void;
   onUnderrun?: (event: { underruns: number; bufferedMs: number }) => void;
@@ -43,6 +54,11 @@ class HivemindRealtimePcmPlayer extends AudioWorkletProcessor {
     this.ended = false;
     this.endedPosted = false;
     this.wasUnderrunning = false;
+    // Rebuffer-on-underrun: after the queue runs dry, hold silence until this
+    // many frames accumulate instead of chasing each arriving chunk — a feed
+    // slower than realtime then produces a few clean pauses, not per-chunk
+    // syllable chopping. Grows with consecutive underruns.
+    this.resumeFrames = 0;
     this.lastStatsFrame = 0;
     this.port.onmessage = (event) => {
       const message = event.data || {};
@@ -83,6 +99,12 @@ class HivemindRealtimePcmPlayer extends AudioWorkletProcessor {
       output[channel].fill(0);
     }
     if (!this.started) return 0;
+    // Rebuffering after an underrun: stay silent until enough audio queued
+    // (unless the stream already ended - then drain whatever is left).
+    if (this.wasUnderrunning && !this.ended && this.bufferedFrames < this.resumeFrames) {
+      this.underrunFrames += outputFrames;
+      return 0;
+    }
 
     let written = 0;
     while (written < outputFrames) {
@@ -111,6 +133,12 @@ class HivemindRealtimePcmPlayer extends AudioWorkletProcessor {
       if (!this.wasUnderrunning) {
         this.wasUnderrunning = true;
         this.underruns += 1;
+        // Hold silence until this much audio re-accumulates; repeated
+        // underruns (feed slower than realtime) earn a longer runway.
+        this.resumeFrames = Math.min(
+          sampleRate * 0.72,
+          sampleRate * 0.24 * Math.min(this.underruns, 3),
+        );
         this.port.postMessage({
           type: "underrun",
           underruns: this.underruns,
@@ -151,6 +179,26 @@ registerProcessor("${WORKLET_PROCESSOR_NAME}", HivemindRealtimePcmPlayer);
 function getAudioContextClass() {
   const audioWindow = window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext };
   return audioWindow.AudioContext || audioWindow.webkitAudioContext;
+}
+
+// One worklet-module load per context: registerProcessor throws on a repeat
+// registration, and external contexts (mic session) outlive individual players.
+const workletModuleLoads = new WeakMap<BaseAudioContext, Promise<void>>();
+
+function ensureWorkletModule(context: AudioContext) {
+  const existing = workletModuleLoads.get(context);
+  if (existing) return existing;
+  const load = (async () => {
+    const url = URL.createObjectURL(new Blob([workletSource], { type: "application/javascript" }));
+    try {
+      await context.audioWorklet.addModule(url);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  })();
+  workletModuleLoads.set(context, load);
+  load.catch(() => workletModuleLoads.delete(context));
+  return load;
 }
 
 function postToWorklet(node: AudioWorkletNode, message: Record<string, unknown>, transfer?: Transferable[]) {
@@ -214,10 +262,10 @@ export class RealtimePcmStreamPlayer {
   private readonly startBufferMs: number;
   private readonly signal?: AbortSignal;
   private readonly onUnderrun?: (event: { underruns: number; bufferedMs: number }) => void;
+  private readonly externalContext: AudioContext | null;
   private context: AudioContext | null = null;
   private gain: GainNode | null = null;
   private node: AudioWorkletNode | null = null;
-  private workletUrl = "";
   private outputSampleRate = 0;
   private bufferedFrames = 0;
   private writtenFrames = 0;
@@ -226,7 +274,9 @@ export class RealtimePcmStreamPlayer {
   private firstAudioAt = 0;
   private underruns = 0;
   private underrunFrames = 0;
+  private playedFrames = 0;
   private ended = false;
+  private stopped = false;
   private endResolver: (() => void) | null = null;
 
   constructor(options: RealtimePcmStreamPlayerOptions) {
@@ -235,20 +285,32 @@ export class RealtimePcmStreamPlayer {
     this.startBufferMs = Math.max(40, options.startBufferMs ?? DEFAULT_START_BUFFER_MS);
     this.signal = options.signal;
     this.onUnderrun = options.onUnderrun;
+    this.externalContext = options.context ?? null;
   }
 
   async connect() {
     if (this.context && this.node) return;
-    const AudioContextClass = getAudioContextClass();
-    if (!AudioContextClass) throw new Error("Web Audio is not available in this browser.");
-    const context = new AudioContextClass({ latencyHint: "interactive" });
-    await waitWithTimeout(context.resume().catch(() => undefined), 2_000, "AudioContext resume");
+    let context = this.externalContext;
+    if (!context) {
+      const AudioContextClass = getAudioContextClass();
+      if (!AudioContextClass) throw new Error("Web Audio is not available in this browser.");
+      context = new AudioContextClass({ latencyHint: "interactive" });
+    }
+    if (context.state !== "running") {
+      await waitWithTimeout(context.resume().catch(() => undefined), 2_000, "AudioContext resume");
+    }
+    // A context that would not start renders every scheduled frame silently;
+    // fail loudly so callers can fall back to an audible path instead.
+    if (context.state !== "running") {
+      if (!this.externalContext) await context.close().catch(() => undefined);
+      throw new Error(`AudioContext is ${context.state}; audio output is blocked.`);
+    }
     this.outputSampleRate = context.sampleRate;
-    this.workletUrl = URL.createObjectURL(new Blob([workletSource], { type: "application/javascript" }));
     if (!context.audioWorklet || !window.AudioWorkletNode) {
+      if (!this.externalContext) await context.close().catch(() => undefined);
       throw new Error("AudioWorklet is not available in this browser.");
     }
-    await waitWithTimeout(context.audioWorklet.addModule(this.workletUrl), 5_000, "AudioWorklet module load");
+    await waitWithTimeout(ensureWorkletModule(context), 5_000, "AudioWorklet module load");
     const node = new AudioWorkletNode(context, WORKLET_PROCESSOR_NAME, {
       numberOfInputs: 0,
       numberOfOutputs: 1,
@@ -258,6 +320,9 @@ export class RealtimePcmStreamPlayer {
     gain.gain.value = 1;
     node.connect(gain);
     gain.connect(context.destination);
+    // Side-tap the single node every queen PCM frame passes through, so the
+    // fleet animation can breathe to her live streamed-TTS amplitude.
+    tapQueenOutput(gain, context);
     node.port.onmessage = (event: MessageEvent<WorkletEvent>) => this.handleWorkletEvent(event.data);
     postToWorklet(node, { type: "configure", channels: this.inputChannels });
     this.context = context;
@@ -307,6 +372,8 @@ export class RealtimePcmStreamPlayer {
   }
 
   async stop() {
+    if (this.stopped) return;
+    this.stopped = true;
     if (this.node) postToWorklet(this.node, { type: "stop" });
     try {
       this.node?.disconnect();
@@ -316,9 +383,8 @@ export class RealtimePcmStreamPlayer {
     }
     this.node = null;
     this.gain = null;
-    if (this.workletUrl) URL.revokeObjectURL(this.workletUrl);
-    this.workletUrl = "";
-    await this.context?.close().catch(() => undefined);
+    // External contexts (the caller's mic/VAD session) stay open and running.
+    if (!this.externalContext) await this.context?.close().catch(() => undefined);
     this.context = null;
     this.endResolver?.();
     this.endResolver = null;
@@ -332,7 +398,13 @@ export class RealtimePcmStreamPlayer {
       underruns: this.underruns,
       underrunMs: Math.round(this.underrunFrames / Math.max(1, this.outputSampleRate) * 1000),
       playbackTailMs: Math.round(this.bufferedFrames / Math.max(1, this.outputSampleRate) * 1000),
+      playedMs: Math.round(this.playedFrames / Math.max(1, this.outputSampleRate) * 1000),
     };
+  }
+
+  /** Audio queued for playback so far, in output-clock milliseconds. */
+  get scheduledMs() {
+    return Math.round(this.writtenFrames / Math.max(1, this.outputSampleRate) * 1000);
   }
 
   private get startFrames() {
@@ -349,6 +421,7 @@ export class RealtimePcmStreamPlayer {
       this.bufferedFrames = event.bufferedFrames;
       this.underruns = event.underruns;
       this.underrunFrames = event.underrunFrames;
+      this.playedFrames = event.playedFrames;
       return;
     }
     if (event.type === "underrun") {
@@ -363,6 +436,7 @@ export class RealtimePcmStreamPlayer {
       this.ended = true;
       this.underruns = event.underruns;
       this.underrunFrames = event.underrunFrames;
+      this.playedFrames = event.playedFrames;
       this.bufferedFrames = 0;
       this.endResolver?.();
       this.endResolver = null;
@@ -370,7 +444,18 @@ export class RealtimePcmStreamPlayer {
   }
 }
 
-export async function playRealtimePcmStream(response: Response, options: RealtimePcmStreamPlayerOptions & { startedAt: number }) {
+export async function playRealtimePcmStream(
+  response: Response,
+  options: RealtimePcmStreamPlayerOptions & {
+    startedAt: number;
+    /**
+     * When the stream dies after at least this much audio was already
+     * scheduled, finish playing what arrived instead of throwing — a caller
+     * falling back would re-speak the whole reply from the top.
+     */
+    acceptErrorAfterMs?: number;
+  },
+) {
   if (!response.body) throw new Error("Local TTS returned an empty audio stream.");
   const sampleRate = Number(response.headers.get("x-audio-sample-rate")) || options.sampleRate || 24_000;
   const channels = Math.max(1, Number(response.headers.get("x-audio-channels")) || options.channels || 1);
@@ -381,6 +466,7 @@ export async function playRealtimePcmStream(response: Response, options: Realtim
   let carry = new Uint8Array(0);
   let firstByteMs = 0;
   let firstAudioMs = 0;
+  let streamErrorAccepted = false;
 
   const feed = (chunk: Uint8Array) => {
     const bytes = carry.byteLength ? new Uint8Array(carry.byteLength + chunk.byteLength) : chunk;
@@ -397,24 +483,41 @@ export async function playRealtimePcmStream(response: Response, options: Realtim
     }
   };
 
+  // Stop output immediately on abort rather than at the next read boundary.
+  const onAbort = () => {
+    void reader.cancel().catch(() => undefined);
+    void player.stop();
+  };
+  options.signal?.addEventListener("abort", onAbort, { once: true });
   try {
-    for (;;) {
-      if (options.signal?.aborted) break;
-      const { value, done } = await reader.read();
-      if (done) break;
-      if (!value?.byteLength) continue;
-      if (!firstByteMs) {
-        firstByteMs = Date.now() - options.startedAt;
-        options.onFirstByte?.(firstByteMs);
+    try {
+      for (;;) {
+        if (options.signal?.aborted) break;
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (!value?.byteLength) continue;
+        if (!firstByteMs) {
+          firstByteMs = Date.now() - options.startedAt;
+          options.onFirstByte?.(firstByteMs);
+        }
+        feed(value);
       }
-      feed(value);
-    }
-    if (carry.byteLength >= bytesPerFrame) {
-      player.feedPcm16(carry.slice(0, carry.byteLength - (carry.byteLength % bytesPerFrame)));
+      if (carry.byteLength >= bytesPerFrame) {
+        player.feedPcm16(carry.slice(0, carry.byteLength - (carry.byteLength % bytesPerFrame)));
+      }
+    } catch (error) {
+      const acceptAfterMs = options.acceptErrorAfterMs;
+      const enoughPlayedToAccept =
+        !options.signal?.aborted && typeof acceptAfterMs === "number" && player.scheduledMs >= acceptAfterMs;
+      if (!enoughPlayedToAccept) throw error;
+      // Mid-stream death with real audio already queued: let it play out, but
+      // tell the caller the reply is INCOMPLETE so it can say so on screen.
+      streamErrorAccepted = true;
     }
     player.end();
     await player.waitForEnd();
   } finally {
+    options.signal?.removeEventListener("abort", onAbort);
     await reader.cancel().catch(() => undefined);
     await player.stop();
   }
@@ -427,5 +530,6 @@ export async function playRealtimePcmStream(response: Response, options: Realtim
     firstByteMs,
     firstAudioMs: playbackFirstAudioMs || firstAudioMs,
     firstAudioAt: metrics.firstAudioAt || (firstAudioMs ? options.startedAt + firstAudioMs : 0),
+    streamErrorAccepted,
   };
 }

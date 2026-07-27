@@ -3,10 +3,17 @@ node_modules/
 .next-tauri/
 .next-tauri-build/
 .next-tauri-static-build/
+# macOS TMPDIR (/var/folders/...) written repo-relative when an absolute path
+# is passed as a Next distDir — never real repo content.
+var/
 .setup-cache/
+# Source-commit marker written by the git-free archive bootstrap/updater
+# (setup.rs, update-hivemindos.ps1); never exists in a real git checkout.
+.hivemindos-source-commit
 out/
 dist/
 bin/
+.codebase-memory/
 /remotion/
 /.remotion-capture/
 /public/remotion/
@@ -18,6 +25,18 @@ promo-videos/
 .env.*
 !.env.example
 
+# Local capture/QA artifacts (session screenshots, dogfood run summaries)
+.codex-nango-*.png
+.hivemindos-dogfood/
+
+# Chat App Builder projects land under <working-directory>/scratchpad/ (see
+# chatAppProjectDirectory in src/lib/services/chat/chat-app-artifact.ts). On
+# fleet machines the chat working directory is often the collector checkout
+# itself; untracked scratchpad projects kept /health reporting dirty=true
+# forever and looped full fleet-update reinstalls (2026-07-18). Unanchored on
+# purpose so nested working directories inside the checkout are covered too.
+scratchpad/
+
 *.tsbuildinfo
 *.log
 npm-debug.log*
@@ -25,7 +44,7 @@ pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 coverage/
-artifacts/
+/artifacts/
 .outputs/
 .hermes/
 strix-results/
@@ -64,6 +83,7 @@ src-tauri/binaries/
 /contracts/cache/
 # Rust build output for the gateway-host crate (sibling of the ignored target/).
 src-tauri/target-gwhost/
+src-tauri/link-runtime/
 # Jekyll/sass build cache for the docs site.
 .sass-cache/
 __pycache__/
@@ -71,3 +91,16 @@ __pycache__/
 
 # Evo optimization workspace (worktrees + experiment state)
 .evo/
+.e2e-loop-templates-*.json
+
+# Official hosted-service source lives outside this MIT-licensed public repo.
+# Keep the public boundary note, but do not commit private Worker source here.
+workers/*
+!workers/README.md
+
+# Local-only operator reference to the private Cloudflare Workers repo. Points at
+# machine-local paths / infra; never committed.
+WORKERS.local.md
+
+# Local internal HIVE bridge mechanism/build record. Intentionally untracked.
+/contracts/HIVE_BRIDGE_INTERNAL_MECHANISM_AND_BUILD.md

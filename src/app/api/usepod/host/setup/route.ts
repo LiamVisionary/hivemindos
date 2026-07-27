@@ -1,6 +1,7 @@
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from "child_process";
 import { constants } from "fs";
 import { access, mkdir, readFile, rm, writeFile } from "fs/promises";
+import { hostname } from "os";
 import { homedir } from "@/lib/home-dir";
 import { dirname, join } from "path";
 import { promisify } from "util";
@@ -14,6 +15,7 @@ import {
   getUsePodBondUsdcBalance,
   postUsePodOperatorBond,
 } from "@/lib/services/usepod/host-bond";
+import { writeSharedHiveEnvValues } from "@/lib/services/hive-env-write";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -301,46 +303,29 @@ async function savedUsePodHostBondSignature() {
   return candidates.find(Boolean) ?? "";
 }
 
-function normalizeEnvValue(value: string) {
-  return value.replace(/^export\s+/, "").trim();
-}
-
-function quoteEnvValue(value: string) {
-  if (!value || /[\s#'"\\$`]/.test(value)) {
-    return `'${value.replace(/'/g, "'\"'\"'")}'`;
-  }
-  return value;
-}
-
-function upsertEnvValues(raw: string, values: Record<string, string>) {
-  const remaining = new Map(Object.entries(values));
-  const output: string[] = [];
-  for (const line of raw.split(/\r?\n/)) {
-    if (!line.trim()) {
-      output.push(line);
-      continue;
-    }
-    const match = normalizeEnvValue(line).match(/^([A-Za-z_][A-Za-z0-9_]*)=/);
-    if (!match || !remaining.has(match[1])) {
-      output.push(line);
-      continue;
-    }
-    const value = remaining.get(match[1]) ?? "";
-    output.push(`${match[1]}=${quoteEnvValue(value)}`);
-    remaining.delete(match[1]);
-  }
-  if (remaining.size && output.length && output[output.length - 1]?.trim()) output.push("");
-  for (const [key, value] of remaining) {
-    output.push(`${key}=${quoteEnvValue(value)}`);
-  }
-  return `${output.join("\n").replace(/\n*$/, "")}\n`;
+/** A stable, readable per-machine env suffix (the machine NAME, uppercased). The
+ *  UsePod host token/wallet/bond are this machine's OWN provider identity, so
+ *  they must not collide or strand across the fleet. hive-env-add treats the
+ *  whole `USEPOD_HOST_` prefix as local-only (never syncs), so this suffix is
+ *  self-documentation + defense-in-depth, not the sync boundary. */
+function machineEnvSuffix(): string {
+  const cleaned = (hostname() || "").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").toUpperCase();
+  return cleaned || "LOCAL";
 }
 
 async function saveUsePodHostEnvValues(values: Record<string, string>) {
-  await mkdir(dirname(HIVE_ENV_FILE), { recursive: true, mode: 0o700 });
-  const raw = await readFile(HIVE_ENV_FILE, "utf8").catch(() => "");
-  await writeFile(HIVE_ENV_FILE, upsertEnvValues(raw, values), { mode: 0o600 });
-  for (const [key, value] of Object.entries(values)) process.env[key] = value;
+  // Persist each UsePod host credential BOTH bare (back-compat for existing
+  // readers) and machine-scoped (`USEPOD_HOST_TOKEN__<MACHINE>`), so a fleet
+  // that ever re-enables broad sync can never overwrite one host's identity
+  // with another's. Both live under the local-only `USEPOD_HOST_` prefix.
+  const suffix = machineEnvSuffix();
+  const expanded: Record<string, string> = {};
+  for (const [key, value] of Object.entries(values)) {
+    expanded[key] = value;
+    if (/^USEPOD_HOST_/.test(key)) expanded[`${key}__${suffix}`] = value;
+  }
+  await writeSharedHiveEnvValues(expanded);
+  for (const [key, value] of Object.entries(expanded)) process.env[key] = value;
 }
 
 function isSolanaAddress(value: string) {
@@ -429,11 +414,17 @@ async function savedUsePodHostWalletAddress() {
   ];
   for (const path of [HIVE_ENV_FILE, HERMES_ENV_FILE]) {
     const raw = await readFile(path, "utf8").catch(() => "");
+    // Also accept the machine-scoped `USEPOD_HOST_WALLET_ADDRESS__<MACHINE>`
+    // form, so a machine whose bare key was pruned still finds its own wallet.
     candidates.push(...parseEnvFileValues(raw, (key) => (
-      key === "USEPOD_HOST_WALLET_ADDRESS" ||
+      /^USEPOD_HOST_WALLET_ADDRESS(?:_|$)/.test(key) ||
       key === "USEPOD_HOST_WALLET" ||
       key === "SOLANA_WALLET_ADDRESS"
     )));
+  }
+  // Machine-scoped keys already loaded into the process env (this run's writes).
+  for (const [key, value] of Object.entries(process.env)) {
+    if (/^USEPOD_HOST_WALLET_ADDRESS(?:_|$)/.test(key)) candidates.push(value?.trim() || "");
   }
   return candidates.find(isSolanaAddress) ?? "";
 }

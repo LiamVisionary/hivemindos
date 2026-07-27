@@ -18,10 +18,16 @@ import type {
   FleetAgentCapabilityIcon,
 } from "@/components/fleet/fleet-data";
 import { simpleStableHash } from "@/features/dashboard/dashboard-light-helpers";
+import { machineNeedsAppBuilderRepair } from "@/features/fleet/app-builder-collector-capability";
 import {
   filterSuppressedAgents,
-  machineExactIdentity,
+  machineRemoteShellAvailable,
 } from "@/features/fleet/fleet-identity";
+import {
+  dedupeMachineGroups,
+  isTailnetSelfShadowGroup,
+  readyTailnetSelfShadowBases,
+} from "@/features/dashboard/dashboard-display-helpers";
 
 // Hoisted so the alternation is compiled once instead of being re-created on
 // every .test() call inside the per-agent fleetViewData loop (which runs over
@@ -682,6 +688,9 @@ export function useDashboardDerivedState(props: any) {
       if (previousMessage?.imageGeneration && !next.imageGeneration) {
         next = { ...next, imageGeneration: previousMessage.imageGeneration };
       }
+      if (previousMessage?.feedback && !next.feedback) {
+        next = { ...next, feedback: previousMessage.feedback };
+      }
       return next;
     };
     const findLastMessageIndex = (
@@ -708,8 +717,16 @@ export function useDashboardDerivedState(props: any) {
           chatDisplayContent(message).trim()
         ) {
           output[previousIndex] = withPreservedProcessEvents(message, previous);
+          continue;
         }
-        continue;
+        if (sameMessage(previous, message) || !chatDisplayContent(message).trim()) {
+          continue;
+        }
+        // Two DIFFERENT visible texts under one source identity means the
+        // identity was mis-stamped (positional merge pairing) — dropping the
+        // later one deleted real responses from the thread. Keep it.
+      } else if (sourceKey) {
+        seenSourceKeys.add(sourceKey);
       }
       if (sameMessage(output.at(-1), message)) {
         const previous = output.at(-1);
@@ -720,6 +737,12 @@ export function useDashboardDerivedState(props: any) {
           output[output.length - 1] = {
             ...previous,
             processEvents: message.processEvents,
+          } as ChatMessage;
+        }
+        if (message.feedback && message.feedback.providedAt !== previous?.feedback?.providedAt) {
+          output[output.length - 1] = {
+            ...output.at(-1),
+            feedback: message.feedback,
           } as ChatMessage;
         }
         continue;
@@ -911,7 +934,9 @@ export function useDashboardDerivedState(props: any) {
         capabilities: discovered?.capabilities,
         envSync: discovered?.envSync,
         system: discovered?.system,
+        fleetPolicy: discovered?.fleetPolicy,
         lastSeenAt: discovered?.lastSeenAt,
+        reportedUnreachableBy: discovered?.reportedUnreachableBy,
       };
     });
     discoveredMachines.forEach((machine) => {
@@ -954,74 +979,11 @@ export function useDashboardDerivedState(props: any) {
         capabilities: machine.capabilities,
         envSync: machine.envSync,
         system: machine.system,
+        fleetPolicy: machine.fleetPolicy,
         lastSeenAt: machine.lastSeenAt,
+        reportedUnreachableBy: machine.reportedUnreachableBy,
       });
     });
-    const dedupeMachineGroups = (items: MachineGroup[]) => {
-      const byIdentity = new Map<string, MachineGroup>();
-      const score = (machine: MachineGroup) =>
-        (machine.self ? 10_000 : 0) +
-        (machine.collector === "ready" ? 1_000 : 0) +
-        machine.agents.length * 10 +
-        (machine.online ? 5 : 0);
-      const stableMachineId = (item: MachineGroup) => {
-        const machineId =
-          item.collector === "ready"
-            ? (item.machineId?.trim().toLowerCase() ?? "")
-            : "";
-        return /^hivemind-machine-[a-f0-9]{32}$/.test(machineId)
-          ? machineId
-          : "";
-      };
-      // Bridge machineId keys to name-identity keys: a bare tailscale device
-      // (no collector probe, so no machineId) must still merge with the
-      // discovered copy of the same machine, which is keyed by machineId.
-      // Identities claimed by more than one machineId are ambiguous (distinct
-      // physical machines whose names collide after -N stripping), so leave
-      // those unbridged rather than merging a shadow into the wrong machine.
-      const machineIdByNameIdentity = new Map<string, string>();
-      for (const item of items) {
-        const machineId = stableMachineId(item);
-        if (!machineId) continue;
-        // Register the exact name identity alongside machineIdentityFromParts:
-        // the self machine resolves to "self" there, but its own embedded link
-        // node can show up as a separate tailnet device whose only handle is
-        // the exact identity ("liamsmacbookpro") — without this entry that
-        // shadow never bridges to the real machine.
-        const identities = new Set(
-          [
-            machineIdentityFromParts(item),
-            machineExactIdentity(item.name, item.dnsName),
-          ].filter(Boolean),
-        );
-        for (const nameIdentity of identities) {
-          const claimed = machineIdByNameIdentity.get(nameIdentity);
-          machineIdByNameIdentity.set(
-            nameIdentity,
-            claimed && claimed !== machineId ? "" : machineId,
-          );
-        }
-      }
-      for (const item of items) {
-        const nameIdentity = machineIdentityFromParts(item);
-        const key =
-          stableMachineId(item) ||
-          machineIdByNameIdentity.get(nameIdentity) ||
-          nameIdentity;
-        const previous = byIdentity.get(key);
-        if (!previous) {
-          byIdentity.set(key, item);
-          continue;
-        }
-        const preferred = score(item) > score(previous) ? item : previous;
-        const agents = [...previous.agents, ...item.agents].filter(
-          (agent, index, all) =>
-            all.findIndex((candidate) => candidate.id === agent.id) === index,
-        );
-        byIdentity.set(key, { ...preferred, agents });
-      }
-      return [...byIdentity.values()];
-    };
     const unassigned: MachineGroup = {
       key: "unassigned",
       name: "Saved profiles",
@@ -1065,7 +1027,13 @@ export function useDashboardDerivedState(props: any) {
       }
     }
 
+    // Fold a rename-orphaned system tailnet node (a bridge-less duplicate a
+    // ready collector claims via tailnetSelf) out of the fleet view, so it does
+    // not resurface as an empty "pending" ghost machine rebuilt from the raw
+    // tailscale device list. See readyTailnetSelfShadowBases.
+    const tailnetSelfShadowBases = readyTailnetSelfShadowBases(discoveredMachines);
     const visibleGroups = dedupeMachineGroups(groups)
+      .filter((group) => !isTailnetSelfShadowGroup(group, tailnetSelfShadowBases))
       .filter(isVisibleFleetMachine)
       .map((machine) => ({
         ...machine,
@@ -1193,6 +1161,7 @@ export function useDashboardDerivedState(props: any) {
           !mobile &&
           machine.collector === "ready" &&
           (versionState === "stale" ||
+            machineNeedsAppBuilderRepair(machine) ||
             machineNeedsChatBridgeRepair(machine) ||
             machineNeedsEnvHttpSyncRepair(machine) ||
             machineNeedsSkillSyncRepair(machine));
@@ -1229,6 +1198,10 @@ export function useDashboardDerivedState(props: any) {
             "not connected",
           ip: machine.ip || machine.address || "—",
           collectorUrl: machine.collectorUrl,
+          remoteShell: machineRemoteShellAvailable(
+            machine.os || machine.system?.platform,
+            machine.capabilities?.remoteShell,
+          ),
           ping: machine.online ? fleetMetric(machine.key, 4, 68) : 0,
           cpu:
             machine.system?.cpuPct ??
@@ -1306,6 +1279,8 @@ export function useDashboardDerivedState(props: any) {
               id: agent.id,
               name: agent.name,
               runtime: RUNTIME_LABELS[agent.runtime],
+              provider: agent.provider,
+              model: agent.model,
               canChat: runtimeCan(agent, "chat"),
               state: fleetAgentState(
                 agent,
@@ -1351,8 +1326,9 @@ export function useDashboardDerivedState(props: any) {
     const edges: Array<[string, string]> = machines
       .slice(1)
       .map((machine) => [machines[0]?.id ?? machine.id, machine.id]);
-    const tasks: FleetTask[] = Object.entries(agentWorkById).flatMap(
-      ([agentId, work]) => {
+    const seenTaskIds = new Set<string>();
+    const tasks: FleetTask[] = Object.entries(agentWorkById)
+      .flatMap(([agentId, work]) => {
         const agent = agentById.get(agentId);
         const machine = machineByAgentId.get(agentId);
         return work.slice(0, 3).map(
@@ -1381,8 +1357,18 @@ export function useDashboardDerivedState(props: any) {
                     : "queue",
           }),
         );
-      },
-    );
+      })
+      // The same underlying task can surface under more than one agent — e.g. a
+      // shared Hermes `~/.hermes` session, whose snapshot id is
+      // `hermes-state:<sessionId>` with no agent prefix. Per-agent lists are
+      // already deduped in candidateWorkById, but this cross-agent flatten is
+      // not, so drop repeats here to keep FleetTask ids unique for React keys
+      // and stop the task channel/ticker showing the same session twice.
+      .filter((task) => {
+        if (seenTaskIds.has(task.id)) return false;
+        seenTaskIds.add(task.id);
+        return true;
+      });
     const machineAlertTimestamp = (machine: MachineGroup) => {
       const handshakeAt = machine.lastHandshake
         ? Date.parse(machine.lastHandshake)
@@ -1525,6 +1511,7 @@ export function useDashboardDerivedState(props: any) {
           if (!machine) return true;
           return (
             fleetVersionState(machine) === "stale" ||
+            machineNeedsAppBuilderRepair(machine) ||
             machineNeedsChatBridgeRepair(machine) ||
             machineNeedsEnvHttpSyncRepair(machine) ||
             machineNeedsSkillSyncRepair(machine)
@@ -1559,6 +1546,7 @@ export function useDashboardDerivedState(props: any) {
             if (!machine) return true;
             return (
               fleetVersionState(machine) === "stale" ||
+              machineNeedsAppBuilderRepair(machine) ||
               machineNeedsChatBridgeRepair(machine) ||
               machineNeedsEnvHttpSyncRepair(machine) ||
               machineNeedsSkillSyncRepair(machine)
@@ -1962,7 +1950,7 @@ export function useDashboardDerivedState(props: any) {
       {
         id: "integrations" as const,
         label: "Integrations",
-        detail: "Nango host",
+        detail: "app connections",
       },
       {
         id: "maintenance" as const,
@@ -2042,6 +2030,7 @@ export function useDashboardDerivedState(props: any) {
           activeView === "env" ||
           activeView === "integrations" ||
           activeView === "my-apps" ||
+          activeView === "mini-apps" ||
           activeView === "phone" ||
           activeView === "aeon" ||
           activeView === "fusion" ||
@@ -2057,6 +2046,7 @@ export function useDashboardDerivedState(props: any) {
       history: { label: "Work", title: "What the hive finished recently" },
       wallet: { label: "Wallets", title: "How the agents spend" },
       trade: { label: "Trade", title: "Buy, sell, and swap crypto & stocks" },
+      socials: { label: "Socials", title: "Where the hive speaks in public" },
       vault: { label: "Brain Graph", title: "What the hive remembers" },
       integrations: { label: "Integrations", title: "What APIs connect" },
       maintenance: {
@@ -2064,10 +2054,10 @@ export function useDashboardDerivedState(props: any) {
         title: "What the hive repairs",
       },
       sessions: { label: "Sessions", title: "What agents already said" },
-      tools: { label: "Tools", title: "What agents can invoke" },
+      tools: { label: "Capability Store", title: "What agents can invoke" },
       memory: { label: "Memory", title: "What memory grows" },
       files: { label: "Brain Files", title: "What agents inspect" },
-      notifications: { label: "Alerts", title: "What alerts need" },
+      notifications: { label: "Alerts", title: "What needs attention" },
       messaging: { label: "Messaging", title: "Where agents can message" },
       chat: {
         label: "Agent Chat",
@@ -2081,10 +2071,12 @@ export function useDashboardDerivedState(props: any) {
         label: "Apps & Services",
         title: "What runs and what agents can call",
       },
+      "mini-apps": { label: "HivemindOS Mini Apps", title: "Focused tools powered by the hive" },
       phone: { label: "Phone", title: "What your phone calls about" },
       aeon: { label: "Aeon", title: "What runs unattended" },
       fusion: { label: "Hive Fusion", title: "What the hive can create" },
       governance: { label: "Zero Human Company", title: "How the hive is held accountable" },
+      podcast: { label: "Podcast", title: "Turn sources into a two-host deep dive" },
     };
     const header = headers[activeView] ?? { label: "Zero Human Company", title: "" };
     return {
@@ -2135,6 +2127,9 @@ export function useDashboardDerivedState(props: any) {
           venice: agentCreateMachine
             ? agentCreateDraft.venice
             : draftAgent.venice,
+          hivemindosModels: agentCreateMachine
+            ? agentCreateDraft.hivemindosModels
+            : draftAgent.hivemindosModels,
           telemetryUrl:
             agentCreateMachine?.collectorUrl ?? draftAgent.telemetryUrl,
         }),
@@ -2154,6 +2149,7 @@ export function useDashboardDerivedState(props: any) {
     agentCreateDraft.runtime,
     agentCreateDraft.provider,
     agentCreateDraft.model,
+    agentCreateDraft.hivemindosModels,
   ]);
   return {
     discoveredAgents,

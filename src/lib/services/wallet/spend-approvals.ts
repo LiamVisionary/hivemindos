@@ -6,7 +6,14 @@ import { randomUUID } from "crypto";
 
 import { homedir } from "@/lib/home-dir";
 import type { AgentSpendCapAsset } from "@/lib/types/agent-wallet";
+import type { ReasoningTrail } from "@/lib/types/reasoning-trail";
 import type { SpendKind } from "@/lib/services/wallet/spend-ledger";
+import { sendApprovalPush } from "@/lib/services/push/mobile-push";
+import {
+  buildSpendApprovalReasoning,
+  fallbackSpendApprovalReasoning,
+  type SpendApprovalReasoningInput,
+} from "@/lib/utils/spend-approval-reasoning";
 
 /**
  * Human-in-the-loop escalation queue. When a spend exceeds an agent's approval
@@ -28,12 +35,16 @@ export type SpendApprovalRequest = {
   assetAmount?: number;
   target?: string;
   reason: string;
+  explanation?: ReasoningTrail;
   status: SpendApprovalStatus;
   createdAt: string;
   createdAtMs: number;
   expiresAtMs: number;
   decidedAt?: string;
   decidedBy?: string;
+  /** Optional human note attached at decision time — a change request when
+   *  denied, or a caveat/condition when approved. Surfaced back to the agent. */
+  decisionNote?: string;
 };
 
 export const SPEND_APPROVALS_PATH = path.join(homedir(), ".hivemindos", "spend-approvals.json");
@@ -86,9 +97,18 @@ function matchesGrant(
   agentId: string,
   asset: AgentSpendCapAsset,
   amountUsd: number,
+  kind: SpendKind,
+  target?: string,
 ): boolean {
+  // A grant is scoped to the exact action the human approved: same agent, asset,
+  // KIND, and TARGET, for at most the approved amount. Previously it matched only
+  // agent + asset + amount, so an approval for "Firecrawl top-up $40 → firecrawl"
+  // could be silently consumed by the same agent's next $40 spend of any kind to
+  // any target. kind + target now bind it to the approved action.
   return record.agentId === agentId
     && record.asset === asset
+    && record.kind === kind
+    && (record.target ?? "") === (target ?? "")
     && amountUsd <= record.amountUsd + AMOUNT_EPSILON;
 }
 
@@ -124,16 +144,38 @@ export type EnqueueApprovalInput = {
   assetAmount?: number;
   target?: string;
   reason: string;
+  thresholdUsd?: number;
+  explanation?: Partial<ReasoningTrail>;
 };
+
+function ensureExplanation(record: SpendApprovalRequest): SpendApprovalRequest {
+  if (record.explanation) return record;
+  const input: SpendApprovalReasoningInput = {
+    agentId: record.agentId,
+    agentName: record.agentName,
+    companyId: record.companyId,
+    kind: record.kind,
+    asset: record.asset,
+    amountUsd: record.amountUsd,
+    assetAmount: record.assetAmount,
+    target: record.target,
+    reason: record.reason,
+  };
+  return { ...record, explanation: fallbackSpendApprovalReasoning(input) };
+}
 
 export async function enqueueApproval(input: EnqueueApprovalInput): Promise<SpendApprovalRequest> {
   const now = Date.now();
   const records = expireStale(await readRaw(), now);
   const existing = findReusable(records, input.agentId, input.kind, input.asset, input.amountUsd, input.target);
   if (existing) {
+    if (!existing.explanation || input.explanation) {
+      existing.explanation = buildSpendApprovalReasoning(input);
+    }
     await writeRaw(records);
     return existing;
   }
+  const explanation = buildSpendApprovalReasoning(input);
   const record: SpendApprovalRequest = {
     id: randomUUID(),
     agentId: input.agentId,
@@ -145,6 +187,7 @@ export async function enqueueApproval(input: EnqueueApprovalInput): Promise<Spen
     assetAmount: input.assetAmount,
     target: input.target,
     reason: input.reason,
+    explanation,
     status: "pending",
     createdAt: new Date(now).toISOString(),
     createdAtMs: now,
@@ -152,6 +195,24 @@ export async function enqueueApproval(input: EnqueueApprovalInput): Promise<Spen
   };
   records.push(record);
   await writeRaw(records);
+  // Fire a background push to the phone for this NEW gate (the reuse path
+  // above returns early, so a duplicate retry never re-notifies). Best-effort:
+  // never let a push failure block the approval it was announcing.
+  const pendingCount = records.filter((r) => r.status === "pending").length;
+  void sendApprovalPush(
+    {
+      id: record.id,
+      agentName: record.agentName,
+      kind: record.kind,
+      asset: record.asset,
+      amountUsd: record.amountUsd,
+      target: record.target,
+      reason: record.reason,
+      summary: record.explanation?.headline,
+      companyId: record.companyId,
+    },
+    pendingCount,
+  ).catch(() => {});
   return record;
 }
 
@@ -160,7 +221,7 @@ export async function listApprovals(filter?: {
   agentId?: string;
   companyId?: string;
 }): Promise<SpendApprovalRequest[]> {
-  const records = await readApprovals();
+  const records = (await readApprovals()).map(ensureExplanation);
   await writeRaw(records); // persist any lazy expirations
   return records
     .filter((record) => (filter?.status ? record.status === filter.status : true))
@@ -173,6 +234,7 @@ export async function decideApproval(
   id: string,
   decision: "approved" | "denied",
   decidedBy?: string,
+  note?: string,
 ): Promise<SpendApprovalRequest | null> {
   const now = Date.now();
   const records = expireStale(await readRaw(), now);
@@ -186,6 +248,8 @@ export async function decideApproval(
   record.status = decision;
   record.decidedAt = new Date(now).toISOString();
   record.decidedBy = decidedBy;
+  const trimmedNote = note?.trim();
+  if (trimmedNote) record.decisionNote = trimmedNote;
   await writeRaw(records);
   return record;
 }
@@ -199,6 +263,8 @@ export async function consumeApproval(input: {
   agentId: string;
   asset: AgentSpendCapAsset;
   amountUsd: number;
+  kind: SpendKind;
+  target?: string;
   token?: string;
 }): Promise<SpendApprovalRequest | null> {
   const now = Date.now();
@@ -206,7 +272,7 @@ export async function consumeApproval(input: {
   const grant = records.find((record) => (
     record.status === "approved"
     && (input.token ? record.id === input.token : true)
-    && matchesGrant(record, input.agentId, input.asset, input.amountUsd)
+    && matchesGrant(record, input.agentId, input.asset, input.amountUsd, input.kind, input.target)
   ));
   if (!grant) {
     await writeRaw(records);

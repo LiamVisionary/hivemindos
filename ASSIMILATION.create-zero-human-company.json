@@ -1,0 +1,28 @@
+{
+  "created_at": "2026-07-11T04:48:43.969779+00:00",
+  "request": "Create a non-optional HivemindOS packaged skill that creates a Zero Human Company",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/app/api/founder/route.ts",
+      "target_path": "packaged-skills/auto-install/create-zero-human-company/SKILL.md",
+      "reuse_type": "config_adapted",
+      "note": "canonical compile/found creation path and approval posture"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/app/api/companies/import/route.ts",
+      "target_path": "packaged-skills/auto-install/create-zero-human-company/references/company-api.md",
+      "reuse_type": "config_adapted",
+      "note": "repository preview/import contract"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/app/api/companies/route.ts",
+      "target_path": "packaged-skills/auto-install/create-zero-human-company/references/company-api.md",
+      "reuse_type": "config_adapted",
+      "note": "company upsert governance verification and rollback actions"
+    }
+  ]
+}

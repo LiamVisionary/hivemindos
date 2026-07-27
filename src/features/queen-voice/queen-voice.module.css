@@ -23,83 +23,47 @@
   opacity: 1;
 }
 
-.glowSvg {
+/* Screen-perimeter glow body: a soft purple halo hugging the viewport edges
+   (inset box-shadow), gently cycling hue. Matches the Page Agent whole-page
+   glow; replaced the earlier SVG rounded-rect trace + warm brand gradient. */
+.glowFrame {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  transform: translateZ(0);
+  /* static base — also what shows under reduced motion */
+  box-shadow:
+    inset 0 0 44px 2px rgba(124, 77, 255, 0.5),
+    inset 0 0 120px 18px rgba(124, 77, 255, 0.22);
 }
 
-.glowBreath {
-  opacity: 0.92;
+.glowRootActive .glowFrame {
+  animation: queenVoiceEdgeGlow 3.6s ease-in-out infinite;
 }
 
-.glowTraceOuter,
-.glowTraceBloom,
-.glowTraceCore {
-  fill: none;
-  vector-effect: non-scaling-stroke;
-  mix-blend-mode: screen;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.glowTraceOuter {
-  stroke-width: 26;
-  opacity: 0.32;
-  animation: queenVoiceGlowOuterBreath 4.8s ease-in-out infinite;
-}
-
-.glowTraceBloom {
-  stroke-width: 16;
-  opacity: 0.42;
-  animation: queenVoiceGlowBloomBreath 4.8s ease-in-out infinite;
-}
-
-.glowTraceCore {
-  stroke-width: 6;
-  opacity: 0.18;
-  animation: queenVoiceGlowCoreBreath 4.8s ease-in-out infinite;
-}
-
-@keyframes queenVoiceGlowOuterBreath {
+/* purple -> magenta -> indigo */
+@keyframes queenVoiceEdgeGlow {
   0%,
   100% {
-    filter: blur(14px) saturate(1.32);
-    opacity: 0.22;
+    box-shadow:
+      inset 0 0 44px 2px rgba(124, 77, 255, 0.5),
+      inset 0 0 120px 18px rgba(124, 77, 255, 0.22);
   }
 
-  50% {
-    filter: blur(24px) saturate(1.5);
-    opacity: 0.42;
-  }
-}
-
-@keyframes queenVoiceGlowBloomBreath {
-  0%,
-  100% {
-    filter: blur(9px) saturate(1.32);
-    opacity: 0.28;
+  33% {
+    box-shadow:
+      inset 0 0 48px 3px rgba(184, 91, 255, 0.52),
+      inset 0 0 130px 20px rgba(184, 91, 255, 0.24);
   }
 
-  50% {
-    filter: blur(17px) saturate(1.45);
-    opacity: 0.48;
+  66% {
+    box-shadow:
+      inset 0 0 44px 2px rgba(99, 110, 241, 0.5),
+      inset 0 0 120px 18px rgba(99, 110, 241, 0.2);
   }
 }
 
-@keyframes queenVoiceGlowCoreBreath {
-  0%,
-  100% {
-    filter: blur(5px) saturate(1.24);
-    opacity: 0.1;
-  }
-
-  50% {
-    filter: blur(9px) saturate(1.34);
-    opacity: 0.18;
+@media (prefers-reduced-motion: reduce) {
+  .glowRootActive .glowFrame {
+    animation: none;
   }
 }
 
@@ -117,6 +81,7 @@
 }
 
 .transcriptPanel {
+  position: relative;
   pointer-events: auto;
   width: min(640px, calc(100vw - 96px));
   /* hug content — never stretch to the flex parent's height (no empty space) */
@@ -127,16 +92,89 @@
   gap: 8px;
   padding: 12px 18px 16px;
   border-radius: 18px;
-  background: rgba(8, 10, 15, 0.82);
-  border: 1px solid rgba(141, 159, 255, 0.28);
-  backdrop-filter: blur(18px);
+  /* match the "Message the hive" pill exactly (fleet-hive.css .fr-chat):
+     frosted glass — bg = color-mix(--panel 60%), border = --line-2. This portal
+     lives outside .fr-root, so the token values are mirrored as literals (dark
+     theme here). The -webkit- prefix is required for the blur to apply in the
+     macOS WKWebView Tauri shell. */
+  background: color-mix(in srgb, #14161c 60%, transparent);
+  border: 1px solid rgba(238, 232, 220, 0.13);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
 }
 
-.transcriptPanelMinimized {
-  width: auto;
-  gap: 0;
-  padding: 8px;
+/* Springy open/close. The bubble grows from its bottom edge (the input) with a
+   little overshoot, and collapses back down faster. Mount/unmount is driven in
+   TranscriptTurns; these classes just supply the motion. */
+.transcriptPanelOpen {
+  transform-origin: bottom center;
+  animation: transcriptPop 300ms cubic-bezier(0.2, 0.85, 0.3, 1) both;
+}
+
+.transcriptPanelClosing {
+  transform-origin: bottom center;
+  animation: transcriptCollapse 200ms cubic-bezier(0.4, 0, 1, 1) both;
+  pointer-events: none;
+}
+
+/* Snappy pop: overshoot peaks early (~48%) and resolves to rest fast — the
+   last segment barely moves, so the settle reads quick, not stiff. */
+@keyframes transcriptPop {
+  0% { opacity: 0; transform: translateY(10px) scale(0.93); }
+  48% { opacity: 1; transform: translateY(-2.5px) scale(1.025); }
+  72% { transform: translateY(0.5px) scale(0.997); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes transcriptCollapse {
+  0% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(8px) scale(0.94); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* keep a token duration so the unmount still fires, but drop the motion */
+  .transcriptPanelOpen,
+  .transcriptPanelClosing {
+    animation-duration: 1ms;
+  }
+}
+
+/* Collapse control: an outlined down-triangle tail hanging off the bubble's
+   bottom-centre, pointing at the input. Its flat top edge merges into the
+   bubble (open path → no stroke there) so it reads as one piece. */
+.bubbleTail {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: -1px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  line-height: 0;
+  pointer-events: auto;
+}
+
+.bubbleTail svg {
+  display: block;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35));
+}
+
+.bubbleTail svg path {
+  /* seamless extension of the bubble = same fill + outline as the input pill */
+  fill: color-mix(in srgb, #14161c 60%, transparent);
+  stroke: rgba(238, 232, 220, 0.13);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  transition: stroke 160ms ease;
+}
+
+.bubbleTail:hover svg path {
+  /* mirror the pill's own hover, which warms its border to --honey-line */
+  stroke: rgba(231, 180, 92, 0.32);
 }
 
 .transcriptScroll {
@@ -145,29 +183,6 @@
   gap: 10px;
   max-height: 40vh;
   overflow-y: auto;
-}
-
-.minimizeButton {
-  align-self: flex-end;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border-radius: 999px;
-  border: 1px solid rgba(141, 159, 255, 0.3);
-  background: rgba(141, 159, 255, 0.12);
-  color: rgba(235, 239, 250, 0.95);
-  cursor: pointer;
-  transition:
-    background 160ms ease,
-    border-color 160ms ease;
-}
-
-.minimizeButton:hover {
-  background: rgba(141, 159, 255, 0.24);
-  border-color: rgba(141, 159, 255, 0.55);
 }
 
 .turn {
@@ -192,12 +207,60 @@
   color: #8d9fff;
 }
 
+/* Subtle "which brain answers" tag beside Queen Bee's name: quieter than the
+   uppercase speaker label, mixed case, no letterspacing shouting. */
+.brainTag {
+  margin-left: 8px;
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: rgba(235, 239, 250, 0.42);
+}
+
+/* Per-turn "your model didn't answer" warning: quiet amber, sits under the
+   reply. Visible enough to catch, never as loud as the reply itself. */
+.brainFallbackNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgba(245, 197, 122, 0.92);
+}
+
+.brainFallbackNote svg {
+  flex: none;
+  margin-top: 1px;
+  color: rgba(245, 197, 122, 0.85);
+}
+
 .turnText {
   margin: 0;
   font-size: 14px;
   line-height: 1.5;
   color: rgba(235, 239, 250, 0.95);
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.commandBadge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 1px 7px;
+  border: 1px solid rgba(141, 159, 255, 0.34);
+  border-radius: 999px;
+  background: rgba(141, 159, 255, 0.12);
+  color: #aab6ff;
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 0.78em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.45;
+  vertical-align: 0.08em;
+  white-space: normal;
   overflow-wrap: anywhere;
 }
 
@@ -215,6 +278,80 @@
 .thinkingDots::after {
   content: "";
   animation: queenVoiceThinkingDots 1.2s steps(4, end) infinite;
+}
+
+/* Typed tool phase inside a queen turn: the bee thinking-loader stacked above
+   the specific tool-status chip ("Asking a hive agent…"). Mirrors the voice
+   thinking block so text and voice share one thinking language. */
+.turnWorking {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+  font-style: normal;
+}
+
+/* Compact live-activity chips inside the thinking bubble: what Queen Bee is
+   doing right now (agent brain, tool calls, fleet scan, routing). */
+.workingChips {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 6px;
+}
+
+.workingChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: rgba(235, 239, 250, 0.62);
+  overflow-wrap: anywhere;
+}
+
+.workingChipDone {
+  color: rgba(235, 239, 250, 0.38);
+}
+
+.workingChipDot {
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(235, 239, 250, 0.35);
+}
+
+.workingChipDotActive {
+  background: rgba(255, 186, 113, 0.95);
+  animation: queenVoiceWorkingPulse 1.1s ease-in-out infinite;
+}
+
+@keyframes queenVoiceWorkingPulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.72);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workingChipDotActive {
+    animation: none;
+  }
+}
+
+/* Non-fatal voice status ("voice server unreachable, replies show as text"). */
+.voiceNotice {
+  margin: 0;
+  max-width: 300px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: rgba(255, 186, 113, 0.92);
 }
 
 @keyframes queenVoiceThinkingBreath {
@@ -339,8 +476,55 @@
   font-size: 13.5px;
   line-height: 1.6;
   color: rgba(235, 239, 250, 0.92);
-  white-space: pre-wrap;
+  /* Markdown renders its own block layout, so don't force pre-wrap (it would
+     double the spacing). overflow-wrap keeps long hashes/payloads from spilling. */
   overflow-wrap: anywhere;
+}
+
+.detailModalActions {
+  display: flex;
+  gap: 10px;
+  padding: 14px 18px;
+  border-top: 1px solid rgba(255, 186, 113, 0.18);
+}
+
+.detailAction {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 11px 16px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.detailActionConfirm {
+  border: 1px solid rgba(120, 220, 160, 0.5);
+  background: rgba(120, 220, 160, 0.16);
+  color: #b6f0cf;
+}
+
+.detailActionConfirm:hover {
+  background: rgba(120, 220, 160, 0.28);
+  border-color: rgba(120, 220, 160, 0.8);
+}
+
+.detailActionDeny {
+  border: 1px solid rgba(235, 239, 250, 0.2);
+  background: rgba(235, 239, 250, 0.06);
+  color: rgba(235, 239, 250, 0.85);
+}
+
+.detailActionDeny:hover {
+  background: rgba(235, 239, 250, 0.14);
+  border-color: rgba(235, 239, 250, 0.45);
 }
 
 .controlBar {
@@ -397,6 +581,18 @@
 .statusDotError {
   background: #ff6778;
   box-shadow: 0 0 10px #ff6778;
+}
+
+/* Live mic waveform in the control bar; the canvas draws with `color`
+   (theme + muted state live here, not in JS). */
+.waveformCanvas {
+  display: block;
+  flex: none;
+  color: #7ef0b2;
+}
+
+.waveformCanvasMuted {
+  color: #ff6778;
 }
 
 .controlButton {
@@ -518,11 +714,26 @@
   box-shadow: 0 18px 48px rgba(82, 61, 22, 0.16);
 }
 
+/* Bubble matches the light pill exactly (color-mix(--panel 60%) + --line-2);
+   wins over the grouped rule above by source order, leaving text + shadow. */
+:global(:root[data-theme="hive-light"]) .transcriptPanel {
+  background: color-mix(in srgb, #fbf8f1 60%, transparent);
+  border-color: rgba(54, 46, 30, 0.16);
+}
+
 :global(:root[data-theme="hive-light"]) .detailBackdrop {
   background: rgba(34, 29, 20, 0.34);
 }
 
-:global(:root[data-theme="hive-light"]) .minimizeButton,
+:global(:root[data-theme="hive-light"]) .bubbleTail svg path {
+  fill: color-mix(in srgb, #fbf8f1 60%, transparent);
+  stroke: rgba(54, 46, 30, 0.16);
+}
+
+:global(:root[data-theme="hive-light"]) .bubbleTail:hover svg path {
+  stroke: rgba(176, 127, 28, 0.34);
+}
+
 :global(:root[data-theme="hive-light"]) .detailButton,
 :global(:root[data-theme="hive-light"]) .detailModalClose,
 :global(:root[data-theme="hive-light"]) .statusBadge,
@@ -533,7 +744,6 @@
   color: #221d14;
 }
 
-:global(:root[data-theme="hive-light"]) .minimizeButton:hover,
 :global(:root[data-theme="hive-light"]) .detailButton:hover,
 :global(:root[data-theme="hive-light"]) .detailModalClose:hover,
 :global(:root[data-theme="hive-light"]) .controlButton:hover,
@@ -542,6 +752,14 @@
   border-color: rgba(176, 127, 28, 0.36);
   background: rgba(176, 127, 28, 0.14);
   color: #221d14;
+}
+
+:global(:root[data-theme="hive-light"]) .waveformCanvas {
+  color: #1f8f5b;
+}
+
+:global(:root[data-theme="hive-light"]) .waveformCanvasMuted {
+  color: #c4485a;
 }
 
 :global(:root[data-theme="hive-light"]) .turnWho,
@@ -553,6 +771,12 @@
 :global(:root[data-theme="hive-light"]) .turnText,
 :global(:root[data-theme="hive-light"]) .detailModalBody {
   color: #221d14;
+}
+
+:global(:root[data-theme="hive-light"]) .commandBadge {
+  border-color: rgba(65, 85, 180, 0.3);
+  background: rgba(65, 85, 180, 0.1);
+  color: #354b9f;
 }
 
 :global(:root[data-theme="hive-light"]) .errorText,

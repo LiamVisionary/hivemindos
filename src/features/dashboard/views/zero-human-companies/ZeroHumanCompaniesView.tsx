@@ -7,7 +7,8 @@
 import "./theme.css";
 
 import React from "react";
-import type { Company, CompanyMember, CompanyRevenue, CompanySpendRollup } from "@/lib/types/company";
+import type { Company, CompanyApprovalPolicy, CompanyMember, CompanyRevenue, CompanySpendRollup } from "@/lib/types/company";
+import { companyExecutionConfigFromForm } from "@/lib/services/company-execution-capabilities";
 import ZeroHumanCompanies from "./ZeroHumanCompanies";
 import {
   applyDemoEdit,
@@ -17,12 +18,23 @@ import {
   DEMO_CREATE_SEED_CREW,
 } from "./zhc-demo-data";
 import { buildColony, toPoolAgents, type AgentLite, type ApprovalRow, type KanbanTaskLite } from "./mappers";
-import type { Agent, Colony, CompanyEditForm, CompanyMemberEdit, CreateForm, GovEvent, PoolAgent } from "./types";
+import { resolvedIssueAnswer, retryDelegationIssueAnswer } from "./issue-resume";
+import { issuePreviewUrl, previewReviewAnswer, type PreviewDecision } from "./preview-review";
+import { workApprovalDecisionAnswer } from "./work-approval-issues";
+import type { Agent, Colony, CompanyEditForm, CompanyImportForm, CompanyMemberEdit, CompanyRevenueShareInput, CreateForm, GovEvent, Issue, PoolAgent } from "./types";
+import type { ApprovalDecision } from "@/features/approvals/spend-approval-model";
+import type { CompanyRevenueRailStatus, CompanyRevenueRollup } from "@/lib/types/company-revenue";
+import type { SkillBrowserAttachmentTarget } from "@/features/dashboard/dashboard-types";
+import type { KanbanLinkedDirectory, KanbanMachineTarget } from "@/lib/types/kanban";
 
-type CompanyEntry = { company: Company; rollup: CompanySpendRollup };
+type CompanyEntry = { company: Company; rollup: CompanySpendRollup; revenueShare?: CompanyRevenueRollup; revenueRail?: CompanyRevenueRailStatus };
+type SkillAttachmentBrowserOpener = (target: SkillBrowserAttachmentTarget) => void | Promise<void>;
+type DirectoryPicker = (machine: KanbanMachineTarget | null, onChoose: (directory: KanbanLinkedDirectory) => void) => void | Promise<void>;
+type ImportCompanyResponse = { ok?: boolean; error?: string; company?: Company; updatedExisting?: boolean };
 
 const POLL_MS = 15_000;
-const USE_ZHC_DEMO_DATA = true;
+const NOTICE_AUTO_DISMISS_MS = 5_000;
+const USE_ZHC_DEMO_DATA = false;
 
 async function postCompanies(body: Record<string, unknown>): Promise<{ ok: boolean; company?: Company; error?: string }> {
   const res = await fetch("/api/companies", {
@@ -31,6 +43,14 @@ async function postCompanies(body: Record<string, unknown>): Promise<{ ok: boole
     body: JSON.stringify(body),
   });
   return res.json().catch(() => ({ ok: false, error: "Bad response" }));
+}
+
+async function postCompanyRunRecord(companyId: string, body: Record<string, unknown>): Promise<void> {
+  await fetch(`/api/companies/${encodeURIComponent(companyId)}/runs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).catch(() => undefined);
 }
 
 function memberEditFromAgent(agent: Agent): CompanyMemberEdit {
@@ -47,7 +67,21 @@ function memberEditFromAgent(agent: Agent): CompanyMemberEdit {
   };
 }
 
-function ZeroHumanCompaniesDemoView({ theme = "dark" }: { theme?: "dark" | "light" } = {}) {
+function ZeroHumanCompaniesDemoView({
+  theme = "dark",
+  openSkillAttachmentBrowser,
+  chooseDirectoryForMachine,
+  defaultDirectoryMachine,
+  onDuplicateAgent,
+  onOpenAgentSettings,
+}: {
+  theme?: "dark" | "light";
+  openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
+  chooseDirectoryForMachine?: DirectoryPicker;
+  defaultDirectoryMachine?: KanbanMachineTarget | null;
+  onDuplicateAgent?: (agentId: string) => void;
+  onOpenAgentSettings?: (agentId: string) => void | Promise<void>;
+} = {}) {
   const [colonies, setColonies] = React.useState<Colony[]>(DEMO_COLONIES);
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const portfolioColonies = colonies;
@@ -58,6 +92,45 @@ function ZeroHumanCompaniesDemoView({ theme = "dark" }: { theme?: "dark" | "ligh
 
   const handleCreateCompany = React.useCallback(async (form: CreateForm, crew: Agent[]): Promise<string | null> => {
     const next = createDemoColony(form, crew);
+    setColonies((current) => [next, ...current]);
+    return next.id;
+  }, []);
+
+  const handleImportCompany = React.useCallback(async (form: CompanyImportForm): Promise<string | null> => {
+    const name = form.companyName?.trim() || "Imported Company";
+    const next: Colony = {
+      ...createDemoColony({
+        name,
+        ticker: form.ticker,
+        sector: form.sector || "Imported Product",
+        apexTitle: form.apexGoalTitle || `Keep ${name}'s existing product operations visible and healthy`,
+      }, []),
+      ...(form.source === "repo"
+        ? {
+            importedOperations: {
+              source: "repo" as const,
+              importedAt: new Date().toISOString(),
+              lastDiscoveredAt: new Date().toISOString(),
+              projectPath: form.repoPath,
+              workflows: [],
+              schedules: [],
+              services: [],
+              scripts: [],
+            },
+          }
+        : {
+            importedKnowledge: {
+              source: "data-room" as const,
+              importedAt: new Date().toISOString(),
+              lastDiscoveredAt: new Date().toISOString(),
+              dataRoomPath: form.dataRoomPath,
+              notesFolder: "Memory/Imported Sources/Companies/demo",
+              documents: [],
+              failedFiles: [],
+              totalSourceBytes: 0,
+            },
+          }),
+    };
     setColonies((current) => [next, ...current]);
     return next.id;
   }, []);
@@ -85,7 +158,7 @@ function ZeroHumanCompaniesDemoView({ theme = "dark" }: { theme?: "dark" | "ligh
     });
   }, [replaceColony]);
 
-  const decideApproval = React.useCallback((companyId: string, approvalId: string, decision: "approved" | "denied") => {
+  const decideApproval = React.useCallback((companyId: string, approvalId: string, decision: "approved" | "denied", note?: string) => {
     setBusyId(approvalId);
     replaceColony(companyId, (colony) => {
       const approval = colony.approvals.find((item) => item.id === approvalId);
@@ -97,7 +170,7 @@ function ZeroHumanCompaniesDemoView({ theme = "dark" }: { theme?: "dark" | "ligh
         governance: [
           {
             kind: eventKind,
-            text: `${approval.agent}'s ${approval.kind} request was ${decision}: ${approval.title}.`,
+            text: `${approval.agent}'s ${approval.kind} request was ${decision}: ${approval.title}.${note?.trim() ? ` Note: ${note.trim()}` : ""}`,
             agent: "human",
             since: "now",
           },
@@ -108,12 +181,47 @@ function ZeroHumanCompaniesDemoView({ theme = "dark" }: { theme?: "dark" | "ligh
     setBusyId(null);
   }, [replaceColony]);
 
+  const handleDecideIssueApproval = React.useCallback((companyId: string, issue: Issue, decision: ApprovalDecision, note: string) => {
+    const taskId = issue.work?.taskId;
+    setBusyId(taskId ?? issue.key);
+    replaceColony(companyId, (colony) => ({
+      ...colony,
+      issues: colony.issues.map((item) => {
+        const same = (taskId && item.work?.taskId === taskId) || item.key === issue.key;
+        return same
+          ? { ...item, status: "todo" as const, work: item.work ? { ...item.work, status: "ready", body: `${item.work.body ?? ""}\n\n${workApprovalDecisionAnswer(item, decision, note)}`.trim() } : item.work }
+          : item;
+      }),
+      governance: [
+        {
+          kind: decision === "approved" ? "patch" as const : "alert" as const,
+          text: `Human ${decision === "approved" ? "approved" : "rejected"} the work approval on ${issue.title}.`,
+          agent: "human",
+          since: "now",
+        },
+        ...colony.governance,
+      ].slice(0, 5),
+    }));
+    setBusyId(null);
+  }, [replaceColony]);
+
+  const setDemoApprovalPolicy = React.useCallback((companyId: string, policy: CompanyApprovalPolicy) => {
+    setBusyId(`approval-policy:${policy.id}`);
+    replaceColony(companyId, (colony) => {
+      const current = colony.approvalPolicies ?? [];
+      const byId = new Map(current.map((entry) => [entry.id, entry]));
+      byId.set(policy.id, policy);
+      return { ...colony, approvalPolicies: [...byId.values()] };
+    });
+    setBusyId(null);
+  }, [replaceColony]);
+
   const handleFreeze = React.useCallback((companyId: string, frozen: boolean) => {
     setBusyId(companyId);
     replaceColony(companyId, (colony) => ({
       ...colony,
       frozen,
-      status: frozen ? "paused" : colony.status === "paused" ? "shipping" : colony.status,
+      status: frozen ? "paused" : colony.status === "paused" ? (colony.autonomy ? "shipping" : "paused") : colony.status,
       agents: colony.agents.map((agent) => ({ ...agent, state: frozen ? "blocked" : agent.state })),
       edit: { ...colony.edit, frozen, status: frozen ? "paused" : colony.edit.status },
     }));
@@ -125,6 +233,7 @@ function ZeroHumanCompaniesDemoView({ theme = "dark" }: { theme?: "dark" | "ligh
     replaceColony(companyId, (colony) => ({
       ...colony,
       autonomy: true,
+      status: colony.status === "paused" && !colony.frozen ? "shipping" : colony.status,
       lastDispatchedAt: Date.now(),
       workBlock: { ...colony.workBlock, state: "active" },
       governance: [
@@ -137,8 +246,91 @@ function ZeroHumanCompaniesDemoView({ theme = "dark" }: { theme?: "dark" | "ligh
 
   const handleStopAutonomy = React.useCallback((companyId: string) => {
     setBusyId(companyId);
-    replaceColony(companyId, (colony) => ({ ...colony, autonomy: false }));
+    replaceColony(companyId, (colony) => ({
+      ...colony,
+      autonomy: false,
+      status: colony.status === "shipping" || colony.status === "review" || colony.status === "drift" ? "paused" : colony.status,
+    }));
     setBusyId(null);
+  }, [replaceColony]);
+
+  const handleResolveIssue = React.useCallback((companyId: string, issue: Issue, answer?: string) => {
+    const taskId = issue.work?.taskId;
+    const providedAnswer = answer?.trim();
+    setBusyId(taskId ?? issue.key);
+    replaceColony(companyId, (colony) => ({
+      ...colony,
+      issues: colony.issues.map((item) => {
+        const same = (taskId && item.work?.taskId === taskId) || item.key === issue.key;
+        return same
+          ? { ...item, status: "todo" as const, work: item.work ? { ...item.work, status: "ready", body: `${item.work.body ?? ""}\n\n${providedAnswer || resolvedIssueAnswer(item)}`.trim() } : item.work }
+          : item;
+      }),
+      governance: [
+        { kind: "reflect" as const, text: `Human handled the blocker on ${issue.title}; the task is back in the queue to retry.`, agent: "human", since: "now" },
+        ...colony.governance,
+      ].slice(0, 5),
+    }));
+    setBusyId(null);
+  }, [replaceColony]);
+
+  const handleRetryIssues = React.useCallback((companyId: string, issues: Issue[]) => {
+    const keys = new Set(issues.map((issue) => issue.work?.taskId ?? issue.key));
+    setBusyId(issues[0]?.work?.taskId ?? issues[0]?.key ?? companyId);
+    replaceColony(companyId, (colony) => ({
+      ...colony,
+      issues: colony.issues.map((item) =>
+        keys.has(item.work?.taskId ?? item.key)
+          ? { ...item, status: "todo" as const, work: item.work ? { ...item.work, status: "ready", body: `${item.work.body ?? ""}\n\n${retryDelegationIssueAnswer(item)}`.trim() } : item.work }
+          : item,
+      ),
+      governance: [
+        { kind: "reflect" as const, text: `Human re-queued ${issues.length} infrastructure-blocked task${issues.length === 1 ? "" : "s"} for another autonomous attempt.`, agent: "human", since: "now" },
+        ...colony.governance,
+      ].slice(0, 5),
+    }));
+    setBusyId(null);
+  }, [replaceColony]);
+
+  const handleDismissIssues = React.useCallback((companyId: string, issues: Issue[]) => {
+    const keys = new Set(issues.map((issue) => issue.work?.taskId ?? issue.key));
+    setBusyId(issues[0]?.work?.taskId ?? issues[0]?.key ?? companyId);
+    replaceColony(companyId, (colony) => ({
+      ...colony,
+      issues: colony.issues.filter((item) => !keys.has(item.work?.taskId ?? item.key)),
+      governance: [
+        { kind: "reflect" as const, text: `Human dismissed ${issues.length} issue${issues.length === 1 ? "" : "s"} — set aside off the board.`, agent: "human", since: "now" },
+        ...colony.governance,
+      ].slice(0, 5),
+    }));
+    setBusyId(null);
+  }, [replaceColony]);
+
+  const handleRecordRevenue = React.useCallback(async (companyId: string, input: CompanyRevenueShareInput): Promise<void> => {
+    replaceColony(companyId, (colony) => {
+      const current = colony.revenueShare ?? {
+        companyId,
+        eventCount: 0,
+        totalRevenueUsd: 0,
+        shareQuotedUsd: 0,
+        shareCollectedUsd: 0,
+        sharePendingUsd: 0,
+        shareFailedUsd: 0,
+        shareUnavailableUsd: 0,
+      };
+      return {
+        ...colony,
+        revenueShare: {
+          ...current,
+          eventCount: current.eventCount + 1,
+          totalRevenueUsd: Math.round((current.totalRevenueUsd + input.amountUsd) * 100) / 100,
+          shareQuotedUsd: current.shareQuotedUsd,
+          shareCollectedUsd: current.shareCollectedUsd,
+          sharePendingUsd: current.sharePendingUsd,
+          lastRevenueAt: new Date().toISOString(),
+        },
+      };
+    });
   }, [replaceColony]);
 
   return (
@@ -154,38 +346,130 @@ function ZeroHumanCompaniesDemoView({ theme = "dark" }: { theme?: "dark" | "ligh
       busyId={busyId}
       onRefresh={() => setColonies(DEMO_COLONIES)}
       onCreateCompany={handleCreateCompany}
+      onImportCompany={handleImportCompany}
       onEditCompany={handleEditCompany}
       onAddAgents={handleAddAgents}
-      onApprove={(companyId, approvalId) => decideApproval(companyId, approvalId, "approved")}
-      onReject={(companyId, approvalId) => decideApproval(companyId, approvalId, "denied")}
+      onDuplicateAgent={onDuplicateAgent}
+      onOpenAgentSettings={onOpenAgentSettings}
+      onDecideApproval={(companyId, approvalId, decision, note) => decideApproval(companyId, approvalId, decision, note)}
+      onDecideIssueApproval={(companyId, issue, decision, note) => handleDecideIssueApproval(companyId, issue, decision, note)}
+      onResolvePricing={(companyId, proposalId) =>
+        replaceColony(companyId, (colony) => ({
+          ...colony,
+          pricingProposals: (colony.pricingProposals ?? []).filter((proposal) => proposal.id !== proposalId),
+        }))
+      }
+      onSetApprovalPolicy={setDemoApprovalPolicy}
       onFreeze={handleFreeze}
       onDelete={(companyId) => setColonies((current) => current.filter((colony) => colony.id !== companyId))}
       onDispatch={handleDispatch}
       onStopAutonomy={handleStopAutonomy}
+      onResolveIssue={(companyId, issue, answer) => handleResolveIssue(companyId, issue, answer)}
+      onRetryIssues={(companyId, issues) => handleRetryIssues(companyId, issues)}
+      onDismissIssues={(companyId, issues) => handleDismissIssues(companyId, issues)}
+      onRecordRevenue={handleRecordRevenue}
+      openSkillAttachmentBrowser={openSkillAttachmentBrowser}
+      chooseDirectoryForMachine={chooseDirectoryForMachine}
+      defaultDirectoryMachine={defaultDirectoryMachine}
       theme={theme}
     />
   );
 }
 
-function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "light" } = {}) {
+function ZeroHumanCompaniesLiveView({
+  theme = "dark",
+  openSkillAttachmentBrowser,
+  chooseDirectoryForMachine,
+  defaultDirectoryMachine,
+  onDuplicateAgent,
+  onOpenAgentSettings,
+}: {
+  theme?: "dark" | "light";
+  openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
+  chooseDirectoryForMachine?: DirectoryPicker;
+  defaultDirectoryMachine?: KanbanMachineTarget | null;
+  onDuplicateAgent?: (agentId: string) => void;
+  onOpenAgentSettings?: (agentId: string) => void | Promise<void>;
+} = {}) {
   const [data, setData] = React.useState<CompanyEntry[]>([]);
   const [agents, setAgents] = React.useState<AgentLite[]>([]);
   const [approvals, setApprovals] = React.useState<ApprovalRow[]>([]);
   const [tasks, setTasks] = React.useState<KanbanTaskLite[]>([]);
   const [loading, setLoading] = React.useState(true);
+  // Companies come back from their own fetch and flip `loading` false BEFORE the
+  // separate Work Board tasks fetch lands — so the cockpit renders with every
+  // lane empty for a beat. Track the first tasks fetch on its own so the board
+  // can show skeletons (not a wall of "empty") until real tasks arrive.
+  const [tasksLoaded, setTasksLoaded] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
+  const [noticeRevision, setNoticeRevision] = React.useState(0);
   const [busyId, setBusyId] = React.useState<string | null>(null);
+  // "Hide locally" fallback for dismissed issues that have NO backing Work Board
+  // task to archive — keyed by issue.key. Task-backed dismisses archive for real;
+  // this only holds the ones there's nothing to persist against. Resets on reload.
+  const [dismissedIssueKeys, setDismissedIssueKeys] = React.useState<ReadonlySet<string>>(() => new Set());
+  // The companies API reports the autonomy driver's health alongside the list.
+  // A launched company with a dead driver looks "running" while dispatching
+  // nothing — that gap stranded the Website Outreach Agency for ~7h once, so
+  // surface it loudly. (The same GET also self-heals: the route restarts the
+  // driver, so a persistent warning means restarting is genuinely failing.)
+  const [driverWarning, setDriverWarning] = React.useState<string | null>(null);
+  const [membershipWarning, setMembershipWarning] = React.useState<string | null>(null);
+
+  const showNotice = React.useCallback((message: string) => {
+    setNotice(message);
+    setNoticeRevision((revision) => revision + 1);
+  }, []);
+
+  React.useEffect(() => {
+    if (!notice) return undefined;
+    const timer = window.setTimeout(() => {
+      setNotice((current) => (current === notice ? null : current));
+    }, NOTICE_AUTO_DISMISS_MS);
+    return () => window.clearTimeout(timer);
+  }, [notice, noticeRevision]);
 
   const refresh = React.useCallback(async () => {
     setRefreshing(true);
     try {
-      const companiesRes = await fetch("/api/companies", { cache: "no-store" });
+      // Fire the company list and the Work Board / approvals / agents fetches
+      // concurrently — they have no dependency, and running them in series
+      // (companies THEN kanban) doubled the load time, so the board sat empty
+      // for the sum of both round trips instead of the slower single one.
+      const companiesPromise = fetch("/api/companies", { cache: "no-store" });
+      const auxPromise = Promise.allSettled([
+        fetch("/api/wallet/approvals?status=pending", { cache: "no-store" }),
+        fetch("/api/obsidian/agents", { cache: "no-store" }),
+        fetch("/api/kanban?include_boards=false", { cache: "no-store" }),
+      ]);
+      const companiesRes = await companiesPromise;
       const companiesJson = await companiesRes.json().catch(() => ({}));
       if (companiesJson.ok) {
         setData(Array.isArray(companiesJson.companies) ? companiesJson.companies : []);
         setError(null);
+        const membershipConflicts = Array.isArray(companiesJson.membershipConflicts)
+          ? companiesJson.membershipConflicts as Array<{ agentId?: string; companies?: Array<{ name?: string }> }>
+          : [];
+        const firstMembershipConflict = membershipConflicts[0];
+        setMembershipWarning(firstMembershipConflict ? [
+          `Agent identity "${firstMembershipConflict.agentId || "unknown"}" is assigned to more than one company`,
+          firstMembershipConflict.companies?.length
+            ? ` (${firstMembershipConflict.companies.map((company) => company.name || "Unnamed company").join(", ")})`
+            : "",
+          ". Remove it from all but one company, then duplicate the agent blueprint for every additional company. Spending for this identity fails closed until repaired.",
+          membershipConflicts.length > 1 ? ` ${membershipConflicts.length - 1} more conflict${membershipConflicts.length === 2 ? "" : "s"} also need repair.` : "",
+        ].join("") : null);
+        const driver = companiesJson.driver as { status?: string } | undefined;
+        const anyAutonomous = (Array.isArray(companiesJson.companies) ? companiesJson.companies : []).some(
+          (entry: { company?: { autonomy?: boolean; frozen?: boolean } }) => entry?.company?.autonomy && !entry?.company?.frozen,
+        );
+        setDriverWarning(
+          driver && driver.status !== "running" && anyAutonomous
+            ? "Autonomy driver is not running on this machine — launched companies are not dispatching work. A restart was requested automatically; if this warning persists across refreshes, check the dashboard server logs."
+            : null,
+        );
       } else if (companiesRes.status === 401) {
         setNotice(null);
         setError("Dashboard authentication required.");
@@ -195,11 +479,7 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
       }
       setLoading(false);
 
-      const [approvalsResult, agentsResult, kanbanResult] = await Promise.allSettled([
-        fetch("/api/wallet/approvals?status=pending", { cache: "no-store" }),
-        fetch("/api/obsidian/agents", { cache: "no-store" }),
-        fetch("/api/kanban?include_boards=false", { cache: "no-store" }),
-      ]);
+      const [approvalsResult, agentsResult, kanbanResult] = await auxPromise;
 
       if (approvalsResult.status === "fulfilled") {
         const approvalsJson = await approvalsResult.value.json().catch(() => ({}));
@@ -231,16 +511,25 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
             body: typeof t.body === "string" ? t.body : undefined,
             result: typeof t.result === "string" ? t.result : undefined,
             status: typeof t.status === "string" ? t.status : "ideas",
+            source: typeof t.source === "string" ? t.source : undefined,
             assignee: typeof t.assignee === "string" ? t.assignee : null,
             priority: typeof t.priority === "string" ? t.priority : undefined,
             skills: Array.isArray(t.skills) ? (t.skills as string[]) : undefined,
             deliverables: Array.isArray(t.deliverables) ? (t.deliverables as KanbanTaskLite["deliverables"]) : undefined,
             loop: t.loop && typeof t.loop === "object" ? (t.loop as KanbanTaskLite["loop"]) : undefined,
             loopReceipts: Array.isArray(t.loopReceipts) ? (t.loopReceipts as KanbanTaskLite["loopReceipts"]) : undefined,
+            targetMachine: t.targetMachine && typeof t.targetMachine === "object" ? (t.targetMachine as KanbanTaskLite["targetMachine"]) : undefined,
             createdAt: typeof t.createdAt === "number" ? t.createdAt : undefined,
             updatedAt: typeof t.updatedAt === "number" ? t.updatedAt : undefined,
             completedAt: typeof t.completedAt === "number" ? t.completedAt : undefined,
           })));
+          // Tasks are only genuinely loaded on a SUCCESSFUL kanban fetch that
+          // returned a task array. This used to live in `finally`, which flipped
+          // it even when the kanban fetch rejected or returned a non-array — which
+          // happens under load (the very case that makes the load slow). That
+          // killed the board/issues loading skeletons and flashed "empty" until a
+          // later poll landed, so tasks appeared to "pop in" with no loading state.
+          setTasksLoaded(true);
         }
       }
     } catch {
@@ -291,27 +580,36 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
       const company = entry?.company;
       if (!company || typeof company.id !== "string") continue;
       try {
-        // Scope the board's tasks to this company by member id OR display name.
-        const idents = new Set<string>();
-        for (const id of company.agentIds ?? []) {
-          idents.add(id);
-          const profile = agentsById.get(id);
-          if (profile?.name) idents.add(profile.name);
-        }
-        const companyTasks = tasks.filter((t) => t.assignee && idents.has(t.assignee));
-        out.push(buildColony({
+        // Scope the board strictly to work THIS company dispatched: every company
+        // dispatch stamps `company:{id}:{runId}` as the task source, so that prefix
+        // is the authoritative and sufficient link. We deliberately do NOT fall
+        // back to assignee identity — a member agent (e.g. the Queen) also runs
+        // unrelated work from other sources (loop evals, ad-hoc chats), and matching
+        // by assignee dragged all of that history onto the company board/deliverables
+        // (seen live 2026-07-02: 11 stray tasks). Source-only keeps it clean.
+        const sourcePrefix = `company:${company.id}:`;
+        const companyTasks = tasks.filter((t) => t.source?.startsWith(sourcePrefix));
+        const colony = buildColony({
           company,
-          rollup: entry.rollup ?? { companyId: company.id, memberCount: company.agentIds?.length ?? 0, dailySpentUsd: 0, monthlySpentUsd: 0, totalSpentUsd: 0, dailyRemainingUsd: null, monthlyRemainingUsd: null, totalRemainingUsd: null },
+          rollup: entry.rollup ?? { companyId: company.id, memberCount: company.agentIds?.length ?? 0, dailySpentUsd: 0, monthlySpentUsd: 0, totalSpentUsd: 0, dailyRemainingUsd: null, monthlyRemainingUsd: null, totalRemainingUsd: null, apiSpentUsd: 0, apiMonthlySpentUsd: 0 },
           approvals: approvalsByCompany.get(company.id) ?? [],
           agentsById,
           tasks: companyTasks,
-        }));
+          revenueShare: entry.revenueShare,
+          revenueRail: entry.revenueRail,
+        });
+        // Drop issues the human hid locally (dismisses with no task to archive).
+        out.push(
+          dismissedIssueKeys.size
+            ? { ...colony, issues: colony.issues.filter((issue) => !dismissedIssueKeys.has(issue.work?.taskId ?? issue.key)) }
+            : colony,
+        );
       } catch {
         // Skip a malformed record rather than blanking the whole portfolio.
       }
     }
     return out;
-  }, [data, agentsById, approvalsByCompany, tasks]);
+  }, [data, agentsById, approvalsByCompany, tasks, dismissedIssueKeys]);
 
   // ── mutations ──────────────────────────────────────────────────────────
   const membersFromCrew = React.useCallback((crew: Agent[], queenId: string | null): CompanyMember[] => {
@@ -366,11 +664,52 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
       apexGoal,
       members,
       dailyBudgetUsd: dailyBudgetUsd > 0 ? dailyBudgetUsd : undefined,
+      execution: companyExecutionConfigFromForm(form),
     });
     if (!result.ok) { setError(result.error || "Could not create company."); return null; }
     await refresh();
     return result.company?.id ?? null;
   }, [membersFromCrew, refresh]);
+
+  const handleImportCompany = React.useCallback(async (form: CompanyImportForm): Promise<string | null> => {
+    setBusyId("import-company");
+    setNotice(null);
+    try {
+      const res = await fetch("/api/companies/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "import",
+          source: form.source,
+          ...(form.source === "repo" ? { repoPath: form.repoPath } : { dataRoomPath: form.dataRoomPath }),
+          companyName: form.companyName,
+          ticker: form.ticker,
+          sector: form.sector,
+          apexGoalTitle: form.apexGoalTitle,
+          companyId: form.companyId,
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as ImportCompanyResponse;
+      if (!res.ok || json.ok === false || !json.company?.id) {
+        setError(json.error || "Could not import company.");
+        return null;
+      }
+      setError(null);
+      showNotice(
+        form.source === "data-room"
+          ? json.updatedExisting
+            ? `${json.company.name} data-room sources refreshed.`
+            : `${json.company.name} imported with reviewable data-room knowledge.`
+          : json.updatedExisting
+            ? `${json.company.name} systems refreshed.`
+            : `${json.company.name} imported with repository systems attached.`,
+      );
+      await refresh();
+      return json.company.id;
+    } finally {
+      setBusyId(null);
+    }
+  }, [refresh, showNotice]);
 
   const handleEditCompany = React.useCallback(async (companyId: string, form: CompanyEditForm): Promise<void> => {
     setBusyId(companyId);
@@ -394,6 +733,14 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
         up: form.revenueUp !== false,
         isApex: form.revenueIsApex === true,
       };
+      // null (not undefined) so clearing the threshold removes the config server-side.
+      const autonomyPause = form.autonomyPauseMax && form.autonomyPauseMax > 0
+        ? {
+            maxWaitingOnHuman: form.autonomyPauseMax,
+            countMode: form.autonomyPauseMode ?? "all",
+            deliverableKinds: form.autonomyPauseMode === "deliverable-kinds" ? form.autonomyPauseKinds : undefined,
+          }
+        : null;
       const result = await postCompanies({
         action: "upsert",
         id: companyId,
@@ -402,10 +749,18 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
         sector: form.sector || undefined,
         charter: form.charter ?? "",
         blurb: form.blurb ?? "",
+        projectId: form.projectId ?? "",
+        analyticsProvider: form.analyticsProvider || undefined,
+        analyticsConfig:
+          form.analyticsProjectId || form.analyticsHost
+            ? { projectId: form.analyticsProjectId || undefined, host: form.analyticsHost || undefined }
+            : undefined,
         dailyBudgetUsd: form.dailyBudgetUsd && form.dailyBudgetUsd > 0 ? form.dailyBudgetUsd : 0,
         monthlyBudgetUsd: form.monthlyBudgetUsd && form.monthlyBudgetUsd > 0 ? form.monthlyBudgetUsd : 0,
         totalBudgetUsd: form.totalBudgetUsd && form.totalBudgetUsd > 0 ? form.totalBudgetUsd : 0,
         frozen: form.frozen === true,
+        autonomyPause,
+        execution: companyExecutionConfigFromForm(form),
         status: form.status ?? "",
         alignment: form.alignment ?? "",
         apexGoal,
@@ -435,13 +790,13 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
     }
   }, [membersFromCrew, refresh]);
 
-  const decideApproval = React.useCallback(async (approvalId: string, decision: "approved" | "denied") => {
+  const decideApproval = React.useCallback(async (approvalId: string, decision: "approved" | "denied", note?: string) => {
     setBusyId(approvalId);
     try {
       const res = await fetch("/api/wallet/approvals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: approvalId, decision }),
+        body: JSON.stringify({ id: approvalId, decision, note: note?.trim() || undefined }),
       });
       const json = await res.json().catch(() => ({}));
       if (!json.ok && json.error) setError(json.error);
@@ -450,6 +805,41 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
       setBusyId(null);
     }
   }, [refresh]);
+
+  const resolvePricing = React.useCallback(async (companyId: string, proposalId: string, decision: "approve" | "reject") => {
+    setBusyId(proposalId);
+    try {
+      const result = await postCompanies({ action: "resolve-pricing", id: companyId, proposalId, decision });
+      if (!result.ok) {
+        setError(result.error || "Could not resolve the pricing request.");
+      } else {
+        showNotice(
+          decision === "approve"
+            ? "New price applied to the catalog — the crew quotes it from the next dispatch."
+            : "Pricing request rejected — the crew keeps the current price and learns the decision.",
+        );
+      }
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }, [refresh, showNotice]);
+
+  const setApprovalPolicy = React.useCallback(async (companyId: string, policy: CompanyApprovalPolicy) => {
+    setBusyId(`approval-policy:${policy.id}`);
+    try {
+      const result = await postCompanies({ action: "set-approval-policy", id: companyId, approvalPolicy: policy });
+      if (!result.ok) {
+        setError(result.error || "Could not save the approval policy.");
+      } else {
+        setError(null);
+        showNotice("Approval policy saved - the crew reads it on the next dispatch.");
+      }
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }, [refresh, showNotice]);
 
   const handleFreeze = React.useCallback(async (companyId: string, frozen: boolean) => {
     setBusyId(companyId);
@@ -477,14 +867,17 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
     setBusyId(companyId);
     setNotice(null);
     try {
-      // Send the live fleet so the engine can route to (and execute on) the
-      // company's online member agents; the server filters it to members.
+      const usesAeon = data.find((entry) => entry.company.id === companyId)?.company.execution?.engine === "aeon";
+      // Only the native crew engine needs a live fleet snapshot. AEON resolves
+      // execution from its saved workspace and must not depend on fleet health.
       let fleetSnapshot: unknown[] = [];
-      try {
-        const fres = await fetch("/api/fleet/discover?fresh=1&includeSnapshots=0", { cache: "no-store" });
-        const fjson = await fres.json().catch(() => ({}));
-        if (Array.isArray(fjson?.machines)) fleetSnapshot = fjson.machines;
-      } catch { /* offline fleet → tasks queue as pending */ }
+      if (!usesAeon) {
+        try {
+          const fres = await fetch("/api/fleet/discover?fresh=1&includeSnapshots=0", { cache: "no-store" });
+          const fjson = await fres.json().catch(() => ({}));
+          if (Array.isArray(fjson?.machines)) fleetSnapshot = fjson.machines;
+        } catch { /* offline fleet → tasks queue as pending */ }
+      }
 
       const res = await fetch("/api/companies", {
         method: "POST",
@@ -500,17 +893,23 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
         const n = d.taskCount ?? 0;
         const live = d.dispatchableMembers ?? 0;
         const plan = d.planner === "llm" ? "AI-planned" : "auto-planned";
-        setNotice(
-          live > 0
-            ? `Launched ${n} ${plan} task${n === 1 ? "" : "s"} to ${live} online agent${live === 1 ? "" : "s"} — autonomy is running; it keeps working until you stop it.`
-            : `Queued ${n} ${plan} task${n === 1 ? "" : "s"}. Autonomy is on — work starts as soon as a member agent comes online.`,
-        );
+        if (d.executionEngine === "aeon") {
+          const skill = typeof d.aeon?.skill === "string" ? d.aeon.skill : "the selected skill";
+          const profileName = typeof d.aeon?.profileName === "string" ? d.aeon.profileName : "the configured AEON workspace";
+          showNotice(`Dispatched AEON skill ${skill} through ${profileName}. Autonomy is running; future idle cycles use the same AEON binding until you stop it.`);
+        } else {
+          showNotice(
+            live > 0
+              ? `Launched ${n} ${plan} task${n === 1 ? "" : "s"} to ${live} online agent${live === 1 ? "" : "s"} — autonomy is running; it keeps working until you stop it.`
+              : `Queued ${n} ${plan} task${n === 1 ? "" : "s"}. Autonomy is on — work starts as soon as a member agent comes online.`,
+          );
+        }
       }
       await refresh();
     } finally {
       setBusyId(null);
     }
-  }, [refresh]);
+  }, [data, refresh, showNotice]);
 
   const handleStopAutonomy = React.useCallback(async (companyId: string) => {
     setBusyId(companyId);
@@ -518,12 +917,337 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
     try {
       const result = await postCompanies({ action: "stop-autonomy", id: companyId });
       if (!result.ok) setError(result.error || "Could not stop autonomy.");
-      else { setError(null); setNotice("Autonomy stopped — in-flight tasks finish, no new work will be dispatched."); }
+      else { setError(null); showNotice("Autonomy stopped — in-flight tasks finish, no new work will be dispatched."); }
       await refresh();
     } finally {
       setBusyId(null);
     }
-  }, [refresh]);
+  }, [refresh, showNotice]);
+
+  const handleResolveIssue = React.useCallback(async (companyId: string, issue: Issue, answer?: string) => {
+    const taskId = issue.work?.taskId;
+    if (!taskId) {
+      setError("This issue does not have a Work Board task to resume.");
+      return;
+    }
+    const companyName = data.find((entry) => entry.company?.id === companyId)?.company?.name ?? "Company";
+    const resumeAnswer = answer?.trim() || resolvedIssueAnswer(issue);
+    setBusyId(taskId);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/kanban", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "answer",
+          taskId,
+          answer: resumeAnswer,
+          author: "dashboard",
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) {
+        setError(json.error || "Could not mark this issue resolved.");
+      } else {
+        void postCompanyRunRecord(companyId, {
+          action: "settle-proposal",
+          idempotencyKey: `task-human:${taskId}`,
+          status: "applied",
+          decision: "Human marked the blocker handled and resumed the task.",
+          decidedBy: "human",
+          evidence: [resumeAnswer],
+        });
+        setError(null);
+        showNotice(
+          json.pickupScheduled
+            ? `${companyName}: marked resolved. ${issue.agent || "The agent"} is picking the task back up now.`
+            : `${companyName}: marked resolved. The task is back in the Work Board queue.`,
+        );
+      }
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }, [data, refresh, showNotice]);
+
+  const handleDecideIssueApproval = React.useCallback(async (companyId: string, issue: Issue, decision: ApprovalDecision, note: string) => {
+    const taskId = issue.work?.taskId;
+    if (!taskId) {
+      setError("This approval does not have a Work Board task to resume.");
+      return;
+    }
+    const companyName = data.find((entry) => entry.company?.id === companyId)?.company?.name ?? "Company";
+    const answer = workApprovalDecisionAnswer(issue, decision, note);
+    setBusyId(taskId);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/kanban", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "answer",
+          taskId,
+          answer,
+          author: "dashboard",
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) {
+        setError(json.error || "Could not send this approval decision to the crew.");
+      } else {
+        const approved = decision === "approved";
+        void postCompanyRunRecord(companyId, {
+          action: "create-proposal",
+          kind: "human-input",
+          status: approved ? "applied" : "rejected",
+          title: approved ? `Work approval approved: ${issue.title}` : `Work approval rejected: ${issue.title}`,
+          sourceTaskId: taskId,
+          idempotencyKey: `work-approval:${taskId}:${decision}:${Date.now()}`,
+          risk: "high",
+          decision: approved ? "Human approved the Work Board approval request." : "Human rejected the Work Board approval request.",
+          decidedBy: "human",
+          evidence: [answer],
+        });
+        setError(null);
+        const soon = json.pickupScheduled ? "now" : "on the next pickup";
+        showNotice(
+          approved
+            ? `${companyName}: approval sent. ${issue.agent || "The crew"} is resuming ${soon}.`
+            : `${companyName}: rejection sent. ${issue.agent || "The crew"} is revising ${soon}.`,
+        );
+      }
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }, [data, refresh, showNotice]);
+
+  const handleRetryIssues = React.useCallback(async (companyId: string, issues: Issue[]) => {
+    const taskIds = issues.map((issue) => issue.work?.taskId).filter((id): id is string => Boolean(id));
+    if (taskIds.length === 0) {
+      setError("These issues have no Work Board tasks to re-run.");
+      return;
+    }
+    const companyName = data.find((entry) => entry.company?.id === companyId)?.company?.name ?? "Company";
+    setBusyId(taskIds[0]);
+    setNotice(null);
+    try {
+      // Same `answer` rail as Mark Resolved, one POST per task: the retry note
+      // stamps into the body, the task returns to Ready, and pickup is scheduled.
+      // Zero-human boards have no hand-move, so this IS the re-run mechanism.
+      const results = await Promise.all(
+        issues.map((issue) => {
+          const taskId = issue.work?.taskId;
+          if (!taskId) return Promise.resolve({ ok: false, pickupScheduled: false });
+          return fetch("/api/kanban", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "answer",
+              taskId,
+              answer: retryDelegationIssueAnswer(issue),
+              author: "dashboard",
+            }),
+          })
+            .then(async (res) => {
+              const json = await res.json().catch(() => ({}));
+              return { ok: res.ok && json.ok === true, pickupScheduled: json.pickupScheduled === true };
+            })
+            .catch(() => ({ ok: false, pickupScheduled: false }));
+        }),
+      );
+      const ok = results.filter((result) => result.ok).length;
+      const pickingUp = results.filter((result) => result.ok && result.pickupScheduled).length;
+      if (ok === 0) {
+        setError("Could not re-queue these tasks — check the dashboard server logs.");
+      } else {
+        for (const issue of issues) {
+          const taskId = issue.work?.taskId;
+          if (!taskId) continue;
+          void postCompanyRunRecord(companyId, {
+            action: "create-proposal",
+            kind: "human-input",
+            status: "applied",
+            title: `Retry requested: ${issue.title}`,
+            sourceTaskId: taskId,
+            idempotencyKey: `task-retry:${taskId}:${Date.now()}`,
+            risk: "low",
+            decision: "Human requested another autonomous attempt.",
+            decidedBy: "human",
+            evidence: [retryDelegationIssueAnswer(issue)],
+          });
+        }
+        setError(null);
+        const failNote = ok < taskIds.length ? ` (${taskIds.length - ok} failed to re-queue)` : "";
+        showNotice(
+          pickingUp > 0
+            ? `${companyName}: re-queued ${ok} task${ok === 1 ? "" : "s"} — ${pickingUp === ok ? "the crew is picking them back up now" : `${pickingUp} picking up now, the rest on the next sweep`}.${failNote}`
+            : `${companyName}: re-queued ${ok} task${ok === 1 ? "" : "s"} for the next dispatch sweep.${failNote}`,
+        );
+      }
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }, [data, refresh, showNotice]);
+
+  const handleDismissIssues = React.useCallback(async (companyId: string, issues: Issue[]) => {
+    if (issues.length === 0) return;
+    const companyName = data.find((entry) => entry.company?.id === companyId)?.company?.name ?? "Company";
+    // Hide every dismissed issue locally and IMMEDIATELY, keyed the same way the
+    // colonies memo filters (`work.taskId ?? key`). This is what makes the click
+    // always take effect: task-backed issues are also archived below, but the
+    // local hide is what survives a mid-flight background poll or a driver
+    // re-escalation that would otherwise re-surface the card and make the button
+    // look broken. Resets on reload — if the archive fails, the issue returns.
+    setDismissedIssueKeys((prev) => {
+      const next = new Set(prev);
+      for (const issue of issues) next.add(issue.work?.taskId ?? issue.key);
+      return next;
+    });
+    const taskIds = issues.map((issue) => issue.work?.taskId).filter((id): id is string => Boolean(id));
+    if (taskIds.length === 0) {
+      setError(null);
+      showNotice(`${companyName}: hid ${issues.length} issue${issues.length === 1 ? "" : "s"} from this view.`);
+      return;
+    }
+    setBusyId(taskIds[0]);
+    setNotice(null);
+    try {
+      // Set aside = archive the underlying task(s): they leave needs-human, stop
+      // showing as issues, and stop re-escalating. Reversible from the Work Board.
+      const results = await Promise.all(
+        taskIds.map((taskId) =>
+          fetch("/api/kanban", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ taskId, status: "archived" }),
+          }).then((res) => res.ok).catch(() => false),
+        ),
+      );
+      const ok = results.filter(Boolean).length;
+      const taskless = issues.length - taskIds.length;
+      if (ok === 0) {
+        setError("Could not archive these issues off the board — they'll return on reload.");
+      } else {
+        for (const issue of issues) {
+          const taskId = issue.work?.taskId;
+          if (!taskId) continue;
+          void postCompanyRunRecord(companyId, {
+            action: "settle-proposal",
+            idempotencyKey: `task-human:${taskId}`,
+            status: "rejected",
+            decision: "Human dismissed this issue from the company board.",
+            decidedBy: "human",
+            evidence: [issue.title],
+          });
+        }
+        setError(null);
+        const hidNote = taskless > 0 ? ` (${taskless} hidden locally)` : "";
+        showNotice(`${companyName}: dismissed ${ok} issue${ok === 1 ? "" : "s"} — archived off the board.${hidNote}`);
+      }
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }, [data, refresh, showNotice]);
+
+  const handleReviewPreview = React.useCallback(async (companyId: string, issue: Issue, decision: PreviewDecision, notes: string) => {
+    const taskId = issue.work?.taskId;
+    if (!taskId) {
+      setError("This preview has no Work Board task to route your review to.");
+      return;
+    }
+    const companyName = data.find((entry) => entry.company?.id === companyId)?.company?.name ?? "Company";
+    const who = issue.agent || "the crew";
+    setBusyId(taskId);
+    setNotice(null);
+    try {
+      // Same `answer` rail as Mark Resolved: stamp the decision into the parked
+      // task and the same agent resumes — send it, or revise and re-submit.
+      const res = await fetch("/api/kanban", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "answer",
+          taskId,
+          answer: previewReviewAnswer(issue, decision, notes, issuePreviewUrl(issue)),
+          author: "dashboard",
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) {
+        setError(json.error || "Could not send your preview review to the crew.");
+      } else {
+        const previewUrl = issuePreviewUrl(issue);
+        void postCompanyRunRecord(companyId, {
+          action: "create-proposal",
+          kind: "preview-review",
+          status: decision === "approve" ? "applied" : "rejected",
+          title: decision === "approve" ? `Preview approved: ${issue.title}` : `Preview changes requested: ${issue.title}`,
+          sourceTaskId: taskId,
+          idempotencyKey: `preview-review:${taskId}:${decision}:${Date.now()}`,
+          risk: "medium",
+          proposedChange: {
+            decision,
+            previewUrl,
+            notes: notes.trim() || undefined,
+          },
+          links: previewUrl ? [{ label: "Preview", url: previewUrl }] : undefined,
+          decision: decision === "approve" ? "Human approved the customer-facing preview." : "Human requested changes before customer-facing use.",
+          decidedBy: "human",
+          evidence: [previewReviewAnswer(issue, decision, notes, previewUrl)],
+        });
+        void postCompanyRunRecord(companyId, {
+          action: "settle-proposal",
+          idempotencyKey: `task-human:${taskId}`,
+          status: "applied",
+          decision: decision === "approve" ? "Preview approved and task resumed." : "Change request sent and task resumed.",
+          decidedBy: "human",
+        });
+        setError(null);
+        const soon = json.pickupScheduled ? "now" : "on the next pickup";
+        showNotice(
+          decision === "approve"
+            ? `${companyName}: preview approved. ${who} is taking the next step ${soon}.`
+            : `${companyName}: change request sent. ${who} is revising the preview ${soon}.`,
+        );
+      }
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }, [data, refresh, showNotice]);
+
+  const handleRecordRevenue = React.useCallback(async (companyId: string, input: CompanyRevenueShareInput): Promise<void> => {
+    setBusyId(companyId);
+    setNotice(null);
+    try {
+      const res = await fetch("/api/company-revenue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "record",
+          companyId,
+          amountUsd: input.amountUsd,
+          source: input.source,
+          collectFee: false,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!json.ok) {
+        setError(json.error || "Could not record company revenue.");
+      } else {
+        setError(null);
+        const record = json.record as { amountUsd?: number; fee?: { amountUsd?: number; status?: string } } | undefined;
+        const amount = typeof record?.amountUsd === "number" ? `$${record.amountUsd.toFixed(2)}` : "Revenue";
+        showNotice(`${amount} recorded. Revenue earned outside HivemindOS carries no platform fee.`);
+      }
+      await refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }, [refresh, showNotice]);
 
   return (
     <ZeroHumanCompanies
@@ -531,24 +1255,54 @@ function ZeroHumanCompaniesLiveView({ theme = "dark" }: { theme?: "dark" | "ligh
       agentPool={agentPool}
       loading={loading || refreshing}
       initialLoading={loading}
-      error={error}
+      initialTasksLoading={!tasksLoaded}
+      error={error ?? membershipWarning ?? driverWarning}
       notice={notice}
       busyId={busyId}
       onRefresh={() => void refresh()}
       onCreateCompany={handleCreateCompany}
+      onImportCompany={handleImportCompany}
       onEditCompany={handleEditCompany}
       onAddAgents={handleAddAgents}
-      onApprove={(_companyId, approvalId) => void decideApproval(approvalId, "approved")}
-      onReject={(_companyId, approvalId) => void decideApproval(approvalId, "denied")}
+      onDuplicateAgent={onDuplicateAgent}
+      onOpenAgentSettings={onOpenAgentSettings}
+      onDecideApproval={(_companyId, approvalId, decision, note) => void decideApproval(approvalId, decision, note)}
+      onDecideIssueApproval={(companyId, issue, decision, note) => void handleDecideIssueApproval(companyId, issue, decision, note)}
+      onResolvePricing={(companyId, proposalId, decision) => void resolvePricing(companyId, proposalId, decision)}
+      onSetApprovalPolicy={(companyId, policy) => void setApprovalPolicy(companyId, policy)}
       onFreeze={(companyId, frozen) => void handleFreeze(companyId, frozen)}
       onDelete={(companyId) => void handleDelete(companyId)}
       onDispatch={(companyId) => void handleDispatch(companyId)}
       onStopAutonomy={(companyId) => void handleStopAutonomy(companyId)}
+      onResolveIssue={(companyId, issue, answer) => void handleResolveIssue(companyId, issue, answer)}
+      onRetryIssues={(companyId, issues) => void handleRetryIssues(companyId, issues)}
+      onDismissIssues={(companyId, issues) => void handleDismissIssues(companyId, issues)}
+      onReviewPreview={(companyId, issue, decision, notes) => void handleReviewPreview(companyId, issue, decision, notes)}
+      onRecordRevenue={handleRecordRevenue}
+      openSkillAttachmentBrowser={openSkillAttachmentBrowser}
+      chooseDirectoryForMachine={chooseDirectoryForMachine}
+      defaultDirectoryMachine={defaultDirectoryMachine}
       theme={theme}
     />
   );
 }
 
-export function ZeroHumanCompaniesView({ theme = "dark" }: { theme?: "dark" | "light" } = {}) {
-  return USE_ZHC_DEMO_DATA ? <ZeroHumanCompaniesDemoView theme={theme} /> : <ZeroHumanCompaniesLiveView theme={theme} />;
+export function ZeroHumanCompaniesView({
+  theme = "dark",
+  openSkillAttachmentBrowser,
+  chooseDirectoryForMachine,
+  defaultDirectoryMachine,
+  onDuplicateAgent,
+  onOpenAgentSettings,
+}: {
+  theme?: "dark" | "light";
+  openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
+  chooseDirectoryForMachine?: DirectoryPicker;
+  defaultDirectoryMachine?: KanbanMachineTarget | null;
+  onDuplicateAgent?: (agentId: string) => void;
+  onOpenAgentSettings?: (agentId: string) => void | Promise<void>;
+} = {}) {
+  return USE_ZHC_DEMO_DATA
+    ? <ZeroHumanCompaniesDemoView theme={theme} openSkillAttachmentBrowser={openSkillAttachmentBrowser} chooseDirectoryForMachine={chooseDirectoryForMachine} defaultDirectoryMachine={defaultDirectoryMachine} onDuplicateAgent={onDuplicateAgent} onOpenAgentSettings={onOpenAgentSettings} />
+    : <ZeroHumanCompaniesLiveView theme={theme} openSkillAttachmentBrowser={openSkillAttachmentBrowser} chooseDirectoryForMachine={chooseDirectoryForMachine} defaultDirectoryMachine={defaultDirectoryMachine} onDuplicateAgent={onDuplicateAgent} onOpenAgentSettings={onOpenAgentSettings} />;
 }

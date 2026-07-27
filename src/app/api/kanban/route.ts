@@ -3,6 +3,7 @@ import type { KanbanStatus } from "@/lib/types/kanban";
 import {
   addComment,
   addLink,
+  answerHumanTask,
   archiveBoard,
   blockTask,
   bulkPatchTasks,
@@ -26,7 +27,12 @@ import {
   unblockTask,
   type KanbanStorageOptions,
 } from "@/lib/services/kanban/local-kanban-store";
+import { holdTask, clearHold } from "@/lib/services/kanban/task-hold";
+import { DASHBOARD_AUTH_HEADER, internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
+import { buildLoopFromTemplate, listLoopTemplates, stripProtectedIntegrityReceipts, type LoopTemplateId } from "@/lib/services/loops";
 import { filterKanbanTasks, groupKanbanTasks } from "@/lib/utils/kanban-board";
+import { recordTaskSkillOutcome } from "@/lib/services/skills/skill-autoresearch";
+import { resolveFleetMachineAccessAnswer } from "@/lib/services/fleet/machine-access-approval";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -72,6 +78,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
+    // The HTTP route is the untrusted boundary: the autonomous worker completes
+    // in-process, so anything arriving here (dashboard, an agent via MCP/API) must
+    // not be able to POST a forged server-only integrity receipt to overwrite a
+    // stored hard-fail and self-complete a parked task.
+    sanitizeClientLoopReceipts(body);
     const boardSlug = request.nextUrl.searchParams.get("board") || body.board;
     const storageOptions = storageOptionsFromRequest(request, body);
     if (body.action === "create-board") {
@@ -108,7 +119,13 @@ export async function POST(request: NextRequest) {
     }
     if (body.action === "complete") {
       const result = await completeTask(boardSlug, body.taskId, body, storageOptions);
-      return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
+      const skillAutoresearch = await recordTaskSkillOutcome(
+        result.task,
+        result.blocked ? "blocked" : "completed",
+        body.summary ?? body.result ?? undefined,
+        { vaultPath: storageOptions.vaultPath ?? undefined },
+      ).catch(() => undefined);
+      return NextResponse.json({ ok: true, ...result, skillAutoresearch, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
     }
     if (body.action === "loop-discover") {
       const result = await discoverTaskLoop(boardSlug, body.taskId, body.loop ?? body, storageOptions);
@@ -120,14 +137,71 @@ export async function POST(request: NextRequest) {
     }
     if (body.action === "block") {
       const result = await blockTask(boardSlug, body.taskId, body.reason ?? body.summary ?? "Blocked.", storageOptions);
-      return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
+      const skillAutoresearch = await recordTaskSkillOutcome(result.task, "blocked", body.reason ?? body.summary ?? undefined, { vaultPath: storageOptions.vaultPath ?? undefined }).catch(() => undefined);
+      return NextResponse.json({ ok: true, ...result, skillAutoresearch, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
     }
     if (body.action === "fail") {
       const result = await failTask(boardSlug, body.taskId, body, storageOptions);
-      return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
+      const skillAutoresearch = await recordTaskSkillOutcome(result.task, "failed", body.summary ?? body.error ?? body.reason ?? undefined, { vaultPath: storageOptions.vaultPath ?? undefined }).catch(() => undefined);
+      return NextResponse.json({ ok: true, ...result, skillAutoresearch, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
     }
     if (body.action === "unblock") {
       const result = await unblockTask(boardSlug, body.taskId, storageOptions);
+      return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
+    }
+    if (body.action === "answer") {
+      const currentBoard = await readBoard(boardSlug, storageOptions);
+      const currentTask = currentBoard.tasks.find((task) => task.id === body.taskId);
+      if (!currentTask) throw new Error("Task not found.");
+      if (currentTask.status !== "needs-human") {
+        throw new Error(`Task is '${currentTask.status}'; answer only applies to Needs You tasks.`);
+      }
+      // A machine-policy answer must reach the collector authority before the
+      // task is resumed. If that enforcement fails, leave the card parked in
+      // Needs You instead of telling the same agent to retry without access.
+      const fleetAccessResolution = await resolveFleetMachineAccessAnswer(currentTask, body.answer);
+      const result = await answerHumanTask(boardSlug, body.taskId, { answer: body.answer, author: body.author }, storageOptions);
+      // A real answer supersedes any prior "parked" state so it doesn't stay
+      // filtered after the task flows on (or if it later re-blocks).
+      await clearHold(boardSlug, body.taskId, storageOptions).catch(() => undefined);
+      // Resume with the SAME agent that asked: when the card still carries a
+      // delegated target, schedule an immediate autonomous pickup instead of
+      // waiting for the next re-dispatch sweep. The chain is rebuilt against
+      // the CURRENT fleet (same rules as the recovery sweep) so a judge-gated
+      // task resumes with real fallbacks and an independent reviewer — a
+      // fabricated one-element chain cannot staff a reviewer, so judge-gated
+      // work ran and immediately re-parked at needs-human. When discovery is
+      // unavailable this degrades to the single known delegate, never blocks.
+      const task = result.task;
+      const assignee = task.assignee?.trim();
+      const collectorUrl = task.targetMachine?.collectorUrl;
+      let pickupScheduled = false;
+      if (assignee && assignee !== "queen-bee" && collectorUrl) {
+        const { scheduleQueenBeeAutonomousPickup } = await import("@/lib/services/queen-bee/autonomous-worker");
+        const { prepareQueenBeeResumeChainContext, rebuildQueenBeeResumeChain } = await import("@/lib/services/queen-bee/control-plane");
+        const { discoverQueenBeeFleetSnapshot } = await import("@/lib/services/queen-bee/fleet-snapshot");
+        const fleetSnapshot = await discoverQueenBeeFleetSnapshot(
+          request.nextUrl.origin,
+          request.headers.get(DASHBOARD_AUTH_HEADER) ?? internalApiAuthHeaders()[DASHBOARD_AUTH_HEADER] ?? null,
+        );
+        const context = await prepareQueenBeeResumeChainContext({ ...storageOptions, fleetSnapshot }).catch(() => null);
+        const chain = context ? rebuildQueenBeeResumeChain(task, context) : [];
+        pickupScheduled = scheduleQueenBeeAutonomousPickup({
+          task,
+          delegation: chain[0] ?? {
+            status: "delegated",
+            agent: { name: assignee, runtime: "hermes", runtimeCapabilities: { chat: true } },
+            machine: { key: task.targetMachine?.key, device: { name: task.targetMachine?.name, collectorUrl } },
+          },
+          delegationChain: chain,
+          vaultPath: storageOptions.vaultPath,
+          kanbanFolder: storageOptions.kanbanFolder,
+        });
+      }
+      return NextResponse.json({ ok: true, ...result, fleetAccessResolution, pickupScheduled, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
+    }
+    if (body.action === "hold") {
+      const result = await holdTask(boardSlug, body.taskId, { by: body.author, note: body.note ?? body.reason }, storageOptions);
       return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
     }
     if (body.action === "promote") {
@@ -138,6 +212,7 @@ export async function POST(request: NextRequest) {
       const result = await reclaimStaleTasks(boardSlug, body, storageOptions);
       return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
     }
+    applyLoopTemplate(body);
     const result = await createTask(boardSlug, body, storageOptions);
     return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
   } catch (error) {
@@ -148,6 +223,7 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
+    sanitizeClientLoopReceipts(body);
     const boardSlug = request.nextUrl.searchParams.get("board") || body.board;
     const storageOptions = storageOptionsFromRequest(request, body);
     if (!body.taskId) throw new Error("taskId is required.");
@@ -170,6 +246,31 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
   } catch (error) {
     return errorResponse(error);
+  }
+}
+
+function applyLoopTemplate(body: Record<string, unknown>) {
+  if (typeof body.loopTemplateId !== "string" || !body.loopTemplateId.trim()) return;
+  const templateId = body.loopTemplateId.trim() as LoopTemplateId;
+  if (!listLoopTemplates().some((template) => template.id === templateId)) {
+    throw new Error(`Unknown loop template: ${templateId}.`);
+  }
+  const title = typeof body.title === "string" && body.title.trim() ? body.title.trim() : "Engineering task";
+  const detail = typeof body.body === "string" && body.body.trim() ? body.body.trim() : title;
+  body.loop = buildLoopFromTemplate({ templateId, title, goal: detail });
+}
+
+/** Strip server-only integrity receipts from a client request body (top-level and
+ *  inside a patch) so a forged `passed` receipt can't overwrite a stored hard-fail.
+ *  Non-integrity receipts pass through untouched. */
+function sanitizeClientLoopReceipts(body: unknown): void {
+  if (!body || typeof body !== "object") return;
+  const record = body as { loopReceipts?: unknown; patch?: { loopReceipts?: unknown } };
+  if (Array.isArray(record.loopReceipts)) {
+    record.loopReceipts = stripProtectedIntegrityReceipts(record.loopReceipts);
+  }
+  if (record.patch && typeof record.patch === "object" && Array.isArray(record.patch.loopReceipts)) {
+    record.patch.loopReceipts = stripProtectedIntegrityReceipts(record.patch.loopReceipts);
   }
 }
 

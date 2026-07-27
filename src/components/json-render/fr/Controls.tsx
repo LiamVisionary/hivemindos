@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from "react";
 import { type CompProps, type Registry, useFrBound } from "./render";
 
-const fieldLabel: React.CSSProperties = { fontFamily: "var(--f-mono)", fontSize: 10, fontWeight: 500, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--fg-3)" };
+const fieldLabel: React.CSSProperties = { fontFamily: "var(--f-mono)", fontSize: 10, fontWeight: 500, letterSpacing: "0.09em", textTransform: "uppercase", color: "var(--fg-3)" };
 const inputBase: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: "var(--radius-sm)", border: "1px solid var(--line-2)", background: "var(--panel-2)", color: "var(--fg)", fontFamily: "var(--f-body)", fontSize: 13.5, outline: "none", transition: "border-color 150ms ease, box-shadow 150ms ease" };
 const onFocus = (e: React.FocusEvent<HTMLElement>) => { (e.target as HTMLElement).style.borderColor = "var(--honey-line)"; (e.target as HTMLElement).style.boxShadow = "0 0 0 3px var(--honey-soft)"; };
 const onBlur = (e: React.FocusEvent<HTMLElement>) => { (e.target as HTMLElement).style.borderColor = "var(--line-2)"; (e.target as HTMLElement).style.boxShadow = "none"; };
@@ -231,7 +231,7 @@ export const controlComponents: Registry = {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--fg-3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? "rotate(180deg)" : "none", transition: "transform 140ms" }}><path d="M6 9l6 6 6-6" /></svg>
         </button>
         {open && (
-          <span style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 40, minWidth: 170, padding: 5, borderRadius: "var(--radius-sm)", background: "var(--panel)", border: "1px solid var(--line-2)", boxShadow: "0 18px 44px -18px rgba(0,0,0,0.7)", display: "grid", gap: 1 }}>
+          <span style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 40, minWidth: 170, padding: 5, borderRadius: "var(--radius-sm)", background: "color-mix(in srgb, var(--panel) 94%, transparent)", backdropFilter: "blur(10px)", border: "1px solid var(--line-2)", boxShadow: "0 18px 44px -18px rgba(0,0,0,0.7)", display: "grid", gap: 1 }}>
             {items.map((it) => (
               <button key={it.value} type="button" onClick={() => { setVal(it.value); emit("select", it.value); setOpen(false); }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 9, padding: "8px 10px", borderRadius: 7, border: 0, background: "transparent", color: it.value === val ? "var(--honey)" : "var(--fg-2)", cursor: "pointer", textAlign: "left", fontFamily: "var(--f-body)", fontSize: 13 }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = "var(--panel-2)")} onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>

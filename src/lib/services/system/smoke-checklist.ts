@@ -33,7 +33,7 @@ export function buildSmokeChecklistFromHealth(health: SystemHealthReport): Smoke
       "Dashboard auth",
       auth?.status === "ok" ? "pass" : "fail",
       auth?.detail ?? "Dashboard auth status was not reported.",
-      { evidence: auth ? [auth.status] : [], nextAction: auth?.status === "ok" ? undefined : "Run pnpm dashboard-auth status and repair missing keys." },
+      { evidence: auth ? [auth.status] : [], nextAction: auth?.status === "ok" ? undefined : "Run dashboard-auth status and repair missing keys." },
     ),
     item(
       "collector-readiness",

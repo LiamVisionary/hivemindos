@@ -214,6 +214,7 @@ Host $SSH_ALIAS
     User root
     IdentityFile $SSH_KEY_FILE
     Port 22
+    StrictHostKeyChecking accept-new
 EOF
 
 mv "$TMP_CONFIG" "$HOME/.ssh/config"

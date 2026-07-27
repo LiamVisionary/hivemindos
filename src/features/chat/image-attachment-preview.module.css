@@ -1,0 +1,185 @@
+/* Image attachment thumbnails + expand-to-lightbox overlay.
+   Shared by the chat composer tray and the sent message thread. */
+
+.thumb {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line, rgba(148, 163, 184, 0.22));
+  border-radius: 12px;
+  background: var(--surface-soft, rgba(12, 17, 25, 0.6));
+  line-height: 0;
+  cursor: zoom-in;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.thumb:hover {
+  border-color: var(--accent-strong, rgba(94, 234, 212, 0.55));
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+}
+
+.thumb:focus-visible {
+  outline: 2px solid var(--button-ring, rgba(94, 234, 212, 0.75));
+  outline-offset: 2px;
+}
+
+.thumb img {
+  display: block;
+}
+
+/* Composer tray tile: thumbnail + corner remove button. */
+.tile {
+  position: relative;
+  display: inline-flex;
+}
+
+.remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  z-index: 2;
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+  background: rgba(8, 12, 20, 0.92);
+  color: var(--foreground, #f4f7fb);
+  padding: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.remove:hover {
+  background: rgba(30, 41, 59, 0.96);
+}
+
+.remove:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.remove:focus-visible {
+  outline: 2px solid var(--button-ring, rgba(94, 234, 212, 0.75));
+  outline-offset: 2px;
+}
+
+.remove svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* Compact square tile used in the composer attachment tray. */
+.thumbComposer {
+  width: 60px;
+  height: 60px;
+  border-radius: 12px;
+}
+
+.thumbComposer img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Aspect-preserved preview used inside a sent chat bubble. */
+.thumbMessage {
+  max-width: 240px;
+  border-radius: 14px;
+}
+
+.thumbMessage img {
+  width: auto;
+  height: auto;
+  max-width: 240px;
+  max-height: 240px;
+  object-fit: contain;
+}
+
+/* Captioned thumbnail (Kanban message gallery). */
+.captioned {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  margin: 0;
+}
+
+.caption {
+  max-width: 240px;
+  color: var(--muted, #94a3b8);
+  font-size: 11px;
+  word-break: break-word;
+}
+
+/* Full-screen lightbox (portaled to <body>). */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.82);
+  opacity: 0;
+  backdrop-filter: blur(10px);
+  transition: opacity 220ms ease;
+}
+
+.overlayVisible {
+  opacity: 1;
+}
+
+.image {
+  display: block;
+  max-width: min(96vw, 1400px);
+  max-height: min(92vh, 1000px);
+  object-fit: contain;
+  border-radius: 10px;
+  opacity: 0;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.55);
+  cursor: zoom-out;
+  will-change: transform;
+  transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.close {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 1;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(2, 6, 12, 0.78);
+  color: #f8fafc;
+  cursor: pointer;
+}
+
+.close:hover {
+  border-color: rgba(255, 255, 255, 0.45);
+  background: rgba(15, 23, 42, 0.92);
+}
+
+.close:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  outline-offset: 2px;
+}
+
+.close svg {
+  width: 22px;
+  height: 22px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumb,
+  .overlay,
+  .image {
+    transition: none;
+  }
+}

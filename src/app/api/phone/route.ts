@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, unlink, writeFile } from "fs/promises";
 import { join, resolve, sep } from "path";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { readVaultAgentProfiles } from "@/lib/services/obsidian/agent-profiles";
 import {
@@ -39,6 +40,8 @@ import {
 import { runChatImageGeneration } from "@/lib/services/chat/image-generation";
 import { cacheGeneratedImageForPhone } from "@/lib/services/chat/generated-media-cache";
 import { signedGeneratedMediaUrl } from "@/lib/services/chat/generated-media-signing";
+import { registerPushDevice } from "@/lib/services/push/mobile-push";
+import { runPhoneShortcutAction } from "@/lib/services/phone/shortcut-actions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -63,7 +66,20 @@ type CallPrompt = {
   enabled: boolean;
   instructions: string;
   path: string;
+  // Optional shared-list agent binding (mirrors the phone's StoredCallScript).
+  // When an agent is bound, the phone schedules + connects the call to that
+  // agent; the external gateway scheduler should skip agent-bound prompts so
+  // the ring isn't duplicated. Absent = agent-less (today's behaviour).
+  agentId?: string;
+  agentName?: string;
+  machineName?: string;
+  voiceProviderId?: string;
 };
+
+type CallPromptBinding = Pick<
+  CallPrompt,
+  "agentId" | "agentName" | "machineName" | "voiceProviderId"
+>;
 
 type MobileAgentTarget = Pick<
   AgentProfile,
@@ -158,6 +174,11 @@ function safeVoiceConfigPayload(
   const recipes = Array.isArray(config.recipes)
     ? config.recipes.filter((recipe) => recipe && typeof recipe === "object")
     : [];
+  const dailyCallDays = Array.isArray(config.dailyCallDays)
+    ? config.dailyCallDays
+        .map((day) => Number(day))
+        .filter((day, index, list) => Number.isInteger(day) && day >= 0 && day <= 6 && list.indexOf(day) === index)
+    : undefined;
   return {
     ...result,
     result: {
@@ -184,6 +205,7 @@ function safeVoiceConfigPayload(
           typeof config.dailyCallTime === "string"
             ? config.dailyCallTime
             : undefined,
+        dailyCallDays,
         voiceProviders,
         voiceOptions: [...voiceOptions, ...extraVoiceOptions],
         localTtsCandidates,
@@ -381,7 +403,7 @@ async function fetchRuntimeVoiceTurn(
   });
   return fetch(new URL("/api/chat/agent-runtime", request.url), {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...internalApiAuthHeaders() },
     body: JSON.stringify({
       agent,
       messages: [
@@ -898,14 +920,22 @@ function serializePrompt(prompt: {
   time: string;
   enabled: boolean;
   instructions: string;
-}): string {
+} & Partial<CallPromptBinding>): string {
   const title = JSON.stringify(String(prompt.title ?? ""));
   const time = JSON.stringify(String(prompt.time ?? ""));
   const enabled = prompt.enabled ? "true" : "false";
   const body = String(prompt.instructions ?? "")
     .replace(/\r\n/g, "\n")
     .replace(/\s+$/, "");
-  return `---\ntitle: ${title}\ntime: ${time}\nenabled: ${enabled}\n---\n\n${body}\n`;
+  // Optional binding lines. Keys match the phone's callScripts serializer, and
+  // are only written when set so an agent-less prompt stays byte-identical.
+  const bindingLines = [
+    prompt.agentId?.trim() ? `\nagentId: ${JSON.stringify(prompt.agentId.trim())}` : "",
+    prompt.agentName?.trim() ? `\nagent: ${JSON.stringify(prompt.agentName.trim())}` : "",
+    prompt.machineName?.trim() ? `\nmachine: ${JSON.stringify(prompt.machineName.trim())}` : "",
+    prompt.voiceProviderId?.trim() ? `\nvoice: ${JSON.stringify(prompt.voiceProviderId.trim())}` : "",
+  ].join("");
+  return `---\ntitle: ${title}\ntime: ${time}\nenabled: ${enabled}${bindingLines}\n---\n\n${body}\n`;
 }
 
 function parseQuotedString(raw: string): string {
@@ -932,24 +962,30 @@ function parsePrompt(content: string): {
   time: string;
   enabled: boolean;
   instructions: string;
-} {
+} & CallPromptBinding {
   const normalized = content.replace(/\r\n/g, "\n");
   const match = /^---\n([\s\S]*?)\n---\n?/.exec(normalized);
   let title = "";
   let time = "";
   let enabled = true;
   let instructions = normalized;
+  const binding: CallPromptBinding = {};
   if (match) {
     instructions = normalized.slice(match[0].length);
     for (const line of match[1].split("\n")) {
       const sep = line.indexOf(":");
       if (sep < 0) continue;
+      // Keys are lower-cased here; the phone writes `agentId` (→ `agentid`).
       const key = line.slice(0, sep).trim().toLowerCase();
       const value = line.slice(sep + 1).trim();
       if (key === "title") title = parseQuotedString(value);
       else if (key === "time") time = parseQuotedString(value);
       else if (key === "enabled")
         enabled = !/^(false|no|0)$/i.test(value.trim());
+      else if (key === "agentid") binding.agentId = parseQuotedString(value) || undefined;
+      else if (key === "agent") binding.agentName = parseQuotedString(value) || undefined;
+      else if (key === "machine") binding.machineName = parseQuotedString(value) || undefined;
+      else if (key === "voice") binding.voiceProviderId = parseQuotedString(value) || undefined;
     }
   }
   return {
@@ -957,6 +993,7 @@ function parsePrompt(content: string): {
     time,
     enabled,
     instructions: instructions.replace(/^\n+/, "").replace(/\s+$/, ""),
+    ...binding,
   };
 }
 
@@ -981,31 +1018,39 @@ async function readFolderPrompts(
   } catch {
     return [];
   }
-  const prompts: CallPrompt[] = [];
-  for (const entry of entries) {
-    if (!entry.toLowerCase().endsWith(".md")) continue;
-    const filePath = join(dir, entry);
-    let content: string;
-    try {
-      content = await readFile(filePath, "utf8");
-    } catch {
-      continue;
-    }
-    const parsed = parsePrompt(content);
-    const baseName = entry.replace(/\.md$/i, "");
-    const id = parsed.title
-      ? slugifyTitle(parsed.title)
-      : slugifyTitle(baseName);
-    prompts.push({
-      id,
-      title: parsed.title || baseName,
-      time: parsed.time,
-      enabled: parsed.enabled,
-      instructions: parsed.instructions,
-      path: filePath,
-    });
-  }
-  return prompts;
+  // Each entry reads an independent file; nothing depends on a prior read, so
+  // run them in parallel. listPrompts re-sorts the result, so push order here
+  // does not affect the response. A read failure still skips that entry (null).
+  const prompts = await Promise.all(
+    entries.map(async (entry): Promise<CallPrompt | null> => {
+      if (!entry.toLowerCase().endsWith(".md")) return null;
+      const filePath = join(dir, entry);
+      let content: string;
+      try {
+        content = await readFile(filePath, "utf8");
+      } catch {
+        return null;
+      }
+      const parsed = parsePrompt(content);
+      const baseName = entry.replace(/\.md$/i, "");
+      const id = parsed.title
+        ? slugifyTitle(parsed.title)
+        : slugifyTitle(baseName);
+      return {
+        id,
+        title: parsed.title || baseName,
+        time: parsed.time,
+        enabled: parsed.enabled,
+        instructions: parsed.instructions,
+        path: filePath,
+        agentId: parsed.agentId,
+        agentName: parsed.agentName,
+        machineName: parsed.machineName,
+        voiceProviderId: parsed.voiceProviderId,
+      };
+    }),
+  );
+  return prompts.filter((prompt): prompt is CallPrompt => prompt !== null);
 }
 
 async function listPrompts(vaultPath: string): Promise<CallPrompt[]> {
@@ -1236,6 +1281,14 @@ export async function POST(request: NextRequest) {
       throw new Error("Unsupported multipart phone action.");
     }
     const body = await request.json().catch(() => ({}));
+    if (body.action === "shortcut-action") {
+      const result = await runPhoneShortcutAction({
+        body,
+        origin: request.nextUrl.origin,
+        deviceToken: request.headers.get("x-hivemindos-device-token"),
+      });
+      return NextResponse.json({ ok: true, ...result });
+    }
     const writableVaultPath = () =>
       resolveObsidianVaultPath(
         body.vaultPath ??
@@ -1255,6 +1308,16 @@ export async function POST(request: NextRequest) {
       const enabled = Boolean(body.enabled);
       const instructions = String(body.instructions ?? "");
       const slug = slugifyTitle(title);
+      // Optional shared-list agent binding + voice. Preserved through save so a
+      // call bound to a fleet agent stays bound.
+      const asString = (v: unknown) =>
+        typeof v === "string" && v.trim() ? v.trim() : undefined;
+      const binding: CallPromptBinding = {
+        agentId: asString(body.agentId),
+        agentName: asString(body.agentName),
+        machineName: asString(body.machineName),
+        voiceProviderId: asString(body.voiceProviderId),
+      };
 
       // If the prompt is being renamed, drop the old slug file so we never duplicate.
       if (body.id) {
@@ -1270,7 +1333,7 @@ export async function POST(request: NextRequest) {
       const filePath = join(dir, `${slug}.md`);
       await writeFile(
         filePath,
-        serializePrompt({ title, time, enabled, instructions }),
+        serializePrompt({ title, time, enabled, instructions, ...binding }),
         "utf8",
       );
       return NextResponse.json({
@@ -1282,6 +1345,7 @@ export async function POST(request: NextRequest) {
           enabled,
           instructions,
           path: filePath,
+          ...binding,
         },
       });
     }
@@ -1365,6 +1429,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(result, { status: result.ok ? 200 : 502 });
     }
 
+    // Register this phone's Expo push token so the hub can alert it about new
+    // spend approvals (device-token gated by the /api proxy, like every action).
+    if (body.action === "register-push") {
+      const token = typeof body.token === "string" ? body.token : "";
+      const platform = typeof body.platform === "string" ? body.platform : "ios";
+      await registerPushDevice(token, platform);
+      return NextResponse.json({ ok: true });
+    }
+
     // Phone-hosted mobile agents: the phone app heartbeats/claims queued chat
     // jobs, streams run events, and posts the final result back to the hub.
     if (body.action === "agent-host-poll") {
@@ -1400,7 +1473,13 @@ export async function POST(request: NextRequest) {
     }
 
     if (body.action === "local-tts-stt-client-secret") {
-      return NextResponse.json(await createRealtimeTranscriptionClientSecret());
+      // "turns" (default): server-VAD session that auto-commits utterances.
+      // "continuous": streaming pre-commit deltas, caller ends turns itself.
+      return NextResponse.json(
+        await createRealtimeTranscriptionClientSecret(
+          body.mode === "continuous" ? "continuous" : "turns",
+        ),
+      );
     }
 
     if (body.action === "local-tts-speech-stream") {

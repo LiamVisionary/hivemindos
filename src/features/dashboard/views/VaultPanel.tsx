@@ -1,5 +1,6 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
+// Partially typed 2026-07-02; the typing pass ran out of session mid-file and the remaining errors are deferred (see CHANGELOG).
 "use client";
 
 /* eslint-disable react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
@@ -9,16 +10,23 @@ import { memo, useEffect, useRef, useState } from "react";
 import { BrainGraphExplorer } from "./BrainGraphExplorer";
 import { BrainConfigPanel } from "./BrainConfigPanel";
 import { BrainSkillsPanel } from "./BrainSkillsPanel";
+import { BrainAtlasPanel, BrainDreamInboxPanel, BrainSkillRoiPanel } from "./BrainAugmentationPanels";
 import { BrainServiceOverview, BrainServiceRunResult, BrainServiceSegmentedNav, BrainServiceSettingsDeck } from "./brain-services-ui";
+import { AgentMemoryHealthCard } from "./AgentMemoryHealthCard";
+import { EmbeddingsProviderCard } from "./EmbeddingsProviderCard";
+import { InboxTriageServiceCard } from "./InboxTriageServiceCard";
 import { SkillSecurityCard } from "./SkillSecurityCard";
+import { SyntoModelTierSettings } from "./SyntoModelTierSettings";
+import { SYNTO_COMPARE_MODEL_OPTIONS } from "@/lib/config/synto-model-tiers";
 import brainServiceStyles from "./brain-services.module.css";
 import { SectionModeHeader } from "./WorkSectionHeader";
+import { BrainDropFab } from "./brain-drop/BrainDropFab";
 
 export const VaultPanel = memo(VaultPanelComponent);
 
 // Memoized (see export above) so unrelated background re-renders skip this panel.
 function VaultPanelComponent(props: any) {
-  const { Activity, BRAIN_SKILL_PROVIDER_FALLBACK, Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, CircleAlert, DEFAULT_SHARED_VAULT, Download, Eye, FileText, FolderOpen, GitBranch, Hexagon, KeyRound, LoaderCircle, Network, PlugZap, RefreshCcw, Repeat2, Search, Sparkles, activeView, brainGraph, brainGraphLoading, brainGraphStats, brainGraphStatus, brainPan, brainSkillAeonSyncing, brainSkillImportAllDescription, brainSkillImportAllLabel, brainSkillImportProvider, brainSkillImportSuccess, brainSkillImportableCount, brainSkills, brainSkillsLoading, brainSkillsStatus, checkControlRoomStatus, checkVaultStatus, controlRoomStatus, displayAgents, endBrainPan, formatBrainDate, gbrainActionStatus, gbrainBusy, gbrainQuery, gbrainQueryResult, gbrainStatus, hermesUpdateRequired, hermesUpdateRequiredDetail, importBrainSkills, inspectBrainNode, installTradingBrainFromDashboard, moveBrainPan, neo4jActionStatus, neo4jBusy, neo4jQuery, neo4jQueryResult, neo4jStatus, openSkillBrowser, pairSyncthingVaultSync, qmdActionStatus, qmdBusy, qmdQuery, qmdQueryResult, qmdStatus, queryGbrainFromDashboard, queryNeo4jFromDashboard, queryQmdFromDashboard, querySyntoFromDashboard, refreshBrainGraph, refreshBrainSkills, refreshGbrainStatus, refreshNeo4jStatus, refreshQmdStatus, refreshSyntoStatus, refreshTradingBrainStatus, runGbrainAction, runNeo4jAction, runQmdAction, runSyntoAction, runVaultTailnetSync, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setChatAttachments, setChatDirectories, setGbrainQuery, setNeo4jQuery, setQmdQuery, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, setSyntoQuery, setText, setTradingBrainForAllRuntimes, setTradingBrainForRuntime, setVaultPanelMode, sharedVault, skillBrowserSearch, skillRequiresHermesUpdate, startAgentChat, startBrainPan, syncBrainSkillsToAeon, syntoActionStatus, syntoBusy, syntoQuery, syntoQueryResult, syntoStatus, tradingBrainActionStatus, tradingBrainAllRuntimeAttached, tradingBrainBusy, tradingBrainRuntimeCards, tradingBrainStatus, updateAllSkillAutoSync, updateSharedVault, updateSkillAutoSync, vaultClass, vaultPanelMode, vaultStatus, vaultSyncPending, vaultSyncStatus } = props;
+  const { Activity, BRAIN_SKILL_PROVIDER_FALLBACK, Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, CircleAlert, DEFAULT_SHARED_VAULT, Download, Eye, FileText, FolderOpen, GitBranch, Hexagon, KeyRound, LoaderCircle, Network, PlugZap, RefreshCcw, Repeat2, Search, Sparkles, activeView, brainGraph, brainGraphLoading, brainGraphStats, brainGraphStatus, brainPan, brainSkillAeonSyncing, brainSkillImportAllDescription, brainSkillImportAllLabel, brainSkillImportProvider, brainSkillImportSuccess, brainSkillImportableCount, brainSkills, brainSkillsLoading, brainSkillsStatus, checkControlRoomStatus, checkVaultStatus, controlRoomStatus, displayAgents, endBrainPan, formatBrainDate, gbrainActionStatus, gbrainBusy, gbrainQuery, gbrainQueryResult, gbrainStatus, hermesUpdateRequired, hermesUpdateRequiredDetail, importBrainSkills, inspectBrainNode, installTradingBrainFromDashboard, moveBrainPan, neo4jActionStatus, neo4jBusy, neo4jQuery, neo4jQueryResult, neo4jStatus, openSkillBrowser, pairSyncthingVaultSync, qmdActionStatus, qmdBusy, qmdQuery, qmdQueryResult, qmdStatus, queryGbrainFromDashboard, queryNeo4jFromDashboard, queryQmdFromDashboard, querySyntoFromDashboard, refreshBrainGraph, refreshBrainSkills, refreshGbrainStatus, refreshNeo4jStatus, refreshQmdStatus, refreshRuntimeIntegrations, refreshSyntoStatus, refreshTradingBrainStatus, runGbrainAction, runNeo4jAction, runQmdAction, runRuntimeIntegrationAction, runSyntoAction, runVaultTailnetSync, runtimeIntegrationBusy, runtimeIntegrationMessage, runtimeIntegrationStatus, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setChatAttachments, setChatDirectories, setGbrainQuery, setNeo4jQuery, setQmdQuery, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, setSyntoQuery, setText, setTradingBrainForAllRuntimes, setTradingBrainForRuntime, setVaultPanelMode, sharedVault, skillBrowserSearch, skillRequiresHermesUpdate, startAgentChat, startBrainPan, syncBrainSkillsToAeon, syntoActionStatus, syntoBusy, syntoQuery, syntoQueryResult, syntoStatus, tradingBrainActionStatus, tradingBrainAllRuntimeAttached, tradingBrainBusy, tradingBrainRuntimeCards, tradingBrainStatus, updateAllSkillAutoSync, updateSharedVault, updateSkillAutoSync, vaultClass, vaultPanelMode, vaultStatus, vaultSyncPending, vaultSyncStatus } = props;
   const brainClass = (...classes) => classes.map((className) => brainServiceStyles[className] || vaultClass(className)).filter(Boolean).join(" ");
   const gbrainMetric = (keys: string[]) => {
     const stats = gbrainStatus?.stats ?? {};
@@ -257,8 +265,6 @@ function VaultPanelComponent(props: any) {
     qmdStatus?.installed || qmdBusy === "install" || qmdBusy === "connect" || qmdBusy === "index" || qmdBusy === "embed" ? qmdActionStatus : "",
     gbrainStatus?.installed || gbrainBusy === "install" || gbrainBusy === "connect" ? gbrainActionStatus : "",
   ].find(Boolean) || "";
-  const syntoOutputHints = `${syntoActionStatus}\n${syntoQueryResult}`;
-  const syntoNeedsModelSetup = /ollama|model/i.test(syntoOutputHints) && /missing|not running|not found|failed|error/i.test(syntoOutputHints);
   const gbrainSetupSteps = ["Check Bun runtime", "Install GBrain CLI", "Initialize local brain", "Import shared vault", "Refresh stale embeddings", "Extract graph links", "Scaffold retrieval skills"];
   const qmdSetupSteps = ["Check npm runtime", "Install QMD CLI", "Add shared vault collection", "Build SQLite/BM25 index", "Refresh local vectors"];
   const neo4jSetupSteps = ["Check Neo4j env keys", "Verify driver connectivity", "Create graph constraints", "MERGE Agent Memory", "Link entities and compiled pages"];
@@ -741,10 +747,21 @@ function VaultPanelComponent(props: any) {
         ...(syntoStatusNote ? [syntoStatusNote] : []),
         syntoStatus?.initialized ? "synto.toml ready" : "Initialize Synthesis",
         `Source access ${syntoStatus?.mcp?.sourceAccessMode ?? sharedVault.synto.sourceAccessMode}`,
-        `Compare ${sharedVault.synto.compareHeavyModel}`,
+        (sharedVault.synto.modelRoute ?? "cloud-best") === "cloud-best" ? "Best cloud · Qwen3 235B" : sharedVault.synto.modelRoute === "local-light" ? "Local Light · Qwen3.5 9B" : "Local Recommended · Qwen3 30B",
         syntoStatus?.pack?.indexExists ? "Pack index ready" : "Pack pending",
         sharedVault.synto.autoApprove ? `Auto approve >= ${sharedVault.synto.minConfidence}` : "Human review first",
       ],
+      setup: (
+        <SyntoModelTierSettings
+          sharedVault={sharedVault}
+          updateSharedVault={updateSharedVault}
+          runtimeIntegrationBusy={runtimeIntegrationBusy}
+          runtimeIntegrationMessage={runtimeIntegrationMessage}
+          runtimeIntegrationStatus={runtimeIntegrationStatus}
+          refreshRuntimeIntegrations={refreshRuntimeIntegrations}
+          runRuntimeIntegrationAction={runRuntimeIntegrationAction}
+        />
+      ),
       primaryAction: {
         key: "run",
         label: "Run pipeline",
@@ -807,13 +824,6 @@ function VaultPanelComponent(props: any) {
       ],
       body: (
         <div className={brainClass("gbrainQueryBox")}>
-          {syntoNeedsModelSetup ? (
-            <div className={brainClass("brainServiceRepairHint")}>
-              <strong>Model backend needs attention</strong>
-              <span>Start Ollama and pull the configured Syntho models before compiling real notes.</span>
-              <code>ollama serve && ollama pull gemma4:e4b && ollama pull qwen2.5:14b && ollama pull nomic-embed-text</code>
-            </div>
-          ) : null}
           <label>
             <span>Question</span>
             <textarea
@@ -859,16 +869,14 @@ function VaultPanelComponent(props: any) {
             </select>
           </label>
           <label>
-            Compare model
+            Comparison challenger
             <select
               value={sharedVault.synto.compareHeavyModel}
               onChange={(event) => updateSharedVault({ synto: { ...sharedVault.synto, compareHeavyModel: event.target.value } })}
             >
-              <option value="llama3.1:8b">llama3.1:8b</option>
-              <option value="qwen2.5:14b">qwen2.5:14b</option>
-              <option value="gemma4:e4b">gemma4:e4b</option>
-              <option value="mistral-nemo:12b">mistral-nemo:12b</option>
-              <option value="deepseek-r1:8b">deepseek-r1:8b</option>
+              {SYNTO_COMPARE_MODEL_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </select>
           </label>
           <label>
@@ -1164,8 +1172,14 @@ function VaultPanelComponent(props: any) {
     { id: "brain-services", label: "Brain Services" },
     { id: "env", label: "Env" },
     { id: "config", label: "Config" },
+    { id: "atlas", label: "Brain Atlas" },
+    { id: "dream-inbox", label: "Dream Inbox" },
+    { id: "skill-roi", label: "Skill ROI" },
   ];
   const vaultPanelCopy = {
+    atlas: { title: "Brain Atlas", subtitle: "Clusters and leverage map" },
+    "dream-inbox": { title: "Dream Inbox", subtitle: "Opt-in GBrain ideas" },
+    "skill-roi": { title: "Skill ROI", subtitle: "Highest-leverage recipes" },
     "hive-vault": { title: "Shared Brain", subtitle: "Obsidian memory graph" },
     "shared-skills": { title: "Shared Skills", subtitle: "Skill shelf and imports" },
     "brain-services": { title: "Brain Services", subtitle: "Retrieval and synthesis" },
@@ -1174,7 +1188,7 @@ function VaultPanelComponent(props: any) {
   }[vaultPanelMode] ?? { title: "Shared Brain", subtitle: "Obsidian memory graph" };
   return (<>
       {activeView === "vault" ? (
-      <section className={vaultClass("vaultPanel", "tabPanel", vaultPanelMode === "env" && "vaultPanelCompact")}>
+      <section className={vaultClass("vaultPanel", "tabPanel", vaultPanelMode === "env" && "vaultPanelCompact", vaultPanelMode === "hive-vault" && "brainMapPanel")}>
         <SectionModeHeader
           activeMode={vaultPanelMode}
           ariaLabel="Brain view mode"
@@ -1192,8 +1206,23 @@ function VaultPanelComponent(props: any) {
         />
 
         <div className={vaultClass("vaultPanelBody", vaultPanelMode === "hive-vault" && "brainMapBody")}>
+        {vaultPanelMode === "atlas" ? (
+          <BrainAtlasPanel {...{ BrainCircuit, Button, FileText, GitBranch, LoaderCircle, Network, RefreshCcw, Search, Sparkles, brainGraph, brainGraphLoading, brainGraphStatus, formatBrainDate, inspectBrainNode, refreshBrainGraph, selectedAgent, setActiveView, setText, startAgentChat, vaultClass }} />
+        ) : null}
+
+        {vaultPanelMode === "dream-inbox" ? (
+          <BrainDreamInboxPanel {...{ Button, LoaderCircle, RefreshCcw, Sparkles, gbrainActionStatus, gbrainBusy, gbrainStatus, runGbrainAction, vaultClass }} />
+        ) : null}
+
+        {vaultPanelMode === "skill-roi" ? (
+          <BrainSkillRoiPanel {...{ Button, Check, Download, LoaderCircle, RefreshCcw, Sparkles, brainSkillImportProvider, brainSkills, brainSkillsLoading, importBrainSkills, openSkillBrowser, providerSkillInventories, refreshBrainSkills, setSkillBrowserSearch, sharedBrainSkills, sharedVault, vaultClass }} />
+        ) : null}
+
         {vaultPanelMode === "hive-vault" ? (
-        <BrainGraphExplorer {...{ Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, Download, FileText, GitBranch, Hexagon, LoaderCircle, Network, RefreshCcw, Sparkles, brainGraph, brainGraphLoading, brainGraphStatus, brainPan, endBrainPan, formatBrainDate, inspectBrainNode, moveBrainPan, refreshBrainGraph, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setChatAttachments, setChatDirectories, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserView, setSkillBrowserWrittenContent, setText, sharedVault, startAgentChat, startBrainPan, vaultClass }} />
+        <>
+          <BrainGraphExplorer {...{ Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, Download, FileText, GitBranch, Hexagon, LoaderCircle, Network, RefreshCcw, Sparkles, brainGraph, brainGraphLoading, brainGraphStatus, brainPan, endBrainPan, formatBrainDate, inspectBrainNode, moveBrainPan, refreshBrainGraph, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setChatAttachments, setChatDirectories, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserView, setSkillBrowserWrittenContent, setText, sharedVault, startAgentChat, startBrainPan, vaultClass }} />
+          <BrainDropFab vaultPath={sharedVault.vaultPath} onImported={refreshBrainGraph} />
+        </>
         ) : null}
 
         {vaultPanelMode === "shared-skills" ? (
@@ -1262,7 +1291,10 @@ function VaultPanelComponent(props: any) {
               <>
                 <BrainServiceOverview Button={Button} brainClass={brainClass} cards={brainServiceOverviewCards} setActiveSection={setBrainServiceSection} />
                 <div className={brainClass("brainServiceOverviewGrid")} style={{ marginTop: 16 }}>
+                  <AgentMemoryHealthCard />
+                  <EmbeddingsProviderCard />
                   <SkillSecurityCard />
+                  <InboxTriageServiceCard />
                 </div>
               </>
             ) : brainServiceSection === "settings" ? (

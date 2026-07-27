@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-07-13T16:51:11.671411+00:00",
+  "request": "and yes change to 3 recognitions for what users give",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/telegram-tip-bot/commands.ts",
+      "target_path": "src/lib/services/telegram-tip-bot/commands.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the existing HONEY command responses to call the daily quota three recognitions."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/telegram-tip-bot/community-honey.ts",
+      "target_path": "src/lib/services/telegram-tip-bot/community-honey.ts",
+      "reuse_type": "adapted_code",
+      "note": "Renamed the existing hosted client fields to recognition counts rather than generic action or HONEY amounts."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/telegram-tip-bot/honey-recognition.ts",
+      "target_path": "src/lib/services/telegram-tip-bot/commands.ts",
+      "reuse_type": "adapted_code",
+      "note": "Reused the fixed one-HONEY and three-per-day recognition policy in the user-facing command contract."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-telegram-tip-bot.mjs",
+      "target_path": "scripts/test-telegram-tip-bot.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Extended the existing bot regression to require three-recognition terminology and reject recognition-actions wording."
+    }
+  ]
+}

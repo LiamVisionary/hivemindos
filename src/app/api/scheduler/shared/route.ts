@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  deleteScheduledSchedule,
   readPastScheduledRuns,
   listScheduledSchedules,
   recordScheduledRun,
@@ -11,7 +12,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type SharedScheduleBody = {
-  action?: "list-schedules" | "upsert-schedule" | "upsert-schedules" | "record-run" | "past-runs";
+  action?: "list-schedules" | "upsert-schedule" | "upsert-schedules" | "record-run" | "past-runs" | "delete-schedule";
   vaultPath?: string;
   scheduledFolder?: string;
   schedule?: Parameters<typeof upsertScheduledSchedule>[0]["schedule"];
@@ -51,6 +52,14 @@ export async function POST(request: NextRequest) {
         vaultPath: body.vaultPath,
         scheduledFolder: body.scheduledFolder,
         record: body.record,
+      });
+      return NextResponse.json({ ok: true, result });
+    }
+    if (body.action === "delete-schedule" && body.schedule) {
+      const result = await deleteScheduledSchedule({
+        vaultPath: body.vaultPath,
+        scheduledFolder: body.scheduledFolder,
+        schedule: body.schedule,
       });
       return NextResponse.json({ ok: true, result });
     }

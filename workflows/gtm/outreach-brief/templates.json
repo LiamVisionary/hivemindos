@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "provenance": "authored",
+  "license": "MIT (same as this repository)",
+  "verifiedOn": "2026-07-11",
+  "note": "Persistent-brief B2B outreach building blocks: the 8 brief sections with the evidence each is built from, copy constraint rows (first-touch, follow-up, DM, subject), the 5-part cold-call script spine, pipeline health flags, sequence-metric triage thresholds, and the first-week ramp. This bank is authored, not measured — the metric thresholds are the pattern's rules of thumb, and agents must not present anything here as 'proven'. A fuller playbook with the full prompt set lives in the shared skills shelf as the outreach-brief-gtm skill; the core pattern: build a canonical brief once from real deal evidence, load it into every session, and have every copywriting and analysis step read it instead of re-asking. Hard rules that travel with every row: the brief holds honest weaknesses, pricing, and deal history and is private context never quoted in outbound copy; sends and automations that enroll prospects stay human-approved. Slots are UPPERCASE so an unfilled template trips the placeholder check in src/lib/services/deliverables/acceptance-contracts.ts.",
+  "count": 29,
+  "taxonomy": {
+    "briefSections": ["company", "value-props", "offer", "icp", "persona", "competitors", "market-size", "pains"]
+  },
+  "briefSections": [
+    { "id": "OB01", "section": "company", "holds": "what you actually sell, the honest case for buying, where positioning is generic, what a sceptic challenges first", "evidence": "the real competitive record, not the marketing copy" },
+    { "id": "OB02", "section": "value-props", "holds": "actual value propositions ranked by frequency in won deals, split rational vs emotional, mapped to persona", "evidence": "won-deal notes, referral language, renewal reasons" },
+    { "id": "OB03", "section": "offer", "holds": "one-sentence offer, specific outcome promise, believability proof, risk reversal, low-friction CTA", "evidence": "what buyers needed to believe before saying yes" },
+    { "id": "OB04", "section": "icp", "holds": "firmographic, technographic, and behavioural criteria, disqualifiers, and the one 60-second qualifying question", "evidence": "won, lost, and churned deal patterns" },
+    { "id": "OB05", "section": "persona", "holds": "title range, top pressures, the buyer's own problem language, what they distrust in cold outreach, tone to use", "evidence": "discovery-call notes in the buyer's words" },
+    { "id": "OB06", "section": "competitors", "holds": "per competitor: their self-positioning, where each side is genuinely stronger, the landmine discovery question, the response when preferred", "evidence": "deals actually lost to and won against each" },
+    { "id": "OB07", "section": "market-size", "holds": "TAM/SAM/SOM with methodology, sources, key assumptions, and the assumption most likely wrong", "evidence": "the ICP definition plus reachable-motion capacity" },
+    { "id": "OB08", "section": "pains", "holds": "the 5 pains most frequent in won deals, each in the buyer's words, what they tried before, and the make-them-feel-understood question", "evidence": "won-deal calls, ranked by urgency x frequency x ability to relieve" }
+  ],
+  "copyConstraints": [
+    { "id": "OC01", "artifact": "first-touch email", "rules": "opener references a specific signal; body under 75 words, one pain, one outcome, no feature list; one low-friction CTA that is not book-a-call; subject under 7 words", "gate": "if the email could have been sent to any company, rewrite it" },
+    { "id": "OC02", "artifact": "follow-up emails", "rules": "each touch a completely different angle; stands alone as if earlier touches were never sent; never checking-in or circling-back; last touch is the break-up; all under 75 words", "gate": "no touch may reference that a previous email was sent" },
+    { "id": "OC03", "artifact": "linkedin connection request", "rules": "under 200 characters, references something specific, no pitch", "gate": "two variants drafted, one marked to send" },
+    { "id": "OC04", "artifact": "linkedin first DM", "rules": "under 150 characters, adds value or opens conversation, no pitch before a conversation exists", "gate": "second DM after five silent days takes a new angle, not a follow-up" }
+  ],
+  "coldCallSpine": [
+    { "id": "OS01", "part": 1, "name": "opening", "rule": "one sentence, a specific reason for calling this person now" },
+    { "id": "OS02", "part": 2, "name": "permission", "rule": "ask for thirty seconds before anything else" },
+    { "id": "OS03", "part": 3, "name": "pain question", "rule": "one question that opens the conversation without pitching" },
+    { "id": "OS04", "part": 4, "name": "value bridge", "rule": "connect their pain to the outcome in two sentences" },
+    { "id": "OS05", "part": 5, "name": "ask", "rule": "a specific next step, never can-I-send-you-some-info; prep the three likeliest objections with exact responses" }
+  ],
+  "pipelineFlags": [
+    { "id": "OP01", "flag": "no activity in 7+ days" },
+    { "id": "OP02", "flag": "no next step with a date attached" },
+    { "id": "OP03", "flag": "close date passed with no update" },
+    { "id": "OP04", "flag": "root-cause each flagged deal: ICP fit, wrong stakeholder, no pain, price, timing, or competitor" }
+  ],
+  "metricTriage": [
+    { "id": "OM01", "metric": "open rate", "target": "40%+", "onMiss": "subject line or deliverability" },
+    { "id": "OM02", "metric": "reply rate", "target": "3%+", "onMiss": "below 3% triggers a rewrite of the worst touch" },
+    { "id": "OM03", "metric": "meeting rate", "target": "1%+", "onMiss": "offer or ICP fit" }
+  ],
+  "firstWeek": [
+    { "id": "OW01", "day": "1", "do": "install, run onboarding, review the generated brief and correct anything wrong" },
+    { "id": "OW02", "day": "2", "do": "first-touch for the top ten accounts, follow-ups for touches two through five, load into the sequencer" },
+    { "id": "OW03", "day": "3", "do": "LinkedIn DMs for the same ten accounts, cold-call script for the primary persona" },
+    { "id": "OW04", "day": "7", "do": "reply-rate audit on the week's sends, pipeline review on replies, fold the week's lessons back into the brief" },
+    { "id": "OW05", "day": "ongoing", "do": "weekly strategist review: three highest-leverage changes, sequenced, with success metrics" }
+  ]
+}

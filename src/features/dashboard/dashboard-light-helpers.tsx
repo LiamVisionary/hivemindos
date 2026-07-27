@@ -1,13 +1,14 @@
-import { Activity, AppWindow, Bell, Bot, Brain, CandlestickChart, Cpu, FolderOpen, KanbanSquare, KeyRound, Landmark, Layers3, MessageSquare, Network, PhoneCall, PlugZap, Repeat2, Search, ShieldCheck, Sparkles, WalletCards, Wrench } from "lucide-react";
+import { Activity, AppWindow, Bell, Bot, Brain, CandlestickChart, Cloud, Cpu, FolderOpen, KanbanSquare, KeyRound, Landmark, Layers3, MessageSquare, Network, PhoneCall, PlugZap, Repeat2, Search, ShieldCheck, Sparkles, WalletCards, Wrench } from "lucide-react";
 
 import { beeRoleIconPath } from "@/lib/config/bee-role-icons";
 import { RUNTIME_LABELS, type AgentProfile, type BeeWorkerClass } from "@/lib/types/agent-runtime";
 import { KANBAN_COLUMNS, type KanbanTask } from "@/lib/types/kanban";
-import { beeRoleLabel, beeWorkerClassLabel, chooseBeeAssignment } from "@/lib/services/orchestration/bee-roles";
+import { beeWorkerClassLabel, chooseBeeAssignment } from "@/lib/services/orchestration/bee-roles";
 import { agentAliasMap, agentWorkspaceKey } from "@/features/fleet/fleet-identity";
 import { attachmentSizeLabel, linkedDirectoryLabel } from "@/features/chat/chat-formatters";
 import { runtimeCan } from "@/features/dashboard/dashboard-storage";
-import type { AgentTask, ChatMessage, ChatTreeItem, DashboardView, MachineGroup, WorkView } from "@/features/dashboard/dashboard-types";
+import { parseTaskBrief, taskBriefHeadline } from "@/features/dashboard/kanban-result-format";
+import type { AgentTask, ChatMessage, ChatTreeItem, DashboardView, MachineGroup } from "@/features/dashboard/dashboard-types";
 
 const STARTER_AGENT_IDS = new Set([
   "openclaw-main",
@@ -111,7 +112,14 @@ export function chatSetupIssue(agent: AgentProfile) {
 
 export function kanbanCardMessage(task: KanbanTask) {
   const body = task.body?.trim();
-  if (body) return body;
+  if (body) {
+    // Control-plane dispatch briefs lead with routing metadata; the card
+    // preview should show the actual request instead (full brief renders
+    // structured in the conversation modal).
+    const brief = parseTaskBrief(body);
+    const headline = brief ? taskBriefHeadline(brief) : "";
+    return headline || body;
+  }
 
   const result = task.result?.trim();
   if (!result) return "No task body yet.";
@@ -217,13 +225,18 @@ export function kanbanTaskDispatchPrompt(task: KanbanTask, assignment: ReturnTyp
     attachmentDetails,
     task.result ? `Existing notes:\n${task.result}` : "",
     `Suggested worker class: ${beeWorkerClassLabel(assignment.workerClass)}.`,
+    task.capabilityApprovalMode === "ask"
+      ? "Capability approval mode: ASK FIRST. Before installing, enabling, replacing, or materially changing a capability, map the task to available and setup-required capabilities. Park the task in Needs You with ACTION NEEDED:, list the proposed capabilities and alternatives in natural language, and wait for approval. If the human removes a capability, redesign the task without that entire step."
+      : "Capability approval mode: AUTOMATIC. Map the task to available and setup-required capabilities, select the best established route, and perform ordinary capability setup automatically so autonomous work does not pause. This does not bypass spend, secret, deploy, destructive-action, or external-send approval gates.",
     task.undoRequestedAt
       ? "This is an explicit undo request. Treat the previous completed change for this task as the target and reverse it narrowly, even if existing notes say the original task was verified or completed."
       : "Treat existing notes as authoritative retry context when they say an old expectation was superseded, removed, or already verified. Do not undo a verified dashboard change just to satisfy a stale task title.",
     needsVisualHandoff
       ? "If your result creates writing, research, planning, or QA context for a downstream visual/image task, include a final section named exactly `VISUAL_BRIEF:` with the prompt an artist agent should use. Do not create the image yourself unless you are the artist worker."
       : "",
-    "Complete the task as far as your runtime/tools allow. If you are blocked, say exactly what human input, access, or setup is needed. End with a concise result summary and any evidence.",
+    "Complete the task as far as your runtime/tools allow. End with a concise result summary and any evidence.",
+    "If you are blocked on human input, access, approval, or a decision, end your result with a section named exactly `ACTION NEEDED:` containing one or two imperative sentences telling the human precisely what to do or decide (include the options if there is a choice). This section becomes the card's headline on the Work Board.",
+    "When it helps the human act faster, add extra lines directly under `ACTION NEEDED:` — `LINK: <url>` pointing where they get or do the thing (for an API key, the exact page that issues it), `OPTIONS: <choice A> | <choice B>` when you need a decision, and `NEEDS: api-key <ENV_VAR_NAME>` (or `NEEDS: file` / `NEEDS: text`) naming what you are waiting for. The Work Board renders these as one-click answer buttons, a save-to-shared-env key input, or an attach-a-file prompt, and the human's answer comes back to you on this task.",
   ].filter(Boolean).join("\n\n");
 }
 
@@ -280,12 +293,17 @@ export function kanbanTaskAssigneeAgent(task: KanbanTask, agents: AgentProfile[]
   if (!assignee) return undefined;
   const normalizedAssignee = assignee.toLowerCase();
   return agents.find((agent) => {
-    const thisMachineAliases = agent.machineName && /mac|local|this/i.test(agent.machineName)
-      ? [
-        `${agent.name} on This Mac`,
-        agent.agentId ? `${agent.agentId} on This Mac` : "",
-        `${agent.runtime} on This Mac`,
-      ]
+    // Local-machine display labels differ by OS ("This Mac" / "This PC" /
+    // "This computer" — see displayMachineName in fleet-identity). An assignee
+    // written with any of them must match an agent whose stored machineName is
+    // a local-machine indicator, including default Windows "DESKTOP-…" hostnames.
+    const localMachineLabels = ["This Mac", "This PC", "This computer"];
+    const thisMachineAliases = agent.machineName && /mac|local|this|desktop|win|computer|\bpc\b/i.test(agent.machineName)
+      ? localMachineLabels.flatMap((label) => [
+        `${agent.name} on ${label}`,
+        agent.agentId ? `${agent.agentId} on ${label}` : "",
+        `${agent.runtime} on ${label}`,
+      ])
       : [];
     const candidates = [
       agent.id,
@@ -330,10 +348,13 @@ export function viewIcon(view: DashboardView) {
   if (view === "more") return <Layers3 aria-hidden="true" />;
   if (view === "env") return <KeyRound aria-hidden="true" />;
   if (view === "my-apps") return <AppWindow aria-hidden="true" />;
+  if (view === "mini-apps") return <Layers3 aria-hidden="true" />;
   if (view === "phone") return <PhoneCall aria-hidden="true" />;
   if (view === "aeon") return <Bot aria-hidden="true" />;
   if (view === "fusion") return <Sparkles aria-hidden="true" />;
   if (view === "governance") return <Landmark aria-hidden="true" />;
+  if (view === "cloud") return <Cloud aria-hidden="true" />;
+  if (view === "compute") return <Cpu aria-hidden="true" />;
   return <MessageSquare aria-hidden="true" />;
 }
 

@@ -14,6 +14,7 @@ import {
   mobileAgentHostLastPollAt,
 } from "@/lib/services/mobile-agents/store";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import type { ChatSkillAttribution } from "@/lib/services/chat/skill-attribution";
 import {
   machineKeyFromMobileGatewayUrl,
   MOBILE_AGENT_HOST_FRESH_MS,
@@ -98,6 +99,8 @@ export function streamMobileAgentTurn(input: {
   chatStorageKey?: string;
   sharedVaultPath?: string;
   routeStartedAt: number;
+  turnId: string;
+  skillAttribution: ChatSkillAttribution[];
 }): Response {
   const encoder = new TextEncoder();
   let cancelled = false;
@@ -184,6 +187,8 @@ export function streamMobileAgentTurn(input: {
           sharedVaultPath: input.sharedVaultPath,
           userContent: input.userPrompt,
           startedAt: input.routeStartedAt,
+          turnId: input.turnId,
+          skillAttribution: input.skillAttribution,
         });
         baselineCount = session.messages.length;
         send({

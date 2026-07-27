@@ -1,14 +1,17 @@
 import { spawn } from "node:child_process";
 import {
   createReadStream,
+  existsSync,
   mkdirSync,
+  readdirSync,
   rmSync,
   readFileSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { createServer, request as httpRequest } from "node:http";
 import { connect, createServer as createNetServer } from "node:net";
-import { extname } from "node:path";
+import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const nextEnvPath = fileURLToPath(new URL("../next-env.d.ts", import.meta.url));
@@ -96,9 +99,57 @@ const requestedNextPort = readPort(
   "HIVEMINDOS_TAURI_NEXT_PORT",
 );
 
+// Many agent sessions share ONE working tree here, so a second `pnpm tauri:dev`
+// should REUSE the dev server the first one already started rather than spawn a
+// second Next dev. Each extra dev server is ~0.2-1.4GB RSS plus its own file
+// watchers writing a sibling `.next-tauri/dev-<port>` cache the other servers
+// then also watch — which is what pegs fseventsd and swaps the machine (see
+// AGENTS.md "Dev Server Ownership"). A single Next dev server can back unlimited
+// Tauri windows: they all just point at this proxy's URL.
+function identifyExistingProxy(port, host) {
+  return new Promise((resolve) => {
+    const probe = httpRequest(
+      { hostname: host, port, path: "/__hivemindos_dev_ready?scope=backend", method: "GET" },
+      (probeResponse) => {
+        probeResponse.resume();
+        // Our loading proxy answers this path with 204 (backend up) or 503
+        // (still warming); a foreign process would 404 / return HTML / reset.
+        resolve(
+          probeResponse.statusCode === 204 || probeResponse.statusCode === 503
+            ? "hivemind"
+            : "foreign",
+        );
+      },
+    );
+    probe.setTimeout(1_500, () => {
+      probe.destroy();
+      resolve("foreign");
+    });
+    probe.on("error", () => resolve("foreign"));
+    probe.end();
+  });
+}
+
 if (!(await isPortAvailable(proxyPort, proxyBindHost))) {
+  const existing =
+    process.env.HIVEMINDOS_DEV_NO_SHARE === "1"
+      ? "foreign"
+      : await identifyExistingProxy(proxyPort, browserHost);
+  if (existing === "hivemind") {
+    console.log(
+      `HivemindOS Tauri dev: reusing the dev server already serving http://${browserHost}:${proxyPort}; not starting a second Next dev server. (Set HIVEMINDOS_DEV_NO_SHARE=1 to force a private one.)`,
+    );
+    // Attach mode: own nothing, spawn nothing — just idle so Tauri's
+    // beforeDevCommand stays alive while this window loads the shared URL. The
+    // owning session keeps serving; this window recovers via the injected
+    // dev-recovery script if the shared server restarts.
+    for (const attachSignal of ["SIGINT", "SIGTERM"]) {
+      process.once(attachSignal, () => process.exit(0));
+    }
+    await new Promise(() => {});
+  }
   console.error(
-    `Tauri loading proxy port ${browserHost}:${proxyPort} is already in use. Stop the existing Tauri dev shell, then run pnpm tauri:dev again.`,
+    `Tauri loading proxy port ${browserHost}:${proxyPort} is already in use by a non-HivemindOS process. Free it or set PORT to another value, then run pnpm tauri:dev again.`,
   );
   process.exit(1);
 }
@@ -209,7 +260,18 @@ const devRecoveryScript = String.raw`
   var reloading = false;
   var lastReloadAt = 0;
   var reloadCooldownMs = 20000;
-  var routeLoadingTimeoutMs = 12000;
+  var routeLoadingTimeoutMs = 30000;
+  // Poll fast only while warming/down; back off to 5s once the backend is
+  // healthy so N shared Tauri windows don't each hammer the proxy (a fresh
+  // net.connect to Next) every single second forever.
+  var busyReadyIntervalMs = 1000;
+  var healthyReadyIntervalMs = 5000;
+  var readyTimer = null;
+
+  function scheduleReady(delay) {
+    if (readyTimer) window.clearTimeout(readyTimer);
+    readyTimer = window.setTimeout(checkReady, delay);
+  }
 
   function forceReload(reason, ignoreCooldown) {
     if (reloading || (!ignoreCooldown && Date.now() - lastReloadAt < reloadCooldownMs)) return;
@@ -226,12 +288,17 @@ const devRecoveryScript = String.raw`
         if (response.ok) {
           if (staticLoading) forceReload("route became ready", true);
           else if (readyWasDown) forceReload("dev server recovered", false);
+          readyWasDown = false;
           return;
         }
         readyWasDown = true;
       })
       .catch(function () {
         readyWasDown = true;
+      })
+      .finally(function () {
+        var busy = readyWasDown || document.querySelector("[data-hivemindos-static-loading='true']");
+        scheduleReady(busy ? busyReadyIntervalMs : healthyReadyIntervalMs);
       });
   }
 
@@ -261,7 +328,6 @@ const devRecoveryScript = String.raw`
 
   checkReady();
   checkRouteLoading();
-  window.setInterval(checkReady, 1000);
   window.setInterval(checkRouteLoading, 1000);
 })();
 </script>`;
@@ -351,13 +417,26 @@ function proxyTimeoutForRequest(clientRequest) {
     return 11 * 60_000;
   if (clientRequest.url?.startsWith("/api/chat/image-generation"))
     return 4 * 60_000;
+  // Queen text chat can use runtime-held brains with a 120s server budget.
+  // Keep the outer dev proxy slightly above that so it does not replace a
+  // still-running text chat with a confusing route-level fallback.
+  if (clientRequest.url?.startsWith("/api/queen-bee/chat")) return 130_000;
+  // X videos can spend the route's full five-minute budget downloading,
+  // extracting, transcribing, and summarizing. Keep the proxy outside it.
+  if (clientRequest.url?.startsWith("/api/integrations/x-transcript"))
+    return 330_000;
   // Fleet updates run a remote update plus a verification poll (route maxDuration 360s).
   if (clientRequest.url?.startsWith("/api/fleet/update")) return 7 * 60_000;
-  // Nango self-host setup clones the repo and runs `docker compose up` on the host,
-  // then polls health (route maxDuration 360s, collector fetch 360s).
-  if (clientRequest.url?.startsWith("/api/integrations/nango/setup"))
-    return 7 * 60_000;
+  // A warmed Hive Compute benchmark runs repeated samples for each selected
+  // model and unloads between models, so it legitimately outlives a normal API.
+  if (clientRequest.url?.startsWith("/api/hive-compute/marketplace"))
+    return 11 * 60_000;
   if (clientRequest.url?.startsWith("/api/")) return 60_000;
+  // Chunk/asset requests routinely block behind a Turbopack compile (or a
+  // backend respawn boot). Killing them fast surfaces in the app as
+  // "ChunkLoadError: Failed to load chunk" — an unrecoverable-looking wedge —
+  // instead of a slow load, so wait out the compile.
+  if (clientRequest.url?.startsWith("/_next/")) return 60_000;
   if (clientRequest.headers.accept?.includes("text/html")) return 15_000;
   return 2_500;
 }
@@ -520,6 +599,64 @@ proxyServer.on("upgrade", (request, socket, head) => {
   socket.on("error", () => upstream.destroy());
   socket.on("close", () => upstream.destroy());
 });
+
+const nodeModulesDir = fileURLToPath(new URL("../node_modules/", import.meta.url));
+
+// Spotlight (mds) indexes and re-scans these multi-GB, constantly-rewritten dev
+// trees, and each rewrite floods fseventsd — on a long-lived dev box that balloons
+// the daemon (seen: fseventsd at 1.6GB RSS / ~98% CPU). A `.metadata_never_index`
+// marker tells macOS to stop indexing/eventing a directory. Empty file, reversible
+// (delete it), no sudo. Dev-only tree — ships nothing to users.
+function markNoSpotlightIndex(dir) {
+  try {
+    if (!existsSync(dir)) return;
+    const marker = join(dir, ".metadata_never_index");
+    if (!existsSync(marker)) writeFileSync(marker, "");
+  } catch {
+    // Best-effort hygiene; never block dev boot on it.
+  }
+}
+
+// Each dev server writes its own .next-tauri/dev-<port> Turbopack cache and never
+// cleans up siblings, so orphaned caches from dead/crashed sessions accumulate
+// (seen: 5.6GB). Sweep dev-<port> dirs whose port has NO listener AND that haven't
+// been touched in 30 min — those are definitively dead (a live Turbopack server
+// rewrites its cache far more often). Next regenerates anything still needed.
+async function pruneStaleDevCaches() {
+  let entries;
+  try {
+    entries = readdirSync(tauriNextRootDir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  const staleBefore = Date.now() - 30 * 60_000;
+  for (const entry of entries) {
+    const match = entry.isDirectory() ? /^dev-(\d+)$/.exec(entry.name) : null;
+    if (!match) continue;
+    const cachePort = Number(match[1]);
+    if (cachePort === nextPort) continue;
+    const dir = join(tauriNextRootDir, entry.name);
+    try {
+      if (statSync(dir).mtimeMs > staleBefore) continue;
+    } catch {
+      continue;
+    }
+    // isPortAvailable() true => the port is free => the owning dev server is gone.
+    if (!(await isPortAvailable(cachePort, upstreamHost))) continue;
+    try {
+      rmSync(dir, { force: true, recursive: true });
+      console.log(
+        `HivemindOS Tauri dev: pruned stale Turbopack cache .next-tauri/${entry.name} (port ${cachePort} has no listener).`,
+      );
+    } catch {
+      // Another session may have removed it first; ignore.
+    }
+  }
+}
+
+markNoSpotlightIndex(tauriNextRootDir);
+markNoSpotlightIndex(nodeModulesDir);
+await pruneStaleDevCaches();
 
 rmSync(tauriNextDir, { force: true, recursive: true });
 writeDevServerInfo();

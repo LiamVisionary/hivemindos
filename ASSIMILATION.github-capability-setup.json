@@ -1,0 +1,56 @@
+{
+  "created_at": "2026-07-15T08:05:06.129651+00:00",
+  "request": "Add a Hivemind GitHub capability index for yt-dlp, Whisper, Plausible, AppFlowy, n8n, Cal.com, Graphify, TradingAgents, Ghost, Medusa, and Shopify, plus in-chat install/setup/OAuth prompts",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "Graphify-Labs/graphify",
+      "source_path": "pyproject.toml",
+      "target_path": "src/lib/services/github-capability-installers.ts",
+      "reuse_type": "config_adapted",
+      "note": "Adapted the official graphifyy package name, Python floor, uv tool isolation, and graphify CLI entrypoint."
+    },
+    {
+      "source_repo": "Graphify-Labs/graphify",
+      "source_path": "README.md",
+      "target_path": "src/lib/services/github-capability-catalog.ts",
+      "reuse_type": "style_adapted",
+      "note": "Adapted the reviewed install and code-graph capability language while excluding upstream curl-to-shell prerequisite commands."
+    },
+    {
+      "source_repo": "TauricResearch/TradingAgents",
+      "source_path": "pyproject.toml",
+      "target_path": "src/lib/services/github-capability-installers.ts",
+      "reuse_type": "config_adapted",
+      "note": "Adapted the isolated Python package setup into the existing HivemindOS git-plus-uv installer boundary."
+    },
+    {
+      "source_repo": "TauricResearch/TradingAgents",
+      "source_path": "README.md",
+      "target_path": "src/lib/services/github-capability-catalog.ts",
+      "reuse_type": "style_adapted",
+      "note": "Adapted the multi-agent debate roles and research-only provider requirements into catalog discovery and safety copy."
+    },
+    {
+      "source_repo": "medusajs/dtc-starter",
+      "source_path": "README.md",
+      "target_path": "src/lib/services/integrations/medusa.ts",
+      "reuse_type": "config_adapted",
+      "note": "Adapted the current Store API backend and localhost defaults after rejecting the obsolete Docker Compose assumption."
+    },
+    {
+      "source_repo": "medusajs/dtc-starter",
+      "source_path": "apps/backend/.env.template",
+      "target_path": "src/lib/services/integrations/connector-manifests.ts",
+      "reuse_type": "config_adapted",
+      "note": "Adapted the backend base URL and publishable-key boundary into structured connection fields."
+    },
+    {
+      "source_repo": "medusajs/dtc-starter",
+      "source_path": "apps/storefront/.env.template",
+      "target_path": "src/lib/services/hive-actions/integrations/medusa.ts",
+      "reuse_type": "config_adapted",
+      "note": "Adapted the storefront-scoped publishable-key model into bounded read-only product and region actions."
+    }
+  ]
+}

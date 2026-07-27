@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HivemindOS Link</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        </span>
+        <span>
+          <b>HivemindOS</b>
+          <small>Link</small>
+        </span>
+        <span class="mode-pill">Collector only · no dashboard</span>
+      </header>
+
+      <section class="hero" id="welcome-view">
+        <p class="eyebrow">Add this computer</p>
+        <h1>Link this device to the Hive Fleet.</h1>
+        <p class="lede">
+          Run this app on the extra computer. It installs the lightweight agent bridge;
+          your Complete HivemindOS Hub keeps control of permissions, agents, and routing.
+        </p>
+
+        <div class="route" aria-label="This extra device connects privately to the main hub">
+          <div class="route-node"><span class="screen"></span><b>This device</b><small>Collector</small></div>
+          <div class="route-line"><i></i><span>Private Link</span><i></i></div>
+          <div class="route-node"><span class="hub-hex">H</span><b>Main hub</b><small>Control</small></div>
+        </div>
+
+        <ul class="benefits">
+          <li><span>01</span><p><b>No second dashboard</b><small>Only the collector and private Link are installed.</small></p></li>
+          <li><span>02</span><p><b>Hub-controlled access</b><small>Shared Brain, env, history, and app access stay governed by your hub.</small></p></li>
+          <li><span>03</span><p><b>Private by default</b><small>No public port is opened on this computer.</small></p></li>
+        </ul>
+
+        <button class="primary" id="link-device" type="button">Link this device <span aria-hidden="true">→</span></button>
+        <p class="microcopy">About a minute. The app handles setup in the background.</p>
+      </section>
+
+      <section class="progress-view" id="progress-view" hidden aria-live="polite">
+        <div class="pulse-mark" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <p class="eyebrow">Setting up this device</p>
+        <h1 id="progress-title">Installing the collector…</h1>
+        <p class="lede" id="progress-copy">HivemindOS Link is working in the background. Approve any operating-system prompt that appears.</p>
+        <div class="meter"><i id="meter-fill"></i></div>
+        <ol class="plain-steps" id="plain-steps">
+          <li data-step="files"><i></i><span>Prepare setup</span></li>
+          <li data-step="runtime"><i></i><span>Prepare collector runtime</span></li>
+          <li data-step="collector"><i></i><span>Install agent bridge</span></li>
+          <li data-step="link"><i></i><span>Start private Link</span></li>
+        </ol>
+        <p class="keep-open">Keep this window open until setup finishes.</p>
+      </section>
+
+      <section class="approval-view" id="approval-view" hidden aria-live="polite">
+        <span class="approval-icon" aria-hidden="true">✓</span>
+        <p class="eyebrow">One approval left</p>
+        <h1>Approve this device from your main hub.</h1>
+        <p class="lede">The private Link is ready. Its one-time approval belongs to the same Tailscale account as your Complete HivemindOS Hub.</p>
+        <ol class="approval-steps">
+          <li><span>1</span><p><b>Copy the approval link below.</b></p></li>
+          <li><span>2</span><p><b>Open it on your main hub.</b><small>Or on any device signed into the same Tailscale account.</small></p></li>
+          <li><span>3</span><p><b>Approve, then return here.</b><small>This screen detects the connection automatically.</small></p></li>
+        </ol>
+        <div class="approval-link"><code id="approval-url"></code><button id="copy-approval" type="button">Copy link</button></div>
+        <p class="copy-state" id="copy-state"></p>
+        <div class="waiting"><i></i><span>Waiting for approval…</span></div>
+      </section>
+
+      <section class="done-view" id="done-view" hidden aria-live="polite">
+        <span class="done-hex" aria-hidden="true">✓</span>
+        <p class="eyebrow">Connected</p>
+        <h1>This device is in the Hive Fleet.</h1>
+        <p class="lede"><span id="connected-name">This collector</span> is ready for agents. Manage its permissions and performance limits from the Complete HivemindOS Hub.</p>
+        <div class="done-list">
+          <span><i>✓</i> Collector online</span>
+          <span><i>✓</i> Private Link connected</span>
+          <span><i>✓</i> Hub remains in control</span>
+        </div>
+        <button class="primary" id="finish" type="button">Finish</button>
+      </section>
+
+      <section class="error-view" id="error-view" hidden aria-live="assertive">
+        <span class="error-icon" aria-hidden="true">!</span>
+        <p class="eyebrow">Setup needs attention</p>
+        <h1>Link setup didn’t finish.</h1>
+        <p class="lede" id="error-copy">Nothing was exposed publicly. Retry setup, or use the Advanced setup details below.</p>
+        <button class="primary" id="retry" type="button">Retry setup</button>
+      </section>
+
+      <details class="advanced" id="advanced-setup">
+        <summary>Advanced setup</summary>
+        <div class="advanced-body">
+          <p>If the guided installer cannot run, use the command for this computer.</p>
+          <div class="platform-switch" role="group" aria-label="Advanced setup operating system">
+            <button type="button" data-platform="unix">macOS / Linux</button>
+            <button type="button" data-platform="windows">Windows</button>
+          </div>
+          <pre><code id="advanced-command"></code></pre>
+          <button class="copy-command" id="copy-command" type="button">Copy command</button>
+          <p class="advanced-note">Advanced setup downloads the open-source collector package and runs the same collector-only installer.</p>
+        </div>
+      </details>
+    </main>
+  </body>
+</html>

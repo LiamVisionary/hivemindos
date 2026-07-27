@@ -5,7 +5,8 @@
 // /api/companies.
 import React from "react";
 import { createPortal } from "react-dom";
-import { RoleGlyph, SectionLabel } from "./primitives";
+import { openNativeDirectory } from "@/lib/native/filesystem";
+import { RoleGlyph, SectionLabel, Spinner } from "./primitives";
 import { assignAgent } from "./data";
 import type {
   Agent,
@@ -20,23 +21,31 @@ import type {
   Role,
   Theme,
 } from "./types";
+import type { CompanyAutonomyPauseMode } from "@/lib/types/company";
+import type { KanbanDeliverableKind } from "@/lib/types/kanban";
+import type { AnalyticsProviderKey } from "@/lib/services/company-analytics/types";
+import { ANALYTICS_ADAPTERS, analyticsAdapter } from "@/lib/services/company-analytics/registry-meta";
+import {
+  COMPANY_EXECUTION_ENGINE_MATRIX,
+  isCompleteCompanyExecutionSelection,
+  type CompanyExecutionSelection,
+} from "@/lib/services/company-execution-capabilities";
+import { CompanyExecutionFields } from "./CompanyExecutionFields";
+import type { CompanyMembershipOwner } from "@/lib/services/company-membership";
+import {
+  FORM_INPUT_STYLE as inputStyle,
+  FormField as Field,
+  FormSelect as Select,
+} from "./modal-form-primitives";
 
 // ── shared input primitives ──────────────────────────────────────────────
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      <span className="mono-cap" style={{ color: "var(--fg-4)" }}>{label}</span>
-      {children}
-      {hint ? <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{hint}</span> : null}
-    </label>
-  );
-}
+/** A registry project as the "Code project" picker needs it. */
+type ProjectPickerEntry = { id: string; name: string; localPath?: string; repoName?: string };
 
-const inputStyle: React.CSSProperties = {
-  width: "100%", boxSizing: "border-box", background: "var(--bg-2)",
-  border: "1px solid var(--line-2)", borderRadius: 9, padding: "9px 11px", colorScheme: "dark",
-  color: "var(--fg)", fontFamily: "var(--f-body)", fontSize: 13.5, outline: "none",
-};
+/** Display-only: collapse the macOS/Linux home prefix so option labels stay scannable. */
+function shortenHomePath(path: string): string {
+  return path.replace(/^\/(?:Users|home)\/[^/]+/, "~");
+}
 
 function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   const [focus, setFocus] = React.useState(false);
@@ -59,21 +68,6 @@ function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
       onBlur={() => setFocus(false)}
       style={{ ...inputStyle, minHeight: 76, resize: "vertical", lineHeight: 1.45, borderColor: focus ? "var(--honey-2)" : "var(--line-2)", ...(props.style || {}) }}
     />
-  );
-}
-
-function Select({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
-  const [focus, setFocus] = React.useState(false);
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      onFocus={() => setFocus(true)}
-      onBlur={() => setFocus(false)}
-      style={{ ...inputStyle, appearance: "none", cursor: "pointer", borderColor: focus ? "var(--honey-2)" : "var(--line-2)" }}
-    >
-      {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
   );
 }
 
@@ -106,6 +100,12 @@ const STATUS_OPTIONS: { value: CompanyStatus | ""; label: string }[] = [
   { value: "paused", label: "Paused" },
 ];
 
+const AUTONOMY_PAUSE_MODE_OPTIONS: { value: CompanyAutonomyPauseMode; label: string }[] = [
+  { value: "all", label: "All items waiting on you" },
+  { value: "deliverable-kinds", label: "Only certain deliverable types" },
+];
+const AUTONOMY_PAUSE_KIND_CHOICES: KanbanDeliverableKind[] = ["website", "document", "image", "video", "audio", "url", "file", "directory"];
+
 function optionalNumber(value: string): number | undefined {
   if (value.trim() === "") return undefined;
   const numeric = Number(value);
@@ -123,11 +123,11 @@ function clampedNumber(value: string, max?: number): number | undefined {
 // Rendered through a portal to <body> (wrapped in a themed .zhc-root so the
 // scoped CSS tokens still resolve), so the fixed overlay is never clipped or
 // re-anchored by the dashboard panel's overflow/transform context.
-function Modal({
-  title, subtitle, onClose, width = 880, children, footer, theme = "dark",
+export function Modal({
+  title, subtitle, onClose, width = 880, children, footer, theme = "dark", zIndex = 2147483000,
 }: {
   title: string; subtitle?: string; onClose: () => void; width?: number;
-  children: React.ReactNode; footer?: React.ReactNode; theme?: Theme;
+  children: React.ReactNode; footer?: React.ReactNode; theme?: Theme; zIndex?: number;
 }) {
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -136,7 +136,7 @@ function Modal({
   }, [onClose]);
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div className="zhc-root" data-theme={theme} onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 2147483000, display: "grid", placeItems: "center", padding: 24, background: "rgba(2,4,8,0.62)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", animation: "zhcFade 160ms ease" }}>
+    <div className="zhc-root" data-theme={theme} onClick={onClose} style={{ position: "fixed", inset: 0, zIndex, display: "grid", placeItems: "center", padding: 24, background: "rgba(2,4,8,0.62)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", animation: "zhcFade 160ms ease" }}>
       <div role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} style={{ width: "min(" + width + "px, 96vw)", maxHeight: "90vh", display: "flex", flexDirection: "column", borderRadius: 16, border: "1px solid var(--line-2)", background: "var(--bg-1)", boxShadow: "0 30px 80px rgba(0,0,0,0.6)", overflow: "hidden", animation: "zhcRise 200ms cubic-bezier(.2,.7,.3,1)" }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "18px 20px", borderBottom: "1px solid var(--line)" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -161,7 +161,7 @@ function GhostBtn({ children, onClick }: { children: React.ReactNode; onClick?: 
 
 function PrimaryBtn({ children, onClick, disabled }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean }) {
   return (
-    <button onClick={onClick} disabled={disabled} style={{ padding: "9px 18px", borderRadius: 9, cursor: disabled ? "not-allowed" : "pointer", border: "1px solid color-mix(in srgb, var(--honey) 50%, transparent)", background: disabled ? "var(--bg-3)" : "var(--honey-2)", color: disabled ? "var(--fg-4)" : "var(--bg-0)", fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 700, letterSpacing: 0.06, opacity: disabled ? 0.6 : 1 }}>{children}</button>
+    <button onClick={onClick} disabled={disabled} style={{ padding: "9px 18px", borderRadius: 9, cursor: disabled ? "not-allowed" : "pointer", border: "1px solid var(--btn-line)", background: disabled ? "var(--panel-2)" : "var(--btn-bg)", color: disabled ? "var(--fg-4)" : "var(--btn-fg)", fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 700, letterSpacing: 0.04, opacity: disabled ? 0.6 : 1 }}>{children}</button>
   );
 }
 
@@ -174,7 +174,7 @@ const ROLE_TINT: Record<string, string> = {
 function AgentPickRow({ agent, onAdd }: { agent: PoolAgent; onAdd: (a: PoolAgent) => void }) {
   const [hover, setHover] = React.useState(false);
   return (
-    <button onClick={() => onAdd(agent)} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} style={{ textAlign: "left", cursor: "pointer", display: "flex", gap: 11, alignItems: "center", width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid " + (hover ? "var(--line-2)" : "var(--line)"), background: hover ? "var(--bg-2)" : "transparent", transition: "background 140ms, border-color 140ms" }}>
+    <button onClick={() => onAdd(agent)} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} style={{ textAlign: "left", cursor: "pointer", display: "flex", gap: 11, alignItems: "center", width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid " + (hover ? "var(--line-3)" : "var(--line)"), background: hover ? "var(--panel-2)" : "transparent", transition: "background 140ms, border-color 140ms" }}>
       <RoleGlyph role={agent.role} size={30} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -185,6 +185,32 @@ function AgentPickRow({ agent, onAdd }: { agent: PoolAgent; onAdd: (a: PoolAgent
       </div>
       <span style={{ fontFamily: "var(--f-mono)", fontSize: 15, color: hover ? "var(--honey-2)" : "var(--fg-4)", flexShrink: 0 }}>+</span>
     </button>
+  );
+}
+
+function AssignedAgentRow({
+  agent,
+  owners,
+  onDuplicate,
+}: {
+  agent: PoolAgent;
+  owners: CompanyMembershipOwner[];
+  onDuplicate?: (agentId: string) => void;
+}) {
+  return (
+    <div style={{ display: "flex", gap: 11, alignItems: "center", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", background: "var(--bg-2)", opacity: 0.86 }}>
+      <RoleGlyph role={agent.role} size={30} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+          <span style={{ fontFamily: "var(--f-display)", fontSize: 13.5, fontWeight: 600, color: "var(--fg-2)" }}>{agent.name}</span>
+          <span style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, color: "var(--honey-2)" }}>Assigned to {owners.map((owner) => owner.name).join(", ")}</span>
+        </div>
+        <div style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)", marginTop: 4, lineHeight: 1.45 }}>Use a separate operational identity so budgets, freezes, mail, memory, and work stay isolated.</div>
+      </div>
+      {onDuplicate ? (
+        <button type="button" onClick={() => onDuplicate(agent.id)} style={{ flexShrink: 0, padding: "7px 9px", borderRadius: 7, cursor: "pointer", border: "1px solid var(--honey-line)", background: "var(--honey-soft)", color: "var(--honey-2)", fontFamily: "var(--f-mono)", fontSize: 9.5, fontWeight: 700 }}>Duplicate agent</button>
+      ) : null}
+    </div>
   );
 }
 
@@ -212,7 +238,7 @@ function CrewRow({ a, onChange, onRemove, locked }: { a: Agent; onChange: (next:
         <span style={{ fontFamily: "var(--f-mono)", fontSize: 9, color: overWallet ? "var(--danger-2)" : "var(--fg-4)" }}>{overWallet ? "over wallet cap" : wallet > 0 ? "wallet $" + wallet : "company budget"}</span>
       </div>
       {locked ? (
-        <span style={{ width: 26, textAlign: "center", fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-4)" }} title="CEO is required">♛</span>
+        <span style={{ width: 26, textAlign: "center", fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-4)" }} title="Every company has a Queen — configure her instead">♛</span>
       ) : (
         <button onClick={onRemove} aria-label="Remove" style={{ width: 26, height: 26, display: "grid", placeItems: "center", cursor: "pointer", border: "1px solid var(--line)", borderRadius: 7, background: "transparent", color: "var(--fg-4)", fontSize: 12 }}>✕</button>
       )}
@@ -221,16 +247,24 @@ function CrewRow({ a, onChange, onRemove, locked }: { a: Agent; onChange: (next:
 }
 
 function CrewBuilder({
-  crew, setCrew, agentPool, seedQueen, queenName,
+  crew, setCrew, agentPool, seedQueen, queenName, membershipOwners, targetCompanyId, onDuplicateAgent,
 }: {
   crew: Agent[]; setCrew: (c: Agent[]) => void; agentPool: PoolAgent[];
   /** create flow: the first hire becomes the Queen/CEO. */
   seedQueen: boolean;
   /** browse flow: existing company's Queen name that new hires report to. */
   queenName?: string | null;
+  membershipOwners: Map<string, CompanyMembershipOwner[]>;
+  targetCompanyId?: string;
+  onDuplicateAgent?: (agentId: string) => void;
 }) {
   const onCrew = new Set(crew.map((a) => a.id ?? a.name));
-  const available = agentPool.filter((a) => !onCrew.has(a.id));
+  const candidates = agentPool.filter((agent) => !onCrew.has(agent.id));
+  const ownersOutsideTarget = (agentId: string) => (membershipOwners.get(agentId) ?? []).filter((owner) => owner.id !== targetCompanyId);
+  const available = candidates.filter((agent) => ownersOutsideTarget(agent.id).length === 0);
+  const assigned = candidates
+    .map((agent) => ({ agent, owners: ownersOutsideTarget(agent.id) }))
+    .filter((entry) => entry.owners.length > 0);
   const addAgent = (poolAgent: PoolAgent) => {
     if (seedQueen && crew.length === 0) {
       setCrew([...crew, assignAgent(poolAgent, undefined, null, "Queen")]);
@@ -246,20 +280,28 @@ function CrewBuilder({
   return (
     <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1.1fr)", gap: 18, alignItems: "start" }}>
       <div>
-        <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{available.length} available</span>}>select an agent</SectionLabel>
+        <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{available.length} available{assigned.length ? ` · ${assigned.length} assigned` : ""}</span>}>select an agent</SectionLabel>
         <div style={{ display: "flex", flexDirection: "column", gap: 7, maxHeight: 392, overflowY: "auto", paddingRight: 4 }} className="scrollbar-thin">
           {available.map((a) => <AgentPickRow key={a.id} agent={a} onAdd={addAgent} />)}
           {available.length === 0 && (
             <div style={{ borderRadius: 10, border: "1px dashed var(--line-2)", padding: "22px 12px", textAlign: "center", fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)" }}>
-              {agentPool.length === 0 ? "no agents configured — add agents in the Fleet view first" : "all available agents are on the crew"}
+              {agentPool.length === 0 ? "no agents configured — add agents in the Fleet view first" : assigned.length ? "no unassigned identities are available" : "all available agents are on the crew"}
             </div>
           )}
         </div>
+        {assigned.length ? (
+          <div style={{ marginTop: 14 }}>
+            <SectionLabel>assigned elsewhere · duplicate the blueprint</SectionLabel>
+            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+              {assigned.map(({ agent, owners }) => <AssignedAgentRow key={agent.id} agent={agent} owners={owners} onDuplicate={onDuplicateAgent} />)}
+            </div>
+          </div>
+        ) : null}
       </div>
       <div>
         <SectionLabel right={<span style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)" }}>{crew.length} agents · ${totalCap}/day company budget</span>}>the crew</SectionLabel>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {crew.map((a, i) => <CrewRow key={a.id ?? a.name} a={a} locked={seedQueen && a.role === "Queen"} onChange={(next) => updateAt(i, next)} onRemove={() => removeAt(i)} />)}
+          {crew.map((a, i) => <CrewRow key={a.id ?? a.name} a={a} locked={a.role === "Queen"} onChange={(next) => updateAt(i, next)} onRemove={() => removeAt(i)} />)}
           {crew.length === 0 && <div style={{ borderRadius: 10, border: "1px dashed var(--line-2)", padding: "22px 12px", textAlign: "center", fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)" }}>select agents on the left to staff this company{seedQueen ? " — the first hire becomes the Queen/CEO" : ""}</div>}
         </div>
       </div>
@@ -269,9 +311,11 @@ function CrewBuilder({
 
 // ── standalone agent browser (from cockpit Team tab) ──────────────────────
 export function AgentBrowserModal({
-  colony, agentPool, busy, theme, onClose, onConfirm,
+  colony, agentPool, busy, theme, membershipOwners, onDuplicateAgent, onClose, onConfirm,
 }: {
   colony: Colony; agentPool: PoolAgent[]; busy?: boolean; theme?: Theme;
+  membershipOwners: Map<string, CompanyMembershipOwner[]>;
+  onDuplicateAgent?: (agentId: string) => void;
   onClose: () => void; onConfirm: (agents: Agent[]) => void;
 }) {
   const [crew, setCrew] = React.useState<Agent[]>([]);
@@ -291,17 +335,17 @@ export function AgentBrowserModal({
             {crew.length ? `${crew.length} new agent${crew.length > 1 ? "s" : ""} will report to ${queen ? queen.name : "the Queen"}` : "no agents selected yet"}
           </span>
           <GhostBtn onClick={onClose}>Cancel</GhostBtn>
-          <PrimaryBtn disabled={!crew.length || busy} onClick={() => onConfirm(crew)}>{busy ? "Adding…" : `Add ${crew.length || ""} to crew`}</PrimaryBtn>
+          <PrimaryBtn disabled={!crew.length || busy} onClick={() => onConfirm(crew)}>{busy ? <><Spinner size={12} /> Adding</> : `Add ${crew.length || ""} to crew`}</PrimaryBtn>
         </>
       }
     >
-      <CrewBuilder crew={crew} setCrew={setCrew} agentPool={pool} seedQueen={false} queenName={queen?.name ?? null} />
+      <CrewBuilder crew={crew} setCrew={setCrew} agentPool={pool} seedQueen={false} queenName={queen?.name ?? null} membershipOwners={membershipOwners} targetCompanyId={colony.id} onDuplicateAgent={onDuplicateAgent} />
     </Modal>
   );
 }
 
 // ── identity form (shared by create step 0 + edit) ────────────────────────
-type FormState = Required<Pick<CreateForm, "name">> & {
+type FormState = Required<Pick<CreateForm, "name">> & CompanyExecutionSelection & {
   ticker: string; sector: string; apexTitle: string; apexMetric: string; apexTarget: string; metricUnit: MetricUnit; _tickerTouched?: boolean;
 };
 
@@ -339,23 +383,33 @@ function readForm(form: FormState): CreateForm {
     name: form.name.trim(), ticker: form.ticker.trim(), sector: form.sector.trim(),
     apexTitle: form.apexTitle.trim(), apexMetric: form.apexMetric.trim(), apexTarget: form.apexTarget.trim(),
     metricUnit: form.metricUnit,
+    executionEngine: form.executionEngine,
+    aeonProfileId: form.aeonProfileId.trim(),
+    aeonSkill: form.aeonSkill.trim(),
   };
 }
 
 // ── create-company flow (2 steps) ─────────────────────────────────────────
 export function CreateCompanyModal({
-  agentPool, initialCrew, busy, theme, onClose, onCreate,
+  agentPool, initialCrew, busy, theme, membershipOwners, onDuplicateAgent, onClose, onCreate,
 }: {
   agentPool: PoolAgent[]; initialCrew?: Agent[]; busy?: boolean; theme?: Theme;
+  membershipOwners: Map<string, CompanyMembershipOwner[]>;
+  onDuplicateAgent?: (agentId: string) => void;
   onClose: () => void; onCreate: (form: CreateForm, crew: Agent[]) => void;
 }) {
   const [step, setStep] = React.useState(0);
-  const [form, setForm] = React.useState<FormState>({ name: "", ticker: "", sector: "", apexTitle: "", apexMetric: "", apexTarget: "", metricUnit: "number" });
+  const [form, setForm] = React.useState<FormState>({ name: "", ticker: "", sector: "", apexTitle: "", apexMetric: "", apexTarget: "", metricUnit: "number", executionEngine: "hivemind", aeonProfileId: "", aeonSkill: "" });
   const [crew, setCrew] = React.useState<Agent[]>(() => (initialCrew ?? []).map((member) => ({ ...member })));
-  const canNext = form.name.trim().length > 0;
-  const create = () => onCreate(readForm(form), crew.map((a) => ({ ...a })));
+  const requiresCrew = COMPANY_EXECUTION_ENGINE_MATRIX[form.executionEngine].autonomy.requiresCompanyCrew;
+  const canNext = form.name.trim().length > 0 && form.apexTitle.trim().length > 0 && isCompleteCompanyExecutionSelection(form);
+  const create = () => {
+    const snapshot = readForm(form);
+    if (!snapshot.name || !snapshot.apexTitle) return;
+    onCreate(snapshot, crew.map((a) => ({ ...a })));
+  };
 
-  const steps = ["Identity", "Founding crew"];
+  const steps = ["Identity", requiresCrew ? "Founding crew" : "Optional crew"];
   return (
     <Modal
       title="Found a company"
@@ -375,15 +429,34 @@ export function CreateCompanyModal({
           </div>
           {step > 0 && <GhostBtn onClick={() => setStep(step - 1)}>Back</GhostBtn>}
           {step === 0
-            ? <PrimaryBtn disabled={!canNext} onClick={() => setStep(1)}>Next · staff the crew</PrimaryBtn>
-            : <PrimaryBtn disabled={crew.length === 0 || busy} onClick={create}>{busy ? "Founding…" : `Found ${form.name || "company"}`}</PrimaryBtn>}
+            ? <PrimaryBtn disabled={!canNext} onClick={() => setStep(1)}>{requiresCrew ? "Next · staff the crew" : "Next · optional crew"}</PrimaryBtn>
+            : <PrimaryBtn disabled={(requiresCrew && crew.length === 0) || !canNext || busy} onClick={create}>{busy ? <><Spinner size={12} /> Founding</> : `Found ${form.name || "company"}`}</PrimaryBtn>}
         </>
       }
     >
       {step === 0 ? (
-        <IdentityFields form={form} setForm={setForm} />
+        <div style={{ display: "grid", gap: 18 }}>
+          <IdentityFields form={form} setForm={setForm} />
+          <div style={{ height: 1, background: "var(--line)" }} />
+          <CompanyExecutionFields value={form} onChange={(patch) => setForm((current) => ({ ...current, ...patch }))} />
+        </div>
       ) : (
-        <CrewBuilder crew={crew} setCrew={setCrew} agentPool={agentPool} seedQueen />
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {/* The company Queen is not staffed here — she is auto-seeded with the
+              company itself and configured from the cockpit's Team tab. */}
+          <div aria-disabled="true" style={{ display: "flex", gap: 11, alignItems: "center", padding: "10px 12px", borderRadius: 10, border: "1px dashed var(--honey-line)", background: "var(--honey-soft)", opacity: 0.9 }}>
+            <RoleGlyph role="Queen" size={28} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ fontFamily: "var(--f-display)", fontSize: 13.5, fontWeight: 600, color: "var(--fg)" }}>Queen · CEO</span>
+                <span style={{ fontFamily: "var(--f-mono)", fontSize: 9.5, color: "var(--honey-2)" }}>auto-created</span>
+              </div>
+              <div style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)", marginTop: 3, lineHeight: 1.45 }}>Created with the company — inherits your Hive Queen's settings.</div>
+            </div>
+            <span title="Every company has a Queen — configure her instead" style={{ width: 26, textAlign: "center", fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-4)" }}>♛</span>
+          </div>
+          <CrewBuilder crew={crew} setCrew={setCrew} agentPool={agentPool} seedQueen={requiresCrew} membershipOwners={membershipOwners} onDuplicateAgent={onDuplicateAgent} />
+        </div>
       )}
     </Modal>
   );
@@ -393,6 +466,10 @@ export function CreateCompanyModal({
 type EditFormState = FormState & {
   charter: string;
   blurb: string;
+  projectId: string;
+  analyticsProvider: AnalyticsProviderKey | "";
+  analyticsProjectId: string;
+  analyticsHost: string;
   dailyBudgetUsd?: number;
   monthlyBudgetUsd?: number;
   totalBudgetUsd?: number;
@@ -401,6 +478,9 @@ type EditFormState = FormState & {
   apexCurrent: string;
   apexProgress?: number;
   frozen: boolean;
+  autonomyPauseMax?: number;
+  autonomyPauseMode: CompanyAutonomyPauseMode;
+  autonomyPauseKinds: KanbanDeliverableKind[];
   revenueKind: "users" | "revenue" | "";
   revenueLabel: string;
   revenueValue: string;
@@ -432,9 +512,16 @@ function initialEditState(initial: CompanyEditForm): EditFormState {
     apexMetric: initial.apexMetric ?? "",
     apexTarget: initial.apexTarget ?? "",
     metricUnit: initial.metricUnit ?? "number",
+    executionEngine: initial.executionEngine ?? "hivemind",
+    aeonProfileId: initial.aeonProfileId ?? "",
+    aeonSkill: initial.aeonSkill ?? "",
     _tickerTouched: true,
     charter: initial.charter ?? "",
     blurb: initial.blurb ?? "",
+    projectId: initial.projectId ?? "",
+    analyticsProvider: initial.analyticsProvider ?? "",
+    analyticsProjectId: initial.analyticsProjectId ?? "",
+    analyticsHost: initial.analyticsHost ?? "",
     dailyBudgetUsd: initial.dailyBudgetUsd,
     monthlyBudgetUsd: initial.monthlyBudgetUsd,
     totalBudgetUsd: initial.totalBudgetUsd,
@@ -443,6 +530,9 @@ function initialEditState(initial: CompanyEditForm): EditFormState {
     apexCurrent: initial.apexCurrent ?? "",
     apexProgress: initial.apexProgress,
     frozen: Boolean(initial.frozen),
+    autonomyPauseMax: initial.autonomyPauseMax,
+    autonomyPauseMode: initial.autonomyPauseMode ?? "all",
+    autonomyPauseKinds: initial.autonomyPauseKinds ?? [],
     revenueKind: initial.revenueKind ?? "",
     revenueLabel: initial.revenueLabel ?? "",
     revenueValue: initial.revenueValue ?? "",
@@ -475,6 +565,10 @@ function readEditForm(form: EditFormState): CompanyEditForm {
     ...readForm(form),
     charter: form.charter.trim(),
     blurb: form.blurb.trim(),
+    projectId: form.projectId.trim(),
+    analyticsProvider: form.analyticsProvider,
+    analyticsProjectId: form.analyticsProjectId.trim(),
+    analyticsHost: form.analyticsHost.trim(),
     dailyBudgetUsd: form.dailyBudgetUsd,
     monthlyBudgetUsd: form.monthlyBudgetUsd,
     totalBudgetUsd: form.totalBudgetUsd,
@@ -483,6 +577,9 @@ function readEditForm(form: EditFormState): CompanyEditForm {
     apexCurrent: form.apexCurrent.trim(),
     apexProgress: form.apexProgress,
     frozen: form.frozen,
+    autonomyPauseMax: form.autonomyPauseMax,
+    autonomyPauseMode: form.autonomyPauseMode,
+    autonomyPauseKinds: form.autonomyPauseKinds,
     revenueKind: form.revenueKind,
     revenueLabel: form.revenueLabel.trim(),
     revenueValue: form.revenueValue.trim(),
@@ -560,13 +657,22 @@ function MemberEditRow({
       <Field label="Task">
         <TextInput value={member.task ?? ""} placeholder="Current work caption" onChange={(event) => onChange({ ...member, task: event.target.value })} />
       </Field>
-      <button
-        onClick={onRemove}
-        aria-label={`Remove ${member.name}`}
-        style={{ width: 34, height: 34, display: "grid", placeItems: "center", cursor: "pointer", border: "1px solid var(--line-2)", borderRadius: 8, background: "transparent", color: "var(--fg-4)", fontSize: 13 }}
-      >
-        ✕
-      </button>
+      {member.role === "Queen" ? (
+        <span
+          title="Every company has a Queen — configure her instead"
+          style={{ width: 34, height: 34, display: "grid", placeItems: "center", fontFamily: "var(--f-mono)", fontSize: 13, color: "var(--fg-4)" }}
+        >
+          ♛
+        </span>
+      ) : (
+        <button
+          onClick={onRemove}
+          aria-label={`Remove ${member.name}`}
+          style={{ width: 34, height: 34, display: "grid", placeItems: "center", cursor: "pointer", border: "1px solid var(--line-2)", borderRadius: 8, background: "transparent", color: "var(--fg-4)", fontSize: 13 }}
+        >
+          ✕
+        </button>
+      )}
     </div>
   );
 }
@@ -578,7 +684,104 @@ export function EditCompanyModal({
   onClose: () => void; onSave: (form: CompanyEditForm) => void;
 }) {
   const [form, setForm] = React.useState<EditFormState>(() => initialEditState(initial));
-  const canSave = form.name.trim().length > 0;
+  // Registered code projects for the "Code project" picker (structured config —
+  // never a free-text id). An id missing from the registry stays selectable so
+  // opening + saving the modal can't silently unlink it.
+  const [projects, setProjects] = React.useState<ProjectPickerEntry[]>([]);
+  const [projectsLoading, setProjectsLoading] = React.useState(true);
+  const [projectLinkBusy, setProjectLinkBusy] = React.useState(false);
+  const [projectLinkError, setProjectLinkError] = React.useState<string | null>(null);
+  const [manualProjectOpen, setManualProjectOpen] = React.useState(false);
+  const [manualProject, setManualProject] = React.useState({ name: "", path: "" });
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/projects", { cache: "no-store" });
+        const json = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          projects?: { id?: string; name?: string; localPath?: string; gitlawbRepo?: { repoName?: string } }[];
+        };
+        if (cancelled || !json?.ok || !Array.isArray(json.projects)) return;
+        setProjects(json.projects
+          .filter((project) => project.id)
+          .map((project) => ({
+            id: project.id!,
+            name: project.name || project.id!,
+            localPath: project.localPath,
+            repoName: project.gitlawbRepo?.repoName,
+          })));
+      } catch {
+        // Registry unreachable — the picker still offers None + the current link.
+      } finally {
+        if (!cancelled) setProjectsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  const projectOptions = React.useMemo(() => {
+    const options = [
+      { value: "", label: "None" },
+      ...projects.map((project) => ({
+        value: project.id,
+        // The name alone is meaningless in a registry of look-alike entries —
+        // show where each project actually lives.
+        label: project.localPath ? `${project.name} · ${shortenHomePath(project.localPath)}` : `${project.name} · no folder linked`,
+      })),
+    ];
+    if (form.projectId && !options.some((option) => option.value === form.projectId)) {
+      options.push({ value: form.projectId, label: `${form.projectId} (not in registry)` });
+    }
+    return options;
+  }, [projects, form.projectId]);
+  const selectedProject = projects.find((project) => project.id === form.projectId);
+
+  const registerProject = async (name: string, localPath?: string) => {
+    if (projectLinkBusy) return;
+    setProjectLinkBusy(true);
+    setProjectLinkError(null);
+    try {
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, localPath }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; project?: { id?: string; name?: string; localPath?: string } };
+      if (!res.ok || !json?.ok || !json.project?.id) {
+        setProjectLinkError(json?.error || "Could not register the project.");
+        return;
+      }
+      const entry: ProjectPickerEntry = { id: json.project.id, name: json.project.name || json.project.id, localPath: json.project.localPath };
+      setProjects((current) => [entry, ...current.filter((project) => project.id !== entry.id)]);
+      setForm((current) => ({ ...current, projectId: entry.id }));
+      setManualProject({ name: "", path: "" });
+      setManualProjectOpen(false);
+    } catch (error) {
+      setProjectLinkError(error instanceof Error ? error.message : "Could not register the project.");
+    } finally {
+      setProjectLinkBusy(false);
+    }
+  };
+
+  const browseForProjectFolder = async () => {
+    if (projectLinkBusy) return;
+    setProjectLinkError(null);
+    const result = await openNativeDirectory({ prompt: "Choose the folder of this company's code repo:" });
+    if (result === null) {
+      // Browser runtime: no native dialog — fall back to the labeled manual row.
+      setManualProjectOpen(true);
+      return;
+    }
+    if (result.cancelled) return;
+    if (!result.ok || !result.path) {
+      setProjectLinkError(result.error || "Could not choose a folder.");
+      return;
+    }
+    const path = result.path.replace(/\/+$/, "");
+    const name = path.split("/").filter(Boolean).at(-1) || path;
+    await registerProject(name, path);
+  };
+  const canSave = form.name.trim().length > 0 && isCompleteCompanyExecutionSelection(form);
   const updateMember = (agentId: string, next: CompanyMemberEdit) => setForm((current) => ({
     ...current,
     members: current.members.map((member) => (member.agentId === agentId ? next : member)),
@@ -601,7 +804,7 @@ export function EditCompanyModal({
             Saves company metadata, treasury caps, revenue metrics, and member fields.
           </span>
           <GhostBtn onClick={onClose}>Cancel</GhostBtn>
-          <PrimaryBtn disabled={!canSave || busy} onClick={() => onSave(readEditForm(form))}>{busy ? "Saving…" : "Save changes"}</PrimaryBtn>
+          <PrimaryBtn disabled={!canSave || busy} onClick={() => onSave(readEditForm(form))}>{busy ? <><Spinner size={12} /> Saving</> : "Save changes"}</PrimaryBtn>
         </>
       }
     >
@@ -615,6 +818,61 @@ export function EditCompanyModal({
             <Field label="Blurb">
               <TextArea value={form.blurb} placeholder="One-line company tagline" onChange={(event) => setForm((current) => ({ ...current, blurb: event.target.value }))} />
             </Field>
+          </div>
+          <div style={{ height: 1, background: "var(--line)", margin: "16px 0" }} />
+          <CompanyExecutionFields value={form} onChange={(patch) => setForm((current) => ({ ...current, ...patch }))} />
+          <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+            <Field label="Code project" hint="The repo this company's product work lives in. New tasks carry it, so work routes to machines that have the repo checked out and shows its code proof.">
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center" }}>
+                <Select value={form.projectId} onChange={(value) => setForm((current) => ({ ...current, projectId: value }))} options={projectOptions} />
+                <GhostBtn onClick={browseForProjectFolder}>{projectLinkBusy ? <><Spinner size={11} /> Linking</> : "Link a folder…"}</GhostBtn>
+              </div>
+              {projectsLoading ? (
+                <div role="status" aria-label="Loading projects" style={{ marginTop: 6, display: "inline-flex", alignItems: "center", gap: 6, fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)" }}>
+                  <Spinner size={11} /> Loading projects…
+                </div>
+              ) : null}
+            </Field>
+            {selectedProject ? (
+              <div style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)", wordBreak: "break-all" }}>
+                {selectedProject.localPath ?? "No folder linked yet — tasks can't route by checkout until one is."}
+                {selectedProject.repoName ? ` · GitLawb repo: ${selectedProject.repoName}` : ""}
+              </div>
+            ) : null}
+            {projectLinkError ? (
+              <div style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--danger-2)" }}>{projectLinkError}</div>
+            ) : null}
+            {manualProjectOpen ? (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr auto", gap: 8, alignItems: "end" }}>
+                <Field label="Project name">
+                  <TextInput value={manualProject.name} placeholder="maps-agency" onChange={(event) => setManualProject((current) => ({ ...current, name: event.target.value }))} />
+                </Field>
+                <Field label="Absolute folder path (advanced)" hint="Folder browsing needs the desktop app; in the browser, paste the repo path.">
+                  <TextInput value={manualProject.path} placeholder="/Users/you/code/projects/my-repo" onChange={(event) => setManualProject((current) => ({ ...current, path: event.target.value }))} />
+                </Field>
+                <PrimaryBtn disabled={!manualProject.name.trim() || projectLinkBusy} onClick={() => registerProject(manualProject.name.trim(), manualProject.path.trim() || undefined)}>
+                  {projectLinkBusy ? <><Spinner size={11} /> Registering</> : "Register"}
+                </PrimaryBtn>
+              </div>
+            ) : null}
+          </div>
+          <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "start" }}>
+            <Field label="Analytics provider" hint="Where this company's at-a-glance numbers come from. Connect the credential once in Settings → Connections; set the per-company project id here.">
+              <Select
+                value={form.analyticsProvider}
+                onChange={(value) => setForm((current) => ({ ...current, analyticsProvider: value as AnalyticsProviderKey | "" }))}
+                options={[{ value: "", label: "None (guided setup in the tab)" }, ...ANALYTICS_ADAPTERS.map((a) => ({ value: a.key, label: a.label }))]}
+              />
+            </Field>
+            {form.analyticsProvider ? (
+              <Field label={analyticsAdapter(form.analyticsProvider)?.configFieldLabel ?? "Project / site id"} hint={analyticsAdapter(form.analyticsProvider)?.configFieldHint}>
+                <TextInput
+                  value={form.analyticsProjectId}
+                  placeholder={analyticsAdapter(form.analyticsProvider)?.configFieldPlaceholder ?? ""}
+                  onChange={(event) => setForm((current) => ({ ...current, analyticsProjectId: event.target.value }))}
+                />
+              </Field>
+            ) : null}
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 130px", gap: 12, marginTop: 16 }}>
             <Field label="Current metric value">
@@ -649,6 +907,47 @@ export function EditCompanyModal({
               <ToggleRow label="Freeze company spend" checked={form.frozen} onChange={(checked) => setForm((current) => ({ ...current, frozen: checked }))} />
             </div>
           </div>
+          <div style={{ display: "grid", gridTemplateColumns: "150px 1fr", gap: 12, marginTop: 16, alignItems: "end" }}>
+            <Field label="Auto-pause at" hint="0 = never">
+              <NumericInput value={form.autonomyPauseMax} step={1} placeholder="0" onChange={(value) => setForm((current) => ({ ...current, autonomyPauseMax: value }))} />
+            </Field>
+            <Field label="Count which waiting items">
+              <Select value={form.autonomyPauseMode} onChange={(value) => setForm((current) => ({ ...current, autonomyPauseMode: value as CompanyAutonomyPauseMode }))} options={AUTONOMY_PAUSE_MODE_OPTIONS} />
+            </Field>
+          </div>
+          {form.autonomyPauseMode === "deliverable-kinds" && (form.autonomyPauseMax ?? 0) > 0 ? (
+            <div style={{ marginTop: 10 }}>
+              <SectionLabel>deliverable types that count</SectionLabel>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+                {AUTONOMY_PAUSE_KIND_CHOICES.map((kind) => {
+                  const on = form.autonomyPauseKinds.includes(kind);
+                  return (
+                    <button
+                      key={kind}
+                      type="button"
+                      onClick={() => setForm((current) => ({
+                        ...current,
+                        autonomyPauseKinds: current.autonomyPauseKinds.includes(kind)
+                          ? current.autonomyPauseKinds.filter((k) => k !== kind)
+                          : [...current.autonomyPauseKinds, kind],
+                      }))}
+                      style={{
+                        fontFamily: "var(--f-mono)", fontSize: 10.5, padding: "5px 10px", borderRadius: 999, cursor: "pointer",
+                        border: `1px solid ${on ? "var(--honey-2)" : "var(--line-2)"}`,
+                        background: on ? "color-mix(in srgb, var(--honey-2) 16%, transparent)" : "transparent",
+                        color: on ? "var(--honey-2)" : "var(--fg-4)",
+                      }}
+                    >
+                      {kind}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+          <p style={{ fontFamily: "var(--f-mono)", fontSize: 10.5, color: "var(--fg-4)", marginTop: 10, lineHeight: 1.5 }}>
+            When this many items are waiting on you (the “Needs You” lane), the crew stops taking on new work and resumes on its own once you clear enough. In-flight work still finishes.
+          </p>
         </EditSection>
 
         <EditSection title="revenue · headline metric">
@@ -783,9 +1082,9 @@ function TreasuryMemberCapRow({
   const walletCap = agent?.walletCap ?? 0;
   const overWallet = walletCap > 0 && (cap ?? 0) > walletCap;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", padding: "12px 0", borderTop: "1px solid var(--line)" }}>
-      <div style={{ flex: "1 1 210px", minWidth: 180, display: "flex", alignItems: "center", gap: 10 }}>
-        <RoleGlyph role={member.role} size={30} />
+    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "10px 0", borderTop: "1px solid var(--line)" }}>
+      <div style={{ flex: "1 1 220px", minWidth: 190, display: "flex", alignItems: "center", gap: 10 }}>
+        <RoleGlyph role={member.role} size={28} />
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: "var(--f-display)", fontSize: 13.5, fontWeight: 650, color: "var(--fg)", lineHeight: 1.25 }}>{member.name}</div>
           <div style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--fg-4)", marginTop: 3, lineHeight: 1.35 }}>
@@ -793,7 +1092,7 @@ function TreasuryMemberCapRow({
           </div>
         </div>
       </div>
-      <div style={{ flex: "1 1 220px", minWidth: 190 }}>
+      <div style={{ flex: "0 1 210px", minWidth: 160, maxWidth: 210 }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 7, fontFamily: "var(--f-mono)", fontVariantNumeric: "tabular-nums", marginBottom: 6, flexWrap: "wrap" }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: over ? "var(--danger-2)" : "var(--honey-2)" }}>{used}% used</span>
           <span style={{ fontSize: 10, color: "var(--fg-4)" }}>{cap ? `$${cap}/day cap` : "uncapped"}</span>
@@ -807,7 +1106,7 @@ function TreasuryMemberCapRow({
           </div>
         ) : null}
       </div>
-      <div style={{ flex: "0 1 150px", minWidth: 132 }}>
+      <div style={{ flex: "0 0 118px" }}>
         <Field label="Daily cap">
           <NumericInput value={member.companyCap} step={5} placeholder="0" onChange={onChangeCap} />
         </Field>
@@ -845,20 +1144,20 @@ export function TreasurySettingsModal({
       subtitle={`${colony.name} · company budgets and agent spend caps`}
       theme={theme}
       onClose={onClose}
-      width={860}
+      width={700}
       footer={
         <>
-          <span style={{ flex: 1, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)" }}>
+          <span style={{ flex: "1 1 180px", minWidth: 0, fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--fg-4)", lineHeight: 1.35 }}>
             Saves only company budgets, spend freeze, and member daily caps.
           </span>
           <GhostBtn onClick={onClose}>Cancel</GhostBtn>
-          <PrimaryBtn disabled={busy} onClick={save}>{busy ? "Saving…" : "Save treasury"}</PrimaryBtn>
+          <PrimaryBtn disabled={busy} onClick={save}>{busy ? <><Spinner size={12} /> Saving</> : "Save treasury"}</PrimaryBtn>
         </>
       }
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <EditSection title="company budget">
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 174px), 186px))", gap: 10, justifyContent: "start" }}>
             <Field label="Daily budget USD">
               <NumericInput value={form.dailyBudgetUsd} step={5} placeholder="0" onChange={(value) => setForm((current) => ({ ...current, dailyBudgetUsd: value }))} />
             </Field>
@@ -929,7 +1228,7 @@ export function AgentMemberSettingsModal({
             Updates this agent’s company role, work state, task caption, and daily cap.
           </span>
           <GhostBtn onClick={onClose}>Cancel</GhostBtn>
-          <PrimaryBtn disabled={busy} onClick={save}>{busy ? "Saving…" : "Save agent"}</PrimaryBtn>
+          <PrimaryBtn disabled={busy} onClick={save}>{busy ? <><Spinner size={12} /> Saving</> : "Save agent"}</PrimaryBtn>
         </>
       }
     >
@@ -961,3 +1260,8 @@ export function AgentMemberSettingsModal({
     </Modal>
   );
 }
+
+
+// TaskDetailModal + its deliverable rendering live in FileViewer.tsx
+// (colocated with DeliverableChip / FileViewerModal) to avoid a
+// Modals <-> FileViewer import cycle. The classification helpers above are shared.

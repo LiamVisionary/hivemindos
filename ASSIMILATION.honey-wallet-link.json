@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-07-15T12:48:10.525959+00:00",
+  "request": "Fix Honey Telegram wallet prerequisite so connected wallets can be selected and signature-verified in context",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/wallet/honey-wallet-link.ts",
+      "target_path": "src/lib/services/wallet/honey-wallet-link-options.ts",
+      "reuse_type": "adapted_code",
+      "note": "Reused the existing Honey proof boundary and canonical EVM validation to expose only locally signable wallet choices."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/wallet/local-wallet-vault.ts",
+      "target_path": "src/lib/services/wallet/honey-wallet-link.ts",
+      "reuse_type": "adapted_code",
+      "note": "Reused the encrypted local vault metadata listing so the Honey status route returns existing wallets without exposing private key material."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/wallet/honey-wallet-link.ts",
+      "target_path": "src/components/wallets-drop-in/HoneyContributionCard.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Wired the existing nonce-sign-link contract into the Honey prerequisite UI instead of inventing another linking flow."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/components/wallets-drop-in/WalletsView.tsx",
+      "target_path": "src/components/wallets-drop-in/HoneyContributionCard.tsx",
+      "reuse_type": "style_adapted",
+      "note": "Reused the established Wallets controls and action-prop pattern for the wallet picker and signature action."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-honey-contribution-layer.mjs",
+      "target_path": "scripts/test-honey-contribution-layer.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Extended the focused Honey contract with wallet normalization, proof wiring, explicit-choice, and Telegram-gating assertions."
+    }
+  ]
+}

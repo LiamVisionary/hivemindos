@@ -1,6 +1,5 @@
-import { spawn } from "node:child_process";
-import { join } from "node:path";
 import { NextRequest, NextResponse } from "next/server";
+import { spawnHiveEnvAdd } from "@/lib/services/hive-env-command";
 import { VEIL_CASH_MCP_MIN_VERSION, VEIL_CASH_MCP_PACKAGE, VEIL_CASH_SDK_PACKAGE } from "@/lib/config/veil-cash";
 import { installVeilCli, installVeilMcp, parseVeilCliJson, readVeilMcpVersion, redactSecrets, resolveVeilCliPath, resolveVeilMcpPath, runVeilCli, veilEnvValue, veilMcpMeetsMinimumVersion } from "@/lib/services/wallet/veil-cli";
 import { requireAuth } from "@/lib/utils/server-auth";
@@ -133,7 +132,7 @@ async function saveGeneratedKeypair(keypair: VeilKeypairJson) {
 
 function saveVeilEnv(entries: Record<"VEIL_KEY" | "DEPOSIT_KEY", string>) {
   return new Promise<void>((resolve, reject) => {
-    const child = spawn(join(process.cwd(), "scripts", "hive-env-add"), [
+    const child = spawnHiveEnvAdd([
       "--import-stdin",
       "--scope",
       "agent",

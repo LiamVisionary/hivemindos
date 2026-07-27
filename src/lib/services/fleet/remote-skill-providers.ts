@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import type { RemoteBrainSkillProviderInventory } from "@/lib/services/obsidian/brain-skills";
+import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
 export async function remoteSkillProviders(
   request: NextRequest,
@@ -7,7 +8,7 @@ export async function remoteSkillProviders(
 ): Promise<RemoteBrainSkillProviderInventory[]> {
   const fleetUrl = new URL("/api/fleet/discover", request.url);
   fleetUrl.searchParams.set("includeSnapshots", "0");
-  const fleetResponse = await fetch(fleetUrl, { cache: "no-store", signal: AbortSignal.timeout(options.fleetTimeoutMs ?? 12_000) }).catch(() => null);
+  const fleetResponse = await fetch(fleetUrl, { cache: "no-store", headers: internalApiAuthHeaders(), signal: AbortSignal.timeout(options.fleetTimeoutMs ?? 12_000) }).catch(() => null);
   if (!fleetResponse?.ok) return [];
   const fleet = await fleetResponse.json().catch(() => null) as {
     machines?: Array<{
@@ -44,7 +45,7 @@ export async function remoteSkillProviders(
 export async function fleetSkillCollectors(request: NextRequest) {
   const fleetUrl = new URL("/api/fleet/discover", request.url);
   fleetUrl.searchParams.set("includeSnapshots", "0");
-  const fleetResponse = await fetch(fleetUrl, { cache: "no-store", signal: AbortSignal.timeout(12_000) }).catch(() => null);
+  const fleetResponse = await fetch(fleetUrl, { cache: "no-store", headers: internalApiAuthHeaders(), signal: AbortSignal.timeout(12_000) }).catch(() => null);
   if (!fleetResponse?.ok) return [];
   const fleet = await fleetResponse.json().catch(() => null) as {
     machines?: Array<{

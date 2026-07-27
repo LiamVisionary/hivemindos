@@ -1,0 +1,21 @@
+{
+  "upstreamName": "Instagram Growth System",
+  "upstreamSlug": "instagram-growth-system",
+  "hiveSlug": "instagram-growth-system",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/gtm/hivemindos/instagram-growth-system",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-26T11:01:16-04:00",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional GTM skills",
+  "sourcePath": "packaged-skills/optional/gtm/hivemindos/instagram-growth-system",
+  "status": "optional",
+  "relatedPublicReference": "https://x.com/simslearnai/status/2080945189317918883",
+  "relatedPublicReferenceLicense": "No reusable-content license detected on 2026-07-26; the thread was used only as inspiration for a clean-room, non-verbatim adaptation.",
+  "hivemindAdaptations": [
+    "Preserves all eight capabilities from the source thread in one end-to-end Instagram strategy, content, conversion, and measurement workflow.",
+    "Adds public and first-party evidence rules, confidence labels, an account-relative baseline, and an outcome-aligned scoreboard.",
+    "Turns the source's 60-day prompt into a phased solo-creator operating system with weekly keep, revise, or stop decisions.",
+    "Adds truthful-claim, privacy, platform-action, disclosure, and human-approval boundaries plus handoffs to existing Reel, media, and publishing skills."
+  ]
+}

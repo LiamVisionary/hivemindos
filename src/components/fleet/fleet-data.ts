@@ -50,6 +50,9 @@ export interface FleetAgent {
   id: string;
   name: string;
   runtime: string;
+  /** LLM backing, surfaced in the agent detail panel, e.g. "openai-codex" / "gpt-5.5". */
+  provider?: string;
+  model?: string;
   canChat?: boolean;
   state: AgentState;
   role: string;
@@ -99,6 +102,12 @@ export interface FleetMachineSyncIssue {
   stalled?: boolean;
 }
 
+/** A resident process reported by the collector, ranked by RSS. */
+export interface FleetMachineProcess {
+  name: string;
+  rssMb: number;
+}
+
 /** Live host metrics reported by the machine's collector `/health` endpoint. */
 export interface FleetMachineSystem {
   checkedAt?: number;
@@ -116,6 +125,22 @@ export interface FleetMachineSystem {
   arch?: string;
   osRelease?: string;
   uptimeSec?: number;
+  // Extended resource telemetry (collector v0.19+; older collectors omit
+  // these, so every field stays optional and the UI degrades gracefully).
+  swapUsedGb?: number | null;
+  swapTotalGb?: number | null;
+  cacheGb?: number | null;
+  tempC?: number | null;
+  diskReadMBs?: number | null;
+  diskWriteMBs?: number | null;
+  netRxMBs?: number | null;
+  netTxMBs?: number | null;
+  procCount?: number | null;
+  topProcesses?: FleetMachineProcess[];
+  /** Rolling recent samples (cpu%/ram%/net MB-s) accumulated by the collector for sparklines. */
+  history?: { cpu: number[]; ram: number[]; netRx: number[]; netTx: number[] };
+  /** Round-trip latency to the collector /health endpoint (ms), measured by the discovery probe. */
+  rttMs?: number | null;
 }
 
 export interface FleetMachine {
@@ -139,6 +164,10 @@ export interface FleetMachine {
   lat: number;
   lon: number;
   uptime: string;
+  /** Whether this machine's hivemind-linkd can host the remote Shell panel.
+   *  Derived from the collector-reported capability (falling back to the
+   *  machine OS) in the dashboard mapper; undefined means "assume available". */
+  remoteShell?: boolean;
   system?: FleetMachineSystem;
   networkIssue?: FleetMachineNetworkIssue;
   syncIssue?: FleetMachineSyncIssue;

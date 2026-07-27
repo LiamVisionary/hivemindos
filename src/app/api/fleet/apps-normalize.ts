@@ -1,3 +1,60 @@
+// Cross-machine app URLs must ride the peer's linkd tailnet door, pinned
+// :8787 fleet-wide (2026-07-03 linkd audit). Collectors bind localhost and
+// are only reachable through linkd, so a URL carrying a peer's local
+// collector port (e.g. :8792) is dead from every other machine.
+export const HIVEMIND_LINK_TAILNET_PORT = 8787;
+
+const APP_PROXY_PATH_PATTERN = /\/app-proxy\/\d+(?:\/|$)/;
+const PEER_PORTAL_PATH_PATTERN = /^\/peer\/([^/]+)(\/.*)?$/;
+const HOST_PORT_PATTERN = /^([^\s:/]+):(\d+)$/;
+
+function isLoopbackHost(hostname: string) {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
+}
+
+// `http://127.0.0.1:8788/peer/<host%3Aport>/…` portal URLs resolve only
+// through the linkd control port of the machine that composed them. API
+// consumers fleet-wide (health watchdogs, phone TTS, other dashboards) need
+// the peer's own tailnet door instead: `http://<host>:<port>/…`.
+export function peerPortalToTailnetUrl(rawUrl: string | undefined) {
+  if (!rawUrl) return "";
+  try {
+    const url = new URL(rawUrl);
+    const portalMatch = url.pathname.match(PEER_PORTAL_PATH_PATTERN);
+    if (!portalMatch) return rawUrl;
+    const hostPort = decodeURIComponent(portalMatch[1] ?? "");
+    if (!HOST_PORT_PATTERN.test(hostPort)) return rawUrl;
+    return `http://${hostPort}${portalMatch[2] ?? ""}${url.search}`;
+  } catch {
+    return rawUrl;
+  }
+}
+
+// Heal a cached cross-machine app-proxy URL minted before the tailnet door
+// was pinned: rewrite the port (or the /peer/<host:port> identity) to :8787.
+// Loopback hosts are the composing machine's own collector — its local port
+// is correct and stays untouched.
+export function pinPeerAppProxyUrl(rawUrl: string | undefined) {
+  if (!rawUrl) return "";
+  try {
+    const url = new URL(rawUrl);
+    const portalMatch = url.pathname.match(PEER_PORTAL_PATH_PATTERN);
+    if (portalMatch) {
+      const hostMatch = decodeURIComponent(portalMatch[1] ?? "").match(HOST_PORT_PATTERN);
+      if (!hostMatch || Number(hostMatch[2]) === HIVEMIND_LINK_TAILNET_PORT) return rawUrl;
+      if (!APP_PROXY_PATH_PATTERN.test(portalMatch[2] ?? "")) return rawUrl;
+      url.pathname = `/peer/${encodeURIComponent(`${hostMatch[1]}:${HIVEMIND_LINK_TAILNET_PORT}`)}${portalMatch[2] ?? ""}`;
+      return url.toString();
+    }
+    if (isLoopbackHost(url.hostname) || !APP_PROXY_PATH_PATTERN.test(url.pathname)) return rawUrl;
+    if (!url.port || url.port === String(HIVEMIND_LINK_TAILNET_PORT)) return rawUrl;
+    url.port = String(HIVEMIND_LINK_TAILNET_PORT);
+    return url.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
 export type NormalizedHostedApp = {
   id: string;
   name: string;

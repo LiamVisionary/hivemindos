@@ -1,0 +1,37 @@
+/* HivemindOS — Effects: radii, borders, shadows, blur, motion.
+   Cards are hairline-bordered translucent panels over a honeycomb backdrop,
+   with a deep soft drop shadow. Corners are gently rounded (6–14px). */
+
+:root {
+  /* ---- Radii (the hive language runs larger + pillier) ---- */
+  --radius: 14px;       /* default card / panel */
+  --radius-xs: 9px;     /* fields, small controls */
+  --radius-sm: 9px;     /* inputs, menus */
+  --radius-md: 14px;    /* cards */
+  --radius-lg: 20px;    /* order tickets / large panels */
+  --radius-pill: 9999px; /* buttons + badges are pills */
+
+  /* ---- Borders ---- */
+  --border: 1px solid var(--hairline);
+  --border-honey: 1px solid var(--honey-line);
+  --border-live: 1px solid color-mix(in srgb, var(--live) 35%, transparent); /* @kind other */
+
+  /* ---- Shadows (soft, deep, lifted) ---- */
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 18px 50px -28px rgba(0, 0, 0, 0.7);
+  --shadow-card: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 18px 50px -28px rgba(0, 0, 0, 0.7);
+  --shadow-panel: 0 28px 90px rgba(0, 0, 0, 0.48);
+  --shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.36);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --glow-live: 0 0 34px rgba(111, 205, 186, 0.20);
+  --glow-honey: 0 0 18px rgba(231, 180, 92, 0.24);
+
+  /* ---- Blur (glass surfaces / overlays) ---- */
+  --blur-overlay: 18px;
+
+  /* ---- Motion ---- */
+  --ease-out: cubic-bezier(0.2, 0.9, 0.2, 1); /* @kind other */
+  --ease-lift: cubic-bezier(0.22, 0.61, 0.18, 1); /* @kind other */
+  --dur-fast: 120ms; /* @kind other */
+  --dur: 140ms; /* @kind other */
+  --dur-slow: 280ms; /* @kind other */
+}

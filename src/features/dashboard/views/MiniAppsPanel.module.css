@@ -1,0 +1,356 @@
+.root {
+  --mini-panel: #14161c;
+  --mini-panel-soft: #1e222b;
+  --mini-line: rgba(238, 232, 220, 0.13);
+  --mini-muted: #a7a39a;
+  --mini-honey: #e7b45c;
+  --mini-honey-bright: #f0c879;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 30px 34px 48px;
+  color: var(--foreground);
+}
+
+:global([data-theme="hive-light"]) .root {
+  --mini-panel: #fbf8f1;
+  --mini-panel-soft: #f6f2e9;
+  --mini-line: rgba(54, 46, 30, 0.16);
+  --mini-muted: #5e574b;
+  --mini-honey: #a97209;
+  --mini-honey-bright: #7d5404;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.eyebrow,
+.cardEyebrow {
+  margin: 0;
+  color: var(--mini-honey);
+  font-family: var(--f-mono, ui-monospace), monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.header h1 {
+  margin: 6px 0 7px;
+  color: var(--foreground);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.lede {
+  max-width: 680px;
+  margin: 0;
+  color: var(--mini-muted);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.refreshButton,
+.errorState button,
+.openButton,
+.backButton,
+.browserButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.refreshButton,
+.errorState button {
+  padding: 0 13px;
+  border: 1px solid var(--mini-line);
+  background: var(--mini-panel);
+  color: var(--foreground);
+}
+
+.refreshButton svg,
+.errorState button svg,
+.openButton svg,
+.backButton svg,
+.browserButton svg {
+  width: 15px;
+  height: 15px;
+}
+
+.refreshButton:disabled { cursor: wait; opacity: 0.72; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.card,
+.skeletonCard {
+  min-height: 510px;
+  display: grid;
+  grid-template-rows: 208px 1fr;
+  overflow: hidden;
+  border: 1px solid var(--mini-line);
+  border-radius: 16px;
+  background: var(--mini-panel);
+  box-shadow: 0 20px 60px -42px rgba(0, 0, 0, 0.8);
+}
+
+.card {
+  transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+
+.card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--mini-honey) 42%, transparent);
+  background: var(--mini-panel-soft);
+}
+
+.visual {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-bottom: 1px solid var(--mini-line);
+  background:
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--mini-honey) 18%, transparent), transparent 35%),
+    linear-gradient(145deg, color-mix(in srgb, var(--mini-honey) 8%, var(--mini-panel)), var(--mini-panel) 72%);
+}
+
+.visual > img {
+  position: relative;
+  z-index: 2;
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 22px color-mix(in srgb, var(--mini-honey) 38%, transparent));
+}
+
+.orbit,
+.orbitSmall {
+  position: absolute;
+  border: 1px solid color-mix(in srgb, var(--mini-honey) 18%, transparent);
+  border-radius: 50%;
+}
+
+.orbit { width: 210px; height: 210px; }
+.orbitSmall { width: 128px; height: 128px; }
+
+.crew { position: absolute; inset: 0; }
+.crew svg { position: absolute; width: 15px; color: color-mix(in srgb, var(--mini-honey) 72%, transparent); fill: color-mix(in srgb, var(--mini-honey) 8%, transparent); }
+.crew svg:nth-child(1) { left: 12%; top: 24%; }
+.crew svg:nth-child(2) { left: 24%; bottom: 17%; }
+.crew svg:nth-child(3) { left: 37%; top: 13%; }
+.crew svg:nth-child(4) { right: 37%; bottom: 12%; }
+.crew svg:nth-child(5) { right: 24%; top: 17%; }
+.crew svg:nth-child(6) { right: 11%; bottom: 25%; }
+.crew svg:nth-child(7) { right: 18%; top: 48%; }
+
+.cardBody,
+.skeletonBody {
+  display: flex;
+  flex-direction: column;
+  padding: 22px;
+}
+
+.skeletonBody { gap: 15px; }
+
+.meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--mini-muted);
+  font-family: var(--f-mono, ui-monospace), monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.status { display: inline-flex; align-items: center; gap: 6px; color: var(--live, #6fcdba); }
+.status i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 9px currentColor; }
+.cardEyebrow { margin-top: 22px; }
+
+.card h2 {
+  margin: 6px 0 9px;
+  color: var(--foreground);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.description {
+  margin: 0;
+  color: var(--mini-muted);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 18px 0 20px;
+  padding: 0;
+  list-style: none;
+}
+
+.tags li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 7px;
+  border: 1px solid var(--mini-line);
+  border-radius: 999px;
+  color: var(--mini-muted);
+  font-size: 9.5px;
+}
+
+.tags svg { width: 10px; height: 10px; color: var(--mini-honey); }
+
+.openButton {
+  width: 100%;
+  margin-top: auto;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, var(--mini-honey) 42%, transparent);
+  background: color-mix(in srgb, var(--mini-honey) 16%, transparent);
+  color: var(--mini-honey-bright);
+}
+
+.openButton:not(:disabled):hover { background: color-mix(in srgb, var(--mini-honey) 24%, transparent); }
+.openButton:disabled { cursor: not-allowed; opacity: 0.5; }
+
+.embeddedRoot {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 16px 20px 22px;
+}
+
+.frameToolbar {
+  flex: 0 0 auto;
+  min-height: 46px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.backButton,
+.browserButton {
+  width: fit-content;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--mini-line);
+  background: var(--mini-panel);
+  color: var(--foreground);
+}
+
+.backButton { justify-self: start; }
+.browserButton { justify-self: end; }
+.backButton:hover,
+.browserButton:hover { border-color: color-mix(in srgb, var(--mini-honey) 42%, transparent); background: var(--mini-panel-soft); }
+
+.frameIdentity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.frameIdentity img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+}
+
+.frameShell {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 480px;
+  overflow: hidden;
+  border: 1px solid var(--mini-line);
+  border-radius: 15px;
+  background: #0b0c10;
+  box-shadow: 0 24px 70px -44px rgba(0, 0, 0, 0.86);
+}
+
+.appFrame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 480px;
+  border: 0;
+  background: #0b0c10;
+}
+
+.frameLoading {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--mini-muted);
+  background: var(--mini-panel);
+  font-family: var(--f-mono, ui-monospace), monospace;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.errorState,
+.emptyState {
+  min-height: 230px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 9px;
+  padding: 28px;
+  border: 1px dashed var(--mini-line);
+  border-radius: 16px;
+  color: var(--mini-muted);
+  text-align: center;
+}
+
+.errorState > svg { width: 30px; height: 30px; color: var(--mini-honey); }
+.errorState strong { color: var(--foreground); font-size: 14px; }
+.errorState p { max-width: 520px; margin: 0 0 7px; font-size: 12px; line-height: 1.5; }
+
+@media (max-width: 1050px) {
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+  .root { padding: 22px 18px 40px; }
+  .header { flex-direction: column; }
+  .grid { grid-template-columns: 1fr; }
+  .embeddedRoot { padding: 10px 12px 16px; }
+  .frameToolbar { grid-template-columns: 1fr auto; }
+  .frameIdentity { display: none; }
+  .browserButton { white-space: nowrap; }
+  .frameShell,
+  .appFrame { min-height: calc(100dvh - 100px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card { transition: none; }
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Content Rewards Viral App Campaign"
+  short_description: "Build app clipper campaigns around viral aha moments"
+  default_prompt: "Use $content-rewards-viral-app-campaign to turn my app into a creator rewards campaign brief with viral formats, creator onboarding, and optimization loops."

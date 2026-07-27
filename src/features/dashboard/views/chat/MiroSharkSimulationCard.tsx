@@ -100,6 +100,17 @@ function isCompleteStatus(value?: string) {
   );
 }
 
+// Simulation-card pill tone (prototype palette): running/waiting -> honey,
+// complete -> live, failed -> danger. Same classification as statusTone().
+function simStatusTone(value?: string) {
+  const status = readableStatus(value).toLowerCase();
+  if (/\b(?:fail|error|blocked|stopped|cancelled|canceled)\b/.test(status))
+    return styles.pillFailed;
+  if (/\b(?:complete|completed|success|succeeded|ready)\b/.test(status))
+    return styles.pillComplete;
+  return styles.pillRunning;
+}
+
 function polymarketUrlFromCard(card: MiroSharkSimulationCardData) {
   const detailUrl = optionalString(card.polymarketDetail?.marketUrl);
   if (detailUrl) return detailUrl;
@@ -214,7 +225,11 @@ export function MiroSharkSimulationCard({
   const reportOpen = hasReport && (card.reportMarkdown?.length ?? 0) < 1600;
   const reportMarkdown = reportMarkdownForDisplay(card);
   const title = displayTitle(card);
-  const subtitle = card.seed && card.seed !== title ? card.seed : "";
+  const subject = card.seed && card.seed !== title ? card.seed : "";
+  const runSummary = [card.runId, card.network]
+    .map((value) => optionalString(value))
+    .filter(Boolean)
+    .join(" · ");
   const polymarketUrl = polymarketUrlFromCard(card);
   const showMoreData = hasPolymarketRunDetails(card);
   const openMarket = () => {
@@ -240,7 +255,7 @@ export function MiroSharkSimulationCard({
           <span className={styles.titleBlock}>
             <span className={styles.kicker}>MiroShark simulation</span>
             <h3>{title}</h3>
-            {subtitle ? <p className={styles.subtitle}>{subtitle}</p> : null}
+            {runSummary ? <p className={styles.subtitle}>{runSummary}</p> : null}
           </span>
           <span className={cx(styles.statusPill, statusTone(card.status))}>
             {status}

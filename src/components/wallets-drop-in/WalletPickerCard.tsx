@@ -1,10 +1,13 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import { Check } from "lucide-react";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { AgentSurvivalSnapshot, AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { agentPaymentProviderFeatures } from "@/lib/config/agent-payments";
 import { getDisplayWalletBalanceUsd, getUsePodBalanceUsd } from "@/lib/utils/agent-wallet";
+import { chainBadgeSrc, chainShortLabel, type PersonalChainKey } from "@/lib/utils/personal-wallet-grouping";
 
 import { frFmtUsdFull } from "./wallet-data";
 import "./wallets.css";
@@ -25,6 +28,10 @@ export type WalletPickerCardProps = {
   pending?: boolean;
   selected?: boolean;
   onSelect?: () => void;
+  /** Brand / chain badges (e.g. Bankr logo + Base) shown in place of the plain
+   *  network text — the agent / Bankr / single-chain analogue of the grouped
+   *  card's chain tags. */
+  tags?: Array<{ label: string; src?: string | null; round?: boolean }>;
 };
 
 const TONE_DOT_COLOR: Record<WalletPickerChipTone, string> = {
@@ -43,6 +50,7 @@ const USDC_BAR_COLOR = "#2775ca";
 function networkLabel(network?: string): string {
   const value = String(network || "").toLowerCase();
   if (value.includes("solana")) return "Solana mainnet";
+  if (value.includes("4663")) return "Robinhood Chain";
   if (value.includes("84532") || value.includes("sepolia")) return "Base Sepolia";
   if (value.includes("eip155") || value.includes("base") || value.includes("8453")) return "Base mainnet";
   return network || "Base mainnet";
@@ -90,13 +98,31 @@ function statusFor(
   return { tone: "ok", text: "Can spend" };
 }
 
+/** The status chip the picker shows for a wallet — an explicit override wins,
+ *  otherwise the canonical computed status. Exported so callers (e.g. the wallet
+ *  picker modal's sort) reuse the exact status the card renders. */
+export function resolveWalletPickerStatus(
+  wallet: AgentWalletConfig,
+  survival: AgentSurvivalSnapshot,
+  agentUsePod?: AgentProfile["usePod"],
+  statusOverride?: { tone: WalletPickerChipTone; text: string },
+): { tone: WalletPickerChipTone; text: string } {
+  return statusOverride ?? statusFor(wallet, survival, agentUsePod);
+}
+
+/** A wallet the picker renders muted/off — not actively spendable (watch-only,
+ *  wallet off, rails not set up). Used to sink these below active wallets. */
+export function isWalletPickerStatusDisabled(tone: WalletPickerChipTone): boolean {
+  return tone === "off" || tone === "muted";
+}
+
 /**
  * Selectable wallet tile rendered in the Wallets-route visual language
  * (`.fw-cc` from wallets.css), driven entirely by props — no shared global
  * runtime state. Used by the Trade tab's wallet picker so it matches the cards
  * on the Wallets screen.
  */
-export function WalletPickerCard({ name, wallet, survival, agentUsePod, statusOverride, pending, selected, onSelect }: WalletPickerCardProps) {
+export function WalletPickerCard({ name, wallet, survival, agentUsePod, statusOverride, pending, selected, onSelect, tags }: WalletPickerCardProps) {
   const providerFeatures = agentPaymentProviderFeatures(wallet.provider);
   const usePodBalanceUnknown = providerFeatures.balanceSource === "usepod-runtime" && getUsePodBalanceUsd(agentUsePod) === null;
   const usePodReadyBalanceUnknown = usePodBalanceUnknown && agentUsePod?.lastTestStatus === "ready";
@@ -105,7 +131,7 @@ export function WalletPickerCard({ name, wallet, survival, agentUsePod, statusOv
   // nothing real to show yet — a stored non-zero balance is shown immediately.
   const showLoading = Boolean(pending) && !usePodBalanceUnknown && safeBalance <= 0;
   const balanceLabel = usePodReadyBalanceUnknown ? "Ready" : usePodBalanceUnknown ? "Pending" : frFmtUsdFull(Math.max(0, safeBalance));
-  const status = statusOverride ?? statusFor(wallet, survival, agentUsePod);
+  const status = resolveWalletPickerStatus(wallet, survival, agentUsePod, statusOverride);
   const showBar = !usePodBalanceUnknown && safeBalance > 0;
 
   return (
@@ -122,8 +148,8 @@ export function WalletPickerCard({ name, wallet, survival, agentUsePod, statusOv
         <span style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
           <span className="fw-pdot" style={{ background: TONE_DOT_COLOR[status.tone] }} aria-hidden="true" />
           <span style={{ minWidth: 0 }}>
-            <span style={{ display: "block", fontSize: 13.5, fontWeight: 600, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</span>
-            <span style={{ display: "block", fontSize: 10.5, color: "var(--fg-3)" }}>{networkLabel(wallet.network)}</span>
+            <span className={styles.walletName}>{name}</span>
+            {tags && tags.length ? null : <span style={{ display: "block", fontSize: 10.5, color: "var(--fg-3)" }}>{networkLabel(wallet.network)}</span>}
           </span>
         </span>
         {selected ? <span className={styles.check} aria-hidden="true"><Check width={12} height={12} strokeWidth={3} /></span> : null}
@@ -136,9 +162,102 @@ export function WalletPickerCard({ name, wallet, survival, agentUsePod, statusOv
         <span className="fw-chip" data-tone={status.tone === "ok" || status.tone === "warn" || status.tone === "danger" ? status.tone : undefined}>{status.text}</span>
       </span>
 
-      <span className="fw-alloc" aria-hidden="true">
-        {showBar ? <i style={{ width: "100%", background: USDC_BAR_COLOR }} /> : null}
-      </span>
+      {tags && tags.length ? (
+        <span style={{ display: "flex", flexWrap: "wrap", gap: 14 }}>
+          {tags.map((tag, i) => (
+            <span key={`${tag.label}-${i}`} className={styles.chainTag}>
+              {tag.src ? <img src={tag.src} alt="" height={15} style={{ height: 15, width: "auto", borderRadius: tag.round === false ? 3 : "50%", display: "block", flex: "0 0 auto" }} /> : null}
+              <span>{tag.label}</span>
+            </span>
+          ))}
+        </span>
+      ) : (
+        <span className="fw-alloc" aria-hidden="true">
+          {showBar ? <i style={{ width: "100%", background: USDC_BAR_COLOR }} /> : null}
+        </span>
+      )}
     </button>
+  );
+}
+
+type GroupedPickerAccount = {
+  id: string;
+  chainKey: PersonalChainKey;
+  network: string;
+  networkLabel: string;
+  address: string;
+  custodyMode: "local" | "watch";
+  wallet: AgentWalletConfig;
+};
+
+export type GroupedWalletPickerCardProps = {
+  /** Wallet display name (one card per seed). */
+  name: string;
+  /** Per-chain accounts; each chain tag selects its executable account. */
+  accounts: GroupedPickerAccount[];
+  statusOverride?: { tone: WalletPickerChipTone; text: string };
+  pending?: boolean;
+  /** Currently-selected account id (any of this wallet's accounts → selected). */
+  selectedAccountId?: string;
+  /** Select this wallet's default account (Base when available). */
+  onSelect: () => void;
+  /** Select a specific executable chain account. */
+  onSelectAccount: (accountId: string) => void;
+};
+
+/**
+ * Grouped user wallet tile: ONE card per seed (matching the Wallets screen),
+ * with an explicit account button for every chain. Selecting the card body uses
+ * the caller's Base-first default; selecting a chain uses that exact account.
+ */
+export function GroupedWalletPickerCard({ name, accounts, statusOverride, pending, selectedAccountId, onSelect, onSelectAccount }: GroupedWalletPickerCardProps) {
+  const total = accounts.reduce((sum, account) => sum + (Number(account.wallet.currentBalanceUsd) || 0), 0);
+  const status = statusOverride ?? { tone: "ok" as WalletPickerChipTone, text: "Local wallet" };
+  const selected = accounts.some((account) => account.id === selectedAccountId);
+  const showLoading = Boolean(pending) && total <= 0;
+
+  return (
+    <div className={`fw-cc ${styles.card}`} data-selected={selected ? "true" : undefined}>
+      <button type="button" className={styles.cardMain} aria-pressed={selected} aria-label={`Select ${name} on Base by default`} onClick={onSelect}>
+        <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
+            <span className="fw-pdot" style={{ background: TONE_DOT_COLOR[status.tone] }} aria-hidden="true" />
+            <span style={{ minWidth: 0 }}>
+              <span className={styles.walletName}>{name}</span>
+              <span style={{ display: "block", fontSize: 10.5, color: "var(--fg-3)" }}>{accounts.length} chains</span>
+            </span>
+          </span>
+          {selected ? <span className={styles.check} aria-hidden="true"><Check width={12} height={12} strokeWidth={3} /></span> : null}
+        </span>
+
+        <span style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 10 }}>
+          {showLoading
+            ? <span className={`fw-cc-bal ${styles.balanceSkeleton}`} aria-label="Loading balance" />
+            : <span className="fw-cc-bal">{frFmtUsdFull(Math.max(0, total))}</span>}
+          <span className="fw-chip" data-tone={status.tone === "ok" || status.tone === "warn" || status.tone === "danger" ? status.tone : undefined}>{status.text}</span>
+        </span>
+      </button>
+
+      <span className={styles.chainList} aria-label={`Choose ${name} chain`}>
+        {accounts.map((account) => {
+          const logo = chainBadgeSrc(account.chainKey);
+          const accountSelected = account.id === selectedAccountId;
+          return (
+            <button
+              key={account.id}
+              type="button"
+              className={styles.chainButton}
+              data-selected={accountSelected ? "true" : undefined}
+              aria-pressed={accountSelected}
+              aria-label={`Use ${name} on ${chainShortLabel(account.chainKey, account.networkLabel)}`}
+              onClick={() => onSelectAccount(account.id)}
+            >
+              {logo ? <img src={logo} alt="" width={15} height={15} style={{ borderRadius: "50%", display: "block" }} /> : null}
+              <span>{chainShortLabel(account.chainKey, account.networkLabel)}</span>
+            </button>
+          );
+        })}
+      </span>
+    </div>
   );
 }

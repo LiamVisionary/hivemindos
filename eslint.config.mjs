@@ -11,5 +11,32 @@ export default defineConfig([
       "react/no-unescaped-entities": "off",
     },
   },
-  globalIgnores([".next/**", "node_modules/**"]),
+  {
+    // .cjs files are CommonJS by definition — require() IS their module system.
+    files: ["**/*.cjs"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
+  globalIgnores([
+    ".antvis-infographic/**",
+    ".next/**",
+    ".next-tauri/**",
+    ".next-tauri-build/**",
+    ".next-tauri-static-build/**",
+    ".evo/**",
+    ".hivemindos-dogfood/**",
+    "node_modules/**",
+    "promo-videos/**",
+    "remotion/**",
+    "src-tauri/target/**",
+    "src-tauri/resources/**",
+    "apps/zimage-mobile-tauri/src-tauri/gen/**",
+    "artifacts/**",
+    "dist/**",
+    "emoji-site/**",
+    "emoji-atlas-visual-asset/**",
+    "public/**",
+    "tmp/**",
+  ]),
 ]);

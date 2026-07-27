@@ -65,14 +65,14 @@ type FleetAppsPayload = {
 };
 
 type InstallableServiceStatus = {
-  id: "n8n" | "browser-use" | "agentic-inbox" | "mcp-email-server" | "openhands" | "aider" | "agent-reach" | "palmier-pro";
+  id: "n8n" | "listmonk" | "browser-use" | "agentic-inbox" | "mcp-email-server" | "openhands" | "aider" | "agent-reach" | "palmier-pro" | "copy-trading-daemon";
   name: string;
   installed: boolean;
   running: boolean;
   version?: string;
   openUrl?: string;
   detail: string;
-  installMethod: "docker" | "uv" | "uv-tool" | "pipx" | "cloudflare-worker" | "dmg";
+  installMethod: "docker" | "uv" | "uv-tool" | "pipx" | "cloudflare-worker" | "dmg" | "local-service";
   requirements: string[];
   sourceUrl: string;
   provenance?: {
@@ -89,7 +89,7 @@ type InstallableServiceStatus = {
     approvedAt?: string;
   };
   projectDir?: string;
-  preflight?: Array<{ key: string; ok: boolean; detail: string }>;
+  preflight?: Array<{ key: string; ok: boolean; detail: string; blocking?: boolean }>;
   preflightActions?: Array<{
     action: InstallableServiceAction;
     label: string;
@@ -199,7 +199,9 @@ function installableServiceBlocked(service: InstallableServiceStatus | undefined
   ) return false;
   if (isInstallOnlyCliService(service) && service.installed) return true;
   if (action === "install" && /required before|is required before|is required to install/i.test(service.detail)) return true;
-  if (service.id === "agentic-inbox" && action === "start") return Boolean(service.preflight?.some((item) => !item.ok));
+  // Only the core scaffold/wrangler/auth checks block Deploy; domain/routing/R2
+  // are readiness hints (blocking: false) that are resolved during/after deploy.
+  if (service.id === "agentic-inbox" && action === "start") return Boolean(service.preflight?.some((item) => item.blocking !== false && !item.ok));
   return false;
 }
 
@@ -600,9 +602,7 @@ export function MyAppsPanel({ activeView, formatRelativeTime }: MyAppsPanelProps
   }, []);
 
   const refreshInstallableServices = useCallback(async () => {
-    const installableIds = AGENT_APP_CATALOG
-      .map((app) => app.installableServiceId)
-      .filter((id): id is InstallableServiceStatus["id"] => Boolean(id));
+    const installableIds = AGENT_APP_CATALOG.flatMap((app) => app.installableServiceId ? [app.installableServiceId] : []);
     const bulkData = await fetch("/api/fleet/apps/installable-services", { cache: "no-store" })
       .then((response) => response.json().catch(() => null))
       .catch(() => null) as { ok?: boolean; services?: InstallableServiceStatus[] } | null;

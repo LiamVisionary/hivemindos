@@ -1,0 +1,24 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Status colors" subtitle="Healthy, needs attention, risk — with soft fills" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; background: var(--background); font-family: var(--font-body); }
+  .row { display: flex; gap: 12px; padding: 18px; }
+  .sw { flex: 1 1 0; }
+  .chip { height: 44px; border-radius: var(--radius-sm); display: flex; align-items: center; padding: 0 12px; font-size: 12px; font-weight: 700; }
+  .name { color: var(--fg-2); font-size: 11px; font-weight: 600; margin-top: 8px; }
+  .val { color: var(--fg-4); font-family: var(--font-mono); font-size: 10px; margin-top: 2px; }
+</style>
+</head>
+<body>
+  <div class="row">
+    <div class="sw"><div class="chip" style="background:var(--success-soft);color:var(--success);border:1px solid color-mix(in srgb,var(--success) 35%,transparent)">Healthy</div><div class="name">success (mint)</div><div class="val">#6fcdba</div></div>
+    <div class="sw"><div class="chip" style="background:var(--warning-soft);color:var(--warning);border:1px solid var(--honey-line)">Needs funding</div><div class="name">warning (honey)</div><div class="val">#e7b45c</div></div>
+    <div class="sw"><div class="chip" style="background:var(--danger-soft);color:var(--danger);border:1px solid color-mix(in srgb,var(--danger) 38%,transparent)">Risk detected</div><div class="name">danger</div><div class="val">#e58e85</div></div>
+    <div class="sw"><div class="chip" style="background:var(--live-soft);color:var(--live);border:1px solid color-mix(in srgb,var(--live) 35%,transparent)">Working</div><div class="name">live</div><div class="val">#6fcdba</div></div>
+  </div>
+</body>
+</html>

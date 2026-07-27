@@ -5,6 +5,7 @@ import path from "path";
 import { execFile, spawn } from "child_process";
 import { promisify } from "util";
 import { discoverMiroSharkHivenetService, type DiscoveredMiroSharkService } from "@/lib/services/miroshark/hivenet-discovery";
+import { writeEnvFileAtomicSync } from "@/lib/utils/atomic-env-file";
 
 export type MiroSharkCompanionPhase =
   | "connected"
@@ -319,7 +320,7 @@ function writeManagedEnv(installPath: string) {
   for (const [key, value] of values) {
     raw = upsertEnvValueIfMissing(raw, key, value);
   }
-  writeFileSync(envPath, raw.replace(/\n*$/, "\n"), { mode: 0o600 });
+  writeEnvFileAtomicSync(envPath, raw.replace(/\n*$/, "\n"));
 }
 
 export function configureMiroSharkAdminAuth() {
@@ -332,14 +333,14 @@ export function configureMiroSharkAdminAuth() {
   const envPath = path.join(discovered.installPath, ".env");
   const raw = existsSync(envPath) ? readFileSync(envPath, "utf8") : "";
   const token = parseEnvValue(raw, "MIROSHARK_ADMIN_TOKEN") || randomBytes(32).toString("base64url");
-  writeFileSync(envPath, upsertEnvValue(raw, "MIROSHARK_ADMIN_TOKEN", token), { mode: 0o600 });
+  writeEnvFileAtomicSync(envPath, upsertEnvValue(raw, "MIROSHARK_ADMIN_TOKEN", token));
   return startMiroSharkSetup("start");
 }
 
 function writeBootstrapEnv() {
   const values = managedEnvValues();
   if (values.length === 0) return;
-  writeFileSync(BOOTSTRAP_ENV_PATH, `${values.map(([key, value]) => `${key}=${value}`).join("\n")}\n`, { mode: 0o600 });
+  writeEnvFileAtomicSync(BOOTSTRAP_ENV_PATH, `${values.map(([key, value]) => `${key}=${value}`).join("\n")}\n`);
 }
 
 function managedStartCommand(installPath: string) {

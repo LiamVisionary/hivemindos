@@ -21,11 +21,14 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	ps "github.com/mitchellh/go-ps"
 	"tailscale.com/client/local"
 )
 
@@ -38,6 +41,13 @@ const (
 	shellMaxBodyBytes     = 64 * 1024
 	shellHeartbeatPeriod  = 25 * time.Second
 	shellSubscriberBuffer = 256
+	// shellSpawnTimeout bounds a single cmd.Start(); on macOS a fork can
+	// wedge in Apple's post-fork Network.framework handler and never reach
+	// exec, so we cap how long we wait before reaping it.
+	shellSpawnTimeout = 5 * time.Second
+	// shellSpawnBackoff throttles respawns after a failed/timed-out spawn so
+	// a client polling an unspawnable session cannot trigger a fork loop.
+	shellSpawnBackoff = 10 * time.Second
 )
 
 var shellSessionIDPattern = regexp.MustCompile(`^[a-zA-Z0-9._-]{1,128}$`)
@@ -67,6 +77,11 @@ type shellSession struct {
 type shellManager struct {
 	mu       sync.Mutex
 	sessions map[string]*shellSession
+	// spawnBackoff records, per session id, the time before which a new
+	// spawn must not be attempted after a failed/timed-out spawn. This stops
+	// a client that keeps polling an unspawnable session from triggering a
+	// tight fork loop (see startShellProcess for the macOS fork-wedge case).
+	spawnBackoff map[string]time.Time
 
 	// History and SSE subscribers live on the manager keyed by session id so
 	// they survive shell process restarts (e.g. an interrupt that takes the
@@ -79,9 +94,10 @@ type shellManager struct {
 
 func newShellManager() *shellManager {
 	return &shellManager{
-		sessions:    map[string]*shellSession{},
-		history:     map[string][]string{},
-		subscribers: map[string]map[chan shellEvent]struct{}{},
+		sessions:     map[string]*shellSession{},
+		spawnBackoff: map[string]time.Time{},
+		history:      map[string][]string{},
+		subscribers:  map[string]map[chan shellEvent]struct{}{},
 	}
 }
 
@@ -157,10 +173,15 @@ func (m *shellManager) ensure(id string) (*shellSession, error) {
 			return existing, nil
 		}
 	}
+	if until, ok := m.spawnBackoff[id]; ok && time.Now().Before(until) {
+		return nil, fmt.Errorf("shell spawn backing off until %s after a failed spawn", until.Format(time.RFC3339))
+	}
 	session, err := m.spawn(id)
 	if err != nil {
+		m.spawnBackoff[id] = time.Now().Add(shellSpawnBackoff)
 		return nil, err
 	}
+	delete(m.spawnBackoff, id)
 	m.sessions[id] = session
 	return session, nil
 }
@@ -197,7 +218,7 @@ func (m *shellManager) spawn(id string) (*shellSession, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := cmd.Start(); err != nil {
+	if err := startShellProcess(cmd); err != nil {
 		return nil, err
 	}
 
@@ -213,6 +234,108 @@ func (m *shellManager) spawn(id string) (*shellSession, error) {
 	go session.waitForExit(m)
 	log.Printf("shell: spawned %s session %q in %s", shell, id, home)
 	return session, nil
+}
+
+type shellStartOps struct {
+	timeout          time.Duration
+	start            func(*exec.Cmd) error
+	directChildren   func(int) (map[int]string, error)
+	killProcess      func(int) error
+	parentExecutable string
+}
+
+func shellDirectChildren(parentPID int) (map[int]string, error) {
+	processes, err := ps.Processes()
+	if err != nil {
+		return nil, err
+	}
+	children := make(map[int]string)
+	for _, process := range processes {
+		if process.PPid() == parentPID && process.Pid() > 0 {
+			children[process.Pid()] = process.Executable()
+		}
+	}
+	return children, nil
+}
+
+func killShellProcess(pid int) error {
+	process, err := os.FindProcess(pid)
+	if err != nil {
+		return err
+	}
+	return process.Kill()
+}
+
+func newPreExecChildPIDs(before, after map[int]string, parentExecutable string) []int {
+	var result []int
+	for pid, executable := range after {
+		// Before exec, the forked child still has the daemon's executable name.
+		// Do not kill unrelated children that another request started while this
+		// shell spawn was wedged.
+		if executable != parentExecutable {
+			continue
+		}
+		if _, existed := before[pid]; !existed {
+			result = append(result, pid)
+		}
+	}
+	sort.Ints(result)
+	return result
+}
+
+// startShellProcess runs cmd.Start with a hard timeout so a hung fork/exec
+// cannot block the caller or accumulate. On macOS, a process that has loaded
+// Network.framework (via the embedded Tailscale node) can deadlock in Apple's
+// post-fork handler (nw_settings_child_has_forked -> os_log) before the child
+// reaches exec, spinning a full core forever. In that state exec.Cmd.Process is
+// still nil, so cleanup must find the newly forked direct child in the process
+// table and kill it by its positive PID.
+func startShellProcess(cmd *exec.Cmd) error {
+	return startShellProcessWith(cmd, shellStartOps{
+		timeout:          shellSpawnTimeout,
+		start:            func(cmd *exec.Cmd) error { return cmd.Start() },
+		directChildren:   shellDirectChildren,
+		killProcess:      killShellProcess,
+		parentExecutable: filepath.Base(os.Args[0]),
+	})
+}
+
+func startShellProcessWith(cmd *exec.Cmd, ops shellStartOps) error {
+	parentPID := os.Getpid()
+	childrenBefore, snapshotErr := ops.directChildren(parentPID)
+	done := make(chan error, 1)
+	go func() { done <- ops.start(cmd) }()
+	timer := time.NewTimer(ops.timeout)
+	defer timer.Stop()
+	select {
+	case err := <-done:
+		return err
+	case <-timer.C:
+		// cmd.Start() wedged (typically the macOS post-fork spin). It has not
+		// published cmd.Process yet, but the kernel already exposes the child.
+		// A process-table snapshot is safe here because it does not fork.
+		if snapshotErr != nil {
+			log.Printf("shell: could not snapshot children before spawn: %v", snapshotErr)
+		} else if childrenAfter, err := ops.directChildren(parentPID); err != nil {
+			log.Printf("shell: could not snapshot children after timed-out spawn: %v", err)
+		} else {
+			for _, pid := range newPreExecChildPIDs(childrenBefore, childrenAfter, ops.parentExecutable) {
+				if err := ops.killProcess(pid); err != nil {
+					log.Printf("shell: could not kill timed-out child pid %d: %v", pid, err)
+				}
+			}
+		}
+		// If Start unwinds after the forced kill, reap a successfully started
+		// process. Reading cmd.Process only after the channel receive avoids a
+		// data race with exec.Cmd.Start publishing it.
+		go func() {
+			if err := <-done; err == nil && cmd.Process != nil {
+				_ = shellTerminateGroup(cmd.Process.Pid)
+				_, _ = cmd.Process.Wait()
+			}
+		}()
+		return fmt.Errorf("shell spawn timed out after %s (process did not reach exec)", ops.timeout)
+	}
 }
 
 func (s *shellSession) drain(pipe io.Reader) {
@@ -386,6 +509,18 @@ func shellJSON(w http.ResponseWriter, status int, payload any) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
+// serveShellUnavailable answers shell API requests on hosts where the shell
+// service is not running (Windows builds compile the unix shell spawn out;
+// -shell=false disables it). A JSON envelope — never the collector-proxy
+// fall-through, whose plain-text "hivemind-linkd proxy error: dial tcp ..."
+// body used to crash the dashboard terminal's JSON parsing.
+func serveShellUnavailable(w http.ResponseWriter, _ *http.Request) {
+	shellJSON(w, http.StatusNotImplemented, map[string]any{
+		"ok":    false,
+		"error": "remote shell is not available on this machine — its hivemind-linkd runs without the shell service (not yet supported on Windows, or disabled with -shell=false)",
+	})
+}
+
 func (m *shellManager) handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		rest := strings.TrimPrefix(r.URL.Path, shellPathPrefix)
@@ -461,15 +596,17 @@ func decodeShellBody(w http.ResponseWriter, r *http.Request, target any) bool {
 }
 
 func (m *shellManager) serveHistory(w http.ResponseWriter, id string) {
-	session, err := m.ensure(id)
-	if err != nil {
-		shellJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "error": err.Error()})
-		return
+	// Read-only: never spawn a shell for a passive history poll. History and
+	// cwd/busy live on the manager and survive without a live process, so a
+	// viewer that is only watching cannot trigger a fork.
+	session := m.get(id)
+	cwd, busy, active := "", false, false
+	if session != nil {
+		_, cwd, busy, active = session.snapshot()
 	}
-	lines, cwd, busy, active := session.snapshot()
 	shellJSON(w, http.StatusOK, map[string]any{
 		"ok":          true,
-		"lines":       lines,
+		"lines":       m.historyFor(id),
 		"cwd":         cwd,
 		"busy":        busy,
 		"shellActive": active,
@@ -477,11 +614,10 @@ func (m *shellManager) serveHistory(w http.ResponseWriter, id string) {
 }
 
 func (m *shellManager) serveStream(w http.ResponseWriter, r *http.Request, id string) {
-	session, err := m.ensure(id)
-	if err != nil {
-		shellJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "error": err.Error()})
-		return
-	}
+	// Read-only: subscribe to the session's event stream without spawning a
+	// shell. The subscription is keyed by id on the manager and survives
+	// process restarts, so a viewer attaches even before/without a live shell
+	// and starts receiving output as soon as a command spawns one.
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		shellJSON(w, http.StatusInternalServerError, map[string]any{"ok": false, "error": "streaming unsupported"})
@@ -508,8 +644,11 @@ func (m *shellManager) serveStream(w http.ResponseWriter, r *http.Request, id st
 	}
 
 	// Metadata-only opener so the client gets cwd/busy without waiting for
-	// the next command.
-	_, cwd, busy, _ := session.snapshot()
+	// the next command. Falls back to empty state when no shell exists yet.
+	cwd, busy := "", false
+	if session := m.get(id); session != nil {
+		_, cwd, busy, _ = session.snapshot()
+	}
 	if !writeEvent(shellEvent{Cwd: cwd, Busy: busy}) {
 		return
 	}

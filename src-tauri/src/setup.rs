@@ -1,10 +1,17 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::Write;
+use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{SocketAddr, TcpStream};
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::Duration;
+use tauri::{AppHandle, Emitter, Manager};
+
+/// Tauri event the setup wizard listens on to render live progress + errors in
+/// the modal (so setup can run hidden with no console window).
+pub(crate) const NATIVE_SETUP_PROGRESS_EVENT: &str = "native-setup-progress";
 
 #[derive(Serialize)]
 struct SetupCheck {
@@ -34,6 +41,17 @@ struct NativeSetupStatus {
     platform: &'static str,
     checks: Vec<SetupCheck>,
     detected_agents: Vec<DetectedAgentRuntime>,
+    link_status: NativeLinkStatus,
+}
+
+#[derive(Serialize)]
+struct NativeLinkStatus {
+    running: bool,
+    connected: bool,
+    auth_needed: bool,
+    auth_url: Option<String>,
+    backend_state: Option<String>,
+    device_name: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -109,17 +127,89 @@ fn home_dir() -> Option<PathBuf> {
 }
 
 fn command_exists(name: &str) -> bool {
-    // hidden_command: native_setup_status calls this ~12x per poll (every 4s
-    // while setup finishes); a plain `where` spawn flashes a console window
-    // each time on Windows. See crate::hidden_command.
-    let status = if cfg!(target_os = "windows") {
-        crate::hidden_command("where").arg(name).output().map(|output| output.status)
+    let path = Path::new(name);
+    if path.components().count() > 1 {
+        return is_executable_file(path);
+    }
+    let candidate_names = command_candidate_names(name);
+    command_lookup_paths().iter().any(|directory| {
+        candidate_names
+            .iter()
+            .any(|candidate| is_executable_file(&directory.join(candidate)))
+    })
+}
+
+fn command_lookup_paths() -> Vec<PathBuf> {
+    let mut paths: Vec<PathBuf> = std::env::var_os("PATH")
+        .map(|value| std::env::split_paths(&value).collect())
+        .unwrap_or_default();
+    if cfg!(target_os = "windows") {
+        if let Some(system_root) = std::env::var_os("SystemRoot") {
+            paths.push(PathBuf::from(&system_root).join("System32"));
+            paths.push(PathBuf::from(&system_root));
+        }
     } else {
-        crate::hidden_command("sh")
-            .args(["-lc", &format!("command -v {name} >/dev/null 2>&1")])
-            .status()
+        if let Some(home) = home_dir() {
+            paths.push(home.join(".local").join("bin"));
+            paths.push(home.join(".npm-global").join("bin"));
+            paths.push(home.join(".nvm").join("current").join("bin"));
+            if let Ok(entries) = fs::read_dir(home.join(".nvm").join("versions").join("node")) {
+                paths.extend(
+                    entries
+                        .flatten()
+                        .map(|entry| entry.path().join("bin")),
+                );
+            }
+        }
+        paths.extend([
+            PathBuf::from("/opt/homebrew/bin"),
+            PathBuf::from("/usr/local/bin"),
+            PathBuf::from("/usr/bin"),
+            PathBuf::from("/bin"),
+            PathBuf::from("/usr/sbin"),
+            PathBuf::from("/sbin"),
+        ]);
+    }
+    let mut deduped = Vec::new();
+    for path in paths {
+        if !deduped.iter().any(|existing| existing == &path) {
+            deduped.push(path);
+        }
+    }
+    deduped
+}
+
+fn command_candidate_names(name: &str) -> Vec<String> {
+    if !cfg!(target_os = "windows") || Path::new(name).extension().is_some() {
+        return vec![name.to_string()];
+    }
+    let path_ext = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".to_string());
+    let mut candidates = vec![name.to_string()];
+    candidates.extend(
+        path_ext
+            .split(';')
+            .map(str::trim)
+            .filter(|extension| !extension.is_empty())
+            .map(|extension| format!("{name}{extension}")),
+    );
+    candidates
+}
+
+fn is_executable_file(path: &Path) -> bool {
+    let Ok(metadata) = fs::metadata(path) else {
+        return false;
     };
-    status.map(|status| status.success()).unwrap_or(false)
+    if !metadata.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        metadata.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
 }
 
 fn mac_app_exists(name: &str) -> bool {
@@ -186,6 +276,105 @@ fn open_local_collector_port() -> Option<u16> {
         .find(|port| tcp_port_open(*port))
 }
 
+fn link_control_address() -> Option<(String, u16)> {
+    let raw = std::env::var("HIVE_LINK_CONTROL")
+        .ok()
+        .or_else(|| collector_env_value("HIVE_LINK_CONTROL"))
+        .unwrap_or_else(|| "127.0.0.1:8788".to_string());
+    let authority = raw
+        .trim()
+        .trim_start_matches("http://")
+        .trim_start_matches("https://")
+        .split('/')
+        .next()?;
+    let (host, port) = authority.rsplit_once(':')?;
+    if !matches!(host, "127.0.0.1" | "localhost" | "[::1]") {
+        return None;
+    }
+    let host = match host {
+        "localhost" => "127.0.0.1",
+        "[::1]" => "::1",
+        value => value,
+    };
+    Some((host.to_string(), port.parse().ok()?))
+}
+
+fn safe_link_auth_url(value: Option<&str>) -> Option<String> {
+    let value = value?.trim();
+    if value.len() > 4_096 {
+        return None;
+    }
+    let parsed = url::Url::parse(value).ok()?;
+    if !matches!(parsed.scheme(), "https" | "http") {
+        return None;
+    }
+    Some(value.to_string())
+}
+
+fn read_native_link_status() -> NativeLinkStatus {
+    let empty = || NativeLinkStatus {
+        running: false,
+        connected: false,
+        auth_needed: false,
+        auth_url: None,
+        backend_state: None,
+        device_name: None,
+    };
+    let Some((host, port)) = link_control_address() else {
+        return empty();
+    };
+    let socket = if host.contains(':') {
+        format!("[{host}]:{port}")
+    } else {
+        format!("{host}:{port}")
+    };
+    let Ok(address) = socket.parse::<SocketAddr>() else {
+        return empty();
+    };
+    let Ok(mut stream) = TcpStream::connect_timeout(&address, Duration::from_millis(350)) else {
+        return empty();
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(650)));
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(350)));
+    if stream
+        .write_all(format!("GET /status HTTP/1.0\r\nHost: {host}\r\nConnection: close\r\n\r\n").as_bytes())
+        .is_err()
+    {
+        return empty();
+    }
+    let mut response = String::new();
+    if stream.read_to_string(&mut response).is_err() {
+        return empty();
+    }
+    let Some(body) = response.split_once("\r\n\r\n").map(|(_, body)| body) else {
+        return empty();
+    };
+    let Ok(payload) = serde_json::from_str::<serde_json::Value>(body.trim()) else {
+        return empty();
+    };
+    let connected = payload.get("ok").and_then(serde_json::Value::as_bool).unwrap_or(false);
+    let auth_url = safe_link_auth_url(payload.get("authUrl").and_then(serde_json::Value::as_str));
+    let backend_state = payload
+        .get("backendState")
+        .and_then(serde_json::Value::as_str)
+        .map(ToString::to_string);
+    let device_name = payload.get("self").and_then(|value| {
+        ["DNSName", "HostName", "dnsName", "hostName"]
+            .into_iter()
+            .find_map(|key| value.get(key).and_then(serde_json::Value::as_str))
+            .map(|value| value.trim_end_matches('.').to_string())
+    });
+    NativeLinkStatus {
+        running: true,
+        connected,
+        auth_needed: auth_url.is_some()
+            || payload.get("authNeeded").and_then(serde_json::Value::as_bool).unwrap_or(false),
+        auth_url,
+        backend_state,
+        device_name,
+    }
+}
+
 fn runtime_home(agent: &str) -> Option<PathBuf> {
     home_dir().map(|home| match agent {
         "codex" => home.join(".codex"),
@@ -223,7 +412,7 @@ fn detect_agent_runtime(id: &'static str, label: &'static str, command: Option<&
 
 fn detected_agent_runtimes() -> Vec<DetectedAgentRuntime> {
     vec![
-        detect_agent_runtime("codex", "Codex", None),
+        detect_agent_runtime("codex", "Codex", Some("codex")),
         detect_agent_runtime("claude", "Claude", Some("claude")),
         detect_agent_runtime("hermes", "Hermes", Some("hermes")),
         detect_agent_runtime("gemini", "Gemini", Some("gemini")),
@@ -257,6 +446,7 @@ fn setup_mode_arg(mode: &str) -> &'static str {
     match mode {
         "system-tailscale" => "--system-tailscale",
         "link" => "--link",
+        "collector" => "--collector-only",
         _ => "--local-only",
     }
 }
@@ -265,6 +455,119 @@ fn app_source_root() -> PathBuf {
     home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".hivemindos/app-source")
+}
+
+fn powershell_quote(value: &str) -> String {
+    value.replace('\'', "''")
+}
+
+fn windows_shell_path(path: &Path) -> String {
+    let value = path.display().to_string();
+    if let Some(network_path) = value.strip_prefix(r"\\?\UNC\") {
+        return format!(r"\\{network_path}");
+    }
+    value
+        .strip_prefix(r"\\?\")
+        .unwrap_or(&value)
+        .to_string()
+}
+
+fn bundled_link_setup_command(app: &AppHandle, platform: SetupPlatform) -> Result<String, String> {
+    let resource_root = app
+        .path()
+        .resource_dir()
+        .map_err(|error| format!("Could not locate HivemindOS Link resources: {error}"))?
+        .join("link-runtime");
+    let home = home_dir().ok_or_else(|| "No home directory was detected.".to_string())?;
+    let runtime_parent = home.join(".hivemindos/link-runtime");
+    bundled_link_setup_command_for_roots(&resource_root, &runtime_parent, platform)
+}
+
+fn bundled_link_setup_command_for_roots(
+    resource_root: &Path,
+    runtime_parent: &Path,
+    platform: SetupPlatform,
+) -> Result<String, String> {
+    let runtime_root = runtime_parent.join(format!(
+        "{}-{}",
+        env!("CARGO_PKG_VERSION"),
+        chrono::Utc::now().timestamp()
+    ));
+
+    if !resource_root.join("runtime-manifest.json").exists() {
+        return Err(format!(
+            "The packaged collector runtime is missing from {}. Reinstall HivemindOS Link.",
+            resource_root.display()
+        ));
+    }
+
+    match platform {
+        SetupPlatform::Windows => {
+            let source = powershell_quote(&windows_shell_path(resource_root));
+            let target = powershell_quote(&windows_shell_path(&runtime_root));
+            Ok(format!(
+                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; $source='{source}'; $target='{target}'; Write-Host 'Preparing bundled collector runtime...'; New-Item -ItemType Directory -Force -Path $target | Out-Null; Copy-Item -Path (Join-Path $source '*') -Destination $target -Recurse -Force; $env:HIVEMINDOS_APP_DIR=$target; & (Join-Path $target 'scripts\\install-telemetry-collector.ps1') -RepoRoot $target -CollectorOnly -EnableLink -NodePath (Join-Path $target 'node.exe') -CollectorScript (Join-Path $target 'scripts\\agent-telemetry-collector.mjs') -PrebuiltLinkBinary (Join-Path $target 'hivemind-linkd.exe'); exit $LASTEXITCODE\""
+            ))
+        }
+        SetupPlatform::Unix => Ok(format!(
+            "echo 'Preparing bundled collector runtime...'\nmkdir -p {parent}\ncp -R {source} {target}\nchmod 700 {target}/node {target}/hivemind-linkd {target}/scripts/install-telemetry-collector.sh\nPATH={target}:\"$PATH\" HIVEMINDOS_NODE_BIN={target}/node HIVEMINDOS_APP_DIR={target} HIVEMINDOS_COLLECTOR_BUNDLED=true HIVE_LINK_PREBUILT=true HIVE_LINK_ENABLED=true HIVE_LINK_BIN={target}/hivemind-linkd HIVE_COLLECTOR_ONLY=true bash {target}/scripts/install-telemetry-collector.sh",
+            parent = shell_quote(&runtime_parent.display().to_string()),
+            source = shell_quote(&resource_root.display().to_string()),
+            target = shell_quote(&runtime_root.display().to_string()),
+        )),
+    }
+}
+
+// GitHub serves a downloadable, extractable snapshot of any ref at these URLs.
+// We bootstrap the app source from the archive instead of `git clone` so a
+// fresh machine needs no `git` on PATH — a hard blocker on a stock Windows PC,
+// which (unlike macOS/Linux) ships no git. Tracks `main`, the same ref the old
+// git path pulled. NOTE: this still follows a moving branch; pinning the
+// archive to the installed app version is the proper follow-up.
+const APP_SOURCE_ARCHIVE_ZIP: &str =
+    "https://github.com/LiamVisionary/hivemindos/archive/refs/heads/main.zip";
+const APP_SOURCE_ARCHIVE_TARBALL: &str =
+    "https://github.com/LiamVisionary/hivemindos/archive/refs/heads/main.tar.gz";
+// `Accept: application/vnd.github.sha` returns the bare commit SHA as text.
+// Archive checkouts have no `.git`, so the bootstrap records the downloaded
+// commit in `.hivemindos-source-commit`; the telemetry collector reports it so
+// the fleet can tell current from stale (scripts/lib/collector-source-version.mjs
+// reads and validates it). Best-effort on purpose: a failed probe must never
+// fail setup, and an absent marker just reports the version as unknown.
+const APP_SOURCE_LATEST_COMMIT_API: &str =
+    "https://api.github.com/repos/LiamVisionary/hivemindos/commits/main";
+
+/// Download + extract the HivemindOS app source into `root` with no `git`
+/// dependency, using tools always present on a stock OS: PowerShell's
+/// Invoke-WebRequest/Expand-Archive on Windows, curl + tar on Unix. Replaces
+/// `root` wholesale each run (the previous git path re-cloned on any
+/// divergence anyway). The archive expands to a single `<repo>-main/` folder;
+/// both variants move that one extracted dir into place rather than hardcoding
+/// the prefix, so it stays correct if the default ref is ever renamed.
+fn bootstrap_app_source_command(platform: SetupPlatform, root: &Path) -> String {
+    let parent = root.parent().unwrap_or_else(|| Path::new("."));
+    match platform {
+        SetupPlatform::Unix => format!(
+            "mkdir -p {parent} && _hm_tmp=\"$(mktemp -d)\" && curl -fsSL {url} -o \"$_hm_tmp/src.tar.gz\" && rm -rf {root} && mkdir -p {root} && tar -xzf \"$_hm_tmp/src.tar.gz\" -C {root} --strip-components=1 && (curl -fsSL --max-time 15 -H 'Accept: application/vnd.github.sha' {api_url} -o {root}/.hivemindos-source-commit || true) && rm -rf \"$_hm_tmp\"",
+            parent = shell_quote(&parent.display().to_string()),
+            root = shell_quote(&root.display().to_string()),
+            url = APP_SOURCE_ARCHIVE_TARBALL,
+            api_url = APP_SOURCE_LATEST_COMMIT_API,
+        ),
+        SetupPlatform::Windows => {
+            // The whole PowerShell program is ONE cmd-level double-quoted arg, so
+            // every inner string literal is single-quoted (no nested `"`). Single
+            // quotes also tolerate spaces in the user profile path. $ErrorAction
+            // 'Stop' makes any failure exit powershell non-zero for the caller's
+            // `if errorlevel 1`. Tls12 keeps the download working on older boxes.
+            format!(
+                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; Write-Host 'Downloading HivemindOS setup files...'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $root='{root}'; $tmp=Join-Path $env:TEMP ('hm-src-'+[guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Force -Path $tmp | Out-Null; $zip=Join-Path $tmp 'src.zip'; Invoke-WebRequest -UseBasicParsing -Uri '{url}' -OutFile $zip; Write-Host 'Unpacking setup files...'; Expand-Archive -Path $zip -DestinationPath $tmp -Force; $inner=Get-ChildItem -Directory $tmp | Select-Object -First 1; if (-not $inner) {{ throw 'app-source archive had no top-level folder' }}; $parent=Split-Path $root -Parent; if ($parent) {{ New-Item -ItemType Directory -Force -Path $parent | Out-Null }}; if (Test-Path $root) {{ Remove-Item -Recurse -Force $root }}; Move-Item $inner.FullName $root; try {{ $shaContent=(Invoke-WebRequest -UseBasicParsing -TimeoutSec 15 -Headers @{{Accept='application/vnd.github.sha'}} -Uri '{api_url}').Content; if ($shaContent -is [byte[]]) {{ $sha=[Text.Encoding]::ASCII.GetString($shaContent).Trim() }} else {{ $sha=(''+$shaContent).Trim() }}; if ($sha -match '^[0-9a-f]{{40}}$') {{ Set-Content -Path (Join-Path $root '.hivemindos-source-commit') -Value $sha -Encoding ASCII }} }} catch {{}}; Remove-Item -Recurse -Force $tmp\"",
+                root = root.display(),
+                url = APP_SOURCE_ARCHIVE_ZIP,
+                api_url = APP_SOURCE_LATEST_COMMIT_API,
+            )
+        }
+    }
 }
 
 fn setup_root_command(platform: SetupPlatform) -> String {
@@ -278,28 +581,29 @@ fn setup_root_command(platform: SetupPlatform) -> String {
     }
 
     let root = app_source_root();
+    let bootstrap = bootstrap_app_source_command(platform, &root);
     match platform {
         SetupPlatform::Unix => format!(
-            "mkdir -p {parent} && if [ ! -d {root}/.git ]; then git clone https://github.com/LiamVisionary/hivemindos.git {root}; elif ! git -C {root} pull --ff-only; then echo 'app-source clone is stale/diverged; recloning a fresh copy...' && rm -rf {root} && git clone https://github.com/LiamVisionary/hivemindos.git {root}; fi && cd {root}",
-            parent = shell_quote(&root.parent().unwrap_or_else(|| Path::new(".")).display().to_string()),
+            "{bootstrap} && cd {root}",
             root = shell_quote(&root.display().to_string()),
         ),
-        SetupPlatform::Windows => {
-            let root = root.display();
-            format!(
-                "if not exist \"{root}\\.git\" (git clone https://github.com/LiamVisionary/hivemindos.git \"{root}\") else (git -C \"{root}\" pull --ff-only || (echo app-source clone is stale/diverged; recloning a fresh copy... & rmdir /s /q \"{root}\" & git clone https://github.com/LiamVisionary/hivemindos.git \"{root}\"))\r\nif errorlevel 1 exit /b 1\r\ncd /d \"{root}\""
-            )
-        }
+        SetupPlatform::Windows => format!(
+            "{bootstrap}\r\nif errorlevel 1 exit /b 1\r\ncd /d \"{root}\"",
+            root = root.display(),
+        ),
     }
 }
 
 fn launcher_file_content(command: &str, platform: SetupPlatform) -> String {
+    // No `pause`/`read` to hold a window open: the launcher runs HIDDEN and its
+    // output is streamed to the setup wizard (see spawn_hidden_setup). A trailing
+    // echo just marks the end of the step in the captured log.
     match platform {
         SetupPlatform::Unix => format!(
-            "#!/usr/bin/env bash\nset -euo pipefail\n{command}\necho\necho 'HivemindOS setup step finished. You can close this terminal.'\nread -r -p 'Press Return to close...' _\n"
+            "#!/usr/bin/env bash\nset -euo pipefail\n{command}\necho\necho 'HivemindOS setup step finished.'\n"
         ),
         SetupPlatform::Windows => format!(
-            "@echo off\r\nsetlocal\r\n{command}\r\necho.\r\necho HivemindOS setup step finished. You can close this window.\r\npause\r\n"
+            "@echo off\r\nsetlocal\r\n{command}\r\nset \"HIVE_SETUP_EXIT=%ERRORLEVEL%\"\r\necho.\r\necho HivemindOS setup step finished.\r\nexit /b %HIVE_SETUP_EXIT%\r\n"
         ),
     }
 }
@@ -354,7 +658,13 @@ fn open_command_file(path: &Path) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub(crate) fn native_setup_status() -> Result<serde_json::Value, String> {
+pub(crate) async fn native_setup_status() -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(collect_native_setup_status)
+        .await
+        .map_err(|error| format!("native setup status task failed: {error}"))?
+}
+
+fn collect_native_setup_status() -> Result<serde_json::Value, String> {
     let platform = SetupPlatform::current();
     let current_dir = std::env::current_dir().ok();
     let setup_script = current_dir
@@ -379,6 +689,7 @@ pub(crate) fn native_setup_status() -> Result<serde_json::Value, String> {
         setup_script_path: setup_script.as_ref().map(|path| path.display().to_string()),
         platform: std::env::consts::OS,
         detected_agents: detected_agent_runtimes(),
+        link_status: read_native_link_status(),
         checks: vec![
             SetupCheck {
                 id: "app",
@@ -431,8 +742,8 @@ pub(crate) fn native_setup_status() -> Result<serde_json::Value, String> {
                 },
                 install_command: setup_script.as_ref().map(|_| {
                     platform.pick(
-                        "./setup.sh --local-only --skip-build",
-                        "powershell -ExecutionPolicy Bypass -File .\\setup.ps1",
+                        "./setup.sh --local-only --skip-deps --skip-build --skip-dashboard",
+                        "powershell -ExecutionPolicy Bypass -File .\\setup.ps1 -SkipDeps -SkipBuild -SkipDashboard",
                     )
                 }),
                 optional: true,
@@ -473,7 +784,13 @@ pub(crate) fn native_setup_status() -> Result<serde_json::Value, String> {
 }
 
 fn build_setup_invocation(request: NativeSetupRunRequest, platform: SetupPlatform) -> (String, String) {
-    let mode = request.install_mode.unwrap_or_else(|| "local".to_string());
+    let mode = match request.install_mode.as_deref() {
+        Some("collector") => "collector",
+        Some("link") => "link",
+        Some("system-tailscale") => "system-tailscale",
+        _ => "local",
+    }
+    .to_string();
     let skill_agents = sanitize_agent_list(request.skill_agents);
     let memory_agents = sanitize_agent_list(request.memory_agents);
     let import_skills = request.import_skills.unwrap_or(true);
@@ -490,11 +807,15 @@ fn build_setup_invocation(request: NativeSetupRunRequest, platform: SetupPlatfor
     };
 
     if platform == SetupPlatform::Windows {
-        // setup.ps1 takes a smaller flag surface than setup.sh: it has no
-        // network-mode flags (it detects Tailscale itself), no collector
-        // install, and handles vault/skills seeding internally, so the mode
-        // and import selections have no Windows equivalents to forward.
+        // setup.ps1 takes a smaller flag surface than setup.sh and handles
+        // vault/skills seeding internally. Collector mode is the exception:
+        // it must be forwarded explicitly so a Link download can never install
+        // or start a second dashboard.
         let mut flags = Vec::new();
+        if mode == "collector" {
+            flags.push("-CollectorOnly");
+            flags.push("-NonInteractive");
+        }
         if !request.start_dashboard.unwrap_or(true) {
             flags.push("-SkipDashboard");
         }
@@ -513,6 +834,20 @@ fn build_setup_invocation(request: NativeSetupRunRequest, platform: SetupPlatfor
         let command = format!(
             "{root}\r\nwhere pwsh >nul 2>&1 && (set \"HIVE_PS=pwsh\") || (set \"HIVE_PS=powershell\")\r\n%HIVE_PS% -ExecutionPolicy Bypass -File setup.ps1 {flags}",
             root = setup_root_command(platform),
+        );
+        return (mode, command);
+    }
+
+    if mode == "collector" {
+        let mut args = vec![setup_mode_arg(&mode).to_string()];
+        if request.force.unwrap_or(false) {
+            args.push("--force".to_string());
+        }
+        let quoted_args = args.iter().map(|arg| shell_quote(arg)).collect::<Vec<_>>().join(" ");
+        let command = format!(
+            "{root}\n./setup.sh {args}",
+            root = setup_root_command(platform),
+            args = quoted_args,
         );
         return (mode, command);
     }
@@ -551,11 +886,24 @@ fn build_setup_invocation(request: NativeSetupRunRequest, platform: SetupPlatfor
 }
 
 #[tauri::command]
-pub(crate) fn native_setup_run(request: NativeSetupRunRequest) -> Result<serde_json::Value, String> {
+pub(crate) fn native_setup_run(app: AppHandle, request: NativeSetupRunRequest) -> Result<serde_json::Value, String> {
     let platform = SetupPlatform::current();
-    let (mode, command) = build_setup_invocation(request, platform);
+    let bundled_collector_requested =
+        cfg!(feature = "link-app") && request.install_mode.as_deref() == Some("collector");
+    let (mode, command) = if bundled_collector_requested {
+        ("collector".to_string(), bundled_link_setup_command(&app, platform)?)
+    } else {
+        build_setup_invocation(request, platform)
+    };
     let command_path = write_command_file(&command, platform)?;
-    open_command_file(&command_path)?;
+    // Run the launcher HIDDEN and stream its output to the setup wizard via the
+    // progress event, instead of opening a console window. Fall back to the
+    // visible launcher if the hidden spawn can't start, so setup is never
+    // un-runnable.
+    if let Err(error) = spawn_hidden_setup(app, &command_path, platform) {
+        eprintln!("[native-setup] hidden run failed ({error}); falling back to visible launcher");
+        open_command_file(&command_path)?;
+    }
 
     serde_json::to_value(NativeSetupRunResult {
         ok: true,
@@ -564,6 +912,110 @@ pub(crate) fn native_setup_run(request: NativeSetupRunRequest) -> Result<serde_j
         mode,
     })
     .map_err(|error| error.to_string())
+}
+
+/// Run the setup launcher hidden (no console window), streaming each output line
+/// to the wizard via NATIVE_SETUP_PROGRESS_EVENT. Emits a final
+/// `{ kind: "done", exitCode }` so the wizard can surface a non-zero exit instead
+/// of spinning forever. stdout and stderr are drained on separate threads so a
+/// full pipe can't deadlock. Returns Err if the process cannot be spawned (the
+/// caller then falls back to a visible launcher).
+fn spawn_hidden_setup(app: AppHandle, command_path: &Path, platform: SetupPlatform) -> Result<(), String> {
+    let mut cmd = match platform {
+        SetupPlatform::Windows => {
+            let mut c = crate::hidden_command("cmd");
+            c.args(["/c", &command_path.display().to_string()]);
+            c
+        }
+        SetupPlatform::Unix => {
+            let mut c = crate::hidden_command("sh");
+            c.arg(command_path);
+            c
+        }
+    };
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = cmd.spawn().map_err(|error| error.to_string())?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "setup process had no stdout pipe".to_string())?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "setup process had no stderr pipe".to_string())?;
+    std::thread::spawn(move || {
+        let _ = app.emit(
+            NATIVE_SETUP_PROGRESS_EVENT,
+            serde_json::json!({ "kind": "start" }),
+        );
+        let app_err = app.clone();
+        let err_handle = std::thread::spawn(move || {
+            // Read raw bytes + decode LOSSILY, never `.lines()`: `.lines()` yields an
+            // Err and STOPS at the first non-UTF-8 byte. setup.ps1 prints glyphs
+            // (✓ ✗ ↑) that land as console-codepage bytes (e.g. 0xFB), so a strict
+            // reader dies on the first such line, drops this pipe — the still-running
+            // setup process then fails with "The process tried to write to a
+            // nonexistent pipe" — and progress stalls. Lossy decode drains to EOF.
+            let mut reader = BufReader::new(stderr);
+            let mut bytes: Vec<u8> = Vec::new();
+            loop {
+                bytes.clear();
+                if matches!(reader.read_until(b'\n', &mut bytes), Ok(0) | Err(_)) { break; }
+                while matches!(bytes.last(), Some(b'\n') | Some(b'\r')) { bytes.pop(); }
+                let line = String::from_utf8_lossy(&bytes).into_owned();
+                let _ = app_err.emit(
+                    NATIVE_SETUP_PROGRESS_EVENT,
+                    serde_json::json!({ "kind": "line", "stream": "stderr", "line": line }),
+                );
+            }
+        });
+        // Rate-cap stdout emits to ~7/sec as IPC backpressure: setup output is
+        // verbose and PowerShell block-buffers its pipe, so lines arrive in large
+        // bursts, and a progress feed only needs the latest activity. We coalesce
+        // intermediate lines and emit at most one per 150 ms — but always FLUSH the
+        // most recent line at end-of-stream, so the final/most-important activity
+        // line never gets dropped by the cap. (stderr is NOT throttled — errors are
+        // low-volume and must all surface.)
+        let mut last_emit = std::time::Instant::now()
+            .checked_sub(std::time::Duration::from_secs(1))
+            .unwrap_or_else(std::time::Instant::now);
+        let mut pending: Option<String> = None;
+        // Byte reader + lossy decode (see the stderr note above): a strict `.lines()`
+        // reader stops at the first non-UTF-8 glyph, which is exactly what stalled the
+        // wizard with no progress. This drains every line to EOF.
+        let mut reader = BufReader::new(stdout);
+        let mut bytes: Vec<u8> = Vec::new();
+        loop {
+            bytes.clear();
+            if matches!(reader.read_until(b'\n', &mut bytes), Ok(0) | Err(_)) { break; }
+            while matches!(bytes.last(), Some(b'\n') | Some(b'\r')) { bytes.pop(); }
+            let line = String::from_utf8_lossy(&bytes).into_owned();
+            let now = std::time::Instant::now();
+            if now.duration_since(last_emit) < std::time::Duration::from_millis(150) {
+                pending = Some(line);
+                continue;
+            }
+            last_emit = now;
+            pending = None;
+            let _ = app.emit(
+                NATIVE_SETUP_PROGRESS_EVENT,
+                serde_json::json!({ "kind": "line", "line": line }),
+            );
+        }
+        if let Some(line) = pending {
+            let _ = app.emit(
+                NATIVE_SETUP_PROGRESS_EVENT,
+                serde_json::json!({ "kind": "line", "line": line }),
+            );
+        }
+        let _ = err_handle.join();
+        let exit_code = child.wait().ok().and_then(|status| status.code());
+        let _ = app.emit(
+            NATIVE_SETUP_PROGRESS_EVENT,
+            serde_json::json!({ "kind": "done", "exitCode": exit_code }),
+        );
+    });
+    Ok(())
 }
 
 #[cfg(test)]
@@ -584,7 +1036,7 @@ mod tests {
             "startDashboard": false,
             "installCollector": true,
             "buildDashboard": false,
-            "installDeps": true,
+            "installDeps": false,
             "force": false,
         })
     }
@@ -610,6 +1062,7 @@ mod tests {
         assert_eq!(mode, "local");
         assert!(command.contains("./setup.sh"));
         assert!(command.contains("'--local-only'"));
+        assert!(command.contains("'--skip-deps'"));
         assert!(command.contains("'--skip-dashboard'"));
         assert!(command.contains("'--import-skills=claude,codex'"));
         assert!(command.contains("HIVE_MEMORY_IMPORTS='none'"));
@@ -630,12 +1083,17 @@ mod tests {
         let (mode, command) = build_setup_invocation(request, SetupPlatform::Windows);
         assert_eq!(mode, "local");
         assert!(command.contains("setup.ps1"));
+        assert!(command.contains("-SkipDeps"));
         assert!(command.contains("-SkipDashboard"));
         assert!(command.contains("-SkipBuild"));
         assert!(command.contains("where pwsh"));
         assert!(!command.contains("setup.sh"));
         assert!(!command.contains("--local-only"));
-        assert!(!command.contains("-Force"));
+        // Check the setup.ps1 flag segment specifically: the source-bootstrap
+        // PowerShell uses its own `-Force` params (Expand-Archive/Remove-Item)
+        // earlier in the command, which are unrelated to the setup.ps1 -Force.
+        let ps_flags = command.rsplit("-File setup.ps1").next().unwrap();
+        assert!(!ps_flags.contains("-Force"));
     }
 
     #[test]
@@ -645,29 +1103,96 @@ mod tests {
         payload["installDeps"] = serde_json::json!(false);
         let request: NativeSetupRunRequest = serde_json::from_value(payload).unwrap();
         let (_, command) = build_setup_invocation(request, SetupPlatform::Windows);
-        assert!(command.contains("-Force"));
-        assert!(command.contains("-SkipDeps"));
+        let ps_flags = command.rsplit("-File setup.ps1").next().unwrap();
+        assert!(ps_flags.contains("-Force"));
+        assert!(ps_flags.contains("-SkipDeps"));
     }
 
     #[test]
-    fn windows_launcher_is_a_batch_file_that_pauses() {
+    fn collector_mode_is_dashboard_free_on_unix_and_windows() {
+        let request = || NativeSetupRunRequest {
+            install_mode: Some("collector".to_string()),
+            skill_agents: None,
+            memory_agents: None,
+            import_skills: None,
+            import_memory: None,
+            start_dashboard: Some(false),
+            install_collector: Some(true),
+            build_dashboard: Some(false),
+            install_deps: Some(false),
+            force: Some(false),
+        };
+        let (unix_mode, unix) = build_setup_invocation(request(), SetupPlatform::Unix);
+        assert_eq!(unix_mode, "collector");
+        assert!(unix.contains("'--collector-only'"));
+        assert!(!unix.contains("--import-skills"));
+        assert!(!unix.contains("import-agent-memory"));
+
+        let (windows_mode, windows) = build_setup_invocation(request(), SetupPlatform::Windows);
+        assert_eq!(windows_mode, "collector");
+        let ps_flags = windows.rsplit("-File setup.ps1").next().unwrap();
+        assert!(ps_flags.contains("-CollectorOnly"));
+        assert!(ps_flags.contains("-NonInteractive"));
+        assert!(ps_flags.contains("-SkipDashboard"));
+        assert!(ps_flags.contains("-SkipBuild"));
+    }
+
+    #[test]
+    fn launcher_files_stream_hidden_setup_and_preserve_windows_exit_code() {
         let content = launcher_file_content("echo hi", SetupPlatform::Windows);
         assert!(content.starts_with("@echo off\r\n"));
-        assert!(content.contains("pause"));
+        assert!(content.contains("set \"HIVE_SETUP_EXIT=%ERRORLEVEL%\""));
+        assert!(content.contains("exit /b %HIVE_SETUP_EXIT%"));
+        assert!(!content.contains("pause"));
         let unix = launcher_file_content("echo hi", SetupPlatform::Unix);
         assert!(unix.starts_with("#!/usr/bin/env bash\n"));
-        assert!(unix.contains("read -r -p"));
+        assert!(unix.contains("set -euo pipefail"));
+        assert!(!unix.contains("read -r -p"));
     }
 
     #[test]
-    fn windows_root_command_clones_when_no_local_checkout() {
-        // The repo checkout contains setup.ps1, so the generated root command
-        // pins to the current directory; both variants must target the
-        // platform's own script and shell syntax.
+    fn root_command_targets_platform_script_and_shell() {
+        // The repo checkout contains setup.ps1/setup.sh, so the generated root
+        // command pins to the current directory; both variants must use the
+        // platform's own shell syntax to change into it.
         let root = setup_root_command(SetupPlatform::Windows);
-        assert!(root.contains("cd /d") || root.contains("git clone"));
+        assert!(root.contains("cd /d") || root.contains("Invoke-WebRequest"));
         let unix_root = setup_root_command(SetupPlatform::Unix);
-        assert!(unix_root.contains("cd ") || unix_root.contains("git clone"));
+        assert!(unix_root.contains("cd ") || unix_root.contains("curl -fsSL"));
+    }
+
+    #[test]
+    fn app_source_bootstrap_needs_no_git() {
+        // A fresh Windows PC has no git on PATH, so the source bootstrap must
+        // not shell out to git. Windows downloads via PowerShell; Unix via
+        // curl + tar. Both extract the single top-level archive folder.
+        // "github.com" in the archive URL legitimately contains the substring
+        // "git", so assert against actual git *invocations*, not the substring.
+        let git_invocations = ["git clone", "git -C", "git pull", "git fetch"];
+        let root = PathBuf::from("/home/user/.hivemindos/app-source");
+        let windows = bootstrap_app_source_command(SetupPlatform::Windows, &root);
+        for pat in git_invocations {
+            assert!(!windows.contains(pat), "windows bootstrap must not run `{pat}`: {windows}");
+        }
+        assert!(windows.contains("Invoke-WebRequest"));
+        assert!(windows.contains("Expand-Archive"));
+        assert!(windows.contains("Move-Item"));
+        assert!(windows.contains("archive/refs/heads/main.zip"));
+        // The bootstrap records the downloaded source commit so a git-free
+        // checkout still reports its version to the fleet.
+        assert!(windows.contains(".hivemindos-source-commit"));
+        assert!(windows.contains("vnd.github.sha"));
+
+        let unix = bootstrap_app_source_command(SetupPlatform::Unix, &root);
+        for pat in git_invocations {
+            assert!(!unix.contains(pat), "unix bootstrap must not run `{pat}`: {unix}");
+        }
+        assert!(unix.contains("curl -fsSL"));
+        assert!(unix.contains("tar -xzf"));
+        assert!(unix.contains("--strip-components=1"));
+        assert!(unix.contains("archive/refs/heads/main.tar.gz"));
+        assert!(unix.contains(".hivemindos-source-commit"));
+        assert!(unix.contains("vnd.github.sha"));
     }
 
     #[test]
@@ -683,6 +1208,56 @@ mod tests {
         assert_eq!(setup_mode_arg("local"), "--local-only");
         assert_eq!(setup_mode_arg("system-tailscale"), "--system-tailscale");
         assert_eq!(setup_mode_arg("link"), "--link");
+        assert_eq!(setup_mode_arg("collector"), "--collector-only");
         assert_eq!(setup_mode_arg("anything-else"), "--local-only");
+    }
+
+    #[test]
+    fn windows_shell_paths_strip_verbatim_prefixes() {
+        assert_eq!(
+            windows_shell_path(Path::new(r"\\?\C:\Users\Tester\HivemindOS Link")),
+            r"C:\Users\Tester\HivemindOS Link"
+        );
+        assert_eq!(
+            windows_shell_path(Path::new(r"\\?\UNC\server\share\HivemindOS Link")),
+            r"\\server\share\HivemindOS Link"
+        );
+    }
+
+    #[test]
+    fn bundled_link_setup_uses_only_packaged_runtime() {
+        let test_root = std::env::temp_dir().join(format!(
+            "hivemind-link-setup-test-{}",
+            std::process::id()
+        ));
+        let resource_root = test_root.join("resources/link-runtime");
+        let runtime_parent = test_root.join("home/.hivemindos/link-runtime");
+        fs::create_dir_all(&resource_root).unwrap();
+        fs::write(resource_root.join("runtime-manifest.json"), "{}\n").unwrap();
+
+        let windows = bundled_link_setup_command_for_roots(
+            &resource_root,
+            &runtime_parent,
+            SetupPlatform::Windows,
+        )
+        .unwrap();
+        assert!(windows.contains("Copy-Item"));
+        assert!(windows.contains("-NodePath"));
+        assert!(windows.contains("-PrebuiltLinkBinary"));
+        assert!(!windows.contains("Invoke-WebRequest"));
+        assert!(!windows.contains("setup.ps1"));
+
+        let unix = bundled_link_setup_command_for_roots(
+            &resource_root,
+            &runtime_parent,
+            SetupPlatform::Unix,
+        )
+        .unwrap();
+        assert!(unix.contains("HIVEMINDOS_COLLECTOR_BUNDLED=true"));
+        assert!(unix.contains("HIVE_LINK_PREBUILT=true"));
+        assert!(!unix.contains("curl -fsSL"));
+        assert!(!unix.contains("setup.sh"));
+
+        fs::remove_dir_all(test_root).unwrap();
     }
 }

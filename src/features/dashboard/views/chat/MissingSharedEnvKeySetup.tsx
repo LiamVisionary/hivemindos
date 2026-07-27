@@ -1,8 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle2, LoaderCircle, Plus, ShieldCheck } from "lucide-react";
-import { maskedSecretValueClass, secretInputProps } from "@/components/ui/secret-input-props";
+import { CheckCircle2, KeyRound, PlugZap, RefreshCcw, ShieldCheck } from "lucide-react";
+import type { ProviderCredentialMode } from "@/features/dashboard/model-provider-view";
+import { HiveEnvKeyInput } from "@/features/env/HiveEnvKeyInput";
+import styles from "@/features/env/hive-env-honey.module.css";
+
+type AuthMode = ProviderCredentialMode;
+
+type SetupActionResult = {
+  ok?: boolean;
+  error?: string;
+  message?: string;
+  authorizeUrl?: string;
+  authorizationUrl?: string;
+  statusEndpoint?: string;
+  warnings?: string[];
+} | void;
 
 type MissingSharedEnvKeySetupProps = {
   apiKeyName: string;
@@ -14,6 +28,14 @@ type MissingSharedEnvKeySetupProps = {
   hermesProvider?: string;
   /** Whether Hermes already holds this key (gates the overwrite toggle). */
   hermesKeyPresent?: boolean;
+  oauthLabel?: string;
+  oauthDetail?: string;
+  oauthStatusEndpoint?: string;
+  initialAuthMode?: AuthMode;
+  onAuthModeChange?: (mode: AuthMode) => void;
+  onOAuthConnect?: () => Promise<SetupActionResult> | SetupActionResult;
+  onOAuthCodeSubmit?: (code: string) => Promise<SetupActionResult> | SetupActionResult;
+  onOAuthConnected?: () => void | Promise<void>;
   onSaved?: () => void | Promise<void>;
 };
 
@@ -49,10 +71,27 @@ export function MissingSharedEnvKeySetup({
   issue = "missing",
   hermesProvider,
   hermesKeyPresent = false,
+  oauthLabel,
+  oauthDetail,
+  oauthStatusEndpoint: configuredOAuthStatusEndpoint,
+  initialAuthMode = "api-key",
+  onAuthModeChange,
+  onOAuthConnect,
+  onOAuthCodeSubmit,
+  onOAuthConnected,
   onSaved,
 }: MissingSharedEnvKeySetupProps) {
+  const [authMode, setAuthMode] = useState<AuthMode>(initialAuthMode);
   const [value, setValue] = useState("");
   const [saving, setSaving] = useState(false);
+  const [oauthStarting, setOauthStarting] = useState(false);
+  const [oauthStarted, setOauthStarted] = useState(false);
+  const [oauthConnected, setOauthConnected] = useState(false);
+  const [oauthConnectedFromExisting, setOauthConnectedFromExisting] = useState(false);
+  const [oauthAuthorizeUrl, setOauthAuthorizeUrl] = useState("");
+  const [oauthStatusEndpoint, setOauthStatusEndpoint] = useState("");
+  const [oauthCode, setOauthCode] = useState("");
+  const [oauthCodeSubmitting, setOauthCodeSubmitting] = useState(false);
   const [status, setStatus] = useState("");
   const [explaining, setExplaining] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -73,6 +112,16 @@ export function MissingSharedEnvKeySetup({
     mountedRef.current = false;
     clearSuccessTimers();
   }, [clearSuccessTimers]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAuthMode(initialAuthMode), 0);
+    return () => window.clearTimeout(timer);
+  }, [initialAuthMode]);
+
+  const selectAuthMode = useCallback((mode: AuthMode) => {
+    setAuthMode(mode);
+    onAuthModeChange?.(mode);
+  }, [onAuthModeChange]);
 
   const save = async () => {
     const trimmed = value.trim();
@@ -140,24 +189,193 @@ export function MissingSharedEnvKeySetup({
     }
   };
 
+  const openOAuthAuthorizeUrl = async (authorizeUrl: string) => {
+    const opened = await fetch("/api/system/browsers/open", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: authorizeUrl }),
+    }).then((response) => response.ok).catch(() => false);
+    if (opened) return true;
+    const popup = window.open(authorizeUrl, "_blank", "noopener");
+    return Boolean(popup);
+  };
+
+  const completeOAuthConnection = useCallback(async (warnings: string[] = [], options: { switchProvider?: boolean; revealOAuth?: boolean; silent?: boolean } = {}) => {
+    if (!mountedRef.current) return;
+    if (options.revealOAuth !== false) setAuthMode("oauth");
+    setOauthStarted(true);
+    setOauthConnected(true);
+    const shouldSwitchProvider = Boolean(options.switchProvider);
+    setOauthConnectedFromExisting(!shouldSwitchProvider);
+    const warningText = warnings.length ? ` ${warnings.join(" ")}` : "";
+    if (!options.silent) {
+      setStatus(`${oauthLabel || providerLabel} connected.${shouldSwitchProvider ? " Refreshing models." : ""}${warningText}`.trim());
+    }
+    if (shouldSwitchProvider) {
+      await Promise.resolve(onOAuthConnected?.()).catch((error: unknown) => {
+        if (mountedRef.current) setStatus(error instanceof Error ? error.message : `${oauthLabel || providerLabel} connected, but the provider selection could not be updated.`);
+      });
+    }
+    await Promise.resolve(onSaved?.()).catch((error: unknown) => {
+      if (mountedRef.current) setStatus(error instanceof Error ? error.message : `${oauthLabel || providerLabel} connected, but models could not be refreshed.`);
+    });
+  }, [oauthLabel, onOAuthConnected, onSaved, providerLabel]);
+
+  const activateOAuthProvider = useCallback(async () => {
+    setStatus(`Switching to ${oauthLabel || providerLabel} models...`);
+    setOauthConnectedFromExisting(false);
+    await Promise.resolve(onOAuthConnected?.()).catch((error: unknown) => {
+      if (mountedRef.current) setStatus(error instanceof Error ? error.message : `${oauthLabel || providerLabel} connected, but the provider selection could not be updated.`);
+    });
+    await Promise.resolve(onSaved?.()).catch((error: unknown) => {
+      if (mountedRef.current) setStatus(error instanceof Error ? error.message : `${oauthLabel || providerLabel} connected, but models could not be refreshed.`);
+    });
+  }, [oauthLabel, onOAuthConnected, onSaved, providerLabel]);
+
+  const startOAuth = async () => {
+    if (!onOAuthConnect) return;
+    setOauthStarting(true);
+    setStatus(`Starting ${oauthLabel || providerLabel} OAuth sign-in...`);
+    try {
+      const result = await onOAuthConnect();
+      if (result && result.ok === false) {
+        setStatus(result.error || `${oauthLabel || providerLabel} OAuth sign-in could not start.`);
+        return;
+      }
+      const authorizeUrl = result?.authorizeUrl || result?.authorizationUrl || "";
+      if (authorizeUrl) {
+        setOauthAuthorizeUrl(authorizeUrl);
+        const opened = await openOAuthAuthorizeUrl(authorizeUrl);
+        if (!opened) {
+          setStatus("Could not open your browser automatically. Use the sign-in link below.");
+          return;
+        }
+      }
+      setOauthStatusEndpoint(result?.statusEndpoint || configuredOAuthStatusEndpoint || "");
+      setOauthStarted(true);
+      setStatus(
+        result?.message ||
+        `${oauthLabel || providerLabel} OAuth sign-in opened. Finish the browser flow to connect.`,
+      );
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : `${oauthLabel || providerLabel} OAuth sign-in could not start.`);
+    } finally {
+      setOauthStarting(false);
+    }
+  };
+
+  const submitOAuthCode = async () => {
+    const trimmed = oauthCode.trim();
+    if (!trimmed || !onOAuthCodeSubmit) {
+      setStatus("Paste the code xAI showed in the browser.");
+      return;
+    }
+    setOauthCodeSubmitting(true);
+    setStatus(`Submitting ${oauthLabel || providerLabel} OAuth code...`);
+    try {
+      const result = await onOAuthCodeSubmit(trimmed);
+      if (result && result.ok === false) {
+        setStatus(result.error || `${oauthLabel || providerLabel} OAuth code could not be accepted.`);
+        return;
+      }
+      setOauthCode("");
+      await completeOAuthConnection(result?.warnings ?? [], { switchProvider: true });
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : `${oauthLabel || providerLabel} OAuth code could not be accepted.`);
+    } finally {
+      setOauthCodeSubmitting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!configuredOAuthStatusEndpoint || oauthConnected) return undefined;
+    let cancelled = false;
+    const checkExistingOAuth = async () => {
+      const response = await fetch(configuredOAuthStatusEndpoint, { cache: "no-store" }).catch(() => null);
+      const data = await response?.json().catch(() => null) as {
+        ok?: boolean;
+        connected?: boolean;
+        usable?: boolean;
+        needsReconnect?: boolean;
+        error?: string | null;
+        warnings?: string[];
+        login?: { phase?: string; error?: string; warnings?: string[] };
+      } | null;
+      if (cancelled || !data?.ok) return;
+      if (data.usable || data.login?.phase === "connected") {
+        setOauthStatusEndpoint(configuredOAuthStatusEndpoint);
+        const shouldSwitchProvider = authMode === "oauth";
+        await completeOAuthConnection([...(data.warnings ?? []), ...(data.login?.warnings ?? [])], {
+          switchProvider: shouldSwitchProvider,
+          revealOAuth: shouldSwitchProvider,
+          silent: !shouldSwitchProvider,
+        });
+      } else if (data.needsReconnect && data.error) {
+        setStatus(data.error);
+      }
+    };
+    const timer = window.setTimeout(() => void checkExistingOAuth(), 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [authMode, completeOAuthConnection, configuredOAuthStatusEndpoint, oauthConnected]);
+
+  useEffect(() => {
+    if (authMode !== "oauth" || !oauthConnected || !oauthConnectedFromExisting || !onOAuthConnected) return;
+    const timer = window.setTimeout(() => void activateOAuthProvider(), 0);
+    return () => window.clearTimeout(timer);
+  }, [activateOAuthProvider, authMode, oauthConnected, oauthConnectedFromExisting, onOAuthConnected]);
+
+  useEffect(() => {
+    if (!oauthStarted || !oauthStatusEndpoint || oauthConnected) return undefined;
+    let cancelled = false;
+    const poll = async () => {
+      const response = await fetch(oauthStatusEndpoint, { cache: "no-store" }).catch(() => null);
+      const data = await response?.json().catch(() => null) as {
+        ok?: boolean;
+        connected?: boolean;
+        usable?: boolean;
+        needsReconnect?: boolean;
+        error?: string | null;
+        warnings?: string[];
+        login?: { phase?: string; error?: string; warnings?: string[] };
+      } | null;
+      if (cancelled || !data?.ok) return;
+      if (data.usable || data.login?.phase === "connected") {
+        await completeOAuthConnection([...(data.warnings ?? []), ...(data.login?.warnings ?? [])], { switchProvider: true });
+        return;
+      }
+      if (data.needsReconnect && data.error) setStatus(data.error);
+      if (data.login?.phase === "error" && data.login.error) {
+        setStatus(data.login.error);
+      }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [completeOAuthConnection, oauthConnected, oauthStarted, oauthStatusEndpoint]);
+
   if (saved) {
     return (
       <section
-        className={`grid gap-3 rounded-md border border-[rgba(94,234,212,0.22)] bg-[rgba(20,184,166,0.08)] p-4 transition duration-500 ${successFading ? "opacity-0 translate-y-1" : "opacity-100 translate-y-0"}`}
+        className={`${styles.scope} ${styles.card} ${styles.successCard} transition duration-500 ${successFading ? "opacity-0 translate-y-1" : "opacity-100 translate-y-0"}`}
         style={{ minHeight: SETUP_CARD_MIN_HEIGHT }}
         aria-live="polite"
       >
-        <div className="flex items-start gap-3">
-          <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-full border border-[rgba(94,234,212,0.38)] bg-[rgba(20,184,166,0.14)]">
-            <span className="absolute h-10 w-10 rounded-full border border-[rgba(94,234,212,0.28)] animate-ping" aria-hidden="true" />
-            <CheckCircle2 aria-hidden="true" className="relative h-5 w-5 text-[var(--accent-strong)] animate-pulse" />
+        <div className={styles.infoRow}>
+          <span className={`${styles.badge} ${styles.badgeLive}`}>
+            <span className={styles.ping} aria-hidden="true" />
+            <CheckCircle2 aria-hidden="true" style={{ position: "relative", width: 20, height: 20 }} />
           </span>
           <div>
             <p className="eyebrow">Saved</p>
-            <h3 className="m-0 text-base font-bold text-[var(--foreground)]">{apiKeyName} saved to the shared hive brain</h3>
-            <p className="m-0 mt-1 text-xs leading-5 text-[var(--muted)]">
-              Reloading provider models with the updated shared env.
-            </p>
+            <h3 className={styles.heading}>{apiKeyName} saved to the shared hive brain</h3>
+            <p className={styles.subtext}>Reloading provider models with the updated shared env.</p>
           </div>
         </div>
       </section>
@@ -166,22 +384,24 @@ export function MissingSharedEnvKeySetup({
 
   if (explaining) {
     return (
-      <section className="grid gap-3 rounded-md border border-[rgba(94,234,212,0.18)] bg-[rgba(20,184,166,0.06)] p-4" style={{ minHeight: SETUP_CARD_MIN_HEIGHT }}>
-        <div className="flex items-start gap-3">
-          <ShieldCheck aria-hidden="true" className="mt-0.5 h-5 w-5 text-[var(--accent-strong)]" />
+      <section className={`${styles.scope} ${styles.card}`} style={{ minHeight: SETUP_CARD_MIN_HEIGHT }}>
+        <div className={styles.infoRow}>
+          <span className={styles.badge}>
+            <ShieldCheck aria-hidden="true" style={{ width: 20, height: 20 }} />
+          </span>
           <div>
             <p className="eyebrow">hive-env-add</p>
-            <h3 className="m-0 text-base font-bold text-[var(--foreground)]">Shared env for all agents</h3>
-            <p className="m-0 mt-1 text-xs leading-5 text-[var(--muted)]">
-              <code className="font-mono text-[var(--foreground)]">hive-env-add</code> writes secrets to the HivemindOS shared env store at{" "}
-              <code className="font-mono text-[var(--foreground)]">{envPath}</code> without printing secret values. The dashboard, local agent bridge, and supported runtimes load that store so every user runtime and agent can reuse the same configured key instead of copying credentials into each profile.
+            <h3 className={styles.heading}>Shared env for all agents</h3>
+            <p className={styles.subtext}>
+              <code className={styles.code}>hive-env-add</code> writes secrets to the HivemindOS shared env store at{" "}
+              <code className={styles.code}>{envPath}</code> without printing secret values. The dashboard, local agent bridge, and supported runtimes load that store so every user runtime and agent can reuse the same configured key instead of copying credentials into each profile.
             </p>
-            <p className="m-0 mt-2 text-xs leading-5 text-[var(--muted)]">
+            <p className={styles.subtext}>
               It also mirrors shared keys into runtime-specific compatibility stores where HivemindOS already supports that path, and Hivemind Sync can reconcile the same shared env across trusted machines.
             </p>
           </div>
         </div>
-        <button type="button" className="justify-self-start text-xs font-semibold text-[var(--accent-strong)] hover:underline" onClick={() => setExplaining(false)}>
+        <button type="button" className={styles.link} onClick={() => setExplaining(false)}>
           Back to setup
         </button>
       </section>
@@ -189,67 +409,143 @@ export function MissingSharedEnvKeySetup({
   }
 
   const invalid = issue === "invalid";
+  const hasOauthAlternative = Boolean(onOAuthConnect);
+  const showingOAuth = hasOauthAlternative && authMode === "oauth";
 
   return (
-    <section className="grid gap-3 rounded-md border border-[rgba(94,234,212,0.18)] bg-[rgba(20,184,166,0.06)] p-4" style={{ minHeight: SETUP_CARD_MIN_HEIGHT }}>
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <section className={`${styles.scope} ${styles.card}`} style={{ minHeight: SETUP_CARD_MIN_HEIGHT }}>
+      <div className={styles.header}>
         <div>
-          <p className="eyebrow">{invalid ? "API key setup" : "Missing API key"}</p>
-          <h3 className="m-0 text-base font-bold text-[var(--foreground)]">{invalid ? `${apiKeyName} needs attention` : `${apiKeyName} is missing`}</h3>
-          <p className="m-0 mt-1 text-xs text-[var(--muted)]">
-            {invalid
-              ? `${apiKeyName} in the shared hive brain could not be used. Enter a fresh key here for ${providerLabel}.`
-              : `${apiKeyName} is missing from the shared hive brain. Enter it here for ${providerLabel}.`}
+          <p className="eyebrow">
+            {showingOAuth ? "OAuth login" : invalid ? "API key setup" : "Missing API key"}
+          </p>
+          <h3 className={styles.heading}>
+            {showingOAuth
+              ? `Connect ${providerLabel} with OAuth`
+              : invalid ? `${apiKeyName} needs attention` : `${apiKeyName} is missing`}
+          </h3>
+          <p className={styles.subtext}>
+            {showingOAuth
+              ? oauthDetail || `Use ${oauthLabel || "OAuth"} for ${providerLabel} instead of storing ${apiKeyName}.`
+              : invalid
+                ? `${apiKeyName} in the shared hive brain could not be used. Enter a fresh key here for ${providerLabel}.`
+                : `${apiKeyName} is missing from the shared hive brain. Enter it here for ${providerLabel}.`}
           </p>
         </div>
-        <span className="rounded-full border border-[rgba(94,234,212,0.22)] bg-[rgba(20,184,166,0.08)] px-3 py-1 text-xs font-bold text-[var(--accent-strong)]">
-          {envPath}
-        </span>
+        <span className={styles.pill}>{envPath}</span>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
-        <input
-          {...secretInputProps}
+      {hasOauthAlternative ? (
+        <div className={styles.authMode} role="group" aria-label={`${providerLabel} credential method`}>
+          <button
+            type="button"
+            className={styles.authModeButton}
+            data-active={!showingOAuth ? "" : undefined}
+            aria-pressed={!showingOAuth}
+            onClick={() => selectAuthMode("api-key")}
+          >
+            <KeyRound aria-hidden="true" />
+            API key
+          </button>
+          <button
+            type="button"
+            className={styles.authModeButton}
+            data-active={showingOAuth ? "" : undefined}
+            aria-pressed={showingOAuth}
+            onClick={() => selectAuthMode("oauth")}
+          >
+            <PlugZap aria-hidden="true" />
+            OAuth
+          </button>
+        </div>
+      ) : null}
+
+      {showingOAuth ? (
+        <div className={styles.oauthPanel}>
+          <div className={styles.oauthActions}>
+            <button type="button" className={styles.saveBtn} disabled={oauthStarting} onClick={() => void startOAuth()}>
+              {oauthStarting ? <RefreshCcw className={styles.spin} aria-hidden="true" /> : <PlugZap aria-hidden="true" />}
+              {oauthStarting ? "Opening sign-in" : oauthStarted && !oauthConnected ? `Retry ${oauthLabel || "OAuth sign-in"}` : oauthConnected ? `Reconnect ${oauthLabel || "OAuth"}` : `Connect ${oauthLabel || "OAuth"}`}
+            </button>
+            {oauthStarted || oauthConnected ? (
+              <button type="button" className={styles.secondaryBtn} onClick={() => void onSaved?.()}>
+                Refresh models
+              </button>
+            ) : null}
+          </div>
+          {oauthConnected ? (
+            <p className={styles.hint}>
+              {oauthLabel || providerLabel} is connected through OAuth.
+            </p>
+          ) : null}
+          {oauthAuthorizeUrl && !oauthConnected ? (
+            <p className={styles.hint}>
+              Sign-in opened in your browser.{" "}
+              <a href={oauthAuthorizeUrl} target="_blank" rel="noopener noreferrer" className={styles.inlineLink}>
+                Open the sign-in page
+              </a>{" "}
+              if nothing appeared.
+            </p>
+          ) : null}
+          {oauthStarted && !oauthConnected && onOAuthCodeSubmit ? (
+            <div className={styles.oauthCodePanel}>
+              <input
+                className={`${styles.field} ${styles.oauthCodeField}`}
+                value={oauthCode}
+                onChange={(event) => setOauthCode(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void submitOAuthCode();
+                }}
+                placeholder="Code from xAI"
+                autoComplete="one-time-code"
+                spellCheck={false}
+              />
+              <button type="button" className={styles.secondaryBtn} disabled={oauthCodeSubmitting} onClick={() => void submitOAuthCode()}>
+                {oauthCodeSubmitting ? <RefreshCcw className={styles.spin} aria-hidden="true" /> : <CheckCircle2 aria-hidden="true" />}
+                Submit code
+              </button>
+            </div>
+          ) : null}
+          {!oauthConnected ? (
+            <p className={styles.hint}>
+              Finish the browser login. If xAI shows a Grok Build code instead of returning here, paste that code above. HivemindOS saves OAuth tokens to the shared hive env and syncs supported runtimes when the flow completes.
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <HiveEnvKeyInput
           value={value}
-          onChange={(event) => setValue(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") void save();
-          }}
-          placeholder={`${apiKeyName} value`}
-          className={`min-w-0 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(15,23,42,0.72)] px-2 py-2 font-mono text-xs text-[var(--foreground)] outline-none focus:border-[rgba(94,234,212,0.45)] ${maskedSecretValueClass}`}
+          onValueChange={setValue}
+          onSave={() => void save()}
+          saving={saving}
+          saveLabel="Save key"
+          valuePlaceholder={`${apiKeyName} value`}
         />
-        <button
-          type="button"
-          disabled={saving || !value.trim()}
-          onClick={() => void save()}
-          className="inline-flex min-h-[2.5rem] items-center justify-center gap-2 rounded-md border border-[rgba(148,163,184,0.16)] bg-[rgba(15,23,42,0.72)] px-4 py-2 text-sm font-semibold text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50"
-          title="Save this key with hive-env-add."
-        >
-          {saving ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : <Plus aria-hidden="true" className="h-4 w-4" />}
-          Save key
-        </button>
-      </div>
+      )}
 
-      {hermesProvider && hermesKeyPresent ? (
-        <label className="flex items-start gap-2 text-xs leading-5 text-[var(--muted)]">
+      {!showingOAuth && hermesProvider && hermesKeyPresent ? (
+        <label className={styles.toggle}>
           <input
             type="checkbox"
             checked={updateHermes}
             onChange={(event) => setUpdateHermes(event.target.checked)}
-            className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[var(--accent-strong)]"
           />
           <span>Hermes already has a {providerLabel} key configured — also update Hermes with this one.</span>
         </label>
       ) : null}
-      <p className="m-0 text-xs leading-5 text-[var(--muted)]">
-        Or run <code className="font-mono text-[var(--foreground)]">hive-env-add {apiKeyName}</code>, or add it to <code className="font-mono text-[var(--foreground)]">{envPath}</code>.
-        {hermesProvider && !hermesKeyPresent ? " Saving also adds it to Hermes." : ""}
-      </p>
-      {detail ? <p className="m-0 text-xs leading-5 text-[var(--muted)]">{detail}</p> : null}
-      {status ? <p className="m-0 rounded-md border border-[rgba(148,163,184,0.14)] bg-[rgba(10,14,21,0.55)] px-3 py-2 text-xs text-[var(--foreground)]">{status}</p> : null}
-      <button type="button" className="justify-self-start text-xs font-semibold text-[var(--muted)] hover:text-[var(--accent-strong)] hover:underline" onClick={() => setExplaining(true)}>
-        How does hive-env-add work?
-      </button>
+      {!showingOAuth ? (
+        <p className={styles.hint}>
+          Or run <code className={styles.code}>hive-env-add {apiKeyName}</code>, or add it to <code className={styles.code}>{envPath}</code>.
+          {hermesProvider && !hermesKeyPresent ? " Saving also adds it to Hermes." : ""}
+        </p>
+      ) : null}
+      {detail ? <p className={styles.hint}>{detail}</p> : null}
+      {status ? <p className={styles.status}>{status}</p> : null}
+      {!showingOAuth ? (
+        <button type="button" className={styles.link} onClick={() => setExplaining(true)}>
+          How does hive-env-add work?
+        </button>
+      ) : null}
     </section>
   );
 }

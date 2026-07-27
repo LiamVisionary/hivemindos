@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-07-10T15:13:08.861011+00:00",
+  "request": "Set up HivemindOS Machines as Azure Marketplace VM offers in the New Machine flow with Microsoft-billed publisher fees and automatic HivemindOS initialization.",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/features/dashboard/views/MachineInitModal.tsx",
+      "target_path": "src/features/dashboard/views/MachineInitModal.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Extended the actual Fleet New Machine wizard with a typed provider choice while preserving the live Hetzner call chain"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/integrations/azure-arm.ts",
+      "target_path": "src/lib/services/hivemindos-machines.ts",
+      "reuse_type": "adapted_code",
+      "note": "Reused the hosted OAuth token minting, strict ARM origin, bounded input validation, and server-only request boundary for Marketplace deployment"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/managed-cloud-agents-contract.ts",
+      "target_path": "src/lib/services/hivemindos-machines-contract.ts",
+      "reuse_type": "adapted_code",
+      "note": "Reused the official hosted-service contract and hostile-client catalog validation pattern"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-cloud-services",
+      "source_path": "workers/managed-agent-control-plane/src/plans.ts",
+      "target_path": "../hivemind-cloud-services/workers/managed-agent-control-plane/src/azure-marketplace.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted server-owned plan selection and public-plan serialization to Microsoft Marketplace publisher policy"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-cloud-services",
+      "source_path": "workers/managed-agent-control-plane/src/runtime-bootstrap.ts",
+      "target_path": "../hivemind-cloud-services/workers/managed-agent-control-plane/marketplace/azure/image/install-hivemindos-image.sh",
+      "reuse_type": "adapted_code",
+      "note": "Adapted pinned runtime initialization and durable-secret avoidance into an Azure Marketplace image build package"
+    }
+  ]
+}

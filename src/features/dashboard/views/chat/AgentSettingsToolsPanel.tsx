@@ -1,11 +1,35 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck
 "use client";
 
-import { Cpu, Mail, MessageSquare, Repeat2, Search, Send, Sparkles } from "lucide-react";
+import { Cpu, Mail, MessageSquare, Repeat2, Search, Send, Sparkles, type LucideIcon } from "lucide-react";
+import type { AgentProfile, RuntimeCapabilities } from "@/lib/types/agent-runtime";
+import type { RuntimeIntegrationKey, RuntimeIntegrationStatus, RuntimeSessionSearchResult } from "@/features/dashboard/dashboard-types";
 import { Badge, Btn, PanelHead, TextInput } from "./AgentSettingsModalPrimitives";
 
-const TOOL_DEFS = [
+export type AgentMailboxOverview = {
+  ok?: boolean;
+  mailboxes?: Array<{ status?: string; address?: string }>;
+  providerStatus?: { ready?: boolean; detail?: string; blockers?: string[] };
+};
+
+export type AgentSettingsToolsPanelProps = {
+  HERMES_UPDATE_INTEGRATION_KEYS: Set<RuntimeIntegrationKey>;
+  agentMailboxBusy: boolean;
+  agentMailboxError: string;
+  agentMailboxOverview: AgentMailboxOverview | null;
+  createMailboxForCurrentAgent: () => unknown;
+  hermesUpdateRequired: boolean;
+  refreshRuntimeIntegrations: (agent: AgentProfile) => unknown;
+  roleModalAgent: AgentProfile | null;
+  runtimeCapabilities: (agent: AgentProfile) => RuntimeCapabilities;
+  runtimeIntegrationBusy: string;
+  runtimeIntegrationStatus: RuntimeIntegrationStatus | null;
+  runtimeSessionQuery: string;
+  runtimeSessionResults: RuntimeSessionSearchResult[] | null;
+  searchRuntimeSessionsForAgent: (agent: AgentProfile) => unknown;
+  setRuntimeSessionQuery: (value: string) => void;
+};
+
+const TOOL_DEFS: Array<[RuntimeIntegrationKey, string, string, LucideIcon]> = [
   ["sessionSearch", "Session search", "Search prior work across this runtime.", Search],
   ["backgroundTasks", "Background tasks", "Run work without blocking chat.", Repeat2],
   ["xSearch", "X search", "Fetch X posts through runtime auth.", MessageSquare],
@@ -35,7 +59,7 @@ export function AgentSettingsToolsPanel({
   runtimeSessionResults,
   searchRuntimeSessionsForAgent,
   setRuntimeSessionQuery,
-}) {
+}: AgentSettingsToolsPanelProps) {
   if (!roleModalAgent) {
     return <div className="as-panel"><PanelHead eyebrow="Tools" title="Runtime integrations" /><p className="as-muted">Create the agent first; runtime tools appear after the profile exists.</p></div>;
   }
@@ -43,7 +67,7 @@ export function AgentSettingsToolsPanel({
   const mailbox = agentMailboxOverview?.mailboxes?.[0];
   const mailboxProvider = agentMailboxOverview?.providerStatus;
   const mailboxReady = mailbox?.status === "ready";
-  const mailboxStatus = mailboxReady ? "Ready" : mailboxProvider?.ready ? "Ready to create" : "Provider needed";
+  const mailboxStatus = mailboxReady ? "Ready" : mailboxProvider?.ready ? null : "Provider needed";
   const mailboxBlockers = Array.isArray(mailboxProvider?.blockers) ? mailboxProvider.blockers.slice(0, 3) : [];
 
   return (
@@ -57,7 +81,7 @@ export function AgentSettingsToolsPanel({
       <article className="as-tool as-mailbox" data-ready={mailboxReady || undefined}>
         <span className="tile"><Mail size={18} aria-hidden="true" /></span>
         <div>
-          <div className="th"><span className="tn">Agent mailbox</span><Badge tone={mailboxReady ? "live" : "honey"}>{mailboxStatus}</Badge></div>
+          <div className="th"><span className="tn">Agent mailbox</span>{mailboxStatus ? <Badge tone={mailboxReady ? "live" : "honey"}>{mailboxStatus}</Badge> : null}</div>
           <p className="td">{mailboxReady ? mailbox.address : mailboxProvider?.detail || "Create a persistent mailbox for this agent."}</p>
           {mailboxBlockers.map((blocker) => <p key={blocker} className="td">{blocker}</p>)}
           {agentMailboxError ? <p className="as-error">{agentMailboxError}</p> : null}

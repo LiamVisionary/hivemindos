@@ -7,9 +7,23 @@ import {
   BANKR_REPO_REFERENCE_PATH,
   BANKR_VAULT_REFERENCE_PATH,
 } from "@/lib/services/chat/bankr-capability-context";
+import {
+  CLAWBANK_HIVEMIND_INTEGRATION_FACTS,
+  CLAWBANK_PLATFORM_FACTS,
+  CLAWBANK_REPO_REFERENCE_PATH,
+  CLAWBANK_VAULT_REFERENCE_PATH,
+} from "@/lib/services/chat/clawbank-capability-context";
+import {
+  X_MCP_HIVEMIND_INTEGRATION_FACTS,
+  X_MCP_PLATFORM_FACTS,
+} from "@/lib/services/chat/x-mcp-capability-context";
+import { NANSEN_HIVEMIND_INTEGRATION_FACTS } from "@/lib/services/chat/nansen-capability-context";
 import { getBrainSkillInventory, getSharedBrainSkillsCached } from "@/lib/services/obsidian/brain-skills";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { externalAgentProviderItems } from "@/lib/services/external-agent-providers";
+import { dashboardSwarmGoalContextIndexItem, documentIngestionContextIndexItem, founderModeContextIndexItem, hiveComputeContextIndexItem, jsonRenderContextIndexItem, loopEngineeringContextIndexItem, managedCloudAgentsContextIndexItem } from "@/lib/services/context-index/static-tool-items";
+import { packagedSkillFileStats, packagedSkillItem } from "@/lib/services/context-index/packaged-skills";
+import { hiveActionContextIndexItems, hiveActionMcpName, listHiveActions } from "@/lib/services/hive-actions";
 import { HIVE_MCP_SERVER_CATALOG } from "@/lib/services/mcp/catalog";
 import {
   USEPOD_COMPATIBILITY_MATRIX,
@@ -27,6 +41,19 @@ import {
 import { RUNTIME_DEFINITIONS } from "@/lib/types/agent-runtime";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
 import { applyAppPreferences, readAppPreferences, type AppModelPreference } from "@/lib/services/fleet/app-preferences";
+import { connectorManifestContextIndexItems } from "@/lib/services/integrations/connector-context-index";
+import { githubCapabilityContextIndexItems } from "@/lib/services/github-capability-catalog";
+import { actionIntegrationConnected } from "@/lib/services/integrations/hive-action-connection";
+import { readSharedAgentEnv } from "@/lib/services/integrations/shared-env";
+import { visualArtifactContextIndexItems } from "@/lib/services/visual-artifact-context-index";
+import {
+  principalCanReadScope,
+  localAdminPrincipal,
+  type AuthorizationMetadata,
+  type PrincipalContext,
+  type ScopePolicy,
+} from "@/lib/types/principal";
+import { searchContextIndexSnapshot } from "@/lib/services/context-index/search";
 
 export type ContextIndexKind =
   | "skill"
@@ -34,9 +61,14 @@ export type ContextIndexKind =
   | "api-route"
   | "connected-app"
   | "app-endpoint"
+  | "connector"
+  | "artifact"
   | "runtime"
   | "doc"
-  | "workspace-file";
+  | "workspace-file"
+  | "code-symbol"
+  | "code-route"
+  | "repo-architecture";
 
 export type ContextIndexLoadHint = {
   type: "file" | "api" | "none";
@@ -61,6 +93,8 @@ export type ContextIndexItem = {
   score?: number;
   /** Rank bonus applied on top of text relevance, e.g. user-pinned priority apps. */
   priorityBoost?: number;
+  scope?: ScopePolicy;
+  authorization?: AuthorizationMetadata;
 };
 
 export type ContextIndex = {
@@ -76,12 +110,15 @@ export type ContextIndexOptions = {
   includeRuntimeProviders?: boolean;
   connectedApps?: ContextConnectedApp[];
   kinds?: ContextIndexKind[];
+  principal?: PrincipalContext | null;
 };
 
 export type ContextIndexSearchOptions = ContextIndexOptions & {
   query?: string;
   limit?: number;
 };
+
+export type ContextIndexBatchQuery = Pick<ContextIndexSearchOptions, "query" | "limit">;
 
 export type ContextConnectedAppRoute = {
   method?: string;
@@ -110,6 +147,7 @@ export type ContextConnectedApp = {
   apiRoutesSource?: string;
   priority?: boolean;
   usageNotes?: string;
+  capabilities?: string[];
   preferredModels?: AppModelPreference[];
 };
 
@@ -121,7 +159,6 @@ const DOC_ROOTS = ["docs"];
 const WORKSPACE_ROOTS = ["src/lib", "src/features/dashboard", "src/components", "scripts", "workers", "cmd", "src-tauri/src"];
 const TOP_LEVEL_FILES = ["AGENTS.md", "README.md", "ROADMAP.md", "CHANGELOG.md", "package.json", "setup.sh", "setup.ps1", "uninstall.sh", "uninstall.ps1"];
 const TOOL_SCHEMA_FILES = ["src/lib/search-tool.ts", "src/app/api/orchestrator/route.ts", "src/app/api/scheduler/skill-action/route.ts"];
-const PACKAGED_AUTO_INSTALL_SKILLS_ROOT = "packaged-skills/auto-install";
 const CONNECTED_APPS_NOTE = "Connected Apps Context Index.md";
 
 function workspaceRoot() {
@@ -187,17 +224,6 @@ function firstUsefulParagraph(markdown: string) {
     .split(/\n\s*\n/)
     .map((part) => part.replace(/^#+\s*/, "").replace(/\s+/g, " ").trim())
     .find((part) => part && !part.startsWith("![")) ?? "";
-}
-
-function parseSimpleFrontmatter(markdown: string) {
-  const fields = new Map<string, string>();
-  const match = markdown.match(/^---\n([\s\S]*?)\n---/);
-  if (!match) return fields;
-  for (const line of match[1].split("\n")) {
-    const field = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
-    if (field) fields.set(field[1].toLowerCase(), field[2].replace(/^["']|["']$/g, "").trim());
-  }
-  return fields;
 }
 
 function titleFromMarkdown(path: string, markdown: string) {
@@ -370,37 +396,6 @@ async function skillItems(options: ContextIndexOptions): Promise<ContextIndexIte
   return [...shared, ...providerSkills];
 }
 
-async function packagedSkillFileStats(): Promise<FileStatEntry[]> {
-  const root = absolutePath(PACKAGED_AUTO_INSTALL_SKILLS_ROOT);
-  if (!(await canRead(root))) return [];
-  const files = (await walkFiles(root, [], 200)).filter((file) => basename(file) === "SKILL.md");
-  return statPaths(files);
-}
-
-async function packagedSkillItem(file: FileStatEntry): Promise<ContextIndexItem> {
-  const markdown = await readFile(file.path, "utf8").catch(() => "");
-  const frontmatter = parseSimpleFrontmatter(markdown);
-  const relativePath = toPosix(relative(workspaceRoot(), file.path));
-  const slug = basename(dirname(file.path));
-  const description = frontmatter.get("description") || firstUsefulParagraph(markdown) || `Packaged skill ${slug}.`;
-  return {
-    id: `skill:packaged:auto-install:${slug}`,
-    kind: "skill",
-    title: frontmatter.get("name") || slug,
-    summary: description,
-    tags: tagParts(slug, "packaged", "auto-install", "installable", "one-click", "skill"),
-    path: file.path,
-    retrievalText: retrievalText([description, relativePath, "packaged skill auto-install catalog"]),
-    load: {
-      type: "file",
-      target: file.path,
-      note: "Packaged auto-install skill metadata is indexed for setup discovery. Optional packaged skills are excluded until the user installs them into the shared brain.",
-    },
-    updatedAt: file.mtimeMs,
-    sizeBytes: file.size,
-  };
-}
-
 async function apiRouteFileStats(): Promise<FileStatEntry[]> {
   const files = await walkFiles(join(workspaceRoot(), "src/app/api"), [], 500);
   return statPaths(files.filter((file) => file.endsWith(`${sep}route.ts`)));
@@ -423,6 +418,107 @@ async function apiRouteItem(file: FileStatEntry): Promise<ContextIndexItem> {
     updatedAt: file.mtimeMs,
     sizeBytes: file.size,
   };
+}
+
+// ── Code-intelligence context entries (compact only) ───────────────────────
+// Emits one repo-architecture summary plus a capped set of exported symbols so
+// agents can find code without raw file walking and know when to call the
+// code_* tools. Private symbols and every route are intentionally NOT flooded
+// in here — the graph engine answers depth via /api/code-intelligence.
+const CODE_SYMBOL_ROOTS = ["src/lib/services", "src/features/dashboard"];
+const CODE_SYMBOL_FILE_CAP = 400;
+const CODE_SYMBOL_ITEM_CAP = 80;
+
+async function codeSymbolFileStats(): Promise<FileStatEntry[]> {
+  const files: string[] = [];
+  for (const root of CODE_SYMBOL_ROOTS) {
+    if (files.length >= CODE_SYMBOL_FILE_CAP) break;
+    await walkFiles(absolutePath(root), files, CODE_SYMBOL_FILE_CAP);
+  }
+  return statPaths(files.filter((file) => /\.tsx?$/.test(file) && !file.endsWith(".d.ts")));
+}
+
+function exportedSymbols(source: string): Array<{ name: string; kind: "function" | "class" }> {
+  const out: Array<{ name: string; kind: "function" | "class" }> = [];
+  for (const match of source.matchAll(/export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)/g)) out.push({ name: match[1], kind: "function" });
+  for (const match of source.matchAll(/export\s+(?:abstract\s+)?class\s+([A-Za-z0-9_]+)/g)) out.push({ name: match[1], kind: "class" });
+  return out;
+}
+
+function repoArchitectureItem(routeCount: number, symbolSampleCount: number): ContextIndexItem {
+  return {
+    id: "code-arch:repo",
+    kind: "repo-architecture" as const,
+    title: "HivemindOS code & system map",
+    summary: `Code-intelligence overview: ${routeCount} API routes plus exported symbols and the cross-service wiring (routes, Hive actions, MCP tools, connected apps).`,
+    tags: ["code", "architecture", "graph", "routes", "symbols", "impact", "system", "setup", "wiring"],
+    aliases: ["code graph", "code intelligence", "architecture", "trace call path", "what calls this", "which routes expose", "impact of my changes", "what did i break", "how is my hive wired", "understand my setup", "system map"],
+    retrievalText: `Use code_get_architecture for a structural overview and the cross-service route map, code_search_graph to find symbols/routes without raw file walking, code_trace_path for callers/callees, and code_detect_changes for diff impact ("what did I break?"). Answers how the HivemindOS hive is wired across ${routeCount} API routes, Hive actions, MCP tools, and connected apps (≈${symbolSampleCount} exported symbols sampled).`,
+    load: { type: "api" as const, target: "/api/code-intelligence", note: "POST { action: 'status' | 'get-architecture' | 'search-graph' | 'trace-path' | 'detect-changes' | 'get-code-snippet' }." },
+  };
+}
+
+async function codeIntelligenceItems(files: FileStatEntry[]): Promise<ContextIndexItem[]> {
+  const items: ContextIndexItem[] = [];
+  const seen = new Set<string>();
+  let symbolCount = 0;
+  for (const file of files) {
+    if (items.length >= CODE_SYMBOL_ITEM_CAP) break;
+    const source = await readFile(file.path, "utf8").catch(() => "");
+    if (!source) continue;
+    const relativePath = toPosix(relative(workspaceRoot(), file.path));
+    for (const symbol of exportedSymbols(source)) {
+      symbolCount += 1;
+      if (items.length >= CODE_SYMBOL_ITEM_CAP) break;
+      const id = `code-symbol:${relativePath}#${symbol.name}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      items.push({
+        id,
+        kind: "code-symbol" as const,
+        title: symbol.name,
+        summary: `Exported ${symbol.kind} in ${relativePath}.`,
+        tags: tagParts(symbol.name, relativePath),
+        aliases: [symbol.name],
+        path: file.path,
+        retrievalText: `Exported ${symbol.kind} ${symbol.name} (${relativePath}). Prefer code_search_graph over broad file search to find symbols; use code_trace_path for callers/callees and code_get_snippet for its source.`,
+        load: { type: "file" as const, target: file.path, note: "Read the file, or call code_get_snippet / code_trace_path for graph context." },
+        updatedAt: file.mtimeMs,
+        sizeBytes: file.size,
+      });
+    }
+  }
+  const routeCount = (await apiRouteFileStats()).length;
+  items.unshift(repoArchitectureItem(routeCount, symbolCount));
+  return items;
+}
+
+function codeCapabilityRouteItems(): ContextIndexItem[] {
+  const byRoute = new Map<string, ContextIndexItem>();
+  for (const action of listHiveActions()) {
+    const route = action.contextIndex?.route;
+    if (!route) continue;
+    const id = `code-route:${route}`;
+    const existing = byRoute.get(id);
+    if (existing) {
+      existing.tags = [...new Set([...existing.tags, ...tagParts(...action.tags)])].slice(0, 12);
+      existing.aliases = [...new Set([...(existing.aliases ?? []), action.id, hiveActionMcpName(action)])];
+      continue;
+    }
+    byRoute.set(id, {
+      id,
+      kind: "code-route" as const,
+      title: route,
+      summary: `Capability route ${route} — exposes ${action.title}.`,
+      tags: tagParts(route, ...action.tags),
+      aliases: [action.id, hiveActionMcpName(action)],
+      route,
+      methods: action.contextIndex?.methods ?? ["POST"],
+      retrievalText: `Route ${route} backs HivemindOS Hive action(s) / MCP tool(s). Use code_get_architecture to see every UI / tool / API surface that exposes a capability, e.g. "which routes expose wallet execution?".`,
+      load: { type: "api" as const, target: route, note: "Route exposed as a Hive action / MCP capability." },
+    });
+  }
+  return [...byRoute.values()];
 }
 
 function toolSchemaFileStats(): Promise<FileStatEntry[]> {
@@ -502,67 +598,11 @@ function localCliToolItems(): ContextIndexItem[] {
         note: "Use plan/dry-run first when the machine match is ambiguous. Use the CLI or MCP tool from raw runtimes.",
       },
     },
-    {
-      id: "tool-schema:dashboard-swarm-goal",
-      kind: "tool-schema",
-      title: "Dashboard /swarm-goal command",
-      summary: "Dashboard chat command that rewrites a loose build request into a richer build prompt, appends parallel-agent /goal instructions, and submits it to Queen Bee for Work Board delegation.",
-      tags: ["swarm-goal", "swarm", "goal", "slash-command", "dashboard", "chat", "queen-bee", "orchestration", "parallel-agents", "agent-routing", "build", "implementation", "work-board", "capability"],
-      aliases: [
-        "/swarm-goal",
-        "swarm goal",
-        "parallel agent goal",
-        "spawn agents with goals",
-        "build with swarm",
-        "queen bee build delegation",
-        "rewrite build prompt",
-        "agent swarm build",
-        "dedicated /goal",
-        "orchestrated build prompt",
-      ],
-      retrievalText: [
-        "Use the dashboard chat slash command /swarm-goal <build request> when the user gives a loose build/create/make request and wants Queen Bee to orchestrate multiple agents.",
-        "/swarm-goal rewrites the request into: Build [THING] in [TECH/FRAMEWORK]. It should include [MAIN FEATURES], with [INTERACTION/ANIMATION/BEHAVIOR DETAILS]. Make it feel [MOOD/QUALITY], using [VISUAL DETAILS], [ENVIRONMENT DETAILS], and [EXTRA EFFECTS].",
-        "The command appends: For this task, write yourself a new goal and spawn agents in parallel — as many as needed to do it better and faster. Split the work into independent pieces, dispatch them concurrently, and synthesize the results as they return. Give each agent its own dedicated /goal.",
-        "Dashboard implementation: src/features/chat/swarm-goal-prompt.ts builds the expanded prompt, src/features/dashboard/hooks/dashboard-swarm-goal-command.ts submits it to /api/queen-bee with mode act, priority high, and skills planner/code/qa.",
-        "Queen Bee route: POST /api/queen-bee creates or reuses a Work Board task, ranks chat-capable fleet agents, records receipts under Operations/Brain Services/Queen Bee, and schedules autonomous pickup for act-mode delegated tasks.",
-        "Side effects: this creates a Work Board task and may start autonomous agent pickup. Use a plan/dry-run or direct /api/queen-bee mode plan if you only need to inspect routing without launching work.",
-      ].join(" "),
-      route: "/api/queen-bee",
-      methods: ["POST"],
-      path: absolutePath("src/features/dashboard/hooks/dashboard-swarm-goal-command.ts"),
-      load: {
-        type: "file",
-        target: absolutePath("src/features/dashboard/hooks/dashboard-swarm-goal-command.ts"),
-        note: "Load with src/features/chat/swarm-goal-prompt.ts when checking the exact prompt rewrite and Queen Bee payload.",
-      },
-    },
-    {
-      id: "tool-schema:json-render-dashboard-ui",
-      kind: "tool-schema",
-      title: "json-render dashboard UI",
-      summary: "Guardrailed assistant-generated UI rendering in chat with @json-render/core and @json-render/react.",
-      tags: ["json-render", "generative-ui", "dynamic-ui", "dashboard", "chat", "renderer", "json", "react", "spec", "catalog", "tool"],
-      aliases: [
-        "json render",
-        "render json ui",
-        "generative ui",
-        "dynamic dashboard card",
-        "assistant generated ui",
-      ],
-      retrievalText: [
-        "HivemindOS chat can render a fenced json-render spec returned by an assistant or tool output.",
-        "Use a fenced block labelled ```json-render containing a flat spec with root and elements. The dashboard only accepts the local guarded catalog: Stack, Panel, Heading, Text, Metric, Badge, Button, Divider, Callout, KeyValueList, DataTable, CodeBlock, Progress, and List.",
-        "Every element must have a supported type, props object, and children array. Every child key must exist in elements. Optional top-level state is allowed for json-render dynamic values.",
-        "Use Callout for prominent notes, KeyValueList for labeled facts, DataTable for compact records, CodeBlock for specs or snippets, Progress for percentages, and List for ordered or unordered steps. Button props support label, optional safe url, optional copyText, and variant primary or secondary. Unknown component types and malformed specs are displayed as plain text instead of executed.",
-      ].join(" "),
-      path: absolutePath("src/components/json-render/JsonRenderSurface.tsx"),
-      load: {
-        type: "file",
-        target: absolutePath("src/components/json-render/JsonRenderSurface.tsx"),
-        note: "Load for the exact supported component catalog and sanitizer before asking an agent to emit json-render UI.",
-      },
-    },
+    dashboardSwarmGoalContextIndexItem(absolutePath),
+    documentIngestionContextIndexItem(absolutePath),
+    founderModeContextIndexItem(absolutePath),
+    jsonRenderContextIndexItem(absolutePath),
+    loopEngineeringContextIndexItem(absolutePath),
     {
       id: "tool-schema:hive-brain-compiled-wiki",
       kind: "tool-schema",
@@ -590,7 +630,7 @@ function localCliToolItems(): ContextIndexItem[] {
         "Human collective shared-brain mode follows the Curator-style contract: write to the contributor's personal opted-in domain, then push/synthesize/pull the shared mirror. This does not restrict ordinary agent-to-agent HivemindOS collaboration; use collaborationMode agent-to-agent for internal agent work.",
       ].join(" "),
       route: "/api/brain/knowledge",
-      methods: ["GET", "POST"],
+      methods: ["POST"],
       load: {
         type: "api",
         target: "/api/brain/knowledge",
@@ -644,15 +684,113 @@ function localCliToolItems(): ContextIndexItem[] {
       load: {
         type: "file",
         target: BANKR_VAULT_REFERENCE_PATH,
-        note: "Vault-relative imported Bankr docs. For live readiness use /api/crypto/capabilities; execution uses native Bankr chat actions, /api/bankr/actions, /api/bankr/llm-credits, and explicit approval gates.",
+        note: "Vault-relative imported Bankr docs. For live readiness use /api/crypto/capabilities; managed copy trading uses /api/trading/bankr-copy, while other execution uses native Bankr chat actions, /api/bankr/actions, /api/bankr/llm-credits, and explicit approval gates.",
+      },
+    },
+    {
+      id: "tool-schema:nansen-onchain-intelligence",
+      kind: "tool-schema",
+      title: "Nansen onchain intelligence",
+      summary: "Nansen token, wallet, Hyperliquid, market-scout, simple-template, complex-template, CEX-health, and research-agent briefings for HivemindOS trade and portfolio due diligence.",
+      tags: ["nansen", "crypto", "wallet", "portfolio", "token", "market-scout", "hyperliquid", "simple-template", "complex-template", "smart-money-holdings", "token-holders", "token-screener", "cex-health", "related-wallets", "onchain", "due-diligence", "hosted-credits", "capability", "tool"],
+      aliases: [
+        "nansen",
+        "token due diligence",
+        "wallet intelligence",
+        "wallet brief",
+        "token brief",
+        "market scout",
+        "hyperliquid intelligence",
+        "simple nansen template",
+        "complex nansen template",
+        "smart money holdings",
+        "top token holders",
+        "token screener discovery",
+        "smart money token tracking",
+        "related wallet clustering",
+        "cex health monitor",
+        "onchain research",
+        "nansen agent",
+      ],
+      retrievalText: NANSEN_HIVEMIND_INTEGRATION_FACTS.join(" "),
+      route: "/api/nansen/status",
+      methods: ["GET"],
+      load: {
+        type: "api",
+        target: "/api/nansen/status",
+        note: "Use /api/nansen/status for readiness, then POST /api/nansen/token-brief, /wallet-brief, /hyperliquid-brief, /market-scout, /simple-template, /complex-template, or /agent. Simple template ids: defi-positions, smart-money-holdings, token-top-holders, token-screener-discovery. Complex template ids: token-tracking-smart-money, hyperliquid-wallet-discovery, related-wallets-scale, top-wallet-copytrade-research, cex-health-monitor. Hosted credits use the managed broker; direct Nansen x402 is not the official cloud path.",
+      },
+    },
+    {
+      id: "tool-schema:clawbank-agent-platform",
+      kind: "tool-schema",
+      title: "ClawBank agent financial + legal OS",
+      summary: "ClawBank financial + legal OS for AI agents: self-custody wallet (Base/XRPL), KYC bank rails (Bridge), off-ramp, autonomous trading, real US LLC formation, contracts, comms, fight clubs, and Wise — over REST (/api/clawbank/*) and a discovery-first MCP tool catalog.",
+      tags: ["clawbank", "bank", "wallet", "llc", "formation", "off-ramp", "kyc", "bridge", "trading", "swap", "contracts", "coms", "self-custody", "usdc", "capability", "agent", "tool"],
+      aliases: [
+        "what can you do with clawbank",
+        "clawbank capabilities",
+        "clawbank wallet",
+        "clawbank bank account",
+        "form an llc",
+        "create a company",
+        "clawbank off-ramp",
+        "clawbank trading",
+        "clawbank contracts",
+        "clawbank formation",
+        "agent legal entity",
+      ],
+      retrievalText: [
+        ...CLAWBANK_PLATFORM_FACTS,
+        ...CLAWBANK_HIVEMIND_INTEGRATION_FACTS,
+        `Full imported ClawBank documentation lives at ${CLAWBANK_VAULT_REFERENCE_PATH} in the shared vault and ${CLAWBANK_REPO_REFERENCE_PATH} in the hivemind-os repo; search those for endpoint references, the MCP discovery flow, and capability details.`,
+      ].join(" "),
+      route: "/api/clawbank",
+      methods: ["GET"],
+      load: {
+        type: "file",
+        target: CLAWBANK_VAULT_REFERENCE_PATH,
+        note: "Vault-relative imported ClawBank docs. For live readiness use GET /api/clawbank; discover the per-account tool surface with GET /api/clawbank/run; money/entity actions need confirmation tokens.",
+      },
+    },
+    {
+      id: "tool-schema:x-mcp-integration",
+      kind: "tool-schema",
+      title: "X / Twitter integration (managed X API + X MCP)",
+      summary: "X/Twitter over MCP on two paths: the official X API MCP with a BYO X developer app, and the managed HivemindOS X API gateway with Sign in with X, server-side OAuth token custody, hosted-credit billing, the x_api MCP tool, and the CONFIRM_X_API_CALL write gate.",
+      tags: ["x", "twitter", "social", "mcp", "integration", "post", "search", "timeline", "oauth", "credits", "gateway", "capability", "tool"],
+      aliases: [
+        "x integration",
+        "twitter integration",
+        "what can you do with x",
+        "connect x",
+        "sign in with x",
+        "post to x",
+        "tweet",
+        "x api",
+        "x mcp",
+        "xapi mcp",
+        "managed x api",
+        "x api credits",
+      ],
+      retrievalText: [
+        ...X_MCP_PLATFORM_FACTS,
+        ...X_MCP_HIVEMIND_INTEGRATION_FACTS,
+      ].join(" "),
+      route: "/api/integrations/x-mcp",
+      methods: ["GET", "POST"],
+      load: {
+        type: "api",
+        target: "/api/integrations/x-mcp",
+        note: "Live X MCP readiness by credential key name plus per-runtime xapi config state. Managed X API calls run through /api/integrations/x-managed; non-GET proxy calls require CONFIRM_X_API_CALL.",
       },
     },
     {
       id: "tool-schema:crypto-capability-router",
       kind: "tool-schema",
       title: "crypto capability router",
-      summary: "Unified agent-facing crypto router for Bankr, x402, Veil Cash, MoneyClaw, and UsePod readiness, route selection, clear-signing reviews, crosschain intent drafts, identity records, and risk checks.",
-      tags: ["crypto", "wallet", "payment", "capability", "router", "bankr", "x402", "veil", "moneyclaw", "usepod", "paid-api", "private-payment", "trade", "crosschain", "bridge", "clear-signing", "agent-identity", "risk", "agent", "tool"],
+      summary: "Unified agent-facing crypto router for Bankr, local Hyperliquid, x402, Veil Cash, MoneyClaw, and UsePod readiness, route selection, clear-signing reviews, crosschain intent drafts, identity records, and risk checks.",
+      tags: ["crypto", "wallet", "payment", "capability", "router", "bankr", "hyperliquid", "perps", "builder-code", "x402", "veil", "moneyclaw", "usepod", "paid-api", "private-payment", "trade", "crosschain", "bridge", "clear-signing", "agent-identity", "risk", "agent", "tool"],
       aliases: [
         "crypto router",
         "unified crypto mcp",
@@ -677,8 +815,9 @@ function localCliToolItems(): ContextIndexItem[] {
         "This is the unified capability layer for agent decisions: it reports provider readiness by key name only, selects the best configured rail for an intent, and prepares the existing provider endpoint request body without executing money movement itself.",
         "GET /api/crypto/capabilities?intent=<status|portfolio|receive|send|private-transfer|paid-api|private-paid-api|trade|crosschain-swap|bridge|crosschain-payment|token-launch|polymarket|hyperliquid|automation|nft|agent-job|card-payment|fund-llm-credits>&agentId=<id> returns the capability map. POST { action: 'select', intent, agentId, wallet, preferredProvider? } selects a rail. POST { action: 'prepare', intent, agentId, wallet, url?, recipientAddress?, amountUsd?, asset?, fromChain?, toChain?, fromAsset?, toAsset? } returns the endpoint, draft body, missing readiness, approval requirement, confirmation token, clear-signing review, and crosschain plan when relevant.",
         "MCP path: run hivemind-mcp as a stdio MCP server. It exposes crypto_capabilities for readiness, select_crypto_rail for no-side-effect provider selection, prepare_crypto_action for provider endpoint/request-body drafts, review_crypto_action for clear-signing, agent_crypto_identity for local identity/listing records, and crypto_risk_monitor for DARC-style control checks.",
-        "The router covers Bankr for wallet portfolio, swaps/trades, crosschain swaps/bridges/payments, token launches, Polymarket, Hyperliquid, recurring automations, NFT actions, Agent API jobs, and LLM credit funding; x402 for public paid API fetches and local-wallet USDC sends; Veil for private transfers and private x402; MoneyClaw for card/web payment readiness; and UsePod for prepaid provider-managed paid inference/paywalls.",
-        "Execution remains with hardened routes and gates: /api/bankr/actions, /api/bankr/llm-credits, /api/wallet/x402, /api/wallet/veil/x402, /api/wallet/veil/transfer, /api/wallet/send, /api/wallet/moneyclaw, /api/usepod/status, /api/usepod/deposit-transaction, /api/crypto/clear-signing, /api/crypto/agent-identity, and /api/crypto/risk-monitor.",
+        "The router covers Bankr for wallet portfolio, swaps/trades, crosschain swaps/bridges/payments, token launches, Polymarket, Hyperliquid fallback, recurring automations, NFT actions, Agent API jobs, and LLM credit funding; local Hyperliquid for governed EVM-wallet perp quotes/orders with server-configured builder codes; x402 for public paid API fetches and local-wallet stablecoin sends (USDC, or USDG on Robinhood Chain); Veil for private transfers and private x402; MoneyClaw for card/web payment readiness; and UsePod for prepaid provider-managed paid inference/paywalls.",
+        "Official money-movement fee policy is fetched from the hosted HivemindOS policy endpoint by default; local HIVEMINDOS_TRADING_PLATFORM_FEES_ENABLED or HIVEMINDOS_PLATFORM_FEE_RECIPIENT_* variables switch an install to self-hosted override policy. Ordinary wallet sends and externally sourced company revenue have no official HivemindOS fee. Current source rates are 0.20% for DEX swaps, 0.10% for supported live stock/tokenized-stock execution, and 0.50% for ordinary paid x402 or private-payment execution, with a $0.01 minimum and $10 cap where a fee applies. /api/company-revenue records Zero Human Company revenue without creating a fee; only a future hosted marketplace or billing policy can attach a disclosed fee to a HivemindOS-sourced transaction. Official Hyperliquid builder policy remains hosted and separate.",
+        "Execution remains with hardened routes and gates: /api/bankr/actions, /api/bankr/llm-credits, /api/trading/hyperliquid, /api/wallet/x402, /api/wallet/veil/x402, /api/wallet/veil/transfer, /api/wallet/send, /api/wallet/moneyclaw, /api/usepod/status, /api/usepod/deposit-transaction, /api/crypto/clear-signing, /api/crypto/agent-identity, and /api/crypto/risk-monitor.",
         "Side-effect policy: call status/select/prepare first; do not execute sends, swaps, trades, token launches, bets, leverage positions, NFT mutations, automations, paid API calls, card payments, private transfers, or LLM credit funding unless wallet Spend and caps allow it, the wallet's explicit auto-send/auto-use policy allows that action, or the user has explicitly confirmed the prepared draft. Never ask for, print, store, or summarize private keys, seed phrases, API keys, card details, or wallet secrets.",
       ].join(" "),
       route: "/api/crypto/capabilities",
@@ -693,7 +832,7 @@ function localCliToolItems(): ContextIndexItem[] {
       id: "tool-schema:managed-agent-billing",
       kind: "tool-schema",
       title: "managed agent Honey billing",
-      summary: "No-BYOK managed-agent billing through spend-only managed HONEY credits, Stripe Checkout funding, signed Honey ledger credit/debit events, and server-side provider markup.",
+      summary: "No-BYOK managed-agent billing through spend-only Hivemind Cloud credits, verified checkout funding, signed credit/debit events, and server-side provider markup.",
       tags: ["managed agent", "billing", "honey", "credits", "stripe", "x402", "bankr", "markup", "no api keys", "funding", "spend"],
       aliases: [
         "managed agent credits",
@@ -707,13 +846,13 @@ function localCliToolItems(): ContextIndexItem[] {
       ],
       retrievalText: [
         "Use /api/managed-agent/billing when the user wants one-step managed agent usage without bringing their own provider API keys.",
-        "GET /api/managed-agent/billing?agentId=<id> returns the Honey ledger, managed Honey balance for the agent, configured funding rails, and provider mode choices.",
-        "POST { action: 'quote', intent: 'chat'|'coding'|'research'|'paid-api'|'tool', provider?: 'auto'|'bankr'|'openai'|'x402'|'moneyclaw'|'agent-wallet'|'hive', estimatedTokens?, estimatedCalls? } returns a server-side quote in spend-only managed HONEY credits with markup.",
-        "POST { action: 'create-stripe-checkout', agentId, amountUsd, rail?: 'stripe'|'stripe-crypto' } creates a Stripe Checkout top-up session when STRIPE_SECRET_KEY is configured. The Stripe webhook credits managed HONEY only after a verified checkout.session.completed event.",
-        "Managed HONEY credits are separate from reward Honey: reward Honey can be claimed to HIVE, but managed HONEY is spend-only service credit for managed agents and cannot be cashed out.",
-        "Official spoof resistance lives in workers/honey-ledger: /managed-billing/events requires HONEY_BILLING_SECRET/HONEY_LEDGER_SECRET HMAC or the admin token, is idempotent, and refuses debit events when the D1-managed balance is insufficient.",
-        "The compute gateway's shared-key mode uses managed HONEY: if ALLOW_SHARED_BANKR_KEY=true and the caller does not provide a Bankr key, it checks managed Honey budget, calls the provider server-side, then submits a signed debit based on verified token usage.",
-        "Never let clients directly claim funded credits. Stripe, x402, Bankr, agent-wallet, and $HIVE funding rails must credit managed HONEY only after a provider-side settlement/webhook/proof is verified by HivemindOS.",
+        "GET /api/managed-agent/billing?agentId=<id> returns the billing ledger, Hivemind Cloud credit balance for the agent, configured funding rails, and provider mode choices.",
+        "POST { action: 'quote', intent: 'chat'|'coding'|'research'|'paid-api'|'tool', provider?: 'auto'|'bankr'|'openai'|'x402'|'hivemindos-models'|'moneyclaw'|'agent-wallet'|'hive', estimatedTokens?, estimatedCalls? } returns a server-side quote in spend-only Hivemind Cloud credits with markup.",
+        "POST { action: 'create-stripe-checkout', agentId, amountUsd, rail?: 'stripe'|'stripe-crypto' } creates a Stripe Checkout top-up session when STRIPE_SECRET_KEY is configured. The Stripe webhook credits Hivemind Cloud usage only after a verified checkout.session.completed event.",
+        "Hivemind Cloud credits are separate from Honey: Honey is a non-transferable contribution record and is not automatically convertible to HIVE; cloud credits are purchased, spend-only service value for managed agents and cannot be transferred or cashed out.",
+        "Official spoof resistance lives in the HivemindOS-hosted Honey ledger service: /managed-billing/events requires HONEY_BILLING_SECRET/HONEY_LEDGER_SECRET HMAC or the admin token, is idempotent, and refuses debit events when the managed balance is insufficient.",
+        "The compute gateway's shared-key mode uses Hivemind Cloud credits: if ALLOW_SHARED_BANKR_KEY=true and the caller does not provide a Bankr key, it checks the managed-service budget, calls the provider server-side, then submits a signed debit based on verified token usage.",
+        "Never let clients directly mint funded credits. Any supported funding rail must credit Hivemind Cloud usage only after provider-side settlement, webhook, or payment proof is verified by HivemindOS.",
       ].join(" "),
       route: "/api/managed-agent/billing",
       methods: ["GET", "POST"],
@@ -728,7 +867,7 @@ function localCliToolItems(): ContextIndexItem[] {
       kind: "tool-schema",
       title: "paid agent x402 gateway",
       summary: "OpenAI-compatible per-call paid agent endpoint that verifies x402 payment before calling a curated HivemindOS runtime profile.",
-      tags: ["paid agent", "x402", "chat completions", "openai compatible", "agent monetization", "honey", "hive", "bankr", "usepod", "venice", "openrouter", "runtime"],
+      tags: ["paid agent", "x402", "builder code", "chat completions", "openai compatible", "agent monetization", "honey", "hive", "bankr", "usepod", "venice", "openrouter", "runtime"],
       aliases: [
         "charge per agent call",
         "sell an agent",
@@ -741,13 +880,14 @@ function localCliToolItems(): ContextIndexItem[] {
       retrievalText: [
         "Use /api/official-paid-agents/<slug>/chat/completions from downloaded apps when calling official HivemindOS monetized agents. This is a buyer/proxy path to HivemindOS-hosted infrastructure and must not package official payTo, facilitator credentials, provider keys, HONEY/HIVE entitlement logic, or quota authority.",
         "Use /api/paid-agents/<slug>/chat/completions only when exposing a self-hosted curated HivemindOS agent as an OpenAI-compatible seller endpoint that charges the caller's crypto wallet per request through x402.",
-        "For the official hosted path, deploy workers/paid-agent-gateway as a Cloudflare Worker. The Worker verifies and settles x402, records D1 receipt metadata and idempotency keys, then forwards paid OpenAI-compatible chat bodies to HIVEMINDOS_PAID_AGENT_UPSTREAM_URL.",
-        "Production configuration is fail-closed: set HIVEMINDOS_PAID_AGENT_GATEWAY_ENABLED=true plus HIVEMINDOS_PAID_AGENT_SELLER_MODE=self-hosted, HIVEMINDOS_PAID_AGENT_PAY_TO, and HIVEMINDOS_PAID_AGENT_FACILITATOR_URL, then define either one default agent with HIVEMINDOS_PAID_AGENT_PROFILE_JSON/HIVEMINDOS_PAID_AGENT_PROFILE_PATH or a catalog with HIVEMINDOS_PAID_AGENT_CATALOG_JSON/HIVEMINDOS_PAID_AGENT_CATALOG_PATH.",
+        "For the official hosted path, use the HivemindOS-controlled paid-agent gateway service. The gateway verifies and settles x402, records receipt metadata and idempotency keys, then forwards paid OpenAI-compatible chat bodies to its trusted upstream runtime.",
+        "Production configuration is fail-closed: set HIVEMINDOS_PAID_AGENT_GATEWAY_ENABLED=true plus HIVEMINDOS_PAID_AGENT_SELLER_MODE=self-hosted, HIVEMINDOS_PAID_AGENT_PAY_TO, CDP_API_KEY_ID, and CDP_API_KEY_SECRET, then define either one default agent with HIVEMINDOS_PAID_AGENT_PROFILE_JSON/HIVEMINDOS_PAID_AGENT_PROFILE_PATH or a catalog with HIVEMINDOS_PAID_AGENT_CATALOG_JSON/HIVEMINDOS_PAID_AGENT_CATALOG_PATH. The default paid-agent seller path is Base mainnet with the CDP facilitator; set HIVEMINDOS_PAID_AGENT_TESTNET_MODE=true only for Base Sepolia development with x402.org.",
+        "Optional Base Builder Code attribution is configured with HIVEMINDOS_X402_CLIENT_BUILDER_CODE for compatible local wallet x402 calls and HIVEMINDOS_PAID_AGENT_BUILDER_CODE or per-catalog builderCode for paid-agent seller routes on eip155:8453. Builder Codes are public identifiers, not secrets, and must never replace server-side payTo, amount, network, resource, or entitlement checks.",
         "Do not package an official payTo address into the downloadable app as authoritative. A downloaded app is user-controlled; official monetized agents should use a HivemindOS-hosted resource server or server-side receipt verification against the expected payTo, network, amount, and resource. Local self-hosted seller mode is only for operators selling their own endpoint.",
-        "Recommended public runtimes are hivemind-os for local/OpenAI-compatible, Bankr, Venice, UsePod, OpenRouter, and Hive Fusion model routes; Hermes and OpenClaw can be exposed only through curated profiles; Codex, Claude Code, OpenCode, OpenHands, Aider, Aeon, and Evo should stay as managed HONEY jobs with explicit workspace/task scope by default.",
-        "The route verifies x402 before invoking /api/chat/agent-runtime, settles after a successful answer, returns a PAYMENT-RESPONSE header, writes a local paid-agent receipt, and can mirror each settled call into managed HONEY credit/debit accounting when HIVEMINDOS_PAID_AGENT_MIRROR_MANAGED_HONEY=true.",
+        "Recommended public runtimes are hivemind-os for local/OpenAI-compatible, Bankr, Venice, UsePod, OpenRouter, Hive Compute, and Hive Fusion model routes; Hermes and OpenClaw can be exposed only through curated profiles; Codex, Claude Code, OpenCode, OpenHands, Aider, Aeon, and Evo should stay as scoped managed jobs with explicit workspace/task limits by default.",
+        "The route verifies x402 before invoking /api/chat/agent-runtime, settles after a successful answer, returns a PAYMENT-RESPONSE header, writes a local paid-agent receipt, and can mirror each settled call into internal managed-credit accounting when HIVEMINDOS_PAID_AGENT_MIRROR_MANAGED_HONEY=true.",
         "Shared vault access and wallet tools are not included by default. Add sharedVault or wallet only inside the curated paid-agent config when that public product intentionally needs them. Never place secrets, provider keys, private wallet material, or local workspace paths in the public config or response.",
-        "HONEY/HIVE positioning: x402 is the external per-call charge, managed HONEY is the internal no-BYOK credit/debit ledger, and HIVE can fund Bankr LLM credits or managed HONEY through the managed-agent billing rail.",
+        "Commercial positioning: x402 is an external per-call rail, Hivemind Cloud credits are the spend-only no-BYOK service ledger, Honey is a separate contribution record, and HIVE is not required for ordinary managed service access.",
       ].join(" "),
       route: "/api/paid-agents/<slug>/chat/completions",
       methods: ["GET", "POST"],
@@ -758,11 +898,41 @@ function localCliToolItems(): ContextIndexItem[] {
       },
     },
     {
+      id: "tool-schema:hivemindos-wallet-paid-models",
+      kind: "tool-schema",
+      title: "HivemindOS wallet-paid models",
+      summary: "Keyless model provider that pays official HivemindOS-hosted model calls from the selected agent's local x402 wallet policy.",
+      tags: ["hivemindos models", "wallet paid models", "no api keys", "x402", "chat completions", "model provider", "crypto wallet", "paid inference", "agent wallet"],
+      aliases: [
+        "crypto wallet models",
+        "wallet paid ai calls",
+        "no api key models",
+        "pay per model call",
+        "HivemindOS Models",
+      ],
+      retrievalText: [
+        "Select provider slug 'hivemindos-models' when the user wants HivemindOS-managed models paid from hosted credits or a crypto wallet without user API keys.",
+        "The chat runtime resolves the provider to /api/hivemindos/models/chat/completions. GPU-first model ids try Hive Compute first, then the route loads persisted credits or the encrypted local funding wallet and pays the official OpenRouter-backed /api/official-paid-agents/<slug>/chat/completions path through hosted credits or x402.",
+        "The route never accepts client-supplied payTo, facilitator, balance, entitlement, or provider key values. Official recipient, amount, resource binding, settlement, and upstream provider authority stay in the hosted HivemindOS paid-agent resource server.",
+        "Supported picker model ids include hivemindos/auto, hivemindos/fast, hivemindos/deep, hivemindos/frontier, hivemindos/research, and hivemindos/swarm-sovereign-scout. Auto, Fast, and Deep prefer Hive Compute marketplace GPU routes and fall back to matching OpenRouter-backed HivemindOS tiers.",
+        "The selected agent must have a local custody Base/Base Sepolia/Robinhood Chain/Solana x402-capable wallet with Spend enabled, provider x402, enough accepted stablecoin/native gas, and Allow auto-use for one-click calls under its cap. Personal user wallets do not auto-spend; they still require explicit payment confirmation.",
+      ].join(" "),
+      route: "/api/hivemindos/models/chat/completions",
+      methods: ["POST"],
+      load: {
+        type: "api",
+        target: "/api/hivemindos/models/models",
+        note: "GET lists the keyless HivemindOS model ids. POST is the local buyer/proxy path and spends only through persisted x402 wallet policy.",
+      },
+    },
+    hiveComputeContextIndexItem(),
+    managedCloudAgentsContextIndexItem(),
+    {
       id: "tool-schema:wallet-actions",
       kind: "tool-schema",
       title: "agent wallet tools",
-      summary: "Provider-specific dashboard wallet routes for read-only balance checks, x402 paid fetches, UsePod prepaid status, Veil Cash privacy setup, and auto-use-gated USDC sends.",
-      tags: ["wallet", "payment", "crypto", "usdc", "x402", "usepod", "moneyclaw", "bankr", "veil", "privacy", "spend", "balance", "agent", "tool"],
+      summary: "Provider-specific dashboard wallet routes for read-only balance checks, x402 paid fetches, UsePod prepaid status, Veil Cash privacy setup, and auto-use-gated stablecoin sends.",
+      tags: ["wallet", "payment", "crypto", "usdc", "usdg", "robinhood chain", "x402", "usepod", "moneyclaw", "bankr", "veil", "privacy", "spend", "balance", "agent", "tool"],
       aliases: [
         "agent wallet",
         "wallet actions",
@@ -773,6 +943,7 @@ function localCliToolItems(): ContextIndexItem[] {
         "x402 fetch",
         "x402 payment",
         "send usdc",
+        "send usdg",
         "wallet balance",
         "usepod wallet",
         "moneyclaw",
@@ -782,13 +953,14 @@ function localCliToolItems(): ContextIndexItem[] {
       ],
       retrievalText: [
         "Prefer /api/crypto/capabilities for unified crypto capability selection and safe action preparation. Load this provider-specific wallet surface after the router selects a rail or when debugging a concrete wallet route.",
-        "Use this capability when a workflow needs agent wallet, payment, crypto, x402, USDC, UsePod, MoneyClaw, Bankr, Veil Cash, privacy-pool setup, or paid API actions.",
+        "Use this capability when a workflow needs agent wallet, payment, crypto, x402, USDC, USDG, Robinhood Chain, UsePod, MoneyClaw, Bankr, Veil Cash, privacy-pool setup, or paid API actions.",
         "Read-only checks: POST /api/wallet/balance for public wallet balance, GET /api/wallet/moneyclaw for MoneyClaw status, POST /api/usepod/status for UsePod token balance/models.",
         "Paid API path: x402_fetch uses POST /api/wallet/x402 with { agentId, url, method, headers, body, policy, confirmation } and signs from the encrypted local wallet vault.",
-        "MiroShark buyer path: POST /api/miroshark/x402 with action 'run' to pay the public MiroShark x402 endpoint, using exactly one of prompt, url, or article plus optional deep_research, prediction_market, and affiliate. Use action 'suggest' for free ideas, 'status' with runId, and 'report' with runId and format 'json' or 'md'. Native chat can also run a MiroShark x402 simulation directly from prompts like 'run a sim on this polymarket: <url>' when the agent wallet Spend gate, Allow auto-use, and cap allow the $1 payment; the chat stream emits MiroShark progress events and embeds the final card payload.",
+        "MiroShark buyer path: POST /api/miroshark/x402 with action 'run' to pay the HivemindOS-hosted MiroShark proxy, using exactly one of prompt, url, or article plus optional deep_research and prediction_market. Use action 'suggest' for free ideas, 'status' with runId, and 'report' with runId and format 'json' or 'md'. Native chat can also run a MiroShark x402 simulation directly from prompts like 'run a sim on this polymarket: <url>' when the agent wallet Spend gate, Allow auto-use, and cap allow the expected all-in $1.20 payment; the chat stream emits MiroShark progress events and embeds the final card payload. This route skips the generic local x402 platform-fee transfer because the HivemindOS cut is already included in the proxy price.",
         "Approval gate: when Allow auto-use is off, present a concise payment draft and wait for plain explicit confirmation from the user before x402_fetch. When Allow auto-use is on, x402_fetch can pay without another prompt while staying under the hard per-payment cap.",
-        "USDC sends use the same Allow auto-use policy: POST /api/wallet/send can send under the hard per-payment cap when auto-use is on, and requires SEND_USDC for the exact recipient and amount when auto-use is off.",
+        "Stablecoin sends use the same Allow auto-use policy: POST /api/wallet/send sends USDC on Base/Solana or USDG on Robinhood Chain, can send under the hard per-payment cap when auto-use is on, and requires SEND_USDC for the exact recipient and amount when auto-use is off.",
         "UsePod agents use their prepaid UsePod token balance for inference and provider-managed x402/paywall handling; do not require a separate local wallet for UsePod x402.",
+        "Managed UsePod billing uses provider 'usepod' plus usePod.billingMode 'hivemindos-managed' or server env HIVEMINDOS_USEPOD_MANAGED_PROXY_ENABLED. The app sends OpenAI-compatible chat requests to the official paid-agent gateway /api/usepod/managed/v1 with a HivemindOS hosted credit token; the gateway holds the UsePod payer token server-side, reserves the per-request max debit, preserves streaming SSE, emits a final hivemindos_billing event, refunds unused reservation, and charges upstream UsePod spend plus the hosted platform fee. This is buyer-side hosted-service revenue; UsePod hoster earnings are not locally skimmed by the app.",
         `Veil Cash runs on Base chain ${VEIL_CASH_CHAIN_ID}; HivemindOS stores the visible funding wallet and setup copy, while registration, deposits, private transfers, withdrawals, and subaccounts use the Veil app or ${VEIL_CASH_SDK_PACKAGE} CLI/SDK with explicit approval. Entry contract ${VEIL_CASH_CONTRACTS.entry}; USDC queue ${VEIL_CASH_CONTRACTS.usdcQueue}. Current docs and deployed source require USDC deposits to clear a 20 USDC shielded minimum after the 0.3% deposit fee: the CLI deposit amount is the net shielded amount, so deposit USDC 20 requires about 20.06 USDC available plus Base gas. Live relay execution currently requires at least 5 USDC for public-recipient USDC withdrawals.`,
         `Private send capability: when a user asks to "send privately" or make a private payment, select the active provider with privateTransferAssets instead of requiring the user to name the provider. Wallet spending must be on before any private-transfer endpoint executes; when Spend is off, prepare a draft only and ask the user to enable spending. Treat public/private/queued Veil state as internal rail inventory and present one agent spend balance to the user. The current Veil implementation supports private USDC and ETH sends through POST /api/wallet/veil/transfer after the user confirms a reviewed transfer draft, or without the internal '${VEIL_CASH_TRANSFER_CONFIRMATION_LABEL}' token only when that wallet's Veil auto-send policy is explicitly enabled; include autoShield for USDC sends. By default it sends privately to any public Ethereum address; if ready private USDC is insufficient, HivemindOS can shield from the agent's encrypted local Base wallet first, subject to the 20 USDC shield minimum and queue acceptance delay, then complete the private withdrawal after acceptance. The wallet duplicate payment guard is on by default and replays a recently completed matching asset, amount, and recipient during its configured time window; if the user turns it off, the same private send may submit again after the previous transfer finishes, while in-flight duplicate locks still apply. Only use registered-recipient mode for an explicit in-pool shielded transfer to a registered Veil recipient. VEIL_KEY and the Veil CLI must be configured on the server. Veil private x402 is a private payment capability: natural chat prompts can draft and confirm it directly, while lower-level POST /api/wallet/veil/x402 maps internal confirmation to VEIL_X402; discover the x402 USDC price, enforce maxPaymentUsd, withdraw from the Veil USDC pool into a fresh derived payer EOA, then sign and settle x402 from that burner. Veil Advanced setup includes Auto Always Private: when on, ordinary pay-this/x402 endpoint requests default to Veil private x402; when off, ordinary pay-this/x402 endpoint requests use the basic public x402 route and only explicit private wording such as privately, in private, private, or Veil selects the private x402 flow. Ask users for plain confirmation such as "confirm", not provider tokens. The dashboard does not expose or store VEIL_KEY in shared notes.`,
         `UsePod drop-in bases: ${USEPOD_COMPATIBILITY_MATRIX.openai.baseUrlTemplate} for OpenAI-compatible clients and ${USEPOD_COMPATIBILITY_MATRIX.anthropic.baseUrlTemplate} for Anthropic-compatible clients; never expose the actual token in shared notes.`,
@@ -806,31 +978,63 @@ function localCliToolItems(): ContextIndexItem[] {
       id: "tool-schema:stock-trading",
       kind: "tool-schema",
       title: "stock trading (buy/sell)",
-      summary: "Buy and sell stocks through Alpaca (paper or live brokerage) or on-chain tokenized xStocks via Jupiter, governed by per-trade caps, the company kill switch, and CONFIRM_BUY/CONFIRM_SELL.",
-      tags: ["stock", "stocks", "shares", "equities", "trade", "trading", "buy", "sell", "alpaca", "xstocks", "brokerage", "jupiter", "solana", "wallet", "spend", "agent", "tool"],
+      summary: "Buy and sell stocks through Alpaca, Robinhood Agentic brokerage via the official MCP, on-chain xStocks via Jupiter, or Robinhood Chain Stock Token swaps via 0x/USDG, governed by wallet caps, optional explicit company-task policy, and CONFIRM_BUY/CONFIRM_SELL.",
+      tags: ["stock", "stocks", "shares", "equities", "trade", "trading", "buy", "sell", "alpaca", "robinhood", "agentic", "mcp", "xstocks", "robinhood-chain", "brokerage", "jupiter", "solana", "wallet", "spend", "agent", "tool"],
       aliases: [
         "buy a stock",
         "sell a stock",
         "buy shares",
         "sell shares",
         "stock trade",
-        "alpaca order",
+        "alpaca order", "robinhood agentic order", "robinhood trading mcp",
         "xstocks swap",
+        "robinhood chain stock token",
         "tokenized equity",
         "trade tab",
       ],
       retrievalText: [
         "Use this capability when a workflow needs to buy or sell stocks/equities, place a brokerage order, or trade tokenized equities (xStocks).",
-        "HTTP surface: POST /api/trading with { action: 'quote'|'execute', side: 'buy'|'sell', agentId, ticker, notionalUsd, confirmation? }. GET /api/trading returns venue readiness (Alpaca key presence, supported xStock tickers) and the trade-ready agents.",
+        "HTTP surface: POST /api/trading with { action: 'quote'|'execute', side: 'buy'|'sell', agentId, ticker, notionalUsd, confirmation? }. GET /api/trading returns venue readiness for Alpaca, Robinhood Agentic OAuth/account/tool readiness, xStocks, and Robinhood Chain.",
         "The acting wallet is resolved server-side from the agent's persisted wallet config; a request never supplies the trade policy, venue, or live/paper flag. The venue comes from the agent wallet's tradingVenue.",
-        "Two venues: 'alpaca' places a market order via the Alpaca Trading API (defaults to PAPER; live only when the wallet sets alpacaPaper:false); 'xstocks' swaps USDC<->the verified xStock SPL mint via Jupiter (a sell sizes the position from the current price then swaps mint->USDC ExactIn) and signs with the agent's local Solana wallet.",
-        "Governance: a buy spends USDC and runs the full per-trade cap, rolling-budget, and approval-escalation checks; a sell is an inflow and only enforces the company kill switch. A buy needs CONFIRM_BUY and a sell needs CONFIRM_SELL; both are recorded in the unified spend ledger as trade activity.",
+        "Venues: 'alpaca' places a market order through Alpaca (PAPER by default); 'robinhood-agentic' calls Robinhood's official OAuth MCP against the selected dedicated Agentic brokerage account, uses review_equity_order before place_equity_order, and never exposes raw mutation tools; 'xstocks' swaps USDC through Jupiter and signs with the local Solana wallet; 'robinhood-chain' swaps USDG against canonical Stock Token contracts through 0x and signs with the local Robinhood Chain wallet. Stock Token legal/eligibility blocks must be surfaced instead of routed around.",
+        "Governance: a buy spends USDC and runs wallet per-trade, rolling-budget, and approval-escalation checks; a sell is an inflow. Company freeze and budget policy applies only when an active company Work Board task passes companyTaskId. A buy needs CONFIRM_BUY and a sell needs CONFIRM_SELL; both are recorded in the unified spend ledger as trade activity.",
         "Native chat can also buy from prompts like 'buy AAPL for $500'. The Trade dashboard tab exposes a Crypto/Stocks UI over the same governed rails. Crypto trading, swaps, perps, prediction markets, and other rails go through /api/crypto/capabilities, not this stock route.",
         "Never request, print, store, or reveal private keys, seed phrases, or wallet secrets.",
       ].join(" "),
       load: {
         type: "none",
-        note: "Stock buy/sell capability. Quote first, then execute with the matching confirmation token; live brokerage orders move real money.",
+        note: "Stock buy/sell capability. Review first, then execute with the matching confirmation token; live brokerage orders move real money.",
+      },
+    },
+    {
+      id: "tool-schema:hyperliquid-trading",
+      kind: "tool-schema",
+      title: "Hyperliquid perp trading",
+      summary: "Local EVM-wallet Hyperliquid perp quotes, builder-code approvals, and governed order execution through /api/trading/hyperliquid.",
+      tags: ["hyperliquid", "perps", "perpetuals", "leverage", "builder-code", "builder-fee", "wallet", "trade", "trading", "agent", "tool"],
+      aliases: [
+        "hyperliquid trade",
+        "hyperliquid order",
+        "perp trade",
+        "perps",
+        "builder codes",
+        "approve builder fee",
+        "hyperliquid builder",
+      ],
+      retrievalText: [
+        "Use this capability when a workflow needs to trade Hyperliquid spot or perps from a local EVM wallet, inspect account state, manage orders, adjust leverage or isolated margin, transfer/withdraw funds, place/cancel TWAPs, or approve the configured builder fee.",
+        "HTTP surface: GET /api/trading/hyperliquid?agentId=<id> returns non-secret readiness, configured builder details, confirmation tokens, and optional account status. POST /api/trading/hyperliquid accepts read actions status, positions, open-orders, fills, fees, order-status; quote/order actions for spot/perp marketType, trigger orders, timeInForce, clientOrderId; and signed actions approve-builder, cancel, cancel-by-cloid, modify, schedule-cancel, leverage, margin, usd-class, usd-send, spot-send, withdraw, twap-order, twap-cancel.",
+        "Builder-code policy: builder address, per-order builder fee, max approval fee, testnet flag, and optional API URL are fetched server-side from the official HivemindOS builder-policy endpoint. Client request bodies and local/shared env never choose the official builder recipient or fee; self-hosters replace the policy by forking/rebuilding or pointing their own distribution at their own endpoint.",
+        "Approval sequence: first quote the order. If builderApproval.approved is false, action 'approve-builder' signs Hyperliquid ApproveBuilderFee from the selected main local EVM wallet and requires CONFIRM_HYPERLIQUID_BUILDER. Then action 'order' places the order with the configured builder payload and requires CONFIRM_HYPERLIQUID_ORDER.",
+        "Execution policy: the route resolves wallet address, network, secret, and max trade/payment caps server-side from the local vault and governed wallet ledger. Orders, transfers, TWAPs, and margin changes pass wallet rolling budgets, approval escalation, maxTradeUsd/maxPaymentUsd cap, Hyperliquid tick/lot precision, and unified spend-ledger recording. Company freeze and budgets apply only when an active company Work Board task passes companyTaskId.",
+        "MCP path: use hyperliquid_trade. quote/status/open-orders/fills/fees/order-status are read-style; approve-builder requires CONFIRM_HYPERLIQUID_BUILDER; order/modify requires CONFIRM_HYPERLIQUID_ORDER; cancels require CONFIRM_HYPERLIQUID_CANCEL; leverage/margin require CONFIRM_HYPERLIQUID_ACCOUNT; transfers/withdrawals require CONFIRM_HYPERLIQUID_TRANSFER; TWAPs require CONFIRM_HYPERLIQUID_TWAP. Never request, print, store, or reveal private keys, seed phrases, or wallet secrets.",
+      ].join(" "),
+      route: "/api/trading/hyperliquid",
+      methods: ["GET", "POST"],
+      load: {
+        type: "api",
+        target: "/api/trading/hyperliquid",
+        note: "Quote/status first. Builder approval and orders are separately confirmed signed actions.",
       },
     },
     {
@@ -850,10 +1054,10 @@ function localCliToolItems(): ContextIndexItem[] {
       ],
       retrievalText: [
         "Use POST /api/miroshark/x402 when a user asks to run a MiroShark social simulation over x402, get MiroShark launch ideas, check a run, or retrieve a report. In native chat, direct requests such as 'run a sim on this polymarket: <url>' are intercepted by the runtime when Spend and Allow auto-use are enabled, paid through the configured x402 wallet, streamed as MiroShark progress, and rendered as an embedded simulation card.",
-        "For paid runs send { action: 'run', agentId, prompt | url | article, deep_research?, prediction_market?, affiliate?, policy, confirmation? }. Exactly one seed is allowed. The route pays https://x402.miroshark.xyz/run through the encrypted local wallet vault and enforces the agent wallet policy.",
+        "For paid runs send { action: 'run', agentId, prompt | url | article, deep_research?, prediction_market?, policy, confirmation? }. Exactly one seed is allowed. The route pays the official HivemindOS proxy at https://hivemindos-paid-agent-gateway.hivemindos.workers.dev/api/miroshark/x402/run through the encrypted local wallet vault; the proxy then pays MiroShark upstream server-side and settles the user charge only after upstream success. The MiroShark buyer disables the generic local x402 platform-fee transfer so the user pays the all-in $1.20 proxy price, not $1.20 plus an extra fee.",
         "For free preflight ideas send { action: 'suggest', prompt }. For polling send { action: 'status', runId }. For report text send { action: 'report', runId, format: 'md' }, or omit format for JSON.",
         "A paid run returns the lower-level x402 result plus MiroShark's run_id, wait_url, status_url, and payer fields when the upstream response includes them.",
-        "Before paying, present the seed, expected $1 USDC Base payment, wallet policy cap, and whether deep research is enabled unless wallet auto-use clearly permits this exact spend.",
+        "Before paying, present the seed, expected all-in $1.20 USDC Base payment, wallet policy cap, and whether deep research is enabled unless wallet auto-use clearly permits this exact spend.",
       ].join(" "),
       route: "/api/miroshark/x402",
       methods: ["POST"],
@@ -867,8 +1071,8 @@ function localCliToolItems(): ContextIndexItem[] {
       kind: "tool-schema",
       title: "shared brain memory",
       summary: "Vault-native remember, evolve, recall, and answer primitives for HivemindOS shared brain context.",
-      tags: ["memory", "remember", "evolve", "supersedes", "recall", "answer", "obsidian", "vault", "agent", "shared", "brain", "context"],
-      aliases: ["remember", "recall", "evolve memory", "update memory", "persistent memory", "shared memory", "agent memory", "memanto style memory", "memory answer", "write shared memory", "rebuild memory index"],
+      tags: ["memory", "remember", "evolve", "supersedes", "recall", "answer", "obsidian", "vault", "agent", "shared", "brain", "context", "capsule", "replay", "generation"],
+      aliases: ["remember", "recall", "evolve memory", "update memory", "persistent memory", "shared memory", "agent memory", "memanto style memory", "memory answer", "write shared memory", "rebuild memory index", "brain capsule", "memory replay", "historical recall"],
       retrievalText: [
         "Use /api/brain/memory when a workflow needs persistent memory or relevant context over the shared Obsidian brain.",
         "Raw/non-managed agents should use the installed hive-brain CLI: hive-brain answer '<query>' for recall, hive-brain recall '<query>' for hit lists, hive-brain remember --type TYPE --title TITLE --content TEXT for durable writes, and hive-brain evolve --memory-id ID --content TEXT to preserve history while replacing old memory when the app API is reachable.",
@@ -876,14 +1080,16 @@ function localCliToolItems(): ContextIndexItem[] {
         "Default recall/answer is tiered: it checks typed Agent Memory first, returns distilled memory when the top hit is strong, and otherwise augments with full shared-vault markdown. Pass scope: 'agent-memory' for typed/proven memory only, or scope: 'full-vault' to force broad vault recall.",
         "Recall before depending on prior user preferences, decisions, instructions, goals, commitments, artifacts, lessons, or project context; remember only durable reviewed facts, decisions, preferences, goals, instructions, commitments, artifacts, errors, learnings, or reusable context.",
         "POST { action: 'remember', type, title, content, confidence, cognitiveStage, evidenceCount, sourceType, metaTags, tags, source, agentName, agentId, runtime, machineName, machineId, tailnetId, tailnetName, tailnetDnsName, collectorUrl, sessionId, project, vaultPath, proof } to save typed memory with machine provenance. Remember is the fast System 1 capture path by default.",
-        "POST { action: 'evolve', memoryId | supersedes, type?, title?, content, confidence?, evolutionType, evolutionReason, cognitiveStage: 'system2', ...provenance } to write a new active memory, mark older memory notes superseded, append replacement index rows, and return the evolution chain.",
+        "POST { action: 'evolve', memoryId | supersedes, type?, title?, content, confidence?, evolutionType, evolutionReason, cognitiveStage: 'system2', ...provenance } to stage a new active memory plus superseded-note updates, publish one verified replacement generation, and return the evolution chain.",
         "Recall and answer include evolutionChain for evolved hits. Treat the latest active chain head as current truth and prior versions as history/evidence.",
         "Set proof: true to always append a GitLawb memory receipt, or proof: 'auto' to receipt durable memory types and high-confidence facts.",
         "POST or GET recall with query, type, tags, project, limit, and optional scope to retrieve relevant memories and, when needed, vault notes.",
         "Use action 'answer' or GET mode=answer to return a grounded memory context pack from matching shared-brain memories and vault notes.",
-        "Use action 'rebuild-index' to scan existing markdown memory notes once and append rich searchable entries to the private JSONL index.",
+        "Use action 'rebuild-index' to scan existing markdown memory notes and publish a compact verified replacement generation plus compatibility mirrors.",
+        "Use list-generations, generationId recall, or compare-generations (hive-brain generations/replay/compare) when a task needs the actual typed-memory snapshot available at an earlier write.",
+        "Use export-capsule only with an explicit project or memoryIds scope. Capsule open/search is read-only; preview/propose import dedupes by content hash and sends changes through Brain Review without direct memory writes.",
         "Supported memory types: instruction, fact, decision, goal, commitment, preference, relationship, context, event, learning, observation, artifact, error.",
-        "Memory files live under Memory/Distillations/Agent Memory; private append-only search index entries live under Operations/Brain Services/Agent Memory Index.jsonl. Evolved records use supersedes/supersededBy/evolutionRootId frontmatter instead of overwriting history.",
+        "Memory files live under Memory/Distillations/Agent Memory. Verified immutable indexes live under Operations/Brain Services/Index Generations while Agent Memory Index.jsonl remains a compatibility mirror. Evolved records use supersedes/supersededBy/evolutionRootId frontmatter instead of overwriting history.",
         "Operations/Secure reference/status notes are included when recall augments with the full vault so agents can see credential names and set/missing status; do not read, print, store, summarize, or copy plaintext secret values.",
         "The search index stores memory content inside the private vault for fast recall; GitLawb proof receipts stay hash-only.",
         "GitLawb memory receipts live under Operations/Brain Services/Agent Memory Proofs.jsonl and store hashes/provenance instead of memory bodies.",
@@ -1192,9 +1398,14 @@ function totals(items: ContextIndexItem[]) {
     "api-route": 0,
     "connected-app": 0,
     "app-endpoint": 0,
+    connector: 0,
+    artifact: 0,
     runtime: 0,
     doc: 0,
     "workspace-file": 0,
+    "code-symbol": 0,
+    "code-route": 0,
+    "repo-architecture": 0,
   } satisfies Record<ContextIndexKind, number>;
   for (const item of items) result[item.kind] += 1;
   return result;
@@ -1274,6 +1485,15 @@ const FS_SOURCES: FsSourceDefinition[] = [
     },
     build: async (probe) => (probe.files ?? []).map(workspaceFileItem),
   },
+  {
+    name: "code-intelligence",
+    kinds: ["code-symbol", "repo-architecture"],
+    probe: async () => {
+      const files = await codeSymbolFileStats();
+      return { signature: fileSignature(files), files };
+    },
+    build: (probe) => codeIntelligenceItems(probe.files ?? []),
+  },
 ];
 
 type FsSourceSnapshot = { signature: string; items: ContextIndexItem[] };
@@ -1346,21 +1566,48 @@ function scheduleFsSourceRefresh(state: FsIndexState, options: ContextIndexOptio
   });
 }
 
-function perRequestItems(options: ContextIndexOptions, wants: (kind: ContextIndexKind) => boolean): ContextIndexItem[] {
+function perRequestItems(
+  options: ContextIndexOptions,
+  wants: (kind: ContextIndexKind) => boolean,
+  sharedEnv: Record<string, string>,
+): ContextIndexItem[] {
   return [
-    ...(wants("tool-schema") ? [...localCliToolItems(), ...externalAgentProviderItems(), ...mcpCatalogItems()] : []),
+    // Integration-backed hive actions (requiresConnection) are advertised only
+    // when their integration is connected; core actions are always available.
+    ...(wants("tool-schema") ? [...hiveActionContextIndexItems(listHiveActions().filter((action) => actionIntegrationConnected(action, sharedEnv))), ...githubCapabilityContextIndexItems(sharedEnv), ...localCliToolItems(), ...externalAgentProviderItems(), ...mcpCatalogItems()] : []),
     ...(wants("connected-app") || wants("app-endpoint") ? connectedAppItems(options.connectedApps) : []),
+    // Connectors surface only when actually connected (token present) — see
+    // connectorManifestContextIndexItems. Disconnected integrations are not capabilities.
+    ...(wants("connector") ? connectorManifestContextIndexItems(sharedEnv) : []),
     ...(wants("runtime") ? runtimeItems() : []),
+    ...(wants("code-route") ? codeCapabilityRouteItems() : []),
   ].filter((item) => wants(item.kind));
 }
 
+async function dynamicItems(options: ContextIndexOptions, wants: (kind: ContextIndexKind) => boolean) {
+  // Pay the shared-env read only when connection-gated items are requested.
+  const sharedEnv = wants("connector") || wants("tool-schema") ? await readSharedAgentEnv() : {};
+  return [
+    ...perRequestItems(options, wants, sharedEnv),
+    ...(wants("artifact") ? await visualArtifactContextIndexItems({ vaultPath: options.vaultPath }) : []),
+  ];
+}
+
+function scopedItems(options: ContextIndexOptions, items: ContextIndexItem[]) {
+  const principal = options.principal === undefined
+    ? localAdminPrincipal("local-user", "fallback")
+    : options.principal;
+  return items.filter((item) => principalCanReadScope(principal, item.scope));
+}
+
 function assembleIndex(options: ContextIndexOptions, items: ContextIndexItem[]): ContextIndex {
+  const visibleItems = scopedItems(options, items);
   return {
     generatedAt: new Date().toISOString(),
     root: workspaceRoot(),
     vaultPath: options.vaultPath,
-    items,
-    totals: totals(items),
+    items: visibleItems,
+    totals: totals(visibleItems),
   };
 }
 
@@ -1379,46 +1626,8 @@ export async function buildContextIndex(rawOptions: ContextIndexOptions = {}): P
     .filter((source) => source.kinds.some(wants))
     .map((source) => probeAndBuildSource(source, options).then((snapshot) => snapshot.items).catch(() => []))
   )).flat();
-  return assembleIndex(options, [...fsItems, ...perRequestItems(options, wants)]);
-}
-
-function tokenize(value: string) {
-  return value.toLowerCase().split(/[^a-z0-9_-]+/).filter((word) => word.length > 2 && word !== "gen");
-}
-
-function expandedQueryWords(query: string) {
-  const normalized = query.toLowerCase();
-  const words = tokenize(normalized);
-  const expansions = [
-    /image|picture|photo|visual|render|diffusion|txt2img|text.?to.?image/.test(normalized) ? ["image", "image generation", "image gen", "text to image", "creative", "visual generation", "diffusion", "render"] : [],
-    /video|movie|clip|animation/.test(normalized) ? ["video", "media", "render", "generation"] : [],
-    /sim|simulation|scenario|swarm/.test(normalized) ? ["simulation", "scenario", "swarm", "swarm-goal", "parallel agents", "run history"] : [],
-    /goal|orchestrat|delegate|parallel|spawn|build|implement/.test(normalized) ? ["goal", "swarm-goal", "queen bee", "orchestration", "agent routing", "work board", "parallel agents", "build"] : [],
-    /graph|ontology|network/.test(normalized) ? ["graph", "ontology", "knowledge graph"] : [],
-    /api|endpoint|route|openapi|swagger|docs/.test(normalized) ? ["api", "endpoint", "openapi", "swagger", "api docs"] : [],
-  ].flat();
-  return uniqueList([...words, ...expansions]);
-}
-
-function scoreItem(query: string, item: ContextIndexItem) {
-  const normalizedQuery = query.toLowerCase().trim();
-  if (!normalizedQuery) return 1;
-  const aliases = item.aliases ?? [];
-  const text = `${item.title} ${item.summary} ${item.tags.join(" ")} ${aliases.join(" ")} ${item.retrievalText ?? ""} ${item.path ?? ""} ${item.route ?? ""}`.toLowerCase();
-  let score = text.includes(normalizedQuery) ? 40 : 0;
-  if (aliases.some((alias) => alias === normalizedQuery || alias.includes(normalizedQuery))) score += 35;
-  if ((item.retrievalText ?? "").toLowerCase().includes(normalizedQuery)) score += 20;
-  for (const word of expandedQueryWords(normalizedQuery)) {
-    if (item.title.toLowerCase().includes(word)) score += 12;
-    if (aliases.some((alias) => alias.includes(word))) score += 11;
-    if (item.tags.some((tag) => tag.includes(word))) score += 8;
-    if ((item.path ?? "").toLowerCase().includes(word) || (item.route ?? "").toLowerCase().includes(word)) score += 5;
-    if ((item.retrievalText ?? "").toLowerCase().includes(word)) score += 4;
-    if (item.summary.toLowerCase().includes(word)) score += 3;
-  }
-  if (item.kind === "skill") score += 2;
-  if (item.kind === "tool-schema" || item.kind === "api-route") score += 1;
-  return score;
+  const liveItems = await dynamicItems(options, wants);
+  return assembleIndex(options, [...fsItems, ...liveItems]);
 }
 
 // Long-lived index serving: the first request for a source blocks to build it
@@ -1435,25 +1644,22 @@ export async function getContextIndex(rawOptions: ContextIndexOptions = {}): Pro
     .map((source) => ensureSourceItems(state, source, options).catch(() => []))
   )).flat();
   scheduleFsSourceRefresh(state, options);
-  return assembleIndex(options, [...fsItems, ...perRequestItems(options, wants)]);
+  const liveItems = await dynamicItems(options, wants);
+  return assembleIndex(options, [...fsItems, ...liveItems]);
 }
 
 export async function searchContextIndex(options: ContextIndexSearchOptions = {}) {
+  const [result] = await searchContextIndexBatch(options, [{
+    query: options.query,
+    limit: options.limit,
+  }]);
+  return result;
+}
+
+export async function searchContextIndexBatch(options: ContextIndexOptions, queries: ContextIndexBatchQuery[]) {
   const index = await getContextIndex(options);
-  const kinds = options.kinds?.length ? new Set(options.kinds) : null;
-  const scored = index.items
-    .filter((item) => !kinds || kinds.has(item.kind))
-    .map((item) => {
-      const base = scoreItem(options.query ?? "", item);
-      // Priority boost only re-ranks items that already match the query; it never surfaces irrelevant apps.
-      return { ...item, score: base > 0 ? base + (item.priorityBoost ?? 0) : base };
-    })
-    .filter((item) => !options.query?.trim() || (item.score ?? 0) > 0)
-    .sort((left, right) => (right.score ?? 0) - (left.score ?? 0) || left.kind.localeCompare(right.kind) || left.title.localeCompare(right.title));
-  return {
-    ...index,
-    query: options.query?.trim() || "",
-    items: scored.slice(0, options.limit ?? 40),
-    totalMatches: scored.length,
-  };
+  return queries.map((query) => searchContextIndexSnapshot(index, {
+    ...query,
+    kinds: options.kinds,
+  }));
 }

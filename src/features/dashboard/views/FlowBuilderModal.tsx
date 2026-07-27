@@ -48,7 +48,13 @@ export function FlowBuilderModal({ open, onClose }: FlowBuilderModalProps) {
   }, []);
 
   useEffect(() => {
-    if (open) void refresh();
+    if (!open) return;
+    // Deferred so refresh()'s synchronous setBusy doesn't cascade renders from
+    // inside the effect body; cancelling also drops a stale open→close refresh.
+    const id = window.setTimeout(() => {
+      void refresh();
+    }, 0);
+    return () => window.clearTimeout(id);
   }, [open, refresh]);
 
   useEffect(() => {

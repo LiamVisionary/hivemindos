@@ -1,11 +1,11 @@
-import { constants } from "fs";
-import { access, readdir, readFile, rm } from "fs/promises";
+import { readdir, readFile, rm } from "fs/promises";
 import { execFile } from "child_process";
 import { homedir } from "@/lib/home-dir";
 import { dirname, join, resolve, sep } from "path";
 import { promisify } from "util";
 import { NextRequest, NextResponse } from "next/server";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import { inspectAeonWorkspace } from "@/lib/services/runtime-adapters/aeon-workspace";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -58,11 +58,7 @@ function workspacePath(agent: AgentProfile) {
 
 async function hasLocalAeonWorkspace(path: string) {
   if (!path) return false;
-  const [hasConfig, hasSkills] = await Promise.all([
-    access(join(path, "aeon.yml"), constants.R_OK).then(() => true).catch(() => false),
-    access(join(path, "skills.json"), constants.R_OK).then(() => true).catch(() => false),
-  ]);
-  return hasConfig || hasSkills;
+  return (await inspectAeonWorkspace(path)).generation === "v0.1";
 }
 
 async function githubRepoExists(repo: string) {

@@ -1,0 +1,32 @@
+/* HivemindOS — Spacing & layout tokens
+   The app uses an 8px-ish rhythm with tight interior padding on cards
+   (14–18px) and a fixed 72px left nav rail. */
+
+:root {
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 14px;
+  --space-8: 16px;
+  --space-9: 18px;
+  --space-10: 22px;
+  --space-12: 28px;
+  --space-16: 38px;
+
+  /* card interior padding (from card.tsx / chat.module.css) */
+  --pad-card: 18px;
+  --pad-card-tight: 14px;
+
+  /* layout */
+  --rail-w: 72px;          /* fixed left nav shelf */
+  --shell-max: 1560px;     /* readability cap on main view */
+  --topbar-h: 92px;
+
+  /* gaps */
+  --gap-tight: 8px;
+  --gap: 12px;
+  --gap-loose: 16px;
+}

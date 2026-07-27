@@ -1,0 +1,190 @@
+/* Plume options desk — "Options Route Redesign" (Claude Design handoff).
+   Only pseudo-class / keyframe / media-query rules live here; all one-off
+   layout is inline in PlumeOptionsPanel.tsx (mirroring the mock). Colors and
+   fonts resolve from the global hive tokens on `.fr-root` (fleet-hive.css),
+   so both the dark and `data-fr-theme="light"` trade themes are covered. */
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+}
+
+.offer {
+  transition: border-color .15s;
+}
+.offer:hover {
+  border-color: var(--honey-line);
+}
+
+/* Pill segmented control */
+.seg {
+  display: inline-flex;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+}
+.tab {
+  border: 0;
+  background: transparent;
+  border-radius: 999px;
+  padding: 8px 18px;
+  font: 500 12.5px var(--f-body);
+  color: var(--fg-3);
+  cursor: pointer;
+  transition: color .15s, background .15s;
+  white-space: nowrap;
+}
+.tab:hover {
+  color: var(--fg);
+}
+.tab[data-on="1"] {
+  background: var(--honey-soft);
+  color: var(--honey);
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 18px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font: 500 12.5px var(--f-body);
+  cursor: pointer;
+  transition: filter .15s, background .15s, border-color .15s, color .15s;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+.btn:active:not(:disabled) {
+  transform: scale(.99);
+}
+.btn:disabled {
+  opacity: .42;
+  cursor: not-allowed;
+  filter: none;
+}
+.btnPrimary {
+  background: var(--button-primary);
+  color: var(--button-primary-foreground);
+}
+.btnOutline {
+  background: transparent;
+  color: var(--fg-2);
+  border-color: var(--line-2);
+}
+.btnOutline:hover:not(:disabled) {
+  border-color: var(--honey-line);
+  color: var(--honey);
+  background: var(--honey-soft);
+}
+.btnGhost {
+  background: transparent;
+  color: var(--fg-3);
+}
+.btnGhost:hover:not(:disabled) {
+  color: var(--fg);
+  background: var(--panel-2);
+}
+
+/* Fields */
+.field {
+  height: 38px;
+  width: 100%;
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+  background: var(--field);
+  color: var(--fg);
+  padding: 0 12px;
+  font: 500 13px var(--f-body);
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.field:focus {
+  border-color: var(--honey-line);
+  box-shadow: 0 0 0 3px var(--honey-soft);
+}
+select.field {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 30px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--fg-3) 50%), linear-gradient(135deg, var(--fg-3) 50%, transparent 50%);
+  background-position: calc(100% - 16px) 16px, calc(100% - 11px) 16px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+/* Enter animation */
+@keyframes odFade {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.anim {
+  animation: odFade .28s cubic-bezier(.2, .9, .2, 1) both;
+}
+
+/* Inline busy spinner (keeps the word, swaps no static "…") */
+.spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, currentColor 32%, transparent);
+  border-top-color: currentColor;
+  animation: odSpin .6s linear infinite;
+  flex: 0 0 auto;
+}
+@keyframes odSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* Region skeleton shimmer */
+@keyframes odSkeleton {
+  100% { transform: translateX(100%); }
+}
+.skel {
+  position: relative;
+  overflow: hidden;
+  display: block;
+  flex: 0 0 auto;
+  background: var(--panel-2);
+  border-radius: 8px;
+}
+.skel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--fg) 8%, transparent), transparent);
+  animation: odSkeleton 1.25s infinite;
+}
+
+/* Layout grids */
+.offerGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 14px;
+}
+.writeGrid {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(300px, .85fr);
+  gap: 14px;
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .writeGrid { grid-template-columns: 1fr; }
+  .offerGrid { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim { animation: none; }
+  .spinner { animation-duration: 1.5s; }
+  .skel::after { animation: none; }
+}

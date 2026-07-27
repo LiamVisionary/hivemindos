@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Copy, Download, KeyRound, LoaderCircle, ShieldCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ProgressBar } from "@/design-system/ui/progress-bar";
 import type { AgentProfile, AgentRuntime } from "@/lib/types/agent-runtime";
 import { runtimeInstallSpec, type RuntimeAuthOption } from "@/lib/services/runtime-install-catalog";
 
@@ -83,6 +84,8 @@ export function RuntimeInstallSetup({
   const spec = useMemo(() => runtimeInstallSpec(runtime), [runtime]);
 
   const [installing, setInstalling] = useState(false);
+  const [installElapsedSeconds, setInstallElapsedSeconds] = useState(0);
+  const installProgressTimerRef = useRef<number | null>(null);
   const [installOutput, setInstallOutput] = useState("");
   const [installError, setInstallError] = useState("");
   // Detection is authoritative; locally-observed success bridges the gap until
@@ -99,6 +102,9 @@ export function RuntimeInstallSetup({
 
   // State resets per runtime via the `key={activeRuntime}` on this component in
   // AgentSettingsModal (a fresh mount), so no reset effect is needed here.
+  useEffect(() => () => {
+    if (installProgressTimerRef.current !== null) window.clearInterval(installProgressTimerRef.current);
+  }, []);
 
   if (!spec) {
     // No catalog entry — should not happen for cards we made clickable, but
@@ -136,6 +142,11 @@ export function RuntimeInstallSetup({
 
   async function runInstall() {
     setInstalling(true);
+    setInstallElapsedSeconds(0);
+    const startedAt = Date.now();
+    installProgressTimerRef.current = window.setInterval(() => {
+      setInstallElapsedSeconds(Math.max(0, Math.floor((Date.now() - startedAt) / 1_000)));
+    }, 1_000);
     setInstallError("");
     setInstallOutput("");
     setMessage("");
@@ -143,6 +154,8 @@ export function RuntimeInstallSetup({
       ok: false,
       error: error instanceof Error ? error.message : "Install failed.",
     }));
+    if (installProgressTimerRef.current !== null) window.clearInterval(installProgressTimerRef.current);
+    installProgressTimerRef.current = null;
     setInstalling(false);
     if (!result?.ok) {
       setInstallError(result?.error ?? "Install failed.");
@@ -179,6 +192,17 @@ export function RuntimeInstallSetup({
 
   const activeAuth: RuntimeAuthOption | undefined = spec.auth.find((entry) => entry.env === selectedAuthEnv) ?? spec.auth[0];
   const isBusy = installing || savingAuth || busy === "install-runtime" || busy === "runtime-auth";
+  const oauthInstructions = spec.oauth ? (
+    <div style={{ display: "grid", gap: 6, marginTop: 2, paddingTop: 9, borderTop: "1px dashed var(--line)" }}>
+      <p style={{ margin: 0, color: "var(--fg-4)", fontSize: 11.5, lineHeight: 1.5 }}>{spec.oauth.note}</p>
+      <div style={codeRowStyle}>
+        <span style={{ flex: 1 }}>{spec.oauth.command}</span>
+        <Button type="button" variant="ghost" size="sm" onClick={() => void copy(spec.oauth!.command, "oauth")} aria-label="Copy sign-in command">
+          {copied === "oauth" ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
+        </Button>
+      </div>
+    </div>
+  ) : null;
 
   return (
     <section style={panelStyle} aria-label={`Set up ${spec.label}`} className={fleetClass("agentRuntimeInstallSetup")}>
@@ -202,19 +226,44 @@ export function RuntimeInstallSetup({
 
         {!isInstalled ? (
           <>
-            <div style={codeRowStyle}>
-              <span style={{ flex: 1 }}>{installCommand}</span>
-              <Button type="button" variant="ghost" size="sm" onClick={() => void copy(installCommand, "install")} aria-label="Copy install command">
-                {copied === "install" ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
-              </Button>
-            </div>
             {canInstallInApp ? (
-              <Button type="button" onClick={() => void runInstall()} disabled={isBusy}>
-                {installing ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <Download aria-hidden="true" />}
-                {installing ? `Installing ${spec.label}…` : `Install ${spec.label}`}
-              </Button>
+              <>
+                <Button type="button" onClick={() => void runInstall()} disabled={isBusy}>
+                  {installing ? <LoaderCircle aria-hidden="true" className="animate-spin" /> : <Download aria-hidden="true" />}
+                  {installing ? `Installing ${spec.label}…` : `Install ${spec.label}`}
+                </Button>
+                {installing ? (
+                  <div role="status" aria-label={`Installing ${spec.label}`} style={{ display: "grid", gap: 7 }}>
+                    <ProgressBar
+                      indeterminate
+                      thickness={4}
+                      label={`Official installer running${installElapsedSeconds ? ` · ${Math.floor(installElapsedSeconds / 60)}:${String(installElapsedSeconds % 60).padStart(2, "0")}` : ""}`}
+                    />
+                    <p style={{ margin: 0, color: "var(--fg-4)", fontSize: 11.5, lineHeight: 1.5 }}>
+                      Downloading and installing the runtime on this machine. This can take several minutes for larger dependency downloads; you can leave this panel open.
+                    </p>
+                  </div>
+                ) : null}
+                <details style={{ color: "var(--fg-4)", fontSize: 12 }}>
+                  <summary style={{ cursor: "pointer", width: "fit-content", color: "var(--fg-3)", fontWeight: 600 }}>Manual install</summary>
+                  <div style={{ marginTop: 8 }}>
+                    <div style={codeRowStyle}>
+                      <span style={{ flex: 1 }}>{installCommand}</span>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => void copy(installCommand, "install")} aria-label="Copy install command">
+                        {copied === "install" ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
+                      </Button>
+                    </div>
+                  </div>
+                </details>
+              </>
             ) : (
               <div style={{ display: "grid", gap: 7 }}>
+                <div style={codeRowStyle}>
+                  <span style={{ flex: 1 }}>{installCommand}</span>
+                  <Button type="button" variant="ghost" size="sm" onClick={() => void copy(installCommand, "install")} aria-label="Copy install command">
+                    {copied === "install" ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
+                  </Button>
+                </div>
                 <p style={{ margin: 0, color: "var(--fg-4)", fontSize: 11.5, lineHeight: 1.5 }}>
                   {platformUnsupported
                     ? `${spec.label} can't be installed automatically on this machine yet. Run the command above, then re-check.`
@@ -272,24 +321,17 @@ export function RuntimeInstallSetup({
             </>
           ) : null}
 
-          {spec.oauth ? (
-            <div style={{ display: "grid", gap: 6, marginTop: 2, paddingTop: 9, borderTop: "1px dashed var(--line)" }}>
-              <p style={{ margin: 0, color: "var(--fg-4)", fontSize: 11.5, lineHeight: 1.5 }}>{spec.oauth.note}</p>
-              <div style={codeRowStyle}>
-                <span style={{ flex: 1 }}>{spec.oauth.command}</span>
-                <Button type="button" variant="ghost" size="sm" onClick={() => void copy(spec.oauth!.command, "oauth")} aria-label="Copy sign-in command">
-                  {copied === "oauth" ? <Check size={13} aria-hidden="true" /> : <Copy size={13} aria-hidden="true" />}
-                </Button>
-              </div>
-            </div>
-          ) : null}
+          {oauthInstructions}
         </div>
       ) : (
         <div style={stepStyle}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <ShieldCheck size={15} aria-hidden="true" style={{ color: "var(--green-2, #34d399)" }} />
-            <strong style={{ color: "var(--fg)", fontSize: 13 }}>No API key needed</strong>
+            {spec.oauth
+              ? <KeyRound size={15} aria-hidden="true" style={{ color: "var(--fg-3)" }} />
+              : <ShieldCheck size={15} aria-hidden="true" style={{ color: "var(--green-2, #34d399)" }} />}
+            <strong style={{ color: "var(--fg)", fontSize: 13 }}>{spec.oauth ? "Connect a model" : "No API key needed"}</strong>
           </div>
+          {oauthInstructions}
           {spec.notes ? <p style={{ margin: 0, color: "var(--fg-4)", fontSize: 11.5, lineHeight: 1.5 }}>{spec.notes}</p> : null}
         </div>
       )}

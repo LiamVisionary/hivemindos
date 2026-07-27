@@ -9,6 +9,12 @@ import {
   type MiroSharkX402RunPayload,
   type MiroSharkX402RunResult,
 } from "@/lib/services/miroshark/x402-buyer";
+import {
+  MIROSHARK_X402_SIMULATION_PRICE_LABEL,
+  MIROSHARK_X402_SIMULATION_PRICE_USD,
+} from "@/lib/config/miroshark-x402";
+
+export { MIROSHARK_X402_SIMULATION_PRICE_USD };
 
 type ChatMessageLike = {
   role?: string;
@@ -53,7 +59,6 @@ export type MiroSharkChatSimulationCardPayload = {
 
 const URL_PATTERN = /https?:\/\/[^\s<>"'`)\]]+/gi;
 const POLYMARKET_EVENT_PATTERN = /https:\/\/(?:www\.)?polymarket\.com\/event\/[A-Za-z0-9_-]+/i;
-const DEFAULT_MIROSHARK_MAX_USD = 1;
 const POLL_INTERVAL_MS = 15_000;
 const POLL_TIMEOUT_MS = 9.25 * 60 * 1000;
 const TERMINAL_STATUS_PATTERN = /\b(?:complete|completed|success|succeeded|ready|failed|failure|error|cancelled|canceled|stopped)\b/i;
@@ -136,7 +141,10 @@ function maxPaymentFromText(text: string, wallet?: AgentWalletConfig) {
   const explicit = text.match(/\b(?:max|cap|limit)(?:imum)?(?:\s+(?:payment|spend|of|at))?\s*(?:is|:|=)?\s*\$?(\d+(?:\.\d{1,6})?)\s*(?:USDC|USD)?/i)?.[1];
   const parsed = Number(explicit);
   if (Number.isFinite(parsed) && parsed > 0) return parsed;
-  return Math.min(Math.max(Number(wallet?.maxPaymentUsd) || DEFAULT_MIROSHARK_MAX_USD, DEFAULT_MIROSHARK_MAX_USD), DEFAULT_MIROSHARK_MAX_USD);
+  return Math.min(
+    Math.max(Number(wallet?.maxPaymentUsd) || MIROSHARK_X402_SIMULATION_PRICE_USD, MIROSHARK_X402_SIMULATION_PRICE_USD),
+    MIROSHARK_X402_SIMULATION_PRICE_USD,
+  );
 }
 
 export function findMiroSharkChatRunRequest(messages: ChatMessageLike[], wallet?: AgentWalletConfig): MiroSharkChatRunDraft | null {
@@ -187,15 +195,15 @@ export function validateMiroSharkChatRun(wallet: AgentWalletConfig | undefined, 
   if (!wallet) return "No wallet is configured for this agent.";
   if (!wallet.enabled) return "Wallet spending is off for this agent. Enable Spend on before running a paid MiroShark simulation.";
   if (wallet.provider !== "x402") return "Set this agent's payment provider to x402 before running paid MiroShark simulations.";
-  if (!wallet.autoPayEnabled) return "Direct MiroShark chat runs need Allow auto-use on for the $1 x402 payment.";
+  if (!wallet.autoPayEnabled) return `Direct MiroShark chat runs need Allow auto-use on for the ${MIROSHARK_X402_SIMULATION_PRICE_LABEL} x402 payment.`;
   if (!/^eip155:8453$|^eip155:84532$|^solana:(?:mainnet|devnet)$/.test(wallet.network || "")) {
     return "MiroShark x402 runs need a supported local x402 wallet network.";
   }
   if (draft.maxPaymentUsd > wallet.maxPaymentUsd) {
     return `MiroShark needs up to ${draft.maxPaymentUsd.toFixed(2)} USDC, above this agent's ${wallet.maxPaymentUsd.toFixed(2)} USDC cap.`;
   }
-  if (wallet.maxPaymentUsd < DEFAULT_MIROSHARK_MAX_USD) {
-    return `MiroShark runs cost about ${DEFAULT_MIROSHARK_MAX_USD.toFixed(2)} USDC, above this agent's ${wallet.maxPaymentUsd.toFixed(2)} USDC cap.`;
+  if (wallet.maxPaymentUsd < MIROSHARK_X402_SIMULATION_PRICE_USD) {
+    return `MiroShark runs cost about ${MIROSHARK_X402_SIMULATION_PRICE_LABEL}, above this agent's ${wallet.maxPaymentUsd.toFixed(2)} USDC cap.`;
   }
   return "";
 }
@@ -206,7 +214,7 @@ export async function executeMiroSharkChatRun(agentId: string, wallet: AgentWall
     ...draft.payload,
     policy: {
       ...wallet,
-      maxPaymentUsd: Math.min(wallet.maxPaymentUsd, Math.max(DEFAULT_MIROSHARK_MAX_USD, draft.maxPaymentUsd)),
+      maxPaymentUsd: Math.min(wallet.maxPaymentUsd, Math.max(MIROSHARK_X402_SIMULATION_PRICE_USD, draft.maxPaymentUsd)),
       provider: "x402",
       autoPayEnabled: wallet.autoPayEnabled,
     },
@@ -283,7 +291,7 @@ export function buildMiroSharkChatCard(input: {
       deepResearch: input.draft.deepResearch,
       network: input.paidRun?.result.network,
       paid: input.paidRun?.result.paid,
-      paymentLabel: input.paidRun?.result.amountUsd ? `$${input.paidRun.result.amountUsd.toFixed(2)} USDC` : "$1.00 USDC",
+      paymentLabel: input.paidRun?.result.amountUsd ? `$${input.paidRun.result.amountUsd.toFixed(2)} USDC` : MIROSHARK_X402_SIMULATION_PRICE_LABEL,
       polymarketDetail: detail,
       reportMarkdown: reportMarkdown || (input.snapshot?.timedOut
         ? `### ${title}\n\nMiroShark accepted the paid run and it is still running. Ask the agent to check status for run \`${runId}\` when it finishes.`

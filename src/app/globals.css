@@ -82,7 +82,7 @@
   --panel-soft: #f6f2e9;
   --line: rgba(54, 46, 30, 0.16);
   --muted: #5e574b;
-  --accent: #b07f1c;
+  --accent: #936811;
   --accent-strong: #7c550b;
   --success: #406f53;
   --warning: #8a641f;
@@ -92,7 +92,7 @@
   --surface-soft: rgba(246, 242, 233, 0.82);
   --field: rgba(255, 252, 246, 0.92);
   --text-soft: #4b463d;
-  --bee: #b07f1c;
+  --bee: #936811;
   --honey: #d8b468;
   --pollen: #efe2be;
   --comb-line: rgba(54, 46, 30, 0.16);
@@ -331,15 +331,15 @@ a {
   align-items: center;
   gap: 10px;
   padding: 7px 18px 7px 7px;
-  border: 1px solid rgba(94, 234, 212, 0.42);
+  border: 1px solid rgba(231, 180, 92, 0.42);
   border-radius: 9999px;
   background:
-    linear-gradient(135deg, rgba(9, 18, 27, 0.98), rgba(16, 46, 52, 0.94)),
-    rgba(8, 12, 19, 0.96);
+    linear-gradient(135deg, rgba(20, 22, 28, 0.98), rgba(30, 24, 12, 0.95)),
+    rgba(12, 13, 17, 0.96);
   box-shadow:
     0 16px 40px rgba(0, 0, 0, 0.36),
-    0 0 0 1px rgba(255, 212, 90, 0.12),
-    0 0 34px rgba(45, 212, 191, 0.22);
+    0 0 0 1px rgba(231, 180, 92, 0.14),
+    0 0 34px rgba(231, 180, 92, 0.20);
   color: var(--foreground);
   pointer-events: none;
   transform: translate(-50%, 0);
@@ -354,12 +354,12 @@ a {
   flex: 0 0 auto;
   place-items: center;
   overflow: hidden;
-  border: 1px solid rgba(255, 212, 90, 0.74);
+  border: 1px solid rgba(231, 180, 92, 0.74);
   border-radius: 9999px;
-  background: rgba(2, 6, 12, 0.86);
+  background: rgba(10, 9, 6, 0.86);
   box-shadow:
-    0 0 0 3px rgba(45, 212, 191, 0.10),
-    0 0 18px rgba(255, 212, 90, 0.24);
+    0 0 0 3px rgba(231, 180, 92, 0.12),
+    0 0 18px rgba(231, 180, 92, 0.24);
 }
 
 .dashboardAppNotificationIcon img {
@@ -469,14 +469,14 @@ a {
 }
 
 :root[data-theme="hive-light"] .dashboardAppNotification {
-  border-color: rgba(13, 90, 78, 0.34);
+  border-color: rgba(176, 127, 28, 0.38);
   background:
     linear-gradient(135deg, rgba(244, 236, 213, 0.98), rgba(224, 210, 174, 0.96)),
     rgba(245, 239, 230, 0.96);
   box-shadow:
     0 16px 40px rgba(92, 75, 45, 0.22),
     0 0 0 1px rgba(106, 69, 5, 0.12),
-    0 0 34px rgba(13, 142, 126, 0.16);
+    0 0 34px rgba(176, 127, 28, 0.20);
 }
 
 :root[data-theme="hive-light"] .dashboardAppNotificationIcon {

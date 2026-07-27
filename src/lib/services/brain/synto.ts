@@ -4,6 +4,15 @@ import { access, mkdir, readdir, readFile, writeFile } from "fs/promises";
 import { homedir } from "@/lib/home-dir";
 import { isAbsolute, join, relative, resolve, sep } from "path";
 import { promisify } from "util";
+import {
+  SYNTO_CLOUD_API_KEY_ENV,
+  SYNTO_CLOUD_MODEL_ID,
+  SYNTO_CLOUD_PROVIDER,
+  SYNTO_CLOUD_PROVIDER_URL,
+  SYNTO_LOCAL_PROVIDER_NAME,
+  SYNTO_LOCAL_PROVIDER_URL,
+} from "@/lib/config/synto-model-tiers";
+import { readSharedAgentEnv, sharedEnvValue } from "@/lib/services/integrations/shared-env";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { DEFAULT_SHARED_VAULT, type SyntoConfig } from "@/lib/types/agent-runtime";
 import { cachedStatus, invalidateStatus } from "./status-cache";
@@ -75,6 +84,13 @@ export type SyntoStatus = {
   };
   version?: string;
   statusText?: string;
+  modelRoute: {
+    route: SyntoConfig["modelRoute"];
+    provider: string;
+    providerUrl: string;
+    model: string;
+    credentialEnv?: string;
+  };
   commands: SyntoCommandResult[];
   error?: string;
 };
@@ -90,6 +106,7 @@ type RunOptions = {
   timeoutMs?: number;
   cwd?: string;
   allowFailure?: boolean;
+  env?: NodeJS.ProcessEnv;
 };
 
 type SyntoAction = "connect" | "install" | "init" | "run" | "maintain" | "compare" | "eval" | "doctor" | "pack" | "query";
@@ -119,9 +136,78 @@ function normalizeSyntoConfig(input?: Partial<SyntoConfig>): SyntoConfig {
     ...DEFAULT_SHARED_VAULT.synto,
     ...(input ?? {}),
     cliPath: input?.cliPath?.trim() || process.env.SYNTO_CLI_PATH?.trim() || DEFAULT_SHARED_VAULT.synto.cliPath,
+    cloudModel: input?.cloudModel?.trim() || SYNTO_CLOUD_MODEL_ID,
+    localModelId: input?.localModelId?.trim() || DEFAULT_SHARED_VAULT.synto.localModelId,
+    localLoadedModelKey: input?.localLoadedModelKey?.trim() || "",
     compareHeavyModel: input?.compareHeavyModel?.trim() || DEFAULT_SHARED_VAULT.synto.compareHeavyModel,
     minConfidence: Number.isFinite(minConfidence) ? Math.max(0, Math.min(1, minConfidence)) : DEFAULT_SHARED_VAULT.synto.minConfidence,
   };
+}
+
+function modelRouteRuntime(config: SyntoConfig) {
+  if (config.modelRoute === "cloud-best") {
+    return {
+      route: config.modelRoute,
+      provider: SYNTO_CLOUD_PROVIDER,
+      providerUrl: SYNTO_CLOUD_PROVIDER_URL,
+      model: config.cloudModel || SYNTO_CLOUD_MODEL_ID,
+      credentialEnv: SYNTO_CLOUD_API_KEY_ENV,
+    };
+  }
+  return {
+    route: config.modelRoute,
+    provider: SYNTO_LOCAL_PROVIDER_NAME,
+    providerUrl: SYNTO_LOCAL_PROVIDER_URL,
+    model: config.localLoadedModelKey || config.localModelId,
+    credentialEnv: undefined,
+  };
+}
+
+function tomlString(value: string) {
+  return JSON.stringify(value);
+}
+
+function upsertTomlSection(source: string, sectionName: string, lines: string[]) {
+  const section = `[${sectionName}]`;
+  const replacement = `${section}\n${lines.join("\n")}\n`;
+  const start = source.indexOf(section);
+  if (start < 0) return `${source.trimEnd()}\n\n${replacement}`;
+  const afterHeader = start + section.length;
+  const nextHeaderOffset = source.slice(afterHeader).search(/\n\[[^\]]+\]/);
+  const end = nextHeaderOffset < 0 ? source.length : afterHeader + nextHeaderOffset + 1;
+  return `${source.slice(0, start)}${replacement}${source.slice(end)}`;
+}
+
+async function applySyntoModelRoute(root: string, config: SyntoConfig) {
+  const tomlPath = join(root, CONFIG_FILE);
+  if (!(await exists(tomlPath))) return;
+  const route = modelRouteRuntime(config);
+  let next = await readFile(tomlPath, "utf8");
+  next = upsertTomlSection(next, "models", [
+    `fast = ${tomlString(route.model)}`,
+    `heavy = ${tomlString(route.model)}`,
+  ]);
+  next = upsertTomlSection(next, "provider", [
+    `name = ${tomlString(route.provider)}`,
+    `url = ${tomlString(route.providerUrl)}`,
+    `timeout = ${route.route === "cloud-best" ? 300 : 600}`,
+    "fast_ctx = 16384",
+    "heavy_ctx = 32768",
+  ]);
+  await writeFile(tomlPath, next, "utf8");
+}
+
+async function prepareSyntoModelRoute(root: string, config: SyntoConfig, requireReady = true) {
+  const route = modelRouteRuntime(config);
+  if (requireReady && route.route !== "cloud-best" && !config.localLoadedModelKey) {
+    throw new Error("Choose a local Syntho tier, download it, and load the model in LM Studio before running Syntho.");
+  }
+  const sharedEnv = route.route === "cloud-best" ? await readSharedAgentEnv() : {};
+  if (requireReady && route.credentialEnv && !sharedEnvValue(route.credentialEnv, sharedEnv)) {
+    throw new Error(`${route.credentialEnv} is not connected. Add OpenRouter in Integrations before running the Best cloud tier.`);
+  }
+  await applySyntoModelRoute(root, config);
+  return { route, env: { ...sharedEnv, ...process.env } };
 }
 
 function cliCommand(config: SyntoConfig) {
@@ -140,7 +226,7 @@ async function runSyntoCommand(config: SyntoConfig, args: string[], options: Run
       cwd: options.cwd ? resolve(expandHome(options.cwd)) : undefined,
       timeout: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
       maxBuffer: 1024 * 1024 * 8,
-      env: { ...process.env },
+      env: options.env ?? { ...process.env },
     });
     return { command: displayCommand(command, args), ok: true, stdout: result.stdout, stderr: result.stderr };
   } catch (error) {
@@ -215,6 +301,13 @@ async function serviceNoteConfig(path: string): Promise<Partial<SyntoConfig>> {
     ...(value("installMode") ? { installMode: value("installMode") as SyntoConfig["installMode"] } : {}),
     ...(value("mcpMode") ? { mcpMode: value("mcpMode") as SyntoConfig["mcpMode"] } : {}),
     ...(value("sourceAccessMode") ? { sourceAccessMode: value("sourceAccessMode") as SyntoConfig["sourceAccessMode"] } : {}),
+    ...(value("modelRoute") ? { modelRoute: value("modelRoute") as SyntoConfig["modelRoute"] } : {}),
+    ...(value("cloudProvider") ? { cloudProvider: value("cloudProvider") as SyntoConfig["cloudProvider"] } : {}),
+    ...(value("cloudModel") ? { cloudModel: value("cloudModel") ?? "" } : {}),
+    ...(value("cloudRequireZdr") ? { cloudRequireZdr: value("cloudRequireZdr") === "true" } : {}),
+    ...(value("localProvider") ? { localProvider: value("localProvider") as SyntoConfig["localProvider"] } : {}),
+    ...(value("localModelId") ? { localModelId: value("localModelId") ?? "" } : {}),
+    ...(value("localLoadedModelKey") ? { localLoadedModelKey: value("localLoadedModelKey") ?? "" } : {}),
     ...(value("compareHeavyModel") ? { compareHeavyModel: value("compareHeavyModel") ?? "" } : {}),
     ...(value("autoApprove") ? { autoApprove: value("autoApprove") === "true" } : {}),
     ...(Number.isFinite(minConfidence) ? { minConfidence } : {}),
@@ -277,6 +370,13 @@ export async function writeSyntoServiceNote(input: SyntoInput & { event?: SyntoA
     `installMode: ${config.installMode}`,
     `mcpMode: ${config.mcpMode}`,
     `sourceAccessMode: ${config.sourceAccessMode}`,
+    `modelRoute: ${config.modelRoute}`,
+    `cloudProvider: ${config.cloudProvider}`,
+    `cloudModel: ${config.cloudModel}`,
+    `cloudRequireZdr: ${config.cloudRequireZdr}`,
+    `localProvider: ${config.localProvider}`,
+    `localModelId: ${config.localModelId}`,
+    config.localLoadedModelKey ? `localLoadedModelKey: ${JSON.stringify(config.localLoadedModelKey)}` : "",
     `compareHeavyModel: ${config.compareHeavyModel}`,
     `autoApprove: ${config.autoApprove}`,
     `minConfidence: ${config.minConfidence}`,
@@ -380,6 +480,7 @@ async function loadSyntoStatus(input: SyntoInput = {}): Promise<SyntoStatus> {
       indexExists,
       manifestExists,
     },
+    modelRoute: modelRouteRuntime(config),
     commands,
   };
 
@@ -467,6 +568,8 @@ export async function connectSynto(input: SyntoInput = {}) {
   const config = normalizeSyntoConfig({ ...input.synto, enabled: true, installMode: "existing" });
   const version = await runSyntoCommand(config, ["--version"], { allowFailure: true, timeoutMs: 8_000 });
   if (!version.ok) throw new Error(version.error || "Could not run the configured Syntho CLI.");
+  const vault = resolveObsidianVaultPath(input.vaultPath, { requireWritable: true });
+  await prepareSyntoModelRoute(synthesisRoot(vault, input.synthesisFolder), config, false);
   await writeSyntoServiceNote({ ...input, synto: config, event: "connect", summary: "Connected an existing Syntho CLI to HivemindOS." });
   invalidateStatus("synto:");
   return { status: await getSyntoStatus({ ...input, synto: config }), commands: [version] };
@@ -478,7 +581,10 @@ export async function initializeSynto(input: SyntoInput = {}) {
   const root = synthesisRoot(vault, input.synthesisFolder);
   await ensureSynthesisFolders(root);
   const init = await runSyntoCommand(config, ["init", root, "--existing", "--non-interactive"], { allowFailure: true, timeoutMs: LONG_TIMEOUT_MS });
-  if (init.ok) await patchSourceAccessMode(root, config.sourceAccessMode);
+  if (init.ok) {
+    await patchSourceAccessMode(root, config.sourceAccessMode);
+    await prepareSyntoModelRoute(root, config, false);
+  }
   await writeSyntoServiceNote({ ...input, synto: config, event: "init", summary: "Initialized the Syntho Synthesis vault." });
   invalidateStatus("synto:");
   return { status: await getSyntoStatus({ ...input, synto: config }), commands: [init] };
@@ -488,11 +594,13 @@ export async function runSyntoPipeline(input: SyntoInput = {}) {
   const vault = resolveObsidianVaultPath(input.vaultPath);
   const config = normalizeSyntoConfig(input.synto);
   const root = synthesisRoot(vault, input.synthesisFolder);
+  const runtime = await prepareSyntoModelRoute(root, config);
   const args = ["run", "--vault", root];
+  args.push("--fast-model", runtime.route.model, "--heavy-model", runtime.route.model, "--provider", runtime.route.provider, "--provider-url", runtime.route.providerUrl);
   if (config.autoApprove) {
     args.push("--auto-approve", "--min-confidence", String(config.minConfidence));
   }
-  const command = await runSyntoCommand(config, args, { allowFailure: true, timeoutMs: LONG_TIMEOUT_MS });
+  const command = await runSyntoCommand(config, args, { allowFailure: true, timeoutMs: LONG_TIMEOUT_MS, env: runtime.env });
   await writeSyntoServiceNote({ ...input, synto: config, event: "run", summary: "Ran the Syntho ingest and compile pipeline from HivemindOS." });
   invalidateStatus("synto:");
   return { status: await getSyntoStatus({ ...input, synto: config }), commands: [command] };
@@ -513,15 +621,18 @@ export async function compareSynto(input: SyntoInput & { heavyModel?: string; fa
   const vault = resolveObsidianVaultPath(input.vaultPath);
   const config = normalizeSyntoConfig(input.synto);
   const root = synthesisRoot(vault, input.synthesisFolder);
+  const runtime = await prepareSyntoModelRoute(root, config);
   const heavyModel = input.heavyModel?.trim() || config.compareHeavyModel.trim();
   const args = ["compare", "--vault", root, "--format", "both"];
   if (heavyModel) args.push("--heavy-model", heavyModel);
   if (input.fastModel?.trim()) args.push("--fast-model", input.fastModel.trim());
   if (input.provider?.trim()) args.push("--provider", input.provider.trim());
   if (input.providerUrl?.trim()) args.push("--provider-url", input.providerUrl.trim());
+  if (!input.provider?.trim()) args.push("--provider", runtime.route.provider);
+  if (!input.providerUrl?.trim()) args.push("--provider-url", runtime.route.providerUrl);
   if (input.allowCloudUpload) args.push("--allow-cloud-upload");
   if (Number.isFinite(input.sampleN) && input.sampleN && input.sampleN > 0) args.push("--sample-n", String(Math.floor(input.sampleN)));
-  const command = await runSyntoCommand(config, args, { allowFailure: true, timeoutMs: LONG_TIMEOUT_MS });
+  const command = await runSyntoCommand(config, args, { allowFailure: true, timeoutMs: LONG_TIMEOUT_MS, env: runtime.env });
   await writeSyntoServiceNote({ ...input, synto: config, event: "compare", summary: `Compared Syntho model output against ${heavyModel || "a challenger model"}.` });
   invalidateStatus("synto:");
   return { output: command.stdout.trim() || command.stderr.trim(), status: await getSyntoStatus({ ...input, synto: config }), commands: [command] };
@@ -541,9 +652,10 @@ export async function doctorSynto(input: SyntoInput & { backlog?: boolean } = {}
   const vault = resolveObsidianVaultPath(input.vaultPath);
   const config = normalizeSyntoConfig(input.synto);
   const root = synthesisRoot(vault, input.synthesisFolder);
+  const runtime = await prepareSyntoModelRoute(root, config);
   const args = ["doctor", "--vault", root];
   if (input.backlog !== false) args.push("--backlog");
-  const command = await runSyntoCommand(config, args, { allowFailure: true, timeoutMs: LONG_TIMEOUT_MS });
+  const command = await runSyntoCommand(config, args, { allowFailure: true, timeoutMs: LONG_TIMEOUT_MS, env: runtime.env });
   await writeSyntoServiceNote({ ...input, synto: config, event: "doctor", summary: "Ran Syntho doctor diagnostics." });
   invalidateStatus("synto:");
   return { output: command.stdout.trim() || command.stderr.trim(), status: await getSyntoStatus({ ...input, synto: config }), commands: [command] };
@@ -567,11 +679,12 @@ export async function querySynto(input: SyntoInput & { query?: string; synthesiz
   const query = input.query?.trim();
   if (!query) throw new Error("Enter a Syntho query first.");
   const root = synthesisRoot(vault, input.synthesisFolder);
+  const runtime = await prepareSyntoModelRoute(root, config);
   const args = ["query", "--vault", root];
   if (input.save) args.push("--save");
   if (input.synthesize) args.push("--synthesize");
   args.push(query);
-  const command = await runSyntoCommand(config, args, { allowFailure: true, timeoutMs: LONG_TIMEOUT_MS });
+  const command = await runSyntoCommand(config, args, { allowFailure: true, timeoutMs: LONG_TIMEOUT_MS, env: runtime.env });
   await writeSyntoServiceNote({ ...input, synto: config, event: "query", summary: "Ran a Syntho routed wiki query from the dashboard." });
   invalidateStatus("synto:");
   return { output: command.stdout.trim() || command.stderr.trim(), status: await getSyntoStatus({ ...input, synto: config }), commands: [command] };

@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { DashboardHiveLoader } from "@/features/dashboard/DashboardHiveLoader";
+import { TermsAcceptanceGate } from "@/features/legal/TermsAcceptanceGate";
 import type { DashboardVaultPanelMode } from "@/features/dashboard/DashboardApp";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import type { WorkHistoryPayload } from "@/lib/types/work-history";
@@ -36,6 +37,7 @@ const DASHBOARD_FRAME_ROUTE_LABELS: Record<string, string> = {
   more: "More",
   env: "Env",
   "my-apps": "Apps & Services",
+  "mini-apps": "HivemindOS Mini Apps",
   phone: "Phone",
   aeon: "Aeon",
   fusion: "Hive Fusion",
@@ -53,8 +55,10 @@ export default function DashboardNativeFrame(props: DashboardNativeFrameProps) {
   return (
     <>
       <div className="desktopWindowDragStrip" aria-hidden="true" data-tauri-drag-region="deep" />
-      <DashboardApp {...props} />
-      <NativeFirstRunOnboarding />
+      <TermsAcceptanceGate>
+        <DashboardApp {...props} />
+        <NativeFirstRunOnboarding />
+      </TermsAcceptanceGate>
     </>
   );
 }

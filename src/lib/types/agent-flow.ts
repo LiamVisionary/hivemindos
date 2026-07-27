@@ -63,13 +63,35 @@ export interface FlowStepRecord {
   at: number;
 }
 
+/** Current FlowRunState schema version. Persisted runs without it are the legacy
+ * single-active-node shape and are migrated by `normalizeFlowRunState` on read
+ * (then rewritten in the new shape on the next save). */
+export const FLOW_RUN_STATE_VERSION = 2;
+
 export interface FlowRunState {
+  /** Absent on legacy (pre-parallel) persisted runs; see FLOW_RUN_STATE_VERSION. */
+  version?: number;
   flowId: string;
   flowName: string;
   runId: string;
   status: FlowRunStatus;
-  /** Node to run next, the approval node awaiting a human, or null when terminal. */
+  /**
+   * Compatibility mirror of `activeNodeIds[0]` (null when terminal), kept so
+   * legacy readers/UI that show "the" current node keep working. The engine
+   * maintains it; treat `activeNodeIds` as the source of truth.
+   */
   currentNodeId: string | null;
+  /** All currently-active nodes. Parallel branches make this multi-element; linear flows stay single-element. */
+  activeNodeIds: string[];
+  /**
+   * Inbound edges (encoded "from=>to") that fired but whose target has not yet
+   * activated — the join ledger. A node with inbound edges from several distinct
+   * sources becomes runnable only when every source has fired an edge to it; its
+   * entries are then consumed so loops re-arm.
+   */
+  firedEdges: string[];
+  /** Nodes activated by the latest transition that the runner has not yet dispatched. */
+  pendingDispatchNodeIds: string[];
   /** Shared typed state: each node's output is written here and readable by later nodes. */
   state: Record<string, unknown>;
   history: FlowStepRecord[];

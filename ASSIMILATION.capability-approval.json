@@ -1,0 +1,49 @@
+{
+  "created_at": "2026-07-14T07:12:22.000000+00:00",
+  "request": "Map build requests to installed or installable capabilities, collect an interactive approval in Chat, fall back to natural-language approval in external runtimes, surface pending plans in chat history and Alerts, and default autonomous work to automatic capability decisions with ask-first overrides.",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/chat/task-retrieval-context.ts",
+      "target_path": "src/lib/services/chat/capability-approval.ts",
+      "reuse_type": "adapted_code",
+      "note": "reused the existing context-index batch search and connected-app discovery path to rank installed and installable implementations for typed capability intents"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/features/dashboard/dashboard-storage.ts",
+      "target_path": "src/features/dashboard/dashboard-storage.ts",
+      "reuse_type": "adapted_code",
+      "note": "extended the canonical chat message persistence, hydration, and deduplication path so pending capability plans survive restarts and remain attached to their exact chat"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/obsidian/agent-notifications.ts",
+      "target_path": "src/app/api/chat/capability-approval/route.ts",
+      "reuse_type": "adapted_code",
+      "note": "reused the established Obsidian-backed agent notification writer and resolution flow to publish capability approvals into the existing Alerts inbox"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/features/notifications/notification-actions.ts",
+      "target_path": "src/features/notifications/notification-actions.ts",
+      "reuse_type": "config_adapted",
+      "note": "extended the existing notification action matrix with an exact-chat deep link for capability approval alerts"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/kanban/local-kanban-store.ts",
+      "target_path": "src/features/dashboard/dashboard-light-helpers.tsx",
+      "reuse_type": "adapted_code",
+      "note": "carried a typed per-task automatic-or-ask capability policy from the canonical Work Board store into Queen Bee dispatch prompts"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/company-approval-policies.ts",
+      "target_path": "src/lib/services/company-approval-policies.ts",
+      "reuse_type": "config_adapted",
+      "note": "extended the existing company approval policy matrix so zero-human companies remain automatic by default while allowing an ask-first capability override"
+    }
+  ]
+}

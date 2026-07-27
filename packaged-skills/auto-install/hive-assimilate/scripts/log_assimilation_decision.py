@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -15,6 +16,23 @@ DEFAULT_MARKDOWN = "ASSIMILATION_LOG.md"
 DEFAULT_JSONL = "ASSIMILATION_LOG.jsonl"
 MAX_TEXT_FIELD = 500
 MAX_NOTE_CHARS = 800
+
+# Fixed phase vocabulary. One-off phases (67 invented in the June 2026 log)
+# make the JSONL unanalyzable by machine; sub-topics belong in --note.
+CANONICAL_PHASES = {
+    "triage",
+    "shared-brain",
+    "local-search",
+    "public-search",
+    "prebuild-gate",
+    "audit",
+    "implementation",
+    "correction",
+    "verification",
+    "asset-reuse",
+    "assimilation-manifest",
+    "final",
+}
 
 DECISION_ALIASES = {
     "selected_donor": "selected-donor",
@@ -228,6 +246,24 @@ def main() -> int:
     )
     parser.add_argument("--payload", help="JSON string or JSON file with candidate/event details")
     args = parser.parse_args()
+
+    # Contract warnings (never fatal: telemetry must not be lost over vocabulary).
+    if args.phase not in CANONICAL_PHASES:
+        print(
+            f"warning: non-canonical --phase '{args.phase}'; use one of {', '.join(sorted(CANONICAL_PHASES))} and put the sub-topic in --note",
+            file=sys.stderr,
+        )
+    decision_text = args.decision.strip()
+    if decision_text and (len(decision_text) > 40 or len(decision_text.split()) > 4):
+        print(
+            "warning: --decision looks like a sentence; keep it in the short decision vocabulary and move detail to --reason/--note",
+            file=sys.stderr,
+        )
+    if not args.request.strip():
+        print(
+            "warning: empty --request makes this event unattributable to a run; pass the same verbatim request on every call for the build",
+            file=sys.stderr,
+        )
 
     event = event_from_args(args)
     append_jsonl(event, args.target_root / args.jsonl)

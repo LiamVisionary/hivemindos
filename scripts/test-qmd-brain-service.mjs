@@ -82,10 +82,10 @@ for (const token of [
   "src/lib/services/brain/qmd.ts",
   "/api/brain/qmd/*",
 ]) {
-  has("docs/whole-brain/brain-services.md", token, `QMD brain service docs ${token}`);
+  has("docs/for-users/whole-brain/brain-services.md", token, `QMD brain service docs ${token}`);
 }
-has("docs/features/brain-vault-and-skills.md", "Install or connect QMD.", "feature docs QMD actions");
-has("docs/whole-brain/vault-map.md", "QMD.md", "vault map QMD service note");
-has("docs/whole-brain/index.md", 'Vault --> QMD["QMD markdown search"]', "whole-brain map QMD edge");
+has("docs/for-users/features/brain-vault-and-skills.md", "Install or connect QMD.", "feature docs QMD actions");
+has("docs/for-users/whole-brain/vault-map.md", "QMD.md", "vault map QMD service note");
+has("docs/for-users/whole-brain/index.md", 'Vault --> QMD["QMD markdown search"]', "whole-brain map QMD edge");
 
 console.log("QMD brain service static checks passed.");

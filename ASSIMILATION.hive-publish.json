@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-07-11T13:38:42.737952+00:00",
+  "request": "Implement free 60-minute Cloudflare test deploys, paid branded HivemindOS previews, renewable static hosting, and a dynamic-app hosting tier independent of managed agents",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "ntegrals/december",
+      "source_path": "backend/src/services/file.ts",
+      "target_path": "scripts/lib/app-builder.mjs",
+      "reuse_type": "adapted_code",
+      "note": "project-confined file and artifact traversal adapted into the canonical local builder"
+    },
+    {
+      "source_repo": "ntegrals/december",
+      "source_path": "backend/src/services/docker.ts",
+      "target_path": "src/lib/services/managed-cloud-agents.ts",
+      "reuse_type": "adapted_code",
+      "note": "December container project operations adapted behind the existing managed-agent client"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/paid-agent-cloud-client.ts",
+      "target_path": "src/lib/services/app-hosting.ts",
+      "reuse_type": "adapted_code",
+      "note": "existing official hosted-service request and encrypted credit-token transport reused"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/hive-actions/app-builder.ts",
+      "target_path": "src/app/api/app-builder/route.ts",
+      "reuse_type": "adapted_code",
+      "note": "existing backend-neutral app-builder action dispatch extended with one hosting plane"
+    },
+    {
+      "source_repo": "cloudflare/cloudflare-docs",
+      "source_path": "src/content/docs/workers/platform/claim-deployments.mdx",
+      "target_path": "scripts/lib/app-builder.mjs",
+      "reuse_type": "config_adapted",
+      "note": "temporary deploy minimum version and Wrangler temporary-account invocation encoded in the adapter"
+    }
+  ]
+}

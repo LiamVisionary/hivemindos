@@ -20,6 +20,8 @@ try {
 const root = join(fileURLToPath(import.meta.url), "..", "..");
 const configPath = join(root, "src", "lib", "config", "xstocks-tokens.ts");
 const source = await readFile(configPath, "utf8");
+const robinhoodConfigPath = join(root, "src", "lib", "config", "robinhood-chain.ts");
+const robinhoodSource = await readFile(robinhoodConfigPath, "utf8");
 
 const failures = [];
 const assert = (cond, msg) => { if (!cond) failures.push(msg); };
@@ -49,6 +51,29 @@ for (const e of entries) {
 }
 
 console.log(`Structural checks: ${entries.length} verified xStocks parsed.`);
+
+// Robinhood Chain stock-token support carries the same anti-scam invariant:
+// only canonical documented contracts are accepted, never symbol search.
+const rhEntryRe = /\{\s*symbol:\s*"([^"]+)",\s*address:\s*"([^"]+)",\s*name:\s*"([^"]+)",\s*kind:\s*"(stock|etf)",\s*decimals:\s*18\s*\}/g;
+const rhEntries = [...robinhoodSource.matchAll(rhEntryRe)].map((m) => ({ symbol: m[1], address: m[2], name: m[3], kind: m[4] }));
+const rhNetworkMatch = robinhoodSource.match(/ROBINHOOD_CHAIN_NETWORK\s*=\s*"([^"]+)"/);
+const rhTestnetMatch = robinhoodSource.match(/ROBINHOOD_CHAIN_TESTNET_NETWORK\s*=\s*"([^"]+)"/);
+assert(rhNetworkMatch?.[1] === "eip155:4663", "Robinhood Chain mainnet CAIP id must be eip155:4663");
+assert(rhTestnetMatch?.[1] === "eip155:46630", "Robinhood Chain testnet CAIP id must be eip155:46630");
+assert(rhEntries.length >= 20, `expected >=20 Robinhood stock tokens, found ${rhEntries.length}`);
+for (const required of ["AAPL", "NVDA", "TSLA", "SPY", "QQQ", "SGOV"]) {
+  assert(rhEntries.some((entry) => entry.symbol === required), `missing Robinhood Chain ticker ${required}`);
+}
+const seenRhAddress = new Set();
+const seenRhSymbol = new Set();
+for (const entry of rhEntries) {
+  assert(/^0x[a-fA-F0-9]{40}$/.test(entry.address), `${entry.symbol}: Robinhood address is not an EVM address`);
+  assert(!seenRhAddress.has(entry.address.toLowerCase()), `duplicate Robinhood address ${entry.address}`);
+  assert(!seenRhSymbol.has(entry.symbol), `duplicate Robinhood ticker ${entry.symbol}`);
+  seenRhAddress.add(entry.address.toLowerCase());
+  seenRhSymbol.add(entry.symbol);
+}
+console.log(`Structural checks: ${rhEntries.length} canonical Robinhood Chain stock tokens parsed.`);
 
 // Optional live check — confirm each mint still quotes against USDC on Jupiter.
 // Network failures are a soft skip (offline / restricted), NOT a test failure.
@@ -83,7 +108,18 @@ assert(/export async function executeStockTrade/.test(tradeSource), "executeStoc
 assert(/export async function discoverStockTradeQuote/.test(tradeSource), "discoverStockTradeQuote must be exported");
 assert(/export async function executeBuyStock/.test(tradeSource), "executeBuyStock wrapper must remain for the chat runtime");
 assert(/function quoteXStocksLeg/.test(tradeSource), "quoteXStocksLeg must size both trade directions");
-console.log("Sell-path source checks: side-aware trade API + CONFIRM_SELL present.");
+assert(/function executeRobinhoodChainSwap/.test(tradeSource), "Robinhood Chain execution must have a concrete swap adapter");
+assert(/zeroExFetch\(robinhoodZeroExPath\("quote"/.test(tradeSource), "Robinhood Chain execution must request a firm 0x quote");
+assert(/executeEvmZeroExSwap/.test(tradeSource), "Robinhood Chain execution must sign through the local EVM 0x signer");
+assert(/source:\s*"robinhood-chain"/.test(tradeSource), "Robinhood Chain trades must carry their own platform-fee source");
+assert(/ROBINHOOD_USDG_DECIMALS\s*=\s*6/.test(tradeSource), "Robinhood Chain trades must size USDG as a 6-decimal stablecoin");
+assert(/resolveRobinhoodStockToken/.test(tradeSource), "Robinhood Chain quote path must resolve through the canonical allowlist");
+console.log("Sell-path source checks: side-aware trade API + CONFIRM_SELL + Robinhood 0x adapter present.");
+
+const routeSource = await readFile(join(root, "src", "app", "api", "trading", "route.ts"), "utf8");
+assert(/robinhoodChain:\s*\{/.test(routeSource), "/api/trading GET must expose Robinhood Chain readiness metadata");
+assert(/checkRobinhoodChainTradingReadiness/.test(routeSource), "Robinhood Chain readiness must use the live 0x route check");
+assert(/executable:\s*robinhoodReadiness\.executable/.test(routeSource), "Robinhood Chain readiness must expose the live route-check result");
 
 if (!liveSkipped && entries[0] && USDC) {
   // Mirror the real sell path: size the position from the USDC->mint price, then

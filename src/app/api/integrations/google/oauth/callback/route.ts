@@ -1,0 +1,89 @@
+import { NextRequest } from "next/server";
+import { renderGitHubOAuthPage, verifyGitHubOAuthState } from "@/lib/services/integrations/github-oauth";
+import { readGoogleOAuthConfig, saveGoogleRefreshToken } from "@/lib/services/integrations/google-oauth";
+
+export const runtime = "nodejs";
+
+const RETURN_URL = "/?view=integrations&connections=google";
+const RETURN_LABEL = "Back to integrations";
+
+type GoogleTokenResponse = {
+  access_token?: string;
+  refresh_token?: string;
+  error?: string;
+  error_description?: string;
+};
+
+export async function GET(request: NextRequest) {
+  const oauthError = request.nextUrl.searchParams.get("error");
+  if (oauthError) {
+    return renderGitHubOAuthPage({
+      title: "Google authorization cancelled",
+      body: request.nextUrl.searchParams.get("error_description") || oauthError,
+      returnUrl: "/?view=integrations",
+      returnLabel: RETURN_LABEL,
+      status: 400,
+    });
+  }
+
+  const state = request.nextUrl.searchParams.get("state") ?? "";
+  const code = request.nextUrl.searchParams.get("code") ?? "";
+  const config = await readGoogleOAuthConfig(request);
+  if (config.missing.length) {
+    return renderGitHubOAuthPage({
+      title: "Google sign-in needs a one-time OAuth client",
+      body: `Save a Google OAuth client in Integrations first — it stores <code>${config.missing.join("</code> and <code>")}</code> in the shared hive env.`,
+      returnUrl: "/?view=integrations",
+      returnLabel: RETURN_LABEL,
+      status: 503,
+    });
+  }
+
+  if (!verifyGitHubOAuthState(state, config.clientSecret) || !code) {
+    return renderGitHubOAuthPage({
+      title: "Google sign-in expired",
+      body: "The authorization session expired or did not match this app session. Start the Google connection again from Integrations.",
+      returnUrl: "/?view=integrations",
+      returnLabel: RETURN_LABEL,
+      status: 400,
+    });
+  }
+
+  try {
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+        redirect_uri: config.redirectUri,
+      }),
+      cache: "no-store",
+    });
+    const payload = await tokenResponse.json().catch(() => null) as GoogleTokenResponse | null;
+    if (!tokenResponse.ok || payload?.error || !payload?.access_token) {
+      throw new Error(payload?.error_description || payload?.error || `Google returned HTTP ${tokenResponse.status}.`);
+    }
+    if (!payload.refresh_token) {
+      throw new Error("Google did not return a refresh token. Remove the app's access at myaccount.google.com/permissions, then connect again.");
+    }
+
+    await saveGoogleRefreshToken(payload.refresh_token);
+    return renderGitHubOAuthPage({
+      title: "Google connected",
+      body: "Saved Google access to the shared hive env. Drive, editable Slides, Gmail, and Calendar context is now available to your hive on every machine.",
+      returnUrl: RETURN_URL,
+      returnLabel: RETURN_LABEL,
+    });
+  } catch (error) {
+    return renderGitHubOAuthPage({
+      title: "Google sign-in failed",
+      body: error instanceof Error ? error.message : "Could not finish Google sign-in.",
+      returnUrl: "/?view=integrations",
+      returnLabel: RETURN_LABEL,
+      status: 502,
+    });
+  }
+}

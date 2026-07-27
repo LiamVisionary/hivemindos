@@ -48,6 +48,49 @@ export function normalizeMachineName(value?: string) {
   return value?.toLowerCase().replace(/[^a-z0-9]+/g, "") ?? "";
 }
 
+/**
+ * A machine's identity stripped of macOS Bonjour `.local` name drift. The SAME
+ * Mac re-announces as `Name-<digits>.local` with a rotating numeric suffix after
+ * reboots / DHCP / VPN churn — so the plain normalized name changes even though
+ * the box didn't. We drop a trailing `-<digits>.local` (or a bare `.local`) to a
+ * stable stem. Non-`.local` hosts (Linux / tailnet boxes like `hel1-2`) are left
+ * intact so genuinely distinct machines never collapse onto one stem.
+ */
+export function machineIdentityStem(value?: string | null) {
+  const raw = value?.trim() ?? "";
+  const dotLocal = /^(.*?)(?:-\d+)?\.local$/i.exec(raw);
+  return normalizeMachineName(dotLocal ? dotLocal[1] : raw);
+}
+
+/**
+ * Do a stored machine key and a live hostname denote the same machine? Exact
+ * normalized match first (unchanged behaviour), then a stem match that tolerates
+ * `.local` suffix drift — the failure mode that silently stranded vault
+ * companies whose `homeMachineKey` was pinned to a now-rotated `.local` name
+ * (WEBS, 2026-07-04). Trade-off: two Macs that only ever differed by a small
+ * mDNS collision suffix (`mac-2.local` vs `mac-3.local`) would share a stem; in
+ * this fleet the base names are unique, and stranding-on-drift is the worse bug.
+ */
+export function sameMachineIdentity(a?: string | null, b?: string | null) {
+  const na = normalizeMachineName(a ?? undefined);
+  const nb = normalizeMachineName(b ?? undefined);
+  if (na && na === nb) return true;
+  const stem = machineIdentityStem(a);
+  return Boolean(stem) && stem === machineIdentityStem(b);
+}
+
+/**
+ * The collector-reported stable machine id (`~/.hivemindos/machine-id`,
+ * `hivemind-machine-<32 hex>`). It survives hostname renames, so durable
+ * per-machine keys (e.g. shared-vault schedule mirrors) should key on it
+ * instead of the machine NAME, which macOS mDNS-conflict renames rotate.
+ * Returns the normalized id, or "" when the value is not a well-formed id.
+ */
+export function stableHivemindMachineId(value?: string | null) {
+  const id = value?.trim().toLowerCase() ?? "";
+  return /^hivemind-machine-[a-f0-9]{32}$/.test(id) ? id : "";
+}
+
 export function isHivemindMachineName(name?: string, dnsName?: string) {
   const dnsLabel = dnsName?.replace(/\.$/, "").split(".")[0] ?? "";
   return (
@@ -68,6 +111,28 @@ export function isMacMachineOs(os?: string) {
 // (HTTP route, process.platform); Linux reports "linux". Both spellings count.
 export function isDesktopMachineOs(os?: string) {
   return /^(windows|win32|linux)$/i.test(os ?? "");
+}
+
+export function isWindowsMachineOs(os?: string) {
+  return /^(windows|win32)$/i.test(os ?? "");
+}
+
+/**
+ * Can this machine host the remote Shell panel? The shell runs inside the
+ * machine's hivemind-linkd, whose Windows builds compile the unix-shell spawn
+ * path out (cmd/hivemind-linkd/main.go gates the service on GOOS). A
+ * machine-reported capability wins when present — collector /health
+ * `capabilities.remoteShell` — so a future Windows linkd that gains shell
+ * support opens the gate by flipping its own flag, with no dashboard change.
+ * The OS predicate is only the fallback for machines whose collector predates
+ * the flag.
+ */
+export function machineRemoteShellAvailable(
+  os?: string,
+  remoteShellCapability?: boolean,
+) {
+  if (typeof remoteShellCapability === "boolean") return remoteShellCapability;
+  return !isWindowsMachineOs(os);
 }
 
 export function isVisibleFleetMachine(
@@ -102,6 +167,29 @@ export function machineExactIdentity(name?: string, dnsName?: string) {
   const dnsLabel = dnsName?.replace(/\.$/, "").split(".")[0] ?? "";
   const value = normalizeMachineName(dnsLabel) || normalizeMachineName(name);
   return value.replace(/^hivemindos/, "").replace(/local$/, "");
+}
+
+/**
+ * A collector's /health may report the machine's system tailscaled node as
+ * `tailnetSelf`. An OS hostname rename (macOS mDNS-conflict renames append
+ * random digits) makes the linkd tsnet node re-register under the NEW name
+ * while the system node keeps its sticky old MagicDNS name — name matching
+ * alone then splits one physical machine into a ready collector machine plus
+ * an empty ghost. Discovery folds any tailnet device whose exact identity is
+ * one of these self-declared candidates into the collector machine.
+ */
+export type TailnetSelfNode = { name?: string | null; dnsName?: string | null };
+
+export function tailnetSelfIdentityCandidates(
+  tailnetSelf: TailnetSelfNode | null | undefined,
+): string[] {
+  // dnsName ONLY: the MagicDNS name is sticky and unique per node. The
+  // reported `name` is tailscaled's HostName — on macOS the ComputerName,
+  // which two of Liam's MacBooks share — so deriving an identity from it
+  // would let one machine's collector claim (and fold away) the OTHER
+  // machine's system node.
+  const identity = machineExactIdentity(undefined, tailnetSelf?.dnsName ?? undefined);
+  return identity ? [identity] : [];
 }
 
 export function machineHivemindBase(
@@ -287,6 +375,19 @@ export function agentSuppressionKeys(agent: AgentProfile) {
   ].filter(Boolean);
 }
 
+const RESERVED_HERMES_PROFILE_SLUGS = new Set([
+  "default",
+  "hermes",
+  "runtime-capability-probe",
+]);
+
+function isReservedHermesProfile(agent: AgentProfile) {
+  if (agent.runtime !== "hermes") return false;
+  const dataDir = normalizeAgentPath(agent.localDataDir);
+  const profileSlug = /(?:^|\/)profiles\/([^/]+)$/.exec(dataDir)?.[1] ?? "";
+  return RESERVED_HERMES_PROFILE_SLUGS.has(profileSlug);
+}
+
 function isRemoteCollectorKey(key: string) {
   if (!key) return false;
   if (key.includes("/peer/")) return true;
@@ -308,6 +409,7 @@ export function agentMatchesSuppression(
   if (suppressedKeys.has(workspaceKey)) return true;
   const idKey = agent.id ? `id:${agent.id}` : "";
   if (!idKey || !suppressedKeys.has(idKey)) return false;
+  if (isReservedHermesProfile(agent)) return true;
   return !isRemoteCollectorKey(collectorKey(agent.telemetryUrl));
 }
 
@@ -355,9 +457,10 @@ export function filterSuppressedAgents<T extends AgentProfile>(
   agents: T[],
   suppressedKeys: ReadonlySet<string>,
 ) {
-  if (suppressedKeys.size === 0) return agents;
   return agents.filter(
-    (agent) => !agentMatchesSuppression(agent, suppressedKeys),
+    (agent) =>
+      !isReservedHermesProfile(agent) &&
+      !agentMatchesSuppression(agent, suppressedKeys),
   );
 }
 

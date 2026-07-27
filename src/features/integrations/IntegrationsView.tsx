@@ -2,59 +2,43 @@
 
 import * as React from "react";
 import type { GitLawbStatus } from "@/lib/types/gitlawb";
-import type {
-  NangoHostConfig,
-  NangoHostSetupResult,
-  NangoIntegrationPayload,
-  NangoProviderKey,
-} from "@/lib/types/integrations";
+import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
+import { openExternalUrl } from "@/lib/native/open-external-url";
+import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
+import {
+  MANAGED_X_RETURN_EVENT,
+  managedXReturnMessage,
+  type ManagedXReturnPayload,
+} from "@/lib/services/managed-x-return";
+import {
+  RESEARCH_SYNC_CODE_EVENT,
+  stashResearchSyncCode,
+  type ResearchSyncCodePayload,
+} from "@/lib/services/research-sync-code";
 import {
   Badge,
   BBtn,
   BIcon,
-  LinkIcon,
   McpGlyph,
-  MonitorGlyph,
-  NiBadge,
   Pill,
-  PlayIcon,
-  ServiceGlyph,
-  TermIcon,
   Toggle,
 } from "./integrations-primitives";
-import "./integrations-redesign.css";
+import { ConnectionsPanel } from "./ConnectionsPanel";
+import { XAccountMcpPanel, type ManagedXPanelStatus, type XMcpStatus } from "./XAccountMcpPanel";
+import { RobinhoodMcpPanel } from "./RobinhoodMcpPanel";
+import { XTranscriptPanel } from "./XTranscriptPanel";
+import {
+  managedXReturnUrl,
+  managedXStatusUrl,
+  readJson,
+  showManagedXReturnMessage,
+  splitArgs,
+  summarizeRegistrarOutput,
+  tabFromLocation,
+  timeAgo,
+} from "./integrations-view-helpers";
 
-type SetupStep = "welcome" | "host" | "method" | "automatic" | "manual" | "apps";
-type SetupMode = "automatic" | "manual" | "";
-type TabId = "connections" | "mcp" | "codeproof";
-
-type FleetMachine = {
-  device?: {
-    self?: boolean;
-    name?: string;
-    dnsName?: string;
-    os?: string;
-    online?: boolean;
-    ip?: string;
-    collectorUrl?: string;
-  };
-  collector?: string;
-  envSync?: { ready?: boolean };
-};
-
-type MachineChoice = {
-  id: string;
-  name: string;
-  os: string;
-  online: boolean;
-  collectorReady: boolean;
-  envReady: boolean;
-  self: boolean;
-  baseUrl: string;
-  collectorUrl: string;
-  rank: number;
-  note: string;
-};
+type TabId = "connections" | "mcp" | "transcript" | "codeproof";
 
 type HiveMcpCatalogItem = {
   id: string;
@@ -88,34 +72,24 @@ type McpCatalogCardItem = HiveMcpCatalogItem & McpTransportDefaults & {
 
 type FetchErrorPayload = { error?: string; message?: string };
 
+type ManagedXReturnPoll = {
+  creditAccountId: string;
+  slug: string;
+  since: number;
+  until: number;
+};
+
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "connections", label: "Connections" },
   { id: "mcp", label: "MCP Servers" },
+  { id: "transcript", label: "Transcript" },
   { id: "codeproof", label: "Code Proof" },
 ];
 
-const NANGO_PROVIDERS: Array<{
-  key: NangoProviderKey;
-  label: string;
-  mono: string;
-  accent: string;
-  detail: string;
-}> = [
-  { key: "github", label: "GitHub", mono: "Gh", accent: "#c7ccd4", detail: "Code, issues, pull requests, and releases." },
-  { key: "linear", label: "Linear", mono: "Li", accent: "#9b8cf0", detail: "Tasks, projects, and triage queues." },
-  { key: "slack", label: "Slack", mono: "Sl", accent: "#e09a86", detail: "Channels, mentions, and approval messages." },
-  { key: "notion", label: "Notion", mono: "No", accent: "#d8d6cf", detail: "Docs, project pages, and task databases." },
-  { key: "google", label: "Google", mono: "Go", accent: "#6f9bd6", detail: "Drive, Gmail, and Calendar context." },
-];
-
-const NANGO_AUTO_TASKS = [
-  "Reach the host over Tailscale",
-  "Install the Nango bundle",
-  "Boot the server on :3003",
-  "Run the health check",
-];
-
 const MCP_DEFAULTS: Record<string, McpTransportDefaults & { accent: string; mono: string }> = {
+  "robinhood-trading": { transport: "http", url: "https://agent.robinhood.com/mcp/trading", accent: "#62c78f", mono: "Rh" },
+  xapi: { transport: "stdio", command: "node", args: ["scripts/x-mcp-bridge.mjs"], accent: "#f3f0e9", mono: "X" },
+  "x-docs": { transport: "http", url: "https://docs.x.com/mcp", accent: "#6f9bd6", mono: "Xd" },
   github: { transport: "stdio", command: "npx", args: ["-y", "@modelcontextprotocol/server-github"], accent: "#c7ccd4", mono: "Gh" },
   "browser-use": { transport: "stdio", command: "npx", args: ["-y", "browser-use-mcp"], accent: "#6f9bd6", mono: "Br" },
   "palmier-pro": { transport: "http", url: "http://127.0.0.1:19789/mcp", accent: "#e09a86", mono: "Pp" },
@@ -125,6 +99,7 @@ const MCP_DEFAULTS: Record<string, McpTransportDefaults & { accent: string; mono
   linear: { transport: "stdio", command: "npx", args: ["-y", "linear-mcp"], accent: "#9b8cf0", mono: "Li" },
   stripe: { transport: "stdio", command: "npx", args: ["-y", "@stripe/mcp"], accent: "#9b8cf0", mono: "St" },
   notion: { transport: "stdio", command: "npx", args: ["-y", "@notionhq/notion-mcp-server"], accent: "#d8d6cf", mono: "No" },
+  notebooklm: { transport: "stdio", command: "node", args: ["scripts/notebooklm-mcp.mjs"], accent: "#f0b24d", mono: "Nl" },
 };
 
 const MCP_SOURCE = {
@@ -142,13 +117,70 @@ const MCP_SIDE_EFFECTS = {
   payments: { label: "payments", tone: "danger" },
 } as const;
 
+const MANAGED_X_RETURN_POLL_INTERVAL_MS = 1500;
+const MANAGED_X_RETURN_POLL_WINDOW_MS = 5 * 60 * 1000;
+const MANAGED_X_RETURN_POLL_GRACE_MS = 5000;
+
 export type IntegrationsViewProps = {
   embedded?: boolean;
   defaultTab?: TabId;
 };
 
 export function IntegrationsView({ embedded = false, defaultTab = "connections" }: IntegrationsViewProps) {
-  const [tab, setTab] = React.useState<TabId>(defaultTab);
+  const [tab, setTab] = React.useState<TabId>(() => tabFromLocation(defaultTab, TABS));
+  const [managedXReturn, setManagedXReturn] = React.useState<ManagedXReturnPayload | null>(null);
+
+  React.useEffect(() => {
+    if (!isTauriDesktopRuntime()) return undefined;
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) => listen<ManagedXReturnPayload>(MANAGED_X_RETURN_EVENT, (event) => {
+        setTab("mcp");
+        setManagedXReturn(event.payload ?? {});
+      }))
+      .then((unlisten) => {
+        const safeUnlisten = createSafeTauriUnlisten(unlisten);
+        if (cancelled) {
+          safeUnlisten();
+          return;
+        }
+        cleanup = safeUnlisten;
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, []);
+
+  // Deep-linked hivemindos://research/sync pairing code: surface the
+  // Connections tab so the Hive Research card mounts and claims the parked
+  // code. The stash dedupes against the dashboard-root listener, so the
+  // single-use code is still redeemed exactly once.
+  React.useEffect(() => {
+    if (!isTauriDesktopRuntime()) return undefined;
+    let cancelled = false;
+    let cleanup: (() => void) | undefined;
+    void import("@tauri-apps/api/event")
+      .then(({ listen }) => listen<ResearchSyncCodePayload>(RESEARCH_SYNC_CODE_EVENT, (event) => {
+        setTab("connections");
+        stashResearchSyncCode(event.payload?.code);
+      }))
+      .then((unlisten) => {
+        const safeUnlisten = createSafeTauriUnlisten(unlisten);
+        if (cancelled) {
+          safeUnlisten();
+          return;
+        }
+        cleanup = safeUnlisten;
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+      cleanup?.();
+    };
+  }, []);
 
   return (
     <div className={`fr-root ${embedded ? "ni-embedded" : ""}`} style={{ position: "relative", minHeight: embedded ? undefined : "100vh", background: embedded ? "transparent" : "var(--bg)" }}>
@@ -161,16 +193,22 @@ export function IntegrationsView({ embedded = false, defaultTab = "connections" 
           ))}
         </div>
 
-        {tab === "connections" ? <NangoConnections /> : null}
+        {tab === "connections" ? <ConnectionsPanel /> : null}
         {tab === "mcp" ? (
           <>
             <TabHeader eyebrow="Model Context Protocol" title="MCP Servers" sub="Tool servers the hive connects to and calls natively." />
-            <McpManager />
+            <McpManager managedXReturn={managedXReturn} onManagedXReturn={setManagedXReturn} />
+          </>
+        ) : null}
+        {tab === "transcript" ? (
+          <>
+            <TabHeader eyebrow="X / Twitter" title="Transcript" sub="Paste an X link — pull the transcript from the video, or stitch the whole thread into text." />
+            <XTranscriptPanel />
           </>
         ) : null}
         {tab === "codeproof" ? (
           <>
-            <TabHeader eyebrow="GitLawb" title="Code Proof" sub="Signed code provenance for HivemindOS projects, independent of Nango." />
+            <TabHeader eyebrow="GitLawb" title="Code Proof" sub="Signed code provenance for HivemindOS projects." />
             <CodeProof embedded />
           </>
         ) : null}
@@ -193,616 +231,59 @@ function TabHeader({ eyebrow, title, sub }: { eyebrow: string; title: string; su
   );
 }
 
-function NangoConnections() {
-  const [payload, setPayload] = React.useState<NangoIntegrationPayload | null>(null);
-  const [machines, setMachines] = React.useState<MachineChoice[]>([]);
-  const [selectedId, setSelectedId] = React.useState("");
-  const [step, setStep] = React.useState<SetupStep>("welcome");
-  const [setupMode, setSetupMode] = React.useState<SetupMode>("");
-  const [loading, setLoading] = React.useState(true);
-  const [saving, setSaving] = React.useState(false);
-  const [setupSaving, setSetupSaving] = React.useState(false);
-  const [validating, setValidating] = React.useState(false);
-  const [manualValidated, setManualValidated] = React.useState(false);
-  const [setupResult, setSetupResult] = React.useState<NangoHostSetupResult | null>(null);
-  const [message, setMessage] = React.useState("");
-  const [providerBusy, setProviderBusy] = React.useState<NangoProviderKey | "">("");
-
-  const refresh = React.useCallback(async (showLoading = false) => {
-    if (showLoading) setLoading(true);
-    setMessage("");
-    try {
-      const [nangoResponse, fleetResponse] = await Promise.all([
-        fetch("/api/integrations/nango", { cache: "no-store" }),
-        fetch("/api/fleet/discover?includeSnapshots=0", { cache: "no-store" }).catch(() => null),
-      ]);
-      const nextPayload = await readJson<NangoIntegrationPayload & FetchErrorPayload>(nangoResponse);
-      if (!nangoResponse.ok) throw new Error(nextPayload.error ?? "Could not read Nango setup.");
-      const fleet = fleetResponse?.ok ? await fleetResponse.json() as { machines?: FleetMachine[] } : { machines: [] };
-      const choices = machineChoices(fleet.machines ?? [], nextPayload.config);
-      setPayload(nextPayload);
-      setMachines(choices);
-      setSelectedId((current) => nextPayload.config.hostMachineId || current || choices[0]?.id || "self");
-      setStep((current) => {
-        if (current !== "welcome" && current !== "apps") return current;
-        return setupStepForPayload(nextPayload);
-      });
-      return nextPayload;
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not read Nango setup.");
-      return null;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  React.useEffect(() => {
-    const timer = window.setTimeout(() => void refresh(true), 0);
-    return () => window.clearTimeout(timer);
-  }, [refresh]);
-
-  const selected = machines.find((machine) => machine.id === selectedId) ?? machines[0];
-  const providerSet = new Set(payload?.config.allowedProviders ?? []);
-  const ready = payload?.health.ok === true;
-  const configured = Boolean(payload?.config.hostMachineId && payload.config.baseUrl);
-
-  async function saveHost(nextStep: SetupStep = "method") {
-    if (!payload || !selected) return false;
-    setSaving(true);
-    setMessage("");
-    try {
-      const response = await fetch("/api/integrations/nango", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          enabled: true,
-          hostMachineId: selected.id,
-          hostMachineName: selected.name,
-          baseUrl: selected.baseUrl,
-          mode: selected.self ? "local" : "tailnet",
-          allowedProviders: payload.config.allowedProviders,
-        }),
-      });
-      const nextPayload = await readJson<NangoIntegrationPayload & FetchErrorPayload>(response);
-      if (!response.ok) throw new Error(nextPayload.error ?? "Could not save this machine.");
-      setPayload(nextPayload);
-      setStep(nextStep);
-      return true;
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not save this machine.");
-      return false;
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function setupHost() {
-    if (!payload || !selected) return false;
-    setSetupSaving(true);
-    setSetupResult(null);
-    setMessage("");
-    try {
-      const response = await fetch("/api/integrations/nango/setup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          enabled: true,
-          hostMachineId: selected.id,
-          hostMachineName: selected.name,
-          baseUrl: selected.baseUrl,
-          mode: selected.self ? "local" : "tailnet",
-          allowedProviders: payload.config.allowedProviders,
-          collectorUrl: selected.collectorUrl,
-          target: selected.self ? "local" : setupTargetFromBaseUrl(selected.baseUrl),
-        }),
-      });
-      const result = await readJson<NangoHostSetupResult & FetchErrorPayload>(response);
-      if (!response.ok || result.ok === false) {
-        setSetupResult(result.health ? result : null);
-        throw new Error(result.error ?? result.health?.error ?? "Nango is not ready yet.");
-      }
-      setSetupResult(result);
-      setMessage("Nango is ready.");
-      await refresh();
-      return true;
-    } catch (error) {
-      setMessage(friendlySetupError(error));
-      return false;
-    } finally {
-      setSetupSaving(false);
-    }
-  }
-
-  async function validateManualSetup() {
-    setValidating(true);
-    setManualValidated(false);
-    setMessage("");
-    const nextPayload = await refresh();
-    window.setTimeout(() => {
-      const ok = nextPayload?.health.ok === true;
-      setManualValidated(ok);
-      setMessage(ok ? "Nango validated!" : "Nango is not reachable yet. Check the setup and try again.");
-      setValidating(false);
-    }, 650);
-  }
-
-  async function toggleProvider(provider: NangoProviderKey) {
-    if (!payload || providerBusy) return;
-    const allowedProviders = providerSet.has(provider)
-      ? payload.config.allowedProviders.filter((item) => item !== provider)
-      : [...payload.config.allowedProviders, provider];
-    setProviderBusy(provider);
-    setMessage("");
-    try {
-      const response = await fetch("/api/integrations/nango", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ allowedProviders }),
-      });
-      const nextPayload = await readJson<NangoIntegrationPayload & FetchErrorPayload>(response);
-      if (!response.ok) throw new Error(nextPayload.error ?? "Could not update providers.");
-      setPayload(nextPayload);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not update providers.");
-    } finally {
-      setProviderBusy("");
-    }
-  }
-
-  return (
-    <>
-      <NangoTopbar step={step} configured={configured} ready={ready} />
-      {loading ? <LoadingStage message={message} /> : null}
-      {!loading && step === "welcome" ? <WelcomeStage onStart={() => setStep("host")} /> : null}
-      {!loading && step === "host" ? (
-        <HostStage
-          machines={machines}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          onBack={() => setStep(configured ? "apps" : "welcome")}
-          onContinue={() => void saveHost("method")}
-          saving={saving}
-          message={message}
-        />
-      ) : null}
-      {!loading && step === "method" ? (
-        <MethodStage
-          mode={setupMode}
-          onMode={(mode) => {
-            setSetupMode(mode);
-            setMessage("");
-          }}
-          onBack={() => setStep("host")}
-          onContinue={() => setStep(setupMode === "manual" ? "manual" : "automatic")}
-        />
-      ) : null}
-      {!loading && step === "automatic" ? (
-        <AutomaticStage
-          machine={selected}
-          setupResult={setupResult}
-          setupSaving={setupSaving}
-          message={message}
-          onBack={() => setStep("method")}
-          onRun={setupHost}
-          onFinish={() => setStep("apps")}
-        />
-      ) : null}
-      {!loading && step === "manual" ? (
-        <ManualStage
-          machine={selected}
-          payload={payload}
-          manualValidated={manualValidated}
-          validating={validating}
-          message={message}
-          onBack={() => setStep("method")}
-          onValidate={() => void validateManualSetup()}
-          onFinish={() => setStep("apps")}
-        />
-      ) : null}
-      {!loading && step === "apps" ? (
-        <AppsStage
-          payload={payload}
-          host={selected}
-          ready={ready}
-          providerSet={providerSet}
-          providerBusy={providerBusy}
-          message={message}
-          onRefresh={() => void refresh(true)}
-          onSetup={() => setStep("host")}
-          onToggleProvider={(provider) => void toggleProvider(provider)}
-        />
-      ) : null}
-    </>
-  );
-}
-
-function NangoTopbar({ step, configured, ready }: { step: SetupStep; configured: boolean; ready: boolean }) {
-  const inApps = step === "apps";
-  return (
-    <div className="ni-top">
-      <div>
-        <div className="fr-eyebrow" style={{ color: "var(--honey)" }}>Nango</div>
-        <h1>{inApps ? "Integrations" : "Welcome to Nango"}</h1>
-        <p>{inApps ? "Choose the integrations your hive can use." : "The unified integration system."}</p>
-      </div>
-      {inApps ? (
-        <div className="ni-status">
-          <NiBadge good={configured} label={configured ? "Host saved" : "Needs host"} />
-          <NiBadge good={ready} warn={configured && !ready} label={ready ? "Nango live" : "Checking"} />
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function LoadingStage({ message }: { message: string }) {
-  return (
-    <div className="ni-stage ni-center" aria-live="polite">
-      <div className="ni-mark"><span className="ni-tspin" style={{ width: 32, height: 32, borderWidth: 3 }} /></div>
-      <h2>Finding your machines</h2>
-      <p>{message || "One moment while Nango gets the full list ready."}</p>
-    </div>
-  );
-}
-
-function WelcomeStage({ onStart }: { onStart: () => void }) {
-  return (
-    <div className="ni-stage ni-center">
-      <div className="ni-mark"><BIcon name="sparkles" size={32} /></div>
-      <h2>Welcome to Nango.</h2>
-      <p>The unified integration system.</p>
-      <BBtn variant="primary" onClick={onStart} style={{ marginTop: 8, padding: "12px 20px", fontSize: 14 }}>
-        <PlayIcon /> Set up Nango
-      </BBtn>
-    </div>
-  );
-}
-
-function HostStage({
-  machines,
-  selectedId,
-  onSelect,
-  onBack,
-  onContinue,
-  saving,
-  message,
+function McpManager({
+  managedXReturn,
+  onManagedXReturn,
 }: {
-  machines: MachineChoice[];
-  selectedId: string;
-  onSelect: (id: string) => void;
-  onBack: () => void;
-  onContinue: () => void;
-  saving: boolean;
-  message: string;
+  managedXReturn?: ManagedXReturnPayload | null;
+  onManagedXReturn: (payload: ManagedXReturnPayload) => void;
 }) {
-  return (
-    <div className="ni-stage ni-pad">
-      <StepHeader kicker="Step 1" title="Choose a home for Nango" detail="Pick the machine that should keep your app connections running." />
-      <div className="ni-mgrid">
-        {machines.map((machine, index) => (
-          <button key={machine.id} type="button" className="ni-mcard" data-sel={machine.id === selectedId ? "" : undefined} onClick={() => onSelect(machine.id)}>
-            <span className="ni-mico"><MonitorGlyph /></span>
-            <strong>{machine.name}</strong>
-            <span className="mnote">{machine.self ? "This computer" : machine.note}</span>
-            {index === 0 && machine.rank >= 60 ? (
-              <span className="ni-pill" style={{ position: "absolute", top: 14, right: 14, color: "var(--honey)", borderColor: "var(--honey-line)", background: "var(--honey-soft)" }}>Recommended</span>
-            ) : null}
-            <div className="ni-mfoot">
-              <span className={`ni-pill ${machine.online ? "good" : "warn"}`}>{machine.online ? "Online" : "Offline"}</span>
-              <span className="ni-mradio">{machine.id === selectedId ? "Primary" : "Set primary"}<i>{machine.id === selectedId ? <BIcon name="check" size={11} sw={2.6} /> : null}</i></span>
-            </div>
-          </button>
-        ))}
-      </div>
-      <FooterActions onBack={onBack}>
-        <BBtn variant="primary" onClick={onContinue} disabled={!selectedId || saving}>
-          {saving ? <span className="ni-spin" /> : <BIcon name="network" size={14} />} Continue
-        </BBtn>
-      </FooterActions>
-      {message ? <p className="ni-note">{message}</p> : null}
-    </div>
-  );
-}
-
-function MethodStage({
-  mode,
-  onMode,
-  onBack,
-  onContinue,
-}: {
-  mode: SetupMode;
-  onMode: (mode: Exclude<SetupMode, "">) => void;
-  onBack: () => void;
-  onContinue: () => void;
-}) {
-  return (
-    <div className="ni-stage ni-pad">
-      <StepHeader kicker="Step 2" title="How would you like to set up this machine?" detail="Most people should choose automatic." />
-      <div className="ni-meth">
-        <button type="button" className="ni-methcard" data-sel={mode === "automatic" ? "" : undefined} onClick={() => onMode("automatic")}>
-          <BIcon name="sparkles" size={30} />
-          <strong>Automatic</strong>
-          <span>HivemindOS prepares Nango for you, then checks that it works.</span>
-        </button>
-        <button type="button" className="ni-methcard" data-sel={mode === "manual" ? "" : undefined} onClick={() => onMode("manual")}>
-          <TermIcon size={30} />
-          <strong>Manual</strong>
-          <span>Use your own setup, then let HivemindOS validate it.</span>
-        </button>
-      </div>
-      <FooterActions onBack={onBack}>
-        <BBtn variant="primary" onClick={onContinue} disabled={!mode}>Next</BBtn>
-      </FooterActions>
-    </div>
-  );
-}
-
-function AutomaticStage({
-  machine,
-  setupResult,
-  setupSaving,
-  message,
-  onBack,
-  onRun,
-  onFinish,
-}: {
-  machine?: MachineChoice;
-  setupResult: NangoHostSetupResult | null;
-  setupSaving: boolean;
-  message: string;
-  onBack: () => void;
-  onRun: () => Promise<boolean>;
-  onFinish: () => void;
-}) {
-  const [phase, setPhase] = React.useState<"idle" | "busy" | "done">("idle");
-  const [progress, setProgress] = React.useState(0);
-  const complete = setupResult?.ok === true || phase === "done";
-  const failureLog = complete
-    ? ""
-    : [message, setupResult?.stderr, setupResult?.stdout].map((part) => part?.trim()).filter(Boolean).join("\n\n");
-
-  async function run() {
-    setPhase("busy");
-    setProgress(0);
-    const interval = window.setInterval(() => {
-      setProgress((current) => Math.min(current + 1, NANGO_AUTO_TASKS.length - 1));
-    }, 560);
-    const ok = await onRun();
-    window.clearInterval(interval);
-    if (ok) {
-      setProgress(NANGO_AUTO_TASKS.length);
-      setPhase("done");
-    } else {
-      setPhase("idle");
-    }
-  }
-
-  return (
-    <div className="ni-stage ni-pad">
-      <StepHeader kicker="Step 3" title="Start automatic setup" detail={`Nango will be prepared on ${machine?.name ?? "the selected machine"}.`} />
-      <div className="ni-setup">
-        <div className="ni-setup-head">
-          <span className="ni-mico" style={{ width: 40, height: 40 }}><MonitorGlyph size={19} /></span>
-          <div className="meta">
-            <div className="n">{machine?.name ?? "selected machine"}</div>
-            <div className="u">{machine?.baseUrl ?? "http://host:3003"}</div>
-          </div>
-          <span className={`ni-badge ${complete ? "good" : phase === "busy" || setupSaving ? "warn" : ""}`}>
-            {complete ? <BIcon name="check" size={13} /> : phase === "busy" || setupSaving ? <span className="ni-tspin" /> : <BIcon name="sparkles" size={12} />}
-            {complete ? "Ready" : phase === "busy" || setupSaving ? "Working" : "Not started"}
-          </span>
-        </div>
-        <div className="ni-tasks">
-          {NANGO_AUTO_TASKS.map((task, index) => {
-            const state = index < progress || complete ? "done" : (phase === "busy" && index === progress ? "active" : "idle");
-            return (
-              <div key={task} className="ni-task" data-state={state}>
-                <span className="tdot">{state === "done" ? <BIcon name="check" size={11} sw={2.6} /> : state === "active" ? <span className="ni-tspin" style={{ width: 12, height: 12, border: "2px solid var(--line-2)", borderTopColor: "var(--honey)" }} /> : null}</span>
-                {task}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-      {complete ? (
-        <div className="ni-burst">
-          <BIcon name="check" size={18} sw={2.2} />
-          <strong>Success</strong>
-          <span>{setupMethodLabel(setupResult?.method)} finished on {setupResult?.target ?? machine?.name ?? "the selected machine"}.</span>
-        </div>
-      ) : (
-        <BBtn variant="primary" onClick={() => void run()} disabled={phase === "busy" || setupSaving || !machine} style={{ justifySelf: "start", padding: "11px 18px", fontSize: 13.5 }}>
-          {phase === "busy" || setupSaving ? <><span className="ni-spin" /> Setting up Nango...</> : <><BIcon name="sparkles" size={15} /> Start automatic setup</>}
-        </BBtn>
-      )}
-      {failureLog ? <pre className="ni-box" style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", color: "var(--danger)" }}>{failureLog}</pre> : null}
-      <FooterActions onBack={onBack}>
-        <BBtn variant="primary" onClick={onFinish} disabled={!complete}>Finish</BBtn>
-      </FooterActions>
-    </div>
-  );
-}
-
-function ManualStage({
-  machine,
-  payload,
-  manualValidated,
-  validating,
-  message,
-  onBack,
-  onValidate,
-  onFinish,
-}: {
-  machine?: MachineChoice;
-  payload: NangoIntegrationPayload | null;
-  manualValidated: boolean;
-  validating: boolean;
-  message: string;
-  onBack: () => void;
-  onValidate: () => void;
-  onFinish: () => void;
-}) {
-  const commands = payload?.setupCommands.length ? payload.setupCommands : [
-    "hive nango up --self-hosted --port 3003",
-    "tailscale serve https / http://127.0.0.1:3003",
-  ];
-  return (
-    <div className="ni-stage ni-pad">
-      <StepHeader kicker="Step 3" title="Manual setup" detail="Set up Nango on the chosen machine, then validate it here." />
-      <div className="ni-box">
-        <strong>Run Nango on this address</strong>
-        <span className="addr">{payload?.config.baseUrl || machine?.baseUrl || "http://host:3003"}</span>
-        <pre>{commands.join("\n")}</pre>
-      </div>
-      <div className="ni-validate">
-        <BBtn variant="primary" onClick={onValidate} disabled={validating}>
-          <BIcon name={validating ? "sync" : "refresh"} size={14} /> {validating ? "Validating..." : "Validate"}
-        </BBtn>
-        {manualValidated ? <span className="ni-ok"><BIcon name="check" size={15} sw={2.2} /> Nango validated!</span> : null}
-      </div>
-      {message ? <p className={`ni-note ${manualValidated ? "good" : ""}`}>{message}</p> : null}
-      <FooterActions onBack={onBack}>
-        <BBtn variant="primary" onClick={onFinish} disabled={!manualValidated}>Finish</BBtn>
-      </FooterActions>
-    </div>
-  );
-}
-
-function AppsStage({
-  payload,
-  host,
-  ready,
-  providerSet,
-  providerBusy,
-  message,
-  onRefresh,
-  onSetup,
-  onToggleProvider,
-}: {
-  payload: NangoIntegrationPayload | null;
-  host?: MachineChoice;
-  ready: boolean;
-  providerSet: Set<NangoProviderKey>;
-  providerBusy: NangoProviderKey | "";
-  message: string;
-  onRefresh: () => void;
-  onSetup: () => void;
-  onToggleProvider: (provider: NangoProviderKey) => void;
-}) {
-  const connections = (payload?.connections ?? []).filter((connection) => providerSet.has(connection.providerConfigKey as NangoProviderKey));
-
-  if (!ready) {
-    return (
-      <div className="ni-stage ni-pad">
-        <div className="ni-atool">
-          <div>
-            <h2>Nango setup incomplete</h2>
-            <p>{payload?.config.hostMachineName || host?.name || "The selected host"} is saved, but Nango is not reachable yet.</p>
-          </div>
-          <div className="ni-abtns">
-            <BBtn onClick={onSetup}><BIcon name="key" size={14} /> Set up again</BBtn>
-            <BBtn onClick={onRefresh}><BIcon name="refresh" size={14} /> Refresh</BBtn>
-          </div>
-        </div>
-        <div className="ni-required">
-          <BIcon name="alert" size={26} />
-          <div>
-            <strong>Finish setup before adding app connections.</strong>
-            <span>{payload?.health.error || payload?.connectionError || "Nango health is failing, so connected accounts and provider setup are paused."}</span>
-          </div>
-        </div>
-        {message ? <p className="ni-note">{message}</p> : null}
-      </div>
-    );
-  }
-
-  return (
-    <div className="ni-stage ni-pad">
-      <div className="ni-atool">
-        <div>
-          <h2>Integrations</h2>
-          <p>{connections.length} connected account{connections.length === 1 ? "" : "s"}</p>
-        </div>
-        <div className="ni-abtns">
-          {payload?.config.baseUrl ? (
-            <BBtn onClick={() => window.open(payload.config.baseUrl, "_blank", "noreferrer")}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}><LinkIcon /> Open Nango</span>
-            </BBtn>
-          ) : null}
-          <BBtn onClick={onSetup}><BIcon name="key" size={14} /> Setup</BBtn>
-          <BBtn onClick={onRefresh}><BIcon name="refresh" size={14} /> Refresh</BBtn>
-        </div>
-      </div>
-
-      <div className="ni-agrid">
-        {NANGO_PROVIDERS.map((provider) => {
-          const enabled = providerSet.has(provider.key);
-          return (
-            <button key={provider.key} type="button" className="ni-acard" data-on={enabled ? "" : undefined} onClick={() => onToggleProvider(provider.key)} aria-pressed={enabled} disabled={Boolean(providerBusy)}>
-              <ServiceGlyph accent={provider.accent} mono={provider.mono} size={56} radius={16} />
-              <strong>{provider.label}</strong>
-              <span className="adet">{provider.detail}</span>
-              <span className={`ni-pill ${enabled ? "good" : ""}`}>{providerBusy === provider.key ? "Saving" : enabled ? "Enabled" : "Off"}</span>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="ni-conn">
-        <div className="ni-connhead">
-          <strong>Connected accounts</strong>
-          <NiBadge good label="Nango live" />
-        </div>
-        {connections.length ? connections.map((connection) => {
-          const provider = NANGO_PROVIDERS.find((item) => item.key === connection.providerConfigKey);
-          return (
-            <div key={`${connection.providerConfigKey}:${connection.id}`} className="ni-connrow">
-              {provider ? <ServiceGlyph accent={provider.accent} mono={provider.mono} size={30} radius={9} /> : null}
-              <div style={{ minWidth: 0, flex: "1 1 auto" }}>
-                <div className="cname">{connection.displayName || connection.email || connection.id}</div>
-              </div>
-              <span className="ckey">{connection.providerConfigKey}</span>
-            </div>
-          );
-        }) : (
-          <div className="ni-empty">
-            <strong>No accounts connected yet.</strong>
-            <span>When people connect apps through Nango, they will appear here.</span>
-          </div>
-        )}
-        {payload?.connectionError ? <p className="ni-note">{payload.connectionError}</p> : null}
-        {message ? <p className="ni-note">{message}</p> : null}
-      </div>
-    </div>
-  );
-}
-
-function McpManager() {
   const [enabled, setEnabled] = React.useState(true);
   const [connected, setConnected] = React.useState<McpServerStatus[]>([]);
   const [catalog, setCatalog] = React.useState<McpCatalogCardItem[]>([]);
+  const [xStatus, setXStatus] = React.useState<XMcpStatus | null>(null);
+  const [managedXStatus, setManagedXStatus] = React.useState<ManagedXPanelStatus | null>(null);
   const [connectItem, setConnectItem] = React.useState<McpCatalogCardItem | null>(null);
   const [category, setCategory] = React.useState("all");
   const [query, setQuery] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const [busy, setBusy] = React.useState("");
+  const [xBusy, setXBusy] = React.useState("");
+  const [xMessage, setXMessage] = React.useState("");
+  const [managedXReturnPoll, setManagedXReturnPoll] = React.useState<ManagedXReturnPoll | null>(null);
   const [message, setMessage] = React.useState("");
+  const handledManagedXReturn = React.useRef("");
+  const managedXStatusContext = React.useRef<{ creditAccountId?: string; slug?: string }>({});
 
   const load = React.useCallback(async () => {
     setLoading(true);
     setMessage("");
     try {
-      const [statusResponse, catalogResponse] = await Promise.all([
+      const managedTarget = managedXStatusContext.current;
+      const [statusResponse, catalogResponse, xResponse, managedResponse] = await Promise.all([
         fetch("/api/mcp/client", { cache: "no-store" }),
         fetch("/api/mcp/catalog?limit=100", { cache: "no-store" }),
+        fetch("/api/integrations/x-mcp", { cache: "no-store" }),
+        fetch(managedXStatusUrl(managedTarget.creditAccountId, managedTarget.slug), { cache: "no-store" }),
       ]);
       const status = await readJson<{ ok?: boolean; enabled?: boolean; servers?: McpServerStatus[] } & FetchErrorPayload>(statusResponse);
       const catalogData = await readJson<{ ok?: boolean; servers?: HiveMcpCatalogItem[] } & FetchErrorPayload>(catalogResponse);
+      const xData = await readJson<{ ok?: boolean; status?: XMcpStatus } & FetchErrorPayload>(xResponse);
+      const managedData = await readJson<{ ok?: boolean } & ManagedXPanelStatus & FetchErrorPayload>(managedResponse);
       if (!statusResponse.ok || status.ok === false) throw new Error(status.error ?? "Could not read MCP client status.");
       if (!catalogResponse.ok || catalogData.ok === false) throw new Error(catalogData.error ?? "Could not read MCP catalog.");
+      if (!xResponse.ok || xData.ok === false) throw new Error(xData.error ?? "Could not read X MCP status.");
+      if (!managedResponse.ok || managedData.ok === false) throw new Error(managedData.error ?? "Could not read managed X status.");
       setEnabled(status.enabled !== false);
       setConnected(status.servers ?? []);
       setCatalog((catalogData.servers ?? []).map(withMcpDefaults));
+      setXStatus(xData.status ?? null);
+      setManagedXStatus({
+        creditAccounts: managedData.creditAccounts ?? [],
+        connections: managedData.connections ?? [],
+        credits: managedData.credits,
+      });
+      showManagedXReturnMessage(setXMessage);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not load MCP servers.");
     } finally {
@@ -823,7 +304,7 @@ function McpManager() {
   const connectedIds = new Set(connected.map((server) => server.id));
   const totalTools = connected.reduce((sum, server) => sum + server.tools.length, 0);
   const cleanQuery = query.trim().toLowerCase();
-  const list = catalog.filter((item) => (
+  const list = catalog.filter((item) => item.id !== "robinhood-trading" && (
     (category === "all" || item.categories.includes(category)) &&
     (!cleanQuery || [item.name, item.summary, ...item.categories, ...item.capabilities, ...item.credentialKeys].join(" ").toLowerCase().includes(cleanQuery))
   ));
@@ -887,6 +368,153 @@ function McpManager() {
     }
   }
 
+  async function runXAction(action: "save-credentials" | "start-oauth" | "sync-runtimes" | "remove-runtimes", payload: Record<string, unknown> = {}) {
+    setXBusy(action);
+    setXMessage("");
+    try {
+      const response = await fetch("/api/integrations/x-mcp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ...payload }),
+      });
+      const data = await readJson<{ ok?: boolean; status?: XMcpStatus; message?: string; stdout?: string } & FetchErrorPayload>(response);
+      if (!response.ok || data.ok === false) throw new Error(data.error ?? "X MCP action failed.");
+      if (data.status) setXStatus(data.status);
+      setXMessage(data.message || summarizeRegistrarOutput(data.stdout) || "X MCP status updated.");
+      await load();
+    } catch (error) {
+      setXMessage(error instanceof Error ? error.message : "X MCP action failed.");
+    } finally {
+      setXBusy("");
+    }
+  }
+
+  const refreshManagedX = React.useCallback(async (creditAccountId?: string, slug?: string) => {
+    setXBusy("managed-refresh");
+    setXMessage("");
+    try {
+      const cleanCreditAccountId = creditAccountId?.trim() || "";
+      const cleanSlug = slug?.trim() || "";
+      if (cleanCreditAccountId || cleanSlug) {
+        managedXStatusContext.current = {
+          creditAccountId: cleanCreditAccountId || undefined,
+          slug: cleanSlug || undefined,
+        };
+      }
+      const response = await fetch(managedXStatusUrl(cleanCreditAccountId, cleanSlug), { cache: "no-store" });
+      const data = await readJson<{ ok?: boolean } & ManagedXPanelStatus & FetchErrorPayload>(response);
+      if (!response.ok || data.ok === false) throw new Error(data.error ?? "Could not read managed X status.");
+      setManagedXStatus({
+        creditAccounts: data.creditAccounts ?? [],
+        connections: data.connections ?? [],
+        credits: data.credits,
+      });
+      const connectionCount = data.connections?.length ?? 0;
+      setXMessage(connectionCount > 0
+        ? `Managed X account connected: ${connectionCount} connection${connectionCount === 1 ? "" : "s"}.`
+        : "Managed X status refreshed.");
+    } catch (error) {
+      setXMessage(error instanceof Error ? error.message : "Could not read managed X status.");
+    } finally {
+      setXBusy("");
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (!managedXReturn) return;
+    const key = JSON.stringify(managedXReturn);
+    if (handledManagedXReturn.current === key) return;
+    handledManagedXReturn.current = key;
+    const timer = window.setTimeout(() => {
+      const messageText = managedXReturnMessage(managedXReturn);
+      if (messageText) setXMessage(messageText);
+      void refreshManagedX(managedXReturn.creditAccountId, managedXReturn.slug);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [managedXReturn, refreshManagedX]);
+
+  React.useEffect(() => {
+    if (!managedXReturnPoll) return undefined;
+    let cancelled = false;
+    let timeoutId: number | undefined;
+
+    const poll = async () => {
+      if (cancelled) return;
+      if (Date.now() > managedXReturnPoll.until) {
+        setManagedXReturnPoll(null);
+        setXMessage("X sign-in is still pending. Use Refresh after finishing in your browser.");
+        return;
+      }
+
+      const params = new URLSearchParams({
+        creditAccountId: managedXReturnPoll.creditAccountId,
+        slug: managedXReturnPoll.slug,
+        since: String(managedXReturnPoll.since),
+      });
+
+      try {
+        const response = await fetch(`/api/integrations/x-managed/desktop-return-pending?${params.toString()}`, { cache: "no-store" });
+        const data = await readJson<{ ok?: boolean; returned?: ManagedXReturnPayload | null } & FetchErrorPayload>(response);
+        if (response.ok && data.ok !== false && data.returned) {
+          setManagedXReturnPoll(null);
+          onManagedXReturn(data.returned);
+          return;
+        }
+      } catch {
+        // Keep polling while the external browser finishes the provider redirect.
+      }
+
+      if (!cancelled) {
+        timeoutId = window.setTimeout(() => void poll(), MANAGED_X_RETURN_POLL_INTERVAL_MS);
+      }
+    };
+
+    timeoutId = window.setTimeout(() => void poll(), MANAGED_X_RETURN_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+    };
+  }, [managedXReturnPoll, onManagedXReturn]);
+
+  async function startManagedXOAuth(creditAccountId: string, slug: string) {
+    setXBusy("managed-oauth");
+    setXMessage("");
+    setManagedXReturnPoll(null);
+    managedXStatusContext.current = { creditAccountId, slug };
+    try {
+      const response = await fetch("/api/integrations/x-managed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "oauth-start",
+          creditAccountId,
+          slug,
+          returnUrl: managedXReturnUrl(creditAccountId, slug),
+        }),
+      });
+      const data = await readJson<{ ok?: boolean; authorizationUrl?: string } & FetchErrorPayload>(response);
+      if (!response.ok || data.ok === false) throw new Error(data.error ?? "Could not start managed X sign-in.");
+      if (!data.authorizationUrl) throw new Error("Managed X sign-in did not return an authorization URL.");
+      await openExternalUrl(data.authorizationUrl);
+      if (isTauriDesktopRuntime()) {
+        const now = Date.now();
+        setManagedXReturnPoll({
+          creditAccountId,
+          slug,
+          since: now - MANAGED_X_RETURN_POLL_GRACE_MS,
+          until: now + MANAGED_X_RETURN_POLL_WINDOW_MS,
+        });
+        setXMessage("Opened X sign-in in your browser. Finish there; HivemindOS will refresh automatically.");
+      } else {
+        setXMessage("Opened X sign-in in your browser. Finish there, then refresh managed status.");
+      }
+    } catch (error) {
+      setXMessage(error instanceof Error ? error.message : "Could not start managed X sign-in.");
+    } finally {
+      setXBusy("");
+    }
+  }
+
   return (
     <div className="fm-wrap">
       <div className="fm-master">
@@ -904,6 +532,22 @@ function McpManager() {
 
       {!loading ? (
         <>
+          <XAccountMcpPanel
+            status={xStatus}
+            managedStatus={managedXStatus}
+            busy={xBusy}
+            message={xMessage}
+            onSaveCredentials={(clientId, clientSecret, redirectUri) => void runXAction("save-credentials", { clientId, clientSecret, redirectUri })}
+            onStartOAuth={() => void runXAction("start-oauth")}
+            onStartManagedOAuth={(creditAccountId, slug) => void startManagedXOAuth(creditAccountId, slug)}
+            onSyncRuntimes={() => void runXAction("sync-runtimes")}
+            onRemoveRuntimes={() => void runXAction("remove-runtimes")}
+            onRefresh={() => void load()}
+            onRefreshManaged={(creditAccountId, slug) => void refreshManagedX(creditAccountId, slug)}
+          />
+
+          <RobinhoodMcpPanel />
+
           <div>
             <div className="fm-sec">Connected <span className="ct">{connected.length} server{connected.length === 1 ? "" : "s"} · {totalTools} tools</span></div>
             {connected.length ? (
@@ -1288,25 +932,6 @@ function CodeProof({ embedded }: { embedded?: boolean }) {
   );
 }
 
-function StepHeader({ kicker, title, detail }: { kicker: string; title: string; detail: string }) {
-  return (
-    <div className="ni-sh">
-      <span className="kick">{kicker}</span>
-      <h2>{title}</h2>
-      <p>{detail}</p>
-    </div>
-  );
-}
-
-function FooterActions({ onBack, children }: { onBack: () => void; children: React.ReactNode }) {
-  return (
-    <div className="ni-foot">
-      <BBtn onClick={onBack}>Back</BBtn>
-      <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>{children}</div>
-    </div>
-  );
-}
-
 function EffectBadges({ item }: { item: Pick<McpCatalogCardItem, "sideEffects"> }) {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
@@ -1325,118 +950,4 @@ function withMcpDefaults(item: HiveMcpCatalogItem): McpCatalogCardItem {
 
 function mcpRiskyEffects(item: Pick<McpCatalogCardItem, "sideEffects">) {
   return item.sideEffects.filter((effect) => effect === "write" || effect === "payments" || effect === "filesystem" || effect === "browser");
-}
-
-function setupStepForPayload(payload: NangoIntegrationPayload): SetupStep {
-  if (payload.health.ok) return "apps";
-  if (payload.config.hostMachineId && payload.config.baseUrl) return "apps";
-  return "welcome";
-}
-
-function setupMethodLabel(method?: NangoHostSetupResult["method"]) {
-  if (method === "collector-api") return "agent bridge";
-  if (method === "local-shell") return "local setup";
-  if (method === "tailscale-ssh") return "Tailscale";
-  if (method === "plain-ssh") return "SSH";
-  return method || "setup";
-}
-
-function machineChoices(machines: FleetMachine[], config: NangoHostConfig): MachineChoice[] {
-  const choices = machines.map((machine) => {
-    const device = machine.device ?? {};
-    const name = device.self ? "This Mac" : device.name || dnsLabel(device.dnsName) || device.ip || "Unknown machine";
-    const id = device.self ? "self" : normalizeId(device.dnsName || device.name || device.ip || name);
-    const online = device.self || device.online === true;
-    const collectorReady = machine.collector === "ready";
-    const envReady = machine.envSync?.ready === true;
-    const serverLike = /linux|ubuntu|debian|server|cloud|hetzner/i.test(`${device.os} ${name} ${device.dnsName}`);
-    const baseHost = device.self ? "127.0.0.1" : (device.dnsName || device.ip || name).replace(/\.$/, "");
-    const rank = (online ? 32 : 0) + (collectorReady ? 18 : 0) + (envReady ? 14 : 0) + (serverLike ? 28 : 0) + (device.self ? 4 : 0);
-    return {
-      id,
-      name,
-      os: device.os || "unknown OS",
-      online,
-      collectorReady,
-      envReady,
-      self: device.self === true,
-      baseUrl: `http://${baseHost}:3003`,
-      collectorUrl: device.collectorUrl || "",
-      rank,
-      note: device.self ? "current machine" : serverLike ? "always-on candidate" : "tailnet machine",
-    };
-  });
-
-  if (!choices.some((choice) => choice.id === "self")) {
-    choices.push({
-      id: "self",
-      name: "This Mac",
-      os: "local",
-      online: true,
-      collectorReady: false,
-      envReady: false,
-      self: true,
-      baseUrl: "http://127.0.0.1:3003",
-      collectorUrl: "",
-      rank: 18,
-      note: "current machine",
-    });
-  }
-
-  if (config.hostMachineId && !choices.some((choice) => choice.id === config.hostMachineId)) {
-    choices.push({
-      id: config.hostMachineId,
-      name: config.hostMachineName || config.hostMachineId,
-      os: "saved host",
-      online: false,
-      collectorReady: false,
-      envReady: false,
-      self: false,
-      baseUrl: config.baseUrl,
-      collectorUrl: "",
-      rank: 10,
-      note: "saved host",
-    });
-  }
-
-  return choices.sort((left, right) => right.rank - left.rank || left.name.localeCompare(right.name));
-}
-
-function dnsLabel(value?: string) {
-  return value?.replace(/\.$/, "").split(".")[0] ?? "";
-}
-
-function normalizeId(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-|-$/g, "") || "machine";
-}
-
-function setupTargetFromBaseUrl(baseUrl: string) {
-  try {
-    return new URL(baseUrl).hostname.replace(/^\[|\]$/g, "");
-  } catch {
-    return baseUrl.replace(/^https?:\/\//, "").split(":")[0] || "integration-host";
-  }
-}
-
-function friendlySetupError(error: unknown) {
-  const message = error instanceof Error ? error.message : "";
-  if (/fetch failed|failed to fetch|network/i.test(message)) return "Could not reach that machine. Make sure it is online, then try again.";
-  return message || "Could not start Nango. Try again in a moment.";
-}
-
-function splitArgs(value: string) {
-  return value.match(/(?:[^\s"]+|"[^"]*")+/g)?.map((part) => part.replace(/^"|"$/g, "")).filter(Boolean) ?? [];
-}
-
-async function readJson<T>(response: Response): Promise<T> {
-  return await response.json().catch(() => ({})) as T;
-}
-
-function timeAgo(ts: number) {
-  const seconds = Math.max(1, Math.round((Date.now() - ts) / 1000));
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  return `${hours}h ago`;
 }

@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-07-10T11:41:18.865818+00:00",
+  "request": "Add the complete Azure integration to HivemindOS: on-demand MCP install, local-first BYO auth, hosted OAuth, least privilege, and publisher setup.",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/integrations/slack-oauth.ts",
+      "target_path": "src/lib/services/integrations/azure-oauth.ts",
+      "reuse_type": "adapted_code",
+      "note": "confidential hosted OAuth rendezvous, local pending-flow persistence, one-time poll-secret handoff"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/app/api/integrations/slack/oauth/start/route.ts",
+      "target_path": "src/app/api/integrations/azure/oauth/start/route.ts",
+      "reuse_type": "adapted_code",
+      "note": "authenticated dashboard-only hosted OAuth starter route"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "scripts/register-mcp-clients.mjs",
+      "target_path": "scripts/register-mcp-clients.mjs",
+      "reuse_type": "config_adapted",
+      "note": "merge-only runtime registration generalized for an external Azure MCP binary and telemetry-off env"
+    },
+    {
+      "source_repo": "microsoft/mcp@Azure.Mcp.Server-2.0.4",
+      "source_path": "eng/npm,servers/Azure.Mcp.Server/src",
+      "target_path": "scripts/install-azure-mcp.mjs",
+      "reuse_type": "config_adapted",
+      "note": "official stable package pin, integrity contract, azmcp command, consolidated mode and read-only flag"
+    }
+  ]
+}

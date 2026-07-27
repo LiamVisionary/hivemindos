@@ -1,0 +1,137 @@
+#!/usr/bin/env node
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { register } from "node:module";
+
+register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
+
+const {
+  buildLoopReadinessReport,
+  renderLoopEngineeringArtifacts,
+} = await import("../src/lib/services/loops/index.ts");
+const { readBoard, resolveKanbanStorage } = await import("../src/lib/services/kanban/local-kanban-store.ts");
+
+const args = process.argv.slice(2);
+const command = parseCommand(args);
+const flags = parseFlags(args);
+
+if (flags.help || command === "help") {
+  printHelp();
+  process.exit(0);
+}
+
+const boardSlug = stringFlag(flags.board);
+const storageOptions = {
+  vaultPath: stringFlag(flags.vaultPath),
+  kanbanFolder: stringFlag(flags.kanbanFolder),
+};
+const board = await readBoard(boardSlug, storageOptions);
+const readiness = buildLoopReadinessReport({ board });
+const artifacts = renderLoopEngineeringArtifacts(readiness, { title: stringFlag(flags.title) });
+
+if (command === "patterns") {
+  if (flags.json) {
+    console.log(JSON.stringify(readiness.patterns, null, 2));
+  } else {
+    console.log(artifacts.registryYaml);
+  }
+  process.exit(0);
+}
+
+if (command === "export") {
+  const writeDir = stringFlag(flags.write);
+  if (writeDir) {
+    await writeArtifacts(writeDir, artifacts);
+    console.log(`Wrote loop artifacts to ${writeDir}`);
+  } else if (flags.json) {
+    console.log(JSON.stringify({ ok: true, readiness, artifacts }, null, 2));
+  } else {
+    console.log(artifacts.loopMd);
+  }
+  process.exit(0);
+}
+
+if (command !== "audit") {
+  console.error(`Unknown hive-loop command: ${command}`);
+  printHelp();
+  process.exit(2);
+}
+
+if (flags.json) {
+  console.log(JSON.stringify({ ok: true, readiness, storage: resolveKanbanStorage(board.meta.slug, storageOptions) }, null, 2));
+} else {
+  printAudit(readiness);
+}
+
+function printAudit(report) {
+  console.log(`Loop readiness: ${report.level} (${report.score}/100)`);
+  console.log(report.assessment);
+  console.log("");
+  for (const finding of report.findings) {
+    console.log(`- ${finding.level.toUpperCase()}: ${finding.message}`);
+  }
+  if (report.recommendations.length) {
+    console.log("");
+    console.log("Next actions:");
+    for (const item of report.recommendations) console.log(`- ${item}`);
+  }
+}
+
+function parseFlags(values) {
+  const parsed = {};
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index];
+    if (!value.startsWith("--")) continue;
+    const [key, inline] = value.slice(2).split("=", 2);
+    if (inline !== undefined) {
+      parsed[key] = inline;
+      continue;
+    }
+    const next = values[index + 1];
+    if (next && !next.startsWith("--")) {
+      parsed[key] = next;
+      index += 1;
+    } else {
+      parsed[key] = true;
+    }
+  }
+  return parsed;
+}
+
+function parseCommand(values) {
+  for (let index = 0; index < values.length; index += 1) {
+    const value = values[index];
+    if (value.startsWith("--")) {
+      if (!value.includes("=") && values[index + 1] && !values[index + 1].startsWith("--")) index += 1;
+      continue;
+    }
+    return value;
+  }
+  return "audit";
+}
+
+function stringFlag(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+async function writeArtifacts(root, output) {
+  await mkdir(root, { recursive: true });
+  await mkdir(join(root, "patterns"), { recursive: true });
+  await Promise.all([
+    writeFile(join(root, "LOOP.md"), output.loopMd, "utf8"),
+    writeFile(join(root, "STATE.md"), output.stateMd, "utf8"),
+    writeFile(join(root, "loop-budget.md"), output.budgetMd, "utf8"),
+    writeFile(join(root, "contract.md"), output.contractMd, "utf8"),
+    writeFile(join(root, "loop-run-log.md"), output.runLogMd, "utf8"),
+    writeFile(join(root, "patterns", "registry.yaml"), output.registryYaml, "utf8"),
+  ]);
+}
+
+function printHelp() {
+  console.log(`hive-loop audit [--json] [--board <slug>] [--vaultPath <path>] [--kanbanFolder <path>]
+hive-loop export [--json] [--write <dir>] [--title <name>]
+hive-loop patterns [--json]
+
+Reads HivemindOS Work Board loop state and emits loop-engineering readiness or
+Cobus-compatible LOOP.md / STATE.md / contract / budget / run-log snapshots.`);
+}

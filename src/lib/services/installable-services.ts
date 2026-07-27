@@ -7,12 +7,22 @@ import { promisify } from "node:util";
 import { homedir } from "@/lib/home-dir";
 import { readBrowserUsePermissions } from "@/lib/services/browser-use-permissions";
 import { deployAgenticInbox, readAgenticInboxStatus, scaffoldAgenticInbox } from "@/lib/services/cloudflare/agentic-inbox-setup";
+import { readEngineStatus } from "@/lib/services/copy-trading/store";
+import { readListmonkInstallableServiceStatus, runListmonkInstallableServiceAction } from "@/lib/services/listmonk-installable";
 import { installPalmierProFromDmg, openPalmierProApp, quitPalmierProApp, readPalmierProInstallableServiceStatus } from "@/lib/services/palmier-pro-installable";
 import { hiveEnvPresence } from "@/lib/services/shared-hive-env";
+import { ENGINE_OFFLINE_AFTER_MS } from "@/lib/types/copy-trading";
+import {
+  GITHUB_CAPABILITY_INSTALLABLE_IDS,
+  isGitHubCapabilityInstallableId,
+  readGitHubCapabilityInstallableStatus,
+  runGitHubCapabilityInstallableAction,
+  type GitHubCapabilityInstallableId,
+} from "@/lib/services/github-capability-installers";
 
 const execFileAsync = promisify(execFile);
 
-export type InstallableServiceId = "n8n" | "browser-use" | "agentic-inbox" | "mcp-email-server" | "openhands" | "aider" | "agent-reach" | "palmier-pro";
+export type InstallableServiceId = "n8n" | "listmonk" | "browser-use" | "agentic-inbox" | "mcp-email-server" | "openhands" | "aider" | "agent-reach" | "palmier-pro" | "copy-trading-daemon" | GitHubCapabilityInstallableId;
 export type InstallableServiceAction =
   | "status"
   | "install"
@@ -31,7 +41,7 @@ export type InstallableServiceActionInput = {
   maxReplies?: number;
 };
 
-export const INSTALLABLE_SERVICE_IDS: InstallableServiceId[] = ["n8n", "browser-use", "agentic-inbox", "mcp-email-server", "openhands", "aider", "agent-reach", "palmier-pro"];
+export const INSTALLABLE_SERVICE_IDS: InstallableServiceId[] = ["n8n", "listmonk", "browser-use", "agentic-inbox", "mcp-email-server", "openhands", "aider", "agent-reach", "palmier-pro", "copy-trading-daemon", ...GITHUB_CAPABILITY_INSTALLABLE_IDS];
 
 export type InstallableServiceStatus = {
   id: InstallableServiceId;
@@ -41,7 +51,7 @@ export type InstallableServiceStatus = {
   version?: string;
   openUrl?: string;
   detail: string;
-  installMethod: "docker" | "uv" | "uv-tool" | "pipx" | "cloudflare-worker" | "dmg";
+  installMethod: "docker" | "uv" | "uv-tool" | "pipx" | "cloudflare-worker" | "dmg" | "local-service";
   requirements: string[];
   sourceUrl: string;
   provenance?: {
@@ -58,7 +68,7 @@ export type InstallableServiceStatus = {
     approvedAt?: string;
   };
   projectDir?: string;
-  preflight?: Array<{ key: string; ok: boolean; detail: string }>;
+  preflight?: Array<{ key: string; ok: boolean; detail: string; blocking?: boolean }>;
   preflightActions?: Array<{
     action: InstallableServiceAction;
     label: string;
@@ -155,6 +165,9 @@ const N8N_CONTAINER = "hivemindos-n8n";
 const N8N_VOLUME = "hivemindos_n8n_data";
 const N8N_IMAGE = "docker.n8n.io/n8nio/n8n";
 const N8N_OPEN_URL = "http://127.0.0.1:5678";
+const COPY_TRADING_INSTALL_SCRIPT = join(process.cwd(), "scripts", "install-copy-trading-daemon.sh");
+const COPY_TRADING_LAUNCHD_LABEL = "com.hivemindos.copytrading";
+const COPY_TRADING_SYSTEMD_UNIT = "hivemindos-copy-trading.service";
 const MCP_EMAIL_SERVER_SOURCE_URL = "https://github.com/ai-zerolab/mcp-email-server";
 const MCP_EMAIL_SERVER_REQUIRED_ENV_KEYS = [
   "MCP_EMAIL_SERVER_EMAIL_ADDRESS",
@@ -507,6 +520,25 @@ function agentReachStatus(partial: Partial<InstallableServiceStatus> = {}): Inst
       updatePolicy: `Pinned to reviewed fork commit ${AGENT_REACH_COMMIT}; update only after a fresh security review.`,
     },
     securityNotes: AGENT_REACH_SECURITY_NOTES,
+    ...partial,
+  };
+}
+
+function copyTradingDaemonStatus(partial: Partial<InstallableServiceStatus> = {}): InstallableServiceStatus {
+  return {
+    id: "copy-trading-daemon",
+    name: "Copy-trading daemon",
+    installed: false,
+    running: false,
+    detail: "Copy-trading background service is not installed.",
+    installMethod: "local-service",
+    requirements: ["Node.js on PATH", "macOS LaunchAgent or Linux systemd user service", "Copy-trading configs stored under ~/.hivemindos"],
+    sourceUrl: "https://github.com/LiamVisionary/hivemindos",
+    securityNotes: [
+      "The daemon is the sole execution host for enabled copy-trading configs; the dashboard only edits config.",
+      "Installing writes a per-user LaunchAgent on macOS or a per-user systemd unit on Linux.",
+      "Rollback: run scripts/install-copy-trading-daemon.sh uninstall from the repo checkout.",
+    ],
     ...partial,
   };
 }
@@ -977,6 +1009,36 @@ async function n8nHttpReachable() {
   );
 }
 
+function copyTradingServicePath() {
+  if (process.platform === "darwin") return join(homedir(), "Library", "LaunchAgents", `${COPY_TRADING_LAUNCHD_LABEL}.plist`);
+  if (process.platform === "linux") return join(homedir(), ".config", "systemd", "user", COPY_TRADING_SYSTEMD_UNIT);
+  return null;
+}
+
+async function readCopyTradingDaemonInstallableServiceStatus(): Promise<InstallableServiceStatus> {
+  const servicePath = copyTradingServicePath();
+  const scriptAvailable = existsSync(COPY_TRADING_INSTALL_SCRIPT);
+  const serviceSupported = Boolean(servicePath);
+  const installed = Boolean(servicePath && existsSync(servicePath));
+  const engine = await readEngineStatus();
+  const running = Boolean(engine && Date.now() - engine.heartbeatMs < ENGINE_OFFLINE_AFTER_MS);
+  const activeConfigs = engine?.activeConfigs ?? 0;
+  const serviceName = process.platform === "darwin" ? "LaunchAgent" : process.platform === "linux" ? "systemd user service" : "background service";
+  const detail = running
+    ? installed
+      ? `Copy-trading daemon is running as a ${serviceName} with ${activeConfigs} active config(s).`
+      : `Copy-trading engine is running with ${activeConfigs} active config(s), but no installed ${serviceName} was found.`
+    : installed
+      ? `Copy-trading ${serviceName} is installed, but no fresh daemon heartbeat is available. Reinstall/start it from the button or run pnpm copy-trading:daemon for foreground logs.`
+      : scriptAvailable && serviceSupported
+        ? `Copy-trading is ready to install as a per-user ${serviceName}.`
+        : serviceSupported
+          ? "Copy-trading service installer script is not available in this build."
+          : "Copy-trading background service install is supported on macOS and Linux; run pnpm copy-trading:daemon manually on this OS.";
+
+  return copyTradingDaemonStatus({ installed, running, detail });
+}
+
 async function readAgentReachInstallableServiceStatus(
   authCheck?: { ok: boolean; detail: string },
   doctor?: Record<string, unknown>,
@@ -1131,6 +1193,13 @@ async function readMcpEmailServerInstallableServiceStatus(): Promise<Installable
 }
 
 export async function readInstallableServiceStatus(id: InstallableServiceId): Promise<InstallableServiceStatus> {
+  if (isGitHubCapabilityInstallableId(id)) return readGitHubCapabilityInstallableStatus(id);
+  if (id === "listmonk") {
+    return readListmonkInstallableServiceStatus();
+  }
+  if (id === "copy-trading-daemon") {
+    return readCopyTradingDaemonInstallableServiceStatus();
+  }
   if (id === "palmier-pro") {
     return readPalmierProInstallableServiceStatus();
   }
@@ -1214,6 +1283,25 @@ export async function runInstallableServiceAction(
   action: InstallableServiceAction,
   input?: InstallableServiceActionInput,
 ): Promise<InstallableServiceStatus | InstallableServiceActionResult> {
+  if (isGitHubCapabilityInstallableId(id)) return runGitHubCapabilityInstallableAction(id, action);
+  if (id === "listmonk") {
+    return runListmonkInstallableServiceAction(action);
+  }
+  if (id === "copy-trading-daemon") {
+    if (action === "status") return readInstallableServiceStatus(id);
+    if (!existsSync(COPY_TRADING_INSTALL_SCRIPT)) throw new Error("Copy-trading service installer script is not available in this build.");
+    if (action === "install" || action === "start") {
+      const install = await run("bash", [COPY_TRADING_INSTALL_SCRIPT], 600_000);
+      if (!install.ok) throw new Error(install.stderr || install.stdout || "Copy-trading service install failed.");
+      return readInstallableServiceStatus(id);
+    }
+    if (action === "stop") {
+      const uninstall = await run("bash", [COPY_TRADING_INSTALL_SCRIPT, "uninstall"], 120_000);
+      if (!uninstall.ok) throw new Error(uninstall.stderr || uninstall.stdout || "Copy-trading service uninstall failed.");
+      return readInstallableServiceStatus(id);
+    }
+    throw new Error("Copy-trading daemon supports install, start, stop, and status actions from HivemindOS.");
+  }
   if (id === "palmier-pro") {
     if (action === "status") return readInstallableServiceStatus(id);
     if (action === "install") {

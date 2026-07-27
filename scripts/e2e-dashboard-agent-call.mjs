@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 import { strict as assert } from "node:assert";
+import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { chromium } from "playwright";
 
 const configuredUrl = process.env.HIVE_E2E_AGENT_CALL_URL
@@ -9,6 +12,59 @@ const configuredUrl = process.env.HIVE_E2E_AGENT_CALL_URL
 const targetUrl = configuredUrl.includes("/e2e/agent-call")
   ? configuredUrl
   : new URL("/e2e/agent-call", `${configuredUrl.replace(/\/+$/, "")}/`).toString();
+
+async function readEnvValue(filePath, key) {
+  const raw = await readFile(filePath, "utf8").catch(() => "");
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = raw.match(new RegExp(`^${escapedKey}=(.*)$`, "m"));
+  return match?.[1]?.trim().replace(/^["']|["']$/g, "") || "";
+}
+
+// The /api auth gate (src/proxy.ts) fails closed, so the harness page's real
+// fetches (/api/fleet/discover, /api/phone?action=voice-config) 401 without a
+// session. Resolve the device token the same way the sibling e2e scripts do,
+// with the shared hive env as a final fallback.
+const dashboardDeviceToken = process.env.HIVE_E2E_DASHBOARD_TOKEN
+  || process.env.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN
+  || await readEnvValue(new URL("../.env.local", import.meta.url), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN")
+  || await readEnvValue(join(homedir(), ".hivemindos", ".env"), "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN");
+
+async function newDashboardContext(browser) {
+  const context = await browser.newContext({
+    extraHTTPHeaders: dashboardDeviceToken ? { "x-hivemindos-device-token": dashboardDeviceToken } : {},
+  });
+  if (!dashboardDeviceToken) {
+    console.warn("No HIVEMINDOS_DASHBOARD_DEVICE_TOKEN found (env, .env.local, ~/.hivemindos/.env); real /api calls will 401 when dashboard auth is enabled.");
+    return context;
+  }
+  // context.request shares the context cookie jar, so the minted
+  // hivemindos_session cookie is visible to every page in this context.
+  const response = await context.request.post(new URL("/api/auth/session", targetUrl).toString(), {
+    data: { token: dashboardDeviceToken },
+    headers: { Accept: "application/json" },
+  }).catch(() => null);
+  if (!response?.ok()) {
+    console.warn(`Dashboard session seeding failed (${response ? response.status() : "request failed"}); relying on device-token header auth.`);
+  }
+  return context;
+}
+
+function observeApiAuthFailures(page) {
+  const authFailures = [];
+  page.on("response", (response) => {
+    let url;
+    try {
+      url = new URL(response.url());
+    } catch {
+      return;
+    }
+    if (!url.pathname.startsWith("/api/")) return;
+    if (response.status() === 401 || response.status() === 403) {
+      authFailures.push(`${response.status()} ${url.pathname}${url.search}`);
+    }
+  });
+  return authFailures;
+}
 
 function byokCallPayload() {
   return {
@@ -332,6 +388,16 @@ async function clickStartAndWaitForSetup(page) {
   await setupRequest;
 }
 
+// With dashboard auth seeded, /api/fleet/discover returns the real fleet, so
+// the harness targets a real agent (fallback "HarnessAgent" only on an empty
+// fleet). Read the resolved name instead of hardcoding the fallback.
+async function harnessAgentName(page) {
+  const targetText = (await page.getByTestId("agent-call-harness-target").textContent()) || "";
+  const name = targetText.split(" on ")[0].trim();
+  assert.ok(name && name !== "Discovering real agent...", `Harness target not resolved: "${targetText}"`);
+  return name;
+}
+
 async function waitForHarnessPhase(page, pageErrors, phase, timeout = 10_000) {
   try {
     await page.waitForFunction((expectedPhase) => (
@@ -344,9 +410,10 @@ async function waitForHarnessPhase(page, pageErrors, phase, timeout = 10_000) {
   }
 }
 
-async function runWorkingCallScenario(browser) {
-  const page = await browser.newPage();
+async function runWorkingCallScenario(context) {
+  const page = await context.newPage();
   const pageErrors = observePageErrors(page);
+  const apiAuthFailures = observeApiAuthFailures(page);
   await installWorkingRealtimeBrowserMocks(page);
   await installPhoneApiMock(page);
   await installOpenAiSdpMock(page);
@@ -354,21 +421,32 @@ async function runWorkingCallScenario(browser) {
   await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
   await clickStartAndWaitForSetup(page);
   await waitForHarnessPhase(page, pageErrors, "talking");
-  await page.getByText("HarnessAgent is on the line.").waitFor({ state: "visible", timeout: 5_000 });
-  const caption = page.getByTestId("agent-call-agent-caption");
-  await expectCaptionText(page, caption, "Second agent response.");
+  const agentName = await harnessAgentName(page);
+  // "is on the line." only renders until the first transcript turn, and the
+  // mocked agent responses land within ~200ms of connecting — accept either
+  // the note or a transcript turn attributed to the agent.
+  const onTheLineNote = page.getByText(`${agentName} is on the line.`);
+  const agentTurnSpeaker = page.getByText(agentName.split("-")[0].toUpperCase().slice(0, 7), { exact: true });
+  await onTheLineNote.or(agentTurnSpeaker).first().waitFor({ state: "visible", timeout: 5_000 });
+  await expectAgentTranscriptText(page, "Second agent response.");
 
   assert.equal(
     pageErrors.filter((message) => /getUserMedia|mediaDevices|RTCPeerConnection|undefined is not an object/i.test(message)).length,
     0,
     `Working call scenario had browser API errors: ${pageErrors.join(" | ")}`,
   );
+  assert.equal(
+    apiAuthFailures.length,
+    0,
+    `Working call scenario hit unauthenticated /api responses (is HIVEMINDOS_DASHBOARD_DEVICE_TOKEN set and matching the server's .env.local?): ${apiAuthFailures.join(" | ")}`,
+  );
   await page.close();
 }
 
-async function runUnsupportedMediaScenario(browser) {
-  const page = await browser.newPage();
+async function runUnsupportedMediaScenario(context) {
+  const page = await context.newPage();
   const pageErrors = observePageErrors(page);
+  const apiAuthFailures = observeApiAuthFailures(page);
   await installUnsupportedMediaMocks(page);
   await installPhoneApiMock(page);
   await installOpenAiSdpMock(page);
@@ -376,27 +454,39 @@ async function runUnsupportedMediaScenario(browser) {
   await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
   await clickStartAndWaitForSetup(page);
   await waitForHarnessPhase(page, pageErrors, "talking");
-  await page.getByText("Speaker-only").waitFor({ state: "visible", timeout: 5_000 });
+  // The rewritten call modal (a6bd2c2a) degrades to speaker-only with one
+  // combined notice (shown in the status line and the transcript note)
+  // instead of the old standalone "Speaker-only" copy and hard failure text.
+  await page.getByText("Microphone capture is not available in this browser or desktop webview. Connecting speaker-only.")
+    .first()
+    .waitFor({ state: "visible", timeout: 5_000 });
   await page.getByRole("button", { name: "End call", exact: true }).waitFor({ state: "visible", timeout: 5_000 });
-  assert.equal(await page.getByText("HarnessAgent answered. Connecting audio...").count(), 0, "Unsupported media should not show answered copy before audio connects.");
-  assert.equal(await page.getByText("Microphone capture is not available in this browser or desktop webview.").count(), 0, "Unsupported media should not fail the call before the agent can speak.");
+  const agentName = await harnessAgentName(page);
+  assert.equal(await page.getByText(`${agentName} answered. Connecting audio...`).count(), 0, "Unsupported media should not show answered copy before audio connects.");
+  assert.equal(
+    await page.getByTestId("agent-call-harness-phase").textContent(),
+    "talking",
+    "Unsupported media should keep the call in the talking phase, not fail it.",
+  );
 
   assert.equal(
     pageErrors.filter((message) => /getUserMedia|mediaDevices|RTCPeerConnection|undefined is not an object/i.test(message)).length,
     0,
     `Unsupported media scenario threw instead of failing gracefully: ${pageErrors.join(" | ")}`,
   );
+  assert.equal(
+    apiAuthFailures.length,
+    0,
+    `Unsupported media scenario hit unauthenticated /api responses (is HIVEMINDOS_DASHBOARD_DEVICE_TOKEN set and matching the server's .env.local?): ${apiAuthFailures.join(" | ")}`,
+  );
   await page.close();
 }
 
-async function expectCaptionText(page, locator, expected) {
-  await locator.waitFor({ state: "visible", timeout: 5_000 });
-  await page.waitForFunction(
-    ([testId, text]) => document.querySelector(`[data-testid="${testId}"]`)?.textContent === text,
-    ["agent-call-agent-caption", expected],
-    { timeout: 5_000 },
-  );
-  assert.equal(await locator.textContent(), expected);
+// The 2026-06-10 call-modal rewrite (a6bd2c2a) replaced the caption element
+// (data-testid="agent-call-agent-caption") with a transcript turn log, so the
+// agent's spoken text is asserted as a transcript turn instead.
+async function expectAgentTranscriptText(page, expected) {
+  await page.getByText(expected, { exact: true }).first().waitFor({ state: "visible", timeout: 5_000 });
 }
 
 const browser = await chromium.launch({
@@ -404,8 +494,9 @@ const browser = await chromium.launch({
   headless: process.env.HIVE_E2E_HEADFUL !== "1",
 });
 try {
-  await runWorkingCallScenario(browser);
-  await runUnsupportedMediaScenario(browser);
+  const context = await newDashboardContext(browser);
+  await runWorkingCallScenario(context);
+  await runUnsupportedMediaScenario(context);
   console.log(`Agent call E2E harness passed: ${targetUrl}`);
 } finally {
   await browser.close();

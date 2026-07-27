@@ -11,14 +11,18 @@ import { HexTile } from "./hex-tile";
 import { ListView } from "./list-view";
 import { MapView } from "./map-view";
 import { NetworkGraph } from "./network-graph";
-import { OrbitalGraph } from "./orbital-graph";
+import { OrbitalGraph, type OrbitalGraphPalette } from "./orbital-graph";
+import { GraphPaletteToggle } from "./graph-palette-toggle";
 import { FleetConstellationLoading, FleetDispatchLoading, FleetRosterLoading, FleetScanOverlay } from "./fleet-loading";
 import { Roster, type MachineUpdateButtonDetail, type MachineUpdateButtonStatus } from "./roster";
 import { AeonDeleteModal, isAeonAgent, type AeonDeleteDepth, type AeonDeleteProgress, type AeonDeleteResult } from "./aeon-delete-modal";
+import { DeepProbesToggle } from "./deep-probes-toggle";
 import { EconomyStrip } from "./economy-strip";
 import type { FleetHostedApp } from "./active-apps";
+import { HiveComputeHostModal } from "./hive-compute-host-modal";
 import { UsePodHostModal } from "./usepod-host-modal";
 import { MachineTerminalModal } from "./machine-terminal-modal";
+import { USEPOD_COMPUTE_RENTALS_ENABLED } from "@/lib/config/compute-rentals";
 import { dashboardStateValue, loadDashboardStateSnapshot, removeDashboardStateValue, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import {
   ALERTS,
@@ -84,6 +88,8 @@ export interface FleetViewProps {
   onCallAgent?: (m: FleetMachine, a: FleetAgent) => Promise<void> | void;
   onOpenWallet?: (m: FleetMachine, a: FleetAgent) => void;
   onEditSettings?: (m: FleetMachine, a: FleetAgent) => void;
+  /** Display name of the logical Queen Bee; the Hive view renders it separately from the Queen role. */
+  queenName?: string;
   /** When provided, the hive view renders a central Queen Bee cell connected to every machine; clicking it opens her settings. */
   onOpenQueenSettings?: () => void;
   /** "Message the hive" composer (new Hive layout only; legacy FleetView ignores it). */
@@ -154,6 +160,7 @@ export function FleetView({
   const [selected, setSelected] = React.useState<string>(() => preferredInitialMachineId(machines));
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
   const [view, setView] = React.useState<ViewMode>("hive");
+  const [graphPalette, setGraphPalette] = React.useState<OrbitalGraphPalette>("classic");
   const [dispatchIdx, setDispatchIdx] = React.useState(0);
   const [aeonDeleteTarget, setAeonDeleteTarget] = React.useState<{ machine: FleetMachine; agent: FleetAgent } | null>(null);
   const [dismissedAlertIds, setDismissedAlertIds] = React.useState<Set<string>>(() => new Set());
@@ -551,6 +558,13 @@ export function FleetView({
                 </div>
               </div>
             </section>
+
+            <section>
+              <div className={styles.monoCap} style={{ color: "var(--muted)", marginBottom: 10 }}>
+                Health watchdog
+              </div>
+              <DeepProbesToggle variant="classic" />
+            </section>
           </aside>
 
           {/* CENTER — view */}
@@ -564,26 +578,29 @@ export function FleetView({
               ) : (
                 <div aria-hidden="true" />
               )}
-              <div className="flex" style={{ gap: 6 }}>
-                {(["hive", "graph", "map", "list"] as ViewMode[]).map((v) => (
-                  <button
-                    key={v}
-                    onClick={() => setView(v)}
-                    aria-pressed={view === v}
-                    data-bee={`fleet-view-${v}`}
-                    className="uppercase cursor-pointer"
-                    style={{
-                      fontFamily: "var(--f-mono)", fontSize: 10,
-                      padding: "5px 10px", borderRadius: 9999,
-                      background: view === v ? "rgba(45,212,191,0.12)" : "transparent",
-                      color: view === v ? "var(--foreground)" : "var(--muted)",
-                      border: `1px solid ${view === v ? "rgba(94,234,212,0.42)" : "rgba(148,163,184,0.18)"}`,
-                      letterSpacing: 0.1,
-                    }}
-                  >
-                    {v}
-                  </button>
-                ))}
+              <div className="flex flex-wrap justify-end" style={{ gap: 6 }}>
+                {view === "graph" ? <GraphPaletteToggle palette={graphPalette} onChoose={setGraphPalette} /> : null}
+                <div className="flex" style={{ gap: 6 }}>
+                  {(["hive", "graph", "map", "list"] as ViewMode[]).map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => setView(v)}
+                      aria-pressed={view === v}
+                      data-bee={`fleet-view-${v}`}
+                      className="uppercase cursor-pointer"
+                      style={{
+                        fontFamily: "var(--f-mono)", fontSize: 10,
+                        padding: "5px 10px", borderRadius: 9999,
+                        background: view === v ? "rgba(45,212,191,0.12)" : "transparent",
+                        color: view === v ? "var(--foreground)" : "var(--muted)",
+                        border: `1px solid ${view === v ? "rgba(94,234,212,0.42)" : "rgba(148,163,184,0.18)"}`,
+                        letterSpacing: 0.1,
+                      }}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -636,6 +653,7 @@ export function FleetView({
                   alerts={displayAlerts}
                   tasks={displayTasks}
                   ticker={displayTicker}
+                  palette={graphPalette}
                 />
               )}
               {!initialLoading && view === "map" && (
@@ -826,7 +844,9 @@ export function FleetView({
         ) : null}
 
         {usePodHostMachine && typeof document !== "undefined" ? createPortal((
-          <UsePodHostModal machine={usePodHostMachine} onClose={() => setUsePodHostMachine(null)} />
+          USEPOD_COMPUTE_RENTALS_ENABLED
+            ? <UsePodHostModal machine={usePodHostMachine} onClose={() => setUsePodHostMachine(null)} />
+            : <HiveComputeHostModal machine={usePodHostMachine} machines={displayMachines} onClose={() => setUsePodHostMachine(null)} />
         ), document.body) : null}
 
         {terminalMachine && typeof document !== "undefined" ? (

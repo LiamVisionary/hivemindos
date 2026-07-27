@@ -1,0 +1,17 @@
+{
+  "upstreamName": "Startup Customer Acquisition Sprint",
+  "upstreamSlug": "startup-customer-acquisition-sprint",
+  "hiveSlug": "startup-customer-acquisition-sprint",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/gtm/hivemindos/startup-customer-acquisition-sprint",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-16T23:02:02Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional GTM skills",
+  "sourcePath": "packaged-skills/optional/gtm/hivemindos/startup-customer-acquisition-sprint",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Packages the seven-lane weekly customer-acquisition sprint (launch-max, competitor backlinks, warm outbound, UGC seeding, video-first build-in-public, watering holes, trend capture).",
+    "Keeps platform-rules, consent, disclosure, and anti-spam guardrails."
+  ]
+}

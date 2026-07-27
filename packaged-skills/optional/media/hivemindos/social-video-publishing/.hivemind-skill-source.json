@@ -1,0 +1,16 @@
+{
+  "upstreamName": "Social Video Publishing",
+  "upstreamSlug": "social-video-publishing",
+  "hiveSlug": "social-video-publishing",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/media/hivemindos/social-video-publishing",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-16T23:02:02Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional media skills",
+  "sourcePath": "packaged-skills/optional/media/hivemindos/social-video-publishing",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Packages the explicit-consent publishing gate, credential presence checks, and dry-run-first workflow for social video uploads."
+  ]
+}

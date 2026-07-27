@@ -1,8 +1,10 @@
-import { access, mkdir, readFile, readdir, stat, writeFile } from "fs/promises";
+import { access, mkdir, readFile, readdir, rename, rm, rmdir, stat, unlink, writeFile } from "fs/promises";
 import { constants } from "fs";
 import { basename, dirname, isAbsolute, join, relative, sep } from "path";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
+import { stableHivemindMachineId } from "@/features/fleet/fleet-identity";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
+import { evaluateCompletionEvent, type EvaluationResult } from "@/lib/services/evaluation/control-plane";
 
 export type ScheduleSnapshot = {
   id: string;
@@ -10,6 +12,7 @@ export type ScheduleSnapshot = {
   agentId?: string;
   agentName?: string;
   machineName?: string;
+  machineId?: string;
   runtime?: string;
   enabled?: boolean;
   every?: string;
@@ -41,6 +44,7 @@ export type ScheduledRunRecord = {
   output?: string;
   summary?: string;
   telemetry?: Record<string, unknown>;
+  evaluation?: EvaluationResult;
 };
 
 export type PastScheduledRun = {
@@ -145,7 +149,8 @@ function repairHermesJobsSchedule(content: string, file: string, vault: string):
     name: name || extractFrontmatterString(content, "scheduleName") || basename(dirname(file)),
     agentId: extractFrontmatterString(content, "agentId"),
     agentName: extractFrontmatterString(content, "agentName"),
-    machineName: extractFrontmatterString(content, "device"),
+    machineName: extractFrontmatterString(content, "machineName") || extractFrontmatterString(content, "device"),
+    machineId: stableHivemindMachineId(extractFrontmatterString(content, "machineId")) || undefined,
     runtime: extractFrontmatterString(content, "runtime") || "hermes",
     enabled: extractFrontmatterString(content, "enabled") !== "false",
     every: every || "custom",
@@ -192,15 +197,58 @@ async function exists(path: string) {
 }
 
 function scheduleSegments(schedule: ScheduleSnapshot) {
-  const device = sanitizeSegment(schedule.machineName || "local", "local");
+  const nameDevice = sanitizeSegment(schedule.machineName || "local", "local");
+  const machineId = stableHivemindMachineId(schedule.machineId);
+  // Key the per-machine mirror directory by the stable machine id when the
+  // snapshot carries one: machine NAMES rotate on macOS mDNS-conflict renames
+  // and fork the tree (the NYC MacBook produced three name-keyed directories
+  // across its 2026-07 hostname churn). The human-readable name lives in the
+  // schedule frontmatter/body, not in the path. Snapshots without a machine id
+  // (dashboard-local schedules, phones, collectorless machines) keep the
+  // legacy name key.
+  const device = machineId || nameDevice;
+  const legacyDevice = machineId && nameDevice !== device ? nameDevice : "";
   const slug = sanitizeSegment(schedule.name || schedule.id, "schedule");
-  return { device, slug };
+  return { device, legacyDevice, slug };
+}
+
+// Lazy one-shot migration: the first time a schedule resolves to a
+// machine-id-keyed directory while its legacy machine-NAME-keyed directory
+// still exists, adopt the legacy directory (rename when the target is absent,
+// else move run history without overwriting) so run numbering and past-run
+// context survive the rekey. Directories keyed by OLDER, since-renamed
+// hostnames can't be recognized from the current snapshot and are left alone.
+async function adoptLegacyScheduleDirectory(root: string, device: string, legacyDevice: string, slug: string) {
+  const legacyDir = join(root, legacyDevice, slug);
+  if (!(await exists(legacyDir))) return;
+  const dir = join(root, device, slug);
+  if (!(await exists(dir))) {
+    await mkdir(dirname(dir), { recursive: true });
+    await rename(legacyDir, dir).catch(() => {});
+  } else {
+    const entries = await readdir(legacyDir).catch(() => []);
+    for (const name of entries) {
+      const from = join(legacyDir, name);
+      const to = join(dir, name);
+      if (await exists(to)) {
+        // The id-keyed schedule.md supersedes the legacy snapshot; colliding
+        // run files stay behind rather than overwrite migrated history.
+        if (name === "schedule.md") await unlink(from).catch(() => {});
+        continue;
+      }
+      await rename(from, to).catch(() => {});
+    }
+  }
+  // Only empty directories disappear (rmdir refuses non-empty ones).
+  await rmdir(legacyDir).catch(() => {});
+  await rmdir(join(root, legacyDevice)).catch(() => {});
 }
 
 async function scheduleDirectory(vaultPath: string | undefined, scheduledFolder: string | undefined, schedule: ScheduleSnapshot) {
   const vault = resolveObsidianVaultPath(vaultPath, { requireWritable: true });
-  const { device, slug } = scheduleSegments(schedule);
+  const { device, legacyDevice, slug } = scheduleSegments(schedule);
   const root = join(vault, scheduledFolderName(scheduledFolder));
+  if (legacyDevice) await adoptLegacyScheduleDirectory(root, device, legacyDevice, slug);
   const dir = join(root, device, slug);
   await mkdir(dir, { recursive: true });
   await ensureScheduledIndex(root);
@@ -216,7 +264,7 @@ async function ensureScheduledIndex(root: string) {
     "",
     "Shared schedule definitions and run history for HivemindOS agents.",
     "",
-    "- `<device>/<schedule>/schedule.md` stores the schedule snapshot.",
+    "- `<machine>/<schedule>/schedule.md` stores the schedule snapshot, keyed by the stable machine id when known (else the machine name).",
     "- `run0001-<agent>-<timestamp>.md` files store execution history.",
     "- Use `usePastRuns` on a schedule to inject recent run notes back into future runs.",
     "",
@@ -230,12 +278,16 @@ export async function upsertScheduledSchedule(input: {
 }) {
   const location = await scheduleDirectory(input.vaultPath, input.scheduledFolder, input.schedule);
   const schedulePath = join(location.dir, "schedule.md");
+  const machineId = stableHivemindMachineId(input.schedule.machineId);
+  const machineLabel = input.schedule.machineName || location.device;
   const body = [
     yamlFrontmatter({
       type: "hivemindos-schedule",
       scheduleId: input.schedule.id,
       scheduleName: input.schedule.name,
       device: location.device,
+      machineId: machineId || null,
+      machineName: input.schedule.machineName ?? null,
       agentId: input.schedule.agentId,
       agentName: input.schedule.agentName,
       runtime: input.schedule.runtime,
@@ -251,7 +303,8 @@ export async function upsertScheduledSchedule(input: {
     "",
     `- Schedule ID: \`${input.schedule.id}\``,
     `- Agent: ${input.schedule.agentName || input.schedule.agentId || "(unassigned)"}`,
-    `- Device: ${location.device}`,
+    `- Device: ${machineLabel}`,
+    ...(machineId ? [`- Machine ID: \`${machineId}\``] : []),
     `- Cadence: ${input.schedule.every || "(custom)"}`,
     `- Shared run folder: \`${relative(location.vault, location.dir)}\``,
     "",
@@ -287,6 +340,21 @@ export async function recordScheduledRun(input: {
   const agent = sanitizeSegment(input.record.agentName || input.record.schedule.agentName || "agent", "agent");
   const timestamp = new Date(input.record.completedAt ?? input.record.startedAt).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
   const path = join(location.dir, `${runLabel}-${agent}-${timestamp}.md`);
+  const evaluation = input.record.evaluation ?? (input.record.status === "running"
+    ? undefined
+    : await evaluateCompletionEvent({
+      id: input.record.runId,
+      surface: "scheduler",
+      status: input.record.status === "ok" ? "completed" : "failed",
+      observed: true,
+      output: input.record.output || input.record.summary || "",
+      startedAt: input.record.startedAt,
+      completedAt: input.record.completedAt ?? Date.now(),
+      metadata: {
+        scheduleId: input.record.schedule.id,
+        runtime: input.record.schedule.runtime,
+      },
+    }));
   const content = [
     yamlFrontmatter({
       type: "hivemindos-scheduled-run",
@@ -296,12 +364,16 @@ export async function recordScheduledRun(input: {
       runNumber,
       status: input.record.status,
       device: location.device,
+      machineId: stableHivemindMachineId(input.record.schedule.machineId) || null,
+      machineName: input.record.machineName || input.record.schedule.machineName || null,
       agentName: input.record.agentName || input.record.schedule.agentName,
       startedAt: new Date(input.record.startedAt).toISOString(),
       completedAt: input.record.completedAt ? new Date(input.record.completedAt).toISOString() : null,
       skills: input.record.schedule.skills ?? [],
       externalSource: input.record.schedule.externalSource ?? null,
       externalJobId: input.record.schedule.externalJobId ?? null,
+      evaluationVerdict: evaluation?.verdict ?? null,
+      evaluationTier: evaluation?.tier ?? null,
     }),
     `# ${runLabel} - ${input.record.schedule.name || input.record.schedule.id}`,
     "",
@@ -312,6 +384,7 @@ export async function recordScheduledRun(input: {
     fenced("Prompt", input.record.prompt || input.record.schedule.prompt || ""),
     fenced("Output", input.record.output || input.record.summary || ""),
     fenced("Telemetry JSON", input.record.telemetry ?? {}),
+    ...(evaluation ? [fenced("Evaluation JSON", evaluation)] : []),
   ].join("\n");
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, content);
@@ -336,6 +409,55 @@ export async function readPastScheduledRuns(input: {
       return { path: relative(location.vault, path), name: basename(path), mtimeMs: fileStat.mtimeMs, content };
     }));
   return runs.sort((a, b) => b.mtimeMs - a.mtimeMs).slice(0, limit);
+}
+
+// Permanently remove a schedule's vault directory (schedule.md + run history)
+// so a deleted automation does NOT reappear on the next vault sync. Both the
+// stable-machine-id-keyed directory and any legacy machine-name-keyed mirror
+// are removed, covering schedules created before a hostname rekey. The path is
+// resolved WITHOUT mkdir so we never recreate a directory we're deleting.
+export async function deleteScheduledSchedule(input: {
+  vaultPath?: string;
+  scheduledFolder?: string;
+  schedule: ScheduleSnapshot;
+}) {
+  const vault = resolveObsidianVaultPath(input.vaultPath, { requireWritable: true });
+  const root = join(vault, scheduledFolderName(input.scheduledFolder));
+  // Path-safety: only ever remove a directory strictly INSIDE the scheduled root
+  // (non-empty relative path, no "..", not absolute) — never the root itself or
+  // anything outside it, even if a snapshot carries a hostile sharedRunFolder.
+  const safeInsideRoot = (dir: string) => {
+    const rel = relative(root, dir);
+    return rel !== "" && !rel.startsWith("..") && !isAbsolute(rel);
+  };
+  const candidates: string[] = [];
+  // Prefer the EXACT stored directory. It round-trips from listScheduledSchedules
+  // and is correct even when the owning agent is offline / on another machine, so
+  // the machine-id/name can't be re-derived from the snapshot (the previous
+  // machine-derived-only path silently resolved to a non-existent "dashboard"
+  // dir for cross-machine schedules, so the vault entry survived and resurrected).
+  const storedFolder = input.schedule.sharedRunFolder
+    || (input.schedule.sharedSchedulePath ? dirname(input.schedule.sharedSchedulePath) : "");
+  if (storedFolder) candidates.push(join(vault, storedFolder));
+  // Fall back to the machine-id/name-derived path (freshly-created local schedules
+  // that were never listed, plus the legacy machine-name mirror).
+  const { device, legacyDevice, slug } = scheduleSegments(input.schedule);
+  for (const dev of [device, legacyDevice].filter((value): value is string => Boolean(value))) {
+    candidates.push(join(root, dev, slug));
+  }
+  const removed: string[] = [];
+  const seen = new Set<string>();
+  for (const dir of candidates) {
+    if (seen.has(dir)) continue;
+    seen.add(dir);
+    if (!safeInsideRoot(dir)) continue;
+    if (!(await exists(dir))) continue;
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+    removed.push(relative(vault, dir));
+    // Prune the now-empty machine directory (rmdir refuses non-empty ones).
+    await rmdir(dirname(dir)).catch(() => {});
+  }
+  return { removed };
 }
 
 async function collectScheduleFiles(dir: string, files: string[] = []) {

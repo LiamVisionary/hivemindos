@@ -1,0 +1,25 @@
+{
+  "schema": "hivemindos-reddit-voc-report-v1",
+  "requiredSections": [
+    "executiveSummary",
+    "coverage",
+    "pains",
+    "desires",
+    "objections",
+    "swipePhrases",
+    "adAngles",
+    "competitorSignals",
+    "nextActions",
+    "limitations"
+  ],
+  "evidence": {
+    "requiredFields": ["quote", "url", "subreddit", "threadTitle"],
+    "urlPolicy": "Use the exact Reddit URL stored in sources.json; never construct or guess one.",
+    "quotePolicy": "The quote must be an exact substring of the stored post or comment body."
+  },
+  "signalStrength": {
+    "emerging": "Supported by one distinct Reddit thread.",
+    "strong-signal": "Supported by two distinct Reddit threads.",
+    "pattern": "Supported by at least three distinct Reddit threads."
+  }
+}

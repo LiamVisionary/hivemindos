@@ -13,6 +13,10 @@ const {
   scaleHiveAmount,
   isHiveEvmAddress,
 } = await import("../src/lib/services/hive-staking.ts");
+const {
+  BASE_CHAIN_ID_HEX,
+  stakeHiveWithBrowserWallet,
+} = await import("../src/lib/services/hive-staking-client.ts");
 const { stakeHrefForPersonalToken } = await import("../src/features/dashboard/views/personal-stake-link.ts");
 const { mergeStakeWalletsByAccount } = await import("../src/app/stake/stake-wallets.ts");
 const { evmAccountFromLocalSecret } = await import("../src/lib/services/hive-staking-local.ts");
@@ -25,6 +29,8 @@ function check(label, condition) {
 
 check("tier table starts with holder", HIVE_STAKING_TIERS[0].id === "holder");
 check("tier table ends with visionary", HIVE_STAKING_TIERS.at(-1).id === "visionary");
+check("tier table has no yield or reward metadata", HIVE_STAKING_TIERS.every((tier) => !("rewardWeight" in tier) && !("rewardBoostLabel" in tier)));
+check("tier descriptions avoid financial return promises", HIVE_STAKING_TIERS.every((tier) => !/reward|yield|discount|revenue|upside/i.test(tier.role)));
 check("below holder has no tier", hiveTierForStakedHive(999_999n) === null);
 check("holder threshold resolves holder", hiveTierForStakedHive(1_000_000n)?.id === "holder");
 check("supporter threshold resolves supporter", hiveTierForStakedHive(10_000_000n)?.id === "supporter");
@@ -115,6 +121,43 @@ try {
   invalidSecretError = error instanceof Error ? error.message : String(error);
 }
 check("local staking rejects unsupported secret formats clearly", invalidSecretError.includes("private key or recovery phrase"));
+
+const fakeWalletAddress = "0x0000000000000000000000000000000000000001";
+const approvalHash = `0x${"a".repeat(64)}`;
+const stakeHash = `0x${"b".repeat(64)}`;
+const oneHiveAllowance = `0x${(10n ** 18n).toString(16).padStart(64, "0")}`;
+const requestOrder = [];
+const fakeProvider = {
+  async request({ method, params }) {
+    requestOrder.push(method);
+    if (method === "eth_requestAccounts") return [fakeWalletAddress];
+    if (method === "wallet_switchEthereumChain") {
+      assert.equal(params?.[0]?.chainId, BASE_CHAIN_ID_HEX);
+      return null;
+    }
+    if (method === "eth_chainId") return BASE_CHAIN_ID_HEX;
+    if (method === "eth_sendTransaction") {
+      const transaction = params?.[0] ?? {};
+      return transaction.to === DEFAULT_BASE_HIVE_STAKING_CONTRACT_ADDRESS ? stakeHash : approvalHash;
+    }
+    if (method === "eth_getTransactionReceipt") return { status: "0x1" };
+    if (method === "eth_call") return oneHiveAllowance;
+    throw new Error(`unexpected fake provider method: ${method}`);
+  },
+};
+const browserStakeResult = await stakeHiveWithBrowserWallet({
+  provider: fakeProvider,
+  walletAddress: fakeWalletAddress,
+  tokenAddress: "0xA382c83e2a3B79368f372c2EB9b6925ffAf45bA3",
+  stakingAddress: DEFAULT_BASE_HIVE_STAKING_CONTRACT_ADDRESS,
+  amountText: "1",
+});
+check("browser staking returns approval hash", browserStakeResult.approveHash === approvalHash);
+check("browser staking returns stake hash", browserStakeResult.stakeHash === stakeHash);
+const sendIndexes = requestOrder.flatMap((method, index) => method === "eth_sendTransaction" ? [index] : []);
+check("browser staking sends approval and stake transactions", sendIndexes.length === 2);
+check("browser staking waits for approval receipt before allowance", requestOrder.indexOf("eth_getTransactionReceipt") < requestOrder.indexOf("eth_call"));
+check("browser staking reads allowance before stake transaction", requestOrder.indexOf("eth_call") < sendIndexes[1]);
 
 let threw = false;
 try {

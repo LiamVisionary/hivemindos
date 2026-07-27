@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-07-15T01:00:45.657833+00:00",
+  "request": "ok do it all please, 1-5",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "anthropics/anthropic-quickstarts",
+      "source_path": "computer-use-demo/computer_use_demo/loop.py",
+      "target_path": "src/lib/services/computer-interaction/orchestrator.ts",
+      "reuse_type": "translated_code",
+      "note": "adapted the bounded observe-tool-result loop into durable policy-gated steps with correlated receipts"
+    },
+    {
+      "source_repo": "anthropics/anthropic-quickstarts",
+      "source_path": "computer-use-demo/computer_use_demo/tools/collection.py",
+      "target_path": "src/lib/services/computer-interaction/adapter-catalog.ts",
+      "reuse_type": "adapted_code",
+      "note": "adapted named tool collection dispatch into semantic-first typed adapter routing"
+    },
+    {
+      "source_repo": "anthropics/anthropic-quickstarts",
+      "source_path": "computer-use-demo/computer_use_demo/tools/base.py",
+      "target_path": "src/lib/services/computer-interaction/types.ts",
+      "reuse_type": "translated_code",
+      "note": "translated explicit tool result contracts into typed observations actions results receipts and adapters"
+    },
+    {
+      "source_repo": "anthropics/anthropic-quickstarts",
+      "source_path": "browser-use-demo/browser_use_demo/loop.py",
+      "target_path": "src/lib/services/computer-interaction/tool-contract.ts",
+      "reuse_type": "adapted_code",
+      "note": "adapted provider tool schemas cache breakpoints and bounded loop metadata into provider-gated contracts"
+    },
+    {
+      "source_repo": "anthropics/anthropic-quickstarts",
+      "source_path": "browser-use-demo/browser_use_demo/message_handler.py",
+      "target_path": "src/lib/services/computer-interaction/store.ts",
+      "reuse_type": "translated_code",
+      "note": "translated preserved tool-result history into append-only durable event and run records"
+    }
+  ]
+}

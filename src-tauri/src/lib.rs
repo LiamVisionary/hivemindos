@@ -15,19 +15,28 @@ use tauri::{Manager, RunEvent};
 use tauri::Runtime;
 
 mod brain;
+mod brain_drop_files;
+mod beeline_credentials;
 mod dashboard_state;
 mod desktop_navigation;
 mod deliverables;
 mod env;
 mod fleet;
+mod image_preview;
 mod kanban;
 mod memory;
 mod obsidian;
+mod open_in_app;
 mod phone;
 mod runtime_files;
 mod runtime_usage;
 mod scheduler;
 mod setup;
+mod slack_session;
+mod speech;
+mod wallet_export;
+
+pub use beeline_credentials::run_cli as run_beeline_credential_broker_cli;
 
 #[cfg(not(debug_assertions))]
 use std::net::TcpListener;
@@ -77,13 +86,13 @@ const NATIVE_PREFERRED_PORT: u16 = 5020;
 const NATIVE_CACHE_TTL: Duration = Duration::from_secs(30);
 #[cfg(not(debug_assertions))]
 const DASHBOARD_AUTH_SECRET_KEY: &str = "HIVEMINDOS_DASHBOARD_AUTH_SECRET";
-#[cfg(not(debug_assertions))]
+// Not debug-gated: dashboard_token_from_dev_sources() reads this in dev too.
 const DASHBOARD_DEVICE_TOKEN_KEY: &str = "HIVEMINDOS_DASHBOARD_DEVICE_TOKEN";
 #[cfg(not(debug_assertions))]
 const NATIVE_BOOTSTRAP_TOKEN_KEY: &str = "HIVEMINDOS_NATIVE_BOOTSTRAP_TOKEN";
 #[cfg(not(debug_assertions))]
 const MIN_DASHBOARD_AUTH_SECRET_LENGTH: usize = 32;
-#[cfg(not(debug_assertions))]
+// Not debug-gated: used by dashboard_token_from_dev_sources()/native_dashboard_unlock_token in dev too.
 const MIN_DASHBOARD_DEVICE_TOKEN_LENGTH: usize = 24;
 
 struct NativeCacheEntry {
@@ -304,7 +313,7 @@ fn clean_path(path: &Path) -> PathBuf {
     cleaned
 }
 
-fn display_path(path: &Path) -> String {
+pub(crate) fn display_path(path: &Path) -> String {
     let clean = clean_path(path);
     if let Some(home) = home_dir().map(|item| clean_path(&item)) {
         if clean == home {
@@ -406,11 +415,11 @@ fn display_local_path(path: String) -> String {
     display_path(&expand_home_path(&path))
 }
 
-fn clean_target(value: &str) -> String {
+pub(crate) fn clean_target(value: &str) -> String {
     value.trim().replace(['\0', '\r', '\n'], "")
 }
 
-fn path_from_target(target: &str) -> Result<PathBuf, String> {
+pub(crate) fn path_from_target(target: &str) -> Result<PathBuf, String> {
     let cleaned = clean_target(target);
     if cleaned.starts_with("file://") {
         let url = url::Url::parse(&cleaned).map_err(|error| error.to_string())?;
@@ -425,7 +434,7 @@ fn path_from_target(target: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
-fn open_system_target(target: &str) -> Result<(), String> {
+pub(crate) fn open_system_target(target: &str) -> Result<(), String> {
     if cfg!(target_os = "macos") {
         Command::new("open")
             .arg(target)
@@ -447,7 +456,7 @@ fn open_system_target(target: &str) -> Result<(), String> {
     }
 }
 
-fn reveal_system_path(path: &Path) -> Result<(), String> {
+pub(crate) fn reveal_system_path(path: &Path) -> Result<(), String> {
     if cfg!(target_os = "macos") {
         Command::new("open")
             .arg("-R")
@@ -491,7 +500,7 @@ fn dashboard_auth_project_dir() -> Option<PathBuf> {
     None
 }
 
-fn open_terminal_in_directory(path: &Path) -> Result<(), String> {
+pub(crate) fn open_terminal_in_directory(path: &Path) -> Result<(), String> {
     if cfg!(target_os = "macos") {
         return Command::new("open")
             .args(["-a", "Terminal"])
@@ -536,7 +545,11 @@ fn open_project_terminal() -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 fn open_deliverable(action: Option<String>, path: Option<String>, url: Option<String>) -> Result<serde_json::Value, String> {
-    let action = if action.as_deref() == Some("reveal") { "reveal" } else { "open" };
+    let action = match action.as_deref() {
+        Some("reveal") => "reveal",
+        Some("folder") => "folder",
+        _ => "open",
+    };
     let path_target = clean_target(path.as_deref().unwrap_or(""));
     let url_target = clean_target(url.as_deref().unwrap_or(""));
     let target = if path_target.is_empty() { url_target } else { path_target };
@@ -545,8 +558,8 @@ fn open_deliverable(action: Option<String>, path: Option<String>, url: Option<St
     }
 
     if target.starts_with("http://") || target.starts_with("https://") {
-        if action == "reveal" {
-            return Err("Web URLs can be opened, but not revealed in the file manager.".to_string());
+        if action != "open" {
+            return Err("Web URLs can be opened, but do not have a local folder.".to_string());
         }
         open_system_target(&target)?;
         return Ok(serde_json::json!({ "ok": true }));
@@ -558,6 +571,11 @@ fn open_deliverable(action: Option<String>, path: Option<String>, url: Option<St
     }
     if action == "reveal" {
         reveal_system_path(&file_path)?;
+    } else if action == "folder" {
+        let parent = file_path
+            .parent()
+            .ok_or_else(|| "Deliverable folder could not be resolved.".to_string())?;
+        open_system_target(&parent.to_string_lossy())?;
     } else {
         open_system_target(&file_path.to_string_lossy())?;
     }
@@ -616,18 +634,131 @@ fn desktop_status(state: tauri::State<NativeServerState>) -> serde_json::Value {
     })
 }
 
+// The dashboard device token inherited from the dev launcher, with the checkout
+// .env.local as a compatibility fallback. This is the SAME source the dev
+// `tauri:next-dev` server verifies against. The explicit handoff avoids making
+// the signed/disclaimed macOS app reopen a privacy-protected checkout file.
+fn dashboard_token_from_dev_sources() -> Option<String> {
+    if let Ok(value) = std::env::var(DASHBOARD_DEVICE_TOKEN_KEY) {
+        if let Some(token) = normalize_dashboard_token(&value) {
+            return Some(token);
+        }
+    }
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Ok(root) = std::env::var("HIVE_ENV_PROJECT_ROOT") {
+        if !root.is_empty() {
+            candidates.push(PathBuf::from(root).join(".env.local"));
+        }
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        candidates.push(cwd.join(".env.local"));
+        if let Some(parent) = cwd.parent() {
+            candidates.push(parent.join(".env.local"));
+        }
+    }
+    let prefix = format!("{DASHBOARD_DEVICE_TOKEN_KEY}=");
+    for path in candidates {
+        let Ok(content) = fs::read_to_string(&path) else { continue };
+        for raw in content.lines() {
+            let line = raw.trim().strip_prefix("export ").unwrap_or(raw.trim());
+            if let Some(rest) = line.strip_prefix(&prefix) {
+                if let Some(token) = normalize_dashboard_token(rest) {
+                    return Some(token);
+                }
+            }
+        }
+    }
+    None
+}
+
+fn normalize_dashboard_token(raw: &str) -> Option<String> {
+    let value = raw.trim().trim_matches('"').trim_matches('\'');
+    (value.len() >= MIN_DASHBOARD_DEVICE_TOKEN_LENGTH).then(|| value.to_string())
+}
+
+#[cfg(test)]
+mod dashboard_token_tests {
+    use super::normalize_dashboard_token;
+
+    #[test]
+    fn dashboard_token_normalization_accepts_valid_process_values() {
+        let token = "t".repeat(64);
+        assert_eq!(normalize_dashboard_token(&format!("  '{token}'  ")), Some(token));
+        assert_eq!(normalize_dashboard_token("too-short"), None);
+    }
+}
+
 #[tauri::command]
 fn native_dashboard_unlock_token(
     state: tauri::State<NativeServerState>,
 ) -> Result<Option<String>, String> {
-    if cfg!(debug_assertions) {
+    Ok(native_dashboard_token_value(&state))
+}
+
+fn native_dashboard_token_value(state: &NativeServerState) -> Option<String> {
+    // Packaged: the token the native server was started with.
+    let from_state = state
+        .dashboard_token
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone())
+        .filter(|token| token.len() >= MIN_DASHBOARD_DEVICE_TOKEN_LENGTH);
+    if from_state.is_some() {
+        return from_state;
+    }
+    // Dev (native server not running / token not set): read the checkout
+    // .env.local so a pairing QR still embeds a token the running hub accepts.
+    dashboard_token_from_dev_sources()
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NativeDashboardBiometricStatus {
+    available: bool,
+    kind: Option<String>,
+}
+
+#[tauri::command]
+fn native_dashboard_biometric_status() -> NativeDashboardBiometricStatus {
+    #[cfg(target_os = "macos")]
+    {
+        let status = hivemindos_biometric_native::status();
+        NativeDashboardBiometricStatus {
+            available: status.available,
+            kind: status.kind.map(|kind| kind.as_str().to_string()),
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        NativeDashboardBiometricStatus {
+            available: false,
+            kind: None,
+        }
+    }
+}
+
+#[tauri::command]
+async fn native_dashboard_biometric_unlock(
+    state: tauri::State<'_, NativeServerState>,
+) -> Result<Option<String>, String> {
+    let token = native_dashboard_token_value(&state);
+    if token.is_none() {
         return Ok(None);
     }
-    let native_server_running = state.port.lock().ok().and_then(|guard| *guard).is_some();
-    if !native_server_running {
-        return Ok(None);
+
+    #[cfg(target_os = "macos")]
+    {
+        tauri::async_runtime::spawn_blocking(|| {
+            hivemindos_biometric_native::authenticate("unlock the HivemindOS dashboard")
+        })
+        .await
+        .map_err(|error| format!("Could not wait for device authentication: {error}"))??;
+        Ok(token)
     }
-    Ok(state.dashboard_token.lock().ok().and_then(|guard| guard.clone()))
+    #[cfg(not(target_os = "macos"))]
+    {
+        Err("Native biometric authentication is not available on this platform.".to_string())
+    }
 }
 
 fn native_payload(result: Result<serde_json::Value, String>) -> serde_json::Value {
@@ -826,6 +957,52 @@ fn has_packaged_next_server<R: Runtime>(app: &impl Manager<R>) -> bool {
         .unwrap_or(false)
 }
 
+/// Push the bundled brain content (skills, packaged skills, For Users / For
+/// Investors docs) into the user's shared vault on launch. The release bundle
+/// ships no setup scripts, so packaged installs that never run setup.sh would
+/// otherwise never get brain improvements after an update. The engine
+/// (resources/brain-seed/hive-brain-sync.mjs, run by the bundled node) is
+/// checksum-managed (updates managed-unedited content, preserves user edits,
+/// never duplicates) and version-gated (a no-op once this version has synced).
+/// Fire-and-forget and best-effort: it must never block or crash launch.
+#[cfg(not(debug_assertions))]
+fn start_bundled_brain_sync<R: Runtime>(app: &impl Manager<R>) {
+    let resource_dir = match app.path().resource_dir() {
+        Ok(dir) => dir,
+        Err(_) => return,
+    };
+    let brain_seed_dir = resource_dir.join("resources").join("brain-seed");
+    let script = brain_seed_dir.join("hive-brain-sync.mjs");
+    let node_path = resource_dir
+        .join("resources")
+        .join("hivemindos-node")
+        .join(if cfg!(target_os = "windows") { "node.exe" } else { "node" });
+    // Older bundles (or dev) ship no brain-seed; nothing to do.
+    if !script.exists() || !node_path.exists() {
+        return;
+    }
+    let log_path = native_server_log_path();
+    let (stdout, stderr) = native_server_log_stdio(log_path.as_deref());
+    let mut command = Command::new(&node_path);
+    command
+        .arg("--preserve-symlinks-main")
+        .arg(&script)
+        .arg("--content-base")
+        .arg(&brain_seed_dir)
+        .arg("--app-version")
+        .arg(env!("CARGO_PKG_VERSION"))
+        .arg("--quiet")
+        .current_dir(&brain_seed_dir)
+        .stdin(Stdio::null())
+        .stdout(stdout)
+        .stderr(stderr);
+    #[cfg(target_os = "windows")]
+    command.creation_flags(CREATE_NO_WINDOW);
+    if let Err(error) = command.spawn() {
+        eprintln!("HivemindOS: brain sync did not start: {error}");
+    }
+}
+
 /// Bridge the loopback dashboard onto the tailnet so a paired phone can reach
 /// it: bind this machine's 100.x tailnet IP at the SAME port the dashboard uses
 /// on loopback, and pipe bytes through. The LAN can't route to a 100.x socket,
@@ -946,6 +1123,41 @@ fn start_native_next_server<R: Runtime>(
     let (stdout, stderr) = native_server_log_stdio(log_path.as_deref());
 
     let mut command = Command::new(&node_path);
+    let native_executable = std::env::current_exe().ok();
+    let markitdown_path = std::env::current_exe()
+        .ok()
+        .and_then(|exe| {
+            exe.parent().map(|dir| {
+                dir.join(if cfg!(target_os = "windows") {
+                    "hivemind-markitdown.exe"
+                } else {
+                    "hivemind-markitdown"
+                })
+            })
+        })
+        .filter(|path| path.exists());
+    let quant_engine_path = std::env::current_exe()
+        .ok()
+        .and_then(|exe| {
+            exe.parent().map(|dir| {
+                dir.join(if cfg!(target_os = "windows") {
+                    "hivemind-quant-research-engine.exe"
+                } else {
+                    "hivemind-quant-research-engine"
+                })
+            })
+        })
+        .filter(|path| path.exists());
+    let quant_validator_path = app
+        .path()
+        .resource_dir()
+        .ok()
+        .map(|dir| {
+            dir.join("resources")
+                .join("quant-research")
+                .join("quant-research-validator.py")
+        })
+        .filter(|path| path.exists());
     command
         // Node realpath-resolves the main-module path at startup. On Windows,
         // Tauri's resource_dir() yields an extended-length (verbatim) path
@@ -972,6 +1184,18 @@ fn start_native_next_server<R: Runtime>(
         .stdin(Stdio::null())
         .stdout(stdout)
         .stderr(stderr);
+    if let Some(native_executable) = native_executable {
+        command.env("HIVEMINDOS_NATIVE_EXECUTABLE", native_executable);
+    }
+    if let Some(markitdown_path) = markitdown_path {
+        command.env("HIVEMINDOS_MARKITDOWN_BIN", markitdown_path);
+    }
+    if let Some(quant_engine_path) = quant_engine_path {
+        command.env("HIVEMINDOS_QUANT_ENGINE_PATH", quant_engine_path);
+    }
+    if let Some(quant_validator_path) = quant_validator_path {
+        command.env("HIVEMINDOS_QUANT_VALIDATOR_PATH", quant_validator_path);
+    }
 
     #[cfg(target_os = "windows")]
     command.creation_flags(CREATE_NO_WINDOW);
@@ -1389,12 +1613,12 @@ fn retry_native_server(app: tauri::AppHandle) -> serde_json::Value {
     }
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
+pub fn run(context: tauri::Context<tauri::Wry>) {
     install_native_panic_logger();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_liquid_glass::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -1408,6 +1632,9 @@ pub fn run() {
         .setup(|_app| {
             if let Err(error) = desktop_navigation::setup_tray(_app.handle()) {
                 eprintln!("HivemindOS tray setup failed: {error}");
+            }
+            if let Err(error) = desktop_navigation::setup_deep_links(_app) {
+                eprintln!("HivemindOS deep link setup failed: {error}");
             }
             desktop_navigation::restore_window_state(_app.handle());
 
@@ -1486,6 +1713,11 @@ pub fn run() {
                         }
                     }
                 }
+
+                // Packaged installs never run setup.sh, so seed/refresh the
+                // bundled brain content into the user's vault on launch. Version-
+                // gated, checksum-managed, idempotent; runs detached, never blocks.
+                start_bundled_brain_sync(app);
             }
 
             Ok(())
@@ -1493,6 +1725,12 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             desktop_status,
             native_pairing_host,
+            beeline_credentials::beeline_local_credentials_list,
+            beeline_credentials::beeline_local_credential_store,
+            beeline_credentials::beeline_local_credential_delete,
+            beeline_credentials::beeline_local_credentials_delete_profile,
+            native_dashboard_biometric_status,
+            native_dashboard_biometric_unlock,
             native_dashboard_unlock_token,
             dashboard_bootstrap,
             list_local_directories,
@@ -1500,6 +1738,8 @@ pub fn run() {
             display_local_path,
             open_deliverable,
             open_project_terminal,
+            open_in_app::list_open_in_apps,
+            open_in_app::open_in_app,
             deliverables::list_aeon_deliverables,
             deliverables::list_aeon_outputs,
             deliverables::list_aeon_schedules,
@@ -1510,6 +1750,7 @@ pub fn run() {
             deliverables::get_aeon_run_log,
             brain::brain_skill_inventory,
             brain::brain_graph,
+            brain_drop_files::read_local_brain_drop_documents,
             env::hive_env_read,
             fleet::fleet_apps_cache,
             fleet::fleet_discover,
@@ -1521,18 +1762,28 @@ pub fn run() {
             retry_native_server,
             runtime_files::runtime_files,
             runtime_usage::runtime_usage,
+            image_preview::read_local_image_preview,
             setup::native_setup_run,
             setup::native_setup_status,
             scheduler::scheduler_shared_schedules,
+            wallet_export::wallet_secret_export_save,
+            slack_session::slack_session_capture,
+            obsidian::obsidian_capture_note,
             obsidian::obsidian_agents,
             obsidian::obsidian_personal_wallets,
             dashboard_state::dashboard_state_read,
             dashboard_state::dashboard_state_write,
             deliverables::download_aeon_deliverable,
             deliverables::send_aeon_deliverable,
-            desktop_navigation::open_route_window
+            desktop_navigation::open_route_window,
+            desktop_navigation::move_route_window,
+            desktop_navigation::set_companion_popover,
+            desktop_navigation::take_pending_research_sync_code,
+            speech::speech_recognition_available,
+            speech::speech_recognition_start,
+            speech::speech_recognition_stop
         ])
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building HivemindOS desktop")
         .run(|app_handle, event| {
             guard_native_callback("app run event", || match event {
@@ -1549,4 +1800,20 @@ pub fn run() {
                 _ => {}
             });
         });
+}
+
+/// Lightweight collector-only setup application distributed as HivemindOS
+/// Link. It intentionally registers only the two setup commands: the Link app
+/// cannot start the dashboard or access any of its data surfaces.
+pub fn run_link(context: tauri::Context<tauri::Wry>) {
+    install_native_panic_logger();
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .invoke_handler(tauri::generate_handler![
+            setup::native_setup_run,
+            setup::native_setup_status,
+        ])
+        .build(context)
+        .expect("error while building HivemindOS Link")
+        .run(|_, _| {});
 }

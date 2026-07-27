@@ -2,14 +2,13 @@
 // @ts-nocheck
 "use client";
 
-/* eslint-disable react-hooks/immutability, react-hooks/purity */
-
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import {
   parseRuntimeSsePayload,
   responseErrorMessage,
   runtimeErrorMessage,
 } from "./runtime-stream-errors";
+import { requestKanbanWorkReceipt } from "./kanban-work-receipts";
 
 export function useKanbanDispatchController(props: any) {
   const {
@@ -166,7 +165,6 @@ export function useKanbanDispatchController(props: any) {
           agent.name === task.agentSession?.agentName,
       );
     if (staleAgent) {
-      // eslint-disable-next-line react-hooks/purity
       kanbanDispatchCooldownRef.current.set(
         staleAgent.id,
         Date.now() + KANBAN_STALE_AGENT_COOLDOWN_MS,
@@ -191,39 +189,104 @@ export function useKanbanDispatchController(props: any) {
     );
   }
 
-  // Asks the collector on the agent's machine to sign a work receipt (per-agent
-  // DID over the workspace git state). Fire-and-forget: a missing receipt never
-  // blocks task completion, it just leaves the task without a verified proof.
   function requestWorkReceipt(task: KanbanTask, agent: AgentProfile) {
-    void fetch("/api/work-receipts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        collectorUrl: agent.telemetryUrl,
-        agentId: agent.agentId || agent.id,
-        agentName: agent.name,
-        taskId: task.id,
-        taskTitle: task.title,
-        board: kanbanBoardSlug,
-        repoPath: appVersion?.appDir,
-      }),
-    })
-      .then(async (response) => {
-        const data = (await response.json().catch(() => null)) as {
-          ok?: boolean;
-          error?: string;
-        } | null;
-        logClientTelemetry("kanban.work_receipt", {
-          taskId: task.id,
-          agentId: agent.id,
-          ok: Boolean(data?.ok),
-          error: data?.ok ? undefined : data?.error,
-        });
-      })
-      .catch(() => undefined);
+    requestKanbanWorkReceipt({
+      agent,
+      appDir: appVersion?.appDir,
+      boardSlug: kanbanBoardSlug,
+      logClientTelemetry,
+      task,
+    });
   }
 
-  /* eslint-disable react-hooks/immutability, react-hooks/purity */
+  async function readCurrentKanbanDispatchTask(taskId: string) {
+    try {
+      const url = new URL(
+        `/api/kanban?board=${encodeURIComponent(kanbanBoardSlug)}`,
+        window.location.origin,
+      );
+      url.searchParams.set("include_archived", "true");
+      url.searchParams.set("q", taskId);
+      const storage = kanbanStorageBody();
+      for (const [key, value] of Object.entries(storage)) {
+        if (value !== undefined && value !== null && String(value).trim()) {
+          url.searchParams.set(key, String(value));
+        }
+      }
+      const response = await fetch(url.toString(), { cache: "no-store" });
+      const data = (await response.json().catch(() => null)) as KanbanResponse | null;
+      if (!response.ok || !data?.ok) return null;
+      return data.board?.tasks?.find((item: KanbanTask) => item.id === taskId) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  function kanbanDispatchFailureStillOwnsTask(task: KanbanTask, agent: AgentProfile) {
+    if (task.status !== "working") return false;
+    if (String(task.claimLock || "").startsWith("queen-bee-autonomous:")) return false;
+    const agentKeys = new Set(
+      [agent.id, agent.agentId, agent.name].filter(Boolean).map((value) => String(value)),
+    );
+    return (
+      agentKeys.has(String(task.assignee || ""))
+      || agentKeys.has(String(task.agentSession?.agentId || ""))
+      || agentKeys.has(String(task.agentSession?.agentName || ""))
+    );
+  }
+
+  async function markKanbanTaskNeedsHumanFromDashboardDispatch(
+    task: KanbanTask,
+    agent: AgentProfile,
+    patch: KanbanTaskPatch,
+    reason: string,
+  ) {
+    const current = await readCurrentKanbanDispatchTask(task.id);
+    if (!current || !kanbanDispatchFailureStillOwnsTask(current, agent)) {
+      logClientTelemetry("kanban.dispatch.needs_human_skipped_stale_owner", {
+        taskId: task.id,
+        agentId: agent.id,
+        agentName: agent.name,
+        reason,
+        currentStatus: current?.status ?? null,
+        currentAssignee: current?.assignee ?? null,
+        currentClaimLock: current?.claimLock ?? null,
+      });
+      await refreshKanbanOnce().catch(() => undefined);
+      return false;
+    }
+    await patchKanbanTask(task.id, {
+      ...patch,
+      status: "needs-human",
+      agentSession: null,
+    });
+    return true;
+  }
+
+  async function patchKanbanTaskFromOwnedDispatch(
+    task: KanbanTask,
+    agent: AgentProfile,
+    patch: KanbanTaskPatch,
+    reason: string,
+  ) {
+    const current = await readCurrentKanbanDispatchTask(task.id);
+    if (!current || !kanbanDispatchFailureStillOwnsTask(current, agent)) {
+      logClientTelemetry("kanban.dispatch.patch_skipped_stale_owner", {
+        taskId: task.id,
+        agentId: agent.id,
+        agentName: agent.name,
+        reason,
+        currentStatus: current?.status ?? null,
+        currentAssignee: current?.assignee ?? null,
+        currentClaimLock: current?.claimLock ?? null,
+      });
+      await refreshKanbanOnce().catch(() => undefined);
+      return false;
+    }
+    await patchKanbanTask(task.id, patch);
+    return true;
+  }
+
   async function dispatchKanbanTaskToAgent(
     task: KanbanTask,
     agent: AgentProfile,
@@ -359,10 +422,11 @@ export function useKanbanDispatchController(props: any) {
               sessionId: parsed.session.id,
               messageCount: parsed.session.messageCount ?? 0,
             });
-            await patchKanbanTask(task.id, {
+            const patched = await patchKanbanTaskFromOwnedDispatch(task, agent, {
               agentSession: lastAgentSession,
               result: `${agent.name} accepted the task. Waiting for agent update.`,
-            });
+            }, "session-accepted");
+            if (!patched) return { ok: true, message: "Task moved away before the agent session update." };
             continue;
           }
           const chunk = parsed.choices?.[0]?.delta?.content;
@@ -430,13 +494,14 @@ export function useKanbanDispatchController(props: any) {
               lastMessage: result,
               completedAt: Date.now(),
             });
-            await createKanbanArtistHandoffTask(task, agent, result);
-            requestWorkReceipt(task, agent);
-            await patchKanbanTask(task.id, {
+            const patched = await patchKanbanTaskFromOwnedDispatch(task, agent, {
               status: "done",
               agentSession: null,
               result,
-            });
+            }, "completed-from-session");
+            if (!patched) return { ok: true, message: "Task moved away before session completion." };
+            await createKanbanArtistHandoffTask(task, agent, result);
+            requestWorkReceipt(task, agent);
             await addKanbanSystemComment(
               task.id,
               `${agent.name} completed the delegated work from the Work board.`,
@@ -465,7 +530,7 @@ export function useKanbanDispatchController(props: any) {
           sawAgentSession,
         });
         updateTask(localTaskId, { status: "active", lastMessage: message });
-        await patchKanbanTask(task.id, {
+        const patched = await patchKanbanTaskFromOwnedDispatch(task, agent, {
           status: "working",
           assignee: agent.name,
           tenant:
@@ -473,7 +538,8 @@ export function useKanbanDispatchController(props: any) {
               ? "queen-bee"
               : `${assignment.workerClass}-worker`,
           result: message,
-        });
+        }, "awaiting-agent-update");
+        if (!patched) return { ok: true, message: "Task moved away before the awaiting-agent update." };
         return { ok: true, message };
       }
 
@@ -494,12 +560,13 @@ export function useKanbanDispatchController(props: any) {
             lastMessage: workspaceSummary,
             completedAt: Date.now(),
           });
-          requestWorkReceipt(task, agent);
-          await patchKanbanTask(task.id, {
+          const patched = await patchKanbanTaskFromOwnedDispatch(task, agent, {
             status: "done",
             agentSession: null,
             result: workspaceSummary,
-          });
+          }, "completed-from-workspace");
+          if (!patched) return { ok: true, message: "Task moved away before workspace completion." };
+          requestWorkReceipt(task, agent);
           await addKanbanSystemComment(
             task.id,
             `${agent.name} completed delegated work with workspace changes.`,
@@ -528,9 +595,10 @@ export function useKanbanDispatchController(props: any) {
         lastMessage: result,
         completedAt: Date.now(),
       });
+      const patched = await patchKanbanTaskFromOwnedDispatch(task, agent, { status: "done", result }, "completed-from-stream");
+      if (!patched) return { ok: true, message: "Task moved away before stream completion." };
       await createKanbanArtistHandoffTask(task, agent, result);
       requestWorkReceipt(task, agent);
-      await patchKanbanTask(task.id, { status: "done", result });
       await addKanbanSystemComment(
         task.id,
         `${agent.name} completed the delegated work from the Work board.`,
@@ -559,12 +627,13 @@ export function useKanbanDispatchController(props: any) {
               lastMessage: workspaceSummary,
               completedAt: Date.now(),
             });
-            requestWorkReceipt(task, agent);
-            await patchKanbanTask(task.id, {
+            const patched = await patchKanbanTaskFromOwnedDispatch(task, agent, {
               status: "done",
               agentSession: null,
               result: workspaceSummary,
-            });
+            }, "no-progress-workspace-completed");
+            if (!patched) return { ok: true, message: "Task moved away before timeout workspace completion." };
+            requestWorkReceipt(task, agent);
             await addKanbanSystemComment(
               task.id,
               `${agent.name} completed delegated work with workspace changes.`,
@@ -586,13 +655,14 @@ export function useKanbanDispatchController(props: any) {
             lastMessage: message,
             completedAt: Date.now(),
           });
-          await patchKanbanTask(task.id, {
+          const patched = await patchKanbanTaskFromOwnedDispatch(task, agent, {
             status: "ready",
             assignee: "",
             tenant: "",
             agentSession: null,
             result: message,
-          });
+          }, "no-progress-requeue");
+          if (!patched) return { ok: true, message: "Task moved away before timeout requeue." };
           await addKanbanSystemComment(task.id, message);
           return { ok: true, message };
         }
@@ -648,7 +718,7 @@ export function useKanbanDispatchController(props: any) {
       if (transientDelegation) {
         if (!isKanbanAwaitingAgentUpdate(task)) {
           const waitingMessage = `${agent.name} accepted the runtime connection and may still be working. Waiting for telemetry or agent output after the dashboard timeout.`;
-          await patchKanbanTask(task.id, {
+          const patched = await patchKanbanTaskFromOwnedDispatch(task, agent, {
             status: "working",
             assignee: agent.name,
             tenant:
@@ -656,28 +726,25 @@ export function useKanbanDispatchController(props: any) {
                 ? "queen-bee"
                 : `${assignment.workerClass}-worker`,
             result: waitingMessage,
-          });
+          }, "transient-delegation-waiting");
+          if (!patched) return { ok: true, message };
         }
         return { ok: true, message };
       }
-      if (!options.leaveKanbanOpen) {
-        await patchKanbanTask(task.id, {
-          status: "needs-human",
-          agentSession: null,
-          result: `Delegation failed for ${agent.name}: ${message}`,
-        });
+      if (options.leaveKanbanOpen) {
+        return { ok: false, message };
       }
-      await addKanbanSystemComment(
-        task.id,
-        `Delegation failed for ${agent.name}: ${message}`,
+      const result = task.targetMachine?.key
+        ? `Delegation failed for ${agent.name} on ${task.targetMachine.name}: ${message}`
+        : `Delegation failed for ${agent.name}: ${message}`;
+      const marked = await markKanbanTaskNeedsHumanFromDashboardDispatch(
+        task,
+        agent,
+        { result },
+        "dispatch-error",
       );
-      if (task.targetMachine?.key) {
-        await patchKanbanTask(task.id, {
-          status: "needs-human",
-          agentSession: null,
-          result: `Delegation failed for ${agent.name} on ${task.targetMachine.name}: ${message}`,
-        });
-        return { ok: true, message };
+      if (marked) {
+        await addKanbanSystemComment(task.id, result);
       }
       return { ok: false, message };
     } finally {
@@ -687,7 +754,6 @@ export function useKanbanDispatchController(props: any) {
       }
     }
   }
-  /* eslint-enable react-hooks/immutability, react-hooks/purity */
 
   useEffect(() => {
     if (!hydrated || !kanbanBoard) return;
@@ -831,12 +897,13 @@ export function useKanbanDispatchController(props: any) {
             failureCount,
             error: errorMessage,
           });
-          await patchKanbanTask(task.id, {
-            status: "needs-human",
-            agentSession: null,
-            result: message,
-          });
-          await addKanbanSystemComment(task.id, message);
+          const marked = await markKanbanTaskNeedsHumanFromDashboardDispatch(
+            task,
+            agent,
+            { result: message },
+            "session-poll-failed",
+          );
+          if (marked) await addKanbanSystemComment(task.id, message);
         }
         return;
       }
@@ -909,7 +976,6 @@ export function useKanbanDispatchController(props: any) {
       const latestRaw = [...rawMessages]
         .reverse()
         .find((message) => message.content.trim());
-      // eslint-disable-next-line react-hooks/purity
       const now = Date.now();
       const sessionUpdatedAt =
         data.session.updatedAt ?? latestRaw?.createdAt ?? now;
@@ -954,12 +1020,13 @@ export function useKanbanDispatchController(props: any) {
             },
           ],
         }));
-        await patchKanbanTask(task.id, {
-          status: "needs-human",
-          agentSession: null,
-          result: message,
-        });
-        await addKanbanSystemComment(task.id, message);
+        const marked = await markKanbanTaskNeedsHumanFromDashboardDispatch(
+          task,
+          agent,
+          { result: message },
+          "tool-output-stalled",
+        );
+        if (marked) await addKanbanSystemComment(task.id, message);
         return;
       }
       if (noAssistantStalled) {
@@ -1000,12 +1067,13 @@ export function useKanbanDispatchController(props: any) {
             },
           ],
         }));
-        await patchKanbanTask(task.id, {
-          status: "needs-human",
-          agentSession: null,
-          result: message,
-        });
-        await addKanbanSystemComment(task.id, message);
+        const marked = await markKanbanTaskNeedsHumanFromDashboardDispatch(
+          task,
+          agent,
+          { result: message },
+          "no-assistant-stalled",
+        );
+        if (marked) await addKanbanSystemComment(task.id, message);
         return;
       }
       if (latestCount !== task.agentSession?.lastMessageCount) {
@@ -1017,7 +1085,7 @@ export function useKanbanDispatchController(props: any) {
           latestCount,
           latestAssistantLength: latestAssistant?.content.length ?? 0,
         });
-        await patchKanbanTask(task.id, {
+        const patched = await patchKanbanTaskFromOwnedDispatch(task, agent, {
           agentSession: {
             ...session,
             updatedAt: sessionUpdatedAt,
@@ -1034,7 +1102,8 @@ export function useKanbanDispatchController(props: any) {
                     ),
                 }
               : {}),
-        });
+        }, "session-poll-update");
+        if (!patched) return;
       }
     } finally {
       kanbanSessionPollInFlightRef.current.delete(inFlightKey);
@@ -1050,7 +1119,6 @@ export function useKanbanDispatchController(props: any) {
       return;
     const lastPoll =
       kanbanSessionPollRef.current.get(selectedKanbanTask.id) ?? 0;
-    // eslint-disable-next-line react-hooks/purity
     const now = Date.now();
     if (now - lastPoll < 4_000) return;
     kanbanSessionPollRef.current.set(selectedKanbanTask.id, now);
@@ -1066,6 +1134,14 @@ export function useKanbanDispatchController(props: any) {
     );
     if (pollable.length === 0) return;
     const poll = () => {
+      // Pause while the OS window is hidden/minimized — nobody is watching the
+      // board, and each pollable task forks a sqlite3 subprocess via
+      // /api/chat/agent-session. Resumes on visibilitychange (below). Matches the
+      // app-wide useVisibilityAwarePolling pattern. NOTE: intentionally NOT scoped
+      // by activeView — this poll also detects stalled sessions (-> needs-human)
+      // and syncs agent messages, which must keep working when the user is off the
+      // board (e.g. dispatched a task, then switched to chat).
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
       pollable.forEach((task) => {
         const lastPoll = kanbanSessionPollRef.current.get(task.id) ?? 0;
         if (Date.now() - lastPoll < 4_000) return;
@@ -1075,13 +1151,17 @@ export function useKanbanDispatchController(props: any) {
     };
     poll();
     const timer = window.setInterval(poll, 6_000);
-    return () => window.clearInterval(timer);
+    const handleVisibility = () => { if (document.visibilityState === "visible") poll(); };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayAgents, hydrated, kanbanBoard]);
 
   useEffect(() => {
     if (!hydrated || !kanbanBoard) return;
-    // eslint-disable-next-line react-hooks/purity
     const now = Date.now();
     const staleTasks = kanbanBoard.tasks.filter((task) =>
       isKanbanStaleWorkingTask(task, now),
@@ -1095,36 +1175,85 @@ export function useKanbanDispatchController(props: any) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayAgents, hydrated, kanbanBoard]);
 
-  async function steerSelectedKanbanTask(event: FormEvent) {
-    event.preventDefault();
-    const prompt = kanbanSteerDraft.trim();
-    const outgoingAttachments = kanbanSteerAttachments;
-    const outgoingDirectories = kanbanSteerDirectories;
+  // `overrides` lets needs-human quick actions (decision buttons, API-key
+  // saves) reuse the whole steer pipeline programmatically without touching
+  // whatever the user has staged in the composer.
+  async function steerSelectedKanbanTask(event?: FormEvent, overrides?: { prompt?: string; targetStatus?: string }) {
+    event?.preventDefault();
+    const overridePrompt = overrides?.prompt?.trim();
+    const steerTargetStatus = overrides?.targetStatus ?? kanbanSteerTargetStatus;
+    const prompt = overridePrompt ?? kanbanSteerDraft.trim();
+    const outgoingAttachments = overridePrompt ? [] : kanbanSteerAttachments;
+    const outgoingDirectories = overridePrompt ? [] : kanbanSteerDirectories;
     const outgoingLabel =
       prompt ||
       attachmentSummary(outgoingAttachments) ||
       (outgoingDirectories.length
         ? `Linked ${outgoingDirectories.length} director${outgoingDirectories.length === 1 ? "y" : "ies"}`
         : "");
-    if (
-      !selectedKanbanTask ||
-      !selectedKanbanAgent ||
-      !outgoingLabel ||
-      kanbanSteeringTaskId
-    )
-      return;
-    const setupIssue = chatSetupIssue(selectedKanbanAgent);
-    if (setupIssue) {
-      await addKanbanSystemComment(
-        selectedKanbanTask.id,
-        `Could not steer ${selectedKanbanAgent.name}: ${setupIssue}`,
+    if (!selectedKanbanTask || !outgoingLabel || kanbanSteeringTaskId) return;
+    const setupIssue = selectedKanbanAgent
+      ? chatSetupIssue(selectedKanbanAgent)
+      : "";
+    if (!selectedKanbanAgent || setupIssue) {
+      // No reachable agent on this task: keep the unified composer useful by
+      // saving the message as a task note instead of dropping it.
+      const noteBody = [
+        prompt || outgoingLabel,
+        outgoingAttachments.length
+          ? `Attachments:\n${outgoingAttachments.map((attachment) => `- ${attachment.kind}: ${attachment.name}`).join("\n")}`
+          : "",
+        outgoingDirectories.length
+          ? `Linked directories:\n${outgoingDirectories.map((directory) => `- ${directory.name}`).join("\n")}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+      if (!overridePrompt) {
+        setKanbanSteerDraft("");
+        setKanbanSteerAttachments([]);
+        setKanbanSteerDirectories([]);
+        setKanbanSteerAttachmentError("");
+        setKanbanSteerAttachmentMenuOpen(false);
+      }
+      const response = await fetch(
+        `/api/kanban?board=${encodeURIComponent(kanbanBoardSlug)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...kanbanStorageBody(),
+            action: "comment",
+            taskId: selectedKanbanTask.id,
+            body: noteBody,
+            author: "dashboard",
+          }),
+        },
+      ).catch(() => null);
+      const data = (await response
+        ?.json()
+        .catch(() => null)) as KanbanResponse | null;
+      if (!response?.ok || !data?.ok) {
+        setKanbanError(data?.error ?? "Could not save the note.");
+        return;
+      }
+      if (selectedKanbanAgent && setupIssue) {
+        await addKanbanSystemComment(
+          selectedKanbanTask.id,
+          `Could not message ${selectedKanbanAgent.name} (${setupIssue}); the message was saved as a task note instead.`,
+        );
+      }
+      await refreshKanbanOnce().catch((error) =>
+        setKanbanError(
+          error instanceof Error ? error.message : "Kanban refresh failed.",
+        ),
       );
       return;
     }
 
     const localTaskId = `kanban-steer-${selectedKanbanTask.id}-${Date.now()}`;
     const targetColumn = KANBAN_COLUMNS.find(
-      (column) => column.id === kanbanSteerTargetStatus,
+      (column) => column.id === steerTargetStatus,
     );
     const directorySummary = outgoingDirectories.length
       ? `Linked directories:\n${outgoingDirectories.map((directory) => `- ${directory.name}`).join("\n")}`
@@ -1143,18 +1272,20 @@ export function useKanbanDispatchController(props: any) {
       selectedKanbanTask.result
         ? `Current task notes:\n${selectedKanbanTask.result}`
         : "",
-      kanbanSteerTargetStatus === "ideas"
+      steerTargetStatus === "ideas"
         ? "Planning mode: reply with guidance or a concise response, but do not continue execution unless asked later."
         : "Use this guidance for the active work. Reply with a concise update, blocker, or result.",
     ]
       .filter(Boolean)
       .join("\n\n");
 
-    setKanbanSteerDraft("");
-    setKanbanSteerAttachments([]);
-    setKanbanSteerDirectories([]);
-    setKanbanSteerAttachmentError("");
-    setKanbanSteerAttachmentMenuOpen(false);
+    if (!overridePrompt) {
+      setKanbanSteerDraft("");
+      setKanbanSteerAttachments([]);
+      setKanbanSteerDirectories([]);
+      setKanbanSteerAttachmentError("");
+      setKanbanSteerAttachmentMenuOpen(false);
+    }
     setKanbanSteeringTaskId(selectedKanbanTask.id);
     upsertTask({
       id: localTaskId,
@@ -1181,9 +1312,9 @@ export function useKanbanDispatchController(props: any) {
     });
 
     try {
-      if (selectedKanbanTask.status !== kanbanSteerTargetStatus) {
+      if (selectedKanbanTask.status !== steerTargetStatus) {
         await patchKanbanTask(selectedKanbanTask.id, {
-          status: kanbanSteerTargetStatus,
+          status: steerTargetStatus,
         });
       }
       const contextMessages = (messagesByAgent[selectedKanbanAgent.id] ?? [])

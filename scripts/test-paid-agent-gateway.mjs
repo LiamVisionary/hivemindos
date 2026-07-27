@@ -7,8 +7,10 @@ const files = {
   officialClient: "src/lib/services/paid-agent-cloud-client.ts",
   route: "src/app/api/paid-agents/[slug]/chat/completions/route.ts",
   officialRoute: "src/app/api/official-paid-agents/[slug]/chat/completions/route.ts",
+  builderHelper: "src/lib/services/wallet/x402-builder-code.ts",
   contextIndex: "src/lib/services/context-index.ts",
-  docs: "docs/features/wallets-honey-and-x402.md",
+  docs: "docs/for-users/features/wallets-honey-and-x402.md",
+  proxy: "src/proxy.ts",
 };
 
 const contents = Object.fromEntries(
@@ -18,10 +20,19 @@ const contents = Object.fromEntries(
   ])),
 );
 
+// The seller routes must stay exempt from the dashboard auth gate: the x402
+// handshake needs the first request to arrive credential-less so the resource
+// server can answer with the 402 challenge. Live regression coverage lives in
+// scripts/test-dashboard-api-auth.mjs (excluded from the hermetic gate).
+const proxyAllowlist = contents.proxy.match(/SELF_AUTHENTICATING_API_PREFIXES = \[[\s\S]*?\]/)?.[0] ?? "";
+
 const checks = [
   ["service uses x402 resource server", contents.service.includes("x402ResourceServer")],
   ["service uses x402 HTTP server", contents.service.includes("x402HTTPResourceServer")],
   ["service registers exact EVM scheme", contents.service.includes("registerExactEvmScheme")],
+  ["service supports x402 builder codes", contents.service.includes("declareBuilderCodeExtension") && contents.builderHelper.includes("HIVEMINDOS_PAID_AGENT_BUILDER_CODE")],
+  ["service uses Coinbase CDP facilitator helper", contents.service.includes("createFacilitatorConfig") && contents.service.includes("CDP_API_KEY_ID") && contents.service.includes("CDP_API_KEY_SECRET")],
+  ["service makes testnet explicit opt-in", contents.service.includes("HIVEMINDOS_PAID_AGENT_TESTNET_MODE") && contents.service.includes("defaultPaidAgentNetwork")],
   ["service settles verified payments", contents.service.includes("processSettlement")],
   ["service fails closed on payTo", contents.service.includes("HIVEMINDOS_PAID_AGENT_PAY_TO")],
   ["service fails closed on facilitator", contents.service.includes("HIVEMINDOS_PAID_AGENT_FACILITATOR_URL")],
@@ -41,15 +52,22 @@ const checks = [
   ["route exposes readiness", contents.route.includes("getPaidAgentGatewayStatus")],
   ["official route delegates to hosted client", contents.officialRoute.includes("proxyOfficialPaidAgentRequest")],
   ["official route exposes hosted readiness", contents.officialRoute.includes("getOfficialPaidAgentStatus")],
+  ["proxy self-auth allowlist exempts seller route", proxyAllowlist.includes("\"/api/paid-agents\"")],
+  ["proxy self-auth allowlist exempts official seller route", proxyAllowlist.includes("\"/api/official-paid-agents\"")],
   ["context index has paid gateway capability", contents.contextIndex.includes("tool-schema:paid-agent-x402-gateway")],
   ["context index names OpenAI-compatible endpoint", contents.contextIndex.includes("/api/paid-agents/<slug>/chat/completions")],
   ["context index names official hosted endpoint", contents.contextIndex.includes("/api/official-paid-agents/<slug>/chat/completions")],
+  ["context index documents testnet flag", contents.contextIndex.includes("HIVEMINDOS_PAID_AGENT_TESTNET_MODE=true")],
   ["docs describe production env", contents.docs.includes("HIVEMINDOS_PAID_AGENT_GATEWAY_ENABLED=true")],
   ["docs describe official hosted client env", contents.docs.includes("HIVEMINDOS_OFFICIAL_PAID_AGENT_BASE_URL=<https-hivemindos-hosted-base-url>")],
   ["docs warn not to package payTo", contents.docs.includes("Do not package an official `payTo` address")],
   ["docs name official downloaded-app route", contents.docs.includes("/api/official-paid-agents/<slug>/chat/completions")],
+  ["docs publish metered hosted chat pricing", contents.docs.includes("metered") && contents.docs.includes("25% markup") && contents.docs.includes("$0.001 minimum per message")],
   ["docs describe runtime policy", contents.docs.includes("Runtime policy:")],
-  ["docs distinguish x402 from HONEY/HIVE", contents.docs.includes("x402 remains the external per-call charge")],
+  ["docs describe builder code attribution", contents.docs.includes("HIVEMINDOS_PAID_AGENT_BUILDER_CODE=<base-builder-code>")],
+  ["docs describe CDP facilitator auth", contents.docs.includes("CDP_API_KEY_ID=<cdp-api-key-id>") && contents.docs.includes("@coinbase/x402")],
+  ["docs describe testnet flag opt-in", contents.docs.includes("HIVEMINDOS_PAID_AGENT_TESTNET_MODE=true") && contents.docs.includes("disabled by default")],
+  ["docs distinguish x402 from Honey, Cloud credits, and HIVE", contents.docs.includes("x402 remains an external per-call payment rail; Hivemind Cloud credits remain ordinary spend-only managed-service value")],
 ];
 
 const failures = checks.filter(([, passed]) => !passed);

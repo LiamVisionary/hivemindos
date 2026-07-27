@@ -1,0 +1,84 @@
+.document {
+  color: #ddd8ca;
+  font-family: Geist, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.72;
+}
+
+.header {
+  padding-bottom: 28px;
+  border-bottom: 1px solid rgba(235, 189, 83, 0.22);
+  margin-bottom: 28px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: #e8b94e;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.header h1 {
+  margin: 0 0 10px;
+  color: #fffaf0;
+  font-size: clamp(32px, 5vw, 52px);
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+
+.header p:last-child {
+  margin: 0;
+  color: #aaa394;
+}
+
+.section + .section {
+  margin-top: 30px;
+}
+
+.section h2 {
+  margin: 0 0 10px;
+  color: #fff7e6;
+  font-size: 18px;
+  letter-spacing: -0.015em;
+  line-height: 1.35;
+}
+
+.section p {
+  margin: 0;
+}
+
+.section p + p {
+  margin-top: 12px;
+}
+
+.section ul {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 0;
+  padding-left: 22px;
+}
+
+.section li::marker {
+  color: #d9a932;
+}
+
+.compact {
+  font-size: 13px;
+  line-height: 1.62;
+}
+
+.compact .section + .section {
+  margin-top: 24px;
+}
+
+.compact .section h2 {
+  font-size: 15px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .document {
+    scroll-behavior: auto;
+  }
+}

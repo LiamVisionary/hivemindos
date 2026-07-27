@@ -1,0 +1,7 @@
+name: swarm-sovereign-gateway
+version: "1.0.0"
+description: "Routes healthy Swarm turns within three seconds or uses Luna, inside a read-only web boundary."
+author: "HivemindOS"
+hooks:
+  - pre_gateway_dispatch
+  - pre_tool_call

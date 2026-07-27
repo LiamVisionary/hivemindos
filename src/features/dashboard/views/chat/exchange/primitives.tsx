@@ -7,7 +7,7 @@ export const FR_CHAT_STATE: Record<string, { dot: string; text: string; label: s
   ready: { dot: "var(--fg-3)", text: "var(--fg-3)", label: "ready" },
   scheduled: { dot: "var(--honey)", text: "var(--honey)", label: "scheduled" },
   setup: { dot: "var(--honey)", text: "var(--honey)", label: "setup" },
-  failed: { dot: "var(--danger)", text: "var(--danger)", label: "blocked" },
+  failed: { dot: "var(--danger)", text: "var(--danger)", label: "status check failed" },
 };
 
 export const FR_COL_TONE: Record<string, { c: string; bg: string; br: string }> = {
@@ -39,6 +39,30 @@ export function HiveMark({ size = 22, stroke = "var(--honey)", fill = "none", do
       <polygon points={points} fill={fill} stroke={stroke} strokeWidth={strokeWidth} strokeLinejoin="round" />
       {dot ? <circle cx="12" cy="12" r="2.1" fill={stroke} /> : null}
     </svg>
+  );
+}
+
+export function HistorySkeleton() {
+  return (
+    <div className="fr-chat-skeleton" role="status" aria-label="Loading chat history">
+      <div className="fr-chat-skeleton-group is-user">
+        <span className="fr-chat-skeleton-bubble" style={{ width: "46%", height: 42 }} />
+      </div>
+      <div className="fr-chat-skeleton-group">
+        <span className="fr-chat-skeleton-name" />
+        <span className="fr-chat-skeleton-line" style={{ width: "88%" }} />
+        <span className="fr-chat-skeleton-line" style={{ width: "72%" }} />
+        <span className="fr-chat-skeleton-line" style={{ width: "55%" }} />
+      </div>
+      <div className="fr-chat-skeleton-group is-user">
+        <span className="fr-chat-skeleton-bubble" style={{ width: "34%", height: 40 }} />
+      </div>
+      <div className="fr-chat-skeleton-group">
+        <span className="fr-chat-skeleton-name" />
+        <span className="fr-chat-skeleton-line" style={{ width: "80%" }} />
+        <span className="fr-chat-skeleton-line" style={{ width: "62%" }} />
+      </div>
+    </div>
   );
 }
 

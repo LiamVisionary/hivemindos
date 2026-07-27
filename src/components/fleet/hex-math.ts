@@ -7,8 +7,12 @@ export const HEX_W = 62 * FLEET_GRAPH_CELL_SCALE;
 export const HEX_H = (HEX_W * 2) / Math.sqrt(3);   // pointy-top bbox height
 export const Y_STEP = (HEX_W * Math.sqrt(3)) / 2;  // diagonal neighbor y offset
 
+export function axialToPixelWithStep(q: number, r: number, step = HEX_W) {
+  return { x: step * (q + r / 2), y: (step * Math.sqrt(3) / 2) * r };
+}
+
 export function axialToPixel(q: number, r: number) {
-  return { x: HEX_W * (q + r / 2), y: Y_STEP * r };
+  return axialToPixelWithStep(q, r);
 }
 
 // Pointy-top neighbor offsets in axial coords, clockwise starting from E.

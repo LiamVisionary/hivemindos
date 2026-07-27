@@ -1,10 +1,73 @@
-/* eslint-disable */
-// @ts-nocheck
+/* eslint-disable react-hooks/set-state-in-effect, react-hooks/refs, react-hooks/exhaustive-deps, @next/next/no-img-element, @typescript-eslint/no-unused-vars, @typescript-eslint/no-unused-expressions --
+   Pre-existing drop-in patterns (prop->state sync effects, render-time runtime-data application,
+   unused destructured aliases) preserved verbatim during the @ts-nocheck removal typing pass. */
 "use client";
 import React from "react";
 import "./wallets.css";
 import * as D from "./wallet-data";
-import { WalletRewardsActions } from "./WalletRewardsActions";
+import type { DropInWallet, WalletBankrInfo, WalletHolding, WalletRail, WalletRailId, WalletRuntimeData, WalletTokenMeta } from "./wallet-data";
+import { chainBadgeSrc, personalWalletSpendAccountForAsset, personalWalletTransferTargets, txExplorerName, txExplorerUrl, type GroupedPersonalWallet, type PersonalWalletAccount } from "@/lib/utils/personal-wallet-grouping";
+import { PERSONAL_WALLET_ADDABLE_CHAINS } from "@/lib/config/personal-wallet-chains";
+import { ClawBankStatusCard } from "./ClawBankStatusCard";
+import { CreateImportWalletModal } from "./CreateImportWalletModal";
+import { WalletRewardsActions, type WalletRewardsActionsSlice } from "./WalletRewardsActions";
+import { WalletSecretExportSheet } from "./WalletSecretExportSheet";
+import { HoneyContributionCard, type HoneyContributionActions } from "./HoneyContributionCard";
+import { formatDisplayCurrencyFromUsd } from "@/lib/services/display-currency";
+import { useDisplayCurrency } from "@/lib/services/use-display-currency";
+import { useWalletTokenUsdPrice } from "@/lib/services/wallet/use-wallet-token-usd-price";
+
+type WalletSendResult = {
+  ok?: boolean;
+  error?: string;
+  signature?: string;
+  assetSymbol?: string;
+  transfer?: { transactionHash?: string };
+  shield?: { transactionHash?: string };
+  gasAssist?: { signature: string; amountEth: number; sponsorAgentId: string };
+  balanceSyncPending?: boolean;
+  status?: string;
+};
+
+type WalletFundResult = WalletSendResult & { recipientBalanceUsd?: number };
+
+type WalletSecretExportResultLike = {
+  ok?: boolean;
+  error?: string;
+  exportedCount?: number;
+  label?: string;
+  savedPath?: string;
+};
+
+type WalletModalActionInput = { wallet?: unknown; name?: string; chain?: string; secret?: string };
+
+export type WalletDropInActions = WalletRewardsActionsSlice & HoneyContributionActions & {
+  onToggleAgentSpend?: (agentId: string, enabled: boolean) => unknown;
+  onUpdateAgentWallet?: (agentId: string, patch: Record<string, unknown>) => unknown;
+  onCreateAgentWallet?: (agentId: string, network: string) => unknown;
+  onRefreshAgentWallet?: (agentId: string) => unknown;
+  onResetAgentRunway?: (agentId: string) => unknown;
+  onCopyAgentPrompt?: (agentId: string) => unknown;
+  onOpenLlmFundingSource?: (agentId: string) => unknown;
+  onExportAgentWallet?: (walletId: string, confirmation: string) => Promise<WalletSecretExportResultLike> | WalletSecretExportResultLike;
+  onExportPersonalWallet?: (walletId: string, confirmation: string) => Promise<WalletSecretExportResultLike> | WalletSecretExportResultLike;
+  onSendAgentPayment?: (input: { agentId: string; asset: string; amount: string; amountUsd?: number; toAddress: string; recipientAgentId?: string; confirmation: string }) => Promise<WalletSendResult | null | undefined>;
+  onSaveRailConfig?: (input: { rail: WalletRail; enabled: boolean; key: string; share: boolean }) => Promise<{ ok?: boolean; error?: string; rail?: Partial<WalletRail> } | null | undefined>;
+  onRefreshUsePod?: (agentId?: string) => unknown;
+  onSetUsePodRoutingMode?: (mode: string) => unknown;
+  onSaveUsePodRepair?: (value: string) => Promise<unknown>;
+  onFundAgent?: (input: { source?: GroupedPersonalWallet | null; agentId?: string; asset: string; amount: string; confirmation: string }) => Promise<WalletFundResult | null | undefined>;
+  onSendPersonalWallet?: (input: { source: GroupedPersonalWallet; sourceAccountId: string; recipient?: GroupedPersonalWallet; recipientAccount?: PersonalWalletAccount; recipientStartingBalance?: number; asset: string; amount: string; toAddress: string; confirmation: string }) => Promise<WalletSendResult | null | undefined>;
+  onRefreshPersonalWallet?: (source: GroupedPersonalWallet) => Promise<unknown> | unknown;
+  onRefreshBankrWallet?: () => Promise<unknown> | unknown;
+  onRenamePersonalWallet?: (input: { source: GroupedPersonalWallet; name: string }) => Promise<unknown>;
+  onAddWalletChain?: (input: { source: GroupedPersonalWallet; chain: string }) => Promise<unknown>;
+  onCreateWallet?: (input: WalletModalActionInput) => Promise<unknown>;
+  onImportWallet?: (input: WalletModalActionInput) => Promise<unknown>;
+  onOpenRailDocs?: (rail: { baseUrl?: string }) => unknown;
+  onToggleHoneyLedger?: (enabled: boolean) => unknown;
+  onMessageHive?: (text: string) => unknown;
+};
 const {
   FR_CCY, FR_MACHINES, frFmtAmount, frFmtUsd, frFmtUsdFull, frFmtChange, frTopBalances,
   frStateMeta, frFleetSummary, frMachineState,
@@ -13,10 +76,34 @@ const {
   FR_MY_WALLETS, FR_WALLET_META,
   frWallets, frRunway, frWalletSummary, frTokenRollup, frRailCfg, frRailReady, frAgentRail,
   frRailAgents, frNetworkLabel, frShortAddr, frBarColor, frModelFor, frUsage,
-  frHoneySummary, frHoneyByAgent, frMyWalletsTotal, frMyRanked,
+  frHoneySummary, frHoneyByAgent, frMyWalletsTotal, frMyRanked, frBankrWallet,
 } = D;
-function BIcon({ name, color = "currentColor", size = 16, sw = 1.7 }) {
-  const c = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: sw, strokeLinecap: "round", strokeLinejoin: "round" };
+
+const STABLE_SEND_SYMBOLS = new Set(["USDC", "USDG"]);
+
+function stableSendSymbolForNetwork(network: string): "USDC" | "USDG" {
+  return String(network || "").toLowerCase().includes("4663") ? "USDG" : "USDC";
+}
+
+function stableWalletHoldings(holdings: WalletHolding[]): WalletHolding[] {
+  return holdings.filter((holding) => STABLE_SEND_SYMBOLS.has(String(holding.sym || "").toUpperCase()));
+}
+
+function transferableWalletHoldings(wallet: GroupedPersonalWallet | null | undefined, holdings: WalletHolding[]): WalletHolding[] {
+  const transferableSymbols = new Set((wallet?.accounts || [])
+    .filter((account) => account.custodyMode === "local")
+    .flatMap((account) => account.assets || [])
+    .filter((asset) => asset.balance > 0)
+    .map((asset) => asset.symbol));
+  return holdings.filter((holding) => transferableSymbols.has(String(holding.sym || "").toUpperCase()));
+}
+
+function sendAssetUsdPrice(symbol: string): number {
+  return STABLE_SEND_SYMBOLS.has(symbol) ? 1 : ((FR_CCY[symbol] || {}).price || 0);
+}
+
+function BIcon({ name, color = "currentColor", size = 16, sw = 1.7 }: { name: string; color?: string; size?: number; sw?: number }) {
+  const c: React.SVGProps<SVGSVGElement> = { width: size, height: size, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: sw, strokeLinecap: "round", strokeLinejoin: "round" };
   switch (name) {
     case "brain": return (<svg {...c}><path d="M9 4a2.5 2.5 0 0 0-2.5 2.5A2.5 2.5 0 0 0 5 11c0 1 .5 1.8 1.2 2.3A2.6 2.6 0 0 0 7 18c.8.6 2 .6 2.5-.2V4z" /><path d="M15 4a2.5 2.5 0 0 1 2.5 2.5A2.5 2.5 0 0 1 19 11c0 1-.5 1.8-1.2 2.3A2.6 2.6 0 0 1 17 18c-.8.6-2 .6-2.5-.2V4z" /></svg>);
     case "search": return (<svg {...c}><circle cx="11" cy="11" r="7" /><path d="m20 20-3.2-3.2" /></svg>);
@@ -34,6 +121,8 @@ function BIcon({ name, color = "currentColor", size = 16, sw = 1.7 }) {
     case "download": return (<svg {...c}><path d="M12 3v12M8 11l4 4 4-4M5 21h14" /></svg>);
     case "plug": return (<svg {...c}><path d="M9 3v6M15 3v6M7 9h10v3a5 5 0 0 1-10 0zM12 17v4" /></svg>);
     case "check": return (<svg {...c}><path d="M20 6 9 17l-5-5" /></svg>);
+    case "x": return (<svg {...c}><path d="M18 6 6 18M6 6l12 12" /></svg>);
+    case "pencil": return (<svg {...c}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>);
     case "plus": return (<svg {...c}><path d="M12 5v14M5 12h14" /></svg>);
     case "shield": return (<svg {...c}><path d="M12 3l7 4v5c0 4.2-2.9 7.4-7 9-4.1-1.6-7-4.8-7-9V7z" /><path d="M9 12l2 2 4-4" /></svg>);
     case "warn": return (<svg {...c}><path d="M12 3 2 20h20z" /><path d="M12 10v4M12 17h.01" /></svg>);
@@ -47,12 +136,13 @@ function BIcon({ name, color = "currentColor", size = 16, sw = 1.7 }) {
     case "promote": return (<svg {...c}><path d="M12 19V7M7 11l5-4 5 4M5 21h14" /></svg>);
     case "bot": return (<svg {...c}><rect x="5" y="8" width="14" height="11" rx="2.4" /><path d="M12 8V4M9 13h.01M15 13h.01M9 16h6" /></svg>);
     case "hex": return (<svg {...c}><path d="M12 3l7.5 4.5v9L12 21l-7.5-4.5v-9z" /></svg>);
+    case "chevron-down": return (<svg {...c}><path d="m6 9 6 6 6-6" /></svg>);
     default: return null;
   }
 }
-function TokenIcon({ sym, size = 30 }) {
-  const m = FR_CCY[sym] || {};
-  const base = { width: size, height: size, borderRadius: "50%", display: "grid", placeItems: "center", flex: "0 0 auto", overflow: "hidden" };
+function TokenIcon({ sym, size = 30 }: { sym: string; size?: number }) {
+  const m: WalletTokenMeta = FR_CCY[sym] || {};
+  const base: React.CSSProperties = { width: size, height: size, borderRadius: "50%", display: "grid", placeItems: "center", flex: "0 0 auto", overflow: "hidden" };
   if (m.img) {
     return <span style={{ ...base, background: m.color || "#0e1118" }}><img src={m.img} width={size} height={size} alt="" style={{ objectFit: "cover" }} /></span>;
   }
@@ -69,7 +159,7 @@ function TokenIcon({ sym, size = 30 }) {
   }
   return <span style={{ ...base, background: m.color || "#444" }}>{glyph}</span>;
 }
-function Dot({ state, size = 7 }) {
+function Dot({ state, size = 7 }: { state: string; size?: number }) {
   const meta = frStateMeta(state);
   return (
     <span
@@ -78,7 +168,7 @@ function Dot({ state, size = 7 }) {
     />
   );
 }
-function HiveMark({ size = 22, stroke = "var(--honey)", fill = "none", dot = true, strokeWidth = 1.4 }) {
+function HiveMark({ size = 22, stroke = "var(--honey)", fill = "none", dot = true, strokeWidth = 1.4 }: { size?: number; stroke?: string; fill?: string; dot?: boolean; strokeWidth?: number }) {
   const pts = "12,1.8 21.2,7 21.2,17 12,22.2 2.8,17 2.8,7";
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden style={{ display: "block" }}>
@@ -87,7 +177,7 @@ function HiveMark({ size = 22, stroke = "var(--honey)", fill = "none", dot = tru
     </svg>
   );
 }
-function Meter({ value, tone }) {
+function Meter({ value, tone }: { value: number; tone?: string }) {
   const color = value >= 85 ? "var(--danger)" : tone || "var(--fg-3)";
   return (
     <span className="fr-meter" style={{ display: "block", width: "100%" }}>
@@ -109,12 +199,26 @@ function MoonIcon() {
     </svg>
   );
 }
-function ChatPill({ placeholder, offsetX = 0, onSubmitMessage }) {
-  const ref = React.useRef(null);
-  const onSubmit = (e) => { e.preventDefault(); const text = ref.current ? ref.current.value.trim() : ""; if (text) onSubmitMessage && onSubmitMessage(text); if (ref.current) ref.current.value = ""; };
+function ChatPill({ placeholder, offsetX = 0, onSubmitMessage }: { placeholder?: string; offsetX?: number; onSubmitMessage?: (text: string) => unknown }) {
+  const ref = React.useRef<HTMLInputElement | null>(null);
+  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => { e.preventDefault(); const text = ref.current ? ref.current.value.trim() : ""; if (text) onSubmitMessage && onSubmitMessage(text); if (ref.current) ref.current.value = ""; };
+  const focusInput = () => {
+    const input = ref.current;
+    if (!input) return;
+    input.focus();
+    const end = input.value.length;
+    input.setSelectionRange(end, end);
+  };
+  const focusInputFromContainer = (event: React.PointerEvent<HTMLFormElement>) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (target.closest("button, input, textarea, select, a, [role='button']")) return;
+    event.preventDefault();
+    focusInput();
+  };
   return (
     <div className="fr-chat-wrap" style={offsetX ? { left: `calc(50% - ${offsetX}px)` } : undefined}>
-      <form className="fr-chat" onSubmit={onSubmit}>
+      <form className="fr-chat" onPointerDown={focusInputFromContainer} onSubmit={onSubmit}>
         <span className="fr-chat-orb"><span className="ring" /><span className="core" /></span>
         <span className="fr-chat-label">Message the hive</span>
         <span className="fr-chat-field">
@@ -134,8 +238,8 @@ function ChatPill({ placeholder, offsetX = 0, onSubmitMessage }) {
   );
 }
 const FR_SHELF_W = 72;
-function FrNavIcon({ id }) {
-  const p = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round" };
+function FrNavIcon({ id }: { id: string }) {
+  const p: React.SVGProps<SVGSVGElement> = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.7, strokeLinecap: "round", strokeLinejoin: "round" };
   switch (id) {
     case "kanban": return (<svg {...p}><rect x="3" y="4" width="5" height="16" rx="1.2" /><rect x="9.5" y="4" width="5" height="10" rx="1.2" /><rect x="16" y="4" width="5" height="13" rx="1.2" /></svg>);
     case "vault": return <BIcon name="brain" size={20} sw={1.7} />;
@@ -151,7 +255,7 @@ function FrNavIcon({ id }) {
     default: return null;
   }
 }
-function NavShelf({ active = "agents", onNavigate, theme, onToggleTheme }) {
+function NavShelf({ active = "agents", onNavigate, theme, onToggleTheme }: { active?: string; onNavigate?: (id: string) => void; theme?: string; onToggleTheme?: () => void }) {
   const groups = [
     [
       { id: "kanban", label: "Work" },
@@ -170,8 +274,8 @@ function NavShelf({ active = "agents", onNavigate, theme, onToggleTheme }) {
       { id: "maintenance", label: "Diagnostics" },
     ],
   ];
-  const go = (id) => { if (onNavigate) onNavigate(id); };
-  const Item = (it) => (
+  const go = (id: string) => { if (onNavigate) onNavigate(id); };
+  const Item = (it: { id: string; label: string }) => (
     <button key={it.id} type="button" className="fr-nav" data-active={active === it.id ? "" : undefined}
       data-bee-nav={it.id}
       onClick={() => go(it.id)} title={it.label}>
@@ -201,21 +305,21 @@ function NavShelf({ active = "agents", onNavigate, theme, onToggleTheme }) {
     </nav>
   );
 }
-function Badge({ tone, children }) { return <span className={"fb-badge" + (tone ? " " + tone : "")}>{children}</span>; }
-function BBtn({ variant = "ghost", sm, children, ...rest }) {
+function Badge({ tone, children }: { tone?: string; children?: React.ReactNode }) { return <span className={"fb-badge" + (tone ? " " + tone : "")}>{children}</span>; }
+function BBtn({ variant = "ghost", sm, children, ...rest }: { variant?: string; sm?: boolean } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return <button type="button" className={"fb-btn " + variant + (sm ? " sm" : "")} {...rest}>{children}</button>;
 }
-function Pill({ active, children, ...rest }) {
+function Pill({ active, children, ...rest }: { active?: boolean } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return <button type="button" data-active={active ? "" : undefined} {...rest}>{children}</button>;
 }
-function Toggle({ on, onChange }) {
+function Toggle({ on, onChange }: { on: boolean; onChange?: React.MouseEventHandler<HTMLSpanElement> }) {
   return (
     <span onClick={onChange} className="fb-switch" style={{ cursor: onChange ? "pointer" : "default", background: on ? "var(--honey)" : "var(--panel-hi)", border: "1px solid " + (on ? "var(--honey)" : "var(--line-2)") }}>
       <i style={{ left: on ? 17 : 2, background: on ? "#1a1305" : "var(--fg-3)" }} />
     </span>
   );
 }
-function Disclosure({ summary, defaultOpen, children }) {
+function Disclosure({ summary, defaultOpen, children }: { summary: React.ReactNode; defaultOpen?: boolean; children?: React.ReactNode }) {
   return (
     <details className="fb-disc" open={defaultOpen}>
       <summary>{summary}</summary>
@@ -223,7 +327,7 @@ function Disclosure({ summary, defaultOpen, children }) {
     </details>
   );
 }
-function Select({ label, value, options, onCommit, disabled }) {
+function Select({ label, value, options, onCommit, disabled }: { label: React.ReactNode; value?: string; options: string[]; onCommit?: (value: string) => void; disabled?: boolean }) {
   const [v, setV] = React.useState(value);
   return (
     <label className="fb-label">{label}
@@ -233,7 +337,7 @@ function Select({ label, value, options, onCommit, disabled }) {
     </label>
   );
 }
-function Field({ label, value, sub, mono, readOnly }) {
+function Field({ label, value, sub, mono, readOnly }: { label: React.ReactNode; value?: string; sub?: string; mono?: boolean; readOnly?: boolean }) {
   const [v, setV] = React.useState(value);
   return (
     <label className="fb-label">{label}
@@ -242,8 +346,8 @@ function Field({ label, value, sub, mono, readOnly }) {
     </label>
   );
 }
-function RunwayChip({ tone, children }) { return <span className="fw-chip" data-tone={tone}>{children}</span>; }
-function AllocBar({ holdings, total }) {
+function RunwayChip({ tone, children }: { tone?: string; children?: React.ReactNode }) { return <span className="fw-chip" data-tone={tone}>{children}</span>; }
+function AllocBar({ holdings, total }: { holdings: Array<{ sym: string; usd: number }>; total: number }) {
   if (!total) return <span className="fw-alloc" />;
   return (
     <span className="fw-alloc" aria-hidden>
@@ -253,8 +357,8 @@ function AllocBar({ holdings, total }) {
     </span>
   );
 }
-function TokenRow({ b }) {
-  const meta = FR_CCY[b.sym] || {};
+function TokenRow({ b }: { b: WalletHolding }) {
+  const meta: WalletTokenMeta = FR_CCY[b.sym] || {};
   const chg = frFmtChange(b.change);
   return (
     <div className="fw-trow">
@@ -270,7 +374,7 @@ function TokenRow({ b }) {
     </div>
   );
 }
-function PowerToggle({ on, onClick }) {
+function PowerToggle({ on, onClick }: { on: boolean; onClick?: () => void }) {
   return (
     <button type="button" className="fw-power" data-on={on ? "" : undefined} onClick={onClick}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v8M7.5 7a7 7 0 1 0 9 0" /></svg>
@@ -278,7 +382,7 @@ function PowerToggle({ on, onClick }) {
     </button>
   );
 }
-function WStat({ value, label, tone, live, sub }) {
+function WStat({ value, label, tone, live, sub }: { value: React.ReactNode; label: string; tone?: string; live?: boolean; sub?: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -290,14 +394,14 @@ function WStat({ value, label, tone, live, sub }) {
     </div>
   );
 }
-function RailConfigModal({ rail, onClose, actions }) {
+function RailConfigModal({ rail, onClose, actions }: { rail: WalletRail; onClose?: () => void; actions?: WalletDropInActions }) {
   const [enabled, setEnabled] = React.useState(rail.enabled);
   const [key, setKey] = React.useState("");
   const [share, setShare] = React.useState(false);
   const [state, setState] = React.useState("idle"); // idle | checking | saved
   const save = async () => { setState("checking"); try { if (!actions?.onSaveRailConfig) throw new Error("Rail setup is not available in this build."); const res = await actions.onSaveRailConfig({ rail, enabled, key, share }); if (res && res.ok === false) throw new Error(res.error || "Rail setup failed."); Object.assign(rail, res?.rail || { enabled, cred: key.trim() ? true : rail.cred }); setState("saved"); setTimeout(() => onClose && onClose(), 850); } catch (e) { setState(e instanceof Error ? e.message : "Rail setup failed."); } };
   React.useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose && onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose && onClose(); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
@@ -378,7 +482,7 @@ function RailConfigModal({ rail, onClose, actions }) {
     </div>
   );
 }
-function UsePodAdvanced({ w, actions } = {}) {
+function UsePodAdvanced({ w, actions }: { w?: DropInWallet; actions?: WalletDropInActions } = {}) {
   const [tab, setTab] = React.useState("status");
   const u = FR_USEPOD;
   const [repair, setRepair] = React.useState("");
@@ -386,7 +490,7 @@ function UsePodAdvanced({ w, actions } = {}) {
   const [routing, setRouting] = React.useState(u.routingMode || u.routing[0].label);
   const statusLabel = String(u.status || "unknown").replace(/-/g, " ");
   React.useEffect(() => setRouting(u.routingMode || u.routing[0].label), [u.routingMode]);
-  const tabs = [["status", "Status"], ["connect", "Connect"], ["routing", "Routing"], ["repair", "Repair"]];
+  const tabs: Array<[string, string]> = [["status", "Status"], ["connect", "Connect"], ["routing", "Routing"], ["repair", "Repair"]];
   const saveRepair = async () => { if (repair.trim().length < 12) { setRepairMsg("That doesn't look like a UsePod token."); return; } setRepairMsg("Saving…"); try { if (!actions?.onSaveUsePodRepair) throw new Error("UsePod repair is not available in this build."); await actions.onSaveUsePodRepair(repair); setRepairMsg("Token saved · rechecking UsePod status."); actions?.onRefreshUsePod?.(w?.id); } catch (e) { setRepairMsg(e instanceof Error ? e.message : "UsePod repair failed."); } };
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, paddingTop: 4 }}>
@@ -454,24 +558,63 @@ function UsePodAdvanced({ w, actions } = {}) {
     </div>
   );
 }
-function FundAgentModal({ source, onClose, actions }) {
+function FundAgentModal({ source, onClose, actions }: { source?: GroupedPersonalWallet | null; onClose?: () => void; actions?: WalletDropInActions }) {
   const agents = frWallets().filter((w) => !w.meta.setup);
-  const [sel, setSel] = React.useState(null);
-  const ranked = source ? frMyRanked(source) : { total: 0, top: [] };
+  const [sel, setSel] = React.useState<string | null>(null);
+  const ranked = source ? frMyRanked(source) : { total: 0, top: [] as WalletHolding[] };
   const [fundSymState, setFundSym] = React.useState("");
   const [amount, setAmount] = React.useState("");
-  const [confirm, setConfirm] = React.useState(""); const [msg, setMsg] = React.useState("");
-  const transferable = ranked.top.filter((b) => b.sym === "USDC");
+  const [fundState, setFundState] = React.useState("idle");
+  const [msg, setMsg] = React.useState("");
+  const [fundResult, setFundResult] = React.useState<WalletFundResult | null>(null);
+  const transferable = stableWalletHoldings(ranked.top);
   const fundSym = fundSymState || (transferable[0] ? transferable[0].sym : "USDC");
   const fundBal = transferable.find((b) => b.sym === fundSym);
+  const baseEthBalance = ranked.top.find((holding) => holding.sym === "ETH")?.amount ?? 0;
   const AssetSel = AssetSelect;
   React.useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose && onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose && onClose(); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
   const selected = agents.find((a) => a.id === sel);
-  const fundAmount = Number(amount), canSubmitFund = source?.canSpend !== false && Boolean(selected) && Boolean(fundBal) && Number.isFinite(fundAmount) && fundAmount > 0 && fundAmount <= fundBal.amount && confirm === "SEND_USDC";
+  const needsGasAssist = Boolean(
+    selected
+    && fundSym === "USDC"
+    && source?.accounts.some((account) => account.network === "eip155:8453")
+    && baseEthBalance < 0.00001,
+  );
+  const fundAmount = Number(amount);
+  const funding = fundState === "funding";
+  const funded = fundState === "funded";
+  const locked = funding || funded;
+  const recipientBalanceUsd = Number(fundResult?.recipientBalanceUsd);
+  const recipientBalanceText = Number.isFinite(recipientBalanceUsd) ? frFmtUsdFull(recipientBalanceUsd) : "";
+  const successDetail = recipientBalanceText
+    ? `${selected?.name || "Agent"} now has ${recipientBalanceText}.`
+    : "Refresh the wallet balance to verify the new total.";
+  const fundExplorerNetwork = selected?.meta?.network || "eip155:8453";
+  const fundExplorerUrl = fundResult?.signature ? txExplorerUrl(fundExplorerNetwork, fundResult.signature) : "";
+  // `!!` (identical to the previous Boolean() call) so TS narrows fundBal for the cap check.
+  const canSubmitFund = !locked && source?.canSpend !== false && Boolean(selected) && !!fundBal && Number.isFinite(fundAmount) && fundAmount > 0 && fundAmount <= fundBal.amount;
+  const resetFundState = () => { setFundState("idle"); setMsg(""); setFundResult(null); };
+  const submitFund = async (event?: React.MouseEvent<HTMLButtonElement>) => {
+    event?.preventDefault();
+    if (funding) return;
+    if (funded) { onClose && onClose(); return; }
+    if (!canSubmitFund) return;
+    setFundState("funding");
+    setMsg("");
+    try {
+      if (!actions?.onFundAgent) throw new Error("Agent funding is not available in this build.");
+      const result = await actions.onFundAgent({ source, agentId: selected?.id, asset: fundSym, amount, confirmation: "SEND_USDC" });
+      setFundResult(result || null);
+      setFundState("funded");
+    } catch (e) {
+      setFundState("idle");
+      setMsg(e instanceof Error ? e.message : "Funding failed.");
+    }
+  };
   return (
     <div className="fw-modal-back" onMouseDown={onClose}>
       <section className="fw-modal" role="dialog" aria-modal="true" aria-label="Fund an agent" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
@@ -485,12 +628,12 @@ function FundAgentModal({ source, onClose, actions }) {
           </div>
           <button type="button" className="fw-x" onClick={onClose} aria-label="Close" style={{ transform: "rotate(45deg)" }}><BIcon name="plus" size={14} sw={2} /></button>
         </div>
-        <p className="fw-sheet-help">{fundBal ? frFmtAmount(fundSym, fundBal.amount) + " " + fundSym + " available." : "No USDC balance is available from this wallet."} Choose an agent to top up.</p>
+        <p className="fw-sheet-help">{fundBal ? frFmtAmount(fundSym, fundBal.amount) + " " + fundSym + " available." : "No transferable stablecoin balance is available from this wallet."} Choose an agent to top up.</p>
         <div className="fw-fundgrid">
           {agents.map((a) => {
             const rw = frRunway(a);
             return (
-              <button key={a.id} type="button" className="fw-fundcard" data-sel={sel === a.id ? "" : undefined} onClick={() => setSel(a.id)}>
+              <button key={a.id} type="button" className="fw-fundcard" data-sel={sel === a.id ? "" : undefined} aria-disabled={locked ? "true" : undefined} onClick={() => { if (locked) return; setSel(a.id); resetFundState(); }}>
                 <div className="row">
                   <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
                     <Dot state={a.state} />
@@ -508,59 +651,151 @@ function FundAgentModal({ source, onClose, actions }) {
           })}
         </div>
         <div className="fw-fundfoot">
-          {AssetSel ? <div style={{ width: 116, flex: "0 0 auto" }}><AssetSel holdings={transferable} value={fundSym} onChange={setFundSym} /></div> : null}
-          <input className="fb-field fb-mono" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder={selected ? "Amount " + fundSym : "Select an agent first"} disabled={!selected || !fundBal} style={{ flex: 1 }} />
-          <input className="fb-field fb-mono" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="SEND_USDC" disabled={!selected || !fundBal} style={{ flex: 1 }} />
-          <button type="button" className="fw-save" style={{ width: "auto", padding: "11px 16px" }} disabled={!canSubmitFund} onClick={async () => { setMsg("Funding…"); try { if (!actions?.onFundAgent) throw new Error("Agent funding is not available in this build."); await actions.onFundAgent({ source, agentId: selected?.id, asset: fundSym, amount, confirmation: confirm }); setMsg("Funded."); setTimeout(() => onClose && onClose(), 850); } catch (e) { setMsg(e instanceof Error ? e.message : "Funding failed."); } }}>
-            <BIcon name="promote" size={15} color="#1a1305" /> {selected ? "Fund " + selected.name : "Fund agent"}
+          {AssetSel ? <div style={{ width: 116, flex: "0 0 auto" }}><AssetSel holdings={transferable} value={fundSym} disabled={locked} onChange={(value) => { setFundSym(value); resetFundState(); }} /></div> : null}
+          <input className="fb-field fb-mono" value={amount} onChange={(e) => { setAmount(e.target.value); resetFundState(); }} placeholder={selected ? "Amount " + fundSym : "Select an agent first"} disabled={!selected || !fundBal || locked} style={{ flex: 1 }} />
+          <button type="button" className="fw-save" data-state={fundState} aria-disabled={locked ? "true" : undefined} style={{ width: "auto", padding: "11px 16px" }} disabled={!canSubmitFund && !locked} onClick={submitFund}>
+            {funding ? <span className="fw-loader"><i /><i /><i /></span> : funded ? <BIcon name="check" size={15} color="currentColor" /> : <BIcon name="promote" size={15} color="#1a1305" />}
+            {funding ? "Funding..." : funded ? "Done" : selected ? "Fund " + selected.name : "Fund agent"}
           </button>
         </div>
+        {needsGasAssist ? <p className="fw-sheet-help">This wallet is short on Base gas. {selected?.name} will first cover only the missing gas reserve, up to 0.00001 ETH, then receive the USDC.</p> : null}
+        {funded ? <div className="fw-fundsuccess"><span className="mark"><BIcon name="check" size={17} /></span><div><strong>{frFmtAmount(fundSym, fundAmount)} {fundSym} sent to {selected?.name || "agent"}</strong><small>{fundResult?.signature ? "Transaction " + frShortAddr(fundResult.signature) + " confirmed. " + successDetail : successDetail}</small>{fundExplorerUrl ? <a className="fw-txlink" href={fundExplorerUrl} target="_blank" rel="noreferrer">View on {txExplorerName(fundExplorerNetwork)} ↗</a> : null}</div></div> : null}
         {msg ? <p className="fw-sheet-help">{msg}</p> : null}
       </section>
     </div>
   );
 }
-function ImportWalletModal({ wallet, onClose, actions }) {
-  const reimport = !!wallet;
-  const [name, setName] = React.useState(reimport ? wallet.name : "");
-  const [chain, setChain] = React.useState(reimport ? (wallet.addresses && wallet.addresses[0] ? wallet.addresses[0][0] : "Base") : "Base");
-  const [secret, setSecret] = React.useState("");
-  const [state, setState] = React.useState("idle");
-  const save = async () => { setState("checking"); try { if (!actions?.onImportWallet) throw new Error("Wallet import is not available in this build."); await actions.onImportWallet({ wallet, name, chain, secret }); setState("saved"); setTimeout(() => onClose && onClose(), 850); } catch (e) { setState(e instanceof Error ? e.message : "Import failed"); } };
+function SendToMyWalletModal({ source, onClose, actions }: { source: GroupedPersonalWallet; onClose?: () => void; actions?: WalletDropInActions }) {
+  const { currency: displayCurrency, fxRates: displayCurrencyRates, ready: displayCurrencyReady } = useDisplayCurrency();
+  const ranked = frMyRanked(source);
+  const [sendSymState, setSendSym] = React.useState("");
+  const [targetKey, setTargetKey] = React.useState("");
+  const [amount, setAmount] = React.useState("");
+  const [sendState, setSendState] = React.useState("idle");
+  const [msg, setMsg] = React.useState("");
+  const [sendResult, setSendResult] = React.useState<WalletSendResult | null>(null);
+  const transferable = transferableWalletHoldings(source, ranked.top);
+  const sendSym = sendSymState || (transferable[0] ? transferable[0].sym : "USDC");
+  const { sourceAccount, targets } = personalWalletTransferTargets(source, sendSym, FR_MY_WALLETS);
+  const sourceAsset = sourceAccount?.assets.find((asset) => asset.symbol === sendSym);
+  const aggregateHolding = transferable.find((holding) => holding.sym === sendSym);
+  const sendBal = sourceAsset && aggregateHolding ? { ...aggregateHolding, amount: sourceAsset.balance } : undefined;
+  const targetKeys = targets.map((target) => target.key).join("|");
+  const selected = targets.find((target) => target.key === targetKey) || targets[0] || null;
+  const sendAmount = Number(amount);
+  const { priceUsd: resolvedPriceUsd, loading: priceLoading } = useWalletTokenUsdPrice(sendSym, sourceAsset?.priceUsd);
+  const fiatEstimate = displayCurrencyReady && Number.isFinite(sendAmount) && sendAmount > 0 && typeof resolvedPriceUsd === "number" && resolvedPriceUsd > 0
+    ? formatDisplayCurrencyFromUsd(sendAmount * resolvedPriceUsd, displayCurrency, displayCurrencyRates)
+    : "";
+  const sending = sendState === "sending";
+  const sent = sendState === "sent";
+  const locked = sending || sent;
+  const canSubmit = !locked
+    && source.canSpend !== false
+    && Boolean(selected)
+    && !!sendBal
+    && Number.isFinite(sendAmount)
+    && sendAmount > 0
+    && sendAmount <= sendBal.amount;
   React.useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose && onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose && onClose(); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
+  React.useEffect(() => {
+    if (!targets.length) {
+      if (targetKey) setTargetKey("");
+      return;
+    }
+    if (!targets.some((target) => target.key === targetKey)) setTargetKey(targets[0].key);
+  }, [targetKey, targetKeys, targets]);
+  const resetSendState = () => { setSendState("idle"); setMsg(""); setSendResult(null); };
+  const submitSend = async (event?: React.MouseEvent<HTMLButtonElement>) => {
+    event?.preventDefault();
+    if (sending) return;
+    if (sent) { onClose && onClose(); return; }
+    if (!canSubmit || !selected) return;
+    setSendState("sending");
+    setMsg("");
+    try {
+      if (!actions?.onSendPersonalWallet) throw new Error("Personal wallet send is not available in this build.");
+      if (!sourceAccount) throw new Error(`No local ${sendSym} wallet is available to send from.`);
+      const result = await actions.onSendPersonalWallet({
+        source,
+        sourceAccountId: sourceAccount.id,
+        recipient: selected.wallet,
+        recipientAccount: selected.account,
+        recipientStartingBalance: selected.account.assets.find((asset) => asset.symbol === sendSym)?.balance ?? 0,
+        asset: sendSym,
+        amount,
+        toAddress: selected.account.address,
+        confirmation: "SEND_TOKEN",
+      });
+      setSendResult(result || null);
+      setSendState("sent");
+    } catch (e) {
+      setSendState("idle");
+      setMsg(e instanceof Error ? e.message : "Send failed.");
+    }
+  };
+  const successDetail = sendResult?.signature
+    ? sendResult.balanceSyncPending
+      ? `Transaction ${frShortAddr(sendResult.signature)} confirmed. Balance refresh is still syncing; reload will retry it.`
+      : `Transaction ${frShortAddr(sendResult.signature)} confirmed and balances refreshed.`
+    : "Refresh balances to verify the new totals.";
+  const sendExplorerNetwork = sourceAccount?.network || "eip155:8453";
+  const sendExplorerUrl = sendResult?.signature ? txExplorerUrl(sendExplorerNetwork, sendResult.signature) : "";
   return (
     <div className="fw-modal-back" onMouseDown={onClose}>
-      <section className="fw-modal" role="dialog" aria-modal="true" aria-label="Import wallet" onMouseDown={(e) => e.stopPropagation()}>
+      <section className="fw-modal" role="dialog" aria-modal="true" aria-label="Send to my wallet" onMouseDown={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
         <div className="fw-modal-head">
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span className="fb-tile" style={{ color: "var(--honey)" }}><BIcon name={reimport ? "refresh" : "plus"} size={19} /></span>
+            <span className="fb-tile" style={{ color: "var(--honey)" }}><BIcon name="shield" size={19} /></span>
             <div>
-              <span className="fb-eyebrow">{reimport ? "Reimport wallet" : "Add a wallet"}</span>
-              <h3>{reimport ? wallet.name : "Import wallet"}</h3>
+              <span className="fb-eyebrow">Send to my wallet</span>
+              <h3>From {source.name}</h3>
             </div>
           </div>
           <button type="button" className="fw-x" onClick={onClose} aria-label="Close" style={{ transform: "rotate(45deg)" }}><BIcon name="plus" size={14} sw={2} /></button>
         </div>
-        <p className="fw-sheet-help">{reimport ? "Re-derive this wallet's addresses from its seed or key — balances and holdings refresh on import." : "Import an existing wallet by seed phrase or private key. Addresses are derived for every supported chain."}</p>
-        {!reimport ? <label className="fb-label">Wallet name<input className="fb-field" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Ops Treasury" /></label> : null}
-        <label className="fb-label">Primary chain
-          <select className="fb-select" value={chain} onChange={(e) => setChain(e.target.value)}>
-            {["Base", "Ethereum", "Arbitrum", "Solana"].map((c) => <option key={c}>{c}</option>)}
-          </select>
-        </label>
-        <label className="fb-label">Seed phrase or private key
-          <input className="fb-field fb-mono fw-secret" type="password" value={secret} onChange={(e) => { setSecret(e.target.value); if (state === "saved") setState("idle"); }} placeholder="•••• •••• •••• ••••" />
-        </label>
-        <button type="button" className="fw-save" data-state={state} disabled={state === "checking" || (!reimport && !name.trim()) || !secret.trim()} onClick={save}>
-          {state === "saved" ? <BIcon name="check" size={15} color="#06231d" /> : null}
-          {state === "checking" ? "Deriving addresses…" : state === "saved" ? "Imported" : reimport ? "Reimport" : "Import wallet"}
-        </button>
-        {state !== "idle" && state !== "checking" && state !== "saved" ? <p className="fw-sheet-help" style={{ color: "var(--danger)" }}>{state}</p> : null}
-        <div className="fw-term"><strong>Keys never leave this device</strong><code>Stored in the OS keychain · re-derived on demand</code></div>
+        <p className="fw-sheet-help">{sendBal ? frFmtAmount(sendSym, sendBal.amount) + " " + sendSym + " available." : "No transferable token balance is available from this wallet."} {sourceAccount ? `Choose one of your ${sourceAccount.networkLabel} wallets.` : "Refresh or reimport this wallet before sending."}</p>
+        <div className="fw-fundgrid">
+          {targets.length ? targets.map((target) => (
+            <button key={target.key} type="button" className="fw-fundcard" data-sel={selected?.key === target.key ? "" : undefined} aria-disabled={locked ? "true" : undefined} onClick={() => { if (locked) return; setTargetKey(target.key); resetSendState(); }}>
+              <div className="row">
+                <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                  <WalletChainBadges w={target.wallet} />
+                  <b>{target.wallet.name}</b>
+                </span>
+                {selected?.key === target.key ? <span className="check"><BIcon name="check" size={13} /></span> : null}
+              </div>
+              <span className="mn">{target.account.networkLabel} · {frShortAddr(target.account.address)}</span>
+              <div className="row">
+                <b className="bal">{frFmtUsdFull(target.account.currentBalanceUsd)}</b>
+                <span className="fw-chip">{target.account.custodyMode === "local" ? "Local" : "Watch"}</span>
+              </div>
+            </button>
+          )) : <p className="fw-sheet-help">No other personal wallet is available on the same network for this asset.</p>}
+        </div>
+        <div className="fw-fundfoot fw-sendfoot">
+          <div style={{ width: 116, flex: "0 0 auto" }}><AssetSelect holdings={transferable} value={sendSym} disabled={locked || !transferable.length} onChange={(value) => { setSendSym(value); resetSendState(); }} /></div>
+          <div className="fw-amount-entry">
+            <input className="fb-field fb-mono" value={amount} onChange={(e) => { setAmount(e.target.value); resetSendState(); }} placeholder={selected ? "Amount " + sendSym : "Select a wallet first"} disabled={!selected || !sendBal || locked} />
+            <span className="fw-amount-fiat" aria-live="polite">
+              {amount && (!displayCurrencyReady || priceLoading)
+                ? <><span className="fw-loader" aria-hidden="true"><i /><i /><i /></span> Converting…</>
+                : fiatEstimate
+                  ? <>≈ {fiatEstimate} {displayCurrency}</>
+                  : amount && sourceAsset ? `Current ${sendSym} price unavailable` : "\u00a0"}
+            </span>
+          </div>
+          <button type="button" className="fw-save" data-state={sendState} aria-label={selected ? `Send ${sendSym} to ${selected.wallet.name}` : "Send"} aria-disabled={locked ? "true" : undefined} style={{ width: "auto" }} disabled={!canSubmit && !locked} onClick={submitSend}>
+            {sending ? <span className="fw-loader"><i /><i /><i /></span> : sent ? <BIcon name="check" size={15} color="currentColor" /> : <BIcon name="promote" size={15} color="#1a1305" />}
+            {sending ? "Sending..." : sent ? "Done" : "Send"}
+          </button>
+        </div>
+        {sent ? <div className="fw-fundsuccess"><span className="mark"><BIcon name="check" size={17} /></span><div><strong>{frFmtAmount(sendSym, sendAmount)} {sendSym} sent to {selected?.wallet.name || "wallet"}</strong><small>{successDetail}</small>{sendExplorerUrl ? <a className="fw-txlink" href={sendExplorerUrl} target="_blank" rel="noreferrer">View on {txExplorerName(sendExplorerNetwork)} ↗</a> : null}</div></div> : null}
+        {msg ? <p className="fw-sheet-help">{msg}</p> : null}
       </section>
     </div>
   );
@@ -572,14 +807,14 @@ const FW_FILTERS = [
   { id: "off",   label: "Off" },
 ];
 const FW_DENSITY_KEY = "fr-wallet-density";
-function frMatchesFilter(w, f) {
+function frMatchesFilter(w: DropInWallet, f: string) {
   if (f === "on")   return w.meta.enabled && !w.meta.setup;
   if (f === "off")  return !w.meta.enabled && !w.meta.setup;
   if (f === "tend") return w.meta.setup || w.state === "failed" || w.meta.alert || (w.runway != null && w.runway < 3);
   return true;
 }
 function frRailSub() { return ""; }
-function CompactCard({ w, enabled, onOpen }) {
+function CompactCard({ w, enabled, onOpen }: { w: DropInWallet; enabled: boolean; onOpen?: () => void }) {
   const rw = frRunway({ ...w, meta: { ...w.meta, enabled } });
   const cfg = frRailCfg(w.railId);
   const railReady = frRailReady(w.railId);
@@ -614,14 +849,14 @@ function CompactCard({ w, enabled, onOpen }) {
     </button>
   );
 }
-function SheetTitle({ children, onClose }) {
+function SheetTitle({ children, onClose }: { children?: React.ReactNode; onClose?: () => void }) {
   return (
     <div className="fw-sheet-title">{children}
       <button type="button" className="fw-x" onClick={onClose} aria-label="Close" style={{ transform: "rotate(45deg)" }}><BIcon name="plus" size={14} sw={2} /></button>
     </div>
   );
 }
-function NumField({ label, value, onCommit, readOnly }) {
+function NumField({ label, value, onCommit, readOnly }: { label: string; value: string; onCommit?: (value: string) => void; readOnly?: boolean }) {
   const [v, setV] = React.useState(value);
   React.useEffect(() => setV(value), [value]);
   const commit = () => { if (!readOnly && onCommit) onCommit(v); };
@@ -631,18 +866,20 @@ function NumField({ label, value, onCommit, readOnly }) {
     </label>
   );
 }
-function AssetSelect({ holdings, value, onChange }) {
+function AssetSelect({ holdings, value, disabled = false, onChange }: { holdings: Array<{ sym: string; amount: number }>; value: string; disabled?: boolean; onChange: (sym: string) => void }) {
   const [open, setOpen] = React.useState(false);
-  const ref = React.useRef(null);
+  const ref = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
   React.useEffect(() => {
     if (!open) return;
-    const away = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    // e.target as Node: DOM boundary; contains() takes Node while listeners get EventTarget.
+    const away = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
     document.addEventListener("mousedown", away);
     return () => document.removeEventListener("mousedown", away);
   }, [open]);
   return (
     <div className="fw-asset" ref={ref}>
-      <button type="button" className="fb-select fw-asset-btn fb-mono" onClick={() => setOpen((o) => !o)}>{value}</button>
+      <button type="button" className="fb-select fw-asset-btn fb-mono" disabled={disabled} onClick={() => setOpen((o) => !o)}>{value}</button>
       {open ? (
         <div className="fw-asset-menu">
           {holdings.map((b) => (
@@ -655,8 +892,8 @@ function AssetSelect({ holdings, value, onChange }) {
     </div>
   );
 }
-function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure, actions }) {
-  const [sheet, setSheet] = React.useState(null);
+function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure, actions }: { w: DropInWallet; enabled: boolean; setEnabled: React.Dispatch<React.SetStateAction<boolean>>; compact?: boolean; onCollapse?: () => void; onConfigure?: (railId: WalletRailId) => void; actions?: WalletDropInActions }) {
+  const [sheet, setSheet] = React.useState<string | null>(null);
   const [auto, setAuto] = React.useState(!!w.meta.autoUse);
   const [copied, setCopied] = React.useState(false);
   const [dup, setDup] = React.useState(!!w.policy.dupGuard);
@@ -664,7 +901,7 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
   const [sendSymState, setSendSym] = React.useState("");
   const [recipMode, setRecipMode] = React.useState("agent");
   const [recipAgent, setRecipAgent] = React.useState("");
-  const [sendAmt, setSendAmt] = React.useState(""); const [sendTo, setSendTo] = React.useState(""); const [sendConfirm, setSendConfirm] = React.useState(""); const [sendMsg, setSendMsg] = React.useState("");
+  const [sendAmt, setSendAmt] = React.useState(""); const [sendTo, setSendTo] = React.useState(""); const [sendConfirm, setSendConfirm] = React.useState(""); const [sendMsg, setSendMsg] = React.useState(""); const [sendTx, setSendTx] = React.useState<{ url: string; name: string } | null>(null);
   const promptSeed = w.meta.notes || ("Spend only on " + w.role.toLowerCase() + " work. Prefer the cheapest route under caps.");
   const [promptText, setPromptText] = React.useState(promptSeed);
   React.useEffect(() => setPromptText(promptSeed), [w.id, promptSeed]);
@@ -677,8 +914,9 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
   const railReady = frRailReady(w.railId);
   const cardTone = rw.tone === "danger" ? "danger" : !enabled ? "muted" : undefined;
   const canDirectSend = w.provider === "crypto" || w.provider === "x402" || w.provider === "veil";
-  const sendHoldings = w.meta.rawProvider === "veil" ? w.holdings.filter((b) => b.sym === "USDC" || b.sym === "ETH") : w.holdings.filter((b) => b.sym === "USDC");
-  const stable = (sendHoldings.find((b) => b.sym === "USDC") || sendHoldings[0] || { sym: "USDC" }).sym;
+  const networkStable = stableSendSymbolForNetwork(w.meta.network);
+  const sendHoldings = w.meta.rawProvider === "veil" ? w.holdings.filter((b) => b.sym === "USDC" || b.sym === "ETH") : w.holdings.filter((b) => b.sym === networkStable);
+  const stable = (sendHoldings.find((b) => b.sym === networkStable) || sendHoldings[0] || { sym: networkStable }).sym;
   const sendSym = sendSymState || stable;
   const confirmLabel = w.meta.rawProvider === "veil" ? "CONFIRM" : "SEND_USDC";
   const requiresSendConfirmation = w.meta.rawProvider === "veil" ? !veilAuto : !auto;
@@ -686,23 +924,26 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
   const others = frWallets().filter((a) => a.id !== w.id && !a.meta.setup && a.meta.addr && a.meta.network === w.meta.network && (w.provider !== "veil" || /^0x[a-fA-F0-9]{40}$/.test(a.meta.addr)));
   const sendAmount = Number(sendAmt);
   const spendCap = Number(w.meta.assetSpendCaps?.[sendSym] ?? (sendSym === "ETH" ? 0.01 : w.meta.maxPay));
-  const sendAmountUsd = Number.isFinite(sendAmount) && sendAmount > 0 ? sendAmount * ((FR_CCY[sendSym] || {}).price || 0) : 0;
-  const canSubmitSend = Boolean(sendBal)
+  const sendAmountUsd = Number.isFinite(sendAmount) && sendAmount > 0 ? sendAmount * sendAssetUsdPrice(sendSym) : 0;
+  // `!!` (identical to the previous Boolean() call) so TS narrows sendBal for the cap check.
+  const canSubmitSend = !!sendBal
     && sendAmt.trim()
     && Number.isFinite(sendAmount)
     && sendAmount > 0
     && sendAmount <= sendBal.amount && (!Number.isFinite(spendCap) || sendAmount <= spendCap)
     && (recipMode === "agent" ? Boolean(recipAgent || others[0]) : sendTo.trim())
     && (!requiresSendConfirmation || sendConfirm === confirmLabel);
-  const toggleSheet = (s) => setSheet((c) => (c === s ? null : s));
-  const copyAddr = () => { try { navigator.clipboard.writeText(w.meta.addr); } catch (e) {} setCopied(true); setTimeout(() => setCopied(false), 1400); };
+  const actionStatus = w.meta.actionError || w.meta.actionMessage || "";
+  const actionTone = w.meta.actionError ? "danger" : w.meta.actionBusy ? "working" : "ok";
+  const toggleSheet = (s: string) => setSheet((c) => (c === s ? null : s));
+  const copyAddr = () => { try { navigator.clipboard.writeText(w.meta.addr); } catch { /* clipboard unavailable */ } setCopied(true); setTimeout(() => setCopied(false), 1400); };
   const flipEnabled = () => setEnabled((v) => { const next = !v; actions?.onToggleAgentSpend?.(w.id, next); return next; });
   const flipAuto = () => setAuto((v) => { const next = !v; actions?.onUpdateAgentWallet?.(w.id, { autoPayEnabled: next, allowAutoUse: next }); return next; });
   const flipVeilAuto = () => setVeilAuto((v) => { const next = !v; actions?.onUpdateAgentWallet?.(w.id, { veilAutoSendEnabled: next }); return next; });
   const flipDup = () => setDup((v) => { const next = !v; actions?.onUpdateAgentWallet?.(w.id, { duplicatePaymentGuardEnabled: next }); return next; });
-  const commitNum = (key) => (value) => { const n = Number(value); if (Number.isFinite(n) && n >= 0) actions?.onUpdateAgentWallet?.(w.id, { [key]: n }); };
-  const commitAsset = (asset) => (value) => { const n = Number(value); if (Number.isFinite(n) && n >= 0) actions?.onUpdateAgentWallet?.(w.id, { assetSpendCaps: { ...(w.meta.assetSpendCaps || {}), [asset]: n } }); };
-  const send = async () => { setSendMsg("Sending…"); try { if (!actions?.onSendAgentPayment) throw new Error("Agent send is not available in this build."); const res = await actions.onSendAgentPayment({ agentId: w.id, asset: sendSym, amount: sendAmt, amountUsd: sendAmountUsd || undefined, toAddress: recipMode === "address" ? sendTo : "", recipientAgentId: recipMode === "agent" ? (recipAgent || (others[0] && others[0].id)) : "", confirmation: sendConfirm }); setSendMsg(res?.signature ? "Sent · " + res.signature : res?.transfer?.transactionHash ? "Sent · " + res.transfer.transactionHash : "Sent."); } catch (e) { setSendMsg(e instanceof Error ? e.message : "Send failed."); } };
+  const commitNum = (key: string) => (value: string) => { const n = Number(value); if (Number.isFinite(n) && n >= 0) actions?.onUpdateAgentWallet?.(w.id, { [key]: n }); };
+  const commitAsset = (asset: string) => (value: string) => { const n = Number(value); if (Number.isFinite(n) && n >= 0) actions?.onUpdateAgentWallet?.(w.id, { assetSpendCaps: { ...(w.meta.assetSpendCaps || {}), [asset]: n } }); };
+  const send = async () => { setSendMsg("Sending…"); setSendTx(null); try { if (!actions?.onSendAgentPayment) throw new Error("Agent send is not available in this build."); const res = await actions.onSendAgentPayment({ agentId: w.id, asset: sendSym, amount: sendAmt, amountUsd: sendAmountUsd || undefined, toAddress: recipMode === "address" ? sendTo : "", recipientAgentId: recipMode === "agent" ? (recipAgent || (others[0] && others[0].id)) : "", confirmation: sendConfirm }); const hash = res?.signature || res?.transfer?.transactionHash || ""; setSendMsg(hash ? "Sent · " + hash : "Sent."); const url = hash ? txExplorerUrl(w.meta.network, hash) : ""; setSendTx(url ? { url, name: txExplorerName(w.meta.network) } : null); } catch (e) { setSendMsg(e instanceof Error ? e.message : "Send failed."); setSendTx(null); } };
   return (
     <div className="fw-card" data-tone={cardTone} data-bee={`wallet-agent-${w.id}`} data-bee-wallet-action="details">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
@@ -741,6 +982,12 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
           <div><strong>Needs funding</strong>Top up before this agent runs out of runway.</div>
         </div>
       ) : null}
+      {actionStatus ? (
+        <div className="fw-action-status" data-tone={actionTone}>
+          {w.meta.actionBusy ? <span className="fw-loader" aria-hidden="true"><i /><i /><i /></span> : <BIcon name={w.meta.actionError ? "alert" : "check"} size={13} />}
+          <span>{actionStatus}</span>
+        </div>
+      ) : null}
       <div className="fw-actions">
         <button type="button" className="fw-act" data-active={sheet === "send" ? "" : undefined} disabled={!enabled || !canDirectSend} onClick={() => toggleSheet("send")}><BIcon name="promote" size={14} /> Send</button>
         <button type="button" className="fw-act" data-active={sheet === "receive" ? "" : undefined} onClick={() => toggleSheet("receive")}><BIcon name="download" size={14} /> Receive</button>
@@ -773,7 +1020,7 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
           )}
           {requiresSendConfirmation ? <label className="fb-label">Confirm<input className="fb-field fb-mono" value={sendConfirm} onChange={(e) => setSendConfirm(e.target.value)} placeholder={confirmLabel} /></label> : null}
           <div style={{ display: "flex", justifyContent: "flex-end" }}><BBtn variant="primary" sm disabled={!canSubmitSend} onClick={send}><BIcon name="promote" size={14} /> Send {sendSym}</BBtn></div>
-          {sendMsg ? <p className="fw-sheet-help">{sendMsg}</p> : null}
+          {sendMsg ? <p className="fw-sheet-help">{sendMsg}{sendTx ? <> · <a className="fw-txlink" href={sendTx.url} target="_blank" rel="noreferrer">View on {sendTx.name} ↗</a></> : null}</p> : null}
         </div>
       ) : null}
       {sheet === "receive" ? (
@@ -803,6 +1050,9 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end" }}><BBtn variant="ghost" sm onClick={() => actions?.onResetAgentRunway?.(w.id)}><BIcon name="refresh" size={14} /> Reset runway clock</BBtn></div>
         </div>
+      ) : null}
+      {sheet === "export" ? (
+        <WalletSecretExportSheet walletId={w.id} actionBusy={w.meta.actionBusy} actionStatus={actionStatus} actions={actions} onClose={() => setSheet(null)} />
       ) : null}
       <div>
         {w.holdings.slice(0, 3).map((b) => <TokenRow key={b.sym} b={b} />)}
@@ -853,6 +1103,15 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
         </span>
         <Toggle on={auto} onChange={(e) => { e.stopPropagation(); flipAuto(); }} />
       </div>
+      {w.meta.llmFundingSource ? (
+        <button type="button" className="fw-autouse" onClick={() => actions?.onOpenLlmFundingSource?.(w.id)}>
+          <span>
+            <strong>LLM Funding Source</strong>
+            <small>{w.meta.llmFundingSource} · {w.meta.llmFundingSourceDetail || "Tap to choose a funding wallet."}</small>
+          </span>
+          <BIcon name="branch" size={15} />
+        </button>
+      ) : null}
       {w.meta.rawProvider === "veil" ? <div className="fw-autouse" onClick={flipVeilAuto} role="button" aria-pressed={veilAuto}><span><strong>Allow Veil auto-send</strong><small>{veilAuto ? "Private sends under USDC/ETH caps can execute without CONFIRM." : "Private sends still require CONFIRM."}</small></span><Toggle on={veilAuto} onChange={(e) => { e.stopPropagation(); flipVeilAuto(); }} /></div> : null}
       <Disclosure summary="Identity & spend policy">
         <div style={{ display: "flex", flexDirection: "column", gap: 11, paddingTop: 4 }}>
@@ -867,7 +1126,7 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
           <div>
             <span className="fb-eyebrow" style={{ display: "block", marginBottom: 7 }}>Per-asset caps · daily</span>
             <div className="fb-grid2">
-              <NumField label="USDC" value={(w.meta.assetSpendCaps?.USDC ?? w.meta.maxPay).toString()} onCommit={commitAsset("USDC")} />
+              <NumField label={networkStable} value={(w.meta.assetSpendCaps?.[networkStable] ?? w.meta.maxPay).toString()} onCommit={commitAsset(networkStable)} />
               <NumField label="ETH" value={(w.meta.assetSpendCaps?.ETH ?? 0.01).toString()} onCommit={commitAsset("ETH")} />
             </div>
           </div>
@@ -883,14 +1142,14 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
           </label>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <BBtn variant="ghost" sm onClick={() => actions?.onCopyAgentPrompt?.(w.id)}><BIcon name="copy" size={14} /> Copy agent prompt</BBtn>
-            <BBtn variant="ghost" sm onClick={() => actions?.onExportAgentWallet?.(w.id)}><BIcon name="download" size={14} /> Export keys</BBtn>
+            <BBtn variant="ghost" sm data-active={sheet === "export" ? "" : undefined} onClick={() => toggleSheet("export")}><BIcon name="download" size={14} /> Export keys</BBtn>
           </div>
         </div>
       </Disclosure>
     </div>
   );
 }
-function WalletCard({ w, density, expanded, onToggle, onConfigure, actions }) {
+function WalletCard({ w, density, expanded, onToggle, onConfigure, actions }: { w: DropInWallet; density: string; expanded: boolean; onToggle: () => void; onConfigure?: (railId: WalletRailId) => void; actions?: WalletDropInActions }) {
   const [enabled, setEnabled] = React.useState(w.meta.enabled);
   React.useEffect(() => setEnabled(w.meta.enabled), [w.id, w.meta.enabled]);
   const detailed = density === "detailed" || expanded;
@@ -911,6 +1170,15 @@ function WalletCard({ w, density, expanded, onToggle, onConfigure, actions }) {
           <Badge tone="honey">Setup</Badge>
         </div>
         <p style={{ fontSize: 12.5, color: "var(--fg-3)", lineHeight: 1.5, margin: "4px 0 8px" }}>No wallet yet. Initialise a rail to let this agent pay for what it needs.</p>
+        {w.meta.llmFundingSource ? (
+          <button type="button" className="fw-autouse" onClick={() => actions?.onOpenLlmFundingSource?.(w.id)}>
+            <span>
+              <strong>LLM Funding Source</strong>
+              <small>{w.meta.llmFundingSource} · {w.meta.llmFundingSourceDetail || "Tap to choose a funding wallet."}</small>
+            </span>
+            <BIcon name="branch" size={15} />
+          </button>
+        ) : null}
         <button type="button" className="fb-btn primary" style={{ width: "100%" }} data-bee={`wallet-create-${w.id}`} onClick={() => actions?.onCreateAgentWallet?.(w.id, w.meta.network || "base")}><BIcon name="plus" size={15} /> Create wallet</button>
       </div>
     );
@@ -918,23 +1186,25 @@ function WalletCard({ w, density, expanded, onToggle, onConfigure, actions }) {
   if (!detailed) return <CompactCard w={w} enabled={enabled} onOpen={onToggle} />;
   return <DetailedCard w={w} enabled={enabled} setEnabled={setEnabled} compact={density === "compact"} onCollapse={onToggle} onConfigure={onConfigure} actions={actions} />;
 }
-function AddrRow({ w, expanded }) {
+function AddrRow({ w, expanded }: { w: { addr: string; network?: string; addresses?: Array<[string, string]> }; expanded?: boolean }) {
   const [open, setOpen] = React.useState(false);
-  const [copied, setCopied] = React.useState(null);
-  const t = React.useRef(null);
-  const show = () => { clearTimeout(t.current); t.current = setTimeout(() => setOpen(true), 200); };
-  const hide = () => { clearTimeout(t.current); t.current = setTimeout(() => setOpen(false), 140); };
-  const doCopy = (val, key) => { try { navigator.clipboard.writeText(val); } catch (e) {} setCopied(key); setTimeout(() => setCopied(null), 1400); };
+  const [copied, setCopied] = React.useState<string | null>(null);
+  const t = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  // clearTimeout(null) is a harmless no-op at runtime; the lib types only accept a timer id.
+  const show = () => { clearTimeout(t.current as ReturnType<typeof setTimeout>); t.current = setTimeout(() => setOpen(true), 200); };
+  const hide = () => { clearTimeout(t.current as ReturnType<typeof setTimeout>); t.current = setTimeout(() => setOpen(false), 140); };
+  const doCopy = (val: string, key: string) => { try { navigator.clipboard.writeText(val); } catch { /* clipboard unavailable */ } setCopied(key); setTimeout(() => setCopied(null), 1400); };
   const multi = w.addresses && w.addresses.length > 1;
   return (
     <div className="fw-addrwrap">
       <div className="addr">
-        <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: multi ? "help" : "default" }} onMouseEnter={multi ? show : undefined} onMouseLeave={multi ? hide : undefined} title={multi ? "Hover for all chain addresses" : undefined}>{expanded && !multi ? w.network + " · " : ""}{frShortAddr(w.addr)}{multi ? "  · " + w.addresses.length + " chains" : ""}</span>
+        {/* w.addresses! below: guarded by `multi`, which implies addresses is set. */}
+        <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: multi ? "help" : "default" }} onMouseEnter={multi ? show : undefined} onMouseLeave={multi ? hide : undefined} title={multi ? "Hover for all chain addresses" : undefined}>{expanded && !multi ? w.network + " · " : ""}{frShortAddr(w.addr)}{multi ? "  · " + w.addresses!.length + " chains" : ""}</span>
         <button type="button" onClick={() => doCopy(w.addr, "main")} aria-label="Copy address"><BIcon name={copied === "main" ? "check" : "copy"} size={13} /></button>
       </div>
       {open && multi ? (
         <div className="fw-addrpop" onMouseEnter={show} onMouseLeave={hide}>
-          {w.addresses.map(([chain, addr]) => (
+          {w.addresses!.map(([chain, addr]) => (
             <div className="arow" key={chain}>
               <span className="chain">{chain}</span>
               <span className="a">{frShortAddr(addr)}</span>
@@ -946,33 +1216,172 @@ function AddrRow({ w, expanded }) {
     </div>
   );
 }
-function MyWalletCard({ w, actions }) {
+function walletChainBadgeSrcs(w: Pick<GroupedPersonalWallet, "accounts"> | null | undefined) {
+  const accounts = Array.isArray(w?.accounts) ? w.accounts : [];
+  const keys: string[] = [];
+  for (const account of accounts) {
+    const key = account?.chainKey;
+    if (key && key !== "other" && !keys.includes(key)) keys.push(key);
+  }
+  return keys.slice(0, 3).map((key) => chainBadgeSrc(key)).filter((src): src is string => Boolean(src));
+}
+function WalletChainBadges({ w }: { w: GroupedPersonalWallet }) {
+  const logos = walletChainBadgeSrcs(w);
+  if (!logos.length) return <span className="fb-tile" style={{ color: w.primary ? "var(--honey)" : "var(--fg-3)" }}><BIcon name={w.icon} size={18} /></span>;
+  return (
+    <span aria-hidden style={{ display: "inline-flex", alignItems: "center", flex: "0 0 auto" }}>
+      {logos.map((src, i) => (
+        <img
+          key={src}
+          src={src}
+          alt=""
+          width={32}
+          height={32}
+          style={{ width: 32, height: 32, borderRadius: "50%", display: "block", marginLeft: i === 0 ? 0 : -11, position: "relative", zIndex: logos.length - i, boxShadow: "0 0 0 2px var(--panel)", background: "var(--panel)" }}
+        />
+      ))}
+    </span>
+  );
+}
+const WALLET_CARD_TOGGLE_EXCLUSION_SELECTOR = "button, a, input, select, textarea, label, [role='button'], [role='dialog'], [role='menu'], [data-wallet-card-no-toggle], .fw-sheet, .fw-modal-back, .fw-addrpop";
+function shouldToggleWalletCard(event: React.MouseEvent<HTMLElement>) {
+  return !event.defaultPrevented
+    && event.target instanceof Element
+    && !event.target.closest(WALLET_CARD_TOGGLE_EXCLUSION_SELECTOR);
+}
+function MyWalletCard({ w, actions }: { w: GroupedPersonalWallet; actions?: WalletDropInActions }) {
   const { top, total } = frMyRanked(w);
   const canSpend = w.canSpend !== false;
   const [expanded, setExpanded] = React.useState(false);
-  const [sheet, setSheet] = React.useState(null); // send | receive
+  const [editingName, setEditingName] = React.useState(false);
+  const [nameDraft, setNameDraft] = React.useState(w.name || "");
+  const [renaming, setRenaming] = React.useState(false);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [refreshMsg, setRefreshMsg] = React.useState("");
+  const beginRename = () => { setNameDraft(w.name || ""); setEditingName(true); };
+  const cancelRename = () => { setEditingName(false); setRenaming(false); setNameDraft(w.name || ""); };
+  const commitRename = async () => {
+    const next = nameDraft.trim();
+    if (!next || next === w.name) { cancelRename(); return; }
+    if (!actions?.onRenamePersonalWallet) { cancelRename(); return; }
+    setRenaming(true);
+    try {
+      await actions.onRenamePersonalWallet({ source: w, name: next });
+      setEditingName(false);
+    } catch {
+      // Leave the field open so the user can retry or cancel.
+    } finally {
+      setRenaming(false);
+    }
+  };
+  const [sheet, setSheet] = React.useState<string | null>(null); // send | receive | export | addchain
   const [fund, setFund] = React.useState(false);
+  const [sendToWallet, setSendToWallet] = React.useState(false);
+  const [fundMenu, setFundMenu] = React.useState(false);
+  const fundMenuRef = React.useRef<HTMLDivElement | null>(null);
   const [imp, setImport] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
   const [sendSymState, setSendSym] = React.useState("");
-  const [sendAmt, setSendAmt] = React.useState(""); const [sendTo, setSendTo] = React.useState(""); const [sendConfirm, setSendConfirm] = React.useState(""); const [sendMsg, setSendMsg] = React.useState("");
-  const sendHoldings = top.filter((b) => b.sym === "USDC"), primaryHolding = sendHoldings[0] || top[0] || { sym: "USDC", amount: 0 };
+  const [sendAmt, setSendAmt] = React.useState(""); const [sendTo, setSendTo] = React.useState(""); const [sendConfirm, setSendConfirm] = React.useState(""); const [sendMsg, setSendMsg] = React.useState(""); const [sendTx, setSendTx] = React.useState<{ url: string; name: string } | null>(null);
+  const sendHoldings = stableWalletHoldings(top), primaryHolding = sendHoldings[0] || top[0] || { sym: "USDC", amount: 0 };
+  const walletTransferHoldings = transferableWalletHoldings(w, top);
   const prim = sendHoldings[0] || { sym: "USDC", amount: 0 };
   const sendSym = sendSymState || prim.sym;
   const sendBal = sendHoldings.find((b) => b.sym === sendSym);
-  const sendAmount = Number(sendAmt), canSendPersonal = canSpend && Boolean(sendBal) && Number.isFinite(sendAmount) && sendAmount > 0 && sendAmount <= sendBal.amount && Boolean(sendTo.trim()) && sendConfirm === "SEND_USDC";
-  const copy = () => { try { navigator.clipboard.writeText(w.addr); } catch (e) {} setCopied(true); setTimeout(() => setCopied(false), 1400); };
-  const toggleSheet = (s) => setSheet((c) => (c === s ? null : s));
+  const walletTargets = personalWalletTransferTargets(w, walletTransferHoldings[0]?.sym || "", FR_MY_WALLETS).targets;
+  const canSendToWallet = canSpend && walletTransferHoldings.length > 0 && walletTargets.length > 0;
+  // `!!` (identical to the previous Boolean() call) so TS narrows sendBal for the cap check.
+  const sendAmount = Number(sendAmt), canSendPersonal = canSpend && !!sendBal && Number.isFinite(sendAmount) && sendAmount > 0 && sendAmount <= sendBal.amount && Boolean(sendTo.trim()) && sendConfirm === "SEND_USDC";
+  const copy = () => { try { navigator.clipboard.writeText(w.addr); } catch { /* clipboard unavailable */ } setCopied(true); setTimeout(() => setCopied(false), 1400); };
+  const toggleSheet = (s: string) => setSheet((c) => (c === s ? null : s));
+  React.useEffect(() => {
+    if (!fundMenu) return;
+    const onPointerDown = (event: MouseEvent) => {
+      if (fundMenuRef.current && !fundMenuRef.current.contains(event.target as Node)) setFundMenu(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [fundMenu]);
+  const refreshBalance = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setRefreshMsg("");
+    try {
+      if (!actions?.onRefreshPersonalWallet) throw new Error("Personal wallet refresh is not available in this build.");
+      await actions.onRefreshPersonalWallet(w);
+      setRefreshMsg("Balance refreshed.");
+    } catch (e) {
+      setRefreshMsg(e instanceof Error ? e.message : "Could not refresh this wallet.");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+  const openSendToWallet = () => {
+    setFundMenu(false);
+    setSheet(null);
+    setSendToWallet(true);
+  };
+  const openSendToAddress = () => {
+    setFundMenu(false);
+    toggleSheet("send");
+  };
+  const missingChains = PERSONAL_WALLET_ADDABLE_CHAINS.filter((chain) => !(Array.isArray(w.accounts) ? w.accounts : []).some((account) => account.chainKey === chain.chainKey));
+  const canAddChain = canSpend && missingChains.length > 0 && Boolean(actions?.onAddWalletChain);
+  const [addingChain, setAddingChain] = React.useState("");
+  const [addChainMsg, setAddChainMsg] = React.useState("");
+  const [addChainFailed, setAddChainFailed] = React.useState(false);
+  const toggleExpanded = () => setExpanded((current) => !current);
+  const addChain = async (label: string) => {
+    if (addingChain) return;
+    setAddingChain(label);
+    setAddChainMsg("");
+    setAddChainFailed(false);
+    try {
+      if (!actions?.onAddWalletChain) throw new Error("Adding chains is not available in this build.");
+      await actions.onAddWalletChain({ source: w, chain: label });
+      setAddChainMsg(`${label} added — this wallet's address list now includes it.`);
+    } catch (e) {
+      setAddChainFailed(true);
+      setAddChainMsg(e instanceof Error ? e.message : `Could not add ${label}.`);
+    } finally {
+      setAddingChain("");
+    }
+  };
   return (
-    <div className="fw-mywallet">
+    <div
+      className="fw-mywallet fw-mywallet-expandable"
+      data-expandable=""
+      data-expanded={expanded ? "" : undefined}
+      onClick={(event) => { if (shouldToggleWalletCard(event)) toggleExpanded(); }}
+    >
       <div className="top">
-        <span className="fb-tile" style={{ color: w.primary ? "var(--honey)" : "var(--fg-3)" }}><BIcon name={w.icon} size={18} /></span>
+        <WalletChainBadges w={w} />
         <div style={{ flex: "1 1 auto", minWidth: 0 }}>
-          <div className="nm">{w.name}</div>
+          {editingName ? (
+            <div className="fw-rename">
+              <input
+                className="fw-rename-input"
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); commitRename(); } else if (e.key === "Escape") { e.preventDefault(); cancelRename(); } }}
+                autoFocus
+                disabled={renaming}
+                maxLength={60}
+                aria-label="Wallet name"
+              />
+              <button type="button" className="fw-rename-btn confirm" onClick={commitRename} disabled={renaming} aria-label="Save name" title="Save"><BIcon name="check" size={14} /></button>
+              <button type="button" className="fw-rename-btn cancel" onClick={cancelRename} disabled={renaming} aria-label="Cancel rename" title="Cancel"><BIcon name="x" size={14} /></button>
+            </div>
+          ) : (
+            <div className="fw-rename">
+              <span className="nm" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{w.name}</span>
+              <button type="button" className="fw-rename-btn" onClick={beginRename} aria-label="Rename wallet" title="Rename wallet"><BIcon name="pencil" size={13} /></button>
+            </div>
+          )}
           <div className="sub">{w.kind} · {w.network}</div>
         </div>
         {w.primary ? <Badge tone="honey">Primary</Badge> : null}
-        <button type="button" className="fw-x" onClick={() => setExpanded((e) => !e)} aria-label={expanded ? "Collapse" : "Expand"}>
+        <button type="button" className="fw-wallet-card-caret" onClick={toggleExpanded} aria-label={expanded ? "Collapse" : "Expand"} aria-expanded={expanded}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform .2s" }}><path d="M6 9l6 6 6-6" /></svg>
         </button>
       </div>
@@ -980,6 +1389,12 @@ function MyWalletCard({ w, actions }) {
         <div className="bal">{frFmtUsdFull(total)}</div>
         <div className="balsub">{frFmtAmount(primaryHolding.sym, primaryHolding.amount)} {primaryHolding.sym}{top.length > 1 ? ` · +${top.length - 1} more` : ""}</div>
       </div>
+      {refreshing || refreshMsg ? (
+        <div className="fw-action-status" data-tone={refreshing ? "working" : refreshMsg.toLowerCase().includes("not available") || refreshMsg.toLowerCase().includes("could not") ? "danger" : "ok"}>
+          {refreshing ? <span className="fw-loader" aria-hidden="true"><i /><i /><i /></span> : <BIcon name={refreshMsg.toLowerCase().includes("not available") || refreshMsg.toLowerCase().includes("could not") ? "alert" : "check"} size={13} />}
+          <span>{refreshing ? "Refreshing..." : refreshMsg}</span>
+        </div>
+      ) : null}
       {expanded ? (
         <>
           <AllocBar holdings={top} total={total} />
@@ -997,7 +1412,10 @@ function MyWalletCard({ w, actions }) {
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontSize: 11, color: "var(--fg-3)" }}>
             <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Imported · {w.source || "manual"}</span>
-            <button type="button" className="fw-mini" onClick={() => setImport(true)}><BIcon name="refresh" size={11} /> Reimport</button>
+            <span style={{ display: "flex", gap: 6, flex: "0 0 auto" }}>
+              {canAddChain ? <button type="button" className="fw-mini" onClick={() => toggleSheet("addchain")}><BIcon name="plus" size={11} /> Add chain</button> : null}
+              <button type="button" className="fw-mini" onClick={() => setImport(true)}><BIcon name="refresh" size={11} /> Reimport</button>
+            </span>
           </div>
         </>
       ) : null}
@@ -1008,12 +1426,12 @@ function MyWalletCard({ w, actions }) {
           {!canSpend ? <p className="fw-sheet-help">This is a watch wallet. Reimport it locally before sending.</p> : null}
           <div className="fb-grid2">
             <label className="fb-label">Asset<AssetSelect holdings={sendHoldings} value={sendSym} onChange={setSendSym} /></label>
-            <label className="fb-label">Amount<input className="fb-field fb-mono" value={sendAmt} onChange={(e) => setSendAmt(e.target.value)} placeholder={sendBal ? frFmtAmount(sendSym, sendBal.amount) + " max" : "USDC wallet required"} disabled={!canSpend || !sendBal} /></label>
+            <label className="fb-label">Amount<input className="fb-field fb-mono" value={sendAmt} onChange={(e) => setSendAmt(e.target.value)} placeholder={sendBal ? frFmtAmount(sendSym, sendBal.amount) + " max" : "Stablecoin wallet required"} disabled={!canSpend || !sendBal} /></label>
           </div>
           <label className="fb-label">Recipient address<input className="fb-field fb-mono" value={sendTo} onChange={(e) => setSendTo(e.target.value)} placeholder="0x… or Solana address" disabled={!canSpend || !sendBal} /></label>
           <label className="fb-label">Confirm<input className="fb-field fb-mono" value={sendConfirm} onChange={(e) => setSendConfirm(e.target.value)} placeholder="SEND_USDC" disabled={!canSpend || !sendBal} /></label>
-          <div style={{ display: "flex", justifyContent: "flex-end" }}><BBtn variant="primary" sm disabled={!canSendPersonal} onClick={async () => { setSendMsg("Sending…"); try { if (!actions?.onSendPersonalWallet) throw new Error("Personal wallet send is not available in this build."); const res = await actions.onSendPersonalWallet({ source: w, asset: sendSym, amount: sendAmt, toAddress: sendTo, confirmation: sendConfirm }); setSendMsg(res?.signature ? "Sent · " + res.signature : "Sent."); } catch (e) { setSendMsg(e instanceof Error ? e.message : "Send failed."); } }}><BIcon name="promote" size={14} /> Send {sendSym}</BBtn></div>
-          {sendMsg ? <p className="fw-sheet-help">{sendMsg}</p> : null}
+          <div style={{ display: "flex", justifyContent: "flex-end" }}><BBtn variant="primary" sm disabled={!canSendPersonal} onClick={async () => { setSendMsg("Sending…"); setSendTx(null); try { if (!actions?.onSendPersonalWallet) throw new Error("Personal wallet send is not available in this build."); const res = await actions.onSendPersonalWallet({ source: w, sourceAccountId: personalWalletSpendAccountForAsset(w, sendSym)?.id || w.spendId, asset: sendSym, amount: sendAmt, toAddress: sendTo, confirmation: sendConfirm }); const hash = res?.signature || ""; setSendMsg(hash ? "Sent · " + hash : "Sent."); const net = personalWalletSpendAccountForAsset(w, sendSym)?.network || ""; const url = hash ? txExplorerUrl(net, hash) : ""; setSendTx(url ? { url, name: txExplorerName(net) } : null); } catch (e) { setSendMsg(e instanceof Error ? e.message : "Send failed."); setSendTx(null); } }}><BIcon name="promote" size={14} /> Send {sendSym}</BBtn></div>
+          {sendMsg ? <p className="fw-sheet-help">{sendMsg}{sendTx ? <> · <a className="fw-txlink" href={sendTx.url} target="_blank" rel="noreferrer">View on {sendTx.name} ↗</a></> : null}</p> : null}
         </div>
       ) : null}
       {sheet === "receive" ? (
@@ -1023,23 +1441,264 @@ function MyWalletCard({ w, actions }) {
           <BBtn variant="ghost" sm onClick={copy}><BIcon name={copied ? "check" : "copy"} size={14} /> {copied ? "Copied" : "Copy address"}</BBtn>
         </div>
       ) : null}
-      <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
-        <BBtn variant="primary" sm style={{ flex: 1 }} disabled={!canSpend} onClick={() => setFund(true)}><BIcon name="promote" size={14} /> Fund agent</BBtn>
+      {sheet === "addchain" ? (
+        <div className="fw-sheet">
+          <SheetTitle onClose={() => setSheet(null)}>Add chain</SheetTitle>
+          <p className="fw-sheet-help">Derive this wallet's address on another chain from its locally stored key — no seed re-entry. Recovery-phrase wallets can add any supported chain; private-key wallets can only add chains that share the same key.</p>
+          {missingChains.length ? (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {missingChains.map((chain) => {
+                const badge = chainBadgeSrc(chain.chainKey);
+                const busy = addingChain === chain.label;
+                return (
+                  <BBtn key={chain.chainKey} variant="ghost" sm disabled={Boolean(addingChain)} onClick={() => addChain(chain.label)}>
+                    {busy
+                      ? <span className="fw-loader" aria-hidden="true"><i /><i /><i /></span>
+                      : badge
+                        ? <img src={badge} alt="" width={15} height={15} style={{ borderRadius: "50%", display: "block" }} />
+                        : <BIcon name="plus" size={14} />}
+                    {busy ? `Adding ${chain.label}...` : `Add ${chain.label}`}
+                  </BBtn>
+                );
+              })}
+            </div>
+          ) : !addChainMsg ? <p className="fw-sheet-help">This wallet is already on every supported chain.</p> : null}
+          {addChainMsg ? <p className="fw-sheet-help" style={addChainFailed ? { color: "var(--danger)" } : undefined}>{addChainMsg}</p> : null}
+        </div>
+      ) : null}
+      {sheet === "export" ? (
+        <WalletSecretExportSheet
+          walletId={w.id}
+          exportAction={(confirmation) => actions?.onExportPersonalWallet?.(w.id, confirmation) ?? { ok: false, error: "Personal wallet export is not available in this build." }}
+          onClose={() => setSheet(null)}
+        />
+      ) : null}
+      <div data-wallet-card-no-toggle="" style={{ display: "flex", gap: 8, marginTop: "auto", flexWrap: "wrap" }}>
+        <div className="fw-split-wrap" ref={fundMenuRef}>
+          <div className="fw-split-action" data-open={fundMenu ? "" : undefined}>
+            <button type="button" className="fw-split-main" disabled={!canSpend} onClick={() => setFund(true)}><BIcon name="promote" size={14} /> Fund agent</button>
+            <button type="button" className="fw-split-caret" disabled={!canSpend} aria-label="More fund actions" aria-expanded={fundMenu} onClick={() => setFundMenu((open) => !open)}><BIcon name="chevron-down" size={14} /></button>
+          </div>
+          {fundMenu ? (
+            <div className="fw-split-menu" role="menu">
+              <button type="button" role="menuitem" disabled={!canSendToWallet} onClick={openSendToWallet}><BIcon name="shield" size={13} /> Send to my wallet</button>
+              <button type="button" role="menuitem" disabled={!canSpend} onClick={openSendToAddress}><BIcon name="branch" size={13} /> Send to address</button>
+            </div>
+          ) : null}
+        </div>
         {expanded ? <BBtn variant="ghost" sm data-active={sheet === "send" ? "" : undefined} disabled={!canSpend} onClick={() => toggleSheet("send")}><BIcon name="branch" size={14} /> Send</BBtn> : null}
         <BBtn variant="ghost" sm onClick={() => toggleSheet("receive")}><BIcon name="download" size={14} /> Receive</BBtn>
+        <BBtn variant="ghost" sm disabled={refreshing} onClick={refreshBalance}>{refreshing ? <span className="fw-loader" aria-hidden="true"><i /><i /><i /></span> : <BIcon name="refresh" size={14} />} {refreshing ? "Refreshing..." : "Refresh"}</BBtn>
+        {expanded ? <BBtn variant="ghost" sm data-active={sheet === "export" ? "" : undefined} onClick={() => toggleSheet("export")}><BIcon name="key" size={14} /> Export keys</BBtn> : null}
       </div>
       {fund ? <FundAgentModal source={w} onClose={() => setFund(false)} actions={actions} /> : null}
-      {imp ? <ImportWalletModal wallet={w} onClose={() => setImport(false)} actions={actions} /> : null}
+      {sendToWallet ? <SendToMyWalletModal source={w} onClose={() => setSendToWallet(false)} actions={actions} /> : null}
+      {imp ? <CreateImportWalletModal wallet={w} onClose={() => setImport(false)} actions={actions} /> : null}
     </div>
   );
 }
-function MyWallets({ actions }) {
+function BankrWalletCard({ bankr, actions }: { bankr: WalletBankrInfo; onNavigate?: (id: string) => void; actions?: WalletDropInActions }) {
+  const [copied, setCopied] = React.useState(false);
+  const [sheet, setSheet] = React.useState<string | null>(null); // "send" | "receive" | "fund" | null
+  const [expanded, setExpanded] = React.useState(false);
+  const [refreshing, setRefreshing] = React.useState(false);
+  const [refreshMsg, setRefreshMsg] = React.useState("");
+  const balance = Number(bankr?.balanceUsd) || 0;
+  const addr = String(bankr?.address || "");
+  // Real per-token holdings from /api/bankr/wallet (Bankr portfolio), mapped to
+  // the same shape the personal cards' AllocBar/TokenRow use. (Bankr's portfolio
+  // doesn't carry a 24h change, so change is shown flat.)
+  const holdings = (Array.isArray(bankr?.tokens) ? bankr.tokens : []).map((t) => ({ sym: t.symbol, name: t.name, amount: Number(t.amount) || 0, usd: Number(t.usd) || 0, change: 0 }));
+  const holdTotal = holdings.reduce((s, h) => s + h.usd, 0) || balance;
+  const topHolding = holdings[0];
+  const toggleExpanded = () => setExpanded((current) => !current);
+  const copy = () => { try { navigator.clipboard.writeText(addr); } catch { /* clipboard unavailable */ } setCopied(true); setTimeout(() => setCopied(false), 1400); };
+
+  // Agents fundable via Bankr — they need an EVM (0x) address, since Bankr sends
+  // on Base mainnet. (Agent addresses live on w.meta.addr in the drop-in data.)
+  const fundableAgents = frWallets().filter((w) => !w.meta?.setup && /^0x[a-fA-F0-9]{40}$/.test(String(w.meta?.addr || "").trim()));
+
+  // Bankr is a MANAGED wallet (no local key), so it can't use the structured
+  // /api/wallet/send rail. It moves funds the way it trades — as a natural-language
+  // action on its own wallet: prepare → confirm (BANKR_ACTION) → execute via
+  // /api/bankr/actions. Send + Fund-agent share this one flow.
+  const [asset, setAsset] = React.useState("USDC");
+  const [amount, setAmount] = React.useState("");
+  const [recipient, setRecipient] = React.useState("");
+  const [fundAgentId, setFundAgentId] = React.useState("");
+  const [step, setStep] = React.useState("idle"); // idle | preparing | review | executing | done | error
+  const [draft, setDraft] = React.useState<{ message?: string; confirmation: string } | null>(null);
+  const [msg, setMsg] = React.useState("");
+  const amtNum = Number(amount) || 0;
+  const selectedAgent = fundableAgents.find((a) => a.id === fundAgentId) || fundableAgents[0];
+  const recipOk = /^0x[a-fA-F0-9]{40}$/.test(recipient.trim()) || /\.(eth|base|box|cb\.id)$/i.test(recipient.trim());
+  const sendAddr = sheet === "fund" ? String(selectedAgent?.meta?.addr || "") : recipient.trim();
+  const addrOk = sheet === "fund" ? Boolean(selectedAgent?.meta?.addr) : recipOk;
+  const canReview = amtNum > 0 && addrOk && step !== "preparing" && step !== "executing";
+  const resetFlow = () => { setStep("idle"); setDraft(null); setMsg(""); };
+  const openSheet = (s: string) => { setSheet((cur) => (cur === s ? null : s)); resetFlow(); };
+
+  const bankrPost = async (body: Record<string, unknown>): Promise<{ ok?: boolean; error?: string; message?: string; confirmation?: string } | null> => {
+    const r = await fetch("/api/bankr/actions", { method: "POST", headers: { "Content-Type": "application/json", accept: "application/json" }, body: JSON.stringify(body) }).catch(() => null);
+    return (await r?.json().catch(() => null)) || null;
+  };
+  const review = async () => {
+    if (!canReview) return;
+    setStep("preparing"); setMsg("");
+    const noun = sheet === "fund" ? "funding" : "send";
+    // Bankr has no structured transfer rail — an arbitrary send (incl. funding an
+    // agent's address) goes through its free-form agent, reviewed + confirmed first.
+    const res = await bankrPost({ action: "prepare", intent: "agent-job", prompt: `send ${amtNum} ${asset} to ${sendAddr}` });
+    if (!res?.ok) { setStep("error"); setMsg(res?.error || `Could not prepare this Bankr ${noun}.`); return; }
+    setDraft({ message: res.message, confirmation: res.confirmation || "BANKR_ACTION" });
+    setStep("review"); setMsg(res.message || "");
+  };
+  const send = async () => {
+    if (!draft) return;
+    setStep("executing"); setMsg("");
+    const res = await bankrPost({ action: "execute", draftMessage: draft.message, confirmation: draft.confirmation });
+    if (!res?.ok) { setStep("error"); setMsg(res?.error || "Bankr action failed."); return; }
+    setStep("done"); setMsg(res.message || "Done."); setAmount(""); setRecipient("");
+  };
+
+  const flowControls = (
+    <>
+      {step === "review" && draft ? <p className="fw-sheet-help" style={{ color: "var(--fg-2)" }}>{draft.message}</p> : null}
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+        {step === "review" ? (
+          <>
+            <BBtn variant="ghost" sm onClick={resetFlow}>Edit</BBtn>
+            {/* (step as string): inside this branch TS narrows step to "review", so these
+                "executing" checks are dead at render time (the outer ternary swaps to the
+                Review button once send() sets step to "executing"). Kept as-is on purpose. */}
+            <BBtn variant="primary" sm disabled={(step as string) === "executing"} onClick={send}><BIcon name="promote" size={14} /> {(step as string) === "executing" ? "Sending…" : "Confirm & send"}</BBtn>
+          </>
+        ) : (
+          <BBtn variant="primary" sm disabled={!canReview} onClick={review}><BIcon name="shield" size={14} /> {step === "preparing" ? "Reviewing…" : sheet === "fund" ? "Review funding" : "Review send"}</BBtn>
+        )}
+      </div>
+      {msg && step !== "review" ? <p className="fw-sheet-help" style={{ color: step === "error" ? "var(--danger)" : step === "done" ? "var(--live)" : undefined }}>{msg}</p> : null}
+    </>
+  );
+  const assetField = (
+    <label className="fb-label">Asset
+      <select className="fb-field" value={asset} onChange={(e) => { setAsset(e.target.value); resetFlow(); }}>
+        {["USDC", "ETH", "USDT", "HIVE"].map((a) => <option key={a} value={a}>{a}</option>)}
+      </select>
+    </label>
+  );
+  const amountField = <label className="fb-label">Amount<input className="fb-field fb-mono" value={amount} onChange={(e) => { setAmount(e.target.value.replace(/[^0-9.]/g, "")); resetFlow(); }} placeholder="0" /></label>;
+  const refreshBankr = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    setRefreshMsg("");
+    try {
+      if (!actions?.onRefreshBankrWallet) throw new Error("Bankr refresh is not available in this build.");
+      await actions.onRefreshBankrWallet();
+      setRefreshMsg("Balance refreshed.");
+    } catch (e) {
+      setRefreshMsg(e instanceof Error ? e.message : "Could not refresh Bankr.");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  return (
+    <div
+      className="fw-mywallet fw-mywallet-expandable"
+      data-expandable={holdings.length ? "" : undefined}
+      data-expanded={expanded ? "" : undefined}
+      onClick={(event) => { if (holdings.length && shouldToggleWalletCard(event)) toggleExpanded(); }}
+    >
+      <div className="top">
+        <img src="/icons/runtimes/bankr.svg" alt="Bankr" height={38} style={{ height: 38, width: "auto", display: "block", flex: "0 0 auto", borderRadius: 9 }} />
+        <div style={{ flex: "1 1 auto", minWidth: 0 }}>
+          <div className="nm">Bankr trading wallet</div>
+          <div className="sub">Managed · Base mainnet</div>
+        </div>
+        <Badge tone="honey">Bankr-managed</Badge>
+        {holdings.length ? (
+          <button type="button" className="fw-wallet-card-caret" onClick={toggleExpanded} aria-label={expanded ? "Collapse" : "Expand"} aria-expanded={expanded}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform .2s" }}><path d="M6 9l6 6 6-6" /></svg>
+          </button>
+        ) : null}
+      </div>
+      <div>
+        <div className="bal">{frFmtUsdFull(balance)}</div>
+        <div className="balsub">{topHolding ? `${frFmtAmount(topHolding.sym, topHolding.amount)} ${topHolding.sym}${holdings.length > 1 ? ` · +${holdings.length - 1} more` : ""}` : "Bankr-managed balance"}</div>
+      </div>
+      {refreshing || refreshMsg ? (
+        <div className="fw-action-status" data-tone={refreshing ? "working" : refreshMsg.toLowerCase().includes("not available") || refreshMsg.toLowerCase().includes("could not") ? "danger" : "ok"}>
+          {refreshing ? <span className="fw-loader" aria-hidden="true"><i /><i /><i /></span> : <BIcon name={refreshMsg.toLowerCase().includes("not available") || refreshMsg.toLowerCase().includes("could not") ? "alert" : "check"} size={13} />}
+          <span>{refreshing ? "Refreshing..." : refreshMsg}</span>
+        </div>
+      ) : null}
+      {expanded && holdings.length ? (
+        <>
+          <AllocBar holdings={holdings} total={holdTotal} />
+          <div style={{ maxHeight: holdings.length > 5 ? 245 : undefined, overflowY: holdings.length > 5 ? "auto" : undefined, paddingRight: holdings.length > 5 ? 4 : 0 }}>{holdings.map((b) => <TokenRow key={b.sym} b={b} />)}</div>
+        </>
+      ) : null}
+      <AddrRow w={{ addr, network: "Base mainnet" }} expanded={false} />
+
+      {sheet === "send" ? (
+        <div className="fw-sheet">
+          <SheetTitle onClose={() => { setSheet(null); resetFlow(); }}>Send via Bankr</SheetTitle>
+          <p className="fw-sheet-help">Bankr is managed, so a send runs as an action on Bankr&apos;s own wallet — reviewed, then confirmed, before it moves.</p>
+          <div className="fb-grid2">{assetField}{amountField}</div>
+          <label className="fb-label">Recipient address<input className="fb-field fb-mono" value={recipient} onChange={(e) => { setRecipient(e.target.value); resetFlow(); }} placeholder="0x… or name.eth" /></label>
+          {recipient.trim() && !recipOk ? <p className="fw-sheet-help" style={{ color: "var(--danger)" }}>Enter a valid 0x… address (Bankr is on Base).</p> : null}
+          {flowControls}
+        </div>
+      ) : null}
+
+      {sheet === "fund" ? (
+        <div className="fw-sheet">
+          <SheetTitle onClose={() => { setSheet(null); resetFlow(); }}>Fund an agent via Bankr</SheetTitle>
+          {fundableAgents.length ? (
+            <>
+              <div className="fb-grid2">
+                <label className="fb-label">Agent
+                  <select className="fb-field" value={selectedAgent?.id || ""} onChange={(e) => { setFundAgentId(e.target.value); resetFlow(); }}>
+                    {fundableAgents.map((a) => <option key={a.id} value={a.id}>{a.name || a.id}</option>)}
+                  </select>
+                </label>
+                {amountField}
+              </div>
+              {assetField}
+              <p className="fw-sheet-help">Sends {asset} from Bankr to {selectedAgent?.name || "the agent"}&apos;s address ({frShortAddr(String(selectedAgent?.meta?.addr || ""))}) — reviewed + confirmed first.</p>
+              {flowControls}
+            </>
+          ) : <p className="fw-sheet-help">No agent wallets with an on-chain address to fund yet. Create or import an agent wallet first.</p>}
+        </div>
+      ) : null}
+
+      {sheet === "receive" ? (
+        <div className="fw-sheet">
+          <SheetTitle onClose={() => setSheet(null)}>Receive on Base mainnet</SheetTitle>
+          <div className="fw-addr">{addr || "No address yet"}</div>
+          {addr ? <BBtn variant="ghost" sm onClick={copy}><BIcon name={copied ? "check" : "copy"} size={14} /> {copied ? "Copied" : "Copy address"}</BBtn> : null}
+        </div>
+      ) : null}
+
+      <div className="fw-bankr-actions" data-wallet-card-no-toggle="">
+        <BBtn variant="primary" sm data-active={sheet === "fund" ? "" : undefined} onClick={() => openSheet("fund")}><BIcon name="promote" size={14} /> Fund agent</BBtn>
+        <BBtn variant="ghost" sm data-active={sheet === "send" ? "" : undefined} onClick={() => openSheet("send")}><BIcon name="branch" size={14} /> Send</BBtn>
+        <BBtn variant="ghost" sm data-active={sheet === "receive" ? "" : undefined} onClick={() => openSheet("receive")}><BIcon name="download" size={14} /> Receive</BBtn>
+        <BBtn variant="ghost" sm disabled={refreshing} onClick={refreshBankr}>{refreshing ? <span className="fw-loader" aria-hidden="true"><i /><i /><i /></span> : <BIcon name="refresh" size={14} />} {refreshing ? "Refreshing..." : "Refresh"}</BBtn>
+      </div>
+    </div>
+  );
+}
+function MyWallets({ actions, onNavigate }: { actions?: WalletDropInActions; onNavigate?: (id: string) => void }) {
   const total = frMyWalletsTotal();
+  const bankr = frBankrWallet();
+  const walletCount = FR_MY_WALLETS.length + (bankr ? 1 : 0);
   const [add, setAdd] = React.useState(false);
   const [collapsed, setCollapsed] = React.useState(() => {
-    try { return localStorage.getItem("fr-mywallets-collapsed") === "1"; } catch (e) { return false; }
+    try { return localStorage.getItem("fr-mywallets-collapsed") === "1"; } catch { return false; }
   });
-  const toggle = () => setCollapsed((c) => { const n = !c; try { localStorage.setItem("fr-mywallets-collapsed", n ? "1" : "0"); } catch (e) {} return n; });
+  const toggle = () => setCollapsed((c) => { const n = !c; try { localStorage.setItem("fr-mywallets-collapsed", n ? "1" : "0"); } catch { /* storage unavailable */ } return n; });
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <button type="button" onClick={toggle} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", width: "100%", background: "transparent", border: 0, padding: 0, cursor: "pointer", textAlign: "left" }}>
@@ -1048,34 +1707,35 @@ function MyWallets({ actions }) {
           <span style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 15, letterSpacing: "-0.01em", color: "var(--fg)" }}>My wallets</span>
           <span style={{ fontSize: 12, color: "var(--fg-3)" }}>your funding sources — top agents up from here</span>
         </div>
-        <span style={{ fontSize: 11.5, color: "var(--fg-3)", fontFamily: "var(--f-mono)" }}>{collapsed ? FR_MY_WALLETS.length + " wallets · " : ""}{frFmtUsdFull(total)} reserve</span>
+        <span style={{ fontSize: 11.5, color: "var(--fg-3)", fontFamily: "var(--f-mono)" }}>{collapsed ? walletCount + " wallets · " : ""}{frFmtUsdFull(total)} reserve</span>
       </button>
       {!collapsed ? (
         <div className="fw-myrow">
           {FR_MY_WALLETS.map((w) => <MyWalletCard key={w.id} w={w} actions={actions} />)}
+          {bankr ? <BankrWalletCard bankr={bankr} actions={actions} onNavigate={onNavigate} /> : null}
           <button type="button" className="fw-addcard" onClick={() => setAdd(true)}>
             <span className="ring"><BIcon name="plus" size={18} /></span>
-            <span>Import wallet</span>
+            <span>Create or Import Wallet</span>
           </button>
         </div>
       ) : null}
-      {add ? <ImportWalletModal onClose={() => setAdd(false)} actions={actions} /> : null}
+      {add ? <CreateImportWalletModal onClose={() => setAdd(false)} actions={actions} /> : null}
     </div>
   );
 }
-function AgentsPanel({ onConfigure, actions }) {
+function AgentsPanel({ onConfigure, actions, onNavigate }: { onConfigure: (railId: WalletRailId) => void; actions?: WalletDropInActions; onNavigate?: (id: string) => void }) {
   const [filter, setFilter] = React.useState("all");
   const [density, setDensity] = React.useState(() => {
-    try { return localStorage.getItem(FW_DENSITY_KEY) || "compact"; } catch (e) { return "compact"; }
+    try { return localStorage.getItem(FW_DENSITY_KEY) || "compact"; } catch { return "compact"; }
   });
-  const [expanded, setExpanded] = React.useState(null);
+  const [expanded, setExpanded] = React.useState<string | null>(null);
   const wallets = frWallets();
   const shown = wallets.filter((w) => frMatchesFilter(w, filter));
-  const setD = (d) => { setDensity(d); setExpanded(null); try { localStorage.setItem(FW_DENSITY_KEY, d); } catch (e) {} };
-  const toggle = (id) => setExpanded((cur) => (cur === id ? null : id));
+  const setD = (d: string) => { setDensity(d); setExpanded(null); try { localStorage.setItem(FW_DENSITY_KEY, d); } catch { /* storage unavailable */ } };
+  const toggle = (id: string) => setExpanded((cur) => (cur === id ? null : id));
   return (
     <div className="fb-fade" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-      <MyWallets actions={actions} />
+      <MyWallets actions={actions} onNavigate={onNavigate} />
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap" }}>
@@ -1129,7 +1789,7 @@ function HoldingsPanel() {
           {tokens.map((t) => (
             <span key={t.sym} style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 11.5, color: "var(--fg-2)" }}>
               <i style={{ width: 9, height: 9, borderRadius: 3, background: frBarColor(t.sym) }} />
-              {(FR_CCY[t.sym] || {}).name} <span style={{ color: "var(--fg-4)", fontFamily: "var(--f-mono)" }}>{Math.round((t.usd / total) * 100)}%</span>
+              {((FR_CCY[t.sym] || {}) as WalletTokenMeta).name} <span style={{ color: "var(--fg-4)", fontFamily: "var(--f-mono)" }}>{Math.round((t.usd / total) * 100)}%</span>
             </span>
           ))}
         </div>
@@ -1148,7 +1808,7 @@ function HoldingsPanel() {
           </thead>
           <tbody>
             {tokens.map((t) => {
-              const meta = FR_CCY[t.sym] || {};
+              const meta: WalletTokenMeta = FR_CCY[t.sym] || {};
               const c = frFmtChange(t.change);
               const share = (t.usd / total) * 100;
               return (
@@ -1219,8 +1879,8 @@ function ActivityPanel() {
     </div>
   );
 }
-function RailsPanel({ actions, selectedRailId, onSelectedRailHandled }) {
-  const [cfg, setCfg] = React.useState(null);
+function RailsPanel({ actions, selectedRailId, onSelectedRailHandled }: { actions?: WalletDropInActions; selectedRailId?: string; onSelectedRailHandled?: () => void }) {
+  const [cfg, setCfg] = React.useState<WalletRail | null>(null);
   React.useEffect(() => {
     if (!selectedRailId) return;
     const rail = frRailCfg(selectedRailId);
@@ -1237,6 +1897,7 @@ function RailsPanel({ actions, selectedRailId, onSelectedRailHandled }) {
         <span style={{ fontSize: 11.5, color: "var(--fg-3)", fontFamily: "var(--f-mono)" }}>{ready} of {FR_RAIL_CONFIG.length} ready</span>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 16, alignItems: "start" }}>
+        <ClawBankStatusCard />
         {FR_RAIL_CONFIG.map((r) => {
           const agents = frRailAgents(r.id);
           const isReady = r.enabled && r.setup === "ready";
@@ -1280,7 +1941,7 @@ function RailsPanel({ actions, selectedRailId, onSelectedRailHandled }) {
     </div>
   );
 }
-function fmtTokens(n) { return n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? Math.round(n / 1e3) + "k" : String(n); }
+function fmtTokens(n: number) { return n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? Math.round(n / 1e3) + "k" : String(n); }
 function UsagePanel() {
   const rows = frUsage();
   const totalTokens = rows.reduce((s, r) => s + r.tokens, 0);
@@ -1353,7 +2014,7 @@ function UsagePanel() {
     </div>
   );
 }
-function HoneyPanel({ actions }) {
+function HoneyPanel({ actions }: { actions?: WalletDropInActions }) {
   const [on, setOn] = React.useState(D.FR_HONEY_ENABLED);
   React.useEffect(() => setOn(D.FR_HONEY_ENABLED), [D.FR_HONEY_ENABLED]);
   const s = frHoneySummary();
@@ -1367,7 +2028,7 @@ function HoneyPanel({ actions }) {
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
             <span className="fw-rtile" style={{ width: 44, height: 44, background: "var(--honey-soft)", border: "1px solid var(--honey-line)" }}><HiveMark size={22} stroke="var(--honey)" dot={false} /></span>
             <div>
-              <span className="fb-eyebrow">Honey · rewards ledger</span>
+              <span className="fb-eyebrow">Honey · lifetime contribution record</span>
               <div style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 32, letterSpacing: "-0.02em", lineHeight: 1.05, marginTop: 4 }}>{s.balance.toLocaleString()} <span style={{ fontSize: 16, color: "var(--honey)", fontWeight: 500 }}>Honey</span></div>
             </div>
           </div>
@@ -1376,16 +2037,28 @@ function HoneyPanel({ actions }) {
           </label>
         </div>
         <p style={{ fontSize: 12.5, color: "var(--fg-3)", lineHeight: 1.55, margin: 0, maxWidth: 620 }}>
-          Agents earn Honey for useful, reviewed work. Spend it on priority routing, or convert it to wallet runway. Earning and redemption are recorded here.
+          Agents earn Honey for useful, reviewed work and bounded peer recognition. It remains non-transferable and does not buy routing or automatically convert to HIVE; the same lifetime Honey total also unlocks higher daily free-agent usage.
         </p>
         <div style={{ display: "flex", gap: 28, flexWrap: "wrap", borderTop: "1px solid var(--line)", paddingTop: 14 }}>
           <WStat value={"+" + s.earned.toLocaleString()} label="earned · this week" tone="var(--honey)" />
-          <WStat value={"-" + s.redeemed.toLocaleString()} label="redeemed + converted" />
+          <WStat value={s.redeemed.toLocaleString()} label="policy-gated conversions" />
           <WStat value={fmtTokens(s.billed)} label="tokens billed" />
           <WStat value={s.holders} label="earning agents" />
+          {(s.potentialHoney ?? 0) > 0 ? <WStat value={(s.potentialHoney ?? 0).toLocaleString()} label="potential · local models" tone="var(--fg-2)" /> : null}
         </div>
+        {(s.potentialHoney ?? 0) > 0 && s.potentialMessage ? (
+          <p style={{ fontSize: 12, color: "var(--fg-3)", lineHeight: 1.55, margin: 0, maxWidth: 620 }}>
+            {s.potentialMessage}
+          </p>
+        ) : null}
       </div>
       <WalletRewardsActions actions={actions} />
+      <HoneyContributionCard
+        onLoad={actions?.onLoadHoneyContributionStatus}
+        onLoadWalletLinkStatus={actions?.onLoadHoneyWalletLinkStatus}
+        onLinkWallet={actions?.onLinkHoneyWallet}
+        onLink={actions?.onLinkTelegramHoney} onCreateLinkIntent={actions?.onCreateTelegramHoneyLinkIntent}
+      />
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1.55fr) minmax(280px,1fr)", gap: 16, alignItems: "start" }}>
         <div className="fb-card" style={{ overflow: "hidden", opacity: on ? 1 : 0.5 }}>
           <div style={{ padding: "15px 18px 12px", borderBottom: "1px solid var(--line)", fontSize: 12.5, fontWeight: 500 }}>Recent ledger</div>
@@ -1408,7 +2081,7 @@ function HoneyPanel({ actions }) {
           }) : <div style={{ padding: 18, color: "var(--fg-3)", fontSize: 12.5 }}>No Honey ledger events have been recorded yet.</div>}
         </div>
         <div className="fb-card" style={{ overflow: "hidden", opacity: on ? 1 : 0.5 }}>
-          <div style={{ padding: "15px 18px 12px", borderBottom: "1px solid var(--line)", fontSize: 12.5, fontWeight: 500 }}>Balances by agent</div>
+          <div style={{ padding: "15px 18px 12px", borderBottom: "1px solid var(--line)", fontSize: 12.5, fontWeight: 500 }}>HONEY attribution by agent</div>
           {byAgent.length ? byAgent.map((a, i) => (
             <div key={a.id} style={{ display: "flex", flexDirection: "column", gap: 7, padding: "12px 18px", borderTop: i ? "1px solid var(--line)" : 0 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
@@ -1420,15 +2093,16 @@ function HoneyPanel({ actions }) {
               </div>
               <span className="fr-meter"><i style={{ width: Math.max(3, (a.honey / maxHoney) * 100) + "%", background: "var(--honey)" }} /></span>
             </div>
-          )) : <div style={{ padding: 18, color: "var(--fg-3)", fontSize: 12.5 }}>No Honey balances yet.</div>}
+          )) : <div style={{ padding: 18, color: "var(--fg-3)", fontSize: 12.5 }}>No Honey has been attributed yet.</div>}
         </div>
       </div>
     </div>
   );
 }
-function WalletModeHeader({ panel, onPanel }) {
+function WalletModeHeader({ panel, onPanel }: { panel: string; onPanel: (id: string) => void }) {
   const s = frWalletSummary();
-  const copy = FR_WALLET_PANELS.find((p) => p.id === panel);
+  // panel is always one of FR_WALLET_PANELS' ids (guarded in FleetWallets).
+  const copy = FR_WALLET_PANELS.find((p) => p.id === panel)!;
   const chg = frFmtChange(s.change);
   return (
     <header style={{ padding: "20px 30px", borderBottom: "1px solid var(--line)" }}>
@@ -1452,12 +2126,12 @@ function WalletModeHeader({ panel, onPanel }) {
     </header>
   );
 }
-function FleetWallets({ theme, onToggleTheme, onNavigate, actions }) {
+function FleetWallets({ theme, onToggleTheme, onNavigate, actions }: { theme?: string; onToggleTheme?: () => void; onNavigate?: (id: string) => void; actions?: WalletDropInActions }) {
   const valid = FR_WALLET_PANELS.map((p) => p.id);
   const initial = (typeof location !== "undefined" && new URLSearchParams(location.search).get("walletPanel")) || "agents";
   const [panel, setPanel] = React.useState(valid.includes(initial) ? initial : "agents");
   const [selectedRailId, setSelectedRailId] = React.useState("");
-  const openRailConfig = React.useCallback((railId) => {
+  const openRailConfig = React.useCallback((railId: string) => {
     setSelectedRailId(railId);
     setPanel("rails");
   }, []);
@@ -1467,7 +2141,7 @@ function FleetWallets({ theme, onToggleTheme, onNavigate, actions }) {
   else if (panel === "usage") body = <UsagePanel />;
   else if (panel === "honey") body = <HoneyPanel actions={actions} />;
   else if (panel === "rails") body = <RailsPanel actions={actions} selectedRailId={selectedRailId} onSelectedRailHandled={() => setSelectedRailId("")} />;
-  else body = <AgentsPanel onConfigure={openRailConfig} actions={actions} />;
+  else body = <AgentsPanel onConfigure={openRailConfig} actions={actions} onNavigate={onNavigate} />;
   return (
     <div className="fr-root" style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--bg)", position: "relative", overflow: "hidden", paddingLeft: FR_SHELF_W }}>
       <NavShelf active="wallet" theme={theme} onToggleTheme={onToggleTheme} onNavigate={onNavigate} />
@@ -1479,8 +2153,16 @@ function FleetWallets({ theme, onToggleTheme, onNavigate, actions }) {
     </div>
   );
 }
-export function WalletsView({ runtimeData, theme, onToggleTheme, onNavigate, actions }: any = {}) {
-  const appliedRuntimeDataRef = React.useRef(null);
+export type WalletsViewProps = {
+  runtimeData?: WalletRuntimeData | null;
+  theme?: string;
+  onToggleTheme?: () => void;
+  onNavigate?: (id: string) => void;
+  actions?: WalletDropInActions;
+};
+
+export function WalletsView({ runtimeData, theme, onToggleTheme, onNavigate, actions }: WalletsViewProps = {}) {
+  const appliedRuntimeDataRef = React.useRef<WalletRuntimeData | null>(null);
   if (runtimeData && appliedRuntimeDataRef.current !== runtimeData) {
     D.frApplyRuntimeWalletData(runtimeData);
     appliedRuntimeDataRef.current = runtimeData;

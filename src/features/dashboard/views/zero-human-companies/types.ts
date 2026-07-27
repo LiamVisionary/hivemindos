@@ -1,6 +1,16 @@
 // Zero Human Companies — shared types.
 // Ported from the nextjs-companies prototype; `id` fields added on Agent /
 // PoolAgent so the live view can persist real agent membership.
+import type { CompanyRevenueEventSource, CompanyRevenueRailStatus, CompanyRevenueRollup } from "@/lib/types/company-revenue";
+import type { AnalyticsProviderKey } from "@/lib/services/company-analytics/types";
+import type { CompanyApprovalPolicy, CompanyAutonomyPauseMode, CompanyDirective, CompanyExecutionConfig, CompanyPricingProposal, CompanyProductCatalog } from "@/lib/types/company";
+import type { CompanyExecutionSelection } from "@/lib/services/company-execution-capabilities";
+import type { KanbanDeliverableKind } from "@/lib/types/kanban";
+import type { CompanyDataRoomImportRequest, CompanyImportRequest, CompanyImportedKnowledge, CompanyImportedOperations } from "@/lib/types/company-import";
+import type { WorkBoardPipelineImpact, WorkBoardPipelineSummary } from "@/features/dashboard/work-board-pipeline";
+import type { SpendApprovalView } from "@/features/approvals/spend-approval-model";
+import type { ReasoningTrail } from "@/lib/types/reasoning-trail";
+import type { GitLawbProof } from "@/lib/types/gitlawb";
 
 export type AgentState =
   | "working" | "reviewing" | "scheduled" | "ready" | "idle" | "blocked" | "setup";
@@ -57,7 +67,7 @@ export interface Burn {
   runway: number;
 }
 
-export interface TokenCapital {
+export interface CapabilityCapital {
   score: number;
   learningAssets: number;
   workflowAssets: number;
@@ -89,19 +99,56 @@ export interface Revenue {
   isApex: boolean;
 }
 
-export interface Approval {
-  id: string;
-  title: string;
-  agent: string;
-  kind: string;
-  risk: Risk;
-}
+// The company approvals surface is the shared spend-approval view (see
+// src/features/approvals). Aliased here so existing ZHC imports keep working
+// while both surfaces render/decide through one shared module (DRY).
+export type Approval = SpendApprovalView;
 
 export interface GovEvent {
   kind: "patch" | "reflect" | "escalate" | "alert";
   text: string;
   agent: string;
   since: string;
+}
+
+/** A durable output attached to a piece of company work (file, doc, or link). */
+export interface IssueDeliverable {
+  id: string;
+  label: string;
+  kind: string;
+  path?: string;
+  url?: string;
+}
+
+/** A verification receipt recorded against the work's eval gates. */
+export interface IssueReceipt {
+  title: string;
+  status: "passed" | "failed" | "skipped";
+  /** The concrete commands/probes and their results behind this receipt — the
+   * proof the human can expand under a failed gate instead of taking it on faith. */
+  evidence?: string[];
+}
+
+/**
+ * The real Work Board record behind a board card — what the agent actually
+ * produced. Present only for live data (demo issues have no backing task);
+ * cards with `work` open the task-detail modal.
+ */
+export interface IssueWork {
+  taskId: string;
+  status: string;
+  body?: string;
+  result?: string;
+  deliverables: IssueDeliverable[];
+  receipts: IssueReceipt[];
+  /** Signed code/task provenance and linked project proofs attached to this work. */
+  proofs?: GitLawbProof[];
+  /** Name of the machine that produced the work (for deliverable provenance). */
+  machineName?: string;
+  updatedAt?: number;
+  completedAt?: number;
+  /** Labeled potential revenue this task can unblock; quoted, not booked. */
+  pipelineImpact?: WorkBoardPipelineImpact;
 }
 
 export interface Issue {
@@ -111,6 +158,12 @@ export interface Issue {
   agent: string | null;
   pri: Priority;
   pts: number;
+  /** Live-data link to the underlying Work Board task and its outputs. */
+  work?: IssueWork;
+  /** Labeled potential revenue this card can unblock; quoted, not booked. */
+  pipelineImpact?: WorkBoardPipelineImpact;
+  /** Human-facing explanation of why this issue exists and what decision/action it needs. */
+  reasoning?: ReasoningTrail;
 }
 
 export interface Colony {
@@ -126,8 +179,15 @@ export interface Colony {
   apex: ApexGoal;
   workBlock: WorkBlock;
   burn: Burn;
-  tokenCapital: TokenCapital;
+  /** Rolling paid cloud-API spend (kind "api") + configured monthly ceiling, for the Treasury API panel. */
+  apiSpend?: { dayUsd: number; monthUsd: number; monthlyCeilingUsd: number | null };
+  capabilityCapital: CapabilityCapital;
   revenue?: Revenue;
+  revenueShare?: CompanyRevenueRollup;
+  /** Whether money can land in the ledger without a human (x402 offers / Stripe webhook). */
+  revenueRail?: CompanyRevenueRailStatus;
+  /** Latest labeled Work Board forecast for this company; quoted, not booked. */
+  pipeline?: WorkBoardPipelineSummary;
   velocity: number[];
   approvals: Approval[];
   agents: Agent[];
@@ -142,6 +202,20 @@ export interface Colony {
   hasApexGoal?: boolean;
   /** True when perpetual autonomy is on — the driver keeps re-dispatching until stopped/frozen. */
   autonomy?: boolean;
+  /** Selected autonomy engine and its optional AEON binding. */
+  execution?: CompanyExecutionConfig;
+  /** Standing directives injected by a human or captured from rejecting a deliverable. */
+  directives?: CompanyDirective[];
+  /** Official product catalog from the shared brain; non-empty items → the Products tab shows. */
+  products?: CompanyProductCatalog;
+  /** Crew-raised price-change requests awaiting the human (shown under Approvals + a Products banner). */
+  pricingProposals?: CompanyPricingProposal[];
+  /** Explicitly saved approval policies; learned/default rows are derived at render time. */
+  approvalPolicies?: CompanyApprovalPolicy[];
+  /** Imported legacy repo operations discovered from source. */
+  importedOperations?: CompanyImportedOperations;
+  /** Reviewable local data-room sources attached to this company. */
+  importedKnowledge?: CompanyImportedKnowledge;
   /**
    * Raw, unformatted company values used to seed the edit form. Distinct from
    * display fields above (`apex`, `ticker`, …), which carry derived fallbacks
@@ -149,6 +223,17 @@ export interface Colony {
    */
   edit: CompanyEditForm;
 }
+
+export interface CompanyRevenueShareInput {
+  amountUsd: number;
+  source: CompanyRevenueEventSource;
+  collectFee: boolean;
+  collectingAgentId?: string;
+}
+
+export type CompanyImportForm =
+  | ({ source: "repo" } & CompanyImportRequest)
+  | ({ source: "data-room" } & CompanyDataRoomImportRequest);
 
 /** A fully-configured agent from the org roster, available to assign. */
 export interface PoolAgent {
@@ -164,7 +249,7 @@ export interface PoolAgent {
 /** How an apex metric is read/rendered (plain number, %, currency, or users). */
 export type MetricUnit = "number" | "percent" | "currency" | "users";
 
-export interface CreateForm {
+export interface CreateForm extends Partial<CompanyExecutionSelection> {
   name: string;
   ticker?: string;
   sector?: string;
@@ -189,6 +274,14 @@ export interface CompanyMemberEdit {
 export interface CompanyEditForm extends CreateForm {
   charter?: string;
   blurb?: string;
+  /** Project-registry id of the company's domain code repo ("" = unlinked). */
+  projectId?: string;
+  /** Analytics provider link ("" = not configured; guided setup shown in the tab). */
+  analyticsProvider?: AnalyticsProviderKey | "";
+  /** Provider project/site id (PostHog project id, Plausible domain, GA4 property). */
+  analyticsProjectId?: string;
+  /** Optional self-hosted analytics base URL. */
+  analyticsHost?: string;
   dailyBudgetUsd?: number;
   monthlyBudgetUsd?: number;
   totalBudgetUsd?: number;
@@ -197,6 +290,12 @@ export interface CompanyEditForm extends CreateForm {
   apexCurrent?: string;
   apexProgress?: number;
   frozen?: boolean;
+  /** Auto-pause new-work dispatch once this many items are waiting on a human. 0/undefined = off. */
+  autonomyPauseMax?: number;
+  /** What the pause threshold counts: all waiting items, or only chosen deliverable kinds. */
+  autonomyPauseMode?: CompanyAutonomyPauseMode;
+  /** Deliverable kinds counted when autonomyPauseMode is "deliverable-kinds". */
+  autonomyPauseKinds?: KanbanDeliverableKind[];
   revenueKind?: "users" | "revenue" | "";
   revenueLabel?: string;
   revenueValue?: string;

@@ -1,0 +1,49 @@
+{
+  "created_at": "2026-07-14T15:42:37.450873+00:00",
+  "request": "Replace the bundled Python MarkItDown sidecar with a much smaller native Rust document-to-Markdown sidecar while preserving HivemindOS's 16-format and security contracts.",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "native/quant-research-engine/Cargo.toml",
+      "target_path": "native/document-reader/Cargo.toml",
+      "reuse_type": "config_adapted",
+      "note": "Reused the stripped LTO single-binary release profile."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/stage-quant-research-engine.mjs",
+      "target_path": "scripts/stage-markitdown-sidecar.mjs",
+      "reuse_type": "adapted_code",
+      "note": "Adapted locked Cargo build, target staging, and version verification."
+    },
+    {
+      "source_repo": "ThomAub/officemd",
+      "source_path": "crates/officemd_cli/src/main.rs",
+      "target_path": "native/document-reader/src/main.rs",
+      "reuse_type": "translated_code",
+      "note": "Translated extension dispatch into the bounded HivemindOS JSONL protocol without retaining OfficeMD runtime crates."
+    },
+    {
+      "source_repo": "marirs/msg-parser-rs",
+      "source_path": "examples/parse-email.rs",
+      "target_path": "native/document-reader/src/main.rs",
+      "reuse_type": "adapted_code",
+      "note": "Adapted Outlook message field and body extraction."
+    },
+    {
+      "source_repo": "tafia/calamine",
+      "source_path": "src/lib.rs",
+      "target_path": "native/document-reader/src/main.rs",
+      "reuse_type": "adapted_code",
+      "note": "Adapted in-memory workbook loading and sheet iteration for XLS and XLSX."
+    },
+    {
+      "source_repo": "xberg-io/html-to-markdown",
+      "source_path": "crates/html-to-markdown/src/lib.rs",
+      "target_path": "native/document-reader/src/main.rs",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the typed HTML conversion API for HTML and EPUB chapters."
+    }
+  ]
+}

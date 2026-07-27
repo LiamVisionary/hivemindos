@@ -1,11 +1,32 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
+// Partially typed 2026-07-02; the typing pass ran out of session mid-file and the remaining errors are deferred (see CHANGELOG).
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { getNativeAppVersion } from "@/lib/native/desktop-status";
 import { getNativeFleetDiscovery } from "@/lib/native/fleet";
 import { readNativeKanban } from "@/lib/native/kanban";
+import { APP_BUILDER_CONTRACT } from "@/lib/services/app-builder/contract";
+import { machineNeedsAppBuilderRepair } from "@/features/fleet/app-builder-collector-capability";
+
+const REMOTE_FLEET_UPDATE_REQUEST_TIMEOUT_MS = 210_000;
+const LOCAL_FLEET_UPDATE_REQUEST_TIMEOUT_MS = 330_000;
+const FLEET_UPDATE_MAINTENANCE_RETRY_MS = 5_000;
+const FLEET_UPDATE_MAINTENANCE_WAIT_MS = 20 * 60_000;
+
+function fleetUpdateIsWaitingForMaintenance(
+  response: Response | null,
+  data: { error?: string; queued?: boolean } | null,
+) {
+  return Boolean(
+    data?.queued === true ||
+      (response?.status === 409 &&
+        /active chat run|maintenance (?:is )?(?:already )?(?:starting|reserved)|reserved by another update request/i.test(
+          data?.error ?? "",
+        )),
+  );
+}
 
 export function useFleetNotificationsController(props: any) {
   const {
@@ -61,12 +82,20 @@ export function useFleetNotificationsController(props: any) {
     summarizeHermesAuthError,
     updateStatusByMachine,
   } = props;
-  function openMachineInitModal() {
-    setMachineInitOpen(true);
-    setMachineInitStatus({});
-    setMachineInitCopiedKey("");
-    setMachineInitTokenStatus({});
-  }
+  // Latest snapshot of the props/state and sibling local helpers that the
+  // stable useCallback handlers below read at call time (see liveRef.current
+  // assignment near the end of this hook). Reading through this ref lets those
+  // handlers keep an empty dep array (stable identity, so the memoized panels
+  // they are spread into can short-circuit) without ever observing stale props.
+  const liveRef = useRef<any>(null);
+
+  const openMachineInitModal = useCallback(() => {
+    const live = liveRef.current;
+    live.setMachineInitOpen(true);
+    live.setMachineInitStatus({});
+    live.setMachineInitCopiedKey("");
+    live.setMachineInitTokenStatus({});
+  }, []);
 
   async function saveHetznerToken() {
     const token = machineInitToken.trim();
@@ -210,26 +239,32 @@ export function useFleetNotificationsController(props: any) {
     }
   }
 
-  async function runMachineUpdate(machine: MachineGroup) {
-    const versionCopy = machineVersionCopy(
+  const runMachineUpdate = useCallback(async (machine: MachineGroup) => {
+    const live = liveRef.current;
+    const { appVersion } = live;
+    const versionCopy = live.machineVersionCopy(
       machine,
       appVersion?.latestCommit || appVersion?.commit,
     );
-    const needsChatBridgeRepair = machineNeedsChatBridgeRepair(machine);
-    const needsEnvHttpSyncRepair = machineNeedsEnvHttpSyncRepair(machine);
-    const needsSkillSyncRepair = machineNeedsSkillSyncRepair(machine);
+    const needsChatBridgeRepair = live.machineNeedsChatBridgeRepair(machine);
+    const needsEnvHttpSyncRepair = live.machineNeedsEnvHttpSyncRepair(machine);
+    const needsSkillSyncRepair = live.machineNeedsSkillSyncRepair(machine);
+    const needsAppBuilderRepair = machineNeedsAppBuilderRepair(machine);
     if (
-      (needsChatBridgeRepair ||
+      (needsAppBuilderRepair ||
+        needsChatBridgeRepair ||
         needsEnvHttpSyncRepair ||
         needsSkillSyncRepair) &&
-      localDashboardHasUnpublishedChanges(appVersion)
+      live.localDashboardHasUnpublishedChanges(appVersion)
     ) {
-      const missingFeature = needsSkillSyncRepair
+      const missingFeature = needsAppBuilderRepair
+        ? "Chat Preview App Builder"
+        : needsSkillSyncRepair
         ? "shared skills bridge"
         : needsEnvHttpSyncRepair
           ? "shared-env sync endpoint"
           : "Hermes chat bridge";
-      setUpdateStatusByMachine((current) => ({
+      live.setUpdateStatusByMachine((current) => ({
         ...current,
         [machine.key]: {
           label: "Publish update first",
@@ -240,12 +275,13 @@ export function useFleetNotificationsController(props: any) {
       return;
     }
     if (
-      !isCollectorAutoUpdateable(versionCopy) &&
+      !live.isCollectorAutoUpdateable(versionCopy) &&
+      !needsAppBuilderRepair &&
       !needsChatBridgeRepair &&
       !needsEnvHttpSyncRepair &&
       !needsSkillSyncRepair
     ) {
-      setUpdateStatusByMachine((current) => ({
+      live.setUpdateStatusByMachine((current) => ({
         ...current,
         [machine.key]: {
           label: "Already up to date",
@@ -256,53 +292,101 @@ export function useFleetNotificationsController(props: any) {
       }));
       return;
     }
-    setUpdateStatusByMachine((current) => ({
+    live.setUpdateStatusByMachine((current) => ({
       ...current,
       [machine.key]: { label: "Updating...", tone: "working" },
     }));
-    const response = await fetch("/api/fleet/update", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        collectorUrl: machine.collectorUrl,
-        dnsName: machine.dnsName,
-        name: machine.name,
-        ip: machine.ip || machine.address,
-        appDir: machine.version?.appDir,
-        updateCommand: machine.version?.updateCommand,
-        expectedCommit:
-          machine.version?.latestCommit || appVersion?.latestCommit,
-        requiredCapabilities: {
-          chat: needsChatBridgeRepair || undefined,
-          envHttpSync: needsEnvHttpSyncRepair || undefined,
-          skillInventory: needsSkillSyncRepair || undefined,
-          skillAutoSync: needsSkillSyncRepair || undefined,
-        },
-      }),
-    }).catch(() => null);
-    const data = (await response?.json().catch(() => null)) as {
+    const updateRequestTimeoutMs = machine.self
+      ? LOCAL_FLEET_UPDATE_REQUEST_TIMEOUT_MS
+      : REMOTE_FLEET_UPDATE_REQUEST_TIMEOUT_MS;
+    const maintenanceRequestId = crypto.randomUUID();
+    const maintenanceWaitStartedAt = Date.now();
+    let updateRequestError = "";
+    let response: Response | null = null;
+    let data: {
       ok?: boolean;
       error?: string;
+      message?: string;
+      queued?: boolean;
       method?: string;
       verified?: boolean;
       fallbackCommand?: string;
-    } | null;
+    } | null = null;
+    while (true) {
+      updateRequestError = "";
+      response = await fetch("/api/fleet/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(updateRequestTimeoutMs),
+        body: JSON.stringify({
+          maintenanceRequestId,
+          collectorUrl: machine.collectorUrl,
+          dnsName: machine.dnsName,
+          name: machine.name,
+          ip: machine.ip || machine.address,
+          appDir: machine.version?.appDir,
+          updateCommand: machine.version?.updateCommand,
+          expectedCommit:
+            machine.version?.latestCommit || appVersion?.latestCommit,
+          requiredCapabilities: {
+            appBuilderContractVersion: needsAppBuilderRepair
+              ? APP_BUILDER_CONTRACT.version
+              : undefined,
+            chat: needsChatBridgeRepair || undefined,
+            envHttpSync: needsEnvHttpSyncRepair || undefined,
+            skillInventory: needsSkillSyncRepair || undefined,
+            skillAutoSync: needsSkillSyncRepair || undefined,
+          },
+        }),
+      }).catch((error: unknown) => {
+        updateRequestError =
+          error instanceof DOMException && error.name === "TimeoutError"
+            ? `Update status timed out after ${Math.round(updateRequestTimeoutMs / 60_000)} minutes. The remote command may still be finishing, but this dashboard stopped waiting so the machine cannot remain stuck on Updating.`
+            : "The dashboard could not reach the fleet update service.";
+        return null;
+      });
+      data = (await response?.json().catch(() => null)) as typeof data;
+      if (!fleetUpdateIsWaitingForMaintenance(response, data)) break;
+      if (
+        Date.now() - maintenanceWaitStartedAt >=
+        FLEET_UPDATE_MAINTENANCE_WAIT_MS
+      ) {
+        data = {
+          ...data,
+          error:
+            "The update waited 20 minutes, but this agent bridge is still busy. No active agent work was interrupted. Try Update again after the work finishes.",
+        };
+        break;
+      }
+      live.setUpdateStatusByMachine((current) => ({
+        ...current,
+        [machine.key]: {
+          label: "Waiting for agent work…",
+          detail: `${data?.message ?? data?.error ?? "This agent bridge is busy."} The update will start automatically as soon as the active work finishes.`,
+          tone: "working",
+        },
+      }));
+      await new Promise((resolve) =>
+        setTimeout(resolve, FLEET_UPDATE_MAINTENANCE_RETRY_MS),
+      );
+    }
     const verified = Boolean(data?.ok && data.verified);
     const detail = verified
       ? data?.method === "already-current"
-        ? "This machine already reports the latest dashboard tools, so no update run was needed."
+        ? data?.message ||
+          "This machine already reports the latest dashboard tools, so no update run was needed."
         : machine.self
           ? "The local checkout update finished, dependencies were installed, and the local agent bridge was restarted."
           : "The update command finished. The machine pulled the latest changes, installed dependencies, and restarted the agent bridge."
       : [
-          data?.error ?? "Update failed",
+          data?.error || updateRequestError || "Update failed",
           data?.fallbackCommand
             ? `Fallback script:\n${data.fallbackCommand}`
             : "",
         ]
           .filter(Boolean)
           .join("\n\n");
-    setUpdateStatusByMachine((current) => ({
+    live.setUpdateStatusByMachine((current) => ({
       ...current,
       [machine.key]: {
         label: verified ? "Updated!" : "Update failed",
@@ -311,24 +395,25 @@ export function useFleetNotificationsController(props: any) {
       },
     }));
     if (verified) {
-      void refreshAppVersionNow();
-      void refreshDiscoveryNow();
+      void live.refreshAppVersionNow();
+      void live.refreshDiscoveryNow();
     }
-  }
+  }, []);
 
-  async function copyUpdateDetail(machineKey: string) {
-    const detail = updateStatusByMachine[machineKey]?.detail;
+  const copyUpdateDetail = useCallback(async (machineKey: string) => {
+    const live = liveRef.current;
+    const detail = live.updateStatusByMachine[machineKey]?.detail;
     if (!detail) return;
     await navigator.clipboard?.writeText(detail).catch(() => undefined);
-    setCopiedUpdateDetailKey(machineKey);
+    live.setCopiedUpdateDetailKey(machineKey);
     window.setTimeout(
       () =>
-        setCopiedUpdateDetailKey((current) =>
+        live.setCopiedUpdateDetailKey((current) =>
           current === machineKey ? "" : current,
         ),
       2500,
     );
-  }
+  }, []);
 
   async function refreshKanbanOnce(overrides: any = {}) {
     const includeArchived =
@@ -590,29 +675,30 @@ export function useFleetNotificationsController(props: any) {
     sharedVault.vaultPath,
   ]);
 
-  async function markNotificationRead(id: string) {
+  const markNotificationRead = useCallback(async (id: string) => {
+    const live = liveRef.current;
     const response = await fetch("/api/notifications", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...notificationStorageBody(), id }),
+      body: JSON.stringify({ ...live.notificationStorageBody(), id }),
     }).catch(() => null);
     const data = (await response
       ?.json()
       .catch(() => null)) as NotificationsResponse | null;
     if (!response?.ok || !data?.ok) {
-      setNotificationsStatus(
+      live.setNotificationsStatus(
         data?.error ?? "Could not mark notification read.",
       );
       return;
     }
-    setNotifications((current) =>
+    live.setNotifications((current) =>
       current.map((notification) =>
         notification.id === id
           ? { ...notification, read: true, readAt: new Date().toISOString() }
           : notification,
       ),
     );
-    setNotificationSummary((current) =>
+    live.setNotificationSummary((current) =>
       current
         ? {
             ...current,
@@ -620,7 +706,7 @@ export function useFleetNotificationsController(props: any) {
             highUnread: Math.max(
               0,
               current.highUnread -
-                (notifications.find((item) => item.id === id)?.priority ===
+                (live.notifications.find((item) => item.id === id)?.priority ===
                 "high"
                   ? 1
                   : 0),
@@ -628,7 +714,7 @@ export function useFleetNotificationsController(props: any) {
             urgentUnread: Math.max(
               0,
               current.urgentUnread -
-                (notifications.find((item) => item.id === id)?.priority ===
+                (live.notifications.find((item) => item.id === id)?.priority ===
                 "urgent"
                   ? 1
                   : 0),
@@ -636,7 +722,7 @@ export function useFleetNotificationsController(props: any) {
           }
         : current,
     );
-  }
+  }, []);
 
   async function markAllNotificationsRead() {
     const response = await fetch("/api/notifications", {
@@ -714,11 +800,12 @@ export function useFleetNotificationsController(props: any) {
     }
   }
 
-  async function trackAgentTaskOnKanban(
+  const trackAgentTaskOnKanban = useCallback(async (
     agent: AgentProfile,
     taskRow: AgentTaskRow,
     task?: AgentTask,
-  ) {
+  ) => {
+    const live = liveRef.current;
     const status: KanbanStatus =
       taskRow.status === "active"
         ? "working"
@@ -728,13 +815,13 @@ export function useFleetNotificationsController(props: any) {
             ? "needs-human"
             : "ideas";
     const response = await fetch(
-      `/api/kanban?board=${encodeURIComponent(kanbanBoardSlug)}`,
+      `/api/kanban?board=${encodeURIComponent(live.kanbanBoardSlug)}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...kanbanStorageBody(),
-          title: cleanActivityTitle(task?.title ?? taskRow.title),
+          ...live.kanbanStorageBody(),
+          title: live.cleanActivityTitle(task?.title ?? taskRow.title),
           body: [
             task?.lastMessage ? `Latest agent note: ${task.lastMessage}` : "",
             task?.source
@@ -758,24 +845,63 @@ export function useFleetNotificationsController(props: any) {
       .json()
       .catch(() => null)) as KanbanResponse | null;
     if (!response.ok || !data?.ok) {
-      setKanbanError(
+      live.setKanbanError(
         data?.error ?? "Could not track agent task on the Work board.",
       );
-      setActiveView("kanban");
+      live.setActiveView("kanban");
       return;
     }
     if (data.board) {
-      setKanbanBoard(data.board);
-      setKanbanStorage(data.storage ?? null);
+      live.setKanbanBoard(data.board);
+      live.setKanbanStorage(data.storage ?? null);
     }
-    if (data.task?.id) setSelectedKanbanTaskId(data.task.id);
-    setActiveView("kanban");
-    await refreshKanbanOnce().catch((error) =>
-      setKanbanError(
+    if (data.task?.id) live.setSelectedKanbanTaskId(data.task.id);
+    live.setActiveView("kanban");
+    await live.refreshKanbanOnce().catch((error) =>
+      live.setKanbanError(
         error instanceof Error ? error.message : "Kanban refresh failed.",
       ),
     );
-  }
+  }, []);
+
+  // Refresh the live snapshot every render so the stable handlers above always
+  // read current props/state and the latest sibling-helper identities. Written
+  // in an effect (matching use-fleet-auto-update.tsx) rather than during render,
+  // since these handlers are user-triggered and always fire after effects flush.
+  useEffect(() => {
+    liveRef.current = {
+      appVersion,
+      cleanActivityTitle,
+      isCollectorAutoUpdateable,
+      kanbanBoardSlug,
+      localDashboardHasUnpublishedChanges,
+      machineNeedsChatBridgeRepair,
+      machineNeedsEnvHttpSyncRepair,
+      machineNeedsSkillSyncRepair,
+      machineVersionCopy,
+      notifications,
+      setActiveView,
+      setCopiedUpdateDetailKey,
+      setKanbanBoard,
+      setKanbanError,
+      setKanbanStorage,
+      setMachineInitCopiedKey,
+      setMachineInitOpen,
+      setMachineInitStatus,
+      setMachineInitTokenStatus,
+      setNotificationSummary,
+      setNotifications,
+      setNotificationsStatus,
+      setSelectedKanbanTaskId,
+      setUpdateStatusByMachine,
+      updateStatusByMachine,
+      kanbanStorageBody,
+      notificationStorageBody,
+      refreshAppVersionNow,
+      refreshDiscoveryNow,
+      refreshKanbanOnce,
+    };
+  });
 
   return {
     openMachineInitModal,

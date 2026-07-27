@@ -33,7 +33,7 @@ export async function POST(req: Request) {
 
   let model;
   try {
-    model = getLanguageModel();
+    model = await getLanguageModel();
   } catch (error) {
     const message = error instanceof Error ? error.message : "Model configuration error";
     return Response.json({ error: message }, { status: 503 });

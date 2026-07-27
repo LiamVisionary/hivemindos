@@ -100,6 +100,8 @@ export type SkillPack = {
     name: string;
     description: string;
     markdown: string;
+    /** Canonical directory under packaged-skills/ for manifest-backed packs. */
+    packagedPath?: string;
   }>;
 };
 
@@ -143,11 +145,14 @@ export type WorkflowAction = {
 export type SkillAnalyticsEvent = {
   id: string;
   skillSlug: string;
-  event: "recommended" | "imported" | "audited" | "action-started" | "action-completed" | "action-failed" | "converted" | "improvement-suggested";
+  event: "recommended" | "imported" | "audited" | "action-started" | "action-completed" | "action-failed" | "task-completed" | "task-failed" | "task-blocked" | "converted" | "improvement-suggested";
   runtime?: string;
   agentId?: string;
   taskSource?: string;
+  taskId?: string;
+  companyId?: string;
   status?: "success" | "failure" | "blocked" | "review";
+  score?: number;
   durationMs?: number;
   auditStatus?: SkillAuditStatus;
   note?: string;

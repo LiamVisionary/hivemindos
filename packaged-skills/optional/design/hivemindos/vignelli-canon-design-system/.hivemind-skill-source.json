@@ -1,0 +1,20 @@
+{
+  "upstreamName": "Vignelli Canon Design System",
+  "upstreamSlug": "vignelli-canon-design-system",
+  "hiveSlug": "vignelli-canon-design-system",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/design/hivemindos/vignelli-canon-design-system",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-06-25T06:07:40Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional design skills",
+  "sourcePath": "packaged-skills/optional/design/hivemindos/vignelli-canon-design-system",
+  "status": "optional",
+  "relatedPublicReference": "https://github.com/alexmcdonnell-airtable/hyperagent-public-skills",
+  "relatedPublicReferenceLicense": "No license detected on 2026-06-25; not vendored or copied.",
+  "hivemindAdaptations": [
+    "Captures modernist design-system discipline as a HivemindOS optional design skill.",
+    "Adds product-token and accessibility constraints for implementation work.",
+    "Avoids vendoring unlicensed upstream text or scripts."
+  ]
+}

@@ -4,8 +4,11 @@ import {
   listAgentNotifications,
   markAgentNotificationRead,
   markAllAgentNotificationsRead,
+  resolveStaleTaskNotifications,
+  setAgentNotificationResolution,
   updateAgentNotificationSettings,
 } from "@/lib/services/obsidian/agent-notifications";
+import { readBoard } from "@/lib/services/kanban/local-kanban-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -56,7 +59,30 @@ export async function PATCH(request: NextRequest) {
       clearNotificationCache();
       return NextResponse.json({ ok: true, ...result });
     }
+    if (body.action === "resolve-stale-task-cards") {
+      // Bulk janitor: resolve+read every task-lifecycle card whose task is no
+      // longer needs-human. The live board is the authority; held (snoozed)
+      // tasks still count as live so their cards survive.
+      const board = await readBoard(null, { vaultPath: options.vaultPath ?? undefined });
+      const live = (board.tasks ?? [])
+        .filter((task) => task.status === "needs-human")
+        .map((task) => task.id);
+      const janitor = await resolveStaleTaskNotifications(live, options);
+      clearNotificationCache();
+      const result = await listAgentNotifications({ ...options, cursor: 0, limit: 40 });
+      return NextResponse.json({ ok: true, janitor, ...result });
+    }
     if (!body.id) throw new Error("Notification id is required.");
+    if (body.action === "dismiss") {
+      await setAgentNotificationResolution(
+        body.id,
+        { status: "resolved", note: "Dismissed by human.", by: "dashboard" },
+        options,
+      );
+      const result = await markAgentNotificationRead(body.id, options);
+      clearNotificationCache();
+      return NextResponse.json({ ok: true, ...result });
+    }
     const result = await markAgentNotificationRead(body.id, options);
     clearNotificationCache();
     return NextResponse.json({ ok: true, ...result });

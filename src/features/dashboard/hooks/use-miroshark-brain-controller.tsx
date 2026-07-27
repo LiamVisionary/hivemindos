@@ -2,12 +2,11 @@
 // @ts-nocheck
 "use client";
 
-/* eslint-disable react-hooks/immutability, react-hooks/purity */
-
-import { useCallback, useEffect, useMemo } from "react";
-import { getNativeBrainGraph } from "@/lib/native/brain-graph";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { getNativeBrainSkillInventory } from "@/lib/native/brain-skills";
 import { listNativeLocalDirectories, openNativeDirectory } from "@/lib/native/filesystem";
+import { refreshBrainGraphFromSources } from "./brain-graph-refresh";
+import { normalizeBrainSkillInventory } from "./brain-skill-inventory";
 import { parseRuntimeSsePayload, responseErrorMessage, runtimeErrorMessage } from "./runtime-stream-errors";
 
 function isLoopbackDirectoryCollector(collectorUrl?: string) {
@@ -42,32 +41,24 @@ function directoryMachineTarget(machine: KanbanMachineTarget) {
   return collectorUrl === machine.collectorUrl ? machine : { ...machine, collectorUrl };
 }
 
-function normalizeBrainSkillInventory(data: any) {
-  const providers = Array.isArray(data?.providers) ? data.providers : [];
-  const shared = Array.isArray(data?.shared) ? data.shared : [];
-  const providerSkills = providers.reduce((total, provider) => total + (Array.isArray(provider?.skills) ? provider.skills.length : 0), 0);
-  const importable = providers.reduce((total, provider) => (
-    total + (Array.isArray(provider?.skills) ? provider.skills.filter((skill) => !skill?.imported).length : 0)
-  ), 0);
-  return {
-    ...data,
-    providers,
-    shared,
-    totals: {
-      ...(data?.totals ?? {}),
-      shared: Number.isFinite(data?.totals?.shared) ? data.totals.shared : shared.length,
-      providerSkills: Number.isFinite(data?.totals?.providerSkills) ? data.totals.providerSkills : providerSkills,
-      importable: Number.isFinite(data?.totals?.importable) ? data.totals.importable : importable,
-    },
-  };
-}
-
 export function useMirosharkBrainController(props: any) {
-  const { BRAIN_GRAPH_CLIENT_CACHE_MS, MIROSHARK_TEMPLATE_INPUTS, SWARM_LAUNCH_PRESETS, activeView, agents, appVersion, asRecord, brainGraph, brainGraphLoadedAtRef, brainGraphVaultPathRef, brainSkills, compactValue, composeMirosharkTemplateScenario, createDefaultAgentWallet, defaultMirosharkTemplateInputs, formatRelativeTime, getMiroSharkPosts, getMiroSharkRunStatus, getMiroSharkTemplates, hermesUpdateDetail, hermesUpdateRequiredDetail, honeyLedgerEnabled, isEmptyIntegrationPayload, isLoopbackCollector, isMiroSharkRunTerminal, isUnpublishedSimulationPayload, mirosharkAnalysisAgentId, mirosharkArchiveRuns, mirosharkExperimentEvent, mirosharkHandle, mirosharkMetadata, mirosharkPlatform, mirosharkRounds, mirosharkRun, mirosharkRunPending, mirosharkScenario, mirosharkSelectedTemplateId, mirosharkStat, mirosharkStatus, mirosharkTemplateInputs, mirosharkUserName, mirosharkWorkspaceMode, notificationCountRef, notificationCursorRef, numericRecordValue, payloadArray, payloadCount, payloadData, payloadPreview, selectedAgentId, selectedMirosharkRunId, setBrainGraph, setBrainGraphLoading, setBrainGraphStatus, setBrainSkillAeonSyncing, setBrainSkillImportProvider, setBrainSkillImportSuccess, setBrainSkills, setBrainSkillsLoading, setBrainSkillsStatus, setHermesUpdateRequiredDetail, setMachineDirectoryBrowser, setMirosharkActionPending, setMirosharkAnalysisPending, setMirosharkAnalysisResult, setMirosharkAnalysisStatus, setMirosharkArchiveLoading, setMirosharkArchiveRuns, setMirosharkArchiveStatus, setMirosharkExperimentPending, setMirosharkExperimentStatus, setMirosharkHelperPending, setMirosharkHelperStatus, setMirosharkMetadata, setMirosharkPlatform, setMirosharkRounds, setMirosharkRun, setMirosharkRunPending, setMirosharkScenario, setMirosharkSelectedTemplateId, setMirosharkStatus, setMirosharkTemplateInputs, setMirosharkWorkbenchTab, setMirosharkWorkspaceMode, setNotificationCursor, setNotificationSummary, setNotifications, setNotificationsLoading, setNotificationsStatus, setRecentDirectories, setSelectedBrainNodeId, setSelectedMirosharkRunId, setSkillBrowserGithubInstalling, setSkillBrowserGithubOpen, setSkillBrowserGithubUrl, setSkillBrowserImporting, setSkillBrowserLoading, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserSkills, setSkillBrowserStatus, setSkillBrowserView, setSkillBrowserWriting, setSkillBrowserWrittenContent, sharedVault, skillBrowserGithubUrl, skillBrowserWrittenContent, skillRequiresHermesUpdate, swarmEventItem, swarmMarketEventItem, swarmMarketFromItems, swarmMarketPriceEventItem, swarmRunState, swarmTemplateIdFromMirosharkTemplate, swarmTemplateIdFromSurface, walletsByAgent } = props;
+  const { BRAIN_GRAPH_CLIENT_CACHE_MS, MIROSHARK_TEMPLATE_INPUTS, SWARM_LAUNCH_PRESETS, activeView, agents, appVersion, asRecord, brainGraph, brainGraphLoadedAtRef, brainGraphVaultPathRef, brainSkills, compactValue, composeMirosharkTemplateScenario, createDefaultAgentWallet, defaultMirosharkTemplateInputs, formatRelativeTime, getMiroSharkPosts, getMiroSharkRunStatus, getMiroSharkTemplates, hermesUpdateDetail, hermesUpdateRequiredDetail, honeyLedgerEnabled, isEmptyIntegrationPayload, isLoopbackCollector, isMiroSharkRunTerminal, isUnpublishedSimulationPayload, mirosharkAnalysisAgentId, mirosharkArchiveRuns, mirosharkExperimentEvent, mirosharkHandle, mirosharkMetadata, mirosharkPlatform, mirosharkRounds, mirosharkRun, mirosharkRunPending, mirosharkScenario, mirosharkSelectedTemplateId, mirosharkStat, mirosharkStatus, mirosharkTemplateInputs, mirosharkUserName, mirosharkWorkspaceMode, notificationCountRef, notificationCursorRef, numericRecordValue, payloadArray, payloadCount, payloadData, payloadPreview, selectedAgentId, selectedMirosharkRunId, setBrainGraph, setBrainGraphLoading, setBrainGraphStatus, setBrainSkillAeonSyncing, setBrainSkillImportProvider, setBrainSkillImportSuccess, setBrainSkills, setBrainSkillsLoading, setBrainSkillsStatus, setHermesUpdateRequiredDetail, setMachineDirectoryBrowser, setMirosharkActionPending, setMirosharkAnalysisPending, setMirosharkAnalysisResult, setMirosharkAnalysisStatus, setMirosharkArchiveLoading, setMirosharkArchiveRuns, setMirosharkArchiveStatus, setMirosharkExperimentPending, setMirosharkExperimentStatus, setMirosharkHelperPending, setMirosharkHelperStatus, setMirosharkMetadata, setMirosharkPlatform, setMirosharkRounds, setMirosharkRun, setMirosharkRunPending, setMirosharkScenario, setMirosharkSelectedTemplateId, setMirosharkStatus, setMirosharkTemplateInputs, setMirosharkWorkbenchTab, setMirosharkWorkspaceMode, setNotificationCursor, setNotificationSummary, setNotifications, setNotificationsLoading, setNotificationsStatus, setRecentDirectories, setSelectedBrainNodeId, setSelectedMirosharkRunId, setSkillBrowserGithubInstalling, setSkillBrowserGithubOpen, setSkillBrowserGithubUrl, setSkillBrowserImporting, setSkillBrowserLoading, setSkillBrowserEnriching, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserSkills, setSkillBrowserStatus, setSkillBrowserView, setSkillBrowserWriting, setSkillBrowserWrittenContent, sharedVault, skillBrowserGithubUrl, skillBrowserWrittenContent, skillRequiresHermesUpdate, swarmEventItem, swarmMarketEventItem, swarmMarketFromItems, swarmMarketPriceEventItem, swarmRunState, swarmTemplateIdFromMirosharkTemplate, swarmTemplateIdFromSurface, walletsByAgent } = props;
+  // Latest metadata mirror for the equality guard below — read via ref so the
+  // refresh callback can stay a no-dep useCallback (stable identity).
+  const mirosharkMetadataRef = useRef(mirosharkMetadata);
+  mirosharkMetadataRef.current = mirosharkMetadata;
   const refreshMirosharkMetadata = useCallback(async () => {
     const response = await fetch("/api/miroshark/swarm?metadata=1", { cache: "no-store" }).catch(() => null);
     const data = await response?.json().catch(() => null) as MiroSharkMetadata | null;
-    if (data) setMirosharkMetadata(data);
+    if (!data) return;
+    // The 20s metadata poll usually returns identical bytes; skip the setState
+    // (and the dashboard re-render it forces) when nothing actually changed.
+    try {
+      if (JSON.stringify(data) === JSON.stringify(mirosharkMetadataRef.current)) return;
+    } catch {
+      // Non-serializable payload — fall through and apply it.
+    }
+    setMirosharkMetadata(data);
   }, []);
 
   useEffect(() => {
@@ -367,64 +358,18 @@ export function useMirosharkBrainController(props: any) {
     }
   }, [sharedVault.enabled, sharedVault.vaultPath]);
 
-  const refreshBrainGraph = useCallback(async (force = false) => {
-    if (!sharedVault.enabled) {
-      setBrainGraph(null);
-      setBrainGraphStatus("Shared brain is off.");
-      brainGraphLoadedAtRef.current = 0;
-      brainGraphVaultPathRef.current = "";
-      return;
-    }
-    const requestedVaultPath = sharedVault.vaultPath.trim();
-    if (
-      !force
-      && brainGraph
-      && brainGraphVaultPathRef.current === requestedVaultPath
-      && Date.now() - brainGraphLoadedAtRef.current < BRAIN_GRAPH_CLIENT_CACHE_MS
-    ) return;
-    setBrainGraphLoading(true);
-    const nativeGraph = await getNativeBrainGraph({
-      vaultPath: requestedVaultPath || undefined,
-      force,
-    });
-    const nativeGraphIsEmpty = Boolean(nativeGraph && nativeGraph.nodes.length === 0 && nativeGraph.links.length === 0);
-    if (nativeGraph && !nativeGraphIsEmpty) {
-      setBrainGraphLoading(false);
-      setBrainGraph(nativeGraph);
-      brainGraphLoadedAtRef.current = Date.now();
-      brainGraphVaultPathRef.current = requestedVaultPath;
-      setSelectedBrainNodeId((current) => current || nativeGraph.nodes[0]?.id || "");
-      const noteCount = nativeGraph.nodes.filter((node) => !node.id.startsWith("unresolved:")).length;
-      setBrainGraphStatus(nativeGraph.truncated
-        ? `Loaded first ${noteCount} notes, ${nativeGraph.nodes.length} cells, and ${nativeGraph.links.length} links.`
-        : `Loaded ${noteCount} notes, ${nativeGraph.nodes.length} cells, and ${nativeGraph.links.length} links.`);
-      return;
-    }
-    const response = await fetch("/api/obsidian/graph", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ vaultPath: requestedVaultPath || undefined, force }),
-    }).catch(() => null);
-    const data = await response?.json().catch(() => null) as BrainGraphResponse | null;
-    setBrainGraphLoading(false);
-    if (!response?.ok || !data?.ok || !data.graph) {
-      if (nativeGraphIsEmpty && nativeGraph) {
-        setBrainGraph(nativeGraph);
-        setBrainGraphStatus(data?.error ?? "Native desktop graph returned 0 notes, and the API fallback is unavailable.");
-        return;
-      }
-      setBrainGraphStatus(data?.error ?? "Could not build brain graph.");
-      return;
-    }
-    setBrainGraph(data.graph);
-    brainGraphLoadedAtRef.current = Date.now();
-    brainGraphVaultPathRef.current = requestedVaultPath;
-    setSelectedBrainNodeId((current) => current || data.graph?.nodes[0]?.id || "");
-    const noteCount = data.graph.nodes.filter((node) => !node.id.startsWith("unresolved:")).length;
-    setBrainGraphStatus(data.graph.truncated
-      ? `Loaded first ${noteCount} notes, ${data.graph.nodes.length} cells, and ${data.graph.links.length} links.`
-      : `Loaded ${noteCount} notes, ${data.graph.nodes.length} cells, and ${data.graph.links.length} links.`);
-  }, [brainGraph, sharedVault.enabled, sharedVault.vaultPath]);
+  const refreshBrainGraph = useCallback((force = false) => refreshBrainGraphFromSources({
+    force,
+    sharedVault,
+    currentGraph: brainGraph,
+    clientCacheMs: BRAIN_GRAPH_CLIENT_CACHE_MS,
+    loadedAtRef: brainGraphLoadedAtRef,
+    vaultPathRef: brainGraphVaultPathRef,
+    setGraph: setBrainGraph,
+    setLoading: setBrainGraphLoading,
+    setStatus: setBrainGraphStatus,
+    setSelectedNodeId: setSelectedBrainNodeId,
+  }), [BRAIN_GRAPH_CLIENT_CACHE_MS, brainGraph, brainGraphLoadedAtRef, brainGraphVaultPathRef, setBrainGraph, setBrainGraphLoading, setBrainGraphStatus, setSelectedBrainNodeId, sharedVault]);
 
   const refreshRecentDirectories = useCallback(async () => {
     if (!sharedVault.enabled) {
@@ -746,6 +691,10 @@ export function useMirosharkBrainController(props: any) {
     setSkillBrowserOpen(true);
     setSkillBrowserStatus("");
     setSkillBrowserLoading(true);
+    // Stays true across Phase 2 (packs/catalogs/full inventory) even after the
+    // fast shared paint flips `skillBrowserLoading` false, so the Packs tab can
+    // render a loading state instead of a premature "no packs" empty message.
+    setSkillBrowserEnriching(true);
     const hermesDetailPromise = refreshHermesUpdateRequirement();
     const includeCatalog = options.includeCatalog !== false;
 
@@ -794,6 +743,7 @@ export function useMirosharkBrainController(props: any) {
       if (sharedInventory?.ok) paintShared(sharedInventory.shared, Boolean(hermesDetailOnly || hermesUpdateRequiredDetail));
       else if (!sharedVault.enabled) setSkillBrowserStatus("Turn on the shared brain before adding shared skills.");
       setSkillBrowserLoading(false);
+      setSkillBrowserEnriching(false);
       return;
     }
 
@@ -924,6 +874,7 @@ export function useMirosharkBrainController(props: any) {
     }
     setSkillBrowserSkills([...deduped.values()]);
     setSkillBrowserLoading(false);
+    setSkillBrowserEnriching(false);
     const statusMessages = [];
     if ("error" in inventoryResult && !sharedInventory?.ok) statusMessages.push(inventoryResult.error);
     if (includeCatalog && !featuredResponse?.ok && !communityResponse?.ok) {
@@ -971,7 +922,9 @@ export function useMirosharkBrainController(props: any) {
         return;
       }
       if (data.inventory) setBrainSkills(data.inventory);
-      setSkillBrowserStatus(`Installed ${data.installed?.length ?? 0} skill${data.installed?.length === 1 ? "" : "s"} from ${skill.name}${data.skipped?.length ? `; skipped ${data.skipped.length} existing` : ""}.`);
+      const installedCount = data.installed?.length ?? 0;
+      const updatedCount = data.updated?.length ?? 0;
+      setSkillBrowserStatus(`Installed ${installedCount} skill${installedCount === 1 ? "" : "s"}${updatedCount ? ` and updated ${updatedCount} managed skill${updatedCount === 1 ? "" : "s"}` : ""} from ${skill.name}${data.skipped?.length ? `; preserved ${data.skipped.length} existing` : ""}.`);
       void refreshBrainGraph();
       void refreshBrainSkills();
       return;
@@ -1172,6 +1125,7 @@ export function useMirosharkBrainController(props: any) {
       settings: data.settings ?? {
         highPriorityMessagingEnabled: false,
         messagingHandledBy: "Configured messaging agent",
+        autonomyReviewMode: "autonomous",
         updatedAt: new Date().toISOString(),
       },
     });

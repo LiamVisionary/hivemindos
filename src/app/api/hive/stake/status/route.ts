@@ -22,6 +22,15 @@ type StakeStatusApiRow = {
   paused: boolean;
 };
 
+type StakeStatusApiResponse = {
+  ok: true;
+  cooldownSeconds: number;
+  paused: boolean;
+  tokenDecimals: number;
+  totalStakedHive: number;
+  statuses: StakeStatusApiRow[];
+};
+
 export async function POST(request: NextRequest) {
   const unauthorized = await requireAuth(request);
   if (unauthorized) return unauthorized;
@@ -33,17 +42,25 @@ export async function POST(request: NextRequest) {
       .filter(isHiveEvmAddress)
       .map((address) => address.toLowerCase() as Address))].slice(0, 25);
     if (!addresses.length) {
-      return NextResponse.json({ ok: true, statuses: [] });
+      const contractStatus = await getHiveStakingContractStatus();
+      return NextResponse.json({
+        ok: true,
+        cooldownSeconds: Number(contractStatus.cooldown),
+        paused: contractStatus.paused,
+        tokenDecimals: contractStatus.tokenDecimals,
+        totalStakedHive: Number(formatUnits(contractStatus.totalStakedRaw, contractStatus.tokenDecimals)),
+        statuses: [],
+      } satisfies StakeStatusApiResponse);
     }
     const client = createHiveStakingPublicClient();
     const contractStatus = await getHiveStakingContractStatus({ client });
     const statusResults = await Promise.all(addresses.map(async (address): Promise<StakeStatusApiRow | null> => {
       try {
-        const status = await getHiveStakeAccountStatus({ account: address, client });
+        const status = await getHiveStakeAccountStatus({ account: address, client, decimals: contractStatus.tokenDecimals });
         return {
           address,
-          activeStakedHive: Number(formatUnits(status.activeStakedRaw, 18)),
-          pendingUnstakeHive: Number(formatUnits(status.pendingUnstakeRaw, 18)),
+          activeStakedHive: Number(formatUnits(status.activeStakedRaw, contractStatus.tokenDecimals)),
+          pendingUnstakeHive: Number(formatUnits(status.pendingUnstakeRaw, contractStatus.tokenDecimals)),
           unstakeAvailableAt: status.unstakeAvailableAt.toString(),
           cooldownSeconds: Number(contractStatus.cooldown),
           tier: status.tier?.id ?? null,
@@ -58,8 +75,10 @@ export async function POST(request: NextRequest) {
       ok: true,
       cooldownSeconds: Number(contractStatus.cooldown),
       paused: contractStatus.paused,
+      tokenDecimals: contractStatus.tokenDecimals,
+      totalStakedHive: Number(formatUnits(contractStatus.totalStakedRaw, contractStatus.tokenDecimals)),
       statuses,
-    });
+    } satisfies StakeStatusApiResponse);
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Could not read HIVE stake status." }, { status: 500 });
   }

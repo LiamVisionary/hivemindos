@@ -1,472 +1,1059 @@
+/* ──────────────────────────────────────────────────────────────────
+   Agent notifications — "Alerts" compact list
+   A narrow, editorial inbox: one honey accent, teal for the live/normal
+   signal, warm rose for trouble. Rows collapse to a compact preview and
+   expand only when clicked to reveal the body + per-item actions
+   (no data is hidden without an expand affordance). Palette lifted from the
+   Fleet-Hive / Trade / Brain views (fleet-hive.css `.fr-root`): warm-neutral
+   dark panels, cream hairlines, warm text tiers. Tokens are scoped to
+   `.notificationsPanel` (self-contained) and the whole view flips to the
+   warm-paper light theme by re-declaring the tokens once under
+   [data-theme="hive-light"].
+   ────────────────────────────────────────────────────────────────── */
+
 .notificationsPanel {
-  display: grid;
-  gap: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 8px;
-  background:
-    linear-gradient(135deg, rgba(45, 212, 191, 0.08), transparent 34%),
-    rgba(16, 20, 29, 0.78);
-  padding: 14px;
+  /* — tokens (dark) — values lifted from fleet-hive.css `.fr-root` — */
+  --nf-panel: #14161c;
+  --nf-panel-2: #181b22;
+  --nf-panel-hi: #1e222b;
+  --nf-line: rgba(238, 232, 220, 0.07);
+  --nf-line-2: rgba(238, 232, 220, 0.13);
+  --nf-line-3: rgba(238, 232, 220, 0.2);
+  --nf-fg: #f3f0e9;
+  --nf-fg-2: #a7a39a;
+  --nf-fg-3: #76726a;
+  --nf-fg-4: #545049;
+  --nf-honey: #e7b45c;
+  --nf-honey-2: #f0c879;
+  --nf-honey-soft: rgba(231, 180, 92, 0.13);
+  --nf-honey-line: rgba(231, 180, 92, 0.32);
+  --nf-live: #6fcdba;
+  --nf-live-soft: rgba(111, 205, 186, 0.14);
+  --nf-live-line: rgba(111, 205, 186, 0.3);
+  --nf-danger: #e58e85;
+  --nf-danger-soft: rgba(229, 142, 133, 0.13);
+  --nf-danger-line: rgba(229, 142, 133, 0.33);
+  --nf-radius: 16px;
+  --nf-radius-sm: 9px;
+  --nf-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 18px 50px -28px rgba(0, 0, 0, 0.6);
+  --nf-display: "Space Grotesk", system-ui, sans-serif;
+  --nf-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  width: 100%;
+  /* Left-hug the nav rail like the rest of the dashboard (.commandMain has
+     margin:0). Wide enough for the two-column layout (list + ~320px review
+     rail); collapses to one column under 1080px. */
+  max-width: 1180px;
+  margin: 0;
+  padding: 32px 24px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  color: var(--nf-fg);
+  font-family: "Inter", system-ui, sans-serif;
+  box-sizing: border-box;
+  /* Fill the full content height so the list is a real scroll region
+     (.listScroll owns scrolling) instead of a short card in a tall area. */
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: clip;
 }
 
-.notificationsHeader,
-.notificationsControls,
-.notificationMetaRow,
-.notificationFooter,
-.notificationSetting {
+/* The panel also carries the global .tabPanel class (overflow:auto); override
+   it so the panel itself doesn't scroll — the inner .listScroll does. */
+.notificationsPanel:global(.tabPanel) {
+  overflow: hidden;
+}
+
+/* — Page header (title + top actions) — */
+.alertsHeader {
   display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex: 0 0 auto;
+}
+
+.alertsEyebrow {
+  margin: 0 0 5px;
+  font-family: var(--nf-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--nf-honey);
+}
+
+.alertsTitle {
+  margin: 0;
+  font-family: var(--nf-display);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  color: var(--nf-fg);
+}
+
+.headerActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.headerBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--nf-line-2);
+  border-radius: 9px;
+  background: var(--nf-panel-2);
+  color: var(--nf-fg-2);
+  font-family: "Inter", system-ui, sans-serif;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.headerBtn:hover:not(:disabled) {
+  background: var(--nf-panel-hi);
+  color: var(--nf-fg);
+}
+
+.headerBtn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.headerBtnPrimary {
+  border-color: transparent;
+  background: var(--nf-honey-fill, var(--nf-honey));
+  color: var(--nf-honey-ink, #1a1305);
+}
+
+.headerBtnPrimary:hover:not(:disabled) {
+  filter: brightness(1.06);
+  background: var(--nf-honey-fill, var(--nf-honey));
+  color: var(--nf-honey-ink, #1a1305);
+}
+
+.headerBtn svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+
+/* — Two-column body: list (left) + review rail (right) — */
+.twoCol {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  /* Bound the single row to the container height (not content) so the columns
+     get a definite height — otherwise .listScroll never gets a bounded height
+     and the list can't scroll past what fits. */
+  grid-template-rows: minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.mainCol {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sideCol {
+  width: 320px;
+  min-width: 0;
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: clip;
+  overscroll-behavior: contain;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+
+.sideCol::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.sidePanel {
+  flex: 0 0 auto;
+  border: 1px solid var(--nf-line-2);
+  border-radius: 14px;
+  background: var(--nf-panel);
+  box-shadow: var(--nf-shadow);
+  padding: 15px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sidePanelHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidePanelLabel {
+  margin: 0;
+  font-family: var(--nf-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--nf-honey);
+}
+
+.reviewCount {
+  margin-left: auto;
+  font-family: var(--nf-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--nf-honey);
+  background: var(--nf-honey-soft);
+  border: 1px solid var(--nf-honey-line);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.overviewGrid {
+  display: grid;
+  gap: 11px;
+}
+
+.overviewRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.overviewRow span {
+  font-size: 13px;
+  color: var(--nf-fg-2);
+}
+
+.overviewRow b {
+  font-family: var(--nf-display);
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--nf-fg);
+}
+
+.overviewDivider {
+  height: 1px;
+  background: var(--nf-line);
+}
+
+.reviewList {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+}
+
+.reviewError {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--nf-danger);
+}
+
+.autonomyIntro {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--nf-fg-3);
+}
+
+.modeStack {
+  display: grid;
+  gap: 7px;
+}
+
+.tabsTotal {
+  margin-left: auto;
+  font-family: var(--nf-mono);
+  font-size: 11px;
+  color: var(--nf-fg-4);
+  padding-bottom: 9px;
+}
+
+@media (max-width: 1080px) {
+  .twoCol {
+    grid-template-columns: 1fr;
+  }
+
+  .sideCol {
+    width: auto;
+    overflow-y: visible;
+    overflow-x: clip;
+  }
+}
+
+.notificationsPanel *,
+.notificationsPanel *::before,
+.notificationsPanel *::after {
+  box-sizing: border-box;
+}
+
+/* — Card — */
+.notificationsCard {
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--nf-line-2);
+  border-radius: var(--nf-radius);
+  background: var(--nf-panel);
+  box-shadow: var(--nf-shadow);
+  padding: 20px 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cardHead {
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   align-items: center;
   justify-content: space-between;
 }
 
-.notificationsHeader h2 {
-  margin: 0;
-  color: #f8fafc;
-  font-size: 24px;
-  line-height: 1.1;
-}
-
-.notificationsHeader p,
-.notificationsEmpty p,
-.notificationCard p,
-.notificationSetting span,
-.notificationStatus {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.45;
-}
-
-.notificationsControls {
-  flex-wrap: wrap;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  border-radius: 8px;
-  background: rgba(9, 13, 20, 0.48);
-  padding: 10px;
-}
-
-.notificationStats {
+.summaryLine {
   display: flex;
+  align-items: baseline;
+  gap: 8px;
   flex-wrap: wrap;
+  font-family: var(--nf-mono);
+  font-size: 11.5px;
+  color: var(--nf-fg-3);
+}
+
+.summaryLine strong {
+  color: var(--nf-fg);
+  font-weight: 700;
+}
+
+.summaryAction {
+  margin-left: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--nf-honey);
+  font-family: "Inter", sans-serif;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.summaryAction:hover {
+  background: var(--nf-honey-soft);
+}
+
+.cardHeadActions {
+  display: flex;
   gap: 8px;
 }
 
-.notificationStats span,
-.priorityPill,
-.kindPill,
-.readPill {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.72);
-  color: var(--text-soft);
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1;
-  padding: 7px 10px;
-}
-
-.notificationStats strong {
-  color: #f8fafc;
-}
-
-.notificationSetting {
-  min-width: min(100%, 390px);
-  border: 1px solid rgba(148, 163, 184, 0.14);
+.iconButton {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--nf-line-2);
   border-radius: 8px;
-  background: rgba(2, 6, 23, 0.34);
+  background: var(--nf-panel-2);
+  color: var(--nf-fg-2);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.iconButton:hover:not(:disabled) {
+  background: var(--nf-panel-hi);
+  color: var(--nf-fg);
+}
+
+.iconButton.active {
+  border-color: var(--nf-honey-line);
+  background: var(--nf-honey-soft);
+  color: var(--nf-honey);
+}
+
+.iconButton:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* — Filter tabs + mode indicator — */
+.filterTabs {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  border-bottom: 1px solid var(--nf-line);
+  padding-bottom: 1px;
+}
+
+.filterTab {
+  border: 0;
+  background: transparent;
+  font-family: "Inter", sans-serif;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--nf-fg-3);
+  padding: 0 0 9px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.filterTab:hover {
+  color: var(--nf-fg-2);
+}
+
+.filterTab.active {
+  color: var(--nf-fg);
+  font-weight: 600;
+  border-bottom-color: var(--nf-honey);
+}
+
+.filterTabCount {
+  font-family: var(--nf-mono);
+  font-size: 10px;
+  color: var(--nf-fg-4);
+  margin-left: 5px;
+}
+
+.filterTab.active .filterTabCount {
+  color: var(--nf-honey);
+}
+
+.modeIndicator {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--nf-fg-3);
+  padding-bottom: 9px;
+}
+
+.modeIndicator svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* — Settings drawer — */
+.settingsDrawer {
+  display: grid;
+  gap: 13px;
+  border: 1px solid var(--nf-line-2);
+  border-radius: 12px;
+  background: var(--nf-panel-2);
+  padding: 15px;
+}
+
+.drawerEyebrow {
+  margin: 0;
+  font-family: var(--nf-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--nf-honey);
+}
+
+.drawerTitle {
+  margin: 5px 0 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--nf-fg);
+}
+
+.modeGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+
+.modeBtn {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  text-align: left;
+  border: 1px solid var(--nf-line);
+  background: transparent;
+  border-radius: 9px;
   padding: 9px 10px;
+  cursor: pointer;
+  font-family: "Inter", sans-serif;
+  min-height: 78px;
+  transition: border-color 0.15s, background 0.15s;
 }
 
-.notificationSetting strong {
+.modeBtn:hover {
+  border-color: var(--nf-line-2);
+}
+
+.modeBtn.active {
+  border-color: var(--nf-honey-line);
+  background: var(--nf-honey-soft);
+}
+
+.modeBtnLabel {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--nf-fg);
+}
+
+.modeBtn.active .modeBtnLabel {
+  color: var(--nf-honey);
+}
+
+.modeBtnDetail {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--nf-fg-3);
+}
+
+.escalateRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid var(--nf-line);
+  padding-top: 13px;
+}
+
+.escalateText b {
   display: block;
-  color: var(--foreground);
   font-size: 13px;
+  color: var(--nf-fg);
 }
 
-.notificationSetting span {
-  display: block;
+.escalateText span {
   font-size: 12px;
+  color: var(--nf-fg-3);
 }
 
-.notificationSetting input {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--accent);
+.escalateTrack {
+  width: 40px;
+  height: 23px;
+  border-radius: 999px;
+  background: var(--nf-line-3);
+  position: relative;
+  flex: 0 0 auto;
+  cursor: pointer;
+  border: 0;
+  transition: background 0.16s;
 }
 
-.notificationList {
-  display: grid;
-  max-height: min(720px, calc(100vh - 300px));
-  min-height: 420px;
-  gap: 10px;
-  overflow: auto;
-  padding-right: 4px;
+.escalateTrack.on {
+  background: var(--nf-honey-fill, var(--nf-honey));
 }
 
-.notificationDayGroup {
-  display: grid;
-  gap: 10px;
+.escalateKnob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.16s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
-.notificationDayGroup h3 {
+.escalateTrack.on .escalateKnob {
+  left: 19px;
+}
+
+/* — Day groups + rows — */
+/* The scroll region: fills the remaining card height and scrolls the list
+   internally (fixed header/tabs above, footer below), with infinite-load. */
+.listScroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Hide the scrollbar (still scrolls) — it was crowding the compact rows. */
+  scrollbar-width: none;
+}
+
+.listScroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.dayGroups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dayGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.dayLabel {
   position: sticky;
   top: 0;
   z-index: 1;
   margin: 0;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
-  background: rgba(16, 20, 29, 0.94);
-  color: var(--accent-strong);
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0;
-  padding: 8px 0;
+  background: var(--nf-panel);
+  font-family: var(--nf-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
+  color: var(--nf-fg-3);
+  padding: 8px 2px 7px;
 }
 
-.notificationCard {
+.row {
+  --acc: var(--nf-fg-3);
+  --acc-soft: var(--nf-line);
+  --acc-line: var(--nf-line-2);
+  position: relative;
   display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
-  gap: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  border-left-width: 4px;
-  border-radius: 8px;
-  background: rgba(9, 13, 20, 0.58);
-  padding: 12px;
-}
-
-.notificationCard[role="button"] {
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 13px;
+  align-items: start;
+  border-bottom: 1px solid var(--nf-line);
+  padding: 12px 8px;
+  background: transparent;
+  text-align: left;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  width: 100%;
+  font-family: inherit;
+  color: inherit;
   cursor: pointer;
+  transition: background 0.26s ease;
 }
 
-.notificationCard[role="button"]:hover,
-.notificationCard[role="button"]:focus-visible {
-  border-color: rgba(94, 234, 212, 0.32);
-  outline: none;
+.row.urgent {
+  --acc: var(--nf-danger);
+  --acc-soft: var(--nf-danger-soft);
+  --acc-line: var(--nf-danger-line);
 }
 
-.notificationCard.unread {
-  background:
-    linear-gradient(90deg, rgba(45, 212, 191, 0.1), transparent 48%),
-    rgba(9, 13, 20, 0.72);
+.row.high {
+  --acc: var(--nf-honey);
+  --acc-soft: var(--nf-honey-soft);
+  --acc-line: var(--nf-honey-line);
 }
 
-.notificationCard.low {
-  border-left-color: #94a3b8;
+.row.normal {
+  --acc: var(--nf-live);
+  --acc-soft: var(--nf-live-soft);
+  --acc-line: var(--nf-live-line);
 }
 
-.notificationCard.normal {
-  border-left-color: #2dd4bf;
+.row.low {
+  --acc: var(--nf-fg-3);
+  --acc-soft: var(--nf-line);
+  --acc-line: var(--nf-line-2);
 }
 
-.notificationCard.high {
-  border-left-color: #facc15;
+.row.resolved {
+  --acc: var(--nf-live);
+  --acc-soft: var(--nf-live-soft);
+  --acc-line: var(--nf-live-line);
 }
 
-.notificationCard.urgent {
-  border-left-color: #fb7185;
+.row:hover,
+.row.open {
+  background: var(--nf-panel-2);
 }
 
-.notificationGlyph {
+.row:focus-visible {
+  outline: 2px solid var(--nf-honey);
+  outline-offset: -2px;
+}
+
+.rowGlyph {
   display: grid;
-  width: 42px;
-  height: 42px;
   place-items: center;
-  border: 1px solid rgba(94, 234, 212, 0.22);
+  width: 28px;
+  height: 28px;
   border-radius: 8px;
-  background: rgba(15, 23, 42, 0.75);
-  color: var(--accent-strong);
+  background: var(--acc-soft);
+  color: var(--acc);
+  border: 1px solid var(--acc-line);
 }
 
-.notificationGlyph svg {
-  width: 20px;
-  height: 20px;
+.rowGlyph svg {
+  width: 15px;
+  height: 15px;
 }
 
-.notificationBody {
+.rowMain {
   min-width: 0;
 }
 
-.notificationMetaRow {
-  align-items: start;
+.rowTitleLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.notificationMetaRow h3 {
-  overflow-wrap: anywhere;
-  margin: 0;
-  background: transparent;
-  color: #f8fafc;
-  font-size: 16px;
-  line-height: 1.25;
-  text-transform: none;
+.rowTitle {
+  font-family: var(--nf-display);
+  font-size: 13.5px;
+  color: var(--nf-fg);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
-.notificationMetaRow time {
+/* Full title revealed on explicit expand — no permanently truncated text. */
+.row.open .rowTitle {
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+}
+
+.unreadDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--nf-honey-fill, var(--nf-honey));
   flex: 0 0 auto;
-  color: var(--muted);
-  font-size: 12px;
 }
 
-.notificationActorRow {
+/* The cluster badge is a button that expands/collapses the look-alike group. */
+.clusterBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--nf-mono);
+  font-size: 10px;
+  color: var(--nf-honey);
+  background: transparent;
+  border: 1px solid var(--nf-honey-line);
+  border-radius: 999px;
+  padding: 1px 7px 1px 4px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.clusterBadge:hover {
+  background: var(--nf-honey-soft);
+}
+
+.clusterChevron {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 auto;
+  transition: transform 0.18s ease;
+}
+
+.clusterBadge.expanded .clusterChevron {
+  transform: rotate(90deg);
+}
+
+/* The expanded group: representative row + its members under a honey rail. */
+.clusterGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.clusterMembers {
+  margin: 0 0 2px 20px;
+  border-left: 2px solid var(--nf-honey-line);
+}
+
+.clusterMembers .row {
+  padding-left: 12px;
+}
+
+.expandWrap {
+  overflow: hidden;
+  padding-top: 3px;
+  max-height: 22px;
+  transition: max-height 0.34s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.row.open .expandWrap {
+  /* 460px matches the mockup and clears the tallest real card (a Hermes
+     sign-out alert with a code block + pager + full action row measures
+     ~268px), so expanded content never clips. */
+  max-height: 460px;
+}
+
+.rowBody {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--nf-fg-3);
+}
+
+.rowBody :global(p) {
+  margin: 0 0 6px;
+}
+
+.rowBody :global(p:last-child) {
+  margin-bottom: 0;
+}
+
+.rowBody :global(pre) {
+  margin: 6px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--nf-panel-hi);
+  border: 1px solid var(--nf-line-2);
+  overflow-x: auto;
+  font-family: var(--nf-mono);
+  font-size: 11.5px;
+  color: var(--nf-fg-2);
+}
+
+.rowBody :global(code) {
+  font-family: var(--nf-mono);
+  font-size: 11.5px;
+}
+
+.rowBodyActor {
+  color: var(--nf-fg-2);
+  font-weight: 500;
+}
+
+.resolutionNote {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--nf-live);
+}
+
+.rowActions {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 12px;
+  opacity: 0;
+  /* Hidden AND removed from the tab order while collapsed so keyboard users
+     never land on an invisible button; the row itself (tabIndex 0) toggles
+     them open, after which they enter the tab order. */
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
-.notificationActorBadge,
-.notificationSourcePill {
+.row.open .rowActions {
+  opacity: 1;
+  visibility: visible;
+}
+
+.actionBtn {
   display: inline-flex;
-  min-height: 32px;
   align-items: center;
-  gap: 8px;
-  border: 1px solid rgba(94, 234, 212, 0.18);
+  gap: 6px;
+  border: 1px solid var(--nf-line-2);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nf-fg-2);
+  padding: 6px 11px;
+  font-size: 11.5px;
+  font-weight: 500;
+  font-family: "Inter", sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.actionBtn:hover:not(:disabled) {
+  background: var(--nf-panel-hi);
+  color: var(--nf-fg);
+  border-color: var(--nf-line-3);
+}
+
+.actionBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.actionBtn.primary {
+  border-color: var(--nf-honey-line);
+  background: var(--nf-honey-soft);
+  color: var(--nf-honey);
+}
+
+.actionBtn svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.readBtn {
+  color: var(--nf-fg-3);
+}
+
+.dismissBtn {
+  color: var(--nf-danger);
+  border-color: var(--nf-danger-line);
+}
+
+.dismissBtn:hover:not(:disabled) {
+  background: var(--nf-danger-soft);
+  color: #ffc7bf;
+  border-color: var(--nf-danger-line);
+}
+
+.actionError {
+  align-self: center;
+  font-size: 11px;
+  color: var(--nf-danger);
+}
+
+/* — Meta column (priority + time) — */
+.rowMeta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+}
+
+.priorityPill {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 8px;
   border-radius: 999px;
-  background: rgba(8, 13, 20, 0.62);
-  color: #dbeafe;
-  padding: 5px 10px;
+  white-space: nowrap;
+  background: var(--acc-soft);
+  color: var(--acc);
+  border: 1px solid transparent;
 }
 
-.notificationActorBadge img {
-  width: 20px;
-  height: 20px;
-  object-fit: contain;
-}
-
-.notificationActorBadge span {
-  display: grid;
-  gap: 1px;
-}
-
-.notificationActorBadge b {
-  color: #f8fafc;
-  font-size: 12px;
-  line-height: 1;
-}
-
-.notificationActorBadge small {
-  color: var(--muted);
+.resolvedPill {
   font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0;
-  line-height: 1;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: var(--nf-live-soft);
+  color: var(--nf-live);
 }
 
-.notificationSourcePill {
-  border-color: rgba(148, 163, 184, 0.16);
-  color: #cbd5e1;
-  font-size: 13px;
-  font-weight: 650;
-  max-width: min(100%, 460px);
-  overflow: hidden;
-  text-overflow: ellipsis;
+.rowTime {
+  font-family: var(--nf-mono);
+  font-size: 10px;
+  color: var(--nf-fg-4);
   white-space: nowrap;
 }
 
-.notificationSourcePill small {
-  color: rgba(148, 163, 184, 0.72);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  line-height: 1;
-  text-transform: uppercase;
+/* — Footer / status / load-more / empty — */
+.cardFooter {
+  margin: 4px 0 6px;
+  font-family: var(--nf-mono);
+  font-size: 10.5px;
+  color: var(--nf-fg-4);
 }
 
-.notificationSourcePill b {
-  min-width: 0;
-  overflow: hidden;
-  color: #dbeafe;
-  font-size: 13px;
-  font-weight: 650;
-  letter-spacing: 0;
-  line-height: 1.1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.statusLine {
+  margin: 0 0 6px;
+  font-family: var(--nf-mono);
+  font-size: 10.5px;
+  color: var(--nf-fg-4);
 }
 
-.notificationCard p {
-  margin-top: 6px;
-  white-space: pre-line;
+.loadMore {
+  align-self: flex-start;
+  margin: 2px 0 8px;
 }
 
-.notificationMarkdown {
+.emptyState {
   display: grid;
-  gap: 12px;
-  margin-top: 18px;
-  color: var(--muted);
+  place-items: center;
+  gap: 8px;
+  padding: 46px 20px;
+  text-align: center;
+  color: var(--nf-fg-3);
+}
+
+.emptyState svg {
+  width: 30px;
+  height: 30px;
+  color: var(--nf-fg-4);
+}
+
+.emptyState strong {
+  font-family: var(--nf-display);
+  font-size: 15px;
+  color: var(--nf-fg);
+}
+
+.emptyState p {
+  margin: 0;
+  max-width: 340px;
+  font-size: 12.5px;
   line-height: 1.5;
 }
 
-.notificationMarkdown p {
-  margin: 0;
-  white-space: pre-wrap;
+.spinIcon {
+  animation: notificationSpin 0.9s linear infinite;
 }
 
-.notificationMarkdown ul,
-.notificationMarkdown ol {
-  margin: 0;
-  padding-left: 1.25rem;
+/* — Light theme: re-declare tokens once; every rule reads them — */
+:global(:root[data-theme="hive-light"]) .notificationsPanel {
+  --nf-panel: #fbf8f1;
+  --nf-panel-2: #f4efe4;
+  --nf-panel-hi: #ffffff;
+  --nf-line: rgba(54, 46, 30, 0.1);
+  --nf-line-2: rgba(54, 46, 30, 0.16);
+  --nf-line-3: rgba(54, 46, 30, 0.26);
+  --nf-fg: #221d14;
+  --nf-fg-2: #5e574b;
+  --nf-fg-3: #867d6e;
+  --nf-fg-4: #a59b89;
+  --nf-honey: #936811; --nf-honey-fill: #e6bb5c;
+  --nf-honey-2: #936811;
+  --nf-honey-soft: rgba(176, 127, 28, 0.12);
+  --nf-honey-line: rgba(176, 127, 28, 0.34);
+  --nf-live: #6f8f68;
+  --nf-live-soft: rgba(111, 143, 104, 0.14);
+  --nf-live-line: rgba(111, 143, 104, 0.32);
+  --nf-danger: #c0524d;
+  --nf-danger-soft: rgba(192, 82, 77, 0.12);
+  --nf-danger-line: rgba(192, 82, 77, 0.34);
+  --nf-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset, 0 18px 50px -30px rgba(80, 60, 20, 0.35);
 }
 
-.notificationMarkdown li + li {
-  margin-top: 4px;
-}
-
-.notificationMarkdown code {
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  border-radius: 4px;
-  background: rgba(10, 14, 21, 0.68);
-  color: #e2e8f0;
-  padding: 0.05rem 0.28rem;
-  font-size: 0.9em;
-}
-
-.notificationMarkdown pre {
-  max-width: 100%;
-  overflow: auto;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 7px;
-  background: rgba(4, 8, 14, 0.78);
-  color: #e2e8f0;
-  margin: 0;
-  padding: 10px;
-  white-space: pre;
-}
-
-.notificationMarkdown pre code {
-  border: 0;
-  background: transparent;
-  padding: 0;
-}
-
-.notificationMarkdown a {
-  color: var(--accent-strong);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.notificationMarkdownHeading {
-  display: block;
-  color: var(--foreground);
-  font-weight: 900;
-}
-
-.notificationFooter {
-  flex-wrap: wrap;
-  margin-top: 10px;
-}
-
-.notificationTags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.priorityPill.high,
-.priorityPill.urgent {
-  border-color: rgba(251, 191, 36, 0.36);
-  color: #fde68a;
-}
-
-.priorityPill.urgent {
-  border-color: rgba(251, 113, 133, 0.36);
-  color: #fecdd3;
-}
-
-.readPill {
-  border-color: rgba(45, 212, 191, 0.28);
-  color: #99f6e4;
-}
-
-.notificationsEmpty {
-  display: grid;
-  min-height: 360px;
-  place-items: center;
-  border: 1px dashed rgba(148, 163, 184, 0.22);
-  border-radius: 8px;
-  text-align: center;
-}
-
-.notificationsEmpty svg {
-  width: 34px;
-  height: 34px;
-  color: var(--accent-strong);
-}
-
-.notificationsEmpty strong {
-  display: block;
-  margin-top: 10px;
-  color: var(--foreground);
-}
-
-.notificationStatus {
-  font-size: 12px;
-  min-height: 18px;
-}
-
-.navBadge {
-  display: inline-grid;
-  min-width: 17px;
-  height: 17px;
-  margin-left: 4px;
-  place-items: center;
-  border-radius: 999px;
-  background: var(--danger);
-  color: white;
-  font-size: 10px;
-  font-style: normal;
-  font-weight: 900;
-  line-height: 1;
-  transform: none;
-}
-
-@media (max-width: 760px) {
-  .notificationsHeader,
-  .notificationMetaRow,
-  .notificationFooter,
-  .notificationSetting {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .notificationList {
-    max-height: none;
-  }
-
-  .notificationCard {
-    grid-template-columns: 1fr;
+@keyframes notificationSpin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
-:global(:root[data-theme="hive-light"]) .notificationsPanel,
-:global(:root[data-theme="hive-light"]) .notificationsControls,
-:global(:root[data-theme="hive-light"]) .notificationSetting,
-:global(:root[data-theme="hive-light"]) .notificationCard,
-:global(:root[data-theme="hive-light"]) .notificationGlyph {
-  border-color: var(--comb-line);
-  background-color: var(--surface);
-  background-image: none;
-  color: var(--foreground);
-}
+@media (prefers-reduced-motion: reduce) {
+  .expandWrap,
+  .rowActions,
+  .row,
+  .escalateTrack,
+  .escalateKnob {
+    transition: none;
+  }
 
-:global(:root[data-theme="hive-light"]) .notificationsHeader h2,
-:global(:root[data-theme="hive-light"]) .notificationStats strong,
-:global(:root[data-theme="hive-light"]) .notificationMetaRow h3 {
-  color: var(--foreground);
-}
-
-:global(:root[data-theme="hive-light"]) .notificationDayGroup h3 {
-  background: rgba(238, 230, 208, 0.94);
-  color: var(--accent-strong);
-}
-
-:global(:root[data-theme="hive-light"]) .priorityPill.high {
-  color: #6f5625;
-}
-
-:global(:root[data-theme="hive-light"]) .priorityPill.urgent {
-  color: #8f1d2c;
+  .spinIcon {
+    animation-duration: 1.8s;
+  }
 }

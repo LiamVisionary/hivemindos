@@ -18,8 +18,8 @@ export const TROUBLESHOOTING_COOKBOOK: TroubleshootingEntry[] = [
     area: "general",
     severity: "critical",
     symptoms: ["Unlock screen repeats", "API calls return Dashboard authentication is required"],
-    checks: ["Run pnpm dashboard-auth status", "Confirm .env.local has dashboard auth keys"],
-    fixes: ["Run pnpm dashboard-auth copy-token to recover the device token", "Run pnpm dashboard-auth reset-token if the token is lost", "Restart the dashboard after rotating auth values"],
+    checks: ["Run dashboard-auth status", "Confirm .env.local has dashboard auth keys"],
+    fixes: ["Run dashboard-auth copy-token to recover the device token", "Run dashboard-auth reset-token if the token is lost", "Restart the dashboard after rotating auth values"],
     relatedRoutes: ["/api/auth/session", "/api/system/health"],
   },
   {
@@ -54,7 +54,7 @@ export const TROUBLESHOOTING_COOKBOOK: TroubleshootingEntry[] = [
   },
   {
     id: "local-model-server-off",
-    title: "Local OpenAI-compatible model is selected but chat fails quickly",
+    title: "Local model is selected but chat fails quickly",
     area: "model",
     severity: "warning",
     symptoms: ["Fetch failed against localhost model endpoint", "LM Studio or Ollama shows a loaded model but /v1/models is unreachable"],

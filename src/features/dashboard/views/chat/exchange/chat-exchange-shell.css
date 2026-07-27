@@ -1,0 +1,566 @@
+/* Chat route shell — interaction + animation layer.
+ *
+ * Ported from the `Chat route UI redesign` prototype (Chat.dc.html). The
+ * prototype carries its static styling inline and reserves classes for the
+ * things inline styles cannot express: :hover, :active, :focus-visible,
+ * ::-webkit-scrollbar, keyframes, and @media. The `cx-` prefix is kept 1:1 with
+ * the handoff so the port stays reviewable against it.
+ *
+ * Colour tokens resolve from `.fr-root` (src/components/json-render/fr/fr-style.css),
+ * which the panel root also carries. Typography resolves from `.fr-chat-root`.
+ */
+
+/* ---------- scrollers ---------- */
+
+.cx-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-2) transparent;
+  overflow-anchor: none;
+}
+
+.cx-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.cx-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 99px;
+  background: var(--line-2);
+  background-clip: padding-box;
+}
+
+.cx-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--line-3);
+  background-clip: padding-box;
+}
+
+/* ---------- icon buttons ---------- */
+
+.cx-iconbtn {
+  transition:
+    background 140ms ease,
+    color 140ms ease,
+    border-color 140ms ease,
+    transform 90ms ease;
+}
+
+.cx-iconbtn:hover {
+  background: var(--panel-hi) !important;
+  color: var(--fg) !important;
+}
+
+.cx-iconbtn:active {
+  transform: scale(0.88);
+}
+
+.cx-iconbtn.is-flash,
+.cx-iconbtn.is-flash:hover {
+  background: var(--honey-soft) !important;
+  color: var(--honey) !important;
+}
+
+.cx-iconbtn.is-rec,
+.cx-iconbtn.is-rec:hover {
+  background: var(--danger-soft) !important;
+  color: var(--danger) !important;
+}
+
+.cx-send {
+  transition:
+    filter 130ms ease,
+    background 140ms ease,
+    color 140ms ease,
+    transform 120ms ease;
+}
+
+.cx-send:not(:disabled):hover {
+  filter: brightness(1.06);
+}
+
+.cx-send:not(:disabled):active {
+  transform: scale(0.9);
+}
+
+/* ---------- sidebar rows ---------- */
+
+.cx-chatrow {
+  transition: background 130ms ease;
+}
+
+.cx-chatrow:hover {
+  background: var(--panel-2) !important;
+}
+
+.cx-chatrow[data-active="true"] {
+  background: color-mix(in srgb, var(--fg) 6%, transparent) !important;
+}
+
+.cx-chatrow[data-active="true"]:hover {
+  background: color-mix(in srgb, var(--fg) 8%, transparent) !important;
+}
+
+.cx-chatrow-running-dot {
+  animation: cx-chatrow-running-bounce 1.6s linear infinite;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--honey) 13%, transparent),
+    0 0 9px color-mix(in srgb, var(--honey) 48%, transparent);
+  transform-origin: center bottom;
+}
+
+.cx-rowwrap {
+  position: relative;
+}
+
+.cx-hoverbtn {
+  opacity: 0;
+  transition:
+    opacity 120ms ease,
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.cx-rowwrap:hover .cx-hoverbtn,
+.cx-hoverbtn:focus-visible {
+  opacity: 1;
+}
+
+.cx-hoverbtn:hover {
+  background: transparent !important;
+  color: var(--honey) !important;
+}
+
+.cx-pinbtn:hover {
+  background: transparent !important;
+  color: var(--honey) !important;
+}
+
+.cx-pinbtn-on {
+  opacity: 1;
+}
+
+.cx-newchat {
+  transition: background 130ms ease;
+}
+
+.cx-newchat:hover {
+  background: color-mix(in srgb, var(--fg) 6%, transparent) !important;
+}
+
+.cx-grouphead {
+  transition: color 120ms ease;
+}
+
+.cx-grouphead:hover .cx-grouphead-label,
+.cx-grouphead:hover .cx-grouphead-ico {
+  color: var(--honey) !important;
+}
+
+/* ---------- menus / popovers ---------- */
+
+.cx-menuitem {
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.cx-menuitem:hover {
+  background: var(--panel-hi) !important;
+  color: var(--fg) !important;
+}
+
+.cx-menuitem-danger:hover {
+  background: var(--danger-soft) !important;
+  color: var(--danger) !important;
+}
+
+.cx-viewsrow {
+  transition: background 120ms ease;
+}
+
+.cx-viewsrow:hover {
+  background: var(--panel-hi) !important;
+}
+
+.cx-diritem {
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.cx-diritem:hover:not([aria-checked="true"]) {
+  background: var(--panel-hi) !important;
+  color: var(--fg) !important;
+}
+
+.cx-pop {
+  animation: cx-pop 150ms cubic-bezier(0.2, 0.9, 0.2, 1);
+  transform-origin: top;
+  background: color-mix(in srgb, var(--panel) 96%, transparent) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.35);
+  backdrop-filter: blur(28px) saturate(1.35);
+}
+
+/* WKWebView and older engines without backdrop-filter would render the menu
+   translucent over live text; fall back to an opaque panel. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .cx-pop {
+    background: color-mix(in srgb, var(--panel) 97%, black) !important;
+  }
+}
+
+/* ---------- pills / chips ---------- */
+
+.cx-pill {
+  background: transparent;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.cx-pill:hover {
+  background: var(--panel-2);
+}
+
+.cx-chip {
+  transition:
+    background 130ms ease,
+    border-color 130ms ease,
+    color 130ms ease;
+}
+
+.cx-chip:hover[aria-pressed="false"] {
+  background: var(--panel-2) !important;
+  border-color: var(--line-3) !important;
+  color: var(--fg) !important;
+}
+
+.cx-agenttrigger {
+  transition:
+    background 150ms ease,
+    border-color 150ms ease;
+}
+
+.cx-agenttrigger:hover {
+  background: var(--panel-2) !important;
+  border-color: var(--line-2) !important;
+}
+
+/* ---------- message + prompt actions ---------- */
+
+.cx-msgaction,
+.cx-promptbtn {
+  transition:
+    background 130ms ease,
+    color 130ms ease,
+    border-color 130ms ease;
+}
+
+.cx-msgaction:hover,
+.cx-promptbtn:hover {
+  border-color: var(--honey-line) !important;
+  background: var(--honey-soft) !important;
+  color: var(--honey) !important;
+}
+
+.fr-chat-feedback-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.fr-chat-feedback-button {
+  display: grid;
+  width: 28px;
+  height: 27px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg-4);
+  cursor: pointer;
+  padding: 0;
+}
+
+.fr-chat-feedback-button svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 1.8;
+}
+
+.fr-chat-feedback-button:hover,
+.fr-chat-feedback-button:focus-visible {
+  border-color: var(--line-2);
+  background: var(--panel-2);
+  color: var(--fg-2);
+}
+
+.fr-chat-feedback-button.is-positive[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--live) 40%, transparent);
+  background: color-mix(in srgb, var(--live) 11%, transparent);
+  color: var(--live);
+}
+
+.fr-chat-feedback-button.is-negative[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.fr-chat-feedback-button:focus-visible {
+  outline: 2px solid var(--honey-line);
+  outline-offset: 1px;
+}
+
+.fr-chat-feedback-button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+/* ---------- deliverable tiles ---------- */
+
+.cx-file {
+  transition: transform 140ms cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+.cx-file:hover {
+  transform: translateY(-2px);
+}
+
+.cx-file > div:first-child {
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.cx-file:hover > div:first-child {
+  border-color: color-mix(in srgb, var(--honey) 45%, var(--line-2)) !important;
+  box-shadow: 0 10px 26px -14px rgba(0, 0, 0, 0.7);
+}
+
+/* ---------- generation skeleton ---------- */
+
+.cx-genskel {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  border-radius: 11px;
+  background:
+    repeating-linear-gradient(0deg, var(--line) 0 1px, transparent 1px 24px),
+    repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px 24px),
+    var(--bg-soft);
+}
+
+.cx-genskel::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 42%;
+  animation: cx-shim 1.8s ease-in-out infinite;
+  background: linear-gradient(
+    100deg,
+    transparent 18%,
+    color-mix(in srgb, var(--honey) 16%, transparent) 48%,
+    color-mix(in srgb, var(--live) 10%, transparent) 60%,
+    transparent 84%
+  );
+}
+
+/* ---------- process timeline ---------- */
+
+.cx-tl-line {
+  transform-origin: top;
+  animation: cx-line 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+.cx-tl-step {
+  opacity: 0;
+  animation: cx-step 0.5s cubic-bezier(0.2, 0.9, 0.2, 1) forwards;
+}
+
+.cx-tl-step:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+.cx-tl-step:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+.cx-tl-step:nth-child(4) {
+  animation-delay: 0.62s;
+}
+
+/* ---------- terminal ---------- */
+
+.cx-termline {
+  min-height: 17px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---------- live dot + entrances ---------- */
+
+.cx-dot-live {
+  animation: cx-pulse 2.4s ease-in-out infinite;
+}
+
+.cx-fade {
+  animation: cx-fade 260ms cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+.cx-slidefull {
+  animation: cx-slide 340ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* ---------- keyframes ---------- */
+
+@keyframes cx-shim {
+  0% {
+    transform: translateX(-130%);
+  }
+
+  100% {
+    transform: translateX(330%);
+  }
+}
+
+@keyframes cx-line {
+  from {
+    transform: scaleY(0);
+  }
+
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes cx-step {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cx-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 55%, transparent);
+  }
+
+  50% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, currentColor 0%, transparent);
+  }
+}
+
+@keyframes cx-fade {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cx-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes cx-slide {
+  from {
+    opacity: 0.3;
+    transform: translateX(64px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes cx-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes cx-chatrow-running-bounce {
+  0%,
+  12%,
+  82%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+
+  20% {
+    transform: translateY(1px) scale(1.18, 0.76);
+  }
+
+  34% {
+    transform: translateY(-4px) scale(0.88, 1.18);
+  }
+
+  46% {
+    transform: translateY(0) scale(1.12, 0.88);
+  }
+
+  57% {
+    transform: translateY(-1.8px) scale(0.94, 1.08);
+  }
+
+  67% {
+    transform: translateY(0) scale(1.04, 0.96);
+  }
+
+  75% {
+    transform: translateY(-0.6px) scale(0.98, 1.03);
+  }
+}
+
+.cx-spin {
+  animation: cx-spin 0.8s linear infinite;
+}
+
+/* ---------- reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .cx-tl-line,
+  .cx-tl-step,
+  .cx-fade,
+  .cx-pop,
+  .cx-slidefull {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .cx-dot-live,
+  .cx-chatrow-running-dot,
+  .cx-genskel::before,
+  .cx-spin {
+    animation: none !important;
+  }
+
+  .cx-iconbtn:active,
+  .cx-send:not(:disabled):active,
+  .cx-file:hover {
+    transform: none;
+  }
+}

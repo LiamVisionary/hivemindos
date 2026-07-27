@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-07-11T12:46:11.634652+00:00",
+  "request": "Build the backend-neutral local and managed HivemindOS app-builder with one canonical contract, local project/runtime/file adapter, managed adapter, capability discovery, and no VM requirement for local users",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "ntegrals/december",
+      "source_path": "backend/src/services/file.ts",
+      "target_path": "scripts/lib/app-builder.mjs",
+      "reuse_type": "adapted_code",
+      "note": "file tree and file mutation operations rebuilt with local path confinement and confirmations"
+    },
+    {
+      "source_repo": "ntegrals/december",
+      "source_path": "backend/src/services/package.ts",
+      "target_path": "scripts/lib/app-builder.mjs",
+      "reuse_type": "adapted_code",
+      "note": "dependency installation adapted to argv execution with registry validation and explicit approval"
+    },
+    {
+      "source_repo": "ntegrals/december",
+      "source_path": "backend/src/services/docker.ts",
+      "target_path": "contracts/app-builder/v1.json",
+      "reuse_type": "config_adapted",
+      "note": "runtime lifecycle and preview capability modeled once for local and managed backends"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/projects/project-registry.ts",
+      "target_path": "src/app/api/app-builder/route.ts",
+      "reuse_type": "adapted_code",
+      "note": "existing project registry reused as durable app-project discovery surface"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/hive-actions/managed-cloud-agents.ts",
+      "target_path": "src/lib/services/hive-actions/app-builder.ts",
+      "reuse_type": "adapted_code",
+      "note": "existing managed-cloud Hive Action conventions adapted into one backend-neutral agent tool"
+    }
+  ]
+}

@@ -2,35 +2,18 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import vm from "node:vm";
 
-import ts from "typescript";
+// The grouping helpers were extracted from WalletPanel into a real module —
+// import the shipped code directly (Node strips the types) instead of
+// vm-compiling a source slice of the panel.
+const { buildGroupedPersonalWallets: buildDropInPersonalWallets, mergePersonalWalletList, mergePersonalWalletSources, personalWalletOptionalNumber, personalWalletSpendAccountForAsset, personalWalletTransferTargets } = await import(
+  new URL("../src/lib/utils/personal-wallet-grouping.ts", import.meta.url)
+);
+const { walletSecretExportLabel } = await import(
+  new URL("../src/lib/services/wallet/wallet-secret-export.ts", import.meta.url)
+);
 
 const root = process.cwd();
-const sourcePath = join(root, "src/features/dashboard/views/WalletPanel.tsx");
-const source = readFileSync(sourcePath, "utf8");
-const helperEnd = source.indexOf("function hasUsePodSetupEvidence");
-if (helperEnd < 0) throw new Error("Could not locate WalletPanel helper boundary.");
-
-const helperSource = source
-  .slice(0, helperEnd)
-  .replace(/^import[\s\S]*?;\n/gm, "")
-  + "\nglobalThis.__walletHelpers = { buildDropInPersonalWallets, mergePersonalWalletSources };";
-
-const compiled = ts.transpileModule(helperSource, {
-  compilerOptions: {
-    module: ts.ModuleKind.CommonJS,
-    target: ts.ScriptTarget.ES2022,
-    jsx: ts.JsxEmit.ReactJSX,
-  },
-  fileName: sourcePath,
-}).outputText;
-
-const context = { console, URL, globalThis: {} };
-context.globalThis = context;
-vm.runInNewContext(compiled, context, { filename: sourcePath });
-
-const { buildDropInPersonalWallets, mergePersonalWalletSources } = context.__walletHelpers;
 
 const wallets = [
   {
@@ -86,6 +69,49 @@ const separate = cards.find((wallet) => wallet.id === "user:private-key-wallet")
 assert.ok(separate, "Unrelated personal wallets should remain separate cards.");
 assert.equal(separate.addresses.length, 1);
 
+const tokenTransferCard = buildDropInPersonalWallets([{
+  id: "user:token-wallet:eip155-8453",
+  agentId: "user:token-wallet:eip155-8453",
+  name: "Token wallet",
+  address: "0x7777000000000000000000000000000000007777",
+  network: "eip155:8453",
+  custodyMode: "local",
+  importedFrom: "recovery-phrase",
+  tokens: [
+    { symbol: "ETH", balance: 0.25, priceUsd: 0, valueUsd: 625, isNative: true },
+    { symbol: "HIVE", balance: 42, valueUsd: 4.2, tokenAddress: "0x8888000000000000000000000000000000008888" },
+    { symbol: "USDC", balance: 12, valueUsd: 12, tokenAddress: "0x9999000000000000000000000000000000009999" },
+  ],
+}])[0];
+assert.equal(personalWalletOptionalNumber(null), undefined, "missing token prices must not be coerced into a real zero-dollar quote");
+assert.deepEqual(
+  tokenTransferCard.accounts[0]?.assets,
+  [
+    { symbol: "ETH", balance: 0.25, priceUsd: 2500, isNative: true },
+    { symbol: "HIVE", balance: 42, priceUsd: 0.1, tokenAddress: "0x8888000000000000000000000000000000008888" },
+    { symbol: "USDC", balance: 12, priceUsd: 1, tokenAddress: "0x9999000000000000000000000000000000009999" },
+  ],
+  "grouped accounts must preserve each held token's chain-local transfer metadata",
+);
+const tokenRecipientCard = buildDropInPersonalWallets([{
+  id: "user:token-recipient:eip155-8453",
+  agentId: "user:token-recipient:eip155-8453",
+  name: "Token recipient",
+  address: "0x6666000000000000000000000000000000006666",
+  network: "eip155:8453",
+  custodyMode: "watch",
+  tokens: [],
+}])[0];
+assert.equal(personalWalletSpendAccountForAsset(tokenTransferCard, "HIVE")?.id, "user:token-wallet:eip155-8453");
+assert.deepEqual(
+  personalWalletTransferTargets(tokenTransferCard, "HIVE", [tokenTransferCard, tokenRecipientCard]).targets.map((target) => target.account.address),
+  ["0x6666000000000000000000000000000000006666"],
+  "wallet-to-wallet token sends must keep recipient choices on the selected source account's network",
+);
+assert.equal(walletSecretExportLabel([{ kind: "private-key" }, { kind: "recovery-phrase" }]), "wallet secret");
+assert.equal(walletSecretExportLabel([{ kind: "private-key" }]), "private key");
+assert.equal(walletSecretExportLabel([{ kind: "recovery-phrase" }]), "recovery phrase");
+
 const staleSignerRows = [
   { id: "user:rich:eip155-8453", agentId: "user:rich:eip155-8453", name: "My wallet Base", address: "0xC42e000000000000000000000000000000007bE9", network: "eip155:8453", custodyMode: "local", importedFrom: "recovery-phrase", currentBalanceUsd: 0, nativeBalance: 0, tokens: [] },
   { id: "user:rich:solana-mainnet", agentId: "user:rich:solana-mainnet", name: "My wallet Solana", address: "936oBc111111111111111111111111111111111ZSFu", network: "solana:mainnet", custodyMode: "local", importedFrom: "recovery-phrase", currentBalanceUsd: 0, nativeBalance: 0, tokens: [] },
@@ -98,13 +124,127 @@ const mergedRich = mergedCards.find((wallet) => wallet.id === "user:rich");
 assert.ok(mergedRich, "Dashboard wallet state should enrich stale signer-only personal rows.");
 assert.equal(JSON.stringify(mergedRich.holdings), JSON.stringify([["ETH", 0.1979414256200372], ["SOL", 0.445883515]]));
 
+const namedAfterReloadCards = buildDropInPersonalWallets(mergePersonalWalletSources([{
+  id: "user:miro:eip155-8453",
+  agentId: "user:miro:eip155-8453",
+  name: "MiroShark payment Base",
+  address: "0x4444000000000000000000000000000000004444",
+  network: "eip155:8453",
+  custodyMode: "local",
+  importedFrom: "recovery-phrase",
+  updatedAt: 100,
+}, {
+  id: "user:miro:solana-mainnet",
+  agentId: "user:miro:solana-mainnet",
+  name: "MiroShark payment Solana",
+  address: "936oBc444444444444444444444444444444444ZSFu",
+  network: "solana:mainnet",
+  custodyMode: "local",
+  importedFrom: "recovery-phrase",
+  updatedAt: 100,
+}], {
+  "user:miro:eip155-8453": {
+    walletAddress: "0x4444000000000000000000000000000000004444",
+    network: "eip155:8453",
+    custodyMode: "local",
+    name: "My Base mainnet wallet",
+    updatedAt: 200,
+  },
+  "user:miro:solana-mainnet": {
+    walletAddress: "936oBc444444444444444444444444444444444ZSFu",
+    network: "solana:mainnet",
+    custodyMode: "local",
+    name: "My Solana mainnet wallet",
+    updatedAt: 200,
+  },
+}));
+assert.equal(namedAfterReloadCards[0]?.name, "MiroShark payment", "Generated reload names such as My Base mainnet wallet must not overwrite a custom wallet name.");
+
+const duplicateAddressRows = mergePersonalWalletList([{
+  id: "user:original:eip155-8453",
+  agentId: "user:original:eip155-8453",
+  name: "My Base mainnet wallet",
+  address: "0x5555000000000000000000000000000000005555",
+  network: "eip155:8453",
+  custodyMode: "local",
+  createdAt: 100,
+}, {
+  id: "user:duplicate:eip155-8453",
+  agentId: "user:duplicate:eip155-8453",
+  name: "New import name",
+  address: "0x5555000000000000000000000000000000005555",
+  network: "eip155:8453",
+  custodyMode: "local",
+  createdAt: 200,
+}]);
+assert.equal(duplicateAddressRows.length, 1, "the same network/address must remain one wallet account");
+assert.equal(duplicateAddressRows[0]?.id, "user:original:eip155-8453", "a duplicate import must preserve the established wallet identity");
+assert.equal(duplicateAddressRows[0]?.name, "My Base mainnet wallet", "a duplicate import must not rename an established wallet");
+const reversedDuplicateAddressRows = mergePersonalWalletList([duplicateAddressRows[0] && {
+  ...duplicateAddressRows[0],
+  id: "user:duplicate:eip155-8453",
+  agentId: "user:duplicate:eip155-8453",
+  name: "New import name",
+  createdAt: 200,
+}, {
+  ...duplicateAddressRows[0],
+  id: "user:original:eip155-8453",
+  agentId: "user:original:eip155-8453",
+  name: "My Base mainnet wallet",
+  createdAt: 100,
+}].filter(Boolean));
+assert.equal(reversedDuplicateAddressRows[0]?.id, "user:original:eip155-8453", "identity precedence must use creation time, not source ordering");
+assert.equal(reversedDuplicateAddressRows[0]?.name, "My Base mainnet wallet", "an older wallet name must survive when native rows arrive newest-first");
+
 const walletViewSource = readFileSync(join(root, "src/components/wallets-drop-in/WalletsView.tsx"), "utf8");
 assert.match(walletViewSource, /setTimeout\(\(\) => setOpen\(true\), 200\)/);
 assert.match(walletViewSource, /title=\{multi \? "Hover for all chain addresses" : undefined\}/);
-assert.match(walletViewSource, /w\.addresses\.map\(\(\[chain, addr\]\)/);
+assert.match(walletViewSource, /w\.addresses!?\.map\(\(\[chain, addr\]\)/);
 assert.match(walletViewSource, /primaryHolding = sendHoldings\[0\] \|\| top\[0\]/);
 assert.match(walletViewSource, /frFmtAmount\(primaryHolding\.sym, primaryHolding\.amount\)/);
 assert.match(walletViewSource, /maxHeight: top\.length > 5 \? 245/);
 assert.match(walletViewSource, /overflowY: top\.length > 5 \? "auto"/);
+assert.match(walletViewSource, /onExportPersonalWallet\?: \(walletId: string, confirmation: string\)/);
+assert.match(walletViewSource, /WalletSecretExportSheet[\s\S]+onExportPersonalWallet\?\.\(w\.id, confirmation\)/);
+assert.match(walletViewSource, /<BIcon name="key" size=\{14\} \/> Export keys/);
+assert.match(walletViewSource, /onRefreshPersonalWallet\?: \(source: GroupedPersonalWallet\)/);
+assert.match(walletViewSource, /function SendToMyWalletModal/);
+assert.match(walletViewSource, /Send to my wallet/);
+assert.match(walletViewSource, /transferableWalletHoldings\(source, ranked\.top\)/, "Send to my wallet must offer every held asset backed by a local chain account");
+assert.match(walletViewSource, /sourceAccount\?\.assets\.find\(\(asset\) => asset\.symbol === sendSym\)/, "send limits must use the selected chain account instead of an aggregate across chains");
+assert.match(walletViewSource, /personalWalletTransferTargets\(w, walletTransferHoldings\[0\]\?\.sym \|\| "", FR_MY_WALLETS\)\.targets/);
+assert.match(walletViewSource, /confirmation: "SEND_TOKEN"/, "the explicit modal action must use the token-send confirmation scope");
+assert.match(walletViewSource, /sourceAccountId: sourceAccount\.id/, "the modal must bind the send to the chain account used to build its destination list");
+assert.match(walletViewSource, /className="fw-split-menu"/);
+assert.match(walletViewSource, /actions\.onRefreshPersonalWallet\(w\)/);
+
+const walletPanelSource = readFileSync(join(root, "src/features/dashboard/views/WalletPanel.tsx"), "utf8");
+assert.match(walletPanelSource, /exportPersonalWalletGroupSecret/);
+assert.match(walletPanelSource, /buildGroupedPersonalWallets\(mergedPersonalWallets\)\.find\(\(wallet\) => wallet\.id === walletId \|\| wallet\.spendId === walletId\)/);
+assert.match(walletPanelSource, /onRefreshPersonalWallet: async \(source: any\) => refreshPersonalWalletSourceBalance\(source\)/);
+assert.match(walletPanelSource, /refreshWalletUntilAssetBalance/, "wallet-to-wallet sends must wait until the recipient's new asset balance is observable");
+assert.match(walletPanelSource, /minimumBalance: recipientStartingBalance \+ sentAmount/, "the post-send refresh must verify the expected recipient amount rather than accepting any successful read");
+assert.match(walletPanelSource, /invalidatePersonalWalletBalance\(recipientAccount\)/, "an unobserved post-send balance must be marked stale so reload retries it");
+assert.match(walletPanelSource, /sendApprovedPersonalWalletAsset/, "personal-wallet sends must use the asset-aware route client");
+assert.match(walletPanelSource, /walletId\(wallet\) === input\.sourceAccountId/, "the dashboard action must preserve the modal's selected source chain");
+assert.match(walletPanelSource, /onRefreshBankrWallet: loadBankrWallet/);
+
+const walletExportActionsSource = readFileSync(join(root, "src/features/dashboard/views/wallet-secret-export-actions.ts"), "utf8");
+assert.match(walletExportActionsSource, /const localWallets = group\.accounts\.filter\(\(wallet\) => wallet\.custodyMode === "local"\)/);
+assert.match(walletExportActionsSource, /confirmation: options\.confirmation/);
+
+const walletNativeExportSource = readFileSync(join(root, "src-tauri/src/wallet_export.rs"), "utf8");
+assert.match(walletNativeExportSource, /async fn wallet_secret_export_save/);
+assert.match(walletNativeExportSource, /\.save_file\(move \|file_path\|/);
+assert.doesNotMatch(walletNativeExportSource, /blocking_save_file/);
+
+const nativePersonalWalletSource = readFileSync(join(root, "src/lib/native/personal-wallets.ts"), "utf8");
+const apiPersonalWalletSource = readFileSync(join(root, "src/app/api/wallet/personal/route.ts"), "utf8");
+const tauriObsidianSource = readFileSync(join(root, "src-tauri/src/obsidian.rs"), "utf8");
+assert.match(nativePersonalWalletSource, /mergePersonalWalletList/, "native + HTTP wallet reads must use the canonical identity-preserving merge");
+assert.doesNotMatch(nativePersonalWalletSource, /function preferredPersonalWalletName/, "native wallet reads must not carry a second name-precedence implementation");
+assert.match(apiPersonalWalletSource, /base sepolia/);
+assert.match(apiPersonalWalletSource, /createdAt: Date\.parse\(vaultWallet\.createdAt\) \|\| wallet\.createdAt/, "vault creation time must remain the wallet identity timestamp");
+assert.match(tauriObsidianSource, /base sepolia/);
 
 console.log("Personal wallet grouping tests passed.");

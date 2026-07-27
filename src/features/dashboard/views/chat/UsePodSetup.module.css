@@ -50,33 +50,10 @@
   pointer-events: none;
 }
 
-.tl {
-  top: 12px;
-  left: 12px;
-  border-right: 0;
-  border-bottom: 0;
-}
-
-.tr {
-  top: 12px;
-  right: 12px;
-  border-left: 0;
-  border-bottom: 0;
-}
-
-.bl {
-  bottom: 12px;
-  left: 12px;
-  border-right: 0;
-  border-top: 0;
-}
-
-.br {
-  right: 12px;
-  bottom: 12px;
-  border-left: 0;
-  border-top: 0;
-}
+.tl { top: 12px; left: 12px; border-right: 0; border-bottom: 0; }
+.tr { top: 12px; right: 12px; border-left: 0; border-bottom: 0; }
+.bl { bottom: 12px; left: 12px; border-right: 0; border-top: 0; }
+.br { right: 12px; bottom: 12px; border-left: 0; border-top: 0; }
 
 .hex {
   position: relative;
@@ -130,31 +107,6 @@
   color: var(--fg3);
   font-size: 12.5px;
   line-height: 1.4;
-}
-
-.x {
-  display: grid;
-  flex: 0 0 auto;
-  width: 32px;
-  height: 32px;
-  place-items: center;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: transparent;
-  color: var(--fg3);
-  cursor: pointer;
-  transition: all 150ms ease;
-}
-
-.x:hover {
-  border-color: var(--line2);
-  background: var(--bg3);
-  color: var(--fg);
-}
-
-.x svg {
-  width: 16px;
-  height: 16px;
 }
 
 .steps {
@@ -757,6 +709,13 @@
   text-align: left;
   transition: all 150ms ease;
   white-space: normal;
+}
+
+.model[aria-pressed="true"] {
+  border-color: var(--cyan);
+  background: rgba(45, 212, 191, 0.12);
+  color: var(--cyan3);
+  box-shadow: 0 0 16px var(--cyan-glow);
 }
 
 .model:hover {

@@ -10,6 +10,11 @@ import { isFleetMachineMobile, type FleetAgent, type FleetMachine } from "./flee
 import { FleetSelectionTooltipContent } from "./selection-tooltip";
 import type { MachineUpdateButtonDetail, MachineUpdateButtonStatus } from "./roster";
 import coastlineData from "./data/ne_110m_coastline";
+// Self-provide the fleet token scope (`--edge-stroke-start`, fonts, hex tones).
+// The classic FleetView wraps us in `.root`, but the hive FleetHiveView does not
+// import these tokens — without our own `.root` the coastline stroke resolves to
+// an undefined var and SVG falls back to `stroke: none` (invisible outlines).
+import styles from "./fleet-tokens.module.css";
 
 interface MapViewProps {
   width?: number;
@@ -43,6 +48,28 @@ type CoastlineFeatureCollection = {
 };
 
 const COASTLINE_LINES = extractCoastlineLines(coastlineData);
+
+// The map is the single source of truth for its own look. `styles.root` (applied
+// to the container below) supplies these edge tokens theme-aware, but every SVG
+// use also carries an inline dark-theme fallback so the map can never render
+// invisible if it is ever mounted outside a fleet token scope (the exact bug that
+// hid the coastlines under the hive layout, which doesn't import fleet-tokens).
+const EDGE_STROKE_START = "var(--edge-stroke-start, rgba(94, 234, 212, 0.50))";
+const EDGE_STROKE_END = "var(--edge-stroke-end, rgba(255, 212, 90, 0.55))";
+
+// How much more one axis may be scaled than the other before we stop stretching.
+// The projection maps the fleet's lon span to width and lat span to height; a
+// globe-spanning, low-latitude-spread fleet would otherwise squish coastlines
+// ~5x vertically. Capping the ratio keeps continents recognizable while still
+// filling the frame. 1 = perfectly aspect-correct (thin band); higher = more
+// fill, more stretch. This is THE knob for map squish.
+const MAP_MAX_ANISOTROPY = 1.8;
+
+// Latitude bounds of the ne_110m coastline data (its own bbox). Used to center
+// the map vertically on the visible landmass instead of on the fleet pins, so a
+// northern-hemisphere-only fleet doesn't leave a dead band above the map.
+const COASTLINE_LAT_MAX = 83.65;
+const COASTLINE_LAT_MIN = -85.61;
 
 // Coincident machines (atlas + honeycomb in Brooklyn) get a small offset so
 // pins don't fully overlap.
@@ -86,7 +113,14 @@ export function MapView({
       .map((line) => coastlinePath(line, projection.project, w, h))
       .filter(Boolean);
   }, [h, projection, w]);
-  const bounds = React.useMemo(() => mapContentBounds(machines, edges, pos), [edges, machines, pos]);
+  // Vertical extent of the projected landmass — folded into the content bounds so
+  // the map centers on the world vertically (fleet pins still drive the horizontal
+  // center). Without this a northern-only fleet leaves a dead band above the map.
+  const regionYBounds = React.useMemo(() => ({
+    minY: projection.project(0, COASTLINE_LAT_MAX).y,
+    maxY: projection.project(0, COASTLINE_LAT_MIN).y,
+  }), [projection]);
+  const bounds = React.useMemo(() => mapContentBounds(machines, edges, pos, regionYBounds), [edges, machines, pos, regionYBounds]);
   const latestBeeMapRef = React.useRef({ edges, pos });
 
   const clampPan = React.useCallback((next: { x: number; y: number }) => {
@@ -136,6 +170,12 @@ export function MapView({
     let raf = 0;
     const SZ = 38;
     const tick = (now: number) => {
+      // Skip the bee animation while the tab/window is hidden; keep the loop
+      // scheduled so it resumes instantly when the page becomes visible again.
+      if (document.hidden) {
+        raf = requestAnimationFrame(tick);
+        return;
+      }
       const { edges: currentEdges, pos: currentPos } = latestBeeMapRef.current;
       for (let i = 0; i < BEE_COUNT; i++) {
         const el = beeRefs.current[i];
@@ -180,7 +220,7 @@ export function MapView({
   return (
     <div
       ref={viewportRef}
-      className="relative h-full w-full overflow-hidden"
+      className={`${styles.root} relative h-full w-full overflow-hidden`}
       style={{ cursor: dragging ? "grabbing" : "grab", touchAction: "none" }}
       onPointerDown={(event) => {
         if (event.button !== 0) return;
@@ -225,8 +265,8 @@ export function MapView({
       >
         <defs>
           <linearGradient id="fleetMapArc" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%"   stopColor="var(--edge-stroke-start)" />
-            <stop offset="100%" stopColor="var(--edge-stroke-end)" />
+            <stop offset="0%"   stopColor={EDGE_STROKE_START} />
+            <stop offset="100%" stopColor={EDGE_STROKE_END} />
           </linearGradient>
         </defs>
         {/* Graticule */}
@@ -238,13 +278,15 @@ export function MapView({
             <line key={"v" + i} y1={0} y2={h} x1={((i + 1) * w) / 8} x2={((i + 1) * w) / 8} strokeDasharray="2 4" />
           ))}
         </g>
-        {/* Natural Earth coastline silhouettes */}
+        {/* Natural Earth coastline silhouettes — dotted region outlines.
+            Round-capped near-zero dashes render as evenly spaced dots; the
+            0.7px hairline was effectively invisible against the dark canvas. */}
         <g
           fill="none"
-          stroke="var(--edge-stroke-start)"
-          strokeWidth={0.7}
-          strokeDasharray="0.8 3"
-          opacity={0.55}
+          stroke={EDGE_STROKE_START}
+          strokeWidth={1.4}
+          strokeLinecap="round"
+          strokeDasharray="0.1 4.5"
         >
           {regionPaths.map((d, i) => <path key={i} d={d} />)}
         </g>
@@ -436,6 +478,23 @@ function createFleetProjection(machines: FleetMachine[], width: number, height: 
   minLat = latCenter - latSpan / 2 - latPad;
   maxLat = latCenter + latSpan / 2 + latPad;
 
+  // Clamp anisotropy so continents don't stretch. Widen (never crop) whichever
+  // window axis is too zoomed-in until pixels-per-degree on the two axes are
+  // within MAP_MAX_ANISOTROPY of each other, keeping the same center.
+  let lonWindow = maxLon - minLon;
+  let latWindow = maxLat - minLat;
+  const pxPerLon = width / lonWindow;
+  const pxPerLat = height / latWindow;
+  if (pxPerLat > pxPerLon * MAP_MAX_ANISOTROPY) {
+    latWindow = height / (pxPerLon * MAP_MAX_ANISOTROPY);
+  } else if (pxPerLon > pxPerLat * MAP_MAX_ANISOTROPY) {
+    lonWindow = width / (pxPerLat * MAP_MAX_ANISOTROPY);
+  }
+  minLon = lonCenter - lonWindow / 2;
+  maxLon = lonCenter + lonWindow / 2;
+  minLat = latCenter - latWindow / 2;
+  maxLat = latCenter + latWindow / 2;
+
   return {
     project: (lon: number, lat: number) => {
       const x = ((lon - minLon) / (maxLon - minLon)) * width;
@@ -541,6 +600,7 @@ function mapContentBounds(
   machines: FleetMachine[],
   edges: Array<[string, string]>,
   pos: Record<string, { x: number; y: number }>,
+  regionYBounds?: { minY: number; maxY: number },
 ) {
   const padding = 90;
   const pinWidth = 56;
@@ -569,6 +629,13 @@ function mapContentBounds(
     if (!A || !B) continue;
     const dist = Math.hypot(B.x - A.x, B.y - A.y);
     includePoint((A.x + B.x) / 2, (A.y + B.y) / 2 - Math.min(60, dist * 0.18));
+  }
+
+  // Extend the VERTICAL extent to the projected landmass (not the horizontal —
+  // pins own the horizontal center) so the map is framed on the world.
+  if (regionYBounds) {
+    minY = Math.min(minY, regionYBounds.minY);
+    maxY = Math.max(maxY, regionYBounds.maxY);
   }
 
   if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) {

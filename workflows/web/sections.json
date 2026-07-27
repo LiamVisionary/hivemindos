@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "provenance": "authored",
+  "license": "MIT (same as this repository)",
+  "verifiedOn": "2026-07-10",
+  "note": "Page-section archetypes, and per section what makes it real rather than a placeholder. Written to give the Deliverable Acceptance gate (src/lib/services/deliverables/acceptance-contracts.ts) something concrete to check: that gate fail-closes on placeholder output, but today it only detects lexical tells ('your headline here', {{mustache}}, [ALL CAPS SLOT]). The `requires` and `placeholderTells` fields below are the semantic layer it does not yet have. Nothing here is wired into that gate — this is data waiting for a consumer.",
+  "count": 8,
+  "sections": [
+    {
+      "id": "hero", "name": "Hero", "order": 1,
+      "purpose": "State what this is and who it is for, above the fold.",
+      "requires": ["A specific noun for the product or service, not a category word", "One concrete outcome", "Exactly one primary action"],
+      "placeholderTells": ["Headline copy goes here", "Welcome to our website", "A generic tagline with no object (e.g. 'Innovate. Grow. Succeed.')", "More than one primary button"]
+    },
+    {
+      "id": "problem", "name": "Problem", "order": 2,
+      "purpose": "Name the reader's situation in their own words before offering anything.",
+      "requires": ["At least one symptom the reader would recognize without explanation", "No product mention"],
+      "placeholderTells": ["Lorem ipsum", "Abstract pain ('inefficiency', 'friction') with no scenario", "The product named before the problem lands"]
+    },
+    {
+      "id": "mechanism", "name": "Mechanism", "order": 3,
+      "purpose": "Explain why this works, not merely that it works.",
+      "requires": ["A named mechanism or process", "At least one step or component", "A stated limit or edge case"],
+      "placeholderTells": ["'Powered by AI' with no explanation", "A three-step diagram whose steps are 'Sign up / Use it / Succeed'", "No failure mode acknowledged anywhere on the page"]
+    },
+    {
+      "id": "proof", "name": "Proof", "order": 4,
+      "purpose": "Give the reader a reason to believe the mechanism section.",
+      "requires": ["At least one named source — a person, company, dataset, or dated measurement", "A number with its unit and its timeframe"],
+      "placeholderTells": ["[TESTIMONIAL]", "'Trusted by thousands'", "A quote with no attributed name", "Logos with no described relationship", "A percentage with no baseline"]
+    },
+    {
+      "id": "offer", "name": "Offer", "order": 5,
+      "purpose": "State precisely what the reader gets and what it costs.",
+      "requires": ["A price, a range, or an explicit 'contact for pricing'", "What is included, enumerated", "What is not included"],
+      "placeholderTells": ["$0.00", "'Pricing coming soon'", "Tiers with identical feature lists", "No exclusions stated anywhere"]
+    },
+    {
+      "id": "objection", "name": "Objection", "order": 6,
+      "purpose": "Answer the reason the reader is about to leave.",
+      "requires": ["At least one objection stated in the reader's voice, not softened", "A direct answer, including 'no' where the answer is no"],
+      "placeholderTells": ["Only objections the product happens to win", "'Is it worth it? Absolutely!'", "No objection section at all on a considered purchase"]
+    },
+    {
+      "id": "faq", "name": "FAQ", "order": 7,
+      "purpose": "Handle the logistics that would otherwise become support tickets.",
+      "requires": ["Questions a real buyer asks (delivery, cancellation, compatibility, data)", "Answers that commit to something checkable"],
+      "placeholderTells": ["'What is [PRODUCT]?' as the first question", "Answers that restate the marketing copy", "Fewer than three questions"]
+    },
+    {
+      "id": "final-cta", "name": "Final CTA", "order": 8,
+      "purpose": "Close, having earned it.",
+      "requires": ["The same action as the hero, worded differently", "A restated outcome, not a restated feature"],
+      "placeholderTells": ["'Get started today!' with no object", "A different primary action than the hero, which splits intent", "A countdown timer with no stated reason"]
+    }
+  ]
+}

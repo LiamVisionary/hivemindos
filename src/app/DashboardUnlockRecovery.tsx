@@ -9,16 +9,13 @@ type DashboardUnlockRecoveryProps = {
   nativeMode?: boolean;
 };
 
-const copyTokenCommand = "pnpm dashboard-auth copy-token";
-const resetTokenCommand = "pnpm dashboard-auth reset-token";
-const rotateSecretCommand = "pnpm dashboard-auth rotate-secret";
-const nativeBootstrapHashKey = "hivemindos_native_bootstrap";
-
+const copyTokenCommand = "dashboard-auth copy-token";
+const resetTokenCommand = "dashboard-auth reset-token";
+const rotateSecretCommand = "dashboard-auth rotate-secret";
 export default function DashboardUnlockRecovery({ authSecretPresent, deviceTokenPresent, nativeMode = false }: DashboardUnlockRecoveryProps) {
   const [open, setOpen] = useState(false);
   const [copiedCommand, setCopiedCommand] = useState("");
   const [failedCommand, setFailedCommand] = useState("");
-  const [nativeUnlockState, setNativeUnlockState] = useState<"idle" | "signing-in" | "failed">("idle");
   const [tauriRuntime, setTauriRuntime] = useState(false);
   const [terminalState, setTerminalState] = useState<"idle" | "opening" | "opened" | "failed">("idle");
   const tokenCommand = deviceTokenPresent ? copyTokenCommand : resetTokenCommand;
@@ -31,42 +28,6 @@ export default function DashboardUnlockRecovery({ authSecretPresent, deviceToken
     }, 0);
     return () => window.clearTimeout(timeout);
   }, []);
-
-  useEffect(() => {
-    if (!nativeMode || !authSecretPresent || !deviceTokenPresent) return;
-    let cancelled = false;
-    async function unlockNativeDashboard() {
-      setNativeUnlockState("signing-in");
-      try {
-        const hashToken = readNativeBootstrapTokenFromHash();
-        let token: string | null = hashToken;
-        if (!token) {
-          const { invoke } = await import("@tauri-apps/api/core");
-          token = await invoke<string | null>("native_dashboard_unlock_token");
-        }
-        if (cancelled || !token) {
-          setNativeUnlockState("idle");
-          return;
-        }
-        const response = await fetch("/api/auth/session", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            accept: "application/json",
-          },
-          body: JSON.stringify({ token, returnTo: currentReturnTo() }),
-        });
-        if (!response.ok) throw new Error("Native dashboard token was not accepted.");
-        window.location.replace(currentReturnTo());
-      } catch {
-        if (!cancelled) setNativeUnlockState("failed");
-      }
-    }
-    void unlockNativeDashboard();
-    return () => {
-      cancelled = true;
-    };
-  }, [authSecretPresent, deviceTokenPresent, nativeMode]);
 
   async function copyCommand(command: string) {
     const copied = await writeClipboardText(command);
@@ -104,17 +65,12 @@ export default function DashboardUnlockRecovery({ authSecretPresent, deviceToken
           color: "var(--accent-strong, #936811)",
           cursor: "pointer",
           fontSize: 13,
-          fontWeight: 800,
+          fontWeight: 600,
           padding: "4px 6px",
         }}
       >
         {open ? "Back to token input" : "Need the token?"}
       </button>
-      {nativeUnlockState === "signing-in" ? (
-        <p style={{ margin: 0, color: "var(--muted, #867d6e)", fontSize: 12, fontWeight: 700, textAlign: "center" }}>
-          Opening signed desktop session...
-        </p>
-      ) : null}
       {open ? (
         <section
           aria-label="Dashboard token recovery"
@@ -134,8 +90,8 @@ export default function DashboardUnlockRecovery({ authSecretPresent, deviceToken
           </div>
           <p style={{ margin: 0, color: "var(--text-soft, #5e574b)", fontSize: 13, lineHeight: 1.55 }}>
             {nativeMode
-              ? "The desktop app creates local auth automatically. If this screen stays locked, quit and reopen HivemindOS."
-              : "Run these from the HivemindOS project folder. The token value is never exposed through this locked page."}
+              ? "The desktop app uses a registered device passkey when available and keeps its local device token as the fallback."
+              : "Run these from any terminal after setup. If the command is not on PATH yet, run it from the HivemindOS project folder with pnpm. The token value is never exposed through this locked page."}
           </p>
           {!nativeMode ? (
             <div style={{ display: "grid", gap: 10 }}>
@@ -176,7 +132,7 @@ export default function DashboardUnlockRecovery({ authSecretPresent, deviceToken
           ) : (
             <p style={{ margin: 0, color: "var(--muted, #867d6e)", fontSize: 12, lineHeight: 1.5 }}>
               {nativeMode
-                ? (nativeUnlockState === "failed" ? "Automatic desktop sign-in failed. Quit and reopen HivemindOS to retry." : "Desktop auth is ready and should open automatically.")
+                ? "Desktop auth is ready. Use device authentication above, choose the token fallback, or reopen HivemindOS to retry."
                 : <>Manual fallback: open <code style={codeStyle}>.env.local</code> and copy <code style={codeStyle}>HIVEMINDOS_DASHBOARD_DEVICE_TOKEN</code>.</>}
             </p>
           )}
@@ -184,26 +140,6 @@ export default function DashboardUnlockRecovery({ authSecretPresent, deviceToken
       ) : null}
     </div>
   );
-}
-
-function readNativeBootstrapTokenFromHash() {
-  const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
-  if (!hash) return "";
-  const params = new URLSearchParams(hash);
-  const token = params.get(nativeBootstrapHashKey)?.trim() ?? "";
-  if (!token) return "";
-  params.delete(nativeBootstrapHashKey);
-  const nextHash = params.toString();
-  const nextUrl = `${window.location.pathname}${window.location.search}${nextHash ? `#${nextHash}` : ""}`;
-  window.history.replaceState(null, "", nextUrl);
-  return token;
-}
-
-function currentReturnTo() {
-  const search = new URLSearchParams(window.location.search);
-  search.delete("auth");
-  const query = search.toString();
-  return `${window.location.pathname}${query ? `?${query}` : ""}`;
 }
 
 async function writeClipboardText(value: string) {
@@ -277,7 +213,7 @@ function CommandButton({ command, copied, failed, icon, label, onCopy }: {
     >
       {icon}
       <code style={{ ...codeStyle, overflowWrap: "anywhere" }}>{command}</code>
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: statusColor, fontSize: 12, fontWeight: 800 }}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: statusColor, fontSize: 12, fontWeight: 600 }}>
         {copied ? <Check size={14} /> : <Terminal size={14} />}
         {statusText}
       </span>
@@ -308,7 +244,7 @@ function ActionButton({ icon, label, title, onClick }: {
         cursor: "pointer",
         padding: "10px 11px",
         fontSize: 12,
-        fontWeight: 800,
+        fontWeight: 600,
       }}
       title={title}
     >

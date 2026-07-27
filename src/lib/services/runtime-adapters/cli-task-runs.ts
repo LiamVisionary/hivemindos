@@ -3,9 +3,11 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { homedir } from "@/lib/home-dir";
+import { runtimeCommandEnv, runtimeCommandPaths } from "@/lib/services/runtime-command-env";
 import { readSharedHiveEnvValues } from "@/lib/services/shared-hive-env";
 import type { AgentProfile, AgentRuntime } from "@/lib/types/agent-runtime";
 import type { RuntimeRun, RuntimeRunLog } from "./types";
+import { evaluateCompletionEvent } from "@/lib/services/evaluation/control-plane";
 
 const RUN_ROOT = join(homedir(), ".hivemindos", "runtime-runs");
 
@@ -23,6 +25,7 @@ type StoredCliRun = RuntimeRun & {
   cwd: string;
   logPath: string;
   exitCode?: number | null;
+  evaluation?: RuntimeRun["evaluation"];
 };
 
 function runDir(runtime: AgentRuntime) {
@@ -39,22 +42,12 @@ function logPath(runtime: AgentRuntime, id: string) {
 
 async function executableExists(command: string) {
   if (command.includes("/")) return existsSync(command);
-  const pathParts = cliRuntimePath().split(":").filter(Boolean);
-  return pathParts.some((part) => existsSync(join(part, command)));
-}
-
-function cliRuntimePath() {
-  return [
-    join(homedir(), ".local", "bin"),
-    "/opt/homebrew/bin",
-    "/usr/local/bin",
-    process.env.PATH || "",
-  ].filter(Boolean).join(":");
+  return runtimeCommandPaths().some((part) => existsSync(join(part, command)));
 }
 
 async function cliRuntimeEnv(runtime: AgentRuntime, profile?: AgentProfile) {
   const sharedEnv = await readSharedHiveEnvValues().catch(() => ({}));
-  const env: NodeJS.ProcessEnv = { ...sharedEnv, ...process.env, PATH: cliRuntimePath() };
+  const env: NodeJS.ProcessEnv = runtimeCommandEnv({ ...sharedEnv, ...process.env });
   if (runtime === "openhands") {
     env.OPENHANDS_SUPPRESS_BANNER = env.OPENHANDS_SUPPRESS_BANNER || "1";
     env.LLM_API_KEY = env.LLM_API_KEY || env.OPENAI_API_KEY || "";
@@ -101,17 +94,17 @@ async function normalizeCwd(input: Record<string, unknown>) {
   return resolved;
 }
 
-async function refreshedRun(runtime: AgentRuntime, run: StoredCliRun): Promise<StoredCliRun> {
+function refreshedRun(run: StoredCliRun): StoredCliRun {
   if (run.status !== "active") return run;
   if (processIsRunning(run.pid)) return run;
-  const next: StoredCliRun = {
+  // Derive the demotion at read time only. The child's close handler attaches the
+  // evaluation and final status asynchronously after exit; persisting this stale
+  // read-modify-write here can land after that write and permanently clobber it.
+  return {
     ...run,
     status: "unknown",
-    updatedAt: new Date().toISOString(),
     conclusion: run.conclusion ?? "Process is no longer running; final exit was not captured.",
   };
-  await writeRun(next).catch(() => undefined);
-  return next;
 }
 
 export async function startCliTaskRun(config: CliTaskConfig, input: Record<string, unknown>, profile?: AgentProfile) {
@@ -122,7 +115,7 @@ export async function startCliTaskRun(config: CliTaskConfig, input: Record<strin
   }
 
   const cwd = await normalizeCwd(input);
-  const id = `${String(config.runtime)}-${Date.now().toString(36)}`;
+  const id = `${String(config.runtime)}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const args = config.buildArgs(task, input, profile);
   const runLogPath = logPath(config.runtime, id);
   const now = new Date().toISOString();
@@ -157,10 +150,15 @@ export async function startCliTaskRun(config: CliTaskConfig, input: Record<strin
   };
   await writeRun(active);
 
-  child.stdout.on("data", (chunk: Buffer) => void appendLog(runLogPath, chunk.toString()));
-  child.stderr.on("data", (chunk: Buffer) => void appendLog(runLogPath, chunk.toString()));
+  let pendingLogWrite = Promise.resolve();
+  const queueLog = (value: string) => {
+    pendingLogWrite = pendingLogWrite.then(() => appendLog(runLogPath, value));
+    return pendingLogWrite;
+  };
+  child.stdout.on("data", (chunk: Buffer) => void queueLog(chunk.toString()));
+  child.stderr.on("data", (chunk: Buffer) => void queueLog(chunk.toString()));
   child.on("error", (error) => {
-    void appendLog(runLogPath, `\n${error.message}\n`);
+    void queueLog(`\n${error.message}\n`);
     void writeRun({
       ...active,
       status: "failed",
@@ -169,13 +167,33 @@ export async function startCliTaskRun(config: CliTaskConfig, input: Record<strin
     });
   });
   child.on("close", (code) => {
-    void writeRun({
-      ...active,
-      status: code === 0 ? "completed" : "failed",
-      updatedAt: new Date().toISOString(),
-      exitCode: code,
-      conclusion: code === 0 ? "completed" : `exited with code ${code}`,
-    });
+    void (async () => {
+      await pendingLogWrite.catch(() => undefined);
+      const rawLog = await readFile(runLogPath, "utf8").catch(() => "");
+      // The first line is HivemindOS's command echo and contains the task prompt.
+      // Exclude it so an exit-0 process with no agent response cannot pass by
+      // "evaluating" its own input as substantive output.
+      const output = rawLog.split(/\r?\n/).slice(1).join("\n");
+      const completedAt = Date.now();
+      const evaluation = await evaluateCompletionEvent({
+        id,
+        surface: "runtime-cli",
+        status: code === 0 ? "completed" : "failed",
+        observed: true,
+        output,
+        startedAt: Date.parse(run.createdAt || "") || undefined,
+        completedAt,
+        metadata: { runtime: config.runtime, cwd },
+      });
+      await writeRun({
+        ...active,
+        status: code === 0 ? "completed" : "failed",
+        updatedAt: new Date(completedAt).toISOString(),
+        exitCode: code,
+        conclusion: code === 0 ? "completed" : `exited with code ${code}`,
+        evaluation,
+      });
+    })();
   });
   child.unref();
 
@@ -187,12 +205,12 @@ export async function listCliTaskRuns(runtime: AgentRuntime): Promise<RuntimeRun
   const files = await readdir(dir).catch(() => []);
   const runs = await Promise.all(files.filter((file) => file.endsWith(".json")).map(async (file) => {
     const run = await readStoredRun(runtime, file.replace(/\.json$/, ""));
-    return run ? refreshedRun(runtime, run) : null;
+    return run ? refreshedRun(run) : null;
   }));
   return runs
     .filter((run): run is StoredCliRun => Boolean(run))
     .sort((left, right) => Date.parse(right.createdAt || "") - Date.parse(left.createdAt || ""))
-    .map(({ id, name, status, createdAt, updatedAt, conclusion }) => ({
+    .map(({ id, name, status, createdAt, updatedAt, conclusion, evaluation }) => ({
       id,
       runtime,
       name,
@@ -200,6 +218,7 @@ export async function listCliTaskRuns(runtime: AgentRuntime): Promise<RuntimeRun
       createdAt,
       updatedAt,
       conclusion,
+      evaluation,
     }));
 }
 
@@ -211,5 +230,6 @@ export async function readCliTaskRunLog(runtime: AgentRuntime, runId: string): P
     id: run.id,
     summary: run.conclusion || run.name,
     logs,
+    evaluation: run.evaluation,
   };
 }

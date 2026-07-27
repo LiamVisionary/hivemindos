@@ -10,11 +10,19 @@ export function hubUrlForPairingHost(host: string) {
   return port ? `http://${cleanHost}:${port}` : `http://${cleanHost}`;
 }
 
-export function clawMobilePairingUrl(input: { hubUrl: string; name: string; machineId?: string }) {
+export function clawMobilePairingUrl(input: {
+  hubUrl: string;
+  name: string;
+  machineId?: string;
+  /** Shared dashboard device token — provisioned into the app so a paired phone
+   *  authenticates to this hub's /api gate with no user-visible token step. */
+  token?: string;
+}) {
   const params = new URLSearchParams({
     hub: input.hubUrl,
     name: input.name,
   });
   if (input.machineId) params.set("machineId", input.machineId);
+  if (input.token) params.set("token", input.token);
   return `clawcodemobile://pair?${params.toString()}`;
 }

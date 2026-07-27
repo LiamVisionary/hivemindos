@@ -28,6 +28,15 @@ use std::time::Duration;
 // While the gateway is installed but keeps exiting (e.g. 5001 not yet free),
 // pause this long between restarts so a hard-failing gateway can't hot-loop.
 const RESTART_BACKOFF: Duration = Duration::from_secs(3);
+// Consecutive fast failures double the pause up to this cap. A gateway that
+// dies instantly on every start (e.g. a native-module ABI mismatch after a
+// Homebrew node upgrade) otherwise re-pays a full tsx transpile at ~100% CPU
+// every few seconds, forever — and appends a stack trace to the launchd err
+// log each time (observed: a 110MB log and a permanently hot core).
+const RESTART_BACKOFF_MAX: Duration = Duration::from_secs(300);
+// A run shorter than this counts as a fast failure; a longer run resets the
+// backoff so transient crashes after healthy uptime still restart quickly.
+const HEALTHY_RUN: Duration = Duration::from_secs(60);
 // While launch-gateway.sh doesn't exist yet (setup hasn't run), re-check this
 // often so the gateway comes up promptly once setup installs it.
 const WAIT_FOR_INSTALL: Duration = Duration::from_secs(5);
@@ -67,6 +76,7 @@ fn main() {
         .join("launch-gateway.sh");
     let claw = bundled_claw();
 
+    let mut backoff = RESTART_BACKOFF;
     loop {
         if !launcher.exists() {
             // The claw backend isn't installed yet (fresh app, before setup) or
@@ -75,10 +85,21 @@ fn main() {
             sleep(WAIT_FOR_INSTALL);
             continue;
         }
+        let started = std::time::Instant::now();
         match run_gateway(&launcher, claw.as_deref()) {
             Ok(status) => eprintln!("hivemind-gateway-host: gateway exited ({status}); restarting"),
             Err(error) => eprintln!("hivemind-gateway-host: failed to start gateway: {error}"),
         }
-        sleep(RESTART_BACKOFF);
+        if started.elapsed() >= HEALTHY_RUN {
+            backoff = RESTART_BACKOFF;
+        } else {
+            backoff = (backoff * 2).min(RESTART_BACKOFF_MAX);
+            eprintln!(
+                "hivemind-gateway-host: gateway exited after {:.1}s; next restart in {}s",
+                started.elapsed().as_secs_f32(),
+                backoff.as_secs()
+            );
+        }
+        sleep(backoff);
     }
 }

@@ -1,9 +1,16 @@
+import type { LoopCapabilityCapital } from "@/lib/types/loops";
+import type { AnalyticsProviderKey, CompanyAnalyticsConfig } from "@/lib/services/company-analytics/types";
+import type { KanbanDeliverableKind, KanbanTaskAttachment } from "@/lib/types/kanban";
+import type { CompanyImportedKnowledge, CompanyImportedOperations } from "@/lib/types/company-import";
+import type { ConnectionProviderKey } from "@/lib/types/integrations";
+
 /**
  * A Company groups agents into an accountable business unit: a shared charter, a
  * collective budget rollup, and a single kill switch (`frozen`) that halts spend
  * across all member agents. The company owns its member list (`agentIds`), so an
- * agent's company is resolved by reverse lookup — membership lives in exactly one
- * place and is managed from the company itself.
+ * agent's company is resolved by reverse lookup. An operational agent identity is
+ * exclusive to one company; reuse across companies happens by duplicating the
+ * agent blueprint into a distinct identity. Membership is managed from companies.
  *
  * The Zero Human Companies view ("a company that runs itself") layers richer
  * presentation metadata on top: a ticker, sector, apex goal, and a per-member
@@ -14,6 +21,31 @@
 
 /** A company's lifecycle posture, surfaced as a status pill in the portfolio. */
 export type CompanyStatus = "shipping" | "drift" | "review" | "setup" | "paused";
+
+/** What counts toward the autonomy-pause threshold (items "waiting on a human"). */
+export type CompanyAutonomyPauseMode = "all" | "deliverable-kinds";
+
+/**
+ * Approval backpressure: auto-pause the company's autonomy driver from planning
+ * NEW work once too many items are already waiting on a human. In-flight work
+ * still finishes; the driver resumes on its own once the count drops back below
+ * the threshold — no button, no permanent Stop. An explicit `maxWaitingOnHuman
+ * <= 0` disables the gate; ABSENT config now inherits the driver's default
+ * (HIVEMINDOS_COMPANY_MAX_WAITING_DEFAULT, 12) — the opt-in default shipped a
+ * live company to 115 unanswered asks before anyone noticed.
+ */
+export interface CompanyAutonomyPause {
+  /** Pause new-work dispatch once this many items are waiting on a human. 0 = explicitly disabled; undefined = driver default. */
+  maxWaitingOnHuman?: number;
+  /**
+   * What counts toward the threshold. "all" (default) = every task of this company
+   * sitting in the needs-human lane. "deliverable-kinds" = only needs-human tasks
+   * carrying a deliverable whose kind is in `deliverableKinds` (e.g. just websites).
+   */
+  countMode?: CompanyAutonomyPauseMode;
+  /** When countMode is "deliverable-kinds", only these deliverable kinds count. Empty = falls back to counting all. */
+  deliverableKinds?: KanbanDeliverableKind[];
+}
 
 /** How an apex/metric value should be read and rendered. */
 export type CompanyMetricUnit = "number" | "percent" | "currency" | "users";
@@ -60,7 +92,7 @@ export interface CompanyRevenue {
  */
 export interface CompanyMember {
   agentId: string;
-  /** Company-specific daily USD budget for this agent (distinct from the agent's own wallet cap). */
+  /** Enforced company-specific rolling-24h USD cap (distinct from the agent's own wallet cap). */
   companyCap?: number;
   /** Role within this company (Queen/Engineer/Product/…). Free-form to match the UI's Role union. */
   roleInCompany?: string;
@@ -79,6 +111,191 @@ export interface CompanyMember {
  * - "graph": run a named agent flow (FlowSpec) with conditional edges + HITL checkpoints.
  */
 export type CompanyProcess = "hierarchical" | "sequential" | "graph";
+
+/**
+ * Which engine advances a company's apex goal when autonomy launches.
+ * HivemindOS remains the default and fans work across the company's crew;
+ * AEON dispatches one configured background skill per autonomy cycle.
+ */
+export type CompanyExecutionConfig =
+  | { engine: "hivemind" }
+  | { engine: "aeon"; profileId: string; skill: string };
+
+/**
+ * One sellable product/package in a company's catalog. Field names deliberately
+ * match the self-serve offer funnel's `packages[]` shape ({key, name, amountUsd,
+ * description, recommended}) so agents can drop catalog entries straight into
+ * client offers without remapping.
+ */
+export interface CompanyProduct {
+  /** Stable slug key, e.g. "starter-launch". */
+  key: string;
+  name: string;
+  /** Price in USD. */
+  amountUsd: number;
+  description?: string;
+  /** Highlighted as the default pick in offers and the UI. */
+  recommended?: boolean;
+  /** Billing cadence. Absent/"one-time" = a one-off sale; "month"/"year" = recurring. */
+  interval?: "one-time" | "month" | "year";
+  /** "package" (core offer, default) or "addon" (optional extra, e.g. a care plan). */
+  kind?: "package" | "addon";
+  /**
+   * x402 seller publication for this product. Set through the company offers
+   * API (publish/unpublish); the slug is server-assigned once and kept stable
+   * across unpublish/republish so buyer links keep working. The catalog price
+   * (`amountUsd`) is the only pricing authority — the public seller route reads
+   * it server-side and never accepts a client-supplied price.
+   */
+  x402Offer?: CompanyProductX402Offer;
+}
+
+/** Publication state for one catalog product on the local x402 seller gateway. */
+export interface CompanyProductX402Offer {
+  published: boolean;
+  /** Public seller slug under /api/paid-agents/offers/<slug>. Server-assigned. */
+  slug: string;
+  publishedAt?: string;
+}
+
+/**
+ * The company's official product catalog — the single source of truth for what
+ * the company sells and at what price. It lives in the replicated definitions
+ * file (Operations/Companies/companies.json in the shared vault), so every
+ * machine and every dispatched agent reads the same prices, and UI edits
+ * propagate fleet-wide. Companies that sell no fixed products simply have no
+ * catalog (the Products tab stays hidden).
+ */
+export interface CompanyProductCatalog {
+  items: CompanyProduct[];
+  /** Where the initial catalog came from: "ui", "repo:<file>", or "shared-brain". */
+  seededFrom?: string;
+  updatedAt?: string;
+}
+
+/**
+ * A concrete price-change request raised by the crew when the evidence they
+ * gather (reply objections, quote-vs-close rates, abandoned checkouts) points
+ * at pricing as the conversion blocker. Pending proposals live on the company
+ * definition (replicated + governance-tracked) and surface under the Approvals
+ * tab; approving applies the change to the catalog, and either outcome lands in
+ * company memory so the crew learns the decision instead of re-proposing it.
+ */
+export interface CompanyPricingProposal {
+  id: string;
+  /** Catalog product this targets (CompanyProduct.key). */
+  productKey: string;
+  /** Product name snapshot at proposal time (display survives later renames). */
+  productName: string;
+  currentAmountUsd: number;
+  proposedAmountUsd: number;
+  /** The concrete evidence the crew cited. */
+  why?: string;
+  /** Work Board task whose result raised this. */
+  sourceTaskId?: string;
+  /** Agent that raised it. */
+  proposedBy?: string;
+  createdAt: string;
+}
+
+/** Human-governed company action policy: off, ask first, or never allow. */
+export type CompanyApprovalPolicyMode = "off" | "ask" | "never";
+
+export type CompanyApprovalPolicySource = "default" | "learning" | "manual";
+
+export interface CompanyApprovalPolicy {
+  /** Stable policy key. Built-ins use fixed ids; learned subjects use a subject slug. */
+  id: string;
+  /** Gerund/action phrase, e.g. "sending customer-facing emails". */
+  subject: string;
+  mode: CompanyApprovalPolicyMode;
+  /** Where this row came from. Explicit saves may preserve default/learning provenance. */
+  source?: CompanyApprovalPolicySource;
+  /** For policies inferred from a standing directive, the source directive id. */
+  directiveId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/**
+ * A standing directive / knowledge entry injected into a company by a human
+ * (Learning tab) or captured from rejecting a deliverable. Directives are
+ * appended to the standing context on EVERY dispatched task
+ * (companyWorkerContext), so the crew is redirected without editing the charter.
+ */
+export interface CompanyDirective {
+  id: string;
+  /** The instruction / knowledge / redirect, in the human's words. */
+  text: string;
+  /** Optional legacy first shared-brain skill slug the crew should read/use for this. */
+  skill?: string;
+  /** Shared-brain skill slugs the crew should read/use for this. */
+  skills?: string[];
+  /** Reference attachments (reuses the task/chat attachment model). */
+  attachments?: KanbanTaskAttachment[];
+  /** How it was created: a Learning-tab injection, or feedback from a rejected deliverable. */
+  source: "inject" | "reject";
+  /** When source === "reject": the deliverable key/title being redirected. */
+  deliverableRef?: string;
+  createdAt: string;
+}
+
+/** One Google-Cloud per-day quota override to push to Service Usage. */
+export interface GcpApiDailyCap {
+  /** Fully-qualified quota metric, e.g. "places.googleapis.com/SearchTextRequest". */
+  metric: string;
+  /** Cap value for the unit window. */
+  value: number;
+  /** Quota unit, e.g. "1/d/{project}". */
+  unit: string;
+  /** Optional per-call cost + free tier for month-cost estimation (mirrors the meter config). */
+  skuUnitCostUsd?: number;
+  freeMonthlyCalls?: number;
+}
+
+/**
+ * A per-company, per-API cost guardrail applied directly to a cloud provider
+ * (per-day quota caps + a monthly billing budget). Config only — the SA key that
+ * actually applies it lives in server-only hive env, never here.
+ */
+export interface CompanyApiBudget {
+  /** Provider discriminant; only "gcp" for now. */
+  provider: "gcp";
+  /** e.g. "places.googleapis.com". */
+  service: string;
+  projectId: string;
+  projectNumber: string;
+  billingAccount: string;
+  /** Monthly billing-budget ceiling in USD. */
+  monthlyCeilingUsd: number;
+  dailyCaps: GcpApiDailyCap[];
+  /** Provider-side apply status — set by the server, never trusted from the client. */
+  appliedAt?: string;
+  appliedError?: string;
+  /** Cloud budget resource name once created, so re-applies update in place. */
+  budgetResourceName?: string;
+}
+
+/**
+ * A local preflight guardrail for calls made through one connected integration.
+ * A provider-wide row omits `operationId`; an operation row is additive, so
+ * both the broad provider cap and the narrower operation cap must allow a call.
+ */
+export interface CompanyIntegrationLimit {
+  id: string;
+  providerKey: ConnectionProviderKey;
+  operationId?: string;
+  /** UTC-calendar-day request cap. 0/undefined means unlimited. */
+  dailyRequestLimit?: number;
+  /** UTC-calendar-month request cap. 0/undefined means unlimited. */
+  monthlyRequestLimit?: number;
+  /** UTC-calendar-day estimated/observed spend cap. 0/undefined means unlimited. */
+  dailySpendLimitUsd?: number;
+  /** UTC-calendar-month estimated/observed spend cap. 0/undefined means unlimited. */
+  monthlySpendLimitUsd?: number;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface Company {
   id: string;
@@ -124,10 +341,85 @@ export interface Company {
    * company is frozen. Set on "Launch", cleared on "Stop".
    */
   autonomy?: boolean;
+  /**
+   * Approval backpressure: auto-pause new-work dispatch when too many items are
+   * already waiting on a human, so the Needs You lane can't silently pile up to
+   * hundreds. Reversible and self-resuming — see {@link CompanyAutonomyPause}.
+   */
+  autonomyPause?: CompanyAutonomyPause;
   /** How the crew executes the apex goal. Defaults to "hierarchical" (parallel fan-out). */
   process?: CompanyProcess;
+  /** Optional autonomy engine. Absent means the native HivemindOS crew path. */
+  execution?: CompanyExecutionConfig;
   /** For process: "graph" — the saved FlowSpec id to run. */
   flowTemplateId?: string;
+  /**
+   * Which machine's autonomy driver owns this company's auto-dispatch. Company
+   * definitions replicate fleet-wide through the shared vault, so without this
+   * gate every machine running the app would dispatch every company. Matched
+   * loosely (normalizeMachineName) against the local hostname; unset means
+   * unclaimed — no driver auto-dispatches until a manual Launch claims it.
+   */
+  homeMachineKey?: string;
+  /**
+   * Project-registry id of the company's domain code repo (e.g. maps-agency).
+   * Dispatched Work Board tasks carry it, so Queen Bee routes code work to
+   * machines with the right checkout and tasks pick up the project's GitLawb
+   * proof badge.
+   */
+  projectId?: string;
+  /**
+   * Official product catalog (what the company sells, at what price). Replicates
+   * with the definitions through the shared vault; agents quote these prices via
+   * the standing worker context. Absent = the company sells no fixed products.
+   */
+  products?: CompanyProductCatalog;
+  /** Pending crew-raised price-change requests (resolved ones are removed; outcomes live in company memory). */
+  pricingProposals?: CompanyPricingProposal[];
+  /** Human approval policy for company actions such as sends, publishing, and learned permission subjects. */
+  approvalPolicies?: CompanyApprovalPolicy[];
+  /** Which analytics provider this company's numbers come from. Unset = not configured (guided setup shown). */
+  analyticsProvider?: AnalyticsProviderKey;
+  /** Per-company analytics link (project/site id + optional self-host). Credentials live in shared hive env, not here. */
+  analyticsConfig?: CompanyAnalyticsConfig;
+  /** Imported legacy project wiring: repo, GitHub Actions, cron jobs, hosting services, and scripts discovered from source. */
+  importedOperations?: CompanyImportedOperations;
+  /** Reviewable knowledge extracted from a local company data room. Source text never becomes an automatic directive. */
+  importedKnowledge?: CompanyImportedKnowledge;
+  /**
+   * Standing directives injected by a human (Learning tab) or captured from a
+   * rejected deliverable. Appended to every dispatched task's context so the
+   * crew follows them without a charter edit. Newest last.
+   */
+  directives?: CompanyDirective[];
+  /**
+   * Per-API cloud cost guardrails (per-day quota caps + a monthly billing budget),
+   * applied server-side to the provider. Written only by the dedicated apply route,
+   * not the generic upsert, so a treasury save can't blank it.
+   */
+  apiBudgets?: CompanyApiBudget[];
+  /** Local request/spend preflight limits for API and integration operations. */
+  integrationLimits?: CompanyIntegrationLimit[];
+  /**
+   * Declared shared-env keys this company needs (seeded by its template).
+   * Drives the PROACTIVE setup checklist: a declared key missing from the hive
+   * env surfaces as a paste-and-save blocker card immediately — instead of the
+   * crew stalling mid-work and the operator discovering keys one drip at a time.
+   * Values never live here; only key names + operator-facing copy.
+   */
+  setupEnvKeys?: CompanyDeclaredSetupKey[];
+}
+
+/** One declared setup key on a company record (see Company.setupEnvKeys). */
+export interface CompanyDeclaredSetupKey {
+  envKey: string;
+  title?: string;
+  explanation?: string;
+  kind?: "secret" | "text";
+  placeholder?: string;
+  links?: Array<{ label: string; url: string }>;
+  /** True = surface at creation; absent/false = surface once work first needs it. */
+  requiredForLaunch?: boolean;
 }
 
 export interface CompanySpendRollup {
@@ -139,6 +431,10 @@ export interface CompanySpendRollup {
   dailyRemainingUsd: number | null;
   monthlyRemainingUsd: number | null;
   totalRemainingUsd: number | null;
+  /** Rolling-24h spend recorded under the "api" kind (paid cloud APIs). */
+  apiSpentUsd: number;
+  /** Rolling-30d spend recorded under the "api" kind. */
+  apiMonthlySpentUsd: number;
   /** Per-agent company-scoped spend, keyed by agentId. Powers per-agent budget bars. */
   memberSpend?: Record<string, CompanyMemberSpend>;
 }
@@ -150,25 +446,10 @@ export interface CompanyMemberSpend {
 }
 
 /**
- * Derived "token capital" readout for a zero-human company. This is not money;
+ * Derived "capability capital" readout for a zero-human company. This is not money;
  * it is the reusable private learning layer the company accumulates through
  * completed work, eval gates, experiments, durable artifacts, and model/runtime
  * diversity. It is intentionally computed from task/loop state so the company
  * can swap models without losing its veteran layer.
  */
-export interface CompanyTokenCapital {
-  score: number;
-  learningAssets: number;
-  workflowAssets: number;
-  evalGates: number;
-  passedEvalGates: number;
-  experiments: number;
-  committedExperiments: number;
-  frontierCandidates: number;
-  antiPatterns: number;
-  distillationQueue: number;
-  learningVelocity: number;
-  spendEfficiency: number | null;
-  modelIndependence: number;
-  notes: string[];
-}
+export type CompanyCapabilityCapital = LoopCapabilityCapital;

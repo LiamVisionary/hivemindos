@@ -1,14 +1,40 @@
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { ComponentType, Dispatch, ElementType, ReactNode, SetStateAction } from "react";
 import { createPortal } from "react-dom";
 import { Check, Copy, Eye, EyeOff, Trash2 } from "lucide-react";
+import type { AgentProfile, AgentRuntime, RuntimeEnvFeature } from "@/lib/types/agent-runtime";
+import type { AgentEnvCardProps } from "@/features/env/env-components";
+import type { RuntimeSecretStatus } from "@/lib/services/runtime-adapters/types";
+import type { DashboardView, HiveEnvBackupStatus, HiveEnvImportEntry, HiveEnvSource, RuntimeModelSelection } from "@/features/dashboard/dashboard-types";
 import { maskedSecretValueClass, secretInputProps } from "@/components/ui/secret-input-props";
+import { HiveEnvKeyInput } from "@/features/env/HiveEnvKeyInput";
 import envStyles from "./brain-env.module.css";
 
-const envClass = (...classes) => classes.map((className) => envStyles[className]).filter(Boolean).join(" ");
+// Non-string entries are falsy toggles; envStyles[falsy] is undefined and filtered out.
+const envClass = (...classes: Array<string | false | null | undefined>) => classes.map((className) => envStyles[className as string]).filter(Boolean).join(" ");
+
+type ClassNameBuilder = (...names: Array<string | false | null | undefined>) => string;
+type IconComponent = ElementType<{ "aria-hidden"?: boolean | "true" | "false"; className?: string; size?: number }>;
+type EnvDraft = { key: string; value: string };
+type HiveEnvImportPreview = { entries: HiveEnvImportEntry[]; error?: string };
+type AeonSecretKey = RuntimeSecretStatus["keys"][number];
+type AgentEnvOverlayCard = { agent: AgentProfile; draft: EnvDraft; entries: Array<[string, string]>; renderKey: string };
+
+type BrainEnvRowProps = {
+  editable?: boolean;
+  extraAction?: ReactNode;
+  name: string;
+  onRemove: () => void;
+  onSave: (value: string) => void;
+  onToggleReveal: (revealKey: string) => void;
+  revealKey: string;
+  revealed: boolean;
+  saving: boolean;
+  scope: string;
+  value: string;
+};
 
 function BrainEnvRow({
   editable = true,
@@ -22,9 +48,9 @@ function BrainEnvRow({
   saving,
   scope,
   value,
-}: any) {
+}: BrainEnvRowProps) {
   const [copied, setCopied] = useState(false);
-  const copyResetTimer = useRef(null);
+  const copyResetTimer = useRef<number | null>(null);
   const copyValue = async () => {
     if (!navigator.clipboard) return;
     try {
@@ -82,7 +108,25 @@ function BrainEnvRow({
   );
 }
 
-function ImportDialog(props: any) {
+type ImportDialogProps = {
+  Check: IconComponent;
+  FileUp: IconComponent;
+  LoaderCircle: IconComponent;
+  importSharedEnvEntries: () => void | Promise<void>;
+  portalTarget: HTMLElement | null;
+  setSharedEnvImportOpen: Dispatch<SetStateAction<boolean>>;
+  setSharedEnvImportText: Dispatch<SetStateAction<string>>;
+  sharedEnvImport: HiveEnvImportPreview;
+  sharedEnvImportChangedCount: number;
+  sharedEnvImportDiff: HiveEnvImportEntry[];
+  sharedEnvImportNewCount: number;
+  sharedEnvImportSameCount: number;
+  sharedEnvImportText: string;
+  sharedEnvImporting: boolean;
+  vaultClass: ClassNameBuilder;
+};
+
+function ImportDialog(props: ImportDialogProps) {
   const {
     Check,
     FileUp,
@@ -174,7 +218,86 @@ function ImportDialog(props: any) {
   ), portalTarget);
 }
 
-export function BrainEnvPanel(props: any) {
+type BrainEnvPanelProps = {
+  AgentEnvCard: ComponentType<AgentEnvCardProps>;
+  Button: ElementType;
+  Check: IconComponent;
+  Download: IconComponent;
+  FileUp: IconComponent;
+  LoaderCircle: IconComponent;
+  Pencil: IconComponent;
+  Plus: IconComponent;
+  RefreshCcw: IconComponent;
+  Search: IconComponent;
+  ShieldCheck: IconComponent;
+  Sparkles: IconComponent;
+  Upload: IconComponent;
+  addAgentEnvValue: (agent: AgentProfile) => void | Promise<void>;
+  addSharedEnvValue: () => void | Promise<void>;
+  aeonAgent: AgentProfile | null;
+  agentEnvOverlayAgents: AgentProfile[];
+  agentEnvOverlayCards: AgentEnvOverlayCard[];
+  agentSpecificEnvCount: number;
+  envSearch: string;
+  envSearchQuery: string;
+  filteredAgentSpecificEnvCount: number;
+  filteredEnvSearchableCount: number;
+  fleetClass: ClassNameBuilder;
+  generateSharedEnvSecret: () => void;
+  hiveEnvLoading: boolean;
+  hiveEnvRestoring: boolean;
+  hiveEnvSavingKey: string;
+  hiveEnvStatus: string;
+  hiveEnvSyncing: boolean;
+  importSharedEnvEntries: () => void | Promise<void>;
+  portalTarget: HTMLElement | null;
+  promoteRuntimeEnvValue: (source: HiveEnvSource, key: string, value: string) => void | Promise<void>;
+  refreshHiveEnv: () => void | Promise<void>;
+  renderAgentKey: (agent: AgentProfile, index: number) => string;
+  restoreSharedEnvBackup: () => void | Promise<void>;
+  revealedEnvValues: Record<string, boolean>;
+  runtimeEnvFeature: (runtime: AgentRuntime) => RuntimeEnvFeature;
+  runtimeEnvSources: HiveEnvSource[];
+  runtimeManagedEnvAgents: AgentProfile[];
+  runtimeModelSelectionsByRuntime: Partial<Record<AgentRuntime, RuntimeModelSelection>>;
+  saveAgentEnvValue: (agent: AgentProfile, key: string, value: string, previousValue: string) => void | Promise<void>;
+  saveSharedEnvValue: (source: HiveEnvSource, key: string, value: string, previousValue: string) => void | Promise<void>;
+  selectedRuntimeEnvEntries: Array<[string, string]>;
+  selectedRuntimeEnvSource: HiveEnvSource | null | undefined;
+  selectedRuntimeEnvTotal: number;
+  setActiveView: Dispatch<SetStateAction<DashboardView>>;
+  setAgentEnvDrafts: Dispatch<SetStateAction<Record<string, EnvDraft>>>;
+  setEnvSearchQuery: Dispatch<SetStateAction<string>>;
+  setHiveEnvRuntimeSourceId: Dispatch<SetStateAction<string>>;
+  setSharedEnvAddMenuOpen: Dispatch<SetStateAction<boolean>>;
+  setSharedEnvDraft: Dispatch<SetStateAction<EnvDraft>>;
+  setSharedEnvEditable: Dispatch<SetStateAction<boolean>>;
+  setSharedEnvImportOpen: Dispatch<SetStateAction<boolean>>;
+  setSharedEnvImportText: Dispatch<SetStateAction<string>>;
+  sharedBackupStatus: HiveEnvBackupStatus | null | undefined;
+  sharedEnvAddMenuOpen: boolean;
+  sharedEnvCount: number;
+  sharedEnvDraft: EnvDraft;
+  sharedEnvEditable: boolean;
+  sharedEnvEntries: Array<[string, string]>;
+  sharedEnvImport: HiveEnvImportPreview;
+  sharedEnvImportChangedCount: number;
+  sharedEnvImportDiff: HiveEnvImportEntry[];
+  sharedEnvImportNewCount: number;
+  sharedEnvImportOpen: boolean;
+  sharedEnvImportSameCount: number;
+  sharedEnvImportText: string;
+  sharedEnvImporting: boolean;
+  sharedEnvSource: HiveEnvSource | null | undefined;
+  syncSharedEnvMachines: () => void | Promise<void>;
+  toggleEnvValue: (key: string) => void;
+  totalEnvSearchableCount: number;
+  vaultClass: ClassNameBuilder;
+  visibleMissingAeonSecrets: AeonSecretKey[];
+  visibleRuntimeManagedEnvAgents: AgentProfile[];
+};
+
+export function BrainEnvPanel(props: BrainEnvPanelProps) {
   const {
     AgentEnvCard,
     Check,
@@ -251,6 +374,8 @@ export function BrainEnvPanel(props: any) {
     runtimeEnvFeature,
     renderAgentKey,
   } = props;
+  const sharedEnvDraftKey = sharedEnvDraft.key.trim();
+  const sharedEnvDraftSaving = Boolean(sharedEnvDraftKey && hiveEnvSavingKey === `shared:${sharedEnvSource?.id ?? "shared"}:${sharedEnvDraftKey}`);
 
   return (
     <section className={`${fleetClass("taskPanel", "tabPanel")} ${envClass("envPanel")}`}>
@@ -303,12 +428,20 @@ export function BrainEnvPanel(props: any) {
       {sharedEnvEditable && sharedEnvAddMenuOpen ? (
         <div className={`${envClass("envCard", "envEditCard")} p-4`}>
           <p className="eyebrow">Add shared variable</p>
-          <div className={envClass("envEditGrid")}>
-            <input className={envClass("envField")} value={sharedEnvDraft.key} onChange={(event) => setSharedEnvDraft((current) => ({ ...current, key: event.target.value.toUpperCase() }))} placeholder="KEY" />
-            <input className={`${envClass("envField")} ${maskedSecretValueClass}`} {...secretInputProps} value={sharedEnvDraft.value} onChange={(event) => setSharedEnvDraft((current) => ({ ...current, value: event.target.value }))} onKeyDown={(event) => { if (event.key === "Enter") void addSharedEnvValue(); }} placeholder="value" />
-            <button type="button" className={envClass("envActionButton")} onClick={generateSharedEnvSecret}><Sparkles aria-hidden="true" />Secret</button>
-            <button type="button" className={envClass("envActionButton", "envActionPrimary")} onClick={() => void addSharedEnvValue()}><Plus aria-hidden="true" />Add</button>
-          </div>
+          <HiveEnvKeyInput
+            keyValue={sharedEnvDraft.key}
+            onKeyChange={(next) => setSharedEnvDraft((current) => ({ ...current, key: next.toUpperCase() }))}
+            value={sharedEnvDraft.value}
+            onValueChange={(next) => setSharedEnvDraft((current) => ({ ...current, value: next }))}
+            onSave={() => void addSharedEnvValue()}
+            saving={sharedEnvDraftSaving}
+            saveLabel="Save"
+            extraAction={
+              <button type="button" className={envClass("envActionButton")} onClick={generateSharedEnvSecret}>
+                <Sparkles aria-hidden="true" />Secret
+              </button>
+            }
+          />
         </div>
       ) : null}
 
@@ -409,7 +542,8 @@ export function BrainEnvPanel(props: any) {
                       <span className={envClass("envScope", "envScopeHoney")}>{agent.runtime}</span>
                     </div>
                     <p className="m-0 text-xs leading-5 text-[var(--brain-fg-3)]">{feature.description}</p>
-                    {manageAction ? <button type="button" className={envClass("envActionButton")} onClick={() => setActiveView(manageAction.view)}><ShieldCheck aria-hidden="true" />{manageAction.label}</button> : null}
+                    {/* Boundary cast: RuntimeEnvFeature lives in lib/types (can't import DashboardView), but manageAction.view values are dashboard views by contract. */}
+                    {manageAction ? <button type="button" className={envClass("envActionButton")} onClick={() => setActiveView(manageAction.view as DashboardView)}><ShieldCheck aria-hidden="true" />{manageAction.label}</button> : null}
                   </article>
                 );
               })}

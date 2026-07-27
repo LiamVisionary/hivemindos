@@ -4,10 +4,23 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { homedir } from "@/lib/home-dir";
+import {
+  createWorkerRoutingRule,
+  enableCloudflareEmailRouting,
+  ensureR2Bucket,
+  listR2BucketNames,
+  listCloudflareZones,
+  readCloudflareRoutingStatus,
+  resolveCloudflareZone,
+  type CloudflareZone,
+} from "@/lib/services/cloudflare/cloudflare-email-api";
+import { hiveEnvValue } from "@/lib/services/shared-hive-env";
 import { AGENTIC_INBOX_BLUEPRINT } from "./agentic-inbox-blueprint";
 
 const execFileAsync = promisify(execFile);
 export const AGENTIC_INBOX_PROJECT_DIR = join(homedir(), ".hivemindos", "cloudflare", "agentic-inbox");
+export const AGENTIC_INBOX_WORKER_NAME = "hivemindos-agentic-inbox";
+export const AGENTIC_INBOX_ATTACHMENTS_BUCKET = "hivemindos-agentic-inbox-attachments";
 
 export type AgenticInboxStatus = {
   id: "agentic-inbox";
@@ -20,7 +33,12 @@ export type AgenticInboxStatus = {
   installMethod: "cloudflare-worker";
   requirements: string[];
   sourceUrl: string;
-  preflight: Array<{ key: string; ok: boolean; detail: string }>;
+  mailboxDomain?: string;
+  attachmentsBucket: string;
+  // `blocking: false` items are readiness hints for a working inbox (domain,
+  // Email Routing, R2) that should NOT gate the Deploy button — only the core
+  // scaffold/wrangler/auth checks block a deploy.
+  preflight: Array<{ key: string; ok: boolean; detail: string; blocking?: boolean }>;
 };
 
 type CommandResult = {
@@ -280,11 +298,15 @@ This project was scaffolded by HivemindOS. It is a deployable Cloudflare Worker 
 
 ## Cloudflare setup
 
+HivemindOS' "Deploy" and "Provision address" actions automate most of this
+(R2 bucket creation, the Worker deploy, enabling Email Routing, and the routing
+rule). The equivalent manual commands are:
+
 1. Run \`npm install\`.
-2. Run \`npx wrangler r2 bucket create hivemindos-agentic-inbox-attachments\` if the bucket does not exist.
-3. Run \`npx wrangler email sending enable <your-domain>\` before sending replies.
-4. Deploy with \`npm run deploy\`.
-5. In Cloudflare Email Routing, route the target mailbox to this Worker.
+2. Run \`npx wrangler r2 bucket create hivemindos-agentic-inbox-attachments\` if the bucket does not exist (HivemindOS Deploy does this for you).
+3. Deploy with \`npm run deploy\`.
+4. Provision an inbound address (HivemindOS Provision does this): enable Email Routing on the domain and add a rule matching your address with a "Send to a Worker" action pointing at \`hivemindos-agentic-inbox\`.
+5. Run \`npx wrangler email sending enable <your-domain>\` before outbound replies are sent.
 `;
 
 async function writeIfMissing(path: string, content: string) {
@@ -305,18 +327,82 @@ export async function scaffoldAgenticInbox() {
   return { ok: true, createdFiles: files.filter(Boolean).length, projectDir: AGENTIC_INBOX_PROJECT_DIR };
 }
 
+type CloudflareContext = {
+  token: string;
+  accountId: string;
+  domain: string;
+  zoneId: string;
+  zone?: CloudflareZone;
+  zoneError?: string;
+  availableZones: string[];
+};
+
+/** Read the shared Cloudflare mailbox context (the same env keys the mailbox
+ *  provider layer uses) and resolve the mailbox zone so preflight and
+ *  provisioning agree on one domain. Safe/empty when no token is configured. */
+async function readCloudflareContext(): Promise<CloudflareContext> {
+  const [token, accountId, mailboxDomain, emailDomain, zoneId] = await Promise.all([
+    hiveEnvValue("CLOUDFLARE_API_TOKEN"),
+    hiveEnvValue("CLOUDFLARE_ACCOUNT_ID"),
+    hiveEnvValue("HIVEMINDOS_AGENT_MAILBOX_DOMAIN"),
+    hiveEnvValue("CLOUDFLARE_EMAIL_DOMAIN"),
+    hiveEnvValue("CLOUDFLARE_ZONE_ID"),
+  ]);
+  const domain = (mailboxDomain || emailDomain || "").trim();
+  const context: CloudflareContext = { token, accountId, domain, zoneId, availableZones: [] };
+  if (!token) return context;
+  const resolved = await resolveCloudflareZone({ token, accountId, configuredDomain: domain, configuredZoneId: zoneId, liveCheck: true });
+  if (resolved?.zone?.id) context.zone = resolved.zone;
+  if (resolved?.error) {
+    context.zoneError = resolved.error;
+    context.availableZones = (await listCloudflareZones(token, accountId)).map((zone) => zone.name || "").filter(Boolean);
+  }
+  return context;
+}
+
 export async function readAgenticInboxStatus(): Promise<AgenticInboxStatus> {
   const installed = existsSync(join(AGENTIC_INBOX_PROJECT_DIR, "wrangler.jsonc")) && existsSync(join(AGENTIC_INBOX_PROJECT_DIR, "src", "index.ts"));
-  const [wrangler, whoami, openUrl] = await Promise.all([
+  const [wrangler, whoami, openUrl, cf] = await Promise.all([
     wranglerAvailable(),
     installed ? wranglerWhoami() : Promise.resolve(""),
     readWorkerUrl(),
+    readCloudflareContext(),
   ]);
+
+  // Live Cloudflare readiness for a working inbox (best-effort; only with a token).
+  const routing = cf.token && cf.zone?.id
+    ? await readCloudflareRoutingStatus(cf.token, cf.zone.id)
+    : { ok: false, detail: cf.token ? (cf.zoneError || "Set a Cloudflare mailbox domain to check Email Routing.") : "Add CLOUDFLARE_API_TOKEN to check Email Routing.", status: "unknown", permission: false };
+  const bucketList = cf.token && cf.accountId
+    ? await listR2BucketNames(cf.token, cf.accountId)
+    : { ok: false, names: [] as string[], error: "Add CLOUDFLARE_API_TOKEN to check the attachments bucket.", permission: false };
+  const bucketOk = bucketList.ok && bucketList.names.includes(AGENTIC_INBOX_ATTACHMENTS_BUCKET);
+
+  const domainDetail = cf.zone?.name
+    ? `Mailbox domain resolved as ${cf.zone.name}.`
+    : cf.zoneError
+      ? `${cf.zoneError}${cf.availableZones.length ? ` Available zones: ${cf.availableZones.join(", ")} — set CLOUDFLARE_EMAIL_DOMAIN to one.` : ""}`
+      : "Set CLOUDFLARE_EMAIL_DOMAIN (or HIVEMINDOS_AGENT_MAILBOX_DOMAIN) to the mailbox domain.";
+  const routingDetail = routing.permission
+    ? `${routing.detail} Grant the token "Email Routing Rules: Edit" (zone) to enable and verify it.`
+    : routing.detail;
+  const bucketDetail = bucketOk
+    ? `Attachments bucket ${AGENTIC_INBOX_ATTACHMENTS_BUCKET} exists.`
+    : bucketList.permission
+      ? `${bucketList.error} Grant the token "Workers R2 Storage: Read".`
+      : bucketList.ok
+        ? `Attachments bucket ${AGENTIC_INBOX_ATTACHMENTS_BUCKET} will be created automatically on Deploy.`
+        : bucketList.error || "Attachments bucket not verified yet.";
+
   const preflight = [
     { key: "scaffold", ok: installed, detail: installed ? `Worker scaffold exists at ${AGENTIC_INBOX_PROJECT_DIR}.` : "Worker scaffold has not been created yet." },
     { key: "wrangler", ok: Boolean(wrangler), detail: wrangler || "Wrangler is required to deploy the inbox Worker." },
     { key: "auth", ok: Boolean(whoami), detail: whoami || "Run wrangler login or provide CLOUDFLARE_API_TOKEN before deploy." },
+    { key: "domain", ok: Boolean(cf.zone?.name), detail: domainDetail, blocking: false },
+    { key: "email-routing", ok: routing.ok, detail: routingDetail, blocking: false },
+    { key: "r2-bucket", ok: bucketOk, detail: bucketDetail, blocking: false },
   ];
+
   return {
     id: "agentic-inbox",
     name: AGENTIC_INBOX_BLUEPRINT.name,
@@ -327,17 +413,30 @@ export async function readAgenticInboxStatus(): Promise<AgenticInboxStatus> {
     detail: installed
       ? openUrl
         ? `Agentic Inbox is deployed at ${openUrl}.`
-        : "Agentic Inbox scaffold is ready; deploy after Cloudflare email prerequisites are configured."
+        : cf.zone?.name
+          ? `Scaffold ready on ${cf.zone.name}. Deploy to create the R2 bucket and publish the Worker, then provision a mailbox address.`
+          : "Scaffold ready. Set a Cloudflare mailbox domain (CLOUDFLARE_EMAIL_DOMAIN), then Deploy."
       : "Create the Cloudflare Worker scaffold to set up Agentic Inbox.",
     installMethod: "cloudflare-worker",
     requirements: AGENTIC_INBOX_BLUEPRINT.prerequisites,
     sourceUrl: AGENTIC_INBOX_BLUEPRINT.sourceUrl,
+    mailboxDomain: cf.zone?.name || cf.domain || undefined,
+    attachmentsBucket: AGENTIC_INBOX_ATTACHMENTS_BUCKET,
     preflight,
   };
 }
 
 export async function deployAgenticInbox() {
   await scaffoldAgenticInbox();
+  // Auto-create the attachments R2 bucket the Worker binds to — `wrangler deploy`
+  // fails when a bound bucket does not exist yet.
+  const cf = await readCloudflareContext();
+  let bucketNote = "R2 bucket check skipped (no CLOUDFLARE_API_TOKEN).";
+  if (cf.token && cf.accountId) {
+    const bucket = await ensureR2Bucket(cf.token, cf.accountId, AGENTIC_INBOX_ATTACHMENTS_BUCKET);
+    if (!bucket.ok) throw new Error(`Attachments bucket could not be provisioned before deploy: ${bucket.detail}`);
+    bucketNote = bucket.detail;
+  }
   const install = existsSync(join(AGENTIC_INBOX_PROJECT_DIR, "node_modules"))
     ? { ok: true, stdout: "", stderr: "" }
     : await run("npm", ["install"], 300_000);
@@ -346,5 +445,49 @@ export async function deployAgenticInbox() {
   if (!deploy.ok) throw new Error(deploy.stderr || deploy.stdout || "Agentic Inbox deploy failed.");
   const url = deploy.stdout.match(/https:\/\/[^\s]+\.workers\.dev/)?.[0] || "";
   if (url) await writeFile(join(AGENTIC_INBOX_PROJECT_DIR, ".hivemindos-deploy.json"), `${JSON.stringify({ url, deployedAt: new Date().toISOString() }, null, 2)}\n`, { mode: 0o600 });
-  return { ok: true, message: "Agentic Inbox deploy completed.", output: deploy.stdout, url };
+  return { ok: true, message: `Agentic Inbox deploy completed. ${bucketNote}`, output: deploy.stdout, url };
+}
+
+export type AgenticInboxProvisionResult = {
+  ok: true;
+  address: string;
+  worker: string;
+  routingRuleId: string;
+  emailRoutingEnabled: boolean;
+};
+
+/** Provision one real inbound mailbox address: resolve the mailbox zone, ensure
+ *  Email Routing is enabled, and add a routing rule that delivers that address
+ *  into the Agentic Inbox Worker. Requires the token to carry "Email Routing
+ *  Rules: Edit" — a 403 is surfaced with the exact scope to grant. */
+export async function provisionAgenticInboxAddress(input: { localPart: string }): Promise<AgenticInboxProvisionResult> {
+  const localPart = String(input.localPart || "").trim().toLowerCase().replace(/[^a-z0-9._-]/g, "");
+  if (!localPart) throw new Error("A mailbox local part (the text before the @) is required.");
+  const cf = await readCloudflareContext();
+  if (!cf.token) throw new Error("CLOUDFLARE_API_TOKEN is required to provision an inbox address.");
+  if (!cf.zone?.id || !cf.zone?.name) {
+    throw new Error(cf.zoneError || "No Cloudflare mailbox domain is configured. Set CLOUDFLARE_EMAIL_DOMAIN to one of your zones first.");
+  }
+  // Ensure Email Routing is on before adding a rule (idempotent on already-enabled zones).
+  const routing = await readCloudflareRoutingStatus(cf.token, cf.zone.id);
+  let emailRoutingEnabled = routing.ok;
+  if (!routing.ok) {
+    const enabled = await enableCloudflareEmailRouting(cf.token, cf.zone.id);
+    if (!enabled.ok) {
+      const scope = enabled.status === 403 ? ' Grant the token "Email Routing Rules: Edit" (zone) or enable Email Routing in the Cloudflare dashboard.' : "";
+      throw new Error(`Email Routing must be enabled on ${cf.zone.name} first: ${enabled.error}.${scope}`);
+    }
+    emailRoutingEnabled = true;
+  }
+  const address = `${localPart}@${cf.zone.name}`;
+  const rule = await createWorkerRoutingRule(cf.token, cf.zone.id, {
+    address,
+    ruleName: `HivemindOS Agentic Inbox ${localPart}`,
+    workerName: AGENTIC_INBOX_WORKER_NAME,
+  });
+  if (!rule.ok) {
+    const scope = rule.status === 403 ? ' Grant the token "Email Routing Rules: Edit" (zone).' : "";
+    throw new Error(`Routing rule creation failed for ${address}: ${rule.error}.${scope}`);
+  }
+  return { ok: true, address, worker: AGENTIC_INBOX_WORKER_NAME, routingRuleId: rule.result?.id || "", emailRoutingEnabled };
 }

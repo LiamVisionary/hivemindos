@@ -1,20 +1,31 @@
-import { ArrowUp, Check, ChevronDown, Clock3, Cpu, FileText, FileUp, FolderOpen, Image as ImageIcon, Mic, Minus, Network, Paperclip, Plus, RefreshCcw } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent as ReactDragEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
+import { ArrowUp, Check, ChevronDown, Clock3, Cpu, FileUp, FolderOpen, Image as ImageIcon, Mic, Minus, Network, Paperclip, Plus, Puzzle, RefreshCcw, ShieldCheck, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type RefObject } from "react";
+import { useVoiceBands } from "@/lib/stores/voice-bands-store";
 
 import chatStyles from "@/app/chat.module.css";
 import kanbanStyles from "@/app/kanban-board.module.css";
 import { LottiePlayer } from "@/components/ui/lottie-player";
 import { CloseIconButton } from "@/components/ui/close-icon-button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { attachmentSizeLabel, linkedDirectoryLabel } from "@/features/chat/chat-formatters";
-import { CHAT_SLASH_COMMANDS, type HermesSlashCommand } from "@/features/chat/hermes-slash-commands";
-import { listenForTauriComposerDragDrop, type TauriDragDropEvent, type TauriDropPosition, type TauriWebviewApi } from "@/features/chat/tauri-composer-drag-drop";
+import { ChatAttachmentView } from "@/features/chat/chat-attachment-view";
+import { isImageAttachment } from "@/features/chat/chat-file-references";
+import { attachmentDetailLabel, attachmentKindLabel, attachmentReferenceTarget, attachmentSizeLabel, linkedDirectoryLabel } from "@/features/chat/chat-formatters";
+import { CHAT_SLASH_COMMANDS, filterChatSlashCommands, type HermesSlashCommand } from "@/features/chat/hermes-slash-commands";
+import { useComposerFileDrop, type ComposerFileDropHandler } from "@/features/chat/use-composer-file-drop";
 import { createStyleClass } from "@/features/dashboard/style-classes";
-import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
+import { CHAT_PERMISSION_MODE_OPTIONS, chatPermissionModeLabel } from "@/lib/types/chat-permissions";
+import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 import type { KanbanLinkedDirectory, KanbanTaskAttachment } from "@/lib/types/kanban";
 import type { RecentDirectory } from "@/lib/types/recent-directories";
+import { visibleChannelMarkupText } from "@/lib/services/chat/channel-markup";
+import {
+  isAssistantColonSectionHeading,
+  stripHermesInlineDiffPreviews,
+  stripHermesInternalToolNarration,
+} from "@/lib/services/chat/hermes-cli-output";
 
 export { attachmentSizeLabel, linkedDirectoryLabel } from "@/features/chat/chat-formatters";
+export { MessageAttachments } from "@/features/chat/chat-attachment-view";
 
 const chatClass = createStyleClass(chatStyles);
 const kanbanClass = createStyleClass(kanbanStyles);
@@ -52,60 +63,6 @@ const RESPONSE_LOADING_PHRASES = [
 function shouldKeepEnterAsNewline() {
   if (typeof window === "undefined") return true;
   return window.matchMedia("(hover: none) and (pointer: coarse)").matches;
-}
-
-type TauriRuntimeWindow = Window & {
-  __TAURI_INTERNALS__?: unknown;
-};
-
-function basenameFromPath(path: string) {
-  return path.split(/[\\/]/).filter(Boolean).at(-1) || "Dropped file";
-}
-
-function fileReferenceFromPath(path: string) {
-  const cleanPath = path.trim();
-  if (!cleanPath) return null;
-  const file = new File([], basenameFromPath(cleanPath), { type: "application/octet-stream" }) as File & { path?: string };
-  Object.defineProperty(file, "path", { value: cleanPath, configurable: true });
-  return file;
-}
-
-function fileFromReferenceText(value: string) {
-  const trimmed = value.trim();
-  if (!trimmed || trimmed.startsWith("#")) return null;
-  try {
-    const parsed = new URL(trimmed);
-    if (parsed.protocol !== "file:") return null;
-    return fileReferenceFromPath(decodeURIComponent(parsed.pathname));
-  } catch {
-    return trimmed.startsWith("/") || trimmed.startsWith("~/")
-      ? fileReferenceFromPath(trimmed)
-      : null;
-  }
-}
-
-function filesFromDataTransfer(dataTransfer: DataTransfer) {
-  const directFiles = Array.from(dataTransfer.files ?? []);
-  if (directFiles.length) return directFiles;
-  const itemFiles = Array.from(dataTransfer.items ?? [])
-    .filter((item) => item.kind === "file")
-    .map((item) => item.getAsFile())
-    .filter((file): file is File => Boolean(file));
-  if (itemFiles.length) return itemFiles;
-  const textReferences = [
-    dataTransfer.getData("text/uri-list"),
-    dataTransfer.getData("text/plain"),
-  ].filter(Boolean).join("\n");
-  return textReferences
-    .split(/\r?\n/)
-    .map(fileFromReferenceText)
-    .filter((file): file is File => Boolean(file));
-}
-
-function filesFromReferencePaths(paths: string[]) {
-  return Array.from(new Set(paths))
-    .map(fileReferenceFromPath)
-    .filter((file): file is File => Boolean(file));
 }
 
 type ChatAttachment = KanbanTaskAttachment;
@@ -229,12 +186,16 @@ export function structureAssistantPlainText(lines: string[]) {
       output.push("");
       continue;
     }
+    const next = lines[index + 1]?.trim() ?? "";
+    if (isAssistantColonSectionHeading(trimmed, next)) {
+      output.push(`### ${trimmed.slice(0, -1).trim()}`);
+      continue;
+    }
     if (/^#{1,3}\s+/.test(trimmed) || /^[-*]\s+/.test(trimmed) || /^\d+[.)]\s+/.test(trimmed)) {
       output.push(line);
       continue;
     }
     const previous = output.at(-1)?.trim() ?? "";
-    const next = lines[index + 1]?.trim() ?? "";
     const afterColonList = previous.endsWith(":") && plainBulletRunLength(lines, index) >= 2;
     const continuingList = /^[-*]\s+/.test(previous) && shouldPromotePlainLineToBullet(trimmed) && !looksLikeAssistantHeading(next);
     if (afterColonList || continuingList) {
@@ -251,7 +212,9 @@ export function structureAssistantPlainText(lines: string[]) {
 }
 
 export function normalizeAssistantChatText(value: string) {
-  const text = stripAnsiSequences(value || "").replace(/\r\n/g, "\n").trim();
+  const text = stripHermesInternalToolNarration(
+    stripHermesInlineDiffPreviews(stripAnsiSequences(value || "")),
+  ).replace(/\r\n/g, "\n").trim();
   if (!text) return "";
   if (isHermesInventoryText(text)) return "";
   const lines = text.split("\n");
@@ -299,34 +262,36 @@ export function restoreRedactedLocalhostPreviewUrls(value: string) {
 }
 
 export function chatDisplayContent(message: ChatMessage) {
-  return message.role === "assistant" ? restoreRedactedLocalhostPreviewUrls(normalizeAssistantChatText(message.content)) : message.content;
+  return message.role === "assistant"
+    ? restoreRedactedLocalhostPreviewUrls(normalizeAssistantChatText(visibleChannelMarkupText(message.content)))
+    : message.content;
 }
 
 export function attachmentSummary(attachments: ChatAttachment[]) {
   if (attachments.length === 0) return "";
-  const images = attachments.filter((attachment) => attachment.kind === "image").length;
+  const images = attachments.filter((attachment) => attachment.referenceKind !== "directory" && isImageAttachment(attachment)).length;
   const audio = attachments.filter((attachment) => attachment.kind === "audio").length;
-  const files = attachments.filter((attachment) => attachment.kind === "file").length;
+  const folders = attachments.filter((attachment) => attachment.referenceKind === "directory").length;
+  const files = attachments.filter((attachment) => attachment.kind === "file" && attachment.referenceKind !== "directory" && !isImageAttachment(attachment)).length;
   return [
     images ? `${images} image${images === 1 ? "" : "s"}` : "",
     audio ? `${audio} audio clip${audio === 1 ? "" : "s"}` : "",
+    folders ? `${folders} folder${folders === 1 ? "" : "s"}` : "",
     files ? `${files} file${files === 1 ? "" : "s"}` : "",
   ].filter(Boolean).join(", ");
 }
 
-function attachmentReferenceTarget(attachment: ChatAttachment) {
-  return attachment.referencePath?.trim() || attachment.name;
-}
-
 function attachmentReferenceText(attachments: ChatAttachment[]) {
+  const hasDirectoryReferences = attachments.some((attachment) => attachment.referenceKind === "directory");
   return [
-    "Attached file references:",
+    hasDirectoryReferences ? "Attached file and folder references:" : "Attached file references:",
     ...attachments.map((attachment) => {
       const target = attachmentReferenceTarget(attachment);
       const details = [
+        attachment.referenceKind ? `kind: ${attachment.referenceKind === "directory" ? "folder" : "file"}` : "",
         target && target !== attachment.name ? `path: ${target}` : "",
         attachment.mimeType ? `type: ${attachment.mimeType}` : "",
-        Number.isFinite(attachment.size) ? `size: ${attachmentSizeLabel(attachment.size)}` : "",
+        Number.isFinite(attachment.size) && attachment.size > 0 ? `size: ${attachmentSizeLabel(attachment.size)}` : "",
       ].filter(Boolean);
       return `- ${attachment.name}${details.length ? ` (${details.join("; ")})` : ""}`;
     }),
@@ -375,19 +340,21 @@ export function readAttachmentFile(file: File, kind: "image" | "file"): Promise<
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
-      const dataUrl = typeof reader.result === "string" ? reader.result : "";
-      if (!dataUrl) {
-        reject(new Error(`Could not read ${file.name}`));
-        return;
-      }
-      resolve({
-        id: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
-        kind,
-        name: file.name,
-        mimeType: file.type || "application/octet-stream",
-        size: file.size,
-        dataUrl,
-      });
+      void (async () => {
+        const dataUrl = typeof reader.result === "string" ? reader.result : "";
+        if (!dataUrl) {
+          reject(new Error(`Could not read ${file.name}`));
+          return;
+        }
+        resolve({
+          id: `${file.name}-${file.size}-${file.lastModified}-${crypto.randomUUID()}`,
+          kind,
+          name: file.name,
+          mimeType: file.type || "application/octet-stream",
+          size: file.size,
+          dataUrl,
+        });
+      })().catch(reject);
     };
     reader.onerror = () => reject(new Error(`Could not read ${file.name}`));
     reader.readAsDataURL(file);
@@ -403,16 +370,18 @@ export async function readComposerFiles(files: FileList | File[], kind: "image" 
   return Promise.all(incoming.map((file) => readAttachmentFile(file, kind)));
 }
 
-export function AgentResponseLoader() {
+export function AgentResponseLoader({ phrase: phraseOverride }: { phrase?: string } = {}) {
   const [phraseIndex, setPhraseIndex] = useState(0);
-  const phrase = RESPONSE_LOADING_PHRASES[phraseIndex] ?? RESPONSE_LOADING_PHRASES[0];
+  const customPhrase = phraseOverride?.trim();
+  const phrase = customPhrase || RESPONSE_LOADING_PHRASES[phraseIndex] || RESPONSE_LOADING_PHRASES[0];
 
   useEffect(() => {
+    if (customPhrase) return undefined;
     const timer = window.setInterval(() => {
       setPhraseIndex((index) => (index + 1) % RESPONSE_LOADING_PHRASES.length);
     }, 2800);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [customPhrase]);
 
   return (
     <div className={chatClass("responseLoader")} role="status" aria-live="polite" aria-label={`${phrase}...`}>
@@ -489,6 +458,8 @@ export function AttachmentMenuContent({
   onAttachImages,
   onAttachFiles,
   onAttachDirectory,
+  onAttachSkill,
+  onAttachTemplate,
   directoryPickerDisabled = false,
   directoryPickerDisabledReason,
   recentDirectories = [],
@@ -501,6 +472,8 @@ export function AttachmentMenuContent({
   onAttachImages: () => void;
   onAttachFiles: () => void;
   onAttachDirectory?: () => void;
+  onAttachSkill?: () => void;
+  onAttachTemplate?: () => void;
   directoryPickerDisabled?: boolean;
   directoryPickerDisabledReason?: string;
   recentDirectories?: RecentDirectory[];
@@ -533,6 +506,18 @@ export function AttachmentMenuContent({
         >
           <FolderOpen aria-hidden="true" />
           Directories
+        </button>
+      ) : null}
+      {onAttachTemplate ? (
+        <button type="button" role="menuitem" onClick={(event) => run(event, onAttachTemplate)}>
+          <Sparkles aria-hidden="true" />
+          Template
+        </button>
+      ) : null}
+      {onAttachSkill ? (
+        <button type="button" role="menuitem" onClick={(event) => run(event, onAttachSkill)}>
+          <Puzzle aria-hidden="true" />
+          Skill
         </button>
       ) : null}
       {onAttachRecentDirectory && setRecentDirectoriesExpanded ? (
@@ -613,10 +598,10 @@ export function AttachmentListMenuContent({
           ))}
           {attachments.map((attachment) => (
             <div className={kanbanClass("kanbanAttachmentListItem")} key={attachment.id}>
-              <Paperclip aria-hidden="true" />
+              {attachment.referenceKind === "directory" ? <FolderOpen aria-hidden="true" /> : <Paperclip aria-hidden="true" />}
               <span>
                 <strong>{attachment.name}</strong>
-                <small>{attachment.kind === "image" ? "Image" : "File"} · {attachmentSizeLabel(attachment.size)}</small>
+                <small>{attachmentKindLabel(attachment)} · {attachmentDetailLabel(attachment)}</small>
               </span>
               <button
                 type="button"
@@ -638,6 +623,22 @@ export function AttachmentListMenuContent({
   );
 }
 
+/**
+ * The live mic level meter (18 bars). Isolated so the ~12fps voice-bands updates
+ * re-render only these spans, not ComposerField or the dashboard tree. Reads the
+ * global voice-bands store directly. See @/lib/stores/voice-bands-store.
+ */
+function VoiceWaveform() {
+  const voiceBands = useVoiceBands();
+  return (
+    <>
+      {voiceBands.map((level, index) => (
+        <span key={index} style={{ transform: `scaleY(${0.18 + level * 1.8})` }} />
+      ))}
+    </>
+  );
+}
+
 export function ComposerField({
   value,
   onChange,
@@ -647,6 +648,7 @@ export function ComposerField({
   disabled,
   busy,
   compact = false,
+  autoGrow = false,
   attachments,
   directories = [],
   attachmentError,
@@ -660,6 +662,8 @@ export function ComposerField({
   onDropFileReferences,
   onRemoveAttachment,
   onAttachDirectory,
+  onAttachSkill,
+  onAttachTemplate,
   directoryPickerDisabled = false,
   directoryPickerDisabledReason,
   recentDirectories = [],
@@ -670,7 +674,6 @@ export function ComposerField({
   workingDirectoryLabel,
   onChangeWorkingDirectory,
   recording,
-  voiceBands,
   voiceTranscript,
   onToggleRecording,
   canRecord = true,
@@ -682,6 +685,8 @@ export function ComposerField({
   hermesSlashCommands = false,
   agentMode,
   onAgentModeChange,
+  permissionMode,
+  onPermissionModeChange,
   modelPicker,
 }: {
   value: string;
@@ -692,6 +697,10 @@ export function ComposerField({
   disabled?: boolean;
   busy?: boolean;
   compact?: boolean;
+  /** Size the textarea to its content (small when empty, grows as you type)
+   * instead of a fixed min-height. WKWebView has no `field-sizing`, so this
+   * is JS-driven. */
+  autoGrow?: boolean;
   attachments: ChatAttachment[];
   directories?: LinkedDirectory[];
   attachmentError?: string;
@@ -702,9 +711,11 @@ export function ComposerField({
   imageInputRef: RefObject<HTMLInputElement | null>;
   onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onImageChange: (event: ChangeEvent<HTMLInputElement>) => void;
-  onDropFileReferences?: (files: FileList | File[]) => void;
+  onDropFileReferences?: ComposerFileDropHandler;
   onRemoveAttachment: (id: string) => void;
   onAttachDirectory?: () => void;
+  onAttachSkill?: () => void;
+  onAttachTemplate?: () => void;
   directoryPickerDisabled?: boolean;
   directoryPickerDisabledReason?: string;
   recentDirectories?: RecentDirectory[];
@@ -715,7 +726,8 @@ export function ComposerField({
   workingDirectoryLabel?: string;
   onChangeWorkingDirectory?: () => void | Promise<void>;
   recording?: boolean;
-  voiceBands: number[];
+  /** @deprecated ignored — the meter now reads the global voice-bands store. Kept optional for call-site compat. */
+  voiceBands?: number[];
   voiceTranscript?: string;
   onToggleRecording?: () => void;
   canRecord?: boolean;
@@ -727,35 +739,36 @@ export function ComposerField({
   hermesSlashCommands?: boolean;
   agentMode?: "plan" | "act";
   onAgentModeChange?: (mode: "plan" | "act") => void;
+  permissionMode?: ChatPermissionMode;
+  onPermissionModeChange?: (mode: ChatPermissionMode) => void;
   modelPicker?: ComposerModelPicker;
 }) {
-  const composerFieldRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const composerDragDepthRef = useRef(0);
-  const composerDropActiveRef = useRef(false);
   const composerValue = value ?? "";
-  const [composerDropActive, setComposerDropActive] = useState(false);
+  const {
+    dropRef: composerFieldRef,
+    dropActive: composerDropActive,
+    dropHandlers: composerDropHandlers,
+  } = useComposerFileDrop({ enabled: !disabled, onDropFileReferences });
   const [selectedSlashCommandIndex, setSelectedSlashCommandIndex] = useState(0);
   const [agentModeMenuOpen, setAgentModeMenuOpen] = useState(false);
+  const [permissionModeMenuOpen, setPermissionModeMenuOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [workingDirectoryMenuOpen, setWorkingDirectoryMenuOpen] = useState(false);
   const [workingDirectoryOpening, setWorkingDirectoryOpening] = useState(false);
+  useEffect(() => {
+    if (!autoGrow) return;
+    const element = textareaRef.current;
+    if (!element) return;
+    // Collapse first so deletions shrink the box, then fit to content.
+    element.style.height = "auto";
+    element.style.height = `${Math.min(element.scrollHeight + 2, 320)}px`;
+  }, [autoGrow, composerValue]);
   const slashTokenMatch = hermesSlashCommands ? composerValue.match(/^\/([^\s/]*)$/) : null;
   const slashCommandQuery = slashTokenMatch?.[1]?.toLowerCase() ?? "";
   const filteredSlashCommands = useMemo(() => {
     if (!hermesSlashCommands) return [];
-    const query = slashCommandQuery.trim();
-    const matching = CHAT_SLASH_COMMANDS.filter((command) => {
-      const haystack = [
-        command.name,
-        command.description,
-        command.category,
-        command.argsHint ?? "",
-        ...(command.aliases ?? []),
-      ].join(" ").toLowerCase();
-      return !query || haystack.includes(query);
-    });
-    return matching.length ? matching : CHAT_SLASH_COMMANDS;
+    return filterChatSlashCommands(CHAT_SLASH_COMMANDS, slashCommandQuery);
   }, [hermesSlashCommands, slashCommandQuery]);
   const slashCommandOpen = Boolean(hermesSlashCommands && slashTokenMatch && !disabled && filteredSlashCommands.length > 0);
 
@@ -810,184 +823,14 @@ export function ComposerField({
     event.currentTarget.form?.requestSubmit();
   }
 
-  const canDropFileReferences = Boolean(onDropFileReferences && !disabled);
-
-  function setComposerDropActiveValue(active: boolean) {
-    composerDropActiveRef.current = active;
-    setComposerDropActive((current) => current === active ? current : active);
-  }
-
-  function resetComposerDropState() {
-    composerDragDepthRef.current = 0;
-    setComposerDropActiveValue(false);
-  }
-
-  useEffect(() => {
-    if (!canDropFileReferences) return;
-
-    function isInsideComposer(event: Pick<DragEvent, "clientX" | "clientY">) {
-      const node = composerFieldRef.current;
-      if (!node) return false;
-      const rect = node.getBoundingClientRect();
-      return event.clientX >= rect.left
-        && event.clientX <= rect.right
-        && event.clientY >= rect.top
-        && event.clientY <= rect.bottom;
-    }
-
-    function handleDocumentDragEnter(event: DragEvent) {
-      if (!isInsideComposer(event)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      composerDragDepthRef.current += 1;
-      setComposerDropActiveValue(true);
-    }
-
-    function handleDocumentDragOver(event: DragEvent) {
-      if (!isInsideComposer(event)) {
-        if (composerDropActiveRef.current) setComposerDropActiveValue(false);
-        return;
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
-      setComposerDropActiveValue(true);
-    }
-
-    function handleDocumentDragLeave(event: DragEvent) {
-      if (isInsideComposer(event)) return;
-      composerDragDepthRef.current = 0;
-      setComposerDropActiveValue(false);
-    }
-
-    function handleDocumentDrop(event: DragEvent) {
-      if (!isInsideComposer(event)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      composerDragDepthRef.current = 0;
-      setComposerDropActiveValue(false);
-      onDropFileReferences?.(event.dataTransfer ? filesFromDataTransfer(event.dataTransfer) : []);
-    }
-
-    document.addEventListener("dragenter", handleDocumentDragEnter, true);
-    document.addEventListener("dragover", handleDocumentDragOver, true);
-    document.addEventListener("dragleave", handleDocumentDragLeave, true);
-    document.addEventListener("drop", handleDocumentDrop, true);
-    return () => {
-      document.removeEventListener("dragenter", handleDocumentDragEnter, true);
-      document.removeEventListener("dragover", handleDocumentDragOver, true);
-      document.removeEventListener("dragleave", handleDocumentDragLeave, true);
-      document.removeEventListener("drop", handleDocumentDrop, true);
-    };
-  }, [canDropFileReferences, onDropFileReferences]);
-
-  useEffect(() => {
-    if (!canDropFileReferences) return;
-    if (typeof window === "undefined" || !(window as TauriRuntimeWindow).__TAURI_INTERNALS__) return;
-
-    let disposed = false;
-    let safeUnlisten = createSafeTauriUnlisten();
-
-    function isInsideComposerPosition(position: TauriDropPosition) {
-      const node = composerFieldRef.current;
-      if (!node) return false;
-      const rect = node.getBoundingClientRect();
-      const contains = (x: number, y: number) => x >= rect.left
-        && x <= rect.right
-        && y >= rect.top
-        && y <= rect.bottom;
-      const scale = window.devicePixelRatio || 1;
-      return contains(position.x, position.y)
-        || (scale > 1 && contains(position.x / scale, position.y / scale));
-    }
-
-    function handleTauriDragDrop(event: TauriDragDropEvent) {
-      const payload = event.payload;
-      if (payload.type === "leave") {
-        composerDragDepthRef.current = 0;
-        setComposerDropActiveValue(false);
-        return;
-      }
-      const insideComposer = isInsideComposerPosition(payload.position);
-      if (!insideComposer) {
-        if (composerDropActiveRef.current) setComposerDropActiveValue(false);
-        return;
-      }
-      if (payload.type === "drop") {
-        composerDragDepthRef.current = 0;
-        setComposerDropActiveValue(false);
-        onDropFileReferences?.(filesFromReferencePaths(payload.paths));
-        return;
-      }
-      setComposerDropActiveValue(true);
-    }
-
-    void import("@tauri-apps/api/webview")
-      .then((module) => {
-        if (disposed) return undefined;
-        const webviewApi = module as TauriWebviewApi;
-        return listenForTauriComposerDragDrop(webviewApi, handleTauriDragDrop);
-      })
-      .then((unlisten) => {
-        if (!unlisten) return;
-        safeUnlisten = createSafeTauriUnlisten(unlisten);
-        if (disposed) safeUnlisten();
-      })
-      .catch(() => {
-        if (!disposed) {
-          composerDragDepthRef.current = 0;
-          setComposerDropActiveValue(false);
-        }
-      });
-
-    return () => {
-      disposed = true;
-      safeUnlisten();
-    };
-  }, [canDropFileReferences, onDropFileReferences]);
-
-  function handleComposerDragEnter(event: ReactDragEvent<HTMLDivElement>) {
-    if (!canDropFileReferences) return;
-    event.preventDefault();
-    event.stopPropagation();
-    composerDragDepthRef.current += 1;
-    setComposerDropActiveValue(true);
-  }
-
-  function handleComposerDragOver(event: ReactDragEvent<HTMLDivElement>) {
-    if (!canDropFileReferences) return;
-    event.preventDefault();
-    event.stopPropagation();
-    event.dataTransfer.dropEffect = "copy";
-    setComposerDropActiveValue(true);
-  }
-
-  function handleComposerDragLeave(event: ReactDragEvent<HTMLDivElement>) {
-    if (!canDropFileReferences) return;
-    event.preventDefault();
-    event.stopPropagation();
-    composerDragDepthRef.current = Math.max(0, composerDragDepthRef.current - 1);
-    if (composerDragDepthRef.current === 0) setComposerDropActiveValue(false);
-  }
-
-  function handleComposerDrop(event: ReactDragEvent<HTMLDivElement>) {
-    if (!canDropFileReferences) return;
-    event.preventDefault();
-    event.stopPropagation();
-    resetComposerDropState();
-    onDropFileReferences?.(event.dataTransfer ? filesFromDataTransfer(event.dataTransfer) : []);
-  }
-
   return (
     <div
       ref={composerFieldRef}
       className={chatClass("chatComposerField", floating && "floatingComposer", compact && "compactComposer", composerDropActive && "dropActive", className)}
-      onDragEnter={handleComposerDragEnter}
-      onDragOver={handleComposerDragOver}
-      onDragLeave={handleComposerDragLeave}
-      onDrop={handleComposerDrop}
+      {...composerDropHandlers}
     >
       {agentMode ? <input type="hidden" name="agentMode" value={agentMode} /> : null}
+      {permissionMode ? <input type="hidden" name="permissionMode" value={permissionMode} /> : null}
       <input
         ref={fileInputRef}
         type="file"
@@ -1026,12 +869,7 @@ export function ComposerField({
             </div>
           ))}
           {attachments.map((attachment) => (
-            <div className={chatClass("attachmentPill")} key={attachment.id}>
-              <span>{attachment.kind === "image" ? "Image" : attachment.kind === "audio" ? "Audio" : "File"}</span>
-              <strong>{attachment.name}</strong>
-              <small>{attachment.referenceOnly ? "reference" : attachmentSizeLabel(attachment.size)}</small>
-              <CloseIconButton size="sm" aria-label={`Remove ${attachment.name}`} onClick={() => onRemoveAttachment(attachment.id)} disabled={disabled} />
-            </div>
+            <ChatAttachmentView key={attachment.id} attachment={attachment} surface="composer" onRemove={onRemoveAttachment} removeDisabled={disabled} />
           ))}
         </div>
       ) : null}
@@ -1093,14 +931,12 @@ export function ComposerField({
       {recording ? (
         <div className={chatClass("voiceRecorder")} aria-live="polite">
           <div className={chatClass("voiceWaveform")} aria-hidden="true">
-            {voiceBands.map((level, index) => (
-              <span key={index} style={{ transform: `scaleY(${0.18 + level * 1.8})` }} />
-            ))}
+            <VoiceWaveform />
           </div>
           <span>{voiceTranscript || "Listening..."}</span>
         </div>
       ) : null}
-      <div className={chatClass("composerTools")}>
+      <div className={chatClass("composerTools")} data-attachment-menu-open={attachmentMenuOpen ? "true" : undefined}>
         <div className={chatClass("attachmentMenuWrap")} ref={attachmentMenuRef}>
           <button
             type="button"
@@ -1112,7 +948,63 @@ export function ComposerField({
           >
             <Plus aria-hidden="true" />
           </button>
-          {agentMode && onAgentModeChange ? (
+          {permissionMode && onPermissionModeChange ? (
+            <TooltipProvider>
+              <Tooltip open={permissionModeMenuOpen}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className={chatClass("composerModeButton", "composerPermissionButton", permissionMode === "bypass" && "bypass")}
+                    onClick={() => setPermissionModeMenuOpen((open) => !open)}
+                    onBlur={(event) => {
+                      if (!event.currentTarget.parentElement?.contains(event.relatedTarget as Node | null)) {
+                        setPermissionModeMenuOpen(false);
+                      }
+                    }}
+                    disabled={disabled}
+                    aria-label="Choose command permissions"
+                    aria-expanded={permissionModeMenuOpen}
+                  >
+                    <ShieldCheck aria-hidden="true" />
+                    <span>{chatPermissionModeLabel(permissionMode)}</span>
+                    <ChevronDown aria-hidden="true" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="top"
+                  align="start"
+                  sideOffset={8}
+                  className={chatClass("agentModeTooltip", "permissionModeTooltip")}
+                  onPointerDown={(event) => event.preventDefault()}
+                >
+                  <div className={chatClass("agentModeList", "permissionModeList")} role="listbox" aria-label="Command permissions">
+                    <span className={chatClass("permissionModeEyebrow")}>Mode</span>
+                    {CHAT_PERMISSION_MODE_OPTIONS.map((option) => (
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={permissionMode === option.mode}
+                        key={option.mode}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          onPermissionModeChange(option.mode);
+                          setPermissionModeMenuOpen(false);
+                          window.requestAnimationFrame(() => textareaRef.current?.focus());
+                        }}
+                      >
+                        <span>
+                          <strong>{option.label}</strong>
+                          <small>{option.detail}</small>
+                        </span>
+                        <kbd>{option.shortcut}</kbd>
+                        {permissionMode === option.mode ? <Check aria-hidden="true" /> : null}
+                      </button>
+                    ))}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : agentMode && onAgentModeChange ? (
             <TooltipProvider>
               <Tooltip open={agentModeMenuOpen}>
                 <TooltipTrigger asChild>
@@ -1323,6 +1215,8 @@ export function ComposerField({
               onAttachImages={() => imageInputRef.current?.click()}
               onAttachFiles={() => fileInputRef.current?.click()}
               onAttachDirectory={onAttachDirectory}
+              onAttachSkill={onAttachSkill}
+              onAttachTemplate={onAttachTemplate}
               directoryPickerDisabled={directoryPickerDisabled}
               directoryPickerDisabledReason={directoryPickerDisabledReason}
               recentDirectories={recentDirectories}
@@ -1389,35 +1283,6 @@ export function ComposerField({
           </button>
         </div>
       </div>
-    </div>
-  );
-}
-
-export function MessageAttachments({ attachments }: { attachments?: ChatAttachment[] }) {
-  if (!attachments?.length) return null;
-  return (
-    <div className={chatClass("messageAttachments")}>
-      {attachments.map((attachment) => (
-        <figure className={chatClass("messageAttachment", attachment.kind)} key={attachment.id}>
-          {attachment.kind === "image" ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            attachment.dataUrl ? <img src={attachment.dataUrl} alt={attachment.name} /> : null
-          ) : attachment.kind === "audio" && attachment.dataUrl ? (
-            <audio src={attachment.dataUrl} controls preload="metadata" />
-          ) : attachment.dataUrl ? (
-            <a href={attachment.dataUrl} download={attachment.name}>
-              <FileText aria-hidden="true" />
-              {attachment.name}
-            </a>
-          ) : (
-            <div className={chatClass("messageAttachmentReference")}>
-              <FileText aria-hidden="true" />
-              <span>{attachmentReferenceTarget(attachment)}</span>
-            </div>
-          )}
-          <figcaption>{attachment.name}</figcaption>
-        </figure>
-      ))}
     </div>
   );
 }

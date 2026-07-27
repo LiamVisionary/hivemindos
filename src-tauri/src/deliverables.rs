@@ -13,8 +13,18 @@ const PAYLOAD_DIR: &str = "payload";
 const DEFAULT_VAULT: &str = "~/Documents/Obsidian/hivemindos-vault";
 const DEFAULT_AEON_ROOT: &str = "~/.aeon";
 const DEFAULT_AEON_MODEL: &str = "claude-sonnet-4-6";
+const OFFICIAL_AEON_REPOSITORY: &str = "https://github.com/aaronjmars/aeon.git";
 const MIROSHARK_RUNS_ROOT: &[&str] = &["Projects", "HivemindOS", "MiroShark Simulations", "runs"];
-const AEON_OUTPUT_DIRS: &[&str] = &[".outputs", "outputs", "dashboard/outputs"];
+const AEON_OUTPUT_DIRS: &[&str] = &[
+    "output/.chains",
+    "output/articles",
+    "output/images",
+    "output/.attest",
+    "apps/dashboard/outputs",
+    ".outputs",
+    "outputs",
+    "dashboard/outputs",
+];
 const DELIVERABLE_FILENAMES: &[&str] = &[
     "aeon-rehearsal.md",
     "aeon-rehearsal.json",
@@ -640,27 +650,15 @@ fn clean_log(value: &str) -> String {
         .to_string()
 }
 
-fn ensure_file(path: &Path, content: &str) -> Result<(), String> {
-    if path.exists() {
+fn ensure_aeon_workspace(root: &Path) -> Result<(), String> {
+    let has_cli = root.join("apps").join("cli").join("aeon").is_file() || root.join("aeon").is_file();
+    if root.join("aeon.yml").is_file() && root.join("catalog").join("skills.json").is_file() && has_cli {
         return Ok(());
     }
-    fs::write(path, content).map_err(|error| error.to_string())
-}
-
-fn ensure_aeon_workspace(root: &Path) -> Result<(), String> {
-    fs::create_dir_all(root.join("skills")).map_err(|error| error.to_string())?;
-    fs::create_dir_all(root.join("memory").join("topics")).map_err(|error| error.to_string())?;
-    fs::create_dir_all(root.join("memory").join("logs")).map_err(|error| error.to_string())?;
-    fs::create_dir_all(root.join("memory").join("issues")).map_err(|error| error.to_string())?;
-    fs::create_dir_all(root.join(".outputs")).map_err(|error| error.to_string())?;
-    fs::create_dir_all(root.join("dashboard").join("outputs")).map_err(|error| error.to_string())?;
-    ensure_file(&root.join("aeon.yml"), "skills:\n")?;
-    ensure_file(&root.join("skills.json"), "{\n  \"skills\": []\n}\n")?;
-    ensure_file(&root.join("memory").join("MEMORY.md"), "# AEON Memory\n\n")?;
-    if !root.join(".git").is_dir() {
-        let _ = Command::new("git").arg("init").current_dir(root).output();
+    if root.join("aeon.yml").is_file() || root.join("skills.json").is_file() {
+        return Err("This is a legacy AEON workspace. Update it to AEON v0.1 or clone a fresh aaronjmars/aeon workspace before linking it.".to_string());
     }
-    Ok(())
+    Err("The selected folder is not an AEON v0.1 workspace (aeon.yml, catalog/skills.json, and apps/cli/aeon are required).".to_string())
 }
 
 fn workspace_agent(root: &Path, name: Option<String>, repo: Option<String>, machine_name: Option<String>) -> Result<Value, String> {
@@ -693,10 +691,9 @@ fn workspace_agent(root: &Path, name: Option<String>, repo: Option<String>, mach
             "notifications": true,
             "setup": true
         },
-        "gatewayUrl": "http://127.0.0.1:41241",
-        "a2aUrl": "http://127.0.0.1:41241",
+        "gatewayUrl": "",
         "chatPath": "",
-        "statusPath": "/health",
+        "statusPath": "",
         "agentId": repo_name,
         "localDataDir": display_path(root),
         "aeonLocalPath": display_path(root),
@@ -869,10 +866,10 @@ fn aeon_outputs(agent: Option<&Value>) -> Vec<AeonOutput> {
     let Some(root) = aeon_root(agent) else {
         return Vec::new();
     };
-    [".outputs", "dashboard/outputs"]
-        .into_iter()
+    AEON_OUTPUT_DIRS
+        .iter()
         .flat_map(|relative| {
-            let dir = root.join(relative);
+            let dir = root.join(*relative);
             let Ok(entries) = fs::read_dir(&dir) else {
                 return Vec::new();
             };
@@ -891,7 +888,7 @@ fn aeon_outputs(agent: Option<&Value>) -> Vec<AeonOutput> {
                     Some(AeonOutput {
                         filename: name.clone(),
                         skill: output_skill(&name),
-                        source: relative.to_string(),
+                        source: (*relative).to_string(),
                         updated_at: metadata.as_ref().map(timestamp_for),
                         excerpt: output_excerpt(&path),
                     })
@@ -996,7 +993,15 @@ pub(crate) fn prepare_aeon_workspace(
     let root = expand_home(path.as_deref().unwrap_or(DEFAULT_AEON_ROOT))
         .canonicalize()
         .unwrap_or_else(|_| expand_home(path.as_deref().unwrap_or(DEFAULT_AEON_ROOT)));
-    fs::create_dir_all(&root).map_err(|error| error.to_string())?;
+    if action == "initialize" && !root.exists() {
+        if let Some(parent) = root.parent() {
+            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+        command_output("git", &["clone", OFFICIAL_AEON_REPOSITORY, &root.to_string_lossy()], None)?;
+    }
+    if !root.is_dir() {
+        return Err("Choose an existing AEON repo folder.".to_string());
+    }
     ensure_aeon_workspace(&root)?;
     let agent = workspace_agent(&root, name, repo_url, machine_name)?;
     Ok(serde_json::json!({
@@ -1040,7 +1045,7 @@ fn repo_sync_status(agent: Option<&Value>) -> RuntimeRepoSyncStatus {
 
 fn pull_aeon_branch(root: &Path, branch: &str) -> Result<(), String> {
     command_output("git", &["fetch", "--quiet", "origin", branch], Some(root))?;
-    command_output("git", &["pull", "--rebase", "--autostash", "origin", branch], Some(root))?;
+    command_output("git", &["pull", "--ff-only", "origin", branch], Some(root))?;
     Ok(())
 }
 
@@ -1070,11 +1075,21 @@ pub(crate) fn aeon_repo_sync(agent: Option<Value>, action: String) -> Result<Val
         if action == "pull" {
             pull_aeon_branch(&root, &branch)?;
         } else if action == "push" {
+            let cli = [root.join("apps").join("cli").join("aeon"), root.join("aeon")]
+                .into_iter()
+                .find(|candidate| candidate.is_file());
+            if let Some(cli) = cli {
+                command_output(&cli.to_string_lossy(), &["sync", "--json"], Some(&root))?;
+                return Ok(serde_json::json!({
+                    "ok": true,
+                    "status": repo_sync_status(agent.as_ref()),
+                    "message": "Saved and pushed the AEON repo through the AEON CLI."
+                }));
+            }
             let _ = command_output("git", &["config", "user.name", "aeonframework"], Some(&root));
             let _ = command_output("git", &["config", "user.email", "aeonframework@proton.me"], Some(&root));
-            let _ = command_output("git", &["checkout", "-B", &branch], Some(&root));
             pull_aeon_branch(&root, &branch)?;
-            let _ = command_output("git", &["add", "aeon.yml", "skills.json", "skills", "memory"], Some(&root));
+            command_output("git", &["add", "-A"], Some(&root))?;
             if has_staged_changes(&root) {
                 command_output("git", &["commit", "-m", "Update AEON dashboard configuration"], Some(&root))?;
             }

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Bot, Check, Settings2, X } from "lucide-react";
+import { Bot, Check, LoaderCircle, Settings2, X } from "lucide-react";
 import {
   AsOrb,
   Badge,
@@ -138,7 +138,8 @@ export function AgentSettingsModalFrame({
               disabled={primaryActionBusy || primaryActionDisabled}
               onClick={() => void onPrimaryAction()}
             >
-              <Check size={14} aria-hidden="true" />{primaryActionLabel}
+              {primaryActionBusy ? <LoaderCircle size={14} className="animate-spin" aria-hidden="true" /> : <Check size={14} aria-hidden="true" />}
+              {primaryActionLabel}
             </Btn>
           </div>
         </footer>

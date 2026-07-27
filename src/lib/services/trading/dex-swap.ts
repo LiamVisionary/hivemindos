@@ -5,17 +5,28 @@ import { formatUnits, parseUnits } from "viem";
 import { Connection, Keypair, PublicKey, VersionedTransaction } from "@solana/web3.js";
 import { getMint } from "@solana/spl-token";
 import { base58 } from "@scure/base";
-import { hiveEnvValue } from "@/lib/services/shared-hive-env";
 import { executeEvmZeroExSwap, readErc20Decimals, type ZeroExSwapQuote } from "@/lib/services/wallet/chain-wallet";
-import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
+import { ROBINHOOD_CHAIN, ROBINHOOD_CORE_TOKENS, ROBINHOOD_STOCK_TOKENS } from "@/lib/config/robinhood-chain";
+import { zeroExFetch } from "@/lib/services/trading/zero-ex";
+import { appendSpend } from "@/lib/services/wallet/spend-ledger";
 import { evaluateSpend, resolveSpendGovernance, shouldEvaluateSpend } from "@/lib/services/wallet/spend-governance";
+import {
+  assertTradingPlatformFeeReady,
+  collectTradingPlatformFee,
+  platformFeeDetail,
+  platformFeeReceiptDetail,
+  quoteTradingPlatformFee,
+  type PlatformFeeCollection,
+  type PlatformFeeQuote,
+} from "@/lib/services/wallet/platform-fees";
 
 /**
  * Local DEX swap rail: trade FROM the user's own (imported/local) wallet by
- * signing locally. Base (EVM) routes through the 0x v2 (Permit2) aggregator;
- * Solana routes through Jupiter. The aggregator's API only quotes — the selected
- * wallet signs + pays. Every swap is hard-capped at MAX_SWAP_USD on the sell
- * side, passes the shared spend-governance chokepoint, and needs CONFIRM_SWAP.
+ * signing locally. Base and Robinhood Chain route through the 0x v2 (Permit2)
+ * aggregator; Solana routes through Jupiter. The aggregator's API only quotes —
+ * the selected wallet signs + pays. Every swap is hard-capped at MAX_SWAP_USD on
+ * the sell side, passes the shared spend-governance chokepoint, and needs
+ * CONFIRM_SWAP.
  */
 
 // This network's Node fetch needs a wider happy-eyeballs window or 0x/Base RPC
@@ -26,19 +37,28 @@ import { evaluateSpend, resolveSpendGovernance, shouldEvaluateSpend } from "@/li
 export const SWAP_CONFIRMATION = "CONFIRM_SWAP";
 export const MAX_SWAP_USD = 10;
 
-const ZEROX_BASE = process.env.ZEROX_API_BASE || "https://api.0x.org";
 const JUPITER_BASE = process.env.JUPITER_API_BASE || "https://lite-api.jup.ag";
-const BASE_CHAIN_ID = 8453;
 const NATIVE_ETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const DEFAULT_SLIPPAGE_BPS = 100; // 1%
 
-type BaseToken = { address: string; decimals: number; symbol: string; stable?: boolean };
-const BASE_TOKENS: Record<string, BaseToken> = {
+type EvmSwapNetwork = "eip155:8453" | "eip155:4663";
+type EvmToken = { address: string; decimals: number; symbol: string; stable?: boolean };
+
+const BASE_TOKENS: Record<string, EvmToken> = {
   USDC: { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", decimals: 6, symbol: "USDC", stable: true },
   USDT: { address: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2", decimals: 6, symbol: "USDT", stable: true },
   WETH: { address: "0x4200000000000000000000000000000000000006", decimals: 18, symbol: "WETH" },
   ETH: { address: NATIVE_ETH, decimals: 18, symbol: "ETH" },
   HIVE: { address: "0xA382c83e2a3B79368f372c2EB9b6925ffAf45bA3", decimals: 18, symbol: "HIVE" },
+};
+
+const ROBINHOOD_TOKENS: Record<string, EvmToken> = {
+  USDG: { address: ROBINHOOD_CORE_TOKENS.USDG, decimals: 6, symbol: "USDG", stable: true },
+  WETH: { address: ROBINHOOD_CORE_TOKENS.WETH, decimals: 18, symbol: "WETH" },
+  ...Object.fromEntries(ROBINHOOD_STOCK_TOKENS.map((token) => [
+    token.symbol,
+    { address: token.address, decimals: token.decimals, symbol: token.symbol },
+  ] satisfies [string, EvmToken])),
 };
 
 const SOLANA_USDC_MINT = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
@@ -50,6 +70,7 @@ const SOL_TOKENS: Record<string, SolToken> = {
 };
 
 export const SWAP_TOKENS_BASE = Object.keys(BASE_TOKENS);
+export const SWAP_TOKENS_ROBINHOOD = Object.keys(ROBINHOOD_TOKENS);
 export const SWAP_TOKENS_SOLANA = Object.keys(SOL_TOKENS);
 
 export type DexSwapInput = {
@@ -63,6 +84,10 @@ export type DexSwapInput = {
   slippageBps?: number;
   confirmation?: string;
   approvalToken?: string;
+  /** True when the caller already completed a concrete server-side user approval for this exact swap. */
+  approvalThresholdSatisfied?: boolean;
+  /** Active Work Board company task id. Omit for ordinary wallet swaps. */
+  companyTaskId?: string;
 };
 
 export type DexSwapQuote = {
@@ -71,6 +96,7 @@ export type DexSwapQuote = {
   sellAmount: number;
   buyAmount: number;
   valueUsd: number;
+  platformFee?: PlatformFeeQuote;
   detail: string;
 };
 
@@ -84,6 +110,7 @@ export type DexSwapResult = {
   valueUsd: number;
   reference: string;
   approvalReference?: string;
+  platformFee?: PlatformFeeCollection;
   detail: string;
 };
 
@@ -100,17 +127,40 @@ function slippageFor(input: DexSwapInput) {
 }
 
 /** Governance chokepoint shared by both chains (kill switch, budgets, approval). */
-async function swapGovernance(agentId: string, valueUsd: number, target: string, approvalToken?: string): Promise<{ companyId?: string }> {
-  const governance = await resolveSpendGovernance(agentId);
-  if (governance && (await shouldEvaluateSpend(governance.wallet, MAX_SWAP_USD))) {
+async function swapGovernance(
+  network: string,
+  agentId: string,
+  valueUsd: number,
+  target: string,
+  approvalToken?: string,
+  approvalThresholdSatisfied?: boolean,
+  companyTaskId?: string,
+): Promise<{ companyId?: string }> {
+  const governance = await resolveSpendGovernance(agentId, { companyTaskId });
+  if (governance && (await shouldEvaluateSpend(governance.wallet, MAX_SWAP_USD, { companyId: governance.companyId }))) {
     const decision = await evaluateSpend({
       wallet: governance.wallet,
       agentName: governance.agentName,
       kind: "trade",
-      asset: "USDC",
+      asset: stableSymbolForNetwork(network),
       amountUsd: valueUsd,
       target,
       approvalToken,
+      approvalThresholdSatisfied,
+      companyId: governance.companyId,
+      explanation: {
+        summary: "This is a decentralized exchange swap from the agent wallet.",
+        whyNow: "The swap value crossed a wallet governance rule and was paused before signing.",
+        impact: `Approving lets the agent swap about $${valueUsd.toFixed(2)} on ${network}. Rejecting keeps the swap blocked.`,
+        requestedAction: "Approve only if the token pair, chain, and value match the intended trade.",
+        evidence: [
+          `Network: ${network}`,
+          `Target: ${target}`,
+          `Value: $${valueUsd.toFixed(2)}`,
+        ],
+        missingContext: [],
+        source: "DEX swap governance",
+      },
     });
     if (decision.decision !== "allow") throw new Error(decision.reason);
     return { companyId: decision.companyId };
@@ -118,86 +168,124 @@ async function swapGovernance(agentId: string, valueUsd: number, target: string,
   return {};
 }
 
-async function recordSwap(input: DexSwapInput, companyId: string | undefined, valueUsd: number, label: string) {
+async function recordSwap(
+  input: DexSwapInput,
+  companyId: string | undefined,
+  valueUsd: number,
+  legs: { sell: string; buy: string; sellAmount: number; buyAmount: number },
+) {
   await appendSpend({
     agentId: input.agentId,
     companyId,
+    // asset/amountUsd stay USD-denominated for spend-cap accounting; the legs
+    // below carry the real swap so the activity feed can show direction + amounts.
     kind: "trade",
-    asset: "USDC",
+    asset: stableSymbolForNetwork(input.network),
     amountUsd: valueUsd,
-    target: shortTarget(label),
+    assetAmount: legs.sellAmount,
+    // Plain pair label — NOT a "dex:…" string: `new URL("dex:…").origin` is the
+    // string "null", which shortTarget would persist and the feed would then drop.
+    target: `${legs.sell} → ${legs.buy}`,
+    swap: { sellToken: legs.sell, sellAmount: legs.sellAmount, buyToken: legs.buy, buyAmount: legs.buyAmount },
     status: "executed",
   }).catch(() => {});
 }
 
-// ---- Base (0x v2 / Permit2) ------------------------------------------------
+// ---- EVM 0x v2 / Permit2 (Base, Robinhood Chain) ---------------------------
 
-async function resolveBaseToken(input: string): Promise<BaseToken> {
+function isEvmSwapNetwork(network: string): network is EvmSwapNetwork {
+  return network === "eip155:8453" || network === "eip155:4663";
+}
+
+function evmChainId(network: EvmSwapNetwork) {
+  return network === "eip155:4663" ? ROBINHOOD_CHAIN.chainId : 8453;
+}
+
+function evmNetworkLabel(network: EvmSwapNetwork) {
+  return network === "eip155:4663" ? "Robinhood Chain" : "Base";
+}
+
+function evmTokens(network: EvmSwapNetwork) {
+  return network === "eip155:4663" ? ROBINHOOD_TOKENS : BASE_TOKENS;
+}
+
+function evmStableToken(network: EvmSwapNetwork) {
+  return network === "eip155:4663" ? ROBINHOOD_TOKENS.USDG : BASE_TOKENS.USDC;
+}
+
+function stableSymbolForNetwork(network: string): "USDC" | "USDG" {
+  return network === "eip155:4663" ? "USDG" : "USDC";
+}
+
+export function swapTokensForNetwork(network: string): string[] {
+  if (isSolanaNetwork(network)) return SWAP_TOKENS_SOLANA;
+  if (network === "eip155:4663") return SWAP_TOKENS_ROBINHOOD;
+  return SWAP_TOKENS_BASE;
+}
+
+async function resolveEvmToken(input: string, network: EvmSwapNetwork): Promise<EvmToken> {
   const raw = input.trim();
-  const known = BASE_TOKENS[raw.toUpperCase()];
+  const tokens = evmTokens(network);
+  const known = tokens[raw.toUpperCase()];
   if (known) return known;
   if (/^0x[a-fA-F0-9]{40}$/.test(raw)) {
-    const byAddress = Object.values(BASE_TOKENS).find((token) => token.address.toLowerCase() === raw.toLowerCase());
+    const byAddress = Object.values(tokens).find((token) => token.address.toLowerCase() === raw.toLowerCase());
     if (byAddress) return byAddress;
-    const decimals = await readErc20Decimals("eip155:8453", raw);
+    const decimals = await readErc20Decimals(network, raw);
     return { address: raw, decimals, symbol: `${raw.slice(0, 6)}…${raw.slice(-4)}` };
   }
-  throw new Error(`Unknown token "${input}". Use ${SWAP_TOKENS_BASE.join(", ")}, or a 0x token address.`);
+  throw new Error(`Unknown token "${input}". Use ${swapTokensForNetwork(network).join(", ")}, or a 0x token address.`);
 }
 
-async function zeroExFetch(path: string): Promise<Record<string, unknown>> {
-  const key = await hiveEnvValue("ZEROX_API_KEY");
-  if (!key) throw new Error("Base swaps need ZEROX_API_KEY. Add it with `hive-env-add ZEROX_API_KEY`.");
-  const response = await fetch(`${ZEROX_BASE}${path}`, {
-    headers: { "0x-api-key": key, "0x-version": "v2" },
-    signal: AbortSignal.timeout(30_000),
-  });
-  const data = (await response.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!response.ok || !data) throw new Error(`0x API error (HTTP ${response.status}): ${(data as { reason?: string })?.reason || "request failed"}.`);
-  return data;
-}
-
-async function baseSellUsd(sell: BaseToken, sellAtomic: bigint): Promise<number> {
+async function evmSellUsd(network: EvmSwapNetwork, sell: EvmToken, sellAtomic: bigint): Promise<number> {
   if (sell.stable) return Number(formatUnits(sellAtomic, sell.decimals));
-  const usdc = BASE_TOKENS.USDC;
-  const price = await zeroExFetch(`/swap/permit2/price?chainId=${BASE_CHAIN_ID}&sellToken=${sell.address}&buyToken=${usdc.address}&sellAmount=${sellAtomic.toString()}`);
-  return Number((price as { buyAmount?: string }).buyAmount || "0") / 10 ** usdc.decimals;
+  const stable = evmStableToken(network);
+  const price = await zeroExFetch(`/swap/permit2/price?chainId=${evmChainId(network)}&sellToken=${sell.address}&buyToken=${stable.address}&sellAmount=${sellAtomic.toString()}`);
+  return Number((price as { buyAmount?: string }).buyAmount || "0") / 10 ** stable.decimals;
 }
 
-async function prepareBaseLeg(input: DexSwapInput) {
-  const sell = await resolveBaseToken(input.sellToken);
-  const buy = await resolveBaseToken(input.buyToken);
+async function prepareEvmLeg(input: DexSwapInput) {
+  if (!isEvmSwapNetwork(input.network)) {
+    throw new Error("Local EVM swaps currently support Base and Robinhood Chain wallets.");
+  }
+  const sell = await resolveEvmToken(input.sellToken, input.network);
+  const buy = await resolveEvmToken(input.buyToken, input.network);
   if (sell.address.toLowerCase() === buy.address.toLowerCase()) throw new Error("Pick two different tokens.");
   if (!(input.amountHuman > 0)) throw new Error("Enter an amount greater than zero.");
   const sellAtomic = parseUnits(input.amountHuman.toFixed(sell.decimals), sell.decimals);
-  const valueUsd = await baseSellUsd(sell, sellAtomic);
+  const valueUsd = await evmSellUsd(input.network, sell, sellAtomic);
   if (valueUsd > MAX_SWAP_USD + 0.01) throw new Error(`This swap is ~$${valueUsd.toFixed(2)} — over the $${MAX_SWAP_USD} cap for this wallet.`);
   return { sell, buy, sellAtomic, valueUsd, slippageBps: slippageFor(input) };
 }
 
-async function quoteBaseSwap(input: DexSwapInput): Promise<DexSwapQuote> {
-  const { sell, buy, sellAtomic, valueUsd, slippageBps } = await prepareBaseLeg(input);
-  const price = await zeroExFetch(`/swap/permit2/price?chainId=${BASE_CHAIN_ID}&sellToken=${sell.address}&buyToken=${buy.address}&sellAmount=${sellAtomic.toString()}&slippageBps=${slippageBps}`);
+async function quoteEvmSwap(input: DexSwapInput): Promise<DexSwapQuote> {
+  const { sell, buy, sellAtomic, valueUsd, slippageBps } = await prepareEvmLeg(input);
+  const network = input.network as EvmSwapNetwork;
+  const price = await zeroExFetch(`/swap/permit2/price?chainId=${evmChainId(network)}&sellToken=${sell.address}&buyToken=${buy.address}&sellAmount=${sellAtomic.toString()}&slippageBps=${slippageBps}`);
   if (!(price as { liquidityAvailable?: boolean }).liquidityAvailable) throw new Error("No route/liquidity for this pair right now.");
   const buyAmount = Number((price as { buyAmount?: string }).buyAmount || "0") / 10 ** buy.decimals;
+  const platformFee = await quoteTradingPlatformFee({ source: "dex-swap", network: input.network, amountUsd: valueUsd });
   return {
     sell: sell.symbol,
     buy: buy.symbol,
     sellAmount: input.amountHuman,
     buyAmount,
     valueUsd,
-    detail: `Swap ${input.amountHuman} ${sell.symbol} → ~${buyAmount.toPrecision(6)} ${buy.symbol} on Base via 0x (≤${(slippageBps / 100).toFixed(2)}% slippage).`,
+    platformFee,
+    detail: `Swap ${input.amountHuman} ${sell.symbol} → ~${buyAmount.toPrecision(6)} ${buy.symbol} on ${evmNetworkLabel(network)} via 0x (≤${(slippageBps / 100).toFixed(2)}% slippage).${platformFeeDetail(platformFee)}`,
   };
 }
 
-async function executeBaseSwap(input: DexSwapInput): Promise<DexSwapResult> {
+async function executeEvmSwap(input: DexSwapInput): Promise<DexSwapResult> {
   if (input.confirmation !== SWAP_CONFIRMATION) throw new Error(`Swaps need confirmation. Type ${SWAP_CONFIRMATION} to approve up to $${MAX_SWAP_USD}.`);
   if (!input.secret) throw new Error("No local wallet key is available to sign the swap.");
-  const { sell, buy, sellAtomic, valueUsd, slippageBps } = await prepareBaseLeg(input);
+  const { sell, buy, sellAtomic, valueUsd, slippageBps } = await prepareEvmLeg(input);
+  const network = input.network as EvmSwapNetwork;
   const label = `dex:${sell.symbol}->${buy.symbol}`;
-  const { companyId } = await swapGovernance(input.agentId, valueUsd, label, input.approvalToken);
+  const { companyId } = await swapGovernance(input.network, input.agentId, valueUsd, label, input.approvalToken, input.approvalThresholdSatisfied, input.companyTaskId);
+  await assertTradingPlatformFeeReady({ source: "dex-swap", network: input.network, amountUsd: valueUsd });
 
-  const quote = await zeroExFetch(`/swap/permit2/quote?chainId=${BASE_CHAIN_ID}&sellToken=${sell.address}&buyToken=${buy.address}&sellAmount=${sellAtomic.toString()}&slippageBps=${slippageBps}&taker=${input.fromAddress}`);
+  const quote = await zeroExFetch(`/swap/permit2/quote?chainId=${evmChainId(network)}&sellToken=${sell.address}&buyToken=${buy.address}&sellAmount=${sellAtomic.toString()}&slippageBps=${slippageBps}&taker=${input.fromAddress}`);
   if (!(quote as { liquidityAvailable?: boolean }).liquidityAvailable || !(quote as { transaction?: unknown }).transaction) {
     throw new Error("No executable route for this swap right now.");
   }
@@ -211,7 +299,16 @@ async function executeBaseSwap(input: DexSwapInput): Promise<DexSwapResult> {
   });
 
   const buyAmount = Number((quote as { buyAmount?: string }).buyAmount || "0") / 10 ** buy.decimals;
-  await recordSwap(input, companyId, valueUsd, label);
+  const platformFee = await collectTradingPlatformFee({
+    agentId: input.agentId,
+    network: input.network,
+    secret: input.secret,
+    fromAddress: input.fromAddress,
+    amountUsd: valueUsd,
+    source: "dex-swap",
+    companyId,
+  });
+  await recordSwap(input, companyId, valueUsd, { sell: sell.symbol, buy: buy.symbol, sellAmount: input.amountHuman, buyAmount });
   return {
     ok: true,
     network: input.network,
@@ -222,7 +319,8 @@ async function executeBaseSwap(input: DexSwapInput): Promise<DexSwapResult> {
     valueUsd,
     reference: swapHash,
     approvalReference: approvalHash,
-    detail: `Swapped ${input.amountHuman} ${sell.symbol} → ~${buyAmount.toPrecision(6)} ${buy.symbol}. Tx ${swapHash}.`,
+    platformFee,
+    detail: `Swapped ${input.amountHuman} ${sell.symbol} → ~${buyAmount.toPrecision(6)} ${buy.symbol} on ${evmNetworkLabel(network)}. Tx ${swapHash}.${platformFeeReceiptDetail(platformFee)}`,
   };
 }
 
@@ -273,13 +371,15 @@ async function quoteSolanaSwap(input: DexSwapInput): Promise<DexSwapQuote> {
   const { sell, buy, sellAtomic, valueUsd, slippageBps } = await prepareSolanaLeg(input);
   const quote = await jupiterQuote(sell.mint, buy.mint, sellAtomic.toString(), slippageBps);
   const buyAmount = Number(quote.outAmount || "0") / 10 ** buy.decimals;
+  const platformFee = await quoteTradingPlatformFee({ source: "dex-swap", network: input.network, amountUsd: valueUsd });
   return {
     sell: sell.symbol,
     buy: buy.symbol,
     sellAmount: input.amountHuman,
     buyAmount,
     valueUsd,
-    detail: `Swap ${input.amountHuman} ${sell.symbol} → ~${buyAmount.toPrecision(6)} ${buy.symbol} on Solana via Jupiter (≤${(slippageBps / 100).toFixed(2)}% slippage).`,
+    platformFee,
+    detail: `Swap ${input.amountHuman} ${sell.symbol} → ~${buyAmount.toPrecision(6)} ${buy.symbol} on Solana via Jupiter (≤${(slippageBps / 100).toFixed(2)}% slippage).${platformFeeDetail(platformFee)}`,
   };
 }
 
@@ -288,7 +388,8 @@ async function executeSolanaSwap(input: DexSwapInput): Promise<DexSwapResult> {
   if (!input.secret) throw new Error("No local Solana wallet key is available to sign the swap.");
   const { sell, buy, sellAtomic, valueUsd, slippageBps } = await prepareSolanaLeg(input);
   const label = `dex:${sell.symbol}->${buy.symbol}`;
-  const { companyId } = await swapGovernance(input.agentId, valueUsd, label, input.approvalToken);
+  const { companyId } = await swapGovernance(input.network, input.agentId, valueUsd, label, input.approvalToken, input.approvalThresholdSatisfied, input.companyTaskId);
+  await assertTradingPlatformFeeReady({ source: "dex-swap", network: input.network, amountUsd: valueUsd });
 
   const quote = await jupiterQuote(sell.mint, buy.mint, sellAtomic.toString(), slippageBps);
   const keypair = Keypair.fromSecretKey(base58.decode(input.secret));
@@ -321,7 +422,16 @@ async function executeSolanaSwap(input: DexSwapInput): Promise<DexSwapResult> {
   await connection.confirmTransaction({ signature, ...latest }, "confirmed");
 
   const buyAmount = Number(quote.outAmount || "0") / 10 ** buy.decimals;
-  await recordSwap(input, companyId, valueUsd, label);
+  const platformFee = await collectTradingPlatformFee({
+    agentId: input.agentId,
+    network: input.network,
+    secret: input.secret,
+    fromAddress: input.fromAddress,
+    amountUsd: valueUsd,
+    source: "dex-swap",
+    companyId,
+  });
+  await recordSwap(input, companyId, valueUsd, { sell: sell.symbol, buy: buy.symbol, sellAmount: input.amountHuman, buyAmount });
   return {
     ok: true,
     network: input.network,
@@ -331,16 +441,21 @@ async function executeSolanaSwap(input: DexSwapInput): Promise<DexSwapResult> {
     buyAmount,
     valueUsd,
     reference: signature,
-    detail: `Swapped ${input.amountHuman} ${sell.symbol} → ~${buyAmount.toPrecision(6)} ${buy.symbol}. Tx ${signature}.`,
+    platformFee,
+    detail: `Swapped ${input.amountHuman} ${sell.symbol} → ~${buyAmount.toPrecision(6)} ${buy.symbol}. Tx ${signature}.${platformFeeReceiptDetail(platformFee)}`,
   };
 }
 
 // ---- Dispatch by network ----------------------------------------------------
 
 export async function quoteDexSwap(input: DexSwapInput): Promise<DexSwapQuote> {
-  return isSolanaNetwork(input.network) ? quoteSolanaSwap(input) : quoteBaseSwap(input);
+  if (isSolanaNetwork(input.network)) return quoteSolanaSwap(input);
+  if (isEvmSwapNetwork(input.network)) return quoteEvmSwap(input);
+  throw new Error("Local DEX swaps support Base, Robinhood Chain, and Solana wallets.");
 }
 
 export async function executeDexSwap(input: DexSwapInput): Promise<DexSwapResult> {
-  return isSolanaNetwork(input.network) ? executeSolanaSwap(input) : executeBaseSwap(input);
+  if (isSolanaNetwork(input.network)) return executeSolanaSwap(input);
+  if (isEvmSwapNetwork(input.network)) return executeEvmSwap(input);
+  throw new Error("Local DEX swaps support Base, Robinhood Chain, and Solana wallets.");
 }

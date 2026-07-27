@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 const workflowPath = ".github/workflows/tauri-cross-platform-release.yml";
 const tauriConfigPath = "src-tauri/tauri.conf.json";
-const nativeDocsPath = "docs/native-app.md";
+const nativeDocsPath = "docs/for-users/native-app.md";
 const packagePath = "package.json";
 
 function fail(message) {
@@ -103,8 +103,8 @@ if (!packageJson.scripts?.["tauri:build"]?.includes('"createUpdaterArtifacts":fa
   fail(`${packagePath} tauri:build must not require updater signing secrets for local production builds.`);
 }
 
-if (!packageJson.scripts?.["tauri:build:release"]?.includes("HIVEMINDOS_TAURI_EMBEDDED_NEXT=1")) {
-  fail(`${packagePath} tauri:build:release must build the embedded release bundle set.`);
+if (packageJson.scripts?.["tauri:build:release"] !== "tauri build") {
+  fail(`${packagePath} tauri:build:release must delegate release-mode environment to the GitHub release workflow.`);
 }
 
 if (packageJson.scripts?.["tauri:build:release"]?.includes("HIVEMINDOS_TAURI_SOURCE_BUILD=1")) {
@@ -125,6 +125,10 @@ if (!nativeDocs.includes("Release builds enable `HIVEMINDOS_TAURI_EMBEDDED_NEXT`
 
 if (!nativeDocs.includes("static fallback still needs native bridge coverage")) {
   fail(`${nativeDocsPath} must describe the native bridge coverage requirement for the static fallback.`);
+}
+
+if (!nativeDocs.includes("downloaded-app users do not get the full source workspace `pnpm install`")) {
+  fail(`${nativeDocsPath} must document that packaged setup skips the source dependency install.`);
 }
 
 for (const packageName of [

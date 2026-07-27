@@ -1,0 +1,174 @@
+{
+  "schemaVersion": 1,
+  "environment": "mainnet",
+  "date": "2026-07-21",
+  "activationStatus": "live-canary-limited",
+  "signer": "0xdE4266DD95E3371F0BF45257b66D7b3F4b46Fee3",
+  "governanceOwner": "0x08D73e591c2D3f4EB7E243A2212682e376CA913e",
+  "feeRecipient": "0x08D73e591c2D3f4EB7E243A2212682e376CA913e",
+  "safe": "0xBeB2245F15ff9F596aB673C26dEc525e7aF44cfB",
+  "timelock": "0x6C41ac629EC899dA4bfBB4C8A5022b3A165fca7e",
+  "timelockDelaySeconds": 259200,
+  "oapp": "0x7356B05c633Ad0EA0030075043172c493578987e",
+  "bootstrapModel": {
+    "reason": "Configure a fresh zero-balance pair atomically, then permanently hand it to the existing 72-hour timelocks before any HIVE moves.",
+    "baseBackingDuringSetupWei": "0",
+    "robinhoodSupplyDuringSetupWei": "0",
+    "finalOwnerBothChains": "0x6C41ac629EC899dA4bfBB4C8A5022b3A165fca7e",
+    "finalLayerZeroDelegateBothChains": "0x6C41ac629EC899dA4bfBB4C8A5022b3A165fca7e",
+    "futureGovernanceDelaySeconds": 259200
+  },
+  "policy": {
+    "directBridgeFeeBps": 5,
+    "directBridgeFeeCapBps": 25,
+    "routedAppFeeBps": 45,
+    "nominalRoutedPlatformFeeBps": 50,
+    "lzReceiveGas": 160000,
+    "hourlyLimitWei": "10000000000000000000",
+    "dailyLimitWei": "25000000000000000000",
+    "baseSourceConfirmations": 30,
+    "robinhoodSourceConfirmations": 1800,
+    "requiredDvns": ["LayerZero Labs", "Nethermind"],
+    "requiredDvnThreshold": "2-of-2"
+  },
+  "chains": {
+    "base": {
+      "chainId": 8453,
+      "layerZeroEid": 30184,
+      "layerZeroEndpoint": "0x1a44076050125825900e736c501f859c50fE728c",
+      "canonicalHive": "0xA382c83e2a3B79368f372c2EB9b6925ffAf45bA3",
+      "oftAdapter": "0x7356B05c633Ad0EA0030075043172c493578987e",
+      "transactions": [
+        "0xf0420924e6b090fdc04227f2a3ba951a443ebabb8e1c0aef7e8f84522408373d",
+        "0x3a1e36d0d65263539a5b0923d2cf8574ac71758df74d4f5acbdcc59a117e4dcb",
+        "0xe41af94d7e2ec8ad950d1b0ea00acb5a0bebdac59aa0d146004393b7b2230231",
+        "0x092c7ead8c3f03e5d174cff82b1db39c1d6808ec72571674ec8533e356e4c214",
+        "0x388cd75e567b004fec78e1fa96894cbdb81a5675326a1c59aa0dc11c2f3bfe1a",
+        "0x0c5568cdec650705a84a5094231d366fc6a1704d04d29a6a3e8c6ade3bbd7caa",
+        "0xb9b354da64e40a6496c484f5442331d2c5ec554f12bcea4bd6db1c3a886997a3",
+        "0xac76f44adaba4da315bee7d4f40decf9f76f24e5e4fef466cb365fcdd317038a",
+        "0x5bbd86e21eed6abca7e9c9b4bf38e032a570faf5454f0493280dd52d5dd54626",
+        "0xf78aeedead95c0bc4baa02b47d1f95aed90020a44a2caf7cd17176176ad4d915",
+        "0xb1d3819b7f3093d2b69eb0c115324beb93ddc643bbdc242fa1c76a0b5220f37c"
+      ],
+      "broadcastReceipt": "contracts/broadcast/DeployAndBootstrapHiveMainnet.s.sol/8453/run-latest.json"
+    },
+    "robinhood": {
+      "chainId": 4663,
+      "layerZeroEid": 30416,
+      "layerZeroEndpoint": "0x6F475642a6e85809B1c36Fa62763669b1b48DD5B",
+      "hiveOft": "0x7356B05c633Ad0EA0030075043172c493578987e",
+      "transactions": [
+        "0x3e67fcd4708c896ea46fa3bd93de9a6d51a79973100d7b86bed3f5849ccea2a2",
+        "0x6f59550f410118e880b3c12136b6d853783ffab5afdd5820497508906b9c5377",
+        "0xf3496b3f56c277f9ecc5de4f2b05017f24d2fa0acc31414f54dbf528df9076b0",
+        "0xb77dbd3f725e96b7aafc43e5d06f0aa74061405602c4457a7c3ddc38dc58be46",
+        "0x101d6e268782197da719ea1e8527dbd8634f346f437c05970daea091c77bfee9",
+        "0x49c56bdb3ec8a06a92afa8c1e6de77086cba43e77e4e2de64ccab648869e9645",
+        "0x420b4b082538f79b63a303fc26433c294b1aaaeae65cbd0f8d21e854d09948ae",
+        "0x9794fe8ce2a1ca160a29cc98ef4999c70120f6abf67bd9eae8b4361b9411bbfc",
+        "0x2a5abec1bf482c9e8f23318d850ceb2413bb8752c6fd2ef8f8561210b59802da",
+        "0xe439920bec82b9687c6c96f54e23b07f1afd0b57e6a7a4c08a41125d14323299",
+        "0xaabdde04b6247fa20ce45594c1485346e37f7f8fdff765925af53389c99eeabe"
+      ],
+      "broadcastReceipt": "contracts/broadcast/DeployAndBootstrapHiveMainnet.s.sol/4663/run-latest.json"
+    }
+  },
+  "canary": {
+    "status": "passed-exact-reconciliation",
+    "baseToRobinhood": {
+      "approvalTransaction": "0x717cbbbdf17701e9ac36b584ba02052dd4b01e2c32f17c278f60770b75d1bdd1",
+      "sourceTransaction": "0xc03d9b11aa3bce7fece4f1c5459ce95bfceef48b3657d2f2fbf79461f6654665",
+      "destinationTransaction": "0x520be8ab5249140a6878199ebb2e0451c37c581ee8708998a77fc69a1de6e956",
+      "layerZeroGuid": "0x01169c22e54e62928a52e0ef48565d26c700c541aea7484746246132a723bd6e",
+      "layerZeroStatus": "DELIVERED",
+      "amountSentWei": "1000000000000000000",
+      "amountReceivedWei": "999500000000000000"
+    },
+    "robinhoodToBase": {
+      "sourceTransaction": "0x377a2455b0bd1257608665d9aa76f183f36bbe108da80fc6228b7436839b780d",
+      "destinationTransaction": "0x38ce0d1dbc34d9d92616ae6035b645aff77ad97e1576bb971582818b88bce07c",
+      "layerZeroGuid": "0x7396e5b990d5e1d2677fa5702e2ca32d81639e8fe3b01fa8ee60d2d78ef39348",
+      "layerZeroStatus": "DELIVERED",
+      "amountSentWei": "999500000000000000",
+      "amountReceivedWei": "999000000000000000"
+    },
+    "finalState": {
+      "baseCanaryWalletBalanceWei": "99999000000000000000",
+      "baseAdapterBalanceWei": "1000000000000000",
+      "baseBridgeFeesAccruedWei": "500000000000000",
+      "baseNetBackingWei": "500000000000000",
+      "robinhoodCanaryWalletBalanceWei": "0",
+      "robinhoodOftContractFeeBalanceWei": "500000000000000",
+      "robinhoodTotalSupplyWei": "500000000000000",
+      "backingEqualsSupply": true
+    }
+  },
+  "abandonedV1": {
+    "oapp": "0xA131dB107711D5DC6743DFF002eACdDCA1f0946d",
+    "status": "permanently-closed-all-scheduled-operations-canceled",
+    "base": [
+      {
+        "operationId": "0xeb30039bdd2209f555bcdadacaa013ea1206a270d6bd6ccba32b7a0680c3b366",
+        "cancellationTransaction": "0x08b15e3b1ef9c86f384e6806c2c58802db334ad7c39c97fc55b27c3379d2692f",
+        "finalTimestamp": "0"
+      },
+      {
+        "operationId": "0xdf9899711946a88f330770d218baa0b3c23889c378dc10e6c7d1ecf827eebfaf",
+        "cancellationTransaction": "0x9fba8950b887883963961701524233cb8607c6216fbbe9f7cc6cf4a919ccc5b7",
+        "finalTimestamp": "0"
+      }
+    ],
+    "robinhood": [
+      {
+        "operationId": "0x7c8274cd05a75f0a4fc5914c0de866cd85539447fd79339841e8519d1451146f",
+        "cancellationTransaction": "0x69b2232da87ddd97d329689a5c569941f4ebfa83b1902115bba3fe33e310a439",
+        "finalTimestamp": "0"
+      },
+      {
+        "operationId": "0x4a9415f3e46c1ae4ab0bf9e4fee51cf78b9ee2f045ee4ebdaf95e73fcb679e24",
+        "cancellationTransaction": "0x3954e38013cec13750c41ab0d8d4d68bdc23c447fc7c218e4fbd8d644178b0b1",
+        "finalTimestamp": "0"
+      }
+    ]
+  },
+  "hosted": {
+    "gatewayUrl": "https://hivemindos-hive-bridge-gateway.hivemindos.workers.dev",
+    "gatewayVersion": "54931808-3cae-46ce-ac54-da9167f3104e",
+    "gatewayEnabled": true,
+    "gatewayHealthStatus": 200,
+    "relayMainnetSupportsBothChains": true,
+    "liveReadOnlyBuyQuoteRequestId": "0xaf57200168d80580a9cee46d8908397c7783f74dd43c30f35e1d88e344515ce6",
+    "liveReadOnlyBuyQuoteTotalImpactPercent": 3.74,
+    "liveReadOnlyUsdgBuyQuoteRequestId": "0xfd90fb026896b40f27f2a48a17144b187cdc1ad395a7bbe774c344fca8ce09e2",
+    "liveReadOnlySellQuoteRequestId": "0xa9dec0f322b992b533d26e89167139f2c0dbd5d6b7287d43e6db0d7e7d15a254",
+    "liveReadOnlySellQuoteTotalImpactPercent": 6.16,
+    "relayMinimumBehavior": "A 1 HIVE sell is below the provider route minimum and returns no routes; a 1,000,000 HIVE read-only sell quote succeeds and remains below the 10% maximum-impact policy.",
+    "pageUrl": "https://hivemindos-hive-bridge.pages.dev",
+    "pagesDeploymentId": "6f0565d4-989e-4232-a2ce-309f32ea0421",
+    "pagesDeploymentUrl": "https://6f0565d4.hivemindos-hive-bridge.pages.dev",
+    "pagesDeploymentStatus": "success"
+  },
+  "verification": {
+    "foundryTests": "32 passed, 0 failed",
+    "routedClientTests": "9 passed, 0 failed",
+    "gatewayTests": "10 passed, 0 failed, plus TypeScript and static guards",
+    "mainnetForkSimulation": "passed independently on Base and Robinhood before broadcast",
+    "liveDeploymentVerifier": "passed owner, pause, fee, peer, options, delegate, libraries, directional ULN/DVN configuration, and open capacity on both chains",
+    "baseSourceVerification": {
+      "provider": "Sourcify",
+      "status": "exact_match",
+      "jobId": "f2da8a5d-5d63-4a2f-9d71-b007d9e8d667"
+    },
+    "robinhoodSourceVerification": {
+      "provider": "Sourcify",
+      "status": "exact_match",
+      "jobId": "e552651b-844f-44e3-9ab9-479044f2fc60"
+    },
+    "livePageSmoke": "HTTP 200; mainnet profile and addresses confirmed; clean browser load reported FULLY BACKED, 0.05% direct fee, open capacity, and Base-routed trading available"
+  },
+  "rollback": {
+    "immediate": "Governance wallet can pause both active OApps; redeploy the hosted gateway with HIVE_BRIDGE_ENABLED=false and roll back or delete the Pages deployment.",
+    "permanentConfigurationChange": "All peer, fee, security, capacity, ownership, and LayerZero delegate changes remain controlled by the existing 72-hour timelocks."
+  }
+}

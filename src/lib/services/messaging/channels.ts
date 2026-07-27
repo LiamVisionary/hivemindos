@@ -1,17 +1,38 @@
 import { constants } from "fs";
 import { access, mkdir, readFile, rename, writeFile } from "fs/promises";
 import { existsSync, statSync } from "fs";
+import { createHash } from "crypto";
 import { dirname, isAbsolute, join, sep } from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import type { AgentRuntime } from "@/lib/types/agent-runtime";
+import { canonicalLocalCollectorUrl, isFleetCollectorUrl, isLocalCollectorUrl, normalizeCollectorUrl } from "@/lib/services/local-collector-url";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
+import {
+  getProviderMeta,
+  isMessagingProvider,
+  MESSAGING_PROVIDER_META,
+  messagingTargetRef,
+  parseMessagingTarget,
+} from "@/lib/services/messaging/provider-matrix";
+import {
+  channelCredentialStatus,
+  hermesBinAvailable,
+  hermesCommandEnv,
+  resolveHermesBin,
+  sendToProvider,
+} from "@/lib/services/messaging/senders";
+import { readSharedHiveEnvValues } from "@/lib/services/shared-hive-env";
+import { DEFAULT_QUEEN_BEE_NAME } from "@/lib/config/queen-bee-personality";
 import type {
   HiveMessagingChannel,
   HiveMessagingChannelDraft,
   HiveMessagingCredentialKind,
   HiveMessagingDirectoryEntry,
   HiveMessagingProvider,
+  HiveMessagingProviderMeta,
+  HiveMessagingRunState,
   HiveMessagingSendResult,
   HiveMessagingSettings,
 } from "@/lib/types/messaging-channels";
@@ -19,14 +40,21 @@ import type {
 const execFileAsync = promisify(execFile);
 
 const MESSAGING_FILE = "messaging-channels.json";
-const VALID_PROVIDERS = new Set<HiveMessagingProvider>(["telegram", "discord", "imessage", "slack", "webhook"]);
-const VALID_CREDENTIAL_KINDS = new Set<HiveMessagingCredentialKind>(["env-bot-token", "env-webhook-url", "macos-messages"]);
-const SECRET_TEXT_RE = /\b([A-Za-z0-9_-]*(?:token|secret|key|signature|webhook)[A-Za-z0-9_-]*)=([^\s,;]+)/gi;
-const URL_SECRET_RE = /([?&](?:access_token|api[_-]?key|auth[_-]?token|token|signature|sig)=)([^&#\s]+)/gi;
+const VALID_CREDENTIAL_KINDS = new Set<HiveMessagingCredentialKind>([
+  "env-bot-token",
+  "env-webhook-url",
+  "env-access-token",
+  "env-multi",
+  "macos-messages",
+  "hermes-runtime",
+]);
+const RUNTIME_DISCOVERY_TIMEOUT_MS = 6_000;
 
 type MessagingStorageOptions = {
   vaultPath?: string | null;
   brainServicesFolder?: string | null;
+  includeRuntimeChannels?: boolean;
+  runtimeAgents?: MessagingRuntimeAgent[];
 };
 
 type SendOptions = MessagingStorageOptions & {
@@ -34,55 +62,25 @@ type SendOptions = MessagingStorageOptions & {
   message: string;
 };
 
+export type MessagingRuntimeAgent = {
+  id?: string;
+  name?: string;
+  runtime?: AgentRuntime | string;
+  agentId?: string;
+  localDataDir?: string;
+  machineName?: string;
+  telemetryUrl?: string;
+  collectorCapabilities?: {
+    runtimes?: string[];
+  };
+};
+
 export type MessagingChannelsResult = {
   channels: HiveMessagingChannel[];
   directory: HiveMessagingDirectoryEntry[];
+  providers: HiveMessagingProviderMeta[];
   settingsFile: string;
   updatedAt: string;
-};
-
-export const PROVIDER_COPY: Record<HiveMessagingProvider, {
-  label: string;
-  credentialKind: HiveMessagingCredentialKind;
-  credentialEnvHint: string;
-  targetHint: string;
-  messageLimit: number;
-}> = {
-  telegram: {
-    label: "Telegram",
-    credentialKind: "env-bot-token",
-    credentialEnvHint: "TELEGRAM_BOT_TOKEN",
-    targetHint: "chat id, or chat_id:thread_id for topics",
-    messageLimit: 4096,
-  },
-  discord: {
-    label: "Discord",
-    credentialKind: "env-webhook-url",
-    credentialEnvHint: "DISCORD_WEBHOOK_URL",
-    targetHint: "webhook target; optional thread id",
-    messageLimit: 2000,
-  },
-  imessage: {
-    label: "iMessage",
-    credentialKind: "macos-messages",
-    credentialEnvHint: "",
-    targetHint: "phone number, email, or Messages handle",
-    messageLimit: 4000,
-  },
-  slack: {
-    label: "Slack",
-    credentialKind: "env-bot-token",
-    credentialEnvHint: "SLACK_BOT_TOKEN",
-    targetHint: "conversation id such as C..., G..., or D...",
-    messageLimit: 4000,
-  },
-  webhook: {
-    label: "Webhook",
-    credentialKind: "env-webhook-url",
-    credentialEnvHint: "HIVE_MESSAGE_WEBHOOK_URL",
-    targetHint: "optional route, topic, or channel id sent in payload metadata",
-    messageLimit: 8000,
-  },
 };
 
 export function resolveMessagingStorage(options: MessagingStorageOptions = {}) {
@@ -101,13 +99,48 @@ export async function listMessagingChannels(options: MessagingStorageOptions = {
   const storage = resolveMessagingStorage(options);
   await ensureMessagingRoot(storage);
   const settings = await readSettings(storage.settingsFile);
-  const channels = settings.channels.map(normalizeStoredChannel).filter(Boolean) as HiveMessagingChannel[];
+  const storedChannels = settings.channels.map(normalizeStoredChannel).filter(Boolean) as HiveMessagingChannel[];
+  const runtimeChannels = options.includeRuntimeChannels
+    ? await discoverRuntimeMessagingChannels(options.runtimeAgents ?? [])
+    : [];
+  const merged = mergeMessagingChannels(storedChannels, runtimeChannels);
+  const channels = await enrichChannels(merged);
   return {
     channels,
     directory: formatMessagingDirectory(channels),
+    providers: MESSAGING_PROVIDER_META,
     settingsFile: storage.settingsFile,
     updatedAt: settings.updatedAt,
   };
+}
+
+/** Stamp each channel with credential status, delivery strategy, and run state for the UI. */
+async function enrichChannels(channels: HiveMessagingChannel[]): Promise<HiveMessagingChannel[]> {
+  const hermesAvailable = await hermesBinAvailable().catch(() => false);
+  // A credential counts as configured if it is set in either process.env or the
+  // shared hive env (~/.hivemindos/.env), matching hiveEnvValue's precedence, so
+  // channels configured the documented way are not falsely flagged "Needs key".
+  const sharedEnv = await readSharedHiveEnvValues().catch(() => ({} as Record<string, string>));
+  const isPresent = (key: string) => Boolean(process.env[key]?.trim() || sharedEnv[key]?.trim());
+  return channels.map((channel) => {
+    const status = channelCredentialStatus(channel, hermesAvailable, isPresent);
+    const meta = getProviderMeta(channel.provider);
+    return {
+      ...channel,
+      credentialConfigured: status.configured,
+      credentialLabel: status.label,
+      missingCredentials: status.missing,
+      deliveryStrategy: channel.readOnly ? "hermes" : meta.deliveryStrategy,
+      runState: runStateFor(channel, status.configured),
+    };
+  });
+}
+
+function runStateFor(channel: HiveMessagingChannel, credentialConfigured: boolean): HiveMessagingRunState {
+  if (channel.readOnly) return "live";
+  if (!channel.enabled) return "paused";
+  if (!credentialConfigured) return "attention";
+  return "enabled";
 }
 
 export async function upsertMessagingChannel(input: HiveMessagingChannelDraft & { id?: string }, options: MessagingStorageOptions = {}) {
@@ -143,8 +176,9 @@ export async function sendHiveMessage(options: SendOptions): Promise<HiveMessagi
   const channel = channels.find((item) => item.id === options.channelId);
   if (!channel) throw new Error("Messaging channel was not found.");
   if (!channel.enabled) throw new Error(`${channel.label} is disabled.`);
-  const limitedMessage = limitMessage(message, PROVIDER_COPY[channel.provider].messageLimit);
+  const limitedMessage = limitMessage(message, getProviderMeta(channel.provider).messageLimit);
   const result = await sendToProvider(channel, limitedMessage);
+  if (channel.readOnly) return result;
   const storage = resolveMessagingStorage(options);
   const settings = await readSettings(storage.settingsFile);
   const nextChannels = settings.channels.map((item) => item.id === channel.id ? {
@@ -158,35 +192,233 @@ export async function sendHiveMessage(options: SendOptions): Promise<HiveMessagi
   return result;
 }
 
-export function parseMessagingTarget(provider: HiveMessagingProvider, targetRef: string) {
-  const trimmed = targetRef.trim();
-  if (!trimmed) return { chatId: "", threadId: undefined };
-  if (provider === "telegram" || provider === "discord") {
-    const match = /^(-?\d+)(?::(\d+))?$/.exec(trimmed);
-    if (match) return { chatId: match[1], threadId: match[2] };
+type HermesSendTarget = {
+  provider: HiveMessagingProvider;
+  chatId: string;
+  threadId?: string;
+  name: string;
+  type: string;
+  targetRef: string;
+};
+
+function mergeMessagingChannels(storedChannels: HiveMessagingChannel[], runtimeChannels: HiveMessagingChannel[]) {
+  const channels = new Map<string, HiveMessagingChannel>();
+  for (const channel of storedChannels) channels.set(channel.id, withVaultSource(channel));
+  for (const channel of runtimeChannels) {
+    if (!channels.has(channel.id)) channels.set(channel.id, channel);
   }
-  if (provider === "slack") {
-    const match = /^([CGDU][A-Z0-9]{8,})(?::([^\s:]+))?$/.exec(trimmed);
-    if (match) return { chatId: match[1], threadId: match[2] };
+  return [...channels.values()];
+}
+
+function withVaultSource(channel: HiveMessagingChannel): HiveMessagingChannel {
+  return {
+    ...channel,
+    source: channel.source ?? { kind: "vault", label: "Shared vault" },
+    delivery: channel.delivery ?? { kind: "provider" },
+  };
+}
+
+async function discoverRuntimeMessagingChannels(agents: MessagingRuntimeAgent[]) {
+  const representatives = hermesAgentRepresentatives(agents);
+  const discovered = await Promise.all(representatives.map(discoverHermesAgentChannels));
+  return discovered.flat();
+}
+
+function hermesAgentRepresentatives(agents: MessagingRuntimeAgent[]) {
+  const hermesAgents = agents.filter(isHermesMessagingAgent);
+  const candidates = hermesAgents.length
+    ? hermesAgents
+    : [{
+        id: "hermes-local",
+        name: "Hermes",
+        runtime: "hermes",
+        agentId: "local-hermes",
+        localDataDir: "~/.hermes",
+        machineName: "This Mac",
+      }];
+  const byCollector = new Map<string, MessagingRuntimeAgent[]>();
+  for (const agent of candidates) {
+    const key = normalizeCollectorUrl(agent.telemetryUrl) || "local";
+    byCollector.set(key, [...(byCollector.get(key) ?? []), agent]);
   }
-  const [chatId, threadId] = trimmed.split(":", 2);
-  return { chatId: chatId.trim(), threadId: threadId?.trim() || undefined };
+  return [...byCollector.values()].map((group) =>
+    group.find((agent) => agent.agentId === "local-hermes")
+    ?? group.find((agent) => /^hermes$/i.test(agent.name ?? ""))
+    ?? group[0],
+  ).filter((agent): agent is MessagingRuntimeAgent => Boolean(agent));
+}
+
+function isHermesMessagingAgent(agent: MessagingRuntimeAgent) {
+  const runtime = String(agent.runtime ?? "").toLowerCase();
+  return runtime === "hermes" || (agent.collectorCapabilities?.runtimes ?? []).includes("hermes");
+}
+
+async function discoverHermesAgentChannels(agent: MessagingRuntimeAgent) {
+  const collectorUrl = await canonicalLocalCollectorUrl(agent);
+  if (collectorUrl && !isLocalCollectorUrl(collectorUrl)) {
+    // SSRF guard: only fetch a client-supplied collector URL when it targets a
+    // known fleet host (loopback / Tailscale node / *.local), never an
+    // arbitrary internal host. Non-fleet hosts contribute no runtime channels.
+    if (!isFleetCollectorUrl(collectorUrl)) return [];
+    return discoverRemoteHermesChannels(agent, collectorUrl);
+  }
+  return discoverLocalHermesChannels(agent);
+}
+
+async function discoverRemoteHermesChannels(agent: MessagingRuntimeAgent, collectorUrl: string) {
+  try {
+    const response = await fetch(`${collectorUrl}/messaging-channels`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "list", agent: runtimeAgentPayload(agent) }),
+      signal: AbortSignal.timeout(RUNTIME_DISCOVERY_TIMEOUT_MS),
+      cache: "no-store",
+    });
+    if (!response.ok) return [];
+    const payload = await response.json().catch(() => null) as { channels?: HiveMessagingChannel[] } | null;
+    return (payload?.channels ?? []).map((channel) => runtimeChannelForAgent(channel, agent, collectorUrl));
+  } catch {
+    return [];
+  }
+}
+
+async function discoverLocalHermesChannels(agent: MessagingRuntimeAgent) {
+  try {
+    const { stdout } = await execFileAsync(await resolveHermesBin(), ["send", "-l", "--json"], {
+      timeout: RUNTIME_DISCOVERY_TIMEOUT_MS,
+      maxBuffer: 1_500_000,
+      env: hermesCommandEnv(agent),
+    });
+    return parseHermesSendTargets(stdout).map((target) => hermesTargetChannel(agent, target));
+  } catch {
+    return [];
+  }
+}
+
+function parseHermesSendTargets(raw: string): HermesSendTarget[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+  const platforms = (parsed as { platforms?: unknown }).platforms;
+  if (!platforms || typeof platforms !== "object" || Array.isArray(platforms)) return [];
+  const targets: HermesSendTarget[] = [];
+  for (const [providerText, entries] of Object.entries(platforms)) {
+    const provider = normalizeHermesProvider(providerText);
+    if (!provider || !Array.isArray(entries)) continue;
+    for (const entry of entries) {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+      const record = entry as Record<string, unknown>;
+      const chatId = String(record.id ?? record.chat_id ?? "").trim();
+      if (!chatId) continue;
+      const threadId = String(record.thread_id ?? record.threadId ?? "").trim() || undefined;
+      targets.push({
+        provider,
+        chatId,
+        threadId,
+        name: String(record.name ?? record.display_name ?? record.displayName ?? chatId).trim() || chatId,
+        type: String(record.type ?? "channel").trim() || "channel",
+        targetRef: messagingTargetRef(provider, chatId, threadId),
+      });
+    }
+  }
+  return targets;
+}
+
+function normalizeHermesProvider(provider: string): HiveMessagingProvider | "" {
+  const normalized = provider.trim().toLowerCase();
+  return isMessagingProvider(normalized) ? normalized : "";
+}
+
+function runtimeChannelForAgent(channel: HiveMessagingChannel, agent: MessagingRuntimeAgent, collectorUrl: string): HiveMessagingChannel {
+  return {
+    ...channel,
+    id: channel.id || runtimeChannelId(agent, channel.provider, `${channel.target.chatId}:${channel.target.threadId ?? ""}`),
+    agentId: channel.agentId || agent.id || agent.agentId || "hermes",
+    agentName: channel.agentName || agent.name || "Hermes",
+    readOnly: true,
+    source: {
+      kind: "hermes",
+      label: "Hermes",
+      machineName: channel.source?.machineName || agent.machineName,
+      collectorUrl,
+      runtime: "hermes",
+    },
+    delivery: {
+      kind: "hermes-send",
+      targetRef: channel.delivery?.targetRef || messagingTargetRef(channel.provider, channel.target.chatId, channel.target.threadId),
+      collectorUrl,
+      machineName: channel.delivery?.machineName || agent.machineName,
+      agentLocalDataDir: channel.delivery?.agentLocalDataDir || agent.localDataDir,
+    },
+  };
+}
+
+function hermesTargetChannel(agent: MessagingRuntimeAgent, target: HermesSendTarget): HiveMessagingChannel {
+  const now = new Date().toISOString();
+  const agentId = agent.id || agent.agentId || "hermes";
+  const agentName = agent.name || "Hermes";
+  const meta = getProviderMeta(target.provider);
+  return {
+    id: runtimeChannelId(agent, target.provider, target.targetRef),
+    provider: target.provider,
+    label: `${meta.label} ${target.name}`,
+    agentId,
+    agentName,
+    enabled: true,
+    defaultForAgent: false,
+    credentialKind: meta.credentialKind,
+    credentialEnvKey: undefined,
+    target: {
+      chatId: target.chatId,
+      threadId: target.threadId,
+      displayName: target.name,
+    },
+    createdAt: now,
+    updatedAt: now,
+    readOnly: true,
+    source: {
+      kind: "hermes",
+      label: "Hermes",
+      machineName: agent.machineName,
+      collectorUrl: normalizeCollectorUrl(agent.telemetryUrl) || undefined,
+      runtime: "hermes",
+    },
+    delivery: {
+      kind: "hermes-send",
+      targetRef: target.targetRef,
+      collectorUrl: normalizeCollectorUrl(agent.telemetryUrl) || undefined,
+      machineName: agent.machineName,
+      agentLocalDataDir: agent.localDataDir,
+    },
+  };
+}
+
+function runtimeChannelId(agent: MessagingRuntimeAgent, provider: HiveMessagingProvider, targetRef: string) {
+  const machine = agent.machineName || agent.telemetryUrl || "local";
+  const owner = agent.id || agent.agentId || agent.name || "hermes";
+  const hash = createHash("sha256").update([machine, owner, provider, targetRef].join("\n")).digest("hex").slice(0, 16);
+  return `hermes-${hash}`;
 }
 
 function normalizeChannelDraft(input: HiveMessagingChannelDraft & { id?: string }, current?: HiveMessagingChannel): HiveMessagingChannel {
   const now = new Date().toISOString();
   const provider = normalizeProvider(input.provider ?? current?.provider ?? "telegram");
-  const copy = PROVIDER_COPY[provider];
+  const meta = getProviderMeta(provider);
+  const credentialKind = meta.credentialKind;
   const targetText = input.target?.chatId ?? current?.target.chatId ?? "";
   const parsedTarget = parseMessagingTarget(provider, targetText);
-  const credentialKind = normalizeCredentialKind(input.credentialKind ?? current?.credentialKind ?? copy.credentialKind);
-  const label = (input.label ?? current?.label ?? `${copy.label} channel`).trim();
+  const label = (input.label ?? current?.label ?? `${meta.label} channel`).trim();
   const agentId = (input.agentId ?? current?.agentId ?? "queen-bee").trim() || "queen-bee";
-  const agentName = (input.agentName ?? current?.agentName ?? "Queen Bee").trim() || "Queen Bee";
+  const agentName = (input.agentName ?? current?.agentName ?? DEFAULT_QUEEN_BEE_NAME).trim() || DEFAULT_QUEEN_BEE_NAME;
+  const envManaged = credentialKind === "macos-messages" || credentialKind === "hermes-runtime";
   if (!label) throw new Error("Messaging channel label is required.");
-  if (!parsedTarget.chatId && provider !== "webhook") throw new Error(`${copy.label} target is required.`);
-  if (credentialKind !== "macos-messages" && !(input.credentialEnvKey ?? current?.credentialEnvKey ?? "").trim()) {
-    throw new Error(`${copy.label} needs a credential env key name.`);
+  if (!parsedTarget.chatId && meta.targetRequired) throw new Error(`${meta.label} target is required.`);
+  if (!envManaged && !(input.credentialEnvKey ?? current?.credentialEnvKey ?? meta.credentialEnvHint ?? "").trim()) {
+    throw new Error(`${meta.label} needs a credential env key name.`);
   }
   return {
     id: input.id?.trim() || current?.id || channelId(`${agentId}-${provider}-${label}`),
@@ -197,7 +429,7 @@ function normalizeChannelDraft(input: HiveMessagingChannelDraft & { id?: string 
     enabled: input.enabled ?? current?.enabled ?? true,
     defaultForAgent: input.defaultForAgent ?? current?.defaultForAgent ?? false,
     credentialKind,
-    credentialEnvKey: credentialKind === "macos-messages" ? undefined : cleanEnvKey(input.credentialEnvKey ?? current?.credentialEnvKey ?? copy.credentialEnvHint),
+    credentialEnvKey: envManaged ? undefined : cleanEnvKey(input.credentialEnvKey ?? current?.credentialEnvKey ?? meta.credentialEnvHint),
     target: {
       chatId: parsedTarget.chatId || current?.target.chatId || "",
       threadId: input.target?.threadId?.trim() || parsedTarget.threadId || current?.target.threadId,
@@ -235,119 +467,20 @@ function formatMessagingDirectory(channels: HiveMessagingChannel[]): HiveMessagi
     .sort((left, right) => left.agentName.localeCompare(right.agentName) || left.provider.localeCompare(right.provider) || left.name.localeCompare(right.name));
 }
 
-async function sendToProvider(channel: HiveMessagingChannel, message: string): Promise<HiveMessagingSendResult> {
-  if (channel.provider === "telegram") return sendTelegram(channel, message);
-  if (channel.provider === "discord") return sendDiscordWebhook(channel, message);
-  if (channel.provider === "slack") return sendSlack(channel, message);
-  if (channel.provider === "imessage") return sendIMessage(channel, message);
-  if (channel.provider === "webhook") return sendGenericWebhook(channel, message);
-  throw new Error(`Unsupported messaging provider: ${channel.provider}`);
-}
-
-async function sendTelegram(channel: HiveMessagingChannel, message: string) {
-  const token = envCredential(channel);
-  const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: channel.target.chatId,
-      message_thread_id: channel.target.threadId ? Number(channel.target.threadId) : undefined,
-      text: message,
-      disable_web_page_preview: true,
-    }),
-  });
-  const payload = await response.json().catch(() => null) as { ok?: boolean; result?: { message_id?: number }; description?: string } | null;
-  if (!response.ok || !payload?.ok) throw new Error(redactError(`Telegram send failed: ${payload?.description || response.statusText}`));
-  return sent(channel, "Sent via Telegram.", payload.result?.message_id ? String(payload.result.message_id) : undefined);
-}
-
-async function sendDiscordWebhook(channel: HiveMessagingChannel, message: string) {
-  const webhookUrl = envCredential(channel);
-  const url = new URL(webhookUrl);
-  if (channel.target.threadId) url.searchParams.set("thread_id", channel.target.threadId);
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content: message, allowed_mentions: { parse: [] } }),
-  });
-  if (!response.ok) throw new Error(redactError(`Discord send failed: ${await response.text().catch(() => response.statusText)}`));
-  return sent(channel, "Sent via Discord webhook.");
-}
-
-async function sendSlack(channel: HiveMessagingChannel, message: string) {
-  const token = envCredential(channel);
-  const response = await fetch("https://slack.com/api/chat.postMessage", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      channel: channel.target.chatId,
-      thread_ts: channel.target.threadId,
-      text: message,
-    }),
-  });
-  const payload = await response.json().catch(() => null) as { ok?: boolean; ts?: string; error?: string } | null;
-  if (!response.ok || !payload?.ok) throw new Error(redactError(`Slack send failed: ${payload?.error || response.statusText}`));
-  return sent(channel, "Sent via Slack.", payload.ts);
-}
-
-async function sendGenericWebhook(channel: HiveMessagingChannel, message: string) {
-  const webhookUrl = envCredential(channel);
-  const response = await fetch(webhookUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      message,
-      target: channel.target.chatId,
-      threadId: channel.target.threadId,
-      agentId: channel.agentId,
-      agentName: channel.agentName,
-      channelId: channel.id,
-      channelLabel: channel.label,
-    }),
-  });
-  if (!response.ok) throw new Error(redactError(`Webhook send failed: ${await response.text().catch(() => response.statusText)}`));
-  return sent(channel, "Sent via webhook.");
-}
-
-async function sendIMessage(channel: HiveMessagingChannel, message: string) {
-  if (process.platform !== "darwin") throw new Error("iMessage delivery is only available on macOS with Messages signed in.");
-  const script = [
-    "on run argv",
-    "tell application \"Messages\"",
-    "set targetBuddy to item 1 of argv",
-    "set targetMessage to item 2 of argv",
-    "set targetService to 1st service whose service type = iMessage",
-    "set targetRecipient to buddy targetBuddy of targetService",
-    "send targetMessage to targetRecipient",
-    "end tell",
-    "end run",
-  ].join("\n");
-  await execFileAsync("osascript", ["-e", script, channel.target.chatId, message], { timeout: 15_000 });
-  return sent(channel, "Sent via Messages.");
-}
-
-function envCredential(channel: HiveMessagingChannel) {
-  const key = cleanEnvKey(channel.credentialEnvKey || "");
-  if (!key) throw new Error(`${PROVIDER_COPY[channel.provider].label} credential env key is missing.`);
-  const value = process.env[key]?.trim();
-  if (!value) throw new Error(`${key} is not set in the server environment.`);
-  return value;
-}
-
-function sent(channel: HiveMessagingChannel, message: string, providerMessageId?: string): HiveMessagingSendResult {
-  return {
-    ok: true,
-    channelId: channel.id,
-    provider: channel.provider,
-    message,
-    providerMessageId,
-    sentAt: new Date().toISOString(),
-  };
-}
-
 function limitMessage(message: string, maxLength: number) {
   if (message.length <= maxLength) return message;
   return `${message.slice(0, Math.max(0, maxLength - 80))}\n\n[truncated by HivemindOS messaging channel limit]`;
+}
+
+function runtimeAgentPayload(agent: MessagingRuntimeAgent) {
+  return {
+    id: agent.id,
+    name: agent.name,
+    runtime: agent.runtime,
+    agentId: agent.agentId,
+    localDataDir: agent.localDataDir,
+    machineName: agent.machineName,
+  };
 }
 
 async function ensureMessagingRoot(storage: ReturnType<typeof resolveMessagingStorage>) {
@@ -371,7 +504,9 @@ async function readSettings(path: string): Promise<HiveMessagingSettings> {
 
 async function writeSettings(path: string, channels: HiveMessagingChannel[]) {
   const settings: HiveMessagingSettings = {
-    channels: channels.sort((left, right) => left.agentName.localeCompare(right.agentName) || left.label.localeCompare(right.label)),
+    channels: channels
+      .map(stripComputedFields)
+      .sort((left, right) => left.agentName.localeCompare(right.agentName) || left.label.localeCompare(right.label)),
     updatedAt: new Date().toISOString(),
   };
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
@@ -380,16 +515,23 @@ async function writeSettings(path: string, channels: HiveMessagingChannel[]) {
   await rename(tmp, path);
 }
 
+/** Never persist the read-time computed fields into the settings file. */
+function stripComputedFields(channel: HiveMessagingChannel): HiveMessagingChannel {
+  const { credentialConfigured, credentialLabel, missingCredentials, deliveryStrategy, runState, ...persisted } = channel;
+  void credentialConfigured; void credentialLabel; void missingCredentials; void deliveryStrategy; void runState;
+  return persisted;
+}
+
 function normalizeProvider(value: string): HiveMessagingProvider {
-  const provider = value.trim().toLowerCase() as HiveMessagingProvider;
-  if (!VALID_PROVIDERS.has(provider)) throw new Error(`Unsupported messaging provider: ${value}`);
+  const provider = value.trim().toLowerCase();
+  if (!isMessagingProvider(provider)) throw new Error(`Unsupported messaging provider: ${value}`);
   return provider;
 }
 
-function normalizeCredentialKind(value: string): HiveMessagingCredentialKind {
-  const kind = value.trim().toLowerCase() as HiveMessagingCredentialKind;
-  if (!VALID_CREDENTIAL_KINDS.has(kind)) throw new Error(`Unsupported credential kind: ${value}`);
-  return kind;
+// Kept for callers that persist an explicit credential kind; the effective kind
+// is always derived from the provider matrix in normalizeChannelDraft.
+export function isValidCredentialKind(value: string): value is HiveMessagingCredentialKind {
+  return VALID_CREDENTIAL_KINDS.has(value as HiveMessagingCredentialKind);
 }
 
 function cleanEnvKey(value: string) {
@@ -414,11 +556,4 @@ function safeVaultFolder(folder?: string | null) {
     throw new Error("Messaging channels folder must be a relative path inside the shared vault.");
   }
   return value.split(/[\\/]+/).filter(Boolean).join(sep);
-}
-
-function redactError(value: string) {
-  return value
-    .replace(URL_SECRET_RE, (_match, prefix) => `${prefix}***`)
-    .replace(SECRET_TEXT_RE, (_match, key) => `${key}=***`)
-    .slice(0, 500);
 }

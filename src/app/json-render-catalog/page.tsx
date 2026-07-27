@@ -102,6 +102,85 @@ const catalogSpecs = [
       },
     },
   },
+  {
+    title: "State, Computed Values, And Watchers",
+    spec: {
+      root: "root",
+      state: { score: 74, enabled: true, dialogOpen: false },
+      elements: {
+        root: { type: "Panel", props: { title: "State, computed values, and watchers", tone: "info" }, children: ["controls", "summary", "actions", "dialog"] },
+        controls: { type: "Stack", props: { direction: "vertical", gap: "md" }, children: ["enabled", "score"] },
+        enabled: { type: "Switch", props: { label: "Enabled", checked: { $bindState: "/enabled" } }, children: [] },
+        score: {
+          type: "Slider",
+          props: { label: "Score", min: 0, max: 100, value: { $bindState: "/score" } },
+          watch: {
+            "/score": { action: "emit", params: { event: "scoreChanged", value: { $state: "/score" } } },
+          },
+          children: [],
+        },
+        summary: {
+          type: "Metric",
+          props: {
+            label: "Computed average",
+            value: { $format: "number", value: { $computed: "average", args: { values: [{ $state: "/score" }, 100] } } },
+            detail: { $cond: { $state: "/enabled" }, $then: "Visible while enabled", $else: "Disabled locally" },
+            tone: { $cond: { $state: "/score", gte: 70 }, $then: "success", $else: "warning" },
+          },
+          visible: { $or: [{ $state: "/enabled" }, { $state: "/score", gte: 90 }] },
+          children: [],
+        },
+        actions: { type: "Stack", props: { direction: "row", gap: "sm" }, children: ["openDialog", "copyState"] },
+        openDialog: {
+          type: "Button",
+          props: { label: "Open dialog", variant: "secondary" },
+          on: { press: { action: "setState", params: { path: "/dialogOpen", value: true } } },
+          children: [],
+        },
+        copyState: {
+          type: "Button",
+          props: { label: "Copy score", copyText: { $template: "Score: ${/score}" }, variant: "primary" },
+          children: [],
+        },
+        dialog: {
+          type: "Dialog",
+          props: { openPath: "/dialogOpen", title: "State changed", description: { $template: "Current score is ${/score}." } },
+          children: ["close"],
+        },
+        close: {
+          type: "Button",
+          props: { label: "Close", variant: "secondary" },
+          on: { press: { action: "setState", params: { path: "/dialogOpen", value: false } } },
+          children: [],
+        },
+      },
+    },
+  },
+  {
+    title: "Charts",
+    spec: {
+      root: "root",
+      elements: {
+        root: { type: "Panel", props: { title: "Charts", tone: "default" }, children: ["grid"] },
+        grid: { type: "Grid", props: { columns: 2, gap: "md" }, children: ["bars", "line", "pie", "area"] },
+        bars: { type: "Chart", props: { type: "bar", title: "Requests by day", data: [{ label: "Mon", value: 120 }, { label: "Tue", value: 200 }, { label: "Wed", value: 150 }, { label: "Thu", value: 280 }, { label: "Fri", value: 240 }] }, children: [] },
+        line: { type: "Chart", props: { type: "line", title: "Valuation (log scale)", logScale: true, valueFormat: "currency", data: [{ label: "2019", value: 31000000 }, { label: "2021", value: 240000000 }, { label: "2023", value: 860000000 }, { label: "2025", value: 2100000000 }] }, children: [] },
+        pie: { type: "Chart", props: { type: "donut", title: "Traffic sources", data: [{ label: "Search", value: 52 }, { label: "Direct", value: 28 }, { label: "Social", value: 14 }, { label: "Referral", value: 6 }] }, children: [] },
+        area: { type: "Chart", props: { type: "area", title: "Active agents", data: [{ label: "w1", value: 3 }, { label: "w2", value: 6 }, { label: "w3", value: 5 }, { label: "w4", value: 9 }, { label: "w5", value: 12 }] }, children: [] },
+      },
+    },
+  },
+  {
+    title: "Diagram And Flashcards",
+    spec: {
+      root: "root",
+      elements: {
+        root: { type: "Stack", props: { direction: "vertical", gap: "md" }, children: ["diagram", "cards"] },
+        diagram: { type: "Diagram", props: { caption: "Division of labor (Adam Smith, Wealth of Nations, ch. 3)", code: "graph TD\n  A[Division of labor] --> B[Limited by market size]\n  B --> C[Water transport widens the market]\n  C --> D[Early civilizations on rivers and coasts]\n  D --> E[More specialization]" }, children: [] },
+        cards: { type: "Flashcards", props: { title: "Adam Smith", cards: [{ front: "When was Adam Smith baptized?", back: "16 June 1723" }, { front: "Nationality?", back: "Scottish" }, { front: "Best-known work?", back: "The Wealth of Nations (1776)" }] }, children: [] },
+      },
+    },
+  },
 ];
 
 export default function JsonRenderCatalogPage() {

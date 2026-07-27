@@ -7,10 +7,19 @@
 import type {
   Company,
   CompanyMember,
+  CompanyCapabilityCapital,
   CompanySpendRollup,
-  CompanyTokenCapital,
 } from "@/lib/types/company";
+import type { CompanyRevenueRailStatus, CompanyRevenueRollup } from "@/lib/types/company-revenue";
 import type { KanbanDeliverable, KanbanLoopReceipt, KanbanLoopSpec } from "@/lib/types/kanban";
+import type { GitLawbProof } from "@/lib/types/gitlawb";
+import { computeLoopCapabilityCapital } from "@/lib/services/loops";
+import { extractWorkBoardPipelineImpact, extractWorkBoardPipelineSummary } from "@/features/dashboard/work-board-pipeline";
+import { mapSpendApproval, type SpendApprovalRaw } from "@/features/approvals/spend-approval-model";
+import {
+  buildCompanyRuntimeMix,
+  companyExecutionFormFromConfig,
+} from "@/lib/services/company-execution-capabilities";
 import type {
   Agent,
   AgentState,
@@ -25,7 +34,6 @@ import type {
   PoolAgent,
   Priority,
   Role,
-  Risk,
 } from "./types";
 
 // ── lite shapes of the API payloads we consume ────────────────────────────
@@ -59,12 +67,17 @@ export interface KanbanTaskLite {
   body?: string;
   result?: string;
   status: string;
+  /** Origin marker; company dispatches stamp `company:{id}:{runId}` — the authoritative company link. */
+  source?: string;
   assignee?: string | null;
   priority?: string;
   skills?: string[];
   deliverables?: KanbanDeliverable[];
   loop?: KanbanLoopSpec;
   loopReceipts?: KanbanLoopReceipt[];
+  proofs?: GitLawbProof[];
+  /** Machine that ran the task; its name is shown as deliverable provenance. */
+  targetMachine?: { name?: string } | null;
   createdAt?: number;
   updatedAt?: number;
   completedAt?: number;
@@ -181,23 +194,12 @@ function defaultTask(state: AgentState, frozen?: boolean): string {
 }
 
 // ── approvals ──────────────────────────────────────────────────────────────
-function riskFor(amountUsd: number, dailyCap?: number): Risk {
-  if (amountUsd >= 50 || (dailyCap && dailyCap > 0 && amountUsd >= dailyCap * 0.5)) return "high";
-  if (amountUsd >= 10) return "med";
-  return "low";
-}
-
+// Delegates to the shared spend-approval mapper so the company approvals
+// section and the Alerts "Review first" queue map identically (DRY). ApprovalRow
+// is structurally the fetched row; the shared mapper ignores fields it doesn't
+// read (e.g. status), so the cast is safe.
 export function mapApproval(row: ApprovalRow, dailyCap?: number): Approval {
-  const amount = `$${(Number(row.amountUsd) || 0).toFixed(2)} ${row.asset || "USDC"}`;
-  const head = row.reason?.trim() || `${row.kind} spend`;
-  const title = `${head} — ${amount}${row.target ? ` → ${row.target}` : ""}`;
-  return {
-    id: row.id,
-    title,
-    agent: row.agentName || row.agentId,
-    kind: row.kind || "spend",
-    risk: riskFor(Number(row.amountUsd) || 0, dailyCap),
-  };
+  return mapSpendApproval(row as unknown as SpendApprovalRaw, dailyCap);
 }
 
 // ── kanban → issues / work block / velocity ─────────────────────────────────
@@ -223,6 +225,15 @@ function hash3(value: string): string {
   return String(100 + (Math.abs(h) % 900));
 }
 
+function issueCollisionSuffix(value: string): string {
+  const compact = value.replace(/[^a-z0-9]/gi, "").toUpperCase();
+  if (compact.length >= 4) return compact.slice(-4);
+
+  let h = 0;
+  for (let i = 0; i < value.length; i++) h = (h * 33 + value.charCodeAt(i)) | 0;
+  return Math.abs(h).toString(36).toUpperCase().padStart(4, "0").slice(-4);
+}
+
 function resolveAssigneeName(assignee: string | null | undefined, byId: Map<string, string>, names: Set<string>): string | null {
   if (!assignee) return null;
   if (byId.has(assignee)) return byId.get(assignee)!;
@@ -231,16 +242,48 @@ function resolveAssigneeName(assignee: string | null | undefined, byId: Map<stri
 }
 
 export function mapIssues(tasks: KanbanTaskLite[], ticker: string, byId: Map<string, string>, names: Set<string>): Issue[] {
-  return tasks
-    .filter((t) => t.status !== "archived" && STATUS_TO_LANE[t.status])
-    .map((t) => ({
-      key: `${ticker}-${hash3(t.id)}`,
+  const visibleTasks = tasks.filter((t) => t.status !== "archived" && STATUS_TO_LANE[t.status]);
+  const baseKeys = visibleTasks.map((t) => `${ticker}-${hash3(t.id)}`);
+  const baseKeyCounts = new Map<string, number>();
+  for (const baseKey of baseKeys) {
+    baseKeyCounts.set(baseKey, (baseKeyCounts.get(baseKey) ?? 0) + 1);
+  }
+  const usedKeys = new Map<string, number>();
+
+  return visibleTasks.map((t, index) => {
+    const baseKey = baseKeys[index] ?? `${ticker}-${hash3(t.id)}`;
+    const collision = (baseKeyCounts.get(baseKey) ?? 0) > 1;
+    const candidateKey = collision ? `${baseKey}-${issueCollisionSuffix(t.id)}` : baseKey;
+    const usedCount = usedKeys.get(candidateKey) ?? 0;
+    usedKeys.set(candidateKey, usedCount + 1);
+    const key = usedCount === 0 ? candidateKey : `${candidateKey}-${usedCount + 1}`;
+    const pipelineImpact = t.status === "needs-human" ? extractWorkBoardPipelineImpact(t) ?? undefined : undefined;
+
+    return {
+      key,
       title: t.title || "(untitled)",
       status: STATUS_TO_LANE[t.status],
       agent: resolveAssigneeName(t.assignee, byId, names),
       pri: (t.priority && PRIORITY_TO_PRI[t.priority]) || "med",
       pts: Math.max(1, Math.min(8, t.skills?.length || 1)),
-    }));
+      pipelineImpact,
+      // Carry the real Work Board record so the cockpit can open the task's
+      // actual output (result, deliverables, receipts) instead of a dead card.
+      work: {
+        taskId: t.id,
+        status: t.status,
+        body: t.body,
+        result: t.result,
+        deliverables: (t.deliverables ?? []).map((d) => ({ id: d.id, label: d.label, kind: d.kind, path: d.path, url: d.url })),
+        receipts: (t.loopReceipts ?? []).map((r) => ({ title: r.summary || r.gateId || "receipt", status: r.status, evidence: r.evidence ?? [] })),
+        proofs: t.proofs ?? [],
+        machineName: t.targetMachine?.name || undefined,
+        updatedAt: t.updatedAt,
+        completedAt: t.completedAt,
+        pipelineImpact,
+      },
+    };
+  });
 }
 
 function deriveVelocity(tasks: KanbanTaskLite[], days = 14): number[] {
@@ -330,6 +373,10 @@ function deriveStatus(company: Company, agents: Agent[], approvals: ApprovalRow[
   if (company.status) return company.status;
   if (company.frozen) return "paused";
   if (agents.length === 0 || !hasWork) return "setup";
+  // Automation off means nothing dispatches: "shipping"/"review"/"drift" all
+  // imply a live loop, so a stopped company must read as paused even with
+  // agents staffed, work on the board, and approvals waiting.
+  if (!company.autonomy) return "paused";
   if (approvals.length > 0) return "review";
   if (alignment < 55) return "drift";
   return "shipping";
@@ -348,92 +395,33 @@ function deriveBurn(company: Company, rollup: CompanySpendRollup, agents: Agent[
   return { today, cap: Math.round(cap), week, runway };
 }
 
-function taskHasDurableOutput(task: KanbanTaskLite): boolean {
-  return Boolean(
-    task.result?.trim() ||
-      task.body?.includes("Deliverable:") ||
-      task.body?.includes("Result:") ||
-      (task.deliverables?.length ?? 0) > 0,
-  );
-}
-
-function deriveTokenCapital(
+function deriveCapabilityCapital(
   company: Company,
   rollup: CompanySpendRollup,
   tasks: KanbanTaskLite[],
   agents: Agent[],
-): CompanyTokenCapital {
-  const loops = tasks.map((task) => task.loop).filter(Boolean) as KanbanLoopSpec[];
-  const done = tasks.filter((task) => task.status === "done");
-  const now = Date.now();
-  const recentDone = done.filter((task) => task.completedAt && now - task.completedAt <= 14 * 24 * 60 * 60 * 1000);
-  const outputTasks = done.filter(taskHasDurableOutput);
-  const evalGates = loops.reduce((n, loop) => n + (loop.evalGates?.length ?? 0), 0);
-  const passedEvalGates = loops.reduce(
-    (n, loop) => n + (loop.evalGates?.filter((gate) => gate.status === "passed").length ?? 0),
-    0,
-  );
-  const experiments = loops.reduce((n, loop) => n + (loop.observation?.totalExperiments ?? loop.experiments?.length ?? 0), 0);
-  const committedExperiments = loops.reduce(
-    (n, loop) => n + (loop.observation?.committedExperiments ?? loop.experiments?.filter((item) => item.status === "committed").length ?? 0),
-    0,
-  );
-  const frontierCandidates = loops.reduce((n, loop) => n + (loop.observation?.frontier?.length ?? 0), 0);
-  const antiPatterns = loops.reduce((n, loop) => n + (loop.observation?.antiPatternCount ?? loop.antiPatterns?.length ?? 0), 0);
-  const workflowAssets = new Set(done.flatMap((task) => task.skills ?? []).filter((skill) => skill && skill !== "company-goal")).size + committedExperiments;
-  const learningAssets = outputTasks.length + committedExperiments + antiPatterns;
-  const distillationQueue = done.filter((task) => !task.loopReceipts?.some((receipt) => /distill|learn|memory/i.test(receipt.summary))).length;
-  const spendEfficiency = rollup.totalSpentUsd > 0 ? Math.round((learningAssets / rollup.totalSpentUsd) * 100) / 100 : null;
-  const runtimeCount = new Set(agents.map((agent) => agent.runtime).filter(Boolean)).size;
-  const hasEvo = agents.some((agent) => agent.runtime.toLowerCase() === "evo") || loops.some((loop) => loop.frontierStrategy?.kind === "pareto_per_task");
-  const modelIndependence = clamp((runtimeCount > 0 ? 35 : 0) + Math.min(runtimeCount, 3) * 15 + (hasEvo ? 15 : 0) + (evalGates > 0 ? 15 : 0));
-  const gateScore = evalGates > 0 ? Math.round((passedEvalGates / evalGates) * 100) : loops.length ? 35 : 0;
-  const score = clamp(
-    Math.round(
-      Math.min(35, learningAssets * 7) +
-        Math.min(20, workflowAssets * 4) +
-        Math.min(15, experiments * 2) +
-        Math.min(10, frontierCandidates * 2) +
-        Math.min(10, antiPatterns * 3) +
-        Math.min(10, Math.round(gateScore / 10)),
-    ),
-  );
-
-  const notes = [
-    loops.length ? `${loops.length} optimizer loop${loops.length === 1 ? "" : "s"} attached to company work.` : "Launch autonomy to attach private eval loops to new work.",
-    evalGates ? `${passedEvalGates}/${evalGates} eval gate${evalGates === 1 ? "" : "s"} passed or waiting for evidence.` : "No private eval gates have been recorded yet.",
-    distillationQueue ? `${distillationQueue} completed task${distillationQueue === 1 ? "" : "s"} ready for reviewed memory distillation.` : "Completed work is already reflected in receipts or no work is done yet.",
-  ];
-
-  if (company.autonomy) notes.push("Autonomy is on; idle crews keep receiving fresh work toward the apex goal.");
-
-  return {
-    score,
-    learningAssets,
-    workflowAssets,
-    evalGates,
-    passedEvalGates,
-    experiments,
-    committedExperiments,
-    frontierCandidates,
-    antiPatterns,
-    distillationQueue,
-    learningVelocity: recentDone.length,
-    spendEfficiency,
-    modelIndependence,
-    notes,
-  };
+): CompanyCapabilityCapital {
+  return computeLoopCapabilityCapital({
+    tasks,
+    agents,
+    totalSpentUsd: rollup.totalSpentUsd,
+    autonomyActive: company.autonomy,
+    emptyLoopNote: "Launch autonomy to attach private eval loops to new work.",
+    loopAttachmentNoun: "company work",
+  });
 }
 
 export interface BuildColonyInput {
   company: Company;
   rollup: CompanySpendRollup;
+  revenueShare?: CompanyRevenueRollup;
+  revenueRail?: CompanyRevenueRailStatus;
   approvals: ApprovalRow[];
   agentsById: Map<string, AgentLite>;
   tasks: KanbanTaskLite[];
 }
 
-export function buildColony({ company, rollup, approvals, agentsById, tasks }: BuildColonyInput): Colony {
+export function buildColony({ company, rollup, revenueShare, revenueRail, approvals, agentsById, tasks }: BuildColonyInput): Colony {
   const safeName = (company.name || "").trim() || company.id || "Untitled company";
   const ticker = (company.ticker || safeName.replace(/[^a-z]/gi, "").slice(0, 4) || "ORG").toUpperCase();
   const agents = buildAgents(company, agentsById, rollup);
@@ -454,7 +442,8 @@ export function buildColony({ company, rollup, approvals, agentsById, tasks }: B
   const alignment = company.alignment ?? (hasWork ? clamp(Math.round((doneCount / totalCount) * 100)) : 0);
   const status = deriveStatus(company, agents, approvals, alignment, hasWork);
   const burn = deriveBurn(company, rollup, agents);
-  const tokenCapital = deriveTokenCapital(company, rollup, liveTasks, agents);
+  const capabilityCapital = deriveCapabilityCapital(company, rollup, liveTasks, agents);
+  const pipeline = extractWorkBoardPipelineSummary(liveTasks) ?? undefined;
 
   const unit = company.apexGoal?.unit;
   const apex = {
@@ -473,7 +462,7 @@ export function buildColony({ company, rollup, approvals, agentsById, tasks }: B
     eta: hasWork ? (totalCount > doneCount ? `${totalCount - doneCount} left` : "ship") : "—",
   };
 
-  const runtimeMix = [...new Set(agents.map((a) => a.runtime))].slice(0, 3);
+  const runtimeMix = buildCompanyRuntimeMix(company.execution, agents.map((agent) => agent.runtime));
 
   // An explicit company.revenue wins; otherwise a currency/users apex goal becomes
   // the headline metric so the card shows the money/DAU layout instead of the
@@ -518,8 +507,16 @@ export function buildColony({ company, rollup, approvals, agentsById, tasks }: B
     apex,
     workBlock,
     burn,
-    tokenCapital,
+    apiSpend: {
+      dayUsd: Math.round((rollup.apiSpentUsd ?? 0) * 100) / 100,
+      monthUsd: Math.round((rollup.apiMonthlySpentUsd ?? 0) * 100) / 100,
+      monthlyCeilingUsd: company.apiBudgets?.[0]?.monthlyCeilingUsd ?? null,
+    },
+    capabilityCapital,
     revenue,
+    revenueShare,
+    revenueRail,
+    pipeline,
     velocity: deriveVelocity(liveTasks),
     approvals: approvals.map((a) => mapApproval(a, company.dailyBudgetUsd)),
     agents,
@@ -530,6 +527,13 @@ export function buildColony({ company, rollup, approvals, agentsById, tasks }: B
     lastDispatchedAt: company.lastDispatchedAt,
     hasApexGoal: Boolean(company.apexGoal?.title?.trim()),
     autonomy: Boolean(company.autonomy),
+    execution: company.execution,
+    directives: company.directives,
+    approvalPolicies: company.approvalPolicies,
+    importedOperations: company.importedOperations,
+    importedKnowledge: company.importedKnowledge,
+    products: company.products,
+    pricingProposals: company.pricingProposals,
     // Raw values for the edit form — the user's own input, not the derived
     // display fallbacks (`apex`, formatted target, etc.).
     edit: {
@@ -538,6 +542,11 @@ export function buildColony({ company, rollup, approvals, agentsById, tasks }: B
       sector: company.sector || "",
       charter: company.charter || "",
       blurb: company.blurb || "",
+      projectId: company.projectId || "",
+      ...companyExecutionFormFromConfig(company.execution),
+      analyticsProvider: company.analyticsProvider ?? "",
+      analyticsProjectId: company.analyticsConfig?.projectId ?? "",
+      analyticsHost: company.analyticsConfig?.host ?? "",
       dailyBudgetUsd: company.dailyBudgetUsd,
       monthlyBudgetUsd: company.monthlyBudgetUsd,
       totalBudgetUsd: company.totalBudgetUsd,
@@ -550,6 +559,9 @@ export function buildColony({ company, rollup, approvals, agentsById, tasks }: B
       apexProgress: company.apexGoal?.progress,
       metricUnit: (company.apexGoal?.unit as MetricUnit) || "number",
       frozen: company.frozen,
+      autonomyPauseMax: company.autonomyPause?.maxWaitingOnHuman,
+      autonomyPauseMode: company.autonomyPause?.countMode ?? "all",
+      autonomyPauseKinds: company.autonomyPause?.deliverableKinds ?? [],
       revenueKind: company.revenue?.kind ?? "",
       revenueLabel: company.revenue?.label || "",
       revenueValue: company.revenue?.value || "",

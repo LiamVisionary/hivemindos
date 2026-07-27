@@ -178,3 +178,7 @@ export function routeChannelMarkupText(value: string): RoutedChannelMarkup {
     thinking: routed.thinking + flushed.thinking,
   };
 }
+
+export function visibleChannelMarkupText(value: string): string {
+  return routeChannelMarkupText(value).content;
+}

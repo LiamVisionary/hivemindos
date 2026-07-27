@@ -522,7 +522,7 @@
 }
 
 .fundingPanel > button {
-  background: linear-gradient(180deg, var(--honey2), var(--honey));
+  background: linear-gradient(180deg, var(--honey2), var(--honey-fill, var(--honey)));
   box-shadow: 0 0 22px var(--honey-glow);
   color: #2a1c05;
 }
@@ -667,7 +667,7 @@
 .rp-earn-sub span { color: var(--fg-4); font-family: var(--fm); font-size: 8px; letter-spacing: 0; text-transform: uppercase; }
 .rp-splitbar { display: flex; gap: 2px; height: 9px; overflow: hidden; border-radius: 999px; }
 .rp-splitbar i { display: block; height: 100%; border-radius: 3px; }
-.you { background: linear-gradient(90deg, var(--honey), var(--honey-2)); box-shadow: 0 0 12px var(--honey-glow); }
+.you { background: linear-gradient(90deg, var(--honey-fill, var(--honey)), var(--honey-2)); box-shadow: 0 0 12px var(--honey-glow); }
 .tre { background: var(--line-2); }
 .rp-split-legend { display: flex; justify-content: space-between; margin-top: 6px; color: var(--fg-4); font-family: var(--fm); font-size: 9px; letter-spacing: 0; text-transform: uppercase; }
 .rp-split-legend b { color: var(--honey-2); }
@@ -681,7 +681,7 @@
 .rp-tabs button.on { box-shadow: inset 0 0 0 1px rgba(94,234,212,.5), 0 0 14px var(--cyan-glow); }
 .rp-range-wrap { position: relative; }
 .rp-range { width: 100%; height: 6px; border-radius: 999px; appearance: none; background: var(--line); cursor: pointer; outline: none; }
-.rp-range::-webkit-slider-thumb { width: 18px; height: 18px; border: 0; border-radius: 999px; appearance: none; background: radial-gradient(circle at 35% 30%, var(--honey-2), var(--honey)); box-shadow: 0 0 0 4px rgba(242,183,5,.16), 0 0 14px var(--honey-glow); cursor: grab; }
+.rp-range::-webkit-slider-thumb { width: 18px; height: 18px; border: 0; border-radius: 999px; appearance: none; background: radial-gradient(circle at 35% 30%, var(--honey-2), var(--honey-fill, var(--honey))); box-shadow: 0 0 0 4px rgba(242,183,5,.16), 0 0 14px var(--honey-glow); cursor: grab; }
 .rp-range-fill { position: absolute; top: 50%; left: 0; height: 6px; border-radius: 999px; pointer-events: none; transform: translateY(-50%); }
 .rp-pricehint { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 2px; color: var(--fg-4); font-family: var(--fm); font-size: 9.5px; }
 .rp-models2 { display: grid; gap: 5px; }
@@ -848,7 +848,7 @@
   --cyan3: #376739;
   --cyan-3: #376739;
   --cyan-glow: rgba(95, 143, 90, 0.22);
-  --honey: #b07f1c;
+  --honey: #936811; --honey-fill: #e6bb5c;
   --honey2: #936811;
   --honey-2: #936811;
   --honey-glow: rgba(176, 127, 28, 0.22);
@@ -929,6 +929,6 @@
 }
 
 :global(:root[data-theme="hive-light"]) .primary {
-  background: linear-gradient(180deg, var(--honey), var(--honey-2));
+  background: linear-gradient(180deg, var(--honey-fill, var(--honey)), var(--honey-2));
   color: #fff7df;
 }

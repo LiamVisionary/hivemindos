@@ -1,33 +1,37 @@
 import { execFile } from "child_process";
 import { readFile, readlink } from "fs/promises";
 import { promisify } from "util";
+import { hivemindLinkControlUrl } from "@/lib/services/hivemind-link-control";
+import { tailnetSelfIdentityCandidates, type TailnetSelfNode } from "@/features/fleet/fleet-identity";
 import {
-  hivemindLinkControlUrl,
-  localTelemetryCollectorUrl,
-} from "@/lib/services/hivemind-link-control";
+  dedupeDevices,
+  deviceFreshnessScore,
+  deviceIdentityKey,
+  dnsLabel,
+  exactMachineIdentity,
+  isMacDevice,
+  isMobileDevice,
+  isSameTailscalePeer,
+  isStaleSelfDuplicate,
+  localDevice,
+  machineIdentityKey,
+  normalizeDnsName,
+  normalizeName,
+  REMOTE_COLLECTOR_PORT_CANDIDATES,
+  shouldUseTailscaleCliFallback,
+  simplifyDevice,
+  type Device,
+  type TailscalePeer,
+} from "@/app/api/fleet/discover-devices";
+import { annotateReverseReachability } from "@/app/api/fleet/reverse-reachability";
 import { readStoredAgentProfiles } from "@/lib/services/agent-profile-store";
 import { mobileAgentProfilesForMachine } from "@/lib/services/mobile-agents/fleet";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import type { FleetMachinePolicySummary } from "@/lib/types/fleet-machine-policy";
 
 export const runtime = "nodejs";
 
 const execFileAsync = promisify(execFile);
-
-type TailscalePeer = {
-  ID?: string;
-  HostName?: string;
-  DNSName?: string;
-  OS?: string;
-  Online?: boolean;
-  TailscaleIPs?: string[];
-  LastSeen?: string;
-  LastHandshake?: string;
-  CurAddr?: string;
-  RxBytes?: number;
-  TxBytes?: number;
-  Active?: boolean;
-  Relay?: string;
-};
 
 type TailscaleStatus = {
   BackendState?: string;
@@ -42,24 +46,6 @@ type HivemindLinkStatus = {
   magicDnsSuffix?: string;
   self?: TailscalePeer;
   peer?: Record<string, TailscalePeer>;
-};
-
-type Device = {
-  self: boolean;
-  name: string;
-  dnsName: string;
-  os: string;
-  online: boolean;
-  ip: string;
-  collectorUrl: string;
-  collectorUrlCandidates?: string[];
-  lastSeen?: string;
-  lastHandshake?: string;
-  curAddr?: string;
-  rxBytes?: number;
-  txBytes?: number;
-  active?: boolean;
-  relay?: string;
 };
 
 type FleetDeviceStatus = {
@@ -87,8 +73,13 @@ type CollectorCapabilities = {
   skillInventory?: boolean;
   skillAutoSync?: boolean;
   runtimes?: string[];
+  runtimeState?: boolean;
+  runtimeStateRuntimes?: string[];
+  runtimeStateSync?: boolean;
   syncthing?: boolean;
   defaultSyncPath?: string;
+  machinePolicy?: boolean;
+  remoteShell?: boolean;
 };
 
 type CollectorEnvSync = {
@@ -96,6 +87,13 @@ type CollectorEnvSync = {
   user?: string;
   command?: string;
   error?: string;
+  maintenance?: {
+    lastRunAt?: string;
+    lastSummary?: {
+      pull?: { peers?: string[]; unreachable?: string[] };
+      retry?: { remaining?: number; unreachable?: string[] };
+    };
+  };
 };
 
 type CollectorSystemStats = {
@@ -114,6 +112,24 @@ type CollectorSystemStats = {
   arch?: string;
   osRelease?: string;
   uptimeSec?: number;
+  // Extended resource telemetry (collector v0.19+; older collectors omit
+  // these, so every field stays optional and the UI degrades gracefully).
+  swapUsedGb?: number | null;
+  swapTotalGb?: number | null;
+  cacheGb?: number | null;
+  tempC?: number | null;
+  diskReadMBs?: number | null;
+  diskWriteMBs?: number | null;
+  netRxMBs?: number | null;
+  netTxMBs?: number | null;
+  procCount?: number | null;
+  topProcesses?: Array<{ name: string; rssMb: number }>;
+  // Rolling recent samples (cpu%/ram%/net MB-s) the collector accumulates while
+  // actively polled, so sparklines show a real trend immediately.
+  history?: { cpu: number[]; ram: number[]; netRx: number[]; netTx: number[] };
+  // Round-trip latency to the collector /health endpoint, measured by the
+  // discovery probe (not the collector itself).
+  rttMs?: number | null;
 };
 
 type BridgeRepairStatus = {
@@ -147,11 +163,18 @@ type DiscoveredMachine = {
   collector: string;
   collectorHost?: string;
   machineId?: string;
+  tailnetSelf?: TailnetSelfNode;
   version?: CollectorVersion;
   capabilities?: CollectorCapabilities;
   envSync?: CollectorEnvSync;
   system?: CollectorSystemStats;
+  fleetPolicy?: FleetMachinePolicySummary;
   bridgeRepair?: BridgeRepairStatus;
+  // Peers (by display name) whose collector reports it cannot reach this
+  // machine over the tailnet — the reverse-reachability signal that exposes
+  // an asymmetric partition this dashboard's own probes cannot see (e.g. this
+  // machine reaches everyone, but its linkd is dead so nobody reaches it).
+  reportedUnreachableBy?: string[];
   agents: AgentProfile[];
   snapshots: unknown[];
 };
@@ -183,253 +206,6 @@ const lastReadyMachineByKey = new Map<
   string,
   { checkedAt: number; machine: DiscoveredMachine }
 >();
-
-function localCollectorUrl() {
-  return localTelemetryCollectorUrl();
-}
-
-function shouldUseTailscaleCliFallback() {
-  return (
-    process.platform !== "darwin" ||
-    process.env.HIVEMIND_TAILSCALE_CLI_FALLBACK === "1"
-  );
-}
-
-function localDevice(): Device {
-  return {
-    self: true,
-    name: "This machine",
-    dnsName: "",
-    os: process.platform,
-    online: true,
-    ip: "127.0.0.1",
-    collectorUrl: localCollectorUrl(),
-    relay: "",
-  };
-}
-
-function dnsLabel(dnsName: string) {
-  return dnsName.replace(/\.$/, "").split(".")[0] ?? "";
-}
-
-function isGenericHostname(name?: string) {
-  const normalized = name?.trim().toLowerCase();
-  return (
-    !normalized ||
-    normalized === "localhost" ||
-    normalized === "localhost.localdomain"
-  );
-}
-
-function displayNameForPeer(peer: TailscalePeer, dnsName: string, ip: string) {
-  const magicDnsName = dnsLabel(dnsName);
-  if (normalizeName(peer.HostName).startsWith("hivemindos") && magicDnsName)
-    return magicDnsName;
-  return isGenericHostname(peer.HostName)
-    ? magicDnsName || ip || "Unknown device"
-    : peer.HostName || magicDnsName || ip || "Unknown device";
-}
-
-function normalizeName(value?: string) {
-  return value?.toLowerCase().replace(/[^a-z0-9]+/g, "") ?? "";
-}
-
-function normalizeDnsName(value?: string) {
-  return value?.replace(/\.$/, "").toLowerCase() ?? "";
-}
-
-function isSameTailscalePeer(left?: TailscalePeer, right?: TailscalePeer) {
-  if (!left || !right) return false;
-  const leftIps = new Set(left.TailscaleIPs ?? []);
-  if ((right.TailscaleIPs ?? []).some((ip) => leftIps.has(ip))) return true;
-  const leftDns = normalizeDnsName(left.DNSName);
-  const rightDns = normalizeDnsName(right.DNSName);
-  return Boolean(leftDns && rightDns && leftDns === rightDns);
-}
-
-// Exact identity: the normalized dns label (or name) with only the
-// `hivemindos` prefix and `.local` suffix stripped. The same physical
-// machine's system node and link node map to the same identity, while
-// tailscale's `-N` suffix is KEPT — a `-1` node is a different physical
-// machine that shares the hostname (two MacBooks named "Liams-MacBook-Pro"),
-// and stripping it merged them into one machine.
-function exactMachineIdentity(device: Device) {
-  const value =
-    normalizeName(dnsLabel(device.dnsName)) || normalizeName(device.name);
-  return value.replace(/^hivemindos/, "").replace(/local\d*$/, "");
-}
-
-function deviceIdentityKey(device: Device) {
-  const identity = exactMachineIdentity(device);
-  if (identity) return identity;
-  if (device.self) return "self";
-  return device.ip || device.collectorUrl;
-}
-
-function isHivemindLinkDevice(device: Device) {
-  return (
-    normalizeName(device.name).startsWith("hivemindos") ||
-    normalizeName(dnsLabel(device.dnsName)).startsWith("hivemindos")
-  );
-}
-
-function isMobileDevice(device: Device) {
-  return /^(ios|android)$/i.test(device.os);
-}
-
-function isMacDevice(device: Device) {
-  return /^(macos|darwin)$/i.test(device.os);
-}
-
-// Windows / Linux desktops are real HivemindOS machines; keep them (and self)
-// so a Windows/Linux install sees its own machine + agents in the fleet.
-function isDesktopDevice(device: Device) {
-  // process.platform reports "win32"; the native bridge reports "windows".
-  // Match both so a Windows device is never dropped (mirrors isDesktopMachineOs).
-  return /^(windows|win32|linux)$/i.test(device.os);
-}
-
-const STALE_OFFLINE_NODE_MS = 7 * 24 * 60 * 60 * 1000;
-
-function machineFamilyBase(device: Device) {
-  return exactMachineIdentity(device).replace(/\d+$/, "");
-}
-
-function isLongOffline(device: Device) {
-  if (device.online) return false;
-  const lastSeen = device.lastSeen ?? "";
-  if (!lastSeen || lastSeen.startsWith("0001-01-01")) return false;
-  const seenAt = Date.parse(lastSeen);
-  return Number.isFinite(seenAt) && Date.now() - seenAt > STALE_OFFLINE_NODE_MS;
-}
-
-function isStaleSelfDuplicate(self: Device | undefined, device: Device) {
-  if (!self || device.self) return false;
-  // Exact identity: this machine's own link node (or another tailnet view of
-  // the same node) seen as a peer.
-  const selfIdentity = exactMachineIdentity(self);
-  const deviceIdentity = exactMachineIdentity(device);
-  if (selfIdentity && deviceIdentity && selfIdentity === deviceIdentity)
-    return true;
-  if (self.ip && device.ip && self.ip === device.ip) return true;
-  // A name-base match with the `-N` suffix stripped is AMBIGUOUS: it is
-  // either an old registration of this machine (macOS renames itself, link
-  // nodes re-register) or a DIFFERENT physical machine that shares the
-  // hostname. An online node is alive somewhere we are not — never hide it.
-  // Only hide entries that have been offline long enough to be dead.
-  const selfFamily = machineFamilyBase(self);
-  if (!selfFamily || selfFamily !== machineFamilyBase(device)) return false;
-  return isLongOffline(device);
-}
-
-function deviceFreshnessScore(device: Device) {
-  return (
-    (device.self ? 10_000 : 0) +
-    (isHivemindLinkDevice(device) ? 500 : 0) +
-    (device.online ? 1_000 : 0) +
-    (device.active ? 100 : 0) +
-    (device.lastHandshake && !device.lastHandshake.startsWith("0001-01-01")
-      ? 10
-      : 0) +
-    ((device.rxBytes ?? 0) > 0 || (device.txBytes ?? 0) > 0 ? 1 : 0)
-  );
-}
-
-function dedupeDevices(devices: Device[]) {
-  const byIdentity = new Map<string, Device>();
-  for (const device of devices) {
-    const key = deviceIdentityKey(device);
-    const previous = byIdentity.get(key);
-    if (
-      !previous ||
-      deviceFreshnessScore(device) > deviceFreshnessScore(previous)
-    ) {
-      byIdentity.set(key, device);
-    }
-  }
-  return [...byIdentity.values()].filter(
-    (device) =>
-      device.self || // never drop this machine's own self device (any OS)
-      isHivemindLinkDevice(device) ||
-      isMacDevice(device) ||
-      isDesktopDevice(device) ||
-      isMobileDevice(device),
-  );
-}
-
-function normalizedMachineId(value?: string) {
-  const trimmed = value?.trim() ?? "";
-  return /^hivemind-machine-[a-f0-9]{32}$/i.test(trimmed)
-    ? trimmed.toLowerCase()
-    : "";
-}
-
-function machineIdentityKey(machine: {
-  device: Device;
-  collector: string;
-  machineId?: string;
-}) {
-  const machineId =
-    machine.collector === "ready" ? normalizedMachineId(machine.machineId) : "";
-  return machineId || deviceIdentityKey(machine.device);
-}
-
-const REMOTE_COLLECTOR_PORT_CANDIDATES = Array.from(
-  { length: 24 },
-  (_, index) => 8787 + index,
-);
-
-function linkCollectorUrlForPort(ip: string, port: number) {
-  return `${hivemindLinkControlUrl()}/peer/${encodeURIComponent(`${ip}:${port}`)}`;
-}
-
-function directCollectorUrlForPort(ip: string, port: number) {
-  return `http://${ip}:${port}`;
-}
-
-function remoteCollectorUrlCandidates(ip: string, viaLink: boolean) {
-  if (!ip) return [];
-  const direct = REMOTE_COLLECTOR_PORT_CANDIDATES.map((port) =>
-    directCollectorUrlForPort(ip, port),
-  );
-  if (!viaLink) return direct;
-  const link = REMOTE_COLLECTOR_PORT_CANDIDATES.map((port) =>
-    linkCollectorUrlForPort(ip, port),
-  );
-  return [...link, ...direct];
-}
-
-function simplifyDevice(
-  peer: TailscalePeer,
-  self = false,
-  viaLink = false,
-): Device {
-  const ip =
-    peer.TailscaleIPs?.find((value) => /^\d+\.\d+\.\d+\.\d+$/.test(value)) ??
-    peer.TailscaleIPs?.[0] ??
-    "";
-  const dnsName = peer.DNSName?.replace(/\.$/, "") ?? "";
-  const collectorUrlCandidates = self
-    ? [localCollectorUrl()]
-    : remoteCollectorUrlCandidates(ip, viaLink);
-  return {
-    self,
-    name: self ? "This Mac" : displayNameForPeer(peer, dnsName, ip),
-    dnsName,
-    os: peer.OS ?? "unknown",
-    online: self ? true : Boolean(peer.Online),
-    ip,
-    collectorUrl: self ? localCollectorUrl() : "",
-    collectorUrlCandidates,
-    lastSeen: peer.LastSeen,
-    lastHandshake: peer.LastHandshake,
-    curAddr: peer.CurAddr ?? "",
-    rxBytes: peer.RxBytes ?? 0,
-    txBytes: peer.TxBytes ?? 0,
-    active: Boolean(peer.Active),
-    relay: peer.Relay ?? "",
-  };
-}
 
 async function hivemindLinkStatus(): Promise<HivemindLinkStatus | null> {
   try {
@@ -610,8 +386,10 @@ type CollectorProbeResult = {
   capabilities?: CollectorCapabilities;
   envSync?: CollectorEnvSync;
   system?: CollectorSystemStats;
+  fleetPolicy?: FleetMachinePolicySummary;
   collectorHost?: string;
   machineId?: string;
+  tailnetSelf?: TailnetSelfNode;
 };
 
 function collectorUrlWithPort(rawUrl: string, port: number) {
@@ -738,17 +516,24 @@ async function probeCollector(
     activeDevice,
     options.collectorTimeoutMs,
   );
+  const healthStartedAt = Date.now();
   const healthData = (await fetchJson(
     `${collectorUrl}/health`,
     options.collectorTimeoutMs,
   )) as {
     host?: string;
     machineId?: string;
+    tailnetSelf?: TailnetSelfNode;
     version?: CollectorVersion;
     capabilities?: CollectorCapabilities;
     envSync?: CollectorEnvSync;
     system?: CollectorSystemStats;
+    fleetPolicy?: FleetMachinePolicySummary;
   };
+  // Round-trip to the collector /health endpoint = a real RTT to this machine
+  // over the tailnet (loopback for self). Rides along inside `system` so it
+  // reaches the client verbatim with the rest of the resource telemetry.
+  const rttMs = Date.now() - healthStartedAt;
   if (!isHivemindCollectorHealth(healthData)) {
     throw new Error("Health endpoint is not a HivemindOS collector.");
   }
@@ -757,15 +542,20 @@ async function probeCollector(
     ...agent,
     collectorCapabilities: capabilities,
   }));
+  const system = healthData.system
+    ? { ...healthData.system, rttMs }
+    : healthData.system;
   return {
     device: activeDevice,
     agents,
     version: healthData.version,
     capabilities,
     envSync: healthData.envSync,
-    system: healthData.system,
+    system,
+    fleetPolicy: healthData.fleetPolicy,
     collectorHost: healthData.host,
     machineId: healthData.machineId,
+    tailnetSelf: healthData.tailnetSelf,
   };
 }
 
@@ -881,7 +671,7 @@ function bridgeRepairScript() {
     'if curl -fsS --max-time 5 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then',
     "  exit 0",
     "fi",
-    'for d in "$HOME/Documents/code/projects/hivemind-os" "$HOME/Documents/code/projects/hivemindos" "$HOME/hivemind-os" "$HOME/hivemindos" "$HOME/openclaw-next" "/root/omni-agent-hivemind" "/root/hivemindos" "/opt/hivemindos"; do',
+    'for d in "$HOME/Documents/code/projects/hivemind-os" "$HOME/Documents/code/projects/hivemindos" "$HOME/hivemind-os" "$HOME/hivemindos" "$HOME/openclaw-next" "/root/hivemindos" "/opt/hivemindos"; do',
     '  if [ -f "$d/scripts/install-telemetry-collector.sh" ]; then',
     '    cd "$d"',
     "    HIVE_LINK_ENABLED=true ./scripts/install-telemetry-collector.sh >/tmp/hivemindos-bridge-auto-repair.log 2>&1 || { tail -80 /tmp/hivemindos-bridge-auto-repair.log >&2 || true; exit 1; }",
@@ -1013,10 +803,12 @@ async function probeCollectorViaTailscale(
   )) as {
     host?: string;
     machineId?: string;
+    tailnetSelf?: TailnetSelfNode;
     version?: CollectorVersion;
     capabilities?: CollectorCapabilities;
     envSync?: CollectorEnvSync;
     system?: CollectorSystemStats;
+    fleetPolicy?: FleetMachinePolicySummary;
   };
   const agentsData = (await fetchRemoteCollectorJsonViaTailscale(
     device,
@@ -1037,8 +829,10 @@ async function probeCollectorViaTailscale(
     capabilities,
     envSync: healthData.envSync,
     system: healthData.system,
+    fleetPolicy: healthData.fleetPolicy,
     collectorHost: healthData.host,
     machineId: healthData.machineId,
+    tailnetSelf: healthData.tailnetSelf,
   };
 }
 
@@ -1051,12 +845,17 @@ async function probeCollectorViaTailscale(
  * agent currently lives.
  */
 async function overlayStoredAgentProfiles<
-  MachineLike extends { agents: AgentProfile[] },
+  MachineLike extends {
+    device: Device;
+    collector: string;
+    capabilities?: CollectorCapabilities;
+    agents: AgentProfile[];
+  },
 >(machines: MachineLike[]): Promise<MachineLike[]> {
   const stored = await readStoredAgentProfiles().catch(() => []);
   if (stored.length === 0) return machines;
   const storedById = new Map(stored.map((profile) => [profile.id, profile]));
-  return machines.map((machine) => ({
+  const overlaid = machines.map((machine) => ({
     ...machine,
     agents: machine.agents.map((agent) => {
       const edited = agent.id ? storedById.get(agent.id) : undefined;
@@ -1071,6 +870,60 @@ async function overlayStoredAgentProfiles<
       };
     }),
   }));
+  return withStoredQueenAgent(overlaid, stored);
+}
+
+/**
+ * The crowned Queen must reach remote clients even when the collector bridge
+ * doesn't report her. The dashboard's own Queen surfaces (hive-center cell,
+ * queen chat FAB, call button) resolve her from STORED profiles and route
+ * turns through the hub's own runtime adapters, so she is fully messageable
+ * regardless of the bridge — but when her stored id has no live collector
+ * counterpart (stale bridge id after a rename/re-register), the overlay above
+ * lands her crown on nothing and remote clients (the phone's Queen Bee picker
+ * entry) see no Queen at all. Inject the stored Queen onto the hub's own
+ * machine so remote clients see and message the same Queen the dashboard
+ * does. Client-side machine merges dedupe agents by id, so a re-bridged live
+ * queen never shows twice.
+ */
+function withStoredQueenAgent<
+  MachineLike extends {
+    device: Device;
+    collector: string;
+    capabilities?: CollectorCapabilities;
+    agents: AgentProfile[];
+  },
+>(machines: MachineLike[], stored: AgentProfile[]): MachineLike[] {
+  const queen = stored.find((profile) => profile.beeRole === "queen");
+  if (!queen) return machines;
+  const alreadyPresent = machines.some((machine) =>
+    machine.agents.some(
+      (agent) => agent.beeRole === "queen" || agent.id === queen.id,
+    ),
+  );
+  if (alreadyPresent) return machines;
+  const host =
+    machines.find(
+      (machine) => machine.device.self && machine.collector === "ready",
+    ) ?? machines.find((machine) => machine.device.self);
+  if (!host) return machines;
+  return machines.map((machine) =>
+    machine === host
+      ? {
+          ...machine,
+          agents: [
+            {
+              ...queen,
+              machineName: host.device.name,
+              telemetryUrl: host.device.collectorUrl,
+              collectorCapabilities:
+                host.capabilities ?? queen.collectorCapabilities,
+            },
+            ...machine.agents,
+          ],
+        }
+      : machine,
+  );
 }
 
 async function readDiscovery(
@@ -1146,10 +999,12 @@ async function readDiscovery(
           collector: "ready",
           collectorHost: probe.collectorHost,
           machineId: probe.machineId,
+          tailnetSelf: probe.tailnetSelf,
           version: probe.version,
           capabilities: probe.capabilities,
           envSync: probe.envSync,
           system: probe.system,
+          fleetPolicy: probe.fleetPolicy,
           agents: probe.agents,
           snapshots: [],
         };
@@ -1170,10 +1025,12 @@ async function readDiscovery(
           collector: "ready",
           collectorHost: probe.collectorHost,
           machineId: probe.machineId,
+          tailnetSelf: probe.tailnetSelf,
           version: probe.version,
           capabilities: probe.capabilities,
           envSync: probe.envSync,
           system: probe.system,
+          fleetPolicy: probe.fleetPolicy,
           agents: probe.agents,
           snapshots: snapshotData.snapshots ?? [],
         };
@@ -1183,10 +1040,12 @@ async function readDiscovery(
           collector: "ready",
           collectorHost: probe.collectorHost,
           machineId: probe.machineId,
+          tailnetSelf: probe.tailnetSelf,
           version: probe.version,
           capabilities: probe.capabilities,
           envSync: probe.envSync,
           system: probe.system,
+          fleetPolicy: probe.fleetPolicy,
           agents: probe.agents,
           snapshots: [],
         };
@@ -1264,6 +1123,7 @@ function refreshDiscovery(
           payload,
           previousPayload,
         );
+        annotateReverseReachability(stablePayload.machines);
         discoveryCache.set(cacheKey, {
           checkedAt: Date.now(),
           payload: stablePayload,
@@ -1351,14 +1211,30 @@ export async function GET(request: Request) {
     }
   }
 
-  const payload = await refreshDiscovery(
-    cacheKey,
-    includeSnapshots,
-    foregroundProbeOptions(includeSnapshots, allowSshFallback),
-    discoveryInFlight,
-  );
-  refreshDiscoveryInBackground(cacheKey, includeSnapshots, allowSshFallback);
-  return Response.json(payload);
+  // Cold cache: no prior payload to fall back on. The foreground read can take
+  // up to DISCOVERY_REQUEST_TIMEOUT_MS (20s) — longer than the phone's 12s
+  // client timeout — and readDiscovery can reject. Without a guard that reject
+  // escaped as an uncaught 500 that the phone never usefully received. Catch it
+  // and return a clean empty payload (a background refresh is already warming
+  // the cache), so the phone gets a well-formed response and degrades to
+  // standalone instead of hanging or seeing a 500.
+  try {
+    const payload = await refreshDiscovery(
+      cacheKey,
+      includeSnapshots,
+      foregroundProbeOptions(includeSnapshots, allowSshFallback),
+      discoveryInFlight,
+    );
+    refreshDiscoveryInBackground(cacheKey, includeSnapshots, allowSshFallback);
+    return Response.json(payload);
+  } catch {
+    refreshDiscoveryInBackground(cacheKey, includeSnapshots, allowSshFallback);
+    return Response.json({
+      ok: true,
+      source: "discovery-unavailable",
+      machines: [],
+    } satisfies FleetDiscoverPayload);
+  }
 }
 
 function machineScore(machine: {
@@ -1416,10 +1292,15 @@ function dedupeMachines<
   return [...byIdentity.values()];
 }
 
-function machineBaseCandidates(machine: { device: Device }) {
+function machineBaseCandidates(machine: { device: Device; tailnetSelf?: TailnetSelfNode }) {
   // Exact identity only (keeps tailscale's `-N` suffix): a `-1` node is a
-  // different physical machine with the same hostname, not a duplicate.
-  return [deviceIdentityKey(machine.device)].filter(Boolean);
+  // different physical machine with the same hostname, not a duplicate. A
+  // ready collector additionally claims its self-reported system tailnet
+  // node, so a hostname rename still folds both nodes into one machine.
+  return [
+    deviceIdentityKey(machine.device),
+    ...tailnetSelfIdentityCandidates(machine.tailnetSelf),
+  ].filter(Boolean);
 }
 
 function hasFreshReadyDuplicate(
@@ -1427,6 +1308,8 @@ function hasFreshReadyDuplicate(
   readyMachineBases: Set<string>,
 ) {
   if (machine.collector === "ready") return false;
+  // A remote collector's claims never fold the local machine out of its own fleet.
+  if (machine.device.self) return false;
   return machineBaseCandidates(machine).some((base) =>
     readyMachineBases.has(base),
   );

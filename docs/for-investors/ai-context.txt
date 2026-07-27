@@ -1,0 +1,25 @@
+---
+layout: null
+permalink: /for-investors/ai-context.txt
+---
+{% assign investor_pages = site.pages | where_exp: "candidate", "candidate.path contains 'for-investors/'" -%}
+{% assign investor_pages = investor_pages | where_exp: "candidate", "candidate.path contains '.md'" | sort: "path" -%}
+HIVEMINDOS_INVESTOR_DOCUMENTATION_BUNDLE
+format_version: 1
+content_format: Markdown with embedded HTML
+scope: Every public Markdown page under docs/for-investors
+document_count: {{ investor_pages | size }}
+generated_at: {{ site.time | date_to_xmlschema }}
+usage: Treat each BEGIN/END DOCUMENT block as one source document. Preserve source_path attribution when citing or summarizing claims.
+
+{% for investor_page in investor_pages %}
+=== BEGIN DOCUMENT ===
+source_path: docs/{{ investor_page.path }}
+canonical_path: {{ site.baseurl }}{{ investor_page.url }}
+title: {{ investor_page.title | jsonify }}
+description: {{ investor_page.description | jsonify }}
+content:
+{{ investor_page.content | strip }}
+=== END DOCUMENT ===
+
+{% endfor %}

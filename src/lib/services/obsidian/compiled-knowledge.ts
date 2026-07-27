@@ -4,6 +4,7 @@ import { createHash } from "crypto";
 import { basename, dirname, join, relative, resolve, sep } from "path";
 import { resolveSharedContributionPolicy, type BrainActorKind, type BrainCollaborationMode } from "@/lib/services/brain/shared-contribution-contract";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
+import { contentAddressForText } from "@/lib/services/obsidian/content-address";
 import { listFilesMatchingTerms, searchTermsFromQuery } from "@/lib/services/search/ripgrep-search";
 
 const COMPILED_ROOT = "Synthesis/Compiled Knowledge";
@@ -329,7 +330,7 @@ function mergeBodies(existing: string, incoming: string) {
   return `${merged.trim()}\n`;
 }
 
-function frontmatter(type: KnowledgePageKind, title: string, tags: string[], createdAt: string, updatedAt: string, sourceHash?: string) {
+function frontmatter(type: KnowledgePageKind, title: string, tags: string[], createdAt: string, updatedAt: string, sourceHash?: string, contentHash?: string) {
   return [
     "---",
     `type: ${yamlString(`compiled-${type}`)}`,
@@ -338,6 +339,7 @@ function frontmatter(type: KnowledgePageKind, title: string, tags: string[], cre
     `createdAt: ${yamlString(createdAt)}`,
     `updatedAt: ${yamlString(updatedAt)}`,
     sourceHash ? `sourceHash: ${yamlString(sourceHash)}` : "",
+    contentHash ? `contentHash: ${yamlString(contentHash)}` : "",
     "---",
   ].filter(Boolean).join("\n");
 }
@@ -361,7 +363,7 @@ async function writeCompiledKnowledgePage(root: string, input: {
   const updatedAt = input.createdAt;
   const normalizedBody = normalizeLinks(input.body);
   const body = previous ? mergeBodies(previous, normalizedBody) : `${stripFrontmatter(normalizedBody).trim()}\n`;
-  const next = `${frontmatter(input.type, input.title, input.tags ?? [], createdAt, updatedAt, input.sourceHash)}\n\n${body}`;
+  const next = `${frontmatter(input.type, input.title, input.tags ?? [], createdAt, updatedAt, input.sourceHash, contentAddressForText(body))}\n\n${body}`;
   const status = !previous ? "created" : previous === next ? "unchanged" : "updated";
   if (status !== "unchanged") await writeAtomic(absolute, next);
   return {
@@ -465,7 +467,7 @@ export async function compileKnowledgeToWiki(input: CompileKnowledgeInput): Prom
   if (!concepts.length) warnings.push("No concepts were provided or extracted.");
 
   const rawPath = join(root, "raw", `${summarySlug}.md`);
-  await writeAtomic(rawPath, `---\ntitle: ${yamlString(title)}\nsourceHash: ${yamlString(sourceHash)}\ncreatedAt: ${yamlString(now)}\n---\n\n${input.content.trim()}\n`);
+  await writeAtomic(rawPath, `---\ntitle: ${yamlString(title)}\nsourceHash: ${yamlString(sourceHash)}\ncontentHash: ${yamlString(contentAddressForText(input.content))}\ncreatedAt: ${yamlString(now)}\n---\n\n${input.content.trim()}\n`);
 
   const writes: CompiledKnowledgeWrite[] = [];
   const entityLinks = entities.map((entity) => wikilink(entity.slug || entity.name));

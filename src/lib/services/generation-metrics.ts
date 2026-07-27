@@ -4,7 +4,7 @@ import { createHash } from "crypto";
 import { mkdir, readFile, rename, writeFile } from "fs/promises";
 import { homedir } from "@/lib/home-dir";
 import { dirname, join } from "path";
-import { rememberAgentMemory } from "@/lib/services/obsidian/agent-memory";
+import { evolveAgentMemory, rememberAgentMemory } from "@/lib/services/obsidian/agent-memory";
 import {
   compactGenerationMetricIdentity,
   generationMetricKey,
@@ -210,7 +210,10 @@ async function maybeWriteSharedBrainSummary(metrics: GenerationMetricsFile) {
   const previousWrittenAt = previous?.writtenAt ? Date.parse(previous.writtenAt) : 0;
   if (Number.isFinite(previousWrittenAt) && Date.now() - previousWrittenAt < SHARED_BRAIN_SUMMARY_MIN_INTERVAL_MS) return;
   try {
-    const result = await rememberAgentMemory({
+    // This summary is a rolling snapshot with a stable title: evolve the
+    // previous version instead of accumulating near-duplicate siblings.
+    const previousMemoryId = previous?.memoryId;
+    const shared = {
       type: "learning",
       title: "HivemindOS generation performance summary",
       content,
@@ -218,8 +221,24 @@ async function maybeWriteSharedBrainSummary(metrics: GenerationMetricsFile) {
       tags: ["hivemindos", "generation-metrics", "local-apps"],
       source: "HivemindOS generation metrics service",
       project: "hivemind-os",
-      proof: "auto",
-    });
+      proof: "auto" as const,
+    };
+    const result = previousMemoryId
+      ? await evolveAgentMemory({
+        ...shared,
+        memoryId: previousMemoryId,
+        evolutionType: "temporal",
+        evolutionReason: "Rolling generation metrics snapshot refresh.",
+      }).catch(async (error) => {
+        // The prior memory id may have been pruned/archived; fall back to a
+        // fresh write rather than losing the snapshot.
+        if (error instanceof Error && /could not find memory id/i.test(error.message)) {
+          return rememberAgentMemory({ ...shared, allowDuplicate: true });
+        }
+        throw error;
+      })
+      : await rememberAgentMemory({ ...shared, allowDuplicate: true });
+    if (!result.record) throw new Error("blockReason" in result && result.blockReason ? result.blockReason : "Shared Brain write was blocked.");
     await persistSharedBrainSummaryMarker(metrics, {
       hash,
       writtenAt: new Date().toISOString(),

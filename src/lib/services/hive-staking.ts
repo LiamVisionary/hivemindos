@@ -1,7 +1,9 @@
-import { createPublicClient, http } from "viem";
+import { createPublicClient, fallback, http, webSocket } from "viem";
 import type { Address } from "viem";
 import {
+  BASE_HIVE_READ_RPC_URLS,
   DEFAULT_BASE_HIVE_STAKING_CONTRACT_ADDRESS,
+  DEFAULT_BASE_HIVE_TOKEN_ADDRESS,
   HIVE_STAKING_TIERS,
   isHiveEvmAddress,
   type HiveStakingTier,
@@ -23,6 +25,13 @@ export const HIVE_STAKE_VAULT_ABI = [
     name: "stakedBalanceOf",
     stateMutability: "view",
     inputs: [{ name: "account", type: "address" }],
+    outputs: [{ name: "amount", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "totalStaked",
+    stateMutability: "view",
+    inputs: [],
     outputs: [{ name: "amount", type: "uint256" }],
   },
   {
@@ -53,6 +62,50 @@ export const HIVE_STAKE_VAULT_ABI = [
     inputs: [],
     outputs: [{ name: "paused", type: "bool" }],
   },
+  {
+    type: "function",
+    name: "stake",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "amount", type: "uint256" }],
+    outputs: [],
+  },
+] as const;
+
+export const HIVE_ERC20_ABI = [
+  {
+    type: "function",
+    name: "balanceOf",
+    stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ name: "balance", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "decimals",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "decimals", type: "uint8" }],
+  },
+  {
+    type: "function",
+    name: "allowance",
+    stateMutability: "view",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" },
+    ],
+    outputs: [{ name: "amount", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "approve",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
 ] as const;
 
 export type HiveStakeStatus = {
@@ -70,6 +123,9 @@ export type HiveStakeAccountStatus = Omit<HiveStakeStatus, "cooldown" | "paused"
 
 export type HiveStakingContractStatus = {
   contractAddress: Address;
+  tokenAddress: Address;
+  tokenDecimals: number;
+  totalStakedRaw: bigint;
   cooldown: bigint;
   paused: boolean;
 };
@@ -86,6 +142,14 @@ export function hiveStakingContractAddress(): Address | null {
     || DEFAULT_BASE_HIVE_STAKING_CONTRACT_ADDRESS;
   if (!candidate) return null;
   if (!isHiveEvmAddress(candidate)) throw new Error(`HIVE_STAKING_CONTRACT_ADDRESS is not a valid address: ${candidate}`);
+  return candidate;
+}
+
+export function hiveTokenAddress(): Address {
+  const candidate = process.env.HIVE_TOKEN_ADDRESS?.trim()
+    || process.env.NEXT_PUBLIC_HIVE_TOKEN_ADDRESS?.trim()
+    || DEFAULT_BASE_HIVE_TOKEN_ADDRESS;
+  if (!isHiveEvmAddress(candidate)) throw new Error(`HIVE_TOKEN_ADDRESS is not a valid address: ${candidate}`);
   return candidate;
 }
 
@@ -110,10 +174,17 @@ export function hiveTierForStakedRaw(stakedRaw: bigint, decimals = DEFAULT_HIVE_
   return match;
 }
 
-export function createHiveStakingPublicClient() {
+export function createHiveStakingPublicClient(rpcUrl?: string) {
+  const readTransports = uniqueBaseRpcUrls(rpcUrl || process.env.BASE_RPC_URL).map((url) => {
+    const options = { retryCount: 1, timeout: 10_000 };
+    return url.startsWith("wss://") ? webSocket(url, options) : http(url, options);
+  });
   return createPublicClient({
     chain: base,
-    transport: http(process.env.BASE_RPC_URL || "https://mainnet.base.org"),
+    transport: fallback(readTransports, {
+      rank: false,
+      retryCount: 1,
+    }),
   });
 }
 
@@ -125,7 +196,7 @@ export async function getHiveStakeStatus(params: {
 }): Promise<HiveStakeStatus> {
   if (!isHiveEvmAddress(params.account)) throw new Error(`Invalid staking account address: ${params.account}`);
 
-  const contractAddress = params.contractAddress ? normalizeContractAddress(params.contractAddress) : hiveStakingContractAddress();
+  const contractAddress = params.contractAddress ? normalizeHiveAddress(params.contractAddress, "HIVE staking contract") : hiveStakingContractAddress();
   if (!contractAddress) throw new Error("HIVE staking contract address is not configured.");
 
   const client = params.client || createHiveStakingPublicClient();
@@ -157,7 +228,7 @@ export async function getHiveStakeAccountStatus(params: {
 }): Promise<HiveStakeAccountStatus> {
   if (!isHiveEvmAddress(params.account)) throw new Error(`Invalid staking account address: ${params.account}`);
 
-  const contractAddress = params.contractAddress ? normalizeContractAddress(params.contractAddress) : hiveStakingContractAddress();
+  const contractAddress = params.contractAddress ? normalizeHiveAddress(params.contractAddress, "HIVE staking contract") : hiveStakingContractAddress();
   if (!contractAddress) throw new Error("HIVE staking contract address is not configured.");
 
   const client = params.client || createHiveStakingPublicClient();
@@ -179,25 +250,44 @@ export async function getHiveStakeAccountStatus(params: {
 
 export async function getHiveStakingContractStatus(params: {
   contractAddress?: string | null;
+  tokenAddress?: string | null;
   client?: HiveStakingReadClient;
 } = {}): Promise<HiveStakingContractStatus> {
-  const contractAddress = params.contractAddress ? normalizeContractAddress(params.contractAddress) : hiveStakingContractAddress();
+  const contractAddress = params.contractAddress ? normalizeHiveAddress(params.contractAddress, "HIVE staking contract") : hiveStakingContractAddress();
   if (!contractAddress) throw new Error("HIVE staking contract address is not configured.");
+  const tokenAddress = params.tokenAddress ? normalizeHiveAddress(params.tokenAddress, "HIVE token") : hiveTokenAddress();
 
   const client = params.client || createHiveStakingPublicClient();
-  const [cooldown, paused] = await Promise.all([
+  const [tokenDecimals, totalStakedRaw, cooldown, paused] = await Promise.all([
+    client.readContract({ address: tokenAddress, abi: HIVE_ERC20_ABI, functionName: "decimals" }).catch(() => DEFAULT_HIVE_DECIMALS),
+    client.readContract({ address: contractAddress, abi: HIVE_STAKE_VAULT_ABI, functionName: "totalStaked" }),
     client.readContract({ address: contractAddress, abi: HIVE_STAKE_VAULT_ABI, functionName: "cooldown" }),
     client.readContract({ address: contractAddress, abi: HIVE_STAKE_VAULT_ABI, functionName: "paused" }),
   ]);
 
   return {
     contractAddress,
+    tokenAddress,
+    tokenDecimals: Number(tokenDecimals),
+    totalStakedRaw,
     cooldown,
     paused,
   };
 }
 
-function normalizeContractAddress(value: string): Address {
-  if (!isHiveEvmAddress(value)) throw new Error(`Invalid HIVE staking contract address: ${value}`);
+function normalizeHiveAddress(value: string, label: string): Address {
+  if (!isHiveEvmAddress(value)) throw new Error(`Invalid ${label} address: ${value}`);
   return value;
+}
+
+function uniqueBaseRpcUrls(primaryUrl?: string) {
+  const urls = [...parseRpcUrls(primaryUrl), ...BASE_HIVE_READ_RPC_URLS];
+  return Array.from(new Set(urls));
+}
+
+function parseRpcUrls(value?: string) {
+  return (value || "")
+    .split(/[,\s]+/)
+    .map((url) => url.trim())
+    .filter(Boolean);
 }
