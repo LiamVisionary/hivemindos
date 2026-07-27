@@ -5,6 +5,14 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-07-27 13:00 EDT (-0400) - HivemindOS Mobile now has an App Review-ready cloud AI privacy notice
+  - Status: Pushed.
+  - User-facing release note: The canonical Privacy Policy now names the cloud AI recipients and processors currently used by HivemindOS Mobile, lists the request content that can be shared, explains the in-app permission shown before a cloud request, documents revocation, and confirms that processors acting for Rizzma Inc. must provide the same or equal protection.
+  - Areas changed: `legal/hivemindos-policies.json`.
+  - Verification: JSON parsing, canonical policy validation, website legal sync/check, website typecheck, and the production static build.
+  - Rollback: revert the privacy-policy commit; the preceding 2026-07-11 policy remains available in Git history.
+  - Intended commit message: `docs(privacy): disclose mobile cloud AI recipients and consent`
+
 - 2026-07-26 18:20 EDT (-0400) - Chat App workspace finds its app again: "No preview available" for a built app is fixed, and the size ratchet is honest again
   - Status: Pushed.
   - User-facing release note: Opening the App workspace on a thread whose agent had just built an app could show "No preview available" even though the project existed on disk. Root cause: the app artifact lives only on client-side messages — the runtime session store never persists it — and the transcript merges rewrite the capability continuation back to the person's typed words, so a reopened thread had no path back to its project. The workspace now recovers the app from two durable sources, in order: the project identity embedded in the capability continuation prompt (kept verbatim by the session store), and the runtime task record, whose working directory is the App Builder project directory. Task-record recovery understands home-relative ("~/") workspaces persisted by chat rows, and only ever adopts a `<workspace>/scratchpad/<slug>` project layout — never the workspace itself. The poll-takeover merge additionally re-attaches a locally streamed artifact to the turn's last assistant row when content pairing found no carrier, so live tabs stop losing it in the first place. Also: the two merge helpers moved from the `@ts-nocheck` DashboardApp into the type-checked `chat-transcript-helpers.ts` (which surfaced and fixed a missing `runId` on the `processEvents` message type), the size-ratchet watermarks were re-baselined honestly after the 63b835a98 publication landed growth without the gate re-running (controller +43 documented, kanban store +1 documented, DashboardApp ratcheted DOWN to its new smaller size), and the ratchet no longer walks other sessions' `.claude/worktrees` checkouts — that noise kept the shared tree permanently red and masked real violations.

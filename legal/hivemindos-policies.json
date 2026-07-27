@@ -179,14 +179,15 @@
     ]
   },
   "privacy": {
-    "version": "2026-07-11",
-    "effectiveDate": "July 11, 2026",
+    "version": "2026-07-27",
+    "effectiveDate": "July 27, 2026",
     "title": "Privacy Policy",
     "eyebrow": "Legal · private and local-first by design",
     "intro": "HivemindOS is designed so its core can run privately on hardware you control. This policy separates local processing, limited automatic technical connections, user-chosen connected services, and deliberately public features.",
     "highlights": [
       "A local-only workflow using local models can remain entirely on the machines and private network you control.",
       "Prompts, responses, files, vault content, credentials, and local telemetry are not sent to HivemindOS merely because the app is installed or opened.",
+      "HivemindOS Mobile identifies the cloud AI recipients and information to be shared, then asks for explicit permission before sending personal data to them.",
       "Remote models, integrations, sync, managed cloud, wallets, and public identity features communicate externally only when configured, enabled, or used by you.",
       "The website and signed app updater make limited technical requests needed for delivery, security, and update awareness."
     ],
@@ -234,6 +235,8 @@
         "paragraphs": [
           "Local model servers can process prompts and outputs on your own machine. When you select a remote model, hosted runtime, coding agent, image or video provider, search provider, or paid API, the information required for that request is sent to the selected provider. This may include prompts, conversation context, system instructions, files or excerpts you attach, tool inputs, generated outputs, model and usage metadata, and technical request information.",
           "If you choose an official HivemindOS-managed agent or model gateway, Rizzma Inc. and its infrastructure providers may process the request content, workspace or agent identifiers, authorization or entitlement data, usage, costs, tool results, error details, and receipts needed to provide, secure, bill, and audit that service. Provider-specific supplemental notices may apply.",
+          "In HivemindOS Mobile, current cloud AI recipients are OpenAI, Anthropic, OpenRouter and the model providers it routes to, and HivemindOS Cloud. HivemindOS Cloud is operated by Rizzma Inc. on Cloudflare; its free Swarm Scout service uses Modal Labs for inference, and its credit-backed requests use OpenRouter and the selected model provider, currently OpenAI or Anthropic. Realtime calls may send live microphone audio, transcripts, instructions, conversation context, and tool results to OpenAI, or through your paired hub and LiveKit to the configured voice provider. Image prompts and relevant context go to your paired hub and its configured image provider.",
+          "Before a cloud AI service receives personal data from HivemindOS Mobile, the app presents a permission screen that identifies the recipient or recipients, the categories of information being shared, and the purpose. Those categories can include typed or spoken prompts, selected photos and files, conversation history, agent instructions, workspace excerpts, and tool inputs or results. The request is not sent unless you choose Allow Sharing.",
           "If you use your own provider key, the provider receives data under its own terms and privacy policy. HivemindOS does not make a remote provider private merely because its controls appear inside a local app."
         ]
       },
@@ -286,6 +289,7 @@
         "title": "13. When information is public or disclosed",
         "paragraphs": [
           "Information may be disclosed to the public when you choose a public identity, community, publishing, deployment, repository, marketplace, wallet, or blockchain feature; to infrastructure and service providers that help deliver the selected feature; to connected providers and destinations you authorize; to advisers, auditors, transaction counterparties, authorities, or successors where reasonably necessary and lawful; and to a self-hosted operator if you use an installation controlled by that operator.",
+          "A service provider acting on behalf of Rizzma Inc. is required to provide the same or equal protection of personal data described in this policy. A provider that you connect independently, including through your own API key, also processes information under its own terms and privacy policy.",
           "We do not sell personal information and do not share personal information for cross-context behavioral advertising. Verified claims and local app content are not used to build advertising profiles."
         ]
       },
@@ -301,6 +305,7 @@
         "paragraphs": [
           "Local data remains under your control subject to the app's deletion tools, your filesystem and backup practices, configured retention limits, and copies held by runtimes or destinations you selected. Deleting a local record does not delete an independently stored provider copy, recipient copy, public post, blockchain record, synced backup, or third-party log.",
           "HivemindOS-managed services retain information only as long as reasonably necessary for service delivery, entitlement and payment records, claim integrity, fraud prevention, community and reward administration, dispute resolution, security, accounting, and legal compliance. Retention depends on the record and whether it remains active, disputed, security-relevant, or legally required.",
+          "In HivemindOS Mobile, choose Not Now to stop a proposed cloud request. You can revoke all future AI sharing in Settings > Privacy & AI Data; the app will ask again before another cloud request. Revocation does not erase information already retained independently by a provider. Requests to access or delete HivemindOS-managed information may be sent to privacy@hivemindos.app.",
           "Public X content and blockchain records may remain public indefinitely. Cloudflare, GitHub, model providers, integration providers, and other third parties retain information according to their own configurations and policies."
         ]
       },
