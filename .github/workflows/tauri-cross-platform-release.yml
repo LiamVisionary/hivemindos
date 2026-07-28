@@ -364,7 +364,7 @@ jobs:
           TAURI_NEXT_BUILD_HEAP_MB: "12288"
           TAURI_NEXT_BUILD_MEMORY_MB: "14000"
           TAURI_NEXT_BUILD_TIMEOUT_SECONDS: ${{ runner.os == 'macOS' && '3600' || '2700' }}
-        run: pnpm tauri:build:release
+        run: node scripts/run-tauri-release-build.mjs
 
       - name: Build Tauri app without macOS notarization
         if: runner.os == 'macOS' && github.event.inputs.notarize_macos != 'true'
@@ -383,7 +383,7 @@ jobs:
           TAURI_NEXT_BUILD_HEAP_MB: "12288"
           TAURI_NEXT_BUILD_MEMORY_MB: "14000"
           TAURI_NEXT_BUILD_TIMEOUT_SECONDS: "3600"
-        run: pnpm tauri:build:release
+        run: node scripts/run-tauri-release-build.mjs
 
       - name: Build HivemindOS Link
         if: runner.os != 'macOS' || github.event.inputs.notarize_macos == 'true'
