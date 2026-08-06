@@ -72,6 +72,14 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Recovery: Remove only the Hivemind Office service/route/actions/tests/docs/catalog entries and scoped open-in discovery mappings. Delete a newly saved copy to undo copy mode; restore the reported sibling backup to undo replacement. Removing an independently installed companion app is separate and leaves HivemindOS's bundled document reader and source documents intact.
   - Intended commit message: `feat(documents): add hardened Hivemind Office companion`
 
+- 2026-08-06 16:42 EDT (-0400) - Refine Shared Brain nodes, bloom, and hover glow
+  - Status: Pushed to `main` in `a9bc40d2`.
+  - User-facing release note: The Shared Brain now uses smaller knowledge nodes, far fewer and fainter ambient motes, restrained node/core/pulse bloom, and a larger crisp cyan hover response attached to the actual node instead of a translucent circle or starburst.
+  - Areas changed: the canonical dashboard Brain renderer and GPU shaders in `src/features/dashboard/views/BrainSynapseCanvas.tsx` and `src/features/dashboard/views/brain-synapse-gpu.ts`.
+  - Verification: The isolated release worktree passes TypeScript, the focused pointer-proximity test, the website/desktop exact-renderer contract, and `git diff --check`.
+  - Rollback: Revert this release commit; no vault data or persistence schema changes.
+  - Intended commit message: `fix(brain): refine node glow and visual density`
+
 - 2026-08-05 21:32 EDT (-0400) - Make the penny-stock paper loop prospective, contextual, and idempotent
   - Status: Uncommitted and research-only.
   - User-facing release note: The penny-stock standing-limit lab now distinguishes completed issuer events from planned, conditional, boilerplate, and unclear filing language; quarantines unresolved issuer risk; registers future-only 10%/20%/30% entry-distance panels; blocks selector learning on incomplete labels; reserves a frozen holdout; and runs the entire after-close review through one duplicate-safe command. It remains unable to contact a broker, place an order, connect a wallet, or move money.
@@ -1415,6 +1423,14 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Recovery: revert only the files listed above and restart the Taildrop, Fleet watchdog, and telemetry LaunchAgents. The stopped old downloaded app can be reopened, but doing so restores its popup/freeze bug until a corrected build replaces it. No Tailscale VPN configuration, account, or system extension was removed by this fix.
   - Intended commit message: `fix(desktop): keep Tailscale failures from blocking startup`
 
+- 2026-07-27 13:00 EDT (-0400) - HivemindOS Mobile now has an App Review-ready cloud AI privacy notice
+  - Status: Pushed.
+  - User-facing release note: The canonical Privacy Policy now names the cloud AI recipients and processors currently used by HivemindOS Mobile, lists the request content that can be shared, explains the in-app permission shown before a cloud request, documents revocation, and confirms that processors acting for Rizzma Inc. must provide the same or equal protection.
+  - Areas changed: `legal/hivemindos-policies.json`.
+  - Verification: JSON parsing, canonical policy validation, website legal sync/check, website typecheck, and the production static build.
+  - Rollback: revert the privacy-policy commit; the preceding 2026-07-11 policy remains available in Git history.
+  - Intended commit message: `docs(privacy): disclose mobile cloud AI recipients and consent`
+
 - 2026-07-27 10:20 EDT (-0400) - Chat can start App Builder projects from reviewed templates
   - Status: Uncommitted.
   - User-facing release note: The chat composer’s plus menu now includes Templates. A grouped card browser opens with Websites as the first ready collection; its first starter is the audited MIT-licensed Scroll World experience. Choosing it shows a live preparation state, creates a thread-specific static App Builder project through the existing confirmation and linked-machine recovery path, attaches the real app artifact to an agent message saying “your web template is ready! what would you like me to change?”, and bounces the App Preview eye for up to 10 seconds or until it is pressed.
@@ -1512,7 +1528,6 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Verification: typecheck baseline 0 errors → 0 after; ESLint on all touched files (sole error is the pre-existing `liveRef.current` render-write at ConnectionsPanel:319, identical at HEAD); all 17 suites matching the touched filenames run — tauri-oauth-external-browser green after the forward-fix, notebooklm/browser-extension-install/slack-session-capture red on pre-existing concurrent-work failures in files this change never touched. Live headless Playwright pass against a throwaway-auth dev server (5059): segmented button renders in the GitHub connect modal, caret menu lists Default browser + Chrome/Safari/Brave/Opera from real detection, choosing Chrome fires POST `/api/system/browsers/open` (stubbed) with the absolute https authorization URL + browserId, the main segment opens the absolute URL via the default-browser path, the page never navigates away, and the real GitHub POST route returned a live authorization URL with `source:"aeon"` in the signed state.
   - Rollback: revert the six source files plus the suite; no state, env, or callback route changed.
   - Intended commit message: `feat(integrations): every OAuth sign-in opens externally via ExternalSignInButton; GitHub/LinkedIn start routes gain POST variants`
-
 - 2026-07-26 18:20 EDT (-0400) - Chat App workspace finds its app again: "No preview available" for a built app is fixed, and the size ratchet is honest again
   - Status: Pushed.
   - User-facing release note: Opening the App workspace on a thread whose agent had just built an app could show "No preview available" even though the project existed on disk. Root cause: the app artifact lives only on client-side messages — the runtime session store never persists it — and the transcript merges rewrite the capability continuation back to the person's typed words, so a reopened thread had no path back to its project. The workspace now recovers the app from two durable sources, in order: the project identity embedded in the capability continuation prompt (kept verbatim by the session store), and the runtime task record, whose working directory is the App Builder project directory. Task-record recovery understands home-relative ("~/") workspaces persisted by chat rows, and only ever adopts a `<workspace>/scratchpad/<slug>` project layout — never the workspace itself. The poll-takeover merge additionally re-attaches a locally streamed artifact to the turn's last assistant row when content pairing found no carrier, so live tabs stop losing it in the first place. Also: the two merge helpers moved from the `@ts-nocheck` DashboardApp into the type-checked `chat-transcript-helpers.ts` (which surfaced and fixed a missing `runId` on the `processEvents` message type), the size-ratchet watermarks were re-baselined honestly after the 63b835a98 publication landed growth without the gate re-running (controller +43 documented, kanban store +1 documented, DashboardApp ratcheted DOWN to its new smaller size), and the ratchet no longer walks other sessions' `.claude/worktrees` checkouts — that noise kept the shared tree permanently red and masked real violations.
