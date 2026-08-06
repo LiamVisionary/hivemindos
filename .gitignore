@@ -31,6 +31,18 @@ promo-videos/
 # One-off isolated Next build output used for local trading-route diagnostics.
 /tmp/hivemind-trading-debug-next/
 
+# Ephemeral browser-control diagnostics and Marketplace screenshots can contain
+# signed-in session endpoints, host paths, or private inbox content. Preserve
+# them locally without publishing them from this shared checkout.
+/scripts/cdp_http_test.py
+/scripts/restart_chrome_cdp.py
+/tmp/cdp_marketplace.mjs
+/tmp/inbox_state.png
+/tmp/marketplace_inbox.png
+/tmp/marketplace_inbox_analysis.png
+/tmp/marketplace_inbox_full.png
+/tmp/marketplace_interact.png
+
 # Chat App Builder projects land under <working-directory>/scratchpad/ (see
 # chatAppProjectDirectory in src/lib/services/chat/chat-app-artifact.ts). On
 # fleet machines the chat working directory is often the collector checkout

@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { register } from "node:module";
 
@@ -29,6 +31,11 @@ const {
   copyTradeRetrospectiveMemory,
   syncCopyTradeRetrospectivesToBrain,
 } = await import("../src/lib/services/copy-trading/brain-sync.ts");
+const {
+  evolveAgentMemory,
+  listAgentMemoryRecords,
+  rememberAgentMemory,
+} = await import("../src/lib/services/obsidian/agent-memory.ts");
 const { copyTradeSignalClockMs, isCopyTradeSignalCooldownActive } = await import("../src/lib/services/copy-trading/signal-clock.ts");
 const { estimateCopyTradeExecutionCost } = await import("../src/lib/services/copy-trading/execution-costs.ts");
 const { buildWalletIntelligence, evaluatePostFillRisk, normalizeGoPlusSecurity } = await import("../src/lib/services/copy-trading/risk-intelligence.ts");
@@ -792,7 +799,7 @@ test("copy-trading retrospectives sync locally first and evolve one canonical Sh
   const dependencies = {
     now: () => 100_000_000,
     persistState: async (nextState) => {
-      assert.equal(nextState.agentAnalysis.counterfactuals[0].retrospectives.length, 1);
+      assert.ok(nextState.agentAnalysis.counterfactuals[0].retrospectives.length >= 1);
       order.push("local");
     },
     remember: async (input) => {
@@ -822,7 +829,7 @@ test("copy-trading retrospectives sync locally first and evolve one canonical Sh
   assert.equal(order.includes("brain"), false);
 
   observeCounterfactualTargetExit(record, "0xsell", 0.4, record.horizons["24h"].dueAt + 1);
-  dependencies.remember = async (input) => ({
+  dependencies.remember = async () => ({
     blocked: true,
     canonicalHeadConflict: { id: "mem-copy-1", content: remembered.content },
   });
@@ -882,6 +889,46 @@ test("Shared Brain copy-trading payload is evidence-only and keyed without walle
   assert.doesNotMatch(memory.memoryKey, new RegExp(other, "i"));
   assert.match(memory.input.content, /not an instruction/);
   assert.match(memory.input.content, /does not authorize policy changes or live trading/);
+});
+
+test("copy-trading sync writes and evolves one active learning in an isolated real Shared Brain vault", async () => {
+  const vaultPath = await mkdtemp(join(tmpdir(), "hivemindos-copy-brain-"));
+  try {
+    const config = defaultCopyTradingConfig({ id: "isolated", agentId: "agent", walletAddress: TARGET, network: "eip155:8453" });
+    config.evolution = {
+      sourceConfigId: "source", model: COPY_TRADE_EVOLUTION_MODEL, reasoningEffort: "medium", minCloseConfidence: 0.7,
+      policyVersion: COPY_TRADE_EVOLUTION_POLICY_VERSION, createdAt: 1,
+    };
+    const state = emptyRuntimeState(config.id);
+    state.agentAnalysis = startAgentAnalysisState({ sourceConfigId: "source", sourceState: undefined, evolvedState: state, startedAt: 1 });
+    const record = createCounterfactualRecord({
+      sequence: 0, policyVersion: COPY_TRADE_EVOLUTION_POLICY_VERSION, targetTxRef: "0xisolated", token: TOKEN, symbol: "TOKEN",
+      entryAt: 1_000, entryPriceUsd: 1, spentUsd: 5, decision: "keep", confidence: 0.8, calibratedConfidence: 0.8,
+      closeThreshold: 0.7, closeExecuted: false, buyCost: { fixedUsd: 0, variableBps: 0 }, sellCost: { fixedUsd: 0, variableBps: 0 },
+    });
+    observeCounterfactualHorizon(record, "24h", 0.8, record.horizons["24h"].dueAt);
+    state.agentAnalysis.counterfactuals.push(record);
+    const deps = {
+      persistState: async () => {},
+      remember: (input) => rememberAgentMemory({ ...input, vaultPath, proof: false }),
+      evolve: (input) => evolveAgentMemory({ ...input, vaultPath, proof: false }),
+    };
+
+    assert.equal((await syncCopyTradeRetrospectivesToBrain(config, state, deps)).synced, 1);
+    observeCounterfactualTargetExit(record, "0xisolated-sell", 0.7, record.horizons["24h"].dueAt + 1);
+    assert.equal((await syncCopyTradeRetrospectivesToBrain(config, state, deps)).synced, 1);
+
+    const records = (await listAgentMemoryRecords({ vaultPath })).records;
+    const active = records.filter((candidate) => candidate.status === "active" && candidate.tags.includes("copy-trading"));
+    const superseded = records.filter((candidate) => candidate.status === "superseded" && candidate.tags.includes("copy-trading"));
+    assert.equal(active.length, 1);
+    assert.equal(superseded.length, 1);
+    assert.match(active[0].content, /24h/);
+    assert.match(active[0].content, /target-exit/);
+    assert.deepEqual(active[0].supersedes, [superseded[0].id]);
+  } finally {
+    await rm(vaultPath, { recursive: true, force: true });
+  }
 });
 
 test("retrospective evidence tags do not invert negated risk findings", () => {

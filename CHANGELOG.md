@@ -5,7 +5,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
-- 2026-08-06 20:00 EDT (-0400) - Sync copy-trading retrospectives to Shared Brain
+- 2026-08-06 19:56 EDT (-0400) - Sync copy-trading retrospectives to Shared Brain
   - Status: Uncommitted and not included in a desktop release.
   - User-facing release note: Agent-analyzed copy trading now keeps its fast local paper-learning state and also synchronizes each matured trade retrospective into Shared Brain. The first 24-hour or target-exit result creates one canonical learning; a later result evolves that same memory with the new evidence instead of creating a duplicate.
   - Safety and failure boundary: Local copy-trading state is persisted before any Brain write and remains the execution source of truth. Shared Brain sync runs outside the signal-polling path, retries with bounded backoff, and cannot block, roll back, promote, or authorize live trading. Acting and copied wallet addresses are excluded from the memory payload and canonical key; model-derived summaries are explicitly stored as evidence, not instructions.
