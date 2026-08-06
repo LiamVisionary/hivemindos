@@ -107,7 +107,8 @@ const posted = await facebookMarketplaceAdapter.createListing(
   approved.decision.id,
   { env: {}, ensureBrowserImpl: fakeEnsureBrowser, dispatchAgentTaskImpl: async () => okReport, readBrowserTabImpl: realPage },
 );
-assert.deepEqual(posted, { externalId: "777", url: "https://www.facebook.com/marketplace/item/777" });
+// The independent page read succeeded on this machine, so the claim comes back "verified".
+assert.deepEqual(posted, { externalId: "777", url: "https://www.facebook.com/marketplace/item/777", verification: "verified" });
 
 // Fabricated claim: the page behind the reported URL does not exist.
 await assert.rejects(
@@ -159,12 +160,15 @@ assert.equal(
   false,
   "no pending card parked for a human submit",
 );
-// The detached dispatch completes with the fake report → active + read-back external id.
-for (let i = 0; i < 100 && (await getMarketplaceListing(humanDraft.id)).state !== "active"; i += 1) {
+// The detached dispatch completes with the fake report, but the account is
+// homed on ANOTHER machine — no independent page read is possible from this
+// process, so the claim lands posted-unverified (with the read-back external
+// id recorded); the owning machine's monitor promotes or refutes it later.
+for (let i = 0; i < 100 && (await getMarketplaceListing(humanDraft.id)).state === "posting"; i += 1) {
   await new Promise((resolve) => setTimeout(resolve, 20));
 }
 const humanPosted = await getMarketplaceListing(humanDraft.id);
-assert.equal(humanPosted.state, "active", "detached dispatch completed the post");
+assert.equal(humanPosted.state, "posted-unverified", "off-machine post claim is recorded, never live on trust");
 assert.equal(humanPosted.external?.externalId, "777");
 // The agent-submitted path (default) still parks a pending card — the gate
 // stays for anything the human did not author.

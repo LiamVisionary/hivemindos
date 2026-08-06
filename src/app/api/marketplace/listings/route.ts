@@ -129,8 +129,11 @@ export async function POST(request: NextRequest) {
         if (!id) return errorJson("id is required");
         const existing = await getMarketplaceListing(id);
         if (!existing) return errorJson(`Unknown listing: ${id}`, 404);
-        if (existing.state === "active" || existing.state === "posting") {
-          return errorJson("This listing is live — end it on the marketplace instead of deleting the record.");
+        // posted-unverified counts as live here: the post claim may already be
+        // real on the marketplace, and deleting the record would orphan it
+        // from the monitor's verification sweep.
+        if (existing.state === "active" || existing.state === "posting" || existing.state === "posted-unverified") {
+          return errorJson("This listing is live or mid-post — end it on the marketplace instead of deleting the record.");
         }
         await deleteMarketplaceListing(id);
         return okJson();

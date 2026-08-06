@@ -5,13 +5,16 @@
 // every capability is declared, listing creation is always gated on an
 // approved decision, adapters implement the full contract, and DTOs are
 // copies. Also covers the facebook probe parsing internals (URL redirect
-// logged-out detection) with no real browser.
+// logged-out detection) with no real browser, plus listing-state consumer
+// completeness: every listing state has a catalog filter bucket besides
+// "all", and the delete guard blocks every may-be-live state.
 import { register } from "node:module";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
-const { MARKETPLACE_PROVIDERS, MARKETPLACE_CAPABILITIES } = await import("../src/lib/services/marketplace/marketplace-types.ts");
+const { MARKETPLACE_PROVIDERS, MARKETPLACE_CAPABILITIES, MARKETPLACE_LISTING_STATES } = await import("../src/lib/services/marketplace/marketplace-types.ts");
 const { MARKETPLACE_PROVIDER_MATRIX, MARKETPLACE_LISTING_APPROVAL_GATE, marketplaceProviderCapabilityDtos, isMarketplaceProvider } =
   await import("../src/lib/services/marketplace/marketplace-provider-matrix.ts");
 const { MARKETPLACE_ADAPTERS } = await import("../src/lib/services/marketplace/adapters/index.ts");
@@ -146,7 +149,9 @@ const posted = await facebookMarketplaceAdapter.createListing(account, listing, 
     return okReport;
   },
 });
-assert.deepEqual(posted, { externalId: "123456", url: "https://www.facebook.com/marketplace/item/123456" });
+// No independent tab reader reaches this off-machine profile, so the claim is
+// recorded as "deferred" — the pipeline lands it posted-unverified, never live on trust.
+assert.deepEqual(posted, { externalId: "123456", url: "https://www.facebook.com/marketplace/item/123456", verification: "deferred" });
 await assert.rejects(
   () =>
     facebookMarketplaceAdapter.createListing(account, listing, "mdec_ok", {
@@ -155,5 +160,34 @@ await assert.rejects(
   /signed out/i,
   "logged-out session surfaces a reconnect error",
 );
+
+// ---------------------------------------------------------------------------
+// Listing-state consumer completeness (source-text contracts — these files
+// can't be imported hermetically: JSX / next/server).
+// ---------------------------------------------------------------------------
+
+// Every listing state must be surfaced by some catalog filter bucket besides
+// "all" — a state missing from matchesFilter silently hides those listings
+// (posted-unverified had this exact gap).
+const catalogGrid = await readFile(new URL("../src/features/dashboard/views/marketplace/CatalogGrid.tsx", import.meta.url), "utf8");
+const matchesFilterStart = catalogGrid.indexOf("function matchesFilter");
+assert.ok(matchesFilterStart >= 0, "CatalogGrid declares matchesFilter");
+const matchesFilterEnd = catalogGrid.indexOf("\nfunction ", matchesFilterStart + 1);
+const matchesFilterBody = catalogGrid.slice(matchesFilterStart, matchesFilterEnd === -1 ? undefined : matchesFilterEnd);
+for (const state of MARKETPLACE_LISTING_STATES) {
+  assert.ok(matchesFilterBody.includes(`"${state}"`), `catalog filter buckets surface listing state "${state}" outside "all"`);
+}
+
+// The delete-draft guard must block every state in which the listing may
+// already be live on the marketplace — deleting a posted-unverified record
+// would orphan a possibly-live post from the monitor's verification sweep.
+const listingsRoute = await readFile(new URL("../src/app/api/marketplace/listings/route.ts", import.meta.url), "utf8");
+const deleteDraftStart = listingsRoute.indexOf('case "delete-draft"');
+assert.ok(deleteDraftStart >= 0, "listings route handles delete-draft");
+const deleteDraftEnd = listingsRoute.indexOf("case ", deleteDraftStart + 1);
+const deleteDraftBlock = listingsRoute.slice(deleteDraftStart, deleteDraftEnd === -1 ? undefined : deleteDraftEnd);
+for (const state of ["active", "posting", "posted-unverified"]) {
+  assert.ok(deleteDraftBlock.includes(`"${state}"`), `delete-draft guard blocks may-be-live state "${state}"`);
+}
 
 console.log("marketplace matrix tests passed");

@@ -15,9 +15,9 @@ import {
   releaseMarketplaceDriverLease,
   type MarketplaceDriverLeaseState,
 } from "@/lib/services/marketplace/marketplace-driver-lease";
-import { applyVerifiedCatalogSweep, verifyUnverifiedPostedListings } from "@/lib/services/marketplace/marketplace-listing-pipeline";
+import { applyVerifiedCatalogSweep, syncMarketplaceCatalog, verifyUnverifiedPostedListings } from "@/lib/services/marketplace/marketplace-listing-pipeline";
 import { recoverLateMarketplaceResearch } from "@/lib/services/marketplace/marketplace-research";
-import { readMarketplaceListings } from "@/lib/services/marketplace/marketplace-listings-store";
+import { readMarketplaceListings, upsertSyncedListings } from "@/lib/services/marketplace/marketplace-listings-store";
 import { resolveIndependentTabReader, verifyClaimedReplies } from "@/lib/services/marketplace/marketplace-verification-matrix";
 import { listMarketplaceDirectives, readMarketplaceAccounts, updateMarketplaceAccount } from "@/lib/services/marketplace/marketplace-store";
 import { mutateMarketplaceRuntime, patchAccountRuntime, readMarketplaceRuntime } from "@/lib/services/marketplace/marketplace-runtime";
