@@ -648,6 +648,14 @@ assert.match(chatTreeControllerSource, /compactCapabilityContinuation\(task\.tit
 assert.match(chatTreeControllerSource, /compactCapabilityContinuation\(task\.lastMessage/, "runtime-task sidebar rows compact capability continuations in the subtitle");
 const snapshotRouteSource = await readFile(new URL("../src/app/api/fleet/snapshot/route.ts", import.meta.url), "utf8");
 assert.match(snapshotRouteSource, /compactCapabilityContinuation\(session\.title \|\| latestUser\?\.content/, "the fleet snapshot compacts hermes-state titles BEFORE the 160-char truncation so the original task line survives");
+// The Fleet machine panel is a display path too, and its hermes-state work
+// items can arrive from a remote collector that predates the snapshot-side
+// compaction — so the client must compact before cleanActivityTitle, which
+// would otherwise mask the continuation as "Background activity".
+const derivedStateSource = await readFile(new URL("../src/features/dashboard/hooks/use-dashboard-derived-state.tsx", import.meta.url), "utf8");
+assert.match(derivedStateSource, /compactCapabilityContinuation\(\s*work\.title \|\| work\.lastMessage/, "the Fleet machine panel's recent chats compact capability continuations from not-yet-updated collectors");
+assert.match(derivedStateSource, /compactCapabilityContinuation\(primaryWork\.title\)/, "the fleet agent card's current-task line compacts capability continuations");
+assert.match(derivedStateSource, /compactCapabilityContinuation\(task\.title\)/, "fleet task rows compact capability continuations");
 assert.match(capabilityRouteSource, /workingDirectory:\s*typeof body\.workingDirectory/, "the capability API forwards bounded repository context to the ranker");
 assert.match(capabilityRouteSource, /required:\s*capabilityPlanRequiresReview\(plan\)/, "the API distinguishes an automatic single choice from a plan that needs review");
 assert.match(appBuilderActionSource, /title:\s*"Create app workspace"/, "the stable apps.build action uses an unambiguous user-facing name");
