@@ -44,7 +44,9 @@ export function normalizeMarketplaceDecisionRecord(raw: unknown): MarketplaceDec
   const accountId = typeof record.accountId === "string" ? record.accountId.trim() : "";
   if (!id || !accountId || !isDecisionKind(record.kind)) return null;
   const status: MarketplaceDecisionStatus =
-    record.status === "approved" || record.status === "denied" || record.status === "expired" ? record.status : "pending";
+    record.status === "approved" || record.status === "denied" || record.status === "ignored" || record.status === "expired"
+      ? record.status
+      : "pending";
   const preview =
     record.preview && typeof record.preview === "object" && typeof (record.preview as Record<string, unknown>).title === "string"
       ? (record.preview as MarketplaceDecision["preview"])
@@ -119,6 +121,34 @@ export type DecideMarketplaceDecisionResult = {
 };
 
 /**
+ * Remove a pending card without accepting or rejecting its proposed action.
+ * The ignored record stays durable as a suppression tombstone so the monitor
+ * can keep the same conversation from creating another card later.
+ */
+export async function ignoreMarketplaceDecision(id: string): Promise<MarketplaceDecision | null> {
+  let updated: MarketplaceDecision | null = null;
+  await mutateRecordsFile(DECISIONS_FILE, normalizeMarketplaceDecisionRecord, (decisions) =>
+    decisions.map((record) => {
+      if (record.id !== id) return record;
+      if (record.status === "ignored") {
+        updated = record;
+        return record;
+      }
+      if (record.status !== "pending") {
+        throw new Error(`Decision ${id} is already ${record.status}.`);
+      }
+      updated = {
+        ...record,
+        status: "ignored",
+        decidedAt: new Date().toISOString(),
+      };
+      return updated;
+    }),
+  );
+  return updated;
+}
+
+/**
  * Record the human's call. The free-text note rides back to the agent via
  * marketplaceDecisionAnswer; with makeDirective it ALSO becomes a standing
  * directive injected into every future dispatch ("ignore low offers like
@@ -131,11 +161,14 @@ export async function decideMarketplaceDecision(
   makeDirective?: boolean,
 ): Promise<DecideMarketplaceDecisionResult | null> {
   const trimmedNote = note?.trim() ?? "";
+  const existing = await getMarketplaceDecision(id);
+  if (!existing) return null;
+  if (existing.status !== "pending") throw new Error(`Decision ${id} is already ${existing.status}.`);
+  if (existing.kind === "buyer-escalation" && decision === "approved" && !trimmedNote) {
+    throw new Error("A buyer decision needs the exact answer to send before it can be approved.");
+  }
   let directiveId: string | undefined;
   if (makeDirective && trimmedNote) {
-    const existing = await getMarketplaceDecision(id);
-    if (!existing) return null;
-    if (existing.status !== "pending") throw new Error(`Decision ${id} is already ${existing.status}.`);
     const directive = await addMarketplaceDirective({
       text: trimmedNote,
       scope: "account",
@@ -150,8 +183,7 @@ export async function decideMarketplaceDecision(
     decisions.map((record) => {
       if (record.id !== id) return record;
       if (record.status !== "pending") {
-        updated = record;
-        return record;
+        throw new Error(`Decision ${id} is already ${record.status}.`);
       }
       updated = {
         ...record,
@@ -176,7 +208,11 @@ export function marketplaceDecisionAnswer(decision: MarketplaceDecision, verdict
   const lines = [
     `Human decision on "${decision.title}": ${verdict === "approved" ? "APPROVED" : "REJECTED"}.`,
   ];
-  if (note?.trim()) lines.push(`Human note: ${note.trim()}`);
+  if (note?.trim()) {
+    lines.push(decision.kind === "buyer-escalation" && verdict === "approved"
+      ? `Send this exact answer to the buyer: ${note.trim()}`
+      : `Human note: ${note.trim()}`);
+  }
   if (verdict === "approved" && decision.kind === "new-listing") {
     lines.push("Proceed with exactly the approved title, price, description, and photos — no changes.");
   }

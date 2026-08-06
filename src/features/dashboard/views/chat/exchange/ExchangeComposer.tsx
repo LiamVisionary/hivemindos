@@ -25,7 +25,9 @@ import {
   normalizeChatReasoningEffort,
 } from "@/lib/types/chat-reasoning-effort";
 import type { ChatReasoningEffort } from "@/lib/types/chat-reasoning-effort";
+import type { WebTemplateId } from "@/lib/services/app-builder/web-template-catalog";
 
+import { ChatTemplateModal } from "./ChatTemplateModal";
 import {
   ClockIco,
   ICON_PATHS,
@@ -119,6 +121,7 @@ export type ExchangeComposerProps = {
   onRemoveDirectory?: (id: string) => void;
   recentDirectories: RecentDirectory[];
   onAttachRecentDirectory?: (directory: RecentDirectory) => void;
+  onAttachWebTemplate?: (templateId: WebTemplateId) => Promise<void>;
 
   machines: Array<{ key: string; name: string; detail?: string }>;
   selectedMachineName: string;
@@ -145,13 +148,14 @@ export function ExchangeComposer(props: ExchangeComposerProps) {
     reasoningEffort, onReasoningEffortChange,
     modelProviders, currentProvider, currentModel, onSelectModel, onOpenModelMenu, modelPickerEnabled,
     attachments, onRemoveAttachment, fileInputRef, imageInputRef, onFileChange, onImageChange, onDropFileReferences,
-    onAttachDirectory, directories, onRemoveDirectory, recentDirectories, onAttachRecentDirectory,
+    onAttachDirectory, directories, onRemoveDirectory, recentDirectories, onAttachRecentDirectory, onAttachWebTemplate,
     machines, selectedMachineName, workingDirectoryLabel, onChangeWorkingDirectory, onClearWorkingDirectory,
     recording, onToggleRecording, onSwarmCommand,
   } = props;
 
   const [menu, setMenu] = useState<"" | "perm" | "model" | "ctx" | "attach">("");
   const [attachRecentsOpen, setAttachRecentsOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
   const [modelSearch, setModelSearch] = useState("");
   const [modelExpanded, setModelExpanded] = useState<Record<string, boolean>>({});
   const [slashIndex, setSlashIndex] = useState(0);
@@ -381,6 +385,9 @@ export function ExchangeComposer(props: ExchangeComposerProps) {
                   <MenuItem icon={ICON_PATHS.fileUp} label="Files" onClick={() => { setMenu(""); fileInputRef.current?.click(); }} />
                   {onAttachDirectory ? (
                     <MenuItem icon={ICON_PATHS.folder} label="Directories" onClick={() => { setMenu(""); onAttachDirectory(); }} />
+                  ) : null}
+                  {onAttachWebTemplate ? (
+                    <MenuItem icon={ICON_PATHS.template} label="Templates" onClick={() => { setMenu(""); setTemplatesOpen(true); }} />
                   ) : null}
                   {recentDirectories.length > 0 && onAttachRecentDirectory ? (
                     <>
@@ -710,6 +717,12 @@ export function ExchangeComposer(props: ExchangeComposerProps) {
           </div>
         </div>
       </div>
+      {templatesOpen && onAttachWebTemplate ? (
+        <ChatTemplateModal
+          onClose={() => setTemplatesOpen(false)}
+          onAttachWebTemplate={onAttachWebTemplate}
+        />
+      ) : null}
     </div>
   );
 }

@@ -1,0 +1,49 @@
+{
+  "created_at": "2026-07-27T03:41:59.940838+00:00",
+  "request": "Implement the full HivemindOS prediction-market trading route and Mini apps from the audited X thread",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "pmxt-dev/pmxt",
+      "source_path": "core/src/types.ts",
+      "target_path": "src/lib/services/trading/prediction-markets.ts",
+      "reuse_type": "adapted_code",
+      "note": "Normalized Event to Market to Outcome contract and order-book levels"
+    },
+    {
+      "source_repo": "txbabaxyz/collectmarkets2",
+      "source_path": "collector.py",
+      "target_path": "src/lib/services/trading/prediction-markets.ts",
+      "reuse_type": "translated_code",
+      "note": "Public activity pagination shape, transaction deduplication, and per-market sample metrics"
+    },
+    {
+      "source_repo": "Jon-Becker/prediction-market-analysis",
+      "source_path": "src/analysis/polymarket/polymarket_calibration_by_bucket.py",
+      "target_path": "src/lib/services/trading/prediction-markets.ts",
+      "reuse_type": "translated_code",
+      "note": "Brier, log-loss, ECE, and probability bucket calculations"
+    },
+    {
+      "source_repo": "nicolastinkl/hermes_weatherbot",
+      "source_path": "bot_v3.py",
+      "target_path": "src/lib/services/trading/prediction-markets.ts",
+      "reuse_type": "translated_code",
+      "note": "Gaussian weather bucket probability with explicit uncertainty"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "src/components/trade/PlumeOptionsPanel.tsx",
+      "target_path": "src/components/trade/PredictionMarketsPanel.tsx",
+      "reuse_type": "style_adapted",
+      "note": "Established Trade desk loading, error, review, and responsive panel conventions"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "../hivemindos-website/src/components/mini-app-brain/HiveSuperbrainSave.tsx",
+      "target_path": "../hivemindos-website/src/app/prediction/PredictionLabClient.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Canonical Cloud-Superbrain-first output save with optional desktop fanout"
+    }
+  ]
+}

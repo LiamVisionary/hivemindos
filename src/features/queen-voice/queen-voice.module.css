@@ -340,7 +340,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .workingChipDotActive {
+  .workingChipDotActive,
+  .voiceNoticeLoading::before {
     animation: none;
   }
 }
@@ -349,9 +350,33 @@
 .voiceNotice {
   margin: 0;
   max-width: 300px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 11.5px;
   line-height: 1.4;
   color: rgba(255, 186, 113, 0.92);
+}
+
+.voiceNoticeLoading::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid rgba(255, 186, 113, 0.28);
+  border-top-color: rgba(255, 186, 113, 0.96);
+  border-radius: 50%;
+  animation: queenVoiceLoadingSpin 720ms linear infinite;
+}
+
+.voiceNoticeReady {
+  color: rgba(94, 234, 212, 0.94);
+}
+
+@keyframes queenVoiceLoadingSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes queenVoiceThinkingBreath {
@@ -783,6 +808,19 @@
 :global(:root[data-theme="hive-light"]) .controlButtonEnd,
 :global(:root[data-theme="hive-light"]) .controlButtonActive {
   color: #8e3328;
+}
+
+:global(:root[data-theme="hive-light"]) .voiceNoticeLoading {
+  color: #8c5e0a;
+}
+
+:global(:root[data-theme="hive-light"]) .voiceNoticeLoading::before {
+  border-color: rgba(140, 94, 10, 0.24);
+  border-top-color: #8c5e0a;
+}
+
+:global(:root[data-theme="hive-light"]) .voiceNoticeReady {
+  color: #0d5a4e;
 }
 
 :global(:root[data-theme="hive-light"]) .controlButtonWakeActive {

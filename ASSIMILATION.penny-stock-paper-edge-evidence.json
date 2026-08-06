@@ -1,0 +1,63 @@
+{
+  "created_at": "2026-08-06T01:35:00.000Z",
+  "request": "Improve the HivemindOS penny-stock paper research loop thoroughly for more credible consistent-profit detection while reducing false vetoes, no-fill stagnation, overfitting, and loss risk; remain research-only.",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/copy-trading/calibration.ts",
+      "target_path": "src/lib/services/penny-stock-paper/outcomes.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the Beta(2,2) small-sample reliability prior into prospective entry-distance fill-probability calibration so sparse fills cannot appear certain."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/copy-trading/counterfactual.ts",
+      "target_path": "src/lib/services/penny-stock-paper/outcomes.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted immutable horizon accounting and missed-label awareness into explicit source and maturity-eligible coverage gates before selector learning."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/copy-trading/retrospective.ts",
+      "target_path": "src/lib/services/penny-stock-paper/outcomes.ts",
+      "reuse_type": "adapted_code",
+      "note": "Extended deterministic paired retrospective aggregation with future-only 10/20/30 percent entry-distance panels, no-fill-inclusive returns, and a 25-observation frozen holdout."
+    },
+    {
+      "source_repo": "dgunning/edgartools",
+      "source_path": "edgar/filing.py",
+      "target_path": "src/lib/services/penny-stock-paper/risk-intelligence.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the structured-filing principle into local event-context states so confirmed, planned, conditional, boilerplate, and unclear SEC language take different veto or quarantine paths."
+    },
+    {
+      "source_repo": "nkaz001/hftbacktest",
+      "source_path": "hftbacktest/src/backtest/models/queue.rs",
+      "target_path": "src/lib/services/penny-stock-paper/execution-research.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted queue-aware fill-model disclosure by making unknown queue priority explicit and retaining only a conservative 10 percent displayed-size participation estimate."
+    },
+    {
+      "source_repo": "eslazarev/purged-cross-validation",
+      "source_path": "src/purgedcv/split.py",
+      "target_path": "src/lib/services/penny-stock-paper/outcomes.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted leakage-aware future-only registration and frozen temporal holdout boundaries so old runs cannot be backfilled into new entry-distance evidence."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/penny-stock-paper/runner.ts",
+      "target_path": "src/lib/services/penny-stock-paper/runner.ts",
+      "reuse_type": "adapted_code",
+      "note": "Extended the existing append-only atomic lifecycle into one idempotent after-close command with data-only snapshot identity, same-session monitor context, and bounded read-only retries."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-copy-trading.mjs",
+      "target_path": "scripts/test-penny-stock-paper-lab.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Adapted fail-closed calibration and append-only counterfactual assertions into contextual SEC, unresolved-risk quarantine, snapshot identity, coverage, and prospective-panel regressions."
+    }
+  ]
+}

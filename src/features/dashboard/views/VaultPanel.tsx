@@ -1220,7 +1220,7 @@ function VaultPanelComponent(props: any) {
 
         {vaultPanelMode === "hive-vault" ? (
         <>
-          <BrainGraphExplorer {...{ Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, Download, FileText, GitBranch, Hexagon, LoaderCircle, Network, RefreshCcw, Sparkles, brainGraph, brainGraphLoading, brainGraphStatus, brainPan, endBrainPan, formatBrainDate, inspectBrainNode, moveBrainPan, refreshBrainGraph, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setChatAttachments, setChatDirectories, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserView, setSkillBrowserWrittenContent, setText, sharedVault, startAgentChat, startBrainPan, vaultClass }} />
+          <BrainGraphExplorer {...{ Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, Download, FileText, GitBranch, Hexagon, LoaderCircle, Network, RefreshCcw, Sparkles, brainGraph, brainGraphLoading, brainGraphStatus, brainPan, endBrainPan, formatBrainDate, inspectBrainNode, moveBrainPan, refreshBrainGraph, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setChatAttachments, setChatDirectories, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserView, setSkillBrowserWrittenContent, setText, sharedVault, startAgentChat, startBrainPan, vaultClass }} openBrainAtlas={() => selectVaultPanel("atlas")} />
           <BrainDropFab vaultPath={sharedVault.vaultPath} onImported={refreshBrainGraph} />
         </>
         ) : null}

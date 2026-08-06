@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-08-03T04:27:08.329130+00:00",
+  "request": "Build Frontier Lab mode into HivemindOS Zero Human Companies with company-scoped intelligence budgets, budget-aware capacity scheduling, elastic workers, tiered model routing, cockpit metrics, staged scale gates, and end-to-end tests",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/company-api-usage.ts",
+      "target_path": "src/lib/services/company-intelligence-usage.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the existing cross-process lock, corrupt-ledger fail-closed, idempotent reservation, and bounded durable-write patterns for company-scoped model tokens."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/companies-orchestration.ts",
+      "target_path": "src/lib/services/companies-orchestration.ts",
+      "reuse_type": "adapted_code",
+      "note": "Extended the native apex-goal to Queen Bee to Work Board call chain with capacity calculation and tier tags instead of building a parallel scheduler."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/queen-bee/autonomous-worker.ts",
+      "target_path": "src/lib/services/queen-bee/autonomous-worker.ts",
+      "reuse_type": "adapted_code",
+      "note": "Extended the established claim, machine-slot, worker chat, independent judge, and terminal settlement path with OAuth policy and token accounting."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/features/dashboard/views/zero-human-companies/ApiLimitsPanel.tsx",
+      "target_path": "src/features/dashboard/views/zero-human-companies/FrontierLabPanel.tsx",
+      "reuse_type": "style_adapted",
+      "note": "Reused the Cockpit panel, loading, metric, guardrail, error, and responsive interaction conventions for Frontier Lab."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-company-api-limits.mjs",
+      "target_path": "scripts/test-frontier-lab.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Adapted the isolated-ledger and deterministic-clock coverage pattern for reservation, settlement, release, and budget exhaustion."
+    }
+  ]
+}

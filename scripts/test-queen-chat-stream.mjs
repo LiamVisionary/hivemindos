@@ -158,6 +158,9 @@ const {
 {
   const source = readFileSync(new URL("../src/features/queen-voice/queen-chat-store.tsx", import.meta.url), "utf8");
   const overlay = readFileSync(new URL("../src/features/queen-voice/QueenBeeVoiceOverlay.tsx", import.meta.url), "utf8");
+  const pipeline = readFileSync(new URL("../src/features/queen-voice/use-queen-bee-voice.ts", import.meta.url), "utf8");
+  const recoveryClient = readFileSync(new URL("../src/features/queen-voice/local-tts-recovery-client.ts", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../src/features/queen-voice/queen-voice.module.css", import.meta.url), "utf8");
   assert.equal(QUEEN_VOICE_CHAT_API_PATH, "/api/queen-bee/voice", "spoken and TTS actions retain the voice route");
   assert.equal(queenChatRouteForSend(false), "text", "closed voice chat keeps audio muted");
   assert.equal(queenChatRouteForSend(true), "voice", "open voice chat enables spoken replies");
@@ -166,6 +169,13 @@ const {
   assert.match(source, /shouldSpeakReply \? ensureVoiceTextAudioContext\(\) : null/, "only voice-open text sends should prime an audio context on the send gesture");
   assert.match(source, /playSpokenReply\([\s\S]{0,120}text,[\s\S]{0,80}abort\.signal,[\s\S]{0,80}audioContext,[\s\S]{0,40}true,?/, "voice-active typed replies should be spoken through the selected playback ladder");
   assert.match(overlay, /setVoiceChatActive\(open\)/, "the overlay should publish its open state to the shared chat store");
+  assert.match(pipeline, /Local voice server not loaded, loading now…/, "a missing local voice should announce automatic loading");
+  assert.match(recoveryClient, /recovery\?\.status === "loading"/, "the pipeline should keep polling changing recovery stages");
+  assert.match(recoveryClient, /recovery\?\.status === "ready"/, "the pipeline should reserve recovered TTS for a later reply");
+  assert.match(pipeline, /if \(outcome === "muted"\) muted = true;/, "a text-only chunk should prevent later chunks in the same reply from being re-sent to TTS");
+  assert.match(overlay, /styles\.voiceNoticeLoading/, "the loading notice should expose an animated state");
+  assert.match(styles, /\.voiceNoticeLoading::before[\s\S]*animation:/, "the local voice loading notice should render a CSS spinner");
+  assert.match(styles, /hive-light[^\n]*\.voiceNoticeLoading/, "the spinner should have a hive-light treatment");
   assert.deepEqual(
     queenVoiceHistoryBeforeTurn([
       { id: "q1", who: "queen", text: "Opening line." },

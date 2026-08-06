@@ -44,6 +44,7 @@ import {
 import { WalletSelectModal, type PickableWallet } from "./WalletSelectModal";
 import { agentPickable, groupedUserPickables, isSelectablePickableId, resolvePickableAccount, type PickableAgent } from "./wallet-pickables";
 import { chainKeyForNetwork, chainLabelForNetwork } from "@/lib/utils/personal-wallet-grouping";
+import type { XCommandTradeDraft } from "@/lib/types/x-command";
 
 type TradeAgent = PickableAgent;
 
@@ -102,6 +103,7 @@ type TradePanelProps = {
       Used by the inline "Enable stock trading" flow for agent acting wallets;
       personal wallets persist through /api/wallet/personal instead. */
   updateWallet?: (agentId: string, patch: Partial<AgentWalletConfig>) => void;
+  initialDraft?: XCommandTradeDraft | null;
 };
 
 export function TradePanel(props: TradePanelProps) {
@@ -671,6 +673,7 @@ export function TradePanel(props: TradePanelProps) {
       isEvmWallet: data?.isEvmWallet ?? network.startsWith("eip155:"),
       isSolanaWallet,
       hasActingWallet: Boolean(acting),
+      initialDraft: props.initialDraft ?? null,
       walletChains,
       onSelectChain,
       availableChains,
@@ -704,7 +707,7 @@ export function TradePanel(props: TradePanelProps) {
       onOpenView,
       refresh,
     };
-  }, [acting, wallet, walletChains, onSelectChain, availableChains, data, loading, refreshing, stockLoading, stockRefreshing, activityLoading, activityRefreshing, paper, currency, fxRates, setCurrency, actors, props.theme, onChangeWallet, onOpenView, refresh, onEnableStockVenue, onCancelStockOrder, onOptimisticStockOrder, displayStockPortfolio]);
+  }, [acting, wallet, walletChains, onSelectChain, availableChains, data, loading, refreshing, stockLoading, stockRefreshing, activityLoading, activityRefreshing, paper, currency, fxRates, setCurrency, actors, props.theme, props.initialDraft, onChangeWallet, onOpenView, refresh, onEnableStockVenue, onCancelStockOrder, onOptimisticStockOrder, displayStockPortfolio]);
 
   return (
     <div style={{ height: "100%", overflow: "hidden" }}>

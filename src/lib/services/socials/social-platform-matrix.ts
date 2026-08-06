@@ -84,7 +84,7 @@ export const SOCIAL_PLATFORM_MATRIX = {
         label: "HivemindOS managed sign-in",
         envKeys: [],
         oauthStartPath: "/api/integrations/x-managed",
-        notes: "Managed x-api-gateway OAuth. The only method that supports multiple X accounts (connection slugs). Reads/writes are credit-metered.",
+        notes: "Managed x-api-gateway OAuth. Posting connections are isolated by connection slug; Comment finder can separately bind an account-specific Agent Reach session. Managed reads/writes are credit-metered.",
       },
       {
         method: "api-token",
@@ -112,7 +112,7 @@ export const SOCIAL_PLATFORM_MATRIX = {
       { op: "quote", gate: SOCIAL_POST_APPROVAL_GATE },
     ],
     limits: [
-      "Reviewed replies and standalone quote posts use the authenticated same-account Agent Reach X session; they fail closed if that session is unavailable or signed into a different account.",
+      "Reviewed replies and standalone quote posts use the selected account's Agent Reach X session. Multiple accounts can bind distinct Shared Hive Env cookie pairs; legacy accounts may use the machine default. Delivery fails closed if the resolved session is unavailable or signed into a different account.",
       "Standalone quote posts are not replies or comments. They publish on your profile with the source post attached and are opt-in in Comment finder.",
       "The direct X API rail cannot substitute here: self-serve replies are access-limited and native quote_tweet_id delivery requires Enterprise, so HivemindOS never falls back to a standalone URL post.",
       "Managed reads and writes debit HivemindOS credits; per-account daily read budget applies.",

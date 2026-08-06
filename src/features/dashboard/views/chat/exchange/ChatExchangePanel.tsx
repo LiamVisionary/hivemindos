@@ -68,6 +68,7 @@ import { ContextShelf } from "./ContextShelf";
 import type { ShelfDeliverable, ShelfMode } from "./ContextShelf";
 import { AppWorkspace, type AppWorkspaceTab } from "./AppWorkspace";
 import { useThreadAppPreview } from "./use-thread-app-preview";
+import { useChatWebTemplate } from "./use-chat-web-template";
 import { ChatTerminalDrawer } from "./ChatTerminalDrawer";
 import { ExchangeComposer } from "./ExchangeComposer";
 import { useChatViewPreferences } from "./use-chat-view-preferences";
@@ -816,6 +817,14 @@ export function ChatExchangePanel(props: any) {
     updateThreadAppArtifact,
   });
   const threadAppProject = preview.threadAppProject;
+  const webTemplates = useChatWebTemplate({
+    storageKey: selectedChatStorageKey,
+    baseDirectory: chatWorkingDirectory,
+    machine: { key: selectedChatMachine?.key, name: machineLabel, collectorUrl: collectorUrl || undefined },
+    setMessagesByAgent,
+    setThreadAppProject: preview.setThreadAppProject,
+  });
+  const acknowledgePreviewAttention = webTemplates.acknowledgePreviewAttention;
 
   const threadAppPreviewTarget = useMemo(() => threadAppArtifact ? {
     projectId: threadAppArtifact.projectId,
@@ -844,12 +853,13 @@ export function ChatExchangePanel(props: any) {
   // The header eye button is a toggle: a second press closes the workspace.
   // Card/approval paths keep calling openThreadWorkspace so they always open.
   const toggleThreadWorkspace = useCallback(() => {
+    acknowledgePreviewAttention();
     if (workspaceOpen) {
       setWorkspaceOpen(false);
       return;
     }
     openThreadWorkspace();
-  }, [openThreadWorkspace, workspaceOpen]);
+  }, [acknowledgePreviewAttention, openThreadWorkspace, workspaceOpen]);
 
   const layoutRef = useRef<HTMLDivElement | null>(null);
   const startWorkspaceResize = useCallback((event: React.PointerEvent) => {
@@ -1258,6 +1268,7 @@ export function ChatExchangePanel(props: any) {
                     onRemoveDirectory={removeChatDirectory}
                     recentDirectories={recentDirectories}
                     onAttachRecentDirectory={attachChatRecentDirectory}
+                    onAttachWebTemplate={webTemplates.attachWebTemplate}
                     machines={machinesWithChats.map((machine: any) => ({ key: machine.key, name: machine.name, detail: machine.detail }))}
                     selectedMachineName={selectedChatMachine?.name ?? ""}
                     workingDirectoryLabel={selectedChatDirectory ?? ""}
@@ -1387,7 +1398,7 @@ export function ChatExchangePanel(props: any) {
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <button type="button" className="cx-iconbtn" onClick={toggleThreadWorkspace} aria-pressed={workspaceOpen} aria-label="App workspace" style={headerIconBtnStyle(workspaceOpen)}>
+                <button type="button" className="cx-iconbtn" data-preview-attention={webTemplates.previewAttention || undefined} onClick={toggleThreadWorkspace} aria-pressed={workspaceOpen} aria-label="App workspace" style={headerIconBtnStyle(workspaceOpen)}>
                   <Ico d={ICON_PATHS.eye} size={18} sw={1.7}><circle cx="12" cy="12" r="3" /></Ico>
                 </button>
               </TooltipTrigger>

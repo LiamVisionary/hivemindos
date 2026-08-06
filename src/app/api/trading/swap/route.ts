@@ -7,6 +7,7 @@ import {
 } from "@/lib/services/trading/dex-swap";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import { requireAuth } from "@/lib/utils/server-auth";
+import { assertTradingLiveMode, failTradePlan } from "@/lib/services/trading/trading-control-store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,14 +33,17 @@ type SwapBody = {
   /** Acting-wallet network for a price-only quote when the wallet has no local
    *  signing key (e.g. a Bankr-managed wallet). Ignored for execute. */
   network?: string;
+  planId?: string;
 };
 
 export async function POST(request: NextRequest) {
   const unauthorized = await requireAuth(request);
   if (unauthorized) return unauthorized;
 
+  let planId = "";
   try {
     const body = (await request.json().catch(() => ({}))) as SwapBody;
+    planId = body.planId?.trim() || "";
     const agentId = body.agentId?.trim();
     const sellToken = body.sellToken?.trim();
     const buyToken = body.buyToken?.trim();
@@ -76,15 +80,18 @@ export async function POST(request: NextRequest) {
       approvalToken: body.approvalToken?.trim() || undefined,
       approvalThresholdSatisfied: body.confirmation === SWAP_CONFIRMATION,
       companyTaskId: body.companyTaskId?.trim() || undefined,
+      planId: planId || undefined,
     };
 
     if (isExecute) {
+      await assertTradingLiveMode({ planId });
       const result = await executeDexSwap(input);
       return NextResponse.json({ ok: true, result });
     }
     const quote = await quoteDexSwap({ ...input, secret: undefined });
     return NextResponse.json({ ok: true, quote, confirmation: SWAP_CONFIRMATION });
   } catch (error) {
+    if (planId) await failTradePlan(planId, error instanceof Error ? error.message : "Swap failed.").catch(() => undefined);
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Swap failed." }, { status: 400 });
   }
 }

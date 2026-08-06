@@ -4,8 +4,11 @@ import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 export async function readNativeKanban(input: {
   board?: string;
   boardsOnly?: boolean;
+  summaryOnly?: boolean;
   includeBoards?: boolean;
   includeArchived?: boolean;
+  includeColumns?: boolean;
+  ifUpdatedAt?: number;
   tenant?: string;
   assignee?: string;
   query?: string;
@@ -18,8 +21,11 @@ export async function readNativeKanban(input: {
     return await invoke<KanbanResponse>("kanban_read", {
       board: input.board,
       boardsOnly: input.boardsOnly,
+      summaryOnly: input.summaryOnly,
       includeBoards: input.includeBoards,
       includeArchived: input.includeArchived,
+      includeColumns: input.includeColumns,
+      ifUpdatedAt: input.ifUpdatedAt,
       tenant: input.tenant,
       assignee: input.assignee,
       query: input.query,

@@ -24,9 +24,18 @@ const { createMarketplaceListingDraft, getMarketplaceListing, upsertSyncedListin
   "../src/lib/services/marketplace/marketplace-listings-store.ts"
 );
 const { requestListingApproval, DuplicateListingError } = await import("../src/lib/services/marketplace/marketplace-listing-pipeline.ts");
-const { decideMarketplaceDecision, listMarketplaceDecisions } = await import("../src/lib/services/marketplace/marketplace-decisions-store.ts");
+const {
+  decideMarketplaceDecision,
+  enqueueMarketplaceDecision,
+  ignoreMarketplaceDecision,
+  listMarketplaceDecisions,
+  marketplaceDecisionAnswer,
+} = await import("../src/lib/services/marketplace/marketplace-decisions-store.ts");
 const { facebookMarketplaceAdapter } = await import("../src/lib/services/marketplace/adapters/facebook.ts");
 const { marketplaceDecisionToView } = await import("../src/features/dashboard/views/marketplace/marketplace-approval-model.ts");
+const { marketplaceDecisionSuppressesConversation } = await import("../src/lib/services/marketplace/marketplace-report-scope.ts");
+const { NextRequest } = await import("next/server");
+const { POST: postDecision } = await import("../src/app/api/marketplace/decisions/route.ts");
 
 const fakeEnsureBrowser = async () => ({ cdpUrl: "http://127.0.0.1:9333", pid: 4242, headed: false, launched: false });
 
@@ -86,6 +95,66 @@ const denied = await decideMarketplaceDecision(submitted.decision.id, "denied", 
 assert.equal(denied.decision.status, "denied");
 assert.ok(denied.directiveId, "standing rule captured from the note");
 assert.equal((await listMarketplaceDecisions({ status: "pending" })).length, 0);
+
+// ── ignore path: remove without deciding + durable no-resurface tombstone ───
+const ignoredConversationId = `${account.id}:personal-dm`;
+const ignorable = await enqueueMarketplaceDecision({
+  kind: "buyer-escalation",
+  accountId: account.id,
+  conversationId: ignoredConversationId,
+  title: "Unrelated conversation",
+  summary: "This thread is outside the managed listing scope.",
+  explanation: {
+    headline: "Unrelated conversation",
+    summary: "This thread is outside the managed listing scope.",
+    whyNow: "The agent reported it by mistake.",
+    evidence: [],
+  },
+});
+await assert.rejects(
+  () => decideMarketplaceDecision(ignorable.id, "approved"),
+  /exact answer to send/i,
+  "buyer escalations cannot be approved with an empty generic response",
+);
+const answerable = await enqueueMarketplaceDecision({
+  kind: "buyer-escalation",
+  accountId: account.id,
+  conversationId: `${account.id}:answerable-dm`,
+  title: "Buyer asks about pickup",
+  summary: "The buyer needs a specific pickup window.",
+  explanation: {
+    headline: "Pickup time needed",
+    summary: "The agent does not know the human's availability.",
+    whyNow: "The buyer asked for a concrete time.",
+    evidence: [],
+  },
+});
+const exactBuyerAnswer = "Yes — pickup is available tomorrow between 2 and 4 PM.";
+const answered = await decideMarketplaceDecision(answerable.id, "approved", exactBuyerAnswer);
+assert.equal(answered.decision.decisionNote, exactBuyerAnswer, "the exact buyer answer is durable on the decision");
+assert.match(
+  marketplaceDecisionAnswer(answered.decision, "approved", exactBuyerAnswer),
+  /Send this exact answer to the buyer:/,
+  "the agent handoff distinguishes a buyer answer from a generic approval note",
+);
+const ignoreResponse = await postDecision(new NextRequest("http://localhost/api/marketplace/decisions", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ action: "ignore", id: ignorable.id }),
+}));
+const ignorePayload = await ignoreResponse.json();
+assert.equal(ignorePayload.ok, true, "ignore API action succeeds");
+const ignored = ignorePayload.decision;
+assert.equal(ignored.status, "ignored", "ignore removes the card without approving or rejecting");
+assert.equal((await listMarketplaceDecisions({ status: "pending" })).some((decision) => decision.id === ignorable.id), false);
+assert.equal((await listMarketplaceDecisions({ status: "ignored" })).some((decision) => decision.id === ignorable.id), true, "ignored state is durable");
+assert.equal(marketplaceDecisionSuppressesConversation(ignored, ignoredConversationId), true, "ignored conversation is blocked from resurfacing");
+assert.equal((await ignoreMarketplaceDecision(ignorable.id)).status, "ignored", "ignore is idempotent");
+await assert.rejects(
+  () => decideMarketplaceDecision(ignorable.id, "approved"),
+  /already ignored/,
+  "an ignored card cannot race into an approval later",
+);
 
 // A denied decision can never fire the post afterwards (fail closed at fire time).
 await assert.rejects(() => postApprovedListing(submitted.decision.id), /denied/, "denied decision cannot fire");
@@ -230,6 +299,8 @@ assert.ok(driverSource.includes("verifyUnverifiedPostedListings(account)"), "the
 assert.ok(driverSource.includes("fullSweep: fullSweepDue"), "the base-cadence sweep is one combined dispatch");
 assert.ok(driverSource.includes("verifyClaimedReplies("), "claimed replies are refuted before ingest");
 assert.ok(driverSource.includes("applyVerifiedCatalogSweep(account"), "report catalogs merge only through the verified sweep");
+assert.ok(driverSource.includes("scopeMarketplaceAgentReport(report, managedListings)"), "agent reports are server-scoped to managed listing conversations");
+assert.ok(driverSource.includes("suppressedConversationIds.has(conversationId)"), "ignored conversations cannot enqueue another card");
 // The agent-submitted path (default) still parks a pending card — the gate
 // stays for anything the human did not author.
 const agentDraft = await createMarketplaceListingDraft({ accountId: remoteAccount.id, title: "Office chair", description: "Mesh", priceUsd: 90 });

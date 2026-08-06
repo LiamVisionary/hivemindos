@@ -76,6 +76,8 @@ assert.match(managedRoute, /requireAuth\(request\)/);
 assert.match(managedRoute, /getHivemindosModelCreditToken/);
 assert.match(managedRoute, /listHivemindosModelCreditTokenSummaries/);
 assert.match(managedRoute, /creditAccounts/);
+assert.match(managedRoute, /dedupeManagedXCreditAccountAliases\(candidates\)/);
+assert.match(managedRoute, /typeof data\.accountId === "string"/);
 assert.match(managedRoute, /selectedCreditAccountId = creditAccountId \|\| creditAccounts\[0\]\?\.accountId/);
 assert.match(managedRoute, /selectedCreditAccountId/);
 assert.match(managedRoute, /oauth-start/);

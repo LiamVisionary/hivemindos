@@ -272,6 +272,44 @@ export function useDashboardNavigationController({
     };
   }, [hydrated, navigateDashboardTarget]);
 
+  // Desktop OAuth returns (park-and-take). The consent flow finishes in an
+  // EXTERNAL browser; the callback parks the outcome server-side and the
+  // scheme activation merely foregrounds this app — installed desktop shells
+  // drop the integrations/oauth-return deep link entirely, so the URL's view
+  // never arrives as a navigate event. Taking on focus (and once on boot, for
+  // the cold-launch case) is what routes the app back to the view the sign-in
+  // started from instead of stranding it on the boot-default agents view.
+  useEffect(() => {
+    if (!hydrated || isPopoutWindow || !isTauriDesktopRuntime()) return;
+
+    let cancelled = false;
+    let inFlight = false;
+    const takePendingOAuthReturn = async () => {
+      if (cancelled || inFlight) return;
+      inFlight = true;
+      try {
+        const response = await fetch("/api/integrations/oauth-return-pending", { method: "POST" });
+        const data = (await response.json().catch(() => null)) as
+          | { ok?: boolean; pending?: { view?: string } | null }
+          | null;
+        if (cancelled || !response.ok || data?.ok === false) return;
+        const view = data?.pending?.view;
+        if (view && isDashboardView(view)) navigateDashboardTarget({ view });
+      } catch {
+        // Best-effort: the connection itself already landed server-side.
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    window.addEventListener("focus", takePendingOAuthReturn);
+    void takePendingOAuthReturn();
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", takePendingOAuthReturn);
+    };
+  }, [hydrated, isPopoutWindow, navigateDashboardTarget]);
+
   return {
     commandPaletteOpen,
     navigateDashboardTarget,

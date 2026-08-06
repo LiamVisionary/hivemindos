@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-08-04T21:08:25.328747+00:00",
+  "request": "Add a separate future-only exact-contract LunarCrush posts availability challenger to the paired one-hour Gemini token forecast panel without changing v1",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "scripts/token-edge/onchain-lunarcrush-provider.mjs",
+      "target_path": "scripts/token-edge/onchain-geckoterminal-new-pool-forecast-posts-rescue.mjs",
+      "reuse_type": "adapted_code",
+      "note": "exact-contract posts collection, config identity proof, privacy-safe post aggregation, and bounded request accounting"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "scripts/token-edge/onchain-geckoterminal-new-pool-forecast-ab.mjs",
+      "target_path": "scripts/token-edge/onchain-geckoterminal-new-pool-forecast-posts-rescue.mjs",
+      "reuse_type": "adapted_code",
+      "note": "future registration, parent forecast lineage, anonymous schema-constrained Gemini request, immutable cash/long events, and arm scoring"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "scripts/test-token-edge-geckoterminal-forecast-ab.mjs",
+      "target_path": "scripts/test-token-edge-geckoterminal-forecast-ab.mjs",
+      "reuse_type": "test_adapted",
+      "note": "temporary immutable ledger, pre-registration exclusion, paired future lifecycle, delayed outcomes, and cash-inclusive availability assertions"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "scripts/token-edge/onchain-geckoterminal-heartbeat.mjs",
+      "target_path": "scripts/token-edge/onchain-geckoterminal-heartbeat.mjs",
+      "reuse_type": "config_adapted",
+      "note": "guarded phase-one parent-then-rescue capture and provider-free score summary"
+    },
+    {
+      "source_repo": "danilobatson/ai-trading-agent-gemini",
+      "source_path": "src/types/trading.ts",
+      "target_path": "scripts/token-edge/onchain-geckoterminal-new-pool-forecast-posts-rescue.mjs",
+      "reuse_type": "adapted_code",
+      "note": "interactions/posts/creators and confidence-oriented treatment vocabulary with symbol identity removed"
+    }
+  ]
+}

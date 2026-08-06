@@ -2126,7 +2126,7 @@ function WalletModeHeader({ panel, onPanel }: { panel: string; onPanel: (id: str
     </header>
   );
 }
-function FleetWallets({ theme, onToggleTheme, onNavigate, actions }: { theme?: string; onToggleTheme?: () => void; onNavigate?: (id: string) => void; actions?: WalletDropInActions }) {
+function FleetWallets({ theme, onToggleTheme, onNavigate, actions, showAppNavigation }: { theme?: string; onToggleTheme?: () => void; onNavigate?: (id: string) => void; actions?: WalletDropInActions; showAppNavigation: boolean }) {
   const valid = FR_WALLET_PANELS.map((p) => p.id);
   const initial = (typeof location !== "undefined" && new URLSearchParams(location.search).get("walletPanel")) || "agents";
   const [panel, setPanel] = React.useState(valid.includes(initial) ? initial : "agents");
@@ -2143,8 +2143,8 @@ function FleetWallets({ theme, onToggleTheme, onNavigate, actions }: { theme?: s
   else if (panel === "rails") body = <RailsPanel actions={actions} selectedRailId={selectedRailId} onSelectedRailHandled={() => setSelectedRailId("")} />;
   else body = <AgentsPanel onConfigure={openRailConfig} actions={actions} onNavigate={onNavigate} />;
   return (
-    <div className="fr-root" style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--bg)", position: "relative", overflow: "hidden", paddingLeft: FR_SHELF_W }}>
-      <NavShelf active="wallet" theme={theme} onToggleTheme={onToggleTheme} onNavigate={onNavigate} />
+    <div className="fr-root" style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--bg)", position: "relative", overflow: "hidden", paddingLeft: showAppNavigation ? FR_SHELF_W : 0 }}>
+      {showAppNavigation ? <NavShelf active="wallet" theme={theme} onToggleTheme={onToggleTheme} onNavigate={onNavigate} /> : null}
       <WalletModeHeader panel={panel} onPanel={setPanel} />
       <div className="fr-scroll" style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto" }}>
         <div className="fb-wrap">{body}</div>
@@ -2158,10 +2158,10 @@ export type WalletsViewProps = {
   theme?: string;
   onToggleTheme?: () => void;
   onNavigate?: (id: string) => void;
-  actions?: WalletDropInActions;
+  actions?: WalletDropInActions; showAppNavigation?: boolean;
 };
 
-export function WalletsView({ runtimeData, theme, onToggleTheme, onNavigate, actions }: WalletsViewProps = {}) {
+export function WalletsView({ runtimeData, theme, onToggleTheme, onNavigate, actions, showAppNavigation = true }: WalletsViewProps = {}) {
   const appliedRuntimeDataRef = React.useRef<WalletRuntimeData | null>(null);
   if (runtimeData && appliedRuntimeDataRef.current !== runtimeData) {
     D.frApplyRuntimeWalletData(runtimeData);
@@ -2175,7 +2175,7 @@ export function WalletsView({ runtimeData, theme, onToggleTheme, onNavigate, act
   const toggle = onToggleTheme || (() => setSelfTheme((t) => (t === "light" ? "dark" : "light")));
   return (
     <div className="fr-app" style={{ height: "100%" }}>
-      <FleetWallets theme={active} onToggleTheme={toggle} onNavigate={onNavigate} actions={actions} />
+      <FleetWallets theme={active} onToggleTheme={toggle} onNavigate={onNavigate} actions={actions} showAppNavigation={showAppNavigation} />
     </div>
   );
 }

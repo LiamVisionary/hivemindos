@@ -26,8 +26,8 @@ assert.ok(
 
 assert.match(
   tradeView,
-  /const contentLoading = !isOptions && \(loading \|\| \(isStock && stockLoading\)\)/,
-  "Only the Stocks segment should wait for deferred stock data",
+  /const contentLoading = !isOptions && !isPrediction && !isLiquidity && \(loading \|\| \(isStock && stockLoading\)\)/,
+  "Only asset segments backed by the deferred portfolio reads should wait for stock or wallet data",
 );
 
 assert.match(

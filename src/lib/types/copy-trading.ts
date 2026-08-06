@@ -35,7 +35,7 @@ export type CopyTradePendingSignal = CopyTradeSignal & {
 };
 
 export const COPY_TRADE_EVOLUTION_MODEL = "gpt-5.6-sol" as const;
-export const COPY_TRADE_EVOLUTION_POLICY_VERSION = "copy-evo-v2.0.0" as const;
+export const COPY_TRADE_EVOLUTION_POLICY_VERSION = "copy-evo-v3.0.0" as const;
 export const COPY_TRADE_EVALUATION_BATCH_SIZE = 50;
 export const COPY_TRADE_PROMOTION_MIN_MATURED = 200;
 
@@ -187,6 +187,8 @@ export type CopyTradeAgentReview = {
   researchUsed: boolean;
   /** True only when the engine successfully closed the evolved position. */
   closeExecuted: boolean;
+  /** Actual whole-position receipt when this review triggered an exit. */
+  closeReceipt?: CopyTradeCloseReceipt;
   responseId?: string;
   error?: string;
 };
@@ -196,6 +198,73 @@ export type CopyTradeCounterfactualHorizon = "5m" | "30m" | "4h" | "24h";
 export type CopyTradeExecutionCost = {
   fixedUsd: number;
   variableBps: number;
+};
+
+export type CopyTradeCloseReceipt = {
+  closedAt: number;
+  priceUsd: number;
+  soldAmount: number;
+  positionCostUsd: number;
+  grossProceedsUsd: number;
+  proceedsUsd: number;
+  executionCostUsd: number;
+  pnlUsd: number;
+};
+
+export type CopyTradeRetrospectiveHorizon = "24h" | "target-exit";
+
+export type CopyTradeRetrospectiveOutcome =
+  | "avoided-loss"
+  | "missed-upside"
+  | "profitable-hold"
+  | "loss-held"
+  | "flat";
+
+/** Deterministic, evidence-linked learning note. The current evaluation batch
+ *  never consumes its own notes; only later frozen batches receive summaries. */
+export type CopyTradeRetrospective = {
+  createdAt: number;
+  horizon: CopyTradeRetrospectiveHorizon;
+  outcome: CopyTradeRetrospectiveOutcome;
+  holdReturnPct: number;
+  evolvedReturnPct: number;
+  pairedDeltaPct: number;
+  causeTags: string[];
+  summary: string;
+  lesson: string;
+};
+
+export type CopyTradeBrainSyncReceipt = {
+  memoryKey: string;
+  contentHash: string;
+  status: "pending" | "synced" | "failed";
+  attempts: number;
+  lastAttemptAt?: number;
+  nextAttemptAt?: number;
+  syncedAt?: number;
+  memoryId?: string;
+  error?: string;
+};
+
+export type CopyTradeTargetExitObservation = {
+  targetTxRef: string;
+  observedAt: number;
+  priceUsd: number;
+  holdReturnPct: number;
+  closeReturnPct: number;
+  evolvedReturnPct: number;
+  pairedDeltaPct: number;
+};
+
+export type CopyTradeEntryContext = {
+  liquidityUsd: number | null;
+  priceChange24hPct: number | null;
+  volume24hUsd: number | null;
+  securityCoverage: "complete" | "partial" | "unavailable";
+  riskScore: number;
+  riskFlags: string[];
+  /** Bounded decision evidence used for deterministic retrospective tags. */
+  reviewSummary?: string;
 };
 
 export type CopyTradeCounterfactualObservation = {
@@ -220,6 +289,8 @@ export type CopyTradeCounterfactual = {
   entryAt: number;
   entryPriceUsd: number;
   spentUsd: number;
+  /** Exact amount acquired by this fill; legacy records derive it from costs. */
+  acquiredAmount?: number;
   decision: CopyTradeAgentReviewDecision;
   reviewPath?: "risk-close" | "sol-adjudication" | "sol-failed-open";
   confidence: number;
@@ -228,9 +299,14 @@ export type CopyTradeCounterfactual = {
   closeExecuted: boolean;
   closePriceUsd?: number;
   closeAt?: number;
+  /** Buy signal whose review caused this lot to be closed, including older lots. */
+  closeDecisionTargetTxRef?: string;
+  entryContext?: CopyTradeEntryContext;
   buyCost: CopyTradeExecutionCost;
   sellCost: CopyTradeExecutionCost;
   horizons: Record<CopyTradeCounterfactualHorizon, CopyTradeCounterfactualObservation>;
+  targetExit?: CopyTradeTargetExitObservation;
+  retrospectives?: CopyTradeRetrospective[];
 };
 
 export type CopyTradeAgentAnalysisState = {
@@ -242,6 +318,8 @@ export type CopyTradeAgentAnalysisState = {
   /** Cost-aware per-fill outcomes; optional for persisted v1 state migration. */
   counterfactuals?: CopyTradeCounterfactual[];
   nextSequence?: number;
+  /** Local receipts for best-effort, idempotent Shared Brain synchronization. */
+  brainSync?: Record<string, CopyTradeBrainSyncReceipt>;
 };
 
 export type CopyTradeRuntimeState = {
@@ -252,6 +330,9 @@ export type CopyTradeRuntimeState = {
   lastSignature?: string;
   /** Target tx refs already consumed (bounded), for restart-safe dedup. */
   consumedTxRefs: string[];
+  /** Deterministic target-chain clock of the last acted signal. Unlike wall time,
+   *  model latency cannot make paired paper configs disagree on cooldown. */
+  lastSignalActionClockMs?: number;
   /** Retryable pre-execution signals, persisted so cursor advancement cannot lose them. */
   pendingSignals?: CopyTradePendingSignal[];
   openPositions: Record<string, CopyTradeOpenPosition>;

@@ -38,6 +38,23 @@ export const MODEL_PROVIDER_GATEWAYS: Record<string, ModelProviderGateway> = {
       models: process.env.NEXT_PUBLIC_LOCAL_OPENAI_MODEL ? [process.env.NEXT_PUBLIC_LOCAL_OPENAI_MODEL] : [],
     },
   },
+  sie: {
+    slug: "sie",
+    name: "SIE",
+    detail: "Shared-GPU lazy model runtime",
+    iconPath: "/icons/runtimes/openai.svg",
+    iconMode: "mask",
+    fallback: "SI",
+    defaultModel: "",
+    hermes: {
+      name: "SIE",
+      baseUrl: process.env.NEXT_PUBLIC_SIE_BASE_URL
+        ? `${process.env.NEXT_PUBLIC_SIE_BASE_URL.replace(/\/v1\/?$/, "").replace(/\/+$/, "")}/v1`
+        : "http://127.0.0.1:8080/v1",
+      keyEnv: "",
+      models: [],
+    },
+  },
   bankr: {
     slug: "bankr",
     name: "Bankr LLM",

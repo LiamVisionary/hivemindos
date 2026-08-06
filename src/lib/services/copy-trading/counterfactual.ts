@@ -6,6 +6,7 @@ import {
   type CopyTradeExecutionCost,
 } from "@/lib/types/copy-trading";
 import { executionCostUsd } from "./execution-costs";
+import { recordCounterfactualRetrospective } from "./retrospective";
 
 export const COPY_TRADE_COUNTERFACTUAL_HORIZONS_MS: Record<CopyTradeCounterfactualHorizon, number> = {
   "5m": 5 * 60_000,
@@ -30,6 +31,7 @@ export function createCounterfactualRecord(input: {
   entryAt: number;
   entryPriceUsd: number;
   spentUsd: number;
+  acquiredAmount?: number;
   decision: CopyTradeAgentReviewDecision;
   reviewPath?: CopyTradeCounterfactual["reviewPath"];
   confidence: number;
@@ -38,6 +40,7 @@ export function createCounterfactualRecord(input: {
   closePriceUsd?: number;
   closeAt?: number;
   closeExecuted: boolean;
+  entryContext?: CopyTradeCounterfactual["entryContext"];
   buyCost: CopyTradeExecutionCost;
   sellCost: CopyTradeExecutionCost;
 }): CopyTradeCounterfactual {
@@ -74,7 +77,58 @@ export function observeCounterfactualHorizon(
     evolvedReturnPct,
     pairedDeltaPct,
   });
+  if (horizon === "24h") {
+    recordCounterfactualRetrospective(record, "24h", observedAt, {
+      holdReturnPct,
+      evolvedReturnPct,
+      pairedDeltaPct,
+    });
+  }
   return observation;
+}
+
+/** Record the target wallet's eventual exit as an additional, variable-horizon
+ *  benchmark even when the evolved position was already closed. */
+export function observeCounterfactualTargetExit(
+  record: CopyTradeCounterfactual,
+  targetTxRef: string,
+  priceUsd: number,
+  observedAt: number,
+) {
+  if (!(priceUsd > 0) || !Number.isFinite(priceUsd) || record.targetExit) return record.targetExit;
+  const holdReturnPct = pathReturnPct(record, priceUsd);
+  const closeReturnPct = pathReturnPct(record, record.closePriceUsd ?? record.entryPriceUsd);
+  const evolvedReturnPct = record.closeExecuted ? closeReturnPct : holdReturnPct;
+  const pairedDeltaPct = evolvedReturnPct - holdReturnPct;
+  record.targetExit = {
+    targetTxRef,
+    observedAt,
+    priceUsd,
+    holdReturnPct,
+    closeReturnPct,
+    evolvedReturnPct,
+    pairedDeltaPct,
+  };
+  recordCounterfactualRetrospective(record, "target-exit", observedAt, record.targetExit);
+  return record.targetExit;
+}
+
+/** A close acts on the whole paper position. Mark every still-open copied lot so
+ *  the sum of per-lot evaluations matches the position-level action. */
+export function markCounterfactualLotsClosed(
+  records: CopyTradeCounterfactual[],
+  input: { token: string; decisionTargetTxRef: string; priceUsd: number; closedAt: number },
+): number {
+  let closed = 0;
+  for (const record of records) {
+    if (record.token !== input.token || record.closeExecuted || record.targetExit) continue;
+    record.closeExecuted = true;
+    record.closePriceUsd = input.priceUsd;
+    record.closeAt = input.closedAt;
+    record.closeDecisionTargetTxRef = input.decisionTargetTxRef;
+    closed += 1;
+  }
+  return closed;
 }
 
 export function dueCounterfactualHorizons(
@@ -113,7 +167,7 @@ export function markMissedCounterfactualHorizons(
 function pathReturnPct(record: CopyTradeCounterfactual, exitPriceUsd: number): number {
   if (!(record.spentUsd > 0) || !(record.entryPriceUsd > 0) || !(exitPriceUsd > 0)) return 0;
   const buyCostUsd = Math.min(record.spentUsd, executionCostUsd(record.spentUsd, record.buyCost));
-  const acquiredAmount = Math.max(0, record.spentUsd - buyCostUsd) / record.entryPriceUsd;
+  const acquiredAmount = record.acquiredAmount ?? Math.max(0, record.spentUsd - buyCostUsd) / record.entryPriceUsd;
   const grossProceedsUsd = acquiredAmount * exitPriceUsd;
   const sellCostUsd = Math.min(grossProceedsUsd, executionCostUsd(grossProceedsUsd, record.sellCost));
   const proceedsUsd = grossProceedsUsd - sellCostUsd;

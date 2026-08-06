@@ -5,7 +5,7 @@
 // Never touches the real ~/.hivemindos, tailscaled, or the network.
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, readdirSync, rmSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, readdirSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -37,6 +37,12 @@ function writeTailscaleStub(script) {
   chmodSync(path, 0o755);
 }
 
+function writeScutilStub(output) {
+  const path = join(binDir, "scutil");
+  writeFileSync(path, `#!/bin/sh\ncat <<'OUTPUT'\n${output}\nOUTPUT\n`);
+  chmodSync(path, 0o755);
+}
+
 function runWatcherOnce(extraEnv = {}) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, ["scripts/taildrop-ingest-watcher.mjs"], {
@@ -45,6 +51,8 @@ function runWatcherOnce(extraEnv = {}) {
         HOME: fakeHome,
         PATH: `${binDir}:${process.env.PATH}`,
         HIVE_TAILSCALE_CLI: join(binDir, "tailscale"),
+        HIVE_TAILSCALE_SCUTIL: join(binDir, "scutil"),
+        HIVEMIND_TAILSCALE_CLI_FALLBACK: "1",
         HIVE_TAILDROP_INGEST_DIR: ingestDir,
         HIVE_TAILDROP_APP_PORTS: String(port),
         HIVE_TAILDROP_ONCE: "1",
@@ -59,6 +67,71 @@ function runWatcherOnce(extraEnv = {}) {
     child.on("close", (code) => resolve({ code, out }));
   });
 }
+
+// --- Case -1: locating an installed CLI must not execute it.
+const { resolveTailscaleCli } = await import("./taildrop-ingest-watcher.mjs");
+const cliResolutionMarker = join(scratch, "tailscale-cli-resolution-invoked");
+writeTailscaleStub(`
+printf invoked >> "${cliResolutionMarker}"
+exit 1
+`);
+const resolvedCli = await resolveTailscaleCli([join(binDir, "tailscale")]);
+assert.equal(resolvedCli, join(binDir, "tailscale"), "the executable CLI path is resolved");
+assert.equal(
+  existsSync(cliResolutionMarker),
+  false,
+  "CLI discovery must inspect the executable without launching Tailscale",
+);
+
+// --- Case 0: a missing macOS VPN service pauses without launching Tailscale.
+const cliInvocationMarker = join(scratch, "tailscale-cli-invoked");
+writeScutilStub(`Available network connection services in the current set (*=enabled):
+* (Disconnected) VPN (ch.protonvpn.mac) "ProtonVPN"`);
+writeTailscaleStub(`
+printf invoked >> "$HIVE_TAILDROP_TEST_CLI_MARKER"
+if [ "$1" = "version" ]; then echo "1.99.0"; exit 0; fi
+if [ "$1" = "file" ] && [ "$2" = "get" ]; then exit 0; fi
+exit 1
+`);
+const missingService = await runWatcherOnce({
+  HIVE_TAILDROP_TEST_CLI_MARKER: cliInvocationMarker,
+});
+assert.equal(missingService.code, 0, "a missing optional VPN service exits cleanly in ONCE mode");
+assert.match(
+  missingService.out,
+  /Taildrop paused.*Tailscale VPN configuration is missing/i,
+  "the watcher explains why Taildrop is paused",
+);
+assert.equal(
+  existsSync(cliInvocationMarker),
+  false,
+  "the watcher must not launch Tailscale when its macOS VPN service is missing",
+);
+
+writeScutilStub(`Available network connection services in the current set (*=enabled):
+* (Disconnected) VPN (io.tailscale.ipn.macsys) "Tailscale"`);
+
+// --- Case 0b: even a configured macOS service does not opt background work
+// into launching a possibly different installed Tailscale variant.
+rmSync(cliInvocationMarker, { force: true });
+writeTailscaleStub(`
+printf invoked >> "$HIVE_TAILDROP_TEST_CLI_MARKER"
+exit 0
+`);
+const macosDefault = await runWatcherOnce({
+  HIVE_TAILDROP_TEST_CLI_MARKER: cliInvocationMarker,
+  HIVEMIND_TAILSCALE_CLI_FALLBACK: "",
+});
+assert.match(
+  macosDefault.out,
+  /Taildrop paused.*automatic Tailscale CLI use is disabled on macOS/i,
+  "macOS background CLI use requires an explicit opt-in",
+);
+assert.equal(
+  existsSync(cliInvocationMarker),
+  false,
+  "a configured but potentially different Tailscale variant must not be launched",
+);
 
 // --- Case 1: files arrive — moved set is detected, logged, and announced.
 writeTailscaleStub(`
@@ -121,6 +194,7 @@ const watchChild = spawn(process.execPath, ["scripts/taildrop-ingest-watcher.mjs
     HIVE_TAILSCALE_CLI: join(binDir, "tailscale"),
     HIVE_TAILDROP_INGEST_DIR: ingestDir,
     HIVE_TAILDROP_APP_PORTS: String(port),
+    HIVEMIND_TAILSCALE_CLI_FALLBACK: "1",
   },
   stdio: ["ignore", "pipe", "pipe"],
 });

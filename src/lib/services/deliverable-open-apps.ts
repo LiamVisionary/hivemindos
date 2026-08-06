@@ -2,6 +2,8 @@ import { execFile } from "node:child_process";
 import { platform } from "node:os";
 import { promisify } from "node:util";
 
+import { homedir } from "@/lib/home-dir";
+
 export type DeliverableOpenApp = {
   id: string;
   name: string;
@@ -20,7 +22,7 @@ const BLOCKED_MAC_BUNDLE_IDS = new Set([
   "com.apple.dt.Instruments",
   "com.google.chrome.for.testing",
 ]);
-const MAC_APPLICATION_ROOTS = ["/Applications/", "/System/Applications/", "/System/Library/CoreServices/"];
+const MAC_APPLICATION_ROOTS = ["/Applications/", `${homedir()}/Applications/`, "/System/Applications/", "/System/Library/CoreServices/"];
 const MAC_APP_QUERY = String.raw`
 ObjC.import("AppKit");
 function bundleRecord(appUrl) {
@@ -48,12 +50,20 @@ function run(argv) {
 
 function applicationPriority(app: DeliverableOpenApp) {
   const name = app.name.toLowerCase();
+  if (name.includes("hivemind office") || name.includes("hermesoffice") || name.includes("genoffice")) return 5;
   if (name.includes("visual studio code") || name === "cursor" || name === "zed") return 10;
   if (name.includes("sublime") || name.includes("bbedit") || name.includes("nova")) return 20;
   if (name === "xcode" || name.includes("pycharm") || name.includes("webstorm")) return 30;
   if (name === "textedit" || name === "preview") return 40;
   if (name === "safari" || name === "google chrome" || name === "firefox") return 50;
   return 100;
+}
+
+function applicationDisplayName(name: string, bundleId: string) {
+  if (bundleId === "com.hivemindos.office") return "Hivemind Office";
+  if (bundleId === "com.hermesoffice.app") return "Hivemind Office (HermesOffice)";
+  if (bundleId === "com.genoffice.app") return "Hivemind Office (GenOffice)";
+  return name;
 }
 
 export function normalizeMacOpenApplications(
@@ -75,7 +85,7 @@ export function normalizeMacOpenApplications(
       || seen.has(bundleId)
     ) return [];
     seen.add(bundleId);
-    return [{ id: `bundle:${bundleId}`, name, isDefault: bundleId === defaultBundleId }];
+    return [{ id: `bundle:${bundleId}`, name: applicationDisplayName(name, bundleId), isDefault: bundleId === defaultBundleId }];
   }).sort((left, right) => (
     Number(right.isDefault) - Number(left.isDefault)
     || applicationPriority(left) - applicationPriority(right)

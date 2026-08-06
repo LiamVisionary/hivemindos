@@ -56,7 +56,7 @@ export function ContextSourcesCard({ account }: { account: SocialsAccountView })
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {account.contextSources.length === 0 && !adding ? (
-          <div className="sc-note">No sources yet. Add repos, sites, X accounts, or local paths the agent should draw from.</div>
+          <div className="sc-note">No sources yet. Standalone drafting waits until you add a repo, website, local file, or local folder with facts this account can safely use. X account references guide Comment finder but do not import post history.</div>
         ) : null}
         {account.contextSources.map((source) => (
           <div key={source.id} className="sc-src">

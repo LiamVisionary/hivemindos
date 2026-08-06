@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-08-02T23:59:57.983294+00:00",
+  "request": "i need you to work continuously until we succeed, try every single possible angle, store knowledge of past runs, look retrospectively hours and days after decisions to see if you made errors in your judgement, evolving continuously between runs. you need to self-improve until we suceed in consistent profits.",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/copy-trading/retrospective.ts",
+      "target_path": "scripts/token-edge/onchain-retrospective.mjs",
+      "reuse_type": "adapted_code",
+      "note": "deterministic outcome classifications cause summaries and earlier-evidence isolation"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/copy-trading/evolution.ts",
+      "target_path": "scripts/token-edge/onchain-forward-core.mjs",
+      "reuse_type": "adapted_code",
+      "note": "profit factor drawdown bootstrap and frozen payoff promotion boundaries"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/trading/prediction-updown-paper-loop.ts",
+      "target_path": "scripts/token-edge/onchain-retrospective.mjs",
+      "reuse_type": "adapted_code",
+      "note": "one-change challenger hypotheses evidence boundaries and retain-or-audit reflection"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-copy-trading.mjs",
+      "target_path": "scripts/test-token-edge-onchain-forward.mjs",
+      "reuse_type": "test_adapted",
+      "note": "append-only retrospective idempotence and conservative non-promotion contracts"
+    }
+  ]
+}

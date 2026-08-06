@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { readSharedAgentEnv, saveSharedAgentEnv, sharedEnvValue } from "@/lib/services/integrations/shared-env";
 // The branded OAuth return page and local-callback origin helper are generic
 // (title/body/returnUrl inputs) — reuse them instead of cloning the HTML.
-import { localCallbackOrigin, renderGitHubOAuthPage } from "@/lib/services/integrations/github-oauth";
+import { localCallbackOrigin, normalizeOAuthReturnMode, renderGitHubOAuthPage, type OAuthReturnMode } from "@/lib/services/integrations/github-oauth";
 
 export const LINKEDIN_OAUTH_STATE_COOKIE = "hive_linkedin_oauth_state";
 export const LINKEDIN_OAUTH_SOURCE_COOKIE = "hive_linkedin_oauth_source";
@@ -28,7 +28,7 @@ export async function readLinkedInOAuthConfig(request: NextRequest): Promise<Lin
   const clientId = sanitizeLinkedInCredential(sharedEnvValue("LINKEDIN_OAUTH_CLIENT_ID", sharedEnv));
   const clientSecret = sanitizeLinkedInCredential(sharedEnvValue("LINKEDIN_OAUTH_CLIENT_SECRET", sharedEnv));
   const redirectUri = sharedEnvValue("LINKEDIN_OAUTH_CALLBACK_URL", sharedEnv)
-    || new URL("/api/integrations/linkedin/oauth/callback", localCallbackOrigin(request)).toString();
+    || new URL("/api/integrations/linkedin/oauth/callback", await localCallbackOrigin(request)).toString();
   const scopes = normalizeScopes(sharedEnvValue("LINKEDIN_OAUTH_SCOPES", sharedEnv));
   return {
     clientId,
@@ -42,11 +42,13 @@ export async function readLinkedInOAuthConfig(request: NextRequest): Promise<Lin
   };
 }
 
-export function createLinkedInOAuthState(clientSecret: string) {
+export function createLinkedInOAuthState(clientSecret: string, returnMode: OAuthReturnMode = "") {
   const payload = Buffer.from(JSON.stringify({
     nonce: randomBytes(16).toString("base64url"),
     source: "integrations",
     exp: Date.now() + 10 * 60 * 1000,
+    // Desktop deep-link return mode; additive and absent for browser flows.
+    ...(returnMode ? { rm: returnMode } : {}),
   })).toString("base64url");
   const signature = signLinkedInOAuthState(payload, clientSecret);
   return `${payload}.${signature}`;
@@ -60,9 +62,9 @@ export function verifyLinkedInOAuthState(state: string, clientSecret: string) {
   const expectedBuffer = new Uint8Array(Buffer.from(expected));
   if (signatureBuffer.length !== expectedBuffer.length || !timingSafeEqual(signatureBuffer, expectedBuffer)) return null;
   try {
-    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { exp?: number };
+    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { exp?: number; rm?: string };
     if (typeof parsed.exp !== "number" || parsed.exp < Date.now()) return null;
-    return { source: "integrations" as const };
+    return { source: "integrations" as const, returnMode: normalizeOAuthReturnMode(parsed.rm) };
   } catch {
     return null;
   }
@@ -83,6 +85,7 @@ export function renderLinkedInOAuthPage(input: {
   returnUrl?: string;
   returnLabel?: string;
   status?: number;
+  deepLink?: string;
 }) {
   return renderGitHubOAuthPage({
     ...input,

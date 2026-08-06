@@ -7,6 +7,7 @@ import path from "path";
 import { randomUUID } from "crypto";
 
 import { homedir } from "@/lib/home-dir";
+import { normalizeFrontierLabPolicy } from "@/lib/frontier-lab";
 import { sameMachineIdentity } from "@/features/fleet/fleet-identity";
 import { recordCompanyConfigChange, type CompanyConfigAction } from "@/lib/services/company-governance";
 import { titlesSimilar } from "@/lib/services/company-task-dedup";
@@ -162,7 +163,9 @@ function normalizeCompanyRecord(raw: unknown): Company | null {
   const id = typeof record.id === "string" ? record.id.trim() : "";
   if (!id) return null;
   const name = typeof record.name === "string" && record.name.trim() ? record.name : "Untitled company";
-  return { ...(record as unknown as Company), id, name };
+  const company = { ...(record as unknown as Company), id, name };
+  if (record.frontierLab !== undefined) company.frontierLab = normalizeFrontierLabPolicy(record.frontierLab);
+  return company;
 }
 
 /**
@@ -323,6 +326,7 @@ function companyDefinitionOf(record: Company): Company {
     directives: record.directives,
     apiBudgets: record.apiBudgets,
     integrationLimits: record.integrationLimits,
+    frontierLab: record.frontierLab,
     setupEnvKeys: record.setupEnvKeys,
   };
 }
@@ -601,6 +605,17 @@ export async function setCompanyIntegrationLimit(
       updatedAt: now,
     };
     company.integrationLimits = [...current.filter((entry) => entry.id !== limitId), limit];
+  });
+}
+
+/** Replace the replicated Frontier Lab policy without touching treasury, roster, or runtime state. */
+export async function setCompanyFrontierLabPolicy(
+  id: string,
+  input: Company["frontierLab"],
+  source = "companies-store:set-frontier-lab",
+): Promise<Company | null> {
+  return mutateCompanyDefinition(id, source, (company) => {
+    company.frontierLab = normalizeFrontierLabPolicy(input);
   });
 }
 
@@ -1006,6 +1021,7 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<Company>
     // through generic company edits, but they must survive those edits.
     apiBudgets: existing?.apiBudgets,
     integrationLimits: existing?.integrationLimits,
+    frontierLab: existing?.frontierLab,
   };
 
   const next = existing

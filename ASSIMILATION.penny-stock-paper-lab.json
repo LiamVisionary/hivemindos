@@ -1,0 +1,49 @@
+{
+  "created_at": "2026-07-27T22:46:21.564253+00:00",
+  "request": "Build a research-only penny-stock limit-order paper simulation bot that researches ten candidates, selects three with documented evidence, and evolves parameters only after walk-forward validation.",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/copy-trading/paper.ts",
+      "target_path": "src/lib/services/penny-stock-paper/simulation.ts",
+      "reuse_type": "adapted_code",
+      "note": "Imported the existing pure paper ledger and cost-aware portfolio accounting"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/copy-trading/evolution.ts",
+      "target_path": "src/lib/services/penny-stock-paper/evolution.ts",
+      "reuse_type": "adapted_code",
+      "note": "Imported paired bootstrap confidence intervals for conservative promotion"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/loops/loop-engine.ts",
+      "target_path": "src/lib/services/penny-stock-paper/evolution.ts",
+      "reuse_type": "adapted_code",
+      "note": "Imported append-only loop experiment discovery and recording"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/quant-research/runner.ts",
+      "target_path": "src/lib/services/penny-stock-paper/runner.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted append-only atomic research artifact lifecycle"
+    },
+    {
+      "source_repo": "TonyMa1/walk-forward-backtester",
+      "source_path": "src/walk_forward_opt/backtesting/wfo.py",
+      "target_path": "src/lib/services/penny-stock-paper/evolution.ts",
+      "reuse_type": "translated_code",
+      "note": "Translated train-select-freeze-forward window structure into the TypeScript evolution gate"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-copy-trading.mjs",
+      "target_path": "scripts/test-penny-stock-paper-lab.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Adapted cost-aware paper ledger assertions into standing-limit and evolution tests"
+    }
+  ]
+}

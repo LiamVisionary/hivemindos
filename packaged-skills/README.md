@@ -70,6 +70,7 @@ Grouped optional directories can also expose a whole-directory pack in the Skill
 Current optional catalog:
 
 - `brand/hivemindos/brand-book-concept-page`: optional HivemindOS brand skill for creating multiple brand directions and compact brand-book concept artifacts with trademark and private-asset safety gates.
+- `brand/hivemindos/hivemindos-brand-visuals`: optional HivemindOS identity skill for art-directing logos, sigils, emblems, and brand imagery around one sharp visual thesis, structurally distinct directions, and mark-first review instead of stacked hive/AI clichés.
 - `brand/hivemindos/out-of-home-subway-campaign`: optional HivemindOS brand skill for transit/out-of-home campaign mockups, with placement, endorsement, and transit-authority caveats.
 - `crypto/hivemindos/b20-issuer-proof`: optional HivemindOS crypto skill for preparing deterministic Base B20 issuer proof cards, requiring confirmation, and creating B20 tokens through the encrypted local wallet route on Base Sepolia.
 - `crypto/hivemindos/nansen-*`: optional HivemindOS crypto skills for Nansen simple and complex research — DeFi positions, Smart Money holdings, token top holders, token screener discovery, token tracking and Smart Money netflow, Hyperliquid wallet discovery, related-wallet clustering, top-wallet token research, and CEX-health monitoring — all routed through the HivemindOS Nansen intelligence path with read-only/copytrade guardrails. They are optional workflow playbooks, not required for Nansen access through the built-in `nansen_intelligence` action or `/api/nansen` routes.
@@ -132,6 +133,7 @@ Current optional catalog:
 - `research/hivemindos/research-call-tracker`: optional HivemindOS research skill for publish-time outcome accountability — maintains Call Tracker and Trade Journal ledgers under the shared brain's `Operations/Research/` (seeded from bundled templates), enforces the no-row-not-published rule, and computes win rate from closed rows only.
 - `research/hivemindos/storm-research`: optional HivemindOS research skill for STORM-style multi-perspective research briefs — mode selection (quick source check, STORM brief, full swarm), expert lenses, contradiction maps, synthesis with confidence review, source discipline, and the exact-heading output contract HivemindOS renders as tabs.
 - `research/hivemindos/wiki-first-research`: optional HivemindOS research skill for the wiki-first project discipline — scaffolded research/process split, raw sources before synthesis, the kill-my-thesis gate before drafting, versioned never-overwritten drafts, tracker logging at publish, and distilling durable findings back into the shared brain at session close.
+- `writing/petergyang/no-ai-slop`: optional, security-audited MIT writing skill for editing drafts with the minimum effective change, preserving the writer's voice, detecting named AI-slop patterns without guessing authorship, and checking rewrites against the bundled evaluation rubric.
 
 ### Importing optional skills
 

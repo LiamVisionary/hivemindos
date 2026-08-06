@@ -32,6 +32,7 @@ import { checkUsePodModels, isUsePodProfile, resolveUsePodRuntimeConfig } from "
 import { checkVeniceModels, isVeniceProfile, resolveVeniceRuntimeConfig } from "@/lib/services/venice";
 import { sanitizeProcessEnv } from "@/lib/utils/safe-process-env";
 import type { RuntimeAdapter } from "./types";
+import { discoverSieProviderModels, runSieAction, type SieProviderStatus } from "./sie";
 
 const execFileAsync = promisify(execFile);
 
@@ -145,6 +146,8 @@ function providerName(profile: AgentProfile) {
             ? "llama.cpp"
             : profile.provider === "lm-studio"
               ? "Local"
+              : profile.provider === "sie"
+                ? "SIE"
               : "OpenAI-compatible";
 }
 
@@ -1267,7 +1270,9 @@ export const openAICompatibleAdapter: RuntimeAdapter = {
         ? { ...profile, gatewayUrl: "https://api.venice.ai/api/v1", statusPath: "/models", token: "" }
         : profile;
     let modelDiscoveryError = "";
+    let modelTelemetryError = "";
     let lmStudioModels: NormalizedLmStudioModel[] = [];
+    let sieStatus: SieProviderStatus | undefined;
     let lmStudioModelSource = "";
     let localModelServers: LocalOpenAICompatibleServer[] = [];
     let models = configuredModelFallback(profile);
@@ -1285,6 +1290,12 @@ export const openAICompatibleAdapter: RuntimeAdapter = {
       localModelServers = discovery.servers;
       modelDiscoveryError = discovery.modelDiscoveryError;
       models = discovery.models.length ? discovery.models : configuredModelFallback(profile);
+    } else if (profile.provider === "sie") {
+      sieStatus = await discoverSieProviderModels(runtimeProfile);
+      const chatModels = sieStatus.models.filter((model) => model.chatCompatible);
+      models = chatModels.length ? chatModels.map((model) => model.key) : configuredModelFallback(profile);
+      modelDiscoveryError = sieStatus.error || "";
+      modelTelemetryError = sieStatus.healthError || "";
     } else {
       try {
         models = (await fetchModels(runtimeProfile)).data
@@ -1299,7 +1310,10 @@ export const openAICompatibleAdapter: RuntimeAdapter = {
       baseUrl: isHivemindosWalletPaidModelProfile(profile) ? "/api/hivemindos/models" : cleanBaseUrl(runtimeProfile),
       chatPath: isHivemindosWalletPaidModelProfile(profile) ? "/chat/completions" : runtimeProfile.chatPath || "/v1/chat/completions",
       models,
-      diagnostics: modelDiscoveryError ? [`${name} model discovery unavailable: ${modelDiscoveryError}`] : undefined,
+      diagnostics: [
+        modelDiscoveryError ? `${name} model discovery unavailable: ${modelDiscoveryError}` : "",
+        modelTelemetryError ? `${name} health telemetry unavailable: ${modelTelemetryError}` : "",
+      ].filter(Boolean),
       providerStatus: usePodStatus ? {
         usePod: {
           tokenEnvName: usePodStatus.tokenEnvName,
@@ -1344,6 +1358,8 @@ export const openAICompatibleAdapter: RuntimeAdapter = {
           error: modelDiscoveryError || undefined,
           checkedAt: new Date().toISOString(),
         },
+      } : profile.provider === "sie" && sieStatus ? {
+        sie: sieStatus,
       } : undefined,
       modelSelection: {
         provider: profile.provider || "openai-compatible",
@@ -1353,6 +1369,7 @@ export const openAICompatibleAdapter: RuntimeAdapter = {
           name,
           models: models.map((id) => {
             const lmStudioModel = lmStudioModels.find((model) => model.key === id);
+            const sieModel = sieStatus?.models.find((model) => model.key === id);
             return lmStudioModel
               ? {
                 id,
@@ -1365,6 +1382,20 @@ export const openAICompatibleAdapter: RuntimeAdapter = {
                   ? "Server"
                   : lmStudioModel.remote ? "Remote" : lmStudioModel.loaded ? "Loaded" : undefined,
               }
+              : sieModel
+                ? {
+                  id,
+                  name: sieModel.displayName,
+                  subtitle: sieModel.state === "loaded"
+                    ? "Warm"
+                    : sieModel.state === "loading"
+                      ? "Warming"
+                      : sieModel.state === "failed"
+                        ? "Failed"
+                        : "Lazy",
+                  group: sieModel.tasks.join(" · "),
+                  badge: "SIE",
+                }
               : { id };
           }),
           totalModels: models.length,
@@ -1372,6 +1403,8 @@ export const openAICompatibleAdapter: RuntimeAdapter = {
           isUserDefined: true,
           source: profile.provider === "lm-studio"
             ? lmStudioModelSource || buildRuntimeUrl(runtimeProfile, "/api/v1/models")
+            : profile.provider === "sie"
+              ? buildRuntimeUrl(runtimeProfile, "/v1/models")
             : isHivemindosWalletPaidModelProfile(profile)
               ? "/api/hivemindos/models/models"
             : buildRuntimeUrl(runtimeProfile, runtimeProfile.statusPath || "/v1/models"),
@@ -1381,6 +1414,7 @@ export const openAICompatibleAdapter: RuntimeAdapter = {
   },
   async runIntegrationAction(profile, action, input) {
     if (!profile) return { ok: false, error: "Agent profile is required." };
+    if (profile.provider === "sie") return runSieAction(profile, action, input);
     if (profile.provider !== "lm-studio") return { ok: false, error: `${providerName(profile)} does not expose local model controls here yet.` };
     return runLmStudioAction(profile, action, input);
   },

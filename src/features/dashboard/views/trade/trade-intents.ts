@@ -32,7 +32,7 @@ export const CRYPTO_INTENTS: CryptoIntentDef[] = [
   { id: "crosschain-swap", label: "Cross-chain swap", desc: "Swap across chains", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "swap 100 USDC on Base to SOL on Solana" },
   { id: "bridge", label: "Bridge", desc: "Move a token between chains", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "bridge 0.2 ETH from Base to Arbitrum" },
   { id: "hyperliquid", label: "Hyperliquid", desc: "Spot, perps, orders", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "quote a $25 ETH long or buy HYPE spot" },
-  { id: "polymarket", label: "Prediction markets", desc: "Search or bet on Polymarket", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "bet $20 yes on the next Fed cut market" },
+  { id: "polymarket", label: "Prediction order", desc: "Prepare a governed Polymarket order", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "bet $20 yes on the next Fed cut market" },
   { id: "token-launch", label: "Launch a token", desc: "Deploy a new token", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "launch a token called HIVE BEE, ticker BEE" },
   { id: "claim-fees", label: "Claim fees", desc: "Collect creator & LP trading fees", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "claim my creator fees for BEE" },
   { id: "nft", label: "NFTs", desc: "Buy, sell, or mint NFTs", group: "Trade & markets", input: "prompt", mutating: true, promptPlaceholder: "buy the floor of <collection>" },

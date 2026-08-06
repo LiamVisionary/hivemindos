@@ -86,7 +86,17 @@ export function applyPaperBuy(
 }
 
 export type PaperSellResult =
-  | { ok: true; proceedsUsd: number; executionCostUsd: number; pnlUsd: number; symbol: string }
+  | {
+      ok: true;
+      priceUsd: number;
+      soldAmount: number;
+      positionCostUsd: number;
+      grossProceedsUsd: number;
+      proceedsUsd: number;
+      executionCostUsd: number;
+      pnlUsd: number;
+      symbol: string;
+    }
   | { ok: false; reason: string };
 
 /** Simulate selling the ENTIRE paper position at the current market price,
@@ -112,7 +122,17 @@ export function applyPaperSell(
   ledger.mirrored += 1;
   pos.lastActionAt = at;
   delete ledger.positions[token];
-  return { ok: true, proceedsUsd: proceeds, executionCostUsd: totalExecutionCostUsd, pnlUsd: pnl, symbol: pos.symbol };
+  return {
+    ok: true,
+    priceUsd,
+    soldAmount: pos.amount,
+    positionCostUsd: pos.spentUsd,
+    grossProceedsUsd: grossProceeds,
+    proceedsUsd: proceeds,
+    executionCostUsd: totalExecutionCostUsd,
+    pnlUsd: pnl,
+    symbol: pos.symbol,
+  };
 }
 
 /** Mark a position to market — pure calc used for revaluation + P&L display. */

@@ -27,6 +27,9 @@ import { ConnectionsPanel } from "./ConnectionsPanel";
 import { XAccountMcpPanel, type ManagedXPanelStatus, type XMcpStatus } from "./XAccountMcpPanel";
 import { RobinhoodMcpPanel } from "./RobinhoodMcpPanel";
 import { XTranscriptPanel } from "./XTranscriptPanel";
+import { XCommandBotPanel } from "./XCommandBotPanel";
+import type { XCommandTradeDraft } from "@/lib/types/x-command";
+import type { PickableAgent } from "@/features/dashboard/views/trade/wallet-pickables";
 import {
   managedXReturnUrl,
   managedXStatusUrl,
@@ -38,7 +41,7 @@ import {
   timeAgo,
 } from "./integrations-view-helpers";
 
-type TabId = "connections" | "mcp" | "transcript" | "codeproof";
+type TabId = "connections" | "mcp" | "xbot" | "transcript" | "codeproof";
 
 type HiveMcpCatalogItem = {
   id: string;
@@ -82,11 +85,13 @@ type ManagedXReturnPoll = {
 const TABS: Array<{ id: TabId; label: string }> = [
   { id: "connections", label: "Connections" },
   { id: "mcp", label: "MCP Servers" },
+  { id: "xbot", label: "X Bot" },
   { id: "transcript", label: "Transcript" },
   { id: "codeproof", label: "Code Proof" },
 ];
 
 const MCP_DEFAULTS: Record<string, McpTransportDefaults & { accent: string; mono: string }> = {
+  "hivemind-office": { transport: "stdio", command: "node", args: ["scripts/hivemind-mcp"], accent: "#e7b45c", mono: "Ho" },
   "robinhood-trading": { transport: "http", url: "https://agent.robinhood.com/mcp/trading", accent: "#62c78f", mono: "Rh" },
   xapi: { transport: "stdio", command: "node", args: ["scripts/x-mcp-bridge.mjs"], accent: "#f3f0e9", mono: "X" },
   "x-docs": { transport: "http", url: "https://docs.x.com/mcp", accent: "#6f9bd6", mono: "Xd" },
@@ -124,9 +129,13 @@ const MANAGED_X_RETURN_POLL_GRACE_MS = 5000;
 export type IntegrationsViewProps = {
   embedded?: boolean;
   defaultTab?: TabId;
+  onReviewTradeDraft?: (draft: XCommandTradeDraft) => void;
+  displayAgents?: PickableAgent[];
+  walletsByAgent?: Record<string, unknown>;
+  vaultPath?: string;
 };
 
-export function IntegrationsView({ embedded = false, defaultTab = "connections" }: IntegrationsViewProps) {
+export function IntegrationsView({ embedded = false, defaultTab = "connections", onReviewTradeDraft, displayAgents, walletsByAgent, vaultPath }: IntegrationsViewProps) {
   const [tab, setTab] = React.useState<TabId>(() => tabFromLocation(defaultTab, TABS));
   const [managedXReturn, setManagedXReturn] = React.useState<ManagedXReturnPayload | null>(null);
 
@@ -136,7 +145,7 @@ export function IntegrationsView({ embedded = false, defaultTab = "connections" 
     let cleanup: (() => void) | undefined;
     void import("@tauri-apps/api/event")
       .then(({ listen }) => listen<ManagedXReturnPayload>(MANAGED_X_RETURN_EVENT, (event) => {
-        setTab("mcp");
+        setTab(event.payload?.returnTab === "xbot" ? "xbot" : "mcp");
         setManagedXReturn(event.payload ?? {});
       }))
       .then((unlisten) => {
@@ -204,6 +213,18 @@ export function IntegrationsView({ embedded = false, defaultTab = "connections" 
           <>
             <TabHeader eyebrow="X / Twitter" title="Transcript" sub="Paste an X link — pull the transcript from the video, or stitch the whole thread into text." />
             <XTranscriptPanel />
+          </>
+        ) : null}
+        {tab === "xbot" ? (
+          <>
+            <TabHeader eyebrow="X / Twitter" title="X Bot" sub="Let connected users summon HivemindOS Mini apps and their own Queen from an X mention." />
+            <XCommandBotPanel
+              onOpenXSetup={() => setTab("mcp")}
+              onReviewTradeDraft={onReviewTradeDraft}
+              displayAgents={displayAgents}
+              walletsByAgent={walletsByAgent}
+              vaultPath={vaultPath}
+            />
           </>
         ) : null}
         {tab === "codeproof" ? (

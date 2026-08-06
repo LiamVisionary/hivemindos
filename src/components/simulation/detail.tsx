@@ -22,6 +22,7 @@ import { frRunMetrics, type Run } from "./sim-data";
 import { useSimData } from "./sim-context";
 import { SimRunningDetail, SimRunViewSeg } from "./running";
 import { SimPostExtras } from "./post";
+import { simulationPublishBlocker } from "./publish-readiness";
 
 export function SimPanel({ label, children, style }: { label?: string; children: React.ReactNode; style?: React.CSSProperties }) {
   return (
@@ -99,6 +100,7 @@ export function SimArtifact({ run }: { run: Run }) {
 }
 
 export function SimRunDetail({ run, onPublish }: { run: Run; onPublish?: (run: Run) => void }) {
+  const data = useSimData();
   if (run.template === "polymarket") {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -111,7 +113,10 @@ export function SimRunDetail({ run, onPublish }: { run: Run; onPublish?: (run: R
   const sectionLabel = run.template === "x-thread" ? "Draft thread"
     : run.template === "reddit-narrative" ? "Narrative cascade"
     : run.template === "research-swarm" ? "Consensus brief" : "Storm console";
-  const canPublish = run.template === "x-thread" && typeof onPublish === "function";
+  const publishBlocker = run.template === "x-thread"
+    ? simulationPublishBlocker(run, data.threadFor(run), typeof onPublish === "function")
+    : null;
+  const canPublish = run.template === "x-thread" && !publishBlocker;
   // The status (Done/Failed/Ready) already shows in the header badge, so skip the
   // verdict banner. Show the scenario summary unless the native artifact below
   // already repeats it (the Reddit post body / research brief use the scenario)
@@ -128,7 +133,8 @@ export function SimRunDetail({ run, onPublish }: { run: Run; onPublish?: (run: R
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
         <span className="sv-eyebrow">{sectionLabel}</span>
         <span style={{ flex: 1, height: 1, background: "var(--line)" }} />
-        {canPublish && <Button variant="primary" sm onClick={() => onPublish!(run)}><Icon name="check" size={13} sw={2.2} /> Approve & publish</Button>}
+        {publishBlocker ? <span role="status" style={{ maxWidth: "34ch", color: "var(--danger)", fontSize: 11.5, lineHeight: 1.4, textAlign: "right" }}>Publishing unavailable · {publishBlocker}</span> : null}
+        {canPublish && <Button variant="primary" sm onClick={() => onPublish!(run)}><Icon name="check" size={13} sw={2.2} /> Approve &amp; publish</Button>}
       </div>
       <SimArtifact run={run} />
       <Intelligence run={run} />

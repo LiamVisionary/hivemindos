@@ -767,7 +767,9 @@ includes(x402Executor, "paymentAttempted?: boolean", "x402 executor distinguishe
 includes(x402Executor, "paymentSettled?: boolean", "x402 executor exposes settled x402 payment state");
 includes(x402Executor, "if (input.skipPaymentDiscovery)", "x402 executor avoids x402 wrapper for prepaid token calls");
 includes(x402Executor, "AbortSignal.timeout(input.timeoutMs ?? 60_000)", "x402 executor timeout override");
-includes(x402Executor, "const paymentSettled = paid && response.status !== 402 && Boolean(paymentResponse)", "x402 executor should not mark rejected 402 retries as paid");
+includes(x402Executor, "if (!input.paid || input.status === 402) return false", "x402 executor should not mark rejected 402 retries as paid");
+includes(x402Executor, "if (input.paymentResponse) return true", "x402 executor accepts the canonical settlement header");
+includes(x402Executor, "acceptPaidResourceAsSettlement", "x402 executor permits narrowly validated paid-resource settlement evidence");
 includes(x402Executor, "if (paymentSettled)", "x402 executor records spend only after payment settlement");
 
 includes(creditVault, "hivemindos-model-credit-vault.json", "credit token vault path");

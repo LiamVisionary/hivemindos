@@ -131,7 +131,10 @@ export function DeepProbesToggle({ variant = "classic" }: { variant?: Variant })
     setEnabled(parseEnabled(data.sharedSource?.values?.[DEEP_PROBES_ENV_KEY]));
   }, []);
 
-  React.useEffect(() => { void load(); }, [load]);
+  React.useEffect(() => {
+    const timeoutId = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [load]);
 
   const toggle = React.useCallback(async () => {
     if (saving) return;

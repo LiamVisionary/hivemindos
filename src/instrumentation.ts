@@ -77,6 +77,39 @@ export async function register() {
     }
   })();
 
+  // Resume the explicitly paired X-command Queen bridge after app-server
+  // restarts. The route is a no-op when this machine has no paired device; the
+  // hosted worker still requires the account policy to be enabled. Keep this
+  // self-POST isolated from app-module imports for the same bundling reason as
+  // the Telegram and company drivers above.
+  void (async () => {
+    try {
+      const flag = process.env.HIVEMINDOS_X_COMMAND_DRIVER?.trim().toLowerCase() ?? "";
+      if (flag === "0" || flag === "false") return;
+      const port = process.env.PORT?.trim();
+      if (!port) return; // opening Integrations > X Bot retries on first contact
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 4_000));
+        let started = false;
+        for (const host of ["127.0.0.1", "[::1]"]) {
+          started = await fetch(`http://${host}:${port}/api/integrations/x-command`, {
+            method: "POST",
+            headers: { "content-type": "application/json", ...selfApiAuthHeaders() },
+            body: JSON.stringify({ action: "start-driver" }),
+          }).then((response) => response.ok).catch(() => false);
+          if (started) break;
+        }
+        if (started) {
+          console.log("[x-command] Queen bridge resumed");
+          return;
+        }
+      }
+      console.error("[x-command] Queen bridge resume gave up after 5 attempts (opening the X Bot panel will retry)");
+    } catch (error) {
+      console.error("[x-command] Queen bridge resume failed:", error instanceof Error ? error.message : error);
+    }
+  })();
+
   // Auto-start the perpetual company-autonomy driver so launched "zero human
   // companies" keep working toward their apex goal across restarts. Same
   // no-app-imports constraint as above: read the disable flag via getBuiltinModule

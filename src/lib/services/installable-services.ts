@@ -6,11 +6,18 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { homedir } from "@/lib/home-dir";
 import { readBrowserUsePermissions } from "@/lib/services/browser-use-permissions";
+import { BROWSER_USE_SECURITY_NOTES, MCP_EMAIL_SERVER_SECURITY_NOTES } from "@/lib/services/installable-services-security";
 import { deployAgenticInbox, readAgenticInboxStatus, scaffoldAgenticInbox } from "@/lib/services/cloudflare/agentic-inbox-setup";
 import { readEngineStatus } from "@/lib/services/copy-trading/store";
 import { readListmonkInstallableServiceStatus, runListmonkInstallableServiceAction } from "@/lib/services/listmonk-installable";
 import { installPalmierProFromDmg, openPalmierProApp, quitPalmierProApp, readPalmierProInstallableServiceStatus } from "@/lib/services/palmier-pro-installable";
 import { hiveEnvPresence } from "@/lib/services/shared-hive-env";
+import {
+  blockedHivemindOfficeInstall,
+  openHivemindOfficeApp,
+  quitHivemindOfficeApp,
+  readHivemindOfficeInstallableServiceStatus,
+} from "@/lib/services/hivemind-office-installable";
 import { ENGINE_OFFLINE_AFTER_MS } from "@/lib/types/copy-trading";
 import {
   GITHUB_CAPABILITY_INSTALLABLE_IDS,
@@ -22,7 +29,7 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-export type InstallableServiceId = "n8n" | "listmonk" | "browser-use" | "agentic-inbox" | "mcp-email-server" | "openhands" | "aider" | "agent-reach" | "palmier-pro" | "copy-trading-daemon" | GitHubCapabilityInstallableId;
+export type InstallableServiceId = "n8n" | "listmonk" | "browser-use" | "agentic-inbox" | "mcp-email-server" | "openhands" | "aider" | "agent-reach" | "palmier-pro" | "hivemind-office" | "copy-trading-daemon" | GitHubCapabilityInstallableId;
 export type InstallableServiceAction =
   | "status"
   | "install"
@@ -41,7 +48,7 @@ export type InstallableServiceActionInput = {
   maxReplies?: number;
 };
 
-export const INSTALLABLE_SERVICE_IDS: InstallableServiceId[] = ["n8n", "listmonk", "browser-use", "agentic-inbox", "mcp-email-server", "openhands", "aider", "agent-reach", "palmier-pro", "copy-trading-daemon", ...GITHUB_CAPABILITY_INSTALLABLE_IDS];
+export const INSTALLABLE_SERVICE_IDS: InstallableServiceId[] = ["n8n", "listmonk", "browser-use", "agentic-inbox", "mcp-email-server", "openhands", "aider", "agent-reach", "palmier-pro", "hivemind-office", "copy-trading-daemon", ...GITHUB_CAPABILITY_INSTALLABLE_IDS];
 
 export type InstallableServiceStatus = {
   id: InstallableServiceId;
@@ -146,20 +153,6 @@ type CommandSpec = {
   argsPrefix?: string[];
   displayName: string;
 };
-
-const BROWSER_USE_SECURITY_NOTES = [
-  "Installed from PyPI with uv; HivemindOS does not run the upstream curl-to-shell installer.",
-  "Normal install validates with doctor and never runs browser-use setup or browser-use install silently.",
-  "HivemindOS launches Browser Use with anonymized telemetry disabled.",
-  "Full permissions can unlock Browser Use cloud tasks, real-profile/CDP launch options, uploads, and JavaScript eval after a slide-to-unlock warning.",
-];
-
-const MCP_EMAIL_SERVER_SECURITY_NOTES = [
-  "Mailbox credentials give agents direct access to private email. Use a dedicated agent mailbox or app password whenever possible.",
-  "HivemindOS only installs the local stdio MCP bridge; it does not read mailbox credentials, probe inboxes, or keep the bridge running in the background.",
-  "Omitting MCP_EMAIL_SERVER_SMTP_HOST keeps the bridge in read-only IMAP mode, so outbound email tools stay hidden.",
-  "Enable attachment downloads only for trusted workflows; email attachments can contain sensitive or unsafe files.",
-];
 
 const N8N_CONTAINER = "hivemindos-n8n";
 const N8N_VOLUME = "hivemindos_n8n_data";
@@ -1203,6 +1196,9 @@ export async function readInstallableServiceStatus(id: InstallableServiceId): Pr
   if (id === "palmier-pro") {
     return readPalmierProInstallableServiceStatus();
   }
+  if (id === "hivemind-office") {
+    return readHivemindOfficeInstallableServiceStatus();
+  }
   if (id === "agent-reach") {
     return readAgentReachInstallableServiceStatus();
   }
@@ -1317,6 +1313,21 @@ export async function runInstallableServiceAction(
       return readInstallableServiceStatus(id);
     }
     throw new Error("Palmier Pro supports install, open, quit, and status actions from HivemindOS.");
+  }
+  if (id === "hivemind-office") {
+    if (action === "status") return readInstallableServiceStatus(id);
+    if (action === "install") {
+      blockedHivemindOfficeInstall();
+    }
+    if (action === "start") {
+      await openHivemindOfficeApp();
+      return readInstallableServiceStatus(id);
+    }
+    if (action === "stop") {
+      await quitHivemindOfficeApp();
+      return readInstallableServiceStatus(id);
+    }
+    throw new Error("Hivemind Office supports open, quit, and status actions; automatic install remains security-blocked.");
   }
   if (
     (

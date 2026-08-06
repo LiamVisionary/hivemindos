@@ -1116,7 +1116,7 @@
 .vaultPanel {
   --brain-bg: #0c0d11; --brain-panel: #14161c; --brain-panel-2: #181b22; --brain-panel-hi: #1e222b;
   --brain-line: rgba(238, 232, 220, 0.08); --brain-line-2: rgba(238, 232, 220, 0.14); --brain-line-3: rgba(238, 232, 220, 0.22);
-  --brain-fg: #f3f0e9; --brain-fg-2: #a7a39a; --brain-fg-3: #76726a; --brain-fg-4: #545049;
+  --brain-fg: #f3f0e9; --brain-fg-2: #a7a39a; --brain-fg-3: #a7a39a; --brain-fg-4: #918c83;
   --brain-honey: #e7b45c; --brain-honey-soft: rgba(231, 180, 92, 0.13); --brain-honey-line: rgba(231, 180, 92, 0.32);
   --brain-live: #6fcdba; --brain-live-soft: rgba(111, 205, 186, 0.14); --brain-danger: #e58e85;
   border: 0; border-radius: 0; background: var(--brain-bg); box-shadow: none; color: var(--brain-fg); padding: 0;
@@ -1185,7 +1185,7 @@
 .providerAutoSyncMaster input, .providerAutoSyncControls input { accent-color: var(--brain-honey); }
 .providerSkillButton { border-color: var(--brain-line-2); background: transparent; color: var(--brain-fg-2); }
 .providerSkillButton:hover:not(:disabled) { border-color: var(--brain-honey-line); background: var(--brain-honey-soft); color: var(--brain-honey); }
-:global(:root[data-theme="hive-light"]) .vaultPanel { --brain-bg: #f1ede3; --brain-panel: #fbf8f1; --brain-panel-2: #f4efe4; --brain-panel-hi: #fff; --brain-line: rgba(54, 46, 30, 0.1); --brain-line-2: rgba(54, 46, 30, 0.16); --brain-line-3: rgba(54, 46, 30, 0.26); --brain-fg: #221d14; --brain-fg-2: #5e574b; --brain-fg-3: #867d6e; --brain-fg-4: #a59b89; --brain-honey: #936811; --brain-honey-fill: #e6bb5c; --brain-honey-soft: rgba(176, 127, 28, 0.12); --brain-honey-line: rgba(176, 127, 28, 0.34); --brain-live: #1d8e7c; --brain-live-soft: rgba(29, 142, 124, 0.12); --brain-danger: #c0524d; }
+:global(:root[data-theme="hive-light"]) .vaultPanel { --brain-bg: #f1ede3; --brain-panel: #fbf8f1; --brain-panel-2: #f4efe4; --brain-panel-hi: #fff; --brain-line: rgba(54, 46, 30, 0.1); --brain-line-2: rgba(54, 46, 30, 0.16); --brain-line-3: rgba(54, 46, 30, 0.26); --brain-fg: #221d14; --brain-fg-2: #5e574b; --brain-fg-3: #5e574b; --brain-fg-4: #6f6657; --brain-honey: #936811; --brain-honey-fill: #e6bb5c; --brain-honey-soft: rgba(176, 127, 28, 0.12); --brain-honey-line: rgba(176, 127, 28, 0.34); --brain-live: #1d8e7c; --brain-live-soft: rgba(29, 142, 124, 0.12); --brain-danger: #c0524d; }
 :global(:root[data-theme="hive-light"]) .brainGraphCanvas { background: radial-gradient(680px 520px at 44% 42%, rgba(176, 127, 28, 0.1), transparent 70%), radial-gradient(var(--brain-line-2) 0.6px, transparent 0.6px), var(--brain-panel); background-size: auto, 22px 22px, auto; }
 
 @media (max-width: 880px) {

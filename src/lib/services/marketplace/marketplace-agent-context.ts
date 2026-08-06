@@ -115,7 +115,14 @@ function inboxListingsContext(input: MarketplaceInboxWorkInput): string {
 
 const INBOX_CONVERSATION_SCOPE = [
   "CONVERSATION SCOPE — reply ONLY in conversations about the live listings named below.",
-  "Old threads about items you are not managing (sold long ago, other people's listings, anything not in the list) are strictly read-only: never reply there, no matter how easy the answer seems. If such a thread has a pending message worth a human's attention, record it as an escalation instead.",
+  "Old threads about items you are not managing (sold long ago, other people's listings, personal chats, anything not in the list) are OUT OF SCOPE. Do not reply, summarize, quote, or record their contents. Never include them in conversations, replies, or escalations — skip them completely.",
+].join("\n");
+
+const BUYER_FACING_VOICE = [
+  "BUYER-FACING VOICE — messages are sent from the seller's own account.",
+  "Write every buyer-facing reply as the seller in first person (I/me/my). The buyer must never hear about a separate agent, seller, owner, operator, or human behind the account.",
+  "Never say phrases such as \"I can check the seller's availability,\" \"I'll ask the seller,\" or \"the owner says.\" When you are authorized to answer an availability question, say \"I can check my availability\" or otherwise keep it in first person.",
+  "If availability, a meetup, payment, or another choice requires the human account owner, escalate it and do not send a holding reply.",
 ].join("\n");
 
 export function buildInboxWorkPrompt(account: MarketplaceAccount, input: MarketplaceInboxWorkInput, cdpUrl?: string | null): string {
@@ -123,6 +130,7 @@ export function buildInboxWorkPrompt(account: MarketplaceAccount, input: Marketp
     sessionPreamble(account, cdpUrl),
     "Task: open Marketplace inbox conversations with pending buyer messages and work through ALL of them.",
     INBOX_CONVERSATION_SCOPE,
+    BUYER_FACING_VOICE,
     AUTONOMY_CONTRACT[account.autonomy],
     negotiationBlock(account, input.listings),
     directivesBlock(input.directives),
@@ -150,6 +158,7 @@ export function buildFullSweepPrompt(account: MarketplaceAccount, input: Marketp
       "End with exactly ONE report covering both the catalog and the conversations.",
     ].join("\n"),
     INBOX_CONVERSATION_SCOPE,
+    BUYER_FACING_VOICE,
     AUTONOMY_CONTRACT[account.autonomy],
     negotiationBlock(account, input.listings),
     directivesBlock(input.directives),

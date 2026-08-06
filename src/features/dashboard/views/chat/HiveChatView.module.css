@@ -10,7 +10,7 @@
   --hive-fg: #f4f7fb;
   --hive-fg-2: #c6d1df;
   --hive-fg-3: #8e9bb1;
-  --hive-fg-4: #5a6478;
+  --hive-fg-4: #748198;
   --hive-cyan: #2dd4bf;
   --hive-cyan-2: #5eead4;
   --hive-cyan-3: #99f6e4;
@@ -46,8 +46,8 @@
   --hive-hex-line: rgba(54, 46, 30, 0.08);
   --hive-fg: #221d14;
   --hive-fg-2: #5e574b;
-  --hive-fg-3: #867d6e;
-  --hive-fg-4: #a59b89;
+  --hive-fg-3: #5e574b;
+  --hive-fg-4: #6f6657;
   --hive-cyan: #5f8f5a;
   --hive-cyan-2: #4f7d4b;
   --hive-cyan-3: #376739;
@@ -388,9 +388,7 @@
   font-size: 12.5px;
   font-weight: 650;
   line-height: 1.25;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .hiveNavRow.active .hiveNavCopy > strong {
@@ -401,9 +399,7 @@
   color: var(--hive-fg-4);
   font-size: 9.5px;
   line-height: 1.35;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .hiveNavCopy .hiveSearchSnippet { white-space: normal; }
@@ -573,7 +569,7 @@
 .hiveTitleRow {
   display: flex;
   min-width: 0;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: 9px;
 }
@@ -586,9 +582,7 @@
   font-size: 15px;
   font-weight: 740;
   line-height: 1.2;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .hiveHeaderMeta {
@@ -598,9 +592,7 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px;
   line-height: 1.45;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .hiveHeaderMeta span {
@@ -682,9 +674,7 @@
   color: currentColor;
   font-size: 12.5px;
   line-height: 1.25;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .hiveAgentMenu small {
@@ -692,9 +682,7 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 10px;
   line-height: 1.35;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .hiveAgentMenuIcon {
@@ -1501,9 +1489,7 @@
 .hiveComposerDock :global([class*="composerModelButton"] span),
 .hiveComposerDock :global([class*="composerModeButton"] span) {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .hiveQueueStrip {

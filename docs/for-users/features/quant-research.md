@@ -49,4 +49,4 @@ For repeated work, set `HIVEMINDOS_QUANT_RESEARCH_REQUEST` to the reviewed reque
 
 ## Safety Boundary
 
-This capability has no order, broker, wallet, or money-movement path. It cannot enable live execution. Any future paper-trading or live-trading system must be separate, explicitly approved, and governed by its own risk controls.
+This capability has no order, broker, wallet, or money-movement path. It cannot enable live execution. The separate [Penny-stock Limit-order Paper Lab](penny-stock-paper-lab.html) can model one bounded low-priced-stock method, but it also has no broker path and cannot promote its paper results into live trading.

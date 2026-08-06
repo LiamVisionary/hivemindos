@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
+  <title id="title">Workshop world</title>
+  <desc id="description">An abstract blue workshop made of floating rooms and pathways.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="1" x2="1" y2="0">
+      <stop stop-color="#10131d"/>
+      <stop offset="1" stop-color="#202b4a"/>
+    </linearGradient>
+    <linearGradient id="room" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#405b9a"/>
+      <stop offset="1" stop-color="#1b2644"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#sky)"/>
+  <path d="M760 1080c40-320 220-380 430-470 190-82 215-265 235-510" fill="none" stroke="#8aa7ff" stroke-opacity=".3" stroke-width="24" stroke-dasharray="18 26"/>
+  <g stroke="#a9bcff" stroke-opacity=".58" stroke-width="5">
+    <path d="m900 545 230-135 230 135v270l-230 135-230-135z" fill="url(#room)"/>
+    <path d="m960 580 170-100 170 100-170 100z" fill="#536daf"/>
+    <path d="M1130 680v194M960 580v194M1300 580v194" fill="none"/>
+  </g>
+  <g fill="#eaf0ff">
+    <rect x="1030" y="655" width="72" height="72" rx="18" opacity=".84"/>
+    <circle cx="1205" cy="718" r="42" opacity=".66"/>
+    <path d="m1110 300 115-68 115 68-115 68z" opacity=".5"/>
+  </g>
+</svg>

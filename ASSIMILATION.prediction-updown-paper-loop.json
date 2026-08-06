@@ -1,0 +1,49 @@
+{
+  "created_at": "2026-08-01T15:10:25.485848+00:00",
+  "request": "paper trade continously, learning as you go along, reflecting on failures, noting every run, referencing past runs for new ones, etc, run on a self-evolving loop until you consistently profit in paper trading.",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/trading/prediction-markets.ts",
+      "target_path": "src/lib/services/trading/prediction-updown-paper-loop.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted canonical public Gamma CLOB displayed-depth and live taker-fee accounting without importing an execution path"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/copy-trading/evolution.ts",
+      "target_path": "src/lib/services/trading/prediction-updown-paper-loop.ts",
+      "reuse_type": "adapted_code",
+      "note": "Reused the deterministic circular block bootstrap for paired forward champion-challenger evidence"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/penny-stock-paper/runner.ts",
+      "target_path": "src/lib/services/trading/prediction-updown-paper-loop.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted immutable prior-run lineage structured failure reflections and review-gated generation handling"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/trading/prediction-proper-betting-paper.ts",
+      "target_path": "src/lib/services/trading/prediction-updown-paper-loop.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted prospective equal-evidence settlement and fail-closed paper accounting boundaries"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/fleet-health-watchdog.mjs",
+      "target_path": "src/lib/services/trading/prediction-updown-paper-loop.ts",
+      "reuse_type": "config_adapted",
+      "note": "Reused the established AbortSignal.timeout public-read deadline pattern to bound each Gamma and CLOB request"
+    },
+    {
+      "source_repo": "agent-next/polymarket-paper-trader",
+      "source_path": "pm_trader/analytics.py|tests/test_benchmark.py",
+      "target_path": "scripts/test-polymarket-updown-paper-loop.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Adapted equal-starting-balance strategy comparison into cash champion and four same-market challenger contracts"
+    }
+  ]
+}

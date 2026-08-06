@@ -33,14 +33,14 @@
   --fg: #f4f7fb;
   --fg-2: #c6d1df;
   --fg-3: #8e9bb1;
-  --fg-4: #5a6478;
+  --fg-4: #748198;
   --cyan: #2dd4bf;
   --cyan-2: #5eead4;
   --cyan-3: #99f6e4;
   --radius: 0.625rem;
   --button-background: #090b10;
-  --button-primary: #5eead4;
-  --button-primary-foreground: #041113;
+  --button-primary: #e7b45c;
+  --button-primary-foreground: #1a1305;
   --button-secondary: rgba(148, 163, 184, 0.14);
   --button-secondary-foreground: #eef4fb;
   --button-accent: rgba(94, 234, 212, 0.11);
@@ -49,7 +49,7 @@
   --button-destructive: #e54864;
   --button-border: rgba(148, 163, 184, 0.2);
   --button-input: rgba(148, 163, 184, 0.18);
-  --button-ring: rgba(94, 234, 212, 0.46);
+  --button-ring: rgba(231, 180, 92, 0.48);
   --button-popover: #0b1018;
   --button-popover-foreground: #f4f7fb;
   color-scheme: dark;
@@ -153,8 +153,8 @@ body {
 :root[data-theme="hive-light"] body {
   color: var(--foreground);
   background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='41.569' viewBox='0 0 72 41.569'%3E%3Cg fill='none' stroke='%23362e1e' stroke-opacity='.10' stroke-width='1'%3E%3Cpath d='M12 0h24l12 20.784-12 20.785H12L0 20.784z'/%3E%3Cpath d='M48-20.784h24L84 0 72 20.784H48L36 0z'/%3E%3Cpath d='M48 20.784h24l12 20.785-12 20.784H48L36 41.569z'/%3E%3C/g%3E%3C/svg%3E"),
-    radial-gradient(circle at 16% 10%, rgba(176, 127, 28, 0.16), transparent 26rem),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='41.569' viewBox='0 0 72 41.569'%3E%3Cg fill='none' stroke='%23362e1e' stroke-opacity='.045' stroke-width='1'%3E%3Cpath d='M12 0h24l12 20.784-12 20.785H12L0 20.784z'/%3E%3Cpath d='M48-20.784h24L84 0 72 20.784H48L36 0z'/%3E%3Cpath d='M48 20.784h24l12 20.785-12 20.784H48L36 41.569z'/%3E%3C/g%3E%3C/svg%3E"),
+    radial-gradient(circle at 16% 10%, rgba(176, 127, 28, 0.10), transparent 26rem),
     radial-gradient(circle at 84% 18%, rgba(95, 143, 90, 0.10), transparent 28rem),
     linear-gradient(140deg, #fbf8f1 0%, #f1ede3 52%, #f4efe4 100%);
   background-size: 72px 41.569px, auto, auto, auto;
@@ -175,7 +175,7 @@ body::before {
 
 :root[data-theme="hive-light"] body::before {
   background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='69.282' viewBox='0 0 120 69.282'%3E%3Cg fill='none' stroke='%23362e1e' stroke-opacity='.055' stroke-width='1'%3E%3Cpath d='M20 0h40l20 34.641-20 34.641H20L0 34.641z'/%3E%3Cpath d='M80-34.641h40L140 0l-20 34.641H80L60 0z'/%3E%3Cpath d='M80 34.641h40l20 34.641-20 34.641H80L60 69.282z'/%3E%3C/g%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='69.282' viewBox='0 0 120 69.282'%3E%3Cg fill='none' stroke='%23362e1e' stroke-opacity='.025' stroke-width='1'%3E%3Cpath d='M20 0h40l20 34.641-20 34.641H20L0 34.641z'/%3E%3Cpath d='M80-34.641h40L140 0l-20 34.641H80L60 0z'/%3E%3Cpath d='M80 34.641h40l20 34.641-20 34.641H80L60 69.282z'/%3E%3C/g%3E%3C/svg%3E");
 }
 
 button,
@@ -214,9 +214,8 @@ a {
   gap: 0;
   align-items: stretch;
   margin: 0;
-  overflow: hidden;
-  padding: 0 0 0 var(--shelf-w);
-  animation: commandShellEnter 0.28s ease-out both;
+  overflow: hidden; padding: 0 0 0 var(--shelf-w);
+  transition: padding-left .34s cubic-bezier(.2, .8, .2, 1); animation: commandShellEnter 0.28s ease-out both;
 }
 
 @keyframes commandShellEnter {
@@ -259,8 +258,10 @@ a {
      gap between themselves and the nav shelf. Chat/agents full-bleed via inline
      style; the rest keep the 1560px readability cap but hug the rail. */
   margin: 0;
-  overflow: hidden;
+  overflow: hidden; transition: width .34s cubic-bezier(.2, .8, .2, 1);
 }
+
+.commandMainWithHiveChat { padding-bottom: calc(86px + env(safe-area-inset-bottom, 0px)); }
 
 .hero {
   display: flex;
@@ -1378,13 +1379,11 @@ h1 {
 }
 
 .hint {
-  overflow: hidden;
   margin: 8px 0 0;
   color: var(--muted);
   font-size: 11px;
   line-height: 1.5;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 1120px) {

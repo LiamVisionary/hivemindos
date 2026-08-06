@@ -34,17 +34,19 @@
 //                              (default 5020,5021,5111,5121,3000)
 //   HIVE_TAILDROP_ONCE=1       run a single drain pass and exit (for testing)
 
-import { mkdir, readdir, appendFile, stat } from "node:fs/promises";
+import { access, mkdir, readdir, appendFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { readFileSync, watch } from "node:fs";
+import { constants, readFileSync, watch } from "node:fs";
+import { shouldUseTailscaleCliFallback } from "./lib/tailscale-optional.mjs";
 
 const execFileAsync = promisify(execFile);
 
 const INGEST_DIR = process.env.HIVE_TAILDROP_INGEST_DIR || join(homedir(), "HiveDrop");
 const RETRY_MS = Number(process.env.HIVE_TAILDROP_RETRY_MS || 30_000);
+const TAILSCALE_SCUTIL = process.env.HIVE_TAILSCALE_SCUTIL || "/usr/sbin/scutil";
 const APP_PORTS = String(process.env.HIVE_TAILDROP_APP_PORTS || "5020,5021,5111,5121,3000")
   .split(",").map((s) => s.trim()).filter(Boolean);
 const RUN_ONCE = process.env.HIVE_TAILDROP_ONCE === "1";
@@ -105,16 +107,46 @@ function tailscaleCliCandidates() {
   ].filter(Boolean);
 }
 
-async function resolveTailscaleCli() {
-  for (const cli of tailscaleCliCandidates()) {
-    try {
-      await execFileAsync(cli, ["version"], { timeout: 10_000 });
-      return cli;
-    } catch {
-      // try the next candidate
+export async function resolveTailscaleCli(candidates = tailscaleCliCandidates()) {
+  for (const candidate of candidates) {
+    const paths = candidate.includes("/")
+      ? [candidate]
+      : String(process.env.PATH || "")
+          .split(delimiter)
+          .filter(Boolean)
+          .map((directory) => join(directory, candidate));
+    for (const path of paths) {
+      try {
+        await access(path, constants.X_OK);
+        return path;
+      } catch {
+        // try the next path
+      }
     }
   }
   return null;
+}
+
+export function tailscaleVpnServiceListed(output) {
+  return String(output || "")
+    .split(/\r?\n/)
+    .some((line) => (
+      /\bVPN\s+\(io\.tailscale\.[^)]+\)/i.test(line)
+      || /["“]Tailscale["”]/i.test(line)
+    ));
+}
+
+async function tailscaleVpnServiceReady() {
+  if (process.platform !== "darwin") return true;
+  try {
+    const { stdout } = await execFileAsync(TAILSCALE_SCUTIL, ["--nc", "list"], {
+      timeout: 2_000,
+      maxBuffer: 128_000,
+    });
+    return tailscaleVpnServiceListed(stdout);
+  } catch {
+    return false;
+  }
 }
 
 // Announce an arrival where a human looks: the dashboard notification feed.
@@ -227,16 +259,42 @@ function watchIngestDir() {
 }
 
 async function main() {
-  const cli = await resolveTailscaleCli();
-  if (!cli) {
-    await log("tailscale CLI not found — install Tailscale or set HIVE_TAILSCALE_CLI; exiting");
-    process.exit(1);
-  }
   await mkdir(INGEST_DIR, { recursive: true });
   for (const name of await listDir(INGEST_DIR)) announced.add(name); // pre-existing files are old news
-  await log(`taildrop-ingest up — inbox drains to ${INGEST_DIR} (cli: ${cli})${RUN_ONCE ? " (ONCE)" : ""}`);
   if (!RUN_ONCE) watchIngestDir();
+  let cli = null;
+  let servicePaused = false;
   for (;;) {
+    if (!shouldUseTailscaleCliFallback()) {
+      if (!servicePaused) {
+        await log("Taildrop paused — automatic Tailscale CLI use is disabled on macOS. HivemindOS will not launch Tailscale; incoming files can continue through Tailscale's normal Downloads behavior.");
+      }
+      servicePaused = true;
+      if (RUN_ONCE) break;
+      await sleep(RETRY_MS);
+      continue;
+    }
+    if (!(await tailscaleVpnServiceReady())) {
+      if (!servicePaused) {
+        await log("Taildrop paused — Tailscale VPN configuration is missing. HivemindOS will not launch Tailscale; allow its VPN configuration to resume phone file delivery.");
+      }
+      servicePaused = true;
+      if (RUN_ONCE) break;
+      await sleep(RETRY_MS);
+      continue;
+    }
+    if (servicePaused) {
+      await log("Taildrop resumed — Tailscale VPN configuration is available.");
+      servicePaused = false;
+    }
+    if (!cli) {
+      cli = await resolveTailscaleCli();
+      if (!cli) {
+        await log("tailscale CLI not found — install Tailscale or set HIVE_TAILSCALE_CLI; exiting");
+        process.exit(1);
+      }
+      await log(`taildrop-ingest up — inbox drains to ${INGEST_DIR} (cli: ${cli})${RUN_ONCE ? " (ONCE)" : ""}`);
+    }
     const startedAt = Date.now();
     const result = await drainOnce(cli);
     if (result.error) {

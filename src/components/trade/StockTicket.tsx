@@ -5,10 +5,9 @@
    CONFIRM_SELL enforced server-side). The Alpaca paper/live toggle is honored
    (a paper-only agent can never escalate to live — the server pins it too).
 
-   Scope note: this rail places MARKET orders. The drop-in's market/limit toggle
-   is intentionally omitted rather than shown as a non-functional control — adding
-   a limit order type to the governed brokerage path (notional-vs-qty rules, GTC,
-   approval) is a separate change, not part of this UI swap. */
+   Market orders stay the beginner default. Alpaca limit, stop, and stop-limit
+   settings live inside a collapsed Advanced order section. Every order becomes
+   a durable Trade Plan before paper simulation or live submission. */
 
 import React from "react";
 import { Badge, AssetMenu, ReviewLine } from "./primitives";
@@ -18,6 +17,8 @@ import { useTradeDesk } from "./trade-context";
 import { COMMON_ALPACA_TICKERS } from "@/features/dashboard/views/trade/trade-intents";
 import { executeStockTrade, fetchStockMarket, quoteStockTrade } from "@/features/dashboard/views/trade/trade-api";
 import { playTradeSuccessSound } from "./trade-sound";
+import { TradePlanReviewCard } from "./TradePlanReviewCard";
+import { useTradePlanFlow } from "./trading-lifecycle-context";
 
 const OTHER = "__other__";
 
@@ -35,11 +36,11 @@ export function StockTicket() {
   const isRobinhoodChain = venue === "robinhood-chain";
   const isRobinhoodAgentic = venue === "robinhood-agentic";
   const isUsdSizedVenue = isXstocks || isRobinhoodChain || isRobinhoodAgentic;
-  const tickerOptions = isXstocks
+  const tickerOptions = React.useMemo(() => isXstocks
     ? (r.xstockTickers.length ? r.xstockTickers : ["AAPLx"])
     : isRobinhoodChain
       ? (r.robinhoodTickers.length ? r.robinhoodTickers : ["AAPL"])
-      : COMMON_ALPACA_TICKERS;
+      : COMMON_ALPACA_TICKERS, [isRobinhoodChain, isXstocks, r.robinhoodTickers, r.xstockTickers]);
 
   const [side, setSide] = React.useState<"buy" | "sell">("buy");
   const [choice, setChoice] = React.useState(tickerOptions[0] ?? "NVDA");
@@ -49,8 +50,11 @@ export function StockTicket() {
   const [price, setPrice] = React.useState<{ price: number; chg: number } | null>(null);
   const [state, setState] = React.useState<"idle" | "reviewing" | "signing" | "done" | "error">("idle");
   const [message, setMessage] = React.useState("");
-  const [reviewedOrderKey, setReviewedOrderKey] = React.useState("");
-  const [robinhoodReview, setRobinhoodReview] = React.useState("");
+  const [orderType, setOrderType] = React.useState<"market" | "limit" | "stop" | "stop_limit">("market");
+  const [timeInForce, setTimeInForce] = React.useState<"day" | "gtc" | "ioc" | "fok">("day");
+  const [limitPrice, setLimitPrice] = React.useState("");
+  const [stopPrice, setStopPrice] = React.useState("");
+  const planFlow = useTradePlanFlow();
 
   // Inline "Enable stock trading" flow — flips this card to a venue config form
   // (defaulting to Alpaca / Paper) instead of bouncing to the Wallets tab. Once
@@ -61,6 +65,28 @@ export function StockTicket() {
   const [enPaper, setEnPaper] = React.useState(true);
   const [enSaving, setEnSaving] = React.useState(false);
   const [enError, setEnError] = React.useState("");
+  const importedDraft = desk.initialDraft?.assetClass === "stock" ? desk.initialDraft : null;
+  const appliedDraftRef = React.useRef("");
+  const sizedDraftRef = React.useRef("");
+
+  React.useEffect(() => {
+    if (!importedDraft) return;
+    void Promise.resolve().then(() => {
+      const key = importedDraft.requestId || JSON.stringify(importedDraft);
+      if (appliedDraftRef.current === key) return;
+      appliedDraftRef.current = key;
+      if (importedDraft.side === "buy" || importedDraft.side === "sell") setSide(importedDraft.side);
+      const asset = importedDraft.asset?.trim().toUpperCase();
+      if (asset) {
+        if (tickerOptions.includes(asset)) setChoice(asset);
+        else { setChoice(OTHER); setCustom(asset); }
+      }
+      if (importedDraft.amountUsd !== undefined) setUsd(String(importedDraft.amountUsd));
+      if (importedDraft.quantity !== undefined) setShares(String(importedDraft.quantity));
+      setMessage("Imported from X as a draft. Review the live quote, wallet, venue, and confirmation before submitting.");
+      setState("idle");
+    });
+  }, [importedDraft, tickerOptions]);
 
   const enable = async () => {
     setEnSaving(true);
@@ -96,50 +122,110 @@ export function StockTicket() {
   const usdNum = Number(usd) || 0;
   const buyingPower = r.buyingPower;
   // Alpaca -> share-count order; on-chain stock-token venues -> USD notional.
-  const notionalUsd = isUsdSizedVenue ? usdNum : (px > 0 ? sharesNum * px : 0);
+  const advancedReferencePrice = orderType === "limit" || orderType === "stop_limit" ? Number(limitPrice) || 0 : orderType === "stop" ? Number(stopPrice) || 0 : px;
+  const notionalUsd = isUsdSizedVenue ? usdNum : (advancedReferencePrice > 0 ? sharesNum * advancedReferencePrice : 0);
   const overBp = side === "buy" && buyingPower > 0 && notionalUsd > buyingPower;
-  const orderKey = `${side}:${ticker}:${notionalUsd.toFixed(6)}`;
-  const hasRobinhoodReview = isRobinhoodAgentic && reviewedOrderKey === orderKey;
   const canAct = Boolean(venue) && r.venueReady && Boolean(ticker) && notionalUsd > 0 && state !== "signing" && state !== "reviewing";
-  const resetRobinhoodReview = () => {
-    setReviewedOrderKey("");
-    setRobinhoodReview("");
-  };
+  const resetPlan = () => { planFlow.clear(); setMessage(""); setState("idle"); };
 
-  const place = async () => {
+  React.useEffect(() => {
+    if (planFlow.mode === "live") setPaper(false);
+    else setPaper(true);
+  }, [planFlow.mode, setPaper]);
+
+  React.useEffect(() => {
+    if (!importedDraft?.amountUsd || isUsdSizedVenue || px <= 0) return;
+    const key = `${importedDraft.requestId || JSON.stringify(importedDraft)}:${ticker}:${px}`;
+    if (sizedDraftRef.current === key) return;
+    sizedDraftRef.current = key;
+    setShares(String(Number((importedDraft.amountUsd / px).toFixed(6))));
+  }, [importedDraft, isUsdSizedVenue, px, ticker]);
+
+  const stagePlan = async () => {
     if (!canAct) return;
-    if (isRobinhoodAgentic && !hasRobinhoodReview) {
-      setState("reviewing");
-      setMessage("");
-      const reviewed = await quoteStockTrade({ agentId, side, ticker, notionalUsd, paper: false });
-      if (!reviewed.ok || !reviewed.quote) {
-        setState("error");
-        setMessage(reviewed.error || "Robinhood could not review this order.");
-        return;
-      }
-      setReviewedOrderKey(orderKey);
-      setRobinhoodReview(reviewed.quote.detail);
-      setState("idle");
+    setState("reviewing");
+    setMessage("");
+    const effectiveOrderType = venue === "alpaca" ? orderType : "market";
+    const quote = await quoteStockTrade({
+      agentId,
+      side,
+      ticker,
+      notionalUsd,
+      paper: planFlow.mode !== "live",
+      ...(!isUsdSizedVenue && (side === "sell" || effectiveOrderType !== "market") ? { qty: sharesNum } : {}),
+      orderType: effectiveOrderType,
+      timeInForce,
+      ...(limitPrice ? { limitPrice: Number(limitPrice) } : {}),
+      ...(stopPrice ? { stopPrice: Number(stopPrice) } : {}),
+    });
+    if (!quote.ok || !quote.quote) {
+      setState("error");
+      setMessage(quote.error || "The venue could not review this order.");
       return;
     }
+    const currentAssetValueUsd = stockPortfolio.rows.find((row) => row.sym === ticker)?.usd ?? 0;
+    const created = await planFlow.stage({
+      title: `${side === "buy" ? "Buy" : "Sell"} ${ticker} via ${venue}`,
+      proposal: {
+        accountId: `${desk.wallet.id}:stocks`,
+        agentId,
+        assetClass: "stock",
+        asset: ticker,
+        side,
+        orderType: effectiveOrderType,
+        timeInForce,
+        quantity: isUsdSizedVenue ? undefined : sharesNum,
+        notionalUsd,
+        estimatedPrice: px || advancedReferencePrice,
+        limitPrice: limitPrice ? Number(limitPrice) : undefined,
+        stopPrice: stopPrice ? Number(stopPrice) : undefined,
+        venue: venue || undefined,
+        network: isRobinhoodChain ? network : undefined,
+        source: "HivemindOS Trade stock ticket",
+        quote: {
+          capturedAt: new Date().toISOString(),
+          source: quote.quote.venue,
+          slippageBps: quote.quote.priceImpactPct === undefined ? undefined : quote.quote.priceImpactPct * 100,
+          feeUsd: quote.quote.platformFee?.amountUsd,
+          detail: quote.quote.detail,
+        },
+        portfolio: {
+          totalValueUsd: Math.max(stockPortfolio.total, r.account?.portfolioValue ?? 0),
+          currentAssetValueUsd,
+          dailyPnlPct: stockPortfolio.dayPct,
+        },
+      },
+      evidence: [quote.quote.detail, `Account health: ${r.venueReady ? "ready" : "not ready"}`],
+      missingContext: [
+        ...(quote.quote.priceImpactPct === undefined ? ["Venue did not provide a numeric slippage bound"] : []),
+        ...(!stockPortfolio.total && !(r.account?.portfolioValue ?? 0) ? ["Portfolio exposure is unknown"] : []),
+      ],
+    });
+    setState(created ? "idle" : "error");
+    if (!created) setMessage(planFlow.error || "The trade plan could not be staged.");
+  };
+
+  const executeLive = async (planId: string) => {
     const confirmation = r.confirmations[side];
-    if (!confirmation) { setMessage("Missing confirmation token — reload the Trade tab."); setState("error"); return; }
+    if (!confirmation) { setMessage("Missing confirmation token — reload the Trade tab."); setState("error"); return { ok: false, error: "Missing confirmation token." }; }
     setState("signing");
     setMessage("");
     const response = await executeStockTrade({
       agentId, side, ticker, notionalUsd,
-      confirmation, paper,
+      confirmation, paper: false, planId,
+      orderType: venue === "alpaca" ? orderType : "market",
+      timeInForce,
+      ...(limitPrice ? { limitPrice: Number(limitPrice) } : {}),
+      ...(stopPrice ? { stopPrice: Number(stopPrice) } : {}),
       // Buys place by NOTIONAL so the per-trade cap, rolling spend budget, and
       // live platform fee bind to the exact USD submitted — a qty order lets a
       // stale client price under-state the gated notional. Sells keep the exact
       // share count (a sell is an inflow, not budget-gated), so "sell N" is exact.
-      ...(!isUsdSizedVenue && side === "sell" ? { qty: sharesNum } : {}),
+      ...(!isUsdSizedVenue && (side === "sell" || orderType !== "market") ? { qty: sharesNum } : {}),
     });
-    if (!response.ok || !response.result) { setState("error"); setMessage(response.error || "Trade failed."); return; }
+    if (!response.ok || !response.result) { setState("error"); setMessage(response.error || "Trade failed."); return { ok: false, error: response.error || "Trade failed." }; }
     setState("done");
     setMessage(response.result.detail);
-    setReviewedOrderKey("");
-    setRobinhoodReview("");
     playTradeSuccessSound();
     // Alpaca orders queue before they fill — show the position as pending right
     // away (with this confirmation), instead of waiting for the open-order list
@@ -149,6 +235,17 @@ export function StockTicket() {
     } else {
       desk.refresh();
     }
+    return { ok: true };
+  };
+
+  const approvePlan = async () => {
+    const next = await planFlow.approveAndContinue(executeLive);
+    if (next?.executionMode !== "live" && next?.execution) {
+      setState("done");
+      setMessage(next.execution.detail);
+      playTradeSuccessSound();
+    }
+    if (planFlow.error) { setState("error"); setMessage(planFlow.error); }
   };
 
   React.useEffect(() => {
@@ -158,11 +255,9 @@ export function StockTicket() {
   }, [state]);
 
   const sell = side === "sell";
-  const label = state === "reviewing" ? "Reviewing with Robinhood…" : state === "signing" ? "Submitting…" : state === "done" ? "Order placed"
+  const label = state === "reviewing" ? "Building plan…" : state === "signing" ? "Submitting approved plan…" : state === "done" ? "Plan completed"
     : !ticker ? "Pick a ticker" : !notionalUsd ? (isUsdSizedVenue ? "Enter an amount" : "Enter share count")
-    : isRobinhoodAgentic && !hasRobinhoodReview ? `Review ${sell ? "sell" : "buy"} with Robinhood`
-    : isRobinhoodAgentic ? `Confirm ${sell ? "sell" : "buy"} ${trUsd2(usdNum)} ${ticker}`
-    : isUsdSizedVenue ? `${sell ? "Sell" : "Buy"} ${trUsd2(usdNum)} ${ticker}` : `${sell ? "Sell" : "Buy"} ${sharesNum} ${ticker}`;
+    : `Review ${sell ? "sell" : "buy"} plan`;
 
   if (!venue) {
     // Bankr is a synthetic pickable with no governed ledger record, so there's
@@ -239,19 +334,15 @@ export function StockTicket() {
 
   return (
     <div className="tk-card">
+      {importedDraft ? <div className="tk-guard"><BIcon name="shield" size={14} /><span>Imported X order draft · nothing has executed. Verify every field and use this rail&apos;s separate confirmation.</span></div> : null}
       <div className="tk-head">
         <div className="tk-side">
           {(["buy", "sell"] as const).map((s) => (
             <button key={s} type="button" data-active={side === s ? "" : undefined} data-sell={side === s && s === "sell" ? "" : undefined}
-              onClick={() => { setSide(s); setState("idle"); setMessage(""); resetRobinhoodReview(); }}>{s[0].toUpperCase() + s.slice(1)}</button>
+              onClick={() => { setSide(s); resetPlan(); }}>{s[0].toUpperCase() + s.slice(1)}</button>
           ))}
         </div>
-        {venue === "alpaca" ? (
-          <div className="dk-pl" role="radiogroup" aria-label="Account mode">
-            <button type="button" data-active={paper ? "" : undefined} onClick={() => setPaper(true)}>Paper</button>
-            <button type="button" data-active={!paper ? "" : undefined} data-live={!paper ? "" : undefined} disabled={!r.liveEnabled} onClick={() => setPaper(false)}>Live</button>
-          </div>
-        ) : <Badge tone="honey">{isRobinhoodAgentic ? "Robinhood Agentic" : isRobinhoodChain ? "Robinhood Chain" : "xStocks · Solana"}</Badge>}
+        <Badge tone={planFlow.mode === "live" ? "live" : "honey"}>{planFlow.mode === "research" ? "Research-only" : planFlow.mode === "paper" ? "Paper simulator" : "Live · governed"}</Badge>
       </div>
 
       <div className="tk-leg">
@@ -262,10 +353,10 @@ export function StockTicket() {
             {price ? <div className="tk-usd" style={{ marginTop: 3, color: price.chg < 0 ? "var(--danger)" : "var(--live)" }}>{trPct(price.chg)} today</div> : null}
           </div>
           <AssetMenu value={choice === OTHER ? "Other" : choice} options={[...tickerOptions, ...((venue === "alpaca" || isRobinhoodAgentic) ? [OTHER] : [])]} values={usdByTicker}
-            getName={(s) => (s === OTHER ? "Custom ticker" : s)} onPick={(s) => { setChoice(s); setState("idle"); resetRobinhoodReview(); }} stock />
+            getName={(s) => (s === OTHER ? "Custom ticker" : s)} onPick={(s) => { setChoice(s); resetPlan(); }} stock />
         </div>
         {choice === OTHER ? (
-          <input className="fb-field" style={{ marginTop: 10 }} placeholder="Ticker e.g. ORCL" value={custom} onChange={(e) => { setCustom(e.target.value.toUpperCase()); resetRobinhoodReview(); }} />
+          <input className="fb-field" style={{ marginTop: 10 }} placeholder="Ticker e.g. ORCL" value={custom} onChange={(e) => { setCustom(e.target.value.toUpperCase()); resetPlan(); }} />
         ) : null}
       </div>
 
@@ -275,10 +366,10 @@ export function StockTicket() {
         <div className="tk-legrow">
           {isUsdSizedVenue ? (
             <input className="tk-input" inputMode="decimal" placeholder="0" value={usd}
-              onChange={(e) => { setUsd(e.target.value.replace(/[^0-9.]/g, "")); setState("idle"); resetRobinhoodReview(); }} aria-label="USD amount" />
+              onChange={(e) => { setUsd(e.target.value.replace(/[^0-9.]/g, "")); resetPlan(); }} aria-label="USD amount" />
           ) : (
             <input className="tk-input" inputMode="decimal" placeholder="0" value={shares}
-              onChange={(e) => { setShares(e.target.value.replace(/[^0-9.]/g, "")); setState("idle"); }} aria-label="Share count" />
+              onChange={(e) => { setShares(e.target.value.replace(/[^0-9.]/g, "")); resetPlan(); }} aria-label="Share count" />
           )}
           <span style={{ fontFamily: "var(--f-mono)", fontSize: 12, color: "var(--fg-3)" }}>{isUsdSizedVenue ? "USD" : "shares"}</span>
         </div>
@@ -286,19 +377,30 @@ export function StockTicket() {
         {!isXstocks && !sell && px > 0 ? (
           <div className="tk-chips">
             {([[0.1, "10%"], [0.25, "25%"], [0.5, "50%"]] as const).map(([p, l]) => (
-              <button key={l} type="button" onClick={() => setShares(String(Math.max(0, Math.floor((buyingPower * p) / px))))}>{l} BP</button>
+              <button key={l} type="button" onClick={() => { setShares(String(Math.max(0, Math.floor((buyingPower * p) / px)))); resetPlan(); }}>{l} BP</button>
             ))}
           </div>
         ) : null}
       </div>
 
+      {venue === "alpaca" ? (
+        <details className="tk-advanced">
+          <summary>Advanced order</summary>
+          <div className="tk-advanced-grid">
+            <label><span>Order type</span><select value={orderType} onChange={(event) => { setOrderType(event.target.value as typeof orderType); resetPlan(); }}><option value="market">Market</option><option value="limit">Limit</option><option value="stop">Stop</option><option value="stop_limit">Stop limit</option></select></label>
+            <label><span>Time in force</span><select value={timeInForce} onChange={(event) => { setTimeInForce(event.target.value as typeof timeInForce); resetPlan(); }}><option value="day">Day</option><option value="gtc">Good until canceled</option><option value="ioc">Immediate or cancel</option><option value="fok">Fill or kill</option></select></label>
+            {orderType === "limit" || orderType === "stop_limit" ? <label><span>Limit price</span><input inputMode="decimal" value={limitPrice} onChange={(event) => { setLimitPrice(event.target.value.replace(/[^0-9.]/g, "")); resetPlan(); }} placeholder={px ? String(px) : "0.00"} /></label> : null}
+            {orderType === "stop" || orderType === "stop_limit" ? <label><span>Stop price</span><input inputMode="decimal" value={stopPrice} onChange={(event) => { setStopPrice(event.target.value.replace(/[^0-9.]/g, "")); resetPlan(); }} placeholder={px ? String(px) : "0.00"} /></label> : null}
+          </div>
+        </details>
+      ) : null}
+
       <div className="tk-review">
-        <ReviewLine k="Order type" v="Market" />
+        <ReviewLine k="Order type" v={venue === "alpaca" ? `${orderType.replace("_", " ")} · ${timeInForce}` : "Market"} />
         {!isXstocks && px > 0 ? <ReviewLine k="Est. price" v={trUsd2(px)} /> : null}
         <ReviewLine k="Est. cost" v={trUsd2(notionalUsd)} />
         {venue === "alpaca" ? <ReviewLine k="Buying power" v={trUsd(buyingPower, true)} icon="wallet" live /> : null}
-        <ReviewLine k="Account" v={isRobinhoodAgentic ? "Robinhood Agentic brokerage" : isRobinhoodChain ? "On-chain · Robinhood Chain" : isXstocks ? "On-chain · xStocks" : paper ? "Paper (simulated)" : "LIVE brokerage"} />
-        {hasRobinhoodReview && robinhoodReview ? <p className="tk-usd" style={{ margin: "8px 0 0" }}>{robinhoodReview}</p> : null}
+        <ReviewLine k="Account" v={isRobinhoodAgentic ? "Robinhood Agentic brokerage" : isRobinhoodChain ? "On-chain · Robinhood Chain" : isXstocks ? "On-chain · xStocks" : planFlow.mode === "live" ? "LIVE brokerage" : planFlow.mode === "paper" ? "Paper simulator" : "Research-only"} />
       </div>
 
       {!r.venueReady && venue === "robinhood-chain" ? (
@@ -321,11 +423,13 @@ export function StockTicket() {
       ) : null}
 
       <button type="button" className="tk-place" data-sell={sell && state === "idle" ? "" : undefined} data-done={state === "done" ? "" : undefined}
-        disabled={!canAct || overBp} onClick={place}>
+        disabled={!canAct || overBp || Boolean(planFlow.plan) || planFlow.busy} onClick={stagePlan}>
         {state === "reviewing" || state === "signing" ? <BIcon name="spinner" size={15} spin /> : state === "done" ? <BIcon name="check" size={15} /> : null}
         {label}
       </button>
-      <div className="tk-foot"><BIcon name="shield" size={12} /> {isRobinhoodAgentic ? "Robinhood review · HivemindOS confirmation · dedicated Agentic account" : isRobinhoodChain ? "Official contracts · USDG swap signed by this wallet" : isXstocks ? "On-chain swap · signed by this wallet" : paper ? "Paper account · Alpaca sandbox" : "LIVE · Alpaca brokerage"}</div>
+      <div className="tk-foot"><BIcon name="shield" size={12} /> Stage → review → approve {planFlow.mode === "live" ? "→ governed submission" : planFlow.mode === "paper" ? "→ virtual fill" : "only"}</div>
+
+      {planFlow.plan ? <TradePlanReviewCard plan={planFlow.plan} busy={planFlow.busy || state === "signing"} onReject={() => void planFlow.reject()} onApprove={() => void approvePlan()} onStartNew={() => { planFlow.clear(); setState("idle"); setMessage(""); }} /> : null}
 
       {!r.venueReady && venue === "alpaca" ? (
         <div style={{ marginTop: 10, textAlign: "center" }}><button type="button" className="fw-manage" onClick={() => onOpenView("env")}>Open Env to add Alpaca keys →</button></div>
@@ -334,6 +438,7 @@ export function StockTicket() {
         <div style={{ marginTop: 10, textAlign: "center" }}><button type="button" className="fw-manage" onClick={() => onOpenView("integrations")}>Open Integrations to connect Robinhood →</button></div>
       ) : null}
       {state === "error" && message ? <p className="tk-error">{message}</p> : null}
+      {planFlow.error ? <p className="tk-error">{planFlow.error}</p> : null}
       {state === "done" && message ? (
         <div className="tk-success">{message}
           <div style={{ marginTop: 6 }}><button type="button" className="fw-manage" onClick={() => onOpenView("wallet")}>View in Wallets · Activity →</button></div>

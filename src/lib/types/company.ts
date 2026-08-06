@@ -297,6 +297,38 @@ export interface CompanyIntegrationLimit {
   updatedAt: string;
 }
 
+/** Reviewed OpenAI OAuth models used by Frontier Lab's cost-conscious tier ladder. */
+export type CompanyFrontierLabModel = "gpt-5.6-luna" | "gpt-5.6-terra" | "gpt-5.6-sol";
+
+/** Work tier selected from the task's role, skills, and title. */
+export type CompanyFrontierLabTaskTier = "scout" | "builder" | "reviewer";
+
+/** Deliberately staged capacity: scale is earned from settled task outcomes. */
+export type CompanyFrontierLabStage = "pilot" | "team" | "frontier";
+
+export interface CompanyFrontierLabPolicy {
+  enabled: boolean;
+  stage: CompanyFrontierLabStage;
+  /** Calendar-month control budget. This is an internal token ceiling, not provider billing. */
+  monthlyTokenLimit: number;
+  /** Conservative token reservation taken before each autonomous task attempt. */
+  perTaskTokenLimit: number;
+  /** Maximum concurrently active Work Board tasks for this company. */
+  maxParallelTasks: number;
+  /** Maximum tasks planned in one autonomy cycle. */
+  maxTasksPerCycle: number;
+  /** Maximum concurrent model turns on one machine, bounded again by the stage. */
+  perMachineConcurrency: number;
+  /** Reuse online identities as elastic task slots instead of limiting work to one slot per identity. */
+  elasticWorkers: boolean;
+  /** Always true after normalization: company task completion keeps its independent review gate. */
+  requireIndependentReview: boolean;
+  /** Frontier Lab is intentionally OAuth-only; no OpenRouter or metered API-key fallback. */
+  provider: "openai-oauth";
+  /** Immutable reviewed ladder: Luna scouts, Terra builds, Sol reviews. */
+  models: Record<CompanyFrontierLabTaskTier, CompanyFrontierLabModel>;
+}
+
 export interface Company {
   id: string;
   name: string;
@@ -400,6 +432,8 @@ export interface Company {
   apiBudgets?: CompanyApiBudget[];
   /** Local request/spend preflight limits for API and integration operations. */
   integrationLimits?: CompanyIntegrationLimit[];
+  /** Company-scoped intelligence budget, elastic capacity, scale gates, and reviewed OAuth model ladder. */
+  frontierLab?: CompanyFrontierLabPolicy;
   /**
    * Declared shared-env keys this company needs (seeded by its template).
    * Drives the PROACTIVE setup checklist: a declared key missing from the hive

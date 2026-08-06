@@ -28,6 +28,10 @@ const ignoredDirectories = new Set([
   "node_modules",
   "promo-videos",
   "remotion",
+  // Local diagnostic and macOS TMPDIR mirrors. Neither is repository source;
+  // both are gitignored and can contain complete generated Next.js trees.
+  "tmp",
+  "var",
 ]);
 
 const ignoredRelativeDirectories = new Set([

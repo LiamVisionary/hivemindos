@@ -9,8 +9,8 @@ import { dirname, join } from "node:path";
 function resolveWasmPath(): string {
   try {
     const req = createRequire(import.meta.url);
-    const pkgJson = req.resolve("@lottiefiles/dotlottie-web/package.json");
-    return join(dirname(pkgJson), "dist", "dotlottie-player.wasm");
+    const packageEntry = req.resolve("@lottiefiles/dotlottie-web");
+    return join(dirname(packageEntry), "dotlottie-player.wasm");
   } catch {
     return join(
       process.cwd(),

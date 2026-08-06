@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-07-29T13:49:33.830064+00:00",
+  "request": "Add an hourly market-hours evidence monitor and weekly accumulated-cohort audit to the research-only penny-stock paper loop while keeping policy evolution once after close.",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:src/lib/services/penny-stock-paper/runner.ts",
+      "target_path": "src/lib/services/penny-stock-paper/cadence.ts",
+      "reuse_type": "adapted_code",
+      "note": "append-only artifact lineage, stable hashing, and immutable writes"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:src/lib/services/penny-stock-paper/execution-research.ts",
+      "target_path": "src/lib/services/penny-stock-paper/research.ts",
+      "reuse_type": "adapted_code",
+      "note": "bounded SIP execution evidence reused by hourly monitor bundle"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:src/lib/services/penny-stock-paper/risk-intelligence.ts",
+      "target_path": "src/lib/services/penny-stock-paper/risk-intelligence.ts",
+      "reuse_type": "adapted_code",
+      "note": "SEC and corporate-action normalization extended with marker-delta detection"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:src/lib/services/copy-trading/evolution.ts",
+      "target_path": "src/lib/services/penny-stock-paper/cadence.ts",
+      "reuse_type": "adapted_code",
+      "note": "matured cohort and holdout readiness gates adapted for weekly audit"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:scripts/test-penny-stock-paper-lab.mjs",
+      "target_path": "scripts/test-penny-stock-paper-lab.mjs",
+      "reuse_type": "test_adapted",
+      "note": "append-only fixtures extended for cadence skip and audit contracts"
+    }
+  ]
+}

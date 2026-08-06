@@ -31,8 +31,8 @@
   --line-3: rgba(238, 232, 220, 0.20);
   --fg: #f3f0e9;
   --fg-2: #a7a39a;
-  --fg-3: #76726a;
-  --fg-4: #545049;
+  --fg-3: #a7a39a;
+  --fg-4: #918c83;
   --honey: #e7b45c;
   --honey-soft: rgba(231, 180, 92, 0.13);
   --honey-line: rgba(231, 180, 92, 0.32);
@@ -72,8 +72,8 @@
   --line-3: rgba(54, 46, 30, 0.26);
   --fg: #221d14;
   --fg-2: #5e574b;
-  --fg-3: #867d6e;
-  --fg-4: #a59b89;
+  --fg-3: #5e574b;
+  --fg-4: #6f6657;
   --honey: #936811; --honey-fill: #e6bb5c;
   --honey-soft: rgba(176, 127, 28, 0.12);
   --honey-line: rgba(176, 127, 28, 0.34);
@@ -167,6 +167,7 @@
 
 .scoreDial {
   position: relative;
+  container-type: inline-size;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -218,12 +219,14 @@
 .scoreValue {
   position: relative;
   z-index: 1;
+  max-width: 100%;
   font-family: var(--f-display);
   font-weight: 600;
   letter-spacing: 0;
   color: var(--honey);
-  font-size: clamp(40px, 9vw, 56px);
+  font-size: clamp(26px, var(--score-fit-size, 9vw), 56px);
   line-height: 0.92;
+  overflow-wrap: anywhere;
 }
 
 .scoreDial small {

@@ -146,7 +146,10 @@ export function HivemindOSManagementPanel() {
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [load]);
 
   // Load local Base signing wallets that can pay a top-up over x402 (USDC).
   useEffect(() => {

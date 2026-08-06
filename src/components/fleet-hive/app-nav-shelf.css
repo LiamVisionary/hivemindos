@@ -1,5 +1,11 @@
 /* Keep full-size targets in the narrow rail, then pair the two icon utilities
    once hover or keyboard focus opens enough horizontal room for both. */
+body:has(.fr-shelf.fr-shelf-app:hover) .commandShell,
+body:has(.fr-shelf.fr-shelf-app[data-keyboard-focus="true"]:focus-within) .commandShell,
+body:has(.fr-shelf.fr-shelf-app[data-footer-tooltip-open="true"]) .commandShell {
+  --shelf-w: 238px;
+}
+
 .fr-shelf[data-footer-tooltip-open="true"] {
   width: 238px;
   box-shadow: 34px 0 70px -34px rgba(0, 0, 0, 0.55);

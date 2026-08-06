@@ -48,12 +48,16 @@ sections:
             url: /for-users/features/runtimes-and-chat.html
           - title: Local Document Reader
             url: /for-users/features/local-document-reader.html
+          - title: Hivemind Office Companion
+            url: /for-users/features/hivemind-office.html
           - title: Local Web Research
             url: /for-users/features/web-research.html
           - title: Calling
             url: /for-users/features/calling.html
           - title: Socials
             url: /for-users/features/socials.html
+          - title: X Command Bot
+            url: /for-users/features/x-command-bot.html
           - title: Work And Scheduler
             url: /for-users/features/work-and-scheduler.html
           - title: Loop Engineering
@@ -133,6 +137,8 @@ sections:
         url: /for-users/trading/
       - title: Crypto Trading
         url: /for-users/trading/crypto.html
+      - title: Concentrated Liquidity
+        url: /for-users/trading/concentrated-liquidity.html
       - title: Hyperliquid Trading
         url: /for-users/trading/hyperliquid.html
       - title: Stock Trading

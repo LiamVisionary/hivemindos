@@ -73,10 +73,17 @@ await setHermesModelAssignment({
   pythonPath: "/home/liam/.hermes/hermes-agent/venv/bin/python",
   provider: "openrouter",
   model: "anthropic/claude-sonnet-4.6",
+  providerConfig: {
+    name: "SIE",
+    baseUrl: "http://127.0.0.1:8080/v1",
+    keyEnv: "",
+  },
   execFileAsync,
 });
 assert.match(calls[1].args[1], /save_config/);
 assert.match(calls[1].args[1], /_apply_main_model_assignment/);
+assert.match(calls[1].args[1], /HIVEMINDOS_HERMES_PROVIDER_BASE_URL/);
 assert.equal(calls[1].options.env.HERMES_HOME, "/home/liam/.hermes/profiles/worker");
+assert.equal(calls[1].options.env.HIVEMINDOS_HERMES_PROVIDER_BASE_URL, "http://127.0.0.1:8080/v1");
 
 console.log("hermes model settings bridge regression passed");

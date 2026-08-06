@@ -232,7 +232,7 @@ export const NANSEN_ENDPOINTS = {
     path: "/api/v1/tgm/holders",
     label: "TGM holders",
     category: "token",
-    credits: 1,
+    credits: 5,
     redistribution: "attribution-required",
     attributionRequired: true,
     note: "Token holder distribution and smart-money holder segments.",
@@ -562,12 +562,16 @@ export async function buildNansenTokenBrief(input: NansenTokenBriefInput): Promi
   const calls: Promise<NansenUpstreamCall>[] = [];
 
   if (tokenAddress) {
-    calls.push(nansenPost("tokenInformation", tokenBody(chain, tokenAddress, input.date)));
-    calls.push(nansenPost("tokenFlowIntelligence", tokenBody(chain, tokenAddress, input.date)));
-    calls.push(nansenPost("tokenWhoBoughtSold", tokenBody(chain, tokenAddress, input.date)));
-    calls.push(nansenPost("tokenOhlcv", tokenBody(chain, tokenAddress, input.date)));
-    if (input.includeTrades) calls.push(nansenPost("tokenDexTrades", tokenBody(chain, tokenAddress, input.date)));
-    if (input.includeIndicators) calls.push(nansenPost("tokenIndicators", tokenBody(chain, tokenAddress, input.date)));
+    const date = input.date ?? defaultDateRangeDays(7);
+    const base = { ...(chain ? { chain } : {}), token_address: tokenAddress };
+    const dated = { ...base, date, pagination: { page: 1, per_page: 25 } };
+    calls.push(nansenPost("tokenInformation", { ...base, timeframe: "1d" }));
+    calls.push(nansenPost("tokenFlowIntelligence", { ...base, timeframe: "1d" }));
+    calls.push(nansenPost("tokenWhoBoughtSold", { ...dated, buy_or_sell: "BUY" }));
+    calls.push(nansenPost("tokenWhoBoughtSold", { ...dated, buy_or_sell: "SELL" }));
+    calls.push(nansenPost("tokenOhlcv", { ...base, date, timeframe: "1h" }));
+    if (input.includeTrades) calls.push(nansenPost("tokenDexTrades", dated));
+    if (input.includeIndicators) calls.push(nansenPost("tokenIndicators", base));
   } else {
     if (tokenSymbol) calls.push(nansenPost("search", searchBody(tokenSymbol, chain)));
     calls.push(nansenPost("tokenScreener", tokenScreenerBody({
@@ -1433,15 +1437,6 @@ function nansenComplianceNotes() {
     "Show attribution near Nansen-derived displayed data when a source marks attribution required.",
     "Never store or print Nansen API keys; credential status is reported by key name only.",
   ];
-}
-
-function tokenBody(chain: string | undefined, tokenAddress: string, date?: DateRangeInput) {
-  return {
-    ...(chain ? { chain } : {}),
-    token_address: tokenAddress,
-    ...(date ? { date } : {}),
-    pagination: { page: 1, per_page: 25 },
-  };
 }
 
 function tokenScreenerBody(input: {

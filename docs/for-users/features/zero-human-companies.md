@@ -79,6 +79,7 @@ The cockpit is organized into tabs:
 - **Systems** — imported workflows and schedules for companies linked from an existing project.
 - **Sources** — locally imported data-room documents with type, provenance, and direct links to their Shared Brain notes.
 - **Limits** — integration request and spend guardrails, Google Cloud quotas and billing budgets, and 30-day usage charts.
+- **Frontier Lab** — company-scoped token capacity, elastic task slots, earned scale gates, the reviewed OpenAI OAuth model ladder, and recent task settlements.
 - **Team** — the org chart and agent membership.
 - **Analytics** — company performance and operating summaries.
 - **Learning** — capability-capital metrics and the eval frontier.
@@ -133,6 +134,48 @@ The Board tab has one launch control whose label follows the selected engine.
 **Stop autonomy** halts new dispatches; work already in flight finishes. Launching also claims the company for the machine that pressed the button, so a company definition replicated across the fleet auto-dispatches only from its home machine rather than from every machine at once.
 
 Every company needs an explicit apex goal and an unfrozen treasury. The HivemindOS crew engine also needs at least one company agent; the AEON engine needs a current workspace and runnable skill instead. The Board shows when the goal was last dispatched and whether autonomy is running.
+
+## Frontier Lab
+
+Frontier Lab turns the native company execution loop into a governed intelligence utility. It is for operators who want one small crew to run more concurrent, independently reviewed work without pretending that more agent names automatically create more capability.
+
+Frontier Lab currently requires the native **HivemindOS crew** with the **hierarchical** process. It cannot be enabled for AEON, sequential flows, or graph flows because those execution boundaries do not yet provide the same task-scoped reservation and settlement path. This is a fail-closed product boundary: an external or unattributed run never inherits a budget merely because the dashboard shows one.
+
+### OAuth-Only Model Ladder
+
+Frontier Lab uses one immutable reviewed ladder:
+
+- **Scout — `gpt-5.6-luna`:** research, triage, planning, and routine synthesis.
+- **Builder — `gpt-5.6-terra`:** implementation, operations, design, and deployment.
+- **Reviewer — `gpt-5.6-sol`:** independent QA, evaluation, security, and audit gates.
+
+All three tiers use the local OpenAI OAuth provider (`openai-codex`). Enabling requires a working OpenAI OAuth session and at least two distinct configured company agent identities, so the worker cannot review its own result. Frontier Lab does not fall back to OpenRouter, Claude, or an API-key provider when OAuth is absent. Stored policy is normalized again at runtime, so a hand-edited provider or model cannot silently bypass this ladder; dispatch rechecks that the reviewer is online and independent.
+
+### Token Reservations And Settlement
+
+The monthly ceiling is an internal token control budget, not a provider bill or a promise about subscription economics. Before a Frontier Lab task can claim a worker or call a model, HivemindOS atomically reserves the configured per-task amount in the company's private intelligence ledger. Concurrent processes cannot reserve the same remaining budget twice, and reservation ids make retries idempotent.
+
+After execution, collector-reported worker and reviewer usage settles against the same task reservation. If a request starts but its response or usage metadata is unavailable, HivemindOS conservatively settles at least the full reservation and labels it estimated. A reservation is released only when execution stops before any inference request starts, and that release does not count as scale-gate evidence. Observed overages are preserved as facts and reduce future capacity to zero until the UTC month rolls over or the operator raises the ceiling.
+
+A task created under Frontier Lab carries its tier on the Work Board. Disabling Frontier Lab while such a task is still queued does not let the task escape onto its agent's ordinary provider: it blocks before inference until the company policy is restored or the task is deliberately replaced outside Frontier Lab.
+
+### Elastic Capacity And Scale Gates
+
+Elastic workers mean an online company identity may serve more than one bounded task slot. They do not clone memory, create new wallets, bypass one-company identity isolation, or manufacture capacity without at least two online, independently identifiable worker/reviewer agents. The stage, monthly budget, per-task reservation, active reservations, tasks-per-cycle limit, parallel-task limit, and per-machine concurrency all constrain the scheduler; the smallest available bound wins.
+
+Scale is operator-selected and evidence-gated:
+
+| Stage | Maximum parallel tasks | Tasks per cycle | Turns per machine | Evidence required to enter |
+| --- | ---: | ---: | ---: | --- |
+| Pilot | 4 | 4 | 1 | Starting stage |
+| Team | 12 | 12 | 2 | 3 settled tasks at 67% success |
+| Frontier | 24 | 24 | 4 | 12 settled tasks at 80% success |
+
+Scaling down is always available. Scaling up is never automatic: the cockpit enables a larger stage only after the company's settled outcomes meet its gate. These are safe capacity ceilings, not a literal “100 employees” equivalence or a claim that task count alone produces frontier-quality research.
+
+### Cockpit Operation
+
+Open a company and choose **Frontier Lab**. The cockpit shows settled, reserved, and remaining tokens; budget-affordable configured slots (with online routing rechecked at dispatch); success evidence; stage locks; the model assigned to each tier; and recent task-scoped reservation events. Choose preset ceilings and concurrency limits, enable elastic slots if desired, select an earned stage, then save. Frontier planning itself is deterministic so no unreserved planner call can escape the ledger; metered inference starts only after a task reservation. New native hierarchical dispatches immediately use the saved policy. Existing non-Frontier tasks are not retroactively reclassified.
 
 ## Deliverables
 

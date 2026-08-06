@@ -18,6 +18,23 @@ import { isLocalCollectorUrl } from "@/lib/services/local-collector-url";
 import { runtimeCommandEnv } from "@/lib/services/runtime-command-env";
 import { companyIdFromSource } from "@/lib/services/queen-bee/company-task-context";
 import { scoreModelStrength } from "@/lib/config/model-strength";
+import { getCompany as readCompany } from "@/lib/services/companies-store";
+import {
+  frontierLabTierFromSkills,
+  normalizeFrontierLabPolicy,
+  openAiOAuthAgentForFrontierLabTier,
+} from "@/lib/frontier-lab";
+import {
+  addCompanyIntelligenceUsage,
+  companyIntelligenceUsageFromResponse,
+  releaseCompanyIntelligenceReservation,
+  reserveCompanyIntelligence,
+  settleCompanyIntelligenceReservation,
+  type CompanyIntelligenceLedgerOptions,
+  type CompanyIntelligenceOutcome,
+  type CompanyIntelligenceUsage,
+} from "@/lib/services/company-intelligence-usage";
+import type { Company } from "@/lib/types/company";
 
 const execFileAsync = promisify(execFile);
 
@@ -44,6 +61,7 @@ export type QueenBeeAutonomousAgent = {
   agentId?: string;
   name?: string;
   runtime?: string;
+  provider?: string;
   model?: string;
   beeRole?: string;
   workerClass?: string;
@@ -110,6 +128,10 @@ export type QueenBeeAutonomousPickupDeps = {
   reroute?: KanbanMutations["reroute"];
   fail?: KanbanMutations["fail"];
   heartbeat?: KanbanMutations["heartbeat"];
+  /** Test seam and alternate store adapter; production reads the replicated company registry. */
+  getCompany?: (id: string) => Promise<Company | null>;
+  /** Hermetic ledger path/clock for tests. Production uses the private HivemindOS ledger. */
+  intelligenceLedgerOptions?: CompanyIntelligenceLedgerOptions;
 };
 
 /**
@@ -161,19 +183,25 @@ const CLAIM_CONFLICT = /not ready to claim|claimed by another worker/i;
 // QUEEN_BEE_MACHINE_SLOT_WAIT_MS (default 10 min) for a slot, then skip that
 // delegate. A pickup whose delegates were ONLY skipped for capacity leaves the
 // task "ready" for the next dispatch sweep instead of blocking it to a human.
-// Set QUEEN_BEE_MACHINE_CHAT_CONCURRENCY=0 to disable the gate entirely.
+// Set QUEEN_BEE_MACHINE_CHAT_CONCURRENCY=0 to disable the ordinary-company gate.
+// A Frontier Lab policy still supplies its own reviewed per-machine ceiling.
 // In-process only — the driver's machine-wide lease keeps autonomous dispatch
 // in one server process, so this covers the batch path that caused the pile-up.
 type MachineChatSlot = { active: number; waiters: Array<{ grant: () => void }> };
 const machineChatSlots = new Map<string, MachineChatSlot>();
 const inFlightPickupTaskIds = new Set<string>();
 
-function machineChatConcurrency() {
+function machineChatConcurrency(requestedLimit?: number) {
   const raw = String(process.env.QUEEN_BEE_MACHINE_CHAT_CONCURRENCY ?? "").trim();
-  if (!raw) return 1;
+  const requested = Number.isFinite(requestedLimit) && Number(requestedLimit) > 0
+    ? Math.max(1, Math.floor(Number(requestedLimit)))
+    : undefined;
+  if (!raw) return requested ?? 1;
   const parsed = Number(raw);
   if (!Number.isFinite(parsed) || parsed < 0) return 1;
-  return parsed === 0 ? Number.POSITIVE_INFINITY : Math.floor(parsed);
+  if (parsed === 0) return requested ?? Number.POSITIVE_INFINITY;
+  const operatorLimit = Math.floor(parsed);
+  return requested ? Math.min(operatorLimit, requested) : operatorLimit;
 }
 
 function machineSlotWaitMs() {
@@ -206,8 +234,8 @@ export function pickupMachineKey(delegation: QueenBeeAutonomousDelegation, colle
   }
 }
 
-async function acquireMachineChatSlot(key: string): Promise<boolean> {
-  const limit = machineChatConcurrency();
+async function acquireMachineChatSlot(key: string, requestedLimit?: number): Promise<boolean> {
+  const limit = machineChatConcurrency(requestedLimit);
   if (!Number.isFinite(limit)) return true;
   const slot = machineChatSlots.get(key) ?? { active: 0, waiters: [] };
   machineChatSlots.set(key, slot);
@@ -285,6 +313,23 @@ export async function runQueenBeeAutonomousPickup(
     return { ok: false, status: "skipped", taskId: input.task.id, error: "Task has no live delegated collector/agent." };
   }
 
+  const companyId = companyIdFromSource(input.task.source);
+  const company = companyId ? await (deps.getCompany ?? readCompany)(companyId) : null;
+  const taggedFrontierTier = frontierLabTierFromSkills(input.task.skills);
+  if (taggedFrontierTier && (!companyId || !company || !company.frontierLab)) {
+    const reason = "Frontier Lab task cannot resolve its company policy, so inference is blocked fail-closed.";
+    await block(null, input.task.id, `${reason}\n\nRestore the company definition, then return this task to Ready.`, storageOptions);
+    return { ok: false, status: "blocked", taskId: input.task.id, error: reason };
+  }
+  // Only dispatch-stamped tasks enter Frontier routing. Enabling a company must
+  // not retroactively reclassify older queued tasks that lack a reviewed tier.
+  const frontierPolicy = taggedFrontierTier && company?.frontierLab
+    ? normalizeFrontierLabPolicy(company.frontierLab)
+    : undefined;
+  const frontierTier = frontierPolicy
+    ? taggedFrontierTier ?? "scout"
+    : undefined;
+
   let currentTask = input.task;
   let lastClaimLock = "";
   let lastCollectorUrl = "";
@@ -321,6 +366,9 @@ export async function runQueenBeeAutonomousPickup(
     const delegation = chain[index];
     const collectorUrl = collectorUrlForDelegation(currentTask, delegation);
     const agent = delegation.agent ?? null;
+    const effectiveAgent = frontierTier && agent
+      ? { ...agent, ...openAiOAuthAgentForFrontierLabTier(frontierTier) }
+      : agent;
     const agentName = delegationAgentName(delegation, currentTask.assignee);
     lastCollectorUrl = collectorUrl;
     lastAgentName = agentName;
@@ -331,7 +379,7 @@ export async function runQueenBeeAutonomousPickup(
     }
 
     const machineKey = pickupMachineKey(delegation, collectorUrl);
-    if (saturatedMachines.has(machineKey) || !(await acquireMachineChatSlot(machineKey))) {
+    if (saturatedMachines.has(machineKey) || !(await acquireMachineChatSlot(machineKey, frontierPolicy?.perMachineConcurrency))) {
       saturatedMachines.add(machineKey);
       capacitySkips += 1;
       failures.push(`${agentName}: machine "${machineKey}" is at its autonomous chat capacity`);
@@ -341,12 +389,41 @@ export async function runQueenBeeAutonomousPickup(
     const claimLock = `queen-bee-autonomous:${input.task.id}:${Date.now().toString(36)}:${index + 1}`;
     lastClaimLock = claimLock;
     let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+    let intelligenceReservationId: string | undefined;
+    let intelligenceUsage: CompanyIntelligenceUsage | undefined;
+    let intelligenceAttempted = false;
+    let intelligenceUnobservedAttempt = false;
+    let intelligenceEstimated = false;
+    let intelligenceOutcome: CompanyIntelligenceOutcome = "failed";
+    let intelligenceReason: string | undefined;
 
     try {
+      if (frontierPolicy && frontierTier && company) {
+        // updatedAt is the task revision: concurrent pickups share it and dedupe,
+        // while a human requeue/retry creates a fresh revision that may reserve
+        // again even when an earlier reservation for this attempt is terminal.
+        const reservationId = `${input.task.id}:attempt-${Math.max(1, currentTask.attempt ?? 1)}:revision-${currentTask.updatedAt}:delegate-${index + 1}`;
+        const reservation = await reserveCompanyIntelligence(company, {
+          reservationId,
+          taskId: input.task.id,
+          tier: frontierTier,
+        }, deps.intelligenceLedgerOptions);
+        if (reservation.duplicate) {
+          return backOff(`Backed off: Frontier Lab reservation ${reservationId} is already owned by another or prior pickup.`);
+        }
+        if (reservation.decision === "block") {
+          const reason = reservation.reason ?? "The company intelligence budget blocked this task.";
+          await block(null, input.task.id, `${reason}\n\nIncrease the Frontier Lab token budget, lower its per-task reservation, or disable Frontier Lab, then return this task to Ready.`, storageOptions);
+          await advanceFlowIfTagged(input.task, "failed", reason, input.vaultPath);
+          return { ok: false, status: "blocked", taskId: input.task.id, claimLock, collectorUrl, agentName, error: reason };
+        }
+        intelligenceReservationId = reservationId;
+      }
+
       const claimed = await claim(null, input.task.id, {
         assignee: agentName,
         claimer: claimLock,
-        runtime: agent?.runtime || "hermes",
+        runtime: effectiveAgent?.runtime || "hermes",
         ttlMs: currentTask.maxRuntimeMs || DEFAULT_PICKUP_TTL_MS,
       }, storageOptions);
       currentTask = claimed.task;
@@ -362,25 +439,43 @@ export async function runQueenBeeAutonomousPickup(
         heartbeatTimer.unref?.();
       }
 
-      const runWorkerChat = (message: string) => fetchJson(`${collectorUrl}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message,
-          rawUserMessage: message,
-          stream: false,
-          agent,
-          context: {
-            queenBeeTaskId: input.task.id,
-            companyId: companyIdFromSource(claimed.task.source) || undefined,
-            companyTaskId: companyIdFromSource(claimed.task.source) ? claimed.task.id : undefined,
-            queenBeeAutonomousPickup: true,
-            claimLock,
-            marker: input.marker,
-          },
-        }),
-        signal: AbortSignal.timeout(pickupChatTimeoutMs(claimed.task)),
-      });
+      const observeIntelligence = (response: unknown) => {
+        if (!intelligenceReservationId) return;
+        intelligenceUnobservedAttempt = false;
+        const responseUsage = companyIntelligenceUsageFromResponse(response);
+        if (!responseUsage) intelligenceEstimated = true;
+        intelligenceUsage = addCompanyIntelligenceUsage(intelligenceUsage, responseUsage);
+      };
+      const beginIntelligenceAttempt = () => {
+        if (!intelligenceReservationId) return;
+        intelligenceAttempted = true;
+        intelligenceUnobservedAttempt = true;
+      };
+      const runWorkerChat = async (message: string) => {
+        beginIntelligenceAttempt();
+        const response = await fetchJson(`${collectorUrl}/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message,
+            rawUserMessage: message,
+            stream: false,
+            agent: effectiveAgent,
+            context: {
+              queenBeeTaskId: input.task.id,
+              companyId: companyIdFromSource(claimed.task.source) || undefined,
+              companyTaskId: companyIdFromSource(claimed.task.source) ? claimed.task.id : undefined,
+              queenBeeAutonomousPickup: true,
+              frontierLabTier: frontierTier,
+              claimLock,
+              marker: input.marker,
+            },
+          }),
+          signal: AbortSignal.timeout(pickupChatTimeoutMs(claimed.task)),
+        });
+        observeIntelligence(response);
+        return response;
+      };
 
       let text = chatText(await runWorkerChat(autonomousWorkerPrompt(claimed.task, input.marker)));
       if (!text.trim()) {
@@ -418,6 +513,8 @@ export async function runQueenBeeAutonomousPickup(
       // /^ACTION NEEDED:/m column-0 uppercase-only match let those complete as "done"
       // with the ask buried in the result (live incident 2026-07-06).
       if (/(?:^|\n)\s*ACTION[\s_-]*NEEDED\s*:/i.test(text) || /^Blocked\b/.test(text.trim())) {
+        intelligenceOutcome = "blocked";
+        intelligenceReason = "Agent asked for human input.";
         await block(null, input.task.id, text, storageOptions);
         await advanceFlowIfTagged(input.task, "failed", text, input.vaultPath);
         return { ok: false, status: "blocked", taskId: input.task.id, claimLock, collectorUrl, agentName, error: "Agent asked for human input." };
@@ -429,12 +526,17 @@ export async function runQueenBeeAutonomousPickup(
       const loopJudge = reviewer
         ? makeLoopJudge({
           collectorUrl: delegationCollectorUrl(reviewer),
-          agent: reviewer.agent!,
+          agent: frontierPolicy
+            ? { ...reviewer.agent!, ...openAiOAuthAgentForFrontierLabTier("reviewer") }
+            : reviewer.agent!,
           fetchJson,
           claimLock,
           marker: input.marker,
           machineKey: pickupMachineKey(reviewer, delegationCollectorUrl(reviewer)),
           heldMachineKey: machineKey,
+          requestedMachineConcurrency: frontierPolicy?.perMachineConcurrency,
+          onAttempt: beginIntelligenceAttempt,
+          onResponse: observeIntelligence,
         })
         : undefined;
       const { receipts } = await runLoopGates({
@@ -464,12 +566,15 @@ export async function runQueenBeeAutonomousPickup(
       const blockedByGates = completion?.blocked === true || completion?.task?.status === "needs-human";
       currentTask = completion.task ?? currentTask;
       if (!blockedByGates) {
+        intelligenceOutcome = "completed";
         await advanceFlowIfTagged(input.task, "passed", text, input.vaultPath);
         return { ok: true, status: "completed", taskId: input.task.id, claimLock, collectorUrl, agentName };
       }
 
       const missing = completion?.missingGateIds ?? [];
       const message = `Worker finished but required loop gates are unsatisfied: ${missing.join(", ") || "missing required eval receipts"}.`;
+      intelligenceOutcome = "blocked";
+      intelligenceReason = message;
       failures.push(`${agentName}: ${message}`);
       const next = nextPickupDelegation(chain, index + 1, currentTask);
       if (!next) {
@@ -481,6 +586,8 @@ export async function runQueenBeeAutonomousPickup(
       currentTask = rerouted;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Queen Bee autonomous pickup failed.";
+      intelligenceOutcome = "failed";
+      intelligenceReason = message;
       if (CLAIM_CONFLICT.test(message)) {
         return backOff(`Backed off: ${agentName} could not claim task ${input.task.id} — another dispatcher already holds it (${message})`);
       }
@@ -504,6 +611,28 @@ export async function runQueenBeeAutonomousPickup(
       currentTask = rerouted;
     } finally {
       if (heartbeatTimer) clearInterval(heartbeatTimer);
+      if (intelligenceReservationId && companyId) {
+        try {
+          if (intelligenceAttempted) {
+            const estimated = intelligenceEstimated || intelligenceUnobservedAttempt;
+            await settleCompanyIntelligenceReservation(companyId, intelligenceReservationId, {
+              outcome: intelligenceOutcome,
+              usage: estimated
+                ? { ...intelligenceUsage, totalTokens: Math.max(intelligenceUsage?.totalTokens ?? 0, frontierPolicy?.perTaskTokenLimit ?? 0) }
+                : intelligenceUsage,
+              estimated,
+              reason: intelligenceReason,
+            }, deps.intelligenceLedgerOptions);
+          } else {
+            await releaseCompanyIntelligenceReservation(companyId, intelligenceReservationId, {
+              outcome: "failed",
+              reason: intelligenceReason ?? "Pickup ended before an inference response was observed.",
+            }, deps.intelligenceLedgerOptions);
+          }
+        } catch (ledgerError) {
+          console.error(`[queen-bee] failed to settle Frontier Lab reservation ${intelligenceReservationId}:`, ledgerError);
+        }
+      }
       releaseMachineChatSlot(machineKey);
     }
   }
@@ -895,6 +1024,9 @@ function makeLoopJudge(ctx: {
   machineKey?: string;
   /** Machine key whose chat slot the worker pickup ALREADY holds while gates run. */
   heldMachineKey?: string;
+  requestedMachineConcurrency?: number;
+  onAttempt?: () => void;
+  onResponse?: (response: unknown) => void;
 }): LoopGateJudge | undefined {
   if (process.env.QUEEN_BEE_LOOP_JUDGE === "0") return undefined;
   return async ({ gate, output, goal, successCriteria, contract, evaluationRubric }) => {
@@ -920,25 +1052,30 @@ function makeLoopJudge(ctx: {
         ? `Score every rubric axis. Reply with ONE line of JSON only: {"accepted":true|false,"confidence":0.0,"reason":"<short reason>","axes":[${evaluationRubric.axes.map((axis) => `{"id":"${axis.id}","score":0.0,"evidence":["specific evidence"]}`).join(",")}]} . Accept only when every score is evidence-backed and the weighted result meets the threshold.`
         : 'Reply with ONE line of JSON only: {"accepted":true|false,"confidence":0.0,"reason":"<short reason>","axes":[]}. Accept only if the output genuinely meets the gate; otherwise reject.',
     ].filter(Boolean).join("\n");
-    const runJudgeChat = (message: string) => ctx.fetchJson(`${ctx.collectorUrl}/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message,
-        rawUserMessage: message,
-        stream: false,
-        agent: ctx.agent,
-        context: { queenBeeLoopJudge: true, gateId: gate.id, claimLock: ctx.claimLock },
-      }),
-      signal: AbortSignal.timeout(Number(process.env.QUEEN_BEE_LOOP_JUDGE_TIMEOUT_MS || 120_000)),
-    });
+    const runJudgeChat = async (message: string) => {
+      ctx.onAttempt?.();
+      const response = await ctx.fetchJson(`${ctx.collectorUrl}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message,
+          rawUserMessage: message,
+          stream: false,
+          agent: ctx.agent,
+          context: { queenBeeLoopJudge: true, gateId: gate.id, claimLock: ctx.claimLock },
+        }),
+        signal: AbortSignal.timeout(Number(process.env.QUEEN_BEE_LOOP_JUDGE_TIMEOUT_MS || 120_000)),
+      });
+      ctx.onResponse?.(response);
+      return response;
+    };
     // A judge chat landing on a DIFFERENT machine than the one the worker pickup
     // already holds must take that machine's own chat slot — the 1-chat-per-machine
     // gate protects small boxes from concurrent `hermes -z` turns regardless of which
     // pickup fired them. A same-machine judge keeps running under the already-held
     // slot: re-acquiring it here would self-deadlock the pickup against itself.
     const needsOwnSlot = Boolean(ctx.machineKey && ctx.machineKey !== ctx.heldMachineKey);
-    if (needsOwnSlot && !(await acquireMachineChatSlot(ctx.machineKey!))) {
+    if (needsOwnSlot && !(await acquireMachineChatSlot(ctx.machineKey!, ctx.requestedMachineConcurrency))) {
       return {
         accepted: false,
         summary: `Reviewer machine "${ctx.machineKey}" is at its autonomous chat capacity; the judge chat never ran.`,

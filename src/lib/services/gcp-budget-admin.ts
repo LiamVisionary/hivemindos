@@ -34,9 +34,35 @@ import type { CompanyApiBudget } from "@/lib/types/company";
  */
 
 const SERVICE_USAGE_BASE = "https://serviceusage.googleapis.com/v1beta1";
+/** services:enable lives on the v1 surface (verified against current docs,
+ *  2026-07-26): POST v1/projects/{ref}/services/{service}:enable, empty body,
+ *  returns an Operation. `cloud-platform` scope (which the stored grant holds —
+ *  the quota-override apply writes with it) satisfies the call; the needed IAM
+ *  permission is serviceusage.services.enable. */
+const SERVICE_USAGE_V1_BASE = "https://serviceusage.googleapis.com/v1";
 const BILLING_BUDGETS_BASE = "https://billingbudgets.googleapis.com/v1";
 const RESOURCE_MANAGER_BASE = "https://cloudresourcemanager.googleapis.com/v1";
 const CLOUD_BILLING_BASE = "https://cloudbilling.googleapis.com/v1";
+
+/**
+ * The ONLY services the enable rail may switch on: the discovery/guardrail
+ * APIs this panel itself calls (Resource Manager + Cloud Billing power the
+ * pickers, Service Usage + Billing Budgets power the guardrail apply) plus the
+ * two Places surfaces the cost guardrails exist for. Never a free-form service
+ * enabler — enabling arbitrary APIs is a spend/attack surface.
+ */
+export const ENABLEABLE_GCP_SERVICES: readonly string[] = [
+  "cloudresourcemanager.googleapis.com",
+  "cloudbilling.googleapis.com",
+  "billingbudgets.googleapis.com",
+  "serviceusage.googleapis.com",
+  "places.googleapis.com",
+  "places-backend.googleapis.com",
+];
+
+export function isEnableableGcpService(service: string): boolean {
+  return ENABLEABLE_GCP_SERVICES.includes(service.trim());
+}
 
 const REQUEST_TIMEOUT_MS = 20_000;
 const OPERATION_TIMEOUT_MS = 30_000;
@@ -148,6 +174,8 @@ async function awaitGcpOperation(
   token: string,
   fetchImpl: typeof fetch,
   sleep: (milliseconds: number) => Promise<void>,
+  /** Operation surface to poll — quota ops live on v1beta1, enable ops on v1. */
+  base: string = SERVICE_USAGE_BASE,
 ): Promise<void> {
   let operation = initial;
   const name = operation.name?.trim();
@@ -158,7 +186,7 @@ async function awaitGcpOperation(
   while (!operation.done) {
     if (Date.now() >= deadline) throw new Error(`Google quota operation ${name} did not finish within 30 seconds.`);
     await sleep(OPERATION_POLL_MS);
-    operation = (await gcpFetch(fetchImpl, token, `${SERVICE_USAGE_BASE}/${name}`)) as GcpOperation;
+    operation = (await gcpFetch(fetchImpl, token, `${base}/${name}`)) as GcpOperation;
   }
   if (operation.error) {
     throw new Error(
@@ -287,6 +315,53 @@ function buildBudgetBody(budget: CompanyApiBudget): Record<string, unknown> {
       { thresholdPercent: 1.0 },
     ],
   };
+}
+
+/** Redact tokens from an error before it crosses to a client — the exported
+ *  form of this module's internal sanitizer, for route handlers wrapping
+ *  throwing helpers like {@link enableGcpService}. */
+export function sanitizeGcpError(error: unknown): string {
+  return sanitizeError(error);
+}
+
+/**
+ * Enable one Google API on a project via Service Usage `services:enable`
+ * (v1, empty request body — per current docs). `projectRef` may be a project
+ * id or number, matching every other helper here (Service Usage accepts both
+ * in the resource name; the docs' example uses the number). The response is an
+ * Operation: `done: true` (or an operation without a pollable name) is treated
+ * as accepted, otherwise we short-poll the v1 operation like the quota rail.
+ * No X-Goog-User-Project header — this module's raw REST calls run without it
+ * by design (attaching it routes quota checks to a project that may itself
+ * lack Service Usage, the classic SERVICE_DISABLED trap).
+ *
+ * Callers MUST gate the service name against {@link ENABLEABLE_GCP_SERVICES};
+ * this stays a guardrail-bootstrap rail, not a general enabler.
+ */
+export async function enableGcpService(
+  projectRef: string,
+  serviceName: string,
+  deps: GcpBudgetDeps = {},
+): Promise<void> {
+  const trimmedRef = projectRef.trim();
+  const trimmedService = serviceName.trim();
+  if (!trimmedRef) throw new Error("A Google Cloud project is required.");
+  if (!trimmedService) throw new Error("A service name is required.");
+  const token = await (deps.mintToken ?? mintGoogleCloudAccessToken)();
+  const fetchImpl = deps.fetchImpl ?? fetch;
+  const sleep = deps.sleep ?? ((milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
+  const operation = (await gcpFetch(
+    fetchImpl,
+    token,
+    `${SERVICE_USAGE_V1_BASE}/projects/${encodeURIComponent(trimmedRef)}` +
+      `/services/${encodeURIComponent(trimmedService)}:enable`,
+    { method: "POST" },
+  )) as GcpOperation | null;
+  if (operation?.error) {
+    throw new Error(operation.error.message || "Google refused to enable the service.");
+  }
+  if (operation?.done || !operation?.name?.trim()) return; // accepted
+  await awaitGcpOperation(operation, token, fetchImpl, sleep, SERVICE_USAGE_V1_BASE);
 }
 
 /** List the caller's accessible Google Cloud projects (for the UI project picker). */

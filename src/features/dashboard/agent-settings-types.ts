@@ -7,6 +7,9 @@ export type AgentCreateDraft = {
   beeRole?: BeeAgentRole;
   provider?: string;
   model?: string;
+  gatewayUrl?: string;
+  chatPath?: string;
+  statusPath?: string;
   adaptiveOpenRouter?: AdaptiveOpenRouterConfig;
   adaptiveRouting?: AdaptiveRoutingConfig;
   usePod?: UsePodAgentConfig;

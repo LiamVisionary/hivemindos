@@ -251,6 +251,10 @@ def truthy(value: str | None) -> bool:
     return (value or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def should_use_tailscale_cli() -> bool:
+    return sys.platform != "darwin" or os.environ.get("HIVEMIND_TAILSCALE_CLI_FALLBACK") == "1"
+
+
 class Spinner:
     """A tiny stderr spinner for slow, otherwise-silent CLI phases.
 
@@ -1269,6 +1273,8 @@ def tailnet_peer_status() -> tuple[list[dict[str, str]], list[str]]:
             else:
                 unreachable.append(raw_target)
         return targets, unreachable
+    if not should_use_tailscale_cli():
+        return [], []
     cli = tailscale_cli()
     if not cli:
         return [], []

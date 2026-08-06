@@ -36,6 +36,7 @@ function runtimeIntegrationTargetKey(agent?: AgentProfile | null) {
 
 function localOpenAiProviderName(slug: string) {
   if (slug === "lm-studio") return "Local";
+  if (slug === "sie") return "SIE";
   if (slug === "ollama") return "Ollama";
   if (slug === "vllm") return "vLLM";
   if (slug === "llamacpp") return "llama.cpp";
@@ -105,6 +106,9 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
           ...createAgentProfile(agentCreateDraft.runtime, runtimeCount(agents, agentCreateDraft.runtime) + 1),
           provider: agentCreateDraft.provider,
           model: agentCreateDraft.model,
+          ...(agentCreateDraft.gatewayUrl ? { gatewayUrl: agentCreateDraft.gatewayUrl } : {}),
+          ...(agentCreateDraft.chatPath ? { chatPath: agentCreateDraft.chatPath } : {}),
+          ...(agentCreateDraft.statusPath ? { statusPath: agentCreateDraft.statusPath } : {}),
           adaptiveOpenRouter: agentCreateDraft.adaptiveOpenRouter,
           adaptiveRouting: agentCreateDraft.adaptiveRouting,
           usePod: agentCreateDraft.usePod,
@@ -119,6 +123,9 @@ export function useAgentSettingsController(props: UseAgentSettingsControllerProp
       agentCreateDraft.adaptiveRouting,
       agentCreateDraft.model,
       agentCreateDraft.provider,
+      agentCreateDraft.gatewayUrl,
+      agentCreateDraft.chatPath,
+      agentCreateDraft.statusPath,
       agentCreateDraft.runtime,
       agentCreateDraft.usePod,
       agentCreateDraft.venice,

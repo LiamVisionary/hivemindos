@@ -206,7 +206,7 @@ const TOOLS = mergeToolDescriptors(
   await loadHiveActionMcpTools(),
 );
 const HIVE_ACTION_MCP_TOOL_BY_NAME = new Map(TOOLS.map((tool) => [tool.name, tool]));
-const EXECUTION_TOOL_NAMES = new Set(["send_usdc", "dex_swap", "stock_trade", "hyperliquid_trade", "clawbank_send_usdc", "clawbank_trade", "clawbank_money_transfer", "clawbank_call"]);
+const EXECUTION_TOOL_NAMES = new Set(["send_usdc", "dex_swap", "stock_trade", "hyperliquid_trade", "apify_fund", "apify_run_actor", "clawbank_send_usdc", "clawbank_trade", "clawbank_money_transfer", "clawbank_call"]);
 const HYPERLIQUID_READ_ACTIONS = new Set(["", "quote", "status", "positions", "open-orders", "fills", "fees", "order-status"]);
 const HYPERLIQUID_CONFIRMATION_BY_ACTION = new Map([
   ["approve-builder", "CONFIRM_HYPERLIQUID_BUILDER"],
@@ -744,9 +744,11 @@ async function callDashboard(route, method, body) {
       // request reached the real dashboard and was rejected for a business reason
       // (validation, governance, a broker rejection). Surface it immediately rather
       // than sweeping to the next port and masking it with a connection error.
-      // Only 5xx / non-JSON / connection failures mean "wrong or sick base, try next".
-      const status = error?.statusCode;
-      const reachedRealApi = error?.payload?.ok === false && (status === undefined || status < 500);
+      // A canonical JSON API error is authoritative even when it is 5xx. Retrying a
+      // write against another candidate port after the first dashboard accepted it
+      // can duplicate payments or other critical side effects. Only connection and
+      // non-JSON failures can mean "wrong or sick base, try next".
+      const reachedRealApi = error?.payload?.ok === false;
       if (error?.payload?.needsUserInput || reachedRealApi) throw error;
     }
   }
@@ -1161,6 +1163,52 @@ function formatApprovalRequest(args = {}) {
 }
 
 async function callTool(name, args = {}) {
+  if (name === "hivemind_office_status") {
+    return callDashboard("/api/hivemind-office", "GET");
+  }
+  if (name === "hivemind_office_inspect_document") {
+    return callDashboard("/api/hivemind-office", "POST", {
+      action: "inspect",
+      path: args.path,
+      includeText: args.includeText,
+      maxChars: args.maxChars,
+    });
+  }
+  if (name === "hivemind_office_open_document") {
+    return callDashboard("/api/hivemind-office", "POST", {
+      action: "open",
+      path: args.path,
+    });
+  }
+  if (name === "hivemind_office_prepare_update") {
+    return callDashboard("/api/hivemind-office", "POST", {
+      action: "prepare-update",
+      originalPath: args.originalPath,
+      candidatePath: args.candidatePath,
+      destinationPath: args.destinationPath,
+      mode: args.mode || "copy",
+    });
+  }
+  if (name === "hivemind_office_apply_update") {
+    const mode = args.mode || "copy";
+    const expected = mode === "replace-original"
+      ? "CONFIRM_HIVEMIND_OFFICE_REPLACE_ORIGINAL"
+      : "CONFIRM_HIVEMIND_OFFICE_SAVE_COPY";
+    if (args.confirmation !== expected) {
+      throw new Error(`hivemind_office_apply_update ${mode} requires confirmation ${expected}.`);
+    }
+    return callDashboard("/api/hivemind-office", "POST", {
+      action: "apply-update",
+      originalPath: args.originalPath,
+      candidatePath: args.candidatePath,
+      destinationPath: args.destinationPath,
+      mode,
+      expectedOriginalSha256: args.expectedOriginalSha256,
+      expectedCandidateSha256: args.expectedCandidateSha256,
+      reviewFingerprint: args.reviewFingerprint,
+      confirmation: args.confirmation,
+    });
+  }
   if (name === "web_search") {
     const response = await callDashboard("/api/web-research/search", "POST", args);
     return response.result ?? response;
@@ -1352,6 +1400,28 @@ async function callTool(name, args = {}) {
       apiVersion: args.apiVersion,
       top: args.top,
     });
+  }
+  if (name === "apify_search_actors") {
+    return callDashboard(routeWithQuery("/api/apify", {
+      action: "search",
+      query: args.query,
+      limit: args.limit,
+      offset: args.offset,
+    }), "GET");
+  }
+  if (name === "apify_x402_status") {
+    return callDashboard(routeWithQuery("/api/apify", {
+      action: "status",
+      agentId: args.agentId,
+    }), "GET");
+  }
+  if (name === "apify_fund") {
+    requireHiveActionExecutionPreflight(name, args);
+    return callDashboard("/api/apify", "POST", { ...args, action: "fund" });
+  }
+  if (name === "apify_run_actor") {
+    requireHiveActionExecutionPreflight(name, args);
+    return callDashboard("/api/apify", "POST", { ...args, action: "run" });
   }
   if (name === "select_crypto_rail") {
     return callDashboard("/api/crypto/capabilities", "POST", {

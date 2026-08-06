@@ -11,6 +11,7 @@
 
 import React from "react";
 import type { CryptoCapabilityMap } from "@/features/dashboard/views/trade/trade-api";
+import type { XCommandTradeDraft } from "@/lib/types/x-command";
 
 export type DeskWalletKind = "user" | "agent" | "bankr";
 
@@ -119,6 +120,8 @@ export type TradeDeskData = {
   isEvmWallet: boolean;
   isSolanaWallet: boolean;
   hasActingWallet: boolean;
+  /** A non-executing draft imported from a connected X command for local review. */
+  initialDraft?: XCommandTradeDraft | null;
   /** Chains the ACTING wallet holds — the action chain dropdown (swap/buy/sell). */
   walletChains: Array<{ key: string; label: string; network: string; accountId: string }>;
   /** Switch the acting wallet to its account on `network` (re-points execution). */

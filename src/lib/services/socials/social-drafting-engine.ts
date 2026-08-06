@@ -8,6 +8,7 @@ import {
   type SocialDraftGeneration,
   type SocialDraftGenerationMode,
 } from "@/lib/services/socials/social-draft-generator";
+import { socialAccountHasStandaloneGroundingSource } from "@/lib/services/socials/social-drafting-readiness";
 import { socialPlatformRow } from "@/lib/services/socials/social-platform-matrix";
 import { enqueueGeneratedSocialDrafts } from "@/lib/services/socials/social-queue-service";
 import {
@@ -56,7 +57,7 @@ function engagementProducerEnabled(account: SocialAccount): boolean {
 }
 
 function automaticGenerationMode(account: SocialAccount): SocialDraftGenerationMode | null {
-  const posts = account.drafting.enabled;
+  const posts = account.drafting.enabled && socialAccountHasStandaloneGroundingSource(account);
   const engagement = engagementProducerEnabled(account);
   if (posts && engagement) return "all";
   if (posts) return "posts";
@@ -65,9 +66,10 @@ function automaticGenerationMode(account: SocialAccount): SocialDraftGenerationM
 }
 
 function generationModeStillEnabled(account: SocialAccount, mode: SocialDraftGenerationMode): boolean {
-  if (mode === "posts") return account.drafting.enabled;
+  const posts = account.drafting.enabled && socialAccountHasStandaloneGroundingSource(account);
+  if (mode === "posts") return posts;
   if (mode === "engagement") return engagementProducerEnabled(account);
-  return account.drafting.enabled && engagementProducerEnabled(account);
+  return posts && engagementProducerEnabled(account);
 }
 
 function runtimeRecoveredFromQueue(account: SocialAccount, queue: SocialQueueItem[]): SocialDraftingRuntime | null {

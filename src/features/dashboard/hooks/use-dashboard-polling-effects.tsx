@@ -2,7 +2,7 @@
 
 /* eslint-disable react-hooks/immutability, react-hooks/purity */
 
-import { type Dispatch, type MutableRefObject, type SetStateAction, useEffect } from "react";
+import { startTransition, type Dispatch, type MutableRefObject, type SetStateAction, useEffect } from "react";
 import type { SharedVaultConfig } from "@/lib/types/agent-runtime";
 import type { AgentWorkerClassView } from "@/features/dashboard/agent-settings-types";
 import type {
@@ -15,7 +15,7 @@ import type {
   MiroSharkRunResult,
 } from "@/features/dashboard/dashboard-types";
 import type { KanbanBoard } from "@/lib/types/kanban";
-import { activeKanbanTaskCount } from "@/lib/utils/kanban-board";
+import { needsHumanKanbanTaskCount } from "@/lib/utils/kanban-board";
 import { useVisibilityAwarePolling } from "@/features/dashboard/hooks/use-visibility-aware-polling";
 import { readNativeKanban } from "@/lib/native/kanban";
 
@@ -365,8 +365,7 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
       controllers.add(controller);
       const params = new URLSearchParams({
         board: kanbanBoardSlug,
-        include_archived: "false",
-        include_boards: "false",
+        summary_only: "true",
       });
       if (sharedVault.enabled) {
         if (sharedVault.vaultPath.trim()) params.set("vaultPath", sharedVault.vaultPath.trim());
@@ -374,13 +373,11 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
       }
       const nativeData = await readNativeKanban({
         board: kanbanBoardSlug,
-        includeArchived: false,
-        includeBoards: false,
+        summaryOnly: true,
         vaultPath: sharedVault.enabled ? sharedVault.vaultPath.trim() : undefined,
         kanbanFolder: sharedVault.enabled ? sharedVault.kanbanFolder?.trim() : undefined,
       });
-      const nativeBoardTaskCount = nativeData?.board?.tasks?.length ?? 0;
-      const response = !(nativeData?.ok && nativeData.board && nativeBoardTaskCount > 0)
+      const response = !(nativeData?.ok && nativeData.counts)
         ? await fetch(`/api/kanban?${params.toString()}`, {
             cache: "no-store",
             signal: controller.signal,
@@ -389,13 +386,13 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
       try {
         const webData = response?.ok ? await response.json().catch(() => null) as KanbanResponse | null : null;
         const data =
-          webData?.ok && webData.board
+          webData?.ok && webData.counts
             ? webData
-            : nativeData?.ok && nativeData.board
+            : nativeData?.ok && nativeData.counts
               ? nativeData
               : webData;
-        if (!cancelled && data?.ok && data.board) {
-          setKanbanNavBadgeCount(activeKanbanTaskCount(data.board.tasks));
+        if (!cancelled && data?.ok && data.counts) {
+          setKanbanNavBadgeCount(data.counts["needs-human"] ?? 0);
         }
       } finally {
         controllers.delete(controller);
@@ -434,12 +431,15 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
     const unfilteredKanbanBoard = !kanbanIncludeArchived && !kanbanTenantFilter && !kanbanAssigneeFilter && !kanbanSearch;
     const controllers = new Set<AbortController>();
     // Skip re-applying board state (and the full re-render it triggers) when a 30s
-    // poll returns content identical to what's already applied — the common idle
-    // case. Mirrors the MiroShark dedup above. kanbanHasLoadedOnce also suppresses
-    // the loading-spinner toggle on background polls (only show it on first load /
-    // filter change), so an unchanged poll causes zero re-renders.
+    // poll sees the same board revision. The revision is also sent to the server /
+    // native command so the common idle poll returns a tiny notModified payload
+    // instead of serializing the full board across the IPC or HTTP boundary.
     let kanbanHasLoadedOnce = false;
-    let lastKanbanSig = "";
+    let lastKanbanUpdatedAt = 0;
+    const finishUnchangedKanbanRefresh = () => {
+      kanbanHasLoadedOnce = true;
+      setKanbanLoading(false);
+    };
     const applyKanbanResult = (result: {
       board: KanbanBoard;
       boards?: KanbanBoardSummary[] | null;
@@ -449,27 +449,25 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
     }) => {
       if (cancelled) return;
       setKanbanError("");
-      const sig = JSON.stringify({
-        board: result.board,
-        boards: result.boards ?? null,
-        tenants: result.tenants ?? null,
-        assignees: result.assignees ?? null,
-        storage: result.storage ?? null,
-      });
-      if (sig !== lastKanbanSig) {
-        lastKanbanSig = sig;
+      const updatedAt = Number(result.board.meta.updatedAt || 0);
+      if (kanbanHasLoadedOnce && updatedAt > 0 && updatedAt === lastKanbanUpdatedAt) {
+        finishUnchangedKanbanRefresh();
+        return;
+      }
+      lastKanbanUpdatedAt = updatedAt;
+      kanbanHasLoadedOnce = true;
+      startTransition(() => {
         setKanbanBoard(result.board);
         if (result.boards) setKanbanBoards(result.boards);
         setKanbanTenants(result.tenants ?? []);
         setKanbanAssignees(result.assignees ?? []);
         setKanbanStorage(result.storage ?? null);
-        if (unfilteredKanbanBoard) setKanbanNavBadgeCount(activeKanbanTaskCount(result.board.tasks));
+        if (unfilteredKanbanBoard) setKanbanNavBadgeCount(needsHumanKanbanTaskCount(result.board.tasks));
         setSelectedKanbanTaskId((current) => (
           current && result.board.tasks.some((task) => task.id === current) ? current : result.board.tasks[0]?.id ?? ""
         ));
-      }
-      kanbanHasLoadedOnce = true;
-      setKanbanLoading(false);
+        setKanbanLoading(false);
+      });
     };
     async function refreshKanbanBoards() {
       if (boardRefreshInFlight) return;
@@ -520,7 +518,9 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
         board: kanbanBoardSlug,
         include_archived: String(kanbanIncludeArchived),
         include_boards: "false",
+        include_columns: "false",
       });
+      if (lastKanbanUpdatedAt > 0) params.set("if_updated_at", String(lastKanbanUpdatedAt));
       if (sharedVault.enabled) {
         if (sharedVault.vaultPath.trim()) params.set("vaultPath", sharedVault.vaultPath.trim());
         if (sharedVault.kanbanFolder?.trim()) params.set("kanbanFolder", sharedVault.kanbanFolder.trim());
@@ -532,12 +532,20 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
         board: kanbanBoardSlug,
         includeArchived: kanbanIncludeArchived,
         includeBoards: false,
+        includeColumns: false,
+        ifUpdatedAt: lastKanbanUpdatedAt || undefined,
         tenant: kanbanTenantFilter || undefined,
         assignee: kanbanAssigneeFilter || undefined,
         query: kanbanSearch || undefined,
         vaultPath: sharedVault.enabled ? sharedVault.vaultPath.trim() : undefined,
         kanbanFolder: sharedVault.enabled ? sharedVault.kanbanFolder?.trim() : undefined,
       });
+      if (nativeData?.ok && nativeData.notModified) {
+        finishUnchangedKanbanRefresh();
+        controllers.delete(controller);
+        kanbanRefreshInFlight = false;
+        return;
+      }
       const nativeBoardTaskCount = nativeData?.board?.tasks?.length ?? 0;
       if (nativeData?.ok && nativeData.board && nativeBoardTaskCount > 0) {
         applyKanbanResult({
@@ -558,6 +566,10 @@ export function useDashboardPollingEffects(props: UseDashboardPollingEffectsProp
       try {
         const data = await response?.json().catch(() => null) as KanbanResponse | null;
         if (cancelled) return;
+        if (data?.ok && data.notModified) {
+          finishUnchangedKanbanRefresh();
+          return;
+        }
         if (!data?.ok || !data.board) {
           if (nativeData?.ok && nativeData.board) {
             applyKanbanResult({

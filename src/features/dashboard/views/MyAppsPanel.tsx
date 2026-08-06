@@ -65,7 +65,7 @@ type FleetAppsPayload = {
 };
 
 type InstallableServiceStatus = {
-  id: "n8n" | "listmonk" | "browser-use" | "agentic-inbox" | "mcp-email-server" | "openhands" | "aider" | "agent-reach" | "palmier-pro" | "copy-trading-daemon";
+  id: "n8n" | "listmonk" | "browser-use" | "agentic-inbox" | "mcp-email-server" | "openhands" | "aider" | "agent-reach" | "palmier-pro" | "hivemind-office" | "copy-trading-daemon";
   name: string;
   installed: boolean;
   running: boolean;
@@ -183,6 +183,7 @@ function installableServiceLabel(id: string, action: InstallableServiceAction, s
   if (isInstallOnlyCliService(service) && service?.installed) return "Installed";
   if (id === "agentic-inbox") return action === "install" ? "Setup" : action === "start" ? "Deploy" : "Disable";
   if (id === "browser-use") return action === "install" ? "Install" : action === "start" ? "Open" : "Close";
+  if (id === "hivemind-office") return action === "install" ? "Install blocked" : action === "start" ? "Open" : "Quit";
   if (id === "palmier-pro") return action === "install" ? "Install" : action === "start" ? "Open" : "Quit";
   return action === "install" ? "Install" : action === "start" ? "Start" : "Stop";
 }
@@ -198,6 +199,7 @@ function installableServiceBlocked(service: InstallableServiceStatus | undefined
     action === "reset-agent-reach-x"
   ) return false;
   if (isInstallOnlyCliService(service) && service.installed) return true;
+  if (service.id === "hivemind-office" && action === "install") return true;
   if (action === "install" && /required before|is required before|is required to install/i.test(service.detail)) return true;
   // Only the core scaffold/wrangler/auth checks block Deploy; domain/routing/R2
   // are readiness hints (blocking: false) that are resolved during/after deploy.

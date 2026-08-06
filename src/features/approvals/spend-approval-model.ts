@@ -38,6 +38,17 @@ export type ApprovalRisk = "high" | "med" | "low";
 
 export type ApprovalDecision = "approved" | "denied";
 
+export type ApprovalActionCopy = {
+  approveLabel?: string;
+  rejectLabel?: string;
+  approveNoteLabel?: string;
+  rejectNoteLabel?: string;
+  approvePlaceholder?: string;
+  rejectPlaceholder?: string;
+  noteHint?: string;
+  requireApproveNote?: boolean;
+};
+
 /**
  * The view shape both surfaces render. The core five fields are always present;
  * the money/provenance extras are optional so a lightweight producer (e.g. ZHC

@@ -136,7 +136,7 @@ export function useKanbanTaskController(props: any) {
   }
 
   async function patchKanbanTask(taskId: string, patch: KanbanTaskPatch) {
-    const response = await fetch(`/api/kanban?board=${encodeURIComponent(kanbanBoardSlug)}`, {
+    const response = await fetch(`/api/kanban?board=${encodeURIComponent(kanbanBoardSlug)}&compact_response=true`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...kanbanStorageBody(), taskId, patch }),
@@ -144,6 +144,16 @@ export function useKanbanTaskController(props: any) {
     const data = await response.json().catch(() => null) as KanbanResponse | null;
     if (!response.ok || !data?.ok) {
       setKanbanError(data?.error ?? "Could not update task.");
+      return;
+    }
+    if (data.task && !props.kanbanAssigneeFilter && !props.kanbanSearch && !props.kanbanTenantFilter) {
+      setKanbanBoard((current) => current ? {
+        ...current,
+        meta: { ...current.meta, updatedAt: data.updatedAt ?? data.task?.updatedAt ?? current.meta.updatedAt },
+        tasks: current.tasks.map((task) => task.id === data.task?.id ? data.task : task),
+      } : current);
+      setKanbanStorage(data.storage ?? null);
+      setKanbanError("");
       return;
     }
     await refreshKanbanOnce().catch((error) => setKanbanError(error instanceof Error ? error.message : "Kanban refresh failed."));

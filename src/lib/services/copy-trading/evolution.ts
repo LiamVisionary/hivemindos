@@ -9,6 +9,7 @@ import {
   COPY_TRADE_EVOLUTION_POLICY_VERSION,
   COPY_TRADE_PROMOTION_MIN_MATURED,
 } from "@/lib/types/copy-trading";
+import { summarizeCounterfactualLearning, type CopyTradeLearningSummary } from "./retrospective";
 
 export type CopyTradeEvolutionPromotion = {
   status: "collecting" | "rejected" | "eligible";
@@ -19,6 +20,10 @@ export type CopyTradeEvolutionPromotion = {
   holdoutBatch: number | null;
   meanEdgePct: number | null;
   edgeCi95Pct: [number | null, number | null];
+  evolvedMeanReturnPct: number | null;
+  evolvedReturnCi95Pct: [number | null, number | null];
+  evolvedWinRatePct: number | null;
+  evolvedProfitFactor: number | null;
   sourceMaxDrawdownPct: number | null;
   evolvedMaxDrawdownPct: number | null;
   errorRatePct: number | null;
@@ -28,7 +33,10 @@ export type CopyTradeEvolutionPromotion = {
     frozenPolicy: boolean;
     walkForwardHoldout: boolean;
     positiveCi: boolean;
+    positiveAbsoluteCi: boolean;
+    profitFactor: boolean;
     drawdown: boolean;
+    absoluteDrawdown: boolean;
     reliability: boolean;
   };
 };
@@ -47,6 +55,7 @@ export type CopyTradeEvolutionComparison = {
   uncertain: number;
   errors: number;
   promotion: CopyTradeEvolutionPromotion;
+  learning: CopyTradeLearningSummary;
 };
 
 export function paperPortfolioValue(ledger: CopyTradePaperLedger | undefined): number | null {
@@ -76,6 +85,7 @@ export function startAgentAnalysisState(input: {
     reviews: [],
     counterfactuals: [],
     nextSequence: 0,
+    brainSync: {},
   };
 }
 
@@ -93,6 +103,7 @@ export function compareCopyTradeEvolution(
     errors: reviews.filter((review) => Boolean(review.error)).length,
   };
   const promotion = evaluateEvolutionPromotion(analysis?.counterfactuals ?? []);
+  const learning = summarizeCounterfactualLearning(analysis?.counterfactuals ?? []);
   const sourcePortfolioUsd = paperPortfolioValue(sourceState?.paper);
   const evolvedPortfolioUsd = paperPortfolioValue(evolvedState?.paper);
   if (
@@ -112,6 +123,7 @@ export function compareCopyTradeEvolution(
       evolvedReturnPct: null,
       returnDeltaPct: null,
       promotion,
+      learning,
       ...counts,
     };
   }
@@ -126,6 +138,7 @@ export function compareCopyTradeEvolution(
     evolvedReturnPct,
     returnDeltaPct: evolvedReturnPct - sourceReturnPct,
     promotion,
+    learning,
     ...counts,
   };
 }
@@ -157,21 +170,39 @@ export function evaluateEvolutionPromotion(
     : [null, null] as [null, null];
   const sourceMaxDrawdownPct = sourceReturns.length ? maxDrawdownPct(sourceReturns) : null;
   const evolvedMaxDrawdownPct = evolvedReturns.length ? maxDrawdownPct(evolvedReturns) : null;
+  const evolvedMeanReturnPct = evolvedReturns.length ? mean(evolvedReturns) : null;
+  const evolvedReturnCi95Pct = evolvedReturns.length
+    ? pairedBootstrapInterval(evolvedReturns, options.bootstrapIterations ?? 2_000)
+    : [null, null] as [null, null];
+  const evolvedWinRatePct = evolvedReturns.length
+    ? (evolvedReturns.filter((value) => value > 0).length / evolvedReturns.length) * 100
+    : null;
+  const evolvedProfitFactor = profitFactor(evolvedReturns);
   const errorRatePct = holdout.length
     ? (holdout.filter((record) => record.reviewPath === "sol-failed-open").length / holdout.length) * 100
     : null;
   const gates = {
     sampleSize: matured.length >= COPY_TRADE_PROMOTION_MIN_MATURED,
-    frozenPolicy: allMatured.length === matured.length,
+    frozenPolicy: holdout.length > 0
+      && holdout.every((record) => record.policyVersion === COPY_TRADE_EVOLUTION_POLICY_VERSION),
     walkForwardHoldout: holdout.length >= COPY_TRADE_EVALUATION_BATCH_SIZE && (holdoutEntry?.[0] ?? 0) >= 3,
     positiveCi: edgeCi95Pct[0] != null && edgeCi95Pct[0] > 0,
+    positiveAbsoluteCi: evolvedReturnCi95Pct[0] != null && evolvedReturnCi95Pct[0] > 0,
+    profitFactor: evolvedProfitFactor != null && evolvedProfitFactor >= 1.2,
     drawdown: sourceMaxDrawdownPct != null
       && evolvedMaxDrawdownPct != null
       && evolvedMaxDrawdownPct <= sourceMaxDrawdownPct,
+    absoluteDrawdown: evolvedMaxDrawdownPct != null && evolvedMaxDrawdownPct <= 25,
     reliability: errorRatePct != null && errorRatePct <= 5,
   };
   const hasEnoughEvidence = gates.sampleSize && gates.frozenPolicy && gates.walkForwardHoldout;
-  const eligible = hasEnoughEvidence && gates.positiveCi && gates.drawdown && gates.reliability;
+  const eligible = hasEnoughEvidence
+    && gates.positiveCi
+    && gates.positiveAbsoluteCi
+    && gates.profitFactor
+    && gates.drawdown
+    && gates.absoluteDrawdown
+    && gates.reliability;
   const drawdownPenalty = sourceMaxDrawdownPct != null && evolvedMaxDrawdownPct != null
     ? Math.max(0, evolvedMaxDrawdownPct - sourceMaxDrawdownPct)
     : 0;
@@ -184,12 +215,24 @@ export function evaluateEvolutionPromotion(
     holdoutBatch: holdoutEntry?.[0] ?? null,
     meanEdgePct: meanEdgePct == null ? null : round(meanEdgePct, 4),
     edgeCi95Pct: [nullableRound(edgeCi95Pct[0], 4), nullableRound(edgeCi95Pct[1], 4)],
+    evolvedMeanReturnPct: nullableRound(evolvedMeanReturnPct, 4),
+    evolvedReturnCi95Pct: [nullableRound(evolvedReturnCi95Pct[0], 4), nullableRound(evolvedReturnCi95Pct[1], 4)],
+    evolvedWinRatePct: nullableRound(evolvedWinRatePct, 2),
+    evolvedProfitFactor: nullableRound(evolvedProfitFactor, 2),
     sourceMaxDrawdownPct: nullableRound(sourceMaxDrawdownPct, 4),
     evolvedMaxDrawdownPct: nullableRound(evolvedMaxDrawdownPct, 4),
     errorRatePct: nullableRound(errorRatePct, 2),
     score: round((meanEdgePct ?? 0) - drawdownPenalty + Math.min(0, edgeCi95Pct[0] ?? 0), 4),
     gates,
   };
+}
+
+function profitFactor(returns: number[]): number | null {
+  if (!returns.length) return null;
+  const gains = returns.filter((value) => value > 0).reduce((sum, value) => sum + value, 0);
+  const losses = Math.abs(returns.filter((value) => value < 0).reduce((sum, value) => sum + value, 0));
+  if (losses === 0) return gains > 0 ? 999 : null;
+  return gains / losses;
 }
 
 /** Circular block bootstrap adapted from the repository's quant validator. */

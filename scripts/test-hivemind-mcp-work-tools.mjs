@@ -5,11 +5,16 @@ import http from "node:http";
 
 function mcpRequest(child, message) {
   return new Promise((resolve, reject) => {
+    let buffer = "";
     const timeout = setTimeout(() => {
+      child.stdout.off("data", onData);
       reject(new Error(`Timed out waiting for MCP response to ${message.method}`));
     }, 5_000);
     const onData = (chunk) => {
-      for (const line of String(chunk).split("\n")) {
+      buffer += String(chunk);
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) {
         if (!line.trim()) continue;
         const parsed = JSON.parse(line);
         if (parsed.id !== message.id) continue;

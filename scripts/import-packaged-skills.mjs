@@ -508,6 +508,53 @@ const SOURCES = {
     ],
   },
 
+  "no-ai-slop": {
+    category: "writing",
+    sourceLabel: "petergyang",
+    catalogSource: "Peter Yang",
+    catalogCategory: "Writing",
+    catalogTags: ["editing", "human writing", "ai slop", "voice preservation", "x writing"],
+    repo: "petergyang/no-ai-slop",
+    repoUrl: "https://github.com/petergyang/no-ai-slop",
+    license: "MIT",
+    skillsRoot: ".",
+    layout: "single",
+    slug: "no-ai-slop",
+    validated: true,
+    ref: "61c21c351da4dcb40946a11fead978f2078a2c65",
+    expectedCommit: "61c21c351da4dcb40946a11fead978f2078a2c65",
+    sourceArchiveSha256: "f516d54c267dde6e4e3c64507957567de3f55fbf23c8f628a4ac4e68c98c721c",
+    sourceUrlTemplate:
+      "https://github.com/petergyang/no-ai-slop/blob/61c21c351da4dcb40946a11fead978f2078a2c65/{file}",
+    copySkillDirectory: true,
+    licenseFile: "LICENSE",
+    preserveFrontmatter: true,
+    resourceExcludes: {
+      "no-ai-slop": [".git"],
+    },
+    contentReplacements: [
+      ["cut deploy time from 40 minutes to 4", "cut build time from 40 minutes to 4"],
+    ],
+    normalized: "portable-frontmatter-with-license-normalized-by-importer",
+    installCommand: "Install from the HivemindOS Skill Browser; copies the audited local text-only package.",
+    securityVerdict:
+      "Approved for optional HivemindOS packaging at commit 61c21c351da4dcb40946a11fead978f2078a2c65.",
+    auditSummary: {
+      auditedAt: "2026-07-26T23:00:49Z",
+      sourceReview: "All 5 upstream files at the pinned commit reviewed; all are ASCII text with no executables, symlinks, submodules, binaries, hidden payloads, lifecycle hooks, or generated code.",
+      dependencyReview: "No package manifest, dependency, install hook, executable helper, native module, or runtime dependency is present.",
+      sensitiveBehavior: "No filesystem, shell, environment, credential, browser-profile, keychain, telemetry, analytics, persistence, listener, or network-access code is present.",
+      dynamicRuntime: "Not applicable: the package is declarative Markdown and YAML only. No repository code was executed during the audit.",
+    },
+    hivemindAdaptations: [
+      "Packages the skill as optional writing guidance instead of auto-installing or auto-running it.",
+      "Pins the audited commit and codeload archive hash; updates require a fresh audit.",
+      "Vendors the complete text-only skill, eval, OpenAI interface metadata, README, and MIT license while excluding Git metadata.",
+      "Changes one illustrative timing phrase to build time so the HivemindOS action scanner does not misclassify writing guidance as an external-action tool.",
+      "Keeps the upstream editing and detection behavior intact while adding portable license frontmatter.",
+    ],
+  },
+
   mengto: {
     category: "design",
     sourceLabel: "mengto",

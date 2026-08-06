@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { KanbanStatus } from "@/lib/types/kanban";
+import { KANBAN_COLUMNS, type KanbanStatus } from "@/lib/types/kanban";
 import {
   addComment,
   addLink,
@@ -43,6 +43,9 @@ export async function GET(request: NextRequest) {
     const includeBoards = request.nextUrl.searchParams.get("include_boards") !== "false";
     const boardsOnly = request.nextUrl.searchParams.get("boards_only") === "true";
     const includeArchived = request.nextUrl.searchParams.get("include_archived") === "true";
+    const includeColumns = request.nextUrl.searchParams.get("include_columns") !== "false";
+    const summaryOnly = request.nextUrl.searchParams.get("summary_only") === "true";
+    const ifUpdatedAt = Number(request.nextUrl.searchParams.get("if_updated_at") || 0);
     const tenant = request.nextUrl.searchParams.get("tenant") || undefined;
     const assignee = request.nextUrl.searchParams.get("assignee") || undefined;
     const query = request.nextUrl.searchParams.get("q") || undefined;
@@ -54,6 +57,16 @@ export async function GET(request: NextRequest) {
     }
 
     const board = await readBoard(boardSlug, storageOptions);
+    if (summaryOnly) {
+      const counts = Object.fromEntries(KANBAN_COLUMNS.map((column) => [
+        column.id,
+        board.tasks.filter((task) => task.status === column.id).length,
+      ]));
+      return NextResponse.json({ ok: true, counts, updatedAt: board.meta.updatedAt });
+    }
+    if (Number.isFinite(ifUpdatedAt) && ifUpdatedAt > 0 && board.meta.updatedAt === ifUpdatedAt) {
+      return NextResponse.json({ ok: true, notModified: true, updatedAt: board.meta.updatedAt });
+    }
     const tasks = filterKanbanTasks(board, { tenant, assignee, query, includeArchived });
     const tenants = [...new Set(board.tasks.map((task) => task.tenant).filter(Boolean))].sort();
     const assignees = [...new Set(board.tasks.map((task) => task.assignee).filter(Boolean))].sort();
@@ -65,7 +78,7 @@ export async function GET(request: NextRequest) {
       ok: true,
       ...(boards ? { boards } : {}),
       board: responseBoard,
-      columns: groupKanbanTasks(tasks, includeArchived),
+      ...(includeColumns ? { columns: groupKanbanTasks(tasks, includeArchived) } : {}),
       tenants,
       assignees,
       storage,
@@ -230,6 +243,14 @@ export async function PATCH(request: NextRequest) {
     const result = body.status
       ? await moveTask(boardSlug, body.taskId, body.status as KanbanStatus, storageOptions)
       : await patchTask(boardSlug, body.taskId, body.patch ?? body, storageOptions);
+    if (request.nextUrl.searchParams.get("compact_response") === "true") {
+      return NextResponse.json({
+        ok: true,
+        task: result.task,
+        updatedAt: result.board.meta.updatedAt,
+        storage: resolveKanbanStorage(result.board.meta.slug, storageOptions),
+      });
+    }
     return NextResponse.json({ ok: true, ...result, storage: resolveKanbanStorage(result.board.meta.slug, storageOptions) });
   } catch (error) {
     return errorResponse(error);

@@ -33,7 +33,7 @@ export async function quoteDex(params: { agentId: string; sellToken: string; buy
   return quoteSwap(params);
 }
 
-export async function runDexSwap(params: { agentId: string; sellToken: string; buyToken: string; amountHuman: number; network?: string }): Promise<RailResult> {
+export async function runDexSwap(params: { agentId: string; sellToken: string; buyToken: string; amountHuman: number; network?: string; planId?: string }): Promise<RailResult> {
   const response = await executeSwap({ ...params, confirmation: SWAP_CONFIRMATION });
   if (!response.ok || !response.result) return { ok: false, error: response.error || "Swap failed." };
   return { ok: true, message: response.result.detail, reference: response.result.reference };

@@ -1,0 +1,259 @@
+{
+  "created_at": "2026-08-03T02:32:55.771001+00:00",
+  "request": "Continuously improve the HivemindOS prospective token-edge paper-research system until it demonstrates repeatable out-of-sample positive net PnL after realistic costs, with immutable forecasts, delayed retrospectives, one-change-at-a-time challengers, strict anti-leakage gates, and no live trading without separate explicit authorization.",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/trading/prediction-updown-paper-loop.ts",
+      "target_path": "scripts/token-edge/onchain-forward-core.mjs",
+      "reuse_type": "adapted_code",
+      "note": "one-change challenger registry and frozen parent comparison"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/copy-trading/evolution.ts",
+      "target_path": "scripts/token-edge/onchain-challenger-scorecard.mjs",
+      "reuse_type": "adapted_code",
+      "note": "paired future-outcome bootstrap and fail-closed promotion gate"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/token-edge/onchain-retrospective.mjs",
+      "target_path": "scripts/token-edge/onchain-forward-core.mjs",
+      "reuse_type": "adapted_code",
+      "note": "strict evidence boundary immutable registration lineage and posthoc-derived labeling"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/token-edge/onchain-forward-research.mjs",
+      "target_path": "scripts/token-edge/onchain-forward-research.mjs",
+      "reuse_type": "adapted_code",
+      "note": "verified ledger registration passed into forecast builder and collection receipts"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/token-edge/onchain-forward-research.mjs",
+      "target_path": "scripts/token-edge/onchain-challenger-scorecard.mjs",
+      "reuse_type": "adapted_code",
+      "note": "discovery candidate confirmation snapshot asset and timestamp lineage reconstruction"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-token-edge-onchain-forward.mjs",
+      "target_path": "scripts/test-token-edge-onchain-forward.mjs",
+      "reuse_type": "test_adapted",
+      "note": "paired cash-versus-long challenger and anti-leakage assertions"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/trading/prediction-updown-paper-loop.ts",
+      "target_path": "scripts/token-edge/onchain-capacity-scorecard.mjs",
+      "reuse_type": "adapted_code",
+      "note": "depth-bounded fixed-notional paper accounting and fee-stress gates"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/copy-trading/paper.ts",
+      "target_path": "scripts/token-edge/onchain-capacity-scorecard.mjs",
+      "reuse_type": "adapted_code",
+      "note": "separate paper notional from explicit execution costs"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/token-edge/onchain-forward-research.mjs",
+      "target_path": "scripts/token-edge/onchain-capacity-scorecard.mjs",
+      "reuse_type": "adapted_code",
+      "note": "append-only policy registration and same-event market evidence lineage"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-token-edge-onchain-forward.mjs",
+      "target_path": "scripts/test-token-edge-onchain-forward.mjs",
+      "reuse_type": "test_adapted",
+      "note": "pre-registration missing-depth invalid-policy and recovery fail-closed cases"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-cloud-services",
+      "source_path": "workers/token-autopsy-gateway/research/social-predictor/predictor.mjs",
+      "target_path": "scripts/token-edge/onchain-lunarcrush-provider.mjs",
+      "reuse_type": "adapted_code",
+      "note": "authenticated bounded time-series normalization coverage and failure receipts"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-cloud-services",
+      "source_path": "workers/token-autopsy-gateway/research/social-predictor/edge-research.mjs",
+      "target_path": "scripts/token-edge/onchain-lunarcrush-provider.mjs",
+      "reuse_type": "adapted_code",
+      "note": "interactions posts creators AltRank and Galaxy acceleration features"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-cloud-services",
+      "source_path": "workers/token-autopsy-gateway/research/social-predictor/prospective-paper.mjs",
+      "target_path": "scripts/token-edge/onchain-challengers.mjs",
+      "reuse_type": "adapted_code",
+      "note": "completed-bar move alert followed by frozen on-chain direction"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-cloud-services",
+      "source_path": "workers/token-autopsy-gateway/research/social-predictor/prospective-audit.mjs",
+      "target_path": "scripts/token-edge/onchain-challenger-scorecard.mjs",
+      "reuse_type": "adapted_code",
+      "note": "future-only paired evidence reconstruction and payoff gate"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-cloud-services",
+      "source_path": "workers/token-autopsy-gateway/research/social-predictor/test.mjs",
+      "target_path": "scripts/test-token-edge-lunarcrush.mjs",
+      "reuse_type": "test_adapted",
+      "note": "immutable provider evidence and anti-leakage contract assertions"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-cloud-services",
+      "source_path": "workers/token-autopsy-gateway/research/social-predictor/edge-research.mjs",
+      "target_path": "scripts/token-edge/onchain-lunarcrush-provider.mjs",
+      "reuse_type": "adapted_code",
+      "note": "complete-universe social-first candidate ranking with fixed AltRank Galaxy breadth and anti-chase thresholds"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/token-edge/onchain-forward-research.mjs",
+      "target_path": "scripts/token-edge/onchain-lunarcrush-discovery.mjs",
+      "reuse_type": "adapted_code",
+      "note": "append-only ledger verification deterministic event identity and bounded provider-cadence preflight"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-token-edge-lunarcrush.mjs",
+      "target_path": "scripts/test-token-edge-lunarcrush-discovery-challenger.mjs",
+      "reuse_type": "test_adapted",
+      "note": "exact provider lineage threshold forgery response timing and zero-request repeat assertions"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-cloud-services",
+      "source_path": "workers/token-autopsy-gateway/research/social-predictor/edge-research.mjs",
+      "target_path": "scripts/token-edge/onchain-lunarcrush-monitoring-scorecard.mjs",
+      "reuse_type": "adapted_code",
+      "note": "forward-only social feature screens and equal-weight frame evaluation without execution claims"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-token-edge-lunarcrush-discovery-challenger.mjs",
+      "target_path": "scripts/test-token-edge-lunarcrush-monitoring.mjs",
+      "reuse_type": "test_adapted",
+      "note": "future transition timing frame weighting creator-history joins and stale-gap exclusion"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/token-edge/onchain-lunarcrush-discovery.mjs",
+      "target_path": "scripts/test-token-edge-discovery-cadence.mjs",
+      "reuse_type": "test_adapted",
+      "note": "provider-cadence bucket preflight zero-call repeat and next-bucket recording contract"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/token-edge/onchain-capacity-scorecard.mjs",
+      "target_path": "scripts/token-edge/onchain-exit-policy-scorecard.mjs",
+      "reuse_type": "adapted_code",
+      "note": "registered constant-product capacity returns frame bootstrap compounded-equity drawdown and concentration gates adapted to future-only sampled exits"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-token-edge-path-observations.mjs",
+      "target_path": "scripts/test-token-edge-exit-policy.mjs",
+      "reuse_type": "test_adapted",
+      "note": "same-pair response-time path lineage return recomputation registration anti-forgery idempotence temporal-boundary and no-unseen-fill assertions"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/token-edge/onchain-capacity-scorecard.mjs",
+      "target_path": "scripts/token-edge/onchain-outcome-timing.mjs",
+      "reuse_type": "adapted_code",
+      "note": "fail-closed live resolution timestamp eligibility extracted into a shared exact-hour timing contract"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-token-edge-pair-age-challenger.mjs",
+      "target_path": "scripts/test-token-edge-hourly-turnover-challenger.mjs",
+      "reuse_type": "test_adapted",
+      "note": "future-only registration ready cash-versus-long decision paired scoring and anti-forgery assertions adapted to a frozen hourly-turnover dimension"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/token-edge/onchain-forward-core.mjs",
+      "target_path": "scripts/token-edge/onchain-independent-frames.mjs",
+      "reuse_type": "adapted_code",
+      "note": "non-overlapping frame construction adapted to retain one earliest exact-asset signal while preserving case-sensitive Solana identity"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-token-edge-onchain-forward.mjs",
+      "target_path": "scripts/test-token-edge-independent-frames.mjs",
+      "reuse_type": "test_adapted",
+      "note": "same-frame cross-sectional evidence adapted to assert earliest exact-asset retention overlap counts and Solana case sensitivity"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-token-edge-hourly-turnover-challenger.mjs",
+      "target_path": "scripts/test-token-edge-social-magnitude-direction.mjs",
+      "reuse_type": "test_adapted",
+      "note": "future-only registration complete-evidence cash versus long decisions paired reconstruction and anti-leakage assertions adapted to a LunarCrush magnitude gate with independent Nansen direction"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/token-edge/onchain-lunarcrush-provider.mjs",
+      "target_path": "scripts/token-edge/onchain-forward-research.mjs",
+      "reuse_type": "adapted_code",
+      "note": "complete LunarCrush discovery availability lineage passed to the frozen challenger in the same collection and reused without duplicate provider requests"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/token-edge/onchain-lunarcrush-monitoring-scorecard.mjs",
+      "target_path": "scripts/token-edge/onchain-organic-activity-monitoring-scorecard.mjs",
+      "reuse_type": "adapted_code",
+      "note": "future-only multiple-screen monitoring adapted to selected full-profile on-chain evidence exact live outcomes AMM capacity and paired parent deltas"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-token-edge-lunarcrush-monitoring.mjs",
+      "target_path": "scripts/test-token-edge-organic-activity-monitoring.mjs",
+      "reuse_type": "test_adapted",
+      "note": "boundary selection-lineage missing-feature timing overlap capacity and immutable hypothesis-only monitoring assertions"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/token-edge/onchain-organic-activity-monitoring-scorecard.mjs",
+      "target_path": "scripts/token-edge/onchain-dex-buy-pressure-monitoring-scorecard.mjs",
+      "reuse_type": "adapted_code",
+      "note": "future-only exact-live capacity monitoring adapted to a single entry-time DEX transaction and price confirmation"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-token-edge-organic-activity-monitoring.mjs",
+      "target_path": "scripts/test-token-edge-dex-buy-pressure-monitoring.mjs",
+      "reuse_type": "test_adapted",
+      "note": "boundary missing-feature timing overlap execution-policy same-pair capacity and research-only assertions"
+    },
+    {
+      "source_repo": "DEX Screener API documentation",
+      "source_path": "api/reference",
+      "target_path": "scripts/token-edge/onchain-dex-early-surface-discovery.mjs",
+      "reuse_type": "config_adapted",
+      "note": "official latest profile takeover ad boost and batched exact-token pool endpoints with documented request ceilings"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/token-edge/onchain-lunarcrush-discovery.mjs",
+      "target_path": "scripts/token-edge/onchain-dex-early-surface-discovery.mjs",
+      "reuse_type": "adapted_code",
+      "note": "append-only verified discovery events deterministic identities bounded candidate ranking and zero-request cadence preflight"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-token-edge-lunarcrush-discovery-challenger.mjs",
+      "target_path": "scripts/test-token-edge-dex-early-surface.mjs",
+      "reuse_type": "test_adapted",
+      "note": "future-only challenger registration exact provider lineage frozen-rule validation and fail-closed decision assertions"
+    }
+  ]
+}

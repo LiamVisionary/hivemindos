@@ -3,12 +3,14 @@ import {
   GITHUB_OAUTH_SOURCE_COOKIE,
   GITHUB_OAUTH_STATE_COOKIE,
   githubOAuthReturnUrl,
+  integrationsOAuthDeepLink,
   normalizeGitHubOAuthSource,
   readGitHubOAuthConfig,
   renderGitHubOAuthPage,
   saveGitHubTokenForAeon,
   verifyGitHubOAuthState,
 } from "@/lib/services/integrations/github-oauth";
+import { parkOAuthReturn } from "@/lib/services/integrations/oauth-return-store";
 
 export const runtime = "nodejs";
 
@@ -61,6 +63,17 @@ export async function GET(request: NextRequest) {
     }));
   }
   returnUrl = githubOAuthReturnUrl(verifiedState.source);
+  // Desktop flows return through the registered scheme (the relative returnUrl
+  // is useless in the external browser). Derived ONLY from the verified state.
+  const view = verifiedState.source === "aeon" ? "aeon" : "integrations";
+  const deepLinkFor = (status: "connected" | "error") => {
+    if (!verifiedState.returnMode) return undefined;
+    // Park the outcome so the desktop app routes to `view` when it regains
+    // focus — the only return path installed shells support (their deep-link
+    // matcher drops unknown URLs; the scheme activation only foregrounds).
+    parkOAuthReturn({ provider: "github", view, status });
+    return integrationsOAuthDeepLink(verifiedState.returnMode, { provider: "github", view, status }) || undefined;
+  };
 
   try {
     const tokenResponse = await fetch("https://github.com/login/oauth/access_token", {
@@ -89,6 +102,7 @@ export async function GET(request: NextRequest) {
       body: "Saved GitHub OAuth access as <code>GH_GLOBAL</code> through hive-env-add. Your hive can now use GitHub on every machine.",
       returnUrl,
       returnLabel: verifiedState.source === "aeon" ? "Back to AEON overview" : "Back to integrations",
+      deepLink: deepLinkFor("connected"),
     }));
   } catch (error) {
     return clearCookies(renderGitHubOAuthPage({
@@ -96,6 +110,7 @@ export async function GET(request: NextRequest) {
       body: error instanceof Error ? error.message : "Could not finish GitHub OAuth.",
       returnUrl,
       status: 502,
+      deepLink: deepLinkFor("error"),
     }));
   }
 }

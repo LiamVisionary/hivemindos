@@ -1,0 +1,18 @@
+/* Match these tokens to the palette and background of the finished scenes. */
+:root,
+.sw-root {
+  --sw-bg: #11151c;
+  --sw-ink: #f8f1e4;
+  --sw-ink-soft: #b9b3aa;
+  --sw-accent: #e7b45c;
+  --sw-font-display: ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif;
+  --sw-font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+}
+
+noscript {
+  position: fixed;
+  inset: auto 16px 16px;
+  z-index: 100;
+  color: var(--sw-ink);
+  font-family: var(--sw-font-body);
+}

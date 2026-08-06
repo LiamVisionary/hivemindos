@@ -10,7 +10,7 @@ import {
   readSocialQueue,
   readSocialReadBudget,
 } from "@/lib/services/socials/socials-store";
-import { getXDiscoveryStatus } from "@/lib/services/socials/social-x-discovery";
+import { getXDiscoveryStatusForAccount } from "@/lib/services/socials/social-x-discovery";
 import type { SocialEngagementTarget, SocialGeneratedDraftKind, SocialQueueItem } from "@/lib/services/socials/socials-types";
 
 function requiredText(value: unknown): string {
@@ -301,7 +301,7 @@ export async function socialQueueDashboard(accountId?: string) {
   const readBudget = account?.platform === "x" && account.method === "managed-oauth"
     ? await readSocialReadBudget(account.id, account.maxDailyReadOps, account.awakeHours.timezone)
     : undefined;
-  const discovery = account?.platform === "x" ? await getXDiscoveryStatus() : undefined;
+  const discovery = account?.platform === "x" ? await getXDiscoveryStatusForAccount(account) : undefined;
   return {
     queue: filtered,
     snapshots,

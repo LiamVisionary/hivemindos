@@ -21,6 +21,7 @@ import {
   SimDataProvider, SimulationView, buildSimDataset,
   type Run, type SimDataset, type SimLaunchPayload, type SimLaunchModeStatus,
 } from "@/components/simulation";
+import type { SimulationPublishResult } from "@/components/simulation/publish-readiness";
 import type { DashboardView, MiroSharkRunResult, MiroSharkStatus } from "@/features/dashboard/dashboard-types";
 import type { SharedVaultConfig } from "@/lib/types/agent-runtime";
 import { useRememberedDashboardValue } from "@/lib/services/use-remembered-dashboard-value";
@@ -76,7 +77,7 @@ type SwarmPanelProps = {
   setMirosharkScenario: Dispatch<SetStateAction<string>>;
   setMirosharkRounds: Dispatch<SetStateAction<number>>;
   setMirosharkPlatform: Dispatch<SetStateAction<MiroSharkPlatform>>;
-  runMirosharkExperiment: (action: "stop" | "inject" | "fork" | "branch" | "publish", runId: string) => void | Promise<void>;
+  runMirosharkExperiment: (action: "stop" | "inject" | "fork" | "branch" | "publish", runId: string) => void | Promise<void | SimulationPublishResult>;
 };
 
 function coercePlatform(value: string): MiroSharkPlatform {
@@ -474,8 +475,9 @@ export function SwarmPanel({
     stageLocalLaunch(payload);
   }, [stageLocalLaunch]);
 
-  const onPublish = React.useCallback((run: Run) => {
-    void runMirosharkExperiment("publish", run.id);
+  const onPublish = React.useCallback(async (run: Run): Promise<SimulationPublishResult> => {
+    const result = await runMirosharkExperiment("publish", run.id);
+    return result ?? { ok: false, error: "MiroShark did not confirm the publish request." };
   }, [runMirosharkExperiment]);
 
   const onExport = React.useCallback((run: Run) => {

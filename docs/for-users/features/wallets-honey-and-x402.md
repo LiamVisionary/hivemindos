@@ -55,6 +55,23 @@ For the separation between Honey, Hivemind Cloud credits, HIVE, and treasury pol
 - Hold spend-only Hivemind Cloud credits for no-BYOK managed agents.
 - Return legacy ledger-only HIVE balances to Honey. Honey-to-HIVE exchange and claim paths remain closed unless a separately authorized hosted policy enables them.
 
+## Apify Actors Over x402
+
+HivemindOS can discover and run Apify Actors without an Apify account or a user-supplied Apify API key. Apify's current agentic-payment flow is prepaid: the wallet makes one exact x402 payment in Base USDC, Apify returns a spend-capped bearer token, and later Actor runs debit that token until its balance is empty or it expires.
+
+The native capability exposes four Hive Actions and MCP tools:
+
+- `apify_search_actors` searches Apify Store and returns only Actors currently marked eligible for agentic payments. Results include compact pay-per-event pricing, usage statistics, and the Actor input schema.
+- `apify_x402_status` reads the remaining balance and expiry without returning the bearer token.
+- `apify_fund` buys prepaid credit from the selected local Base-mainnet wallet. Apify requires at least `$1`; the wallet must have Spend enabled, provider `x402`, and a per-payment cap at least as large as the funding amount.
+- `apify_run_actor` runs one exact `username/name` Actor. Every request carries a required `maxTotalChargeUsd` ceiling, a result limit of at most 100 items, and a timeout of at most 150 seconds so the MCP request can finish inside HivemindOS's transport deadline.
+
+The bearer token is encrypted under `~/.hivemindos/apify-x402-token-vault.json` with separate local key material and is never returned by `/api/apify`, chat tools, or MCP. HivemindOS refuses to buy another token while the current one still has usable credit, because Apify prepaid balances are non-refundable and expire after 14 days. Search is public and read-only; status, funding, and runs keep authentication server-side.
+
+Funding uses the existing governed x402 buyer, so wallet network, Spend state, hard cap, cumulative budgets, company-task context, approval thresholds, personal-wallet restrictions, and the configured ordinary x402 platform fee continue to apply. `PAY_APIFY` confirms a funding purchase when auto-use does not apply. `RUN_APIFY_ACTOR` confirms an Actor run; an agent wallet with governed auto-use may run within its persisted wallet cap, while personal wallets always require confirmation.
+
+Before a run, HivemindOS rechecks that the Actor is still agentic-payment eligible, uses pay-per-event pricing, fits the submitted dollar ceiling, and has enough prepaid balance. Actor inputs can cause external web access and automation, so review the selected Actor's scope, target sites, input, price events, and applicable terms before execution.
+
 ## Honey And Hivemind Cloud Credits
 
 The ledger keeps contribution and purchased service value separate:

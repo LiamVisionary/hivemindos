@@ -14,6 +14,32 @@ export type HiveMcpServerCatalogItem = {
 
 export const HIVE_MCP_SERVER_CATALOG: HiveMcpServerCatalogItem[] = [
   {
+    id: "hivemind-office",
+    name: "Hivemind Office document bridge",
+    source: "hivemindos",
+    repoUrl: "https://github.com/criptogus/HermesOffice",
+    summary: "Bundled local HivemindOS MCP tools for inspecting office documents, opening separate candidates in a compatible desktop editor, preparing hash-bound reviews, and promoting candidates with copy-first or backup-before-replace semantics.",
+    categories: ["documents", "office", "desktop", "local-files", "mcp"],
+    capabilities: ["status", "document-inspection", "desktop-preview", "conflict-check", "save-copy", "replace-with-backup"],
+    credentialKeys: [],
+    sideEffects: ["read", "write", "filesystem"],
+    installHint: "Use the bundled hivemind_office_* tools. HivemindOS detects an existing compatible app; automatic HermesOffice installation is blocked until a signed hash-pinned release passes review.",
+    safetyNote: "Default to save-copy. Open and visually inspect the candidate before applying it. Never infer a confirmation token; replacement requires unchanged hashes, the prepare fingerprint, explicit replace confirmation, and creates a sibling backup.",
+  },
+  {
+    id: "apify-actors",
+    name: "Apify Actors",
+    source: "official",
+    repoUrl: "https://github.com/apify/apify-mcp-server",
+    summary: "Discover and run agentic-payment-compatible Apify Actors for live web data and automation. HivemindOS adds a native no-Apify-account path that buys a spend-capped prepaid token over x402, encrypts it locally, and requires a per-run dollar ceiling.",
+    categories: ["web-data", "scraping", "automation", "actors", "x402", "mcp"],
+    capabilities: ["actor-search", "input-schemas", "pricing", "x402-funding", "actor-runs", "dataset-items"],
+    credentialKeys: [],
+    sideEffects: ["read", "write", "network", "payments"],
+    installHint: "Use HivemindOS native apify_* tools for the governed x402/prepaid path, or connect the official hosted Apify MCP when using an existing Apify account token.",
+    safetyNote: "Search is read-only. Funding settles real Base USDC for non-refundable credit that expires after 14 days; Actor runs can access external sites and debit that credit, so review the Actor input and maxChargeUsd before execution. The bearer token remains encrypted and server-side.",
+  },
+  {
     id: "robinhood-trading",
     name: "Robinhood Trading MCP",
     source: "official",

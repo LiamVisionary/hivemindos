@@ -432,6 +432,7 @@ export function useFleetNotificationsController(props: any) {
       board: kanbanBoardSlug,
       include_archived: String(includeArchived),
       include_boards: "false",
+      include_columns: "false",
     });
     addKanbanStorageParams(params);
     if (tenantFilter) params.set("tenant", tenantFilter);
@@ -441,6 +442,7 @@ export function useFleetNotificationsController(props: any) {
       board: kanbanBoardSlug,
       includeArchived,
       includeBoards: false,
+      includeColumns: false,
       tenant: tenantFilter || undefined,
       assignee: assigneeFilter || undefined,
       query: queryFilter || undefined,

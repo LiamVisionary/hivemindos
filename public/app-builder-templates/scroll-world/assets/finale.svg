@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
+  <title id="title">Finale world</title>
+  <desc id="description">A warm golden destination at the end of a connected route.</desc>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#17130f"/>
+      <stop offset="1" stop-color="#35291a"/>
+    </linearGradient>
+    <radialGradient id="sun">
+      <stop stop-color="#fff1b7"/>
+      <stop offset=".28" stop-color="#e7b45c" stop-opacity=".9"/>
+      <stop offset="1" stop-color="#e7b45c" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1600" height="1000" fill="url(#sky)"/>
+  <circle cx="1200" cy="420" r="390" fill="url(#sun)"/>
+  <path d="M670 1080c80-290 260-350 450-420 250-92 270-280 260-560" fill="none" stroke="#f6d78e" stroke-opacity=".35" stroke-width="30"/>
+  <g transform="translate(930 360)">
+    <path d="m0 230 270-158 270 158v316L270 704 0 546z" fill="#513c21" stroke="#e7b45c" stroke-width="7"/>
+    <path d="M0 230 270 72l270 158-270 158z" fill="#7a5a2c"/>
+    <path d="M270 388v316" stroke="#b98437" stroke-width="7"/>
+    <circle cx="270" cy="363" r="54" fill="#fff1b7" opacity=".82"/>
+  </g>
+</svg>

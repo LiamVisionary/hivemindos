@@ -21,7 +21,7 @@ import { SimDetail } from "./detail";
 import { SimRunRow, SimTemplatesRail } from "./rail";
 import { Composer } from "./Composer";
 import { Publish } from "./Publish";
-import { useSimData, type SimLaunchMode, type SimLaunchModeStatus } from "./sim-context";
+import { useSimData, type SimDataset, type SimLaunchMode, type SimLaunchModeStatus } from "./sim-context";
 import { SimViewProvider } from "./sim-view-context";
 import type { Run, TemplateId } from "./sim-data";
 import { MIROSHARK_X402_SIMULATION_PRICE_LABEL } from "@/lib/config/miroshark-x402";
@@ -44,8 +44,8 @@ export interface SimulationViewProps {
   onSelectRun?: (run: Run) => void;
   /** Fired by the "New simulation" button and template rows. If omitted, an in-component composer slide-over opens. */
   onNewSimulation?: (t: TemplateId) => void;
-  /** Fired when an x-thread run is approved for publishing. If omitted, an in-component publish slide-over opens. */
-  onPublish?: (run: Run) => void;
+  /** Performs a confirmed X-thread publish and returns the provider outcome. */
+  onPublish?: SimDataset["onPublish"];
   /** Fired when a header mode tab (Workboard/Automations/Simulation/History) is clicked. */
   onSelectMode?: (mode: string) => void;
 }
@@ -203,9 +203,10 @@ export function SimulationView({ theme = "dark", initialRunId, railCollapsed = f
     else data.onSelectRun?.(run);
   };
   const openComposer = (t: TemplateId, mode: SimLaunchMode = "local") => { if (onNewSimulation) onNewSimulation(t); else setComposer({ tpl: t, mode }); };
-  // The in-component publish slide-over opens for review; its confirm fires the
-  // live publish handler (data.onPublish). The onPublish prop fully overrides it.
-  const openPublish = (run: Run) => { if (onPublish) onPublish(run); else setPublish(run); };
+  // Always review in the slide-over; only a confirmed, successful provider
+  // result may transition it to the published state.
+  const publishHandler = onPublish ?? data.onPublish;
+  const openPublish = (run: Run) => setPublish(run);
 
   return (
     <SimViewProvider value={simViewActions}>
@@ -276,7 +277,7 @@ export function SimulationView({ theme = "dark", initialRunId, railCollapsed = f
       </div>
 
       {composer && <Composer initialTemplate={composer.tpl} initialMode={composer.mode} initialScenario={composer.scenario} onClose={() => setComposer(null)} onLaunch={(payload) => { data.onLaunch?.(payload); setComposer(null); }} />}
-      {publish && <Publish run={publish} onClose={() => setPublish(null)} onPublished={() => data.onPublish?.(publish)} />}
+      {publish && <Publish run={publish} onClose={() => setPublish(null)} onPublished={publishHandler ? () => publishHandler(publish) : undefined} />}
     </div>
     </SimViewProvider>
   );

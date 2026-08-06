@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { SocialsDeskProvider, SocialsView, type SocialsAccountView, type SocialsDeskData, type SocialsNewContextSource, type SocialsSoulOption } from "@/components/socials";
 import { useRememberedDashboardValue } from "@/lib/services/use-remembered-dashboard-value";
+import type { SocialXSessionBinding } from "@/lib/services/socials/social-x-session-binding";
 import type { SocialAwakeHours, SocialDraftingPolicy, SocialDraftingRuntime, SocialMetricSnapshot, SocialPlatformCapabilityDto, SocialQueueEngineMeta, SocialQueueItem, SocialXDiscoveryStatus } from "@/lib/services/socials/socials-types";
 
 const ACTIVE_ACCOUNT_STATE_KEY = "socials.activeAccountId";
@@ -14,6 +15,7 @@ type AccountsPayload = {
   accounts?: SocialsAccountView[];
   platforms?: SocialPlatformCapabilityDto[];
   queue?: SocialQueueEngineMeta;
+  queueCounts?: Record<string, number>;
   souls?: SocialsSoulOption[];
 };
 
@@ -60,6 +62,7 @@ export function SocialsPanel({ theme }: { theme: "light" | "dark" }) {
   const [souls, setSouls] = useState<SocialsSoulOption[]>([]);
   const [queueMeta, setQueueMeta] = useState<SocialQueueEngineMeta>({ settings: { enabled: true, updatedAt: "", updatedBy: "system" } });
   const [queueItems, setQueueItems] = useState<SocialQueueItem[]>([]);
+  const [queueCounts, setQueueCounts] = useState<Record<string, number>>({});
   const [queueLoading, setQueueLoading] = useState(false);
   const [queueBusy, setQueueBusy] = useState<string | null>(null);
   const [engine, setEngine] = useState<SocialsDeskData["engine"]>({ running: false, disabled: false, enabled: true, leaseHeld: false });
@@ -69,26 +72,35 @@ export function SocialsPanel({ theme }: { theme: "light" | "dark" }) {
   const [draftingRuntime, setDraftingRuntime] = useState<SocialDraftingRuntime | null>(null);
   const [xDiscovery, setXDiscovery] = useState<SocialXDiscoveryStatus | null>(null);
   const [connectOpen, setConnectOpen] = useState(false);
+  const [allAccountsSelected, setAllAccountsSelected] = useState(false);
+  const queueScopeRef = useRef<"all" | "account">("account");
   const [rememberedActiveId, rememberActiveId] = useRememberedDashboardValue(ACTIVE_ACCOUNT_STATE_KEY);
 
-  const loadQueue = useCallback(async (accountId: string, showLoading = false) => {
-    if (!accountId) {
-      setQueueItems([]);
-      setMetricSnapshots([]);
-      setManagedReadBudget(null);
-      setDraftingRuntime(null);
-      setXDiscovery(null);
-      return;
-    }
+  const loadQueue = useCallback(async (accountId?: string, showLoading = false) => {
     if (showLoading) setQueueLoading(true);
     try {
-      const response = await fetch(`/api/socials/queue?accountId=${encodeURIComponent(accountId)}`, { cache: "no-store" });
+      const query = accountId ? `?accountId=${encodeURIComponent(accountId)}` : "";
+      const response = await fetch(`/api/socials/queue${query}`, { cache: "no-store" });
       const payload = (await response.json()) as QueuePayload;
       if (!payload.ok) {
         setError(payload.error ?? `HTTP ${response.status}`);
         return;
       }
-      setQueueItems(payload.queue ?? []);
+      const nextQueue = payload.queue ?? [];
+      setQueueItems(nextQueue);
+      setQueueCounts((current) => {
+        if (accountId) {
+          return {
+            ...current,
+            [accountId]: nextQueue.filter((item) => ["draft", "suggested", "failed"].includes(item.state)).length,
+          };
+        }
+        const next = Object.fromEntries(Object.keys(current).map((id) => [id, 0])) as Record<string, number>;
+        for (const item of nextQueue) {
+          if (["draft", "suggested", "failed"].includes(item.state)) next[item.accountId] = (next[item.accountId] ?? 0) + 1;
+        }
+        return next;
+      });
       setMetricSnapshots(payload.snapshots ?? []);
       setManagedReadBudget(payload.readBudget ?? null);
       setDraftingRuntime(payload.drafting ?? null);
@@ -124,11 +136,12 @@ export function SocialsPanel({ theme }: { theme: "light" | "dark" }) {
       setAccounts(payload.accounts ?? []);
       setPlatforms(payload.platforms ?? []);
       setSouls(payload.souls ?? []);
+      setQueueCounts(payload.queueCounts ?? {});
       if (payload.queue) setQueueMeta(payload.queue);
       const selected = (payload.accounts ?? []).some((account) => account.id === rememberedActiveId)
         ? rememberedActiveId
         : payload.accounts?.[0]?.id ?? "";
-      await loadQueue(selected, mode === "initial");
+      await loadQueue(queueScopeRef.current === "all" ? undefined : selected, mode === "initial");
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : String(fetchError));
     } finally {
@@ -152,10 +165,13 @@ export function SocialsPanel({ theme }: { theme: "light" | "dark" }) {
   const activeAccount = accounts.find((account) => account.id === activeAccountId) ?? null;
 
   useEffect(() => {
-    if (!activeAccountId) return undefined;
-    const interval = window.setInterval(() => void loadQueue(activeAccountId), 5_000);
+    if (!activeAccountId && !allAccountsSelected) return undefined;
+    const interval = window.setInterval(
+      () => void loadQueue(allAccountsSelected ? undefined : activeAccountId),
+      5_000,
+    );
     return () => window.clearInterval(interval);
-  }, [activeAccountId, loadQueue]);
+  }, [activeAccountId, allAccountsSelected, loadQueue]);
 
   const runAction = useCallback(
     async (body: Record<string, unknown>) => {
@@ -183,7 +199,7 @@ export function SocialsPanel({ theme }: { theme: "light" | "dark" }) {
         return { ok: false, error: message };
       }
       setError(null);
-      await loadQueue(activeAccountId);
+      await loadQueue(queueScopeRef.current === "all" ? undefined : activeAccountId);
       return { ok: true, ...(parsed.item ? { item: parsed.item } : {}) };
     } catch (actionError) {
       const message = actionError instanceof Error ? actionError.message : String(actionError);
@@ -205,6 +221,7 @@ export function SocialsPanel({ theme }: { theme: "light" | "dark" }) {
       souls,
       queueMeta,
       queueItems,
+      queueCounts,
       queueLoading,
       queueBusy,
       engine,
@@ -215,10 +232,18 @@ export function SocialsPanel({ theme }: { theme: "light" | "dark" }) {
       xDiscovery,
       activeAccountId,
       activeAccount,
+      allAccountsSelected,
       connectOpen,
       selectAccount: (id: string) => {
+        queueScopeRef.current = "account";
+        setAllAccountsSelected(false);
         rememberActiveId(id);
         void loadQueue(id, true);
+      },
+      selectAllAccounts: () => {
+        queueScopeRef.current = "all";
+        setAllAccountsSelected(true);
+        void loadQueue(undefined, true);
       },
       setConnectOpen,
       refresh: async () => {
@@ -249,6 +274,11 @@ export function SocialsPanel({ theme }: { theme: "light" | "dark" }) {
         mode,
         ...(mode === "auto" ? { optIn: true, optInNote: "Enabled from the Socials queue controls." } : {}),
       }),
+      setXSessionBinding: async (id: string, xSession: SocialXSessionBinding) => runAction({
+        action: "set-x-session",
+        id,
+        xSession,
+      }),
       setMaxDailyReadOps: async (id: string, maxDailyReadOps: number) => {
         await runAction({ action: "update", id, update: { maxDailyReadOps } });
       },
@@ -257,9 +287,9 @@ export function SocialsPanel({ theme }: { theme: "light" | "dark" }) {
         await runAction({ action: "set-drafting", id, drafting });
       },
       queueAction: runQueueAction,
-      refreshQueue: async () => loadQueue(activeAccountId, true),
+      refreshQueue: async () => loadQueue(queueScopeRef.current === "all" ? undefined : activeAccountId, true),
     }),
-    [theme, loading, refreshing, error, accounts, platforms, souls, queueMeta, queueItems, queueLoading, queueBusy, engine, socialAnalytics, metricSnapshots, managedReadBudget, draftingRuntime, xDiscovery, activeAccountId, activeAccount, connectOpen, rememberActiveId, load, loadQueue, runAction, runQueueAction],
+    [theme, loading, refreshing, error, accounts, platforms, souls, queueMeta, queueItems, queueCounts, queueLoading, queueBusy, engine, socialAnalytics, metricSnapshots, managedReadBudget, draftingRuntime, xDiscovery, activeAccountId, activeAccount, allAccountsSelected, connectOpen, rememberActiveId, load, loadQueue, runAction, runQueueAction],
   );
 
   return (

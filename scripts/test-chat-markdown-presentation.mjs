@@ -57,6 +57,55 @@ assert.match(rendererSource, /<ol[^>]*className=/);
 assert.doesNotMatch(rendererSource, /const (?:bullet|ordered)ItemStyle/);
 assert.doesNotMatch(rendererSource, /role="list(?:item)?"/);
 
+const markdownLinksModuleUrl = new URL(
+  "../src/features/dashboard/chat-markdown-links.ts",
+  import.meta.url,
+);
+const markdownLinksSource = await readFile(
+  markdownLinksModuleUrl,
+  "utf8",
+).catch(() => "");
+assert.ok(
+  markdownLinksSource,
+  "chat markdown needs a testable link classifier for Obsidian wikilinks",
+);
+const { isMarkdownLinkLead, parseObsidianWikilink } = await import(
+  markdownLinksModuleUrl.href
+);
+assert.equal(isMarkdownLinkLead("[[Intake/Processed/example-note]]"), true);
+assert.equal(
+  isMarkdownLinkLead("[receipt](https://example.com/receipt)"),
+  true,
+);
+assert.equal(isMarkdownLinkLead("[1, 2, 3]"), false);
+assert.deepEqual(parseObsidianWikilink("[[Intake/Processed/example-note]]"), {
+  label: "example-note",
+  target: "Intake/Processed/example-note",
+});
+assert.deepEqual(
+  parseObsidianWikilink("[[Intake/Processed/example-note|Source note]]"),
+  {
+    label: "Source note",
+    target: "Intake/Processed/example-note",
+  },
+);
+assert.equal(parseObsidianWikilink("[1, 2, 3]"), null);
+assert.match(
+  rendererSource,
+  /isMarkdownLinkLead\(trimmed\)/,
+  "wikilinks must bypass embedded JSON formatting",
+);
+assert.match(
+  rendererSource,
+  /!isMarkdownLinkLead\(line\)/,
+  "standalone wikilinks must bypass JSON block formatting",
+);
+assert.match(
+  rendererSource,
+  /parseObsidianWikilink\(value\)/,
+  "wikilinks must render with a readable label",
+);
+
 assert.match(processPanelSource, /worked · \{stepCount\} step/);
 assert.match(processPanelSource, /className="cx-tl-line"/);
 assert.match(processPanelSource, /className="cx-tl-step"/);
@@ -114,9 +163,11 @@ assert.match(deliverableRouteSource, /resolveLocalDeliverableFile/);
 assert.match(nativeSource, /open_in_app::list_open_in_apps/);
 assert.match(nativeOpenInSource, /fn list_open_in_apps/);
 assert.match(nativeOpenInSource, /dynamic_bundle_id/);
+assert.match(nativeOpenInSource, /Hivemind Office \(HermesOffice\)/);
 
 const normalizedApps = normalizeMacOpenApplications([
   { name: "Visual Studio Code", bundleId: "com.microsoft.VSCode", path: "/Applications/Visual Studio Code.app" },
+  { name: "HermesOffice", bundleId: "com.hermesoffice.app", path: "/Applications/HermesOffice.app" },
   { name: "Xcode", bundleId: "com.apple.dt.Xcode", path: "/Applications/Xcode.app" },
   { name: "TextEdit", bundleId: "com.apple.TextEdit", path: "/System/Applications/TextEdit.app" },
   { name: "Notes", bundleId: "com.apple.Notes", path: "/System/Applications/Notes.app" },
@@ -125,6 +176,7 @@ const normalizedApps = normalizeMacOpenApplications([
 ], "com.apple.dt.Xcode");
 assert.deepEqual(normalizedApps, [
   { id: "bundle:com.apple.dt.Xcode", name: "Xcode", isDefault: true },
+  { id: "bundle:com.hermesoffice.app", name: "Hivemind Office (HermesOffice)", isDefault: false },
   { id: "bundle:com.microsoft.VSCode", name: "Visual Studio Code", isDefault: false },
   { id: "bundle:com.apple.TextEdit", name: "TextEdit", isDefault: false },
 ]);

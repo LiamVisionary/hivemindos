@@ -8,7 +8,7 @@
   --tm-fg: #f4f7fb;
   --tm-fg-2: #c6d1df;
   --tm-fg-3: #8e9bb1;
-  --tm-fg-4: #5a6478;
+  --tm-fg-4: #748198;
   --tm-line: rgba(148,163,184,0.16);
   --tm-line-2: rgba(148,163,184,0.32);
   --tm-bg-2: #10151f;
@@ -24,8 +24,8 @@
 :global([data-theme="hive-light"]) .root {
   --tm-fg: #221d14;
   --tm-fg-2: #5e574b;
-  --tm-fg-3: #867d6e;
-  --tm-fg-4: #a59b89;
+  --tm-fg-3: #5e574b;
+  --tm-fg-4: #6f6657;
   --tm-line: rgba(54,46,30,0.10);
   --tm-line-2: rgba(54,46,30,0.16);
   --tm-bg-2: #fbf8f1;

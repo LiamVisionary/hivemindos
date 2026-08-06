@@ -1,0 +1,19 @@
+{
+  "upstreamName": "HivemindOS Brand Visuals",
+  "upstreamSlug": "hivemindos-brand-visuals",
+  "hiveSlug": "hivemindos-brand-visuals",
+  "version": "0.2.0",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/brand/hivemindos/hivemindos-brand-visuals",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT",
+  "importedAt": "2026-07-27T00:13:31Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional brand skills",
+  "sourcePath": "packaged-skills/optional/brand/hivemindos/hivemindos-brand-visuals",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Uses one concrete brand job and one sharp visual thesis instead of stacking overlapping hive and AI metaphors.",
+    "Requires structurally distinct directions and mark-only review before presentation mockups.",
+    "Treats raster generations as exploratory concepts that still need vector construction and trademark clearance."
+  ]
+}

@@ -45,6 +45,7 @@ export type MarketplaceDeskData = {
   runAccountsAction: (body: Record<string, unknown>) => Promise<MarketplaceActionResult>;
   runListingsAction: (body: Record<string, unknown>) => Promise<MarketplaceActionResult>;
   decideDecision: (id: string, decision: "approved" | "denied", note: string, makeDirective: boolean) => Promise<MarketplaceActionResult>;
+  ignoreDecision: (id: string) => Promise<MarketplaceActionResult>;
   removeDirective: (id: string) => Promise<MarketplaceActionResult>;
   onNavigate?: (target: DashboardRouteTarget) => void;
 };

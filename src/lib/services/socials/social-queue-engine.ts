@@ -28,7 +28,7 @@ import {
 import type { SocialAccount, SocialQueueItem } from "@/lib/services/socials/socials-types";
 
 const POSTING_STALE_MS = 15 * 60_000;
-const SOCIAL_QUEUE_RUNNER_SCHEMA = 4;
+const SOCIAL_QUEUE_RUNNER_SCHEMA = 6;
 
 type TickDependencies = {
   now?: Date;

@@ -46,12 +46,13 @@ export async function getCopyTradeIntelligence(input: {
   network: CopyTradeNetwork;
   token: string;
   counterfactuals: CopyTradeCounterfactual[];
+  currentBatch?: number;
   fetchImpl?: typeof fetch;
 }): Promise<CopyTradeIntelligence> {
   const security = await fetchGoPlusTokenSecurity(input.network, input.token, input.fetchImpl);
   return {
     security,
-    wallet: buildWalletIntelligence(input.counterfactuals),
+    wallet: buildWalletIntelligence(input.counterfactuals, input.currentBatch),
   };
 }
 
@@ -60,6 +61,7 @@ export function warmCopyTradeIntelligence(input: {
   network: CopyTradeNetwork;
   token: string;
   counterfactuals: CopyTradeCounterfactual[];
+  currentBatch?: number;
   fetchImpl?: typeof fetch;
 }): Promise<CopyTradeIntelligence> {
   return getCopyTradeIntelligence(input);
@@ -185,8 +187,12 @@ export function evaluatePostFillRisk(input: {
   };
 }
 
-export function buildWalletIntelligence(records: CopyTradeCounterfactual[]): CopyTradeWalletIntelligence {
+export function buildWalletIntelligence(
+  records: CopyTradeCounterfactual[],
+  currentBatch = Number.POSITIVE_INFINITY,
+): CopyTradeWalletIntelligence {
   const returns = records
+    .filter((record) => record.evaluationBatch < currentBatch)
     .map((record) => record.horizons["24h"].holdReturnPct)
     .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
   if (!returns.length) {
@@ -227,7 +233,9 @@ function normalizeEvmSecurity(data: Record<string, unknown>): CopyTradeTokenSecu
 
 function normalizeSolanaSecurity(data: Record<string, unknown>): CopyTradeTokenSecurity {
   const hardRiskFlags: string[] = [];
-  if (flag(data.none_transferable)) hardRiskFlags.push("non-transferable");
+  if (flag(data.non_transferable) || flag(data.none_transferable)) {
+    hardRiskFlags.push("non-transferable");
+  }
   const creators = Array.isArray(data.creators) ? data.creators.map(asRecord).filter(Boolean) : [];
   if (creators.some((creator) => flag(creator?.malicious_address))) hardRiskFlags.push("malicious-creator");
   const cautionFlags: string[] = [];

@@ -83,7 +83,8 @@ export function HyperframesPromptBuilder({ disabled, sendPromptMessage, sourceRe
   }
 
   useEffect(() => {
-    void refreshRuntime();
+    const timeoutId = window.setTimeout(() => void refreshRuntime(), 0);
+    return () => window.clearTimeout(timeoutId);
   }, []);
 
   async function changeRuntime(action: "install" | "uninstall") {

@@ -28,6 +28,12 @@ const brainGraphRefresh = source("src/features/dashboard/hooks/brain-graph-refre
 
 assert.match(
   tauriDev,
+  /reusing the dev server[\s\S]*setInterval\(\(\) => \{\}, 60_000\);[\s\S]*await new Promise\(\(\) => \{\}\);/,
+  "A Tauri window attached to the shared dev server must keep a real event-loop handle so Node does not exit with unsettled top-level await.",
+);
+
+assert.match(
+  tauriDev,
   /function spawnDevServer\(\)[\s\S]*child\.on\("exit", handleDevServerExit\);[\s\S]*child\.on\("error", handleDevServerError\);/,
   "Tauri dev proxy should own and observe the dev-server child lifecycle.",
 );

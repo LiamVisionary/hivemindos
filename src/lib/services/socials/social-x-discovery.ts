@@ -7,6 +7,11 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 import { optionalEnv } from "@/lib/config/env";
+import { readSharedAgentEnv } from "@/lib/services/integrations/shared-env";
+import {
+  socialXSessionBinding,
+  validSocialXSessionEnvKey,
+} from "@/lib/services/socials/social-x-session-binding";
 import type {
   SocialAccount,
   SocialEngagementTarget,
@@ -41,8 +46,19 @@ export type SocialXDiscoveryResult = {
 };
 
 export type TwitterCliRun = (args: string[]) => Promise<unknown>;
+export type TwitterCliExecute = (
+  command: string,
+  args: string[],
+  options: {
+    timeout: number;
+    maxBuffer: number;
+    windowsHide: boolean;
+    env?: NodeJS.ProcessEnv;
+  },
+) => Promise<{ stdout: string }>;
 
 let statusCache: { expiresAt: number; value: SocialXDiscoveryStatus } | null = null;
+const accountStatusCache = new Map<string, { expiresAt: number; value: SocialXDiscoveryStatus }>();
 
 async function existingFile(candidates: string[]): Promise<string | null> {
   for (const candidate of candidates) {
@@ -80,13 +96,18 @@ function structuredTwitterError(stdout: unknown): string {
 }
 
 /** Execute the installed Agent Reach X CLI with argv isolation and JSON output. */
-export async function runTwitterCli(args: string[]): Promise<unknown> {
-  const command = await resolveTwitterCommand();
+async function executeTwitterCli(
+  command: string,
+  args: string[],
+  env: NodeJS.ProcessEnv | undefined,
+  executeImpl: TwitterCliExecute,
+): Promise<unknown> {
   try {
-    const { stdout } = await execFileAsync(command, args, {
+    const { stdout } = await executeImpl(command, args, {
       timeout: TWITTER_TIMEOUT_MS,
       maxBuffer: TWITTER_MAX_BUFFER,
       windowsHide: true,
+      ...(env ? { env } : {}),
     });
     return JSON.parse(stdout);
   } catch (error) {
@@ -99,6 +120,83 @@ export async function runTwitterCli(args: string[]): Promise<unknown> {
       || candidate.stderr?.replace(/\s+/g, " ").trim().slice(0, 500);
     throw new Error(detail || (error instanceof Error ? error.message : "twitter-cli failed."));
   }
+}
+
+const defaultTwitterCliExecute: TwitterCliExecute = (command, args, options) =>
+  execFileAsync(command, args, options) as Promise<{ stdout: string }>;
+
+/** Execute the machine-default Agent Reach X session. */
+export async function runTwitterCli(args: string[]): Promise<unknown> {
+  return executeTwitterCli(await resolveTwitterCommand(), args, undefined, defaultTwitterCliExecute);
+}
+
+function accountTwitterCliEnv(
+  account: SocialAccount,
+  sharedEnv: Record<string, string>,
+  baseEnv: NodeJS.ProcessEnv,
+): NodeJS.ProcessEnv {
+  const session = socialXSessionBinding(account);
+  const env = { ...baseEnv };
+  if (session.mode === "machine-default") {
+    if (!env.TWITTER_AUTH_TOKEN?.trim() && sharedEnv.TWITTER_AUTH_TOKEN?.trim()) {
+      env.TWITTER_AUTH_TOKEN = sharedEnv.TWITTER_AUTH_TOKEN.trim();
+    }
+    if (!env.TWITTER_CT0?.trim() && sharedEnv.TWITTER_CT0?.trim()) {
+      env.TWITTER_CT0 = sharedEnv.TWITTER_CT0.trim();
+    }
+    return env;
+  }
+  if (!validSocialXSessionEnvKey(session.authTokenEnvKey)) {
+    throw new Error("This Socials account has an invalid TWITTER_AUTH_TOKEN env binding.");
+  }
+  if (!validSocialXSessionEnvKey(session.ct0EnvKey)) {
+    throw new Error("This Socials account has an invalid TWITTER_CT0 env binding.");
+  }
+  const authToken = (baseEnv[session.authTokenEnvKey] ?? sharedEnv[session.authTokenEnvKey] ?? "").trim();
+  const ct0 = (baseEnv[session.ct0EnvKey] ?? sharedEnv[session.ct0EnvKey] ?? "").trim();
+  const missing = [
+    ...(!authToken ? [session.authTokenEnvKey] : []),
+    ...(!ct0 ? [session.ct0EnvKey] : []),
+  ];
+  if (missing.length) {
+    throw new Error(`This Socials account's Agent Reach session is missing Shared Hive Env ${missing.join(" and ")}.`);
+  }
+  env.TWITTER_AUTH_TOKEN = authToken;
+  env.TWITTER_CT0 = ct0;
+  delete env.TWITTER_CHROME_PROFILE;
+  return env;
+}
+
+/**
+ * Resolve one immutable account-scoped twitter-cli runner. Shared-env values
+ * are loaded once, then only the selected cookie pair is mapped onto the
+ * canonical variables read by twitter-cli.
+ */
+export async function createAccountTwitterCliRun(
+  account: SocialAccount,
+  input: {
+    sharedEnv?: Record<string, string>;
+    baseEnv?: NodeJS.ProcessEnv;
+    command?: string;
+    executeImpl?: TwitterCliExecute;
+  } = {},
+): Promise<TwitterCliRun> {
+  const [sharedEnv, command] = await Promise.all([
+    input.sharedEnv ? Promise.resolve(input.sharedEnv) : readSharedAgentEnv(),
+    input.command ? Promise.resolve(input.command) : resolveTwitterCommand(),
+  ]);
+  let env: NodeJS.ProcessEnv | null = null;
+  let setupError: Error | null = null;
+  try {
+    env = accountTwitterCliEnv(account, sharedEnv, input.baseEnv ?? process.env);
+  } catch (error) {
+    setupError = error instanceof Error ? error : new Error(String(error));
+  }
+  const executeImpl = input.executeImpl ?? defaultTwitterCliExecute;
+  return async (args) => {
+    if (setupError) throw setupError;
+    return executeTwitterCli(command, args, env!, executeImpl);
+  };
 }
 
 function objectRecord(value: unknown): Record<string, unknown> | null {
@@ -145,6 +243,61 @@ export async function getXDiscoveryStatus(input: { force?: boolean; runTwitterIm
   }
   if (!input.runTwitterImpl) statusCache = { expiresAt: now + STATUS_CACHE_MS, value };
   return value;
+}
+
+/** Verify that the resolved account session really belongs to this account. */
+export function bindXDiscoveryStatusToAccount(
+  account: SocialAccount,
+  status: SocialXDiscoveryStatus,
+): SocialXDiscoveryStatus {
+  if (account.platform !== "x" || !status.available || !status.authenticated) return status;
+  const session = socialXSessionBinding(account);
+  const connectedHandle = account.handle.trim().replace(/^@/, "");
+  const sessionHandle = (status.accountHandle ?? "").trim().replace(/^@/, "");
+  if (sessionHandle && sessionHandle.toLowerCase() === connectedHandle.toLowerCase()) {
+    return session.mode === "account-env"
+      ? { ...status, detail: `Authenticated X discovery as @${sessionHandle} using this account's isolated session.` }
+      : status;
+  }
+  const recovery = session.mode === "account-env"
+    ? `Update this account's Agent Reach X session with credentials for @${connectedHandle}`
+    : `Bind per-account credentials for @${connectedHandle}, or sign the machine-default Agent Reach session into that account`;
+  return {
+    ...status,
+    authenticated: false,
+    detail: `Agent Reach is authenticated as @${sessionHandle || "unknown"}, but this Socials account is connected as @${connectedHandle}. Comment finder and X engagement require the same account. ${recovery} before finding or publishing replies and quote posts.`,
+  };
+}
+
+export async function getXDiscoveryStatusForAccount(
+  account: SocialAccount,
+  input: { force?: boolean; runTwitterImpl?: TwitterCliRun } = {},
+): Promise<SocialXDiscoveryStatus> {
+  const now = Date.now();
+  const session = socialXSessionBinding(account);
+  const cacheKey = `${account.id}:${session.mode}:${session.mode === "account-env" ? `${session.authTokenEnvKey}:${session.ct0EnvKey}` : "default"}`;
+  if (!input.runTwitterImpl && !input.force) {
+    const cached = accountStatusCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) return cached.value;
+  }
+  const runImpl = input.runTwitterImpl ?? await createAccountTwitterCliRun(account);
+  const value = bindXDiscoveryStatusToAccount(
+    account,
+    await getXDiscoveryStatus({ force: true, runTwitterImpl: runImpl }),
+  );
+  if (!input.runTwitterImpl) accountStatusCache.set(cacheKey, { expiresAt: now + STATUS_CACHE_MS, value });
+  return value;
+}
+
+export function invalidateXDiscoveryStatus(accountId?: string): void {
+  statusCache = null;
+  if (!accountId) {
+    accountStatusCache.clear();
+    return;
+  }
+  for (const key of accountStatusCache.keys()) {
+    if (key.startsWith(`${accountId}:`)) accountStatusCache.delete(key);
+  }
 }
 
 function validHandle(value: string): string | null {
@@ -262,8 +415,8 @@ export async function discoverRelevantXPosts(input: {
 }): Promise<SocialXDiscoveryResult> {
   if (input.account.platform !== "x") throw new Error("Live engagement discovery is currently available for X accounts.");
   const now = input.now ?? new Date();
-  const runImpl = input.runTwitterImpl ?? runTwitterCli;
-  const status = await getXDiscoveryStatus({ runTwitterImpl: runImpl });
+  const runImpl = input.runTwitterImpl ?? await createAccountTwitterCliRun(input.account);
+  const status = await getXDiscoveryStatusForAccount(input.account, { runTwitterImpl: runImpl });
   if (!status.available || !status.authenticated) throw new Error(status.detail);
   const targetHandles = extractEngagementTargetHandles(input.account, input.contextText);
   const queries = boundedQueries(input.queries);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
-import { executeX402Fetch, type X402FetchPolicy } from "@/lib/services/wallet/x402-agent-fetch";
+import { executeX402Fetch, normalizeX402Policy } from "@/lib/services/wallet/x402-agent-fetch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     // Personal (`user:`) wallets never auto-spend: force auto-pay off so x402
     // always needs an explicit confirmation. An explicit pay-from-my-wallet
     // still works; the no-human auto path does not.
-    const policy = normalizePolicy(body.policy, stored.info.network, agentId.startsWith("user:"));
+    const policy = normalizeX402Policy(body.policy, stored.info.network, agentId.startsWith("user:"));
     const result = await executeX402Fetch({
       agentId,
       network: stored.info.network,
@@ -61,24 +61,4 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "x402 request failed" }, { status: 400 });
   }
-}
-
-function normalizePolicy(policy: Partial<AgentWalletConfig> | undefined, network: string, isPersonalWallet = false): X402FetchPolicy {
-  const provider = policy?.provider === "veil" && policy.veilAutoPrivateX402 === false
-    ? "x402"
-    : policy?.provider ?? "manual";
-  return {
-    enabled: Boolean(policy?.enabled),
-    provider,
-    network: policy?.network || network,
-    maxPaymentUsd: positiveMoney(policy?.maxPaymentUsd, 0.5),
-    approvalRequiredOverUsd: positiveMoney(policy?.approvalRequiredOverUsd, 0),
-    autoPayEnabled: Boolean(policy?.autoPayEnabled) && !isPersonalWallet,
-    x402BaseUrl: policy?.x402BaseUrl ?? "",
-  };
-}
-
-function positiveMoney(value: unknown, fallback: number) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }

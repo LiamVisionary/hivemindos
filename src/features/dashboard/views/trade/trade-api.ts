@@ -5,6 +5,19 @@
 
 import type { TradeTokenMetadata } from "@/lib/types/trading-token";
 import type { QuantResearchRunManifest } from "@/lib/types/quant-research";
+import type {
+  PortfolioAccountSnapshot,
+  PortfolioSnapshot,
+  TradePlan,
+  TradeProposal,
+  TradingBrokerConnection,
+  TradingControlConfig,
+  TradingControlOverview,
+  TradingExecutionMode,
+  TradingReconciliation,
+  TradingThesis,
+} from "@/lib/types/trading-control";
+import type { TradingBrokerPackDefinition } from "@/lib/config/trading-brokers";
 export type { TradeTokenMetadata } from "@/lib/types/trading-token";
 
 // Fallback only — the live confirmation token is always taken from the server's
@@ -254,6 +267,8 @@ export type StockQuote = {
   venue: StockVenue;
   ticker: string;
   notionalUsd: number;
+  orderType?: "market" | "limit" | "stop" | "stop_limit";
+  timeInForce?: "day" | "gtc" | "ioc" | "fok";
   priceImpactPct?: number;
   platformFee?: {
     enabled: boolean;
@@ -271,6 +286,8 @@ export type StockTradeResult = {
   venue: StockVenue;
   ticker: string;
   notionalUsd: number;
+  orderType?: "market" | "limit" | "stop" | "stop_limit";
+  timeInForce?: "day" | "gtc" | "ioc" | "fok";
   reference: string;
   paper: boolean;
   acquired?: number;
@@ -402,7 +419,7 @@ export async function quoteSwap(params: { agentId: string; sellToken: string; bu
   return postJson("/api/trading/swap", { action: "quote", ...params });
 }
 
-export async function executeSwap(params: { agentId: string; sellToken: string; buyToken: string; amountHuman: number; confirmation: string; slippageBps?: number; network?: string }): Promise<{ ok: boolean; error?: string; result?: DexSwapResult }> {
+export async function executeSwap(params: { agentId: string; sellToken: string; buyToken: string; amountHuman: number; confirmation: string; slippageBps?: number; network?: string; planId?: string }): Promise<{ ok: boolean; error?: string; result?: DexSwapResult }> {
   return postJson("/api/trading/swap", { action: "execute", ...params });
 }
 
@@ -739,12 +756,90 @@ export async function fetchTradingReadiness(): Promise<TradingReadiness | null> 
   return data.ok ? (data as TradingReadiness) : null;
 }
 
-export async function quoteStockTrade(params: { agentId: string; side: "buy" | "sell"; ticker: string; notionalUsd: number; paper: boolean }): Promise<{ ok: boolean; error?: string; quote?: StockQuote; confirmation?: string }> {
+export async function quoteStockTrade(params: { agentId: string; side: "buy" | "sell"; ticker: string; notionalUsd: number; paper: boolean; qty?: number; orderType?: "market" | "limit" | "stop" | "stop_limit"; timeInForce?: "day" | "gtc" | "ioc" | "fok"; limitPrice?: number; stopPrice?: number }): Promise<{ ok: boolean; error?: string; quote?: StockQuote; confirmation?: string }> {
   return postJson("/api/trading", { action: "quote", ...params });
 }
 
-export async function executeStockTrade(params: { agentId: string; side: "buy" | "sell"; ticker: string; notionalUsd: number; confirmation: string; paper: boolean; qty?: number }): Promise<{ ok: boolean; error?: string; result?: StockTradeResult }> {
+export async function executeStockTrade(params: { agentId: string; side: "buy" | "sell"; ticker: string; notionalUsd: number; confirmation: string; paper: boolean; qty?: number; orderType?: "market" | "limit" | "stop" | "stop_limit"; timeInForce?: "day" | "gtc" | "ioc" | "fok"; limitPrice?: number; stopPrice?: number; planId?: string }): Promise<{ ok: boolean; error?: string; result?: StockTradeResult }> {
   return postJson("/api/trading", { action: "execute", ...params });
+}
+
+// ---- Unified trading control plane ----------------------------------------
+export type TradingControlResponse = {
+  overview: TradingControlOverview;
+  brokerPacks: TradingBrokerPackDefinition[];
+};
+
+export async function fetchTradingControl(): Promise<{ ok: boolean; error?: string; overview?: TradingControlOverview; brokerPacks?: TradingBrokerPackDefinition[] }> {
+  const response = await fetch("/api/trading/control", { headers: { accept: "application/json" }, cache: "no-store" }).catch(() => null);
+  return asJson<TradingControlResponse>(response);
+}
+
+export async function runTradingControlAction<T>(body: Record<string, unknown>): Promise<{ ok: boolean; error?: string } & Partial<T>> {
+  const response = await postJson<T>("/api/trading/control", body);
+  return response as { ok: boolean; error?: string } & Partial<T>;
+}
+
+export async function createTradingPlan(input: {
+  title?: string;
+  proposal: TradeProposal;
+  thesis?: string;
+  evidence?: string[];
+  missingContext?: string[];
+}) {
+  return runTradingControlAction<{ plan: TradePlan }>({ action: "plan.create", ...input });
+}
+
+export async function approveTradingPlan(id: string, note?: string) {
+  return runTradingControlAction<{ plan: TradePlan }>({ action: "plan.approve", id, note });
+}
+
+export async function rejectTradingPlan(id: string, note?: string) {
+  return runTradingControlAction<{ plan: TradePlan }>({ action: "plan.reject", id, note });
+}
+
+export async function simulateTradingPlan(id: string) {
+  return runTradingControlAction<{ plan: TradePlan }>({ action: "plan.simulate", id });
+}
+
+export async function recordExternalTradingPlanResult(input: { id: string; executionStatus?: string; reference?: string; detail: string; filled?: boolean; filledQuantity?: number; fillPrice?: number; feesUsd?: number }) {
+  return runTradingControlAction<{ plan: TradePlan }>({ action: "plan.record-external", ...input });
+}
+
+export async function assertTradingPlanLive(id: string) {
+  return runTradingControlAction<{ plan: TradePlan }>({ action: "plan.assert-live", id });
+}
+
+export async function updateTradingConfig(config: Partial<TradingControlConfig>) {
+  return runTradingControlAction<{ overview: TradingControlOverview }>({ action: "config.update", config });
+}
+
+export async function updateTradingAccountPolicy(input: { accountId: string; readOnly: boolean; executionMode?: TradingExecutionMode }) {
+  return runTradingControlAction<{ overview: TradingControlOverview }>({ action: "account-policy.update", ...input });
+}
+
+export async function savePortfolioSnapshot(accounts: PortfolioAccountSnapshot[]) {
+  return runTradingControlAction<{ snapshot: PortfolioSnapshot }>({ action: "snapshot.capture", reason: "manual", accounts });
+}
+
+export async function saveTradingThesis(input: Omit<TradingThesis, "id" | "status" | "nextReviewAt" | "createdAt" | "updatedAt" | "notes">) {
+  return runTradingControlAction<{ thesis: TradingThesis }>({ action: "thesis.create", ...input });
+}
+
+export async function reviseTradingThesis(id: string, input: Partial<Pick<TradingThesis, "status" | "summary" | "invalidation" | "conviction">> & { note?: string }) {
+  return runTradingControlAction<{ thesis: TradingThesis }>({ action: "thesis.update", id, ...input });
+}
+
+export async function saveTradingBrokerConnection(connection: Partial<TradingBrokerConnection>) {
+  return runTradingControlAction<{ connection: TradingBrokerConnection }>({ action: "broker.upsert", connection });
+}
+
+export async function probeTradingBrokerConnection(id: string) {
+  return runTradingControlAction<{ connection: TradingBrokerConnection; probe: Record<string, unknown> }>({ action: "broker.probe", id });
+}
+
+export async function reconcileTradingPosition(input: Omit<TradingReconciliation, "id" | "quantityDelta" | "costBasisDeltaUsd" | "status" | "reconciledAt">) {
+  return runTradingControlAction<{ reconciliation: TradingReconciliation }>({ action: "position.reconcile", ...input });
 }
 
 export async function fetchStockPortfolio(agentId: string, paper: boolean): Promise<{ ok: boolean; error?: string; portfolio?: AlpacaPortfolio | null; note?: string }> {

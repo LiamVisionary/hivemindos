@@ -14,7 +14,7 @@
 // tokens + the canonical animated loading primitives) so both dark and the
 // hive-light/clay theme come for free.
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type { FleetMachine } from "@/components/fleet/fleet-data";
 import { Panel, Skeleton, Spinner } from "@/features/dashboard/views/zero-human-companies/primitives";
@@ -119,7 +119,7 @@ function machineTone(m: FleetMachine): Tone {
 // ── sparkline (inline SVG — repo precedent: AnalyticsPanel.Sparkline) ────────
 
 function Sparkline({ data, color, height = 34 }: { data: number[]; color: string; height?: number }) {
-  const gradientId = useMemo(() => `tlm-spark-${Math.random().toString(36).slice(2)}`, []);
+  const gradientId = `tlm-spark-${useId().replaceAll(":", "")}`;
   const w = 240;
   const h = height;
   const pad = 3;
@@ -381,9 +381,9 @@ function TelemetrySkeleton() {
 // ── main view ───────────────────────────────────────────────────────────────
 
 export function TelemetryView({ machines, loading, theme, checkedAt, onRefresh, onOpenMachine, pollSeconds = 15 }: TelemetryViewProps) {
-  const historyRef = useRef<Map<string, number[]>>(new Map());
-  const [, setTick] = useState(0);
-  const [now, setNow] = useState<number | null>(null);
+  const [history, setHistory] = useState<Map<string, number[]>>(() => new Map());
+  const [now, setNow] = useState(() => Date.now());
+  const lastRecordedSampleRef = useRef("");
 
   const reporting = useMemo(() => machines.filter((m) => m.system && isOnline(m)), [machines]);
 
@@ -413,37 +413,38 @@ export function TelemetryView({ machines, loading, theme, checkedAt, onRefresh, 
 
   // Append a real sample to each series on every fresh discovery poll.
   useEffect(() => {
-    if (!reporting.length) return;
-    const hist = historyRef.current;
-    const push = (key: string, value: number) => {
-      const arr = hist.get(key) ?? [];
-      arr.push(value);
-      if (arr.length > HISTORY_LENGTH) arr.splice(0, arr.length - HISTORY_LENGTH);
-      hist.set(key, arr);
-    };
-    for (const m of reporting) {
-      const s = m.system;
-      if (!s) continue;
-      if (s.ramPct != null) push(`mem-${m.id}`, s.ramPct);
-      if (s.cpuPct != null) push(`cpu-${m.id}`, s.cpuPct);
-      push(`net-${m.id}`, s.netRxMBs ?? 0);
-    }
-    push("kpi-mem", fleet.memPct);
-    push("kpi-cpu", fleet.cpuAvg);
-    push("kpi-net", fleet.netTotal);
-    push("kpi-disk", fleet.diskAvg);
-    setTick((t) => t + 1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sampleSignature]);
+    if (!reporting.length) return undefined;
+    const timeoutId = window.setTimeout(() => {
+      if (lastRecordedSampleRef.current === sampleSignature) return;
+      lastRecordedSampleRef.current = sampleSignature;
+      setHistory((current) => {
+        const next = new Map(current);
+        const push = (key: string, value: number) => {
+          const values = [...(next.get(key) ?? []), value].slice(-HISTORY_LENGTH);
+          next.set(key, values);
+        };
+        for (const m of reporting) {
+          const system = m.system;
+          if (!system) continue;
+          if (system.ramPct != null) push(`mem-${m.id}`, system.ramPct);
+          if (system.cpuPct != null) push(`cpu-${m.id}`, system.cpuPct);
+          push(`net-${m.id}`, system.netRxMBs ?? 0);
+        }
+        push("kpi-mem", fleet.memPct);
+        push("kpi-cpu", fleet.cpuAvg);
+        push("kpi-net", fleet.netTotal);
+        push("kpi-disk", fleet.diskAvg);
+        return next;
+      });
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, [fleet.cpuAvg, fleet.diskAvg, fleet.memPct, fleet.netTotal, reporting, sampleSignature]);
 
   // Tick the "updated Xs ago" label without re-polling.
   useEffect(() => {
-    setNow(Date.now());
     const id = setInterval(() => setNow(Date.now()), 5_000);
     return () => clearInterval(id);
   }, []);
-
-  const hist = historyRef.current;
 
   // Fleet-wide top processes by RSS (real — from each collector's ps walk).
   const topProcesses = useMemo(() => {
@@ -515,9 +516,9 @@ export function TelemetryView({ machines, loading, theme, checkedAt, onRefresh, 
 
   // Fleet KPI sparklines prefer the collectors' real rolling history (aggregated
   // across nodes), falling back to the client-accumulated buffer.
-  const kpiMemHist = aggregateHistory(reporting.map((m) => m.system?.history?.ram), "avg") ?? (hist.get("kpi-mem") ?? []);
-  const kpiCpuHist = aggregateHistory(reporting.map((m) => m.system?.history?.cpu), "avg") ?? (hist.get("kpi-cpu") ?? []);
-  const kpiNetHist = aggregateHistory(reporting.map((m) => m.system?.history?.netRx), "sum") ?? (hist.get("kpi-net") ?? []);
+  const kpiMemHist = aggregateHistory(reporting.map((m) => m.system?.history?.ram), "avg") ?? (history.get("kpi-mem") ?? []);
+  const kpiCpuHist = aggregateHistory(reporting.map((m) => m.system?.history?.cpu), "avg") ?? (history.get("kpi-cpu") ?? []);
+  const kpiNetHist = aggregateHistory(reporting.map((m) => m.system?.history?.netRx), "sum") ?? (history.get("kpi-net") ?? []);
 
   const kpis = [
     {
@@ -539,7 +540,7 @@ export function TelemetryView({ machines, loading, theme, checkedAt, onRefresh, 
     },
     {
       label: "Disk", value: `${Math.round(fleet.diskAvg)}`, unit: "% avg",
-      sub: `across ${nodeCount} volumes`, spark: hist.get("kpi-disk") ?? [],
+      sub: `across ${nodeCount} volumes`, spark: history.get("kpi-disk") ?? [],
       sparkColor: fleet.diskAvg >= 85 ? "var(--danger)" : "var(--fg-3)",
       delta: "steady", deltaColor: "var(--fg-3)",
     },
@@ -573,7 +574,7 @@ export function TelemetryView({ machines, loading, theme, checkedAt, onRefresh, 
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <Pill>
               <span className="dot live" style={{ color: "var(--live)" }} />
-              {loading ? "Refreshing" : `Updated ${fmtRelative(checkedAt, now ?? undefined)}`}
+              {loading ? "Refreshing" : `Updated ${fmtRelative(checkedAt, now)}`}
             </Pill>
             <Pill>{nodeCount} {nodeCount === 1 ? "machine" : "machines"} · {fleet.procs} processes</Pill>
             {onRefresh ? (
@@ -608,7 +609,7 @@ export function TelemetryView({ machines, loading, theme, checkedAt, onRefresh, 
             {/* two-column body */}
             <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 340px", gap: 18, alignItems: "start" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
-                {machines.map((m) => <MachineCard key={m.id} m={m} history={hist} onOpen={onOpenMachine} />)}
+                {machines.map((m) => <MachineCard key={m.id} m={m} history={history} onOpen={onOpenMachine} />)}
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 16, position: "sticky", top: 0 }}>

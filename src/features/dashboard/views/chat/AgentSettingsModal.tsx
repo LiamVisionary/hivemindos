@@ -25,6 +25,7 @@ import { GuidedHivemindosModelsSetup } from "./GuidedHivemindosModelsSetup";
 import { GuidedUsePodSetup } from "./GuidedUsePodSetup";
 import { GuidedVeniceSetup } from "./GuidedVeniceSetup";
 import { LmStudioModelManager } from "./LmStudioModelManager";
+import { SieModelManager } from "./SieModelManager";
 import { MissingSharedEnvKeySetup } from "./MissingSharedEnvKeySetup";
 import { ModelPillSelector } from "./ModelPillSelector";
 import { ResearchMethodSettingsPanel } from "./ResearchMethodSettingsPanel";
@@ -35,8 +36,11 @@ import { WorkspaceModal } from "@/components/aeon";
 import { renderBeeSoulTemplate } from "@/lib/config/bee-worker-presets";
 import { normalizeResearchMethod } from "@/lib/config/research-methods";
 import { MODEL_PROVIDER_GATEWAYS } from "@/lib/config/model-provider-gateways";
+import { LOCAL_MODEL_RUNTIME_CAPABILITIES, SIE_PROVIDER_ID } from "@/lib/config/local-model-runtimes";
 import { HIVEMINDOS_WALLET_PAID_MODELS_DEFAULT_MODEL, HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER } from "@/lib/config/hivemindos-wallet-paid-models";
 import { providerCatalogEntry } from "@/lib/config/provider-catalog";
+import { openExternalUrl } from "@/lib/native/open-external-url";
+import { oauthReturnMode } from "@/lib/native/oauth-return-mode";
 import { runtimeHasInstallSetup } from "@/lib/services/runtime-install-catalog";
 import { HIVEMIND_OS_RUNTIME, buildAgentCallPreferences, defaultAgentNameForRuntime, runtimeProfileFeature, runtimeSettingsFeature, type AgentRuntime } from "@/lib/types/agent-runtime";
 import { rememberMruRuntime } from "@/features/dashboard/agent-mru-runtime";
@@ -51,6 +55,7 @@ const BANKR_LLM_BASE_URL = "https://llm.bankr.bot";
 const BANKR_LLM_CHAT_PATH = "/v1/chat/completions";
 const BANKR_LLM_MODELS_PATH = "/v1/models";
 const LM_STUDIO_EMPTY_DISCOVERY_GRACE_MS = 12_000;
+const SIE_RUNTIME = LOCAL_MODEL_RUNTIME_CAPABILITIES[SIE_PROVIDER_ID];
 
 export function AgentSettingsModal(props: any) {
   const {
@@ -173,6 +178,7 @@ export function AgentSettingsModal(props: any) {
   const hivemindosModelsSelected = selectedProviderSlug === HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER;
   const bankrLlmSelected = selectedProviderSlug === "bankr";
   const lmStudioSelected = selectedProviderSlug === "lm-studio";
+  const sieSelected = selectedProviderSlug === SIE_PROVIDER_ID;
   const adaptiveProviderSelected = selectedProviderSlug === "adaptive";
   const selectedCatalogEntry = providerCatalogEntry(selectedProviderSlug);
 
@@ -191,6 +197,7 @@ export function AgentSettingsModal(props: any) {
   const [xaiOAuthStatusLoaded, setXaiOAuthStatusLoaded] = useState(false);
   const [fetchedProviderModels, setFetchedProviderModels] = useState(() => ({}));
   const [lmStudioEmptyDiscoveryGraceActive, setLmStudioEmptyDiscoveryGraceActive] = useState(false);
+  const [sieEmptyDiscoveryGraceActive, setSieEmptyDiscoveryGraceActive] = useState(false);
   const [lmStudioPendingLoadModelKeys, setLmStudioPendingLoadModelKeys] = useState<string[]>([]);
   const [lmStudioPendingPrimaryAction, setLmStudioPendingPrimaryAction] = useState<"save" | "create" | null>(null);
   const [agentMailboxOverview, setAgentMailboxOverview] = useState(null);
@@ -235,6 +242,7 @@ export function AgentSettingsModal(props: any) {
   const bankrCreditStatus = runtimeIntegrationStatus?.providerStatus?.bankr;
   const bankrInitialCredits = bankrCreditStatus ? { ok: true, balanceUsd: bankrCreditStatus.creditsBalanceUsd, balanceLabel: bankrCreditStatus.balanceLabel ?? (bankrCreditStatus.creditsBalanceUsd === null ? "Unknown" : undefined), error: bankrCreditStatus.error } : undefined;
   const lmStudioStatus = runtimeIntegrationStatus?.providerStatus?.lmStudio;
+  const sieStatus = runtimeIntegrationStatus?.providerStatus?.sie;
   const lmStudioActiveDownloadCount = (lmStudioStatus?.downloads ?? []).filter((download) => download.state === "queued" || download.state === "downloading").length;
   // Queen voice brain degradation: voice turns are silently bypassing this
   // agent's configured model and falling back to the OpenAI fallback model.
@@ -251,6 +259,9 @@ export function AgentSettingsModal(props: any) {
   const lmStudioInventoryModelCount = lmStudioStatus?.models?.length ?? 0;
   const lmStudioHasDiscoveredModels = runtimeModelOptions.length > 0 || lmStudioInventoryModelCount > 0;
   const lmStudioDiscoveryPending = Boolean(lmStudioSelected && !lmStudioHasDiscoveredModels && (runtimeIntegrationBusy === "status" || lmStudioEmptyDiscoveryGraceActive));
+  const sieHasDiscoveredModels = Boolean(sieStatus?.models?.length);
+  const sieDiscoveryPending = Boolean(sieSelected && !sieHasDiscoveredModels && (runtimeIntegrationBusy === "status" || sieEmptyDiscoveryGraceActive));
+  const sieActiveLifecycleCount = (sieStatus?.models ?? []).filter((model) => model.state === "loading" || model.state === "unloading").length;
   const selectedLmStudioInventoryModel = lmStudioStatus?.models?.find((model) => model.key === selectedRuntimeModelId && model.type === "llm");
   const lmStudioSelectedModelLoaded = Boolean(selectedLmStudioInventoryModel?.loaded || selectedRuntimeModelOption?.subtitle === "Loaded" || selectedRuntimeModelOption?.badge === "Loaded");
   const lmStudioSelectedModelLoading = Boolean(lmStudioSelected && selectedRuntimeModelId && lmStudioPendingLoadModelKeys.includes(selectedRuntimeModelId) && !lmStudioSelectedModelLoaded);
@@ -524,6 +535,19 @@ export function AgentSettingsModal(props: any) {
   }, [lmStudioHasDiscoveredModels, lmStudioSelected, modalOpen, runtimeIntegrationBusy, selectedProviderSlug]);
 
   useEffect(() => {
+    if (!modalOpen || !sieSelected || sieHasDiscoveredModels) {
+      const clearGrace = window.setTimeout(() => setSieEmptyDiscoveryGraceActive(false), 0);
+      return () => window.clearTimeout(clearGrace);
+    }
+    const startGrace = window.setTimeout(() => setSieEmptyDiscoveryGraceActive(true), 0);
+    const stopGrace = window.setTimeout(() => setSieEmptyDiscoveryGraceActive(false), LM_STUDIO_EMPTY_DISCOVERY_GRACE_MS);
+    return () => {
+      window.clearTimeout(startGrace);
+      window.clearTimeout(stopGrace);
+    };
+  }, [modalOpen, runtimeIntegrationBusy, selectedProviderSlug, sieHasDiscoveredModels, sieSelected]);
+
+  useEffect(() => {
     if (!lmStudioPendingLoadModelKeys.length) return;
     const loadedKeys = new Set((lmStudioStatus?.models ?? []).filter((model) => model.loaded).map((model) => model.key));
     if (!loadedKeys.size) return;
@@ -546,6 +570,22 @@ export function AgentSettingsModal(props: any) {
     const interval = window.setInterval(refresh, 2500);
     return () => { window.clearTimeout(initial); window.clearInterval(interval); };
   }, [agentSettingsIntegrationTarget, lmStudioActiveDownloadCount, lmStudioSelected, modalOpen, refreshRuntimeIntegrations, runtimeIntegrationBusy]);
+
+  useEffect(() => {
+    if (!modalOpen || !sieSelected || !sieActiveLifecycleCount || !agentSettingsIntegrationTarget) return;
+    const refresh = () => { if (runtimeIntegrationBusy !== "status") void refreshRuntimeIntegrations(agentSettingsIntegrationTarget); };
+    const initial = window.setTimeout(refresh, 900);
+    const interval = window.setInterval(refresh, 2500);
+    return () => { window.clearTimeout(initial); window.clearInterval(interval); };
+  }, [agentSettingsIntegrationTarget, modalOpen, refreshRuntimeIntegrations, runtimeIntegrationBusy, sieActiveLifecycleCount, sieSelected]);
+
+  useEffect(() => {
+    const configuredModel = agentCreateMachine ? agentCreateDraft.model : roleModalAgent?.model;
+    const firstChatModel = (sieStatus?.models ?? []).find((model) => model.chatCompatible);
+    if (!modalOpen || !sieSelected || configuredModel || !firstChatModel) return;
+    const selectFirstModel = window.setTimeout(() => updateAgentRuntimeModel(SIE_PROVIDER_ID, firstChatModel.key), 0);
+    return () => window.clearTimeout(selectFirstModel);
+  }, [agentCreateDraft.model, agentCreateMachine, modalOpen, roleModalAgent?.model, sieSelected, sieStatus?.models, updateAgentRuntimeModel]);
 
   useEffect(() => {
     if (!lmStudioPendingPrimaryAction || !selectedRuntimeModelId || !lmStudioSelectedModelLoaded || lmStudioSelectedModelLoading) return;
@@ -678,6 +718,55 @@ export function AgentSettingsModal(props: any) {
     updateAgentRuntimeModel(selectedProviderSlug, modelKey);
   }
 
+  function patchSieProfile(patch: Record<string, unknown>) {
+    if (agentCreateMachine) setAgentCreateDraft((current) => ({ ...current, ...patch }));
+    else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, patch);
+  }
+
+  function selectSieProvider() {
+    const availableModels = (sieStatus?.models ?? []).filter((model) => model.chatCompatible);
+    const currentModel = agentCreateMachine ? agentCreateDraft.model : roleModalAgent?.model;
+    const model = currentModel && availableModels.some((entry) => entry.key === currentModel)
+      ? currentModel
+      : availableModels[0]?.key || "";
+    const currentProvider = agentCreateMachine ? agentCreateDraft.provider : roleModalAgent?.provider;
+    const currentBaseUrl = agentCreateMachine ? agentCreateDraft.gatewayUrl : roleModalAgent?.gatewayUrl;
+    const patch = {
+      provider: SIE_PROVIDER_ID,
+      model,
+      gatewayUrl: currentProvider === SIE_PROVIDER_ID && currentBaseUrl?.trim() ? currentBaseUrl : SIE_RUNTIME.defaultBaseUrl,
+      chatPath: SIE_RUNTIME.chatPath,
+      statusPath: SIE_RUNTIME.modelsPath,
+    };
+    patchSieProfile(patch);
+    if (model) updateAgentRuntimeModel(SIE_PROVIDER_ID, model);
+    void refreshRuntimeIntegrations({ ...(agentSettingsIntegrationTarget ?? {}), ...patch });
+  }
+
+  function selectSieModel(modelKey: string) {
+    if (!modelKey) return;
+    const patch = {
+      provider: SIE_PROVIDER_ID,
+      model: modelKey,
+      gatewayUrl: sieStatus?.baseUrl || SIE_RUNTIME.defaultBaseUrl,
+      chatPath: SIE_RUNTIME.chatPath,
+      statusPath: SIE_RUNTIME.modelsPath,
+    };
+    patchSieProfile(patch);
+    updateAgentRuntimeModel(SIE_PROVIDER_ID, modelKey);
+  }
+
+  async function updateSieEndpoint(baseUrl: string) {
+    const patch = {
+      provider: SIE_PROVIDER_ID,
+      gatewayUrl: baseUrl,
+      chatPath: SIE_RUNTIME.chatPath,
+      statusPath: SIE_RUNTIME.modelsPath,
+    };
+    patchSieProfile(patch);
+    await refreshRuntimeIntegrations({ ...(agentSettingsIntegrationTarget ?? {}), ...patch });
+  }
+
   async function runPrimarySettingsAction() {
     if (lmStudioSelectedModelNeedsLoad) {
       if (!lmStudioSelectedModelLoading && selectedRuntimeModelId) {
@@ -742,13 +831,33 @@ export function AgentSettingsModal(props: any) {
     void refreshRuntimeIntegrations({ ...(agentSettingsIntegrationTarget ?? {}), ...patch });
   }
 
-  function openAeonGithubOauth() {
+  async function openAeonGithubOauth() {
     if (aeonOauthConnecting) return;
     setAeonOauthConnecting(true);
     updateAeonSettings({ aeonMode: "github" });
-    requestAnimationFrame(() => {
-      window.location.assign("/api/integrations/github/oauth/start?source=aeon");
-    });
+    try {
+      // External-browser pattern: fetch the ABSOLUTE GitHub authorization URL
+      // (source=aeon rides in the signed state, steering the callback's return
+      // URL back to the Aeon panel) and open it OUTSIDE the app window — the
+      // external browser has no dashboard session, so the old same-origin GET
+      // navigation would 401 at the proxy out there.
+      const response = await fetch("/api/integrations/github/oauth/start?source=aeon", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // Desktop flows: the callback deep-links back to the AEON panel via
+        // hivemindos://, carried in the signed state.
+        body: JSON.stringify(oauthReturnMode() ? { returnMode: oauthReturnMode() } : {}),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || data?.ok === false || !data?.authorizationUrl) {
+        throw new Error(data?.error || "GitHub sign-in could not start.");
+      }
+      await openExternalUrl(data.authorizationUrl);
+    } catch {
+      // The Connect button re-enables so the user can retry.
+    } finally {
+      setAeonOauthConnecting(false);
+    }
   }
 
   function updateSettingsRuntime(runtime: AgentRuntime) {
@@ -1046,12 +1155,18 @@ export function AgentSettingsModal(props: any) {
                 const providerKeyMissing = providerNeedsKey(provider.slug);
                 const lmStudioProviderModels = provider.slug === "lm-studio" ? (lmStudioStatus?.models?.filter((model) => model.type === "llm") ?? []) : [];
                 const lmStudioLoadedCount = lmStudioProviderModels.filter((model) => model.loaded).length;
+                const sieProviderModels = provider.slug === SIE_PROVIDER_ID ? (sieStatus?.models ?? []) : [];
+                const sieWarmCount = sieProviderModels.filter((model) => model.loaded).length;
                 const providerModelDetail = providerLoading
                   ? "Loading models"
                   : provider.slug === "lm-studio" && lmStudioDiscoveryPending
                     ? "Discovering models"
                     : provider.slug === "lm-studio" && lmStudioProviderModels.length
                       ? `${lmStudioProviderModels.length} model${lmStudioProviderModels.length === 1 ? "" : "s"} - ${lmStudioLoadedCount} loaded`
+                      : provider.slug === SIE_PROVIDER_ID && sieDiscoveryPending
+                        ? "Discovering models"
+                        : provider.slug === SIE_PROVIDER_ID && sieProviderModels.length
+                          ? `${sieProviderModels.length} model${sieProviderModels.length === 1 ? "" : "s"} - ${sieWarmCount} warm`
                       : `${effectiveTotalModels} model${effectiveTotalModels === 1 ? "" : "s"}`;
                 const bestProviderModel = selectBestRuntimeModel(provider, {
                   defaultModel: runtimeSettings.defaultModel,
@@ -1066,6 +1181,8 @@ export function AgentSettingsModal(props: any) {
                       ? selectHivemindosModelsProvider
                       : provider.slug === "bankr"
                         ? selectBankrLlmProvider
+                        : provider.slug === SIE_PROVIDER_ID
+                          ? selectSieProvider
                         : () => updateAgentRuntimeModel(bestProviderModel === "adaptive" ? "openrouter" : provider.slug, bestProviderModel);
                 return (
                   <button key={provider.slug} type="button" className="as-choice" data-active={selected || undefined} data-bee={`agent-provider-${provider.slug}`} aria-pressed={selected} onClick={selectProvider}>
@@ -1198,7 +1315,7 @@ export function AgentSettingsModal(props: any) {
           />
         ) : !adaptiveProviderSelected ? (
           <div>
-            {!lmStudioSelected ? (
+            {!lmStudioSelected && !sieSelected ? (
               <>
                 <GroupLabel>Model</GroupLabel>
                 {bankrLlmSelected && bankrLowCredits && selectedRuntimeModels.length ? (
@@ -1239,6 +1356,18 @@ export function AgentSettingsModal(props: any) {
                 refreshRuntimeIntegrations={refreshRuntimeIntegrations}
                 runRuntimeIntegrationAction={runRuntimeIntegrationAction}
                 selectedModelId={selectedRuntimeModelId}
+              />
+            ) : null}
+            {sieSelected ? (
+              <SieModelManager
+                agent={agentSettingsIntegrationTarget}
+                busy={runtimeIntegrationBusy}
+                status={sieStatus}
+                selectedModelId={selectedRuntimeModelId}
+                onSelectModel={selectSieModel}
+                onEndpointChange={updateSieEndpoint}
+                refreshRuntimeIntegrations={refreshRuntimeIntegrations}
+                runRuntimeIntegrationAction={runRuntimeIntegrationAction}
               />
             ) : null}
           </div>

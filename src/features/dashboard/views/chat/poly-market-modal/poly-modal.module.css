@@ -12,7 +12,7 @@
   /* surfaces */
   --bg-0: #06080d; --bg-1: #0a0e16;
   --line: rgba(148, 163, 184, 0.12); --line-2: rgba(148, 163, 184, 0.22);
-  --fg: #f4f7fb; --fg-2: #c6d1df; --fg-3: #8e9bb1; --fg-4: #5a6478;
+  --fg: #f4f7fb; --fg-2: #c6d1df; --fg-3: #8e9bb1; --fg-4: #748198;
   --cyan: #2dd4bf; --cyan-2: #5eead4; --cyan-glow: rgba(45, 212, 191, 0.32);
   --honey: #f2b705; --honey-2: #ffd45a; --honey-3: #fff6cf;
   --danger: #fb7185; --danger-2: #fecdd3;
@@ -35,7 +35,7 @@
 :global([data-theme="hive-light"]) .root {
   --bg-0: #f1ede3; --bg-1: #f6f2e9;
   --line: rgba(54, 46, 30, 0.10); --line-2: rgba(54, 46, 30, 0.16);
-  --fg: #221d14; --fg-2: #5e574b; --fg-3: #867d6e; --fg-4: #a59b89;
+  --fg: #221d14; --fg-2: #5e574b; --fg-3: #5e574b; --fg-4: #6f6657;
   --cyan: #5f8f5a; --cyan-2: #4f7d4b; --cyan-glow: rgba(95, 143, 90, 0.22);
   --honey: #936811; --honey-fill: #e6bb5c; --honey-2: #936811; --honey-3: #6f5011;
   --danger: #c0524d; --danger-2: #963a37;

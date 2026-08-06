@@ -74,7 +74,7 @@
 }
 
 .briefFields dt {
-  color: #76726a;
+  color: #a7a39a;
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -120,7 +120,7 @@
 }
 
 .briefActivity time {
-  color: #76726a;
+  color: #a7a39a;
   font-family: ui-monospace, "JetBrains Mono", monospace;
   font-size: 10.5px;
 }
@@ -163,7 +163,7 @@
   border: 1px solid rgba(238, 232, 220, 0.14);
   border-radius: 6px;
   background: transparent;
-  color: #76726a;
+  color: #a7a39a;
   padding: 3px 9px;
   font-size: 10.5px;
   font-weight: 700;
@@ -276,7 +276,7 @@
 }
 
 .convoEntryHead time {
-  color: #76726a;
+  color: #a7a39a;
   flex: 0 0 auto;
   font-size: 10px;
 }
@@ -340,7 +340,7 @@
 
 .convoComposerHint {
   margin: 2px 0 0;
-  color: #76726a;
+  color: #a7a39a;
   font-size: 11px;
   line-height: 1.45;
 }
@@ -349,7 +349,7 @@
   border: 1px dashed rgba(238, 232, 220, 0.16);
   border-radius: 8px;
   padding: 16px 12px;
-  color: #76726a;
+  color: #a7a39a;
   font-size: 12px;
   text-align: center;
 }

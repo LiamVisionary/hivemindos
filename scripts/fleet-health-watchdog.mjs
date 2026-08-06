@@ -100,6 +100,7 @@ import { promisify } from "node:util";
 
 import { createEscalationTracker, formatEscalationAlert } from "./lib/fleet-watchdog-escalation.mjs";
 import { linkdSourcesChangedBetween } from "./lib/linkd-staleness.mjs";
+import { shouldUseTailscaleCliFallback } from "./lib/tailscale-optional.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -519,6 +520,7 @@ function localMachineId() {
 // watchdog run on collector-only machines and keeps working when the local
 // dashboard is closed. Phones never host collectors and are skipped.
 async function discoverViaTailscale() {
+  if (!shouldUseTailscaleCliFallback()) return [];
   let status = null;
   for (const cli of tailscaleCli()) {
     try {
@@ -879,14 +881,25 @@ function remediationCommand(os, kind) {
     if (os.includes("linux")) {
       return "systemctl --user restart hivemindos-linkd.service 2>/dev/null && echo 'watchdog restarted linkd' || echo 'linkd unit missing'";
     }
-    // kickstart the loaded agent; if it is not registered at all (the failure
-    // that silently killed linkd on 2026-07-02), bootstrap the existing plist.
+    // Recycle the whole job instead of only kickstarting it. A prior linkd can
+    // outlive launchd ownership while still holding the control port; in that
+    // state every replacement exits with EADDRINUSE and kickstart loops forever.
+    // Match the installer's exact-name cleanup, wait briefly for a graceful
+    // exit, then force only the stale hivemind-linkd executable before loading
+    // the managed plist again.
     return [
       "U=$(id -u)",
-      `launchctl kickstart -k "gui/$U/${label}" 2>/dev/null && echo "watchdog kicked linkd" && exit 0`,
       `PLIST="$HOME/Library/LaunchAgents/${label}.plist"`,
-      `[ -f "$PLIST" ] && launchctl bootstrap "gui/$U" "$PLIST" 2>/dev/null && echo "watchdog bootstrapped linkd" && exit 0`,
-      "echo 'linkd LaunchAgent missing — rerun install-telemetry-collector.sh'",
+      `[ -f "$PLIST" ] || { echo "linkd LaunchAgent missing — rerun install-telemetry-collector.sh"; exit 1; }`,
+      `launchctl bootout "gui/$U/${label}" 2>/dev/null || launchctl unload "$PLIST" 2>/dev/null || true`,
+      "pkill -x hivemind-linkd 2>/dev/null || true",
+      "for I in 1 2 3 4 5; do pgrep -x hivemind-linkd >/dev/null 2>&1 || break; sleep 1; done",
+      "pgrep -x hivemind-linkd >/dev/null 2>&1 && pkill -9 -x hivemind-linkd 2>/dev/null || true",
+      "for I in 1 2 3; do pgrep -x hivemind-linkd >/dev/null 2>&1 || break; sleep 1; done",
+      `pgrep -x hivemind-linkd >/dev/null 2>&1 && { echo "watchdog could not stop stale linkd processes"; exit 1; } || true`,
+      `launchctl bootstrap "gui/$U" "$PLIST" 2>/dev/null || launchctl load "$PLIST" 2>/dev/null || { echo "watchdog failed to load linkd LaunchAgent"; exit 1; }`,
+      `launchctl kickstart -k "gui/$U/${label}" 2>/dev/null || { echo "watchdog failed to start linkd LaunchAgent"; exit 1; }`,
+      "echo 'watchdog recycled linkd and cleared stale daemon processes'",
     ].join("; ");
   }
   const pattern = kind === "tts" ? "universal.?tts|mlx.?audio" : "telemetry|collector";

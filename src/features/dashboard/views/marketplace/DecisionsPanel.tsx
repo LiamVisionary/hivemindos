@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { BellRing } from "lucide-react";
+import { BellRing, ExternalLink } from "lucide-react";
 
 import { ApprovalReviewCard } from "@/features/approvals/ApprovalReviewCard";
 import type { MarketplaceDecision } from "@/lib/services/marketplace/marketplace-types";
 
-import { MARKETPLACE_NOTE_MODE, marketplaceDecisionToView } from "./marketplace-approval-model";
+import { MARKETPLACE_NOTE_MODE, marketplaceDecisionActionCopy, marketplaceDecisionToView } from "./marketplace-approval-model";
 import { useMarketplaceDesk } from "./marketplace-context";
 import { Panel } from "./primitives";
 
@@ -40,8 +40,19 @@ function DecisionCard({ decision }: { decision: MarketplaceDecision }) {
       <ApprovalReviewCard
         approval={marketplaceDecisionToView(decision)}
         noteMode={MARKETPLACE_NOTE_MODE}
+        actionCopy={marketplaceDecisionActionCopy(decision)}
         busy={busy}
         error={error}
+        onIgnore={async () => {
+          setBusy(true);
+          setError(undefined);
+          try {
+            const result = await desk.ignoreDecision(decision.id);
+            if (!result.ok) setError(result.error ?? "Could not ignore the decision.");
+          } finally {
+            setBusy(false);
+          }
+        }}
         onDecide={async (verdict, note, makeStanding) => {
           setBusy(true);
           setError(undefined);
@@ -73,6 +84,29 @@ export function DecisionsPanel() {
       </Panel>
     );
   }
+  if (desk.onNavigate) {
+    return (
+      <Panel pad="26px 28px" style={{ maxWidth: 720 }}>
+        <div style={{ display: "grid", gap: 12 }}>
+          <div>
+            <p style={{ margin: 0, color: "var(--fg)", fontSize: 15, fontWeight: 600 }}>
+              {pending.length === 1 ? "1 marketplace decision needs you" : `${pending.length} marketplace decisions need you`}
+            </p>
+            <p style={{ margin: "6px 0 0", color: "var(--fg-3)", fontSize: 12.5, lineHeight: 1.5 }}>
+              Alerts is the single review queue for marketplace decisions, spend approvals, and other agent requests.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => desk.onNavigate?.({ view: "notifications" })}
+            style={{ justifySelf: "start", display: "inline-flex", alignItems: "center", gap: 7, border: 0, borderRadius: 9, padding: "9px 13px", background: "var(--honey)", color: "var(--honey-ink)", fontWeight: 650 }}
+          >
+            Review in Alerts <ExternalLink aria-hidden width={14} height={14} />
+          </button>
+        </div>
+      </Panel>
+    );
+  }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 720 }}>
       {pending.map((decision) => (
@@ -90,7 +124,7 @@ export function DecisionsStrip() {
   return (
     <button
       type="button"
-      onClick={() => desk.selectTab("decisions")}
+      onClick={() => desk.onNavigate ? desk.onNavigate({ view: "notifications" }) : desk.selectTab("decisions")}
       style={{
         display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
         padding: "11px 15px", marginBottom: 16, borderRadius: 12, cursor: "pointer",
@@ -102,7 +136,7 @@ export function DecisionsStrip() {
       {pending.length === 1 ? "1 decision needs you" : `${pending.length} decisions need you`}
       <span style={{ flex: 1 }} />
       <span style={{ fontSize: 11.5, fontWeight: 500, color: "color-mix(in srgb, var(--honey) 75%, var(--fg))" }}>
-        {pending[0].title}
+        {desk.onNavigate ? "Review in Alerts" : pending[0].title}
       </span>
     </button>
   );

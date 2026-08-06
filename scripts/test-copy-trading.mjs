@@ -8,7 +8,7 @@ import { register } from "node:module";
 // repo's TS-relative loader (which shims "server-only") before importing it.
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
-const { classifyEvmSwaps, classifyEnrichedEvmSwap, classifySolanaSwap } = await import("../src/lib/services/copy-trading/watcher.ts");
+const { classifyEvmSwaps, classifyEnrichedEvmSwap, classifySolanaSwap, resolveBaseScanWindow } = await import("../src/lib/services/copy-trading/watcher.ts");
 const { tokenMarket } = await import("../src/lib/services/copy-trading/market.ts");
 const { selectBuyFunding, fundingAssetsFromBalance, fundableSummary } = await import("../src/lib/services/copy-trading/funding.ts");
 const { emptyRuntimeState, normalizeConfig } = await import("../src/lib/services/copy-trading/store.ts");
@@ -19,9 +19,17 @@ const { calibrateAgentDecision } = await import("../src/lib/services/copy-tradin
 const {
   createCounterfactualRecord,
   dueCounterfactualHorizons,
+  markCounterfactualLotsClosed,
   markMissedCounterfactualHorizons,
   observeCounterfactualHorizon,
+  observeCounterfactualTargetExit,
 } = await import("../src/lib/services/copy-trading/counterfactual.ts");
+const { summarizeCounterfactualLearning } = await import("../src/lib/services/copy-trading/retrospective.ts");
+const {
+  copyTradeRetrospectiveMemory,
+  syncCopyTradeRetrospectivesToBrain,
+} = await import("../src/lib/services/copy-trading/brain-sync.ts");
+const { copyTradeSignalClockMs, isCopyTradeSignalCooldownActive } = await import("../src/lib/services/copy-trading/signal-clock.ts");
 const { estimateCopyTradeExecutionCost } = await import("../src/lib/services/copy-trading/execution-costs.ts");
 const { buildWalletIntelligence, evaluatePostFillRisk, normalizeGoPlusSecurity } = await import("../src/lib/services/copy-trading/risk-intelligence.ts");
 const {
@@ -225,6 +233,54 @@ test("EVM: quote↔quote (USDC out, WETH in) → no signal", () => {
     transfer("0xee", WETH, other, TARGET, "3000000000000000"),
   ];
   assert.deepEqual(classifyEvmSwaps(TARGET, transfers, 3000), []);
+});
+
+// ── Base scan window (cursor safety) ─────────────────────────────────────────
+// One bogus eth_blockNumber response must never rewind the cursor: on
+// 2026-07-16 a head≈0 report reset every config's cursor to "0" and turned each
+// poll into a rate-limited genesis crawl for ten days.
+const HEAD = 33_000_000n;
+
+test("scan window: normal advance scans from cursor+1 to head-confirmations", () => {
+  const w = resolveBaseScanWindow((HEAD - 10n).toString(), HEAD);
+  assert.deepEqual(w, { kind: "scan", fromBlock: HEAD - 9n, safeBlock: HEAD - 2n });
+});
+
+test("scan window: first run (no cursor) anchors at now and scans only the head block", () => {
+  const w = resolveBaseScanWindow(undefined, HEAD);
+  assert.deepEqual(w, { kind: "scan", fromBlock: HEAD - 2n, safeBlock: HEAD - 2n });
+});
+
+test("scan window: head 0 (bogus RPC response) keeps the cursor untouched", () => {
+  assert.deepEqual(resolveBaseScanWindow("123456", 0n), { kind: "bogus-head" });
+  assert.deepEqual(resolveBaseScanWindow(undefined, 0n), { kind: "bogus-head" });
+});
+
+test("scan window: head behind our own cursor keeps the cursor untouched", () => {
+  assert.deepEqual(resolveBaseScanWindow(HEAD.toString(), HEAD - 100n), { kind: "bogus-head" });
+});
+
+test("scan window: cursor at safe head → anchor in place, nothing to scan", () => {
+  const w = resolveBaseScanWindow((HEAD - 2n).toString(), HEAD);
+  assert.deepEqual(w, { kind: "anchor", lastBlock: (HEAD - 2n).toString() });
+});
+
+test("scan window: poisoned \"0\" cursor re-anchors at now instead of crawling from genesis", () => {
+  const w = resolveBaseScanWindow("0", HEAD);
+  assert.deepEqual(w, { kind: "anchor", lastBlock: (HEAD - 2n).toString() });
+});
+
+test("scan window: catch-up cap — within cap scans, beyond cap re-anchors at now", () => {
+  const cap = 20_000n;
+  const atCap = resolveBaseScanWindow((HEAD - 2n - cap - 1n).toString(), HEAD);
+  assert.deepEqual(atCap, { kind: "scan", fromBlock: HEAD - 2n - cap, safeBlock: HEAD - 2n });
+  const beyondCap = resolveBaseScanWindow((HEAD - 2n - cap - 2n).toString(), HEAD);
+  assert.deepEqual(beyondCap, { kind: "anchor", lastBlock: (HEAD - 2n).toString() });
+});
+
+test("scan window: unreadable cursor falls back to first-run semantics", () => {
+  const w = resolveBaseScanWindow("not-a-number", HEAD);
+  assert.deepEqual(w, { kind: "scan", fromBlock: HEAD - 2n, safeBlock: HEAD - 2n });
 });
 
 // ── enriched Base classification (native-ETH + token↔token) ──────────────────
@@ -525,7 +581,7 @@ test("risk intelligence normalizes explicit Base and Solana security failures", 
   const mint = "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3";
   const solana = normalizeGoPlusSecurity("solana:mainnet", mint, {
     code: 1,
-    result: { [mint]: { closable: { status: "1" }, freezable: { status: "1" }, none_transferable: "1", creators: [{ malicious_address: "1" }], trusted_token: 0 } },
+    result: { [mint]: { closable: { status: "1" }, freezable: { status: "1" }, non_transferable: "1", creators: [{ malicious_address: "1" }], trusted_token: 0 } },
   });
   assert.deepEqual(solana.hardRiskFlags, ["non-transferable", "malicious-creator"]);
   assert.deepEqual(solana.cautionFlags, ["closable-authority", "freeze-authority"]);
@@ -556,6 +612,31 @@ test("wallet intelligence is precomputed from matured cost-aware outcomes", () =
   assert.ok(profile.maxDrawdownPct > 0);
 });
 
+test("wallet intelligence cannot read outcomes from the current frozen batch", () => {
+  const prior = promotionRecord(0, 0, 0, { sourceReturnPct: 4 });
+  const current = promotionRecord(50, 0, 1, { sourceReturnPct: -90 });
+  const profile = buildWalletIntelligence([prior, current], 1);
+  assert.equal(profile.maturedTrades, 1);
+  assert.equal(profile.meanReturnPct, 4);
+});
+
+test("target-chain cooldown is deterministic across model latency", () => {
+  const signal = { blockOrSlot: "100" };
+  assert.equal(copyTradeSignalClockMs("eip155:8453", signal), 200_000);
+  assert.equal(isCopyTradeSignalCooldownActive({
+    network: "eip155:8453",
+    signal,
+    lastActionClockMs: 198_000,
+    cooldownMs: 5_000,
+  }), true);
+  assert.equal(isCopyTradeSignalCooldownActive({
+    network: "eip155:8453",
+    signal: { blockOrSlot: "103" },
+    lastActionClockMs: 198_000,
+    cooldownMs: 5_000,
+  }), false);
+});
+
 test("execution cost model charges fixed network cost, venue/slippage, and liquidity impact", () => {
   const deep = estimateCopyTradeExecutionCost({ network: "eip155:8453", notionalUsd: 5, liquidityUsd: 100_000, maxSlippageBps: 100 });
   const thin = estimateCopyTradeExecutionCost({ network: "eip155:8453", notionalUsd: 5, liquidityUsd: 500, maxSlippageBps: 100 });
@@ -578,6 +659,9 @@ test("paper fills deduct modeled buy and sell costs", () => {
   const sell = applyPaperSell(ledger, TOKEN, 1, 2, { fixedUsd: 0.1, variableBps: 100 });
   assert.equal(sell.ok, true);
   assert.equal(Number(sell.proceedsUsd.toFixed(3)), 9.701);
+  assert.equal(sell.positionCostUsd, 10.1);
+  assert.equal(sell.soldAmount, 9.9);
+  assert.equal(sell.grossProceedsUsd, 9.9);
   assert.equal(Number(ledger.executionCostsUsd.toFixed(3)), 0.399);
 });
 
@@ -629,6 +713,194 @@ test("counterfactual records mature at fixed horizons with both hold and immedia
   assert.equal(observed.pairedDeltaPct, observed.evolvedReturnPct - observed.holdReturnPct);
 });
 
+test("whole-position closes mark every copied lot and preserve actual per-lot amount", () => {
+  const first = createCounterfactualRecord({
+    sequence: 0, policyVersion: COPY_TRADE_EVOLUTION_POLICY_VERSION, targetTxRef: "0xbuy1", token: TOKEN, symbol: "TOKEN",
+    entryAt: 1_000, entryPriceUsd: 1, spentUsd: 10, acquiredAmount: 9, decision: "keep", confidence: 0.8,
+    calibratedConfidence: 0.8, closeThreshold: 0.7, closeExecuted: false,
+    buyCost: { fixedUsd: 0, variableBps: 0 }, sellCost: { fixedUsd: 0, variableBps: 0 },
+  });
+  const second = createCounterfactualRecord({
+    sequence: 1, policyVersion: COPY_TRADE_EVOLUTION_POLICY_VERSION, targetTxRef: "0xbuy2", token: TOKEN, symbol: "TOKEN",
+    entryAt: 2_000, entryPriceUsd: 2, spentUsd: 10, acquiredAmount: 4, decision: "close", confidence: 0.9,
+    calibratedConfidence: 0.9, closeThreshold: 0.7, closeExecuted: false,
+    buyCost: { fixedUsd: 0, variableBps: 0 }, sellCost: { fixedUsd: 0, variableBps: 0 },
+  });
+  assert.equal(markCounterfactualLotsClosed([first, second], {
+    token: TOKEN, decisionTargetTxRef: "0xbuy2", priceUsd: 1.5, closedAt: 3_000,
+  }), 2);
+  assert.equal(first.closeDecisionTargetTxRef, "0xbuy2");
+  assert.equal(second.closeExecuted, true);
+  const observed = observeCounterfactualHorizon(first, "24h", 1, first.horizons["24h"].dueAt);
+  assert.equal(observed.closeReturnPct, 35);
+});
+
+test("24h and target-exit outcomes create durable notes that only later batches can consume", () => {
+  const prior = createCounterfactualRecord({
+    sequence: 0, policyVersion: COPY_TRADE_EVOLUTION_POLICY_VERSION, targetTxRef: "0xprior", token: TOKEN, symbol: "TOKEN",
+    entryAt: 1_000, entryPriceUsd: 1, spentUsd: 5, acquiredAmount: 5, decision: "keep", confidence: 0.8,
+    calibratedConfidence: 0.8, closeThreshold: 0.7, closeExecuted: false,
+    entryContext: { liquidityUsd: 2_000, priceChange24hPct: -20, volume24hUsd: 100, securityCoverage: "partial", riskScore: 55, riskFlags: ["mintable"] },
+    buyCost: { fixedUsd: 0, variableBps: 0 }, sellCost: { fixedUsd: 0, variableBps: 0 },
+  });
+  observeCounterfactualHorizon(prior, "24h", 0.5, prior.horizons["24h"].dueAt);
+  observeCounterfactualTargetExit(prior, "0xsell", 0.4, prior.horizons["24h"].dueAt + 1);
+  assert.deepEqual(prior.retrospectives.map((note) => note.horizon), ["24h", "target-exit"]);
+  assert.equal(prior.retrospectives[0].outcome, "loss-held");
+  assert.ok(prior.retrospectives[0].causeTags.includes("low-liquidity"));
+  assert.equal(summarizeCounterfactualLearning([prior], 0).total, 0);
+  const later = summarizeCounterfactualLearning([prior], 1);
+  assert.equal(later.total, 2);
+  assert.ok(later.promptLessons.some((lesson) => /prior-batch notes/.test(lesson)));
+});
+
+test("copy-trading retrospectives sync locally first and evolve one canonical Shared Brain learning", async () => {
+  const config = defaultCopyTradingConfig({ id: "evolved", agentId: "agent", walletAddress: TARGET, network: "eip155:8453" });
+  config.targetAddress = other;
+  config.evolution = {
+    sourceConfigId: "source",
+    model: COPY_TRADE_EVOLUTION_MODEL,
+    reasoningEffort: "medium",
+    minCloseConfidence: 0.7,
+    policyVersion: COPY_TRADE_EVOLUTION_POLICY_VERSION,
+    createdAt: 1,
+  };
+  const state = emptyRuntimeState(config.id);
+  state.agentAnalysis = startAgentAnalysisState({ sourceConfigId: "source", sourceState: undefined, evolvedState: state, startedAt: 1 });
+  const record = createCounterfactualRecord({
+    sequence: 0, policyVersion: COPY_TRADE_EVOLUTION_POLICY_VERSION, targetTxRef: "0xbrain", token: TOKEN, symbol: "TOKEN",
+    entryAt: 1_000, entryPriceUsd: 1, spentUsd: 5, acquiredAmount: 5, decision: "keep", reviewPath: "sol-adjudication",
+    confidence: 0.8, calibratedConfidence: 0.75, closeThreshold: 0.7, closeExecuted: false,
+    entryContext: {
+      liquidityUsd: 2_000, priceChange24hPct: -20, volume24hUsd: 100, securityCoverage: "partial", riskScore: 55,
+      riskFlags: ["mintable"], reviewSummary: "Thin liquidity and incomplete security coverage; keep only in paper mode.",
+    },
+    buyCost: { fixedUsd: 0, variableBps: 0 }, sellCost: { fixedUsd: 0, variableBps: 0 },
+  });
+  observeCounterfactualHorizon(record, "24h", 0.5, record.horizons["24h"].dueAt);
+  state.agentAnalysis.counterfactuals.push(record);
+  state.agentAnalysis.reviews.push({
+    reviewedAt: 1_000, targetTxRef: record.targetTxRef, token: TOKEN, symbol: "TOKEN", spentUsd: 5,
+    model: COPY_TRADE_EVOLUTION_MODEL, decision: "keep", reviewPath: "sol-adjudication", confidence: 0.8,
+    calibratedConfidence: 0.75, closeThreshold: 0.7, summary: "Thin liquidity.", risks: ["liquidity"],
+    sources: [{ title: "Market source", url: "https://example.com/token" }], researchUsed: true, closeExecuted: false,
+  });
+
+  const order = [];
+  let remembered = null;
+  let evolved = null;
+  const dependencies = {
+    now: () => 100_000_000,
+    persistState: async (nextState) => {
+      assert.equal(nextState.agentAnalysis.counterfactuals[0].retrospectives.length, 1);
+      order.push("local");
+    },
+    remember: async (input) => {
+      order.push("brain");
+      remembered = input;
+      return { record: { id: "mem-copy-1", content: input.content } };
+    },
+    evolve: async (input) => {
+      order.push("evolve");
+      evolved = input;
+      return { record: { id: "mem-copy-2", content: input.content } };
+    },
+  };
+  const first = await syncCopyTradeRetrospectivesToBrain(config, state, dependencies);
+  assert.equal(order[0], "local", "the local retrospective must persist before the external Brain write");
+  assert.equal(first.synced, 1);
+  assert.equal(remembered.type, "learning");
+  assert.match(remembered.content, /24h/);
+  assert.match(remembered.content, /Thin liquidity/);
+  assert.match(remembered.content, /https:\/\/example\.com\/token/);
+  assert.doesNotMatch(remembered.content, new RegExp(TARGET, "i"));
+  assert.doesNotMatch(remembered.content, new RegExp(other, "i"));
+
+  order.length = 0;
+  const unchanged = await syncCopyTradeRetrospectivesToBrain(config, state, dependencies);
+  assert.equal(unchanged.unchanged, 1);
+  assert.equal(order.includes("brain"), false);
+
+  observeCounterfactualTargetExit(record, "0xsell", 0.4, record.horizons["24h"].dueAt + 1);
+  dependencies.remember = async (input) => ({
+    blocked: true,
+    canonicalHeadConflict: { id: "mem-copy-1", content: remembered.content },
+  });
+  const updated = await syncCopyTradeRetrospectivesToBrain(config, state, dependencies);
+  assert.equal(updated.synced, 1);
+  assert.equal(evolved.memoryId, "mem-copy-1");
+  assert.match(evolved.content, /target-exit/);
+  const receipts = Object.values(state.agentAnalysis.brainSync);
+  assert.equal(receipts.length, 1);
+  assert.equal(receipts[0].status, "synced");
+  assert.equal(receipts[0].memoryId, "mem-copy-2");
+});
+
+test("a Shared Brain outage keeps the local retrospective and records a bounded retry", async () => {
+  const config = defaultCopyTradingConfig({ id: "evolved-failure", agentId: "agent", walletAddress: TARGET, network: "eip155:8453" });
+  config.evolution = {
+    sourceConfigId: "source", model: COPY_TRADE_EVOLUTION_MODEL, reasoningEffort: "medium", minCloseConfidence: 0.7,
+    policyVersion: COPY_TRADE_EVOLUTION_POLICY_VERSION, createdAt: 1,
+  };
+  const state = emptyRuntimeState(config.id);
+  state.agentAnalysis = startAgentAnalysisState({ sourceConfigId: "source", sourceState: undefined, evolvedState: state, startedAt: 1 });
+  const record = createCounterfactualRecord({
+    sequence: 0, policyVersion: COPY_TRADE_EVOLUTION_POLICY_VERSION, targetTxRef: "0xfailure", token: TOKEN, symbol: "TOKEN",
+    entryAt: 1_000, entryPriceUsd: 1, spentUsd: 5, decision: "keep", confidence: 0.8, calibratedConfidence: 0.8,
+    closeThreshold: 0.7, closeExecuted: false, buyCost: { fixedUsd: 0, variableBps: 0 }, sellCost: { fixedUsd: 0, variableBps: 0 },
+  });
+  observeCounterfactualHorizon(record, "24h", 0.5, record.horizons["24h"].dueAt);
+  state.agentAnalysis.counterfactuals.push(record);
+  let persisted = 0;
+  const result = await syncCopyTradeRetrospectivesToBrain(config, state, {
+    now: () => 1_000_000,
+    persistState: async () => { persisted += 1; },
+    remember: async () => { throw new Error("brain offline"); },
+    evolve: async () => { throw new Error("unexpected evolve"); },
+  });
+  assert.equal(result.failed, 1);
+  assert.ok(persisted >= 3);
+  assert.equal(record.retrospectives.length, 1);
+  const receipt = Object.values(state.agentAnalysis.brainSync)[0];
+  assert.equal(receipt.status, "failed");
+  assert.equal(receipt.error, "brain offline");
+  assert.ok(receipt.nextAttemptAt > 1_000_000);
+});
+
+test("Shared Brain copy-trading payload is evidence-only and keyed without wallet addresses", () => {
+  const config = defaultCopyTradingConfig({ id: "privacy", agentId: "agent", walletAddress: TARGET, network: "eip155:8453" });
+  config.targetAddress = other;
+  const record = createCounterfactualRecord({
+    sequence: 1, policyVersion: COPY_TRADE_EVOLUTION_POLICY_VERSION, targetTxRef: "0xprivacy", token: TOKEN, symbol: "TOKEN",
+    entryAt: 1_000, entryPriceUsd: 1, spentUsd: 5, decision: "uncertain", confidence: 0.5, calibratedConfidence: 0.4,
+    closeThreshold: 0.7, closeExecuted: false, buyCost: { fixedUsd: 0, variableBps: 0 }, sellCost: { fixedUsd: 0, variableBps: 0 },
+  });
+  observeCounterfactualHorizon(record, "24h", 1, record.horizons["24h"].dueAt);
+  const memory = copyTradeRetrospectiveMemory(config, record);
+  assert.match(memory.memoryKey, /^copy-trading:retrospective:[a-f0-9]{24}$/);
+  assert.doesNotMatch(memory.memoryKey, new RegExp(TARGET, "i"));
+  assert.doesNotMatch(memory.memoryKey, new RegExp(other, "i"));
+  assert.match(memory.input.content, /not an instruction/);
+  assert.match(memory.input.content, /does not authorize policy changes or live trading/);
+});
+
+test("retrospective evidence tags do not invert negated risk findings", () => {
+  const record = createCounterfactualRecord({
+    sequence: 0, policyVersion: COPY_TRADE_EVOLUTION_POLICY_VERSION, targetTxRef: "0xnegated", token: TOKEN, symbol: "TOKEN",
+    entryAt: 1_000, entryPriceUsd: 1, spentUsd: 5, acquiredAmount: 5, decision: "keep", confidence: 0.8,
+    calibratedConfidence: 0.8, closeThreshold: 0.7, closeExecuted: false,
+    entryContext: {
+      liquidityUsd: 100_000, priceChange24hPct: 1, volume24hUsd: 200_000, securityCoverage: "complete", riskScore: 0,
+      riskFlags: [], reviewSummary: "No concrete exploit, liquidity failure, or holder concentration was found; liquidity is substantial.",
+    },
+    buyCost: { fixedUsd: 0, variableBps: 0 }, sellCost: { fixedUsd: 0, variableBps: 0 },
+  });
+  observeCounterfactualHorizon(record, "24h", 0.9, record.horizons["24h"].dueAt);
+  assert.equal(record.retrospectives[0].causeTags.includes("exploit-or-integrity-history"), false);
+  assert.equal(record.retrospectives[0].causeTags.includes("thin-market-evidence"), false);
+  assert.equal(record.retrospectives[0].causeTags.includes("concentration-or-overhang"), false);
+});
+
 test("counterfactuals reject prices captured too late for their named horizon", () => {
   const record = createCounterfactualRecord({
     sequence: 0, policyVersion: COPY_TRADE_EVOLUTION_POLICY_VERSION, targetTxRef: "0xlate", token: TOKEN, symbol: "TOKEN",
@@ -658,6 +930,16 @@ test("promotion requires 200 matured trades, a frozen 50-trade holdout, positive
   const rejected = evaluateEvolutionPromotion(risky, { bootstrapIterations: 2_000 });
   assert.equal(rejected.status, "rejected");
   assert.equal(rejected.gates.drawdown, false);
+});
+
+test("promotion rejects a strategy that beats the baseline while still losing absolutely", () => {
+  const losingLess = Array.from({ length: COPY_TRADE_PROMOTION_MIN_MATURED }, (_, index) => (
+    promotionRecord(index, 5, Math.floor(index / COPY_TRADE_EVALUATION_BATCH_SIZE), { sourceReturnPct: -10 })
+  ));
+  const result = evaluateEvolutionPromotion(losingLess, { bootstrapIterations: 1_000 });
+  assert.equal(result.gates.positiveCi, true);
+  assert.equal(result.gates.positiveAbsoluteCi, false);
+  assert.equal(result.status, "rejected");
 });
 
 test("agent analysis parser rejects malformed decisions", () => {
@@ -725,6 +1007,8 @@ test("engine wires precomputed evidence through the fast gate, calibrated Sol re
   assert.match(engineSource, /createCounterfactualRecord/);
   assert.match(engineSource, /dueCounterfactualHorizons/);
   assert.match(engineSource, /observeCounterfactualHorizon/);
+  assert.match(engineSource, /queueRetrospectiveBrainSync/);
+  assert.match(engineSource, /syncCopyTradeRetrospectivesToBrain/);
 });
 
 test("engine persists retryable price misses without consuming the target transaction", async () => {

@@ -8,6 +8,8 @@ import {
   startSocialQueueEngine,
 } from "@/lib/services/socials/social-queue-engine";
 import { runSocialDraftingCycle } from "@/lib/services/socials/social-drafting-engine";
+import { readSharedAgentEnv } from "@/lib/services/integrations/shared-env";
+import { socialAdapter } from "@/lib/services/socials/adapters";
 import {
   approveSocialQueueItem,
   cancelSocialQueueItem,
@@ -19,7 +21,11 @@ import {
   socialQueueDashboard,
   updateSocialQueueDraft,
 } from "@/lib/services/socials/social-queue-service";
-import { setSocialQueueEngineEnabled } from "@/lib/services/socials/socials-store";
+import {
+  getSocialAccount,
+  readSocialQueue,
+  setSocialQueueEngineEnabled,
+} from "@/lib/services/socials/socials-store";
 import { refreshSocialAnalytics } from "@/lib/services/socials/social-analytics";
 import { errorJson, okJson } from "@/lib/utils/api-response";
 
@@ -86,6 +92,16 @@ export async function POST(request: NextRequest) {
         return okJson({ item: await scheduleSocialQueueItem(body.id, body.scheduledFor) });
       case "send-now": {
         if (!body.id) return errorJson("id is required.");
+        const queued = (await readSocialQueue()).find((item) => item.id === body.id);
+        if (!queued) return errorJson(`Unknown social queue item: ${body.id}`, 404);
+        const account = await getSocialAccount(queued.accountId);
+        if (!account) return errorJson(`Unknown social account: ${queued.accountId}`, 404);
+        const probe = await socialAdapter(account.platform).connectStatus(account, {
+          env: await readSharedAgentEnv(),
+        });
+        if (!probe.ok) {
+          return errorJson(`Reconnect @${account.handle} before publishing. ${probe.detail}`, 409);
+        }
         const item = await sendSocialQueueItemNow(body.id);
         startSocialQueueEngine();
         const tick = await runSocialQueueTickNow();

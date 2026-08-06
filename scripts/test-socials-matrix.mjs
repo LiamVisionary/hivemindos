@@ -16,6 +16,9 @@ const { SOCIAL_PLATFORM_MATRIX, SOCIAL_POST_APPROVAL_GATE, socialPlatformCapabil
 const { SOCIAL_ADAPTERS } = await import("../src/lib/services/socials/adapters/index.ts");
 const { accountEnvValue } = await import("../src/lib/services/socials/adapters/types.ts");
 const { CONNECTOR_MANIFESTS } = await import("../src/lib/services/integrations/connector-manifests.ts");
+const { dedupeManagedXCreditAccountAliases } = await import(
+  "../src/lib/services/socials/managed-x-credit-accounts.ts"
+);
 
 const SUPPORT_VALUES = new Set(["supported", "limited", "unsupported"]);
 
@@ -80,6 +83,10 @@ assert.deepEqual(
 assert.ok(
   SOCIAL_PLATFORM_MATRIX.x.limits.some((limit) => /access-limited|Enterprise/i.test(limit)),
   "X row documents why engagement uses the authenticated Agent Reach session",
+);
+assert.ok(
+  SOCIAL_PLATFORM_MATRIX.x.limits.some((limit) => /Multiple accounts.*Shared Hive Env cookie pairs/i.test(limit)),
+  "X row documents account-isolated Agent Reach sessions",
 );
 assert.equal(SOCIAL_PLATFORM_MATRIX.telegram.capabilities.reply, "limited", "Telegram message replies are exposed as limited");
 assert.equal(SOCIAL_PLATFORM_MATRIX.linkedin.capabilities.reply, "unsupported", "LinkedIn adapter does not expose reply posting");
@@ -154,6 +161,33 @@ assert.equal(
   accountEnvValue({ ...dummy, binding: { "env:TELEGRAM_BOT_TOKEN": "UNSET_KEY" } }, envCtx, "TELEGRAM_BOT_TOKEN"),
   "",
   "override pointing at a missing key reads empty (probe reports missing, no silent canonical fallback)",
+);
+
+// Managed X credit accounts are local aliases. Collapse only aliases that the
+// hosted gateway proves belong to the same account, prefer the canonical
+// per-install pool, and preserve separate service rails or unresolved entries.
+const managedXCreditAccounts = [
+  { accountId: "service:hive-research", hostedAccountId: "pagw_service", balanceUsd: 42.06 },
+  { accountId: "agent:hermes-lead", hostedAccountId: "pagw_personal", balanceUsd: 42.06 },
+  { accountId: "hmos-model-credits:legacy", hostedAccountId: "pagw_personal", balanceUsd: 42.06 },
+  { accountId: "shared:hivemindos-models", hostedAccountId: "pagw_personal", balanceUsd: 42.06 },
+  { accountId: "legacy:unresolved", balanceUsd: null },
+];
+assert.deepEqual(
+  dedupeManagedXCreditAccountAliases(managedXCreditAccounts).map((account) => account.accountId),
+  ["shared:hivemindos-models", "service:hive-research", "legacy:unresolved"],
+  "managed X picker prefers the shared pool, collapses proven aliases, and preserves separate or unresolved accounts",
+);
+assert.deepEqual(
+  managedXCreditAccounts.map((account) => account.accountId),
+  [
+    "service:hive-research",
+    "agent:hermes-lead",
+    "hmos-model-credits:legacy",
+    "shared:hivemindos-models",
+    "legacy:unresolved",
+  ],
+  "managed X alias deduplication does not mutate discovery order",
 );
 
 console.log("socials matrix tests passed");

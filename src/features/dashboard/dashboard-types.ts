@@ -1,7 +1,7 @@
 import type { AgentProfile, AgentRuntime, RuntimeCapabilities, SharedVaultConfig } from "@/lib/types/agent-runtime";
 import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 import type { AgentNotification, AgentNotificationSummary } from "@/lib/types/agent-notifications";
-import type { KanbanBoard, KanbanLinkedDirectory, KanbanMachineTarget, KanbanTask, KanbanTaskAttachment } from "@/lib/types/kanban";
+import type { KanbanBoard, KanbanColumnGroup, KanbanLinkedDirectory, KanbanMachineTarget, KanbanTask, KanbanTaskAttachment } from "@/lib/types/kanban";
 import type { GBrainStatus } from "@/lib/services/brain/gbrain";
 import type { Neo4jBrainStatus } from "@/lib/services/brain/neo4j";
 import type { QmdStatus } from "@/lib/services/brain/qmd";
@@ -14,6 +14,7 @@ import type { EvaluationHumanFeedback } from "@/lib/types/evaluation";
 import type { LocalModelDownloadJob, LocalModelHardwareSnapshot, LocalModelInstallCatalogStatus, LocalOpenAICompatibleServer, LocalRuntimeSetupStatus } from "@/lib/config/local-model-install-catalog";
 import type { FleetMachinePolicySummary } from "@/lib/types/fleet-machine-policy";
 import type { ChatAppArtifact } from "@/lib/services/chat/chat-app-artifact";
+import type { SieProviderStatus } from "@/lib/services/runtime-adapters/sie";
 
 export type GatewayStatus = {
   ok?: boolean;
@@ -147,6 +148,7 @@ export type RuntimeIntegrationStatus = {
       error?: string;
       checkedAt?: string;
     };
+    sie?: SieProviderStatus;
     hiveCompute?: {
       status?: string;
       message?: string;
@@ -793,8 +795,12 @@ export type KanbanBoardSummary = {
 
 export type KanbanResponse = {
   ok?: boolean;
+  notModified?: boolean;
+  updatedAt?: number;
+  counts?: Record<string, number>;
   boards?: KanbanBoardSummary[];
   board?: KanbanBoard;
+  columns?: KanbanColumnGroup[];
   task?: KanbanTask;
   created?: boolean;
   tenants?: string[];

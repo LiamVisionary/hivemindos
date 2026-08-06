@@ -1,0 +1,49 @@
+{
+  "created_at": "2026-07-29T21:45:24.082239+00:00",
+  "request": "Try BTC Polymarket YES+NO arbitrage in HivemindOS with a paper simulation to see if it works.",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "Polymarket/clob-client",
+      "source_path": "src/client.ts",
+      "target_path": "src/lib/services/trading/prediction-markets.ts",
+      "reuse_type": "adapted_code",
+      "note": "Batch order-book POST contract and requested-token response ordering"
+    },
+    {
+      "source_repo": "Polymarket/clob-client",
+      "source_path": "src/order-builder/helpers.ts",
+      "target_path": "src/lib/services/trading/prediction-markets.ts",
+      "reuse_type": "adapted_code",
+      "note": "Executable ask-depth traversal and bounded per-level capacity"
+    },
+    {
+      "source_repo": "local-experiment",
+      "source_path": "/Users/liam/.hivemindos/experiments/polymarket-weather-paper-2026-07-27/lib.mjs",
+      "target_path": "src/lib/services/trading/prediction-markets.ts",
+      "reuse_type": "adapted_code",
+      "note": "Existing executable-ask normalization, fee-aware paper economics, and conservative 25-percent depth convention"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:src/app/api/trading/prediction/route.ts",
+      "target_path": "src/app/api/trading/prediction/route.ts",
+      "reuse_type": "adapted_code",
+      "note": "Existing authenticated read and paper-only API boundary"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:src/components/trade/PredictionMarketsPanel.tsx",
+      "target_path": "src/components/trade/PredictionMarketsPanel.tsx",
+      "reuse_type": "style_adapted",
+      "note": "Existing Prediction desk segmented modes, cards, loading, and error conventions"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:scripts/test-prediction-markets.mjs",
+      "target_path": "scripts/test-prediction-markets.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Existing hermetic Gamma, CLOB, route, and UI contract fixtures extended for paired execution"
+    }
+  ]
+}

@@ -190,10 +190,10 @@ export function DeparturesBoard({ jobs, selectedId, now, onSelect }: DeparturesP
             </div>
             <BeeIcon role={job.beeRole} workerClass={job.workerClass} size={30} dim={!job.enabled} />
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontFamily: "var(--f-display)", fontSize: 14.5, fontWeight: 700, color: "var(--foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.name}</div>
-              <div style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--muted)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.bee} · {job.cadence}</div>
+              <div style={{ fontFamily: "var(--f-display)", fontSize: 14.5, fontWeight: 700, color: "var(--foreground)", overflowWrap: "anywhere" }}>{job.name}</div>
+              <div style={{ fontFamily: "var(--f-mono)", fontSize: 10, color: "var(--muted)", marginTop: 2, overflowWrap: "anywhere" }}>{job.bee} · {job.cadence}</div>
             </div>
-            <div style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.machine} · {job.runtime}</div>
+            <div style={{ fontFamily: "var(--f-mono)", fontSize: 11, color: "var(--muted)", overflowWrap: "anywhere" }}>{job.machine} · {job.runtime}</div>
             <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
               <span className={styles.dot} style={{ color: job.sc.color }} />
               <span style={{ fontFamily: "var(--f-mono)", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: job.sc.color }}>{job.sc.word}</span>

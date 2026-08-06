@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronRight, ClipboardList, MessageSquare, X } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, ClipboardList, EyeOff, MessageSquare, X } from "lucide-react";
 
 import approvalStyles from "@/features/approvals/approvals.module.css";
 import { createStyleClass } from "@/features/dashboard/style-classes";
-import type { ApprovalDecision, SpendApprovalView } from "@/features/approvals/spend-approval-model";
+import type { ApprovalActionCopy, ApprovalDecision, SpendApprovalView } from "@/features/approvals/spend-approval-model";
 import { ReasoningTrailView } from "@/features/reasoning/ReasoningTrailView";
 
 const cls = createStyleClass(approvalStyles);
@@ -20,6 +20,9 @@ export type ApprovalCardProps = {
   onDiscuss?: () => void;
   /** Optional deeper context affordance, e.g. the backing task detail modal. */
   onOpenDetails?: () => void;
+  /** Optional quiet dismissal that does not approve or reject the action. */
+  onIgnore?: () => void | Promise<void>;
+  actionCopy?: ApprovalActionCopy;
   busy?: boolean;
 };
 
@@ -31,7 +34,7 @@ export type ApprovalCardProps = {
  * the shared ApproveRejectModal. Every item maps to the real approvals backend
  * (approve/reject + optional note) — nothing here is a placeholder.
  */
-export function ApprovalCard({ approval, onDecide, onReview, onDiscuss, onOpenDetails, busy = false }: ApprovalCardProps) {
+export function ApprovalCard({ approval, onDecide, onReview, onDiscuss, onOpenDetails, onIgnore, actionCopy, busy = false }: ApprovalCardProps) {
   const [menu, setMenu] = useState<MenuKind | null>(null);
   const [reasonOpen, setReasonOpen] = useState(false);
   const [trailOpen, setTrailOpen] = useState(false);
@@ -127,7 +130,7 @@ export function ApprovalCard({ approval, onDecide, onReview, onDiscuss, onOpenDe
             disabled={busy}
           >
             {busy ? <span className={cls("spinner")} aria-hidden="true" /> : <Check aria-hidden="true" />}
-            Approve
+            {actionCopy?.approveLabel ?? "Approve"}
           </button>
           <button
             type="button"
@@ -150,7 +153,7 @@ export function ApprovalCard({ approval, onDecide, onReview, onDiscuss, onOpenDe
             disabled={busy}
           >
             <X aria-hidden="true" />
-            Reject
+            {actionCopy?.rejectLabel ?? "Reject"}
           </button>
           <button
             type="button"
@@ -164,6 +167,19 @@ export function ApprovalCard({ approval, onDecide, onReview, onDiscuss, onOpenDe
             <ChevronDown aria-hidden="true" />
           </button>
         </div>
+
+        {onIgnore ? (
+          <button
+            type="button"
+            className={cls("btn", "btnQuiet")}
+            onClick={() => { void onIgnore(); }}
+            disabled={busy}
+            title="Remove this decision without approving it and keep it from resurfacing"
+          >
+            <EyeOff aria-hidden="true" />
+            Ignore
+          </button>
+        ) : null}
 
         {onDiscuss ? (
           <button
@@ -181,7 +197,7 @@ export function ApprovalCard({ approval, onDecide, onReview, onDiscuss, onOpenDe
 
       {menu === "approve" ? (
         <div className={cls("menu")} role="menu" aria-label="Approve options">
-          <p className={cls("menuLabel")}>Approve but…</p>
+          <p className={cls("menuLabel")}>{actionCopy?.approveLabel ?? "Approve"} with…</p>
           <button type="button" role="menuitem" className={cls("menuItem")} onClick={() => pick("approved")}>
             Leave a note or condition
           </button>
@@ -198,7 +214,7 @@ export function ApprovalCard({ approval, onDecide, onReview, onDiscuss, onOpenDe
 
       {menu === "reject" ? (
         <div className={cls("menu", "menuDanger")} role="menu" aria-label="Reject options">
-          <p className={cls("menuLabel")}>Reject and…</p>
+          <p className={cls("menuLabel")}>{actionCopy?.rejectLabel ?? "Reject"} and…</p>
           <button type="button" role="menuitem" className={cls("menuItem")} onClick={() => pick("denied")}>
             Send back for changes
           </button>

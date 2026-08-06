@@ -5,8 +5,17 @@ import { NextRequest } from "next/server";
 
 import { errorJson, okJson } from "@/lib/utils/api-response";
 import { readSharedAgentEnv } from "@/lib/services/integrations/shared-env";
+import { hiveEnvPresence } from "@/lib/services/shared-hive-env";
 import { socialAdapter } from "@/lib/services/socials/adapters";
 import { socialPlatformCapabilityDtos, socialPlatformRow } from "@/lib/services/socials/social-platform-matrix";
+import {
+  validSocialXSessionEnvKey,
+  withSocialXSessionBinding,
+} from "@/lib/services/socials/social-x-session-binding";
+import {
+  getXDiscoveryStatusForAccount,
+  invalidateXDiscoveryStatus,
+} from "@/lib/services/socials/social-x-discovery";
 import {
   connectSocialAccount,
   deleteSocialAccount,
@@ -15,6 +24,7 @@ import {
   mutateSocialDraftingRuntime,
   newContextSource,
   readSocialAccounts,
+  readSocialQueue,
   readSocialQueueMeta,
   mutateSocialQueue,
   updateSocialAccount,
@@ -42,10 +52,11 @@ const CONTEXT_SOURCE_KINDS: readonly SocialContextSourceKind[] = ["github", "web
 
 export async function GET() {
   try {
-    const [accounts, env, queueMeta, souls] = await Promise.all([
+    const [accounts, env, queueMeta, queue, souls] = await Promise.all([
       readSocialAccounts(),
       readSharedAgentEnv(),
       readSocialQueueMeta(),
+      readSocialQueue(),
       listSocialSoulOptions(),
     ]);
     const probes = await Promise.all(
@@ -63,7 +74,11 @@ export async function GET() {
       status: (probes[index].ok ? "connected" : account.status === "disconnected" ? "disconnected" : "needs-attention") as SocialAccount["status"],
       capabilities: socialAdapter(account.platform).capabilities(account),
     }));
-    return okJson({ accounts: withStatus, platforms: socialPlatformCapabilityDtos(), queue: queueMeta, souls });
+    const queueCounts = Object.fromEntries(accounts.map((account) => [
+      account.id,
+      queue.filter((item) => item.accountId === account.id && ["draft", "suggested", "failed"].includes(item.state)).length,
+    ]));
+    return okJson({ accounts: withStatus, platforms: socialPlatformCapabilityDtos(), queue: queueMeta, queueCounts, souls });
   } catch (error) {
     return errorJson(error instanceof Error ? error.message : "Failed to read social accounts", 500);
   }
@@ -82,6 +97,11 @@ type PostBody = {
   sourceId?: string;
   drafting?: Partial<Pick<SocialDraftingPolicy,
     "enabled" | "cadenceHours" | "draftsPerRun" | "engagementEnabled" | "replyDraftsPerRun" | "quoteDraftsPerRun" | "engagementLookbackHours">>;
+  xSession?: {
+    mode?: string;
+    authTokenEnvKey?: string;
+    ct0EnvKey?: string;
+  };
 };
 
 export async function POST(request: NextRequest) {
@@ -165,6 +185,58 @@ export async function POST(request: NextRequest) {
             };
           }));
         }
+        return okJson({ account });
+      }
+      case "set-x-session": {
+        if (!body.id) return errorJson("Account id is required");
+        const current = await getSocialAccount(body.id);
+        if (!current) return errorJson(`Unknown social account: ${body.id}`, 404);
+        if (current.platform !== "x") return errorJson("Agent Reach X sessions can only be bound to X accounts.");
+        const mode = body.xSession?.mode;
+        if (mode !== "machine-default" && mode !== "account-env") {
+          return errorJson(`Unknown Agent Reach X session mode: ${mode ?? "(none)"}`);
+        }
+
+        let nextBinding: SocialAccount["binding"];
+        if (mode === "machine-default") {
+          nextBinding = withSocialXSessionBinding(current.binding, { mode });
+        } else {
+          const authTokenEnvKey = (body.xSession?.authTokenEnvKey ?? "").trim();
+          const ct0EnvKey = (body.xSession?.ct0EnvKey ?? "").trim();
+          if (!validSocialXSessionEnvKey(authTokenEnvKey) || !validSocialXSessionEnvKey(ct0EnvKey)) {
+            return errorJson("Agent Reach credential bindings must be valid Shared Hive Env key names.");
+          }
+          if (authTokenEnvKey === ct0EnvKey) {
+            return errorJson("TWITTER_AUTH_TOKEN and TWITTER_CT0 must use different Shared Hive Env keys.");
+          }
+          const presence = await hiveEnvPresence([authTokenEnvKey, ct0EnvKey]);
+          const missing = presence.filter((entry) => !entry.present).map((entry) => entry.key);
+          if (missing.length) {
+            return errorJson(`Save or select these Shared Hive Env credentials first: ${missing.join(", ")}.`);
+          }
+          nextBinding = withSocialXSessionBinding(current.binding, {
+            mode,
+            authTokenEnvKey,
+            ct0EnvKey,
+          });
+          const candidate = { ...current, binding: nextBinding };
+          const status = await getXDiscoveryStatusForAccount(candidate, { force: true });
+          if (!status.available || !status.authenticated) {
+            return errorJson(`These credentials were not bound because they did not verify as @${current.handle}. ${status.detail}`);
+          }
+        }
+
+        const account = await updateSocialAccount(body.id, (accountToUpdate) => ({
+          ...accountToUpdate,
+          binding: nextBinding,
+        }));
+        invalidateXDiscoveryStatus(body.id);
+        await mutateSocialDraftingRuntime(body.id, (runtime) => ({
+          ...runtime,
+          ...(account.drafting.engagementEnabled ? { nextRunAt: new Date().toISOString() } : {}),
+          lastEngagementError: undefined,
+          consecutiveFailures: 0,
+        }));
         return okJson({ account });
       }
       case "set-awake-hours": {
@@ -262,6 +334,14 @@ export async function POST(request: NextRequest) {
             ...valid.map((source) => newContextSource({ kind: source.kind, ref: source.ref.trim(), ...(source.note ? { note: source.note } : {}) })),
           ],
         }));
+        if (account.drafting.enabled && valid.some((source) => source.kind !== "x-account")) {
+          await mutateSocialDraftingRuntime(account.id, (runtime) => ({
+            ...runtime,
+            nextRunAt: new Date().toISOString(),
+            lastError: undefined,
+            consecutiveFailures: 0,
+          }));
+        }
         return okJson({ account });
       }
       case "remove-context-source": {

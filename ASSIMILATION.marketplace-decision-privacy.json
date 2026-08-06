@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-07-27T03:58:45.177840+00:00",
+  "request": "Fix Marketplace decisions showing personal DMs and add a persistent ignore action",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/marketplace/marketplace-listings-store.ts",
+      "target_path": "src/lib/services/marketplace/marketplace-report-scope.ts",
+      "reuse_type": "adapted_code",
+      "note": "reused the established listing-title similarity algorithm for the server privacy boundary"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/marketplace/marketplace-decisions-store.ts",
+      "target_path": "src/lib/services/marketplace/marketplace-decisions-store.ts",
+      "reuse_type": "adapted_code",
+      "note": "extended the durable decision lifecycle with an ignored suppression tombstone"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/features/approvals/ApprovalCard.tsx",
+      "target_path": "src/features/approvals/ApprovalCard.tsx",
+      "reuse_type": "adapted_code",
+      "note": "extended the shared optional-action surface with a quiet Ignore control"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "scripts/test-marketplace-decisions.mjs",
+      "target_path": "scripts/test-marketplace-decisions.mjs",
+      "reuse_type": "test_adapted",
+      "note": "extended the existing hermetic API and lifecycle regression harness"
+    }
+  ]
+}

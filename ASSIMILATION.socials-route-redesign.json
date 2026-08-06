@@ -1,0 +1,63 @@
+{
+  "created_at": "2026-08-05T23:48:47.816379+00:00",
+  "request": "Replace the entire Socials route UI with /Users/liam/Downloads/Socials route redesign and wire every shown function",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "user-source",
+      "source_path": "Socials Redesign.dc.html",
+      "target_path": "src/components/socials/SocialsView.tsx",
+      "reuse_type": "style_adapted",
+      "note": "Adapted the supplied four-mode route shell, account rail, worker status, tabs, and first-account empty state into the live dashboard."
+    },
+    {
+      "source_repo": "user-source",
+      "source_path": "Socials Redesign.dc.html",
+      "target_path": "src/components/socials/SocialQueueWorkspace.tsx",
+      "reuse_type": "style_adapted",
+      "note": "Adapted the supplied focused review card, stats, filters, review order, composer, agent work, and activity layouts."
+    },
+    {
+      "source_repo": "user-source",
+      "source_path": "Socials Redesign.dc.html",
+      "target_path": "src/components/socials/socials.css",
+      "reuse_type": "style_adapted",
+      "note": "Translated the supplied palette, spacing, typography, panels, interaction states, connector, and responsive layouts into scoped HivemindOS dark and light tokens."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/components/socials/SocialQueueWorkspace.tsx",
+      "target_path": "src/components/socials/SocialScheduleBoard.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Reused durable queue actions and item states for week/list scheduling, drag-to-reschedule, cancel, and provider-confirmed history."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/components/socials/SocialsView.tsx",
+      "target_path": "src/components/socials/SocialSettingsWorkspace.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Recomposed existing voice, context, awake-hours, drafting, discovery, posting-policy, and X-session controls under the supplied settings navigation."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/socials/social-queue-service.ts",
+      "target_path": "src/components/socials/SocialAnalyticsDashboard.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Rendered only stored queue analytics and metric snapshots, preserving managed-read confirmation and daily-budget controls."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/components/socials/ConnectAccountModal.tsx",
+      "target_path": "src/components/socials/ConnectAccountModal.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Preserved every live credential and OAuth rail while restructuring the connector into the supplied Platform, Method, and Identify steps."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/e2e-socials-queue-ui.mjs",
+      "target_path": "scripts/e2e-socials-queue-ui.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Extended the authenticated browser smoke across aggregate scope, four route modes, settings subsections, and the three-step connector without publishing."
+    }
+  ]
+}

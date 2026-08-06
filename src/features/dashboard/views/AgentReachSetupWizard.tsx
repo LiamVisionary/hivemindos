@@ -69,7 +69,7 @@ type AgentReachXProfileTestResult = {
 };
 
 type InstallableServiceStatus = {
-  id: "n8n" | "listmonk" | "browser-use" | "agentic-inbox" | "mcp-email-server" | "openhands" | "aider" | "agent-reach" | "palmier-pro" | "copy-trading-daemon";
+  id: "n8n" | "listmonk" | "browser-use" | "agentic-inbox" | "mcp-email-server" | "openhands" | "aider" | "agent-reach" | "palmier-pro" | "hivemind-office" | "copy-trading-daemon";
   name: string;
   installed: boolean;
   running: boolean;

@@ -5,6 +5,7 @@
 // feature: a needs-human Work Board escalation and the company-driver
 // empty-fleet alarm.
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { register } from "node:module";
 
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
@@ -14,6 +15,7 @@ const {
   notificationDiscussPrompt,
   notificationTaskId,
 } = await import("../src/features/notifications/notification-actions.ts");
+const { selectDiscussionChatAgent } = await import("../src/features/dashboard/chat-discuss-context.ts");
 
 const base = {
   id: "n-1",
@@ -167,6 +169,44 @@ const types = (actions) => actions.map((a) => a.type);
   assert.ok(prompt.includes("Big body"));
   assert.ok(prompt.length < 1400, "prompt stays chat-sized");
   assert.match(prompt, /next concrete action/);
+}
+
+// ── Discuss opens a fresh chat with a capability-compatible agent ───────────
+{
+  const queen = { id: "queen", beeRole: "queen", canChat: true };
+  const unavailableQueen = { id: "unavailable-queen", beeRole: "queen", canChat: false };
+  const selected = { id: "selected", beeRole: "worker", canChat: true };
+  const fallback = { id: "fallback", beeRole: "worker", canChat: true };
+  const canChat = (agent) => agent.canChat;
+
+  assert.equal(selectDiscussionChatAgent([selected, queen, fallback], selected, canChat, "queen"), queen);
+  assert.equal(
+    selectDiscussionChatAgent([unavailableQueen, selected, fallback], selected, canChat, "unavailable-queen"),
+    selected,
+    "a non-chat Queen falls back to the user's current chat agent",
+  );
+  assert.equal(selectDiscussionChatAgent([unavailableQueen, fallback], null, canChat, "unavailable-queen"), fallback);
+  assert.equal(selectDiscussionChatAgent([unavailableQueen], unavailableQueen, canChat, "unavailable-queen"), null);
+
+  const dashboard = readFileSync(new URL("../src/features/dashboard/DashboardApp.tsx", import.meta.url), "utf8");
+  const handlerStart = dashboard.indexOf("onDiscussInChat: (context: ChatDiscussContext, draft: string) => {");
+  const handlerEnd = dashboard.indexOf("}, schedules,", handlerStart);
+  assert.notEqual(handlerStart, -1, "the Alerts discussion bridge is wired at the dashboard boundary");
+  assert.notEqual(handlerEnd, -1, "the Alerts discussion handler has a stable boundary");
+  const handler = dashboard.slice(handlerStart, handlerEnd);
+  assert.match(handler, /setChatDiscussContext\(context\)/, "the fresh chat retains the selected alert context");
+  assert.match(handler, /setText\(draft \?\? ""\)/, "the fresh chat retains the editable discussion draft");
+  assert.match(
+    handler,
+    /selectDiscussionChatAgent\(displayAgents, selectedAgent, \(agent\) => runtimeCan\(agent, "chat"\), QUEEN_BEE_AGENT_ID\)/,
+    "the dashboard bridge selects a capability-compatible discussion agent",
+  );
+  assert.match(
+    handler,
+    /startAgentChat\(chatAgent\.id, \{ fresh: true \}\)/,
+    "Discuss creates a fresh chat instead of selecting an existing conversation",
+  );
+  assert.doesNotMatch(handler, /navigateDashboardTarget\(\{ view: "chat"/);
 }
 
 console.log("PASS test-notification-actions");

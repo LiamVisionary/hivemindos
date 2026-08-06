@@ -1,12 +1,13 @@
 /* chat-discuss-context.ts — the "discuss this inbox item with the Queen" bridge.
  *
  * When the user hits Discuss on an Alerts-inbox card (an automation-health
- * warning, a spend approval, or any alert row) the dashboard deep-links to the
- * /chat route with the Queen Bee agent selected, pre-fills an editable draft,
- * and pins a context BADGE for that item. The badge is folded (invisibly) into
- * the FIRST message the user sends so the Queen answers from the real item,
- * then it clears. Kept dependency-light so both the inbox and the chat send
- * path can import it without pulling in UI.
+ * warning, a spend approval, or any alert row) the dashboard starts a fresh
+ * /chat conversation, pre-fills an editable draft, and pins a context BADGE
+ * for that item. It prefers the Queen when that profile can host chat, then the
+ * user's current chat agent. The badge is folded (invisibly) into the FIRST
+ * message the user sends so the agent answers from the real item, then it
+ * clears. Kept dependency-light so both the inbox and the chat send path can
+ * import it without pulling in UI.
  */
 
 export type ChatDiscussContextKind = "alert" | "approval" | "automation-health";
@@ -21,6 +22,25 @@ export type ChatDiscussContext = {
   body: string;
 };
 
+type DiscussionChatAgent = {
+  id: string;
+  beeRole?: string;
+};
+
+export function selectDiscussionChatAgent<T extends DiscussionChatAgent>(
+  agents: readonly T[],
+  selectedAgent: T | null | undefined,
+  canChat: (agent: T) => boolean,
+  queenAgentId: string,
+): T | null {
+  const queen = agents.find((agent) => (
+    (agent.beeRole === "queen" || agent.id === queenAgentId) && canChat(agent)
+  ));
+  if (queen) return queen;
+  if (selectedAgent && canChat(selectedAgent)) return selectedAgent;
+  return agents.find(canChat) ?? null;
+}
+
 function kindNoun(kind: ChatDiscussContextKind): string {
   if (kind === "approval") return "spend approval";
   if (kind === "automation-health") return "automation-health warning";
@@ -31,7 +51,7 @@ function kindNoun(kind: ChatDiscussContextKind): string {
  * The context block appended (invisibly) to the FIRST message the user sends
  * while a discuss badge is attached. It never appears in the transcript — the
  * visible message stays exactly what the user typed — but the runtime receives
- * it so the Queen answers from the real inbox item.
+ * it so the discussion agent answers from the real inbox item.
  */
 export function formatDiscussContextForPrompt(context: ChatDiscussContext): string {
   return [

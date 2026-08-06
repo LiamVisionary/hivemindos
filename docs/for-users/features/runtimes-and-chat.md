@@ -81,6 +81,15 @@ Managed assistant messages also include thumbs-up and thumbs-down controls. Rati
 - Runtime-specific powers such as deterministic connector queries and artifact authoring are declared in the runtime capability matrix. Hermes is the first runtime enabled for these PromptQL-style work-product flows; other runtimes opt in through the same matrix instead of separate branches.
 - Explicit Teach Hive phrasing in chat creates a Brain Review proposal, not an immediate memory write. The normal Brain Review approval/apply path still decides what becomes durable Shared Brain Memory.
 
+### Local Model Runtimes
+
+Agent Settings offers two first-class local model paths:
+
+- **LM Studio** is the download-and-control path. HivemindOS can install or start the local server, download catalog models, explicitly load or unload them, test them, and discover models shared through LM Link.
+- **SIE** is the shared-GPU path. Point the SIE provider at its gateway (default `http://127.0.0.1:8080`) and HivemindOS shows every configured generation, embedding, reranking, extraction, vision, and audio model; lifecycle state; load failures; worker health; queue depth; GPU count; loaded models; and per-worker VRAM usage. Generation models can be selected for chat. Generation and embedding models can be warmed from the panel.
+
+SIE owns residency: the first compatible inference request loads a model, and SIE later keeps or evicts it according to GPU demand. Its current public gateway does not expose arbitrary load, unload, or pin mutations, so HivemindOS does not present controls that would imply otherwise. Task-specific reranking and extraction models load on their first task request. Remote Fleet agents expose the same inventory, telemetry, and warm actions through their collector. See the [SIE project](https://github.com/superlinked/sie) for server and model configuration.
+
 ### Automatic Thread Titles
 
 Open the thread-title settings from the Chat sidebar to keep first-message previews or choose Local or Cloud captioning.

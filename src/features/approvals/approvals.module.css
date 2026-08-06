@@ -12,8 +12,8 @@
   --ap-line-2: rgba(238, 232, 220, 0.13);
   --ap-fg: #f3f0e9;
   --ap-fg-2: #a7a39a;
-  --ap-fg-3: #76726a;
-  --ap-fg-4: #545049;
+  --ap-fg-3: #a7a39a;
+  --ap-fg-4: #918c83;
   --ap-honey: #e7b45c;
   --ap-honey-ink: #1a1305;
   --ap-honey-soft: rgba(231, 180, 92, 0.13);
@@ -35,8 +35,8 @@
   --ap-line-2: rgba(54, 46, 30, 0.16);
   --ap-fg: #221d14;
   --ap-fg-2: #5e574b;
-  --ap-fg-3: #867d6e;
-  --ap-fg-4: #a59b89;
+  --ap-fg-3: #5e574b;
+  --ap-fg-4: #6f6657;
   --ap-honey: #936811; --ap-honey-fill: #e6bb5c;
   --ap-honey-ink: #fdf7ea;
   --ap-honey-soft: rgba(176, 127, 28, 0.12);
@@ -304,6 +304,18 @@
 .btnDanger {
   border-color: var(--ap-danger-line);
   color: var(--ap-danger);
+}
+
+.btnQuiet {
+  flex: 0 0 auto;
+  padding-inline: 12px;
+  border-color: var(--ap-line-2);
+  color: var(--ap-fg-2);
+}
+
+.btnQuiet:hover:not(:disabled) {
+  background: var(--ap-panel-hi);
+  color: var(--ap-fg);
 }
 
 .iconBtn {
@@ -626,7 +638,12 @@
 
 @media (max-width: 380px) {
   .cardActions {
+    flex-wrap: wrap;
     gap: 3px;
+  }
+
+  .btnQuiet {
+    flex: 1 0 100%;
   }
 
   .btn {

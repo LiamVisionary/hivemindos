@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-07-27T14:22:12.860418+00:00",
+  "request": "In the chat route plus menu, add a templates browser and make audited oso95/scroll-world the first website template with App Builder initialization, loading, preview-eye attention, and the ready agent message.",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "oso95/scroll-world",
+      "source_path": "skills/scroll-world/references/scrub-engine.js",
+      "target_path": "public/app-builder-templates/scroll-world/scrub-engine.js",
+      "reuse_type": "adapted_code",
+      "note": "portable scroll-scrub engine, mobile media support, reduced-motion handling, and namespaced visual layer"
+    },
+    {
+      "source_repo": "oso95/scroll-world",
+      "source_path": "skills/scroll-world/references/index-template.html",
+      "target_path": "public/app-builder-templates/scroll-world/index.html",
+      "reuse_type": "adapted_code",
+      "note": "portable static document shell for the App Builder starter"
+    },
+    {
+      "source_repo": "oso95/scroll-world",
+      "source_path": "skills/scroll-world/references/index-template.html",
+      "target_path": "public/app-builder-templates/scroll-world/script.js",
+      "reuse_type": "config_adapted",
+      "note": "config-driven scene chain using local reviewed posters"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:src/features/dashboard/views/chat/chat-folder-modal.module.css",
+      "target_path": "src/features/dashboard/views/chat/exchange/ChatTemplateModal.module.css",
+      "reuse_type": "style_adapted",
+      "note": "existing chat modal tokens, overlay, responsive, light-theme, and loading conventions"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:src/lib/services/chat/capability-app-project-client.ts",
+      "target_path": "src/lib/services/app-builder/web-template-client.ts",
+      "reuse_type": "adapted_code",
+      "note": "existing App Builder project creation and linked-machine recovery path"
+    }
+  ]
+}

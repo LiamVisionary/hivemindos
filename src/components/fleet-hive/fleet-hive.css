@@ -22,8 +22,8 @@
 
   --fg: #f3f0e9;
   --fg-2: #a7a39a;
-  --fg-3: #76726a;
-  --fg-4: #545049;
+  --fg-3: #a7a39a;
+  --fg-4: #918c83;
 
   /* one warm accent — used sparingly */
   --honey: #e7b45c;
@@ -97,8 +97,8 @@
 
   --fg: #1f241e;
   --fg-2: #4e5a4e;
-  --fg-3: #74806e;
-  --fg-4: #99a08f;
+  --fg-3: #5e574b;
+  --fg-4: #6f6657;
 
   --honey: #a97209;
   --honey-2: #7d5404;
@@ -975,8 +975,8 @@ html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .co
 }
 :root[data-theme="hive-light"][data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .commandShell {
   background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='41.569' viewBox='0 0 72 41.569'%3E%3Cg fill='none' stroke='%23362e1e' stroke-opacity='.10' stroke-width='1'%3E%3Cpath d='M12 0h24l12 20.784-12 20.785H12L0 20.784z'/%3E%3Cpath d='M48-20.784h24L84 0 72 20.784H48L36 0z'/%3E%3Cpath d='M48 20.784h24l12 20.785-12 20.784H48L36 41.569z'/%3E%3C/g%3E%3C/svg%3E"),
-    radial-gradient(circle at 16% 10%, rgba(176, 127, 28, 0.16), transparent 26rem),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='41.569' viewBox='0 0 72 41.569'%3E%3Cg fill='none' stroke='%23362e1e' stroke-opacity='.045' stroke-width='1'%3E%3Cpath d='M12 0h24l12 20.784-12 20.785H12L0 20.784z'/%3E%3Cpath d='M48-20.784h24L84 0 72 20.784H48L36 0z'/%3E%3Cpath d='M48 20.784h24l12 20.785-12 20.784H48L36 41.569z'/%3E%3C/g%3E%3C/svg%3E"),
+    radial-gradient(circle at 16% 10%, rgba(176, 127, 28, 0.10), transparent 26rem),
     radial-gradient(circle at 84% 18%, rgba(169, 114, 9, 0.055), transparent 28rem),
     linear-gradient(140deg, #fbf8f1 0%, #f1ede3 52%, #f4efe4 100%);
   background-clip: content-box;

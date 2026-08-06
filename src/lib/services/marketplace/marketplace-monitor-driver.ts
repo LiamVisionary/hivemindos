@@ -18,6 +18,10 @@ import {
 import { applyVerifiedCatalogSweep, verifyUnverifiedPostedListings } from "@/lib/services/marketplace/marketplace-listing-pipeline";
 import { recoverLateMarketplaceResearch } from "@/lib/services/marketplace/marketplace-research";
 import { readMarketplaceListings } from "@/lib/services/marketplace/marketplace-listings-store";
+import {
+  marketplaceDecisionSuppressesConversation,
+  scopeMarketplaceAgentReport,
+} from "@/lib/services/marketplace/marketplace-report-scope";
 import { resolveIndependentTabReader, verifyClaimedReplies } from "@/lib/services/marketplace/marketplace-verification-matrix";
 import { listMarketplaceDirectives, readMarketplaceAccounts, updateMarketplaceAccount } from "@/lib/services/marketplace/marketplace-store";
 import { mutateMarketplaceRuntime, patchAccountRuntime, readMarketplaceRuntime } from "@/lib/services/marketplace/marketplace-runtime";
@@ -26,6 +30,7 @@ import {
   computeMarketplaceTickGate,
   type MarketplaceAccount,
   type MarketplaceAgentReport,
+  type MarketplaceListing,
   type MarketplaceReportEscalation,
 } from "@/lib/services/marketplace/marketplace-types";
 
@@ -81,7 +86,11 @@ function sleepUnlessStopped(runner: Runner, ms: number): Promise<void> {
 }
 
 /** Apply one agent inbox report: verified replies + conversations, verified catalog, escalations → decisions. */
-async function applyInboxReport(account: MarketplaceAccount, report: MarketplaceAgentReport): Promise<void> {
+async function applyInboxReport(
+  account: MarketplaceAccount,
+  report: MarketplaceAgentReport,
+  managedListings: MarketplaceListing[],
+): Promise<void> {
   const now = new Date().toISOString();
   if (report.sessionHealth === "logged-out") {
     await updateMarketplaceAccount(account.id, { status: "needs-attention" });
@@ -94,17 +103,18 @@ async function applyInboxReport(account: MarketplaceAccount, report: Marketplace
     }).catch(() => undefined);
     return;
   }
+  const scopedReport = scopeMarketplaceAgentReport(report, managedListings);
   // Per-op refutation (matrix row "work-inbox"): a claimed sent reply ingests
   // only when the real thread shows it — a fabricated "reply sent" used to
   // mark the conversation awaiting-buyer and ghost the buyer. Refuted claims
   // become escalations below; unobservable claims defer to the next sweep's
   // thread snapshot, which carries the reply if it was really sent.
   const reader = resolveIndependentTabReader(account);
-  const replyCheck = await verifyClaimedReplies(reader, account.machine.profileName, report);
-  const ingest = await ingestConversationSnapshot(account.id, report.conversations, replyCheck.accepted);
+  const replyCheck = await verifyClaimedReplies(reader, account.machine.profileName, scopedReport);
+  const ingest = await ingestConversationSnapshot(account.id, scopedReport.conversations, replyCheck.accepted);
   // Catalog rows that would flip an EXISTING record verify against their live
   // pages before merging (matrix row "sync-catalog") — never a raw upsert.
-  if (report.catalog?.length) await applyVerifiedCatalogSweep(account, report.catalog);
+  if (scopedReport.catalog?.length) await applyVerifiedCatalogSweep(account, scopedReport.catalog);
 
   const refutedReplyEscalations: MarketplaceReportEscalation[] = replyCheck.refuted.map((claim) => ({
     conversationId: claim.conversationId,
@@ -112,11 +122,22 @@ async function applyInboxReport(account: MarketplaceAccount, report: Marketplace
     question: "Review the conversation and answer the buyer yourself — the claimed reply was not sent.",
   }));
 
-  // Escalations → decision cards (deduped per conversation: one pending card at a time).
-  const pending = await listMarketplaceDecisions({ status: "pending", accountId: account.id });
-  for (const escalation of [...report.escalations, ...refutedReplyEscalations]) {
+  // Escalations → decision cards. Pending cards dedupe the current ask; ignored
+  // cards are durable tombstones that keep that conversation from resurfacing.
+  const existingDecisions = await listMarketplaceDecisions({ accountId: account.id });
+  const pendingConversationIds = new Set(
+    existingDecisions
+      .filter((decision) => decision.status === "pending" && decision.conversationId)
+      .map((decision) => decision.conversationId as string),
+  );
+  const suppressedConversationIds = new Set(
+    existingDecisions
+      .filter((decision) => decision.conversationId && marketplaceDecisionSuppressesConversation(decision, decision.conversationId))
+      .map((decision) => decision.conversationId as string),
+  );
+  for (const escalation of [...scopedReport.escalations, ...refutedReplyEscalations]) {
     const conversationId = `${account.id}:${escalation.conversationId}`;
-    if (pending.some((decision) => decision.conversationId === conversationId)) continue;
+    if (pendingConversationIds.has(conversationId) || suppressedConversationIds.has(conversationId)) continue;
     const conversation = (await readMarketplaceConversations(account.id)).find((candidate) => candidate.id === conversationId);
     const decision = await enqueueMarketplaceDecision({
       kind: "buyer-escalation",
@@ -137,6 +158,7 @@ async function applyInboxReport(account: MarketplaceAccount, report: Marketplace
         source: "marketplace",
       },
     });
+    pendingConversationIds.add(conversationId);
     await attachConversationEscalation(conversationId, decision.id, escalation.reason);
     await notifyEscalation({
       key: `marketplace-escalation-${conversationId}`,
@@ -203,12 +225,13 @@ async function tickAccount(account: MarketplaceAccount, nowMs: number): Promise<
         listMarketplaceDirectives(account.id),
         readMarketplaceListings(account.id),
       ]);
+      const managedListings = listings.filter((listing) => listing.state === "active");
       const report = await adapter.workInbox(
         account,
-        { directives, listings: listings.filter((listing) => listing.state === "active"), fullSweep: fullSweepDue },
+        { directives, listings: managedListings, fullSweep: fullSweepDue },
         { env: {}, dispatchAgentTaskImpl: dispatchMarketplaceAgentTask },
       );
-      await applyInboxReport(account, report);
+      await applyInboxReport(account, report, managedListings);
       if (fullSweepDue) await flagUnsyncedActiveListings(account);
     }
   } catch (error) {

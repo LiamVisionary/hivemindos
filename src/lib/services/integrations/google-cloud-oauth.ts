@@ -3,7 +3,7 @@ import "server-only";
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { NextRequest } from "next/server";
 
-import { localCallbackOrigin } from "@/lib/services/integrations/github-oauth";
+import { localCallbackOrigin, normalizeOAuthReturnMode, type OAuthReturnMode } from "@/lib/services/integrations/github-oauth";
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
 import { writeSharedHiveEnvValues } from "@/lib/services/hive-env-write";
 import {
@@ -113,9 +113,15 @@ function stateSigningKey(): string {
  *   state   = `${payload}.${sig}`
  * No server-side session is kept, so the flow survives HMR / restarts.
  */
-function createGoogleCloudState(codeVerifier: string): string {
+function createGoogleCloudState(codeVerifier: string, returnMode: OAuthReturnMode = ""): string {
   const payload = base64Url(
-    Buffer.from(JSON.stringify({ v: codeVerifier, n: base64Url(randomBytes(16)), t: Date.now() })),
+    Buffer.from(JSON.stringify({
+      v: codeVerifier,
+      n: base64Url(randomBytes(16)),
+      t: Date.now(),
+      // Desktop deep-link return mode; additive and absent for browser flows.
+      ...(returnMode ? { rm: returnMode } : {}),
+    })),
   );
   const sig = base64Url(createHmac("sha256", stateSigningKey()).update(payload).digest());
   return `${payload}.${sig}`;
@@ -126,7 +132,7 @@ function createGoogleCloudState(codeVerifier: string): string {
  * Returns the extracted PKCE verifier, or null when the state is invalid,
  * tampered, malformed, or expired.
  */
-function verifyGoogleCloudState(state: string): { verifier: string } | null {
+function verifyGoogleCloudState(state: string): { verifier: string; returnMode: OAuthReturnMode } | null {
   const [payload, sig] = state.split(".");
   if (!payload || !sig) return null;
   const expected = base64Url(createHmac("sha256", stateSigningKey()).update(payload).digest());
@@ -139,18 +145,21 @@ function verifyGoogleCloudState(state: string): { verifier: string } | null {
     const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
       v?: string;
       t?: number;
+      rm?: string;
     };
     if (typeof parsed.v !== "string" || !parsed.v) return null;
     if (typeof parsed.t !== "number" || Date.now() - parsed.t > LOGIN_FLOW_TTL_MS) return null;
-    return { verifier: parsed.v };
+    return { verifier: parsed.v, returnMode: normalizeOAuthReturnMode(parsed.rm) };
   } catch {
     return null;
   }
 }
 
-/** The app's own callback URL (this app's origin), rebuilt per request. */
-function googleCloudRedirectUri(request: NextRequest): string {
-  return new URL(OAUTH_CALLBACK_PATH, localCallbackOrigin(request)).toString();
+/** The app's own callback URL (this app's origin), rebuilt per request.
+ *  localCallbackOrigin probes the loopback binds (memoized per process), so
+ *  authorize-time and exchange-time URIs stay identical within one server. */
+async function googleCloudRedirectUri(request: NextRequest): Promise<string> {
+  return new URL(OAUTH_CALLBACK_PATH, await localCallbackOrigin(request)).toString();
 }
 
 export async function googleCloudOAuthConfigured(): Promise<boolean> {
@@ -176,19 +185,19 @@ export async function googleCloudOAuthStatus() {
  * server-side session to lose. Returns `missing` (non-empty) when the client
  * isn't configured, so callers can render the "not configured" page.
  */
-export function googleCloudAuthorizeUrl(request: NextRequest): { authorizeUrl: string; missing: string[] } {
+export async function googleCloudAuthorizeUrl(request: NextRequest, returnMode: OAuthReturnMode = ""): Promise<{ authorizeUrl: string; missing: string[] }> {
   if (!googleCloudOAuthClientReady()) {
     return { authorizeUrl: "", missing: [GOOGLE_CLOUD_CLIENT_ID_ENV] };
   }
   const clientId = googleCloudOAuthClientId();
   const verifier = base64Url(randomBytes(48));
   const challenge = base64Url(createHash("sha256").update(verifier).digest());
-  const state = createGoogleCloudState(verifier);
+  const state = createGoogleCloudState(verifier, returnMode);
 
   const authorizeUrl = `${OAUTH_AUTHORIZE_URL}?${new URLSearchParams({
     response_type: "code",
     client_id: clientId,
-    redirect_uri: googleCloudRedirectUri(request),
+    redirect_uri: await googleCloudRedirectUri(request),
     scope: OAUTH_SCOPE,
     code_challenge: challenge,
     code_challenge_method: "S256",
@@ -297,7 +306,7 @@ export async function exchangeGoogleCloudCode(
   code: string,
   state: string,
   request: NextRequest,
-): Promise<void> {
+): Promise<{ returnMode: OAuthReturnMode }> {
   if (!googleCloudOAuthClientReady()) {
     throw new Error("The Google Cloud OAuth client is not configured.");
   }
@@ -310,10 +319,11 @@ export async function exchangeGoogleCloudCode(
   const tokens = await callExchangeWorker("/token", {
     code,
     code_verifier: verified.verifier,
-    redirect_uri: googleCloudRedirectUri(request),
+    redirect_uri: await googleCloudRedirectUri(request),
     client_id: googleCloudOAuthClientId(),
   });
   await persistTokens(tokens as { access_token: string; refresh_token?: string });
+  return { returnMode: verified.returnMode };
 }
 
 /**

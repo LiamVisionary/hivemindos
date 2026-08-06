@@ -10,6 +10,7 @@ const baseUrl = (process.env.HIVE_E2E_BASE_URL || process.env.DASHBOARD_URL || "
 const screenshotPath = process.env.HIVE_E2E_SCREENSHOT || "/tmp/hivemindos-socials-queue-e2e.png";
 const generateDrafts = process.env.HIVE_E2E_GENERATE_DRAFTS === "1";
 const generateEngagement = process.env.HIVE_E2E_GENERATE_ENGAGEMENT === "1";
+const contextlessHandle = (process.env.HIVE_E2E_CONTEXTLESS_HANDLE || "").trim().replace(/^@/, "");
 
 async function readEnvValue(filePath, key) {
   const raw = await readFile(filePath, "utf8").catch(() => "");
@@ -30,10 +31,15 @@ try {
     extraHTTPHeaders: { "x-hivemindos-device-token": dashboardDeviceToken },
     viewport: { width: 1440, height: 1000 },
   });
-  const session = await context.request.post(`${baseUrl}/api/auth/session`, {
-    data: { token: dashboardDeviceToken },
-    headers: { Accept: "application/json" },
-  });
+  let session;
+  try {
+    session = await context.request.post(`${baseUrl}/api/auth/session`, {
+      data: { token: dashboardDeviceToken },
+      headers: { Accept: "application/json" },
+    });
+  } catch {
+    throw new Error(`Dashboard session setup could not connect to ${baseUrl}. Request headers were redacted.`);
+  }
   assert.ok(session.ok(), `Dashboard session setup failed with HTTP ${session.status()}.`);
 
   const page = await context.newPage();
@@ -55,14 +61,45 @@ try {
   await page.getByTestId("social-queue-composer").waitFor({ state: "visible" });
   await page.getByRole("button", { name: "Process queue" }).waitFor({ state: "visible" });
   await page.getByTestId("social-drafting-automation").waitFor({ state: "visible" });
+  const allAccounts = page.locator(".sc-account-chip").filter({ hasText: "All accounts" });
+  await allAccounts.click();
+  assert.equal(await allAccounts.getAttribute("data-active"), "true", "All accounts must load the aggregate review queue.");
+  await page.getByTestId("social-queue-workspace").waitFor({ state: "visible" });
   const xAccount = page.locator(".sc-acct").filter({ hasText: "@TheHivemindOS" });
   if (await xAccount.count()) {
     await xAccount.click();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.locator(".sc-settings-route > nav").getByRole("button", { name: /^Connection/ }).click();
+    await page.getByTestId("social-x-session").waitFor({ state: "visible" });
+    await page.getByText("Agent Reach X session", { exact: true }).waitFor({ state: "visible" });
+    await page.getByRole("button", { name: /^Review/ }).click();
     await page.getByTestId("social-engagement-discovery").waitFor({ state: "visible" });
-    await page.getByText(/local Agent Reach X session/).waitFor({ state: "visible" });
+  }
+  if (contextlessHandle) {
+    const contextlessAccount = page.locator(".sc-acct").filter({ hasText: `@${contextlessHandle}` });
+    assert.equal(await contextlessAccount.count(), 1, `Expected one @${contextlessHandle} account in the Socials rail.`);
+    await contextlessAccount.click();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.locator(".sc-settings-route > nav").getByRole("button", { name: /^Connection/ }).click();
+    await page.getByTestId("social-x-session").waitFor({ state: "visible" });
+    await page.locator(".sc-settings-route > nav").getByRole("button", { name: /^Automation/ }).click();
+    const drafting = page.getByTestId("social-drafting-automation");
+    await drafting.getByText("Waiting for account-specific context", { exact: true }).waitFor({ state: "visible" });
+    await drafting.getByText(/Add context first/).waitFor({ state: "visible" });
+    assert.equal(
+      await drafting.getByRole("button", { name: "Generate full pack" }).isDisabled(),
+      true,
+      "Standalone generation must stay disabled until account-specific context is configured.",
+    );
+    assert.equal(
+      await drafting.locator(".sc-error").count(),
+      0,
+      "A stale drafting failure must not obscure the missing-context setup state.",
+    );
+    await page.getByRole("button", { name: /^Review/ }).click();
   }
   const engineStatus = (await page.getByTestId("social-queue-engine-status").innerText()).trim();
-  assert.match(engineStatus, /Delivery worker (active|starting|paused)/, `Unexpected engine status: ${engineStatus}`);
+  assert.match(engineStatus, /Worker (live|waiting|paused)/, `Unexpected engine status: ${engineStatus}`);
 
   if (generateDrafts) {
     await page.getByRole("button", { name: "Generate full pack" }).click();
@@ -79,18 +116,36 @@ try {
     await page.getByRole("link", { name: /Open target/ }).first().waitFor({ state: "visible" });
   }
 
-  const historyTab = page.getByRole("tab", { name: /^History/ });
-  await historyTab.click();
-  assert.equal(await historyTab.getAttribute("aria-selected"), "true");
-  const analyticsTab = page.getByRole("tab", { name: "Analytics" });
+  const scheduledTab = page.getByRole("button", { name: /^Scheduled/ });
+  await scheduledTab.click();
+  assert.equal(await scheduledTab.getAttribute("aria-current"), "page");
+  await page.getByRole("button", { name: "List", exact: true }).click();
+  await page.locator(".sc-schedule-list").waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "Week", exact: true }).click();
+  await page.locator(".sc-week-grid").waitFor({ state: "visible" });
+  const analyticsTab = page.getByRole("button", { name: "Analytics", exact: true });
   await analyticsTab.click();
-  assert.equal(await analyticsTab.getAttribute("aria-selected"), "true");
+  assert.equal(await analyticsTab.getAttribute("aria-current"), "page");
   await page.getByRole("button", { name: "Refresh analytics" }).waitFor({ state: "visible" });
-  await page.getByRole("tab", { name: /^Queue/ }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByText("Posting voice", { exact: true }).waitFor({ state: "visible" });
+  await page.locator(".sc-settings-route > nav").getByRole("button", { name: /^Schedule & mode/ }).click();
+  await page.getByText("Posting mode", { exact: true }).waitFor({ state: "visible" });
+  await page.locator(".sc-settings-route > nav").getByRole("button", { name: /^Automation/ }).click();
+  await page.getByTestId("social-drafting-automation").waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "Connect account", exact: true }).click();
+  await page.locator('[aria-label="Connect account step 1 of 3"]').waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.locator('[aria-label="Connect account step 2 of 3"]').waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await page.locator('[aria-label="Connect account step 3 of 3"]').waitFor({ state: "visible" });
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: /^Review/ }).click();
 
   const firstTarget = page.getByTestId("social-engagement-target").first();
   if (await firstTarget.count()) await firstTarget.scrollIntoViewIfNeeded();
 
+  await page.waitForTimeout(400);
   await page.screenshot({ path: screenshotPath, fullPage: true });
   assert.deepEqual(apiFailures, [], `Socials API failures: ${apiFailures.join(", ")}`);
   assert.deepEqual(pageErrors, [], `Browser page errors: ${pageErrors.join(" | ")}`);

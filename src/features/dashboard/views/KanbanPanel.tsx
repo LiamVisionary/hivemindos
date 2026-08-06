@@ -22,6 +22,8 @@ const panelClass = createStyleClass(panelStyles);
 
 const EMPTY_WORK_HISTORY: WorkHistoryPayload = { projects: [], entries: [] };
 const WORK_HISTORY_PAGE_SIZE = 10;
+const KANBAN_INITIAL_VISIBLE_TASKS = 20;
+const KANBAN_VISIBLE_TASK_STEP = 20;
 const codeProofPillStyle = {
   display: "inline-flex",
   alignItems: "center",
@@ -49,11 +51,6 @@ function compactWorkHistoryTimestamp(timestamp?: string) {
 
 function KanbanPanelBase(props: any) {
   const { AttachmentListMenuContent, AttachmentMenuContent, CellMenu, ChatMarkdown, Check, ChevronDown, ChevronRight, ComposerField, DEFAULT_SHARED_VAULT, ExternalLink, Eye, FolderOpen, Image, KANBAN_COLUMNS, KANBAN_STEER_TARGETS, MessageAttachments, MessageSquare, Paperclip, Plus, RotateCcw, Search, Settings2, activeView, answerKanbanNeedsHuman, attachKanbanCardDirectory, attachKanbanCardRecentDirectory, attachKanbanSteerDirectory, attachKanbanSteerRecentDirectory, attachQuickAddDirectory, attachQuickAddRecentDirectory, bulkPatchKanbanTasks, chatClass, clearKanbanColumnTasks, createKanbanBoard, createKanbanTask, displayAgents, editAndInterruptKanbanTask, expandedKanbanCards, formatDurationShort, formatMessageTimestamp, formatRelativeTime, handleKanbanCardFileChange, handleKanbanCardImageChange, handleKanbanSteerFileChange, handleKanbanSteerImageChange, handleQuickAddFileChange, handleQuickAddImageChange, importNoteIntake, initialWorkHistory, isKanbanStaleWorkingTask, isKanbanTerminalMessage, kanbanAssigneeFilter, kanbanAssigneeOptions, kanbanBoard, kanbanBoardScrollRef, kanbanBoardScrollState, kanbanBoardSlug, kanbanBoards, kanbanBulkAssignee, kanbanBulkPending, kanbanCardAttachmentListOpen, kanbanCardAttachmentMenuOpen, kanbanCardDeliverableMenuOpen, kanbanCardFileInputRef, kanbanCardImageInputRef, kanbanCardMachineMenuOpen, kanbanCardMessage, kanbanCardRecentsExpanded, kanbanClass, kanbanClearingColumnId, kanbanEditDraft, kanbanEditPendingTaskId, kanbanError, kanbanEventLabel, kanbanIncludeArchived, kanbanInitialLoading, kanbanLoading, kanbanMachineTargets, kanbanNotice, kanbanPickupPreviewByTask, kanbanSearch, kanbanStaleAge, kanbanSteerAttachmentError, kanbanSteerAttachmentMenuOpen, kanbanSteerAttachmentMenuRef, kanbanSteerAttachments, kanbanSteerDirectories, kanbanSteerDraft, kanbanSteerFileInputRef, kanbanSteerImageInputRef, kanbanSteerTargetMenuOpen, kanbanSteerTargetMenuRef, kanbanSteerTargetStatus, kanbanSteeringTaskId, kanbanStorage, kanbanTaskBee, kanbanTaskMenuItems, kanbanTaskModal, kanbanTenantFilter, kanbanTenants, kanbanViewColumns, loadKanbanNeedsHumanEnvKeys, markKanbanTaskReviewed, moveKanbanTask, newBoardDraft, noteIntakePending, noteIntakePreview, noteIntakeStatus, openKanbanCardFilePicker, openKanbanTaskModal, openSkillAttachmentBrowser, patchKanbanTask, quickAddAttachmentError, quickAddAttachmentMenuOpen, quickAddAttachmentMenuRef, quickAddAttachments, quickAddDirectories, quickAddDrafts, quickAddFileInputRef, quickAddImageInputRef, quickAddMachineMenuOpen, quickAddMachineMenuRef, quickAddMachineTarget, quickAddMachineTargets, quickAddSkills, quickAddStatus, quickAddTemplateIds, recentDirectories, recentDirectoriesExpanded, recording, refreshKanbanOnce, removeKanbanCardAttachment, removeKanbanCardDirectory, removeKanbanSteerAttachment, removeKanbanSteerDirectory, removeQuickAddAttachment, removeQuickAddDirectory, saveKanbanNeedsHumanApiKey, scanNoteIntake, selectedKanbanAgent, selectedKanbanAgentMessages, selectedKanbanBulkIds, selectedKanbanComments, selectedKanbanEvents, selectedKanbanTask, selectedKanbanTaskId, selectedKanbanTaskIds, setActiveView, setExpandedKanbanCards, setKanbanAssigneeFilter, setKanbanBoardSlug, setKanbanBulkAssignee, setKanbanCardAttachmentListOpen, setKanbanCardAttachmentMenuOpen, setKanbanCardDeliverableMenuOpen, setKanbanCardMachineMenuOpen, setKanbanCardRecentsExpanded, setKanbanEditDraft, setKanbanError, setKanbanIncludeArchived, setKanbanLoading, setKanbanNotice, setKanbanSearch, setKanbanSteerAttachmentMenuOpen, setKanbanSteerDraft, setKanbanSteerTargetMenuOpen, setKanbanSteerTargetStatus, setKanbanTaskModal, setKanbanTenantFilter, setNewBoardDraft, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddDrafts, setQuickAddMachineMenuOpen, setQuickAddMachineTargets, setQuickAddSkills, setQuickAddStatus, setQuickAddTemplateIds, setRecentDirectoriesExpanded, setSelectedKanbanTaskIds, sharedSkillOptions, sharedVault, startAudioRecording, steerSelectedKanbanTask, stopAudioRecording, updateKanbanTaskMachine, updateSharedVault, selectKanbanNeedsHumanEnvKey, voiceBands, voiceTarget, voiceTranscript, workBoardStats } = props;
-  // TEMP perf instrumentation (remove after profiler verification): a running
-  // count that increments only when this memo()-wrapped panel actually
-  // re-renders. A background poll that changes no kanban data should NOT
-  // increment it once the handler props are stabilized in DashboardApp.
-  if (typeof window !== "undefined") console.count("[perf] KanbanPanel render");
   const [workHistory, setWorkHistory] = useState<WorkHistoryPayload>(initialWorkHistory ?? EMPTY_WORK_HISTORY);
   const [workHistoryLoading, setWorkHistoryLoading] = useState(false);
   const [workHistoryLoadingMore, setWorkHistoryLoadingMore] = useState(false);
@@ -66,10 +63,19 @@ function KanbanPanelBase(props: any) {
   const [selectedCodeProjectId, setSelectedCodeProjectId] = useState("");
   const [gitlawbStatus, setGitlawbStatus] = useState<any>(null);
   const [quickAddTemplatePickerStatus, setQuickAddTemplatePickerStatus] = useState("");
+  const [taskVisibility, setTaskVisibility] = useState<{ scopeKey: string; counts: Record<string, number> }>({ scopeKey: "", counts: {} });
   const workHistorySkipInitialFetchRef = useRef(Boolean(initialWorkHistory?.generatedAt));
   const workHistoryEntryCountRef = useRef(workHistory.entries.length);
   const kanbanFallbackRefreshKeyRef = useRef("");
   const sharedVaultPath = sharedVault?.vaultPath;
+  const taskVisibilityScopeKey = [
+    kanbanBoardSlug,
+    kanbanIncludeArchived ? "archived" : "active",
+    kanbanTenantFilter,
+    kanbanAssigneeFilter,
+    kanbanSearch,
+    selectedCodeProjectId,
+  ].join("|");
   const kanbanShowingInitialLoading = activeView === "kanban" && !kanbanBoard && !kanbanError;
   const workHistoryInitialLoading = activeView === "history" && !workHistory.generatedAt && !workHistory.entries.length && !workHistoryError;
   const workHistoryShowingLoading = workHistoryLoading || workHistoryInitialLoading;
@@ -294,7 +300,7 @@ function KanbanPanelBase(props: any) {
   }, [workHistory.entries.length]);
 
   useEffect(() => {
-    if (activeView !== "kanban" || kanbanBoard || kanbanError) return;
+    if (activeView !== "kanban" || kanbanBoard || kanbanError || kanbanLoading) return;
     if (typeof refreshKanbanOnce !== "function") return;
     const refreshKey = [
       kanbanBoardSlug,
@@ -304,20 +310,24 @@ function KanbanPanelBase(props: any) {
       kanbanSearch,
     ].join("|");
     if (kanbanFallbackRefreshKeyRef.current === refreshKey) return;
-    kanbanFallbackRefreshKeyRef.current = refreshKey;
     let cancelled = false;
-    setKanbanLoading(true);
-    Promise.resolve(refreshKanbanOnce())
-      .catch((error) => {
-        if (cancelled) return;
-        kanbanFallbackRefreshKeyRef.current = "";
-        setKanbanError(error instanceof Error ? error.message : "Kanban refresh failed.");
-      })
-      .finally(() => {
-        if (!cancelled) setKanbanLoading(false);
-      });
+    const fallbackTimer = window.setTimeout(() => {
+      if (cancelled) return;
+      kanbanFallbackRefreshKeyRef.current = refreshKey;
+      setKanbanLoading(true);
+      Promise.resolve(refreshKanbanOnce())
+        .catch((error) => {
+          if (cancelled) return;
+          kanbanFallbackRefreshKeyRef.current = "";
+          setKanbanError(error instanceof Error ? error.message : "Kanban refresh failed.");
+        })
+        .finally(() => {
+          if (!cancelled) setKanbanLoading(false);
+        });
+    }, 750);
     return () => {
       cancelled = true;
+      window.clearTimeout(fallbackTimer);
     };
   }, [
     activeView,
@@ -326,6 +336,7 @@ function KanbanPanelBase(props: any) {
     kanbanBoardSlug,
     kanbanError,
     kanbanIncludeArchived,
+    kanbanLoading,
     kanbanSearch,
     kanbanTenantFilter,
     refreshKanbanOnce,
@@ -610,6 +621,14 @@ function KanbanPanelBase(props: any) {
               {projectScopedColumns.map((column) => {
                 const selectedQuickAddSkills = quickAddSkills?.[column.id] ?? [];
                 const selectedQuickAddTemplate = findTaskTemplate(quickAddTemplateIds?.[column.id]);
+                const visibleTaskCount = Math.max(
+                  KANBAN_INITIAL_VISIBLE_TASKS,
+                  taskVisibility.scopeKey === taskVisibilityScopeKey ? taskVisibility.counts[column.id] ?? 0 : 0,
+                );
+                const visibleTasks = column.tasks.slice(0, visibleTaskCount);
+                const selectedTask = column.tasks.find((task) => task.id === selectedKanbanTaskId);
+                if (selectedTask && !visibleTasks.some((task) => task.id === selectedTask.id)) visibleTasks.push(selectedTask);
+                const hiddenTaskCount = Math.max(0, column.tasks.length - visibleTasks.length);
                 return (
                 <section
                   className={`${kanbanClass("kanbanColumn", column.id)}${kanbanDragOverColumn === column.id ? ` ${convoClass("laneDropTarget")}` : ""}`}
@@ -652,9 +671,10 @@ function KanbanPanelBase(props: any) {
                         type="button"
                         className={kanbanClass("kanbanAddColumnTask")}
                         data-bee={`kanban-add-${column.id}`}
+                        disabled={kanbanInitialLoading || kanbanShowingInitialLoading}
                         onClick={() => setQuickAddStatus((current) => current === column.id ? "" : column.id)}
                         aria-label={`Add task to ${column.title}`}
-                        title={`Add task to ${column.title}`}
+                        title={kanbanInitialLoading || kanbanShowingInitialLoading ? "Loading Work Board" : `Add task to ${column.title}`}
                       >
                         <Plus aria-hidden="true" />
                       </button>
@@ -783,7 +803,7 @@ function KanbanPanelBase(props: any) {
                         ) : null}
                       </form>
                     ) : null}
-                    {!kanbanShowingInitialLoading && !kanbanInitialLoading && column.tasks.map((task) => {
+                    {!kanbanShowingInitialLoading && !kanbanInitialLoading && visibleTasks.map((task) => {
                       const columnIndex = projectScopedColumns.findIndex((item) => item.id === task.status);
                       const previousColumn = columnIndex > 0 ? projectScopedColumns[columnIndex - 1] : null;
                       const nextColumn = columnIndex >= 0 && columnIndex < projectScopedColumns.length - 1 ? projectScopedColumns[columnIndex + 1] : null;
@@ -1184,6 +1204,22 @@ function KanbanPanelBase(props: any) {
                         </article>
                       );
                     })}
+                    {!kanbanShowingInitialLoading && !kanbanInitialLoading && hiddenTaskCount > 0 ? (
+                      <button
+                        type="button"
+                        className={panelClass("kanbanLoadMore")}
+                        onClick={() => setTaskVisibility((current) => ({
+                          scopeKey: taskVisibilityScopeKey,
+                          counts: {
+                            ...(current.scopeKey === taskVisibilityScopeKey ? current.counts : {}),
+                            [column.id]: visibleTaskCount + KANBAN_VISIBLE_TASK_STEP,
+                          },
+                        }))}
+                      >
+                        Show {Math.min(KANBAN_VISIBLE_TASK_STEP, hiddenTaskCount)} more
+                        <small>{hiddenTaskCount} remaining</small>
+                      </button>
+                    ) : null}
                     {!kanbanShowingInitialLoading && !kanbanInitialLoading && column.tasks.length === 0 && quickAddStatus !== column.id ? (
                       <div className={kanbanClass("kanbanEmptyLane")}>
                         <p className={kanbanClass("kanbanEmptyLaneMessage")}>

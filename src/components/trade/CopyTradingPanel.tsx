@@ -604,6 +604,7 @@ function EvolutionComparison(props: { comparison: CopyTradeEvolutionComparison }
       ? "Not eligible yet"
       : "Learning evidence";
   const ci = promotion.edgeCi95Pct;
+  const absoluteCi = promotion.evolvedReturnCi95Pct;
   return (
     <div className={styles.evolutionSummary}>
       {comparison.status === "ready" ? (
@@ -618,7 +619,12 @@ function EvolutionComparison(props: { comparison: CopyTradeEvolutionComparison }
         <span>95% edge <b>{ci[0] == null || ci[1] == null ? "waiting" : `${fmtSignedPoints(ci[0])} to ${fmtSignedPoints(ci[1])}`}</b></span>
         <span>Drawdown <b>{promotion.evolvedMaxDrawdownPct == null ? "waiting" : `${promotion.evolvedMaxDrawdownPct.toFixed(1)}% agent · ${(promotion.sourceMaxDrawdownPct ?? 0).toFixed(1)}% original`}</b></span>
       </div>
-      <small>{fmtInt(comparison.reviews)} reviewed · {fmtInt(comparison.closed)} closed · {fmtInt(comparison.kept)} kept · {fmtInt(comparison.errors)} errors · frozen {fmtInt(promotion.requiredHoldoutSamples)}-trade validation batches</small>
+      <div className={styles.evolutionReturns}>
+        <span>Absolute 95% return <b>{absoluteCi[0] == null || absoluteCi[1] == null ? "waiting" : `${fmtSignedPoints(absoluteCi[0])} to ${fmtSignedPoints(absoluteCi[1])}`}</b></span>
+        <span>Profit factor <b>{promotion.evolvedProfitFactor == null ? "waiting" : promotion.evolvedProfitFactor.toFixed(2)}</b></span>
+        <span>Review reliability <b>{promotion.errorRatePct == null ? "waiting" : `${(100 - promotion.errorRatePct).toFixed(1)}%`}</b></span>
+      </div>
+      <small>{fmtInt(comparison.reviews)} reviewed · {fmtInt(comparison.closed)} closed · {fmtInt(comparison.kept)} kept · {fmtInt(comparison.errors)} errors · frozen {fmtInt(promotion.requiredHoldoutSamples)}-trade validation batches · paper-only, never auto-live</small>
     </div>
   );
 }
@@ -639,6 +645,9 @@ function ConfigPerformance(props: {
   const openPositions = Object.values((config.dryRun ? state?.paper?.positions : state?.openPositions) ?? {});
   const events = (state?.events ?? []).slice(-8).reverse();
   const reviews = (state?.agentAnalysis?.reviews ?? []).slice(-8).reverse();
+  const brainSyncReceipts = Object.values(state?.agentAnalysis?.brainSync ?? {});
+  const brainSynced = brainSyncReceipts.filter((receipt) => receipt.status === "synced").length;
+  const brainWaiting = brainSyncReceipts.length - brainSynced;
   const comparison = config.evolution ? compareCopyTradeEvolution(state, props.sourceState) : null;
   const loopStatus = !config.enabled ? "Stopped" : !online ? "Offline" : state?.running ? "Running" : "Waiting";
   const lastEvent = summary?.lastEventAt ? fmtAgo(summary.lastEventAt) : "none";
@@ -703,6 +712,35 @@ function ConfigPerformance(props: {
             <div className={styles.detailBlock}>
               <div className={styles.detailTitle}>Original vs agent-analyzed</div>
               <EvolutionComparison comparison={comparison} />
+            </div>
+          ) : null}
+
+          {config.evolution && comparison ? (
+            <div className={styles.detailBlock}>
+              <div className={styles.detailTitle}>Outcome retrospectives</div>
+              <p className={styles.detailMuted}>
+                Shared Brain sync · {fmtInt(brainSynced)} current{brainWaiting ? ` · ${fmtInt(brainWaiting)} retrying` : ""}
+              </p>
+              {comparison.learning.latest.length ? (
+                <div className={styles.reviews}>
+                  <p className={styles.detailMuted}>
+                    {fmtInt(comparison.learning.total)} evidence-linked notes · {fmtInt(comparison.learning.avoidedLosses)} avoided losses · {fmtInt(comparison.learning.missedUpside)} missed upside · {fmtInt(comparison.learning.lossesHeld)} losses held
+                  </p>
+                  {comparison.learning.latest.map((note) => (
+                    <div key={`${note.targetTxRef}:${note.horizon}`} className={styles.review}>
+                      <span className={`${styles.kind} ${note.pairedDeltaPct < 0 ? styles.kindErr : note.pairedDeltaPct > 0 ? styles.kindBuy : ""}`}>
+                        {note.horizon}
+                      </span>
+                      <span className={styles.reviewBody}>
+                        <b>{note.symbol} · {note.outcome} · {fmtSignedPoints(note.pairedDeltaPct)} edge</b>
+                        <span>{note.summary}</span>
+                        <small>{note.lesson}</small>
+                        <small>Evidence tags: {note.causeTags.join(" · ")}</small>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className={styles.detailMuted}>Waiting for a valid 24-hour observation or the target wallet's exit. Current-batch outcomes cannot teach the current batch.</p>}
             </div>
           ) : null}
 

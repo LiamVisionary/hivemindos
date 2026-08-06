@@ -54,6 +54,11 @@ The product starts with machines and agents. Fleet tells you what is online, whi
     <a href="local-document-reader.html">Open document reader</a>
   </section>
   <section class="docCard">
+    <h3>Hivemind Office Companion</h3>
+    <p>Optional visual DOCX, spreadsheet, presentation, and PDF review with local MCP tools, hash-bound handoffs, copy-first saves, explicit replacement confirmation, and verified backups.</p>
+    <a href="hivemind-office.html">Open office companion docs</a>
+  </section>
+  <section class="docCard">
     <h3>Local Web Research</h3>
     <p>Runtime-independent keyless search, guarded page extraction, bounded site crawling, screenshots, scanned-PDF OCR, and public-network safety controls.</p>
     <a href="web-research.html">Open web research</a>
@@ -114,6 +119,11 @@ Looped work is where operator intent turns into agent execution. A loop contract
     <h3>Quant Research Swarm</h3>
     <p>Research-only hypothesis families with lagged Rust backtests, independent Python validation, hard overfitting gates, regime and factor audits, and durable lineage.</p>
     <a href="quant-research.html">Open quant research docs</a>
+  </section>
+  <section class="docCard">
+    <h3>Penny-stock Limit-order Paper Lab</h3>
+    <p>Rank ten listed low-priced stocks, document a reasoned three-name paper basket, model standing limit fills, and retain strategy changes only after three forward windows pass every gate.</p>
+    <a href="penny-stock-paper-lab.html">Open the paper-lab docs</a>
   </section>
   <section class="docCard">
     <h3>MiroShark And Runtime Gateways</h3>
@@ -246,13 +256,18 @@ Wallet and token features are explicit rails, not a background permission pool. 
     <a href="integrations-and-work-history.html">Open integrations</a>
   </section>
   <section class="docCard">
+    <h3>X Command Bot</h3>
+    <p>Bind a numeric X identity to shared Mini credits, invoke allowlisted apps such as X Transcript, and route read-only questions to an explicitly paired local Queen.</p>
+    <a href="x-command-bot.html">Open X bot docs</a>
+  </section>
+  <section class="docCard">
     <h3>Beeline Family Profiles</h3>
     <p>Separate family identities, explicit authority, allowed capability areas, and dedicated Chrome profiles without mixing them with your own account set.</p>
     <a href="beeline.html">Open Beeline</a>
   </section>
   <section class="docCard">
     <h3>Agent Provider Integrations</h3>
-    <p>External agent providers, MCP catalog discovery, Browser Use, OpenHands, Aider, n8n, Agentic Inbox, and Queen Bee PRD decomposition.</p>
+    <p>External agent providers, MCP catalog discovery, Hivemind Office, Browser Use, OpenHands, Aider, n8n, Agentic Inbox, and Queen Bee PRD decomposition.</p>
     <a href="agent-provider-integrations.html">Open provider docs</a>
   </section>
   <section class="docCard">

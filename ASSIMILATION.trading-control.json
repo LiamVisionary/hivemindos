@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-08-05T16:19:04.881939+00:00",
+  "request": "Implement all approved OpenAlice-inspired trading route, capability, UI, and UX upgrades in HivemindOS with beginner-first progressive disclosure and end-to-end tests",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:src/lib/services/trading/crypto-practice-book.ts",
+      "target_path": "src/lib/services/trading/trading-control-store.ts",
+      "reuse_type": "adapted_code",
+      "note": "Reused the normalized server-only JSON store, serialized mutation queue, bounded history, and atomic temp-file rename pattern for plans, snapshots, simulator state, theses, connections, reconciliation, and events."
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:src/lib/services/wallet/spend-governance.ts",
+      "target_path": "src/lib/services/trading/trading-risk-policy.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted fail-before-execution checks and ReasoningTrail evidence into a multi-asset policy that blocks unknown live context and downgrades non-spending paper/research uncertainty to warnings."
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:src/features/approvals/ApprovalCard.tsx",
+      "target_path": "src/components/trade/TradePlanReviewCard.tsx",
+      "reuse_type": "style_adapted",
+      "note": "Adapted explicit review, reject, status, evidence, and progressive-disclosure conventions into a persistent trade-plan review card."
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:src/components/trade/trade-context.tsx",
+      "target_path": "src/components/trade/trading-lifecycle-context.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Extended the established typed provider and same-origin client pattern into one route-wide lifecycle for modes, plans, snapshots, theses, brokers, and reconciliation."
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:scripts/test-crypto-practice-book.mjs",
+      "target_path": "scripts/test-trading-control.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Adapted the hermetic temp-store and direct service-entry test pattern for concurrency, simulation, policy, snapshots, and reconciliation."
+    }
+  ]
+}

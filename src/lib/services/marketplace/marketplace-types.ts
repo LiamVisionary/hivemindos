@@ -358,7 +358,7 @@ export const MARKETPLACE_CONVERSATION_MESSAGE_CAP = 200;
 export const MARKETPLACE_DECISION_KINDS = ["new-listing", "buyer-escalation", "price-change", "end-listing"] as const;
 export type MarketplaceDecisionKind = (typeof MARKETPLACE_DECISION_KINDS)[number];
 
-export type MarketplaceDecisionStatus = "pending" | "approved" | "denied" | "expired";
+export type MarketplaceDecisionStatus = "pending" | "approved" | "denied" | "ignored" | "expired";
 
 export type MarketplaceDecision = {
   id: string;

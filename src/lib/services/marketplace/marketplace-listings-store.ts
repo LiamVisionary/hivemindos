@@ -118,7 +118,7 @@ export async function getMarketplaceListing(id: string): Promise<MarketplaceList
  * token CONTAINMENT (how much of the shorter title the longer one covers) is
  * the primary signal, with plain Jaccard as a backstop.
  */
-function listingTitlesLookAlike(a: string, b: string): boolean {
+export function marketplaceListingTitlesMatch(a: string, b: string): boolean {
   if (titlesSimilar(a, b, 0.75)) return true;
   const tokensA = titleTokens(a);
   const tokensB = titleTokens(b);
@@ -141,7 +141,7 @@ export async function findDuplicateListing(
   for (const listing of listings) {
     if (draft.id && listing.id === draft.id) continue;
     if (listing.state === "ended" || listing.state === "rejected" || listing.state === "failed") continue;
-    if (!listingTitlesLookAlike(listing.title, draft.title)) continue;
+    if (!marketplaceListingTitlesMatch(listing.title, draft.title)) continue;
     if (listing.priceUsd > 0 && draft.priceUsd > 0) {
       const ratio = draft.priceUsd / listing.priceUsd;
       if (ratio < 0.85 || ratio > 1.15) continue;

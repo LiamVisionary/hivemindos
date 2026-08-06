@@ -18,6 +18,7 @@ export function managedXReturnUrl(
   creditAccountId: string,
   slug: string,
   view: ManagedXReturnView = "integrations",
+  integrationsTab: "mcp" | "xbot" = "mcp",
 ) {
   const desktop = isTauriDesktopRuntime();
   const url = desktop
@@ -26,10 +27,11 @@ export function managedXReturnUrl(
 
   if (desktop) {
     url.searchParams.set("x_return_view", view);
+    if (view === "integrations") url.searchParams.set("x_return_tab", integrationsTab);
     if (process.env.NODE_ENV === "development") url.searchParams.set("x_return_scheme", "hivemindos-dev");
   } else {
     url.searchParams.set("view", view);
-    if (view === "integrations") url.searchParams.set("tab", "mcp");
+    if (view === "integrations") url.searchParams.set("tab", integrationsTab);
   }
   if (creditAccountId.trim()) url.searchParams.set("x_credit_account_id", creditAccountId.trim());
   if (slug.trim()) url.searchParams.set("x_slug", slug.trim());

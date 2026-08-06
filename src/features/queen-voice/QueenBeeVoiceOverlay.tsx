@@ -689,18 +689,26 @@ export function QueenBeeVoiceOverlay({
   // them. Frames stream into whichever realtime session is active.
   const cameraCapable = realtimeMode || geminiLiveMode;
   const activeSendVideoFrame = geminiLiveMode ? geminiLive.sendVideoFrame : realtime.sendVideoFrame;
-  const camera = useQueenCamera(
+  const {
+    active: cameraActive,
+    error: cameraError,
+    videoRef: cameraVideoRef,
+    stop: cameraStop,
+    toggle: cameraToggle,
+  } = useQueenCamera(
     React.useCallback((frame: string) => { activeSendVideoFrame?.(frame); }, [activeSendVideoFrame]),
     geminiLiveMode ? 1000 : 2500,
   );
-  const cameraStop = camera.stop;
-  const cameraActive = camera.active;
   React.useEffect(() => {
     if ((!voiceSessionOpen || !cameraCapable) && cameraActive) cameraStop();
   }, [voiceSessionOpen, cameraCapable, cameraActive, cameraStop]);
   const lastVoiceFailureRef = React.useRef("");
   React.useEffect(() => {
-    const message = voiceState.error || (voiceModeForOpen === "pipeline" ? pipeline.voiceNotice : "");
+    const message = voiceState.error || (
+      voiceModeForOpen === "pipeline" && pipeline.voiceNoticeKind === "error"
+        ? pipeline.voiceNotice
+        : ""
+    );
     if (!open || !message) {
       lastVoiceFailureRef.current = "";
       return;
@@ -712,7 +720,7 @@ export function QueenBeeVoiceOverlay({
       agentRole: "queen",
       message,
     });
-  }, [onVoiceFailure, open, pipeline.voiceNotice, queenName, voiceModeForOpen, voiceState.error]);
+  }, [onVoiceFailure, open, pipeline.voiceNotice, pipeline.voiceNoticeKind, queenName, voiceModeForOpen, voiceState.error]);
   const voiceThinking = open && voiceState.phase === "thinking";
 
   const { upsertTurn: chatUpsertTurn, removeTurn: chatRemoveTurn } = chat;
@@ -960,7 +968,7 @@ export function QueenBeeVoiceOverlay({
               // Preview stays mounted (visibility toggled) so the ref is bound
               // before getUserMedia resolves and sets srcObject.
               <video
-                ref={camera.videoRef}
+                ref={cameraVideoRef}
                 autoPlay
                 muted
                 playsInline
@@ -994,9 +1002,19 @@ export function QueenBeeVoiceOverlay({
               <p className={styles.errorText}>{voiceState.error}</p>
             ) : null}
             {voiceModeForOpen === "pipeline" && pipeline.voiceNotice ? (
-              // Voice continuity: her selected local voice is down, replies
-              // are text-only until it recovers - keep that visible.
-              <p className={styles.voiceNotice}>{pipeline.voiceNotice}</p>
+              <p
+                className={`${styles.voiceNotice} ${
+                  pipeline.voiceNoticeKind === "loading"
+                    ? styles.voiceNoticeLoading
+                    : pipeline.voiceNoticeKind === "ready"
+                      ? styles.voiceNoticeReady
+                      : ""
+                }`}
+                role="status"
+                aria-live="polite"
+              >
+                {pipeline.voiceNotice}
+              </p>
             ) : null}
             {voiceModeForOpen === "realtime" ? (
               <button
@@ -1024,10 +1042,10 @@ export function QueenBeeVoiceOverlay({
               <button
                 type="button"
                 className={`${styles.controlButton} ${cameraActive ? styles.controlButtonActive : ""}`}
-                onClick={camera.toggle}
+                onClick={cameraToggle}
                 aria-label={cameraActive ? "Turn camera off" : "Turn camera on"}
                 aria-pressed={cameraActive}
-                title={camera.error || (cameraActive ? "Camera on — she can see what you point at" : `Show the camera to ${queenName}`)}
+                title={cameraError || (cameraActive ? "Camera on — she can see what you point at" : `Show the camera to ${queenName}`)}
               >
                 {cameraActive ? <Camera size={14} aria-hidden="true" /> : <CameraOff size={14} aria-hidden="true" />}
                 Camera

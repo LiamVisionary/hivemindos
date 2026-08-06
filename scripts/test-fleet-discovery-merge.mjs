@@ -47,6 +47,97 @@ compileIntoContext(helperSubset, helperContext, "dashboard-display-helpers.tsx")
 const { mergeDiscoveredMachines, machineNetworkIssue, readyTailnetSelfShadowBases, isTailnetSelfShadowGroup } =
   helperContext.__fleetMerge;
 
+const tailscaleStatusSource = readFileSync(
+  new URL("../src/lib/native/tailscale-status.ts", import.meta.url),
+  "utf8",
+).replace(/\bexport\s+/g, "");
+const tailscaleStatusContext = vm.createContext({});
+compileIntoContext(
+  `${tailscaleStatusSource}\n;globalThis.__tailscaleStatus = { tailscaleAttentionIssueKey, tailscaleStatusPresentation, tailscaleStatusRequiresAttention, shouldClearTailscaleAttentionDismissal, shouldShowTailscaleAttention };`,
+  tailscaleStatusContext,
+  "tailscale-status.ts",
+);
+const {
+  tailscaleAttentionIssueKey,
+  tailscaleStatusPresentation,
+  tailscaleStatusRequiresAttention,
+  shouldClearTailscaleAttentionDismissal,
+  shouldShowTailscaleAttention,
+} = tailscaleStatusContext.__tailscaleStatus;
+
+assert.deepEqual(
+  JSON.parse(JSON.stringify(tailscaleStatusPresentation({
+    ok: false,
+    error: "Tailscale LocalAPI unavailable",
+    tailnetHealth: {
+      state: "status-unavailable",
+      detail: "Tailscale status was not available.",
+    },
+  }))),
+  {
+    label: "Tailscale needs attention",
+    detail: "Tailscale did not respond. HivemindOS is continuing locally; restart or reconnect Tailscale to restore Fleet, sync, and phone access.",
+    requiresAttention: true,
+  },
+  "an unavailable optional Tailnet must produce an actionable, non-blocking status",
+);
+
+const unavailableStatus = "Tailscale needs attention. Tailscale did not respond.";
+const stoppedStatus = "Tailscale needs attention. Tailscale is stopped.";
+const unavailableIssueKey = tailscaleAttentionIssueKey(unavailableStatus);
+assert.equal(unavailableIssueKey, unavailableStatus);
+assert.equal(tailscaleStatusRequiresAttention(unavailableStatus), true);
+assert.equal(
+  shouldShowTailscaleAttention(unavailableStatus, ""),
+  true,
+  "an unacknowledged Tailscale problem must show the global warning",
+);
+assert.equal(
+  shouldShowTailscaleAttention(unavailableStatus, unavailableIssueKey),
+  false,
+  "dismissing a Tailscale problem must hide that same problem",
+);
+assert.equal(
+  shouldShowTailscaleAttention(stoppedStatus, unavailableIssueKey),
+  true,
+  "a changed Tailscale problem must reappear after an earlier warning was dismissed",
+);
+assert.equal(
+  shouldClearTailscaleAttentionDismissal("Checking Tailnet...", unavailableIssueKey),
+  false,
+  "startup status must not erase a remembered acknowledgement before health resolves",
+);
+assert.equal(
+  shouldClearTailscaleAttentionDismissal("Tailscale Running", unavailableIssueKey),
+  true,
+  "a recovered Tailnet must clear the acknowledgement so the same problem can reappear later",
+);
+
+const tailscaleBannerSource = readFileSync(
+  new URL("../src/features/dashboard/TailscaleAttentionBanner.tsx", import.meta.url),
+  "utf8",
+);
+assert.match(
+  tailscaleBannerSource,
+  /onRetry:\s*\(\)\s*=>\s*(?:void\s*\|\s*)?Promise<void>/,
+  "the global Tailscale warning must expose an explicit retry action",
+);
+assert.match(
+  tailscaleBannerSource,
+  /aria-label="Dismiss Tailscale warning"/,
+  "the global Tailscale warning must expose an accessible dismiss action",
+);
+
+const dashboardAppSource = readFileSync(
+  new URL("../src/features/dashboard/DashboardApp.tsx", import.meta.url),
+  "utf8",
+);
+assert.match(
+  dashboardAppSource,
+  /enabled:\s*hydrated,[\s\S]*?intervalMs:\s*tailscaleStatusRequiresAttention\(tailscaleStatus\)\s*\?\s*30_000/,
+  "an active Tailscale warning must retry automatically while the dashboard is visible",
+);
+
 function readyUbuntuMachine() {
   return {
     device: {

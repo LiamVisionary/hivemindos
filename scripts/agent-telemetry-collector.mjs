@@ -1756,6 +1756,7 @@ async function handleVeniceX402Proxy(request, response, pathname, search) {
 const HERMES_GATEWAY_PROVIDERS = {
   venice: { name: "Venice AI", baseUrl: "https://api.venice.ai/api/v1", keyEnv: "VENICE_API_KEY", models: ["llama-3.3-70b"] },
   bankr: { name: "Bankr LLM", baseUrl: "https://llm.bankr.bot/v1", keyEnv: "BANKR_LLM_KEY", models: [] },
+  sie: { name: "SIE", baseUrl: "http://127.0.0.1:8080/v1", keyEnv: "", models: [] },
 };
 
 function hermesProvidersBlock(provider, model, agentConfig) {
@@ -1766,12 +1767,18 @@ function hermesProvidersBlock(provider, model, agentConfig) {
   // Venice x402 wallet mode: point Hermes at the local signing proxy (which
   // injects the SIWX header) instead of api.venice.ai, and send no bearer key.
   if (provider === "venice") {
-    const venice = agentConfig && typeof agentConfig === "object" ? agentConfig : {};
+    const config = agentConfig && typeof agentConfig === "object" ? agentConfig : {};
+    const venice = config.venice && typeof config.venice === "object" ? config.venice : config;
     const walletVaultId = String(venice.walletVaultId || "").trim();
     if (walletVaultId && venice.authMode !== "api-key") {
       baseUrl = `http://127.0.0.1:${port}/venice-x402/${encodeURIComponent(walletVaultId)}`;
       keyEnv = "";
     }
+  }
+  if (provider === "sie") {
+    const config = agentConfig && typeof agentConfig === "object" ? agentConfig : {};
+    const configuredBase = String(config.gatewayUrl || "").trim().replace(/\/+$/, "").replace(/\/v1$/, "");
+    if (configuredBase) baseUrl = `${configuredBase}/v1`;
   }
   if (!baseUrl) return [];
   const models = Array.from(new Set([model, ...gateway.models].filter(Boolean)));
@@ -1830,7 +1837,7 @@ async function createHermesProfileAgent(input) {
       // Gateway providers (Venice, Bankr) need an inline definition; profiles
       // don't inherit the root config's providers. Venice wallet mode points
       // at the local x402 signing proxy.
-      ...hermesProvidersBlock(provider, model, input.venice),
+      ...hermesProvidersBlock(provider, model, input),
       "image_gen:",
       "  provider: openai-codex",
       "  model: gpt-image-2-medium",
@@ -3604,7 +3611,7 @@ async function hermesIntegrationStatus(agent = {}) {
     sanitizeLocalDataDir(agent.localDataDir) || defaultHermesDir,
   );
   const diagnostics = [];
-  const [version, tools, config, modelSelection] = await Promise.all([
+  const [version, tools, config, modelSelection, sieStatus] = await Promise.all([
     runHermes(["--version"]).catch((error) => {
       diagnostics.push(
         error instanceof Error ? error.message : "Hermes version check failed.",
@@ -3628,7 +3635,37 @@ async function hermesIntegrationStatus(agent = {}) {
         );
         return undefined;
       }),
+    String(agent.provider || "") === "sie"
+      ? readSieStatus(agent)
+      : Promise.resolve(undefined),
   ]);
+  if (sieStatus?.error) diagnostics.push(`SIE model discovery unavailable: ${sieStatus.error}`);
+  if (sieStatus?.healthError) diagnostics.push(`SIE health telemetry unavailable: ${sieStatus.healthError}`);
+  const effectiveModelSelection = sieStatus
+    ? (() => {
+        const providers = [...(modelSelection?.providers || [])];
+        const models = sieStatus.models.filter((model) => model.chatCompatible).map((model) => ({
+          id: model.key,
+          name: model.displayName,
+          subtitle: model.state === "loaded" ? "Warm" : model.state === "loading" ? "Warming" : model.state === "failed" ? "Failed" : "Lazy",
+          group: model.tasks.join(" · "),
+          badge: "SIE",
+        }));
+        const providerEntry = {
+          slug: "sie",
+          name: "SIE",
+          models,
+          totalModels: models.length,
+          isCurrent: true,
+          isUserDefined: true,
+          source: `${sieStatus.baseUrl}/v1/models`,
+        };
+        const existingIndex = providers.findIndex((provider) => provider.slug === "sie");
+        if (existingIndex >= 0) providers[existingIndex] = { ...providers[existingIndex], ...providerEntry };
+        else providers.push(providerEntry);
+        return { provider: "sie", model: String(agent.model || "").trim() || models[0]?.id || "", providers };
+      })()
+    : modelSelection;
   const toolEnabled = (name) =>
     new RegExp(`✓\\s+enabled\\s+${escapeRegExp(name)}\\b`).test(tools);
   const codexConfigured =
@@ -3658,13 +3695,14 @@ async function hermesIntegrationStatus(agent = {}) {
       setup: true,
       modelSelection: true,
     },
-    modelSelection,
+    modelSelection: effectiveModelSelection,
+    providerStatus: sieStatus ? { sie: sieStatus } : undefined,
     integrations: {
       modelSelection: {
         supported: true,
-        enabled: Boolean(modelSelection?.providers?.length),
-        detail: modelSelection?.providers?.length
-          ? `Hermes reported ${modelSelection.providers.length} configured provider${modelSelection.providers.length === 1 ? "" : "s"}.`
+        enabled: Boolean(effectiveModelSelection?.providers?.length),
+        detail: effectiveModelSelection?.providers?.length
+          ? `Hermes reported ${effectiveModelSelection.providers.length} configured provider${effectiveModelSelection.providers.length === 1 ? "" : "s"}.`
           : "Hermes did not report any configured model providers.",
       },
       sessionSearch: {
@@ -4002,6 +4040,7 @@ function localOpenAiBase(agent = {}) {
 function localOpenAiProviderName(agent = {}) {
   const provider = String(agent.provider || "openai-compatible").trim();
   if (provider === "lm-studio") return "Local";
+  if (provider === "sie") return "SIE";
   if (provider === "ollama") return "Ollama";
   if (provider === "vllm") return "vLLM";
   if (provider === "llamacpp") return "llama.cpp";
@@ -4539,6 +4578,132 @@ async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 8_000) {
   }
 }
 
+const SIE_MODEL_STATES = new Set(["available", "loading", "loaded", "unloading", "failed"]);
+const SIE_EMBEDDING_OUTPUTS = new Set(["dense", "sparse", "multivector", "embedding", "embeddings", "vector"]);
+const SIE_SCORE_OUTPUTS = new Set(["score", "scores", "rank", "ranking"]);
+const SIE_EXTRACT_OUTPUTS = new Set(["entity", "entities", "relation", "relations", "class", "classes", "object", "objects", "bbox", "boxes", "markdown"]);
+
+function normalizeSieModels(payload = {}) {
+  const nativeModels = Array.isArray(payload) ? payload : Array.isArray(payload.models) ? payload.models : [];
+  const models = nativeModels.map((raw) => {
+    const key = String(raw?.name || raw?.id || "").trim();
+    if (!key) return null;
+    const inputs = Array.isArray(raw.inputs) ? raw.inputs.map(String).filter(Boolean) : [];
+    const outputs = Array.isArray(raw.outputs) ? raw.outputs.map(String).filter(Boolean) : [];
+    const capabilities = raw.capabilities && typeof raw.capabilities === "object" ? raw.capabilities : undefined;
+    const tasks = new Set();
+    if (capabilities) tasks.add("chat");
+    if (outputs.some((output) => SIE_EMBEDDING_OUTPUTS.has(output.toLowerCase()))) tasks.add("embedding");
+    if (outputs.some((output) => SIE_SCORE_OUTPUTS.has(output.toLowerCase()))) tasks.add("rerank");
+    if (outputs.some((output) => SIE_EXTRACT_OUTPUTS.has(output.toLowerCase()))) tasks.add("extract");
+    if (inputs.some((input) => input.toLowerCase() === "image")) tasks.add("vision");
+    if (inputs.some((input) => ["audio", "speech"].includes(input.toLowerCase()))) tasks.add("audio");
+    if (!tasks.size && outputs.some((output) => output.toLowerCase() === "text")) tasks.add("text");
+    if (!tasks.size) tasks.add("inference");
+    const rawState = String(raw.state || "").toLowerCase();
+    const state = SIE_MODEL_STATES.has(rawState) ? rawState : raw.loaded ? "loaded" : "available";
+    const lastError = typeof raw.last_error === "string"
+      ? raw.last_error
+      : [raw.last_error?.code, raw.last_error?.message].filter(Boolean).join(" · ");
+    const taskList = [...tasks];
+    const chatCompatible = taskList.includes("chat");
+    const warmKind = chatCompatible ? "chat" : taskList.includes("embedding") ? "embedding" : undefined;
+    return {
+      key,
+      displayName: key,
+      type: taskList[0],
+      state,
+      loaded: state === "loaded" || Boolean(raw.loaded),
+      inputs,
+      outputs,
+      tasks: taskList,
+      dims: raw.dims && typeof raw.dims === "object" ? raw.dims : undefined,
+      maxContextLength: Number(raw.max_sequence_length || 0) || undefined,
+      revision: raw.revision ?? null,
+      profiles: Array.isArray(raw.profiles) ? raw.profiles.map(String) : raw.profiles && typeof raw.profiles === "object" ? Object.keys(raw.profiles) : [],
+      capabilities: capabilities ? {
+        grammar: Array.isArray(capabilities.grammar) ? capabilities.grammar : [],
+        tools: Boolean(capabilities.tools),
+        loraAdapters: Array.isArray(capabilities.lora_adapters) ? capabilities.lora_adapters : [],
+        profileLoraAdapters: capabilities.profile_lora_adapters || {},
+        code: Boolean(capabilities.code),
+        sql: Boolean(capabilities.sql),
+        guard: Boolean(capabilities.guard),
+      } : undefined,
+      lastError: lastError || undefined,
+      canWarm: Boolean(warmKind) && state !== "loading" && state !== "unloading",
+      warmKind,
+      chatCompatible,
+    };
+  }).filter(Boolean);
+  const known = new Set(models.map((model) => model.key));
+  for (const entry of Array.isArray(payload?.data) ? payload.data : []) {
+    const key = String(entry?.id || "").trim();
+    if (!key || known.has(key)) continue;
+    models.push({ key, displayName: key, type: "inference", state: "available", loaded: false, inputs: [], outputs: [], tasks: ["inference"], profiles: [], canWarm: false, chatCompatible: false });
+  }
+  return models.sort((left, right) => left.displayName.localeCompare(right.displayName));
+}
+
+function normalizeSieHealth(payload = {}) {
+  const workers = (Array.isArray(payload.workers) ? payload.workers : []).map((raw) => ({
+    name: String(raw?.name || raw?.url || "").trim(),
+    url: String(raw?.url || "").trim() || undefined,
+    gpu: String(raw?.gpu || "").trim() || undefined,
+    gpuCount: Number(raw?.gpu_count || 0),
+    readyGpuSlots: Number(raw?.ready_gpu_slots || 0),
+    healthy: raw?.healthy !== false,
+    queueDepth: Number(raw?.queue_depth || 0),
+    pendingCost: Number(raw?.pending_cost || 0),
+    inflightBatches: Number(raw?.inflight_batches || 0),
+    loadedModels: Array.isArray(raw?.loaded_models) ? raw.loaded_models.map(String) : [],
+    memoryUsedBytes: Number(raw?.memory_used_bytes || 0),
+    memoryTotalBytes: Number(raw?.memory_total_bytes || 0),
+    bundle: String(raw?.bundle || "").trim() || undefined,
+  })).filter((worker) => worker.name);
+  const cluster = payload.cluster && typeof payload.cluster === "object" ? payload.cluster : {};
+  return {
+    workers,
+    cluster: {
+      status: String(payload.status || "").trim() || undefined,
+      type: String(payload.type || "").trim() || undefined,
+      workerCount: Number(cluster.worker_count ?? workers.filter((worker) => worker.healthy).length),
+      gpuCount: Number(cluster.gpu_count ?? workers.reduce((total, worker) => total + worker.gpuCount, 0)),
+      modelsLoaded: Number(cluster.models_loaded ?? new Set(workers.flatMap((worker) => worker.loadedModels)).size),
+      totalQps: Number(cluster.total_qps || 0),
+      configuredGpuTypes: Array.isArray(payload.configured_gpu_types) ? payload.configured_gpu_types.map(String) : [],
+      liveGpuTypes: Array.isArray(payload.live_gpu_types) ? payload.live_gpu_types.map(String) : [],
+    },
+  };
+}
+
+async function readSieStatus(agent = {}) {
+  const baseUrl = localOpenAiBase(agent).replace(/\/v1$/, "");
+  const [modelsResult, healthResult] = await Promise.allSettled([
+    fetchJsonWithTimeout(`${baseUrl}/v1/models`, { headers: localOpenAiHeaders(agent) }),
+    fetchJsonWithTimeout(`${baseUrl}/health`, { headers: localOpenAiHeaders(agent) }),
+  ]);
+  const health = healthResult.status === "fulfilled" ? normalizeSieHealth(healthResult.value) : normalizeSieHealth();
+  return {
+    baseUrl,
+    models: modelsResult.status === "fulfilled" ? normalizeSieModels(modelsResult.value) : [],
+    ...health,
+    error: modelsResult.status === "rejected" ? modelsResult.reason instanceof Error ? modelsResult.reason.message : "SIE model discovery failed." : undefined,
+    healthError: healthResult.status === "rejected" ? healthResult.reason instanceof Error ? healthResult.reason.message : "SIE health telemetry failed." : undefined,
+    checkedAt: new Date().toISOString(),
+  };
+}
+
+function sieWarmRequest(model) {
+  if (model?.warmKind === "chat") {
+    return { path: "/v1/chat/completions", body: { model: model.key, messages: [{ role: "user", content: "Reply with OK." }], max_tokens: 1, temperature: 0 } };
+  }
+  if (model?.warmKind === "embedding") {
+    return { path: "/v1/embeddings", body: { model: model.key, input: "warmup" } };
+  }
+  return null;
+}
+
 function normalizeLmStudioInventory(payload = {}) {
   const models = Array.isArray(payload)
     ? payload
@@ -4846,6 +5011,7 @@ async function localOpenAiIntegrationStatus(agent = {}) {
   const baseUrl = localOpenAiBase(agent);
   const diagnostics = [];
   let lmStudioModels = [];
+  let sieStatus;
   let localServers = [];
   let openAiModels = [];
   let inventoryError = "";
@@ -4880,45 +5046,51 @@ async function localOpenAiIntegrationStatus(agent = {}) {
         );
       }
     }
+  } else if (provider === "sie") {
+    sieStatus = await readSieStatus(agent);
+    if (sieStatus.error) diagnostics.push(`${providerName} model discovery unavailable: ${sieStatus.error}`);
+    if (sieStatus.healthError) diagnostics.push(`${providerName} health telemetry unavailable: ${sieStatus.healthError}`);
   }
-  try {
-    localServers = await discoverLocalOpenAiServers(agent, {
-      baseUrlForAgent: localOpenAiBase,
-      fetchJsonWithTimeout,
-    });
-    const known = new Set(lmStudioModels.map((model) => model.key));
-    for (const server of localServers) {
-      for (const serverModel of server.models || []) {
-        const id = String(serverModel.id || "").trim();
-        if (!id || known.has(id) || serverModel.type === "embedding") continue;
-        known.add(id);
-        lmStudioModels.push({
-          key: id,
-          displayName: serverModel.displayName || id,
-          type: serverModel.type || "llm",
-          loaded: true,
-          loadedInstanceIds: [id],
-          paramsString: server.label,
-          format: "OpenAI",
-          remote: false,
-          source: "openai-server",
-          sourceLabel: server.label,
-          serverId: server.id,
-          baseUrl: server.baseUrl,
-          chatPath: server.chatPath,
-          statusPath: server.statusPath,
-          canLoad: false,
-          canUnload: false,
-        });
+  if (provider === "lm-studio") {
+    try {
+      localServers = await discoverLocalOpenAiServers(agent, {
+        baseUrlForAgent: localOpenAiBase,
+        fetchJsonWithTimeout,
+      });
+      const known = new Set(lmStudioModels.map((model) => model.key));
+      for (const server of localServers) {
+        for (const serverModel of server.models || []) {
+          const id = String(serverModel.id || "").trim();
+          if (!id || known.has(id) || serverModel.type === "embedding") continue;
+          known.add(id);
+          lmStudioModels.push({
+            key: id,
+            displayName: serverModel.displayName || id,
+            type: serverModel.type || "llm",
+            loaded: true,
+            loadedInstanceIds: [id],
+            paramsString: server.label,
+            format: "OpenAI",
+            remote: false,
+            source: "openai-server",
+            sourceLabel: server.label,
+            serverId: server.id,
+            baseUrl: server.baseUrl,
+            chatPath: server.chatPath,
+            statusPath: server.statusPath,
+            canLoad: false,
+            canUnload: false,
+          });
+        }
       }
+    } catch (error) {
+      if (!inventoryError)
+        diagnostics.push(
+          `Local server discovery unavailable: ${error instanceof Error ? error.message : "Server discovery failed."}`,
+        );
     }
-  } catch (error) {
-    if (!inventoryError)
-      diagnostics.push(
-        `Local server discovery unavailable: ${error instanceof Error ? error.message : "Server discovery failed."}`,
-      );
   }
-  if (!lmStudioModels.length) {
+  if (provider !== "sie" && !lmStudioModels.length) {
     try {
       const statusPath = String(agent.statusPath || "/v1/models");
       const payload = await fetchJsonWithTimeout(
@@ -4940,7 +5112,16 @@ async function localOpenAiIntegrationStatus(agent = {}) {
     }
   }
   const llmModels = lmStudioModels.filter((model) => model.type === "llm");
-  const modelOptions = llmModels.length
+  const sieChatModels = (sieStatus?.models || []).filter((model) => model.chatCompatible);
+  const modelOptions = provider === "sie"
+    ? sieChatModels.map((model) => ({
+        id: model.key,
+        name: model.displayName,
+        subtitle: model.state === "loaded" ? "Warm" : model.state === "loading" ? "Warming" : model.state === "failed" ? "Failed" : "Lazy",
+        group: model.tasks.join(" · "),
+        badge: "SIE",
+      }))
+    : llmModels.length
     ? llmModels.map((model) => ({
         id: model.key,
         name: model.displayName,
@@ -4978,6 +5159,8 @@ async function localOpenAiIntegrationStatus(agent = {}) {
           source:
             provider === "lm-studio"
               ? inventorySource || `${baseUrl}/api/v1/models`
+              : provider === "sie"
+                ? `${baseUrl}/v1/models`
               : `${baseUrl}${agent.statusPath || "/v1/models"}`,
         },
       ],
@@ -4995,6 +5178,8 @@ async function localOpenAiIntegrationStatus(agent = {}) {
               checkedAt: new Date().toISOString(),
             },
           }
+        : provider === "sie" && sieStatus
+          ? { sie: sieStatus }
         : undefined,
     integrations: {
       modelSelection: {
@@ -5010,7 +5195,34 @@ async function localOpenAiIntegrationStatus(agent = {}) {
 }
 
 async function runLocalOpenAiIntegrationAction(action, input = {}, agent = {}) {
-  if (String(agent.provider || "") !== "lm-studio")
+  const provider = String(agent.provider || "");
+  if (provider === "sie") {
+    if (action !== "warm-model" && action !== "smoke-test-local-model") {
+      return { ok: false, error: `Unsupported SIE action: ${action}` };
+    }
+    const modelKey = String(input.model || "").trim();
+    if (!modelKey) return { ok: false, error: "Model is required." };
+    const status = await readSieStatus(agent);
+    if (status.error) return { ok: false, error: status.error };
+    const model = status.models.find((entry) => entry.key === modelKey);
+    if (!model) return { ok: false, error: `${modelKey} is not present in the SIE model inventory.` };
+    const warmRequest = sieWarmRequest(model);
+    if (!warmRequest) {
+      return { ok: false, error: `${modelKey} cannot be warmed from this chat surface. Its ${model.tasks.join("/")} task loads on the first task-specific SIE request.` };
+    }
+    await fetchJsonWithTimeout(`${status.baseUrl}${warmRequest.path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...localOpenAiHeaders(agent) },
+      body: JSON.stringify(warmRequest.body),
+    }, 240_000);
+    return {
+      ok: true,
+      message: action === "smoke-test-local-model"
+        ? `${modelKey} answered the SIE smoke test.`
+        : `${modelKey} is warm on SIE. SIE will keep or evict it according to GPU demand.`,
+    };
+  }
+  if (provider !== "lm-studio")
     return {
       ok: false,
       error: `${localOpenAiProviderName(agent)} does not expose local model controls here yet.`,
@@ -5096,6 +5308,11 @@ async function runHermesIntegrationAction(action, input = {}, agent = {}) {
       pythonPath: await resolveHermesPython(),
       provider,
       model,
+      providerConfig: provider === "sie" ? {
+        name: "SIE",
+        baseUrl: `${localOpenAiBase(agent).replace(/\/v1$/, "")}/v1`,
+        keyEnv: "",
+      } : undefined,
       execFileAsync,
     });
     const profile = hermesProfileName(hermesHome, defaultHermesDir);
@@ -9157,6 +9374,25 @@ async function handleCollectorRequest(request, response) {
         );
         return;
       }
+      const localModelProvider = String(body.agent?.provider || "");
+      const localModelAction = new Set([
+        "load-model",
+        "unload-model",
+        "download-model",
+        "cancel-download",
+        "install-local-runtime",
+        "start-local-runtime",
+        "smoke-test-local-model",
+        "warm-model",
+      ]).has(String(body.action || ""));
+      if (body.action && localModelAction && (localModelProvider === "lm-studio" || localModelProvider === "sie")) {
+        jsonResponse(
+          response,
+          200,
+          await runLocalOpenAiIntegrationAction(body.action, body.input || {}, body.agent || {}),
+        );
+        return;
+      }
       if (runtimeName === "openclaw") {
         if (body.action) {
           jsonResponse(
@@ -9623,15 +9859,7 @@ async function advertiseHubMdns() {
     let magicDnsSuffix = "";
     let magicDnsName = ""; // the full stable tailnet name (Self.DNSName)
     try {
-      const { stdout } = await promisify(execFile)(
-        "tailscale",
-        ["status", "--json"],
-        {
-          timeout: 5000,
-          maxBuffer: 1_500_000,
-        },
-      );
-      const st = JSON.parse(stdout);
+      const st = await tailscaleStatusJson();
       magicDnsSuffix = st?.MagicDNSSuffix || "";
       magicDnsName = (st?.Self?.DNSName || "").replace(/\.$/, "");
     } catch {

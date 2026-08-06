@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowUpRight, Bell, CalendarClock, Check, CheckCheck, Ch
 
 import { ApprovalReviewCard } from "@/features/approvals/ApprovalReviewCard";
 import { useSpendApprovals } from "@/features/approvals/use-spend-approvals";
-import { MARKETPLACE_NOTE_MODE, marketplaceDecisionToView } from "@/features/dashboard/views/marketplace/marketplace-approval-model";
+import { MARKETPLACE_NOTE_MODE, marketplaceDecisionActionCopy, marketplaceDecisionToView } from "@/features/dashboard/views/marketplace/marketplace-approval-model";
 import { useMarketplaceDecisions } from "@/features/dashboard/views/marketplace/use-marketplace-decisions";
 import type { SpendApprovalView } from "@/features/approvals/spend-approval-model";
 import notificationStyles from "@/app/notifications.module.css";
@@ -746,9 +746,14 @@ export function NotificationsPanel({
                     key={decision.id}
                     approval={marketplaceDecisionToView(decision)}
                     noteMode={MARKETPLACE_NOTE_MODE}
+                    actionCopy={marketplaceDecisionActionCopy(decision)}
                     busy={marketplaceDecisions.busyId === decision.id}
                     error={marketplaceDecisions.error || undefined}
+                    onIgnore={async () => {
+                      await marketplaceDecisions.ignore(decision.id);
+                    }}
                     onDecide={(verdict, note, makeStanding) => marketplaceDecisions.decide(decision.id, verdict, note, Boolean(makeStanding))}
+                    onOpenDetails={onNavigateTarget ? () => onNavigateTarget({ view: "marketplace" }) : undefined}
                   />
                 ))}
                 {spendApprovals.approvals.map((approval) => (

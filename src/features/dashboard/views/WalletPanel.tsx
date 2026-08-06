@@ -1263,8 +1263,8 @@ function WalletPanelComponent(props: any) {
   }, []);
 
   return (
-    <section aria-label="Wallets" style={{ position: "fixed", inset: 0, zIndex: 90, background: "#0c0d11" }}>
-      <WalletsView runtimeData={runtimeData} actions={walletActions} onNavigate={navigateFromDropInShelf} />
+    <section aria-label="Wallets" style={{ position: "relative", height: "100%", minHeight: 0, background: "var(--bg)" }}>
+      <WalletsView runtimeData={runtimeData} actions={walletActions} onNavigate={navigateFromDropInShelf} showAppNavigation={false} />
       {llmFundingAgentId ? (
         <WalletSelectModal
           pickables={llmFundingPickables}

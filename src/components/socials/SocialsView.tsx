@@ -1,132 +1,195 @@
 "use client";
 
-import { RefreshCw, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, RefreshCw, Share2 } from "lucide-react";
 
 import "./socials.css";
 
-import { AccountRail } from "@/components/socials/AccountRail";
-import { AwakeHoursCard } from "@/components/socials/AwakeHoursCard";
 import { ConnectAccountModal } from "@/components/socials/ConnectAccountModal";
-import { ContextSourcesCard } from "@/components/socials/ContextSourcesCard";
-import { DraftingAutomationCard } from "@/components/socials/DraftingAutomationCard";
-import { EngagementDiscoveryCard } from "@/components/socials/EngagementDiscoveryCard";
-import { useSocialsDesk } from "@/components/socials/socials-context";
-import { SocialsDeskSkeleton, SocialsSpinner } from "@/components/socials/skeletons";
-import { VoiceCard } from "@/components/socials/VoiceCard";
+import { SocialAnalyticsDashboard } from "@/components/socials/SocialAnalyticsDashboard";
 import { SocialQueueWorkspace } from "@/components/socials/SocialQueueWorkspace";
-import { SOCIAL_CAPABILITIES } from "@/lib/services/socials/socials-types";
-import { confirmUserAction } from "@/lib/utils/confirm-user-action";
+import { SocialScheduleBoard } from "@/components/socials/SocialScheduleBoard";
+import { SocialSettingsWorkspace } from "@/components/socials/SocialSettingsWorkspace";
+import { useSocialsDesk, type SocialsAccountView } from "@/components/socials/socials-context";
+import { SocialsDeskSkeleton, SocialsSpinner } from "@/components/socials/skeletons";
 
-/** Pure presentational Socials desk (Trade triad pattern; data via useSocialsDesk). */
+type SocialsRouteTab = "review" | "scheduled" | "analytics" | "settings";
+
+const ROUTE_TABS: Array<{ id: SocialsRouteTab; label: string }> = [
+  { id: "review", label: "Review" },
+  { id: "scheduled", label: "Scheduled" },
+  { id: "analytics", label: "Analytics" },
+  { id: "settings", label: "Settings" },
+];
+
+function platformGlyph(account: SocialsAccountView): string {
+  if (account.platform === "x") return "𝕏";
+  if (account.platform === "telegram") return "TG";
+  if (account.platform === "farcaster") return "FC";
+  if (account.platform === "linkedin") return "in";
+  if (account.platform === "reddit") return "r/";
+  return "fb";
+}
+
+function workerAge(lastWakeAt?: string, lastTickAt?: string): string {
+  const timestamp = Date.parse(lastWakeAt ?? lastTickAt ?? "");
+  if (!Number.isFinite(timestamp)) return "starting";
+  const seconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1_000));
+  if (seconds < 60) return `tick ${seconds}s`;
+  if (seconds < 3_600) return `tick ${Math.floor(seconds / 60)}m`;
+  return `tick ${Math.floor(seconds / 3_600)}h`;
+}
+
+/** The complete Socials command center, adapted from the supplied four-screen redesign. */
 export function SocialsView() {
   const desk = useSocialsDesk();
+  const [tab, setTab] = useState<SocialsRouteTab>("review");
+  const [, setClock] = useState(0);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setClock(Date.now()), 1_000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  const reviewCount = useMemo(
+    () => desk.queueItems.filter((item) => ["draft", "suggested", "failed"].includes(item.state)).length,
+    [desk.queueItems],
+  );
+  const scheduledCount = useMemo(
+    () => desk.queueItems.filter((item) => ["approved", "scheduled", "posting"].includes(item.state)).length,
+    [desk.queueItems],
+  );
+
+  const routeCount = (route: SocialsRouteTab) => {
+    if (route === "review") return reviewCount;
+    if (route === "scheduled") return scheduledCount;
+    return 0;
+  };
+
+  const workerTone = !desk.engine.enabled || desk.engine.disabled
+    ? "off"
+    : desk.engine.running || desk.engine.leaseHeld
+      ? "live"
+      : "warn";
+  const workerLabel = workerTone === "live" ? "Worker live" : workerTone === "warn" ? "Worker waiting" : "Worker paused";
 
   return (
-    <div className="fr-root" data-fr-theme={desk.theme === "light" ? "light" : undefined} style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <div className="fr-scroll" style={{ flex: 1, overflowY: "auto" }}>
-        {desk.loading ? (
-          <SocialsDeskSkeleton />
-        ) : (
-          <div className="sc-wrap">
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-              <div>
-                <div style={{ fontSize: 19, fontWeight: 700, color: "var(--fg)" }}>Socials</div>
-                <div style={{ fontSize: 12.5, color: "var(--fg-3)", marginTop: 2 }}>
-                  Find timely conversations, draft original posts and contextual replies, review, schedule, publish, and measure every connected account. Posting stays approval-gated unless you explicitly opt an account into auto mode.
+    <div className="fr-root sc-shell" data-fr-theme={desk.theme === "light" ? "light" : undefined}>
+      {desk.loading ? (
+        <div className="sc-route-scroll"><SocialsDeskSkeleton /></div>
+      ) : desk.accounts.length === 0 ? (
+        <SocialsEmptyState onConnect={() => desk.setConnectOpen(true)} />
+      ) : (
+        <>
+          <header className="sc-route-header">
+            <div className="sc-route-heading-row">
+              <div className="sc-route-heading">
+                <h1>Socials</h1>
+                <p>Find conversations, draft, review, publish, measure — posting stays approval-gated.</p>
+              </div>
+              <div className="sc-route-actions">
+                <div className="sc-worker-pill" data-tone={workerTone} data-testid="social-queue-engine-status">
+                  <span className="sc-worker-dot" aria-hidden="true" />
+                  <strong>{workerLabel}</strong>
+                  <span>{workerAge(desk.engine.lastWakeAt, desk.engine.lastTickAt)}</span>
                 </div>
+                <button type="button" className="sc-btn sc-refresh-btn" onClick={() => void desk.refresh()} disabled={desk.refreshing}>
+                  {desk.refreshing ? <SocialsSpinner /> : <RefreshCw aria-hidden="true" width={15} />} Refresh
+                </button>
+                <button type="button" className="sc-btn sc-connect-primary" onClick={() => desk.setConnectOpen(true)}>
+                  <Plus aria-hidden="true" width={16} /> Connect account
+                </button>
               </div>
-              <button type="button" className="sc-btn" onClick={() => void desk.refresh()} disabled={desk.refreshing}>
-                {desk.refreshing ? <SocialsSpinner /> : <RefreshCw aria-hidden="true" width={14} height={14} />} Refresh
+            </div>
+
+            <div className="sc-account-strip" role="list" aria-label="Social account scope">
+              <button
+                type="button"
+                className="sc-account-chip sc-acct"
+                data-active={desk.allAccountsSelected}
+                onClick={desk.selectAllAccounts}
+              >
+                <span className="sc-account-glyph">All</span>
+                <span>All accounts</span>
+                <span className="sc-account-count">{Object.values(desk.queueCounts).reduce((total, count) => total + count, 0)}</span>
               </button>
+              {desk.accounts.map((account) => (
+                <button
+                  key={account.id}
+                  type="button"
+                  className="sc-account-chip sc-acct"
+                  data-active={!desk.allAccountsSelected && desk.activeAccountId === account.id}
+                  onClick={() => desk.selectAccount(account.id)}
+                >
+                  <span className="sc-account-glyph">{platformGlyph(account)}</span>
+                  <span>@{account.handle}</span>
+                  <span className="sc-account-status" data-tone={account.probe.ok ? "live" : "warn"} aria-label={account.probe.ok ? "Connected" : "Needs attention"} />
+                  <span className="sc-account-count">{desk.queueCounts[account.id] ?? 0}</span>
+                </button>
+              ))}
             </div>
 
-            {desk.error ? <div className="sc-error">{desk.error}</div> : null}
+            <nav className="sc-route-tabs" aria-label="Socials sections">
+              {ROUTE_TABS.map((route) => {
+                const count = routeCount(route.id);
+                return (
+                  <button
+                    key={route.id}
+                    type="button"
+                    aria-current={tab === route.id ? "page" : undefined}
+                    data-active={tab === route.id}
+                    onClick={() => setTab(route.id)}
+                  >
+                    {route.label}{count > 0 ? <span>{count}</span> : null}
+                  </button>
+                );
+              })}
+            </nav>
+          </header>
 
-            <div className="sc-body">
-              <AccountRail />
-              <div className="sc-col">
-                {desk.activeAccount ? (
-                  <>
-                    <section className="sc-card">
-                      <div className="sc-card-head">
-                        <span className="sc-card-title">
-                          @{desk.activeAccount.handle}
-                          {desk.activeAccount.displayName ? ` · ${desk.activeAccount.displayName}` : ""}
-                        </span>
-                        <span className="sc-mode-badge">
-                          {desk.activeAccount.postingMode === "auto" ? "auto posting (opted in)" : "manual posting"}
-                        </span>
-                      </div>
-                      <div className="sc-probe">
-                        <span className="sc-dot" data-tone={desk.activeAccount.probe.ok ? "live" : "warn"} style={{ marginLeft: 0, marginTop: 5 }} aria-hidden="true" />
-                        <span>{desk.activeAccount.probe.detail}</span>
-                      </div>
-                      <div className="sc-pills" style={{ marginTop: 10 }}>
-                        {SOCIAL_CAPABILITIES.map((capability) => (
-                          <span key={capability} className="sc-pill" data-support={desk.activeAccount!.capabilities[capability]}>
-                            {capability}: {desk.activeAccount!.capabilities[capability]}
-                          </span>
-                        ))}
-                      </div>
-                      <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                        <button
-                          type="button"
-                          className="sc-btn"
-                          onClick={() => {
-                            const account = desk.activeAccount!;
-                            if (account.postingMode === "auto") {
-                              void desk.setPostingMode(account.id, "manual");
-                              return;
-                            }
-                            void confirmUserAction(
-                              `Enable auto mode for @${account.handle}? Agent automations may schedule approved-by-policy posts after a visible five-minute cancellation window, and awake hours still apply.`,
-                            ).then((confirmed) => {
-                              if (confirmed) void desk.setPostingMode(account.id, "auto");
-                            });
-                          }}
-                        >
-                          {desk.activeAccount.postingMode === "auto" ? "Switch to manual mode" : "Enable auto mode"}
-                        </button>
-                        <button
-                          type="button"
-                          className="sc-btn"
-                          data-tone="danger"
-                          onClick={() => {
-                            // In the Tauri shell window.confirm is a Promise — raw truthiness
-                            // would fire the delete unconditionally; confirmUserAction awaits it.
-                            const account = desk.activeAccount!;
-                            void confirmUserAction(`Remove @${account.handle}? Credentials in the shared env are untouched.`).then((confirmed) => {
-                              if (confirmed) void desk.deleteAccount(account.id);
-                            });
-                          }}
-                        >
-                          <Trash2 aria-hidden="true" width={13} height={13} /> Remove account
-                        </button>
-                      </div>
-                    </section>
-
-                    <VoiceCard account={desk.activeAccount} />
-                    <AwakeHoursCard account={desk.activeAccount} />
-                    <ContextSourcesCard account={desk.activeAccount} />
-                    <DraftingAutomationCard account={desk.activeAccount} />
-                    <EngagementDiscoveryCard account={desk.activeAccount} />
-
-                    <SocialQueueWorkspace />
-                  </>
-                ) : (
-                  <section className="sc-card">
-                    <div className="sc-card-title" style={{ marginBottom: 6 }}>No accounts connected yet</div>
-                    <div className="sc-note">
-                      Connect X, Telegram, Farcaster, LinkedIn, or Reddit. Each account gets its own posting voice, awake hours, drafting context, durable queue, history, and analytics.
-                    </div>
-                  </section>
-                )}
-              </div>
-            </div>
+          <div className="sc-route-scroll">
+            {desk.error ? <div className="sc-route-error" role="alert">{desk.error}</div> : null}
+            {tab === "review" ? <SocialQueueWorkspace key={desk.allAccountsSelected ? "all" : desk.activeAccountId} onOpenSettings={() => setTab("settings")} /> : null}
+            {tab === "scheduled" ? <SocialScheduleBoard /> : null}
+            {tab === "analytics" ? <SocialAnalyticsDashboard /> : null}
+            {tab === "settings" ? <SocialSettingsWorkspace /> : null}
           </div>
-        )}
-      </div>
+        </>
+      )}
       <ConnectAccountModal />
     </div>
+  );
+}
+
+function SocialsEmptyState({ onConnect }: { onConnect: () => void }) {
+  return (
+    <section className="sc-empty-route">
+      <div className="sc-empty-glow" aria-hidden="true" />
+      <div className="sc-empty-content">
+        <div className="sc-empty-mark"><Share2 aria-hidden="true" width={52} /></div>
+        <div>
+          <h1>One desk for every account your agents write for</h1>
+          <p>Connect X, Telegram, Farcaster, LinkedIn, Reddit, or Facebook. Each account keeps its own voice, awake hours, drafting context, review queue, and analytics — and nothing publishes until you approve it.</p>
+        </div>
+        <button type="button" className="sc-btn sc-connect-primary" onClick={onConnect}>
+          <Plus aria-hidden="true" width={17} /> Connect your first account
+        </button>
+        <div className="sc-empty-steps">
+          <EmptyStep number="01" title="Connect an account" copy="Use a browser profile, OAuth, API credentials, or the platform's available rail." />
+          <EmptyStep number="02" title="Give it a voice and facts" copy="Bind a soul file and the repos, sites, or folders drafts may draw from." />
+          <EmptyStep number="03" title="Review, then publish" copy="Drafts and reply suggestions land in one queue. You decide what goes live." />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function EmptyStep({ number, title, copy }: { number: string; title: string; copy: string }) {
+  return (
+    <article>
+      <span>{number}</span>
+      <strong>{title}</strong>
+      <p>{copy}</p>
+    </article>
   );
 }

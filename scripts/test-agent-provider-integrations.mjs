@@ -88,6 +88,8 @@ assert.match(rentAHumanService, /action: "rent-human"[\s\S]*path: "\/escrow\/age
 assert.match(rentAHumanService, /sideEffect !== "none"[\s\S]*input\.confirmation !== RENTAHUMAN_ACTION_CONFIRMATION/);
 
 const installableServices = readFileSync("src/lib/services/installable-services.ts", "utf8");
+const installableServicesSecurity = readFileSync("src/lib/services/installable-services-security.ts", "utf8");
+const installableServicesContract = `${installableServices}\n${installableServicesSecurity}`;
 const palmierProInstallable = readFileSync("src/lib/services/palmier-pro-installable.ts", "utf8");
 assert.match(installableServices, /InstallableServiceId = "n8n" \| "listmonk" \| "browser-use" \| "agentic-inbox" \| "mcp-email-server" \| "openhands" \| "aider"/);
 assert.match(installableServices, /uv"[\s\S]*"tool"[\s\S]*"install"[\s\S]*"browser-use\[cli\]"/);
@@ -95,12 +97,12 @@ assert.match(installableServices, /"tool", "install", "openhands", "--python", "
 assert.match(installableServices, /"tool", "install", "aider-chat"/);
 assert.match(installableServices, /"tool", "install", "mcp-email-server"/);
 assert.match(installableServices, /MCP_EMAIL_SERVER_EMAIL_ADDRESS/);
-assert.match(installableServices, /read-only IMAP mode/);
-assert.match(installableServices, /Browser Use doctor passes before starting sessions/);
-assert.match(installableServices, /does not run the upstream curl-to-shell installer/);
-assert.match(installableServices, /never runs browser-use setup or browser-use install silently/);
-assert.match(installableServices, /Latest compatible PyPI release at install time; not pinned by HivemindOS/);
-assert.match(installableServices, /Full permissions can unlock Browser Use cloud tasks/);
+assert.match(installableServicesContract, /read-only IMAP mode/);
+assert.match(installableServicesContract, /Browser Use doctor passes before starting sessions/);
+assert.match(installableServicesContract, /does not run the upstream curl-to-shell installer/);
+assert.match(installableServicesContract, /never runs browser-use setup or browser-use install silently/);
+assert.match(installableServicesContract, /Latest compatible PyPI release at install time; not pinned by HivemindOS/);
+assert.match(installableServicesContract, /Full permissions can unlock Browser Use cloud tasks/);
 assert.match(installableServices, /ANONYMIZED_TELEMETRY: "False"/);
 assert.doesNotMatch(installableServices, /browserUseCommand\(\), \["install"\]/);
 assert.doesNotMatch(installableServices, /browserUseCommand\(\), \["setup"\]/);

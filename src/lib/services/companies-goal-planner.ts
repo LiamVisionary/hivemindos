@@ -222,7 +222,7 @@ export async function llmDecomposeApexGoal(
   opts: { origin?: string; vaultPath?: string; maxTasks?: number; history?: string; completedTitles?: readonly string[]; salesContentContext?: string } = {},
 ): Promise<QueenBeePrdTaskDraft[] | null> {
   if (!company.apexGoal?.title?.trim()) return null;
-  const maxTasks = Math.max(1, Math.min(opts.maxTasks ?? 6, 8));
+  const maxTasks = Math.max(1, Math.min(opts.maxTasks ?? 6, 24));
   const system = systemPrompt(maxTasks);
   const user = userPrompt(company, opts.history, opts.completedTitles, opts.salesContentContext);
 

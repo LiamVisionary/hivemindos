@@ -18,6 +18,7 @@ The provider catalog makes external options retrievable by agents through `/api/
 - Cloudflare Agentic Inbox as one provider backend for routable email-agent Workers.
 - MCP Email Server as an advanced local stdio bridge for existing IMAP and optional SMTP mailboxes.
 - OpenHands and Aider as optional coding runtime adapters.
+- Hivemind Office as an optional local visual editor companion with HivemindOS-owned document inspection, review hashes, confirmation gates, and copy-first writes.
 - Palmier Pro as an installable macOS video editor with a local MCP endpoint for timeline and media workflows.
 - RentAHuman as a REST and MCP provider for real-world human work through profile search, conversations, bounties, service bookings, escrow, and transfers.
 - X API MCP as an official user-account bridge for X search, timelines, bookmarks, trends, news, and Articles.
@@ -98,6 +99,14 @@ Listmonk is not an inbox and does not replace AgentMail, Cloudflare Agentic Inbo
 The Apps & Services view includes Palmier Pro as an installable macOS video editor for agent-assisted timeline work. HivemindOS installs the reviewed GitHub release DMG by downloading the pinned asset, verifying its SHA-256 digest, mounting it read-only, and copying the app bundle into Applications. It does not run a shell installer.
 
 Palmier Pro requires macOS 26 Tahoe on Apple Silicon. When the app is open, it exposes a local MCP endpoint at `http://127.0.0.1:19789/mcp`. Agents should connect to that loopback endpoint only after the user has opened the intended Palmier project and confirmed that timeline or media mutations are in scope.
+
+## Hivemind Office Companion
+
+The Apps & Services view discovers existing Hivemind Office, HermesOffice, and GenOffice desktop bundles on macOS and Windows. HivemindOS does not automatically install HermesOffice: the audited source revision does not provide a signed, immutable binary artifact with a reviewed digest, so the card reports **Install blocked** instead of cloning or building mutable third-party code.
+
+Agents use the existing bundled HivemindOS MCP server rather than an editor-owned model provider. Five tools separate status, inspection, desktop opening, review preparation, and final application. HivemindOS restricts paths to the local home/vault boundary, snapshots full file hashes, defaults to a non-overwriting copy, and requires separate exact confirmations for saving a copy and replacing the original. Replacement creates and verifies a sibling backup first.
+
+See [Hivemind Office Companion](hivemind-office.html) for the supported formats, exact source provenance, review workflow, MCP tool names, conflict behavior, recovery path, and credential boundary.
 
 ## Agent Mailboxes
 

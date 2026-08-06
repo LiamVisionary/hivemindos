@@ -60,6 +60,10 @@ import {
   getQueenOutputAnalyser,
   useQueenVoiceLevelPump,
 } from "@/lib/audio/queen-voice-amplitude";
+import {
+  prewarmQueenLocalTts,
+  type QueenVoiceNoticeKind,
+} from "./local-tts-recovery-client";
 
 export type QueenVoicePhase =
   | "starting"
@@ -128,6 +132,7 @@ export function useQueenBeeVoice(
   // Non-fatal voice status, e.g. "local voice unreachable, replies shown as
   // text" — the session keeps listening while it shows.
   const [voiceNotice, setVoiceNotice] = React.useState("");
+  const [voiceNoticeKind, setVoiceNoticeKind] = React.useState<QueenVoiceNoticeKind | "">("");
   const mutedRef = React.useRef(muted);
   // Read at playback time so the long-lived session effect never goes stale.
   const streamLocalTtsRef = React.useRef(streamLocalTts);
@@ -266,19 +271,6 @@ export function useQueenBeeVoice(
     // (cold model loads measured 5-30s) while the session opens and while the
     // reply is being composed, so speech starts promptly when it's time.
     let lastPrewarmAt = 0;
-    const prewarmLocalTtsEngine = () => {
-      if (!streamLocalTtsRef.current || cancelled) return Promise.resolve();
-      const now = Date.now();
-      if (now - lastPrewarmAt < LOCAL_TTS_PREWARM_INTERVAL_MS) return Promise.resolve();
-      lastPrewarmAt = now;
-      return fetch("/api/queen-bee/voice", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "speak-prewarm" }),
-        cache: "no-store",
-        signal: abort.signal,
-      }).then(() => undefined, () => undefined);
-    };
 
     // Pre-synthesized "On it" clip + voice-outage blip (voice-ack-cues.ts).
     // The clip is fetched after the prewarm lands so a cold local TTS model
@@ -293,19 +285,39 @@ export function useQueenBeeVoice(
 
     // Voice-outage bookkeeping: cue once per outage, clear when speech returns.
     let voiceOutageActive = false;
+    let currentVoiceNoticeKind: QueenVoiceNoticeKind | "" = "";
+    const showVoiceNotice = (message: string, kind: QueenVoiceNoticeKind) => {
+      currentVoiceNoticeKind = kind;
+      setVoiceNotice(message);
+      setVoiceNoticeKind(kind);
+    };
     const noteVoiceOutage = (
-      message = "Her voice server is unreachable, so replies show as text. The voice returns automatically once it's back.",
+      message?: string,
+      kind: QueenVoiceNoticeKind = "loading",
     ) => {
       if (!voiceOutageActive) {
         voiceOutageActive = true;
         cues.playVoiceMutedCue();
       }
-      setVoiceNotice(message);
+      if (!message && currentVoiceNoticeKind === "error") return;
+      showVoiceNotice(message || "Local voice server not loaded, loading now…", kind);
     };
     const clearVoiceOutage = () => {
-      if (!voiceOutageActive) return;
       voiceOutageActive = false;
+      currentVoiceNoticeKind = "";
       setVoiceNotice("");
+      setVoiceNoticeKind("");
+    };
+    const prewarmLocalTtsEngine = () => {
+      if (!streamLocalTtsRef.current || cancelled) return Promise.resolve(false);
+      const now = Date.now();
+      if (now - lastPrewarmAt < LOCAL_TTS_PREWARM_INTERVAL_MS) return Promise.resolve(false);
+      lastPrewarmAt = now;
+      return prewarmQueenLocalTts({
+        signal: abort.signal,
+        onNotice: showVoiceNotice,
+        onHealthy: clearVoiceOutage,
+      });
     };
 
     // Watch the mic for sustained speech while Queen Bee talks; on barge-in,
@@ -631,7 +643,7 @@ export function useQueenBeeVoice(
           }
           if (spoken === "muted") noteVoiceOutage();
           else if (spoken === "local-stream-partial") {
-            noteVoiceOutage("Her voice cut out mid-reply (the TTS stream dropped). The full reply is on screen.");
+            noteVoiceOutage("Her voice cut out mid-reply (the TTS stream dropped). The full reply is on screen.", "error");
           } else clearVoiceOutage();
           startListening();
           return;
@@ -796,7 +808,7 @@ export function useQueenBeeVoice(
           outcomes.includes("local-stream-partial") ||
           outcomes.includes("none")
         ) {
-          noteVoiceOutage("Her voice cut out mid-reply (the TTS stream dropped). The full reply is on screen.");
+          noteVoiceOutage("Her voice cut out mid-reply (the TTS stream dropped). The full reply is on screen.", "error");
         } else if (audible) clearVoiceOutage();
         startListening();
       } catch (turnError) {
@@ -829,7 +841,7 @@ export function useQueenBeeVoice(
       }
       if (spoken === "muted") noteVoiceOutage();
       else if (spoken === "local-stream-partial") {
-        noteVoiceOutage("Her voice cut out mid-reply (the TTS stream dropped). The full reply is on screen.");
+        noteVoiceOutage("Her voice cut out mid-reply (the TTS stream dropped). The full reply is on screen.", "error");
       } else clearVoiceOutage();
       startListening();
     };
@@ -1464,5 +1476,5 @@ export function useQueenBeeVoice(
     });
   }, [active, muted]);
 
-  return { phase, error, turns, speechDetected, working, voiceNotice, micAnalyserRef, sessionSerial };
+  return { phase, error, turns, speechDetected, working, voiceNotice, voiceNoticeKind, micAnalyserRef, sessionSerial };
 }

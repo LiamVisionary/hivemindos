@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-08-05T06:07:06.148158+00:00",
+  "request": "Use one app-selected HivemindOSBot wallet for automatic X trades without per-order approval and consolidate X OAuth plus credit balance into the X Bot UI",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "current-project",
+      "source_path": "src/lib/services/copy-trading/store.ts",
+      "target_path": "src/lib/services/x-command/x-command-wallet-policy.ts",
+      "reuse_type": "adapted_code",
+      "note": "Reused the established process-global serialized queue and atomic temp-plus-rename persistence pattern for the owner-only policy and receipt ledger."
+    },
+    {
+      "source_repo": "current-project",
+      "source_path": "src/lib/services/copy-trading/engine.ts",
+      "target_path": "src/lib/services/x-command/x-command-trade-executor.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the established automatic execution rail pattern with internal confirmation constants, local signing, and fail-closed receipt handling."
+    },
+    {
+      "source_repo": "current-project",
+      "source_path": "src/features/dashboard/views/trade/WalletSelectModal.tsx",
+      "target_path": "src/features/integrations/XCommandBotPanel.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Reused the existing grouped wallet selector so the bot authorization follows the app wallet UX and preserves compatible accounts."
+    },
+    {
+      "source_repo": "current-project",
+      "source_path": "src/features/integrations/XAccountMcpPanel.tsx",
+      "target_path": "src/features/integrations/XCommandBotPanel.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the managed X connection and hosted credit surfaces into the dedicated X Bot setup tab."
+    }
+  ]
+}

@@ -70,5 +70,33 @@ export function useMarketplaceDecisions({ pollMs = 30_000, enabled = true }: { p
     [refresh],
   );
 
-  return { decisions, busyId, error, refresh, decide };
+  const ignore = useCallback(
+    async (id: string) => {
+      setBusyId(id);
+      setError(null);
+      try {
+        const res = await fetch("/api/marketplace/decisions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "ignore", id }),
+        });
+        const payload = (await res.json()) as { ok?: boolean; error?: string };
+        if (!payload.ok) {
+          if (aliveRef.current) setError(payload.error ?? `HTTP ${res.status}`);
+          return false;
+        }
+        if (aliveRef.current) setDecisions((current) => current.filter((candidate) => candidate.id !== id));
+        void refresh();
+        return true;
+      } catch (fetchError) {
+        if (aliveRef.current) setError(fetchError instanceof Error ? fetchError.message : String(fetchError));
+        return false;
+      } finally {
+        if (aliveRef.current) setBusyId(null);
+      }
+    },
+    [refresh],
+  );
+
+  return { decisions, busyId, error, refresh, decide, ignore };
 }

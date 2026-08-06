@@ -8,6 +8,7 @@ export type ManagedXReturnPayload = {
   creditAccountId?: string;
   slug?: string;
   returnView?: "integrations" | "socials";
+  returnTab?: "mcp" | "xbot";
   url?: string;
 };
 
@@ -18,6 +19,7 @@ const MANAGED_X_RETURN_QUERY_KEYS = [
   "error",
   "x_credit_account_id",
   "x_slug",
+  "x_return_tab",
 ] as const;
 
 export function managedXDeepLinkFromSearchParams(params: URLSearchParams): string {
@@ -40,6 +42,7 @@ export function managedXReturnPayloadFromSearchParams(params: URLSearchParams, s
     creditAccountId: params.get("x_credit_account_id")?.trim() || undefined,
     slug: params.get("x_slug")?.trim() || undefined,
     returnView: params.get("x_return_view") === "socials" ? "socials" : "integrations",
+    returnTab: params.get("x_return_tab") === "xbot" ? "xbot" : "mcp",
     url: sourceUrl || undefined,
   };
 }

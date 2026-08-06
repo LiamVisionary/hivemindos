@@ -6,7 +6,7 @@
   --brain-line-2: rgba(238, 232, 220, 0.16);
   --brain-fg: #f3f0e9;
   --brain-fg-2: #a7a39a;
-  --brain-fg-3: #76726a;
+  --brain-fg-3: #a7a39a;
   --brain-honey: #e7b45c;
   --brain-honey-soft: rgba(231, 180, 92, 0.13);
   --brain-honey-line: rgba(231, 180, 92, 0.32);
@@ -454,7 +454,7 @@
   --brain-line-2: rgba(54, 46, 30, 0.18);
   --brain-fg: #221d14;
   --brain-fg-2: #5e574b;
-  --brain-fg-3: #867d6e;
+  --brain-fg-3: #5e574b;
   --brain-honey: #936811; --brain-honey-fill: #e6bb5c;
   --brain-honey-soft: rgba(176, 127, 28, 0.12);
   --brain-live: #1d8e7c;

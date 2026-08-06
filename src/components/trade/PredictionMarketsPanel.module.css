@@ -1,0 +1,104 @@
+.root { display: flex; flex-direction: column; gap: 18px; padding: 8px 0 28px; color: var(--fg); }
+.header { display: flex; align-items: end; justify-content: space-between; gap: 24px; }
+.header h1, .toolCard h2, .paper h2, .ledger h2, .detailHeading h2 { margin: 5px 0 0; font-family: var(--f-display); font-weight: 600; letter-spacing: -.025em; }
+.header h1 { font-size: clamp(25px, 4vw, 38px); }
+.header p, .toolCard > p { max-width: 760px; margin: 8px 0 0; color: var(--fg-3); line-height: 1.55; font-size: 13px; }
+.eyebrow { color: var(--honey); font: 500 10px var(--f-mono); letter-spacing: .13em; text-transform: uppercase; }
+.modeTabs, .sideToggle { display: inline-flex; padding: 3px; border: 1px solid var(--line-2); border-radius: 999px; background: var(--surface); }
+.modeTabs button, .sideToggle button { border: 0; border-radius: 999px; color: var(--fg-3); background: transparent; padding: 8px 14px; font-weight: 500; cursor: pointer; }
+.modeTabs button[data-active], .sideToggle button[data-active] { color: var(--fg); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line-2); }
+.search { display: grid; gap: 7px; }
+.search label, .ticketRow label, .weatherGrid label { color: var(--fg-3); font: 500 10px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; }
+.search > div { display: flex; gap: 8px; }
+.search input, .toolForm input, .ticketRow input, .weatherGrid input { width: 100%; color: var(--fg); background: var(--surface); border: 1px solid var(--line-2); border-radius: 9px; padding: 11px 12px; font: 400 13px var(--f-body); outline: none; }
+.search input:focus, .toolForm input:focus, .ticketRow input:focus, .weatherGrid input:focus { border-color: var(--honey); }
+.search button, .toolForm button, .primary { border: 0; border-radius: 999px; padding: 10px 18px; color: var(--on-honey); background: var(--honey); font-weight: 500; white-space: nowrap; cursor: pointer; }
+.search button:disabled, .toolForm button:disabled, .primary:disabled { opacity: .5; cursor: default; }
+.explorer { display: grid; grid-template-columns: minmax(280px, .82fr) minmax(380px, 1.18fr); min-height: 480px; overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.marketList { max-height: 560px; overflow-y: auto; border-right: 1px solid var(--line); }
+.marketRow { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 14px; text-align: left; padding: 15px 16px; color: var(--fg); background: transparent; border: 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+.marketRow[data-active] { background: color-mix(in srgb, var(--honey) 8%, transparent); box-shadow: inset 3px 0 0 var(--honey); }
+.marketRow span:first-child { min-width: 0; }
+.marketRow b { display: block; font-size: 12.5px; line-height: 1.35; font-weight: 600; }
+.marketRow small { display: block; margin-top: 5px; color: var(--fg-4); font-size: 10px; line-height: 1.25; }
+.marketRow .odds { color: var(--honey); font: 600 19px var(--f-display); }
+.marketRow .volume { grid-column: 2; text-align: right; margin: 0; }
+.marketDetail { min-width: 0; padding: 22px; }
+.detailHeading { display: flex; justify-content: space-between; align-items: start; gap: 18px; }
+.detailHeading h2 { max-width: 640px; font-size: 20px; line-height: 1.25; }
+.detailHeading a { color: var(--fg-3); font-size: 11px; white-space: nowrap; }
+.outcomes { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin: 22px 0; }
+.outcomes button { display: flex; justify-content: space-between; gap: 10px; padding: 11px 12px; color: var(--fg); background: var(--bg); border: 1px solid var(--line-2); border-radius: 10px; cursor: pointer; font-weight: 500; }
+.outcomes button[data-active] { border-color: var(--honey); background: color-mix(in srgb, var(--honey) 8%, transparent); }
+.outcomes b { color: var(--honey); }
+.chart { width: 100%; height: 170px; color: var(--live); overflow: visible; border-bottom: 1px solid var(--line-2); background-image: linear-gradient(to bottom, transparent 49%, var(--line) 50%, transparent 51%); }
+.emptyChart { display: grid; place-items: center; height: 170px; color: var(--fg-4); border: 1px dashed var(--line-2); border-radius: 12px; font-size: 12px; }
+.marketStats, .metricGrid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 18px; }
+.marketStats span, .metricGrid span { padding: 11px; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
+.marketStats small, .metricGrid small, .weatherResult small { display: block; color: var(--fg-4); font-size: 10px; margin-bottom: 4px; }
+.marketStats b, .metricGrid b { display: block; font-size: 13px; font-weight: 600; }
+.bottomGrid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 14px; }
+.paper, .ledger, .toolCard { padding: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 15px; }
+.cardHeading { display: flex; justify-content: space-between; align-items: start; gap: 14px; }
+.cardHeading h2 { font-size: 18px; }
+.cardHeading > span { color: var(--fg-3); font-size: 11px; }
+.safeBadge { padding: 5px 9px; color: var(--live) !important; background: var(--live-soft); border: 1px solid color-mix(in srgb, var(--live) 30%, transparent); border-radius: 999px; }
+.paper > p { margin: 13px 0; color: var(--fg-2); }
+.ticketRow { display: grid; grid-template-columns: auto minmax(100px, 1fr) auto; gap: 10px; align-items: end; }
+.ticketRow label { display: grid; gap: 6px; }
+.paper > small { display: block; margin-top: 11px; color: var(--fg-4); line-height: 1.45; }
+.ledger article { display: flex; justify-content: space-between; gap: 16px; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.ledger article:last-child { border-bottom: 0; }
+.ledger article span:last-child { text-align: right; }
+.ledger article b { display: block; max-width: 320px; font-size: 11px; font-weight: 600; }
+.ledger article small { display: block; margin-top: 4px; color: var(--fg-4); font-size: 10px; white-space: normal; }
+.toolCard { min-height: 400px; }
+.toolCard h2 { font-size: 25px; }
+.toolForm { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-top: 22px; }
+.toolForm button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.metricGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.metricGrid b { font-size: 20px; }
+.sourceLine { color: var(--fg-4); font: 10px var(--f-mono); }
+.arbitrageGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 20px; }
+.arbitrageCard { padding: 16px; background: var(--bg); border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line)); border-radius: 13px; }
+.arbitrageCard[data-decision="paper-filled"] { border-color: color-mix(in srgb, var(--live) 45%, var(--line)); }
+.arbitrageCard h3 { margin: 5px 0 0; font: 600 18px var(--f-display); letter-spacing: -.015em; }
+.arbitrageCard .cardHeading > span { color: var(--danger); }
+.arbitrageCard[data-decision="paper-filled"] .cardHeading > span { color: var(--live); }
+.arbitrageCard > p { margin: 13px 0 0; color: var(--fg-3); font-size: 11px; line-height: 1.5; }
+.arbitrageMetrics, .arbitrageFill { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-top: 14px; }
+.arbitrageMetrics span, .arbitrageFill span { min-width: 0; padding: 9px; background: var(--surface); border: 1px solid var(--line); border-radius: 9px; }
+.arbitrageMetrics small, .arbitrageFill small { display: block; color: var(--fg-4); font-size: 9px; line-height: 1.3; }
+.arbitrageMetrics b, .arbitrageFill b { display: block; margin-top: 4px; overflow-wrap: anywhere; font: 600 12px var(--f-mono); }
+.arbitrageFill { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.spinner { width: 12px; height: 12px; border: 2px solid color-mix(in srgb, currentColor 30%, transparent); border-top-color: currentColor; border-radius: 999px; animation: spin .7s linear infinite; }
+.weatherGrid { display: grid; grid-template-columns: repeat(4, minmax(110px, 1fr)); gap: 10px; margin: 22px 0 12px; }
+.weatherGrid label { display: grid; gap: 6px; }
+.weatherResult { margin-top: 18px; padding: 20px; color: var(--on-honey); background: var(--honey); border-radius: 14px; }
+.weatherResult b { display: block; font: 600 48px var(--f-display); }
+.weatherResult span { font-size: 12px; }
+.boundary { padding: 13px 15px; color: var(--fg-3); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; font-size: 11px; line-height: 1.45; }
+.error { margin: 0; padding: 11px 13px; color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent); border-radius: 10px; font-size: 12px; }
+.empty { color: var(--fg-4); font-size: 12px; line-height: 1.5; }
+.marketList > .empty { padding: 20px; }
+.skeleton { display: block; height: 83px; margin: 1px; border-radius: 9px; background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 50%, var(--surface) 75%); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 900px) {
+  .header { align-items: start; flex-direction: column; }
+  .explorer, .bottomGrid { grid-template-columns: 1fr; }
+  .marketList { max-height: 360px; border-right: 0; border-bottom: 1px solid var(--line); }
+  .marketStats { grid-template-columns: repeat(2, 1fr); }
+  .arbitrageGrid { grid-template-columns: 1fr; }
+  .weatherGrid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 560px) {
+  .modeTabs { width: 100%; }
+  .modeTabs button { flex: 1; }
+  .explorer { display: block; }
+  .marketDetail { padding: 16px; }
+  .detailHeading { display: block; }
+  .detailHeading a { display: inline-block; margin-top: 10px; }
+  .ticketRow, .toolForm, .weatherGrid, .metricGrid, .arbitrageMetrics, .arbitrageFill { grid-template-columns: 1fr; }
+}

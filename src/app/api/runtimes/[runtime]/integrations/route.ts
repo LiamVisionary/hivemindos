@@ -35,7 +35,7 @@ async function proxyCollectorIntegration(runtime: AgentRuntime, collectorUrl: st
   const base = normalizeCollectorUrl(collectorUrl);
   const timeoutMs = body.action === "install-runtime" || body.action === "install-local-runtime"
     ? 900_000
-    : body.action === "load-model" || body.action === "start-local-runtime" || body.action === "smoke-test-local-model"
+    : body.action === "load-model" || body.action === "warm-model" || body.action === "start-local-runtime" || body.action === "smoke-test-local-model"
       ? 240_000
       : body.action === "hermes-update"
         ? 330_000

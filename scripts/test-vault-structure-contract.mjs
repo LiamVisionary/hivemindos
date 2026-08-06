@@ -430,6 +430,7 @@ assert.ok(existsSync(join(root, "packaged-skills/optional/crypto/hivemindos/b20-
 assert.ok(existsSync(join(root, "packaged-skills/optional/gtm/athm793/local-business-scraper/SKILL.md")), "missing local business scraper optional package");
 for (const path of [
   "packaged-skills/optional/brand/hivemindos/brand-book-concept-page/SKILL.md",
+  "packaged-skills/optional/brand/hivemindos/hivemindos-brand-visuals/SKILL.md",
   "packaged-skills/optional/brand/hivemindos/out-of-home-subway-campaign/SKILL.md",
   "packaged-skills/optional/design/hivemindos/newsroom-data-visualization/SKILL.md",
   "packaged-skills/optional/design/hivemindos/swiss-grid-editorial-page/SKILL.md",
@@ -461,6 +462,7 @@ for (const path of [
 }
 has("docs/for-users/packaged-skills/index.md", "Hive skills");
 has("docs/for-users/packaged-skills/index.md", "Third-party packaged skills");
+has("docs/for-users/packaged-skills/index.md", "brand/hivemindos/hivemindos-brand-visuals");
 has("docs/for-users/packaged-skills/hive-skills.md", "create-zero-human-company");
 has("docs/for-users/packaged-skills/hive-skills.md", "hive-assimilate");
 has("docs/for-users/packaged-skills/hive-skills.md", "engineering-discipline");
@@ -482,6 +484,7 @@ has("docs/for-users/packaged-skills/third-party-skills.md", "UI Skills directory
 has("docs/for-users/packaged-skills/third-party-skills.md", "design/mengto/");
 has("docs/for-users/packaged-skills/third-party-skills.md", "gtm/athm793/local-business-scraper");
 has("docs/for-users/packaged-skills/third-party-skills.md", "brand/hivemindos/brand-book-concept-page");
+has("docs/for-users/packaged-skills/third-party-skills.md", "brand/hivemindos/hivemindos-brand-visuals");
 has("docs/for-users/packaged-skills/third-party-skills.md", "ops/hivemindos/work-board-airtable-bridge");
 has("docs/for-users/whole-brain/shared-skills.md", "packaged-skills/optional/design/<source>/<skill>/");
 has("docs/for-users/whole-brain/shared-skills.md", "packaged-skills/optional/design/mengto/<skill>/");

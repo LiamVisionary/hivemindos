@@ -28,6 +28,8 @@ promo-videos/
 # Local capture/QA artifacts (session screenshots, dogfood run summaries)
 .codex-nango-*.png
 .hivemindos-dogfood/
+# One-off isolated Next build output used for local trading-route diagnostics.
+/tmp/hivemind-trading-debug-next/
 
 # Chat App Builder projects land under <working-directory>/scratchpad/ (see
 # chatAppProjectDirectory in src/lib/services/chat/chat-app-artifact.ts). On

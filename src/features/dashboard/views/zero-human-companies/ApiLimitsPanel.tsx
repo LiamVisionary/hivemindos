@@ -1,7 +1,10 @@
 "use client";
 
 import React from "react";
-import { Activity, AlertTriangle, CheckCircle2, PlugZap, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, RefreshCw, ShieldCheck, Trash2 } from "lucide-react";
+import { ExternalSignInButton } from "@/components/ExternalSignInButton";
+import { oauthReturnMode } from "@/lib/native/oauth-return-mode";
+import { openExternalUrl } from "@/lib/native/open-external-url";
 
 import { Panel, Skeleton, Spinner } from "./primitives";
 import type { CompanyApiBudget, CompanyIntegrationLimit, GcpApiDailyCap } from "@/lib/types/company";
@@ -554,37 +557,72 @@ function GcpGuardrailEditor({ companyId, data, engine, onReload }: { companyId: 
     setBillingAccount(saved?.billingAccount || payload.billingInfo?.billingAccountName || payload.billingAccounts.find((account) => account.open)?.name || "");
   }
 
-  // In-place OAuth connect: fetch the authorization URL and open Google's
-  // consent screen in a popup, then poll until the grant lands — no detour
-  // through the Integrations view. The GET start route stays available as the
-  // full-page fallback.
-  async function startConnect() {
-    setBusy("connect");
-    setMessage("");
+  // In-place OAuth connect, opened OUTSIDE the app window (external browser —
+  // never the Tauri WKWebView). The POST-start pattern matters: the external
+  // browser has no dashboard session, so it must receive the absolute signed
+  // authorization URL, not a same-origin /oauth/start link (which would 401 at
+  // the proxy out there). The persistent callback + this poll close the loop.
+  async function resolveGoogleCloudAuthUrl(): Promise<string> {
+    const response = await fetch("/api/integrations/google-cloud/oauth/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // Desktop flows: the callback deep-links back via hivemindos://, carried
+      // in the signed state.
+      body: JSON.stringify(oauthReturnMode() ? { returnMode: oauthReturnMode() } : {}),
+    });
+    const payload = await responseJson<{ authorizationUrl?: string }>(response);
+    if (!response.ok || payload.ok === false || !payload.authorizationUrl) {
+      throw new Error(payload.error || "Google Cloud sign-in could not start.");
+    }
+    return payload.authorizationUrl;
+  }
+
+  async function pollUntilConnected() {
+    setMessage("Finish the Google sign-in in the browser window that just opened — this panel updates itself once the grant lands.");
     setMessageError(false);
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 3000));
+      const refreshed = await onReload(projectId, service).catch(() => null);
+      if (refreshed?.connected) {
+        setMessage("Google Cloud connected.");
+        return;
+      }
+    }
+    setMessage("Still not connected — finish the sign-in, then press Refresh.");
+    setMessageError(true);
+  }
+
+  // One in-flight enable at a time; per-service failure text drives the row's
+  // "open the console instead" fallback (Service Usage itself disabled, or the
+  // account lacks serviceusage.services.enable — the bootstrap cases).
+  const [enablingService, setEnablingService] = React.useState("");
+  const [enableRowErrors, setEnableRowErrors] = React.useState<Record<string, string>>({});
+
+  async function enableDiscoveredApi(entry: ParsedDisabledApi) {
+    setEnablingService(entry.service);
+    setEnableRowErrors((current) => ({ ...current, [entry.service]: "" }));
     try {
-      const response = await fetch("/api/integrations/google-cloud/oauth/start", { method: "POST" });
-      const payload = await responseJson<{ authorizationUrl?: string }>(response);
-      if (!response.ok || payload.ok === false || !payload.authorizationUrl) {
-        throw new Error(payload.error || "Google Cloud sign-in could not start.");
-      }
-      window.open(payload.authorizationUrl, "_blank", "noopener,width=560,height=760");
-      setMessage("Finish the Google sign-in in the window that just opened — this panel updates itself once the grant lands.");
-      for (let attempt = 0; attempt < 40; attempt += 1) {
-        await new Promise((resolve) => window.setTimeout(resolve, 3000));
-        const refreshed = await onReload(projectId, service).catch(() => null);
-        if (refreshed?.connected) {
-          setMessage("Google Cloud connected.");
-          return;
-        }
-      }
-      setMessage("Still not connected — finish the sign-in, then press Refresh.");
-      setMessageError(true);
+      const response = await fetch(`/api/companies/${encodeURIComponent(companyId)}/api-budget`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "enable-gcp-service", service: entry.service, projectRef: entry.projectRef }),
+      });
+      const payload = await responseJson<{ enabled?: string }>(response);
+      if (!response.ok || payload.ok === false) throw new Error(payload.error || `Could not enable ${entry.label}.`);
+      setMessageError(false);
+      setMessage(`${entry.label} enabled — waiting for Google to propagate it, then refreshing…`);
+      // Enablement takes a few seconds to propagate; refresh discovery after a
+      // short pause so the pickers populate on their own.
+      await new Promise((resolve) => window.setTimeout(resolve, 3_000));
+      await onReload(projectId, service).catch(() => null);
+      setMessage(`${entry.label} enabled.`);
     } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : "Google Cloud sign-in could not start.");
-      setMessageError(true);
+      setEnableRowErrors((current) => ({
+        ...current,
+        [entry.service]: reason instanceof Error ? reason.message : `Could not enable ${entry.label}.`,
+      }));
     } finally {
-      setBusy("");
+      setEnablingService("");
     }
   }
 
@@ -715,9 +753,12 @@ function GcpGuardrailEditor({ companyId, data, engine, onReload }: { companyId: 
           {data.connected ? (
             <span className={`${styles.pill} ${styles.pillLive}`}><CheckCircle2 size={12} /> OAuth ready</span>
           ) : (
-            <button type="button" className={styles.button} disabled={busy === "connect"} onClick={() => void startConnect()}>
-              {busy === "connect" ? <Spinner size={11} /> : <PlugZap size={12} />} Connect Google Cloud
-            </button>
+            <ExternalSignInButton
+              label="Connect Google Cloud"
+              resolveUrl={resolveGoogleCloudAuthUrl}
+              onOpened={() => void pollUntilConnected()}
+              onError={(message) => { setMessage(message); setMessageError(true); }}
+            />
           )}
         </div>
       </div>
@@ -785,7 +826,14 @@ function GcpGuardrailEditor({ companyId, data, engine, onReload }: { companyId: 
           </div>
 
           {busy === "discover" ? <div className={styles.note} style={{ marginTop: 13 }}><Spinner size={11} /> Discovering provider configuration…</div> : null}
-          {data.discoveryErrors.length ? <div className={styles.error} style={{ marginTop: 13 }}>{data.discoveryErrors.join(" · ")}</div> : null}
+          {data.discoveryErrors.length ? (
+            <DiscoveryErrorList
+              errors={data.discoveryErrors}
+              enablingService={enablingService}
+              rowErrors={enableRowErrors}
+              onEnable={(entry) => void enableDiscoveredApi(entry)}
+            />
+          ) : null}
           {service && !busy && drafts.length === 0 ? <div className={styles.empty} style={{ marginTop: 13 }}>Google reported no overridable per-day quota metrics for this API.</div> : null}
 
           {drafts.length ? (
@@ -926,6 +974,99 @@ export function ApiLimitsPanel({ companyId, companyName }: { companyId: string; 
       <IntegrationLimitsEditor companyId={companyId} data={data} onReload={() => load()} />
 
       <GcpGuardrailEditor companyId={companyId} data={data} engine={data.engine?.providerKey.startsWith("google") ? data.engine : null} onReload={load} />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Discovery-error rows: parse the standard Google "API disabled" 403 into an
+// actionable row with an Enable button, instead of dumping raw error text.
+
+type ParsedDisabledApi = {
+  /** Human API label, e.g. "Cloud Resource Manager API" (falls back to the service id). */
+  label: string;
+  /** Service id, e.g. "cloudresourcemanager.googleapis.com" — taken from the console URL. */
+  service: string;
+  /** The project the 403 named (usually the number) — the authoritative ref,
+   *  since the projects dropdown is often EMPTY exactly when this error shows. */
+  projectRef: string;
+  /** Google's own enable page for this API+project (host pinned by the regex). */
+  consoleUrl: string;
+};
+
+function parseDisabledApiError(message: string): ParsedDisabledApi | null {
+  // Standard shape: "<API label> has not been used in project <ref> before or
+  // it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/<service>/overview?project=<ref> then retry."
+  const urlMatch = message.match(
+    /https:\/\/console\.developers\.google\.com\/apis\/api\/([a-z][a-z0-9.-]*)\/overview\?project=([A-Za-z0-9-]+)/,
+  );
+  if (!urlMatch) return null;
+  const labelMatch = message.match(/([^.:]*? API) has not been used in project [A-Za-z0-9-]+ before or it is disabled/);
+  return {
+    label: labelMatch?.[1]?.trim() || urlMatch[1],
+    service: urlMatch[1],
+    projectRef: urlMatch[2],
+    consoleUrl: urlMatch[0],
+  };
+}
+
+function DiscoveryErrorList({
+  errors,
+  enablingService,
+  rowErrors,
+  onEnable,
+}: {
+  errors: string[];
+  enablingService: string;
+  rowErrors: Record<string, string>;
+  onEnable: (entry: ParsedDisabledApi) => void;
+}) {
+  return (
+    <div style={{ display: "grid", gap: 8, marginTop: 13 }}>
+      {errors.map((raw, index) => {
+        const parsed = parseDisabledApiError(raw);
+        if (!parsed) {
+          // Unparseable errors stay verbatim — full text behind an expander
+          // when long, never a silent clamp.
+          return raw.length > 160 ? (
+            <details key={`${index}-${raw.slice(0, 24)}`} className={styles.error}>
+              <summary style={{ cursor: "pointer" }}>{raw.slice(0, 140)}… (show full error)</summary>
+              <div style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>{raw}</div>
+            </details>
+          ) : (
+            <div key={`${index}-${raw.slice(0, 24)}`} className={styles.error}>{raw}</div>
+          );
+        }
+        const busyRow = enablingService === parsed.service;
+        const rowError = rowErrors[parsed.service] || "";
+        return (
+          <div key={parsed.service} className={styles.error} style={{ display: "grid", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span style={{ flex: 1, minWidth: 220 }}>
+                <strong>{parsed.label}</strong> is disabled on project {parsed.projectRef} — discovery needs it to fill these pickers.
+              </span>
+              <button
+                type="button"
+                className={styles.button}
+                disabled={Boolean(enablingService)}
+                onClick={() => onEnable(parsed)}
+              >
+                {busyRow ? <><Spinner size={11} /> Enabling…</> : `Enable ${parsed.label}`}
+              </button>
+            </div>
+            {rowError ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <span style={{ flex: 1, minWidth: 220 }}>
+                  Couldn&rsquo;t enable it from here: {rowError} Enable it on Google&rsquo;s console page instead (opens in your browser), then press Refresh.
+                </span>
+                <button type="button" className={styles.button} onClick={() => void openExternalUrl(parsed.consoleUrl)}>
+                  Open Google Cloud console
+                </button>
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
 }

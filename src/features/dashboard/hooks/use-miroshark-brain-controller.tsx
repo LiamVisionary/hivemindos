@@ -211,7 +211,7 @@ export function useMirosharkBrainController(props: any) {
     const simulationId = selectedSimulationId ?? mirosharkRun?.simulationId;
     if (!simulationId) {
       setMirosharkExperimentStatus("No simulation selected to publish.");
-      return;
+      return { ok: false as const, error: "No simulation selected to publish." };
     }
     setMirosharkExperimentPending(action);
     setMirosharkExperimentStatus("");
@@ -227,11 +227,13 @@ export function useMirosharkBrainController(props: any) {
     const data = await response?.json().catch(() => null) as { ok?: boolean; error?: string; payload?: unknown } | null;
     setMirosharkExperimentPending("");
     if (!data?.ok) {
-      setMirosharkExperimentStatus(data?.error ?? "Experiment request failed");
-      return;
+      const error = data?.error ?? "Experiment request failed";
+      setMirosharkExperimentStatus(error);
+      return { ok: false as const, error };
     }
     setMirosharkExperimentStatus(`${action} sent to MiroShark`);
     if (action === "stop" || action === "inject" || action === "publish") void refreshMirosharkRun();
+    return { ok: true as const };
   }
 
   async function analyzeMirosharkRun(run: SwarmRun, mode: MiroSharkAnalysisMode) {

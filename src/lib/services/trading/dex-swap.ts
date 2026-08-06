@@ -19,6 +19,10 @@ import {
   type PlatformFeeCollection,
   type PlatformFeeQuote,
 } from "@/lib/services/wallet/platform-fees";
+import {
+  assertTradePlanExecutable,
+  recordLiveTradePlanResult,
+} from "@/lib/services/trading/trading-control-store";
 
 /**
  * Local DEX swap rail: trade FROM the user's own (imported/local) wallet by
@@ -84,10 +88,12 @@ export type DexSwapInput = {
   slippageBps?: number;
   confirmation?: string;
   approvalToken?: string;
-  /** True when the caller already completed a concrete server-side user approval for this exact swap. */
+  /** True when a concrete approval or a persisted, bounded user authorization already covers this swap. */
   approvalThresholdSatisfied?: boolean;
   /** Active Work Board company task id. Omit for ordinary wallet swaps. */
   companyTaskId?: string;
+  /** Reviewed Trade Plan id when execution originated from the unified Trade desk. */
+  planId?: string;
 };
 
 export type DexSwapQuote = {
@@ -280,6 +286,9 @@ async function executeEvmSwap(input: DexSwapInput): Promise<DexSwapResult> {
   if (input.confirmation !== SWAP_CONFIRMATION) throw new Error(`Swaps need confirmation. Type ${SWAP_CONFIRMATION} to approve up to $${MAX_SWAP_USD}.`);
   if (!input.secret) throw new Error("No local wallet key is available to sign the swap.");
   const { sell, buy, sellAtomic, valueUsd, slippageBps } = await prepareEvmLeg(input);
+  if (input.planId) {
+    await assertTradePlanExecutable({ planId: input.planId, agentId: input.agentId, asset: [sell.symbol, buy.symbol], notionalUsd: valueUsd, orderType: "market" });
+  }
   const network = input.network as EvmSwapNetwork;
   const label = `dex:${sell.symbol}->${buy.symbol}`;
   const { companyId } = await swapGovernance(input.network, input.agentId, valueUsd, label, input.approvalToken, input.approvalThresholdSatisfied, input.companyTaskId);
@@ -387,6 +396,9 @@ async function executeSolanaSwap(input: DexSwapInput): Promise<DexSwapResult> {
   if (input.confirmation !== SWAP_CONFIRMATION) throw new Error(`Swaps need confirmation. Type ${SWAP_CONFIRMATION} to approve up to $${MAX_SWAP_USD}.`);
   if (!input.secret) throw new Error("No local Solana wallet key is available to sign the swap.");
   const { sell, buy, sellAtomic, valueUsd, slippageBps } = await prepareSolanaLeg(input);
+  if (input.planId) {
+    await assertTradePlanExecutable({ planId: input.planId, agentId: input.agentId, asset: [sell.symbol, buy.symbol], notionalUsd: valueUsd, orderType: "market" });
+  }
   const label = `dex:${sell.symbol}->${buy.symbol}`;
   const { companyId } = await swapGovernance(input.network, input.agentId, valueUsd, label, input.approvalToken, input.approvalThresholdSatisfied, input.companyTaskId);
   await assertTradingPlatformFeeReady({ source: "dex-swap", network: input.network, amountUsd: valueUsd });
@@ -455,7 +467,24 @@ export async function quoteDexSwap(input: DexSwapInput): Promise<DexSwapQuote> {
 }
 
 export async function executeDexSwap(input: DexSwapInput): Promise<DexSwapResult> {
-  if (isSolanaNetwork(input.network)) return executeSolanaSwap(input);
-  if (isEvmSwapNetwork(input.network)) return executeEvmSwap(input);
-  throw new Error("Local DEX swaps support Base, Robinhood Chain, and Solana wallets.");
+  const result = isSolanaNetwork(input.network)
+    ? await executeSolanaSwap(input)
+    : isEvmSwapNetwork(input.network)
+      ? await executeEvmSwap(input)
+      : null;
+  if (!result) throw new Error("Local DEX swaps support Base, Robinhood Chain, and Solana wallets.");
+  if (input.planId) {
+    await recordLiveTradePlanResult({
+      planId: input.planId,
+      execution: {
+        status: "filled",
+        reference: result.reference,
+        detail: result.detail,
+        filledAt: new Date().toISOString(),
+        filledQuantity: result.buyAmount,
+        feesUsd: result.platformFee?.amountUsd,
+      },
+    });
+  }
+  return result;
 }

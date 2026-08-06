@@ -16,6 +16,7 @@ import {
   type Agent, type Decision, type Intel, type RedditPost, type Run, type TemplateId, type XThread,
 } from "./sim-data";
 import { MIROSHARK_X402_SIMULATION_PRICE_LABEL } from "@/lib/config/miroshark-x402";
+import type { SimulationPublishResult } from "./publish-readiness";
 
 export type SimLaunchMode = "local" | "x402";
 /** Per-mode readiness for the split launch button — drives the menu + disabled reasons. */
@@ -71,7 +72,7 @@ export interface SimDataset {
   emptyLabel?: string;
   /** operational handlers — wired to the live controller by the panel */
   onLaunch?: (payload: SimLaunchPayload) => void;
-  onPublish?: (run: Run) => void;
+  onPublish?: (run: Run) => Promise<SimulationPublishResult>;
   onSelectRun?: (run: Run) => void;
   onExport?: (run: Run) => void;
   /** Stop a live run. */

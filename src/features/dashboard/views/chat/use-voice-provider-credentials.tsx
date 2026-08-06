@@ -6,6 +6,7 @@ import {
   voiceProviderById,
   type VoiceProviderAuthMode,
 } from "@/lib/config/voice-call-providers";
+import { openExternalUrl } from "@/lib/native/open-external-url";
 
 /**
  * Credential state for the Calls voice panel: which provider API keys live in
@@ -150,18 +151,13 @@ export function useVoiceProviderCredentials(active: boolean) {
         | null;
       if (!data?.ok || !data.authorizeUrl) throw new Error(data?.error || "Could not start the sign-in.");
       setOauthAuthorizeUrl(data.authorizeUrl);
-      // Tauri's webview swallows window.open, so fall back to the system browser
-      // opener; the rendered link is the final manual fallback.
-      const popup = window.open(data.authorizeUrl, "_blank", "noopener");
-      if (!popup) {
-        const opened = await fetch("/api/system/browsers/open", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ url: data.authorizeUrl }),
-        })
-          .then((openResponse) => openResponse.ok)
-          .catch(() => false);
-        if (!opened) setError("Could not open a browser automatically — use the sign-in link below.");
+      // Open OUTSIDE the app window via the canonical external opener (system
+      // browser in Tauri, new tab in a browser); the rendered link stays as
+      // the manual fallback.
+      try {
+        await openExternalUrl(data.authorizeUrl);
+      } catch {
+        setError("Could not open a browser automatically — use the sign-in link below.");
       }
     } catch (connectError) {
       setError(connectError instanceof Error ? connectError.message : String(connectError));

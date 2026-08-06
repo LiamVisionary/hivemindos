@@ -60,13 +60,16 @@ export function hermesProfileName(hermesHome, defaultHermesHome) {
   return "";
 }
 
-function pythonEnv({ hermesHome, projectDir, provider, model }) {
+function pythonEnv({ hermesHome, projectDir, provider, model, providerConfig }) {
   return {
     ...process.env,
     HERMES_HOME: hermesHome,
     PYTHONPATH: projectDir,
     ...(provider ? { HIVEMINDOS_HERMES_PROVIDER: provider } : {}),
     ...(model ? { HIVEMINDOS_HERMES_MODEL: model } : {}),
+    ...(providerConfig?.baseUrl ? { HIVEMINDOS_HERMES_PROVIDER_BASE_URL: providerConfig.baseUrl } : {}),
+    ...(providerConfig?.name ? { HIVEMINDOS_HERMES_PROVIDER_NAME: providerConfig.name } : {}),
+    ...(providerConfig && "keyEnv" in providerConfig ? { HIVEMINDOS_HERMES_PROVIDER_KEY_ENV: providerConfig.keyEnv } : {}),
   };
 }
 
@@ -99,6 +102,7 @@ export async function setHermesModelAssignment({
   pythonPath,
   provider,
   model,
+  providerConfig,
   execFileAsync,
 }) {
   const script = `
@@ -110,14 +114,32 @@ provider, model = _normalize_main_model_assignment(
     os.environ["HIVEMINDOS_HERMES_MODEL"],
 )
 cfg = load_config()
+base_url = os.environ.get("HIVEMINDOS_HERMES_PROVIDER_BASE_URL", "").strip()
+if base_url:
+    providers = cfg.get("providers") if isinstance(cfg.get("providers"), dict) else {}
+    current = providers.get(provider) if isinstance(providers.get(provider), dict) else {}
+    models = current.get("models") if isinstance(current.get("models"), dict) else {}
+    models[model] = models.get(model) if isinstance(models.get(model), dict) else {}
+    current.update({
+        "name": os.environ.get("HIVEMINDOS_HERMES_PROVIDER_NAME", provider),
+        "base_url": base_url,
+        "default_model": model,
+        "models": models,
+    })
+    key_env = os.environ.get("HIVEMINDOS_HERMES_PROVIDER_KEY_ENV", "").strip()
+    if key_env:
+        current["key_env"] = key_env
+    else:
+        current.pop("key_env", None)
+    providers[provider] = current
+    cfg["providers"] = providers
 cfg["model"] = _apply_main_model_assignment(cfg.get("model", {}), provider, model)
 save_config(cfg)
 `;
   await execFileAsync(pythonPath, ["-c", script], {
     cwd: projectDir,
-    env: pythonEnv({ hermesHome, projectDir, provider, model }),
+    env: pythonEnv({ hermesHome, projectDir, provider, model, providerConfig }),
     timeout: 25_000,
     maxBuffer: 2_000_000,
   });
 }
-

@@ -4,7 +4,7 @@
 // grants).
 import { NextRequest, NextResponse } from "next/server";
 
-import { renderGitHubOAuthPage } from "@/lib/services/integrations/github-oauth";
+import { normalizeOAuthReturnMode, renderGitHubOAuthPage } from "@/lib/services/integrations/github-oauth";
 import { googleCloudAuthorizeUrl } from "@/lib/services/integrations/google-cloud-oauth";
 import { errorJson, okJson } from "@/lib/utils/api-response";
 import { requireAuth } from "@/lib/utils/server-auth";
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
   const unauthorized = await requireAuth(request);
   if (unauthorized) return unauthorized;
 
-  const { authorizeUrl, missing } = googleCloudAuthorizeUrl(request);
+  const { authorizeUrl, missing } = await googleCloudAuthorizeUrl(request);
   if (missing.length) return renderGoogleCloudMissingClientPage();
 
   return NextResponse.redirect(authorizeUrl);
@@ -34,7 +34,10 @@ export async function POST(request: NextRequest) {
   const unauthorized = await requireAuth(request);
   if (unauthorized) return unauthorized;
 
-  const { authorizeUrl, missing } = googleCloudAuthorizeUrl(request);
+  // Desktop flows declare themselves so the callback can deep-link back with
+  // the right scheme (hivemindos vs hivemindos-dev) after the consent returns.
+  const body = (await request.json().catch(() => null)) as { returnMode?: unknown } | null;
+  const { authorizeUrl, missing } = await googleCloudAuthorizeUrl(request, normalizeOAuthReturnMode(body?.returnMode));
   if (missing.length) {
     return errorJson(
       "The Google Cloud OAuth client is not configured yet. Set GOOGLE_CLOUD_OAUTH_CLIENT_ID (a Google \"Desktop app\" client) or bake one into HivemindOS.",

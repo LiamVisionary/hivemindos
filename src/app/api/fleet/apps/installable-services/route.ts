@@ -25,6 +25,7 @@ function serviceId(value: unknown): InstallableServiceId {
   if (value === "aider") return value;
   if (value === "agent-reach") return value;
   if (value === "palmier-pro") return value;
+  if (value === "hivemind-office") return value;
   if (value === "copy-trading-daemon") return value;
   throw new Error("Unknown installable service.");
 }

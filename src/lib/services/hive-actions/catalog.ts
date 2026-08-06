@@ -16,6 +16,8 @@ import { plumeOptionsAction } from "./plume-options-action";
 import { sharedBrainPortabilityAction } from "./brain-portability-action";
 import { sreInvestigationsAction } from "./sre-investigations-action";
 import { walletX402FetchAction } from "./wallet-x402-action";
+import { APIFY_HIVE_ACTIONS } from "./apify-actions";
+import { HIVEMIND_OFFICE_HIVE_ACTIONS } from "./hivemind-office";
 import { bankrCopyTradingAction } from "./bankr-copy-action";
 import { companyRevenueLedgerAction } from "./company-revenue-action";
 import { socialQueueAccountPolicyAction, socialQueueSuggestionAction } from "./social-queue-action";
@@ -1718,6 +1720,8 @@ export const phoneLocalTtsAction = defineHiveAction({
 
 export const HIVE_ACTIONS = [
   ...WEB_RESEARCH_HIVE_ACTIONS,
+  ...APIFY_HIVE_ACTIONS,
+  ...HIVEMIND_OFFICE_HIVE_ACTIONS,
   computerInteractionAction,
   beelineProfilesAction,
   beelineOpenBrowserAction,

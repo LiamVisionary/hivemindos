@@ -491,11 +491,24 @@ async function main() {
     );
 
     const kanbanPanelSource = await readFile(new URL("../src/features/dashboard/views/KanbanPanel.tsx", import.meta.url), "utf8");
+    const pollingSource = await readFile(new URL("../src/features/dashboard/hooks/use-dashboard-polling-effects.tsx", import.meta.url), "utf8");
     assert(
       kanbanPanelSource.includes('if (status === "verified") return 4;')
       && kanbanPanelSource.includes('const projectProofForTask = (task: any) => Array.isArray(task.proofs)')
       && kanbanPanelSource.includes('const kindDelta = proofKindRank(proof.kind) - proofKindRank(best.kind);'),
       "Regression guard failed: Work cards should prioritize verified GitLawb proofs while keeping project proof metadata available.",
+    );
+    assert(
+      kanbanPanelSource.includes("const KANBAN_INITIAL_VISIBLE_TASKS = 20;")
+      && kanbanPanelSource.includes("visibleTasks.map((task)")
+      && kanbanPanelSource.includes("Show {Math.min(KANBAN_VISIBLE_TASK_STEP, hiddenTaskCount)} more"),
+      "Regression guard failed: large Work Board lanes must render cards in bounded batches.",
+    );
+    assert(
+      pollingSource.includes('include_columns: "false"')
+      && pollingSource.includes('params.set("if_updated_at"')
+      && pollingSource.includes("nativeData.notModified"),
+      "Regression guard failed: Work Board polls must avoid duplicate columns and full unchanged payloads.",
     );
     assert(
       taskControllerSource.includes("const undoRequested = Boolean(task.undoRequestedAt);")
@@ -510,7 +523,35 @@ async function main() {
       "Regression guard failed: session-backed dispatches must finalize from assistant output or fail closed out of Working.",
     );
 
-    const final = await request("GET", {}, { vaultPath, kanbanFolder, include_archived: "true" });
+    const compactPatch = await request("PATCH", {
+      taskId: proofTask.id,
+      patch: { priority: "high" },
+    }, { vaultPath, kanbanFolder, compact_response: "true" });
+    assert(compactPatch.task?.priority === "high", "Compact PATCH responses should return the updated task.");
+    assert(!compactPatch.board, "Compact PATCH responses should not serialize the full board.");
+
+    const leanBoard = await request("GET", {}, {
+      vaultPath,
+      kanbanFolder,
+      include_archived: "true",
+      include_columns: "false",
+    });
+    assert(leanBoard.board?.tasks?.length > 0, "Lean board reads should retain task data.");
+    assert(!leanBoard.columns, "Lean board reads should omit the duplicate grouped task payload.");
+    const unchanged = await request("GET", {}, {
+      vaultPath,
+      kanbanFolder,
+      include_archived: "true",
+      include_columns: "false",
+      if_updated_at: leanBoard.board.meta.updatedAt,
+    });
+    assert(unchanged.notModified === true, "Unchanged board reads should return a revision-only response.");
+    assert(!unchanged.board, "Unchanged board reads should not serialize the full board.");
+    const summary = await request("GET", {}, { vaultPath, kanbanFolder, summary_only: "true" });
+    assert(typeof summary.counts?.["needs-human"] === "number", "Summary reads should return lane counts.");
+    assert(!summary.board, "Summary reads should not serialize the full board.");
+
+    const final = await request("GET", {}, { vaultPath, kanbanFolder, include_archived: "true", include_columns: "false" });
     const statuses = Object.fromEntries(final.board.tasks.map((task) => [task.title, task.status]));
     console.log(JSON.stringify({ ok: true, board, statuses }, null, 2));
   } finally {

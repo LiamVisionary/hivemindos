@@ -21,7 +21,7 @@
 
   --fg: #f3f0e9;
   --fg-2: #a7a39a;
-  --fg-3: #76726a;
+  --fg-3: #a7a39a;
 
   --honey: #e7b45c;
   --honey-2: #f0c879;
@@ -531,7 +531,7 @@
   --panel-2: #ffffff;
   --fg: #1c160a;
   --fg-2: rgba(28, 22, 10, 0.66);
-  --fg-3: rgba(28, 22, 10, 0.5);
+  --fg-3: #5e574b;
   --line: rgba(28, 22, 10, 0.09);
   --line-2: rgba(28, 22, 10, 0.15);
   --line-3: rgba(28, 22, 10, 0.24);
@@ -539,7 +539,7 @@
 }
 /* The ClawBank hero stays a dark brand band in both themes so the white mark
    and warm glow read correctly. */
-:global([data-theme="hive-light"]) .hero { --fg: #f3f0e9; --fg-3: #76726a; }
+:global([data-theme="hive-light"]) .hero { --fg: #f3f0e9; --fg-3: #a7a39a; }
 :global([data-theme="hive-light"]) .primary { color: #ffffff; }
 :global([data-theme="hive-light"]) .primary[data-tone="live"] { color: #06241f; }
 :global([data-theme="hive-light"]) .capText small,

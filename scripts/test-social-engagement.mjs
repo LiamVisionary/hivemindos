@@ -5,9 +5,20 @@ import { register } from "node:module";
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
 const {
+  bindXDiscoveryStatusToAccount,
+  createAccountTwitterCliRun,
   discoverRelevantXPosts,
   extractEngagementTargetHandles,
 } = await import("../src/lib/services/socials/social-x-discovery.ts");
+const xSessionBindingModule = await import("../src/lib/services/socials/social-x-session-binding.ts").catch(() => null);
+assert.ok(xSessionBindingModule, "Socials needs a non-secret per-account X session binding contract");
+const {
+  SOCIAL_X_SESSION_MODE_BINDING,
+  socialXSessionBinding,
+  suggestedSocialXSessionEnvKeys,
+  withSocialXSessionBinding,
+} = xSessionBindingModule;
+assert.equal(typeof createAccountTwitterCliRun, "function", "Socials needs an account-scoped twitter-cli runner");
 const { generateSocialEngagementDrafts } = await import("../src/lib/services/socials/social-engagement-generator.ts");
 const { targetAnchorIsSupported } = await import("../src/lib/services/socials/social-draft-quality.ts");
 
@@ -42,6 +53,163 @@ Tier-1 engagement targets: @0xDeployer, @bankrbot, @jessepollak, @base, @buildon
 ## Product
 HivemindOS is a local-first agent operating system with shared memory, governed wallets, and work routing.
 `;
+
+const suggestedKeys = suggestedSocialXSessionEnvKeys("RHSpillover");
+assert.deepEqual(suggestedKeys, {
+  authTokenEnvKey: "SOCIAL_X_RHSPILLOVER_AUTH_TOKEN",
+  ct0EnvKey: "SOCIAL_X_RHSPILLOVER_CT0",
+});
+
+const accountA = {
+  ...account,
+  id: "x:account-a",
+  handle: "account_a",
+  binding: {
+    [SOCIAL_X_SESSION_MODE_BINDING]: "account-env",
+    "env:TWITTER_AUTH_TOKEN": "SOCIAL_X_ACCOUNT_A_AUTH_TOKEN",
+    "env:TWITTER_CT0": "SOCIAL_X_ACCOUNT_A_CT0",
+  },
+};
+const accountB = {
+  ...account,
+  id: "x:account-b",
+  handle: "account_b",
+  binding: {
+    [SOCIAL_X_SESSION_MODE_BINDING]: "account-env",
+    "env:TWITTER_AUTH_TOKEN": "SOCIAL_X_ACCOUNT_B_AUTH_TOKEN",
+    "env:TWITTER_CT0": "SOCIAL_X_ACCOUNT_B_CT0",
+  },
+};
+const sharedXEnv = {
+  TWITTER_AUTH_TOKEN: "global-auth",
+  TWITTER_CT0: "global-ct0",
+  SOCIAL_X_ACCOUNT_A_AUTH_TOKEN: "account-a-auth",
+  SOCIAL_X_ACCOUNT_A_CT0: "account-a-ct0",
+  SOCIAL_X_ACCOUNT_B_AUTH_TOKEN: "account-b-auth",
+  SOCIAL_X_ACCOUNT_B_CT0: "account-b-ct0",
+};
+const executions = [];
+const executeImpl = async (command, args, options) => {
+  executions.push({ command, args, env: options.env });
+  const handle = options.env.TWITTER_AUTH_TOKEN === "account-a-auth" ? "account_a" : "account_b";
+  return {
+    stdout: JSON.stringify({ ok: true, data: { authenticated: true, user: { screenName: handle } } }),
+  };
+};
+const [runAccountA, runAccountB] = await Promise.all([
+  createAccountTwitterCliRun(accountA, {
+    sharedEnv: sharedXEnv,
+    baseEnv: { PATH: "/test/bin", TWITTER_AUTH_TOKEN: "process-global-auth", TWITTER_CT0: "process-global-ct0" },
+    command: "/test/bin/twitter",
+    executeImpl,
+  }),
+  createAccountTwitterCliRun(accountB, {
+    sharedEnv: sharedXEnv,
+    baseEnv: { PATH: "/test/bin", TWITTER_AUTH_TOKEN: "process-global-auth", TWITTER_CT0: "process-global-ct0" },
+    command: "/test/bin/twitter",
+    executeImpl,
+  }),
+]);
+await Promise.all([runAccountA(["status", "--json"]), runAccountB(["status", "--json"])]);
+assert.equal(executions.length, 2);
+assert.deepEqual(
+  executions.map((execution) => ({
+    command: execution.command,
+    auth: execution.env.TWITTER_AUTH_TOKEN,
+    ct0: execution.env.TWITTER_CT0,
+    path: execution.env.PATH,
+  })),
+  [
+    { command: "/test/bin/twitter", auth: "account-a-auth", ct0: "account-a-ct0", path: "/test/bin" },
+    { command: "/test/bin/twitter", auth: "account-b-auth", ct0: "account-b-ct0", path: "/test/bin" },
+  ],
+  "concurrent account runners receive isolated cookies instead of the process-global session",
+);
+assert.deepEqual(socialXSessionBinding(accountA), {
+  mode: "account-env",
+  authTokenEnvKey: "SOCIAL_X_ACCOUNT_A_AUTH_TOKEN",
+  ct0EnvKey: "SOCIAL_X_ACCOUNT_A_CT0",
+});
+assert.match(
+  bindXDiscoveryStatusToAccount(accountA, {
+    available: true,
+    authenticated: true,
+    backend: "agent-reach-twitter-cli",
+    checkedAt: "2026-07-27T00:00:00.000Z",
+    accountHandle: "account_a",
+    detail: "Authenticated X discovery as @account_a.",
+  }).detail,
+  /isolated session/i,
+  "a matching per-account session is visibly distinguished from the machine default",
+);
+assert.match(
+  bindXDiscoveryStatusToAccount(accountA, {
+    available: true,
+    authenticated: true,
+    backend: "agent-reach-twitter-cli",
+    checkedAt: "2026-07-27T00:00:00.000Z",
+    accountHandle: "someone_else",
+    detail: "Authenticated X discovery as @someone_else.",
+  }).detail,
+  /update this account's Agent Reach X session/i,
+  "a mismatched per-account session points back to the account binding instead of global re-authentication",
+);
+assert.deepEqual(
+  withSocialXSessionBinding(
+    { connectionSlug: "managed-account-a", creditAccountId: "credits-a" },
+    {
+      mode: "account-env",
+      authTokenEnvKey: "SOCIAL_X_ACCOUNT_A_AUTH_TOKEN",
+      ct0EnvKey: "SOCIAL_X_ACCOUNT_A_CT0",
+    },
+  ),
+  {
+    connectionSlug: "managed-account-a",
+    creditAccountId: "credits-a",
+    xSessionMode: "account-env",
+    "env:TWITTER_AUTH_TOKEN": "SOCIAL_X_ACCOUNT_A_AUTH_TOKEN",
+    "env:TWITTER_CT0": "SOCIAL_X_ACCOUNT_A_CT0",
+  },
+  "Agent Reach session bindings preserve the managed posting connection",
+);
+assert.deepEqual(
+  withSocialXSessionBinding(accountA.binding, { mode: "machine-default" }),
+  undefined,
+  "switching an account back to the legacy machine default removes only its X session binding",
+);
+
+let missingCredentialExecutions = 0;
+const missingCredentialRun = await createAccountTwitterCliRun({
+  ...accountA,
+  binding: {
+    ...accountA.binding,
+    "env:TWITTER_CT0": "SOCIAL_X_MISSING_CT0",
+  },
+}, {
+  sharedEnv: sharedXEnv,
+  baseEnv: { TWITTER_AUTH_TOKEN: "process-global-auth", TWITTER_CT0: "process-global-ct0" },
+  command: "/test/bin/twitter",
+  executeImpl: async () => {
+    missingCredentialExecutions += 1;
+    return { stdout: "{}" };
+  },
+});
+await assert.rejects(
+  () => missingCredentialRun(["status", "--json"]),
+  /SOCIAL_X_MISSING_CT0/,
+  "a broken account binding names the missing env key instead of silently falling back to another account",
+);
+assert.equal(missingCredentialExecutions, 0, "missing account credentials fail before twitter-cli runs");
+
+const runMachineDefault = await createAccountTwitterCliRun(account, {
+  sharedEnv: sharedXEnv,
+  baseEnv: { PATH: "/test/bin" },
+  command: "/test/bin/twitter",
+  executeImpl,
+});
+await runMachineDefault(["status", "--json"]);
+assert.equal(executions.at(-1).env.TWITTER_AUTH_TOKEN, "global-auth", "legacy accounts keep using the machine-default Agent Reach session");
+assert.equal(executions.at(-1).env.TWITTER_CT0, "global-ct0");
 
 assert.deepEqual(
   extractEngagementTargetHandles(account, contextText),
@@ -94,6 +262,27 @@ const queue = [{
   stateHistory: [{ state: "suggested", at: "2026-07-20T12:00:00.000Z", by: "agent" }],
   createdAt: "2026-07-20T12:00:00.000Z",
 }];
+
+const mismatchedCommands = [];
+await assert.rejects(
+  () => discoverRelevantXPosts({
+    account: { ...account, id: "x:rhspillover", handle: "RHSpillover" },
+    contextText,
+    queue: [],
+    queries: ["agent memory wallets"],
+    now,
+    runTwitterImpl: async (args) => {
+      mismatchedCommands.push(args[0]);
+      if (args[0] === "status") {
+        return { ok: true, data: { authenticated: true, user: { screenName: "TheHivemindOS" } } };
+      }
+      throw new Error("account-mismatched discovery must stop before reading X");
+    },
+  }),
+  /authenticated as @TheHivemindOS.*@RHSpillover/i,
+  "comment discovery must fail closed when Agent Reach is authenticated as a different X account",
+);
+assert.deepEqual(mismatchedCommands, ["status"], "a mismatched X session must not perform discovery reads");
 
 assert.equal(
   targetAnchorIsSupported(

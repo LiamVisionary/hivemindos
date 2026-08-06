@@ -41,10 +41,55 @@ const created = await store.createSocialAccount({
 assert.equal(created.drafting.enabled, true, "posting-capable accounts start with daily drafting enabled");
 assert.equal(created.drafting.draftsPerRun, 3);
 
-const draftContext = await buildSocialDraftContext(created, []);
+const unconfiguredContext = await buildSocialDraftContext(created, []);
+assert.match(unconfiguredContext.voiceCorpusText ?? "", /spent half the morning tracing one broken callback/);
+assert.equal(unconfiguredContext.sourceText, "", "a shared voice corpus is style input, not account-owned factual context");
+let prematureGenerationCalls = 0;
+await assert.rejects(
+  () => generateSocialDraftPack({
+    account: created,
+    queue: [],
+    count: 3,
+    mode: "posts",
+    dependencies: {
+      standaloneModelImpl: async () => {
+        prematureGenerationCalls += 1;
+        return { model: "test-luna", text: JSON.stringify({ drafts: [] }) };
+      },
+    },
+  }),
+  /Add at least one usable .*context source/i,
+  "standalone drafting waits for account-specific evidence instead of treating a shared persona as factual ownership",
+);
+assert.equal(prematureGenerationCalls, 0, "an unconfigured account does not spend a model turn");
+let unconfiguredAutomaticMode = "";
+const unconfiguredCycle = await runSocialDraftingCycle({
+  now: new Date("2026-07-19T14:00:00.000Z"),
+  generateImpl: async ({ mode }) => {
+    unconfiguredAutomaticMode = mode;
+    return { model: "test-model", contextSourceIds: [], contextWarnings: [], drafts: [] };
+  },
+  connectionProbeImpl: async () => ({ ok: true, detail: "connected" }),
+});
+assert.equal(unconfiguredCycle.generated.length, 0);
+assert.equal(unconfiguredAutomaticMode, "engagement", "background comment discovery stays independent while standalone drafting waits for context");
+
+const evidenceFile = join(tempHome, "draft-evidence.md");
+await writeFile(evidenceFile, "We repaired the broken callback and kept the regression test that proves the deep link returns to the desktop app.\n");
+const configured = await store.updateSocialAccount(created.id, (account) => ({
+  ...account,
+  contextSources: [store.newContextSource({ kind: "local-file", ref: evidenceFile })],
+}));
+const draftContext = await buildSocialDraftContext(configured, []);
 assert.match(draftContext.voiceCorpusText ?? "", /spent half the morning tracing one broken callback/);
+assert.match(draftContext.sourceText ?? "", /repaired the broken callback/);
 assert.match(draftContext.text, /Anti-repetition memory/);
-assert.ok(sourceAnchorIsSupported("broken callback", `${draftContext.voiceCorpusText}\n${draftContext.sourceText}`));
+assert.ok(sourceAnchorIsSupported("broken callback", draftContext.sourceText));
+assert.equal(
+  sourceAnchorIsSupported("spent half the morning", draftContext.sourceText),
+  false,
+  "a phrase found only in the shared voice corpus cannot support an account-specific factual claim",
+);
 
 assert.equal(
   socialDraftCadenceFamily("an agent wallet without a hard cap is just a liability"),
@@ -67,7 +112,7 @@ assert.ok(
 );
 
 const qualityGatedPreview = await generateSocialDraftPack({
-  account: created,
+  account: configured,
   queue: [],
   count: 3,
   mode: "posts",
@@ -80,7 +125,7 @@ const qualityGatedPreview = await generateSocialDraftPack({
           shape: "receipt",
           sourceAnchor: "broken callback",
           text: "spent half the morning on one callback. the desktop catches it again, and the regression test is staying forever",
-          rationale: "Concrete repair receipt from the authored corpus.",
+          rationale: "Concrete repair receipt grounded in the account-specific context source.",
         },
         {
           shape: "reaction",
@@ -100,6 +145,12 @@ const qualityGatedPreview = await generateSocialDraftPack({
           text: "callback opens the browser, desktop catches the deep link, test pins the route. small chain, very annoying bug",
           rationale: "Specific walkthrough with a separate cadence.",
         },
+        {
+          shape: "invitation",
+          sourceAnchor: "spent half the morning",
+          text: "tell us which callback edge case ate the most time in your desktop app",
+          rationale: "This anchor exists only in the shared voice corpus and must not establish account ownership.",
+        },
       ] }),
     }),
   },
@@ -107,6 +158,82 @@ const qualityGatedPreview = await generateSocialDraftPack({
 assert.equal(qualityGatedPreview.model, "test-luna");
 assert.equal(qualityGatedPreview.drafts.length, 2, "unsupported and generic quota filler is dropped instead of backfilled");
 assert.ok(qualityGatedPreview.drafts.every((draft) => draft.kind === "post"));
+
+let repairCalls = 0;
+let observedRepairFeedback = "";
+const repairedPreview = await generateSocialDraftPack({
+  account: configured,
+  queue: [],
+  count: 3,
+  mode: "posts",
+  now: new Date("2026-07-22T15:00:00.000Z"),
+  dependencies: {
+    standaloneModelImpl: async (input) => {
+      repairCalls += 1;
+      observedRepairFeedback = input.repairFeedback ?? "";
+      if (repairCalls === 1) {
+        return {
+          model: "test-luna",
+          text: JSON.stringify({ drafts: [
+            {
+              shape: "receipt",
+              sourceAnchor: "a launch that never happened",
+              text: "made up evidence should never reach the queue",
+              rationale: "Unsupported source.",
+            },
+            {
+              shape: "reaction",
+              sourceAnchor: "broken callback",
+              text: "the future of desktop callbacks is here",
+              rationale: "Generic filler.",
+            },
+          ] }),
+        };
+      }
+      return {
+        model: "test-luna",
+        text: JSON.stringify({ drafts: [{
+          shape: "lesson",
+          sourceAnchor: "regression test",
+          text: "the callback fix was small. keeping the regression test is the part that saves the next afternoon",
+          rationale: "Repairs the rejected pack with a concrete account-context anchor.",
+        }] }),
+      };
+    },
+  },
+});
+assert.equal(repairCalls, 2, "an entirely rejected pack gets one bounded repair pass");
+assert.match(observedRepairFeedback, /unsupported source anchor/i);
+assert.match(observedRepairFeedback, /generic AI copy/i);
+assert.equal(repairedPreview.drafts.length, 1);
+
+let failedRepairCalls = 0;
+await assert.rejects(
+  () => generateSocialDraftPack({
+    account: configured,
+    queue: [],
+    count: 3,
+    mode: "posts",
+    now: new Date("2026-07-22T15:00:00.000Z"),
+    dependencies: {
+      standaloneModelImpl: async () => {
+        failedRepairCalls += 1;
+        return {
+          model: "test-luna",
+          text: JSON.stringify({ drafts: [{
+            shape: "reaction",
+            sourceAnchor: "not in the supplied evidence",
+            text: "the future of callbacks is here",
+            rationale: "Still unsupported and generic.",
+          }] }),
+        };
+      },
+    },
+  }),
+  /Repair attempt:.*unsupported source anchor.*generic AI copy/i,
+  "a failed repair reports the actual rejection reasons instead of a generic quality-gate error",
+);
+assert.equal(failedRepairCalls, 2, "draft repair is bounded to one retry");
 
 let generationCalls = 0;
 const generateImpl = async ({ count }) => {
@@ -126,7 +253,7 @@ const first = await runSocialDraftingCycle({
   generateImpl,
   connectionProbeImpl: async () => ({ ok: true, detail: "connected" }),
 });
-assert.equal(first.generated.length, 3, "a new connected account gets its first draft pack immediately");
+assert.equal(first.generated.length, 3, "a configured connected account gets its first draft pack immediately");
 assert.equal(generationCalls, 1);
 let queue = await store.readSocialQueue();
 assert.deepEqual(queue.map((item) => item.state), ["suggested", "suggested", "suggested"]);

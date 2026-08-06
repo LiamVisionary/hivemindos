@@ -1,0 +1,49 @@
+{
+  "created_at": "2026-07-28T17:54:48.808149+00:00",
+  "request": "Upgrade the penny-stock paper loop with every proposed improvement: optional 0-3 selection, conservative EV, quote-level fills, SEC/corporate-action vetoes, outcome learning, stronger overfitting/risk gates, portfolio controls, and explicit reflections.",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/quant-research-validator.py",
+      "target_path": "src/lib/services/penny-stock-paper/statistics.ts",
+      "reuse_type": "translated_code",
+      "note": "Translated the existing Benjamini-Hochberg, CSCV/PBO, shifted-placebo, and deflated-Sharpe implementations into deterministic TypeScript research gates."
+    },
+    {
+      "source_repo": "eslazarev/purged-cross-validation",
+      "source_path": "src/purgedcv/_pbo.py",
+      "target_path": "src/lib/services/penny-stock-paper/statistics.ts",
+      "reuse_type": "translated_code",
+      "note": "Translated the audited MIT donor CSCV winner-rank/PBO calculation and aligned segment boundaries."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/copy-trading/counterfactual.ts",
+      "target_path": "src/lib/services/penny-stock-paper/outcomes.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted fixed-horizon counterfactual maturation into 1/5/10/20-session candidate outcomes."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/copy-trading/evolution.ts",
+      "target_path": "src/lib/services/penny-stock-paper/evolution.ts",
+      "reuse_type": "adapted_code",
+      "note": "Reused the paired bootstrap interval inside the expanded forward-promotion boundary."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/loops/loop-engine.ts",
+      "target_path": "src/lib/services/penny-stock-paper/evolution.ts",
+      "reuse_type": "adapted_code",
+      "note": "Reused append-only experiment recording for retained and rejected generations."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-copy-trading.mjs",
+      "target_path": "scripts/test-penny-stock-paper-lab.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Adapted paper-ledger and fail-closed evolution assertions to quote partial fills, SEC vetoes, cash, statistics, and matured outcomes."
+    }
+  ]
+}

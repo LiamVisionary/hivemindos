@@ -21,6 +21,7 @@ import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import type {
   CopyTradeAgentReview,
   CopyTradeAgentAnalysisState,
+  CopyTradeCloseReceipt,
   CopyTradeEngineStatus,
   CopyTradeEvent,
   CopyTradeEventKind,
@@ -59,8 +60,10 @@ import { calibrateAgentDecision } from "./calibration";
 import {
   createCounterfactualRecord,
   dueCounterfactualHorizons,
+  markCounterfactualLotsClosed,
   markMissedCounterfactualHorizons,
   observeCounterfactualHorizon,
+  observeCounterfactualTargetExit,
 } from "./counterfactual";
 import { estimateCopyTradeExecutionCost } from "./execution-costs";
 import { paperPortfolioValue, startAgentAnalysisState } from "./evolution";
@@ -69,6 +72,12 @@ import {
   warmCopyTradeIntelligence,
   type CopyTradeIntelligence,
 } from "./risk-intelligence";
+import {
+  backfillCounterfactualRetrospectives,
+  summarizeCounterfactualLearning,
+} from "./retrospective";
+import { copyTradeSignalClockMs, isCopyTradeSignalCooldownActive } from "./signal-clock";
+import { syncCopyTradeRetrospectivesToBrain } from "./brain-sync";
 
 const RECONCILE_MS = 10_000;
 const HEARTBEAT_MS = 15_000;
@@ -81,6 +90,8 @@ type Loop = {
   config: CopyTradingConfig;
   state: CopyTradeRuntimeState;
   timer: NodeJS.Timeout | null;
+  analysisQueue: Promise<void>;
+  brainSyncBusy: boolean;
   busy: boolean;
   stop: boolean;
 };
@@ -96,7 +107,7 @@ type Engine = {
 };
 
 type SignalHandlingResult =
-  | { status: "complete"; acted?: boolean }
+  | { status: "complete"; acted?: boolean; sellReceipt?: CopyTradeCloseReceipt }
   | { status: "retry"; reason: string };
 
 const COMPLETE_SIGNAL: SignalHandlingResult = { status: "complete" };
@@ -186,7 +197,15 @@ async function reconcile(engine: Engine): Promise<void> {
       }
       const state = persisted[config.id] ?? seedEvolvedRuntimeState(config, persisted);
       state.running = true;
-      const loop: Loop = { config, state, timer: null, busy: false, stop: false };
+      const loop: Loop = {
+        config,
+        state,
+        timer: null,
+        analysisQueue: Promise.resolve(),
+        brainSyncBusy: false,
+        busy: false,
+        stop: false,
+      };
       engine.loops.set(config.id, loop);
       scheduleLoop(engine, loop, 0);
     }
@@ -281,6 +300,7 @@ async function tick(engine: Engine, loop: Loop): Promise<void> {
     state.lastError = error instanceof Error ? error.message : String(error);
   } finally {
     await writeRuntimeState(state).catch(() => {});
+    queueRetrospectiveBrainSync(loop);
     loop.busy = false;
     scheduleLoop(engine, loop, loop.config.pollIntervalMs);
   }
@@ -342,8 +362,12 @@ async function handleSignal(loop: Loop, signal: CopyTradeSignal): Promise<Signal
     return COMPLETE_SIGNAL;
   }
 
-  const sinceLast = Date.now() - lastActionAt(activePositions(loop));
-  if (!isPendingSignal(state, signal.targetTxRef) && sinceLast < config.cooldownMs) {
+  if (!isPendingSignal(state, signal.targetTxRef) && isCopyTradeSignalCooldownActive({
+    network: config.network,
+    signal,
+    lastActionClockMs: state.lastSignalActionClockMs,
+    cooldownMs: config.cooldownMs,
+  })) {
     state.stats.skipped += 1;
     record(state, "skip", `Cooldown active — skipped ${signal.direction} ${short(token)}.`, { token, targetTxRef: signal.targetTxRef });
     return COMPLETE_SIGNAL;
@@ -352,6 +376,7 @@ async function handleSignal(loop: Loop, signal: CopyTradeSignal): Promise<Signal
   if (signal.direction === "buy") {
     return handleBuy(loop, signal, token);
   }
+  if (config.evolution) await observeEvolvedTargetExit(loop, signal, token);
   return handleSell(loop, signal, token, "sell");
 }
 
@@ -398,8 +423,9 @@ async function handleBuy(loop: Loop, signal: CopyTradeSignal, token: string): Pr
     const attempt = await paperBuy(loop, signal, token, usd, prepared?.market);
     if (attempt.status === "retry") return attempt;
     if (attempt.fill) {
+      markSignalAction(loop, signal);
       await commitSignalState(loop, signal.targetTxRef);
-      if (prepared) await analyzeEvolvedBuy(loop, signal, attempt.fill, prepared.intelligence);
+      if (prepared) queueEvolvedAnalysis(loop, signal, attempt.fill, prepared.intelligence);
     }
     return COMPLETE_SIGNAL;
   }
@@ -436,6 +462,7 @@ async function handleBuy(loop: Loop, signal: CopyTradeSignal, token: string): Pr
       lastActionAt: now,
     };
     state.stats.mirrored += 1;
+    markSignalAction(loop, signal);
     record(state, "buy", `Bought ~$${result.valueUsd.toFixed(2)} of ${result.buy} with ${funding.sellToken}. Tx ${short(result.reference)}.`, {
       token, symbol: result.buy, usd: result.valueUsd, txRef: result.reference, targetTxRef: signal.targetTxRef,
     });
@@ -443,10 +470,11 @@ async function handleBuy(loop: Loop, signal: CopyTradeSignal, token: string): Pr
       const market = await prepared.market;
       const entryPriceUsd = market.priceUsd ?? (result.buyAmount > 0 ? result.valueUsd / result.buyAmount : null);
       if (entryPriceUsd != null && entryPriceUsd > 0) {
-        await analyzeEvolvedBuy(loop, signal, {
+        queueEvolvedAnalysis(loop, signal, {
           token,
           symbol: result.buy,
           spentUsd: result.valueUsd,
+          acquiredAmount: result.buyAmount,
           entryPriceUsd,
           market,
           buyCost: executionCostFor(config, result.valueUsd, market.liquidityUsd),
@@ -476,6 +504,7 @@ async function handleSell(loop: Loop, signal: CopyTradeSignal | null, token: str
   if (config.dryRun) {
     const result = await paperSell(loop, signal, token, reason);
     if (result.status === "complete" && result.acted && signal) {
+      markSignalAction(loop, signal);
       await commitSignalState(loop, signal.targetTxRef);
     }
     return result;
@@ -496,6 +525,7 @@ async function handleSell(loop: Loop, signal: CopyTradeSignal | null, token: str
       confirmation: SWAP_CONFIRMATION,
     });
     state.stats.mirrored += 1;
+    if (signal) markSignalAction(loop, signal);
     record(state, reason === "sell" ? "sell" : reason, `Sold ${position.symbol} → ~$${result.valueUsd.toFixed(2)} (${reason}). Tx ${short(result.reference)}.`, {
       token, symbol: position.symbol, usd: result.valueUsd, txRef: result.reference, targetTxRef: signal?.targetTxRef,
     });
@@ -583,6 +613,30 @@ async function ensureAgentAnalysisState(loop: Loop): Promise<void> {
   }
   state.agentAnalysis.counterfactuals ??= [];
   state.agentAnalysis.nextSequence ??= nextCounterfactualSequence(state.agentAnalysis.counterfactuals);
+  state.agentAnalysis.brainSync ??= {};
+  const reviewsByTxRef = new Map(state.agentAnalysis.reviews.map((review) => [review.targetTxRef, review]));
+  for (const record of state.agentAnalysis.counterfactuals) {
+    const review = reviewsByTxRef.get(record.targetTxRef);
+    if (!record.entryContext && review) {
+      record.entryContext = {
+        liquidityUsd: null,
+        priceChange24hPct: null,
+        volume24hUsd: null,
+        securityCoverage: "unavailable",
+        riskScore: review.riskScore ?? 0,
+        riskFlags: review.riskFlags ?? [],
+        reviewSummary: review.summary,
+      };
+    }
+  }
+  for (const record of state.agentAnalysis.counterfactuals) backfillCounterfactualRetrospectives(record);
+  if (
+    state.agentAnalysis.counterfactuals.length
+    && !state.agentAnalysis.counterfactuals.some((record) => record.policyVersion === evolution.policyVersion)
+  ) {
+    const next = nextCounterfactualSequence(state.agentAnalysis.counterfactuals);
+    state.agentAnalysis.nextSequence = Math.ceil(next / COPY_TRADE_EVALUATION_BATCH_SIZE) * COPY_TRADE_EVALUATION_BATCH_SIZE;
+  }
   if (state.agentAnalysis.sourceStartPortfolioUsd == null) {
     state.agentAnalysis.sourceStartPortfolioUsd = paperPortfolioValue(sourceState?.paper);
   }
@@ -595,6 +649,7 @@ type EvolvedBuyFill = {
   token: string;
   symbol: string;
   spentUsd: number;
+  acquiredAmount: number;
   entryPriceUsd: number;
   market: TokenMarket;
   buyCost: CopyTradeExecutionCost;
@@ -609,12 +664,15 @@ function prepareEvolvedBuy(loop: Loop, token: string): {
   intelligence: Promise<CopyTradeIntelligence>;
 } {
   const counterfactuals = loop.state.agentAnalysis?.counterfactuals ?? [];
+  const nextSequence = loop.state.agentAnalysis?.nextSequence ?? nextCounterfactualSequence(counterfactuals);
+  const currentBatch = Math.floor(nextSequence / COPY_TRADE_EVALUATION_BATCH_SIZE);
   return {
     market: tokenMarket(loop.config.network, token),
     intelligence: warmCopyTradeIntelligence({
       network: loop.config.network,
       token,
       counterfactuals,
+      currentBatch,
     }),
   };
 }
@@ -625,6 +683,7 @@ async function analyzeEvolvedBuy(
   fill: EvolvedBuyFill,
   intelligencePromise: Promise<CopyTradeIntelligence>,
 ): Promise<void> {
+  if (loop.stop) return;
   const { config, state } = loop;
   const evolution = config.evolution;
   if (!evolution) return;
@@ -640,6 +699,7 @@ async function analyzeEvolvedBuy(
     market: fill.market,
     security: intelligence.security,
   });
+  const priorLearning = summarizeCounterfactualLearning(analysis.counterfactuals, evaluationBatch);
   const thresholdSnapshot = calibrateAgentDecision({
     rawConfidence: 0,
     baseThreshold: evolution.minCloseConfidence,
@@ -684,8 +744,10 @@ async function analyzeEvolvedBuy(
       intelligence,
       riskGate,
       calibration: thresholdSnapshot,
-      recentReviews: analysis.reviews,
+      recentReviews: analysis.reviews.filter((candidate) => (candidate.evaluationBatch ?? -1) < evaluationBatch),
+      priorLearning,
     });
+    if (loop.stop) return;
     const calibration = calibrateAgentDecision({
       rawConfidence: review.rawConfidence ?? review.confidence,
       baseThreshold: evolution.minCloseConfidence,
@@ -705,6 +767,38 @@ async function analyzeEvolvedBuy(
   const shouldClose = !review.error
     && review.decision === "close"
     && (review.reviewPath === "risk-close" || review.confidence >= closeThreshold);
+  const sellCost = executionCostFor(config, fill.spentUsd, fill.market.liquidityUsd);
+  const counterfactual = createCounterfactualRecord({
+    sequence,
+    policyVersion: evolution.policyVersion,
+    targetTxRef: signal.targetTxRef,
+    token: fill.token,
+    symbol: fill.symbol,
+    entryAt: review.reviewedAt,
+    entryPriceUsd: fill.entryPriceUsd,
+    spentUsd: fill.spentUsd,
+    acquiredAmount: fill.acquiredAmount,
+    decision: review.decision,
+    reviewPath: review.reviewPath,
+    confidence: review.rawConfidence ?? review.confidence,
+    calibratedConfidence: review.calibratedConfidence ?? review.confidence,
+    closeThreshold,
+    closeExecuted: false,
+    entryContext: {
+      liquidityUsd: fill.market.liquidityUsd,
+      priceChange24hPct: fill.market.priceChange24hPct,
+      volume24hUsd: fill.market.volume24hUsd,
+      securityCoverage: intelligence.security.coverage,
+      riskScore: riskGate.score,
+      riskFlags: [...intelligence.security.hardRiskFlags, ...intelligence.security.cautionFlags],
+      reviewSummary: review.summary,
+    },
+    buyCost: fill.buyCost,
+    sellCost,
+  });
+  analysis.reviews.push(review);
+  analysis.counterfactuals.push(counterfactual);
+  analysis.nextSequence = sequence + 1;
   if (review.error) {
     record(state, "agent-error", `GPT-5.6 Sol review failed; kept ${fill.symbol}. ${review.error}`, {
       token: fill.token,
@@ -722,8 +816,17 @@ async function analyzeEvolvedBuy(
       dryRun: config.dryRun,
       targetTxRef: signal.targetTxRef,
     });
-    const closeResult = await handleSell(loop, signal, fill.token, "agent-close");
+    const closeResult = await handleSell(loop, null, fill.token, "agent-close");
     review.closeExecuted = closeResult.status === "complete" && closeResult.acted === true;
+    if (review.closeExecuted && closeResult.status === "complete" && closeResult.sellReceipt) {
+      review.closeReceipt = closeResult.sellReceipt;
+      markCounterfactualLotsClosed(analysis.counterfactuals, {
+        token: fill.token,
+        decisionTargetTxRef: signal.targetTxRef,
+        priceUsd: closeResult.sellReceipt.priceUsd,
+        closedAt: closeResult.sellReceipt.closedAt,
+      });
+    }
   } else {
     const detail = review.decision === "close"
       ? `GPT-5.6 Sol close confidence ${fmtPct(review.confidence)} was below calibrated ${fmtPct(closeThreshold)}; kept ${fill.symbol}. ${review.summary}`
@@ -737,30 +840,27 @@ async function analyzeEvolvedBuy(
     });
   }
 
-  analysis.reviews.push(review);
-  const closePriceUsd = fill.market.priceUsd ?? fill.entryPriceUsd;
-  const sellCost = executionCostFor(config, fill.spentUsd, fill.market.liquidityUsd);
-  analysis.counterfactuals.push(createCounterfactualRecord({
-    sequence,
-    policyVersion: evolution.policyVersion,
-    targetTxRef: signal.targetTxRef,
-    token: fill.token,
-    symbol: fill.symbol,
-    entryAt: review.reviewedAt,
-    entryPriceUsd: fill.entryPriceUsd,
-    spentUsd: fill.spentUsd,
-    decision: review.decision,
-    reviewPath: review.reviewPath,
-    confidence: review.rawConfidence ?? review.confidence,
-    calibratedConfidence: review.calibratedConfidence ?? review.confidence,
-    closeThreshold,
-    closePriceUsd,
-    closeAt: review.closeExecuted ? Date.now() : undefined,
-    closeExecuted: review.closeExecuted,
-    buyCost: fill.buyCost,
-    sellCost,
-  }));
-  analysis.nextSequence = sequence + 1;
+}
+
+/** Model research is serialized but deliberately kept off the signal-detection
+ *  loop so a 120-second review cannot shift later paper entries or cooldowns. */
+function queueEvolvedAnalysis(
+  loop: Loop,
+  signal: CopyTradeSignal,
+  fill: EvolvedBuyFill,
+  intelligencePromise: Promise<CopyTradeIntelligence>,
+): void {
+  loop.analysisQueue = loop.analysisQueue
+    .catch(() => {})
+    .then(async () => {
+      if (loop.stop) return;
+      await analyzeEvolvedBuy(loop, signal, fill, intelligencePromise);
+      await writeRuntimeState(loop.state);
+    })
+    .catch((error) => {
+      loop.state.stats.errors += 1;
+      loop.state.lastError = error instanceof Error ? error.message : String(error);
+    });
 }
 
 async function matureEvolvedCounterfactuals(loop: Loop): Promise<void> {
@@ -783,6 +883,30 @@ async function matureEvolvedCounterfactuals(loop: Loop): Promise<void> {
       }
     }
   }));
+}
+
+/** Shared Brain writes run after local persistence and outside the polling
+ *  critical path. A failed sync remains in the local retry ledger. */
+function queueRetrospectiveBrainSync(loop: Loop): void {
+  if (!loop.config.evolution || loop.brainSyncBusy) return;
+  loop.brainSyncBusy = true;
+  void syncCopyTradeRetrospectivesToBrain(loop.config, loop.state)
+    .catch(() => undefined)
+    .finally(() => {
+      loop.brainSyncBusy = false;
+    });
+}
+
+async function observeEvolvedTargetExit(loop: Loop, signal: CopyTradeSignal, token: string): Promise<void> {
+  const records = loop.state.agentAnalysis?.counterfactuals ?? [];
+  const candidates = records.filter((record) => record.token === token && !record.targetExit);
+  if (!candidates.length) return;
+  const priceUsd = await tokenPriceUsd(loop.config.network, token);
+  if (priceUsd == null) return;
+  const observedAt = Date.now();
+  for (const record of candidates) {
+    observeCounterfactualTargetExit(record, signal.targetTxRef, priceUsd, observedAt);
+  }
 }
 
 function nextCounterfactualSequence(records: NonNullable<CopyTradeAgentAnalysisState["counterfactuals"]>): number {
@@ -840,7 +964,8 @@ async function paperBuy(
     fill: {
       token,
       symbol: sym,
-      spentUsd: res.notionalUsd,
+      spentUsd: res.spentUsd,
+      acquiredAmount: res.boughtAmount,
       entryPriceUsd: res.priceUsd,
       market,
       buyCost,
@@ -862,7 +987,8 @@ async function paperSell(
   const position = ledger.positions[token];
   const grossProceedsUsd = price != null && position ? position.amount * price : position?.spentUsd ?? 0;
   const sellCost = executionCostFor(config, grossProceedsUsd, market.liquidityUsd);
-  const res = applyPaperSell(ledger, token, price, Date.now(), sellCost);
+  const closedAt = Date.now();
+  const res = applyPaperSell(ledger, token, price, closedAt, sellCost);
   if (!res.ok) {
     if (res.reason === "no market price" && signal) {
       return { status: "retry", reason: "verified market price unavailable" };
@@ -878,7 +1004,20 @@ async function paperSell(
   record(state, kind, `[paper] sold ${res.symbol} → ~$${res.proceedsUsd.toFixed(2)} (${reason}, P&L ${fmtSigned(res.pnlUsd)}) — sim cash ${fmtUsd(ledger.cashUsd)}.`, {
     token, symbol: res.symbol, usd: res.proceedsUsd, dryRun: true, targetTxRef: signal?.targetTxRef,
   });
-  return { status: "complete", acted: true };
+  return {
+    status: "complete",
+    acted: true,
+    sellReceipt: {
+      closedAt,
+      priceUsd: res.priceUsd,
+      soldAmount: res.soldAmount,
+      positionCostUsd: res.positionCostUsd,
+      grossProceedsUsd: res.grossProceedsUsd,
+      proceedsUsd: res.proceedsUsd,
+      executionCostUsd: res.executionCostUsd,
+      pnlUsd: res.pnlUsd,
+    },
+  };
 }
 
 /** Revalue every paper position to market each tick (updates the display mark) and
@@ -947,8 +1086,9 @@ function isBlacklisted(config: CopyTradingConfig, token: string): boolean {
   return config.blacklist.some((b) => b.toLowerCase() === lower);
 }
 
-function lastActionAt(positions: Record<string, CopyTradeOpenPosition>): number {
-  return Object.values(positions).reduce((max, p) => Math.max(max, p.lastActionAt), 0);
+function markSignalAction(loop: Loop, signal: CopyTradeSignal): void {
+  const clock = copyTradeSignalClockMs(loop.config.network, signal);
+  if (clock != null) loop.state.lastSignalActionClockMs = clock;
 }
 
 function clamp(value: number, min: number, max: number): number {

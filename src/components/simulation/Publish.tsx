@@ -11,12 +11,32 @@ import { Icon } from "./icons";
 import { SlideOver } from "./SlideOver";
 import { type Run } from "./sim-data";
 import { useSimData } from "./sim-context";
+import { simulationPublishBlocker, type SimulationPublishResult } from "./publish-readiness";
 
-export function Publish({ run, onClose, onPublished }: { run: Run; onClose: () => void; onPublished?: () => void }) {
+export function Publish({ run, onClose, onPublished }: { run: Run; onClose: () => void; onPublished?: () => Promise<SimulationPublishResult> }) {
   const thread = useSimData().threadFor(run);
   const tweets = thread ? thread.tweets : [];
   const [done, setDone] = React.useState(false);
-  const confirm = () => { onPublished?.(); setDone(true); };
+  const [publishing, setPublishing] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const blocker = simulationPublishBlocker(run, thread, typeof onPublished === "function");
+  const confirm = async () => {
+    if (!onPublished || blocker || publishing) return;
+    setPublishing(true);
+    setError("");
+    try {
+      const result = await onPublished();
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setDone(true);
+    } catch (publishError) {
+      setError(publishError instanceof Error ? publishError.message : "Publishing failed.");
+    } finally {
+      setPublishing(false);
+    }
+  };
   return (
     <SlideOver open onClose={onClose} wide title={done ? "Thread published" : "Approve & publish"}
       sub={done ? undefined : "Review the thread the social bee generated, then publish it to @hivemindos."}
@@ -24,7 +44,7 @@ export function Publish({ run, onClose, onPublished }: { run: Run; onClose: () =
         ? <><span /><Button variant="primary" sm onClick={onClose}>Done</Button></>
         : <>
             <span className="sv-mono" style={{ fontSize: 11, color: "var(--fg-4)" }}>{tweets.length} tweet{tweets.length === 1 ? "" : "s"} · published as generated</span>
-            <Button variant="primary" sm onClick={confirm}><Icon name="check" size={13} sw={2.2} /> Publish now</Button>
+            <Button variant="primary" sm disabled={Boolean(blocker) || publishing} onClick={() => void confirm()}>{publishing ? <span className="fr-dot live sv-livedot" style={{ color: "currentColor", width: 6, height: 6 }} /> : <Icon name="check" size={13} sw={2.2} />} {publishing ? "Publishing…" : "Publish now"}</Button>
           </>}>
       {done ? (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14, padding: "30px 10px", textAlign: "center" }}>
@@ -53,6 +73,8 @@ export function Publish({ run, onClose, onPublished }: { run: Run; onClose: () =
           ) : (
             <p style={{ margin: 0, fontSize: 12.5, color: "var(--fg-3)", lineHeight: 1.5 }}>No thread was generated for this run yet.</p>
           )}
+          {blocker ? <p role="status" style={{ margin: 0, color: "var(--danger)", fontSize: 12.5, lineHeight: 1.5 }}>{blocker}</p> : null}
+          {error ? <p role="alert" style={{ margin: 0, color: "var(--danger)", fontSize: 12.5, lineHeight: 1.5 }}>{error}</p> : null}
         </>
       )}
     </SlideOver>

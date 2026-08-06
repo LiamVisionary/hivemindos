@@ -17,6 +17,11 @@ import {
 } from "@/lib/config/robinhood-chain";
 import { zeroExFetch } from "@/lib/services/trading/zero-ex";
 import {
+  buildAlpacaOrderPayload,
+  type AlpacaSupportedOrderType,
+  type AlpacaTimeInForce,
+} from "@/lib/services/trading/alpaca-order";
+import {
   placeRobinhoodAgenticEquityOrder,
   reviewRobinhoodAgenticEquityOrder,
 } from "@/lib/services/trading/robinhood-agentic";
@@ -128,10 +133,17 @@ export type BuyStockInput = {
   paper?: boolean;
   /** Optional whole-share count for alpaca (overrides notional when present). */
   qty?: number;
+  /** Advanced Alpaca order controls. Other venues remain market-only. */
+  orderType?: AlpacaSupportedOrderType;
+  timeInForce?: AlpacaTimeInForce;
+  limitPrice?: number;
+  stopPrice?: number;
   /** Must equal CONFIRM_BUY for a buy, or CONFIRM_SELL for a sell, to execute. */
   confirmation?: string;
   /** Granted approval id supplied when retrying an escalated trade. */
   approvalToken?: string;
+  /** True only for a server-validated direct confirmation or bounded persisted authorization. */
+  approvalThresholdSatisfied?: boolean;
   /** Local wallet network used by xStocks, and by live Alpaca platform-fee collection. */
   network?: string;
   /** Local wallet secret used by xStocks, and by live Alpaca platform-fee collection. Never logged. */
@@ -151,6 +163,8 @@ export type BuyStockResult = {
   ticker: string;
   notionalUsd: number;
   qty?: number;
+  orderType?: AlpacaSupportedOrderType;
+  timeInForce?: AlpacaTimeInForce;
   /** Alpaca order id, xStocks tx signature, or future venue reference. */
   reference: string;
   /** true only for alpaca paper-trading orders. */
@@ -167,6 +181,8 @@ export type BuyStockQuote = {
   venue: AgentTradingVenue;
   ticker: string;
   notionalUsd: number;
+  orderType?: AlpacaSupportedOrderType;
+  timeInForce?: AlpacaTimeInForce;
   /** Estimated equity acquired in human units, when derivable. */
   estimatedUnits?: number;
   priceImpactPct?: number;
@@ -286,9 +302,16 @@ async function executeAlpaca(input: BuyStockInput): Promise<BuyStockResult> {
     ? undefined
     : await reserveBrokeragePlatformFee(input, "alpaca-live", "Live Alpaca");
   const base = paper ? ALPACA_PAPER_BASE : ALPACA_LIVE_BASE;
-  const order = input.qty && input.qty > 0
-    ? { symbol: underlying, qty: String(input.qty), side, type: "market", time_in_force: "day" }
-    : { symbol: underlying, notional: input.notionalUsd.toFixed(2), side, type: "market", time_in_force: "day" };
+  const order = buildAlpacaOrderPayload({
+    ticker: underlying,
+    side,
+    notionalUsd: input.notionalUsd,
+    qty: input.qty,
+    orderType: input.orderType,
+    timeInForce: input.timeInForce,
+    limitPrice: input.limitPrice,
+    stopPrice: input.stopPrice,
+  });
 
   const response = await fetch(`${base}/v2/orders`, {
     method: "POST",
@@ -317,12 +340,14 @@ async function executeAlpaca(input: BuyStockInput): Promise<BuyStockResult> {
     ticker: underlying,
     notionalUsd: input.notionalUsd,
     qty: input.qty,
+    orderType: order.type,
+    timeInForce: order.time_in_force,
     reference: json.id,
     paper,
     acquired: Number.isFinite(filled) ? filled : undefined,
     platformFee,
     status: json.status || "accepted",
-    detail: `${paper ? "Paper" : "LIVE"} market ${side} of ${underlying} submitted (order ${json.id}, status ${json.status || "accepted"}).${platformFeeReceiptDetail(platformFee)}`,
+    detail: `${paper ? "Paper" : "LIVE"} ${order.type.replace("_", "-")} ${side} of ${underlying} submitted (order ${json.id}, status ${json.status || "accepted"}).${platformFeeReceiptDetail(platformFee)}`,
   };
 }
 
@@ -813,6 +838,9 @@ async function executeRobinhoodAgenticTrade(input: BuyStockInput): Promise<BuySt
 export async function executeStockTrade(input: BuyStockInput): Promise<BuyStockResult> {
   const side = input.side ?? "buy";
   const venue = assertVenue(input.policy);
+  if (venue !== "alpaca" && input.orderType && input.orderType !== "market") {
+    throw new Error("Advanced stock orders are currently available only for Alpaca. Choose a market order for this venue.");
+  }
   const notionalUsd = assertAmount(input, input.policy);
   const expected = stockTradeConfirmation(side);
   if (input.confirmation !== expected) {
@@ -843,6 +871,7 @@ export async function executeStockTrade(input: BuyStockInput): Promise<BuyStockR
       amountUsd: spendForGovernance,
       target: `${venue}:${input.ticker} ${side}${isPaperTrade ? " (paper)" : ""}`,
       approvalToken: input.approvalToken,
+      approvalThresholdSatisfied: input.approvalThresholdSatisfied,
       companyId: governance.companyId,
       explanation: {
         summary: isPaperTrade
@@ -859,6 +888,7 @@ export async function executeStockTrade(input: BuyStockInput): Promise<BuyStockR
           `Ticker: ${input.ticker}`,
           `Side: ${side}`,
           `Venue: ${venue}`,
+          `Order type: ${input.orderType ?? "market"}`,
           `Notional: $${notionalUsd.toFixed(2)}`,
         ],
         missingContext: [],
@@ -907,13 +937,23 @@ export async function executeBuyStock(input: BuyStockInput): Promise<BuyStockRes
  * alpaca it echoes the notional (a live quote would burn an API call before
  * confirmation).
  */
-export async function discoverStockTradeQuote(input: Pick<BuyStockInput, "side" | "policy" | "ticker" | "notionalUsd" | "slippageBps" | "paper">): Promise<BuyStockQuote> {
+export async function discoverStockTradeQuote(input: Pick<BuyStockInput, "side" | "policy" | "ticker" | "notionalUsd" | "slippageBps" | "paper" | "orderType" | "timeInForce" | "qty" | "limitPrice" | "stopPrice">): Promise<BuyStockQuote> {
   const side = input.side ?? "buy";
   const venue = assertVenue(input.policy);
   const notionalUsd = assertAmount({ ...input, agentId: "", ticker: input.ticker, notionalUsd: input.notionalUsd }, input.policy);
   if (venue === "alpaca") {
     const underlying = alpacaSymbol(input.ticker);
     const paper = resolveAlpacaPaper(input);
+    const order = buildAlpacaOrderPayload({
+      ticker: underlying,
+      side,
+      notionalUsd,
+      qty: input.qty,
+      orderType: input.orderType,
+      timeInForce: input.timeInForce,
+      limitPrice: input.limitPrice,
+      stopPrice: input.stopPrice,
+    });
     const platformFee = paper
       ? undefined
       : await quoteTradingPlatformFee({ source: "alpaca-live", network: input.policy.network, amountUsd: notionalUsd });
@@ -921,9 +961,14 @@ export async function discoverStockTradeQuote(input: Pick<BuyStockInput, "side" 
       venue,
       ticker: underlying,
       notionalUsd,
+      orderType: order.type,
+      timeInForce: order.time_in_force,
       platformFee,
-      detail: `Market ${side} of ${underlying} for ~$${notionalUsd.toFixed(2)} via Alpaca ${paper ? "paper" : "LIVE"}.${platformFeeDetail(platformFee)}`,
+      detail: `${order.type.replace("_", "-")} ${side} of ${underlying} for ~$${notionalUsd.toFixed(2)} via Alpaca ${paper ? "paper" : "LIVE"} (${order.time_in_force.toUpperCase()}).${platformFeeDetail(platformFee)}`,
     };
+  }
+  if (input.orderType && input.orderType !== "market") {
+    throw new Error("Advanced stock orders are currently available only for Alpaca.");
   }
   if (venue === "robinhood-agentic") {
     const ticker = alpacaSymbol(input.ticker);

@@ -394,3 +394,87 @@ Trace the actual producer call chain from delivery tick or button through policy
 ### Fixed evidence
 
 The focused regression starts red with no discovery module, then proves explicit context targets precede voice-memory targets; self, stale, reposted, previously seen, and duplicate posts are rejected; Luna receives bounded live candidates; and two replies plus one quote retain exact target snapshots. Store/service tests prove target tampering fails closed, repeated targets are suppressed across queue history, editing cannot silently retarget copy, and auto-mode accounts still receive engagement as unapproved suggestions. Fixed 2026-07-20.
+
+## G9 - A broken optional desktop integration can leave a blank window at startup
+
+### Symptom
+
+The macOS window opens but remains entirely white. The embedded dashboard server
+is healthy and returns HTTP 200, yet the WebView never paints the application.
+Tailscale can simultaneously show `Connecting`, and repeated
+`tailscale status --json` processes remain alive indefinitely.
+
+### Why it fools you
+
+- A healthy embedded HTTP server makes the blank window look like a frontend
+  hydration or routing failure.
+- The Tailscale CLI normally returns quickly, so an unbounded fallback looks
+  harmless in code review.
+- macOS can report the Tailscale system extension as activated and enabled while
+  its Network Extension session is still wedged in `Connecting`.
+- Multiple macOS Tailscale variants can coexist: the connected VPN service can
+  belong to one bundle while `/usr/local/bin/tailscale` launches another. A
+  generic “some Tailscale service exists” check can then reopen the wrong app
+  and trigger macOS's “Add VPN Configurations” prompt.
+- KeepAlive helpers can recreate the symptom after the desktop closes. The
+  HiveDrop watcher, collector identity/mDNS, Fleet watchdog, app discovery,
+  bridge repair, and env replication all count as startup-adjacent automatic
+  work and must share the same optional-integration policy.
+- A synchronous Tauri invoke runs on the UI-process main thread. Waiting for an
+  optional integration there blocks WKWebView input, compositing, and first
+  paint even though the server and React bundle are healthy.
+
+### Root cause and fix
+
+Trace the launch path through `DashboardApp` → native dashboard bootstrap /
+Tailscale device refresh → Rust status lookup. On macOS, use the bounded local
+API first and never fall through to a generic GUI-bundled Tailscale CLI when the
+local service is unhealthy. The App Store variant does not expose the
+standalone LocalAPI files, so it has one narrow exception: require `scutil` to
+report the exact `io.tailscale.ipn.macos` VPN profile as already connected,
+resolve that bundle inside `/Applications` without executing it, and invoke
+only its exact CLI path. Every CLI call has a hard deadline and terminates its
+process group so wrapper scripts cannot leave descendants behind. Make native
+startup, discovery, and pairing invokes async and move blocking status work
+away from the UI thread. Treat failure as degraded optional functionality:
+continue locally and render a persistent, actionable “Tailscale needs
+attention” message. Generic automatic CLI work remains disabled by default on
+macOS across both the app and persistent background services; the explicit
+`HIVEMIND_TAILSCALE_CLI_FALLBACK=1` opt-in is for diagnosis or a known-safe
+single installation. Resolve executable paths with filesystem checks, never a
+`tailscale version` probe.
+
+### Diagnosis recipe
+
+1. Confirm the embedded dashboard URL returns HTTP 200 while the window is
+   blank.
+2. Sample the app process. If the main thread is inside
+   `WebURLSchemeHandlerCocoa`, `wry`, Tauri IPC, or project Rust, follow the
+   active invoke rather than debugging React paint.
+3. Run `scutil --nc status "Tailscale"` and inspect connect/disconnect counters.
+   `Connecting` with no successful connection confirms the VPN session is not
+   ready, even if `systemextensionsctl list` says the extension is enabled.
+4. Inspect Tailscale CLI children and sample one. A process waiting on
+   NetworkExtension/XPC is evidence that the status fallback cannot be trusted
+   to return promptly.
+5. Use `scutil --nc list` to identify duplicate bundle IDs or separately named
+   Tailscale VPN services. Match the executable's variant, not only the display
+   name.
+6. Inspect persistent HivemindOS LaunchAgents and their child processes. A
+   KeepAlive `tailscale file get --wait` or periodic status/SSH probe can reopen
+   the permission dialog after a force quit.
+7. Verify the repaired app paints, remains usable locally, shows the attention
+   banner, and creates no new unbounded status processes.
+
+### Fixed evidence
+
+The focused Rust regression forces a wrapper and descendant process past a
+50 ms deadline, verifies the call returns in under one second, and confirms the
+descendant never writes its delayed marker. A separate health regression proves
+an unavailable Tailnet is explicitly marked as requiring attention. The
+frontend regression proves that condition becomes actionable copy stating that
+HivemindOS is continuing locally. Taildrop and shared-policy regressions prove
+that neither a missing VPN profile nor a configured-but-different macOS variant
+launches Tailscale automatically. Live LaunchAgent verification confirmed the
+guarded pause and zero Tailscale children; the permission dialog remained
+absent. Fixed 2026-07-27.

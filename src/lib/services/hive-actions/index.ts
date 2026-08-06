@@ -1,5 +1,20 @@
 export { defineHiveAction } from "./define";
+export {
+  APIFY_HIVE_ACTIONS,
+  apifyFundAction,
+  apifyRunActorAction,
+  apifySearchActorsAction,
+  apifyX402StatusAction,
+} from "./apify-actions";
 export { monidReadAction, monidRunAction } from "./integrations/monid";
+export {
+  HIVEMIND_OFFICE_HIVE_ACTIONS,
+  hivemindOfficeApplyUpdateAction,
+  hivemindOfficeInspectAction,
+  hivemindOfficeOpenAction,
+  hivemindOfficePrepareUpdateAction,
+  hivemindOfficeStatusAction,
+} from "./hivemind-office";
 export { calcomReadAction } from "./integrations/calcom";
 export { shopifyReadAction } from "./integrations/shopify";
 export { medusaReadAction } from "./integrations/medusa";

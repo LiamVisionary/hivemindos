@@ -9,6 +9,8 @@ import {
   saveLinkedInTokens,
   verifyLinkedInOAuthState,
 } from "@/lib/services/integrations/linkedin-oauth";
+import { integrationsOAuthDeepLink } from "@/lib/services/integrations/github-oauth";
+import { parkOAuthReturn } from "@/lib/services/integrations/oauth-return-store";
 
 export const runtime = "nodejs";
 
@@ -60,6 +62,15 @@ export async function GET(request: NextRequest) {
       status: 400,
     }));
   }
+  // Desktop flows return through the registered scheme (the relative returnUrl
+  // is useless in the external browser). Derived ONLY from the verified state.
+  const deepLinkFor = (status: "connected" | "error") => {
+    if (!verifiedState.returnMode) return undefined;
+    // Park the outcome so the desktop app routes back when it regains focus —
+    // installed shells drop unknown deep-link URLs and only foreground.
+    parkOAuthReturn({ provider: "linkedin", view: "integrations", status });
+    return integrationsOAuthDeepLink(verifiedState.returnMode, { provider: "linkedin", view: "integrations", status }) || undefined;
+  };
 
   try {
     // LinkedIn's token endpoint only accepts application/x-www-form-urlencoded.
@@ -85,6 +96,7 @@ export async function GET(request: NextRequest) {
       title: "LinkedIn connected",
       body: "Saved LinkedIn OAuth access as <code>LINKEDIN_ACCESS_TOKEN</code> through hive-env-add. Your hive can now post to LinkedIn on every machine.",
       returnUrl,
+      deepLink: deepLinkFor("connected"),
     }));
   } catch (error) {
     return clearCookies(renderLinkedInOAuthPage({
@@ -92,6 +104,7 @@ export async function GET(request: NextRequest) {
       body: error instanceof Error ? error.message : "Could not finish LinkedIn OAuth.",
       returnUrl,
       status: 502,
+      deepLink: deepLinkFor("error"),
     }));
   }
 }

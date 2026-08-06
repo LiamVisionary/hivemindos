@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-07-27T12:36:51.838745+00:00",
+  "request": "Add per-Socials-account Agent Reach X session bindings",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/socials/adapters/types.ts",
+      "target_path": "src/lib/services/socials/social-x-session-binding.ts",
+      "reuse_type": "adapted_code",
+      "note": "Extended the existing non-secret per-account env-alias contract to select Agent Reach cookie key names without storing cookie values."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/features/env/SharedHiveEnvCredentialInput.tsx",
+      "target_path": "src/components/socials/XSessionCard.tsx",
+      "reuse_type": "adapted_code",
+      "note": "Reused the established names-only Shared Hive Env secret selector and saver for each account cookie."
+    },
+    {
+      "source_repo": "public-clis/twitter-cli",
+      "source_path": "twitter_cli/auth.py",
+      "target_path": "src/lib/services/socials/social-x-discovery.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted twitter-cli canonical per-process TWITTER_AUTH_TOKEN and TWITTER_CT0 precedence into immutable account-scoped subprocess environments."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/shared-hive-env.ts",
+      "target_path": "src/app/api/socials/accounts/route.ts",
+      "reuse_type": "adapted_code",
+      "note": "Reused presence-only env validation before persisting an account binding."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-social-adapters-post.mjs",
+      "target_path": "scripts/test-social-engagement.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Extended the existing hermetic X engagement runner seam with concurrent account isolation and fail-closed credential cases."
+    }
+  ]
+}

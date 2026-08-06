@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-07-30T00:20:30.000000+00:00",
+  "request": "are you just doing 1? do multiple and monitor them to see how we perform. also worth noting what our average win rate it so we can see if we have any sort of edge with the real markets",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/trading/prediction-proper-betting-paper.ts",
+      "target_path": "src/lib/services/trading/prediction-proper-betting-monitor.ts",
+      "reuse_type": "adapted_code",
+      "note": "canonical paper-run arms, frozen forecast probabilities, market midpoints, and research-only boundary"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/penny-stock-paper/cadence.ts",
+      "target_path": "scripts/prediction-proper-betting-monitor.mjs",
+      "reuse_type": "adapted_code",
+      "note": "repeatable public-evidence monitor cadence and append-only aggregate artifacts"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/audit-prediction-proper-betting-ledger.mjs",
+      "target_path": "src/lib/services/trading/prediction-proper-betting-monitor.ts",
+      "reuse_type": "adapted_code",
+      "note": "unique-market and event-cluster grouping, closed-only outcomes, and PnL concentration"
+    },
+    {
+      "source_repo": "ank3it/polymarket-arb-agent",
+      "source_path": "src/polymarket_arb_agent/sizing.py",
+      "target_path": "src/lib/services/trading/prediction-proper-betting-paper.ts",
+      "reuse_type": "translated_code",
+      "note": "configurable paper capital while preserving portfolio, market, event, category, and depth caps"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-prediction-proper-betting-paper.mjs",
+      "target_path": "scripts/test-prediction-proper-betting-monitor.mjs",
+      "reuse_type": "test_adapted",
+      "note": "hermetic public-resolution fixture, immutable artifact output, and zero-order assertions"
+    }
+  ]
+}

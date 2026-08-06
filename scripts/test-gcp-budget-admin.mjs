@@ -259,4 +259,89 @@ const leakResult = await admin.applyCompanyApiBudget(SAMPLE_BUDGET, {
 const joined = JSON.stringify(leakResult.errors);
 assert.doesNotMatch(joined, /ya29\.SECRET-TOKEN-XYZ/, "the access token must never leak into error output");
 
+// ── enableGcpService: strict allowlist — the discovery/guardrail APIs plus the
+//    two Places surfaces, NEVER a free-form service enabler. ──
+for (const allowed of [
+  "cloudresourcemanager.googleapis.com",
+  "cloudbilling.googleapis.com",
+  "billingbudgets.googleapis.com",
+  "serviceusage.googleapis.com",
+  "places.googleapis.com",
+  "places-backend.googleapis.com",
+]) {
+  assert.equal(admin.isEnableableGcpService(allowed), true, `${allowed} must be enableable`);
+}
+assert.equal(admin.isEnableableGcpService("compute.googleapis.com"), false, "never a free-form service enabler");
+assert.equal(admin.isEnableableGcpService(""), false);
+assert.equal(admin.ENABLEABLE_GCP_SERVICES.length, 6, "the allowlist is exactly the six known services");
+
+// ── Single-shot enable: v1 services:enable, POST, bearer token, EMPTY body. ──
+{
+  const enableCalls = [];
+  await admin.enableGcpService("maps-agency-42", "cloudresourcemanager.googleapis.com", {
+    mintToken: async () => "ya29.FAKE-ACCESS-TOKEN",
+    fetchImpl: async (url, init) => {
+      enableCalls.push({ url: String(url), init });
+      return new Response(JSON.stringify({ name: "operations/enable-op-1", done: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+  });
+  assert.equal(enableCalls.length, 1, "a done operation needs no polling");
+  assert.equal(
+    enableCalls[0].url,
+    "https://serviceusage.googleapis.com/v1/projects/maps-agency-42/services/cloudresourcemanager.googleapis.com:enable",
+    "enable must POST the v1 services:enable resource",
+  );
+  assert.equal(enableCalls[0].init.method, "POST", "enable must be a POST");
+  assert.equal(enableCalls[0].init.headers.Authorization, "Bearer ya29.FAKE-ACCESS-TOKEN");
+  assert.equal(enableCalls[0].init.body, undefined, "docs: the enable request body must be empty");
+}
+
+// ── Not-done operation is short-polled on the v1 surface (not v1beta1). ──
+{
+  const urls = [];
+  await admin.enableGcpService("123456789", "cloudbilling.googleapis.com", {
+    mintToken: async () => "ya29.FAKE-ACCESS-TOKEN",
+    fetchImpl: async (url) => {
+      urls.push(String(url));
+      const body = urls.length === 1
+        ? { name: "operations/enable-op-2", done: false }
+        : { name: "operations/enable-op-2", done: true };
+      return new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
+    },
+    sleep: async () => {},
+  });
+  assert.equal(urls.length, 2, "a pending operation must be polled to done");
+  assert.equal(
+    urls[1],
+    "https://serviceusage.googleapis.com/v1/operations/enable-op-2",
+    "the enable operation must be polled on the v1 surface",
+  );
+}
+
+// ── Provider refusal throws (the bootstrap case: Service Usage itself
+//    disabled / permission denied) — the UI shows the console-link fallback. ──
+await assert.rejects(
+  admin.enableGcpService("maps-agency-42", "places.googleapis.com", {
+    mintToken: async () => "ya29.FAKE-ACCESS-TOKEN",
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify({ error: { message: "Service Usage API has not been used in project 123 before or it is disabled." } }),
+        { status: 403, headers: { "Content-Type": "application/json" } },
+      ),
+  }),
+  /Google API 403/,
+);
+await assert.rejects(admin.enableGcpService("", "places.googleapis.com"), /project/i);
+await assert.rejects(admin.enableGcpService("maps-agency-42", ""), /service/i);
+
+// ── The route must gate the enable action on the allowlist (text pin). ──
+const { readFileSync } = await import("node:fs");
+const budgetRoute = readFileSync(new URL("../src/app/api/companies/[id]/api-budget/route.ts", import.meta.url), "utf8");
+assert.match(budgetRoute, /action === "enable-gcp-service"/);
+assert.match(budgetRoute, /isEnableableGcpService\(service\)/, "the route must reject non-allowlisted services");
+assert.match(budgetRoute, /enableGcpService\(projectRef, service\)/);
+
 console.log("test-gcp-budget-admin: OK");

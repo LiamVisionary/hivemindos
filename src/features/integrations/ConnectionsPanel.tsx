@@ -6,6 +6,8 @@ import type { ConnectionProviderKey, ConnectionProviderStatus, ConnectionsPayloa
 import { CLAWBANK_OPEN_EVENT, CLAWBANK_UPDATED_EVENT } from "@/features/dashboard/ClawBankOnboardingModal";
 import { DASHBOARD_TARGET_APPLIED_EVENT, dashboardTargetFromSearch, type DashboardRouteTarget } from "@/features/dashboard/dashboard-navigation";
 import { openExternalUrl } from "@/lib/native/open-external-url";
+import { oauthReturnMode } from "@/lib/native/oauth-return-mode";
+import { ExternalSignInButton } from "@/components/ExternalSignInButton";
 import { IntegrationModalActions } from "./IntegrationModalActions";
 import { AzureMcpSetup } from "./AzureMcpSetup";
 import { BrowserExtensionInstallCard } from "./BrowserExtensionInstallCard";
@@ -18,6 +20,7 @@ import "./integrations-redesign.css";
 
 type FetchErrorPayload = { error?: string; message?: string };
 type ModalTab = "connect" | "actions";
+type ConnectionFilter = "all" | "connected" | "attention" | "available";
 
 const PROVIDER_STYLE: Record<ConnectionProviderKey, { mono: string; accent: string; logo?: string }> = {
   github: { mono: "Gh", accent: "#c7ccd4" },
@@ -95,6 +98,8 @@ export function ConnectionsPanel({
   const [message, setMessage] = React.useState("");
   const [modalTarget, setModalTarget] = React.useState<IntegrationModalTarget | null>(initialModalTarget);
   const [openKey, setOpenKey] = React.useState<ConnectionProviderKey | "">(setupProviderKey ?? initialModalTarget?.providerKey ?? "");
+  const [query, setQuery] = React.useState("");
+  const [connectionFilter, setConnectionFilter] = React.useState<ConnectionFilter>("all");
 
   const refresh = React.useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true);
@@ -158,6 +163,15 @@ export function ConnectionsPanel({
 
   const providers = payload?.providers ?? [];
   const connectedCount = providers.filter((provider) => provider.connected).length;
+  const verifiedCount = providers.filter((provider) => provider.connected && provider.verified).length;
+  const attentionCount = providers.filter((provider) => provider.connected && !provider.verified).length;
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredProviders = providers.filter((provider) => {
+    if (connectionFilter === "connected" && (!provider.connected || !provider.verified)) return false;
+    if (connectionFilter === "attention" && (!provider.connected || provider.verified)) return false;
+    if (connectionFilter === "available" && provider.connected) return false;
+    return !normalizedQuery || `${provider.label} ${provider.detail} ${provider.account ?? ""}`.toLowerCase().includes(normalizedQuery);
+  });
   const open = providers.find((provider) => provider.key === openKey) ?? null;
 
   if (setupProviderKey) {
@@ -204,17 +218,32 @@ export function ConnectionsPanel({
         </div>
       ) : (
         <div className="ni-stage ni-pad">
-          <BrowserExtensionInstallCard />
-          <HiveResearchSyncCard />
-          <NotebookLmIntegrationCard />
           <div className="ni-atool">
             <div>
               <h2>Apps</h2>
               <p>{connectedCount} connected app{connectedCount === 1 ? "" : "s"} · shared with every machine in your hive</p>
             </div>
           </div>
+          <div className="ni-filterbar">
+            <label className="fm-search">
+              <BIcon name="search" size={15} />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search app connections…" aria-label="Search app connections" />
+            </label>
+            <div className="ni-filterchips" role="group" aria-label="Filter app connections">
+              {([
+                { id: "all", label: `All ${providers.length}` },
+                { id: "connected", label: `Connected ${verifiedCount}` },
+                { id: "attention", label: `Needs attention ${attentionCount}` },
+                { id: "available", label: `Available ${providers.length - connectedCount}` },
+              ] as Array<{ id: ConnectionFilter; label: string }>).map((filter) => (
+                <button key={filter.id} type="button" aria-pressed={connectionFilter === filter.id} onClick={() => setConnectionFilter(filter.id)}>
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="ni-agrid">
-            {providers.map((provider) => (
+            {filteredProviders.map((provider) => (
               <button key={provider.key} type="button" className="ni-acard" data-on={provider.connected ? "" : undefined} onClick={() => { setMessage(""); setModalTarget(null); setOpenKey(provider.key); }}>
                 <ProviderGlyph providerKey={provider.key} size={56} radius={16} />
                 <strong>{provider.label}</strong>
@@ -223,6 +252,21 @@ export function ConnectionsPanel({
               </button>
             ))}
           </div>
+          {!filteredProviders.length ? (
+            <div className="ni-empty" role="status">
+              <strong>No app connections match</strong>
+              <span>Clear the search or choose a different status.</span>
+            </div>
+          ) : null}
+          <div className="ni-atool">
+            <div>
+              <h2>Local tools &amp; workflows</h2>
+              <p>Optional browser, research, and NotebookLM helpers that stay under your control</p>
+            </div>
+          </div>
+          <BrowserExtensionInstallCard />
+          <HiveResearchSyncCard />
+          <NotebookLmIntegrationCard />
           {message ? <p className="ni-note good">{message}</p> : null}
         </div>
       )}
@@ -258,7 +302,7 @@ function StatusPill({ provider }: { provider: ConnectionProviderStatus }) {
   if (!provider.verified) return <span className="ni-pill warn">Saved · check failed</span>;
   return (
     <span className="ni-pill good" style={{ maxWidth: "100%", minWidth: 0 }}>
-      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+      <span style={{ overflowWrap: "anywhere" }}>
         Connected{provider.account ? ` · ${provider.account}` : ""}
       </span>
     </span>
@@ -287,6 +331,7 @@ function ConnectModal({
   const [busy, setBusy] = React.useState("");
   const [note, setNote] = React.useState("");
   const [modalTab, setModalTab] = React.useState<ModalTab>(initialTab);
+  const modalRef = React.useRef<HTMLDivElement>(null);
   // After the sign-in tab opens in the external browser, poll the connections
   // endpoint so the modal flips to Connected on its own — the user never has to
   // come back and hit Refresh. `pollDeadlineRef` bounds the wait.
@@ -311,20 +356,54 @@ function ConnectModal({
   // `google-cloud` and `slack` use a baked-in client (PKCE, persistent callback),
   // so they are oauthReady once the client id is set and never show a client form.
   const oauthOnly = isGoogle || isGoogleCloud || isSlack || isAzure;
-  const usesOAuthClient = isGoogle || isGoogleCloud || isSlack || isAzure;
 
   // Keep the latest props reachable from the poll interval without making it a
   // dependency (which would tear down and recreate the interval every render).
   const liveRef = React.useRef({ provider, onUpdated, onClose });
-  liveRef.current = { provider, onUpdated, onClose };
+  const busyRef = React.useRef(Boolean(busy));
+  React.useEffect(() => {
+    liveRef.current = { provider, onUpdated, onClose };
+  }, [onClose, onUpdated, provider]);
+  React.useEffect(() => {
+    busyRef.current = Boolean(busy);
+  }, [busy]);
 
   React.useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusableSelector = "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])";
+    const focusFirst = window.requestAnimationFrame(() => {
+      modalRef.current?.querySelector<HTMLElement>(focusableSelector)?.focus();
+    });
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !busy) onClose();
+      if (event.key === "Escape" && !busyRef.current) {
+        event.preventDefault();
+        liveRef.current.onClose();
+        return;
+      }
+      if (event.key !== "Tab" || !modalRef.current) return;
+      const focusable = Array.from(modalRef.current.querySelectorAll<HTMLElement>(focusableSelector));
+      if (focusable.length === 0) {
+        event.preventDefault();
+        modalRef.current.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose, busy]);
+    return () => {
+      window.cancelAnimationFrame(focusFirst);
+      document.removeEventListener("keydown", onKey);
+      previouslyFocused?.focus();
+    };
+  }, []);
 
   React.useEffect(() => {
     if (!polling) return;
@@ -452,30 +531,48 @@ function ConnectModal({
     await startOAuthConnect();
   }
 
+  // Resolves the ABSOLUTE provider authorization URL via the authenticated
+  // POST-start route. The external browser has no dashboard session cookie, so
+  // it must be handed the signed provider URL — a same-origin /oauth/start GET
+  // link would 401 at the proxy out there. Broker providers (slack/azure) also
+  // return a flowId, kept for the /poll rendezvous.
+  async function resolveAuthorizationUrl(): Promise<string> {
+    const response = await fetch(oauthUrl as string, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "start",
+        // Desktop app flows: the callback (in the external browser) deep-links
+        // back through the registered hivemindos:// scheme, carried in the
+        // signed state. Broker providers (slack/azure) ignore the field.
+        ...(oauthReturnMode() ? { returnMode: oauthReturnMode() } : {}),
+        ...(isAzure && azureTenantId.trim() ? { tenantId: azureTenantId.trim() } : {}),
+      }),
+    });
+    const data = await readJson<{ ok?: boolean; authorizationUrl?: string; flowId?: string } & FetchErrorPayload>(response);
+    if (!response.ok || data.ok === false) throw new Error(data.error ?? `Could not start ${provider.label} sign-in.`);
+    if (!data.authorizationUrl) throw new Error(`${provider.label} sign-in did not return an authorization URL.`);
+    brokerFlowRef.current = data.flowId ?? "";
+    return data.authorizationUrl;
+  }
+
+  function noteOpenedAndPoll() {
+    setNote(
+      isGoogleCloud
+        ? "Opened Google sign-in in your browser. Finish there — keep the Cloud Platform box ticked — and this window will update on its own."
+        : `Opened ${provider.label} sign-in in your browser. Finish there and this window will update on its own.`,
+    );
+    pollDeadlineRef.current = Date.now() + 3 * 60_000;
+    setPolling(true);
+  }
+
   async function startOAuthConnect() {
     setBusy("oauth");
     setNote("");
     try {
-      const response = await fetch(oauthUrl as string, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "start",
-          ...(isAzure && azureTenantId.trim() ? { tenantId: azureTenantId.trim() } : {}),
-        }),
-      });
-      const data = await readJson<{ ok?: boolean; authorizationUrl?: string; flowId?: string } & FetchErrorPayload>(response);
-      if (!response.ok || data.ok === false) throw new Error(data.error ?? `Could not start ${provider.label} sign-in.`);
-      if (!data.authorizationUrl) throw new Error(`${provider.label} sign-in did not return an authorization URL.`);
-      brokerFlowRef.current = data.flowId ?? "";
-      await openExternalUrl(data.authorizationUrl);
-      setNote(
-        isGoogleCloud
-          ? "Opened Google sign-in in your browser. Finish there — keep the Cloud Platform box ticked — and this window will update on its own."
-          : `Opened ${provider.label} sign-in in your browser. Finish there and this window will update on its own.`,
-      );
-      pollDeadlineRef.current = Date.now() + 3 * 60_000;
-      setPolling(true);
+      const authorizationUrl = await resolveAuthorizationUrl();
+      await openExternalUrl(authorizationUrl);
+      noteOpenedAndPoll();
     } catch (error) {
       setNote(error instanceof Error ? error.message : `Could not start ${provider.label} sign-in.`);
     } finally {
@@ -492,7 +589,7 @@ function ConnectModal({
 
   return (
     <div className="fm-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
-      <div className="fm-modal" role="dialog" aria-modal="true" aria-label={`Connect ${provider.label}`}>
+      <div ref={modalRef} className="fm-modal" role="dialog" aria-modal="true" aria-label={`Connect ${provider.label}`} tabIndex={-1}>
         <div className="fm-mhead">
           <div style={{ display: "flex", gap: 13, alignItems: "flex-start", minWidth: 0 }}>
             <ProviderGlyph providerKey={provider.key} size={40} radius={11} />
@@ -593,21 +690,23 @@ function ConnectModal({
           ) : null}
 
           {oauthUrl && !googleNeedsClient ? (
-            <BBtn
-              variant="primary"
-              onClick={() => usesOAuthClient ? void startOAuthConnect() : window.location.assign(oauthUrl)}
-              disabled={Boolean(busy) || polling}
-              style={{ justifySelf: "start", padding: "11px 18px", fontSize: 13.5 }}
-            >
-              {busy === "oauth" || polling ? <span className="ni-spin" /> : <BIcon name="key" size={15} />}
-              {polling
-                ? `Waiting for ${provider.label} sign-in…`
-                : busy === "oauth" && usesOAuthClient
-                  ? `Opening ${provider.label}…`
+            // Segmented external sign-in: the main segment opens the sign-in in
+            // the DEFAULT browser, the caret picks an installed one. Every
+            // provider resolves the absolute authorization URL through the
+            // authenticated POST-start route first (see resolveAuthorizationUrl).
+            <div style={{ justifySelf: "start" }}>
+              <ExternalSignInButton
+                label={polling
+                  ? `Waiting for ${provider.label} sign-in…`
                   : isGoogle
                     ? "Sign in with Google"
                     : `Connect with ${provider.label}`}
-            </BBtn>
+                resolveUrl={resolveAuthorizationUrl}
+                disabled={Boolean(busy) || polling}
+                onOpened={() => noteOpenedAndPoll()}
+                onError={(message) => setNote(message)}
+              />
+            </div>
           ) : null}
 
           {isClawBank ? (
@@ -637,6 +736,9 @@ function ConnectModal({
               </label>
               <label className="fb-label">Redirect URI (copy into the OAuth client if asked)
                 <input className="fb-field fb-mono" readOnly value={googleRedirectUri} onFocus={(event) => event.currentTarget.select()} />
+                <span className="ni-note" style={{ margin: 0 }}>
+                  Also add the same URI with <code>[::1]</code> in place of <code>127.0.0.1</code> — HivemindOS uses it when this machine serves on IPv6 only.
+                </span>
               </label>
             </div>
           ) : null}

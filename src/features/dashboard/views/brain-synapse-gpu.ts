@@ -100,17 +100,17 @@ export function makeNodeGlowAtlas(): THREE.CanvasTexture {
       const cy = Math.floor(variant / 2) * cell + cell / 2;
       // A compact core plus broad glow bed keeps the node crisp at any zoom.
       const bed = ctx.createRadialGradient(cx, cy, 0, cx, cy, cell * 0.46);
-      bed.addColorStop(0, "rgba(255,255,255,0.72)");
-      bed.addColorStop(0.16, "rgba(255,255,255,0.28)");
-      bed.addColorStop(0.5, "rgba(255,255,255,0.07)");
+      bed.addColorStop(0, "rgba(255,255,255,0.24)");
+      bed.addColorStop(0.16, "rgba(255,255,255,0.08)");
+      bed.addColorStop(0.5, "rgba(255,255,255,0.015)");
       bed.addColorStop(1, "rgba(255,255,255,0)");
       ctx.fillStyle = bed;
       ctx.beginPath();
       ctx.arc(cx, cy, cell * 0.46, 0, Math.PI * 2);
       ctx.fill();
       const core = ctx.createRadialGradient(cx, cy, 0, cx, cy, cell * 0.13);
-      core.addColorStop(0, "rgba(255,255,255,1)");
-      core.addColorStop(0.42, "rgba(255,255,255,0.7)");
+      core.addColorStop(0, "rgba(255,255,255,0.45)");
+      core.addColorStop(0.42, "rgba(255,255,255,0.25)");
       core.addColorStop(1, "rgba(255,255,255,0)");
       ctx.fillStyle = core;
       ctx.beginPath();
@@ -146,11 +146,13 @@ export const SOMA_VERTEX = /* glsl */ `
   attribute vec3 iTint;
   attribute float iGlow;
   attribute float iDim;
+  attribute float iHover;
   attribute float iProximity;
   attribute float iSeed;
   varying vec3 vTint;
   varying float vGlow;
   varying float vDim;
+  varying float vHover;
   varying float vProximity;
   varying float vSeed;
   varying vec3 vNormal;
@@ -160,9 +162,10 @@ export const SOMA_VERTEX = /* glsl */ `
     vTint = iTint;
     vGlow = iGlow;
     vDim = iDim;
+    vHover = iHover;
     vProximity = iProximity;
     vSeed = iSeed;
-    vec4 world = modelMatrix * instanceMatrix * vec4(position, 1.0);
+    vec4 world = modelMatrix * instanceMatrix * vec4(position * (1.0 + iHover * 0.45), 1.0);
     vNormal = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * normal);
     vView = normalize(cameraPosition - world.xyz);
     vec4 mv = viewMatrix * world;
@@ -180,6 +183,7 @@ export const SOMA_FRAGMENT = /* glsl */ `
   varying vec3 vTint;
   varying float vGlow;
   varying float vDim;
+  varying float vHover;
   varying float vProximity;
   varying float vSeed;
   varying vec3 vNormal;
@@ -193,13 +197,16 @@ export const SOMA_FRAGMENT = /* glsl */ `
     float membrane = pow(facing, 0.48);
     float nucleus = pow(facing, 6.0);
     float proximity = vProximity * mix(1.0, 0.86 + 0.14 * sin(uTime * 4.6 + vSeed * 18.0), uMotion);
-    vec3 col = mix(vTint * (0.9 + vGlow * 0.32), vec3(0.9, 0.97, 1.0), nucleus * uAdditive * 0.58);
-    col += vTint * nucleus * vGlow * 0.62;
-    col += mix(vTint, vec3(0.88, 0.96, 1.0), 0.32) * proximity * (0.34 + membrane * 0.46);
-    float darkAlpha = (0.12 + membrane * 0.4 + nucleus * 0.38) * (0.84 + vGlow * 0.4);
-    float lightAlpha = 0.42 + membrane * 0.48;
+    vec3 col = mix(vTint * (0.82 + vGlow * 0.12), vec3(0.9, 0.97, 1.0), nucleus * uAdditive * 0.18);
+    col += vTint * nucleus * vGlow * 0.18;
+    col += mix(vTint, vec3(0.88, 0.96, 1.0), 0.2) * proximity * (0.06 + membrane * 0.08);
+    vec3 hoverTint = mix(vTint, vec3(0.2, 0.9, 1.35), 0.78);
+    col = mix(col, hoverTint * (0.85 + membrane * 0.55 + nucleus * 0.3), vHover);
+    float darkAlpha = (0.06 + membrane * 0.16 + nucleus * 0.1) * (0.75 + vGlow * 0.12);
+    float lightAlpha = 0.28 + membrane * 0.34;
     float alpha = mix(lightAlpha, darkAlpha, uAdditive);
-    alpha *= 1.0 + proximity * 0.72;
+    alpha *= 1.0 + proximity * 0.08;
+    alpha = max(alpha, (0.13 + membrane * 0.4 + nucleus * 0.2) * vHover);
     alpha *= 1.0 - vDim * 0.68;
     float fog = smoothstep(uFogNear, uFogFar, vDist);
     alpha *= 1.0 - fog * 0.82;
@@ -233,10 +240,10 @@ export const HALO_VERTEX = /* glsl */ `
     float energized = iProximity * proximityPulse;
     vProximity = energized * sizeBias;
     vec4 mv = viewMatrix * modelMatrix * vec4(iPos, 1.0);
-    float proximityGrowth = energized * (8.0 + sizeBias * 10.0);
+    float proximityGrowth = energized * (0.5 + sizeBias * 1.2);
     mv.xy += position.xy * (iScale + proximityGrowth);
     float fog = smoothstep(uFogNear, uFogFar, -mv.z);
-    vAlpha = iAlpha * (1.0 + vProximity * 1.05) * (1.0 - fog * 0.9);
+    vAlpha = iAlpha * (1.0 + vProximity * 0.1) * (1.0 - fog * 0.9);
     gl_Position = projectionMatrix * mv;
   }
 `;
@@ -261,18 +268,11 @@ export const HALO_FRAGMENT = /* glsl */ `
     vec2 quadrant = vec2(step(0.5, fract(vSeed * 3.17)), step(0.5, fract(vSeed * 5.53)));
     vec2 atlasUv = clamp(rotated, 0.02, 0.98) * 0.5 + quadrant * 0.5;
     float mask = texture2D(uMap, atlasUv).a;
-    float radial = length(centered) * 2.0;
-    float rayCount = 7.0 + floor(vSeed * 7.0);
-    float rayAngle = atan(centered.y, centered.x) + angle * 0.3;
-    float rays = pow(abs(cos(rayAngle * rayCount)), 22.0)
-      * (1.0 - smoothstep(0.08, 0.92, radial))
-      * smoothstep(0.025, 0.1, radial);
-    float star = rays * (0.55 + vProximity * 0.75);
-    if (mask + star < 0.003) discard;
-    float a = (mask + star) * vAlpha;
+    float a = mask * vAlpha;
+    if (a < 0.003) discard;
     // Materials already select NormalBlending or AdditiveBlending. Supplying
     // unpremultiplied color avoids multiplying by alpha twice in dark mode.
-    gl_FragColor = vec4(mix(vTint, vec3(0.92, 0.98, 1.0), clamp(vProximity * 0.42, 0.0, 0.72)), a);
+    gl_FragColor = vec4(vTint, a);
   }
 `;
 
@@ -294,7 +294,7 @@ export const CORE_GLOW_VERTEX = /* glsl */ `
     float fast = 0.5 + 0.5 * sin(uTime * 2.3 + 1.7);
     vPulse = mix(0.5, slow * 0.7 + fast * 0.3, uMotion);
     vec4 mv = modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0);
-    mv.xy += position.xy * uSize * (0.86 + 0.24 * vPulse);
+    mv.xy += position.xy * uSize * (0.9 + 0.12 * vPulse);
     gl_Position = projectionMatrix * mv;
   }
 `;
@@ -341,14 +341,14 @@ export const CORE_GLOW_FRAGMENT = /* glsl */ `
       float nucleus = pow(h, 3.0);
       color = mix(color, vec3(0.5, 0.24, 1.0), clamp(turb, 0.0, 1.0));
       color = mix(color, vec3(0.55, 0.75, 1.0), depthTurb * 0.45);
-      color = mix(color, vec3(0.72, 0.78, 1.0), rim * 0.85);
-      color = mix(color, vec3(0.98, 0.99, 1.0), nucleus * 0.9);
-      alpha = (0.26 + 0.3 * depthTurb) * (1.0 - rim) + rim * 0.5 + nucleus * 0.55;
+      color = mix(color, vec3(0.72, 0.78, 1.0), rim * 0.55);
+      color = mix(color, vec3(0.98, 0.99, 1.0), nucleus * 0.58);
+      alpha = (0.18 + 0.2 * depthTurb) * (1.0 - rim) + rim * 0.32 + nucleus * 0.36;
     }
     float aura = step(orb, radius) * (1.0 - smoothstep(orb, 1.0, radius));
     color = mix(color, vec3(0.4, 0.45, 1.0), aura * 0.8);
-    alpha += aura * (0.1 + 0.08 * turb);
-    float breath = 0.78 + 0.22 * vPulse;
+    alpha += aura * (0.055 + 0.04 * turb);
+    float breath = 0.84 + 0.16 * vPulse;
     gl_FragColor = vec4(color, alpha * breath);
   }
 `;
@@ -456,8 +456,8 @@ export const PULSE_VERTEX = /* glsl */ `
     float ends = smoothstep(0.08, 0.2, t) * (1.0 - smoothstep(0.8, 0.92, t));
     float fog = smoothstep(uFogNear, uFogFar, -mv.z);
     vTint = aTint;
-    vAlpha = ends * mix(uSelDim, 1.0, aLit) * (1.0 - fog * 0.9) * mix(0.18, 1.0, uAdditive);
-    gl_PointSize = aSize * (1.0 + aLit * 0.15) * uScale / max(-mv.z, 1.0);
+    vAlpha = ends * mix(uSelDim, 1.0, aLit) * (1.0 - fog * 0.9) * mix(0.16, 0.48, uAdditive);
+    gl_PointSize = aSize * (1.0 + aLit * 0.06) * uScale / max(-mv.z, 1.0);
     gl_Position = projectionMatrix * mv;
   }
 `;
@@ -526,13 +526,13 @@ export const DUST_VERTEX = /* glsl */ `
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
     float fog = smoothstep(uFogNear, uFogFar, -mv.z);
     float core = 1.0 - smoothstep(70.0, 230.0, length(position));
-    // Center-dense crisp motes mirror the orbital graph's particle hierarchy.
-    vAlpha = mix(0.12, 0.42, core) * (1.0 - fog) * mix(0.04, 1.0, uAdditive);
-    float pointSize = aSize * (1.0 + core * 0.72) * uScale / max(-mv.z, 1.0);
+    // Sparse, faint motes add depth without competing with real graph nodes.
+    vAlpha = mix(0.03, 0.1, core) * (1.0 - fog) * mix(0.04, 1.0, uAdditive);
+    float pointSize = aSize * (1.0 + core * 0.32) * uScale / max(-mv.z, 1.0);
     // WebGL point size is perspective-scaled in framebuffer pixels. Clamp it
     // to the orbital graph's tiny 1–3 CSS-pixel character at retina scale so
     // close particles never become giant square blocks.
-    gl_PointSize = clamp(pointSize, 1.1, 4.2);
+    gl_PointSize = clamp(pointSize, 0.8, 2.2);
     gl_Position = projectionMatrix * mv;
   }
 `;

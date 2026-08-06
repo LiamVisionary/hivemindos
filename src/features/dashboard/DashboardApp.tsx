@@ -63,6 +63,7 @@ import {
 } from "lucide-react";
 import type { AdaptiveOpenRouterConfig, AdaptiveRoutingConfig, AgentProfile, AgentRuntime, BeeAgentRole, BeeWorkerClass, CustomWorkerClassProfile, HivemindosModelsAgentConfig, ResearchMethod, RuntimeCapabilities, SharedVaultConfig, UsePodAgentConfig, VeniceAgentConfig, WorkerTaskPreference } from "@/lib/types/agent-runtime";
 import type { AgentNotification, AgentNotificationSettings, AgentNotificationSummary } from "@/lib/types/agent-notifications";
+import type { XCommandTradeDraft } from "@/lib/types/x-command";
 import { HIVEMIND_OS_RUNTIME, createAgentProfile, DEFAULT_SHARED_VAULT, RUNTIME_CAPABILITIES, RUNTIME_DEFAULTS, RUNTIME_KINDS, RUNTIME_LABELS } from "@/lib/types/agent-runtime";
 import type { AgentPaymentProvider, AgentWalletConfig, HoneyTreasuryConfig } from "@/lib/types/agent-wallet";
 import type { KanbanBoard, KanbanLinkedDirectory, KanbanMachineTarget, KanbanStatus, KanbanTask, KanbanTaskAttachment } from "@/lib/types/kanban";
@@ -74,7 +75,7 @@ import { mergeAgentProfileConfiguration } from "@/lib/config/agent-profile-confi
 import { beeRoleIconPath } from "@/lib/config/bee-role-icons";
 import { DEFAULT_QUEEN_BEE_NAME } from "@/lib/config/queen-bee-personality";
 import { QUEEN_BEE_AGENT_ID } from "@/features/dashboard/views/messaging-shared";
-import type { ChatDiscussContext } from "@/features/dashboard/chat-discuss-context";
+import { selectDiscussionChatAgent, type ChatDiscussContext } from "@/features/dashboard/chat-discuss-context";
 import { providerIconPath, providerIconRenderMode, runtimeIconFallback, runtimeIconPath, runtimeIconRenderMode } from "@/lib/config/runtime-icons";
 import { BEE_WORKER_PRESET_LIST, beeWorkerPreset, renderBeeSoulTemplate } from "@/lib/config/bee-worker-presets";
 import { clientTelemetryEnabled, logClientTelemetry } from "@/lib/utils/client-telemetry";
@@ -100,6 +101,7 @@ import { chatStreamHasLocalRun, reconcilePolledChatProcessState, reconcilePolled
 import { readNativeDashboardBootstrap } from "@/lib/native/dashboard-bootstrap";
 import { getNativeAppVersion } from "@/lib/native/desktop-status";
 import { getNativeFleetAppsCache, getNativeFleetDiscovery, getNativeTailscaleDevices } from "@/lib/native/fleet";
+import { tailscaleStatusPresentation, tailscaleStatusRequiresAttention } from "@/lib/native/tailscale-status";
 import { getNativeObsidianAgents } from "@/lib/native/obsidian";
 import { readNativeHiveEnv } from "@/lib/native/hive-env";
 import { readNativeMemoryTelemetry } from "@/lib/native/memory";
@@ -112,7 +114,7 @@ import {
   normalizeMoney,
   stripUnfundedWalletBalance,
 } from "@/lib/utils/agent-wallet";
-import { activeKanbanTaskCount, groupKanbanTasks } from "@/lib/utils/kanban-board";
+import { groupKanbanTasks, needsHumanKanbanTaskCount } from "@/lib/utils/kanban-board";
 import {
   beeRoleLabel,
   beeWorkerClassLabel,
@@ -432,6 +434,7 @@ import { TRADE_ROUTE_CAPABILITY_LINES, WALLET_ROUTE_CAPABILITY_LINES } from "@/l
 // DashboardHeader is retained as a legacy component; the app now navigates via
 // the left AppNavShelf (the redesigned hive shelf) instead of a top header.
 import { DashboardAppCompletionToast, type DashboardAppCompletionNotification } from "@/features/dashboard/views/DashboardHeader";
+import { TailscaleAttentionBanner } from "@/features/dashboard/TailscaleAttentionBanner";
 import { AppNavShelf } from "@/components/fleet-hive";
 import { CompanionSetupModal } from "@/features/companion/CompanionSetupModal";
 import { useCompanionPopoverBoot } from "@/features/companion/use-companion-popover-boot";
@@ -1200,6 +1203,9 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     beeRole?: BeeAgentRole;
     provider?: string;
     model?: string;
+    gatewayUrl?: string;
+    chatPath?: string;
+    statusPath?: string;
     adaptiveOpenRouter?: AdaptiveOpenRouterConfig;
     adaptiveRouting?: AdaptiveRoutingConfig;
     usePod?: UsePodAgentConfig;
@@ -1352,6 +1358,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   const [mirosharkHelperPending, setMirosharkHelperPending] = useState<"ask" | "suggest" | "">("");
   const [mirosharkHelperStatus, setMirosharkHelperStatus] = useState("");
   const [activeView, setActiveView] = useState<DashboardView>(initialView ?? "agents");
+  const [xCommandTradeDraft, setXCommandTradeDraft] = useState<XCommandTradeDraft | null>(null);
   const [fleetChatOpenSpaceRightInset, setFleetChatOpenSpaceRightInset] = useState(0);
   const [fleetChatTone, setFleetChatTone] = useState<"hive" | "legacy">("hive");
   const [routeRetry, setRouteRetry] = useState(0);
@@ -1668,9 +1675,11 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     if (data?.tailnetHealth?.state === "peer-traffic-stalled") {
       setTailscaleStatus("Tailscale Running; peer traffic stalled");
     } else if (data?.tailnetHealth?.state === "status-unavailable") {
-      setTailscaleStatus("Tailscale status unavailable. Running locally.");
+      const presentation = tailscaleStatusPresentation(data);
+      setTailscaleStatus(`${presentation.label}. ${presentation.detail}`);
     } else if (data?.tailnetHealth?.state === "not-running") {
-      setTailscaleStatus(`Tailscale ${data.backendState ?? "not running"}`);
+      const presentation = tailscaleStatusPresentation(data);
+      setTailscaleStatus(`${presentation.label}. ${presentation.detail}`);
     } else {
       setTailscaleStatus(data?.ok ? `Tailscale ${data.backendState}` : "Tailscale not configured. Running locally.");
     }
@@ -2593,12 +2602,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     initialDelayMs: FLEET_PASSIVE_REFRESH_DELAY_MS,
     task: refreshFleetHostedApps,
   });
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void refreshTailscaleDevices();
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [refreshTailscaleDevices]);
+  useVisibilityAwarePolling({ enabled: hydrated, intervalMs: tailscaleStatusRequiresAttention(tailscaleStatus) ? 30_000 : 5 * 60_000, hiddenIntervalMs: 5 * 60_000, initialDelayMs: 0, task: refreshTailscaleDevices });
   useEffect(() => () => {
     if (hivemindLinkConnectedTimeoutRef.current) {
       window.clearTimeout(hivemindLinkConnectedTimeoutRef.current);
@@ -2646,7 +2650,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
         applyHivemindLinkStatus(data.hivemindLink);
       }
       const machines = data.machines;
-      const statusUnavailableFallback = tailscaleStatus.startsWith("Tailscale status unavailable")
+      const statusUnavailableFallback = tailscaleStatus.startsWith("Tailscale needs attention")
         && discoveredMachines.length > 1
         && machines.length <= 1
         && machines.every((machine) => machine.device.self);
@@ -4514,22 +4518,17 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     setAgentRenameEditing(false); setAgentRuntimeFolderEditing(false); setAgentRuntimeFolderStatus(""); setAgentRuntimeAdvancedOpen(false);
     setAgentSettingsPanel("role"); setAgentRoleModalId(agentId);
   }, [displayAgents, pollFleetDiscovery]);
-  // Chat, Fleet, and Scheduler fill the full width right of the rail so dense
-  // canvas/detail views reach the edge instead of showing the default route gutter.
+  // Dense canvas/detail routes fill the width right of the rail.
   const fullWidthRouteShellStyle = (activeView === "chat" || activeView === "agents" || activeView === "scheduler")
     ? { width: "100%", maxWidth: "none", margin: 0, overflow: "hidden" }
     : undefined;
   const queenChatOpenSpaceRightInset = activeView === "agents" ? fleetChatOpenSpaceRightInset : 0;
-
-  // Stable handlers for the always-mounted AppNavShelf (memoized), so it doesn't
-  // re-render on every keystroke. Deps exclude fast-changing state like `text`;
-  // only board-presence is tracked, not board contents.
+  // Keep the always-mounted rail stable across fast-changing view state.
   const hasKanbanBoard = Boolean(kanbanBoard); const { pinnedUtilities, togglePinnedUtility } = usePinnedUtilities();
   const appNavBadges = useMemo<Partial<Record<DashboardView, number>>>(() => ({
-    kanban: kanbanNavBadgeCount ?? (kanbanBoard ? activeKanbanTaskCount(kanbanBoard.tasks) : 0),
-    scheduler: schedules.filter((schedule) => schedule.enabled).length,
+    kanban: kanbanNavBadgeCount ?? (kanbanBoard ? needsHumanKanbanTaskCount(kanbanBoard.tasks) : 0),
     notifications: notificationSummary?.unread ?? 0,
-  }), [kanbanBoard, kanbanNavBadgeCount, notificationSummary?.unread, schedules]);
+  }), [kanbanBoard, kanbanNavBadgeCount, notificationSummary?.unread]);
   const handleNavShelfNavigate = useCallback((id: DashboardView) => {
     if (id === requestedView && id === activeView) return;
     setRequestedView(id);
@@ -4539,16 +4538,11 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   const handleNavShelfToggleTheme = useCallback(() => {
     setDashboardTheme((current) => (current === "hive-light" ? "dark" : "hive-light"));
   }, []);
-  // Drag-to-pop-out from the nav rail: tear a tab out of the shelf to open
-  // that view in its own window (native window on desktop, popup in browser).
-  // Returns the browser popup handle for live drag-out so the shelf can keep
-  // moving the new window with the pointer.
+  // Drag a rail tab out to open and position a native window or browser popup.
   const handleNavShelfPopout = useCallback((id: DashboardView, screenPosition?: { x: number; y: number }, opts?: { live?: boolean }) => {
     return popoutDashboardTarget({ view: id }, screenPosition, opts);
   }, [popoutDashboardTarget]);
-  // Hologram-companion setup modal (opened from the shelf foot). The "open
-  // companion view" action lands on the fleet view; the fleet's hive layout
-  // picks up the queued companion-tab request (companion-events.ts).
+  // Companion setup hands the queued companion-tab request to the fleet view.
   const [companionSetupOpen, setCompanionSetupOpen] = useState(false);
   useCompanionPopoverBoot();
   const handleOpenCompanionSetup = useCallback(() => setCompanionSetupOpen(true), []);
@@ -4556,7 +4550,6 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   const handleOpenCompanionView = useCallback(() => {
     handleNavShelfNavigate("agents");
   }, [handleNavShelfNavigate]);
-
   return (
     <QueenChatProvider runQueenCommand={beePilot.runVoiceCommand}>
     <>
@@ -4595,10 +4588,17 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
           style={{ position: "fixed", insetInline: 0, top: 0, height: 2, zIndex: 9999, background: "var(--accent-strong, #6fe0b0)", opacity: 0.85, pointerEvents: "none" }}
         />
       ) : null}
+      {!isPopoutWindow ? (
+        <TailscaleAttentionBanner
+          status={tailscaleStatus}
+          onOpenFleet={() => handleNavShelfNavigate("agents")}
+          onRetry={refreshTailscaleDevices}
+        />
+      ) : null}
       {/* Popped-out satellite windows render chrome-free: no rail is mounted,
           so the shell drops its 72px rail inset and the view fills the window. */}
       <main className="shell commandShell" style={isPopoutWindow ? ({ "--shelf-w": "0px" } as CSSProperties) : undefined}>
-      <div className="commandMain" style={fullWidthRouteShellStyle}>
+      <div className={`commandMain${activeView === "chat" ? "" : " commandMainWithHiveChat"}`} style={fullWidthRouteShellStyle}>
       <DashboardRouteErrorBoundary
         resetKey={`${activeView}:${routeRetry}`}
         view={activeView}
@@ -4610,11 +4610,11 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       {(activeView === "scheduler" || (activeView === "aeon" && schedulerDraftOpen)) ? <SchedulerPanel {...{ activeView, setActiveView, schedulerJobs, schedulerRunStates, schedules, scheduleImporting, scheduleImportStatus, schedulerDraftOpen, editingScheduleId, displayAgents, selectedAgent, machineGroups, sharedSkillOptions, aeonSkillOptions, schedulerModalInitial, refreshSharedSchedulesFromVault, importExistingSchedules, toggleSchedule, runScheduleNow, findScheduleForJob, editSchedule, duplicateSchedule, removeSchedule, fetchScheduleHistory, resetScheduleDraft, setSchedulerDraftOpen, setScheduleImportStatus, browseSchedulerFolder, saveScheduleFromModal }} /> : null}
       {activeView === "swarm" ? <SwarmPanel {...{ setActiveView, swarmRuns, currentSwarmRun, swarmMarket, swarmAgents, swarmDecisions, swarmStatusLabel, selectedSwarmRunId, mirosharkRunPending, mirosharkProgressLabel, mirosharkArchiveStatus, mirosharkStatus, mirosharkScenario, walletsByAgent, displayAgents, selectedAgent, setSelectedAgentId, getSurvivalSnapshot, sharedVault, loadMirosharkArchivedRun, startNewMirosharkSimulation, launchMirosharkSwarm, setMirosharkScenario, setMirosharkRounds, setMirosharkPlatform, runMirosharkExperiment }} /> : null}
       {activeView === "wallet" ? <WalletPanel {...{ AGENT_PAYMENT_PROVIDER_COPY, AgentWalletCard, AgentWalletCardCompact, Button, ChevronLeft, Download, HandCoins, LoaderCircle, RUNTIME_LABELS, RefreshCcw, activeView, copyPaymentPrompt, createDefaultAgentWallet, createLocalWallet, displayAgents, claimAllHoneyToBankrHive, enableHoneyLedger, exportWalletSecrets, formatHiveAmount, formatRelativeTime, getSurvivalSnapshot, honeyLedgerEnabled, honeyStats, hiveEnv, hydrated, initializeCoreWalletRails, moneyClawStatusByEnvName, refreshRuntimeIntegrations, refreshRuntimeUsage, refreshWalletBalance, renderAgentKey, resetWalletBurnClock, returnAllHiveToHoney, runWalletVaultBackupAction, runtimeUsage, runtimeUsageLoading, saveMoneyClawKey, selectedAgent, selectedHoneyReward, selectedWallet, selectedWalletSnapshot, setHoneyLedgerEnabled, sharedVault, sendWalletUsdc, setSelectedAgentId, setWalletExpanded, setWalletPanelMode, testX402Fetch, updateAgentProfile, updateWallet, updateWalletAction, vaultClass, walletActionsByAgent, walletClass, walletExpanded, walletPanelMode, walletStats, walletVaultBackupBusy, walletVaultBackupMessage, walletVaultBackupStatus, walletsByAgent }} /> : null}
-      {activeView === "trade" ? <TradePanel {...{ activeView, displayAgents, walletsByAgent, selectedAgent, setSelectedAgentId, getSurvivalSnapshot, hiveEnv, hydrated, RUNTIME_LABELS, sharedVault, setActiveView, onActingWalletChange: setTradeActingWallet, updateWallet, theme: dashboardTheme === "hive-light" ? "light" : "dark" }} /> : null}
+      {activeView === "trade" ? <TradePanel initialDraft={xCommandTradeDraft} {...{ activeView, displayAgents, walletsByAgent, selectedAgent, setSelectedAgentId, getSurvivalSnapshot, hiveEnv, hydrated, RUNTIME_LABELS, sharedVault, setActiveView, onActingWalletChange: setTradeActingWallet, updateWallet, theme: dashboardTheme === "hive-light" ? "light" : "dark" }} /> : null}
       {activeView === "socials" ? <SocialsPanel theme={dashboardTheme === "hive-light" ? "light" : "dark"} /> : null}
       {activeView === "marketplace" ? <MarketplacePanel theme={dashboardTheme === "hive-light" ? "light" : "dark"} onNavigate={navigateDashboardTarget} /> : null}
       {activeView === "vault" ? <VaultPanel {...{ Activity, BRAIN_SKILL_PROVIDER_FALLBACK, Bot, BrainCircuit, BrainGraphLoader, Button, Cell, Check, CircleAlert, Clock3, DEFAULT_SHARED_VAULT, Download, Eye, FileText, FolderOpen, GitBranch, Hexagon, Image, KeyRound, LoaderCircle, Network, PlugZap, RefreshCcw, Repeat2, Search, Sparkles, activeView, brainGraph, brainGraphLoading, brainGraphStats, brainGraphStatus, brainPan, brainSkillAeonSyncing, brainSkillImportAllDescription, brainSkillImportAllLabel, brainSkillImportProvider, brainSkillImportSuccess, brainSkillImportableCount, brainSkills, brainSkillsLoading, brainSkillsStatus, checkControlRoomStatus, checkVaultStatus, controlRoomStatus, displayAgents, endBrainPan, formatBrainDate, gbrainActionStatus, gbrainBusy, gbrainQuery, gbrainQueryResult, gbrainStatus, hermesUpdateRequired, hermesUpdateRequiredDetail, importBrainSkills, inspectBrainNode, installTradingBrainFromDashboard, moveBrainPan, neo4jActionStatus, neo4jBusy, neo4jQuery, neo4jQueryResult, neo4jStatus, openSkillBrowser, pairSyncthingVaultSync, qmdActionStatus, qmdBusy, qmdQuery, qmdQueryResult, qmdStatus, queryGbrainFromDashboard, queryNeo4jFromDashboard, queryQmdFromDashboard, querySyntoFromDashboard, refreshBrainGraph, refreshBrainSkills, refreshGbrainStatus, refreshNeo4jStatus, refreshQmdStatus, refreshRuntimeFileRoots, refreshRuntimeIntegrations, refreshSyntoStatus, refreshTradingBrainStatus, runGbrainAction, runNeo4jAction, runQmdAction, runRuntimeIntegrationAction, runSyntoAction, runVaultTailnetSync, runtimeIntegrationBusy, runtimeIntegrationMessage, runtimeIntegrationStatus, selectedAgent, selectedBrainNode, setActiveView, setBrainPan, setChatAttachments, setChatDirectories, setGbrainQuery, setNeo4jQuery, setQmdQuery, setQuickAddDrafts, setQuickAddStatus, setSkillBrowserOpen, setSkillBrowserSearch, setSkillBrowserView, setSkillBrowserWrittenContent, setSyntoQuery, setText, setTradingBrainForAllRuntimes, setTradingBrainForRuntime, setVaultPanelMode, sharedVault, skillBrowserSearch, skillRequiresHermesUpdate, startAgentChat, startBrainPan, syncBrainSkillsToAeon, syntoActionStatus, syntoBusy, syntoQuery, syntoQueryResult, syntoStatus, tradingBrainActionStatus, tradingBrainAllRuntimeAttached, tradingBrainBusy, tradingBrainRuntimeCards, tradingBrainStatus, updateAllSkillAutoSync, updateSharedVault, updateSkillAutoSync, vaultClass, vaultPanelMode, vaultStatus, vaultSyncPending, vaultSyncStatus, walletClass }} /> : null}
-      {activeView === "integrations" ? <IntegrationsView embedded /> : null}
+      {activeView === "integrations" ? <IntegrationsView embedded displayAgents={displayAgents} walletsByAgent={walletsByAgent} vaultPath={sharedVault.enabled ? sharedVault.vaultPath : undefined} onReviewTradeDraft={(draft) => { setXCommandTradeDraft(draft); setActiveView("trade"); }} /> : null}
       {activeView === "beeline" ? <BeelineView agentName={queenName} /> : null}
       {activeView === "cloud" ? <ManagedCloudAgentsPanel /> : null}
       {activeView === "credit-admin" ? <HivemindOSManagementPanel /> : null}
@@ -4632,10 +4632,11 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       ) : null}
       {activeView === "podcast" ? <PodcastStudioView /> : null}
       {(isUtilityPanelView(activeView) || (activeView === "vault" && vaultPanelMode === "env")) ? <UtilityPanels {...{ AgentEnvCard, Activity, Button, Check, ChevronDown, ChevronLeft, Download, EnvValueRow, FileText, FileUp, FolderOpen, LoaderCircle, MorePanel, NotificationsPanel, Pencil, Plus, RefreshCcw, RotateCcw, ShieldCheck, Sparkles, URL, Upload, activeView, addAgentEnvValue, addSharedEnvValue, agentEnvDrafts, agentSpecificEnvCount, displayAgents, fleetClass, formatRelativeTime, generateSharedEnvSecret, hiveEnvLoading, hiveEnvRestoring, hiveEnvSavingKey, hiveEnvStatus, hiveEnvSyncing, importSharedEnvEntries, listRuntimeFiles, maintenanceBusy, maintenanceMessage, maintenanceReport, markAllNotificationsRead, markNotificationRead, memoryTelemetry, notificationCursor, notificationGroups, notificationSummary, notifications, notificationsLoading, notificationsStatus, onOpenNotification: openDashboardNotification, onNavigateTarget: navigateDashboardTarget, onDiscussInChat: (context: ChatDiscussContext, draft: string) => {
-        const queen = displayAgents.find((agent) => agent?.beeRole === "queen") ?? displayAgents.find((agent) => agent?.id === QUEEN_BEE_AGENT_ID);
+        const chatAgent = selectDiscussionChatAgent(displayAgents, selectedAgent, (agent) => runtimeCan(agent, "chat"), QUEEN_BEE_AGENT_ID);
         setChatDiscussContext(context);
         setText(draft ?? "");
-        navigateDashboardTarget({ view: "chat", agentId: queen?.id ?? QUEEN_BEE_AGENT_ID });
+        if (chatAgent) startAgentChat(chatAgent.id, { fresh: true });
+        else setActiveView("chat");
       }, schedules, openRuntimeFile, pinnedUtilities, promoteRuntimeEnvValue, refreshHiveEnv, refreshMaintenanceReport, refreshMemoryTelemetry, refreshNotifications, refreshRuntimeFileRoots, renderAgentKey, restoreSharedEnvBackup, revealedEnvValues, runMaintenanceAction, runtimeEnvSources, runtimeFileDraft, runtimeFileOpen, runtimeFilePath, runtimeFileRootKey, runtimeFileRoots, runtimeFileStatus, runtimeFiles, runtimeModelSelectionsByRuntime, saveAgentEnvValue, saveRuntimeFile, saveSharedEnvValue, searchAllRuntimeSessions, selectedRuntimeEnvSource, sessionSearchLoading, sessionSearchMessage, sessionSearchQuery, sessionSearchResults, setActiveView, setAgentEnvDrafts, setHiveEnvRuntimeSourceId, setRuntimeFileDraft, setRuntimeFileOpen, setRuntimeFilePath, setRuntimeFileRootKey, setSessionSearchQuery, setSharedEnvAddMenuOpen, setSharedEnvDraft, setSharedEnvEditable, setSharedEnvImportOpen, setSharedEnvImportText, sharedBackupStatus, sharedEnvAddMenuOpen, sharedEnvCount, sharedEnvDraft, sharedEnvEditable, sharedEnvImport, sharedEnvImportChangedCount, sharedEnvImportDiff, sharedEnvImportNewCount, sharedEnvImportOpen, sharedEnvImportSameCount, sharedEnvImportText, sharedEnvImporting, sharedEnvSource, sharedVault, startAgentChat, syncSharedEnvMachines, toggleEnvValue, togglePinnedUtility, updateNotificationSettings, vaultClass, vaultPanelMode, walletClass }} /> : null}
       {activeView === "aeon" ? <AeonAutopilotPanel agentProfiles={displayAgents.filter((agent) => agent.runtime === "aeon")} sharedVault={sharedVault} machineGroups={machineGroups} chooseDirectoryForMachine={chooseDirectoryForMachine} onWorkspaceCreated={handleAeonWorkspaceCreated} /> : null}
       {activeView === "fusion" ? <FusionPanel sharedVault={sharedVault} /> : activeView === "phone" ? <PhonePanel activeView={activeView} fleetClass={fleetClass} formatRelativeTime={formatRelativeTime} sharedVault={sharedVault} /> : null}

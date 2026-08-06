@@ -190,6 +190,19 @@ fn handle_deep_link_urls(app: &AppHandle, urls: Vec<String>) {
                 "slug": slug,
                 "url": url.to_string(),
             }));
+        } else if host == "integrations" && path == "oauth-return" {
+            // Generic OAuth external-browser return (github/linkedin/google …):
+            // the provider callback page deep-links here after the token
+            // exchange completed server-side. Foreground the app and open the
+            // view the signed state named; the open Connect modal (or the AEON
+            // panel) picks the credential up through its own polling/refresh.
+            let view = match query_value(&url, "view").as_deref() {
+                Some("aeon") => "aeon",
+                Some("socials") => "socials",
+                _ => "integrations",
+            };
+            show_main_window(app);
+            let _ = app.emit(NAVIGATE_EVENT, serde_json::json!({ "view": view }));
         } else if host == "integrations" && path == "google-cloud" {
             // Return target from the Google Cloud OAuth "close this tab" page.
             // The consent flow ran in the external browser; this deep link brings
@@ -205,8 +218,20 @@ fn handle_deep_link_urls(app: &AppHandle, urls: Vec<String>) {
             } else {
                 "integrations"
             };
+            let return_tab = if return_view == "integrations"
+                && query_value(&url, "x_return_tab").as_deref() == Some("xbot")
+            {
+                "xbot"
+            } else if return_view == "integrations" {
+                "mcp"
+            } else {
+                ""
+            };
             show_main_window(app);
-            let _ = app.emit(NAVIGATE_EVENT, serde_json::json!({ "view": return_view }));
+            let _ = app.emit(NAVIGATE_EVENT, serde_json::json!({
+                "view": return_view,
+                "integrationsTab": return_tab,
+            }));
             let _ = app.emit(
                 MANAGED_X_RETURN_EVENT,
                 serde_json::json!({
@@ -217,6 +242,7 @@ fn handle_deep_link_urls(app: &AppHandle, urls: Vec<String>) {
                     "creditAccountId": query_value(&url, "x_credit_account_id").unwrap_or_default(),
                     "slug": query_value(&url, "x_slug").unwrap_or_default(),
                     "returnView": return_view,
+                    "returnTab": return_tab,
                     "url": url.to_string(),
                 }),
             );
@@ -235,6 +261,11 @@ fn handle_deep_link_urls(app: &AppHandle, urls: Vec<String>) {
                 "code": code,
                 "url": url.to_string(),
             }));
+        } else {
+            // Unknown deep link: FOREGROUND-ONLY. Never navigate (a route reset
+            // to the default view strands the user), never drop the activation —
+            // an unrecognized hivemindos:// URL still means "bring the app up".
+            show_main_window(app);
         }
     }
 }

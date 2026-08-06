@@ -943,8 +943,8 @@
   --kb-line: rgba(238, 232, 220, 0.10);
   --kb-line-strong: rgba(238, 232, 220, 0.18);
   --kb-fg: #f3f0e9;
-  --kb-muted: #76726a;
-  --kb-muted-soft: rgba(118, 114, 106, 0.7);
+  --kb-muted: #a7a39a;
+  --kb-muted-soft: rgba(167, 163, 154, 0.76);
   --kb-cyan: #6fcdba;
   --kb-cyan-2: #6fcdba;
   --kb-cyan-3: #9fe0d3;
@@ -3941,8 +3941,8 @@
   --kb-line: rgba(54, 46, 30, 0.10);
   --kb-line-strong: rgba(54, 46, 30, 0.16);
   --kb-fg: #221d14;
-  --kb-muted: #867d6e;
-  --kb-muted-soft: rgba(134, 125, 110, 0.7);
+  --kb-muted: #5e574b;
+  --kb-muted-soft: rgba(94, 87, 75, 0.76);
   --kb-cyan: #1d8e7c;
   --kb-cyan-2: #1d8e7c;
   --kb-cyan-3: #166b5d;
@@ -4056,8 +4056,8 @@
   --fc-line-3: rgba(238, 232, 220, 0.20);
   --fc-fg: #f3f0e9;
   --fc-fg-2: #a7a39a;
-  --fc-fg-3: #76726a;
-  --fc-fg-4: #545049;
+  --fc-fg-3: #a7a39a;
+  --fc-fg-4: #918c83;
   --fc-honey: #e7b45c;
   --fc-honey-soft: rgba(231, 180, 92, 0.13);
   --fc-honey-line: rgba(231, 180, 92, 0.32);
@@ -4581,8 +4581,8 @@
   --fc-line-3: rgba(54, 46, 30, 0.26);
   --fc-fg: #221d14;
   --fc-fg-2: #5e574b;
-  --fc-fg-3: #867d6e;
-  --fc-fg-4: #a59b89;
+  --fc-fg-3: #5e574b;
+  --fc-fg-4: #6f6657;
   --fc-honey: #936811; --fc-honey-fill: #e6bb5c;
   --fc-honey-soft: rgba(176, 127, 28, 0.12);
   --fc-honey-line: rgba(176, 127, 28, 0.34);

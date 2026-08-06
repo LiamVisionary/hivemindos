@@ -8,6 +8,7 @@ export type ExternalAgentProviderId =
   | "mcp-email-server"
   | "openhands"
   | "aider"
+  | "hivemind-office"
   | "palmier-pro"
   | "rentahuman"
   | "n8n"
@@ -111,6 +112,18 @@ export const EXTERNAL_AGENT_PROVIDERS: ExternalAgentProvider[] = [
     credentialKeys: ["AIDER_BIN"],
     sideEffectGate: "Use the Aider runtime action run-task; HivemindOS passes no-auto-commits/no-dirty-commits for repo safety.",
     fallback: "Use Codex, Claude Code, OpenCode, or Hermes.",
+  },
+  {
+    id: "hivemind-office",
+    name: "Hivemind Office",
+    sourceUrl: "https://github.com/criptogus/HermesOffice",
+    licenseNote: "Apache-2.0 fork of GenOffice outside the separately licensed ee directory; HivemindOS consumes no ee source.",
+    summary: "Optional local office companion for visual document review, paired with HivemindOS-owned MCP tools for bounded extraction, hash-bound candidate review, copy-first saves, and explicit backup-before-replace writes.",
+    capabilities: ["documents", "docx", "spreadsheets", "slides", "pdf", "mcp", "desktop-preview", "conflict-safe-writes"],
+    installSurface: "installable-service",
+    credentialKeys: [],
+    sideEffectGate: "Use the bundled hivemind_office_* tools. Inspect and open a separate candidate before applying it; default to save-copy. Replacement requires unchanged hashes, a prepare fingerprint, explicit confirmation, and creates a backup.",
+    fallback: "Use HivemindOS bundled document ingestion for reading and the system's existing office application for manual editing when no compatible companion is installed.",
   },
   {
     id: "palmier-pro",

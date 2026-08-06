@@ -96,6 +96,36 @@
   flex: 0 0 auto;
 }
 
+.kanbanLoadMore {
+  display: grid;
+  width: calc(100% - 4px);
+  min-height: 44px;
+  place-items: center;
+  gap: 2px;
+  margin: 4px 2px 8px;
+  border: 1px solid var(--fc-line-2);
+  border-radius: 10px;
+  background: var(--fc-panel-2);
+  color: var(--fc-fg-2);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.kanbanLoadMore small {
+  color: var(--fc-fg-3);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.kanbanLoadMore:hover,
+.kanbanLoadMore:focus-visible {
+  border-color: var(--fc-live);
+  color: var(--fc-fg-1);
+  outline: none;
+}
+
 @media (max-width: 760px) {
   .workBoardColumnActions {
     max-width: 118px;

@@ -1,0 +1,56 @@
+{
+  "created_at": "2026-08-06T20:49:22.118642+00:00",
+  "request": "Build the full hardened Hivemind Office companion integration into HivemindOS",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "criptogus/HermesOffice@70374e037e1afa97f42948d31df238c0b38250ae",
+      "source_path": "apps/shell/electron-builder.cjs",
+      "target_path": "src/lib/services/hivemind-office-installable.ts",
+      "reuse_type": "config_adapted",
+      "note": "Adapted app identity, build-info provenance, and office file associations without importing the updater or installer."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-os",
+      "source_path": "src/lib/services/palmier-pro-installable.ts",
+      "target_path": "src/lib/services/hivemind-office-installable.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted credentialless app discovery, lifecycle status, provenance, and security-preflight conventions while blocking unreviewed installation."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-os",
+      "source_path": "src/lib/services/deliverable-file-resolution.ts",
+      "target_path": "src/lib/services/hivemind-office-bridge.ts",
+      "reuse_type": "adapted_code",
+      "note": "Reused canonical home and vault realpath boundaries for readable office documents."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-os",
+      "source_path": "src/lib/services/hive-actions/mcp-export.ts",
+      "target_path": "src/lib/services/hive-actions/hivemind-office.ts",
+      "reuse_type": "adapted_code",
+      "note": "Adapted canonical titles, read-only annotations, destructive hints, and separate read/write action descriptors."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-os",
+      "source_path": "scripts/test-hivemind-mcp-work-tools.mjs",
+      "target_path": "scripts/test-hivemind-office-mcp.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Adapted the real spawned stdio MCP client fixture for exact tool descriptors, annotations, confirmation preflight, and dashboard routing."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-os",
+      "source_path": "scripts/test-chat-markdown-presentation.mjs",
+      "target_path": "scripts/test-chat-markdown-presentation.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Extended established macOS app discovery source contracts with Hivemind Office compatibility ordering and transparent names."
+    },
+    {
+      "source_repo": "criptogus/HermesOffice@70374e037e1afa97f42948d31df238c0b38250ae",
+      "source_path": "packages/ai-provider/src/providers.ts",
+      "target_path": "src/lib/services/hivemind-office-installable.ts",
+      "reuse_type": "config_adapted",
+      "note": "Kept only the credentialless loopback gateway health convention; rejected editor-owned API key persistence and model routing."
+    }
+  ]
+}

@@ -9,6 +9,8 @@
 // The provider KEY is a fleet-wide shared credential (every company uses the same
 // key; only the project is per-company) — the copy says so.
 import React from "react";
+import { ExternalSignInButton } from "@/components/ExternalSignInButton";
+import { oauthReturnMode } from "@/lib/native/oauth-return-mode";
 import { Spinner } from "./primitives";
 import type {
   AnalyticsProviderKey,
@@ -122,6 +124,24 @@ function ProviderCard({
         : isGoogle
           ? "sign in"
           : "no key";
+
+  // Resolves the ABSOLUTE Google authorization URL via the authenticated POST
+  // start route — the external browser has no dashboard session cookie, so a
+  // same-origin /oauth/start GET link would 401 at the proxy out there.
+  async function resolveGoogleAuthUrl(): Promise<string> {
+    const res = await fetch(GOOGLE_OAUTH_START, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      // Desktop flows: the callback deep-links back via hivemindos://, carried
+      // in the signed state.
+      body: JSON.stringify(oauthReturnMode() ? { returnMode: oauthReturnMode() } : {}),
+    });
+    const data = await readJson<{ authorizationUrl?: string }>(res);
+    if (!res.ok || data.ok === false || !data.authorizationUrl) {
+      throw new Error(data.error || "Google sign-in could not start.");
+    }
+    return data.authorizationUrl;
+  }
 
   async function fetchResources() {
     if (!p.canEnumerate) {
@@ -255,7 +275,12 @@ function ProviderCard({
             <Btn variant="primary" onClick={() => { setMode("connect"); setNote(""); }}>Connect key</Btn>
           )}
           {!connected && isGoogle && (
-            <Btn variant="primary" onClick={() => window.location.assign(GOOGLE_OAUTH_START)}>Connect Google</Btn>
+            <ExternalSignInButton
+              label="Connect Google"
+              resolveUrl={resolveGoogleAuthUrl}
+              onOpened={() => setNote("Opened Google sign-in in your browser — finish there, then come back; this card updates on the next refresh.")}
+              onError={(message) => setNote(message)}
+            />
           )}
           {connected && (
             <Btn variant={isActive ? "ghost" : "primary"} onClick={openPicker}>
@@ -266,7 +291,12 @@ function ProviderCard({
             <Btn onClick={() => { setMode("connect"); setNote(""); }}>Replace key</Btn>
           )}
           {connected && isGoogle && (
-            <Btn onClick={() => window.location.assign(GOOGLE_OAUTH_START)}>Reconnect Google</Btn>
+            <ExternalSignInButton
+              label="Reconnect Google"
+              resolveUrl={resolveGoogleAuthUrl}
+              onOpened={() => setNote("Opened Google sign-in in your browser — finish there, then come back; this card updates on the next refresh.")}
+              onError={(message) => setNote(message)}
+            />
           )}
           {isActive && (
             <Btn onClick={() => void save("", undefined)} busy={busy === "save"}>Unlink</Btn>

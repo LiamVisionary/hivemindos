@@ -22,6 +22,7 @@ const { parseMarketplaceAgentReport, parseResearchResultBlock } = await import("
 const { buildInboxWorkPrompt, buildCreateListingPrompt, buildFullSweepPrompt, buildSyncCatalogPrompt, buildPriceResearchPrompt, directivesBlock } = await import(
   "../src/lib/services/marketplace/marketplace-agent-context.ts"
 );
+const { scopeMarketplaceAgentReport } = await import("../src/lib/services/marketplace/marketplace-report-scope.ts");
 
 const account = {
   id: "facebook:primary",
@@ -101,6 +102,30 @@ assert.equal(parseMarketplaceAgentReport("no fenced block here"), null, "absent 
 assert.equal(parseMarketplaceAgentReport("```json MARKETPLACE_REPORT\n{ not json\n```"), null, "malformed JSON ⇒ null");
 assert.equal(parseMarketplaceAgentReport("```json MARKETPLACE_REPORT\n{ \"sessionHealth\": \"weird\" }\n```").sessionHealth, "error", "unknown health degrades to error");
 
+// Untrusted agent output is scoped again on the server. A personal thread
+// accidentally included in the report cannot reach reply verification,
+// conversation persistence, or the human decision queue.
+const scopedReport = scopeMarketplaceAgentReport({
+  ...report,
+  conversations: [
+    ...report.conversations,
+    {
+      id: "personal-dm",
+      listingTitle: "Personal chat",
+      buyerName: "Friend",
+      messages: [{ from: "buyer", text: "Are you free next week?" }],
+    },
+  ],
+  replies: [...report.replies, { conversationId: "personal-dm", text: "Yes" }],
+  escalations: [
+    ...report.escalations,
+    { conversationId: "personal-dm", reason: "Unrelated personal chat", question: "Choose a day?" },
+  ],
+}, [{ ...listing, state: "active", external: { externalId: "999", url: "https://facebook.com/marketplace/item/999" } }]);
+assert.deepEqual(scopedReport.conversations.map((conversation) => conversation.id), ["conv-9"], "managed listing conversation stays in scope");
+assert.deepEqual(scopedReport.replies.map((reply) => reply.conversationId), ["conv-9"], "personal reply is removed before verification");
+assert.deepEqual(scopedReport.escalations.map((escalation) => escalation.conversationId), ["conv-9"], "personal DM cannot become a decision");
+
 // ── research result parsing ─────────────────────────────────────────────────
 const researchText = [
   "Found comps.",
@@ -141,6 +166,10 @@ assert.match(inboxPrompt, /minimum acceptable offer is \$13000/, "per-listing mi
 assert.match(inboxPrompt, /70% of an item's asking price/, "global floor");
 assert.match(inboxPrompt, /```json MARKETPLACE_REPORT/, "report contract");
 assert.match(inboxPrompt, /marketplace-facebook/, "profile name for the browser rail");
+assert.match(inboxPrompt, /Write every buyer-facing reply as the seller in first person/, "buyer replies use the account owner's voice");
+assert.match(inboxPrompt, /I can check the seller['’]s availability/, "the live third-person wording is explicitly prohibited");
+assert.match(inboxPrompt, /I can check my availability/, "schedule example stays in the seller's first person");
+assert.match(inboxPrompt, /do not send a holding reply/, "human-only decisions escalate without an agent-identity leak");
 
 const reviewAllPrompt = buildInboxWorkPrompt({ ...account, autonomy: "review-all" }, { directives: [], listings: [] });
 assert.match(reviewAllPrompt, /Do NOT send any message/, "review-all sends nothing");
@@ -162,7 +191,9 @@ assert.match(createPrompt, /COVERS the final Publish click/, "approval extends t
 const syncPrompt = buildSyncCatalogPrompt(account);
 assert.match(syncPrompt, /NEVER open the Marketplace inbox/, "sync sessions are barred from chats");
 assert.match(inboxPrompt, /reply ONLY in conversations about the live listings/, "inbox replies scoped to managed listings");
-assert.match(inboxPrompt, /strictly read-only/, "old unrelated threads are read-only");
+assert.match(inboxPrompt, /personal chats[\s\S]*OUT OF SCOPE/, "personal and unrelated threads are explicitly out of scope");
+assert.match(inboxPrompt, /Never include them in conversations, replies, or escalations/, "out-of-scope content is excluded from the report");
+assert.ok(!/record it as an escalation instead/.test(inboxPrompt), "personal threads are never escalated to the human");
 assert.ok(!/NEVER open the Marketplace inbox/.test(inboxPrompt), "the inbox op itself may open the inbox");
 
 // The base-cadence combined sweep: catalog + inbox in ONE session and ONE
@@ -174,6 +205,7 @@ assert.match(fullSweepPrompt, /Then open the Marketplace inbox/, "full sweep the
 assert.match(fullSweepPrompt, /exactly ONE report covering both/, "one MARKETPLACE_REPORT covers catalog + conversations");
 assert.match(fullSweepPrompt, /AUTONOMOUS/, "full sweep carries the autonomy contract");
 assert.match(fullSweepPrompt, /Standing directives from the human — follow these exactly/, "full sweep carries the directives block");
+assert.match(fullSweepPrompt, /Write every buyer-facing reply as the seller in first person/, "combined sweep carries the seller-voice contract");
 assert.equal(fullSweepPrompt.match(/```json MARKETPLACE_REPORT/g).length, 1, "exactly one report contract in the combined prompt");
 assert.ok(!/NEVER open the Marketplace inbox/.test(fullSweepPrompt), "the combined sweep may open the inbox");
 assert.match(fullSweepPrompt, /reply ONLY in conversations about the live listings/, "combined sweep keeps the inbox reply scope");

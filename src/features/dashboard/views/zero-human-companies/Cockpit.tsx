@@ -14,6 +14,7 @@ import type { PreviewDecision } from "./preview-review";
 import { DeliverableCard } from "./DeliverableCard";
 import { AnalyticsPanel } from "./AnalyticsPanel";
 import { ApiLimitsPanel } from "./ApiLimitsPanel";
+import { FrontierLabPanel } from "./FrontierLabPanel";
 import { ProductsPanel } from "./ProductsPanel";
 import { ImportedOperationsPanel } from "./ImportedOperationsPanel";
 import { ImportedKnowledgePanel } from "./ImportedKnowledgePanel";
@@ -926,6 +927,7 @@ export function Cockpit({
     { key: "team", label: "Team" },
     { key: "analytics", label: "Analytics" },
     { key: "limits", label: "Limits" },
+    { key: "frontier", label: "Frontier Lab" },
     { key: "learning", label: "Learning", badge: c.capabilityCapital.distillationQueue || null },
     { key: "labs", label: "Labs" },
     { key: "approvals", label: "Approvals", badge: approveCount || null },
@@ -1109,6 +1111,8 @@ export function Cockpit({
       {active === "analytics" && <AnalyticsPanel colony={c} />}
 
       {active === "limits" && <ApiLimitsPanel companyId={c.id} companyName={c.name} />}
+
+      {active === "frontier" && <FrontierLabPanel companyId={c.id} companyName={c.name} />}
 
       {active === "learning" && <CapabilityCapitalPanel colony={c} openSkillAttachmentBrowser={openSkillAttachmentBrowser} />}
 

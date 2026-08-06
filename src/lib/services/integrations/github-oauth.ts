@@ -1,4 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
+import { connect as netConnect } from "node:net";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { readSharedAgentEnv, saveSharedAgentEnv, sharedEnvValue } from "@/lib/services/integrations/shared-env";
@@ -22,7 +23,7 @@ export async function readGitHubOAuthConfig(request: NextRequest): Promise<GitHu
   const clientId = sanitizeGitHubCredential(sharedEnvValue("GITHUB_OAUTH_CLIENT_ID", sharedEnv) || sharedEnvValue("GH_OAUTH_CLIENT_ID", sharedEnv));
   const clientSecret = sanitizeGitHubCredential(sharedEnvValue("GITHUB_OAUTH_CLIENT_SECRET", sharedEnv) || sharedEnvValue("GH_OAUTH_CLIENT_SECRET", sharedEnv));
   const redirectUri = sharedEnvValue("GITHUB_OAUTH_CALLBACK_URL", sharedEnv)
-    || new URL("/api/integrations/github/oauth/callback", localCallbackOrigin(request)).toString();
+    || new URL("/api/integrations/github/oauth/callback", await localCallbackOrigin(request)).toString();
   const scopes = normalizeScopes(sharedEnvValue("GITHUB_OAUTH_SCOPES", sharedEnv));
   return {
     clientId,
@@ -36,11 +37,13 @@ export async function readGitHubOAuthConfig(request: NextRequest): Promise<GitHu
   };
 }
 
-export function createGitHubOAuthState(source: string, clientSecret: string) {
+export function createGitHubOAuthState(source: string, clientSecret: string, returnMode: OAuthReturnMode = "") {
   const payload = Buffer.from(JSON.stringify({
     nonce: randomBytes(16).toString("base64url"),
     source: normalizeGitHubOAuthSource(source),
     exp: Date.now() + 10 * 60 * 1000,
+    // Desktop deep-link return mode; additive and absent for browser flows.
+    ...(returnMode ? { rm: returnMode } : {}),
   })).toString("base64url");
   const signature = signGitHubOAuthState(payload, clientSecret);
   return `${payload}.${signature}`;
@@ -54,9 +57,12 @@ export function verifyGitHubOAuthState(state: string, clientSecret: string) {
   const expectedBuffer = new Uint8Array(Buffer.from(expected));
   if (signatureBuffer.length !== expectedBuffer.length || !timingSafeEqual(signatureBuffer, expectedBuffer)) return null;
   try {
-    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { source?: string; exp?: number };
+    const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { source?: string; exp?: number; rm?: string };
     if (typeof parsed.exp !== "number" || parsed.exp < Date.now()) return null;
-    return { source: normalizeGitHubOAuthSource(parsed.source ?? null) };
+    return {
+      source: normalizeGitHubOAuthSource(parsed.source ?? null),
+      returnMode: normalizeOAuthReturnMode(parsed.rm),
+    };
   } catch {
     return null;
   }
@@ -80,9 +86,23 @@ export function renderGitHubOAuthPage(input: {
   returnUrl?: string;
   returnLabel?: string;
   status?: number;
+  /** hivemindos(-dev):// deep link for desktop flows: the page auto-attempts it
+   *  and the button targets it (the relative returnUrl is useless in an
+   *  external browser). Only pass a deep link derived from a VERIFIED state. */
+  deepLink?: string;
 }) {
-  const returnUrl = input.returnUrl ?? "/?view=aeon";
-  const returnLabel = input.returnLabel ?? "Back to AEON";
+  const returnUrl = input.deepLink || (input.returnUrl ?? "/?view=aeon");
+  const returnLabel = input.deepLink ? "Return to HivemindOS" : (input.returnLabel ?? "Back to AEON");
+  // Auto-attempt the scheme SAME-TAB via a plain href assignment, keeping the
+  // button as the manual path. Never a new-window/_blank open (the OS
+  // intercepts the scheme and the spawned window would be stranded at
+  // about:blank), and not a history replace — swapping this page's only
+  // history entry for an unloadable scheme URL is how a tab ends up showing
+  // about:blank after the hand-off. A failed href assignment leaves this page
+  // intact.
+  const deepLinkScript = input.deepLink
+    ? `<script>window.location.href = ${JSON.stringify(input.deepLink).replace(/</g, "\\u003c")};</script>`
+    : "";
   const isError = (input.status ?? 200) >= 400;
   // Glyph tracks outcome: a live-teal check for success, a danger triangle for
   // failure — the same two tones the Integrations panel uses for connected /
@@ -164,6 +184,7 @@ export function renderGitHubOAuthPage(input: {
       <p class="body">${input.body}</p>
       <a class="btn" href="${escapeHtml(returnUrl)}">${escapeHtml(returnLabel)}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></a>
     </main>
+    ${deepLinkScript}
   </body>
 </html>`, {
     status: input.status ?? 200,
@@ -175,12 +196,98 @@ function sanitizeGitHubCredential(value: string) {
   return value.replace(/[^A-Za-z0-9]/g, "");
 }
 
-export function localCallbackOrigin(request: NextRequest) {
-  const url = new URL(request.nextUrl.origin);
-  if (url.hostname === "localhost" || url.hostname === "127.0.0.1") {
-    url.hostname = "127.0.0.1";
+// ---------------------------------------------------------------------------
+// Loopback callback origin — canonical AND provably reachable.
+//
+// OAuth callback URLs must be CANONICAL (the same literal regardless of
+// whether the app was loaded via localhost or 127.0.0.1, so one registered
+// redirect URI always matches) and REACHABLE FROM AN EXTERNAL BROWSER, which
+// resolves the literal itself. The old hard-coded 127.0.0.1 satisfied only the
+// first: a dev server bound to ::1 only (the Tauri-attached trap) made every
+// external-browser callback die with ERR_CONNECTION_REFUSED.
+//
+// So the canonical literal is now chosen by probing which loopback stacks
+// actually have a listener on the origin port: 127.0.0.1 whenever IPv4 listens
+// (today's contract — every registered redirect URI keeps working), else the
+// [::1] literal when only IPv6 listens. IP literals — never `localhost` —
+// because GitHub and Google desktop clients give port-flexible loopback
+// validation only to 127.0.0.1/[::1]. The probe is memoized per port for the
+// process lifetime, so the authorize-time and exchange-time redirect_uri stay
+// identical within one server process.
+
+const loopbackHostnames = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
+const loopbackStackProbeByPort = new Map<number, Promise<{ v4: boolean; v6: boolean }>>();
+
+function probeLoopbackListener(host: string, port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (listening: boolean) => {
+      if (settled) return;
+      settled = true;
+      socket.destroy();
+      resolve(listening);
+    };
+    const socket = netConnect({ host, port });
+    socket.setTimeout(400);
+    socket.once("connect", () => finish(true));
+    socket.once("timeout", () => finish(false));
+    socket.once("error", () => finish(false));
+  });
+}
+
+function loopbackStacksListening(port: number): Promise<{ v4: boolean; v6: boolean }> {
+  let probe = loopbackStackProbeByPort.get(port);
+  if (!probe) {
+    probe = Promise.all([
+      probeLoopbackListener("127.0.0.1", port),
+      probeLoopbackListener("::1", port),
+    ]).then(([v4, v6]) => ({ v4, v6 }));
+    loopbackStackProbeByPort.set(port, probe);
   }
+  return probe;
+}
+
+export async function localCallbackOrigin(request: NextRequest): Promise<string> {
+  const url = new URL(request.nextUrl.origin);
+  if (!loopbackHostnames.has(url.hostname)) return url.origin;
+  const port = Number(url.port || (url.protocol === "https:" ? 443 : 80));
+  const stacks = Number.isFinite(port) && port > 0
+    ? await loopbackStacksListening(port)
+    : { v4: true, v6: false };
+  // IPv4 listening (or nothing conclusively listening — a fronting proxy):
+  // keep the long-standing 127.0.0.1 canonical form. Only a provably
+  // IPv6-only bind switches to the [::1] literal.
+  url.hostname = !stacks.v4 && stacks.v6 ? "[::1]" : "127.0.0.1";
   return url.origin;
+}
+
+// ---------------------------------------------------------------------------
+// Desktop deep-link return. When the sign-in was launched from the Tauri
+// desktop app, the callback renders in an EXTERNAL browser that has no way
+// back to the app except the registered hivemindos:// scheme (mirroring the
+// managed-X desktop-return rail). The mode travels INSIDE the signed state so
+// the callback only ever deep-links on a signature-verified flow — a forged
+// or expired state never gets a scheme bounce.
+
+export type OAuthReturnMode = "desktop" | "desktop-dev" | "";
+
+export function normalizeOAuthReturnMode(value: unknown): OAuthReturnMode {
+  return value === "desktop" || value === "desktop-dev" ? value : "";
+}
+
+/** Deep link that foregrounds the desktop app after an external-browser OAuth
+ *  return. Empty when the flow did not start from the desktop app. The
+ *  `integrations/oauth-return` route is handled by desktop_navigation.rs
+ *  (show window + navigate to `view`); older installed shells still foreground
+ *  the app via OS scheme activation. */
+export function integrationsOAuthDeepLink(returnMode: OAuthReturnMode, input: { provider: string; view?: string; status?: string }): string {
+  if (returnMode !== "desktop" && returnMode !== "desktop-dev") return "";
+  const scheme = returnMode === "desktop-dev" ? "hivemindos-dev" : "hivemindos";
+  const url = new URL(`${scheme}://integrations/oauth-return`);
+  url.searchParams.set("provider", input.provider);
+  if (input.view) url.searchParams.set("view", input.view);
+  if (input.status) url.searchParams.set("status", input.status);
+  return url.toString();
 }
 
 function signGitHubOAuthState(payload: string, clientSecret: string) {

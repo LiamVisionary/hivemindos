@@ -18,7 +18,9 @@ import { trUsd, trUsd2, trAmt } from "./format";
 import { useTradeDesk } from "./trade-context";
 import { playTradeSuccessSound } from "./trade-sound";
 import { quoteDex, runDexSwap, prepareCapability, executeCapability, type RailResult } from "./rails";
-import type { DexSwapQuote } from "@/features/dashboard/views/trade/trade-api";
+import { recordExternalTradingPlanResult, type DexSwapQuote } from "@/features/dashboard/views/trade/trade-api";
+import { TradePlanReviewCard } from "./TradePlanReviewCard";
+import { useTradePlanFlow } from "./trading-lifecycle-context";
 
 type Side = "buy" | "sell" | "swap";
 
@@ -62,6 +64,7 @@ export function CryptoTicket() {
   const [quoting, setQuoting] = React.useState(false);
   const [state, setState] = React.useState<"idle" | "signing" | "done" | "error">("idle");
   const [result, setResult] = React.useState<RailResult | null>(null);
+  const planFlow = useTradePlanFlow();
 
   // An address leg becomes tradable only after the metadata endpoint confirms
   // that the completed input is a token on the acting chain.
@@ -80,10 +83,42 @@ export function CryptoTicket() {
   // These are overridable defaults, not locks — the asset menus still offer every
   // held token. Done on the side click — no effect needed (derive-on-event).
   const changeSide = (s: Side) => {
-    setSide(s); setState("idle"); setResult(null); setQuoteState(null);
+    setSide(s); setState("idle"); setResult(null); setQuoteState(null); planFlow.clear();
     if (s === "buy") { setPaySelection(stable); if (recv === stable) setRecvSelection(firstNonStable); }
     if (s === "sell") { setRecvSelection(stable); if (pay === stable) setPaySelection(firstNonStable); }
   };
+
+  const importedDraft = desk.initialDraft?.assetClass === "token" ? desk.initialDraft : null;
+  const appliedDraftRef = React.useRef("");
+  React.useEffect(() => {
+    if (!importedDraft) return;
+    void Promise.resolve().then(() => {
+      const key = importedDraft.requestId || JSON.stringify(importedDraft);
+      if (appliedDraftRef.current === key) return;
+      appliedDraftRef.current = key;
+      const nextSide: Side = importedDraft.side === "sell" ? "sell" : importedDraft.side === "swap" ? "swap" : "buy";
+      changeSide(nextSide);
+      const asset = importedDraft.asset?.trim() || "";
+      if (asset) {
+        const addressLike = /^0x[a-fA-F0-9]{40}$/.test(asset) || /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(asset);
+        if (nextSide === "sell") {
+          if (addressLike) { setPayByAddress(true); payAddress.change(asset); }
+          else if (payOptions.includes(asset.toUpperCase())) setPaySelection(asset.toUpperCase());
+        } else if (addressLike) {
+          setRecvByAddress(true);
+          recvAddress.change(asset);
+        } else if (recvOptions.includes(asset.toUpperCase())) {
+          setRecvSelection(asset.toUpperCase());
+        }
+      }
+      const amount = nextSide === "buy" ? importedDraft.amountUsd : importedDraft.quantity;
+      if (amount !== undefined) setAmt(String(amount));
+      setResult({ ok: false, error: "Imported from X as a draft. Review the live quote, wallet, network, and confirmation before signing." });
+      setState("idle");
+    });
+  // Apply each immutable X draft once; ticket inputs remain user-editable afterward.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [importedDraft?.requestId]);
 
   const customPayAddress = payAddress.token?.address;
   const addressHolding = customPayAddress
@@ -131,7 +166,7 @@ export function CryptoTicket() {
   const overCap = !useBankr && payUsdEstimate > swapMaxUsd;
   const overWalletCap = useBankr && wallet.cap != null && payUsdEstimate > wallet.cap;
 
-  const clearQuote = () => { setState("idle"); setResult(null); setQuoteState(null); setQuoting(false); };
+  const clearQuote = () => { setState("idle"); setResult(null); setQuoteState(null); setQuoting(false); planFlow.clear(); };
   const setPct = (p: number) => { setAmt(String(+(bal * p).toFixed(payDisplay === "ETH" || payDisplay === "cbBTC" || payDisplay === "BTC" ? 6 : 2))); clearQuote(); };
   const flip = () => {
     setSide("swap");
@@ -152,11 +187,61 @@ export function CryptoTicket() {
     onSelectChain(nextNetwork);
   };
 
-  const place = async () => {
+  const stagePlan = async () => {
     if (!amtNum || state === "signing") return;
     if (!pay || !recv) { setResult({ ok: false, error: network.startsWith("solana") ? "Enter the full token mint address for the custom leg." : "Enter the full 0x token address for the custom leg." }); setState("error"); return; }
     if (sameToken(pay, recv)) { setResult({ ok: false, error: "Pick two different assets." }); setState("error"); return; }
     if (overCap) { setResult({ ok: false, error: `This rail caps swaps at ${trUsd(swapMaxUsd)}. Reduce the amount.` }); setState("error"); return; }
+    setState("signing");
+    setResult(null);
+    const asset = side === "sell" ? (payDisplay || pay) : (recvDisplay || recv);
+    const currentAssetValueUsd = cryptoPortfolio.rows.find((row) => row.sym.toUpperCase() === asset.toUpperCase())?.usd ?? 0;
+    const estimatedPrice = side === "sell"
+      ? (amtNum > 0 ? payUsdEstimate / amtNum : undefined)
+      : (recvAmt > 0 ? payUsdEstimate / recvAmt : undefined);
+    const created = await planFlow.stage({
+      title: `${side === "buy" ? "Buy" : side === "sell" ? "Sell" : "Swap into"} ${asset}`,
+      proposal: {
+        accountId: wallet.id,
+        agentId,
+        assetClass: "crypto",
+        asset,
+        side,
+        orderType: "market",
+        quantity: side === "sell" ? amtNum : recvAmt || undefined,
+        notionalUsd: payUsdEstimate,
+        estimatedPrice,
+        fromAsset: payDisplay || pay,
+        fromQuantity: amtNum,
+        estimatedReceiveQuantity: recvAmt || undefined,
+        venue: routeLabel(useBankr, network),
+        network,
+        source: "HivemindOS Trade crypto ticket",
+        quote: quote ? {
+          capturedAt: new Date().toISOString(),
+          source: routeLabel(useBankr, network),
+          slippageBps: useBankr ? undefined : 100,
+          feeUsd: quote.platformFee?.amountUsd,
+          detail: quote.detail,
+        } : undefined,
+        portfolio: {
+          totalValueUsd: cryptoPortfolio.total,
+          currentAssetValueUsd,
+          dailyPnlPct: cryptoPortfolio.dayPct,
+        },
+      },
+      evidence: quote ? [quote.detail, `Acting wallet: ${wallet.name}`, `Network: ${network}`] : [`Wallet valuation estimate: ${trUsd2(payUsdEstimate)}`],
+      missingContext: [
+        ...(!quote ? ["A live executable quote was not available"] : []),
+        ...(useBankr ? ["Bankr did not provide a numeric slippage bound"] : []),
+        ...(!cryptoPortfolio.total ? ["Portfolio exposure is unknown"] : []),
+      ],
+    });
+    setState(created ? "idle" : "error");
+    if (!created) setResult({ ok: false, error: planFlow.error || "The trade plan could not be staged." });
+  };
+
+  const executeLive = async (planId: string) => {
     setState("signing");
     setResult(null);
     let outcome: RailResult;
@@ -170,12 +255,27 @@ export function CryptoTicket() {
       outcome = prepared.ok && prepared.prepared
         ? await executeCapability(prepared.prepared, { intentId: "trade", amountUsd: payUsd })
         : { ok: false, error: prepared.error || "Could not prepare this Bankr order." };
+      if (outcome.ok) {
+        const recorded = await recordExternalTradingPlanResult({ id: planId, executionStatus: "filled", reference: outcome.reference, detail: outcome.message || "Bankr reported the governed trade as completed.", filled: true, filledQuantity: recvAmt || undefined, fillPrice: recvAmt > 0 ? payUsdEstimate / recvAmt : undefined, feesUsd: quote?.platformFee?.amountUsd });
+        if (!recorded.ok) outcome = { ok: false, error: recorded.error || "The Bankr trade completed, but its plan record could not be updated." };
+      }
     } else {
-      outcome = await runDexSwap({ agentId, sellToken: pay, buyToken: recv, amountHuman: amtNum, network });
+      outcome = await runDexSwap({ agentId, sellToken: pay, buyToken: recv, amountHuman: amtNum, network, planId });
     }
     setResult(outcome);
     setState(outcome.ok ? "done" : "error");
     if (outcome.ok) { playTradeSuccessSound(); setAmt(""); setQuoteState(null); desk.refresh(); }
+    return { ok: outcome.ok, error: outcome.error };
+  };
+
+  const approvePlan = async () => {
+    const next = await planFlow.approveAndContinue(executeLive);
+    if (next?.executionMode !== "live" && next?.execution) {
+      const outcome = { ok: true, message: next.execution.detail };
+      setResult(outcome);
+      setState("done");
+      playTradeSuccessSound();
+    }
   };
 
   React.useEffect(() => {
@@ -185,14 +285,15 @@ export function CryptoTicket() {
   }, [state]);
 
   const sell = side === "sell";
-  const label = state === "signing" ? (useBankr ? "Routing…" : "Signing…")
-    : state === "done" ? "Order filled"
+  const label = state === "signing" ? "Building plan…"
+    : state === "done" ? "Plan completed"
     : !amtNum ? "Enter an amount"
     : !pay || !recv ? "Enter a token address"
-    : side === "buy" ? `Buy ${recvDisplay}` : side === "sell" ? `Sell ${payDisplay}` : `Swap ${payDisplay} → ${recvDisplay}`;
+    : side === "buy" ? `Review ${recvDisplay} buy plan` : side === "sell" ? `Review ${payDisplay} sell plan` : `Review ${payDisplay} → ${recvDisplay} plan`;
 
   return (
     <div className="tk-card">
+      {importedDraft ? <div className="tk-guard"><BIcon name="shield" size={14} /><span>Imported X order draft · nothing has executed. Verify every field and use this rail&apos;s separate confirmation.</span></div> : null}
       <div className="tk-head">
         <div className="tk-side">
           {(["buy", "sell", "swap"] as Side[]).map((s) => (
@@ -202,7 +303,7 @@ export function CryptoTicket() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <ChainMenu value={network} options={walletChains} onPick={selectNetwork} />
-          <Badge tone="live"><span className="fr-dot live" style={{ color: "var(--live)" }} /> {useBankr ? "Bankr" : "Live"}</Badge>
+          <Badge tone={planFlow.mode === "live" ? "live" : "honey"}><span className="fr-dot live" style={{ color: planFlow.mode === "live" ? "var(--danger)" : "var(--honey)" }} /> {planFlow.mode === "research" ? "Research-only" : planFlow.mode === "paper" ? "Paper simulator" : `${useBankr ? "Bankr" : "Live"} · governed`}</Badge>
         </div>
       </div>
 
@@ -280,13 +381,16 @@ export function CryptoTicket() {
       ) : null}
 
       <button type="button" className="tk-place" data-sell={sell && state === "idle" ? "" : undefined} data-done={state === "done" ? "" : undefined}
-        disabled={(!amtNum && state === "idle") || state === "signing" || overCap} onClick={place}>
+        disabled={(!amtNum && state === "idle") || state === "signing" || overCap || Boolean(planFlow.plan) || planFlow.busy} onClick={stagePlan}>
         {state === "signing" ? <BIcon name="spinner" size={15} spin /> : state === "done" ? <BIcon name="check" size={15} /> : null}
         {label}
       </button>
-      <div className="tk-foot"><BIcon name="shield" size={12} /> {useBankr ? "Routed through the Bankr trading wallet" : "Signs locally from your governed wallet"}</div>
+      <div className="tk-foot"><BIcon name="shield" size={12} /> Stage → review → approve {planFlow.mode === "live" ? "→ governed submission" : planFlow.mode === "paper" ? "→ virtual fill" : "only"}</div>
+
+      {planFlow.plan ? <TradePlanReviewCard plan={planFlow.plan} busy={planFlow.busy || state === "signing"} onReject={() => void planFlow.reject()} onApprove={() => void approvePlan()} onStartNew={() => { planFlow.clear(); setState("idle"); setResult(null); }} /> : null}
 
       {state === "error" && result?.error ? <p className="tk-error">{result.error}</p> : null}
+      {planFlow.error ? <p className="tk-error">{planFlow.error}</p> : null}
       {state === "done" && result?.ok ? (
         <div className="tk-success">
           {result.message || "Order filled."}

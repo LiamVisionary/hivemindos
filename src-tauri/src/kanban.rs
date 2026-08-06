@@ -207,8 +207,11 @@ pub(crate) fn kanban_read(
     vault_path: Option<String>,
     kanban_folder: Option<String>,
     boards_only: Option<bool>,
+    summary_only: Option<bool>,
     include_boards: Option<bool>,
     include_archived: Option<bool>,
+    include_columns: Option<bool>,
+    if_updated_at: Option<u64>,
     tenant: Option<String>,
     assignee: Option<String>,
     query: Option<String>,
@@ -227,7 +230,19 @@ pub(crate) fn kanban_read(
         "events": [],
         "runs": []
     }));
+    let updated_at = board_value.pointer("/meta/updatedAt").and_then(Value::as_u64).unwrap_or(0);
     let all_tasks = board_value.get("tasks").and_then(Value::as_array).cloned().unwrap_or_default();
+    if summary_only == Some(true) {
+        let mut counts = serde_json::Map::new();
+        for status in ["ideas", "ready", "working", "needs-human", "done", "archived"] {
+            let count = all_tasks.iter().filter(|task| task.get("status").and_then(Value::as_str) == Some(status)).count();
+            counts.insert(status.to_string(), Value::from(count as u64));
+        }
+        return Ok(serde_json::json!({ "ok": true, "counts": counts, "updatedAt": updated_at }));
+    }
+    if matches!(if_updated_at, Some(value) if value > 0 && value == updated_at) {
+        return Ok(serde_json::json!({ "ok": true, "notModified": true, "updatedAt": updated_at }));
+    }
     let filtered_tasks = all_tasks
         .iter()
         .filter(|task| task_matches(task, include_archived.unwrap_or(false), &tenant, &assignee, &query))
@@ -235,13 +250,17 @@ pub(crate) fn kanban_read(
         .collect::<Vec<_>>();
     let tenants = all_tasks.iter().filter_map(|task| task.get("tenant").and_then(Value::as_str).map(str::to_string)).collect::<BTreeSet<_>>();
     let assignees = all_tasks.iter().filter_map(|task| task.get("assignee").and_then(Value::as_str).map(str::to_string)).collect::<BTreeSet<_>>();
-    Ok(serde_json::json!({
+    let columns = include_columns.unwrap_or(true).then(|| group_tasks(&filtered_tasks, include_archived.unwrap_or(false)));
+    let mut response = serde_json::json!({
         "ok": true,
         "boards": if include_boards.unwrap_or(true) { Value::Array(list_boards(&storage)) } else { Value::Null },
-        "board": trim_board(board_value, filtered_tasks.clone()),
-        "columns": group_tasks(&filtered_tasks, include_archived.unwrap_or(false)),
+        "board": trim_board(board_value, filtered_tasks),
         "tenants": tenants.into_iter().collect::<Vec<_>>(),
         "assignees": assignees.into_iter().collect::<Vec<_>>(),
         "storage": storage
-    }))
+    });
+    if let (Some(object), Some(columns)) = (response.as_object_mut(), columns) {
+        object.insert("columns".to_string(), Value::Array(columns));
+    }
+    Ok(response)
 }

@@ -32,6 +32,7 @@ assert.equal(nansen.NANSEN_ENDPOINTS.smartMoneyDexTrades.path, "/api/v1/smart-mo
 assert.equal(nansen.NANSEN_ENDPOINTS.smartMoneyHoldings.path, "/api/v1/smart-money/holdings");
 assert.equal(nansen.NANSEN_ENDPOINTS.tokenPnlLeaderboard.path, "/api/v1/tgm/pnl-leaderboard");
 assert.equal(nansen.NANSEN_ENDPOINTS.tokenHolders.path, "/api/v1/tgm/holders");
+assert.equal(nansen.NANSEN_ENDPOINTS.tokenHolders.credits, 5);
 assert.equal(nansen.NANSEN_ENDPOINTS.addressHistoricalBalances.path, "/api/v1/profiler/address/historical-balances");
 assert.equal(nansen.NANSEN_ENDPOINTS.addressLabels.path, "/api/v1/profiler/address/labels");
 assert.equal(nansen.NANSEN_ENDPOINTS.addressPremiumLabels.path, "/api/v1/profiler/address/premium-labels");
@@ -56,6 +57,10 @@ assertIncludes(serviceSource, "managedNansenBaseUrl", "Nansen service");
 assertIncludes(serviceSource, "resolvePooledHivemindosModelCreditToken", "Nansen service");
 assertIncludes(serviceSource, "portfolioDefiHoldings", "Nansen service");
 assertIncludes(serviceSource, "buildNansenSimpleTemplateBrief", "Nansen service");
+assertIncludes(serviceSource, 'nansenPost("tokenInformation", { ...base, timeframe: "1d" })', "Nansen token information contract");
+assertIncludes(serviceSource, 'nansenPost("tokenFlowIntelligence", { ...base, timeframe: "1d" })', "Nansen flow intelligence contract");
+assertIncludes(serviceSource, '{ ...dated, buy_or_sell: "BUY" }', "Nansen buyer leaderboard contract");
+assertIncludes(serviceSource, '{ ...dated, buy_or_sell: "SELL" }', "Nansen seller leaderboard contract");
 assertIncludes(serviceSource, "smartMoneyHoldings", "Nansen service");
 assertIncludes(serviceSource, "HivemindOS hosted credits", "Nansen service");
 assertIncludes(serviceSource, "Return derived HivemindOS analysis", "Nansen service");

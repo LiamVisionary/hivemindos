@@ -3,6 +3,10 @@ import { memo, useState, type MouseEvent, type ReactNode } from "react";
 import chatStyles from "@/app/chat.module.css";
 import presentationStyles from "@/features/dashboard/ChatMarkdownPresentation.module.css";
 import { ChatRouteMarkdown } from "@/features/dashboard/ChatRouteMarkdown";
+import {
+  isMarkdownLinkLead,
+  parseObsidianWikilink,
+} from "@/features/dashboard/chat-markdown-links";
 import type { DeliverableSourceMachine } from "@/lib/services/deliverable-open-client";
 import { createStyleClass } from "@/features/dashboard/style-classes";
 import { isExternalHttpUrl, openExternalUrl } from "@/lib/native/open-external-url";
@@ -29,11 +33,6 @@ const fieldLabelStyle = {
 const fieldPattern = /(^|\s)(Suggested comment|Suggested DM|Post context|Related post|Best action|Comment under Wake or related thread|Name|Followers|Bio|Why|Post|Comment|DM|Account|Action|Profile|Handle|Engagement|URL|Link):/g;
 const jsonStartPattern = /^\s*[{[]/;
 const jsonPropertyPattern = /"[^"\n]+"\s*:/g;
-// A line/segment that begins with a markdown link — `[text](url)` — also starts
-// with `[`, but it is NOT JSON. Without this guard the JSON heuristics below
-// pretty-print it and shatter the link across lines (e.g. a basescan tx receipt
-// rendered as `[\n receipt\n](https:\n//…)`).
-const markdownLinkLeadPattern = /^\s*\[[^\]]+\]\s*\(/;
 
 function safeMarkdownHref(href: string) {
   const trimmed = href.trim();
@@ -170,9 +169,9 @@ function extractBalancedJsonCandidate(value: string) {
 function formatJsonCandidate(value: string) {
   const trimmed = trimJsonCandidate(value);
   if (!trimmed) return "";
-  // Never treat a markdown link as a JSON candidate (the `[` start is a false
-  // positive); this is what keeps inline links — like tx receipts — intact.
-  if (markdownLinkLeadPattern.test(trimmed)) return "";
+  // Markdown links and Obsidian wikilinks also start with `[`. Keep both out of
+  // the JSON fallback so source notes and transaction receipts stay readable.
+  if (isMarkdownLinkLead(trimmed)) return "";
   const formatted = formatJsonBlock(trimmed);
   if (formatted) return formatted;
   const balanced = extractBalancedJsonCandidate(trimmed);
@@ -309,7 +308,7 @@ function pushTextWithBreaks(parts: ReactNode[], text: string, keyPrefix: string)
 
 function renderInlineMarkdown(text: string, options: { links?: "anchor" | "text"; codeCopied?: string; onCopyCode?: (value: string) => void } = {}): ReactNode[] {
   const parts: ReactNode[] = [];
-  const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\s*\([^)]+\)|(?:https?:\/\/|mailto:)[^\s<]+)/g;
+  const pattern = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*|\[\[[^\]]+\]\]|\[[^\]]+\]\s*\([^)]+\)|(?:https?:\/\/|mailto:)[^\s<]+)/g;
   let cursor = 0;
   for (const match of text.matchAll(pattern)) {
     const value = match[0];
@@ -341,6 +340,17 @@ function renderInlineMarkdown(text: string, options: { links?: "anchor" | "text"
       parts.push(<strong key={`${index}-strong`}>{value.slice(2, -2)}</strong>);
     } else if (value.startsWith("*")) {
       parts.push(<em key={`${index}-em`}>{value.slice(1, -1)}</em>);
+    } else if (value.startsWith("[[")) {
+      const wikilink = parseObsidianWikilink(value);
+      parts.push(
+        wikilink ? (
+          <span key={`${index}-wikilink`} title={wikilink.target}>
+            {wikilink.label}
+          </span>
+        ) : (
+          value
+        ),
+      );
     } else if (value.startsWith("[")) {
       const link = /^\[\s*([^\]]*?)\s*\]\s*\(([^)]+)\)$/.exec(value);
       const href = link ? safeMarkdownHref(link[2]) : "#";
@@ -459,7 +469,7 @@ function ChatMarkdownBase({ text, className, headingClassName, sourceMachine, su
       previousBlockKind = formattedDataFence ? "json" : "code";
       continue;
     }
-    if (jsonStartPattern.test(line) && !markdownLinkLeadPattern.test(line)) {
+    if (jsonStartPattern.test(line) && !isMarkdownLinkLead(line)) {
       const jsonBlock = collectJsonBlock(lines, index);
       if (jsonBlock) {
         blocks.push(renderDataBlock(jsonBlock.formatted, `json-${index}`));

@@ -2,8 +2,8 @@ import "server-only";
 
 import { SocialPostError, type SocialPostResult } from "@/lib/services/socials/adapters/types";
 import {
-  getXDiscoveryStatus,
-  runTwitterCli,
+  createAccountTwitterCliRun,
+  getXDiscoveryStatusForAccount,
   type TwitterCliRun,
 } from "@/lib/services/socials/social-x-discovery";
 import type { SocialAccount } from "@/lib/services/socials/socials-types";
@@ -42,21 +42,15 @@ export async function deliverXEngagement(input: {
     throw new SocialPostError(`X ${kind} target ids must contain 1-19 digits.`);
   }
 
-  const runTwitterImpl = input.runTwitterImpl ?? runTwitterCli;
-  let session = await getXDiscoveryStatus({ force: true, runTwitterImpl });
+  const runTwitterImpl = input.runTwitterImpl ?? await createAccountTwitterCliRun(input.account);
+  let session = await getXDiscoveryStatusForAccount(input.account, { force: true, runTwitterImpl });
   for (let attempt = 1; !session.available && attempt < X_IDENTITY_PREFLIGHT_ATTEMPTS; attempt += 1) {
-    session = await getXDiscoveryStatus({ force: true, runTwitterImpl });
+    session = await getXDiscoveryStatusForAccount(input.account, { force: true, runTwitterImpl });
   }
   if (!session.available || !session.authenticated) {
     throw new SocialPostError(`X ${kind} delivery needs the authenticated Agent Reach X session. ${session.detail}`);
   }
   const connectedHandle = input.account.handle.replace(/^@/, "");
-  const sessionHandle = (session.accountHandle ?? "").replace(/^@/, "");
-  if (!sessionHandle || sessionHandle.toLowerCase() !== connectedHandle.toLowerCase()) {
-    throw new SocialPostError(
-      `Agent Reach is authenticated as @${sessionHandle || "unknown"}, but this Socials account is connected as @${connectedHandle}. Re-authenticate Agent Reach with the same X account before publishing.`,
-    );
-  }
 
   let raw: unknown;
   try {

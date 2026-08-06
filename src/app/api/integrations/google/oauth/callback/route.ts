@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
-import { renderGitHubOAuthPage, verifyGitHubOAuthState } from "@/lib/services/integrations/github-oauth";
+import { integrationsOAuthDeepLink, renderGitHubOAuthPage, verifyGitHubOAuthState } from "@/lib/services/integrations/github-oauth";
+import { parkOAuthReturn } from "@/lib/services/integrations/oauth-return-store";
 import { readGoogleOAuthConfig, saveGoogleRefreshToken } from "@/lib/services/integrations/google-oauth";
 
 export const runtime = "nodejs";
@@ -39,7 +40,8 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  if (!verifyGitHubOAuthState(state, config.clientSecret) || !code) {
+  const verifiedState = verifyGitHubOAuthState(state, config.clientSecret);
+  if (!verifiedState || !code) {
     return renderGitHubOAuthPage({
       title: "Google sign-in expired",
       body: "The authorization session expired or did not match this app session. Start the Google connection again from Integrations.",
@@ -48,6 +50,15 @@ export async function GET(request: NextRequest) {
       status: 400,
     });
   }
+  // Desktop flows return through the registered scheme (the relative returnUrl
+  // is useless in the external browser). Derived ONLY from the verified state.
+  const deepLinkFor = (status: "connected" | "error") => {
+    if (!verifiedState.returnMode) return undefined;
+    // Park the outcome so the desktop app routes back when it regains focus —
+    // installed shells drop unknown deep-link URLs and only foreground.
+    parkOAuthReturn({ provider: "google", view: "integrations", status });
+    return integrationsOAuthDeepLink(verifiedState.returnMode, { provider: "google", view: "integrations", status }) || undefined;
+  };
 
   try {
     const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
@@ -76,6 +87,7 @@ export async function GET(request: NextRequest) {
       body: "Saved Google access to the shared hive env. Drive, editable Slides, Gmail, and Calendar context is now available to your hive on every machine.",
       returnUrl: RETURN_URL,
       returnLabel: RETURN_LABEL,
+      deepLink: deepLinkFor("connected"),
     });
   } catch (error) {
     return renderGitHubOAuthPage({
@@ -84,6 +96,7 @@ export async function GET(request: NextRequest) {
       returnUrl: "/?view=integrations",
       returnLabel: RETURN_LABEL,
       status: 502,
+      deepLink: deepLinkFor("error"),
     });
   }
 }

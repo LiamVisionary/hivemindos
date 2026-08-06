@@ -11,6 +11,7 @@ import {
   pinPeerAppProxyUrl,
 } from "../apps-normalize";
 import { fetchServiceProbe } from "../apps-service-probe";
+import { shouldUseTailscaleCliFallback } from "../discover-devices";
 import { hivemindLinkControlUrl } from "@/lib/services/hivemind-link-control";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 
@@ -1154,6 +1155,7 @@ function configuredPeerIps() {
 async function tailscalePeerIps() {
   const explicit = configuredPeerIps();
   if (explicit.length > 0) return explicit;
+  if (!shouldUseTailscaleCliFallback()) return [];
   for (const command of TAILSCALE_CLI_CANDIDATES) {
     try {
       const { stdout } = await execFileAsync(command, ["status", "--json"], {

@@ -88,6 +88,7 @@ Install or repair the current HivemindOS desktop release. Installing Python or M
 
 ## Related Guides
 
+- [Hivemind Office Companion](hivemind-office.html)
 - [Agents, Runtimes, And Chat](runtimes-and-chat.html)
 - [Brain, Vault, And Skills](brain-vault-and-skills.html)
 - [Zero Human Companies](zero-human-companies.html)

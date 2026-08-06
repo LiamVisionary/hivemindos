@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 
 import { loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import type {
@@ -96,6 +96,9 @@ export function ProgressRewardPopup({ enabled = true }: ProgressRewardPopupProps
     : current.metrics.honeyEarned > 0
       ? "HONEY earned"
       : "";
+  const scoreValueStyle = {
+    "--score-fit-size": `${Math.min(40, 166 / Math.max(primaryMetric.length, 1))}cqi`,
+  } as CSSProperties;
 
   return (
     <div
@@ -132,7 +135,7 @@ export function ProgressRewardPopup({ enabled = true }: ProgressRewardPopupProps
             <span className={styles.scoreMark} aria-hidden="true"><HiveHex size={hasPrimaryActivity ? 30 : 34} strokeWidth={1.3} dot /></span>
             {hasPrimaryActivity ? (
               <>
-                <span className={styles.scoreValue}>{primaryMetric}</span>
+                <span className={styles.scoreValue} style={scoreValueStyle}>{primaryMetric}</span>
                 <small>{primaryLabel}</small>
               </>
             ) : (

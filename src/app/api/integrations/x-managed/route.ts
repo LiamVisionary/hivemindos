@@ -14,6 +14,7 @@ import {
   startManagedXOAuth,
   type ManagedXProxyInput,
 } from "@/lib/services/managed-x-api-client";
+import { dedupeManagedXCreditAccountAliases } from "@/lib/services/socials/managed-x-credit-accounts";
 import { requireAuth } from "@/lib/utils/server-auth";
 
 export const runtime = "nodejs";
@@ -35,6 +36,10 @@ type ManagedXCreditAccount = {
   balanceUsd: number | null;
   balanceLabel: string;
   error?: string;
+};
+
+type ManagedXCreditAccountCandidate = ManagedXCreditAccount & {
+  hostedAccountId?: string;
 };
 
 export async function GET(request: NextRequest) {
@@ -128,10 +133,19 @@ function isWriteMethod(method: unknown) {
 async function listManagedXCreditAccounts(slug: string): Promise<ManagedXCreditAccount[]> {
   const records = (await listHivemindosModelCreditTokenSummaries())
     .filter((record) => normalizeHivemindosWalletPaidSlug(record.slug) === slug);
-  return Promise.all(records.map(accountSummary));
+  const candidates = await Promise.all(records.map(accountSummary));
+  return dedupeManagedXCreditAccountAliases(candidates)
+    .map(({ accountId, slug: accountSlug, updatedAt, balanceUsd, balanceLabel, error }) => ({
+      accountId,
+      slug: accountSlug,
+      updatedAt,
+      balanceUsd,
+      balanceLabel,
+      error,
+    }));
 }
 
-async function accountSummary(record: HivemindosModelCreditTokenSummary): Promise<ManagedXCreditAccount> {
+async function accountSummary(record: HivemindosModelCreditTokenSummary): Promise<ManagedXCreditAccountCandidate> {
   const slug = normalizeHivemindosWalletPaidSlug(record.slug);
   const base = {
     accountId: record.walletAgentId,
@@ -144,9 +158,11 @@ async function accountSummary(record: HivemindosModelCreditTokenSummary): Promis
   if (!token) return { ...base, error: "Stored credit token is unavailable." };
   try {
     const data = await responseJson(getManagedXBalance(token, slug));
+    const hostedAccountId = typeof data.accountId === "string" ? data.accountId.trim() : "";
     const balanceUsd = typeof data.balanceUsd === "number" ? data.balanceUsd : null;
     return {
       ...base,
+      hostedAccountId: hostedAccountId || undefined,
       balanceUsd,
       balanceLabel: typeof data.balanceLabel === "string"
         ? data.balanceLabel

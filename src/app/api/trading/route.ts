@@ -29,6 +29,13 @@ import {
   cancelRobinhoodAgenticEquityOrder,
   robinhoodAgenticStatus,
 } from "@/lib/services/trading/robinhood-agentic";
+import {
+  assertTradePlanExecutable,
+  assertTradingLiveMode,
+  failTradePlan,
+  recordLiveTradePlanResult,
+} from "@/lib/services/trading/trading-control-store";
+import type { AlpacaSupportedOrderType, AlpacaTimeInForce } from "@/lib/services/trading/alpaca-order";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -57,6 +64,11 @@ type TradingBody = {
   approvalToken?: string;
   companyTaskId?: string;
   slippageBps?: number;
+  orderType?: AlpacaSupportedOrderType;
+  timeInForce?: AlpacaTimeInForce;
+  limitPrice?: number;
+  stopPrice?: number;
+  planId?: string;
   /** Paper toggle from the Stocks screen. true forces paper; never escalates to live. */
   paper?: boolean;
 };
@@ -148,8 +160,10 @@ export async function POST(request: NextRequest) {
   const unauthorized = await requireAuth(request);
   if (unauthorized) return unauthorized;
 
+  let planId = "";
   try {
     const body = (await request.json().catch(() => ({}))) as TradingBody;
+    planId = body.planId?.trim() || "";
     const agentId = body.agentId?.trim();
     const side = normalizeSide(body.side);
     const action = body.action === "execute" ? "execute"
@@ -196,8 +210,26 @@ export async function POST(request: NextRequest) {
     const slippageBps = Number(body.slippageBps) || undefined;
 
     if (action === "quote") {
-      const quote = await discoverStockTradeQuote({ side, policy, ticker, notionalUsd, slippageBps, paper });
+      const quote = await discoverStockTradeQuote({
+        side,
+        policy,
+        ticker,
+        notionalUsd,
+        slippageBps,
+        paper,
+        orderType: body.orderType,
+        timeInForce: body.timeInForce,
+        qty: Number(body.qty) > 0 ? Number(body.qty) : undefined,
+        limitPrice: Number(body.limitPrice) > 0 ? Number(body.limitPrice) : undefined,
+        stopPrice: Number(body.stopPrice) > 0 ? Number(body.stopPrice) : undefined,
+      });
       return NextResponse.json({ ok: true, side, paper, quote, confirmation: stockTradeConfirmation(side) });
+    }
+
+    const movesFunds = policy.tradingVenue !== "alpaca" || paper === false;
+    if (movesFunds) await assertTradingLiveMode({ planId });
+    if (planId) {
+      await assertTradePlanExecutable({ planId, agentId, asset: ticker, notionalUsd, side, orderType: body.orderType ?? "market" });
     }
 
     // Execute: xStocks and Robinhood Chain use the agent's local on-chain wallet
@@ -234,10 +266,27 @@ export async function POST(request: NextRequest) {
       secret,
       fromAddress,
       slippageBps,
+      orderType: body.orderType,
+      timeInForce: body.timeInForce,
+      limitPrice: Number(body.limitPrice) > 0 ? Number(body.limitPrice) : undefined,
+      stopPrice: Number(body.stopPrice) > 0 ? Number(body.stopPrice) : undefined,
       companyTaskId: body.companyTaskId?.trim() || undefined,
     });
+    if (planId) {
+      await recordLiveTradePlanResult({
+        planId,
+        execution: {
+          status: result.status,
+          reference: result.reference,
+          detail: result.detail,
+          ...(result.status === "filled" ? { filledAt: new Date().toISOString(), filledQuantity: result.acquired } : {}),
+          feesUsd: result.platformFee?.amountUsd,
+        },
+      });
+    }
     return NextResponse.json({ ok: true, result });
   } catch (error) {
+    if (planId) await failTradePlan(planId, error instanceof Error ? error.message : "Trade failed.").catch(() => undefined);
     // Governance blocks/escalations and confirmation/cap failures throw with a
     // human-readable reason; surface it so the UI can show the next step.
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "Trade failed." }, { status: 400 });

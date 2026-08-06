@@ -37,6 +37,43 @@ export type X402FetchPolicy = Pick<
   "enabled" | "provider" | "network" | "maxPaymentUsd" | "approvalRequiredOverUsd" | "autoPayEnabled" | "x402BaseUrl"
 >;
 
+/**
+ * Canonical request-policy normalization for local x402 buyer routes.
+ * Personal wallets never inherit auto-pay, and Veil with private x402 disabled
+ * falls back to the public x402 buyer just like the generic wallet route.
+ */
+export function normalizeX402Policy(
+  policy: Partial<AgentWalletConfig> | undefined,
+  network: string,
+  isPersonalWallet = false,
+): X402FetchPolicy {
+  const provider = policy?.provider === "veil" && policy.veilAutoPrivateX402 === false
+    ? "x402"
+    : policy?.provider ?? "manual";
+  return {
+    enabled: Boolean(policy?.enabled),
+    provider,
+    network: policy?.network || network,
+    maxPaymentUsd: positiveMoney(policy?.maxPaymentUsd, 0.5),
+    approvalRequiredOverUsd: positiveMoney(policy?.approvalRequiredOverUsd, 0),
+    autoPayEnabled: Boolean(policy?.autoPayEnabled) && !isPersonalWallet,
+    x402BaseUrl: policy?.x402BaseUrl ?? "",
+  };
+}
+
+function positiveMoney(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+export type X402PaidResource = {
+  status: number;
+  amountUsd: number;
+  contentType: string;
+  bodyPreview: string;
+  bodyJson?: unknown;
+};
+
 export type X402FetchInput = {
   agentId: string;
   network: string;
@@ -60,6 +97,19 @@ export type X402FetchInput = {
   skipPaymentDiscovery?: boolean;
   /** True when the endpoint price already includes HivemindOS revenue, so the generic local platform fee should not be collected. */
   skipPlatformFee?: boolean;
+  /**
+   * Optional fixed-upstream proof for servers that deliver the paid resource but
+   * omit PAYMENT-RESPONSE. Returning true promotes a successful paid response to
+   * settled; callers must validate purpose-specific response data, not status alone.
+   */
+  acceptPaidResourceAsSettlement?: (response: X402PaidResource) => boolean | Promise<boolean>;
+  /**
+   * Optional server-side capture hook invoked immediately after the main x402
+   * settlement response is decoded and before a separate platform-fee transfer.
+   * Purpose-specific rails use this for one-time credentials returned by the
+   * paid resource so a later fee-transfer failure cannot discard paid value.
+   */
+  onPaymentSettled?: (response: X402PaidResource) => Promise<void>;
   timeoutMs?: number;
 };
 
@@ -98,6 +148,20 @@ export type X402FetchResult = {
   bodyPreview: string;
   bodyJson?: unknown;
 };
+
+export async function confirmX402Settlement(input: {
+  paid: boolean;
+  responseOk: boolean;
+  status: number;
+  paymentResponse?: string;
+  resource: X402PaidResource;
+  acceptPaidResourceAsSettlement?: X402FetchInput["acceptPaidResourceAsSettlement"];
+}) {
+  if (!input.paid || input.status === 402) return false;
+  if (input.paymentResponse) return true;
+  if (!input.responseOk || !input.acceptPaidResourceAsSettlement) return false;
+  return Boolean(await input.acceptPaidResourceAsSettlement(input.resource));
+}
 
 type X402SpendRecord = {
   agentId: string;
@@ -400,7 +464,25 @@ export async function executeX402Fetch(input: X402FetchInput): Promise<X402Fetch
   });
   const preview = await responsePreview(response);
   const paymentResponse = response.headers.get("PAYMENT-RESPONSE") ?? response.headers.get("X-PAYMENT-RESPONSE") ?? undefined;
-  const paymentSettled = paid && response.status !== 402 && Boolean(paymentResponse);
+  const paymentSettled = await confirmX402Settlement({
+    paid,
+    responseOk: response.ok,
+    status: response.status,
+    paymentResponse,
+    resource: {
+      status: response.status,
+      amountUsd: selectedAmountUsd,
+      ...preview,
+    },
+    acceptPaidResourceAsSettlement: input.acceptPaidResourceAsSettlement,
+  });
+  if (paymentSettled && input.onPaymentSettled) {
+    await input.onPaymentSettled({
+      status: response.status,
+      amountUsd: selectedAmountUsd,
+      ...preview,
+    });
+  }
   const platformFee = !input.skipPlatformFee && paymentSettled && selectedAmountUsd > 0
     ? await collectTradingPlatformFee({
       agentId: input.agentId,

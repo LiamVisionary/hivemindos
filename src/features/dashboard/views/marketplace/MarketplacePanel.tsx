@@ -148,6 +148,14 @@ export function MarketplacePanel({ theme, onNavigate }: { theme: "light" | "dark
     return result;
   }, [load]);
 
+  const ignoreDecision = useCallback(async (id: string) => {
+    setDecisions((current) => current.filter((candidate) => candidate.id !== id));
+    const result = await postJson("/api/marketplace/decisions", { action: "ignore", id });
+    if (!result.ok) setError(result.error ?? "Could not ignore the decision");
+    await load("refresh");
+    return result;
+  }, [load]);
+
   const removeDirective = useCallback(async (id: string) => {
     const result = await postJson("/api/marketplace/directives", { action: "remove", id });
     if (!result.ok) setError(result.error ?? "Could not remove the rule");
@@ -184,10 +192,11 @@ export function MarketplacePanel({ theme, onNavigate }: { theme: "light" | "dark
       runAccountsAction,
       runListingsAction,
       decideDecision,
+      ignoreDecision,
       removeDirective,
       onNavigate,
     }),
-    [theme, loading, refreshing, error, accounts, providers, listings, conversations, decisions, directives, activeAccountId, activeAccount, activeTab, connectOpen, listingModal, monitorStatus, rememberActiveId, load, runAccountsAction, runListingsAction, decideDecision, removeDirective, onNavigate],
+    [theme, loading, refreshing, error, accounts, providers, listings, conversations, decisions, directives, activeAccountId, activeAccount, activeTab, connectOpen, listingModal, monitorStatus, rememberActiveId, load, runAccountsAction, runListingsAction, decideDecision, ignoreDecision, removeDirective, onNavigate],
   );
 
   return (

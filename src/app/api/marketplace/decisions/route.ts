@@ -7,6 +7,7 @@ import { NextRequest } from "next/server";
 import { errorJson, okJson } from "@/lib/utils/api-response";
 import {
   decideMarketplaceDecision,
+  ignoreMarketplaceDecision,
   listMarketplaceDecisions,
   marketplaceDecisionAnswer,
 } from "@/lib/services/marketplace/marketplace-decisions-store";
@@ -22,7 +23,9 @@ export async function GET(request: NextRequest) {
     const status = request.nextUrl.searchParams.get("status");
     const accountId = request.nextUrl.searchParams.get("accountId")?.trim() || undefined;
     const decisions = await listMarketplaceDecisions({
-      ...(status === "pending" || status === "approved" || status === "denied" || status === "expired" ? { status } : {}),
+      ...(status === "pending" || status === "approved" || status === "denied" || status === "ignored" || status === "expired"
+        ? { status }
+        : {}),
       ...(accountId ? { accountId } : {}),
     });
     return okJson({ decisions });
@@ -39,8 +42,24 @@ export async function POST(request: NextRequest) {
     return errorJson("Invalid JSON body");
   }
   const action = typeof body.action === "string" ? body.action : "decide";
-  if (action !== "decide") return errorJson(`Unknown action: ${action}`);
   const id = typeof body.id === "string" ? body.id.trim() : "";
+  if (action === "ignore") {
+    if (!id) return errorJson("id is required");
+    try {
+      const ignored = await ignoreMarketplaceDecision(id);
+      if (!ignored) return errorJson(`Unknown decision: ${id}`, 404);
+      if (ignored.kind === "new-listing" && ignored.listingId) {
+        await setMarketplaceListingState(ignored.listingId, "draft", "human");
+      }
+      if (ignored.kind === "buyer-escalation" && ignored.conversationId) {
+        await setMarketplaceConversationState(ignored.conversationId, "active").catch(() => null);
+      }
+      return okJson({ decision: ignored });
+    } catch (error) {
+      return errorJson(error instanceof Error ? error.message : String(error), 500);
+    }
+  }
+  if (action !== "decide") return errorJson(`Unknown action: ${action}`);
   const verdict = body.decision === "approved" || body.decision === "denied" ? body.decision : null;
   if (!id || !verdict) return errorJson("id and decision (approved|denied) are required");
   const note = typeof body.note === "string" ? body.note : "";

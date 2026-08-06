@@ -155,6 +155,8 @@ globalThis.fetch = async (input, init) => {
   recordLocalTtsSuccess(APP_ID, t0 + 2);
   assert.equal(localTtsBreakerState(APP_ID, t0 + 3).open, false, "success closes the breaker");
   assert.equal(localTtsRecentlyHealthy(APP_ID, t0 + 3), true, "success marks recently healthy");
+  recordLocalTtsFailure(APP_ID, "server stopped", t0 + 4);
+  assert.equal(localTtsRecentlyHealthy(APP_ID, t0 + 5), false, "a newer failure invalidates recently-healthy prewarm skips");
   assert.equal(localTtsRecentlyHealthy(APP_ID, t0 + 300_000), false, "recent health expires");
   console.log("breaker unit behavior ok");
 }
@@ -240,6 +242,89 @@ globalThis.fetch = async (input, init) => {
   assert.ok(failed.error, "failed prewarm carries the error");
   assert.equal(localTtsBreakerState(APP_ID).open, true, "failed prewarm trips the breaker");
   console.log("prewarm failure reporting ok");
+}
+
+// --- auto-recovery: start the owning machine, load, then verify ---------------
+{
+  const { runLocalTtsRecovery } =
+    await import("../src/lib/services/phone/local-tts-recovery.ts");
+  const stages = [];
+  const loadCalls = [];
+  const startedCollectors = [];
+  let serviceStarted = false;
+  let warmAttempts = 0;
+  const recovered = await runLocalTtsRecovery(
+    {
+      origin: ORIGIN,
+      appId: "voice-mac:8799:universal-tts",
+      machineName: "Voice Mac",
+      model: "qwen3-tts-0.6b-custom",
+      voice: "voice01",
+    },
+    {
+      loadModel: async (input) => {
+        loadCalls.push(input);
+        return serviceStarted
+          ? { ok: true, message: "load requested" }
+          : { ok: false, message: "server unreachable" };
+      },
+      listLaunchCandidates: async () => [
+        {
+          id: "other",
+          machineName: "Other Mac",
+          collectorUrl: "http://other.test:8787",
+          collectorStatus: "ready",
+          online: true,
+          serviceLabels: ["com.liam.universal-tts"],
+          capacity: "ready",
+          capacityLabel: "Can load Local TTS",
+          capacityDetail: "Ready",
+          canStart: true,
+          modelHints: ["qwen3-tts-0.6b-custom"],
+          modelHintsSource: "service",
+          preferredModel: "qwen3-tts-0.6b-custom",
+        },
+        {
+          id: "voice",
+          machineName: "Voice Mac",
+          collectorUrl: "http://voice.test:8787",
+          collectorStatus: "ready",
+          online: true,
+          serviceLabels: ["com.liam.universal-tts"],
+          capacity: "ready",
+          capacityLabel: "Can load Local TTS",
+          capacityDetail: "Ready",
+          canStart: true,
+          modelHints: ["qwen3-tts-0.6b-custom"],
+          modelHintsSource: "service",
+          preferredModel: "qwen3-tts-0.6b-custom",
+        },
+      ],
+      startService: async ({ collectorUrl }) => {
+        startedCollectors.push(collectorUrl);
+        serviceStarted = true;
+        return { ok: true, message: "started" };
+      },
+      prewarm: async () => {
+        warmAttempts += 1;
+        return warmAttempts > 1
+          ? { ok: true, warmed: true, ms: 1 }
+          : { ok: false, warmed: false, ms: 1, error: "provider still loading" };
+      },
+      sleep: async () => undefined,
+    },
+    (status) => stages.push(status.stage),
+  );
+  assert.equal(recovered.status, "ready", "recovery verifies the selected voice before declaring ready");
+  assert.deepEqual(startedCollectors, ["http://voice.test:8787"], "recovery starts only the stored voice's machine");
+  assert.equal(loadCalls.length, 2, "recovery retries the model load after starting Universal TTS");
+  assert.equal(loadCalls.at(-1)?.model, "qwen3-tts-0.6b-custom", "recovery loads the stored voice model");
+  assert.deepEqual(
+    stages,
+    ["loading-model", "finding-machine", "starting-server", "loading-model", "verifying", "ready"],
+    "recovery exposes changing progress stages for the UI",
+  );
+  console.log("local TTS auto-recovery lifecycle ok");
 }
 
 // --- call config: stored voice ids are validated against the server ----------

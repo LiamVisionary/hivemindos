@@ -347,7 +347,7 @@ function NavShelfItem({ id, label, active, onNavigate, onPrefetch, badge, tearOf
     >
       <span className="fr-nav-ico"><FrNavIcon id={id} /></span>
       <span className="fr-nav-label">{label}</span>
-      {badge ? <span className="fr-nav-badge" aria-label={`${badge} ${label}`}>{badge > 99 ? "99+" : badge}</span> : null}
+      {badge ? <span className="fr-nav-badge" aria-label={`${badge} item${badge === 1 ? "" : "s"} need attention in ${label}`}>{badge > 99 ? "99+" : badge}</span> : null}
     </button>
   );
 }

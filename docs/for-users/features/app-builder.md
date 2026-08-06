@@ -68,6 +68,26 @@ and retries automatically. Fleet also shows the machine as updateable when its
 App Builder protocol is behind, even if its Git commit previously appeared
 current.
 
+### Start From A Chat Template
+
+Open the composer’s plus menu and choose **Templates** to browse starter
+collections as a grid. Choose **Websites** to see the reviewed website
+starters, then select one to attach it to the current conversation.
+
+HivemindOS loads every reviewed starter file before it creates anything, writes
+the files into a thread-specific project under the selected Chat workspace,
+and attaches the resulting App Builder project to the conversation. The modal
+shows an animated preparation state while this runs. When the project is ready,
+the agent asks what you would like to change and the App Preview eye draws
+attention for up to ten seconds; press it to start or open the preview.
+
+The first website starter is **Scroll World**, an MIT-licensed,
+dependency-free landing-page engine adapted from the pinned and audited
+`oso95/scroll-world` source. It includes local poster artwork so it previews
+without accounts or external services. The upstream project’s optional media
+generation workflows are not installed or run by template selection; any paid
+generation remains a separate, explicit action.
+
 ## Build On Your Own Machine
 
 Choose a directory on This Mac or another connected fleet machine. The agent

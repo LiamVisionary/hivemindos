@@ -36,6 +36,11 @@ import {
   localTtsBreakerState,
   prewarmLocalTts,
 } from "@/lib/services/phone/local-tts-health";
+import {
+  beginLocalTtsRecovery,
+  readLocalTtsRecoveryStatus,
+  recoveryInputFromCalls,
+} from "@/lib/services/phone/local-tts-recovery";
 import { warmHiveDailyReport } from "@/lib/services/company-daily-report";
 import {
   beginVoiceTurnProgress,
@@ -917,6 +922,20 @@ async function prewarmSpokenReplyEngine(request: NextRequest) {
   ) {
     return NextResponse.json({ ok: true, warmed: false, skipped: "local-tts-not-selected" });
   }
+  const recoveryInput = recoveryInputFromCalls({
+    origin: request.nextUrl.origin,
+    voiceProviderId: calls.voiceProviderId,
+    voiceModelId: calls.voiceModelId,
+    voiceId: calls.voiceId,
+  });
+  const activeRecovery = readLocalTtsRecoveryStatus(recoveryInput);
+  if (activeRecovery) {
+    return NextResponse.json({
+      ok: activeRecovery.status !== "failed",
+      warmed: activeRecovery.status === "ready",
+      recovery: activeRecovery,
+    }, { status: activeRecovery.status === "loading" ? 202 : 200 });
+  }
   const result = await prewarmLocalTts({
     origin: request.nextUrl.origin,
     voiceProviderId: calls.voiceProviderId,
@@ -942,6 +961,15 @@ async function prewarmSpokenReplyEngine(request: NextRequest) {
       ...(result.error ? { error: result.error } : {}),
       ttsMs: result.ms,
     });
+  }
+  if (!result.ok) {
+    const recovery = beginLocalTtsRecovery({
+      ...recoveryInput,
+      ...("appId" in result && result.appId ? { appId: result.appId } : {}),
+      ...("model" in result && result.model ? { model: result.model } : {}),
+      ...("voice" in result && result.voice ? { voice: result.voice } : {}),
+    });
+    return NextResponse.json({ ...result, recovery }, { status: 202 });
   }
   return NextResponse.json(result, { status: result.ok ? 200 : 502 });
 }

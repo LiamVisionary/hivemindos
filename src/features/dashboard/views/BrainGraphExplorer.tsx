@@ -126,6 +126,7 @@ export function BrainGraphExplorer(props: any) {
     brainGraphStatus,
     formatBrainDate,
     inspectBrainNode,
+    openBrainAtlas,
     refreshBrainGraph,
     selectedAgent,
     selectedBrainNode,
@@ -374,6 +375,14 @@ export function BrainGraphExplorer(props: any) {
           >
             {brainGraphLoading ? <LoaderCircle aria-hidden="true" className={vaultClass("spinIcon")} /> : <RefreshCcw aria-hidden="true" />}
           </button>
+          <button
+            type="button"
+            className={graphClass("hudTextButton")}
+            onClick={openBrainAtlas}
+          >
+            <Network aria-hidden="true" />
+            Atlas view
+          </button>
           {process.env.NODE_ENV === "development" ? (
             <button
               type="button"
@@ -405,7 +414,7 @@ export function BrainGraphExplorer(props: any) {
         </div>
       </div>
 
-      <div className={graphClass("legend")} aria-hidden="true">
+      <div className={graphClass("legend")} role="note" aria-label="Brain graph legend">
         <span><i className={graphClass("legendSize")} />size = wiki-link degree</span>
         <span><i className={graphClass("legendAssociation")} />faint fibers = folder/tag associations</span>
         <span><i className={graphClass("legendHoney")} />agent-touched</span>

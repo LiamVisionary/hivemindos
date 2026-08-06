@@ -1185,7 +1185,10 @@ export function useDashboardGeminiLive(
   const [remoteAudioActive, setRemoteAudioActive] = React.useState(false);
   const [localMicrophoneTrack, setLocalMicrophoneTrack] = React.useState<MediaStreamTrack | null>(null);
   const mutedRef = React.useRef(muted);
-  mutedRef.current = muted;
+
+  React.useEffect(() => {
+    mutedRef.current = muted;
+  }, [muted]);
 
   React.useEffect(() => {
     if (!active || !connection) return undefined;
@@ -1462,4 +1465,3 @@ export function voiceStatusLabel(status: DashboardVoiceStatus, hasConnection: bo
   if (status === "failed") return "Dashboard audio failed";
   return "Dashboard audio idle";
 }
-

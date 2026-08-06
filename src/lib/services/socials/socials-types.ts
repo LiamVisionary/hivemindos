@@ -129,9 +129,11 @@ export type SocialAccount = {
   maxDailyReadOps: number;
   /**
    * Non-secret platform bindings: telegram { chatId }, farcaster { fid, signerUuid },
-   * x-managed { connectionSlug, creditAccountId, creditSlug }, reddit { defaultSubreddit }. An `env:<CANONICAL_KEY>`
-   * entry re-points that credential at a differently-named shared env key for this
-   * account only (adapters resolve via accountEnvValue); values are key NAMES, never secrets.
+   * x-managed { connectionSlug, creditAccountId, creditSlug }, x Agent Reach
+   * { xSessionMode, env:TWITTER_AUTH_TOKEN, env:TWITTER_CT0 }, reddit
+   * { defaultSubreddit }. An `env:<CANONICAL_KEY>` entry re-points that
+   * credential at a differently-named shared env key for this account only
+   * (adapters resolve via accountEnvValue); values are key NAMES, never secrets.
    */
   binding?: Record<string, string>;
   createdAt: string;

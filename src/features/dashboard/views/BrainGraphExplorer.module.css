@@ -135,6 +135,34 @@
   stroke: currentColor;
 }
 
+.hudTextButton {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--brain-line-2, rgba(238, 232, 220, 0.14));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brain-panel, #14161c) 26%, transparent);
+  color: var(--brain-fg-2, #a7a39a);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 0 11px;
+}
+
+.hudTextButton:hover,
+.hudTextButton:focus-visible {
+  border-color: var(--brain-honey-line, rgba(231, 180, 92, 0.32));
+  color: var(--brain-honey, #e7b45c);
+  outline: none;
+}
+
+.hudTextButton svg {
+  width: 14px;
+  height: 14px;
+}
+
 .devSpeechButton {
   display: inline-flex;
   width: auto;

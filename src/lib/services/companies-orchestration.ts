@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { Company, CompanyProcess } from "@/lib/types/company";
+import type { Company, CompanyFrontierLabStage, CompanyProcess } from "@/lib/types/company";
 import { decomposePrdToTaskDrafts, type QueenBeePrdTaskDraft } from "@/lib/services/queen-bee/prd-decomposition";
 import { submitQueenBeeMessage, type QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plane";
 import { llmDecomposeApexGoal } from "@/lib/services/companies-goal-planner";
@@ -23,6 +23,12 @@ import {
   dispatchCompanyWithAeon,
   type CompanyAeonDispatchResult,
 } from "@/lib/services/company-aeon-execution";
+import {
+  classifyFrontierLabTaskTier,
+  evaluateFrontierLabCapacity,
+  normalizeFrontierLabPolicy,
+} from "@/lib/frontier-lab";
+import { readCompanyIntelligenceSnapshot } from "@/lib/services/company-intelligence-usage";
 
 /**
  * Company orchestration bridge: turn a company's apex goal into a per-role work
@@ -88,6 +94,20 @@ export function countDispatchableMembers(scoped: QueenBeeFleetMachine[]): number
     n += (machine.agents ?? []).filter((a) => isMemberChatCapable(a, machine.capabilities)).length;
   }
   return n;
+}
+
+/** Distinct online identities available for a worker/reviewer split. */
+export function countDispatchableMemberIdentities(scoped: QueenBeeFleetMachine[]): number {
+  const identities = new Set<string>();
+  for (const machine of scoped) {
+    if (!machine.device?.online) continue;
+    for (const agent of machine.agents ?? []) {
+      if (!isMemberChatCapable(agent, machine.capabilities)) continue;
+      const identity = String(agent.id || agent.agentId || agent.name || "").trim().toLowerCase();
+      if (identity) identities.add(identity);
+    }
+  }
+  return identities.size;
 }
 
 /** Build a structured PRD brief from the apex goal + the crew's roles. */
@@ -205,6 +225,15 @@ export function companyWorkerContext(company: Company, memoryDigest: string, sal
       lines.push(`- google-cloud:${budget.service} in ${budget.projectId || budget.projectNumber} — provider daily quotas ${caps || "none"}; $${budget.monthlyCeilingUsd}/month billing alert`);
     }
   }
+  if (company.frontierLab?.enabled) {
+    const policy = normalizeFrontierLabPolicy(company.frontierLab);
+    lines.push(
+      "",
+      `Frontier Lab is active at the ${policy.stage} stage with a ${policy.monthlyTokenLimit.toLocaleString("en-US")}-token monthly control budget and ${policy.perTaskTokenLimit.toLocaleString("en-US")} tokens reserved per task attempt.`,
+      `Model routing is fixed to OpenAI OAuth: scout ${policy.models.scout}, builder ${policy.models.builder}, reviewer ${policy.models.reviewer}. Do not switch to OpenRouter, Claude, or an API-key provider.`,
+      `Capacity guardrails: ${policy.maxParallelTasks} parallel task(s), ${policy.maxTasksPerCycle} task(s) per planning cycle, ${policy.perMachineConcurrency} model turn(s) per machine.`,
+    );
+  }
   const directives = company.directives ?? [];
   if (directives.length) {
     lines.push("", "Standing directives from the human — follow these exactly (newest last):");
@@ -260,6 +289,13 @@ export type HivemindCompanyDispatchResult = {
   executionEngine?: "hivemind";
   externalRunCount?: never;
   aeon?: never;
+  /** Present when company-scoped Frontier Lab scheduling governed this dispatch. */
+  frontierLab?: {
+    stage: CompanyFrontierLabStage;
+    availableSlots: number;
+    remainingTokens: number;
+    blockedReason?: string;
+  };
 };
 
 export type CompanyDispatchResult = HivemindCompanyDispatchResult | CompanyAeonDispatchResult;
@@ -406,6 +442,7 @@ function buildCompanyLearningLoop(company: Company, draft: QueenBeePrdTaskDraft,
     branchAgent: draft.skills?.[0],
     skills: draft.skills,
     governanceLabel: "company governance",
+    requireIndependentJudge: company.frontierLab?.enabled === true,
   });
 }
 
@@ -463,7 +500,43 @@ export async function dispatchCompanyGoal(
 
   const scoped = scopeFleetToMembers(fleetSnapshot, company.agentIds);
   const dispatchableMembers = countDispatchableMembers(scoped);
-  const maxTasks = Math.max(1, Math.min(opts.maxTasks ?? 6, 8));
+  const frontierPolicy = company.frontierLab?.enabled ? normalizeFrontierLabPolicy(company.frontierLab) : undefined;
+  const intelligence = frontierPolicy
+    ? await readCompanyIntelligenceSnapshot(company.id, frontierPolicy)
+    : undefined;
+  const frontierCapacity = frontierPolicy && intelligence
+    ? evaluateFrontierLabCapacity({
+        policy: frontierPolicy,
+        dispatchableMembers: countDispatchableMemberIdentities(scoped),
+        activeTasks: intelligence.activeReservations,
+        settledTokens: intelligence.settledTokens,
+        reservedTokens: intelligence.reservedTokens,
+      })
+    : undefined;
+  const frontierLab = frontierPolicy && frontierCapacity
+    ? {
+        stage: frontierPolicy.stage,
+        availableSlots: frontierCapacity.availableSlots,
+        remainingTokens: frontierCapacity.remainingTokens,
+        blockedReason: frontierCapacity.blockedReason,
+      }
+    : undefined;
+  if (frontierCapacity && frontierCapacity.availableSlots <= 0) {
+    return {
+      goal,
+      taskCount: 0,
+      delegatedCount: 0,
+      pickupCount: 0,
+      dispatchableMembers,
+      planner: "heuristic",
+      tasks: [],
+      frontierLab,
+    };
+  }
+  const requestedMax = opts.maxTasks ?? (frontierCapacity?.availableSlots ?? 6);
+  const maxTasks = frontierCapacity
+    ? Math.max(1, Math.min(requestedMax, frontierCapacity.availableSlots, 24))
+    : Math.max(1, Math.min(requestedMax, 8));
 
   // Company memory makes each cycle incremental: the planner sees a longer digest
   // (plan the NEXT batch), each worker body a shorter one (don't run cold).
@@ -471,22 +544,24 @@ export async function dispatchCompanyGoal(
   const workerMemory = plannerMemory.length > 900 ? `${plannerMemory.slice(0, 899)}…` : plannerMemory;
   const salesContentContext = await buildStoredSalesContentDispatchContext(company).catch(() => "");
 
-  // Prefer an LLM-authored, goal-specific plan via queen-bee's brain order
-  // (the company's own agent first, then OpenAI). Fall back to the deterministic
-  // per-role heuristic brief when no brain is reachable, so dispatch never blocks.
+  // Frontier planning is deterministic so no unreserved planner inference can
+  // escape the company ledger or fall through to a member's non-OAuth runtime.
+  // Ordinary companies preserve the established agent-first planner behavior.
   let drafts: QueenBeePrdTaskDraft[];
   let planner: "llm" | "heuristic";
-  const llmDrafts = await llmDecomposeApexGoal(company, {
-    origin: opts.origin,
-    vaultPath: opts.vaultPath,
-    maxTasks,
-    history: plannerMemory,
-    // Lifetime completed-work inventory: the memory digest above only reaches a
-    // few records back, so without this the planner re-creates assets built days
-    // earlier once they roll off the digest and the 24h dedupe window.
-    completedTitles: opts.completedCompanyTaskTitles,
-    salesContentContext,
-  }).catch(() => null);
+  const llmDrafts = frontierPolicy
+    ? null
+    : await llmDecomposeApexGoal(company, {
+        origin: opts.origin,
+        vaultPath: opts.vaultPath,
+        maxTasks,
+        history: plannerMemory,
+        // Lifetime completed-work inventory: the memory digest above only reaches a
+        // few records back, so without this the planner re-creates assets built days
+        // earlier once they roll off the digest and the 24h dedupe window.
+        completedTitles: opts.completedCompanyTaskTitles,
+        salesContentContext,
+      }).catch(() => null);
   if (llmDrafts && llmDrafts.length > 0) {
     drafts = llmDrafts;
     planner = "llm";
@@ -514,7 +589,7 @@ export async function dispatchCompanyGoal(
   if (drafts.length === 0) {
     // Everything the planner proposed is already recent or in flight — nothing new
     // to do this cycle. Not an error; the driver backs off and re-checks later.
-    return { goal, taskCount: 0, delegatedCount: 0, pickupCount: 0, dispatchableMembers, planner, tasks: [], deduped };
+    return { goal, taskCount: 0, delegatedCount: 0, pickupCount: 0, dispatchableMembers, planner, tasks: [], deduped, frontierLab };
   }
 
   const companyRun = await startCompanyRun(company.id, {
@@ -532,6 +607,7 @@ export async function dispatchCompanyGoal(
       agentCount: company.agentIds.length,
       autonomy: company.autonomy,
       frozen: company.frozen,
+      frontierLab,
     },
     input: {
       planner,
@@ -539,6 +615,7 @@ export async function dispatchCompanyGoal(
       deduped,
       draftTitles: drafts.map((draft) => draft.title),
       recentTitleCount: opts.recentCompanyTaskTitles?.length ?? 0,
+      frontierLab,
     },
   });
 
@@ -570,7 +647,9 @@ export async function dispatchCompanyGoal(
         priority: "high",
         source: `company:${company.id}:${runId}`,
         fleetSnapshot: scoped,
-        skills: draft.skills,
+        skills: frontierPolicy
+          ? [...new Set([...(draft.skills ?? []), `frontier-lab:tier:${classifyFrontierLabTaskTier(draft)}`])]
+          : draft.skills,
         loop: buildCompanyLearningLoop(company, draft, runId),
         workspace: companyTaskWorkspace(company, draft),
         // The company's domain repo: routes code work toward machines with the
@@ -608,7 +687,7 @@ export async function dispatchCompanyGoal(
     companyId: company.id,
     companyName: company.name,
     event: "dispatch",
-    payload: { goal, runId, planner, taskIds: tasks.map((t) => t.taskId), taskCount: tasks.length },
+    payload: { goal, runId, planner, taskIds: tasks.map((t) => t.taskId), taskCount: tasks.length, frontierLab },
   }).catch(() => undefined);
   await appendCompanyRunEvent(company.id, companyRun.id, {
     kind: "tasks-created",
@@ -642,5 +721,6 @@ export async function dispatchCompanyGoal(
     companyRunId: companyRun.id,
     tasks,
     deduped,
+    frontierLab,
   };
 }

@@ -808,15 +808,15 @@ fn join_scoped_payload(handle: std::thread::ScopedJoinHandle<'_, Value>) -> Valu
 }
 
 #[tauri::command]
-fn dashboard_bootstrap(
-    state: tauri::State<NativeServerState>,
+async fn dashboard_bootstrap(
+    state: tauri::State<'_, NativeServerState>,
     max_age_ms: Option<u64>,
     allow_private_filesystem: Option<bool>,
     vault_path: Option<String>,
     kanban_folder: Option<String>,
     kanban_board: Option<String>,
     scheduled_folder: Option<String>,
-) -> serde_json::Value {
+) -> Result<serde_json::Value, String> {
     let hive_key = cache_key("hive-env", &[]);
     let max_age_key = max_age_ms.map(|value| value.to_string());
     let fleet_key = cache_key("fleet-apps", &[max_age_key.as_deref()]);
@@ -831,19 +831,19 @@ fn dashboard_bootstrap(
     let allow_private_filesystem = allow_private_filesystem.unwrap_or(false);
 
     if !allow_private_filesystem {
-        return serde_json::json!({
+        return Ok(serde_json::json!({
             "ok": true,
             "checkedAt": chrono::Utc::now().to_rfc3339(),
             "desktopStatus": desktop_status,
             "appVersion": desktop_status,
-        });
+        }));
     }
 
-    std::thread::scope(|scope| {
+    Ok(std::thread::scope(|scope| {
         let state_ref = &state;
         let hive_env = scope.spawn(move || cached_payload(state_ref, hive_key, || native_payload(env::hive_env_read(Some(true)))));
         let fleet_apps = scope.spawn(move || cached_payload(state_ref, fleet_key, || native_payload(fleet::fleet_apps_cache(max_age_ms))));
-        let tailscale_devices = scope.spawn(move || cached_payload(state_ref, tailscale_key, || native_payload(fleet::tailscale_devices())));
+        let tailscale_devices = scope.spawn(move || cached_payload(state_ref, tailscale_key, || native_payload(fleet::tailscale_devices_payload())));
         let kanban_read = {
             let vault_path = vault_path.clone();
             let kanban_folder = kanban_folder.clone();
@@ -852,9 +852,12 @@ fn dashboard_bootstrap(
                 kanban_board,
                 vault_path,
                 kanban_folder,
-                None,
                 Some(true),
+                None,
+                None,
+                None,
                 Some(false),
+                None,
                 None,
                 None,
                 None,
@@ -891,7 +894,7 @@ fn dashboard_bootstrap(
             "runtimeUsage": join_scoped_payload(runtime_usage),
             "schedulerShared": join_scoped_payload(scheduler_shared),
         })
-    })
+    }))
 }
 
 #[cfg(not(debug_assertions))]
@@ -1314,8 +1317,11 @@ fn navigate_main_window_to_server(handle: &tauri::AppHandle, port: u16, token: &
 /// built from it makes the phone time out. The pairing QR uses this instead.
 /// None when Tailscale isn't up.
 #[tauri::command]
-fn native_pairing_host() -> Option<String> {
-    fleet::self_tailnet_ipv4()
+async fn native_pairing_host() -> Option<String> {
+    tauri::async_runtime::spawn_blocking(fleet::self_tailnet_ipv4)
+        .await
+        .ok()
+        .flatten()
 }
 
 /// The port the app-signed gateway login item binds and the phone probes. NOT 5000 — that's

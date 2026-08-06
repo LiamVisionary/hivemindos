@@ -3,12 +3,16 @@ import { requireAuth } from "@/lib/utils/server-auth";
 import { errorJson, okJson } from "@/lib/utils/api-response";
 import { getCompany, setCompanyApiBudget } from "@/lib/services/companies-store";
 import {
+  ENABLEABLE_GCP_SERVICES,
   applyCompanyApiBudget,
+  enableGcpService,
   getGcpProjectBillingInfo,
+  isEnableableGcpService,
   listBillingAccounts,
   listGcpEnabledServices,
   listGcpProjects,
   listOverridableDailyMetrics,
+  sanitizeGcpError,
 } from "@/lib/services/gcp-budget-admin";
 import { mintGoogleCloudAccessToken } from "@/lib/services/integrations/google-cloud-oauth";
 import { CONNECTOR_MANIFESTS } from "@/lib/services/integrations/connector-manifests";
@@ -207,6 +211,29 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   if (!companyId) return errorJson("Company id is required.");
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+
+  // Enable one of the discovery/guardrail APIs the panel needs (the Enable
+  // buttons on parsed 403 rows). Strictly allowlisted — never a free-form
+  // service enabler — and uses the same stored OAuth grant as the apply rail.
+  if (body?.action === "enable-gcp-service") {
+    const company = await getCompany(companyId);
+    if (!company) return errorJson("Company not found.", 404);
+    const service = typeof body.service === "string" ? body.service.trim() : "";
+    const projectRef = typeof body.projectRef === "string" ? body.projectRef.trim() : "";
+    if (!projectRef) return errorJson("A projectRef (project id or number) is required.");
+    if (!isEnableableGcpService(service)) {
+      return errorJson(
+        `"${service}" is not enableable from here. Allowed: ${ENABLEABLE_GCP_SERVICES.join(", ")}.`,
+      );
+    }
+    try {
+      await enableGcpService(projectRef, service);
+      return okJson({ enabled: service, projectRef });
+    } catch (error) {
+      return errorJson(sanitizeGcpError(error), 502);
+    }
+  }
+
   const validated = validateBudgetBody(body);
   if ("error" in validated) return errorJson(validated.error);
   const { budget } = validated;

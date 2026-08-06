@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Check, X } from "lucide-react";
 
 import approvalStyles from "@/features/approvals/approvals.module.css";
 import { createStyleClass } from "@/features/dashboard/style-classes";
-import { APPROVAL_RISK_LABEL, type ApprovalDecision, type SpendApprovalView } from "@/features/approvals/spend-approval-model";
+import { APPROVAL_RISK_LABEL, type ApprovalActionCopy, type ApprovalDecision, type SpendApprovalView } from "@/features/approvals/spend-approval-model";
 import { ReasoningTrailView } from "@/features/reasoning/ReasoningTrailView";
 
 const cls = createStyleClass(approvalStyles);
@@ -20,6 +20,7 @@ export type ApproveRejectModalProps = {
    * third onConfirm argument. Absent ⇒ today's UI, untouched.
    */
   noteMode?: { standingLabel: string; standingHint: string };
+  actionCopy?: ApprovalActionCopy;
   busy?: boolean;
   error?: string;
   onConfirm: (decision: ApprovalDecision, note: string, makeStanding?: boolean) => void;
@@ -32,16 +33,42 @@ export type ApproveRejectModalProps = {
  * gets the same human-in-the-loop decision surface — with an optional note that
  * rides along (a change request on reject, a caveat/condition on approve).
  */
-export function ApproveRejectModal({ approval, initialDecision = "approved", initialNote = "", noteMode, busy = false, error, onConfirm, onClose }: ApproveRejectModalProps) {
+export function ApproveRejectModal({ approval, initialDecision = "approved", initialNote = "", noteMode, actionCopy, busy = false, error, onConfirm, onClose }: ApproveRejectModalProps) {
   const [note, setNote] = useState(initialNote);
   const [makeStanding, setMakeStanding] = useState(false);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const noteRef = useRef<HTMLTextAreaElement | null>(null);
+  const noteId = useId();
 
   useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    window.requestAnimationFrame(() => noteRef.current?.focus());
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !busy) onClose();
+      if (event.key === "Escape" && !busy) {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), textarea:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+      ) ?? []);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      previousFocus?.focus();
+    };
   }, [busy, onClose]);
 
   const rejectFramed = initialDecision === "denied";
@@ -53,7 +80,7 @@ export function ApproveRejectModal({ approval, initialDecision = "approved", ini
       aria-label="Review request"
       onClick={() => { if (!busy) onClose(); }}
     >
-      <div className={cls("modal")} onClick={(event) => event.stopPropagation()}>
+      <div ref={dialogRef} className={cls("modal")} onClick={(event) => event.stopPropagation()}>
         <div className={cls("modalHead")}>
           <p className={cls("modalEyebrow")}>Review request</p>
           <button type="button" className={cls("closeBtn")} aria-label="Close" onClick={onClose} disabled={busy}>
@@ -72,18 +99,23 @@ export function ApproveRejectModal({ approval, initialDecision = "approved", ini
         <ReasoningTrailView trail={approval.explanation} tone="approval" />
 
         <div>
-          <label className={cls("noteLabel")} htmlFor="approval-note">
-            {rejectFramed ? "What should change? (optional)" : "Add a condition or note (optional)"}
+          <label className={cls("noteLabel")} htmlFor={noteId}>
+            {rejectFramed
+              ? actionCopy?.rejectNoteLabel ?? "What should change? (optional)"
+              : actionCopy?.approveNoteLabel ?? "Add a condition or note (optional)"}
           </label>
           <textarea
-            id="approval-note"
+            ref={noteRef}
+            id={noteId}
             className={cls("noteInput")}
-            placeholder={rejectFramed ? "e.g. Cheaper provider, or cap it at $20 first…" : "e.g. Approved — keep it under $40 and log the run…"}
+            placeholder={rejectFramed
+              ? actionCopy?.rejectPlaceholder ?? "e.g. Cheaper provider, or cap it at $20 first…"
+              : actionCopy?.approvePlaceholder ?? "e.g. Approved — keep it under $40 and log the run…"}
             value={note}
             onChange={(event) => setNote(event.target.value)}
             disabled={busy}
           />
-          <p className={cls("noteHint")}>The note is sent back to {approval.agent} with your decision.</p>
+          <p className={cls("noteHint")}>{actionCopy?.noteHint ?? `The note is sent back to ${approval.agent} with your decision.`}</p>
           {noteMode ? (
             <div role="radiogroup" aria-label="How the note applies" style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
               {[
@@ -122,16 +154,16 @@ export function ApproveRejectModal({ approval, initialDecision = "approved", ini
             disabled={busy}
           >
             {busy ? <span className={cls("spinner")} aria-hidden="true" /> : <X aria-hidden="true" />}
-            Reject
+            {actionCopy?.rejectLabel ?? "Reject"}
           </button>
           <button
             type="button"
             className={cls("btn", "btnPrimary")}
             onClick={() => onConfirm("approved", note, noteMode ? makeStanding && Boolean(note.trim()) : undefined)}
-            disabled={busy}
+            disabled={busy || Boolean(actionCopy?.requireApproveNote && !note.trim())}
           >
             {busy ? <span className={cls("spinner")} aria-hidden="true" /> : <Check aria-hidden="true" />}
-            Approve
+            {actionCopy?.approveLabel ?? "Approve"}
           </button>
         </div>
       </div>

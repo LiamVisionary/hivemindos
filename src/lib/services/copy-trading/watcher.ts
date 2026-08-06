@@ -39,6 +39,12 @@ export type WatchResult = {
 const TRANSFER_EVENT = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
 const MAX_LOG_RANGE = 2_000n; // public Base RPC rejects wide getLogs ranges
 const BASE_CONFIRMATIONS = 2n;
+// Deepest backfill a poll will scan (~2s Base blocks → ≈11 hours). A cursor
+// further behind is stale or poisoned (a bogus RPC head report once rewound
+// every cursor to "0" and sent each poll crawling from genesis), and a trade
+// that old is too stale to mirror at today's price anyway — re-anchor at "now",
+// the same copy-future-trades-only semantics as a first run.
+const MAX_CATCHUP_BLOCKS = 20_000n;
 const SOLANA_SIG_LIMIT = 50;
 // Per-poll ceiling on enrichment RPC lookups (getTransaction/getCode/liquidity).
 // Steady-state polls cover a few blocks → a handful of candidates; this only
@@ -303,13 +309,46 @@ export async function detectNewSwaps(params: {
   return detectBase(params.targetAddress, params.lastBlock);
 }
 
+/** What a Base poll should do given the stored cursor and the reported head.
+ *  Pure for unit tests. The cursor must NEVER move backward: one bad head
+ *  report must not rewind it and restart history (that exact failure poisoned
+ *  every cursor to "0" on 2026-07-16 and turned each poll into a rate-limited
+ *  genesis crawl). */
+export type BaseScanWindow =
+  | { kind: "bogus-head" } // untrustworthy head — keep the cursor, try next poll
+  | { kind: "anchor"; lastBlock: string } // nothing to scan — set the cursor here
+  | { kind: "scan"; fromBlock: bigint; safeBlock: bigint };
+
+export function resolveBaseScanWindow(lastBlock: string | undefined, head: bigint): BaseScanWindow {
+  if (head <= BASE_CONFIRMATIONS) return { kind: "bogus-head" };
+  const safeBlock = head - BASE_CONFIRMATIONS;
+  const prev = parseBlockCursor(lastBlock);
+  // First run (or an unreadable cursor): start from "now" — copy future trades
+  // only, never replay history.
+  if (prev == null) return { kind: "scan", fromBlock: safeBlock, safeBlock };
+  if (prev > safeBlock) return { kind: "bogus-head" }; // head behind our own cursor
+  if (prev === safeBlock) return { kind: "anchor", lastBlock: safeBlock.toString() };
+  const fromBlock = prev + 1n;
+  if (safeBlock - fromBlock > MAX_CATCHUP_BLOCKS) return { kind: "anchor", lastBlock: safeBlock.toString() };
+  return { kind: "scan", fromBlock, safeBlock };
+}
+
+function parseBlockCursor(lastBlock: string | undefined): bigint | null {
+  if (!lastBlock) return null;
+  try {
+    return BigInt(lastBlock);
+  } catch {
+    return null;
+  }
+}
+
 async function detectBase(targetAddress: string, lastBlock?: string): Promise<WatchResult> {
   const client = basePublicClient();
   const head = await client.getBlockNumber();
-  const safeBlock = head > BASE_CONFIRMATIONS ? head - BASE_CONFIRMATIONS : 0n;
-  // First run: start from "now" — copy future trades only, never replay history.
-  const fromBlock = lastBlock ? BigInt(lastBlock) + 1n : safeBlock;
-  if (fromBlock > safeBlock) return { signals: [], cursor: { lastBlock: safeBlock.toString() } };
+  const window = resolveBaseScanWindow(lastBlock, head);
+  if (window.kind === "bogus-head") return { signals: [], cursor: { lastBlock } };
+  if (window.kind === "anchor") return { signals: [], cursor: { lastBlock: window.lastBlock } };
+  const { fromBlock, safeBlock } = window;
 
   const target = targetAddress as `0x${string}`;
   const transfers: EvmTransfer[] = [];

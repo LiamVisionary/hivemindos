@@ -1,4 +1,4 @@
-import type { CompanyProduct } from "@/lib/types/company";
+import type { CompanyFrontierLabStage, CompanyProduct } from "@/lib/types/company";
 
 export type CompanyRunKind =
   | "dispatch"
@@ -57,6 +57,12 @@ export interface CompanyRunSnapshot {
   agentCount?: number;
   autonomy?: boolean;
   frozen?: boolean;
+  frontierLab?: {
+    stage: CompanyFrontierLabStage;
+    availableSlots: number;
+    remainingTokens: number;
+    blockedReason?: string;
+  };
 }
 
 export interface CompanyRun {

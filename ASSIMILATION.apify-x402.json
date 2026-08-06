@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-08-02T23:25:03.487975+00:00",
+  "request": "Integrate Apify x402 Actors into HivemindOS",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "apify/awesome-skills",
+      "source_path": "skills/apify-x402-agentic-wallet/SKILL.md",
+      "target_path": "src/lib/services/apify/contracts.ts",
+      "reuse_type": "adapted_code",
+      "note": "prepaid-token endpoint, minimum amount, balance, expiry, and bearer-token lifecycle"
+    },
+    {
+      "source_repo": "apify/apify-mcp-server",
+      "source_path": "src/utils/actor_search.ts",
+      "target_path": "src/lib/services/apify/client.ts",
+      "reuse_type": "adapted_code",
+      "note": "allowsAgenticUsers Store filtering with compact input-schema discovery"
+    },
+    {
+      "source_repo": "apify/apify-mcp-server",
+      "source_path": "src/tools/actors/call_actor.ts",
+      "target_path": "src/lib/services/apify/contracts.ts",
+      "reuse_type": "adapted_code",
+      "note": "maxTotalChargeUsd, timeout, and bounded Actor call options"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-os",
+      "source_path": "src/lib/services/hivemindos-model-credit-vault.ts",
+      "target_path": "src/lib/services/apify/token-vault.ts",
+      "reuse_type": "adapted_code",
+      "note": "AES-GCM encrypted local bearer-token vault with atomic writes"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemind-os",
+      "source_path": "src/lib/services/hive-actions/wallet-x402-action.ts",
+      "target_path": "src/lib/services/hive-actions/apify-actions.ts",
+      "reuse_type": "adapted_code",
+      "note": "critical wallet/payment action metadata and confirmation contracts"
+    }
+  ]
+}

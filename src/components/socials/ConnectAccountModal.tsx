@@ -49,8 +49,10 @@ type ManagedXReturnPoll = {
 
 export function ConnectAccountModal() {
   const desk = useSocialsDesk();
+  const setConnectOpen = desk.setConnectOpen;
   const [platformKey, setPlatformKey] = useState("x");
   const [methodKey, setMethodKey] = useState("");
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [handle, setHandle] = useState("");
   const [binding, setBinding] = useState<Record<string, string>>({});
   const [soulPath, setSoulPath] = useState("");
@@ -67,6 +69,13 @@ export function ConnectAccountModal() {
   const [managedReturnPoll, setManagedReturnPoll] = useState<ManagedXReturnPoll | null>(null);
   const [signInBusy, setSignInBusy] = useState(false);
   const preferredManagedConnectionId = useRef("");
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  const close = useCallback(() => {
+    setConnectOpen(false);
+    setStep(1);
+    setError(null);
+  }, [setConnectOpen]);
 
   const platform = useMemo(
     () => desk.platforms.find((candidate) => candidate.platform === platformKey) ?? desk.platforms[0],
@@ -243,12 +252,41 @@ export function ConnectAccountModal() {
     };
   }, [desk.connectOpen, methodEnvKeySignature, methodAliasSignature]);
 
-  if (!desk.connectOpen || !platform || !method) return null;
+  useEffect(() => {
+    if (!desk.connectOpen) return;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusableSelector = "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])";
+    const focusFrame = window.requestAnimationFrame(() => {
+      modalRef.current?.querySelector<HTMLElement>(focusableSelector)?.focus();
+    });
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        close();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const focusable = [...(modalRef.current?.querySelectorAll<HTMLElement>(focusableSelector) ?? [])];
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      window.removeEventListener("keydown", onKeyDown);
+      previouslyFocused?.focus();
+    };
+  }, [close, desk.connectOpen]);
 
-  const close = () => {
-    desk.setConnectOpen(false);
-    setError(null);
-  };
+  if (!desk.connectOpen || !platform || !method) return null;
 
   const startManagedSignIn = async () => {
     setSignInBusy(true);
@@ -323,16 +361,26 @@ export function ConnectAccountModal() {
   };
 
   return (
-    <div className="sc-modal-backdrop" role="dialog" aria-modal="true" aria-label="Connect social account" onClick={close}>
+    <div ref={modalRef} className="sc-modal-backdrop" role="dialog" aria-modal="true" aria-label="Connect social account" onClick={close}>
       <div className="sc-modal" onClick={(event) => event.stopPropagation()}>
-        <div className="sc-card-head" style={{ marginBottom: 0 }}>
-          <span className="sc-card-title" style={{ fontSize: 15 }}>Connect a social account</span>
+        <div className="sc-card-head sc-connect-modal-head" style={{ marginBottom: 0 }}>
+          <div>
+            <span className="sc-card-title">Connect a social account</span>
+            <p>Three steps. Credentials go to Shared Hive Env, never into the account record.</p>
+          </div>
           <button type="button" className="sc-src-remove" aria-label="Close" onClick={close}>
             <X aria-hidden="true" width={16} height={16} />
           </button>
         </div>
 
-        <div className="sc-field">
+        <div className="sc-connect-progress" aria-label={`Connect account step ${step} of 3`}>
+          {(["Platform", "Method", "Identify"] as const).map((label, index) => {
+            const number = (index + 1) as 1 | 2 | 3;
+            return <div key={label} data-active={step === number} data-complete={step > number}><span>{step > number ? "✓" : number}</span><strong>{label}</strong>{number < 3 ? <i /> : null}</div>;
+          })}
+        </div>
+
+        {step === 1 ? <div className="sc-field sc-connect-step">
           <span className="sc-label">Platform</span>
           <div className="sc-plat-grid">
             {desk.platforms.map((candidate) => (
@@ -348,30 +396,36 @@ export function ConnectAccountModal() {
                   setHandle("");
                 }}
               >
-                {candidate.label}
+                <strong>{candidate.label}</strong>
+                <span>{Object.entries(candidate.capabilities).filter(([, support]) => support !== "unsupported").map(([capability]) => capability).join(" · ")}</span>
               </button>
             ))}
           </div>
-        </div>
+        </div> : null}
 
-        <div className="sc-field">
+        {step === 2 ? <div className="sc-field sc-connect-step">
           <span className="sc-label">Connect method</span>
-          <select
-            className="sc-select"
-            value={method.method}
-            onChange={(event) => {
-              setMethodKey(event.target.value);
-              setBinding({});
-              setHandle("");
-            }}
-          >
+          <div className="sc-method-list">
             {platform.methods.map((candidate) => (
-              <option key={candidate.method} value={candidate.method}>{candidate.label}</option>
+              <button
+                key={candidate.method}
+                type="button"
+                data-active={candidate.method === method.method}
+                onClick={() => {
+                  setMethodKey(candidate.method);
+                  setBinding({});
+                  setHandle("");
+                }}
+              >
+                <i />
+                <span><strong>{candidate.label}</strong><em>{candidate.notes || (candidate.browserProfile ? "Uses a persistent managed browser profile." : "Connect with credentials stored outside the account record.")}</em></span>
+                <small>{candidate.method === "browser-profile" ? "recommended" : candidate.method === "managed-oauth" ? "metered" : "advanced"}</small>
+              </button>
             ))}
-          </select>
-          {method.notes ? <div className="sc-note">{method.notes}</div> : null}
-        </div>
+          </div>
+        </div> : null}
 
+        {step === 3 ? <div className="sc-connect-step sc-connect-identify">
         {isBrowserProfile ? (
           <div className="sc-field">
             <BrowserProfileConnectFlow
@@ -537,21 +591,21 @@ export function ConnectAccountModal() {
           <div className="sc-note">{platform.limits.join(" ")}</div>
         ) : null}
         {error ? <div className="sc-error">{error}</div> : null}
+        <div className="sc-manual-mode-note">Posting starts in manual mode. Nothing publishes until you approve it in review.</div>
+        </div> : null}
 
-        {!isBrowserProfile ? (
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <div className="sc-connect-footer">
+          <button type="button" className="sc-btn" disabled={step === 1} onClick={() => setStep((current) => Math.max(1, current - 1) as 1 | 2 | 3)}>Back</button>
+          <div>
             <button type="button" className="sc-btn" onClick={close}>Cancel</button>
-            <button
-              type="button"
-              className="sc-btn"
-              data-tone="primary"
-              disabled={busy || !handle.trim() || !managedReady}
-              onClick={() => void submit()}
-            >
-              {busy ? <SocialsSpinner /> : null} Connect
-            </button>
+            {step < 3 ? <button type="button" className="sc-btn sc-connect-primary" onClick={() => setStep((current) => Math.min(3, current + 1) as 1 | 2 | 3)}>Continue</button> : null}
+            {step === 3 && !isBrowserProfile ? (
+              <button type="button" className="sc-btn sc-connect-primary" disabled={busy || !handle.trim() || !managedReady} onClick={() => void submit()}>
+                {busy ? <SocialsSpinner /> : null} Connect account
+              </button>
+            ) : null}
           </div>
-        ) : null}
+        </div>
       </div>
     </div>
   );

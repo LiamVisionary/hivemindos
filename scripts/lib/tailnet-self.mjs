@@ -7,6 +7,7 @@
 // Self-declaring the system node lets fleet discovery fold them back together.
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { shouldUseTailscaleCliFallback } from "./tailscale-optional.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -29,6 +30,7 @@ const TAILSCALE_CLI_CANDIDATES = [
 let cache = { value: null, checkedAt: 0 };
 
 export async function tailscaleStatusJson() {
+  if (!shouldUseTailscaleCliFallback()) throw new Error("automatic Tailscale CLI fallback is disabled on macOS");
   let lastError = null;
   for (const cli of TAILSCALE_CLI_CANDIDATES) {
     try {

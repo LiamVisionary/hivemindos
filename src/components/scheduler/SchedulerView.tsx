@@ -44,7 +44,7 @@ interface SchedulerViewProps {
 }
 
 const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
-  { value: "all", label: "All" },
+  { value: "all", label: "All statuses" },
   { value: "active", label: "Active" },
   { value: "paused", label: "Paused" },
   { value: "failed", label: "Failed" },
@@ -96,7 +96,7 @@ export function SchedulerView({
 
   const effectiveRuntime = (lockedRuntime ?? runtimeFilter).trim().toLowerCase();
   const runtimeOptions = React.useMemo<ScheduleRuntimeOption[]>(() => (
-    runtimeOptionsProp?.length ? runtimeOptionsProp : [{ value: "all", label: "All" }, ...runtimeScheduleFilterOptions()]
+    runtimeOptionsProp?.length ? runtimeOptionsProp : [{ value: "all", label: "All runtimes" }, ...runtimeScheduleFilterOptions()]
   ), [runtimeOptionsProp]);
 
   const labelForRuntime = React.useCallback((runtime: ScheduleRuntimeFilter) => {
@@ -150,7 +150,7 @@ export function SchedulerView({
       {runtimeOptions.map(({ value, label }) => (
         <button key={value} type="button" aria-pressed={effectiveRuntime === value.trim().toLowerCase()}
           className={`${styles.schedChip} ${effectiveRuntime === value.trim().toLowerCase() ? styles.schedChipActive : ""}`}
-          onClick={() => setRuntimeFilter(value)}>{label}</button>
+          onClick={() => setRuntimeFilter(value)}>{value === "all" ? "All runtimes" : label}</button>
       ))}
     </div>
   );
@@ -186,6 +186,27 @@ export function SchedulerView({
               <button type="button" className={`${styles.honeyBtn} ${styles.honeyBtnPill}`} onClick={onNewJob}>+ New flight</button>
             </div>
           </div>
+        </div>
+      ) : null}
+      {!full ? (
+        <div className={styles.schedToolbar} aria-label="Filter flight plan">
+          <div className={styles.schedSearch}>
+            <Search size={14} aria-hidden style={{ color: "var(--muted)", flexShrink: 0 }} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search automations" aria-label="Search automations" />
+          </div>
+          {runtimeChips}
+          <div className={styles.schedChipRow} role="group" aria-label="Filter by status">
+            {STATUS_FILTERS.map(({ value, label }) => (
+              <button key={value} type="button" aria-pressed={statusFilter === value}
+                className={`${styles.schedChip} ${statusFilter === value ? styles.schedChipActive : ""}`}
+                onClick={() => setStatusFilter(value)}>{label}</button>
+            ))}
+          </div>
+          {isFiltered ? (
+            <button type="button" className={`${styles.toolBtn} ${styles.toolBtnWide}`} onClick={() => { setQuery(""); setStatusFilter("all"); if (!lockedRuntime) setRuntimeFilter("all"); }}>
+              Clear filters
+            </button>
+          ) : null}
         </div>
       ) : null}
       <TimelineRibbon

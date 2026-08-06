@@ -1,0 +1,56 @@
+{
+  "created_at": "2026-08-01T04:08:21.320420+00:00",
+  "request": "continue",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/copy-trading/paper.ts",
+      "target_path": "scripts/token-edge/onchain-forward-core.mjs",
+      "reuse_type": "adapted_code",
+      "note": "Adapted cost-aware paper outcome accounting without importing any execution path"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/copy-trading/evolution.ts",
+      "target_path": "scripts/token-edge/onchain-forward-core.mjs",
+      "reuse_type": "adapted_code",
+      "note": "Adapted conservative promotion boundaries into a forward-only model-versioned evidence gate"
+    },
+    {
+      "source_repo": "hivemind-cloud-services",
+      "source_path": "workers/token-autopsy-gateway/research/social-predictor/prospective-paper.mjs",
+      "target_path": "scripts/token-edge/onchain-forward-core.mjs",
+      "reuse_type": "adapted_code",
+      "note": "Carried forward immutable registration delayed resolution and no-lookahead experiment structure"
+    },
+    {
+      "source_repo": "Nansen API documentation",
+      "source_path": "api/token-god-mode",
+      "target_path": "scripts/token-edge/onchain-forward-research.mjs",
+      "reuse_type": "config_adapted",
+      "note": "Implemented current aggregate request contracts and explicit provider-credit ceilings"
+    },
+    {
+      "source_repo": "Nansen API documentation",
+      "source_path": "api/token-god-mode/price-ohlcv.md",
+      "target_path": "scripts/token-edge/onchain-forward-research.mjs",
+      "reuse_type": "config_adapted",
+      "note": "Adapted exact interval timestamps closed candle semantics batching and truncation refusal for outcome-only recovery"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/lib/services/trading/market-data.ts",
+      "target_path": "scripts/token-edge/onchain-forward-research.mjs",
+      "reuse_type": "adapted_code",
+      "note": "Adapted the existing GeckoTerminal pool OHLCV row parsing and deepest-pool provenance for bounded recovery"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-copy-trading.mjs",
+      "target_path": "scripts/test-token-edge-onchain-forward.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Adapted immutable paper-ledger and conservative-gate assertions to prospective token forecasts"
+    }
+  ]
+}

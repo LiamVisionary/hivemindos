@@ -52,6 +52,8 @@ export type OperatingUnitLearningLoopInput = {
   branchAgent?: string;
   skills?: string[];
   governanceLabel?: string;
+  /** Force the independent outcome gate even when the ordinary-company env default is disabled. */
+  requireIndependentJudge?: boolean;
   now?: number;
 };
 
@@ -147,7 +149,9 @@ export function buildOperatingUnitLearningLoop(input: OperatingUnitLearningLoopI
   // requires evaluator.independent. Cost: one bounded extra chat per completion.
   // QUEEN_BEE_LOOP_OUTCOME_JUDGE=0 disables — default ON, disable-flag
   // semantics like the other QUEEN_BEE_LOOP_* integrity gates.
-  const requiresIndependentJudge = usesProductTasteRubric || booleanEnv("QUEEN_BEE_LOOP_OUTCOME_JUDGE", true);
+  const requiresIndependentJudge = input.requireIndependentJudge === true
+    || usesProductTasteRubric
+    || booleanEnv("QUEEN_BEE_LOOP_OUTCOME_JUDGE", true);
   return withObservation({
     mode: "optimizer",
     goal: `${input.workTitle}: improve "${goal}" while preserving the unit's charter, budget, and evidence trail.`,

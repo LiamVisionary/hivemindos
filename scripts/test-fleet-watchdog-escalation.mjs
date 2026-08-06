@@ -117,6 +117,23 @@ check("deep recovery is only recorded on deep cycles (cheap probes lie through a
   assert.match(watchdog, /if \(deep\) \{\s*\n\s*const recovery = escalations\.recordDeepRecovery\(target\.key\)/);
 });
 
+check("macOS linkd repair clears stale daemon processes before rebootstrap", () => {
+  const bootout = watchdog.indexOf('launchctl bootout "gui/$U/${label}"');
+  const gracefulStop = watchdog.indexOf("pkill -x hivemind-linkd");
+  const waitForExit = watchdog.indexOf("pgrep -x hivemind-linkd");
+  const forcedStop = watchdog.indexOf("pkill -9 -x hivemind-linkd");
+  const bootstrap = watchdog.indexOf('launchctl bootstrap "gui/$U" "$PLIST"');
+
+  assert.ok(bootout >= 0, "repair unloads the managed LaunchAgent first");
+  assert.ok(gracefulStop > bootout, "repair terminates an orphaned exact-name linkd process");
+  assert.ok(waitForExit > gracefulStop, "repair waits for the stale process to release its listeners");
+  assert.ok(forcedStop > waitForExit, "repair force-stops only an exact-name linkd process if graceful exit wedges");
+  assert.ok(bootstrap > forcedStop, "repair reboots the LaunchAgent only after stale listeners are gone");
+  assert.match(watchdog, /watchdog could not stop stale linkd processes/);
+  assert.match(watchdog, /watchdog failed to load linkd LaunchAgent/);
+  assert.match(watchdog, /watchdog failed to start linkd LaunchAgent/);
+});
+
 check("escalations land in the dashboard notifications feed as urgent alerts", () => {
   assert.match(watchdog, /\/api\/notifications/);
   assert.match(watchdog, /priority: "urgent"/);

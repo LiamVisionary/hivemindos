@@ -4,6 +4,10 @@ import { Pause, Play, Sparkles } from "lucide-react";
 
 import { useSocialsDesk, type SocialsAccountView } from "@/components/socials/socials-context";
 import { SocialsSpinner } from "@/components/socials/skeletons";
+import {
+  socialAccountHasStandaloneGroundingSource,
+  socialStandaloneDraftingSetupMessage,
+} from "@/lib/services/socials/social-drafting-readiness";
 import { SOCIAL_DRAFT_CADENCE_HOURS, SOCIAL_DRAFTS_PER_RUN } from "@/lib/services/socials/socials-types";
 
 function formatDate(value?: string): string {
@@ -23,6 +27,7 @@ export function DraftingAutomationCard({ account }: { account: SocialsAccountVie
   const desk = useSocialsDesk();
   const runtime = desk.draftingRuntime;
   const supported = account.capabilities.post !== "unsupported";
+  const standaloneReady = socialAccountHasStandaloneGroundingSource(account);
   const generating = desk.queueBusy === "generate-drafts" || Boolean(runtime?.inFlightSince);
   const save = (drafting: Parameters<typeof desk.setDraftingPolicy>[1]) => desk.setDraftingPolicy(account.id, drafting);
 
@@ -34,7 +39,9 @@ export function DraftingAutomationCard({ account }: { account: SocialsAccountVie
           <div className="sc-card-hint" style={{ marginTop: 3 }}>
             {supported
               ? account.drafting.enabled
-                ? `${account.drafting.draftsPerRun} standalone posts · ${cadenceLabel(account.drafting.cadenceHours).toLowerCase()}`
+                ? standaloneReady
+                  ? `${account.drafting.draftsPerRun} standalone posts · ${cadenceLabel(account.drafting.cadenceHours).toLowerCase()}`
+                  : "Waiting for account-specific context"
                 : account.drafting.engagementEnabled
                   ? "Standalone posts paused · comment finder still follows this cadence"
                   : "Paused · manual full-pack generation is still available"
@@ -81,11 +88,16 @@ export function DraftingAutomationCard({ account }: { account: SocialsAccountVie
             </label>
             <div className="sc-drafting-status">
               <span><strong>Last posts</strong>{runtime?.lastPostGeneratedAt ? `${formatDate(runtime.lastPostGeneratedAt)} · ${runtime.lastPostGeneratedCount ?? 0} drafts` : "Not generated yet"}</span>
-              <span><strong>Next pack</strong>{account.drafting.enabled || account.drafting.engagementEnabled ? formatDate(runtime?.nextRunAt) : "Paused"}</span>
+              <span><strong>Next pack</strong>{account.drafting.enabled && !standaloneReady ? "Add context first" : account.drafting.enabled || account.drafting.engagementEnabled ? formatDate(runtime?.nextRunAt) : "Paused"}</span>
             </div>
           </div>
 
-          {runtime?.lastError ? <div className="sc-error">Drafting failed: {runtime.lastError} {runtime.nextRunAt ? `Retry scheduled for ${formatDate(runtime.nextRunAt)}.` : ""}</div> : null}
+          {account.drafting.enabled && !standaloneReady ? (
+            <div className="sc-note">{socialStandaloneDraftingSetupMessage(account.handle)}</div>
+          ) : null}
+          {runtime?.lastError && standaloneReady
+            ? <div className="sc-error">Drafting failed: {runtime.lastError} {runtime.nextRunAt ? `Retry scheduled for ${formatDate(runtime.nextRunAt)}.` : ""}</div>
+            : null}
           <div className="sc-drafting-footer">
             <div className="sc-note">
               {account.postingMode === "manual"
@@ -96,7 +108,7 @@ export function DraftingAutomationCard({ account }: { account: SocialsAccountVie
               type="button"
               className="sc-btn"
               data-tone="primary"
-              disabled={Boolean(desk.queueBusy) || generating}
+              disabled={Boolean(desk.queueBusy) || generating || !standaloneReady}
               onClick={() => void desk.queueAction({ action: "generate-drafts", accountId: account.id })}
             >
               {generating ? <SocialsSpinner /> : <Sparkles aria-hidden="true" width={13} />}

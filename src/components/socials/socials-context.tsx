@@ -16,6 +16,7 @@ import type {
   SocialMetricSnapshot,
   SocialXDiscoveryStatus,
 } from "@/lib/services/socials/socials-types";
+import type { SocialXSessionBinding } from "@/lib/services/socials/social-x-session-binding";
 
 /** Account as the desk renders it: definition + live probe + capability projection. */
 export type SocialsAccountView = SocialAccount & {
@@ -42,6 +43,7 @@ export type SocialsDeskData = {
   souls: SocialsSoulOption[];
   queueMeta: SocialQueueEngineMeta;
   queueItems: SocialQueueItem[];
+  queueCounts: Record<string, number>;
   queueLoading: boolean;
   queueBusy: string | null;
   engine: {
@@ -69,8 +71,10 @@ export type SocialsDeskData = {
   xDiscovery: SocialXDiscoveryStatus | null;
   activeAccountId: string;
   activeAccount: SocialsAccountView | null;
+  allAccountsSelected: boolean;
   connectOpen: boolean;
   selectAccount: (id: string) => void;
+  selectAllAccounts: () => void;
   setConnectOpen: (open: boolean) => void;
   refresh: () => Promise<void>;
   createAccount: (input: {
@@ -86,6 +90,7 @@ export type SocialsDeskData = {
   addContextSources: (id: string, sources: SocialsNewContextSource[]) => Promise<void>;
   removeContextSource: (id: string, sourceId: string) => Promise<void>;
   setPostingMode: (id: string, mode: "manual" | "auto") => Promise<{ ok: boolean; error?: string }>;
+  setXSessionBinding: (id: string, session: SocialXSessionBinding) => Promise<{ ok: boolean; error?: string }>;
   setMaxDailyReadOps: (id: string, maxDailyReadOps: number) => Promise<void>;
   setDraftingPolicy: (id: string, drafting: Partial<Pick<SocialDraftingPolicy,
     "enabled" | "cadenceHours" | "draftsPerRun" | "engagementEnabled" | "replyDraftsPerRun" | "quoteDraftsPerRun" | "engagementLookbackHours">>) => Promise<void>;

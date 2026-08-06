@@ -24,8 +24,8 @@
 
   --fg: #f3f0e9;
   --fg-2: #a7a39a;
-  --fg-3: #76726a;
-  --fg-4: #545049;
+  --fg-3: #a7a39a;
+  --fg-4: #918c83;
 
   --honey: #e7b45c;
   --honey-2: #f0c879;
@@ -61,8 +61,8 @@
 
   --fg: #221d14;
   --fg-2: #5e574b;
-  --fg-3: #867d6e;
-  --fg-4: #a59b89;
+  --fg-3: #5e574b;
+  --fg-4: #6f6657;
 
   --honey: #936811; --honey-fill: #e6bb5c;
   --honey-2: #936811;
@@ -132,20 +132,20 @@
 .sim-root .sv-mono { font-family: var(--f-mono); }
 
 .sim-root .sv-metric { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 13px; min-width: 0; }
-.sim-root .sv-metric .v { font-family: var(--f-display); font-weight: 600; font-size: 19px; letter-spacing: -0.02em; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sim-root .sv-metric .v { font-family: var(--f-display); font-weight: 600; font-size: 19px; letter-spacing: -0.02em; line-height: 1; overflow-wrap: anywhere; }
 .sim-root .sv-metric .k { font-family: var(--f-mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-4); margin-top: 7px; }
 
 .sim-root .sv-fac { display: inline-flex; align-items: center; font-family: var(--f-mono); font-size: 9px; font-weight: 600; letter-spacing: .1em; padding: 2px 6px; border-radius: 4px; border: 1px solid; }
 
 .sim-root .sv-agent { display: grid; grid-template-columns: auto 1fr auto; gap: 11px; align-items: center; padding: 9px 11px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel-2); }
-.sim-root .sv-agent .nm { font-size: 12.5px; font-weight: 500; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sim-root .sv-agent .ro { font-family: var(--f-mono); font-size: 9.5px; color: var(--fg-4); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sim-root .sv-agent .nm { font-size: 12.5px; font-weight: 500; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.sim-root .sv-agent .ro { font-family: var(--f-mono); font-size: 9.5px; color: var(--fg-4); margin-top: 2px; overflow-wrap: anywhere; }
 
 .sim-root .sv-con { background: color-mix(in srgb, var(--bg) 60%, var(--panel)); border: 1px solid var(--line-2); border-radius: var(--radius-sm); padding: 9px 0; font-family: var(--f-mono); font-size: 11px; }
 .sim-root .sv-conline { display: grid; grid-template-columns: 92px 64px 1fr; gap: 10px; padding: 3px 14px; align-items: baseline; }
-.sim-root .sv-conline .who { color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sim-root .sv-conline .who { color: var(--fg-2); overflow-wrap: anywhere; }
 .sim-root .sv-conline .act { font-weight: 600; letter-spacing: .04em; }
-.sim-root .sv-conline .det { color: var(--fg-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sim-root .sv-conline .det { color: var(--fg-3); overflow-wrap: anywhere; }
 
 .sim-root .sv-runrow { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; width: 100%; text-align: left; padding: 12px 13px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel); color: var(--fg); cursor: pointer; transition: border-color .15s, background .15s; }
 .sim-root .sv-runrow:hover { border-color: var(--line-3); }
@@ -216,7 +216,7 @@
 @keyframes fr-sp { 0%,100% { opacity: .26; } 50% { opacity: .6; } }
 
 .sim-root .fr-rmetric { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 11px 12px; }
-.sim-root .fr-rmetric .v { font-family: var(--f-display); font-weight: 600; font-size: 18px; letter-spacing: -0.02em; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sim-root .fr-rmetric .v { font-family: var(--f-display); font-weight: 600; font-size: 18px; letter-spacing: -0.02em; line-height: 1.05; overflow-wrap: anywhere; }
 .sim-root .fr-rmetric .b { font-family: var(--f-mono); font-size: 9.5px; color: var(--fg-4); margin-top: 4px; }
 .sim-root .fr-rmetric .k { font-family: var(--f-mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-4); margin-top: 6px; }
 

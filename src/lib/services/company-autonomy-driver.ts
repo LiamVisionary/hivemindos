@@ -604,6 +604,8 @@ async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof r
       });
       if (result.executionEngine === "aeon") {
         console.log(`[company-autonomy-driver] ${company.id}: dispatched AEON skill ${result.aeon?.skill ?? "run"} through ${result.aeon?.profileName ?? "the configured workspace"}`);
+      } else if (result.frontierLab?.blockedReason) {
+        console.log(`[company-autonomy-driver] ${company.id}: Frontier Lab paused dispatch — ${result.frontierLab.blockedReason}`);
       } else if (result.taskCount === 0) {
         console.log(`[company-autonomy-driver] ${company.id}: nothing new to dispatch — all ${result.deduped ?? 0} planned task(s) already recent or in flight`);
       } else if (result.deduped) {

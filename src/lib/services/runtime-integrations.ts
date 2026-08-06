@@ -10,7 +10,9 @@ import { HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER } from "@/lib/config/hivemindos-
 import { RUNTIME_CAPABILITIES } from "@/lib/types/agent-runtime";
 import { getRuntimeAdapter } from "@/lib/services/runtime-adapters/registry";
 import { discoverLmStudioProviderModels, localModelHubStatus, localOpenAIProviderProfile, localRuntimeSetupStatus, runLmStudioAction } from "@/lib/services/runtime-adapters/openai-compatible";
+import { discoverSieProviderModels, runSieAction, type SieProviderStatus } from "@/lib/services/runtime-adapters/sie";
 import type { LocalModelDownloadJob, LocalModelHardwareSnapshot, LocalModelInstallCatalogStatus, LocalOpenAICompatibleServer, LocalRuntimeSetupStatus } from "@/lib/config/local-model-install-catalog";
+import { LOCAL_MODEL_RUNTIME_CAPABILITIES, SIE_PROVIDER_ID } from "@/lib/config/local-model-runtimes";
 import { bankrLlmAccessStatus, bankrLlmModelOptions, isBankrLlmLowCreditError, listBankrLlmModels } from "@/lib/services/bankr-llm";
 import {
   hivemindosWalletPaidModelOptions,
@@ -135,6 +137,7 @@ export type RuntimeIntegrationStatus = {
       error?: string;
       checkedAt?: string;
     };
+    sie?: SieProviderStatus;
     hivemindosModels?: {
       status?: string;
       message?: string;
@@ -351,13 +354,38 @@ async function augmentGatewayModelProviders(
   if (!agent) return { modelSelection, providerStatus };
   const bankrGateway = MODEL_PROVIDER_GATEWAYS.bankr;
   const lmStudioGateway = MODEL_PROVIDER_GATEWAYS["lm-studio"];
+  const sieGateway = MODEL_PROVIDER_GATEWAYS[SIE_PROVIDER_ID];
   const walletPaidGateway = MODEL_PROVIDER_GATEWAYS[HIVEMINDOS_WALLET_PAID_MODELS_PROVIDER];
   // Run the independent gateway probes concurrently: Bankr model discovery +
   // Bankr access status (network) and LM Studio discovery (`lms ls`/REST,
   // memoized per resolved endpoint) no longer serialize, so the settings status
   // sweep waits the slowest probe instead of their sum.
   const lmStudioProfile = localOpenAIProviderProfile(agent);
-  const [bankr, bankrAccess, lmStudio, hiveCompute] = await Promise.all([
+  const sieRuntime = LOCAL_MODEL_RUNTIME_CAPABILITIES[SIE_PROVIDER_ID];
+  const sieProfile: AgentProfile = {
+    ...agent,
+    provider: SIE_PROVIDER_ID,
+    gatewayUrl: agent.provider === SIE_PROVIDER_ID && agent.gatewayUrl?.trim()
+      ? agent.gatewayUrl
+      : sieRuntime.defaultBaseUrl,
+    chatPath: sieRuntime.chatPath,
+    statusPath: sieRuntime.modelsPath,
+  };
+  const emptySieStatus: SieProviderStatus = {
+    baseUrl: String(sieProfile.gatewayUrl ?? sieRuntime.defaultBaseUrl).replace(/\/+$/, ""),
+    models: [],
+    workers: [],
+    cluster: {
+      workerCount: 0,
+      gpuCount: 0,
+      modelsLoaded: 0,
+      totalQps: 0,
+      configuredGpuTypes: [],
+      liveGpuTypes: [],
+    },
+    checkedAt: new Date().toISOString(),
+  };
+  const [bankr, bankrAccess, lmStudio, sie, hiveCompute] = await Promise.all([
     listBankrLlmModels(agent).catch((error) => ({
       models: [],
       error: error instanceof Error ? error.message : "Bankr LLM model discovery failed.",
@@ -378,6 +406,17 @@ async function augmentGatewayModelProviders(
       lmStudioModelSource: "",
       models: [],
     })),
+    agent.provider === SIE_PROVIDER_ID
+      ? providerStatus?.sie
+        ? Promise.resolve(providerStatus.sie)
+        : catalogMemo(
+          `sie::${sieProfile.gatewayUrl ?? ""}::${sieProfile.token ?? ""}`,
+          () => discoverSieProviderModels(sieProfile),
+        ).catch((error): SieProviderStatus => ({
+          ...emptySieStatus,
+          error: error instanceof Error ? error.message : "SIE model discovery failed.",
+        }))
+      : Promise.resolve(emptySieStatus),
     readHiveComputeMarketplaceStatus().catch((error) => ({
       error: error instanceof Error ? error.message : "Hive Compute status failed.",
       models: [],
@@ -391,6 +430,8 @@ async function augmentGatewayModelProviders(
   if (bankr.error) diagnostics.push(`Bankr LLM models unavailable: ${bankr.error}`);
   if (bankrAccess.error) diagnostics.push(`Bankr access status unavailable: ${bankrAccess.error}`);
   if (lmStudio.modelDiscoveryError) diagnostics.push(`Local model discovery unavailable: ${lmStudio.modelDiscoveryError}`);
+  if (agent.provider === SIE_PROVIDER_ID && sie.error && !diagnostics.some((item) => item.includes(sie.error!))) diagnostics.push(`SIE model discovery unavailable: ${sie.error}`);
+  if (agent.provider === SIE_PROVIDER_ID && sie.healthError && !diagnostics.some((item) => item.includes(sie.healthError!))) diagnostics.push(`SIE health telemetry unavailable: ${sie.healthError}`);
   if ("error" in hiveCompute && hiveCompute.error) diagnostics.push(`Hive Compute unavailable: ${hiveCompute.error}`);
   const providers = (modelSelection?.providers ?? []).filter((provider) => provider.slug !== HIVE_COMPUTE_PROVIDER_SLUG);
   const lmStudioModels = lmStudio.models.length
@@ -421,6 +462,31 @@ async function augmentGatewayModelProviders(
   const lmStudioIndex = providers.findIndex((provider) => provider.slug === "lm-studio");
   if (lmStudioIndex >= 0) providers[lmStudioIndex] = { ...providers[lmStudioIndex], ...lmStudioProvider };
   else providers.push(lmStudioProvider);
+  const sieModels = sie.models.filter((model) => model.chatCompatible);
+  const sieProvider = {
+    slug: SIE_PROVIDER_ID,
+    name: sieGateway.name,
+    models: sieModels.map((model) => ({
+      id: model.key,
+      name: model.displayName,
+      subtitle: model.state === "loaded"
+        ? "Warm"
+        : model.state === "loading"
+          ? "Warming"
+          : model.state === "failed"
+            ? "Failed"
+            : "Lazy",
+      group: model.tasks.join(" · "),
+      badge: "SIE",
+    })),
+    totalModels: sieModels.length,
+    isCurrent: agent.provider === SIE_PROVIDER_ID,
+    isUserDefined: true,
+    source: `${sie.baseUrl}/v1/models`,
+  };
+  const sieIndex = providers.findIndex((provider) => provider.slug === SIE_PROVIDER_ID);
+  if (sieIndex >= 0) providers[sieIndex] = { ...providers[sieIndex], ...sieProvider };
+  else providers.push(sieProvider);
   const bankrModels = bankrLlmModelOptions(bankr.models, bankr.error, bankrAccess);
   const bankrProvider = {
     slug: "bankr",
@@ -467,6 +533,7 @@ async function augmentGatewayModelProviders(
       error: lmStudio.modelDiscoveryError || undefined,
       checkedAt: new Date().toISOString(),
     },
+    sie,
     hivemindosModels: {
       status: "ready",
       message: "Free Swarm Sovereign Scout by default; hosted credits or an x402 wallet unlock wallet-paid routes.",
@@ -513,6 +580,11 @@ export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action:
   }
   if ((action === "load-model" || action === "unload-model" || action === "download-model" || action === "cancel-download" || action === "install-local-runtime" || action === "start-local-runtime" || action === "smoke-test-local-model") && agent?.provider === "lm-studio") {
     const result = await runLmStudioAction(agent, action, input);
+    catalogCache.clear();
+    return result;
+  }
+  if ((action === "warm-model" || action === "smoke-test-local-model") && agent?.provider === SIE_PROVIDER_ID) {
+    const result = await runSieAction(agent, action, input);
     catalogCache.clear();
     return result;
   }
@@ -570,6 +642,9 @@ export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action:
     // route through the collector's local signing proxy, which injects the
     // SIWX header. Point the provider's base_url there with no key_env.
     const veniceProxyBase = provider === "venice" ? veniceWalletProxyBase(agent) : null;
+    const sieProviderBase = provider === SIE_PROVIDER_ID && agent?.gatewayUrl?.trim()
+      ? `${agent.gatewayUrl.trim().replace(/\/+$/, "").replace(/\/v1$/, "")}/v1`
+      : null;
     const gateway = MODEL_PROVIDER_GATEWAYS[provider];
     if (gateway && !gateway.hermes) {
       // Dashboard-internal gateways (hivemindos-models: custom wallet-agent
@@ -584,7 +659,12 @@ export async function runRuntimeIntegrationAction(runtime: AgentRuntime, action:
       };
     }
     if (gateway?.hermes) {
-      await addHermesProvider(provider, model, profileEnv, veniceProxyBase ? { base_url: veniceProxyBase, key_env: "" } : undefined);
+      const gatewayOverride = veniceProxyBase
+        ? { base_url: veniceProxyBase, key_env: "" }
+        : sieProviderBase
+          ? { base_url: sieProviderBase, key_env: "" }
+          : undefined;
+      await addHermesProvider(provider, model, profileEnv, gatewayOverride);
     } else await addHermesModel(provider, model, undefined, profileEnv);
     if (profileEnv) {
       await setHermesProfileModel(provider, model, profileEnv);

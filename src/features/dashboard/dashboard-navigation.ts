@@ -47,6 +47,7 @@ export type DashboardRouteTarget = {
   integration?: string;
   integrationTab?: "connect" | "actions";
   integrationAction?: string;
+  integrationsTab?: "connections" | "mcp" | "xbot" | "transcript" | "codeproof";
   /** Deep-link intent: scroll the Work Board to `taskId` and open its
    * conversation (bee-piloted). Intentionally never serialized into URLs or
    * persisted routes, so restored sessions don't replay the flight. */
@@ -255,10 +256,11 @@ function homeShelfSection(view: DashboardView): 0 | 1 | 2 | undefined {
   return undefined;
 }
 
-/** Default pinned utilities = the catalog's shelfGroup-2 set (governance/aeon/integrations). */
-export const DEFAULT_PINNED_VIEWS: DashboardView[] = DASHBOARD_ROUTE_ORDER.filter(
-  (id) => (DASHBOARD_ROUTE_CATALOG_BY_ID[id] as DashboardRouteCatalogEntry).shelfGroup === 2,
-);
+/** Keep the default rail focused; optional destinations stay discoverable in More until pinned. */
+export const DEFAULT_PINNED_VIEWS: DashboardView[] = [];
+
+/** Removable destinations also start in More so a new workspace has seven stable top-level routes. */
+export const DEFAULT_REMOVED_RAIL_VIEWS: DashboardView[] = [...REMOVABLE_RAIL_VIEWS];
 
 /**
  * Sentinel for "the user explicitly pinned no utilities". A cleared utilities
@@ -295,9 +297,10 @@ export function serializePinnedUtilities(views: readonly DashboardView[]): strin
   return filtered.length ? filtered.join(",") : PINNED_UTILITIES_NONE;
 }
 
-/** Parse the persisted REMOVED-rail-views value (opt-out): unset/empty -> nothing removed. */
+/** Parse persisted removals: unset seeds the focused default, while an explicit empty string means show all. */
 export function parseRemovedRailViews(raw: string | null | undefined): DashboardView[] {
-  if (!raw) return [];
+  if (raw == null) return [...DEFAULT_REMOVED_RAIL_VIEWS];
+  if (raw === "") return [];
   return dedupeViews(raw, REMOVABLE_RAIL_SET);
 }
 
@@ -415,6 +418,8 @@ export function dashboardTargetFromSearch(search: string): DashboardRouteTarget 
         ? "connect"
         : undefined,
     integrationAction: params.get("integrationAction") ?? undefined,
+    integrationsTab: (["connections", "mcp", "xbot", "transcript", "codeproof"] as const)
+      .find((tab) => tab === params.get("tab")),
     popout: params.get("popout") === "1" || undefined,
   };
 }
@@ -429,6 +434,7 @@ export function dashboardUrlForTarget(target: DashboardRouteTarget, basePath = "
   if (target.integration) params.set("integration", target.integration);
   if (target.integrationTab) params.set("integrationTab", target.integrationTab);
   if (target.integrationAction) params.set("integrationAction", target.integrationAction);
+  if (target.integrationsTab) params.set("tab", target.integrationsTab);
   if (target.popout) params.set("popout", "1");
   return `${basePath}?${params.toString()}`;
 }

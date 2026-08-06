@@ -1371,6 +1371,22 @@
       "packagedPath": "packaged-skills/optional/design/mengto/nested-container-frames/SKILL.md",
       "computedHash": "fe61334172b28c1a5536a6fd5777735bac742a9fe016355f2474a032ef2d81f3"
     },
+    "no-ai-slop": {
+      "source": "petergyang/no-ai-slop",
+      "sourceType": "github",
+      "ref": "61c21c351da4dcb40946a11fead978f2078a2c65",
+      "license": "MIT",
+      "skillPath": "SKILL.md",
+      "packagedPath": "packaged-skills/optional/writing/petergyang/no-ai-slop/SKILL.md",
+      "computedHash": "8f9a7db5cc4eee4a66dc6d48846c6660e1ece84364067ba4ff21d02bf585d9b4",
+      "resourceHashes": {
+        "agents/openai.yaml": "51aa33afd4a3287a618c681212a86ce01cc7da4d9c37e54e65166acffa24519a",
+        "eval.md": "b274cdc623e57ff1b4f673aedef929ba2b01419d13097248c3c74a5dbd80ccfd",
+        "LICENSE": "b7a7fe370cc4c9e974528c7cea7841cf8ac886bc9ed947edb11b289441fba4a8",
+        "README.md": "bafba17f090793ae056b0928b02c19cc4cae9c348df045463a528c9641553bd2",
+        "SKILL.md": "8f9a7db5cc4eee4a66dc6d48846c6660e1ece84364067ba4ff21d02bf585d9b4"
+      }
+    },
     "number-details": {
       "source": "MengTo/Skills",
       "sourceType": "github",

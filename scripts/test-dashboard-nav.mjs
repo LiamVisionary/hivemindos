@@ -31,11 +31,11 @@ const navigation = await import(new URL("../src/features/dashboard/dashboard-nav
 assert.deepEqual(
   navigation.APP_NAV_SHELF_GROUPS.map((group) => group.map((item) => item.id)),
   [
-    ["kanban", "vault", "chat", "wallet", "trade", "socials"],
-    ["scheduler", "swarm", "history"],
-    ["governance", "cloud", "aeon", "integrations", "notifications"],
+    ["kanban", "vault", "chat"],
+    ["scheduler", "history"],
+    ["notifications"],
   ],
-  "App nav shelf groups should derive Work/Brain/Chat/Wallets/Trade/Socials, Schedules/Swarm/History, Companies/Cloud/Aeon/Integrations/Alerts",
+  "The default app rail should keep seven stable routes and leave optional destinations in More",
 );
 assert.equal(navigation.shelfSlotForView("agents"), "agents", "Fleet lights the brand slot");
 assert.equal(navigation.shelfSlotForView("my-apps"), "integrations", "Apps & Services lights the Integrations slot");
@@ -45,6 +45,16 @@ assert.equal(navigation.DASHBOARD_ROUTE_LABELS.history, "Work History", "Route l
 assert.ok(navigation.DASHBOARD_UTILITY_VIEWS.includes("env"), "Utilities set includes env (the More grid renders every utility view)");
 assert.ok(navigation.DASHBOARD_UTILITY_VIEWS.includes("cloud"), "Utilities set includes managed Cloud Agents");
 assert.ok(navigation.DASHBOARD_UTILITY_VIEWS.includes("mini-apps"), "Utilities set includes HivemindOS Mini Apps");
+assert.equal(
+  navigation.dashboardTargetFromSearch("?view=integrations&tab=xbot")?.integrationsTab,
+  "xbot",
+  "Desktop X OAuth returns should preserve the X Bot subtab through dashboard navigation",
+);
+assert.match(
+  navigation.dashboardUrlForTarget({ view: "integrations", integrationsTab: "xbot" }),
+  /tab=xbot/,
+  "Dashboard URLs should serialize the X Bot subtab",
+);
 assert.match(dashboardApp, /activeView === "mini-apps" \? <MiniAppsPanel[ /]/, "Dashboard should render the dedicated Mini Apps view");
 assert.match(morePanel, /title: "HivemindOS Mini Apps"/, "More launcher should expose HivemindOS Mini Apps");
 
@@ -82,8 +92,8 @@ assert.match(
 );
 assert.match(
   kanbanBoardUtils,
-  /export function activeKanbanTaskCount\(tasks: KanbanTask\[\]\)/,
-  "Work nav badge counts should share the Kanban active-task helper",
+  /export function needsHumanKanbanTaskCount\(tasks: KanbanTask\[\]\)/,
+  "Work nav badge counts should share the Kanban attention helper",
 );
 assert.match(
   dashboardApp,
@@ -92,8 +102,8 @@ assert.match(
 );
 assert.match(
   dashboardApp,
-  /kanban:\s*kanbanNavBadgeCount \?\? \(kanbanBoard \? activeKanbanTaskCount\(kanbanBoard\.tasks\) : 0\)/,
-  "Work nav badge should use the background badge count before the Kanban panel is opened",
+  /kanban:\s*kanbanNavBadgeCount \?\? \(kanbanBoard \? needsHumanKanbanTaskCount\(kanbanBoard\.tasks\) : 0\)/,
+  "Work nav badge should count Needs You items, including before the Kanban panel is opened",
 );
 assert.match(
   pollingEffects,
@@ -102,8 +112,8 @@ assert.match(
 );
 assert.match(
   pollingEffects,
-  /setKanbanNavBadgeCount\(activeKanbanTaskCount\(data\.board\.tasks\)\)/,
-  "Background Kanban polling should update only the nav badge count",
+  /setKanbanNavBadgeCount\(data\.counts\["needs-human"\] \?\? 0\)/,
+  "Background Kanban polling should update the Needs You nav badge from a count-only response",
 );
 assert.match(
   morePanel,

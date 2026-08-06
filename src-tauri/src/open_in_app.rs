@@ -78,6 +78,7 @@ function bundleRecord(appUrl) {
 }
 function priority(app) {
   const name = app.name.toLowerCase();
+  if (name.includes("hivemind office") || name.includes("hermesoffice") || name.includes("genoffice")) return 5;
   if (name.includes("visual studio code") || name === "cursor" || name === "zed") return 10;
   if (name.includes("sublime") || name.includes("bbedit") || name.includes("nova")) return 20;
   if (name === "xcode" || name.includes("pycharm") || name.includes("webstorm")) return 30;
@@ -85,13 +86,19 @@ function priority(app) {
   if (name === "safari" || name === "google chrome" || name === "firefox") return 50;
   return 100;
 }
+function displayName(record) {
+  if (record.bundleId === "com.hivemindos.office") return "Hivemind Office";
+  if (record.bundleId === "com.hermesoffice.app") return "Hivemind Office (HermesOffice)";
+  if (record.bundleId === "com.genoffice.app") return "Hivemind Office (GenOffice)";
+  return record.name;
+}
 function run(argv) {
   const url = $.NSURL.fileURLWithPath(argv[0]);
   const workspace = $.NSWorkspace.sharedWorkspace;
   const urls = workspace.URLsForApplicationsToOpenURL(url);
   const defaultApp = bundleRecord(workspace.URLForApplicationToOpenURL(url));
   const defaultBundleId = defaultApp ? defaultApp.bundleId : "";
-  const roots = ["/Applications/", "/System/Applications/", "/System/Library/CoreServices/"];
+  const roots = ["/Applications/", ObjC.unwrap($.NSHomeDirectory()) + "/Applications/", "/System/Applications/", "/System/Library/CoreServices/"];
   const blocked = ["com.apple.Notes", "com.apple.dt.Instruments", "com.google.chrome.for.testing"];
   const seen = {};
   const apps = [];
@@ -101,7 +108,7 @@ function run(argv) {
     if (!roots.some((root) => record.path.startsWith(root))) continue;
     if (record.path.includes("/Contents/Applications/") || blocked.includes(record.bundleId) || seen[record.bundleId]) continue;
     seen[record.bundleId] = true;
-    apps.push({ id: `bundle:${record.bundleId}`, name: record.name, isDefault: record.bundleId === defaultBundleId });
+    apps.push({ id: `bundle:${record.bundleId}`, name: displayName(record), isDefault: record.bundleId === defaultBundleId });
   }
   apps.sort((left, right) => Number(right.isDefault) - Number(left.isDefault) || priority(left) - priority(right) || left.name.localeCompare(right.name));
   return JSON.stringify({ ok: true, available: true, apps: apps.slice(0, 8), fileManagerLabel: "Finder", source: "local" });
