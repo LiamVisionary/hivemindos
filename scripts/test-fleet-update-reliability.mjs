@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { register } from "node:module";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
@@ -262,6 +265,194 @@ function jsonResponse(payload, status = 200) {
     /if \(options\.waitForRefresh === false\)[\s\S]*?installedRuntimesCache\s*\?[\s\S]*?: \[\]/,
     "cold runtime probes should refresh in the background while health uses an empty fallback",
   );
+}
+
+// A simulate request for a remote machine must never reach a transport that
+// runs a real update (this footgun shipped: simulate fell through the POST
+// dispatch into tryCollectorUpdate/tryTailscaleSsh and full-updated the
+// machine, without even the maintenance reservation).
+{
+  const updateRouteSource = readFileSync("src/app/api/fleet/update/route.ts", "utf8");
+  assert.match(
+    updateRouteSource,
+    /body\.simulate\s*\?\s*tryRemoteRehearsal\(body\)/,
+    "a remote simulate must dispatch to the rehearsal path before any real update transport",
+  );
+  for (const transport of [
+    "tryCollectorUpdate",
+    "tryHivemindLinkShell",
+    "tryTailscaleSsh",
+    "tryDetachedTailscaleSsh",
+  ]) {
+    const transportSource = updateRouteSource.match(
+      new RegExp(`async function ${transport}\\([\\s\\S]*?\\n\\}`),
+    )?.[0];
+    assert.ok(transportSource, `${transport} must exist in the fleet update route`);
+    assert.match(
+      transportSource,
+      /assertRealUpdateAllowed\(body\)/,
+      `${transport} must refuse simulate requests — a rehearsal reaching it would run a real update`,
+    );
+  }
+  const rehearsalSource = updateRouteSource.match(
+    /function updateRehearsalScript\([\s\S]*?\n\}/,
+  )?.[0];
+  assert.ok(rehearsalSource, "the shared rehearsal script generator must exist");
+  assert.doesNotMatch(
+    rehearsalSource,
+    /git pull|git clone|pnpm install|\.\/scripts\/install-telemetry-collector\.sh|setup\.sh/,
+    "the rehearsal script must stay read-only",
+  );
+}
+
+// End-to-end through the route: a remote simulate runs the read-only rehearsal
+// over the Hivemind Link shell and leaves the checkout untouched.
+{
+  const { POST } = await import("../src/app/api/fleet/update/route.ts");
+  const collectorUrl = "http://update-rehearsal.test-tailnet.ts.net:8787";
+
+  const checkout = await mkdtemp(join(tmpdir(), "hive-update-rehearsal-"));
+  const git = (...args) =>
+    execFileSync("git", ["-C", checkout, ...args], { encoding: "utf8" }).trim();
+  // A git checkout WITHOUT setup.sh, so isLocalCheckout stays false and the
+  // route treats it as a remote machine's appDir.
+  execFileSync("git", ["init", "-q", checkout]);
+  await mkdir(join(checkout, "scripts"), { recursive: true });
+  await writeFile(join(checkout, "scripts", "install-telemetry-collector.sh"), "#!/bin/sh\n");
+  await writeFile(join(checkout, "README.md"), "rehearsal fixture\n");
+  git("add", "-A");
+  git("-c", "user.email=test@hivemindos.test", "-c", "user.name=Test", "commit", "-q", "-m", "fixture");
+  const headBefore = git("rev-parse", "HEAD");
+
+  const fetched = [];
+  const shellCommands = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    const href = String(url);
+    const method = init.method ?? "GET";
+    fetched.push({ href, method });
+    if (href === `${collectorUrl}/health`) {
+      return jsonResponse({
+        ok: true,
+        collectorStartedAtMs: 1,
+        version: { commit: "old-commit", latestCommit: "new-commit" },
+      });
+    }
+    if (/\/_hivemind\/shell\/sessions\/[^/]+\/command$/.test(href)) {
+      const command = JSON.parse(String(init.body ?? "{}")).command ?? "";
+      shellCommands.push(command);
+      // Execute the posted wrapper for real so the rehearsal script's own
+      // behavior (and exit code marker) is what the route sees.
+      const output = execFileSync("/bin/sh", ["-c", command], {
+        encoding: "utf8",
+        env: process.env,
+      });
+      const lines = output.split(/\r?\n/).filter(Boolean);
+      globalThis.__hiveRehearsalLines = lines;
+      return jsonResponse({ ok: true });
+    }
+    if (/\/_hivemind\/shell\/sessions\/[^/]+$/.test(href)) {
+      return jsonResponse({
+        ok: true,
+        busy: false,
+        lines: globalThis.__hiveRehearsalLines ?? [],
+      });
+    }
+    throw new Error(`unexpected fetch during a simulate request: ${method} ${href}`);
+  };
+
+  try {
+    const response = await POST(
+      new Request("http://dashboard.test/api/fleet/update", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          collectorUrl,
+          dnsName: "update-rehearsal.test-tailnet.ts.net",
+          appDir: checkout,
+          simulate: true,
+          source: "test",
+        }),
+      }),
+    );
+    const payload = await response.json();
+    assert.equal(payload.ok, true, payload.error ?? "remote rehearsal should succeed");
+    assert.equal(payload.method, "hivemind-link-shell-rehearsal");
+    assert.equal(payload.simulated, true);
+    assert.equal(payload.verified, true);
+    assert.match(payload.stdout ?? "", /HivemindOS update rehearsal completed/);
+
+    assert.ok(
+      !fetched.some(
+        (request) =>
+          request.href === `${collectorUrl}/update` ||
+          request.href.includes("/maintenance/reserve-update"),
+      ),
+      "a simulate request must not touch the collector update or maintenance endpoints",
+    );
+
+    assert.equal(shellCommands.length, 1);
+    const encoded = shellCommands[0].match(/printf '%s' '([A-Za-z0-9+/=]+)'/)?.[1];
+    assert.ok(encoded, "the link shell wrapper should carry the base64 script");
+    const rehearsal = Buffer.from(encoded, "base64").toString("utf8");
+    assert.match(rehearsal, /HivemindOS update rehearsal started/);
+    assert.doesNotMatch(
+      rehearsal,
+      /git pull|git clone|pnpm install|\.\/scripts\/install-telemetry-collector\.sh|setup\.sh/,
+      "the script sent to the remote machine must be the read-only rehearsal, not a real update",
+    );
+
+    assert.equal(git("rev-parse", "HEAD"), headBefore, "the rehearsal must not move HEAD");
+    assert.equal(git("status", "--porcelain"), "", "the rehearsal must not dirty the checkout");
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete globalThis.__hiveRehearsalLines;
+    await rm(checkout, { recursive: true, force: true });
+  }
+}
+
+// The original footgun scenario: simulate for a machine whose link shell is
+// unavailable and that has no SSH target must fail loudly — never fall back to
+// the collector's real /update endpoint.
+{
+  const { POST } = await import("../src/app/api/fleet/update/route.ts");
+  const collectorUrl = "http://update-no-shell.test-tailnet.ts.net:8787";
+  const fetched = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    const href = String(url);
+    fetched.push({ href, method: init.method ?? "GET" });
+    if (href === `${collectorUrl}/health`) {
+      return jsonResponse({
+        ok: true,
+        collectorStartedAtMs: 1,
+        version: { commit: "old-commit", latestCommit: "new-commit" },
+      });
+    }
+    if (/\/_hivemind\/shell\/sessions\/[^/]+\/command$/.test(href)) {
+      return jsonResponse({ ok: false, error: "no shell here" }, 404);
+    }
+    throw new Error(`unexpected fetch during a simulate request: ${init.method ?? "GET"} ${href}`);
+  };
+  try {
+    const response = await POST(
+      new Request("http://dashboard.test/api/fleet/update", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ collectorUrl, simulate: true }),
+      }),
+    );
+    const payload = await response.json();
+    assert.equal(response.status, 502);
+    assert.equal(payload.ok, false);
+    assert.match(payload.error ?? "", /rehearsal transport/i);
+    assert.ok(
+      !fetched.some((request) => request.href === `${collectorUrl}/update`),
+      "a simulate request without a rehearsal transport must fail, not run a real collector update",
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 }
 
 console.log("fleet update reliability checks passed");
