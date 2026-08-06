@@ -691,6 +691,31 @@ export function useChatTreeController(props: any) {
         folderMap.set(key, next);
         return next;
       };
+      const knownFolderByDedupeKey = new Map<string, { path: string; label: string }>();
+      for (const knownPath of [projectDirectoryPath(machine.version?.appDir), projectDirectoryPath(selectedChatDirectoryPath)]) {
+        if (knownPath) knownFolderByDedupeKey.set(chatDedupeKey(knownPath), { path: knownPath, label: workspaceLabelFromPath(knownPath) });
+      }
+      for (const customFolder of chatCustomFolders.filter((folder) => folder.machineKey === machine.key)) {
+        const knownPath = projectDirectoryPath(customFolder.path);
+        if (knownPath) knownFolderByDedupeKey.set(chatDedupeKey(knownPath), { path: knownPath, label: customFolder.label || workspaceLabelFromPath(knownPath) });
+      }
+      // Leaf keys look like `folder-<machineKey>-<dedupeKey(path)>-<agentId>`; machine keys,
+      // dedupe segments, and agent ids may all contain dashes, so recover the folder by testing
+      // each known path's dedupe key against the leaf key instead of splitting on dashes.
+      const knownFolderForChatLeafKey = (leafKey: string) => {
+        const leafPrefix = `folder-${machine.key}-`;
+        if (!leafKey.startsWith(leafPrefix)) return undefined;
+        const dedupeSegment = leafKey.slice(leafPrefix.length);
+        let match: { path: string; label: string } | undefined;
+        let matchedKeyLength = -1;
+        for (const [dedupe, folder] of knownFolderByDedupeKey) {
+          if (dedupe.length > matchedKeyLength && dedupeSegment.startsWith(`${dedupe}-`)) {
+            match = folder;
+            matchedKeyLength = dedupe.length;
+          }
+        }
+        return match;
+      };
 
       for (const agent of machine.agents.filter((item) => runtimeCan(item, "chat"))) {
         const folderPath = projectDirectoryPath(machine.version?.appDir);
@@ -734,8 +759,16 @@ export function useChatTreeController(props: any) {
           subtitle: chat.subtitle === agent.id ? agent.name : chat.subtitle,
         }));
         for (const savedChat of savedChats) {
+          const knownFolder = knownFolderForChatLeafKey(savedChat.key);
           const targetFolder = savedChat.key.startsWith(`machine-${machine.key}-`)
             ? machineChatFolder()
+            : knownFolder
+            ? ensureFolder(
+              knownFolder.label,
+              startFreshChatInMachine(agent, knownFolder.path),
+              knownFolder.path,
+              selectedAgentId === agent.id && selectedChatDirectoryPath === knownFolder.path,
+            )
             : defaultFolder();
           targetFolder.chats.push(savedChat);
         }
