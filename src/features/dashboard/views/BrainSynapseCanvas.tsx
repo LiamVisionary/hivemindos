@@ -79,14 +79,14 @@ const FIBER_SEGMENTS = 14;
 const LINK_STRANDS = 4;
 const MAX_PULSE_SLOTS = 9000;
 const MAX_LABELS = 16;
-const DUST_COUNT = 1400;
+const DUST_COUNT = 260;
 const PRE_TICKS = 110;
 // Dark theme is a deep-space indigo field; honey stays the semantic accent.
 const DARK_DUST_TINT = "#b9c8ff";
 // Lit/selection tint: electric blue-white so firing paths read as signal in
 // the blue-violet field — never amber/orange, which breaks the palette.
 const DARK_LIT_TINT = "#dff0ff";
-const DARK_PULSE_TINT = "#e9f7ff";
+const DARK_PULSE_TINT = "#9fdfff";
 const DARK_FOG_TINT = "#061348";
 const DARK_CLEAR_TINT = "#02082d";
 
@@ -335,7 +335,7 @@ class SynapseEngine {
       const existing = previousById.get(input.id);
       // Only structural wiki-link centrality changes physical size. Recent
       // edits and agent reads are activity, expressed later through glow.
-      const radius = 2.35 + clamp(input.weight, 0, 1) * 5.45;
+      const radius = 1.9 + clamp(input.weight, 0, 1) * 3.7;
       const anchor = brainClusterAnchor(input.cluster);
       if (existing) {
         existing.activity = input.activity;
@@ -487,11 +487,11 @@ class SynapseEngine {
   }
 
   private toneGlow(tone: SynapseNodeTone) {
-    if (tone === "touched") return 0.55;
-    if (tone === "recent") return 0.44;
-    if (tone === "unresolved") return 0.42;
-    if (tone === "stale") return 0.32;
-    return 0.3;
+    if (tone === "touched") return 0.4;
+    if (tone === "recent") return 0.34;
+    if (tone === "unresolved") return 0.32;
+    if (tone === "stale") return 0.24;
+    return 0.22;
   }
 
   private applyNodeVisuals() {
@@ -499,12 +499,11 @@ class SynapseEngine {
     const tintAttr = this.soma.geometry.getAttribute("iTint") as THREE.InstancedBufferAttribute;
     const glowAttr = this.soma.geometry.getAttribute("iGlow") as THREE.InstancedBufferAttribute;
     const dimAttr = this.soma.geometry.getAttribute("iDim") as THREE.InstancedBufferAttribute;
+    const hoverAttr = this.soma.geometry.getAttribute("iHover") as THREE.InstancedBufferAttribute;
     const haloGeo = this.haloMesh?.geometry as THREE.InstancedBufferGeometry | undefined;
     const haloTint = haloGeo?.getAttribute("iTint") as THREE.InstancedBufferAttribute | undefined;
     const haloAlpha = haloGeo?.getAttribute("iAlpha") as THREE.InstancedBufferAttribute | undefined;
-    // ANY selection engages the spotlight — even a 0-link orphan dims the rest
-    // of the tissue, otherwise picking such a note shows no focus change at all.
-    // Dim is a 0.5 mix toward the background, so nothing blacks out.
+    // Any selection dims unrelated tissue so even a zero-link note visibly focuses.
     const hasSelection = Boolean(this.selectedId);
     this.nodes.forEach((node, index) => {
       const selected = node.id === this.selectedId;
@@ -513,28 +512,30 @@ class SynapseEngine {
       toneColorInto(this.palette, node.tone, node.drift, this.tmpColor);
       if (inContext) this.tmpColor.lerp(this.palette.live, 0.5);
       if (selected) this.tmpColor.lerp(this.palette.light ? this.palette.honey : linearizeSRGB(this.tmpColorB.set(DARK_LIT_TINT)), 0.5);
-      let glow = this.toneGlow(node.tone) + node.activity * 0.22;
-      if (inContext) glow = Math.max(glow, 0.55);
-      if (neighbor) glow += 0.08;
-      if (selected) glow = 0.72;
-      if (node.id === this.hoveredId) glow = Math.min(0.85, glow + 0.15);
+      let glow = this.toneGlow(node.tone) + node.activity * 0.14;
+      if (inContext) glow = Math.max(glow, 0.42);
+      if (neighbor) glow += 0.05;
+      if (selected) glow = 0.55;
+      if (node.id === this.hoveredId) glow = 1;
       const dim = hasSelection && !selected && !neighbor && !inContext ? 1 : 0;
       tintAttr.setXYZ(index, this.tmpColor.r, this.tmpColor.g, this.tmpColor.b);
       glowAttr.setX(index, clamp(glow, 0, 1));
       dimAttr.setX(index, dim);
+      hoverAttr.setX(index, node.id === this.hoveredId ? 1 : 0);
       this.nodeTints[index * 3] = this.tmpColor.r;
       this.nodeTints[index * 3 + 1] = this.tmpColor.g;
       this.nodeTints[index * 3 + 2] = this.tmpColor.b;
       if (haloTint && haloAlpha) {
         haloTint.setXYZ(index, this.tmpColor.r, this.tmpColor.g, this.tmpColor.b);
-        const base = this.palette.light ? 0.4 : 0.46;
+        const base = this.palette.light ? 0.12 : 0.14;
         // Capped so a selected hub reads as a bright cell, not a glow blob.
-        haloAlpha.setX(index, Math.min(this.palette.light ? 0.58 : 0.68, base + glow * 0.28) * (dim ? 0.3 : 1));
+        haloAlpha.setX(index, Math.min(this.palette.light ? 0.18 : 0.2, base + glow * 0.06) * (dim ? 0.3 : 1));
       }
     });
     tintAttr.needsUpdate = true;
     glowAttr.needsUpdate = true;
     dimAttr.needsUpdate = true;
+    hoverAttr.needsUpdate = true;
     if (haloTint) haloTint.needsUpdate = true;
     if (haloAlpha) haloAlpha.needsUpdate = true;
   }
@@ -720,7 +721,7 @@ class SynapseEngine {
       // Pulsating energy core at the organ's center. Sized to sit inside the
       // cortical shell (~104 world units) so tissue drawn after it overlays
       // the corona and the core reads as embedded, not pasted on top.
-      uniforms: { uSize: { value: 48 }, uTime: { value: 0 }, uMotion: { value: this.reducedMotion ? 0 : 1 } },
+      uniforms: { uSize: { value: 36 }, uTime: { value: 0 }, uMotion: { value: this.reducedMotion ? 0 : 1 } },
       vertexShader: CORE_GLOW_VERTEX,
       fragmentShader: CORE_GLOW_FRAGMENT,
       transparent: true,
@@ -750,7 +751,7 @@ class SynapseEngine {
       positions[i * 3] = Math.cos(angle) * ring * spread * 0.94;
       positions[i * 3 + 1] = u * spread * 0.72;
       positions[i * 3 + 2] = Math.sin(angle) * ring * spread * 1.3;
-      sizes[i] = 0.65 + hashUnit(`dust-${i}`, 13) * 1.5;
+      sizes[i] = 0.55 + hashUnit(`dust-${i}`, 13) * 0.85;
       seeds[i] = hashUnit(`dust-${i}`, 17);
     }
     const geometry = new THREE.BufferGeometry();
@@ -790,6 +791,7 @@ class SynapseEngine {
     sphereGeometry.setAttribute("iTint", new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3));
     sphereGeometry.setAttribute("iGlow", new THREE.InstancedBufferAttribute(new Float32Array(count), 1));
     sphereGeometry.setAttribute("iDim", new THREE.InstancedBufferAttribute(new Float32Array(count), 1));
+    sphereGeometry.setAttribute("iHover", new THREE.InstancedBufferAttribute(new Float32Array(count), 1));
     sphereGeometry.setAttribute("iProximity", new THREE.InstancedBufferAttribute(this.nodeProximity, 1));
     const somaSeeds = new Float32Array(count);
     this.nodes.forEach((node, index) => {
@@ -822,7 +824,7 @@ class SynapseEngine {
     const haloScales = new Float32Array(count);
     const haloSeeds = new Float32Array(count);
     this.nodes.forEach((node, index) => {
-      haloScales[index] = node.radius * 6.4;
+      haloScales[index] = node.radius * 4.0;
       haloSeeds[index] = hashUnit(node.id, 53);
     });
     haloGeometry.setAttribute("iScale", new THREE.InstancedBufferAttribute(haloScales, 1));
@@ -948,7 +950,7 @@ class SynapseEngine {
         const seed = hashUnit(`spark-${fiberIndex}-${packet}`, 7);
         phases[slot] = seed + packet * 0.47 - tail * 0.014;
         speeds[slot] = 0.16 + hashUnit(`spark-speed-${fiberIndex}-${packet}`, 11) * 0.055;
-        sizes[slot] = 26 * [1, 0.76, 0.56, 0.39, 0.25, 0.14][tail];
+        sizes[slot] = 14 * [1, 0.76, 0.56, 0.39, 0.25, 0.14][tail];
       }
     });
     pulseGeometry.setAttribute("aPhase", new THREE.BufferAttribute(phases, 1));

@@ -5,6 +5,14 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-08-06 16:42 EDT (-0400) - Refine Shared Brain nodes, bloom, and hover glow
+  - Status: Main-branch release prepared.
+  - User-facing release note: The Shared Brain now uses smaller knowledge nodes, far fewer and fainter ambient motes, restrained node/core/pulse bloom, and a larger crisp cyan hover response attached to the actual node instead of a translucent circle or starburst.
+  - Areas changed: the canonical dashboard Brain renderer and GPU shaders in `src/features/dashboard/views/BrainSynapseCanvas.tsx` and `src/features/dashboard/views/brain-synapse-gpu.ts`.
+  - Verification: The isolated release worktree passes TypeScript, the focused pointer-proximity test, the website/desktop exact-renderer contract, and `git diff --check`.
+  - Rollback: Revert this release commit; no vault data or persistence schema changes.
+  - Intended commit message: `fix(brain): refine node glow and visual density`
+
 - 2026-07-27 13:00 EDT (-0400) - HivemindOS Mobile now has an App Review-ready cloud AI privacy notice
   - Status: Pushed.
   - User-facing release note: The canonical Privacy Policy now names the cloud AI recipients and processors currently used by HivemindOS Mobile, lists the request content that can be shared, explains the in-app permission shown before a cloud request, documents revocation, and confirms that processors acting for Rizzma Inc. must provide the same or equal protection.
