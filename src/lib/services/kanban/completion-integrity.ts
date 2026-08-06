@@ -65,3 +65,59 @@ export async function untrustedCompletionIntegrityReceipts(input: {
   };
   return runIntegrityGates({ output, probeUrl: probes.probeUrl, fetchContent: probes.fetchContent });
 }
+
+/**
+ * Integrity receipts for an untrusted PATCH (patchTask). Two patch shapes need
+ * verification: patch-to-done is a completion (verifies the submitted text,
+ * falling back to the stored result exactly like completeTask), and a
+ * status-LESS result patch against a card ALREADY "done" is a completion-claim
+ * REWRITE — complete honestly with clean text, then swap the done card's
+ * displayed result for a fabricated "site is live at <url>" claim. The rewrite
+ * path verifies ONLY the new text (no stored-result fallback — the stored text
+ * is exactly what the patch replaces); its hardFail must THROW at the caller,
+ * not park, so a bad patch cannot un-complete a card a human moved to Done via
+ * the moveTask override. The caller's reads run OUTSIDE the board mutation
+ * queue — network probes must never hold the board lock.
+ */
+export async function untrustedPatchIntegrityReceipts(input: {
+  patchesToDone: boolean;
+  statusless: boolean;
+  submittedText: string;
+  readStoredTask: () => Promise<{ status: string; result?: unknown } | undefined>;
+  probes?: KanbanIntegrityProbes;
+}): Promise<KanbanLoopReceipt[]> {
+  if (input.patchesToDone) {
+    return untrustedCompletionIntegrityReceipts({
+      submittedText: input.submittedText,
+      readStoredResult: async () => coerceKanbanText((await input.readStoredTask())?.result),
+      probes: input.probes,
+    });
+  }
+  if (!input.statusless || !input.submittedText.trim()) return [];
+  const stored = await input.readStoredTask().catch(() => undefined);
+  if (stored?.status !== "done") return [];
+  return untrustedCompletionIntegrityReceipts({
+    submittedText: input.submittedText,
+    readStoredResult: async () => "",
+    probes: input.probes,
+  });
+}
+
+// A completion whose result is byte-identical to ANOTHER task's stored result
+// is a misattributed session output, not this task's work (live incident:
+// one session's Bankr wallet dump stamped onto 3 tasks at once). Shared by
+// completeTask and applyPatchToBoard's patch-to-done path.
+export function assertResultNotMisattributed(
+  board: { tasks: Array<{ id: string; title: string; result?: string }> },
+  taskId: string,
+  result: string | undefined,
+): void {
+  const normalized = (result ?? "").trim();
+  if (normalized.length < 200) return;
+  const twin = board.tasks.find((item) => item.id !== taskId && (item.result ?? "").trim() === normalized);
+  if (twin) {
+    throw new Error(
+      `Completion rejected: the result is byte-identical to task ${twin.id} ("${twin.title.slice(0, 60)}") — that is a misattributed session output, not this task's work. Re-run the task and return ITS deliverable.`,
+    );
+  }
+}

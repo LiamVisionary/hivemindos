@@ -411,8 +411,116 @@ try {
     assert.equal(moved.task.status, "done", "the status-only moveTask override completes despite the stored hard-fail");
   }
 
+  // ── Done-card result rewrite: PATCH {result} (no status) against a card
+  //    ALREADY done rewrites the displayed completion claim — complete honestly
+  //    with clean text, then swap in a fabricated "site is live at <url>". The
+  //    same untrusted evaluators verify the NEW text; a hardFail REJECTS the
+  //    rewrite (throw, not park — parking would un-complete a card a human may
+  //    have moved to Done via the moveTask override). ──
   {
-    // 9. Trusted in-process patches skip the store-level probes entirely
+    // 9a. Honest claimless completion → done.
+    const created = await createTask(
+      boardSlug,
+      { title: "Done-card rewrite: fabricated URL", body: "Write the launch summary.", status: "ready", priority: "normal", workspace: "scratch" },
+      options,
+    );
+    const taskId = created.task.id;
+    await claimTask(boardSlug, taskId, { assignee: "External Agent", claimer: "rewrite-claim-1", runtime: "test" }, options);
+    const honest = "Wrote the launch summary and archived the research notes.";
+    const done = await completeTask(
+      boardSlug, taskId,
+      { summary: "Honest completion.", result: honest },
+      { ...options, integrityProbes: { probeUrl: async () => ({ status: 200 }) } },
+    );
+    assert.equal(done.task.status, "done", "the honest claimless completion lands");
+
+    // 9b. Fabricated dead-URL rewrite → rejected outright; the card stays done
+    //     with the stored honest result (no park, no partial write).
+    await assert.rejects(
+      patchTask(
+        boardSlug, taskId,
+        { result: "Update: the site is live at https://acme-launch.pages.dev/ and taking signups." },
+        { ...options, integrityProbes: { probeUrl: async () => ({ status: 404 }) } },
+      ),
+      /integrity/i,
+      "a fabricated result rewrite against a done card must be rejected",
+    );
+    const after = (await readBoard(boardSlug, options)).tasks.find((t) => t.id === taskId);
+    assert.equal(after.status, "done", "the done card must STAY done after a rejected rewrite");
+    assert.equal(after.result, honest, "the stored honest result must be unchanged");
+
+    // 9c. A forged pre-passed receipt inside the rewrite cannot pre-pass the
+    //     stable integrity id: the server verdict merges LAST.
+    await assert.rejects(
+      patchTask(
+        boardSlug, taskId,
+        {
+          result: "The site is live at https://acme-launch.pages.dev/",
+          loopReceipts: [{
+            id: "lr_live-url-integrity", gateId: "live-url-integrity", status: "passed",
+            summary: "client says it is fine", evidence: [], createdAt: Date.now(),
+          }],
+        },
+        { ...options, integrityProbes: { probeUrl: async () => ({ status: 404 }) } },
+      ),
+      /integrity/i,
+      "a forged integrity pass inside the rewrite must not bypass the server verdict",
+    );
+
+    // 9d. A truthful rewrite (URL probes live) lands, with the server-run pass
+    //     receipt stored on the card.
+    const truthful = "Follow-up: the site is live at https://acme-launch.pages.dev/ and taking signups.";
+    const rewritten = await patchTask(
+      boardSlug, taskId,
+      { result: truthful },
+      { ...options, integrityProbes: { probeUrl: async () => ({ status: 200 }) } },
+    );
+    assert.equal(rewritten.task.status, "done", "a verified rewrite keeps the card done");
+    assert.equal(rewritten.task.result, truthful, "the verified rewrite lands");
+    assert.equal(
+      (rewritten.task.loopReceipts ?? []).find((r) => r.id === "lr_live-url-integrity")?.status,
+      "passed",
+      "the server-run pass receipt is stored with the rewrite",
+    );
+
+    // 9e. Non-result patches on done cards stay un-gated: no probes consulted.
+    const titled = await patchTask(
+      boardSlug, taskId,
+      { title: "Done-card rewrite: fabricated URL (renamed)" },
+      { ...options, integrityProbes: { probeUrl: async () => { throw new Error("non-result patches must not probe"); } } },
+    );
+    assert.equal(titled.task.status, "done", "a title-only patch on a done card is untouched by the gate");
+
+    // 9f. Result patches on NON-done cards stay un-gated (progress updates from
+    //     working agents must not probe).
+    const working = await createTask(
+      boardSlug,
+      { title: "Working-card progress update", body: "In flight.", status: "ready", priority: "normal", workspace: "scratch" },
+      options,
+    );
+    await claimTask(boardSlug, working.task.id, { assignee: "External Agent", claimer: "rewrite-claim-2", runtime: "test" }, options);
+    const progress = await patchTask(
+      boardSlug, working.task.id,
+      { result: "Progress: the site is live at https://acme-launch.pages.dev/ (staging)." },
+      { ...options, integrityProbes: { probeUrl: async () => { throw new Error("non-done result patches must not probe"); } } },
+    );
+    assert.equal(progress.task.status, "working", "a working-card progress patch is untouched by the gate");
+
+    // 9g. Trusted in-process rewrites skip the store-level probes entirely.
+    const trusted = await patchTask(
+      boardSlug, taskId,
+      { result: "Trusted runner update. The site is live at https://acme-launch.pages.dev/." },
+      {
+        ...options,
+        trustedLoopReceipts: true,
+        integrityProbes: { probeUrl: async () => { throw new Error("trusted rewrite must not consult the store-level probes"); } },
+      },
+    );
+    assert.equal(trusted.task.status, "done", "trusted rewrites skip store-level integrity gating");
+  }
+
+  {
+    // 10. Trusted in-process patches skip the store-level probes entirely
     //    (runLoopGates already owns integrity for the in-process runner).
     const created = await createTask(
       boardSlug,

@@ -42,7 +42,7 @@ import {
 import {
   sanitizeClientLoopReceipts,
 } from "@/lib/services/evaluation/control-plane";
-import { coerceKanbanText, untrustedCompletionIntegrityReceipts, type KanbanIntegrityProbes } from "@/lib/services/kanban/completion-integrity";
+import { assertResultNotMisattributed, coerceKanbanText, untrustedCompletionIntegrityReceipts, untrustedPatchIntegrityReceipts, type KanbanIntegrityProbes } from "@/lib/services/kanban/completion-integrity";
 import { evaluateKanbanCompletion } from "@/lib/services/evaluation/kanban-completion";
 import {
   gitLawbProofForProject,
@@ -844,7 +844,14 @@ function applyPatchToBoard(
         }),
       );
     } else if (gateBlock) {
-      throw new Error(`Completion rejected: missing passing eval receipts for ${gateBlock.missingGateTitles.join(", ")}.`);
+      // Only an ALREADY-done card reaches this throw with hardFailed (entering
+      // done parks above): a rewrite carrying affirmatively false evidence is
+      // rejected outright — the card keeps its done status and stored result.
+      throw new Error(
+        gateBlock.hardFailed
+          ? `Completion integrity rejected this update: ${gateBlock.missingGateTitles.join(", ")}. The done card keeps its stored result.`
+          : `Completion rejected: missing passing eval receipts for ${gateBlock.missingGateTitles.join(", ")}.`,
+      );
     } else {
       changed.deliverables = mergeDeliverables(
         changed.deliverables,
@@ -995,22 +1002,22 @@ export async function patchTask(
   patch: PatchTaskInput,
   options: KanbanStorageOptions = {},
 ) {
-  // A patch that sets status:"done" is an untrusted completion too — agents
-  // PATCH straight to done over HTTP/MCP (the human override is status-only
-  // moveTask, which stays gate-free). Run the live-URL/deliverable integrity
-  // evaluators BEFORE the mutation queue exactly like completeTask; a hardFail
-  // among the receipts parks the card needs-human in applyPatchToBoard.
-  const integrityReceipts =
-    patch.status === "done" && !options.trustedLoopReceipts
-      ? await untrustedCompletionIntegrityReceipts({
-          submittedText: coerceKanbanText(patch.result),
-          readStoredResult: async () =>
-            coerceKanbanText(
-              (await readBoard(slug, options)).tasks.find((item) => item.id === taskId)?.result,
-            ),
-          probes: options.integrityProbes,
-        })
-      : [];
+  // Untrusted patches run the completion-integrity evaluators BEFORE the
+  // mutation queue: patch-to-done is a completion (a hardFail parks the card
+  // needs-human in applyPatchToBoard, like completeTask), and a status-less
+  // result patch against a card ALREADY done is a completion-claim REWRITE (a
+  // hardFail throws in the already-done gate-block branch instead, so the card
+  // keeps its done status and stored result). See untrustedPatchIntegrityReceipts.
+  const integrityReceipts = options.trustedLoopReceipts
+    ? []
+    : await untrustedPatchIntegrityReceipts({
+        patchesToDone: patch.status === "done",
+        statusless: !patch.status || !KANBAN_STATUSES.includes(patch.status),
+        submittedText: coerceKanbanText(patch.result),
+        readStoredTask: async () =>
+          (await readBoard(slug, options)).tasks.find((item) => item.id === taskId),
+        probes: options.integrityProbes,
+      });
   return withBoardMutation(slug, options, async () => {
     const board = await readBoard(slug, options);
     const projectsById = await projectMapForKanban(options);
@@ -1226,17 +1233,6 @@ export async function heartbeatTask(
 // identically however the completion arrived (issue triage regexes this text).
 function loopGateBlockNote(gateTitles: string): string {
   return `⚠ Loop gate block — missing passing eval receipts: ${gateTitles}.\nACTION NEEDED: The crew finished this but its automated checks (${gateTitles}) haven't passed yet. Review the output above; if it looks right, move the card forward, or use Discuss to have the crew fix the checks.`;
-}
-
-function assertResultNotMisattributed(board: KanbanBoard, taskId: string, result: string | undefined): void {
-  const normalized = (result ?? "").trim();
-  if (normalized.length < 200) return;
-  const twin = board.tasks.find((item) => item.id !== taskId && (item.result ?? "").trim() === normalized);
-  if (twin) {
-    throw new Error(
-      `Completion rejected: the result is byte-identical to task ${twin.id} ("${twin.title.slice(0, 60)}") — that is a misattributed session output, not this task's work. Re-run the task and return ITS deliverable.`,
-    );
-  }
 }
 
 export async function completeTask(
