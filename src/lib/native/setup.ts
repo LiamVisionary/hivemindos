@@ -1,6 +1,6 @@
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 
-export const NATIVE_SETUP_DEMO_ENABLED = false;
+export const NATIVE_SETUP_DEMO_ENABLED = true;
 export const NATIVE_SETUP_RERUN_EVENT = "hivemindos:rerun-setup";
 
 export type NativeSetupCheck = {

@@ -5,6 +5,14 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-08-06 20:39 EDT (-0400) - Preserve the isolated onboarding audit state
+  - Status: Uncommitted audit-only source state; production demo mode must remain disabled after integration.
+  - Developer note: The registered onboarding audit worktree records its explicit native-setup demo toggle and the shared Kanban integrity-helper cleanup. An exact `node_modules` ignore also prevents the audit's local absolute dependency symlink from entering Git.
+  - Areas changed: native setup audit flag, completion-integrity deduplication, repository dependency-symlink ignore, and this changelog.
+  - Verification: Scoped whitespace and TypeScript checks are required after integration into current `main`; the completion-integrity cleanup is already independently present and covered by the canonical loop-blocking suite there.
+  - Recovery: Revert this audit commit. The final integration commit restores `NATIVE_SETUP_DEMO_ENABLED` to `false` before publication.
+  - Intended commit message: `chore: preserve onboarding audit worktree`
+
 - 2026-08-06 20:24 EDT (-0400) - Reconcile the complete main-worktree integration
   - Status: Uncommitted and not included in a desktop release.
   - User-facing release note: The integrated app now preserves Local TTS circuit-breaker recovery, structured remote Hermes replies, every merged Trade destination, a mobile-safe Frontier Lab, and discoverable governance metadata for company budgets, X command controls, trading plans, liquidity monitoring, and prediction-market research.
