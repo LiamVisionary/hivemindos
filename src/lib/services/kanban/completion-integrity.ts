@@ -117,22 +117,3 @@ export async function untrustedPatchIntegrityReceipts(input: {
     probes: input.probes,
   });
 }
-
-// A completion whose result is byte-identical to ANOTHER task's stored result
-// is a misattributed session output, not this task's work (live incident:
-// one session's Bankr wallet dump stamped onto 3 tasks at once). Shared by
-// completeTask and applyPatchToBoard's patch-to-done path.
-export function assertResultNotMisattributed(
-  board: { tasks: Array<{ id: string; title: string; result?: string }> },
-  taskId: string,
-  result: string | undefined,
-): void {
-  const normalized = (result ?? "").trim();
-  if (normalized.length < 200) return;
-  const twin = board.tasks.find((item) => item.id !== taskId && (item.result ?? "").trim() === normalized);
-  if (twin) {
-    throw new Error(
-      `Completion rejected: the result is byte-identical to task ${twin.id} ("${twin.title.slice(0, 60)}") — that is a misattributed session output, not this task's work. Re-run the task and return ITS deliverable.`,
-    );
-  }
-}
