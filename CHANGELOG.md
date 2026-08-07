@@ -6,7 +6,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 ## Unreleased
 
 - 2026-08-06 23:29 EDT (-0400) - Align every onboarding footer action
-  - Status: Uncommitted and not included in a desktop release.
+  - Status: Pushed to `main` in `8e06cb0c`; not yet included in a desktop release.
   - User-facing release note: First-time setup actions now follow a stable grid instead of wrapping at arbitrary widths. Three-action screens place the primary choice on its own aligned row above two equal supporting controls; two-action screens use two equal columns; narrow screens use one ordered full-width stack.
   - Root cause and baseline: The footer combined content-sized buttons, `margin-right: auto`, flex wrapping, and a nested completion-only action container. At the real modal width, the three welcome controls exceeded the available row and pushed only the primary action onto a second row. The new geometry regression reproduced the reported screen and failed because the primary control appeared below the supporting controls.
   - Areas changed: native onboarding action order and footer grid, desktop/mobile action geometry coverage, visual regression artifacts, and this changelog.
@@ -15,7 +15,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(onboarding): align footer action grid`
 
 - 2026-08-06 23:21 EDT (-0400) - Route agentless first tasks into setup
-  - Status: Uncommitted and not included in a desktop release.
+  - Status: Pushed to `main` in `8e06cb0c`; not yet included in a desktop release.
   - User-facing release note: Finishing onboarding without an AI agent now offers to add the first agent and opens the existing guided agent setup. Chat also keeps Send disabled until an agent is selected, so a suggested task can never fail as a silent no-op.
   - Root cause and baseline: The first-task handoff prefilled Chat even when no chat-capable agent existed. The composer treated that text alone as sendable, while the submission handler returned without feedback because it had no target agent.
   - Areas changed: onboarding completion copy and action, first-task dashboard handoff, agentless chat send state, browser fixture coverage, focused first-launch contracts, and this changelog.
@@ -24,7 +24,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(onboarding): guide agentless users into setup`
 
 - 2026-08-06 23:13 EDT (-0400) - Keep the fourth onboarding step clear of Close
-  - Status: Uncommitted and not included in a desktop release.
+  - Status: Pushed to `main` in `8e06cb0c`; not yet included in a desktop release.
   - User-facing release note: The fourth first-time-setup progress segment no longer runs underneath the circular Close button. The desktop header now preserves a visible safety gap at every onboarding step.
   - Root cause and baseline: The 44px Close control plus its 16px right inset occupied 60px, while the header reserved only 58px. The real Mac screenshot exposed the overlap, and the new browser geometry assertion reproduced it with a measured -2px gap before the fix.
   - Areas changed: native onboarding header spacing, cross-platform browser geometry regression coverage, and this changelog.
@@ -33,7 +33,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(onboarding): separate progress rail from close control`
 
 - 2026-08-06 22:44 EDT (-0400) - Let core onboarding finish when macOS blocks Documents
-  - Status: Uncommitted and not included in a desktop release.
+  - Status: Pushed to `main` in `8e06cb0c`; not yet included in a desktop release.
   - User-facing release note: First-time setup no longer fails the whole app when macOS blocks the optional Shared Brain workspace in Documents. The local agent bridge finishes, the success screen clearly identifies the paused step, and lay users receive exact System Settings and re-run instructions.
   - Root cause and baseline: Driving the real signed native wizard on this Mac reproduced an exit-code 1 failure from shared-skill metadata under the Documents-hosted Obsidian vault. The existing browser matrix and setup CI had passed because they did not exercise this machine's real macOS privacy state. Shared-vault initialization, skill sync, daily reports, and memory import were incorrectly fatal to otherwise independent core setup.
   - Areas changed: Unix setup vault preflight and optional-issue reporting, agent-memory import resilience, native launcher failure containment, onboarding completion guidance, focused regression coverage, and this changelog.
@@ -42,7 +42,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(onboarding): tolerate protected Documents vaults`
 
 - 2026-08-06 21:57 EDT (-0400) - Retire the old HivemindOS logo
-  - Status: Uncommitted and not included in a desktop release.
+  - Status: Pushed to `main` in `8e06cb0c`; not yet included in a desktop release.
   - User-facing release note: Onboarding, the repository introduction, and the design-system asset gallery now use the same HivemindOS app icon shown in the left navigation rail. The obsolete wordmark-and-orbit logo and its duplicate design-system asset are removed.
   - Root cause and baseline: Native onboarding explicitly referenced `/hivemindos-logo.png` even though the app-wide left rail has standardized on `/icon-512.png`. A new regression failed against both retired files and every remaining live reference before the replacement.
   - Areas changed: native onboarding branding, public and design-system assets, repository introduction, native first-launch regression coverage, and this changelog.
@@ -51,7 +51,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(brand): retire legacy onboarding logo`
 
 - 2026-08-06 21:29 EDT (-0400) - Keep Next file tracing out of Windows profiles
-  - Status: Uncommitted and not included in a desktop release.
+  - Status: Pushed to `main` in `8e06cb0c`; not yet included in a desktop release.
   - User-facing release note: Windows builds no longer let Next's server file tracer wander through the user's entire profile while compiling HivemindOS.
   - Root cause and scope: The real setup matrix passed Ubuntu, macOS, and Windows setup plus dashboard startup, but its independent Windows build reproduced an 8 GB heap failure after logging an `EPERM` scan of `C:\Users\runneradmin\Application Data`. Seventeen server modules had bypassed the established `@/lib/home-dir` tracing indirection, allowing Next's static evaluator to turn those home paths into profile-wide asset globs. Sixteen now use the canonical helper; the instrumentation-reachable memory guard uses Node's runtime-only builtin lookup because static Node imports break that webpack bundle. A release contract rejects future direct imports and typed runtime requires.
   - Areas changed: canonical server home-directory imports, Tauri release contract, and this changelog.
