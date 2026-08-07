@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 function fail(message) {
   console.error(message);
@@ -20,11 +20,37 @@ const onboardingStyles = readFileSync("src/features/native/NativeFirstRunOnboard
 const setupClient = readFileSync("src/lib/native/setup.ts", "utf8");
 const dashboard = readFileSync("src/features/dashboard/DashboardApp.tsx", "utf8");
 const guidedTour = readFileSync("src/features/dashboard/GuidedDashboardTour.tsx", "utf8");
+const chatExchange = readFileSync("src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx", "utf8");
 const firstTask = readFileSync("src/lib/native/first-task.ts", "utf8");
 const focusTrap = readFileSync("src/lib/ui/use-modal-focus-trap.ts", "utf8");
 const hiveEnv = readFileSync("src/lib/native/hive-env.ts", "utf8");
 const phone = readFileSync("src/lib/native/phone.ts", "utf8");
 const scheduler = readFileSync("src/lib/native/scheduler.ts", "utf8");
+const readme = readFileSync("README.md", "utf8");
+const designSystem = readFileSync("src/app/design-system/page.tsx", "utf8");
+const appNavShelf = readFileSync("src/components/fleet-hive/AppNavShelf.tsx", "utf8");
+
+if (
+  existsSync("public/hivemindos-logo.png")
+  || existsSync("public/design-system/assets/logo/hivemindos-logo.png")
+  || onboarding.includes("/hivemindos-logo.png")
+  || readme.includes("public/hivemindos-logo.png")
+  || designSystem.includes("/design-system/assets/logo/hivemindos-logo.png")
+) {
+  fail("The retired HivemindOS logo must not exist or remain referenced.");
+}
+
+const navBrandPath = appNavShelf.match(/brandSrc\s*=\s*"([^"]+)"/)?.[1];
+const onboardingBrandPath = onboarding.match(/const APP_LOGO_PATH = "([^"]+)"/)?.[1];
+if (
+  navBrandPath !== "/icon-512.png"
+  || onboardingBrandPath !== navBrandPath
+  || !existsSync(`public${navBrandPath}`)
+  || !readme.includes(`src="public${navBrandPath}"`)
+  || !designSystem.includes(`{ src: "${navBrandPath}"`)
+) {
+  fail("Native onboarding must use the same canonical app icon as the left navigation rail.");
+}
 
 if (/join\("Documents\/Obsidian\/hivemindos-vault"\)/.test(setup)) {
   fail("native_setup_status must not probe ~/Documents before user consent.");
@@ -293,6 +319,16 @@ if (
   fail("The first-task action must open a fresh chat and provide a lay-user prompt without auto-sending it.");
 }
 
+if (
+  !onboarding.includes("Add your first agent")
+  || !guidedTour.includes("if (!opened) openFirstAgentSetup()")
+  || !dashboard.includes("openFirstAgentSetup={() =>")
+  || !dashboard.includes("addAgentToMachine(targetMachine)")
+  || !chatExchange.includes("Boolean(selectedAgent &&")
+) {
+  fail("The first-task action must open agent setup when no chat-capable agent exists, and agentless chat drafts must stay unsendable.");
+}
+
 if (!collectorPs.includes("Remove-HivemindStartupLauncher -Name $Name")) {
   fail("Successful Windows Scheduled Task registration must remove any stale Startup-folder fallback launcher.");
 }
@@ -303,6 +339,15 @@ if (!uninstallPs.includes("Remove-HivemindStartupLauncher") || !uninstallPs.incl
 
 if (!onboarding.includes("setupProcessDone") || !onboarding.includes("Setup finished, but the local agent bridge did not come online.") || !onboarding.includes("Retry setup")) {
   fail("native first-run must turn a finished-but-offline collector run into a retryable setup error.");
+}
+
+if (
+  !setupSh.includes("HIVEMINDOS_SETUP_WARNING:")
+  || !setup.includes("Memory import could not finish. Core setup is ready")
+  || !onboarding.includes("setupWarningMessages")
+  || !onboarding.includes("One optional step is paused")
+) {
+  fail("native first-run must keep optional protected-folder failures nonfatal and show lay-user recovery guidance on completion.");
 }
 
 if (!hiveEnv.includes("nativePrivateFilesystemAccessGranted()") || !hiveEnv.includes("allowPrivateFilesystem")) {

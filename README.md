@@ -1,5 +1,5 @@
 <div align="center">
-  <img width="220" height="220" alt="HivemindOS" src="public/hivemindos-logo.png" />
+  <img width="220" height="220" alt="HivemindOS" src="public/icon-512.png" />
 
   <p>
     <a href="https://github.com/LiamVisionary/hivemindos/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/LiamVisionary/hivemindos?style=for-the-badge&amp;logo=github&amp;label=stars&amp;color=0b8bdc&amp;labelColor=555555" /></a>

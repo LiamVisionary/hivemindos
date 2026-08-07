@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 const workflowPath = ".github/workflows/tauri-cross-platform-release.yml";
@@ -11,12 +11,34 @@ function fail(message) {
   process.exitCode = 1;
 }
 
+function sourceFiles(root) {
+  return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(root, entry.name);
+    if (entry.isDirectory()) return sourceFiles(path);
+    return /\.tsx?$/.test(entry.name) ? [path] : [];
+  });
+}
+
 const workflow = readFileSync(workflowPath, "utf8");
 const tauriConfig = JSON.parse(readFileSync(tauriConfigPath, "utf8"));
 const nativeDocs = readFileSync(nativeDocsPath, "utf8");
 const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
 const tauriBuild = readFileSync("scripts/tauri-build.mjs", "utf8");
 const tauriReleaseBuild = readFileSync("scripts/run-tauri-release-build.mjs", "utf8");
+
+const staticallyTraceableServerHomedirLoads = sourceFiles("src").filter((path) => {
+  if (path === join("src", "lib", "home-dir.ts")) return false;
+  const source = readFileSync(path, "utf8");
+  return /import\s*\{[^}]*\bhomedir\b[^}]*\}\s*from\s*["'](?:node:)?os["']/.test(source)
+    || /require\s*<[^>]*\bhomedir\b[^>]*>\s*\(\s*["'](?:node:)?os["']\s*\)/s.test(source)
+    || /require\s*\(\s*["'](?:node:)?os["']\s*\)\.homedir/s.test(source);
+});
+
+if (staticallyTraceableServerHomedirLoads.length > 0) {
+  fail(
+    `Next server modules must use @/lib/home-dir, or a runtime-only process.getBuiltinModule lookup when instrumentation bundling requires it, so file tracing cannot scan the user profile:\n${staticallyTraceableServerHomedirLoads.join("\n")}`,
+  );
+}
 
 function findInstalledPackageDir(packageName) {
   const segments = packageName.split("/");

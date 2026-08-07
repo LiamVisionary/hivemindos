@@ -30,6 +30,17 @@ if [[ "$vault_path" == "~/"* ]]; then
 fi
 
 target_root="$vault_path/Memory/Imported Agent Memory"
+vault_probe="$vault_path/.hivemindos-memory-import-write-test-$$"
+if ! mkdir -p "$vault_path" 2>/dev/null || ! : > "$vault_probe" 2>/dev/null; then
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    issue="Memory import paused: macOS blocked access to Documents. Open System Settings > Privacy & Security > Files & Folders, allow Documents for HivemindOS, then choose HivemindOS > Re-run Setup."
+  else
+    issue="Memory import paused: HivemindOS cannot write to its workspace folder. Fix that folder's permissions, then re-run Setup from the HivemindOS app menu."
+  fi
+  printf "HIVEMINDOS_SETUP_WARNING: %s\n" "$issue"
+  exit 0
+fi
+rm -f "$vault_probe"
 mkdir -p "$target_root"
 
 agent_home() {

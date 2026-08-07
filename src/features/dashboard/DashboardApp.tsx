@@ -4368,7 +4368,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
         screenContext={hiveScreenContext}
       />
       <GuidedDashboardTour
-        selectView={setActiveView}
+        selectView={setActiveView} openFirstAgentSetup={() => { setActiveView("agents"); const targetMachine = machineGroups.find((machine) => machine.self) ?? machineGroups.find((machine) => machine.key !== "unassigned"); if (targetMachine) addAgentToMachine(targetMachine); else openMachineInitModal(); }}
         openFirstChat={(prompt) => {
           const target = displayAgents.find((agent) => runtimeCan(agent, "chat"));
           if (prompt) setText(prompt);

@@ -1,5 +1,5 @@
 import { promises as fs } from "node:fs";
-import { homedir } from "node:os";
+import { homedir } from "@/lib/home-dir";
 import path from "node:path";
 
 /**

@@ -8,7 +8,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir } from "@/lib/home-dir";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {

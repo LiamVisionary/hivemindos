@@ -1,5 +1,5 @@
 import { mkdir, open, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir } from "@/lib/home-dir";
 import { join } from "node:path";
 
 import { pairedBootstrapInterval } from "@/lib/services/copy-trading/evolution";

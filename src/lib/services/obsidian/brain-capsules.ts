@@ -2,7 +2,7 @@ import "server-only";
 
 import { createCipheriv, createDecipheriv, createHash, createSecretKey, randomBytes, randomUUID, scrypt as scryptCallback } from "crypto";
 import { mkdir, readFile, rename, stat, unlink, writeFile } from "fs/promises";
-import { homedir } from "os";
+import { homedir } from "@/lib/home-dir";
 import { basename, dirname, join, resolve } from "path";
 import { promisify } from "util";
 import { createBrainReviewProposal } from "@/lib/services/brain-review-queue";

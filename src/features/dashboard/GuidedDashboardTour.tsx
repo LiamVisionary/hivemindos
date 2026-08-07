@@ -69,8 +69,10 @@ const CARD_MARGIN = 12;
 
 type AnchorRect = { top: number; left: number; width: number; height: number };
 
-export function GuidedDashboardTour({ selectView, openFirstChat }: {
+export function GuidedDashboardTour({ selectView, openFirstAgentSetup, openFirstChat }: {
   selectView: (view: DashboardView) => void;
+  /** Open the simplest available setup path when there is no chat-capable agent. */
+  openFirstAgentSetup: () => void;
   /** Open the chat view with the first chat-capable agent selected. Returns false when no agent was available. */
   openFirstChat: (prompt?: string) => boolean;
 }) {
@@ -99,12 +101,13 @@ export function GuidedDashboardTour({ selectView, openFirstChat }: {
   useEffect(() => {
     const startFirstTask = (event: Event) => {
       const detail = (event as CustomEvent<FirstTaskEventDetail>).detail;
-      openFirstChat(detail?.prompt?.trim() || DEFAULT_FIRST_TASK_PROMPT);
+      const opened = openFirstChat(detail?.prompt?.trim() || DEFAULT_FIRST_TASK_PROMPT);
+      if (!opened) openFirstAgentSetup();
       setStopIndex(null);
     };
     window.addEventListener(FIRST_TASK_EVENT, startFirstTask);
     return () => window.removeEventListener(FIRST_TASK_EVENT, startFirstTask);
-  }, [openFirstChat]);
+  }, [openFirstAgentSetup, openFirstChat]);
 
   useLayoutEffect(() => {
     if (stopIndex === null) return;

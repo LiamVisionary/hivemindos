@@ -73,7 +73,7 @@ const staticPreviews = [
 ];
 
 const assetTiles = [
-  { src: "/design-system/assets/logo/hivemindos-logo.png", alt: "HivemindOS logo" },
+  { src: "/icon-512.png", alt: "HivemindOS app icon" },
   { src: "/design-system/assets/logo/app-icon-1024.png", alt: "HivemindOS app icon" },
   { src: "/design-system/assets/brand/honey-hive-icon.png", alt: "Honey hive icon" },
   { src: "/design-system/assets/brand/honey-pot.png", alt: "Honey pot brand glyph" },

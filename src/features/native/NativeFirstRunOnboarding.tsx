@@ -42,7 +42,8 @@ const LEGACY_DISMISS_KEY = "hivemindos.nativeFirstRun.dismissed.v2";
 const LOCAL_COMPLETE_KEY = `${COMPLETE_KEY}.localFallback`;
 const LOCAL_SKIP_KEY = `${SKIP_KEY}.localFallback`;
 const NATIVE_SETUP_PROGRESS_EVENT = "native-setup-progress";
-const APP_LOGO_PATH = "/hivemindos-logo.png";
+const SETUP_WARNING_PREFIX = "HIVEMINDOS_SETUP_WARNING:";
+const APP_LOGO_PATH = "/icon-512.png";
 const ALL_AGENT_IDS = ["codex", "claude", "hermes", "gemini", "openclaw", "aeon"];
 const WIZARD_STEPS = ["welcome", "setup", "running", "done"] as const;
 const EMBLEM_CELLS = 7;
@@ -75,6 +76,15 @@ function setupPhaseLabel(lines: string[], settled: boolean) {
   if (settled) return "This computer is ready.";
   const current = [...SETUP_MILESTONES].reverse().find((milestone) => lines.some((line) => milestone.re.test(line)));
   return current?.label ?? "Starting setup…";
+}
+
+function setupWarningMessages(lines: string[]) {
+  return [...new Set(lines.flatMap((line) => {
+    const marker = line.indexOf(SETUP_WARNING_PREFIX);
+    if (marker < 0) return [];
+    const message = line.slice(marker + SETUP_WARNING_PREFIX.length).trim();
+    return message ? [message] : [];
+  }))];
 }
 
 function deviceNoun(platform: string | undefined) {
@@ -127,11 +137,13 @@ function AgentIcon({ agent }: { agent: NativeDetectedAgentRuntime }) {
 type NativeFirstRunOnboardingProps = {
   demoMode?: boolean;
   demoPlatform?: "macos" | "windows" | "linux";
+  demoHasAgents?: boolean;
 };
 
 export function NativeFirstRunOnboarding({
   demoMode: demoModeProp,
   demoPlatform,
+  demoHasAgents = true,
 }: NativeFirstRunOnboardingProps = {}) {
   const demoMode = demoModeProp ?? NATIVE_SETUP_DEMO_ENABLED;
   const [status, setStatus] = useState<NativeSetupStatus | null>(null);
@@ -157,8 +169,11 @@ export function NativeFirstRunOnboarding({
     if (!demoMode && !isTauriDesktopRuntime()) return;
     const next = await readNativeSetupStatus({ demoMode });
     if (next && demoMode && demoPlatform) next.platform = demoPlatform;
+    if (next && demoMode && !demoHasAgents) {
+      next.detected_agents = next.detected_agents?.map((agent) => ({ ...agent, installed: false }));
+    }
     setStatus(next);
-  }, [demoMode, demoPlatform]);
+  }, [demoHasAgents, demoMode, demoPlatform]);
 
   const dismissTemporarily = useCallback(() => setOpen(false), []);
   useModalFocusTrap(open && Boolean(status), modalRef, { onEscape: dismissTemporarily, portalRootRef: stageRef });
@@ -373,6 +388,7 @@ export function NativeFirstRunOnboarding({
   const meterPct = Math.round((filled / EMBLEM_CELLS) * 100);
   const phaseLabel = setupExitError ? "Setup needs attention." : setupPhaseLabel(setupLines, setupSettled);
   const activity = setupLines.map((line) => line.trim()).filter(Boolean).slice(-8);
+  const setupWarnings = setupWarningMessages(setupLines);
 
   return createPortal(
     <div className={styles.stage} ref={stageRef}>
@@ -433,38 +449,38 @@ export function NativeFirstRunOnboarding({
               onCopy={copyCommand}
             />
           ) : null}
-          {step === "done" ? <DoneStep device={device} mode={mode} /> : null}
+          {step === "done" ? <DoneStep device={device} hasReadyAgent={readyAgents.length > 0} mode={mode} warnings={setupWarnings} /> : null}
         </div>
 
         <footer className={styles.foot}>
           {step === "welcome" ? <p className={styles.disclaimer}>Your workspace stays on this {device}. Setup downloads pinned open-source components; optional network features are clearly labeled.</p> : null}
-          <div className={styles.footActions}>
+          <div className={styles.footActions} data-layout={step === "welcome" || step === "done" ? "three" : "two"}>
             {step === "welcome" ? (
               <>
-                <button className={`${styles.btn} ${styles.text}`} type="button" onClick={() => void skipSetup()}>Use without setup</button>
-                <button className={`${styles.btn} ${styles.ghost} ${styles.grow}`} type="button" onClick={dismissTemporarily}>Not now — ask next time</button>
                 <button className={`${styles.btn} ${styles.primary}`} type="button" data-modal-autofocus onClick={() => setStep("setup")}>See setup choices <IconArrow /></button>
+                <button className={`${styles.btn} ${styles.text}`} type="button" onClick={() => void skipSetup()}>Use without setup</button>
+                <button className={`${styles.btn} ${styles.ghost}`} type="button" onClick={dismissTemporarily}>Not now — ask next time</button>
               </>
             ) : step === "setup" ? (
               <>
-                <button className={`${styles.btn} ${styles.text} ${styles.grow}`} type="button" onClick={() => setStep("welcome")}><IconChevL /> Back</button>
+                <button className={`${styles.btn} ${styles.text}`} type="button" onClick={() => setStep("welcome")}><IconChevL /> Back</button>
                 <button className={`${styles.btn} ${styles.primary}`} type="button" onClick={() => void launchSetup()} disabled={running}>
                   {running ? <><IconSpinner /> Starting…</> : <>Set up this {device} <IconArrow /></>}
                 </button>
               </>
             ) : step === "running" ? (
               <>
-                <button className={`${styles.btn} ${styles.text} ${styles.grow}`} type="button" onClick={dismissTemporarily}>Close — setup keeps running</button>
+                <button className={`${styles.btn} ${styles.text}`} type="button" onClick={dismissTemporarily}>Close — setup keeps running</button>
                 {setupExitError ? (
                   <button className={`${styles.btn} ${styles.primary}`} type="button" onClick={() => void launchSetup()} disabled={running}><IconRefresh /> Retry setup</button>
                 ) : <button className={`${styles.btn} ${styles.primary}`} type="button" data-tone="live" disabled><IconSpinner /> Working…</button>}
               </>
             ) : (
-              <div className={styles.doneActions}>
-                <button className={`${styles.btn} ${styles.primary} ${styles.grow}`} type="button" data-tone="live" data-modal-autofocus onClick={() => finishWith("task")}>Try a first task <IconArrow /></button>
-                <button className={`${styles.btn} ${styles.ghost}`} type="button" onClick={() => finishWith("tour")}>Show me around</button>
+              <>
+                <button className={`${styles.btn} ${styles.primary}`} type="button" data-tone="live" data-modal-autofocus onClick={() => finishWith("task")}>{readyAgents.length > 0 ? "Try a first task" : "Add your first agent"} <IconArrow /></button>
                 <button className={`${styles.btn} ${styles.text}`} type="button" onClick={() => finishWith("dashboard")}>Go to dashboard</button>
-              </div>
+                <button className={`${styles.btn} ${styles.ghost}`} type="button" onClick={() => finishWith("tour")}>Show me around</button>
+              </>
             )}
           </div>
         </footer>
@@ -638,12 +654,20 @@ function RunningStep({ filled, meterPct, settled, phaseLabel, activity, runStatu
   );
 }
 
-function DoneStep({ device, mode }: { device: string; mode: InstallMode }) {
+function DoneStep({ device, hasReadyAgent, mode, warnings }: { device: string; hasReadyAgent: boolean; mode: InstallMode; warnings: string[] }) {
   return (
     <div className={`${styles.step} ${styles.center}`}>
       <div className={styles.mkWrap} aria-hidden="true"><span className={styles.mkRing} /><span className={styles.mkRing} data-delay="true" /><span className={styles.mkGlow} /><svg className={styles.mkSvg} viewBox="0 0 52 52" width="62" height="62"><circle className={styles.mkCircle} cx="26" cy="26" r="23" fill="none" stroke="currentColor" strokeWidth="2.4" /><path className={styles.mkTick} d="M15 27 L23 34.5 L38 18" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" /></svg></div>
       <h2 id="native-setup-title" className={styles.title}>This {device} is ready.</h2>
-      <p id="native-setup-description" className={styles.lede}>The local agent bridge answered and this setup run finished successfully. Try one small task now, take a short tour, or go straight to the dashboard.</p>
+      <p id="native-setup-description" className={styles.lede}>{hasReadyAgent
+        ? "The local agent bridge answered and this setup run finished successfully. Try one small task now, take a short tour, or go straight to the dashboard."
+        : "The local agent bridge is online. No AI helper was detected yet, so add your first agent before starting a task."}</p>
+      {warnings.length ? (
+        <div className={styles.setupWarnings} role="status" aria-label="Optional setup steps that need attention">
+          <strong>One optional step is paused</strong>
+          {warnings.map((warning) => <p key={warning}>{warning}</p>)}
+        </div>
+      ) : null}
       {mode !== "local" ? <p className={styles.lede} style={{ fontSize: 12.5 }}>Your private multi-computer connection is prepared. If sign-in is still needed, Fleet will show the next step.</p> : null}
       <p className={styles.agentNote}>Optional integrations, wallets, and financial tools remain off until you choose them from the dashboard.</p>
     </div>

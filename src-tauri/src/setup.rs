@@ -893,7 +893,7 @@ fn build_setup_invocation(request: NativeSetupRunRequest, platform: SetupPlatfor
     let web_research = if install_web_research { "true" } else { "false" };
     let code_proof = if enable_code_proof { "true" } else { "false" };
     let command = format!(
-        "{root}\nHIVE_INSTALL_WEB_RESEARCH={web_research} HIVE_GITLAWB_SETUP={code_proof} HIVE_GITLAWB_IDENTITY={code_proof} HIVE_GITLAWB_REGISTER={code_proof} HIVE_MEMORY_IMPORTS={memory_list} ./setup.sh {args}\nif [ {memory_list} != 'none' ] && [ -x ./scripts/import-agent-memory.sh ]; then ./scripts/import-agent-memory.sh --sources {memory_list}; fi",
+        "{root}\nHIVE_INSTALL_WEB_RESEARCH={web_research} HIVE_GITLAWB_SETUP={code_proof} HIVE_GITLAWB_IDENTITY={code_proof} HIVE_GITLAWB_REGISTER={code_proof} HIVE_MEMORY_IMPORTS={memory_list} ./setup.sh {args}\nif [ {memory_list} != 'none' ] && [ -x ./scripts/import-agent-memory.sh ]; then if ! ./scripts/import-agent-memory.sh --sources {memory_list}; then echo 'HIVEMINDOS_SETUP_WARNING: Memory import could not finish. Core setup is ready; re-run Setup later to try again.'; fi; fi",
         root = setup_root_command(platform),
         memory_list = shell_quote(&memory_list),
         args = quoted_args,
@@ -1152,6 +1152,14 @@ mod tests {
         let ps_flags = windows.rsplit("-File setup.ps1").next().unwrap();
         assert!(ps_flags.contains("-InstallWebResearch"));
         assert!(ps_flags.contains("-EnableCodeProof"));
+    }
+
+    #[test]
+    fn unix_memory_import_is_optional_after_core_setup() {
+        let request: NativeSetupRunRequest = serde_json::from_value(frontend_local_payload()).unwrap();
+        let (_, unix) = build_setup_invocation(request, SetupPlatform::Unix);
+        assert!(unix.contains("if ! ./scripts/import-agent-memory.sh"));
+        assert!(unix.contains("Memory import could not finish. Core setup is ready"));
     }
 
     #[test]

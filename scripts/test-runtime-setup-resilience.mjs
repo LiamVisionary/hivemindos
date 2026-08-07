@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { register } from "node:module";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
@@ -48,6 +52,27 @@ test("setup distinguishes core readiness from optional feature failures", () => 
   assert.match(setupSh, /Core setup ready/);
   assert.match(setupSh, /Optional features need attention/);
   assert.match(setupSh, /Code Proof \(GitLawb registration\)/);
+});
+
+test("protected Shared Brain folders do not abort core setup", () => {
+  assert.match(setupSh, /shared_vault_ready="false"/);
+  assert.match(setupSh, /HIVEMINDOS_SETUP_WARNING/);
+  assert.match(setupSh, /macOS blocked access to Documents/);
+
+  const root = mkdtempSync(join(tmpdir(), "hivemindos-protected-vault-"));
+  const blockedVault = join(root, "not-a-directory");
+  writeFileSync(blockedVault, "blocks mkdir");
+  try {
+    const result = spawnSync("bash", ["scripts/import-agent-memory.sh", "--sources", "none"], {
+      cwd: new URL("..", import.meta.url),
+      env: { ...process.env, NEXT_PUBLIC_OBSIDIAN_VAULT_PATH: blockedVault },
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /HIVEMINDOS_SETUP_WARNING: Memory import paused/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("runtime installation shows animated, elapsed progress", () => {

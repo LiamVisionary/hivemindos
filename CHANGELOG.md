@@ -5,6 +5,60 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-08-06 23:29 EDT (-0400) - Align every onboarding footer action
+  - Status: Uncommitted and not included in a desktop release.
+  - User-facing release note: First-time setup actions now follow a stable grid instead of wrapping at arbitrary widths. Three-action screens place the primary choice on its own aligned row above two equal supporting controls; two-action screens use two equal columns; narrow screens use one ordered full-width stack.
+  - Root cause and baseline: The footer combined content-sized buttons, `margin-right: auto`, flex wrapping, and a nested completion-only action container. At the real modal width, the three welcome controls exceeded the available row and pushed only the primary action onto a second row. The new geometry regression reproduced the reported screen and failed because the primary control appeared below the supporting controls.
+  - Areas changed: native onboarding action order and footer grid, desktop/mobile action geometry coverage, visual regression artifacts, and this changelog.
+  - Verification: The new browser regression is red against the reported flex layout and passes after the grid correction across welcome, setup, running, and completion states on macOS, Windows, and Linux, plus a 390px stacked layout. The live signed Mac dev app reports an exact 487px primary row above two 239px supporting controls with a 9px rendered gap and matching outer edges; visual proof is saved at `.outputs/dogfood/native-onboarding/mac-native-footer-grid.png`. Whole-project TypeScript, focused first-launch coverage, zero-warning lint, UI typography, file-size, and whitespace gates pass.
+  - Recovery: Revert this scoped footer markup, CSS grid, geometry assertions, and entry. No setup or user state is changed.
+  - Intended commit message: `fix(onboarding): align footer action grid`
+
+- 2026-08-06 23:21 EDT (-0400) - Route agentless first tasks into setup
+  - Status: Uncommitted and not included in a desktop release.
+  - User-facing release note: Finishing onboarding without an AI agent now offers to add the first agent and opens the existing guided agent setup. Chat also keeps Send disabled until an agent is selected, so a suggested task can never fail as a silent no-op.
+  - Root cause and baseline: The first-task handoff prefilled Chat even when no chat-capable agent existed. The composer treated that text alone as sendable, while the submission handler returned without feedback because it had no target agent.
+  - Areas changed: onboarding completion copy and action, first-task dashboard handoff, agentless chat send state, browser fixture coverage, focused first-launch contracts, and this changelog.
+  - Verification: The browser onboarding matrix passes on macOS, Windows, Linux, and the 390px responsive layout, including a no-agent run that completes setup and proves the first-task event reaches agent setup. The focused first-launch contract, zero-warning ESLint, whole-project TypeScript, UI typography, file-size, and whitespace gates pass.
+  - Recovery: Revert this scoped onboarding handoff, chat guard, test fixture, and regression coverage. No agent, task, or user data is created or removed by the change.
+  - Intended commit message: `fix(onboarding): guide agentless users into setup`
+
+- 2026-08-06 23:13 EDT (-0400) - Keep the fourth onboarding step clear of Close
+  - Status: Uncommitted and not included in a desktop release.
+  - User-facing release note: The fourth first-time-setup progress segment no longer runs underneath the circular Close button. The desktop header now preserves a visible safety gap at every onboarding step.
+  - Root cause and baseline: The 44px Close control plus its 16px right inset occupied 60px, while the header reserved only 58px. The real Mac screenshot exposed the overlap, and the new browser geometry assertion reproduced it with a measured -2px gap before the fix.
+  - Areas changed: native onboarding header spacing, cross-platform browser geometry regression coverage, and this changelog.
+  - Verification: The cross-platform onboarding browser matrix passes on macOS, Windows, Linux, and the 390px responsive layout. Its new geometry check measured the baseline at -2px and now enforces at least 12px of clearance. Focused zero-warning ESLint, UI typography, file-size, and whitespace gates pass. The running signed native Mac app visibly renders all four segments clear of Close in `.outputs/dogfood/native-onboarding/mac-native-rail-clear.png`.
+  - Recovery: Revert this scoped header-padding change and geometry assertion. No user or setup state is changed.
+  - Intended commit message: `fix(onboarding): separate progress rail from close control`
+
+- 2026-08-06 22:44 EDT (-0400) - Let core onboarding finish when macOS blocks Documents
+  - Status: Uncommitted and not included in a desktop release.
+  - User-facing release note: First-time setup no longer fails the whole app when macOS blocks the optional Shared Brain workspace in Documents. The local agent bridge finishes, the success screen clearly identifies the paused step, and lay users receive exact System Settings and re-run instructions.
+  - Root cause and baseline: Driving the real signed native wizard on this Mac reproduced an exit-code 1 failure from shared-skill metadata under the Documents-hosted Obsidian vault. The existing browser matrix and setup CI had passed because they did not exercise this machine's real macOS privacy state. Shared-vault initialization, skill sync, daily reports, and memory import were incorrectly fatal to otherwise independent core setup.
+  - Areas changed: Unix setup vault preflight and optional-issue reporting, agent-memory import resilience, native launcher failure containment, onboarding completion guidance, focused regression coverage, and this changelog.
+  - Verification: Focused setup contracts, 17 native Rust tests, the browser onboarding matrix, lint, TypeScript, typography, size, and whitespace gates pass. The real signed native Mac wizard completed its default local-only setup, proved the collector healthy, and reached “This Mac is ready”; `.outputs/dogfood/native-onboarding/mac-native-real-done.png` records the result. Disposable real Windows Server E2E remains pending because Vultr rejects the current API key IP allowlist before provisioning.
+  - Recovery: Revert this scoped entry and its setup/onboarding changes. The preflight uses and removes a uniquely named empty probe file; it does not migrate or delete user data.
+  - Intended commit message: `fix(onboarding): tolerate protected Documents vaults`
+
+- 2026-08-06 21:57 EDT (-0400) - Retire the old HivemindOS logo
+  - Status: Uncommitted and not included in a desktop release.
+  - User-facing release note: Onboarding, the repository introduction, and the design-system asset gallery now use the same HivemindOS app icon shown in the left navigation rail. The obsolete wordmark-and-orbit logo and its duplicate design-system asset are removed.
+  - Root cause and baseline: Native onboarding explicitly referenced `/hivemindos-logo.png` even though the app-wide left rail has standardized on `/icon-512.png`. A new regression failed against both retired files and every remaining live reference before the replacement.
+  - Areas changed: native onboarding branding, public and design-system assets, repository introduction, native first-launch regression coverage, and this changelog.
+  - Verification: The focused native first-launch contract failed before implementation and passes after both obsolete files were removed; it now compares onboarding, README, and design-system branding directly with the left rail's `brandSrc`. The real onboarding browser matrix passes on macOS, Windows, Linux, and a 390px viewport with the replacement visibly rendered and no console errors. Focused zero-warning ESLint, whole-project TypeScript, the size ratchet, and scoped whitespace checks pass.
+  - Recovery: Revert this scoped change and recover the deleted images from Git history. No user data or runtime state is changed.
+  - Intended commit message: `fix(brand): retire legacy onboarding logo`
+
+- 2026-08-06 21:29 EDT (-0400) - Keep Next file tracing out of Windows profiles
+  - Status: Uncommitted and not included in a desktop release.
+  - User-facing release note: Windows builds no longer let Next's server file tracer wander through the user's entire profile while compiling HivemindOS.
+  - Root cause and scope: The real setup matrix passed Ubuntu, macOS, and Windows setup plus dashboard startup, but its independent Windows build reproduced an 8 GB heap failure after logging an `EPERM` scan of `C:\Users\runneradmin\Application Data`. Seventeen server modules had bypassed the established `@/lib/home-dir` tracing indirection, allowing Next's static evaluator to turn those home paths into profile-wide asset globs. Sixteen now use the canonical helper; the instrumentation-reachable memory guard uses Node's runtime-only builtin lookup because static Node imports break that webpack bundle. A release contract rejects future direct imports and typed runtime requires.
+  - Areas changed: canonical server home-directory imports, Tauri release contract, and this changelog.
+  - Verification: The new contract was captured red against 16 direct imports, then expanded to cover the seventeenth typed runtime require, and passes after the repair; focused zero-warning ESLint, whole-project TypeScript, size ratchet, and scoped whitespace pass. The first final canonical gate exposed the instrumentation import incompatibility in Frontier Lab's real webpack-dev path; after switching that one caller to the runtime-only builtin lookup, the exact desktop/mobile UI test passed and the final canonical gate passed 273/273 in 234.8 seconds. The unsafe profile-glob warning is absent from both local post-fix builds. The normal 5 GB build still exhausted V8's roughly 4.1 GB default heap, and a parity rerun still exhausted an 8.2 GB heap while compiling the existing module graph; a production-wide worker experiment did not improve that result and was removed. A fresh Windows build requires the follow-up to be committed before the remote matrix can exercise it.
+  - Recovery: Revert this import-only follow-up and its regression assertion. Runtime home paths and user data are unchanged.
+  - Intended commit message: `fix(build): keep Next tracing out of user profiles`
+
 - 2026-08-06 20:41 EDT (-0400) - Complete the consent-first onboarding redesign
   - Status: Pushed to `main` in `9defd7cb`; not yet included in a desktop release.
   - User-facing release note: First-run setup now explains its choices in plain language, defaults optional downloads and public Code Proof registration off, reports live progress from the exact setup run, and offers a first task or guided tour after the local bridge is proven online. Terms, onboarding, ClawBank setup, and the dashboard tour keep keyboard focus contained and restore it on close.

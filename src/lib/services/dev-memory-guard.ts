@@ -88,9 +88,17 @@ function recordMemoryPressure(reason: string) {
     const require = runtimeRequire();
     if (!require) return payload;
     const fs = require<{ appendFileSync: (path: string, data: string, encoding: BufferEncoding) => void; mkdirSync: (path: string, options: { recursive: boolean; mode: number }) => void }>("fs");
-    const os = require<{ homedir: () => string }>("os");
     const path = require<{ dirname: (path: string) => string; join: (...parts: string[]) => string }>("path");
-    const file = path.join(os.homedir(), MEMORY_PRESSURE_FILE);
+    // instrumentation.ts imports this module, so it cannot reach the shared
+    // home-dir helper: that helper's static Node builtin import breaks the
+    // webpack instrumentation bundle. getBuiltinModule keeps the lookup both
+    // runtime-only for Next file tracing and safe for that bundle.
+    const os = (process as unknown as {
+      getBuiltinModule?: (id: string) => { homedir?: () => string } | undefined;
+    }).getBuiltinModule?.("node:os");
+    const home = os?.homedir?.();
+    if (!home) return payload;
+    const file = path.join(home, MEMORY_PRESSURE_FILE);
     fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
     fs.appendFileSync(file, `${JSON.stringify(payload)}\n`, "utf-8");
   } catch {

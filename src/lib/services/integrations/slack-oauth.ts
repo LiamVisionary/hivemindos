@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { homedir } from "@/lib/home-dir";
 import { join } from "node:path";
 
 import { writeSharedHiveEnvValues } from "@/lib/services/hive-env-write";

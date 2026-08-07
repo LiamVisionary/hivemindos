@@ -6,7 +6,7 @@ import {
   rename,
   writeFile,
 } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir } from "@/lib/home-dir";
 import { join, resolve } from "node:path";
 import { evaluatePennyPaperEvolution } from "./evolution";
 import {

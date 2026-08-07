@@ -967,7 +967,7 @@ export function ChatExchangePanel(props: any) {
 
   if (activeView !== "chat") return <ChatFolderModal {...props} />;
 
-  const canSend = Boolean((text ?? "").trim() || chatAttachments.length || chatDirectories.length);
+  const canSend = Boolean(selectedAgent && ((text ?? "").trim() || chatAttachments.length || chatDirectories.length));
 
   return (
     <>

@@ -11,7 +11,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { hostname } from "node:os";
 import { dirname, join } from "node:path";
-import { homedir } from "node:os";
+import { homedir } from "@/lib/home-dir";
 import { optionalEnv } from "@/lib/config/env";
 import {
   evolveAgentMemory,

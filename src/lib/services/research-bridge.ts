@@ -15,7 +15,7 @@
 
 import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir } from "@/lib/home-dir";
 import { dirname, join } from "node:path";
 import { answerFromAgentMemory, rememberAgentMemory } from "@/lib/services/obsidian/agent-memory";
 import { writeBrainSkill } from "@/lib/services/obsidian/brain-skills";

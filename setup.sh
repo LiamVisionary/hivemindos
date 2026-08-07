@@ -1365,12 +1365,16 @@ configure_shared_skills() {
 
   imports="$(normalize_agent_list "${imports:-none}")"
   targets="$(normalize_agent_list "${targets:-none}")"
-  info "→ Syncing the shared skill shelf and installing agent hooks… (this can take a moment)"
-  ./scripts/seed-shared-skills.sh --import-sources "$imports" --share-targets "$targets"
-  # Push the full bundled brain (skills, packaged skills, and the For Users /
-  # For Investors docs) into the vault through the same checksum-managed engine
-  # that the update path uses, so setup and update stay consistent.
-  node "$ROOT/scripts/hive-brain-sync.mjs" --content-base "$ROOT" || warn "Brain sync reported issues; the shared shelf is still seeded"
+  if [[ "${shared_vault_ready:-true}" == "true" ]]; then
+    info "→ Syncing the shared skill shelf and installing agent hooks… (this can take a moment)"
+    ./scripts/seed-shared-skills.sh --import-sources "$imports" --share-targets "$targets"
+    # Push the full bundled brain (skills, packaged skills, and the For Users /
+    # For Investors docs) into the vault through the same checksum-managed engine
+    # that the update path uses, so setup and update stay consistent.
+    node "$ROOT/scripts/hive-brain-sync.mjs" --content-base "$ROOT" || warn "Brain sync reported issues; the shared shelf is still seeded"
+  else
+    warn "Skipping shared skill and brain sync until workspace access is allowed"
+  fi
   # Tools, not just skills: register the HivemindOS MCP server into each targeted
   # harness so its agents get HivemindOS tools (fleet, brain, crypto read/prepare,
   # and the governed send/swap/stock execute tools) regardless of runtime. The
@@ -1982,6 +1986,23 @@ notifications_folder="${NEXT_PUBLIC_OBSIDIAN_NOTIFICATIONS_FOLDER:-Operations/Ag
 synthesis_folder="${NEXT_PUBLIC_OBSIDIAN_SYNTHESIS_FOLDER:-Synthesis}"
 brain_services_folder="${NEXT_PUBLIC_OBSIDIAN_BRAIN_SERVICES_FOLDER:-Operations/Brain Services}"
 
+shared_vault_ready="true"
+shared_vault_probe="$shared_vault_path/.hivemindos-setup-write-test-$$"
+if ! mkdir -p "$shared_vault_path" 2>/dev/null || ! : > "$shared_vault_probe" 2>/dev/null; then
+  shared_vault_ready="false"
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    shared_vault_issue="Shared Brain: macOS blocked access to Documents. Core setup continued. Open System Settings > Privacy & Security > Files & Folders, allow Documents for HivemindOS, then choose HivemindOS > Re-run Setup."
+  else
+    shared_vault_issue="Shared Brain: HivemindOS cannot write to its workspace folder. Core setup continued. Fix that folder's permissions, then re-run Setup from the HivemindOS app menu."
+  fi
+  warn "$shared_vault_issue"
+  optional_setup_issue "$shared_vault_issue"
+else
+  rm -f "$shared_vault_probe"
+fi
+
+set_env_local "NEXT_PUBLIC_HIVE_GBRAIN_SURFACE_ENABLED" "true"
+if [[ "$shared_vault_ready" == "true" ]]; then
 mkdir -p \
   "$shared_vault_path/Intake" \
   "$shared_vault_path/Intake/Requests" \
@@ -2057,7 +2078,6 @@ Status notes for HivemindOS brain services. Shared Brain Memory keeps Markdown a
 EOF
 fi
 
-set_env_local "NEXT_PUBLIC_HIVE_GBRAIN_SURFACE_ENABLED" "true"
 if [[ ! -f "$shared_vault_path/$brain_services_folder/GBrain.md" ]]; then
   cat > "$shared_vault_path/$brain_services_folder/GBrain.md" <<'EOF'
 ---
@@ -2130,6 +2150,7 @@ node "$ROOT/scripts/seed-vault-foundation.mjs" \
   --brain-services-folder "$brain_services_folder" \
   --kanban-folder "$kanban_folder" \
   --notifications-folder "$notifications_folder" >/dev/null
+fi
 
 ensure_hive_pulse_python
 install_hive_env_add
@@ -2198,7 +2219,11 @@ EOF
   fi
   info "→ Company daily report scheduled daily at 08:05 (launchd com.hivemindos.company-daily-report)."
 }
-install_company_daily_report
+if [[ "$shared_vault_ready" == "true" ]]; then
+  install_company_daily_report
+else
+  warn "Skipping the optional daily Shared Brain report until workspace access is allowed"
+fi
 
 configure_shared_skills
 
@@ -2406,6 +2431,7 @@ if (( ${#optional_setup_issues[@]} > 0 )); then
   warn "Optional features need attention:"
   for item in "${optional_setup_issues[@]}"; do
     echo "  - $item"
+    echo "HIVEMINDOS_SETUP_WARNING: $item"
   done
 else
   ok "Ready"

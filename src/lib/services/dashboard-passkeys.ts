@@ -13,7 +13,7 @@ import {
 } from "@simplewebauthn/server";
 import { createHash, randomBytes } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir } from "@/lib/home-dir";
 import { dirname, join } from "node:path";
 
 const STORE_VERSION = 1;

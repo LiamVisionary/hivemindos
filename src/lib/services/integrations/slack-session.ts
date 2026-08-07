@@ -1,7 +1,7 @@
 import "server-only";
 
 import { mkdir, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir } from "@/lib/home-dir";
 import { join } from "node:path";
 
 import { readSharedAgentEnv, sharedEnvValue } from "@/lib/services/integrations/shared-env";

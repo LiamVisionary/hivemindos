@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { mkdir, open, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir } from "@/lib/home-dir";
 import { join } from "node:path";
 
 import type { BrainReviewProposalInput } from "@/lib/types/brain-review";

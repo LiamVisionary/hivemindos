@@ -64,8 +64,20 @@ try {
     await page.goto(`${baseUrl}/onboarding-preview?platform=${fixture.platform}`, { waitUntil: "domcontentloaded", timeout: 60_000 });
     const dialog = page.getByRole("dialog");
     await dialog.getByRole("heading", { name: "Let’s make HivemindOS useful." }).waitFor({ timeout: 30_000 });
+    const closeBox = await dialog.getByRole("button", { name: "Close setup" }).boundingBox();
+    const stepRailBox = await dialog.locator("header span[aria-hidden='true']").last().boundingBox();
+    assert(closeBox && stepRailBox, `${fixture.platform}: close button and step rail must be measurable`);
+    const stepRailGap = closeBox.x - (stepRailBox.x + stepRailBox.width);
+    assert.ok(stepRailGap >= 12, `${fixture.platform}: step rail must clear the close button by at least 12px (gap ${stepRailGap}px)`);
     assert.equal(await page.locator("body > *[inert]").count() > 0, true, `${fixture.platform}: background must be inert`);
     assert.doesNotMatch(await dialog.innerText(), /takes about a minute|runs entirely on your computer/i);
+    await assertThreeActionLayout(dialog, {
+      label: `${fixture.platform}: welcome actions`,
+      primary: "See setup choices",
+      secondary: "Not now — ask next time",
+      tertiary: "Use without setup",
+    });
+    await page.screenshot({ path: join(artifacts, `${fixture.platform}-welcome.png`), fullPage: true });
     await dialog.getByRole("button", { name: "See setup choices" }).click();
 
     const localChoice = dialog.getByRole("radio", { name: new RegExp(`Only this ${fixture.device}`, "i") });
@@ -76,6 +88,11 @@ try {
     assert.equal(await dialog.getByRole("switch", { name: /Enable public Code Proof/i }).getAttribute("aria-checked"), "false");
     assert.match(await dialog.innerText(), /Ready to connect/i);
     assert.match(await dialog.innerText(), /Can add later/i);
+    await assertTwoActionLayout(dialog, {
+      label: `${fixture.platform}: setup actions`,
+      primary: new RegExp(`Set up this ${fixture.device}`, "i"),
+      secondary: "Back",
+    });
 
     for (let index = 0; index < 12; index += 1) {
       await page.keyboard.press("Tab");
@@ -97,7 +114,18 @@ try {
     const progress = dialog.getByRole("progressbar", { name: "Setup progress" });
     await progress.waitFor({ state: "visible" });
     assert(await dialog.getByRole("log").isVisible(), `${fixture.platform}: live setup log must be visible`);
+    await assertTwoActionLayout(dialog, {
+      label: `${fixture.platform}: running actions`,
+      primary: "Working…",
+      secondary: "Close — setup keeps running",
+    });
     await dialog.getByRole("heading", { name: `This ${fixture.device} is ready.` }).waitFor({ timeout: 10_000 });
+    await assertThreeActionLayout(dialog, {
+      label: `${fixture.platform}: completion actions`,
+      primary: "Try a first task",
+      secondary: "Show me around",
+      tertiary: "Go to dashboard",
+    });
     await page.screenshot({ path: join(artifacts, `${fixture.platform}-ready.png`), fullPage: true });
   }
 
@@ -105,6 +133,10 @@ try {
   await page.goto(`${baseUrl}/onboarding-preview?platform=windows`, { waitUntil: "domcontentloaded" });
   const mobileDialog = page.getByRole("dialog");
   await mobileDialog.getByRole("heading", { name: "Let’s make HivemindOS useful." }).waitFor();
+  await assertStackedActionLayout(mobileDialog, {
+    label: "390px: welcome actions",
+    actions: ["See setup choices", "Use without setup", "Not now — ask next time"],
+  });
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   assert.ok(overflow <= 1, `mobile onboarding must not overflow horizontally (delta ${overflow}px)`);
   await page.screenshot({ path: join(artifacts, "windows-mobile-390.png"), fullPage: true });
@@ -122,13 +154,26 @@ try {
   await finalDialog.getByRole("heading", { name: "This Mac is ready." }).waitFor({ timeout: 10_000 });
   await finalDialog.getByRole("button", { name: "Try a first task" }).click();
   assert.equal(await page.evaluate(() => window.__firstTaskPrompt), "What can you help me accomplish today?");
+  await page.getByTestId("onboarding-handoff").getByText("chat", { exact: true }).waitFor();
+  await page.getByRole("dialog").waitFor({ state: "detached" });
+
+  await page.goto(`${baseUrl}/onboarding-preview?platform=windows&agents=none`, { waitUntil: "domcontentloaded" });
+  const noAgentDialog = page.getByRole("dialog");
+  await noAgentDialog.getByRole("heading", { name: "Let’s make HivemindOS useful." }).waitFor();
+  await noAgentDialog.getByRole("button", { name: "See setup choices" }).click();
+  await noAgentDialog.getByRole("button", { name: "Set up this PC" }).click();
+  await noAgentDialog.getByRole("heading", { name: "This PC is ready." }).waitFor({ timeout: 10_000 });
+  assert.match(await noAgentDialog.innerText(), /No AI helper was detected yet/i);
+  await page.screenshot({ path: join(artifacts, "windows-no-agent-ready.png"), fullPage: true });
+  await noAgentDialog.getByRole("button", { name: "Add your first agent" }).click();
+  await page.getByTestId("onboarding-handoff").getByText("agent-setup", { exact: true }).waitFor();
   await page.getByRole("dialog").waitFor({ state: "detached" });
 
   assert.deepEqual(browserErrors, [], `browser errors:\n${browserErrors.join("\n")}`);
   console.log(JSON.stringify({
     ok: true,
     platforms: ["macos", "windows", "linux"],
-    assertions: "defaults, consent, parity, focus trap, progress semantics, completion, first task, responsive layout, console",
+    assertions: "defaults, consent, parity, focus trap, action geometry, progress semantics, completion, first task, no-agent setup handoff, responsive layout, console",
     screenshots: artifacts,
   }, null, 2));
 } catch (error) {
@@ -154,6 +199,40 @@ async function freePort() {
   await new Promise((resolve) => server.close(resolve));
   assert(address && typeof address === "object");
   return address.port;
+}
+
+async function buttonBox(dialog, name, label) {
+  const box = await dialog.getByRole("button", { name }).boundingBox();
+  assert(box, `${label}: button must be measurable`);
+  return box;
+}
+
+async function assertTwoActionLayout(dialog, { label, primary, secondary }) {
+  const primaryBox = await buttonBox(dialog, primary, label);
+  const secondaryBox = await buttonBox(dialog, secondary, label);
+  assert.ok(Math.abs(primaryBox.y - secondaryBox.y) <= 1, `${label}: controls must share one row`);
+  assert.ok(Math.abs(primaryBox.width - secondaryBox.width) <= 1, `${label}: controls must have equal widths`);
+  assert.ok(Math.abs(primaryBox.height - secondaryBox.height) <= 1, `${label}: controls must have equal heights`);
+}
+
+async function assertThreeActionLayout(dialog, { label, primary, secondary, tertiary }) {
+  const primaryBox = await buttonBox(dialog, primary, label);
+  const secondaryBox = await buttonBox(dialog, secondary, label);
+  const tertiaryBox = await buttonBox(dialog, tertiary, label);
+  assert.ok(primaryBox.y + primaryBox.height < secondaryBox.y, `${label}: primary action must occupy the first row`);
+  assert.ok(Math.abs(secondaryBox.y - tertiaryBox.y) <= 1, `${label}: supporting actions must share the second row`);
+  assert.ok(Math.abs(secondaryBox.width - tertiaryBox.width) <= 1, `${label}: supporting actions must have equal widths`);
+  assert.ok(Math.abs(primaryBox.x - Math.min(secondaryBox.x, tertiaryBox.x)) <= 1, `${label}: rows must align on the left`);
+  assert.ok(Math.abs(primaryBox.x + primaryBox.width - Math.max(secondaryBox.x + secondaryBox.width, tertiaryBox.x + tertiaryBox.width)) <= 1, `${label}: rows must align on the right`);
+}
+
+async function assertStackedActionLayout(dialog, { label, actions }) {
+  const boxes = await Promise.all(actions.map((action) => buttonBox(dialog, action, label)));
+  for (let index = 1; index < boxes.length; index += 1) {
+    assert.ok(boxes[index - 1].y + boxes[index - 1].height < boxes[index].y, `${label}: controls must follow one consistent vertical order`);
+    assert.ok(Math.abs(boxes[0].x - boxes[index].x) <= 1, `${label}: controls must align on the left`);
+    assert.ok(Math.abs(boxes[0].width - boxes[index].width) <= 1, `${label}: controls must have equal widths`);
+  }
 }
 
 async function waitForServer(url, timeoutMs = 240_000) {

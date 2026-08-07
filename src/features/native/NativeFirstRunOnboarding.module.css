@@ -137,7 +137,9 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 22px 58px 18px 26px;
+  /* The close control occupies the final 60px (44px control + 16px inset).
+     Keep a separate 16px safety gap so the fourth step never runs beneath it. */
+  padding: 22px 76px 18px 26px;
   overflow: hidden;
   border-bottom: 1px solid var(--line);
   background:
@@ -380,6 +382,10 @@
 .agentChip[data-found="true"] { color: var(--live-2); border-color: var(--live-line); background: var(--live-soft); }
 .agentChip span { min-width: 0; overflow-wrap: anywhere; }
 .agentNote { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--fg-3); }
+.setupWarnings { width: min(100%, 580px); padding: 12px 14px; border: 1px solid var(--honey-line); border-radius: 10px; background: var(--honey-soft); color: var(--fg-2); text-align: left; }
+.setupWarnings strong { display: block; margin-bottom: 4px; color: var(--honey); font-size: 12px; }
+.setupWarnings p { margin: 0; font-size: 11.5px; line-height: 1.5; }
+.setupWarnings p + p { margin-top: 6px; }
 
 .fieldset {
   display: flex;
@@ -543,9 +549,11 @@
 /* ---- Footer / buttons --------------------------------------------------- */
 .foot { flex: 0 0 auto; display: flex; flex-direction: column; gap: 12px; padding: 16px 26px 22px; border-top: 1px solid var(--line); }
 .disclaimer { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--fg-3); }
-.footActions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
-.footActions .grow { margin-right: auto; }
-.doneActions { display: flex; width: 100%; align-items: center; flex-wrap: wrap; gap: 10px; }
+.footActions { display: grid; width: 100%; gap: 10px; }
+.footActions[data-layout="two"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.footActions[data-layout="three"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.footActions[data-layout="three"] .primary { grid-column: 1 / -1; }
+.footActions .btn { width: 100%; min-width: 0; }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
@@ -599,10 +607,10 @@
   .rail { display: none; }
   .body { padding: 18px 18px 6px; }
   .foot { padding: 13px 18px 18px; }
-  .footActions { align-items: stretch; flex-direction: column-reverse; }
-  .footActions .grow { width: 100%; margin-right: 0; }
+  .footActions[data-layout] { grid-template-columns: minmax(0, 1fr); }
+  .footActions[data-layout="two"] .primary { grid-row: 1; }
+  .footActions[data-layout="two"] .text { grid-row: 2; }
   .btn { width: 100%; min-height: 44px; white-space: normal; }
-  .doneActions { flex-direction: column; }
   .choice { grid-template-columns: auto 1fr auto; padding: 13px; }
   .emblem { transform: scale(0.82); margin-block: -8px; }
 }
