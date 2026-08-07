@@ -176,6 +176,7 @@ const posted = await facebookMarketplaceAdapter.createListing(
   approved.decision.id,
   { env: {}, ensureBrowserImpl: fakeEnsureBrowser, dispatchAgentTaskImpl: async () => okReport, readBrowserTabImpl: realPage },
 );
+// The independent page read succeeded on this machine, so the claim comes back "verified".
 assert.deepEqual(posted, { externalId: "777", url: "https://www.facebook.com/marketplace/item/777", verification: "verified" });
 
 // Fabricated claim: the page behind the reported URL does not exist.
