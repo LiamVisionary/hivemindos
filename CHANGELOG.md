@@ -5,6 +5,14 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-08-06 20:39 EDT (-0400) - Preserve the isolated onboarding audit state
+  - Status: Uncommitted audit-only source state; production demo mode must remain disabled after integration.
+  - Developer note: The registered onboarding audit worktree records its explicit native-setup demo toggle and the shared Kanban integrity-helper cleanup. An exact `node_modules` ignore also prevents the audit's local absolute dependency symlink from entering Git.
+  - Areas changed: native setup audit flag, completion-integrity deduplication, repository dependency-symlink ignore, and this changelog.
+  - Verification: Scoped whitespace and TypeScript checks are required after integration into current `main`; the completion-integrity cleanup is already independently present and covered by the canonical loop-blocking suite there.
+  - Recovery: Revert this audit commit. The final integration commit restores `NATIVE_SETUP_DEMO_ENABLED` to `false` before publication.
+  - Intended commit message: `chore: preserve onboarding audit worktree`
+
 - 2026-08-06 20:10 EDT (-0400) - Hide persisted Hermes transport dumps
   - Status: Uncommitted and not included in a desktop release.
   - User-facing release note: Previously saved Hermes provider failures now render as a short actionable error instead of exposing prompt echoes, private runtime markers, retry logs, or resume commands.
