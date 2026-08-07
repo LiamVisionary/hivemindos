@@ -691,6 +691,31 @@ export function useChatTreeController(props: any) {
         folderMap.set(key, next);
         return next;
       };
+      const knownFolderByDedupeKey = new Map<string, { path: string; label: string }>();
+      for (const knownPath of [projectDirectoryPath(machine.version?.appDir), projectDirectoryPath(selectedChatDirectoryPath)]) {
+        if (knownPath) knownFolderByDedupeKey.set(chatDedupeKey(knownPath), { path: knownPath, label: workspaceLabelFromPath(knownPath) });
+      }
+      for (const customFolder of chatCustomFolders.filter((folder) => folder.machineKey === machine.key)) {
+        const knownPath = projectDirectoryPath(customFolder.path);
+        if (knownPath) knownFolderByDedupeKey.set(chatDedupeKey(knownPath), { path: knownPath, label: customFolder.label || workspaceLabelFromPath(knownPath) });
+      }
+      // Leaf keys look like `folder-<machineKey>-<dedupeKey(path)>-<agentId>`; machine keys,
+      // dedupe segments, and agent ids may all contain dashes, so recover the folder by testing
+      // each known path's dedupe key against the leaf key instead of splitting on dashes.
+      const knownFolderForChatLeafKey = (leafKey: string) => {
+        const leafPrefix = `folder-${machine.key}-`;
+        if (!leafKey.startsWith(leafPrefix)) return undefined;
+        const dedupeSegment = leafKey.slice(leafPrefix.length);
+        let match: { path: string; label: string } | undefined;
+        let matchedKeyLength = -1;
+        for (const [dedupe, folder] of knownFolderByDedupeKey) {
+          if (dedupe.length > matchedKeyLength && dedupeSegment.startsWith(`${dedupe}-`)) {
+            match = folder;
+            matchedKeyLength = dedupe.length;
+          }
+        }
+        return match;
+      };
 
       for (const agent of machine.agents.filter((item) => runtimeCan(item, "chat"))) {
         const folderPath = projectDirectoryPath(machine.version?.appDir);
@@ -733,47 +758,24 @@ export function useChatTreeController(props: any) {
           ...chat,
           subtitle: chat.subtitle === agent.id ? agent.name : chat.subtitle,
         }));
-        // A folder chat's leaf key encodes the project it was started in
-        // (`folder-<machine>-<chatDedupeKey(path)>-…`). Resolve it against the
-        // paths this machine knows, longest match first — dumping every saved
-        // chat into the machine's default workspace both mis-grouped the rail
-        // AND made reopened chats run in the wrong working directory.
-        const knownFolderPaths = [
-          ...chatCustomFolders
-            .filter((folder) => folder.machineKey === machine.key)
-            .map((folder) => projectDirectoryPath(folder.path)),
-          folderPath,
-          projectDirectoryPath(selectedChatDirectoryPath),
-        ].filter((path): path is string => Boolean(path));
-        const savedChatFolderPath = (leafKey: string) => {
-          let best = "";
-          for (const path of knownFolderPaths) {
-            const encoded = chatDedupeKey(path);
-            if (!encoded || chatDedupeKey(best).length >= encoded.length) continue;
-            if (leafKey.startsWith(`folder-${machine.key}-${encoded}-`)) best = path;
-          }
-          return best;
-        };
         for (const savedChat of savedChats) {
-          if (savedChat.key.startsWith(`machine-${machine.key}-`)) {
-            machineChatFolder().chats.push(savedChat);
-            continue;
-          }
-          const encodedFolderPath = savedChatFolderPath(savedChat.key);
-          const targetFolder = encodedFolderPath
+          const knownFolder = knownFolderForChatLeafKey(savedChat.key);
+          const targetFolder = savedChat.key.startsWith(`machine-${machine.key}-`)
+            ? machineChatFolder()
+            : knownFolder
             ? ensureFolder(
-              workspaceLabelFromPath(encodedFolderPath),
-              startFreshChatInMachine(agent, encodedFolderPath),
-              encodedFolderPath,
-              selectedAgentId === agent.id && selectedChatDirectoryPath === encodedFolderPath,
+              knownFolder.label,
+              startFreshChatInMachine(agent, knownFolder.path),
+              knownFolder.path,
+              selectedAgentId === agent.id && selectedChatDirectoryPath === knownFolder.path,
             )
             : defaultFolder();
-          targetFolder.chats.push(encodedFolderPath
+          targetFolder.chats.push(knownFolder
             ? {
               ...savedChat,
               // Reopen the chat in ITS project, not whatever directory happens
               // to be selected when the row is clicked.
-              onOpen: () => startAgentChat(agent.id, { chatLeafKey: savedChat.key, workingDirectoryPath: encodedFolderPath }),
+              onOpen: () => startAgentChat(agent.id, { chatLeafKey: savedChat.key, workingDirectoryPath: knownFolder.path }),
             }
             : savedChat);
         }
