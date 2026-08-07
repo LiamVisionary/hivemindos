@@ -1782,13 +1782,13 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Rollback: remove the `minimumCompatibleVersion` field and revert `collectorSupportsAppBuilderContract` to the strict ≥-required rule (and the test assertions); the hub then again requires every collector to match its full contract version.
   - Intended commit message: `fix(app-builder): additive contract bumps no longer block compatible collectors`
 
-- 2026-07-24 21:56 EDT (-0400) - Remove the superseded AppBuilderWorkspace exploration to clear the standing typecheck red
-  - Status: Committed in `7957c884`; pending integration to `main`.
-  - User-facing release note: None (internal cleanup — no shipped surface changes). The earlier app-builder workspace UX exploration preserved by e258aaedd is removed from the working tree; the shipped chat App workspace (`AppWorkspace.tsx`) is unchanged and remains guarded by `test:chat-app-workspace`.
-  - Areas changed: deleted `src/features/dashboard/views/chat/exchange/AppBuilderWorkspace.tsx` and `src/features/dashboard/views/chat/exchange/app-builder-workspace.module.css`. Both were fully dead at HEAD: nothing imported the component (not the exchange barrel, not `ChatExchangePanel.tsx`), no script referenced its text, and it no longer compiled because the shipped `ContextShelf.tsx` does not export the `PreviewFrame` it imported (TS2305 at line 26). Deleting completes the direction e012bcfb2 already took when it removed the exploration's test suite (`scripts/test-app-builder-workspace.mjs`) from `test:app-builder`; the exploration stays recoverable verbatim from git history at e258aaedd. `ChatExchangePanel.tsx` and `ContextShelf.tsx` were not touched.
-  - Verification: `pnpm typecheck` baseline at the branch head was 4 errors (the AppBuilderWorkspace TS2305 plus three existing Marketplace errors); after the deletion it was exactly the 3 Marketplace errors. `pnpm test:app-builder` passed 18/18 and `pnpm test:chat-app-workspace` passed.
-  - Rollback: Recover the two deleted files from commit `e258aaedd` if the superseded exploration is intentionally revived; doing so also restores its typecheck failure until the obsolete import is updated.
-  - Intended commit message: `chore(app-builder): remove superseded AppBuilderWorkspace exploration`
+- 2026-07-24 21:56 EDT (-0400) - Remove the superseded AppBuilderWorkspace exploration and guard
+  - Status: Committed in `7957c884` and `9332e1c4`; pending integration to `main`.
+  - User-facing release note: None (internal cleanup — no shipped surface changes). The earlier app-builder workspace UX exploration and its contradictory test guard are removed; the shipped chat App workspace (`AppWorkspace.tsx`) remains protected by `test:chat-app-workspace`.
+  - Areas changed: deleted the unused `AppBuilderWorkspace.tsx`, its CSS module, and `scripts/test-app-builder-workspace.mjs`; `package.json` drops the obsolete test from `test:app-builder`. The rest of the app-builder contract, implementation, and documentation remain intact.
+  - Verification: The branch baseline showed the dead component failing TypeScript and the obsolete guard failing its first `<AppBuilderWorkspace>` assertion. After cleanup, `pnpm test:app-builder` passed end to end and `pnpm test:chat-app-workspace` passed; no active source references the removed exploration.
+  - Rollback: Recover the three deleted files from commit `e258aaedd` and restore the package script only if the exploration is intentionally revived; restoring them unchanged also restores the conflicting guard and typecheck failure.
+  - Intended commit message: `test(app-builder): drop superseded workspace guard and dead exploration UI`
 
 - 2026-07-24 21:20 EDT (-0400) - Fix remote task-permission approvals failing with "this node's tailnet owner is unknown"
   - Status: Pushed (code rode the 2026-07-24 full-tree publication commit ee4caef0f).
