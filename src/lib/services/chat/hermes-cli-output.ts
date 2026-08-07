@@ -19,8 +19,8 @@ export function hermesLeakedTransportFailureNotice(value: string) {
   if (!text.includes(HERMES_CLI_STREAM_EVENT_PREFIX)) return "";
   const summary = hermesCliFailureSummary(text);
   return summary
-    ? `Hermes could not complete this response. ${summary}`
-    : "Hermes did not produce a usable response. Internal runtime output was hidden.";
+    ? `Error: ${summary}`
+    : "Error: Hermes did not produce a usable response. Internal runtime output was hidden.";
 }
 
 function isHermesInlineDiffLine(line: string) {

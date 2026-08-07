@@ -125,7 +125,7 @@ API call failed after 3 retries: HTTP 429: Provider returned error
 Resume this session with: hermes --resume 20260806_194743_3a0d46`;
 assert.equal(
   hermesOutputModule.hermesLeakedTransportFailureNotice(leakedHermesFailure),
-  "Hermes could not complete this response. API call failed after 3 retries: HTTP 429: Provider returned error",
+  "Error: API call failed after 3 retries: HTTP 429: Provider returned error",
 );
 assert.equal(hermesOutputModule.hermesLeakedTransportFailureNotice("A normal assistant answer."), "");
 assert.match(
