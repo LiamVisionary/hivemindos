@@ -18,6 +18,7 @@ import type {
   FleetAgentCapabilityIcon,
 } from "@/components/fleet/fleet-data";
 import { simpleStableHash } from "@/features/dashboard/dashboard-light-helpers";
+import { compactCapabilityContinuation } from "@/features/dashboard/chat-transcript-helpers";
 import { machineNeedsAppBuilderRepair } from "@/features/fleet/app-builder-collector-capability";
 import {
   filterSuppressedAgents,
@@ -1239,11 +1240,20 @@ export function useDashboardDerivedState(props: any) {
               .slice(0, 3)
               .map((work) => ({
                 id: work.id,
+                // Compact before cleaning: hermes-state titles from a
+                // not-yet-updated remote collector still carry the raw
+                // capability-continuation prompt, which cleanActivityTitle
+                // would otherwise mask as "Background activity" instead of
+                // recovering the person's own task line.
                 title: cleanActivityTitle(
-                  work.title || work.lastMessage || "Previous chat",
+                  compactCapabilityContinuation(
+                    work.title || work.lastMessage || "Previous chat",
+                  ),
                 ),
                 task: cleanActivityTitle(
-                  work.title || work.lastMessage || "Previous chat",
+                  compactCapabilityContinuation(
+                    work.title || work.lastMessage || "Previous chat",
+                  ),
                 ),
                 since:
                   work.updatedAt > 0
@@ -1305,7 +1315,9 @@ export function useDashboardDerivedState(props: any) {
                     : "healthy"
                 : "off",
               task: primaryWork
-                ? cleanActivityTitle(primaryWork.title)
+                ? cleanActivityTitle(
+                    compactCapabilityContinuation(primaryWork.title),
+                  )
                 : snapshot?.summary || "Idle · waiting for the next handoff",
               currentTaskId: primaryWork?.id,
               currentTaskUpdatedAt: primaryWork?.updatedAt,
@@ -1334,7 +1346,7 @@ export function useDashboardDerivedState(props: any) {
         return work.slice(0, 3).map(
           (task): FleetTask => ({
             id: task.id,
-            title: cleanActivityTitle(task.title),
+            title: cleanActivityTitle(compactCapabilityContinuation(task.title)),
             agent: agent?.name ?? agentId,
             machine: machine?.name ?? "unassigned",
             state:
