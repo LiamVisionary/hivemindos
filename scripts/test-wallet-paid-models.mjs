@@ -832,7 +832,7 @@ includes(chatBillingTypes, "normalizeChatResponseBilling", "chat billing metadat
 includes(runtimeSessionStore, "billing?: ChatResponseBilling", "runtime session persists response billing");
 includes(runtimeSessionStore, "updateRuntimeChatSessionLastAssistantBilling", "runtime session can update streamed assistant billing");
 includes(dashboardTypes, "billing?: ChatResponseBilling", "dashboard chat messages include response billing");
-includes(dashboardApp, "normalizeChatResponseBilling(message.billing)", "dashboard session hydration preserves response billing");
+includes(await source("src/features/dashboard/chat-run-transcripts.ts"), "normalizeChatResponseBilling(message.billing)", "dashboard session hydration preserves response billing");
 includes(dashboardStorage, "billing: normalizeChatResponseBilling(message.billing)", "dashboard storage preserves response billing");
 includes(statusChatInputController, "attachBillingToActiveAssistant", "live chat stream applies response billing");
 includes(messageThread, "responseBillingText(message.billing)", "chat thread renders response billing");

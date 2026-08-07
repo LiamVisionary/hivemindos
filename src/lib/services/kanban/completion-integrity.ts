@@ -14,7 +14,7 @@ import { runIntegrityGates, type LoopUrlProber } from "@/lib/services/loops/loop
 import { makeLiveUrlProber } from "@/lib/services/loops/integrity-probes";
 import { makeDeliverableContentFetcher } from "@/lib/services/deliverables/content-fetcher";
 import type { DeliverableContentFetcher } from "@/lib/services/deliverables/deliverable-acceptance";
-import type { KanbanLoopReceipt } from "@/lib/types/kanban";
+import type { KanbanBoard, KanbanLoopReceipt } from "@/lib/types/kanban";
 
 /**
  * Probe overrides for hermetic tests. When set it is used WHOLESALE — an absent
@@ -38,6 +38,21 @@ export function coerceKanbanText(value: unknown): string {
     return JSON.stringify(value, null, 2) ?? String(value);
   } catch {
     return String(value);
+  }
+}
+
+// A completion whose long result is byte-identical to ANOTHER task's stored
+// result is a misattributed session output (the wrong task's transcript pasted
+// in), never legitimate work. Called by completeTask and the patch-to-done
+// path before any mutation is queued.
+export function assertResultNotMisattributed(board: KanbanBoard, taskId: string, result: string | undefined): void {
+  const normalized = (result ?? "").trim();
+  if (normalized.length < 200) return;
+  const twin = board.tasks.find((item) => item.id !== taskId && (item.result ?? "").trim() === normalized);
+  if (twin) {
+    throw new Error(
+      `Completion rejected: the result is byte-identical to task ${twin.id} ("${twin.title.slice(0, 60)}") — that is a misattributed session output, not this task's work. Re-run the task and return ITS deliverable.`,
+    );
   }
 }
 
