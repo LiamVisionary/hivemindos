@@ -16,6 +16,7 @@ const tauriConfig = JSON.parse(readFileSync(tauriConfigPath, "utf8"));
 const nativeDocs = readFileSync(nativeDocsPath, "utf8");
 const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
 const tauriBuild = readFileSync("scripts/tauri-build.mjs", "utf8");
+const tauriReleaseBuild = readFileSync("scripts/run-tauri-release-build.mjs", "utf8");
 
 function findInstalledPackageDir(packageName) {
   const segments = packageName.split("/");
@@ -115,8 +116,16 @@ if (packageJson.scripts?.["test:tauri-runtime-bundle"] !== "node scripts/test-ta
   fail(`${packagePath} must expose test:tauri-runtime-bundle for post-staging embedded runtime dependency checks.`);
 }
 
-if (!workflow.includes("run: pnpm tauri:build:release")) {
-  fail(`${workflowPath} must use the explicit full release bundle script.`);
+if (!workflow.includes("run: node scripts/run-tauri-release-build.mjs")) {
+  fail(`${workflowPath} must use the guarded full release bundle script.`);
+}
+
+if ((workflow.match(/node scripts\/run-tauri-release-build\.mjs/g) ?? []).length < 2) {
+  fail(`${workflowPath} must retry transient macOS DMG packaging failures on the warm build cache.`);
+}
+
+if (!tauriReleaseBuild.includes("const maxAttempts = process.platform === \"darwin\" ? 3 : 1;")) {
+  fail("scripts/run-tauri-release-build.mjs must retry only macOS release bundles.");
 }
 
 if (!nativeDocs.includes("Release builds enable `HIVEMINDOS_TAURI_EMBEDDED_NEXT`")) {

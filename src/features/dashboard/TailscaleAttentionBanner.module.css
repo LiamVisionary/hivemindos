@@ -79,7 +79,6 @@
   width: 16px;
   height: 16px;
 }
-
 :global([data-theme="hive-light"]) .banner {
   background: color-mix(in srgb, #fffaf0 94%, var(--danger) 6%);
   box-shadow: 0 16px 42px rgba(78, 58, 27, 0.2);

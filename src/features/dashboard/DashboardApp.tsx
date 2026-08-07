@@ -431,8 +431,7 @@ import {
   type DashboardActingWallet,
 } from "@/features/dashboard/screen-context";
 import { TRADE_ROUTE_CAPABILITY_LINES, WALLET_ROUTE_CAPABILITY_LINES } from "@/lib/services/chat/trade-route-context";
-// DashboardHeader is retained as a legacy component; the app now navigates via
-// the left AppNavShelf (the redesigned hive shelf) instead of a top header.
+// DashboardHeader is legacy; the app now navigates through the left AppNavShelf.
 import { DashboardAppCompletionToast, type DashboardAppCompletionNotification } from "@/features/dashboard/views/DashboardHeader";
 import { TailscaleAttentionBanner } from "@/features/dashboard/TailscaleAttentionBanner";
 import { AppNavShelf } from "@/components/fleet-hive";

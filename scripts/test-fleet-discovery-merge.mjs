@@ -137,7 +137,6 @@ assert.match(
   /enabled:\s*hydrated,[\s\S]*?intervalMs:\s*tailscaleStatusRequiresAttention\(tailscaleStatus\)\s*\?\s*30_000/,
   "an active Tailscale warning must retry automatically while the dashboard is visible",
 );
-
 function readyUbuntuMachine() {
   return {
     device: {

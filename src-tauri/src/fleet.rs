@@ -333,7 +333,6 @@ fn tailscale_cli_candidates() -> Vec<PathBuf> {
     }
     candidates
 }
-
 fn app_initials(name: &str) -> String {
     let initials = name
         .split_whitespace()
@@ -947,7 +946,6 @@ mod tests {
         assert!(!macos_app_store_service_connected(connecting));
         assert!(!macos_app_store_service_connected(standalone));
     }
-
     fn peer(host: &str, dns: &str, ip: &str) -> Value {
         json!({
             "HostName": host,

@@ -36,7 +36,6 @@ export function shouldClearTailscaleAttentionDismissal(status: string, dismissed
   if (!dismissedIssueKey || status.trim() === "Checking Tailnet...") return false;
   return !tailscaleStatusRequiresAttention(status);
 }
-
 export function tailscaleStatusPresentation(
   data: TailscaleStatusPayload | null | undefined,
 ): TailscaleStatusPresentation {
