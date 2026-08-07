@@ -225,9 +225,16 @@ function normalizeHermesCliFailureCandidate(value: string) {
     .toLowerCase();
 }
 
+function isLeakedHermesTransportFailure(value: string) {
+  const normalized = stripTerminalControls(value).replace(/\r\n?/g, "\n").toLowerCase();
+  if (!normalized.includes("__hivemind_hermes_event__")) return false;
+  return /(?:^|\n)\s*(?:api call failed after \d+ retries|provider resolver returned|unknown provider|session not found|rate limited after \d+ retries|final error:)(?:\s|$|[^a-z0-9])/.test(normalized);
+}
+
 export function isHermesCliFailureText(value: string) {
   const normalized = normalizeHermesCliFailureCandidate(value);
-  return HERMES_CLI_FAILURE_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+  return HERMES_CLI_FAILURE_PREFIXES.some((prefix) => normalized.startsWith(prefix))
+    || isLeakedHermesTransportFailure(value);
 }
 
 export function isPotentialHermesCliFailureText(value: string) {

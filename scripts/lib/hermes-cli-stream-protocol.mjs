@@ -1,11 +1,32 @@
 export const HERMES_CLI_STREAM_EVENT_PREFIX = "__HIVEMIND_HERMES_EVENT__";
 
+const HERMES_CLI_FAILURE_SUMMARY_PATTERNS = [
+  /(?:^|\n)\s*(API call failed after \d+ retries:\s*[^\r\n]+)/i,
+  /(?:^|\n)\s*(Provider resolver returned[^\r\n]*)/i,
+  /(?:^|\n)\s*(Unknown provider[^\r\n]*)/i,
+  /(?:^|\n)\s*(Session not found[^\r\n]*)/i,
+  /(?:^|\n)\s*(Rate limited after \d+ retries[^\r\n]*)/i,
+  /(?:^|\n)\s*(Final error:\s*[^\r\n]+)/i,
+];
+
 function cleanText(value) {
   return typeof value === "string" ? value : "";
 }
 
 function comparableText(value) {
   return cleanText(value).replace(/\r\n/g, "\n").trim();
+}
+
+/** Extracts one bounded actionable failure line without exposing terminal rendering. */
+export function hermesCliFailureSummary(value) {
+  const text = cleanText(value)
+    .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
+    .replace(/\r\n?/g, "\n");
+  for (const pattern of HERMES_CLI_FAILURE_SUMMARY_PATTERNS) {
+    const summary = text.match(pattern)?.[1]?.trim();
+    if (summary) return summary.slice(0, 500);
+  }
+  return "";
 }
 
 /**

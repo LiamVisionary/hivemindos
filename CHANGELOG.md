@@ -5,6 +5,14 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-08-06 20:01 EDT (-0400) - Keep Hermes provider failures out of assistant messages
+  - Status: Uncommitted and not included in a desktop release.
+  - User-facing release note: Hermes runs that exhaust provider retries now finish as actionable errors even when the CLI exits successfully. Raw prompt echoes, private stream events, terminal output, and resume footers no longer appear as an assistant reply.
+  - Areas changed: Hermes CLI failure extraction and stream completion, API-side leaked-transport detection, collector and adaptive-stream regressions, local browser-diagnostic exclusions, and this changelog.
+  - Verification: Focused adaptive Hermes stream and collector chat-abort tests pass, including the exit-zero provider failure path and private terminal-output boundary; scoped whitespace checks pass.
+  - Recovery: Revert this entry and the scoped Hermes stream, collector, API compatibility, regression, and ignore changes. No chat, session, provider, or browser state was migrated or deleted.
+  - Intended commit message: `fix(chat): reject exit-zero Hermes provider failures`
+
 - 2026-08-06 19:56 EDT (-0400) - Sync copy-trading retrospectives to Shared Brain
   - Status: Uncommitted and not included in a desktop release.
   - User-facing release note: Agent-analyzed copy trading now keeps its fast local paper-learning state and also synchronizes each matured trade retrospective into Shared Brain. The first 24-hour or target-exit result creates one canonical learning; a later result evolves that same memory with the new evidence instead of creating a duplicate.

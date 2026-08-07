@@ -98,6 +98,25 @@ printf 'session_id: 20260718_203500_deadbe\\n' >&2
   return path;
 }
 
+async function makeExitZeroProviderFailureHermes(name) {
+  const path = join(sandbox, name);
+  await writeFile(path, `#!/bin/sh
+mkdir -p "$HERMES_HOME"
+sqlite3 "$HERMES_HOME/state.db" "create table if not exists sessions (id text primary key, source text not null, started_at real not null, ended_at real, end_reason text, title text, message_count integer default 0, tool_call_count integer default 0); create table if not exists messages (id integer primary key autoincrement, session_id text not null, role text not null, content text, tool_name text, timestamp real not null); insert into sessions (id,source,started_at,message_count,tool_call_count) values ('20260806_194743_3a0d46','cli',strftime('%s','now'),3,1); insert into messages (session_id,role,content,timestamp) values ('20260806_194743_3a0d46','user','exit-zero provider failure contract test',strftime('%s','now')); insert into messages (session_id,role,content,timestamp) values ('20260806_194743_3a0d46','assistant','',strftime('%s','now'));"
+printf 'Query: exit-zero provider failure contract test\n\nInitializing agent...\n'
+printf '%s\n' '__HIVEMIND_HERMES_EVENT__{"type":"tool.started","name":"terminal","status":"running"}'
+printf '%s\n' '__HIVEMIND_HERMES_EVENT__{"type":"tool.failed","name":"terminal","status":"failed"}'
+printf '⚠️  API call failed (attempt 1/3): RateLimitError [HTTP 429]\n'
+printf '⚠️  API call failed (attempt 2/3): RateLimitError [HTTP 429]\n'
+printf '⚠️  API call failed (attempt 3/3): RateLimitError [HTTP 429]\n'
+printf 'API call failed after 3 retries: HTTP 429: Provider returned error\n'
+printf 'Resume this session with: hermes --resume 20260806_194743_3a0d46\n'
+exit 0
+`);
+  await chmod(path, 0o755);
+  return path;
+}
+
 async function bootCollector(hermesBin, extraEnv = {}) {
   const port = await freePort();
   const base = `http://127.0.0.1:${port}`;
@@ -183,14 +202,41 @@ async function assertStreamingChatOutput(base) {
   assert.doesNotMatch(streamText, /review diff|a\/index\.html|Done from noisy unmarked stdout/, "unmarked CLI terminal output must not become assistant chat text");
 }
 
+async function assertExitZeroProviderFailure(base) {
+  const response = await fetch(`${base}/chat`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      stream: true,
+      forceHermesCli: true,
+      message: "exit-zero provider failure contract test",
+      rawUserMessage: "exit-zero provider failure contract test",
+      agent: { id: "exit-zero-provider-failure-test", runtime: "hermes" },
+    }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  assert.equal(response.status, 200);
+  const streamText = await response.text();
+  assert.match(streamText, /"error"\s*:/, "an exit-zero Hermes provider failure must be returned as an error");
+  assert.match(streamText, /HTTP 429/, "the error should preserve the actionable provider status");
+  assert.doesNotMatch(
+    streamText,
+    /Query: exit-zero|Initializing agent|__HIVEMIND_HERMES_EVENT__|Resume this session/,
+    "prompt echoes, private protocol lines, and terminal footers must never become assistant text",
+  );
+  assert.doesNotMatch(streamText, /"choices"\s*:/, "a failed empty run must not emit a fake assistant delta");
+}
+
 try {
   const fakeKill = await makeFakeHermes("fake-hermes-kill");
   const fakeDetach = await makeFakeHermes("fake-hermes-detach");
   const fakeNoisyStreaming = await makeNoisyStreamingHermes("fake-hermes-noisy-streaming");
-  const [killBase, detachBase, quietBase] = await Promise.all([
+  const fakeExitZeroFailure = await makeExitZeroProviderFailureHermes("fake-hermes-exit-zero-provider-failure");
+  const [killBase, detachBase, quietBase, exitZeroFailureBase] = await Promise.all([
     bootCollector(fakeKill),
     bootCollector(fakeDetach, { AGENT_TELEMETRY_CHAT_ABORT_KILL: "0" }),
     bootCollector(fakeNoisyStreaming),
+    bootCollector(fakeExitZeroFailure, { HERMES_HOME: join(sandbox, "exit-zero-provider-failure-home") }),
   ]);
 
   await Promise.all([
@@ -218,6 +264,10 @@ try {
     (async () => {
       await assertStreamingChatOutput(quietBase);
       console.log("✓ structured Hermes deltas stream while terminal diff output stays out of chat");
+    })(),
+    (async () => {
+      await assertExitZeroProviderFailure(exitZeroFailureBase);
+      console.log("✓ exit-zero Hermes provider failures stay errors and raw terminal output stays private");
     })(),
   ]);
 

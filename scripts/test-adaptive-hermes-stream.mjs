@@ -105,6 +105,22 @@ includes(
 assert.equal(isHermesCliFailureText("Provider resolver returned an empty API key."), true);
 assert.equal(isHermesCliFailureText("\n⚠️  Provider resolver returned an empty API key.\n"), true);
 assert.equal(isHermesCliFailureText("❌ Hermes exited with code 1."), true);
+assert.equal(
+  isHermesCliFailureText(`Query: output contract test
+
+Initializing agent...
+__HIVEMIND_HERMES_EVENT__{"type":"tool.started","name":"terminal","status":"running"}
+API call failed after 3 retries: HTTP 429: Provider returned error`),
+  true,
+  "a raw Hermes transport dump ending in a provider failure must not count as assistant text",
+);
+assert.equal(
+  isHermesCliFailureText(`Query: output contract test
+__HIVEMIND_HERMES_EVENT__{"type":"tool.failed","name":"terminal","status":"failed"}
+Final error: Request timed out`),
+  true,
+  "a raw Hermes transport dump with only a final-error summary must not count as assistant text",
+);
 assert.equal(isHermesCliFailureText("Here is the requested app."), false);
 
 let splitFailure = "";

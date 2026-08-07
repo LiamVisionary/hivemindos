@@ -86,7 +86,10 @@ import {
   summarizeHermesDbSessionTimeline,
   summarizeHermesProcessPayload,
 } from "./lib/hermes-api-proxy-telemetry.mjs";
-import { createHermesCliStreamProtocol } from "./lib/hermes-cli-stream-protocol.mjs";
+import {
+  createHermesCliStreamProtocol,
+  hermesCliFailureSummary,
+} from "./lib/hermes-cli-stream-protocol.mjs";
 import {
   hermesApiMessages,
   hermesApiSelectionMatchesAgent,
@@ -8331,6 +8334,7 @@ async function streamHermesChat(body, response, options = {}) {
     void (async () => {
       const content = stripHermesCliMetadata(stdout);
       const errorText = stripHermesCliMetadata(stderr);
+      const terminalFailure = hermesCliFailureSummary(`${errorText}\n${content}`);
       if (code === 0) {
         const completedSession = emittedHermesSessionId
           ? await readHermesDbSession(hermesHome, emittedHermesSessionId).catch(() => null)
@@ -8340,12 +8344,23 @@ async function streamHermesChat(body, response, options = {}) {
           .find((message) => message.role === "assistant" && message.content.trim())
           ?.content.trim();
         const snapshot = streamProtocol.snapshot();
-        const finalContent = finalAssistantText || (!snapshot.sawAssistantDelta ? content || errorText : "");
-        streamProtocol.reconcileFinal(finalContent);
+        if (finalAssistantText) {
+          streamProtocol.reconcileFinal(finalAssistantText);
+          finish();
+          return;
+        }
+        if (terminalFailure) {
+          finish({ error: terminalFailure });
+          return;
+        }
+        if (!snapshot.sawAssistantDelta) {
+          finish({ error: "Hermes completed without producing assistant text." });
+          return;
+        }
         finish();
         return;
       }
-      finish({ error: errorText || `Hermes exited with code ${code ?? "unknown"}.` });
+      finish({ error: terminalFailure || errorText || `Hermes exited with code ${code ?? "unknown"}.` });
     })();
   });
 }

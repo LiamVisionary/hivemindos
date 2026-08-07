@@ -36,7 +36,18 @@ promo-videos/
 # them locally without publishing them from this shared checkout.
 /scripts/cdp_http_test.py
 /scripts/restart_chrome_cdp.py
+/scripts/check_cdp_state.py
+/scripts/check_page_state.py
+/scripts/check_facebook_cookies.py
+/scripts/debug_cdp.py
+/scripts/extract_facebook_cookies.py
+/scripts/verify_session.py
 /tmp/cdp_marketplace.mjs
+/tmp/try_compose.mjs
+/tmp/compose_area.png
+/tmp/analyze_messages.mjs
+/tmp/all_conversations.png
+/tmp/inbox_final.png
 /tmp/inbox_state.png
 /tmp/marketplace_inbox.png
 /tmp/marketplace_inbox_analysis.png
