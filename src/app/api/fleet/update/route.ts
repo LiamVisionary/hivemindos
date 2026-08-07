@@ -394,10 +394,23 @@ async function startCollectorUpdate(
   return payload ?? { ok: true, accepted: true };
 }
 
+// Every transport that mutates a machine (git pull/reclone, pnpm install,
+// collector reinstall) must refuse a simulate request outright. Simulations
+// once fell through the POST dispatch into these transports and ran a REAL
+// update on the remote machine — without even the maintenance reservation.
+function assertRealUpdateAllowed(body: UpdateBody) {
+  if (body.simulate) {
+    throw new Error(
+      "Refusing to run a real update for a simulate request. Update rehearsals never use real update transports.",
+    );
+  }
+}
+
 async function tryCollectorUpdate(
   body: UpdateBody,
   maintenanceReservationToken?: string,
 ) {
+  assertRealUpdateAllowed(body);
   const result = await startCollectorUpdate(
     body.collectorUrl,
     maintenanceReservationToken,
@@ -547,11 +560,22 @@ function localUpdateScript(collectorOnly = false) {
   ].join("\n");
 }
 
-function localUpdateRehearsalScript(appDir?: string) {
-  const script = [
+function checkoutPreamble(appDir?: string) {
+  if (appDir?.trim()) return [`cd ${shellSingleQuote(appDir.trim())}`];
+  return [
+    checkoutSearchScript(),
+    "[ -d .git ] || { echo 'Could not find hivemindos checkout'; exit 2; }",
+  ];
+}
+
+// Read-only: a rehearsal must never pull, install, reclone, or restart
+// anything, because it also runs on remote machines over the same transports
+// as a real update.
+function updateRehearsalScript(appDir?: string) {
+  return [
     "set -euo pipefail",
     REMOTE_PATH_BOOTSTRAP,
-    appDir?.trim() ? `cd ${shellSingleQuote(appDir.trim())}` : "",
+    ...checkoutPreamble(appDir),
     "echo 'HivemindOS update rehearsal started.'",
     "git rev-parse --is-inside-work-tree >/dev/null",
     'echo "current=$(git rev-parse --short HEAD)"',
@@ -562,8 +586,7 @@ function localUpdateRehearsalScript(appDir?: string) {
     "if command -v pnpm >/dev/null 2>&1; then echo \"pnpm=$(pnpm --version)\"; else echo 'pnpm=missing'; fi",
     "test -f scripts/install-telemetry-collector.sh",
     "echo 'HivemindOS update rehearsal completed.'",
-  ].filter(Boolean);
-  return script.join("\n");
+  ].join("\n");
 }
 
 function fallbackScript(
@@ -571,21 +594,10 @@ function fallbackScript(
   allowReclone = false,
   collectorOnly = false,
 ) {
-  if (appDir?.trim()) {
-    return [
-      "set -euo pipefail",
-      REMOTE_PATH_BOOTSTRAP,
-      `cd ${shellSingleQuote(appDir.trim())}`,
-      allowReclone
-        ? remoteUpdateScript(collectorOnly)
-        : localUpdateScript(collectorOnly),
-    ].join("\n");
-  }
   return [
     "set -euo pipefail",
     REMOTE_PATH_BOOTSTRAP,
-    checkoutSearchScript(),
-    "[ -d .git ] || { echo 'Could not find hivemindos checkout'; exit 2; }",
+    ...checkoutPreamble(appDir),
     allowReclone
       ? remoteUpdateScript(collectorOnly)
       : localUpdateScript(collectorOnly),
@@ -746,6 +758,7 @@ async function runRemoteShell(target: string, script: string) {
 }
 
 async function tryTailscaleSsh(body: UpdateBody, collectorOnly = false) {
+  assertRealUpdateAllowed(body);
   const target = body.dnsName || body.name || body.ip;
   if (!target) throw new Error("No Tailscale target was provided.");
   const script = fallbackScript(body.appDir, true, collectorOnly);
@@ -765,6 +778,7 @@ async function tryDetachedTailscaleSsh(
   body: UpdateBody,
   collectorOnly = false,
 ) {
+  assertRealUpdateAllowed(body);
   const target = body.dnsName || body.name || body.ip;
   if (!target) throw new Error("No Tailscale target was provided.");
   const updateSteps = collectorOnly
@@ -812,6 +826,7 @@ async function tryHivemindLinkShell(
   body: UpdateBody,
   collectorOnly = false,
 ) {
+  assertRealUpdateAllowed(body);
   const script = fallbackScript(body.appDir, true, collectorOnly);
   const result = await runHivemindLinkUpdateScript({
     collectorUrl: body.collectorUrl,
@@ -825,6 +840,66 @@ async function tryHivemindLinkShell(
     stdout: result.stdout,
     stderr: "",
     command: script,
+  };
+}
+
+// A simulate request for a remote machine rehearses over the same transports
+// a real update would use — Hivemind Link shell first, then SSH — but only
+// ever sends the read-only rehearsal script. It never falls back to the
+// collector /update endpoint, which cannot simulate.
+async function tryRemoteRehearsal(body: UpdateBody) {
+  const script = updateRehearsalScript(body.appDir);
+  let linkError = "";
+  if (body.collectorUrl) {
+    try {
+      const result = await runHivemindLinkUpdateScript({
+        collectorUrl: body.collectorUrl,
+        script,
+        timeoutMs: HIVEMIND_LINK_UPDATE_TIMEOUT_MS,
+      });
+      if (!result.disconnected) {
+        return {
+          ok: true,
+          accepted: true,
+          method: "hivemind-link-shell-rehearsal",
+          stdout: result.stdout,
+          stderr: "",
+          command: script,
+          simulated: true,
+        };
+      }
+      linkError =
+        "The Hivemind Link shell disconnected before the rehearsal finished.";
+    } catch (error) {
+      // The rehearsal is read-only and idempotent, so retrying over SSH is
+      // safe even when the Link command was accepted before failing.
+      linkError = error instanceof Error ? error.message : String(error);
+    }
+  }
+  const target = body.dnsName || body.name || body.ip;
+  if (!target) {
+    throw new Error(
+      combineOutput(
+        "No rehearsal transport reached this machine: it has no Hivemind Link shell and no Tailscale target.",
+        linkError ? `Hivemind Link shell error:\n${linkError}` : undefined,
+      ),
+    );
+  }
+  const { stdout, stderr } = await runRemoteShell(target, script);
+  return {
+    ok: true,
+    accepted: true,
+    method: "remote-shell-rehearsal",
+    target,
+    stdout,
+    stderr: combineOutput(
+      linkError
+        ? `Hivemind Link shell failed, SSH rehearsal succeeded. Original error:\n${linkError}`
+        : undefined,
+      stderr,
+    ),
+    command: script,
+    simulated: true,
   };
 }
 
@@ -881,7 +956,7 @@ async function isLocalCheckout(appDir?: string) {
 
 async function tryLocalShell(body: UpdateBody, collectorOnly = false) {
   if (body.simulate) {
-    const script = localUpdateRehearsalScript(body.appDir);
+    const script = updateRehearsalScript(body.appDir);
     const { stdout, stderr } = await runProcess("bash", ["-s"], script, 45_000);
     return {
       ok: true,
@@ -988,13 +1063,17 @@ export async function POST(request: Request) {
   }
   const maintenanceReservationToken = reservation.maintenanceReservationToken;
   try {
+    // A simulate request for anything but a local checkout must stay on the
+    // rehearsal path: the transports below run a REAL update on the machine.
     const result = await ((await isLocalCheckout(body.appDir))
       ? tryLocalShell(body, collectorOnly)
-      : body.preferRemoteShell || collectorOnly
-        ? tryPreferredRemoteUpdate(remoteBody, collectorOnly, maintenanceReservationToken)
-        : body.collectorUrl
-          ? tryCollectorUpdate(remoteBody, maintenanceReservationToken)
-          : tryTailscaleSsh(remoteBody, collectorOnly));
+      : body.simulate
+        ? tryRemoteRehearsal(remoteBody)
+        : body.preferRemoteShell || collectorOnly
+          ? tryPreferredRemoteUpdate(remoteBody, collectorOnly, maintenanceReservationToken)
+          : body.collectorUrl
+            ? tryCollectorUpdate(remoteBody, maintenanceReservationToken)
+            : tryTailscaleSsh(remoteBody, collectorOnly));
     if (body.simulate) {
       return Response.json({
         ...result,

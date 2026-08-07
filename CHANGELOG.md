@@ -1719,6 +1719,14 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Rollback: revert the three files; updates return to the bare-`node` script, the four-entry search list, and a `/health` payload without `appDir`.
   - Intended commit message: `fix(fleet): update script survives non-login PATH and finds collector-advertised checkouts`
 
+- 2026-07-25 11:06 EDT (-0400) - A simulated fleet update can no longer run a real update on a remote machine
+  - Status: Committed in `5b10e0e8`; pending integration to `main`.
+  - User-facing release note: `POST /api/fleet/update` with `simulate: true` previously only rehearsed when the target was this machine's own checkout; for a remote machine the flag was silently ignored and the request fell through to real update transports. A remote simulate now runs the read-only rehearsal over Hivemind Link shell first and SSH as fallback. It never falls back to the collector's `/update` endpoint; if no rehearsal transport reaches the machine, the request fails loudly instead of updating anything. Every real update transport also refuses simulate requests outright.
+  - Areas changed: remote rehearsal dispatch and transport guards in `src/app/api/fleet/update/route.ts`, combined with collector-advertised checkout discovery and non-login PATH bootstrapping; end-to-end and source-contract coverage in `scripts/test-fleet-update-reliability.mjs`.
+  - Verification: The branch's focused fleet-update reliability suite passed with a real temporary git checkout proving HEAD and status remain untouched. The merged path retains the newer advertised-checkout and PATH discovery behavior; final focused verification is recorded after integration.
+  - Rollback: Revert the scoped route and test changes to return to the earlier dispatch behavior; doing so would intentionally restore the unsafe remote-simulate fallthrough.
+  - Intended commit message: `fix(fleet): remote update simulate rehearses instead of running a real update`
+
 - 2026-07-25 02:07 EDT (-0400) - A newly created chat project no longer disappears on reload
   - Status: Pushed.
   - User-facing release note: Creating a project from the chat rail's "Create new project" now keeps that project in the sidebar across reloads. Previously the project was only visible while its empty first chat happened to be the selected thread — the folder was saved correctly, but the rail builds its Projects sections from chat threads, so a project with no conversations in it yet rendered nothing and looked deleted. An empty project now shows its own section with a "No chats yet — start one" action, and empty projects sort after projects that hold chats (newest created first) so adding one never pushes active work down the rail.
