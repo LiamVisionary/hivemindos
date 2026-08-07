@@ -1,9 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import type { DashboardView } from "@/features/dashboard/dashboard-types";
 import { GUIDED_TOUR_EVENT } from "@/lib/native/guided-tour";
+import { DEFAULT_FIRST_TASK_PROMPT, FIRST_TASK_EVENT, type FirstTaskEventDetail } from "@/lib/native/first-task";
+import { useModalFocusTrap } from "@/lib/ui/use-modal-focus-trap";
 
 type TourStop = {
   id: "fleet" | "brain" | "work" | "wallets" | "more" | "chat";
@@ -69,11 +72,16 @@ type AnchorRect = { top: number; left: number; width: number; height: number };
 export function GuidedDashboardTour({ selectView, openFirstChat }: {
   selectView: (view: DashboardView) => void;
   /** Open the chat view with the first chat-capable agent selected. Returns false when no agent was available. */
-  openFirstChat: () => boolean;
+  openFirstChat: (prompt?: string) => boolean;
 }) {
   const [stopIndex, setStopIndex] = useState<number | null>(null);
   const [chatReady, setChatReady] = useState(true);
   const [rect, setRect] = useState<AnchorRect | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLElement>(null);
+  const close = useCallback(() => setStopIndex(null), []);
+
+  useModalFocusTrap(stopIndex !== null, cardRef, { onEscape: close, portalRootRef: rootRef });
 
   const openStop = useCallback((index: number) => {
     const stop = TOUR_STOPS[index];
@@ -89,13 +97,14 @@ export function GuidedDashboardTour({ selectView, openFirstChat }: {
   }, [openStop]);
 
   useEffect(() => {
-    if (stopIndex === null) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setStopIndex(null);
+    const startFirstTask = (event: Event) => {
+      const detail = (event as CustomEvent<FirstTaskEventDetail>).detail;
+      openFirstChat(detail?.prompt?.trim() || DEFAULT_FIRST_TASK_PROMPT);
+      setStopIndex(null);
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [stopIndex]);
+    window.addEventListener(FIRST_TASK_EVENT, startFirstTask);
+    return () => window.removeEventListener(FIRST_TASK_EVENT, startFirstTask);
+  }, [openFirstChat]);
 
   useLayoutEffect(() => {
     if (stopIndex === null) return;
@@ -120,13 +129,11 @@ export function GuidedDashboardTour({ selectView, openFirstChat }: {
     };
   }, [stopIndex]);
 
-  if (stopIndex === null) return null;
+  if (stopIndex === null || typeof document === "undefined") return null;
 
   const stop = TOUR_STOPS[stopIndex];
   const body = stop.id === "chat" && !chatReady ? CHAT_BODY_NO_AGENT : stop.body;
   const isLast = stopIndex === TOUR_STOPS.length - 1;
-  const close = () => setStopIndex(null);
-
   const cardStyle = rect
     ? {
         top: rect.top + rect.height + SPOT_PADDING + CARD_MARGIN,
@@ -137,8 +144,8 @@ export function GuidedDashboardTour({ selectView, openFirstChat }: {
       }
     : { top: "50%" as const, left: "50%" as const, transform: "translate(-50%, -50%)" };
 
-  return (
-    <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-label="Guided tour">
+  return createPortal(
+    <div ref={rootRef} className="fixed inset-0 z-[70]" role="presentation">
       {rect ? (
         <div
           aria-hidden="true"
@@ -155,6 +162,11 @@ export function GuidedDashboardTour({ selectView, openFirstChat }: {
         <div aria-hidden="true" className="fixed inset-0 bg-[rgba(2,6,23,0.1)]" />
       )}
       <section
+        ref={cardRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Guided tour"
+        tabIndex={-1}
         className="fixed w-[340px] max-w-[calc(100vw-24px)] rounded-lg border border-[rgba(148,163,184,0.24)] bg-[rgba(8,13,22,0.97)] p-4 text-[var(--foreground)] shadow-2xl"
         style={cardStyle}
       >
@@ -165,11 +177,12 @@ export function GuidedDashboardTour({ selectView, openFirstChat }: {
           <Button type="button" variant="ghost" onClick={close}>
             Skip tour
           </Button>
-          <Button type="button" onClick={() => (isLast ? close() : openStop(stopIndex + 1))}>
+          <Button type="button" data-modal-autofocus onClick={() => (isLast ? close() : openStop(stopIndex + 1))}>
             {isLast ? "Start chatting" : "Next"}
           </Button>
         </div>
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }

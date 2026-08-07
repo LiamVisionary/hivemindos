@@ -242,6 +242,12 @@
   font-size: 11px;
 }
 
+.actionButtons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .actions button {
   display: inline-flex;
   min-width: 190px;
@@ -262,6 +268,19 @@
 
 .actions button:hover:not(:disabled) {
   filter: brightness(1.06);
+}
+
+.actions .secondaryAction {
+  min-width: 164px;
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #d7d1c5;
+  background: transparent;
+  box-shadow: none;
+}
+
+.actions .secondaryAction:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .actions button:focus-visible {
@@ -547,6 +566,11 @@
 
   .actions button {
     width: 100%;
+  }
+
+  .actionButtons {
+    width: 100%;
+    flex-direction: column-reverse;
   }
 
   .loadingShell {

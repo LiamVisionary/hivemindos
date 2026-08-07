@@ -1949,7 +1949,17 @@ set_env_local "NEXT_PUBLIC_GBRAIN_CLI_PATH" "${NEXT_PUBLIC_GBRAIN_CLI_PATH:-gbra
 set_env_local "NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION" "${NEXT_PUBLIC_GBRAIN_SKILLPACK_LOCATION:-Skills/GBrain}"
 set_env_local "NEXT_PUBLIC_SYNTO_CLI_PATH" "${NEXT_PUBLIC_SYNTO_CLI_PATH:-synto}"
 set_env_local "NEXT_PUBLIC_SYNTO_COMPARE_HEAVY_MODEL" "${NEXT_PUBLIC_SYNTO_COMPARE_HEAVY_MODEL:-llama3.1:8b}"
-ensure_gitlawb_code_proof
+enable_code_proof="false"
+if [[ "${HIVE_GITLAWB_SETUP:-}" =~ ^(1|true|yes|on)$ ]]; then
+  enable_code_proof="true"
+elif [[ -z "${HIVE_GITLAWB_SETUP:-}" ]] && setup_is_interactive && prompt_yes_no "Enable Code Proof? This creates a local identity and publishes its public ID to the GitLawb network." "no"; then
+  enable_code_proof="true"
+fi
+if [[ "$enable_code_proof" == "true" ]]; then
+  ensure_gitlawb_code_proof
+else
+  warn "Skipping optional Code Proof; enable it later from Integrations."
+fi
 configure_openclaw_codex_plugin_trust
 
 dashboard_auth_secret="${HIVEMINDOS_DASHBOARD_AUTH_SECRET:-$(env_local_value HIVEMINDOS_DASHBOARD_AUTH_SECRET)}"
@@ -2221,9 +2231,11 @@ else
 fi
 
 if [[ "$CLI_COLLECTOR_ONLY" != "true" && "${HIVEMINDOS_SKIP_WEB_RESEARCH:-0}" != "1" ]]; then
-  install_web_research="true"
-  if setup_is_interactive && ! prompt_yes_no "Install the local keyless web research engine for search, fetch, crawl, screenshots, and PDF OCR?" "yes"; then
-    install_web_research="false"
+  install_web_research="false"
+  if [[ "${HIVE_INSTALL_WEB_RESEARCH:-}" =~ ^(1|true|yes|on)$ ]]; then
+    install_web_research="true"
+  elif [[ -z "${HIVE_INSTALL_WEB_RESEARCH:-}" ]] && setup_is_interactive && prompt_yes_no "Install the local keyless web research engine for search, fetch, crawl, screenshots, and PDF OCR?" "no"; then
+    install_web_research="true"
   fi
   if [[ "$install_web_research" == "true" ]]; then
     info "Installing the pinned local web research engine"

@@ -38,6 +38,21 @@ async function waitForServer(baseUrl, timeoutMs = 15_000) {
   throw new Error("collector did not come up in time");
 }
 
+async function waitForChildExit(childProcess, timeoutMs) {
+  if (childProcess.exitCode !== null) return true;
+  return new Promise((resolve) => {
+    const finish = (exited) => {
+      clearTimeout(timer);
+      childProcess.off("exit", onExit);
+      resolve(exited);
+    };
+    const onExit = () => finish(true);
+    const timer = setTimeout(() => finish(false), timeoutMs);
+    childProcess.once("exit", onExit);
+    if (childProcess.exitCode !== null) finish(true);
+  });
+}
+
 function seedHermesSession(profileDir) {
   const dbPath = join(profileDir, "state.db");
   const sql = `
@@ -137,6 +152,21 @@ try {
 
   console.log("Collector omits client-supplied reserved Hermes profiles from /snapshot.");
 } finally {
-  if (child && !child.killed) child.kill("SIGTERM");
-  await rm(sandbox, { recursive: true, force: true });
+  if (child?.exitCode === null) {
+    child.kill("SIGTERM");
+    await waitForChildExit(child, 5_000);
+  }
+  if (child?.exitCode === null) {
+    child.kill("SIGKILL");
+    await waitForChildExit(child, 5_000);
+  }
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      await rm(sandbox, { recursive: true, force: true });
+      break;
+    } catch (error) {
+      if (attempt === 3) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 150 * (attempt + 1)));
+    }
+  }
 }

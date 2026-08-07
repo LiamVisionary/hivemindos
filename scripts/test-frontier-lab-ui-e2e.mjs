@@ -142,6 +142,7 @@ try {
   browserErrors.length = 0;
 
   await assertFrontierSurface(page);
+  await dismissWelcome(page);
   await page.getByRole("switch").click();
   await page.getByRole("button", { name: "Save Frontier Lab" }).click();
   await page.getByText("Frontier Lab policy saved and enforced on new company work.", { exact: true }).waitFor();
@@ -197,6 +198,9 @@ async function assertFrontierSurface(page) {
 }
 
 async function dismissWelcome(page) {
+  const rewardClose = page.getByRole("button", { name: "Close progress reward" });
+  if (await rewardClose.isVisible().catch(() => false)) await rewardClose.click();
+  await rewardClose.waitFor({ state: "hidden", timeout: 10_000 }).catch(() => undefined);
   const dismiss = page.getByRole("button", { name: "Maybe later" });
   if (await dismiss.isVisible().catch(() => false)) await dismiss.click();
   await dismiss.waitFor({ state: "hidden", timeout: 10_000 }).catch(() => undefined);

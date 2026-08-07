@@ -1,6 +1,6 @@
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 
-export const NATIVE_SETUP_DEMO_ENABLED = true;
+export const NATIVE_SETUP_DEMO_ENABLED = false;
 export const NATIVE_SETUP_RERUN_EVENT = "hivemindos:rerun-setup";
 
 export type NativeSetupCheck = {
@@ -26,17 +26,22 @@ export type NativeSetupStatus = {
   setup_script_available?: boolean;
   setup_script_path?: string | null;
   platform?: string;
+  app_version?: string;
+  setup_source_ref?: string;
   checks?: NativeSetupCheck[];
   detected_agents?: NativeDetectedAgentRuntime[];
   error?: string;
 };
 
 export type NativeSetupRunInput = {
+  runId: string;
   installMode: string;
   skillAgents: string[];
   memoryAgents: string[];
   importSkills: boolean;
   importMemory: boolean;
+  installWebResearch: boolean;
+  enableCodeProof: boolean;
   startDashboard: boolean;
   installCollector: boolean;
   buildDashboard: boolean;
@@ -49,6 +54,7 @@ export type NativeSetupRunResult = {
   command?: string;
   command_path?: string;
   mode?: string;
+  runId?: string;
   error?: string;
 };
 
@@ -60,6 +66,8 @@ export function createNativeSetupDemoStatus(): NativeSetupStatus {
     setup_script_available: true,
     setup_script_path: "./setup.sh",
     platform: "demo",
+    app_version: "demo",
+    setup_source_ref: "demo-pinned-source",
     checks: [
       {
         id: "demo-app",
@@ -68,14 +76,21 @@ export function createNativeSetupDemoStatus(): NativeSetupStatus {
         detail: "Demo preview only. No setup files or services will be changed.",
         optional: false,
       },
+      {
+        id: "collector",
+        label: "Local agent bridge",
+        installed: true,
+        detail: "Demo bridge is ready.",
+        optional: false,
+      },
     ],
     detected_agents: [
       { id: "codex", label: "Codex", installed: true, detail: "Detected for demo preview" },
       { id: "claude", label: "Claude", installed: true, detail: "Detected for demo preview" },
       { id: "hermes", label: "Hermes", installed: true, detail: "Detected for demo preview" },
       { id: "gemini", label: "Gemini", installed: true, detail: "Detected for demo preview" },
-      { id: "openclaw", label: "OpenClaw", installed: true, detail: "Detected for demo preview" },
-      { id: "aeon", label: "Aeon", installed: true, detail: "Detected for demo preview" },
+      { id: "openclaw", label: "OpenClaw", installed: false, detail: "Can be connected later" },
+      { id: "aeon", label: "Aeon", installed: false, detail: "Can be connected later" },
     ],
   };
 }
@@ -103,6 +118,7 @@ export async function runNativeSetup(input: NativeSetupRunInput, options?: Nativ
     return {
       ok: true,
       mode: input.installMode,
+      runId: input.runId,
       command: "demo",
       command_path: "demo",
     };

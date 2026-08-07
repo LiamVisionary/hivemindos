@@ -596,8 +596,10 @@ const {
   );
 
   const setupRs = readFileSync("src-tauri/src/setup.rs", "utf8");
+  const setupRuntime = setupRs.slice(0, setupRs.indexOf("#[cfg(test)]"));
   assert.match(setupRs, /\.hivemindos-source-commit/);
-  assert.match(setupRs, /vnd\.github\.sha/);
+  assert.match(setupRuntime, /HIVEMINDOS_GIT_COMMIT/);
+  assert.doesNotMatch(setupRuntime, /archive\/refs\/heads\/main|commits\/main/);
 }
 
 console.log("collector windows update checks passed");

@@ -1,0 +1,182 @@
+#!/usr/bin/env node
+
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { mkdir } from "node:fs/promises";
+import { createServer } from "node:net";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { chromium } from "playwright";
+
+const projectRoot = fileURLToPath(new URL("..", import.meta.url)).replace(/\/$/, "");
+const artifacts = join(projectRoot, ".outputs", "dogfood", "native-onboarding");
+const port = await freePort();
+const baseUrl = `http://127.0.0.1:${port}`;
+const serverLog = [];
+let child;
+let browser;
+
+await mkdir(artifacts, { recursive: true });
+
+try {
+  child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--hostname", "127.0.0.1", "--port", String(port)], {
+    cwd: projectRoot,
+    detached: true,
+    stdio: ["ignore", "pipe", "pipe"],
+    env: {
+      ...process.env,
+      HIVEMINDOS_ONBOARDING_PREVIEW: "1",
+      HIVEMINDOS_TAURI_BUILD: "0",
+      HIVEMINDOS_TAURI_DEV: "0",
+      HIVEMINDOS_DEV_WARM_ROUTES: "0",
+      HIVEMINDOS_DEV_FS_CACHE: "0",
+      HIVEMINDOS_COMPANY_AUTONOMY_DRIVER: "0",
+      HIVEMINDOS_HIVE_COMPUTE_RESUME: "0",
+      HIVEMINDOS_INBOX_TRIAGE: "0",
+      HIVEMINDOS_MARKETPLACE_MONITOR: "0",
+      HIVEMINDOS_RESEARCH_SYNC: "0",
+      HIVEMINDOS_SOCIAL_QUEUE_ENGINE: "0",
+      HIVEMINDOS_TELEGRAM_TIP_BOT_AUTOSTART: "0",
+      HIVEMINDOS_X_COMMAND_DRIVER: "0",
+      QUEEN_BEE_AUTONOMOUS_PICKUP: "0",
+      NEXT_TELEMETRY_DISABLED: "1",
+    },
+  });
+  child.stdout.on("data", collectLog);
+  child.stderr.on("data", collectLog);
+  await waitForServer(`${baseUrl}/onboarding-preview?platform=macos`);
+
+  browser = await chromium.launch({ headless: process.env.HIVE_E2E_HEADED !== "1" });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: "reduce" });
+  const page = await context.newPage();
+  const browserErrors = [];
+  page.on("pageerror", (error) => browserErrors.push(`pageerror: ${error.message}`));
+  page.on("console", (message) => {
+    if (message.type() === "error" && !message.text().includes("Failed to load resource")) browserErrors.push(`console: ${message.text()}`);
+  });
+
+  for (const fixture of [
+    { platform: "macos", device: "Mac" },
+    { platform: "windows", device: "PC" },
+    { platform: "linux", device: "computer" },
+  ]) {
+    await page.goto(`${baseUrl}/onboarding-preview?platform=${fixture.platform}`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("heading", { name: "Let’s make HivemindOS useful." }).waitFor({ timeout: 30_000 });
+    assert.equal(await page.locator("body > *[inert]").count() > 0, true, `${fixture.platform}: background must be inert`);
+    assert.doesNotMatch(await dialog.innerText(), /takes about a minute|runs entirely on your computer/i);
+    await dialog.getByRole("button", { name: "See setup choices" }).click();
+
+    const localChoice = dialog.getByRole("radio", { name: new RegExp(`Only this ${fixture.device}`, "i") });
+    const multiChoice = dialog.getByRole("radio", { name: /Connect my other computers/i });
+    assert.equal(await localChoice.getAttribute("aria-checked"), "true", `${fixture.platform}: local-only must be default`);
+    assert.equal(await multiChoice.getAttribute("aria-checked"), "false", `${fixture.platform}: networking must be opt-in`);
+    assert.equal(await dialog.getByRole("switch", { name: /Install web research tools/i }).getAttribute("aria-checked"), "false");
+    assert.equal(await dialog.getByRole("switch", { name: /Enable public Code Proof/i }).getAttribute("aria-checked"), "false");
+    assert.match(await dialog.innerText(), /Ready to connect/i);
+    assert.match(await dialog.innerText(), /Can add later/i);
+
+    for (let index = 0; index < 12; index += 1) {
+      await page.keyboard.press("Tab");
+      assert.equal(await page.evaluate(() => {
+        const active = document.activeElement;
+        const openDialog = document.querySelector('[role="dialog"]');
+        return Boolean(active && openDialog?.contains(active));
+      }), true, `${fixture.platform}: focus escaped the modal`);
+    }
+
+    await multiChoice.click();
+    assert.equal(await multiChoice.getAttribute("aria-checked"), "true");
+    assert.equal(await dialog.getByRole("switch", { name: /full system Tailscale/i }).getAttribute("aria-checked"), "false");
+    await dialog.getByRole("switch", { name: /Install web research tools/i }).click();
+    assert.equal(await dialog.getByRole("switch", { name: /Install web research tools/i }).getAttribute("aria-checked"), "true");
+    await page.screenshot({ path: join(artifacts, `${fixture.platform}-choices.png`), fullPage: true });
+
+    await dialog.getByRole("button", { name: new RegExp(`Set up this ${fixture.device}`, "i") }).click();
+    const progress = dialog.getByRole("progressbar", { name: "Setup progress" });
+    await progress.waitFor({ state: "visible" });
+    assert(await dialog.getByRole("log").isVisible(), `${fixture.platform}: live setup log must be visible`);
+    await dialog.getByRole("heading", { name: `This ${fixture.device} is ready.` }).waitFor({ timeout: 10_000 });
+    await page.screenshot({ path: join(artifacts, `${fixture.platform}-ready.png`), fullPage: true });
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${baseUrl}/onboarding-preview?platform=windows`, { waitUntil: "domcontentloaded" });
+  const mobileDialog = page.getByRole("dialog");
+  await mobileDialog.getByRole("heading", { name: "Let’s make HivemindOS useful." }).waitFor();
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  assert.ok(overflow <= 1, `mobile onboarding must not overflow horizontally (delta ${overflow}px)`);
+  await page.screenshot({ path: join(artifacts, "windows-mobile-390.png"), fullPage: true });
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`${baseUrl}/onboarding-preview?platform=macos`, { waitUntil: "domcontentloaded" });
+  const finalDialog = page.getByRole("dialog");
+  await page.evaluate(() => {
+    window.addEventListener("hivemindos:start-first-task", (event) => {
+      window.__firstTaskPrompt = event.detail?.prompt || "";
+    }, { once: true });
+  });
+  await finalDialog.getByRole("button", { name: "See setup choices" }).click();
+  await finalDialog.getByRole("button", { name: "Set up this Mac" }).click();
+  await finalDialog.getByRole("heading", { name: "This Mac is ready." }).waitFor({ timeout: 10_000 });
+  await finalDialog.getByRole("button", { name: "Try a first task" }).click();
+  assert.equal(await page.evaluate(() => window.__firstTaskPrompt), "What can you help me accomplish today?");
+  await page.getByRole("dialog").waitFor({ state: "detached" });
+
+  assert.deepEqual(browserErrors, [], `browser errors:\n${browserErrors.join("\n")}`);
+  console.log(JSON.stringify({
+    ok: true,
+    platforms: ["macos", "windows", "linux"],
+    assertions: "defaults, consent, parity, focus trap, progress semantics, completion, first task, responsive layout, console",
+    screenshots: artifacts,
+  }, null, 2));
+} catch (error) {
+  console.error(`\nIsolated onboarding server log (tail):\n${serverLog.slice(-80).join("\n")}\n`);
+  throw error;
+} finally {
+  await browser?.close();
+  await stopChild();
+}
+
+function collectLog(chunk) {
+  serverLog.push(...String(chunk).split(/\r?\n/).filter(Boolean));
+  if (serverLog.length > 400) serverLog.splice(0, serverLog.length - 400);
+}
+
+async function freePort() {
+  const server = createServer();
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  await new Promise((resolve) => server.close(resolve));
+  assert(address && typeof address === "object");
+  return address.port;
+}
+
+async function waitForServer(url, timeoutMs = 240_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (child?.exitCode !== null && child?.exitCode !== undefined) throw new Error(`Isolated Next server exited with ${child.exitCode}.`);
+    try {
+      const response = await fetch(url);
+      if (response.ok) return;
+    } catch { /* keep waiting */ }
+    await new Promise((resolve) => setTimeout(resolve, 750));
+  }
+  throw new Error(`Timed out waiting for ${url}`);
+}
+
+async function stopChild() {
+  if (!child || child.exitCode !== null) return;
+  try { process.kill(-child.pid, "SIGTERM"); } catch { child.kill("SIGTERM"); }
+  await Promise.race([
+    new Promise((resolve) => child.once("exit", resolve)),
+    new Promise((resolve) => setTimeout(resolve, 5000)),
+  ]);
+  if (child.exitCode === null) {
+    try { process.kill(-child.pid, "SIGKILL"); } catch { child.kill("SIGKILL"); }
+  }
+}

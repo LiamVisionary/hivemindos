@@ -5,7 +5,7 @@ use std::net::{SocketAddr, TcpStream};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -39,6 +39,8 @@ struct NativeSetupStatus {
     setup_script_available: bool,
     setup_script_path: Option<String>,
     platform: &'static str,
+    app_version: &'static str,
+    setup_source_ref: String,
     checks: Vec<SetupCheck>,
     detected_agents: Vec<DetectedAgentRuntime>,
     link_status: NativeLinkStatus,
@@ -57,11 +59,14 @@ struct NativeLinkStatus {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct NativeSetupRunRequest {
+    run_id: Option<String>,
     install_mode: Option<String>,
     skill_agents: Option<Vec<String>>,
     memory_agents: Option<Vec<String>>,
     import_skills: Option<bool>,
     import_memory: Option<bool>,
+    install_web_research: Option<bool>,
+    enable_code_proof: Option<bool>,
     start_dashboard: Option<bool>,
     install_collector: Option<bool>,
     build_dashboard: Option<bool>,
@@ -75,6 +80,8 @@ struct NativeSetupRunResult {
     command: String,
     command_path: String,
     mode: String,
+    #[serde(rename = "runId")]
+    run_id: String,
 }
 
 /// Platform matrix for the native setup flow: which setup script runs, how
@@ -438,6 +445,20 @@ fn sanitize_agent_list(values: Option<Vec<String>>) -> Vec<String> {
     agents
 }
 
+fn sanitize_run_id(value: Option<&str>) -> String {
+    let clean = value
+        .unwrap_or_default()
+        .chars()
+        .filter(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
+        .take(80)
+        .collect::<String>();
+    if clean.is_empty() {
+        format!("setup-{}", chrono::Utc::now().timestamp_millis())
+    } else {
+        clean
+    }
+}
+
 fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
@@ -518,41 +539,40 @@ fn bundled_link_setup_command_for_roots(
     }
 }
 
-// GitHub serves a downloadable, extractable snapshot of any ref at these URLs.
-// We bootstrap the app source from the archive instead of `git clone` so a
-// fresh machine needs no `git` on PATH — a hard blocker on a stock Windows PC,
-// which (unlike macOS/Linux) ships no git. Tracks `main`, the same ref the old
-// git path pulled. NOTE: this still follows a moving branch; pinning the
-// archive to the installed app version is the proper follow-up.
-const APP_SOURCE_ARCHIVE_ZIP: &str =
-    "https://github.com/LiamVisionary/hivemindos/archive/refs/heads/main.zip";
-const APP_SOURCE_ARCHIVE_TARBALL: &str =
-    "https://github.com/LiamVisionary/hivemindos/archive/refs/heads/main.tar.gz";
-// `Accept: application/vnd.github.sha` returns the bare commit SHA as text.
-// Archive checkouts have no `.git`, so the bootstrap records the downloaded
-// commit in `.hivemindos-source-commit`; the telemetry collector reports it so
-// the fleet can tell current from stale (scripts/lib/collector-source-version.mjs
-// reads and validates it). Best-effort on purpose: a failed probe must never
-// fail setup, and an absent marker just reports the version as unknown.
-const APP_SOURCE_LATEST_COMMIT_API: &str =
-    "https://api.github.com/repos/LiamVisionary/hivemindos/commits/main";
+// The native build embeds its exact source commit. First-run downloads that
+// immutable archive instead of following a moving branch, so setup cannot
+// silently change between app signing and installation. Local development
+// builds without a commit fall back to their version tag.
+fn setup_source_ref() -> String {
+    let commit = env!("HIVEMINDOS_GIT_COMMIT").trim();
+    if commit.len() == 40 && commit.chars().all(|character| character.is_ascii_hexdigit()) {
+        commit.to_ascii_lowercase()
+    } else {
+        format!("v{}", env!("CARGO_PKG_VERSION"))
+    }
+}
 
 /// Download + extract the HivemindOS app source into `root` with no `git`
 /// dependency, using tools always present on a stock OS: PowerShell's
 /// Invoke-WebRequest/Expand-Archive on Windows, curl + tar on Unix. Replaces
 /// `root` wholesale each run (the previous git path re-cloned on any
-/// divergence anyway). The archive expands to a single `<repo>-main/` folder;
+/// divergence anyway). The archive expands to a single top-level folder;
 /// both variants move that one extracted dir into place rather than hardcoding
 /// the prefix, so it stays correct if the default ref is ever renamed.
 fn bootstrap_app_source_command(platform: SetupPlatform, root: &Path) -> String {
     let parent = root.parent().unwrap_or_else(|| Path::new("."));
+    let source_ref = setup_source_ref();
+    let archive_suffix = platform.pick("tar.gz", "zip");
+    let archive_url = format!(
+        "https://github.com/LiamVisionary/hivemindos/archive/{source_ref}.{archive_suffix}"
+    );
     match platform {
         SetupPlatform::Unix => format!(
-            "mkdir -p {parent} && _hm_tmp=\"$(mktemp -d)\" && curl -fsSL {url} -o \"$_hm_tmp/src.tar.gz\" && rm -rf {root} && mkdir -p {root} && tar -xzf \"$_hm_tmp/src.tar.gz\" -C {root} --strip-components=1 && (curl -fsSL --max-time 15 -H 'Accept: application/vnd.github.sha' {api_url} -o {root}/.hivemindos-source-commit || true) && rm -rf \"$_hm_tmp\"",
+            "mkdir -p {parent} && _hm_tmp=\"$(mktemp -d)\" && curl -fsSL {url} -o \"$_hm_tmp/src.tar.gz\" && rm -rf {root} && mkdir -p {root} && tar -xzf \"$_hm_tmp/src.tar.gz\" -C {root} --strip-components=1 && printf '%s\\n' {source_ref} > {root}/.hivemindos-source-commit && rm -rf \"$_hm_tmp\"",
             parent = shell_quote(&parent.display().to_string()),
             root = shell_quote(&root.display().to_string()),
-            url = APP_SOURCE_ARCHIVE_TARBALL,
-            api_url = APP_SOURCE_LATEST_COMMIT_API,
+            url = shell_quote(&archive_url),
+            source_ref = shell_quote(&source_ref),
         ),
         SetupPlatform::Windows => {
             // The whole PowerShell program is ONE cmd-level double-quoted arg, so
@@ -561,10 +581,10 @@ fn bootstrap_app_source_command(platform: SetupPlatform, root: &Path) -> String 
             // 'Stop' makes any failure exit powershell non-zero for the caller's
             // `if errorlevel 1`. Tls12 keeps the download working on older boxes.
             format!(
-                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; Write-Host 'Downloading HivemindOS setup files...'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $root='{root}'; $tmp=Join-Path $env:TEMP ('hm-src-'+[guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Force -Path $tmp | Out-Null; $zip=Join-Path $tmp 'src.zip'; Invoke-WebRequest -UseBasicParsing -Uri '{url}' -OutFile $zip; Write-Host 'Unpacking setup files...'; Expand-Archive -Path $zip -DestinationPath $tmp -Force; $inner=Get-ChildItem -Directory $tmp | Select-Object -First 1; if (-not $inner) {{ throw 'app-source archive had no top-level folder' }}; $parent=Split-Path $root -Parent; if ($parent) {{ New-Item -ItemType Directory -Force -Path $parent | Out-Null }}; if (Test-Path $root) {{ Remove-Item -Recurse -Force $root }}; Move-Item $inner.FullName $root; try {{ $shaContent=(Invoke-WebRequest -UseBasicParsing -TimeoutSec 15 -Headers @{{Accept='application/vnd.github.sha'}} -Uri '{api_url}').Content; if ($shaContent -is [byte[]]) {{ $sha=[Text.Encoding]::ASCII.GetString($shaContent).Trim() }} else {{ $sha=(''+$shaContent).Trim() }}; if ($sha -match '^[0-9a-f]{{40}}$') {{ Set-Content -Path (Join-Path $root '.hivemindos-source-commit') -Value $sha -Encoding ASCII }} }} catch {{}}; Remove-Item -Recurse -Force $tmp\"",
-                root = root.display(),
-                url = APP_SOURCE_ARCHIVE_ZIP,
-                api_url = APP_SOURCE_LATEST_COMMIT_API,
+                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; Write-Host 'Downloading HivemindOS setup files...'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $root='{root}'; $tmp=Join-Path $env:TEMP ('hm-src-'+[guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Force -Path $tmp | Out-Null; $zip=Join-Path $tmp 'src.zip'; Invoke-WebRequest -UseBasicParsing -Uri '{url}' -OutFile $zip; Write-Host 'Unpacking setup files...'; Expand-Archive -Path $zip -DestinationPath $tmp -Force; $inner=Get-ChildItem -Directory $tmp | Select-Object -First 1; if (-not $inner) {{ throw 'app-source archive had no top-level folder' }}; $parent=Split-Path $root -Parent; if ($parent) {{ New-Item -ItemType Directory -Force -Path $parent | Out-Null }}; if (Test-Path $root) {{ Remove-Item -Recurse -Force $root }}; Move-Item $inner.FullName $root; Set-Content -Path (Join-Path $root '.hivemindos-source-commit') -Value '{source_ref}' -Encoding ASCII; Remove-Item -Recurse -Force $tmp\"",
+                root = powershell_quote(&windows_shell_path(root)),
+                url = powershell_quote(&archive_url),
+                source_ref = powershell_quote(&source_ref),
             )
         }
     }
@@ -635,28 +655,6 @@ fn write_command_file(command: &str, platform: SetupPlatform) -> Result<PathBuf,
     Ok(command_path)
 }
 
-fn open_command_file(path: &Path) -> Result<(), String> {
-    if cfg!(target_os = "macos") {
-        Command::new("open")
-            .arg(path)
-            .spawn()
-            .map(|_| ())
-            .map_err(|error| error.to_string())
-    } else if cfg!(target_os = "windows") {
-        Command::new("cmd")
-            .args(["/c", "start", "", &path.display().to_string()])
-            .spawn()
-            .map(|_| ())
-            .map_err(|error| error.to_string())
-    } else {
-        Command::new("sh")
-            .arg(path)
-            .spawn()
-            .map(|_| ())
-            .map_err(|error| error.to_string())
-    }
-}
-
 #[tauri::command]
 pub(crate) async fn native_setup_status() -> Result<serde_json::Value, String> {
     tauri::async_runtime::spawn_blocking(collect_native_setup_status)
@@ -688,6 +686,8 @@ fn collect_native_setup_status() -> Result<serde_json::Value, String> {
         setup_script_available: setup_script.is_some(),
         setup_script_path: setup_script.as_ref().map(|path| path.display().to_string()),
         platform: std::env::consts::OS,
+        app_version: env!("CARGO_PKG_VERSION"),
+        setup_source_ref: setup_source_ref(),
         detected_agents: detected_agent_runtimes(),
         link_status: read_native_link_status(),
         checks: vec![
@@ -795,6 +795,8 @@ fn build_setup_invocation(request: NativeSetupRunRequest, platform: SetupPlatfor
     let memory_agents = sanitize_agent_list(request.memory_agents);
     let import_skills = request.import_skills.unwrap_or(true);
     let import_memory = request.import_memory.unwrap_or(true);
+    let install_web_research = request.install_web_research.unwrap_or(false);
+    let enable_code_proof = request.enable_code_proof.unwrap_or(false);
     let skill_list = if import_skills && !skill_agents.is_empty() {
         skill_agents.join(",")
     } else {
@@ -811,22 +813,34 @@ fn build_setup_invocation(request: NativeSetupRunRequest, platform: SetupPlatfor
         // vault/skills seeding internally. Collector mode is the exception:
         // it must be forwarded explicitly so a Link download can never install
         // or start a second dashboard.
-        let mut flags = Vec::new();
+        let windows_network_mode = if mode == "collector" { "link" } else { mode.as_str() };
+        let mut flags = vec![
+            "-NonInteractive".to_string(),
+            "-NetworkMode".to_string(),
+            windows_network_mode.to_string(),
+            "-RuntimeTargets".to_string(),
+            skill_list.clone(),
+        ];
         if mode == "collector" {
-            flags.push("-CollectorOnly");
-            flags.push("-NonInteractive");
+            flags.push("-CollectorOnly".to_string());
         }
         if !request.start_dashboard.unwrap_or(true) {
-            flags.push("-SkipDashboard");
+            flags.push("-SkipDashboard".to_string());
         }
         if !request.build_dashboard.unwrap_or(false) {
-            flags.push("-SkipBuild");
+            flags.push("-SkipBuild".to_string());
         }
         if !request.install_deps.unwrap_or(true) {
-            flags.push("-SkipDeps");
+            flags.push("-SkipDeps".to_string());
         }
         if request.force.unwrap_or(false) {
-            flags.push("-Force");
+            flags.push("-Force".to_string());
+        }
+        if install_web_research {
+            flags.push("-InstallWebResearch".to_string());
+        }
+        if enable_code_proof {
+            flags.push("-EnableCodeProof".to_string());
         }
         let flags = flags.join(" ");
         // Prefer PowerShell 7 (pwsh); fall back to the always-present Windows
@@ -839,7 +853,7 @@ fn build_setup_invocation(request: NativeSetupRunRequest, platform: SetupPlatfor
     }
 
     if mode == "collector" {
-        let mut args = vec![setup_mode_arg(&mode).to_string()];
+        let mut args = vec!["--non-interactive".to_string(), setup_mode_arg(&mode).to_string()];
         if request.force.unwrap_or(false) {
             args.push("--force".to_string());
         }
@@ -852,7 +866,7 @@ fn build_setup_invocation(request: NativeSetupRunRequest, platform: SetupPlatfor
         return (mode, command);
     }
 
-    let mut args = vec!["--interactive".to_string(), setup_mode_arg(&mode).to_string()];
+    let mut args = vec!["--non-interactive".to_string(), setup_mode_arg(&mode).to_string()];
     if !request.start_dashboard.unwrap_or(true) {
         args.push("--skip-dashboard".to_string());
     }
@@ -870,14 +884,16 @@ fn build_setup_invocation(request: NativeSetupRunRequest, platform: SetupPlatfor
     }
     if import_skills {
         args.push(format!("--import-skills={skill_list}"));
-        args.push("--share-skills=all".to_string());
+        args.push(format!("--share-skills={skill_list}"));
     } else {
         args.push("--no-shared-skills".to_string());
     }
 
     let quoted_args = args.iter().map(|arg| shell_quote(arg)).collect::<Vec<_>>().join(" ");
+    let web_research = if install_web_research { "true" } else { "false" };
+    let code_proof = if enable_code_proof { "true" } else { "false" };
     let command = format!(
-        "{root}\nHIVE_MEMORY_IMPORTS={memory_list} ./setup.sh {args}\nif [ {memory_list} != 'none' ] && [ -x ./scripts/import-agent-memory.sh ]; then ./scripts/import-agent-memory.sh --sources {memory_list}; fi",
+        "{root}\nHIVE_INSTALL_WEB_RESEARCH={web_research} HIVE_GITLAWB_SETUP={code_proof} HIVE_GITLAWB_IDENTITY={code_proof} HIVE_GITLAWB_REGISTER={code_proof} HIVE_MEMORY_IMPORTS={memory_list} ./setup.sh {args}\nif [ {memory_list} != 'none' ] && [ -x ./scripts/import-agent-memory.sh ]; then ./scripts/import-agent-memory.sh --sources {memory_list}; fi",
         root = setup_root_command(platform),
         memory_list = shell_quote(&memory_list),
         args = quoted_args,
@@ -888,6 +904,7 @@ fn build_setup_invocation(request: NativeSetupRunRequest, platform: SetupPlatfor
 #[tauri::command]
 pub(crate) fn native_setup_run(app: AppHandle, request: NativeSetupRunRequest) -> Result<serde_json::Value, String> {
     let platform = SetupPlatform::current();
+    let run_id = sanitize_run_id(request.run_id.as_deref());
     let bundled_collector_requested =
         cfg!(feature = "link-app") && request.install_mode.as_deref() == Some("collector");
     let (mode, command) = if bundled_collector_requested {
@@ -896,20 +913,17 @@ pub(crate) fn native_setup_run(app: AppHandle, request: NativeSetupRunRequest) -
         build_setup_invocation(request, platform)
     };
     let command_path = write_command_file(&command, platform)?;
-    // Run the launcher HIDDEN and stream its output to the setup wizard via the
-    // progress event, instead of opening a console window. Fall back to the
-    // visible launcher if the hidden spawn can't start, so setup is never
-    // un-runnable.
-    if let Err(error) = spawn_hidden_setup(app, &command_path, platform) {
-        eprintln!("[native-setup] hidden run failed ({error}); falling back to visible launcher");
-        open_command_file(&command_path)?;
-    }
+    // Run the launcher hidden and stream its exact run id to the wizard. A
+    // failed hidden spawn is returned as an actionable error; a visible
+    // fallback cannot provide a trustworthy completion handshake.
+    spawn_hidden_setup(app, &command_path, platform, &run_id)?;
 
     serde_json::to_value(NativeSetupRunResult {
         ok: true,
         command,
         command_path: command_path.display().to_string(),
         mode,
+        run_id,
     })
     .map_err(|error| error.to_string())
 }
@@ -918,9 +932,10 @@ pub(crate) fn native_setup_run(app: AppHandle, request: NativeSetupRunRequest) -
 /// to the wizard via NATIVE_SETUP_PROGRESS_EVENT. Emits a final
 /// `{ kind: "done", exitCode }` so the wizard can surface a non-zero exit instead
 /// of spinning forever. stdout and stderr are drained on separate threads so a
-/// full pipe can't deadlock. Returns Err if the process cannot be spawned (the
-/// caller then falls back to a visible launcher).
-fn spawn_hidden_setup(app: AppHandle, command_path: &Path, platform: SetupPlatform) -> Result<(), String> {
+/// full pipe can't deadlock. Returns Err if the process cannot be spawned; a
+/// visible fallback would not provide the correlated completion handshake the
+/// wizard requires.
+fn spawn_hidden_setup(app: AppHandle, command_path: &Path, platform: SetupPlatform, run_id: &str) -> Result<(), String> {
     let mut cmd = match platform {
         SetupPlatform::Windows => {
             let mut c = crate::hidden_command("cmd");
@@ -943,12 +958,14 @@ fn spawn_hidden_setup(app: AppHandle, command_path: &Path, platform: SetupPlatfo
         .stderr
         .take()
         .ok_or_else(|| "setup process had no stderr pipe".to_string())?;
+    let run_id = run_id.to_string();
     std::thread::spawn(move || {
         let _ = app.emit(
             NATIVE_SETUP_PROGRESS_EVENT,
-            serde_json::json!({ "kind": "start" }),
+            serde_json::json!({ "runId": run_id.clone(), "kind": "start" }),
         );
         let app_err = app.clone();
+        let run_id_err = run_id.clone();
         let err_handle = std::thread::spawn(move || {
             // Read raw bytes + decode LOSSILY, never `.lines()`: `.lines()` yields an
             // Err and STOPS at the first non-UTF-8 byte. setup.ps1 prints glyphs
@@ -965,7 +982,7 @@ fn spawn_hidden_setup(app: AppHandle, command_path: &Path, platform: SetupPlatfo
                 let line = String::from_utf8_lossy(&bytes).into_owned();
                 let _ = app_err.emit(
                     NATIVE_SETUP_PROGRESS_EVENT,
-                    serde_json::json!({ "kind": "line", "stream": "stderr", "line": line }),
+                    serde_json::json!({ "runId": run_id_err.clone(), "kind": "line", "stream": "stderr", "line": line }),
                 );
             }
         });
@@ -999,20 +1016,20 @@ fn spawn_hidden_setup(app: AppHandle, command_path: &Path, platform: SetupPlatfo
             pending = None;
             let _ = app.emit(
                 NATIVE_SETUP_PROGRESS_EVENT,
-                serde_json::json!({ "kind": "line", "line": line }),
+                serde_json::json!({ "runId": run_id.clone(), "kind": "line", "line": line }),
             );
         }
         if let Some(line) = pending {
             let _ = app.emit(
                 NATIVE_SETUP_PROGRESS_EVENT,
-                serde_json::json!({ "kind": "line", "line": line }),
+                serde_json::json!({ "runId": run_id.clone(), "kind": "line", "line": line }),
             );
         }
         let _ = err_handle.join();
         let exit_code = child.wait().ok().and_then(|status| status.code());
         let _ = app.emit(
             NATIVE_SETUP_PROGRESS_EVENT,
-            serde_json::json!({ "kind": "done", "exitCode": exit_code }),
+            serde_json::json!({ "runId": run_id, "kind": "done", "exitCode": exit_code }),
         );
     });
     Ok(())
@@ -1028,11 +1045,14 @@ mod tests {
     // "just this computer" first-run option.
     fn frontend_local_payload() -> serde_json::Value {
         serde_json::json!({
+            "runId": "test-run-1",
             "installMode": "local",
             "skillAgents": ["claude", "codex"],
             "memoryAgents": [],
             "importSkills": true,
             "importMemory": false,
+            "installWebResearch": false,
+            "enableCodeProof": false,
             "startDashboard": false,
             "installCollector": true,
             "buildDashboard": false,
@@ -1062,10 +1082,13 @@ mod tests {
         assert_eq!(mode, "local");
         assert!(command.contains("./setup.sh"));
         assert!(command.contains("'--local-only'"));
+        assert!(command.contains("'--non-interactive'"));
         assert!(command.contains("'--skip-deps'"));
         assert!(command.contains("'--skip-dashboard'"));
         assert!(command.contains("'--import-skills=claude,codex'"));
         assert!(command.contains("HIVE_MEMORY_IMPORTS='none'"));
+        assert!(command.contains("HIVE_INSTALL_WEB_RESEARCH=false"));
+        assert!(command.contains("HIVE_GITLAWB_SETUP=false"));
         assert!(!command.contains("'--force'"));
     }
 
@@ -1086,6 +1109,9 @@ mod tests {
         assert!(command.contains("-SkipDeps"));
         assert!(command.contains("-SkipDashboard"));
         assert!(command.contains("-SkipBuild"));
+        assert!(command.contains("-NonInteractive"));
+        assert!(command.contains("-NetworkMode local"));
+        assert!(command.contains("-RuntimeTargets claude,codex"));
         assert!(command.contains("where pwsh"));
         assert!(!command.contains("setup.sh"));
         assert!(!command.contains("--local-only"));
@@ -1109,13 +1135,44 @@ mod tests {
     }
 
     #[test]
+    fn optional_first_run_tools_are_explicit_on_both_platforms() {
+        let mut payload = frontend_local_payload();
+        payload["installWebResearch"] = serde_json::json!(true);
+        payload["enableCodeProof"] = serde_json::json!(true);
+
+        let unix_request: NativeSetupRunRequest = serde_json::from_value(payload.clone()).unwrap();
+        let (_, unix) = build_setup_invocation(unix_request, SetupPlatform::Unix);
+        assert!(unix.contains("HIVE_INSTALL_WEB_RESEARCH=true"));
+        assert!(unix.contains("HIVE_GITLAWB_SETUP=true"));
+        assert!(unix.contains("HIVE_GITLAWB_IDENTITY=true"));
+        assert!(unix.contains("HIVE_GITLAWB_REGISTER=true"));
+
+        let windows_request: NativeSetupRunRequest = serde_json::from_value(payload).unwrap();
+        let (_, windows) = build_setup_invocation(windows_request, SetupPlatform::Windows);
+        let ps_flags = windows.rsplit("-File setup.ps1").next().unwrap();
+        assert!(ps_flags.contains("-InstallWebResearch"));
+        assert!(ps_flags.contains("-EnableCodeProof"));
+    }
+
+    #[test]
+    fn run_ids_are_bounded_to_safe_event_correlation_values() {
+        assert_eq!(sanitize_run_id(Some("setup_ABC-123")), "setup_ABC-123");
+        assert_eq!(sanitize_run_id(Some("../unsafe run")), "unsaferun");
+        assert_eq!(sanitize_run_id(Some(&"a".repeat(120))).len(), 80);
+        assert!(sanitize_run_id(None).starts_with("setup-"));
+    }
+
+    #[test]
     fn collector_mode_is_dashboard_free_on_unix_and_windows() {
         let request = || NativeSetupRunRequest {
             install_mode: Some("collector".to_string()),
+            run_id: Some("collector-test".to_string()),
             skill_agents: None,
             memory_agents: None,
             import_skills: None,
             import_memory: None,
+            install_web_research: Some(false),
+            enable_code_proof: Some(false),
             start_dashboard: Some(false),
             install_collector: Some(true),
             build_dashboard: Some(false),
@@ -1177,11 +1234,12 @@ mod tests {
         assert!(windows.contains("Invoke-WebRequest"));
         assert!(windows.contains("Expand-Archive"));
         assert!(windows.contains("Move-Item"));
-        assert!(windows.contains("archive/refs/heads/main.zip"));
+        assert!(windows.contains(&format!("archive/{}.zip", setup_source_ref())));
+        assert!(!windows.contains("refs/heads/main"));
         // The bootstrap records the downloaded source commit so a git-free
         // checkout still reports its version to the fleet.
         assert!(windows.contains(".hivemindos-source-commit"));
-        assert!(windows.contains("vnd.github.sha"));
+        assert!(!windows.contains("api.github.com/repos/LiamVisionary/hivemindos/commits/main"));
 
         let unix = bootstrap_app_source_command(SetupPlatform::Unix, &root);
         for pat in git_invocations {
@@ -1190,9 +1248,10 @@ mod tests {
         assert!(unix.contains("curl -fsSL"));
         assert!(unix.contains("tar -xzf"));
         assert!(unix.contains("--strip-components=1"));
-        assert!(unix.contains("archive/refs/heads/main.tar.gz"));
+        assert!(unix.contains(&format!("archive/{}.tar.gz", setup_source_ref())));
+        assert!(!unix.contains("refs/heads/main"));
         assert!(unix.contains(".hivemindos-source-commit"));
-        assert!(unix.contains("vnd.github.sha"));
+        assert!(!unix.contains("api.github.com/repos/LiamVisionary/hivemindos/commits/main"));
     }
 
     #[test]

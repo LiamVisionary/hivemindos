@@ -17,6 +17,7 @@ import {
   saveDashboardStateValue,
 } from "@/lib/services/dashboard-state-client";
 import styles from "./TermsAcceptanceGate.module.css";
+import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 
 type GateState = "checking" | "required" | "accepted";
 
@@ -61,6 +62,15 @@ export function TermsAcceptanceGate({ children }: { children: ReactNode }) {
       return;
     }
     setGateState("accepted");
+  }
+
+  async function quitWithoutAccepting() {
+    if (isTauriDesktopRuntime()) {
+      const { exit } = await import("@tauri-apps/plugin-process");
+      await exit(0);
+      return;
+    }
+    window.close();
   }
 
   if (gateState === "accepted") return children;
@@ -148,10 +158,13 @@ export function TermsAcceptanceGate({ children }: { children: ReactNode }) {
           {error ? <p className={styles.error} role="alert">{error}</p> : null}
           <div className={styles.actions}>
             <p>If you do not agree, close HivemindOS and do not use the Services.</p>
-            <button type="button" disabled={!agreed || saving} onClick={() => void acceptTerms()}>
-              {saving ? <span className={styles.spinner} aria-hidden="true" /> : <ShieldCheck aria-hidden="true" />}
-              {saving ? "Saving acceptance" : "Accept and continue"}
-            </button>
+            <div className={styles.actionButtons}>
+              <button className={styles.secondaryAction} type="button" onClick={() => void quitWithoutAccepting()}>Quit without accepting</button>
+              <button type="button" disabled={!agreed || saving} onClick={() => void acceptTerms()}>
+                {saving ? <span className={styles.spinner} aria-hidden="true" /> : <ShieldCheck aria-hidden="true" />}
+                {saving ? "Saving acceptance" : "Accept and continue"}
+              </button>
+            </div>
           </div>
         </footer>
       </section>

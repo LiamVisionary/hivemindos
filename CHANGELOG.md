@@ -5,8 +5,17 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-08-06 20:41 EDT (-0400) - Complete the consent-first onboarding redesign
+  - Status: Uncommitted and not included in a desktop release.
+  - User-facing release note: First-run setup now explains its choices in plain language, defaults optional downloads and public Code Proof registration off, reports live progress from the exact setup run, and offers a first task or guided tour after the local bridge is proven online. Terms, onboarding, ClawBank setup, and the dashboard tour keep keyboard focus contained and restore it on close.
+  - Safety and correctness boundary: The production app uses the real native setup flow, never forced demo fixtures. Setup source is pinned to the desktop build's embedded commit; run IDs correlate start, output, result, and completion events; Windows honors the chosen connection mode and runtime targets; and both setup scripts honor the optional-tool choices without treating a stale local collector as successful completion.
+  - Areas changed: native onboarding UI and browser-only preview fixture, shared modal focus containment, first-task and guided-tour handoff, terms-decline exit, native setup TypeScript/Rust contracts, Unix and Windows setup option handling, pinned source bootstrap, privacy regressions, and this changelog.
+  - Verification: The isolated real-browser fixture passes macOS, Windows, and Linux parity; local-only and optional-feature defaults; keyboard containment; live progress semantics; verified completion; first-task handoff; zero console errors; and 390px layout. Whole-project TypeScript, focused zero-warning UI/test lint, native first-launch privacy, legal acceptance, runtime onboarding, Bash and PowerShell syntax, 16 Rust setup tests, native `cargo check`, scoped whitespace, the size and durable-state guards, and the final canonical gate pass. The canonical gate finished 273/273 in 247.9 seconds, and production source reports `NATIVE_SETUP_DEMO_ENABLED = false`.
+  - Recovery: Revert this follow-up and the onboarding-audit merge. No existing vault, chat, task, credential, setup receipt, or external account data is migrated or deleted.
+  - Intended commit message: `fix(setup): complete consent-first onboarding`
+
 - 2026-08-06 20:39 EDT (-0400) - Preserve the isolated onboarding audit state
-  - Status: Uncommitted audit-only source state; production demo mode must remain disabled after integration.
+  - Status: Committed as audit-only source state in `160e2b68` and integrated via `81d15115`; production demo mode is disabled by the follow-up above.
   - Developer note: The registered onboarding audit worktree records its explicit native-setup demo toggle and the shared Kanban integrity-helper cleanup. An exact `node_modules` ignore also prevents the audit's local absolute dependency symlink from entering Git.
   - Areas changed: native setup audit flag, completion-integrity deduplication, repository dependency-symlink ignore, and this changelog.
   - Verification: Scoped whitespace and TypeScript checks are required after integration into current `main`; the completion-integrity cleanup is already independently present and covered by the canonical loop-blocking suite there.
@@ -14,7 +23,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `chore: preserve onboarding audit worktree`
 
 - 2026-08-06 20:24 EDT (-0400) - Reconcile the complete main-worktree integration
-  - Status: Uncommitted and not included in a desktop release.
+  - Status: Committed locally in `b013aeb0` and not included in a desktop release.
   - User-facing release note: The integrated app now preserves Local TTS circuit-breaker recovery, structured remote Hermes replies, every merged Trade destination, a mobile-safe Frontier Lab, and discoverable governance metadata for company budgets, X command controls, trading plans, liquidity monitoring, and prediction-market research.
   - Root cause and scope: The full-worktree merge exposed six canonical-gate mismatches: a stale TTS healthy timestamp, an old plain-text Hermes stream fixture, an outdated three-tab Trade contract, a Next.js child-process cleanup race that had masked real mobile overflow, missing Hive action route registrations, and size ratchets that did not yet represent the integrated legacy research files. The fixes update behavior or contracts at their owning boundaries, make the company cockpit and Frontier surface shrink safely beside the mobile app rail, and keep oversized merged files on exact no-growth watermarks.
   - Areas changed: Local TTS health, fleet stream regression fixture, Trade integration contract, Frontier Lab UI/mobile layout and teardown, operational Hive action catalog, OAuth drift annotations, size ratchets, and this changelog.

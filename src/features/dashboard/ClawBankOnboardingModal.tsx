@@ -6,6 +6,7 @@ import Image from "next/image";
 
 import { normalizeClawBankLoginCode } from "./clawbank-login-code";
 import styles from "./ClawBankOnboardingModal.module.css";
+import { useModalFocusTrap } from "@/lib/ui/use-modal-focus-trap";
 
 /**
  * Guided ClawBank setup for the user's agents (email -> code -> mint). The
@@ -59,6 +60,13 @@ export function ClawBankOnboardingModal({ enabled = true }: ClawBankOnboardingMo
   const bootstrapTokenRef = useRef<string>("");
   const codeInputRef = useRef<HTMLInputElement>(null);
   const emailInputRef = useRef<HTMLInputElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLElement>(null);
+  const stepRef = useRef<Step>(step);
+
+  useEffect(() => {
+    stepRef.current = step;
+  }, [step]);
 
   // Button-only: open ONLY when a button dispatches CLAWBANK_OPEN_EVENT — never
   // automatically. (It used to auto-pop on dashboard hydration, which surfaced it
@@ -98,20 +106,14 @@ export function ClawBankOnboardingModal({ enabled = true }: ClawBankOnboardingMo
     setOpen(false);
   }, []);
 
-  // Lock background scroll + Escape-to-skip (but never interrupt the mint).
-  useEffect(() => {
-    if (!open) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && step !== "initializing") dismiss();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open, step, dismiss]);
+  const dismissOnEscape = useCallback(() => {
+    if (stepRef.current !== "initializing") dismiss();
+  }, [dismiss]);
+
+  useModalFocusTrap(open, dialogRef, {
+    onEscape: dismissOnEscape,
+    portalRootRef: backdropRef,
+  });
 
   // Autofocus the right field as steps change.
   useEffect(() => {
@@ -203,6 +205,7 @@ export function ClawBankOnboardingModal({ enabled = true }: ClawBankOnboardingMo
 
   return createPortal(
     <div
+      ref={backdropRef}
       className={styles.backdrop}
       role="presentation"
       data-step={step}
@@ -211,10 +214,12 @@ export function ClawBankOnboardingModal({ enabled = true }: ClawBankOnboardingMo
       }}
     >
       <section
+        ref={dialogRef}
         className={styles.modal}
         role="dialog"
         aria-modal="true"
         aria-labelledby="clawbank-onboarding-title"
+        tabIndex={-1}
       >
         {step !== "initializing" && step !== "success" ? (
           <button className={styles.close} type="button" aria-label="Skip ClawBank setup" onClick={dismiss}>
@@ -272,7 +277,7 @@ export function ClawBankOnboardingModal({ enabled = true }: ClawBankOnboardingMo
                   Skip for now
                 </button>
                 <button className={styles.primary} type="button" onClick={() => setStep("email")}>
-                  Of course
+                  Explore ClawBank
                 </button>
               </>
             ) : step === "email" ? (

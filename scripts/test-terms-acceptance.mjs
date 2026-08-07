@@ -78,6 +78,8 @@ assert.match(gateSource, /saveDashboardStateValue\([\s\S]*HIVEMINDOS_TERMS_ACCEP
 assert.match(gateSource, /if \(!saved\)/, "failed acceptance persistence must fail closed");
 assert.match(gateSource, /disabled=\{!agreed \|\| saving\}/, "accept action must require an affirmative checkbox");
 assert.match(gateSource, /href="\/privacy"/, "acceptance gate must make the privacy policy available before acceptance");
+assert.match(gateSource, /Quit without accepting/, "acceptance gate must provide an explicit way to leave without accepting");
+assert.match(gateSource, /@tauri-apps\/plugin-process/, "native quit must close the app instead of relying on an explanatory sentence");
 assert.match(gateSource, /private, local-first core/i);
 assert.match(privacyPageSource, /<PrivacyDocument \/>/);
 assert.match(

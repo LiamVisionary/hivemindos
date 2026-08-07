@@ -16,6 +16,12 @@ const env = readFileSync("src-tauri/src/env.rs", "utf8");
 const nativeBootstrap = readFileSync("src-tauri/src/lib.rs", "utf8");
 const bootstrapClient = readFileSync("src/lib/native/dashboard-bootstrap.ts", "utf8");
 const onboarding = readFileSync("src/features/native/NativeFirstRunOnboarding.tsx", "utf8");
+const onboardingStyles = readFileSync("src/features/native/NativeFirstRunOnboarding.module.css", "utf8");
+const setupClient = readFileSync("src/lib/native/setup.ts", "utf8");
+const dashboard = readFileSync("src/features/dashboard/DashboardApp.tsx", "utf8");
+const guidedTour = readFileSync("src/features/dashboard/GuidedDashboardTour.tsx", "utf8");
+const firstTask = readFileSync("src/lib/native/first-task.ts", "utf8");
+const focusTrap = readFileSync("src/lib/ui/use-modal-focus-trap.ts", "utf8");
 const hiveEnv = readFileSync("src/lib/native/hive-env.ts", "utf8");
 const phone = readFileSync("src/lib/native/phone.ts", "utf8");
 const scheduler = readFileSync("src/lib/native/scheduler.ts", "utf8");
@@ -193,8 +199,98 @@ if (!collectorPs.includes("-eq 75") || !collectorPs.includes("consecutiveFastExi
 // done-gate: "done" requires the hidden setup process to have actually exited
 // cleanly, not just any collector responding (a re-run previously jumped
 // straight to the completed screen while setup was still mid-download).
-if (!/setupSettled = demoMode \|\| setupEventlessFallback \|\| \(collectorReady && setupProcessDone && !setupExitError\)/.test(onboarding)) {
+if (
+  !/setupSettled\s*=\s*setupProcessDone\s*&&\s*!setupExitError\s*&&\s*\(demoMode\s*\|\|\s*collectorReady\)/.test(onboarding)
+  || !onboarding.includes("payload.runId !== activeRunIdRef.current")
+) {
   fail("The first-run wizard must gate 'done' on the setup process finishing AND collector health, so a stale collector cannot fake instant completion.");
+}
+
+if (
+  !setup.includes('"runId": run_id')
+  || !setup.includes("spawn_hidden_setup(app, &command_path, platform, &run_id)")
+  || !onboarding.includes("result.runId === runId")
+) {
+  fail("native first-run setup must correlate start, progress, completion, and result to the exact initiating run.");
+}
+
+if (
+  !onboarding.includes("setInstallWebResearch] = useState(false)")
+  || !onboarding.includes("setEnableCodeProof] = useState(false)")
+  || !setupSh.includes("HIVE_INSTALL_WEB_RESEARCH:-")
+  || !setupPs.includes("[switch]$InstallWebResearch")
+  || !setupPs.includes("[switch]$EnableCodeProof")
+) {
+  fail("first-run optional web research and Code Proof downloads must default off and be honored by both setup scripts.");
+}
+
+if (onboarding.includes("setupEventlessFallback")) {
+  fail("The first-run wizard must never turn an old collector or silent event bridge into a successful current setup run.");
+}
+
+if (!onboarding.includes('const [mode, setMode] = useState<InstallMode>("local")')) {
+  fail("First-run networking must default to this computer only.");
+}
+
+if (!onboarding.includes('const WIZARD_STEPS = ["welcome", "setup", "running", "done"]') || /isWindows\s*\?\s*\["welcome"/.test(onboarding)) {
+  fail("macOS, Windows, and Linux must use the same four understandable onboarding steps.");
+}
+
+for (const explicitChoice of ["installWebResearch: boolean", "enableCodeProof: boolean"]) {
+  if (!setupClient.includes(explicitChoice)) fail(`Native setup must carry the explicit optional choice: ${explicitChoice}`);
+}
+
+if (!setupSh.includes('install_web_research="false"') || !setupSh.includes('enable_code_proof="false"')) {
+  fail("Non-interactive setup.sh must keep web research and public Code Proof off without explicit consent.");
+}
+
+if (!setupPs.includes("$installWebResearchRequested") || !setupPs.includes("$enableCodeProofRequested") || setupPs.includes("$installWebResearch = $NonInteractive")) {
+  fail("Non-interactive setup.ps1 must keep optional network/download features off without explicit consent.");
+}
+
+for (const windowsParity of ["-NetworkMode", "-RuntimeTargets", "-NonInteractive", "-InstallWebResearch", "-EnableCodeProof"]) {
+  if (!setup.includes(windowsParity)) fail(`Windows native setup must receive the same approved setup contract: ${windowsParity}`);
+}
+
+const setupRuntime = setup.slice(0, setup.indexOf("#[cfg(test)]"));
+if (setupRuntime.includes("archive/refs/heads/main") || setupRuntime.includes("commits/main") || !setupRuntime.includes('env!("HIVEMINDOS_GIT_COMMIT")')) {
+  fail("Native first-run must download the immutable source embedded in the signed app build, never a moving main branch.");
+}
+
+for (const accessibleContract of [
+  'role="radiogroup"',
+  'role="radio"',
+  'role="switch"',
+  'role="progressbar"',
+  'role="log"',
+  'aria-live="polite"',
+]) {
+  if (!onboarding.includes(accessibleContract)) fail(`Onboarding must expose accessible semantics: ${accessibleContract}`);
+}
+
+if (!focusTrap.includes("child.inert = true") || !focusTrap.includes('event.key !== "Tab"') || !focusTrap.includes("previousFocus?.focus()")) {
+  fail("Portal modals must make the background inert, trap keyboard focus, and restore focus on close.");
+}
+
+if (!/\.close\s*\{[\s\S]*?width:\s*44px;[\s\S]*?height:\s*44px;/.test(onboardingStyles)) {
+  fail("The onboarding close target must meet the 44px touch-target minimum.");
+}
+
+if (/\.logLine\s*\{[^}]*text-overflow:\s*ellipsis/.test(onboardingStyles) || !/\.logLine\s*\{[^}]*overflow-wrap:\s*anywhere/.test(onboardingStyles)) {
+  fail("Setup errors and activity must wrap instead of being silently truncated.");
+}
+
+if (!onboarding.includes("Try a first task") || !onboarding.includes("Show me around") || onboarding.includes("CLAWBANK_OPEN_EVENT")) {
+  fail("Successful setup must lead to a useful first task or tour, not a financial integration.");
+}
+
+if (
+  !firstTask.includes("What can you help me accomplish today?")
+  || !guidedTour.includes("FIRST_TASK_EVENT")
+  || !dashboard.includes("setText(prompt)")
+  || !dashboard.includes("startAgentChat(target.id, { fresh: true })")
+) {
+  fail("The first-task action must open a fresh chat and provide a lay-user prompt without auto-sending it.");
 }
 
 if (!collectorPs.includes("Remove-HivemindStartupLauncher -Name $Name")) {

@@ -7,6 +7,9 @@
   [switch]$Full,
   [ValidateSet("link", "system-tailscale", "local")]
   [string]$NetworkMode = "",
+  [string]$RuntimeTargets = "all",
+  [switch]$InstallWebResearch,
+  [switch]$EnableCodeProof,
   [switch]$Force,
   [int]$Port = 0,
   [int]$CollectorPort = 0
@@ -140,6 +143,16 @@ if (@("link", "system-tailscale", "local") -notcontains $resolvedNetworkMode) {
 }
 $env:HIVE_NETWORK_MODE = $resolvedNetworkMode
 $env:HIVE_LINK_ENABLED = ($resolvedNetworkMode -eq "link").ToString().ToLowerInvariant()
+$knownRuntimeTargets = @("codex", "claude", "hermes", "gemini", "openclaw", "aeon")
+$runtimeTargetIds = if ($RuntimeTargets.Trim().ToLowerInvariant() -eq "all") {
+  $knownRuntimeTargets
+} elseif ($RuntimeTargets.Trim().ToLowerInvariant() -eq "none") {
+  @()
+} else {
+  @($RuntimeTargets.Split(",") | ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $knownRuntimeTargets -contains $_ } | Select-Object -Unique)
+}
+$installWebResearchRequested = $InstallWebResearch -or $env:HIVE_INSTALL_WEB_RESEARCH -match '^(1|true|yes|on)$'
+$enableCodeProofRequested = $EnableCodeProof -or $env:HIVE_GITLAWB_SETUP -match '^(1|true|yes|on)$'
 
 function Info($Message) { Write-Host $Message -ForegroundColor Cyan }
 function Ok($Message) { Write-Host "✓ $Message" -ForegroundColor Green }
@@ -694,7 +707,14 @@ Ensure-Obsidian
 Ensure-Gpg
 Ensure-HivePulsePython
 Ensure-HiveEnvAdd
-Ensure-GitLawbCodeProof
+if (-not $NonInteractive -and -not $enableCodeProofRequested) {
+  $enableCodeProofRequested = Ask-YesNo "Enable Code Proof? This creates a local identity and publishes its public ID to the GitLawb network." $false
+}
+if ($enableCodeProofRequested) {
+  Ensure-GitLawbCodeProof
+} else {
+  Warn "Skipping optional Code Proof; enable it later from Integrations."
+}
 
 if ($Missing.Count -gt 0) {
   Write-Host ""
@@ -967,18 +987,22 @@ function Sync-SharedSkillsToRuntime {
 }
 
 function Get-AgentInstructionFiles {
+  param([string[]]$Agents = @("codex", "claude", "hermes", "gemini", "openclaw", "aeon"))
   $homeDir = [Environment]::GetFolderPath("UserProfile")
-  @(
-    "$homeDir\.codex\AGENTS.md",
-    "$homeDir\.claude\CLAUDE.md",
-    "$homeDir\.hermes\SOUL.md",
-    "$homeDir\.hermes\AGENTS.md",
-    "$homeDir\.gemini\GEMINI.md",
-    "$homeDir\.openclaw\AGENTS.md",
-    "$homeDir\.aeon\AGENTS.md"
-  )
-  Get-ChildItem "$homeDir\.openclaw" -Directory -Filter "workspace-*" -ErrorAction SilentlyContinue |
-    ForEach-Object { Join-Path $_.FullName "AGENTS.md" }
+  foreach ($agent in $Agents) {
+    switch ($agent) {
+      "codex" { "$homeDir\.codex\AGENTS.md" }
+      "claude" { "$homeDir\.claude\CLAUDE.md" }
+      "hermes" { "$homeDir\.hermes\SOUL.md"; "$homeDir\.hermes\AGENTS.md" }
+      "gemini" { "$homeDir\.gemini\GEMINI.md" }
+      "openclaw" {
+        "$homeDir\.openclaw\AGENTS.md"
+        Get-ChildItem "$homeDir\.openclaw" -Directory -Filter "workspace-*" -ErrorAction SilentlyContinue |
+          ForEach-Object { Join-Path $_.FullName "AGENTS.md" }
+      }
+      "aeon" { "$homeDir\.aeon\AGENTS.md" }
+    }
+  }
 }
 
 function Remove-HivemindManagedBlock {
@@ -1107,7 +1131,7 @@ function Install-ClaudeBrainHook {
 }
 
 Seed-BundledSharedSkills -VaultPath $vaultPath
-@("codex", "claude", "hermes", "gemini", "openclaw", "aeon") | ForEach-Object {
+$runtimeTargetIds | ForEach-Object {
   Sync-SharedSkillsToRuntime -Agent $_ -VaultPath $vaultPath
 }
 # Push the full bundled brain (skills, packaged skills, and the For Users /
@@ -1120,11 +1144,12 @@ if ($LASTEXITCODE -ne 0) { Warn "Brain sync reported issues; the shared shelf is
 # read/prepare, and the governed send/swap/stock execute tools) regardless of
 # runtime. The device token stays out of harness configs (the server reads it
 # from the checkout via HIVE_ENV_PROJECT_ROOT).
-& node (Join-Path $Root "scripts\register-mcp-clients.mjs") --targets all
+$runtimeTargetList = if ($runtimeTargetIds.Count -gt 0) { $runtimeTargetIds -join "," } else { "none" }
+& node (Join-Path $Root "scripts\register-mcp-clients.mjs") --targets $runtimeTargetList
 if ($LASTEXITCODE -ne 0) { Warn "MCP client registration reported issues; harness tools may need a manual re-run" }
 Write-HivemindManagedBlock -Path (Join-Path $vaultPath "AGENTS.md") -VaultPath $vaultPath
-Get-AgentInstructionFiles | ForEach-Object { Write-HivemindManagedBlock -Path $_ -VaultPath $vaultPath }
-Install-ClaudeBrainHook
+Get-AgentInstructionFiles -Agents $runtimeTargetIds | ForEach-Object { Write-HivemindManagedBlock -Path $_ -VaultPath $vaultPath }
+if ($runtimeTargetIds -contains "claude") { Install-ClaudeBrainHook }
 Ok "Runtime skill and memory hints installed for local agents"
 if (-not (Test-Path (Join-Path $vaultPath "$scheduledFolder/README.md"))) {
   Set-Content -Path (Join-Path $vaultPath "$scheduledFolder/README.md") -Value "# Automations`n`nShared schedule definitions and run history for HivemindOS agents.`n`n- ``<device>/<schedule>/schedule.md`` stores each schedule snapshot.`n- ``run0001-<agent>-<timestamp>.md`` files store execution history."
@@ -1176,8 +1201,10 @@ if ($SkipDeps) {
 }
 
 if (-not $CollectorOnly -and $env:HIVEMINDOS_SKIP_WEB_RESEARCH -ne "1") {
-  $installWebResearch = $NonInteractive -or (Ask-YesNo "Install the local keyless web research engine for search, fetch, crawl, screenshots, and PDF OCR?" $true)
-  if ($installWebResearch) {
+  if (-not $NonInteractive -and -not $installWebResearchRequested) {
+    $installWebResearchRequested = Ask-YesNo "Install the local keyless web research engine for search, fetch, crawl, screenshots, and PDF OCR?" $false
+  }
+  if ($installWebResearchRequested) {
     Info "Installing the pinned local web research engine"
     & node (Join-Path $Root "scripts\install-web-research.mjs")
     if ($LASTEXITCODE -eq 0) {

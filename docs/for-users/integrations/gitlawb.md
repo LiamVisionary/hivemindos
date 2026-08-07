@@ -16,17 +16,16 @@ Shared Brain Memory can also write GitLawb memory receipts. These receipts prove
 
 ## Default Setup
 
-HivemindOS uses a proof ready default:
+HivemindOS keeps Code Proof optional during first-run setup:
 
-- GitLawb CLI and remote helper are recommended during macOS/Linux setup.
-- A local DID can be created during setup with `gl identity new`.
-- Public node registration is not performed by default.
+- GitLawb is not downloaded unless the user enables **Public Code Proof**.
+- When enabled, the same choice works on macOS, Windows, and Linux.
+- A local DID is created with `gl identity new`.
+- The DID's public ID is registered with the selected GitLawb network; private keys stay local.
 - A GitLawb node is not started by default.
 - Public federation, staking, IPFS, Arweave, and public exposure remain explicit opt-in work.
 
-The Tauri first-run wizard opens a user-approved Terminal command that runs `setup.sh --interactive ...`. That setup path prompts for Code Proof in the terminal. The wizard itself does not silently install GitLawb in the background.
-
-Windows setup currently detects an existing `gl` and can create a DID if present, but it does not run the macOS/Linux static installer automatically.
+The Tauri wizard explains this network effect on its choices screen, keeps the switch off, and passes the approved value to a non-interactive background setup. Users can leave it off and enable Code Proof later from Integrations.
 
 ## Full Node Weight
 

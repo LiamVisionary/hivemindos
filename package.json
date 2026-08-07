@@ -201,6 +201,7 @@
     "test:document-ingestion": "node scripts/test-document-ingestion.mjs",
     "test:company-aeon": "node scripts/test-company-aeon-execution.mjs",
     "test:native-first-launch-privacy": "node scripts/test-native-first-launch-privacy.mjs",
+    "test:e2e:native-onboarding": "node scripts/test-native-onboarding-ui-e2e.mjs",
     "test:markitdown-bundle": "node scripts/test-markitdown-bundle.mjs",
     "test:legal-policies": "node --import tsx scripts/test-terms-acceptance.mjs",
     "test:taildrop-ingest": "node scripts/test-taildrop-ingest.mjs",

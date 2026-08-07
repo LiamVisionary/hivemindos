@@ -53,7 +53,11 @@ This is the supported full packaged desktop mode. It keeps the browser and deskt
 
 Local `pnpm tauri:build` produces the embedded production `.app` bundle and intentionally skips local DMG creation, updater signing, and release-channel update prompts, because DMG packaging depends on the host `hdiutil` disk-image device stack and updater artifacts require the release signing key. GitHub releases use `pnpm tauri:build:release` after downloading the shared embedded standalone artifact, so published releases still produce DMG/updater assets and remain eligible for signed GitHub update checks.
 
-Opening the packaged app does not auto-run `setup.sh` or `install.sh`. The first-run setup wizard checks local capabilities from native code, asks the user how to install the hive, detects agent runtimes, lets skills and memory imports be selected independently, then opens an explicit Terminal command only after the user approves it. That terminal setup path runs the setup script in packaged-app mode with dependency installation, dashboard builds, and the source dev server skipped, so downloaded-app users do not get the full source workspace `pnpm install`. Users who want source/dev mode should clone the GitHub repo and run setup from that checkout. The setup flow can still prompt for GitLawb Code Proof CLI and DID preparation. It does not silently start a full GitLawb node or install Docker/Postgres.
+Opening the packaged app does not auto-run `setup.sh` or `install.sh`. The first-run wizard uses the same four steps on macOS, Windows, and Linux: an explanation, one choices screen, live progress, and a verified completion screen. It detects AI helpers without reading private files, defaults to this computer only, and clearly separates helpers that are ready from ones users can add later. “Not now” asks again on a future launch; “Use without setup” is a durable choice that can be reversed from Settings.
+
+Setup begins only after the user selects **Set up this computer**. It runs non-interactively in the background, streams an accessible activity log, and does not report success until that exact setup process exits successfully and the local agent bridge answers. The app downloads the immutable source commit embedded in the installed build instead of a moving branch. Packaged-app setup skips the source dependency install, dashboard build, and development server, so downloaded-app users do not get the full source workspace `pnpm install`. Users who want source/development mode should clone the repository and run setup from that checkout.
+
+The default path creates the local workspace and bridge only. Hivemind Link, full system Tailscale, the web-research runtime, and Code Proof are optional choices. Web research and Code Proof start off. Enabling Code Proof explicitly downloads GitLawb, creates a local DID, and registers its public ID with the GitLawb network; private keys remain local. Setup never starts a full GitLawb node or installs Docker/Postgres. After verified completion, the primary action opens a fresh chat with a plain first-task prompt; it does not automatically open a wallet or financial integration.
 
 For debugging or constrained builds, a static fallback can still be generated:
 
@@ -79,9 +83,9 @@ The desktop shell exposes a narrow command surface for operations that should be
 | `display_local_path` | `displayNativeLocalPath` | Normalize local paths for display |
 | `fleet_discover` | `getNativeFleetDiscovery` | Discover Tailnet machines and collector-backed agents for the static fallback |
 | `native_setup_status` | `readNativeSetupStatus` | Detect setup prerequisites and local agent runtimes for the first-run wizard |
-| `native_setup_run` | `runNativeSetup` | Open a user-approved Terminal command that runs `setup.sh` with selected wizard options |
+| `native_setup_run` | `runNativeSetup` | Run the approved, pinned setup contract in the background and stream run-correlated progress |
 
-The wizard delegates Code Proof preparation to `setup.sh`: macOS/Linux users can accept the GitLawb CLI and DID prompts in the opened terminal, while full local node hosting remains a later Integrations/project-linking action.
+The wizard passes the same explicit Code Proof choice to both setup scripts. Full local node hosting remains a later Integrations/project-linking action.
 
 The browser path remains fully supported. Frontend code calls native helpers only when Tauri is detected and the target collector URL is local. Remote machines still use Hivemind Link or collector directory APIs, so local native privileges are never confused with remote access.
 

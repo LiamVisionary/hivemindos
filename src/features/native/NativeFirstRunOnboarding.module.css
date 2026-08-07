@@ -110,8 +110,8 @@
   z-index: 4;
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   color: var(--fg-3);
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--line);
@@ -120,6 +120,15 @@
   transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
 }
 .close:hover { color: var(--fg); background: rgba(255, 255, 255, 0.07); border-color: var(--line-2); }
+.close:focus-visible,
+.choice:focus-visible,
+.adv:focus-visible,
+.btn:focus-visible,
+.copy:focus-visible,
+.detailSummary:focus-visible {
+  outline: 3px solid var(--honey-line);
+  outline-offset: 3px;
+}
 
 /* ---- Hero --------------------------------------------------------------- */
 .hero {
@@ -197,6 +206,17 @@
 .center .lede { margin-inline: auto; }
 .lede strong { color: var(--fg); font-weight: 600; }
 .lede code { font-family: var(--f-mono); color: var(--honey-2); }
+.srStatus {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 
 /* ---- Welcome capability cards ------------------------------------------- */
 .caps { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
@@ -302,7 +322,11 @@
   background: rgba(255, 255, 255, 0.012);
   animation: fadeUp 280ms ease both;
   cursor: pointer;
+  width: 100%;
+  color: inherit;
+  text-align: left;
 }
+.adv:hover { border-color: var(--line-3); background: rgba(255, 255, 255, 0.025); }
 .toggle {
   position: relative;
   flex: 0 0 auto;
@@ -335,7 +359,7 @@
   border-radius: var(--radius);
 }
 .agentsHint { margin: 0; font-size: 13px; line-height: 1.5; color: var(--fg-2); }
-.agentChips { display: flex; flex-wrap: wrap; gap: 8px; }
+.agentChips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .agentChip {
   display: inline-flex; align-items: center; gap: 7px;
   max-width: 100%;
@@ -345,18 +369,50 @@
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--line-2);
   border-radius: 999px;
-  cursor: pointer;
-  transition: color 150ms ease, background 150ms ease, border-color 150ms ease, transform 150ms ease;
+  cursor: default;
 }
-.agentChip:hover { transform: translateY(-1px); border-color: var(--line-3); color: var(--fg); }
 .agentChip[data-on="true"] {
   color: var(--honey-ink);
   background: linear-gradient(180deg, var(--honey-2), var(--honey));
   border-color: var(--honey-line);
 }
-.agentChip[data-found="false"] { opacity: 0.5; }
-.agentChip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agentChip[data-found="false"] { opacity: 0.72; }
+.agentChip[data-found="true"] { color: var(--live-2); border-color: var(--live-line); background: var(--live-soft); }
+.agentChip span { min-width: 0; overflow-wrap: anywhere; }
 .agentNote { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--fg-3); }
+
+.fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+  margin: 5px 0 0;
+  padding: 13px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+}
+.fieldset legend,
+.helperGroups h3 {
+  padding: 0 5px;
+  color: var(--fg);
+  font-family: var(--f-display);
+  font-size: 13px;
+  font-weight: 600;
+}
+.helperGroups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.012);
+}
+.helperGroups h3 { margin: 0; padding: 0; }
+.helperGroup { display: flex; flex-direction: column; gap: 7px; }
+.helperGroup > p { margin: 0; color: var(--fg-3); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.helperGroup > small { color: var(--fg-3); font-size: 11.5px; line-height: 1.45; }
+.scan { align-self: flex-start; min-height: 40px; font-size: 12px; }
 
 /* ---- Plan checklist ----------------------------------------------------- */
 .plan { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; }
@@ -432,12 +488,12 @@
   line-height: 1.7;
   color: var(--fg-2);
   height: 138px;
-  overflow: hidden;
+  overflow: auto;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
 }
-.logLine { display: flex; gap: 8px; animation: logIn 260ms ease both; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.logLine { display: flex; gap: 8px; animation: logIn 260ms ease both; white-space: pre-wrap; overflow-wrap: anywhere; }
 .logLine .logOk { color: var(--live-2); }
 .logLine .logRun { color: var(--honey-2); }
 .logLine .logDim { color: var(--fg-4); }
@@ -480,6 +536,8 @@
 .detailSummary { cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--fg-2); }
 .detailSummary:hover { color: var(--fg); }
 .detailBody { margin-top: 10px; font-size: 12px; line-height: 1.55; color: var(--fg-3); }
+.detailBody p { margin: 5px 0; }
+.detailBody code { overflow-wrap: anywhere; font-family: var(--f-mono); color: var(--honey-2); }
 .pre { margin: 8px 0 0; padding: 11px 13px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: var(--f-mono); font-size: 11px; color: var(--fg-2); background: rgba(6, 8, 11, 0.66); border: 1px solid var(--line); border-radius: 10px; }
 
 /* ---- Footer / buttons --------------------------------------------------- */
@@ -487,6 +545,7 @@
 .disclaimer { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--fg-3); }
 .footActions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
 .footActions .grow { margin-right: auto; }
+.doneActions { display: flex; width: 100%; align-items: center; flex-wrap: wrap; gap: 10px; }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
@@ -526,6 +585,26 @@
     animation: none !important;
   }
   .mkCircle, .mkTick { stroke-dashoffset: 0; }
+}
+
+@media (max-width: 640px), (max-height: 700px) {
+  .stage { place-items: stretch; }
+  .modal {
+    width: 100vw;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+  .hero { padding: 15px 66px 13px 18px; }
+  .mark { width: 42px; height: 42px; }
+  .rail { display: none; }
+  .body { padding: 18px 18px 6px; }
+  .foot { padding: 13px 18px 18px; }
+  .footActions { align-items: stretch; flex-direction: column-reverse; }
+  .footActions .grow { width: 100%; margin-right: 0; }
+  .btn { width: 100%; min-height: 44px; white-space: normal; }
+  .doneActions { flex-direction: column; }
+  .choice { grid-template-columns: auto 1fr auto; padding: 13px; }
+  .emblem { transform: scale(0.82); margin-block: -8px; }
 }
 
 /* ---- Hive-light mirror --------------------------------------------------

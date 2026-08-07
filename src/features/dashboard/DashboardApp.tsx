@@ -4369,13 +4369,13 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       />
       <GuidedDashboardTour
         selectView={setActiveView}
-        openFirstChat={() => {
+        openFirstChat={(prompt) => {
           const target = displayAgents.find((agent) => runtimeCan(agent, "chat"));
+          if (prompt) setText(prompt);
           if (!target) {
-            setActiveView("chat");
-            return false;
+            setActiveView("chat"); return false;
           }
-          startAgentChat(target.id);
+          startAgentChat(target.id, { fresh: true });
           return true;
         }}
       />
