@@ -7037,6 +7037,7 @@ async function collectorHealthPayload() {
       host: hostname(),
       machineId,
       tailnetSelf,
+      appDir, // checkout root — the fleet update route cds here instead of guessing
       mode: collectorOnly ? "collector-only" : "full",
       collectorStartedAt,
       collectorStartedAtMs,

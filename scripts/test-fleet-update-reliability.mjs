@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { register } from "node:module";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
@@ -262,6 +264,74 @@ function jsonResponse(payload, status = 200) {
     /if \(options\.waitForRefresh === false\)[\s\S]*?installedRuntimesCache\s*\?[\s\S]*?: \[\]/,
     "cold runtime probes should refresh in the background while health uses an empty fallback",
   );
+
+  // 2026-07-25 fleet rollout failures. (1) NYC Mac: linkd's non-login shell
+  // PATH misses /opt/homebrew/bin and /usr/local/bin, so the script's bare
+  // `node` died with "command not found". (2) Ubuntu VPS: the checkout search
+  // list missed the real checkout at /root/hivemindos-collector-current.
+  assert.match(
+    updateRouteSource,
+    /REMOTE_PATH_BOOTSTRAP\s*=\s*\n?\s*'export PATH="\$PATH:\/opt\/homebrew\/bin:\/usr\/local\/bin"'/,
+    "update scripts must append the Homebrew/local bin dirs for linkd's non-login PATH",
+  );
+  const bootstrapUses = updateRouteSource.match(
+    /"set -euo pipefail",\s*\n\s*REMOTE_PATH_BOOTSTRAP,/g,
+  );
+  assert.ok(
+    (bootstrapUses?.length ?? 0) >= 3,
+    "every generated update script (fallback ×2, rehearsal, detached) must extend PATH before invoking node/pnpm",
+  );
+  assert.match(
+    updateRouteSource,
+    /CHECKOUT_SEARCH_CANDIDATES[\s\S]*?hivemindos-collector-current/,
+    "the checkout search list must include the hivemindos-collector-current VPS layout",
+  );
+  assert.doesNotMatch(
+    updateRouteSource,
+    /for d in "\$HOME\/hivemindos"/,
+    "checkout search lists must be single-sourced from CHECKOUT_SEARCH_CANDIDATES",
+  );
+  assert.match(
+    collectorSource,
+    /machineId,\s*\n\s*tailnetSelf,\s*\n\s*appDir,/,
+    "collector /health must advertise its checkout root so updates stop guessing paths",
+  );
+  assert.match(
+    updateRouteSource,
+    /advertisedCollectorAppDir\(preUpdateHealth\)[\s\S]*?isLocalCheckout\(body\.appDir\)/,
+    "the route must adopt the collector-advertised appDir for remote paths only — the local-shell decision stays on the caller-provided path",
+  );
+}
+
+{
+  // Reproduces the NYC Mac failure mode: with a PATH that cannot resolve node,
+  // the pre-fix script died at its bare `node` call. Execute the actual
+  // bootstrap line from the route source (hardcoded dirs redirected into a
+  // writable scratch dir) and prove a bare `node` resolves afterwards.
+  const updateRouteSource = readFileSync("src/app/api/fleet/update/route.ts", "utf8");
+  const bootstrap = updateRouteSource.match(
+    /REMOTE_PATH_BOOTSTRAP\s*=\s*\n?\s*'([^']+)'/,
+  )?.[1];
+  assert.ok(bootstrap, "REMOTE_PATH_BOOTSTRAP must stay a single-quoted one-liner");
+  const scratch = mkdtempSync(join(tmpdir(), "hive-update-path-"));
+  try {
+    writeFileSync(join(scratch, "node"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    const probe = bootstrap
+      .replaceAll("/opt/homebrew/bin", scratch)
+      .replaceAll("/usr/local/bin", scratch);
+    const resolved = execFileSync(
+      "/bin/sh",
+      ["-c", `${probe}\ncommand -v node`],
+      { encoding: "utf8", env: { PATH: "/nonexistent-bin" } },
+    ).trim();
+    assert.equal(
+      resolved,
+      join(scratch, "node"),
+      "the PATH bootstrap must make a bare `node` resolvable in a non-login shell",
+    );
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
 }
 
 console.log("fleet update reliability checks passed");

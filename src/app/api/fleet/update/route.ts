@@ -35,6 +35,7 @@ type UpdateBody = {
 type CollectorHealth = {
   ok?: boolean;
   mode?: string;
+  appDir?: string;
   collectorStartedAt?: string;
   collectorStartedAtMs?: number;
   capabilities?: {
@@ -88,6 +89,15 @@ async function fetchCollectorHealth(
   }).catch(() => null);
   if (!response?.ok) return null;
   return response.json().catch(() => null) as Promise<CollectorHealth | null>;
+}
+
+// Collectors advertise their own checkout root in /health `appDir`. Adopt it
+// only for remote execution paths: a remote machine's path may exist on this
+// machine too (identical layouts across Macs), and must never flip the update
+// into the local-shell branch here.
+function advertisedCollectorAppDir(health: CollectorHealth | null) {
+  const value = typeof health?.appDir === "string" ? health.appDir.trim() : "";
+  return value.startsWith("/") ? value : "";
 }
 
 function hasRequiredCapabilities(
@@ -399,6 +409,31 @@ function shellSingleQuote(value: string) {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
+// The Hivemind Link shell and launchd/systemd-spawned collectors run with a
+// minimal non-login PATH that misses /opt/homebrew/bin and /usr/local/bin on
+// macOS, so the update script's bare `node`/`pnpm` calls die with "command
+// not found" (NYC Mac, 2026-07-25). Append — never prepend — the known
+// install dirs so a toolchain already on PATH keeps winning.
+const REMOTE_PATH_BOOTSTRAP =
+  'export PATH="$PATH:/opt/homebrew/bin:/usr/local/bin"';
+
+// Real fleet checkout layouts. /root/hivemindos-collector-current is the
+// Ubuntu VPS collector checkout the old list missed (2026-07-25); collectors
+// now advertise their checkout in /health `appDir`, so this list is only the
+// fallback for collectors that predate that field.
+const CHECKOUT_SEARCH_CANDIDATES = [
+  '"$HOME/hivemindos"',
+  '"$HOME/hivemindos-collector-current"',
+  '"$HOME/openclaw-next"',
+  "/root/hivemindos",
+  "/root/hivemindos-collector-current",
+  "/opt/hivemindos",
+];
+
+function checkoutSearchScript() {
+  return `for d in ${CHECKOUT_SEARCH_CANDIDATES.join(" ")}; do if [ -d "$d/.git" ]; then cd "$d"; break; fi; done`;
+}
+
 function installScriptForCheckout(collectorOnly = false) {
   if (collectorOnly) {
     // Agent-bridge machines skip the workspace install; the installer fetches the
@@ -515,6 +550,7 @@ function localUpdateScript(collectorOnly = false) {
 function localUpdateRehearsalScript(appDir?: string) {
   const script = [
     "set -euo pipefail",
+    REMOTE_PATH_BOOTSTRAP,
     appDir?.trim() ? `cd ${shellSingleQuote(appDir.trim())}` : "",
     "echo 'HivemindOS update rehearsal started.'",
     "git rev-parse --is-inside-work-tree >/dev/null",
@@ -522,6 +558,7 @@ function localUpdateRehearsalScript(appDir?: string) {
     'echo "branch=$(git rev-parse --abbrev-ref HEAD)"',
     "echo 'working-tree-status:'",
     "git status --short --untracked-files=no || true",
+    "if command -v node >/dev/null 2>&1; then echo \"node=$(node --version)\"; else echo 'node=missing'; fi",
     "if command -v pnpm >/dev/null 2>&1; then echo \"pnpm=$(pnpm --version)\"; else echo 'pnpm=missing'; fi",
     "test -f scripts/install-telemetry-collector.sh",
     "echo 'HivemindOS update rehearsal completed.'",
@@ -537,26 +574,17 @@ function fallbackScript(
   if (appDir?.trim()) {
     return [
       "set -euo pipefail",
+      REMOTE_PATH_BOOTSTRAP,
       `cd ${shellSingleQuote(appDir.trim())}`,
       allowReclone
         ? remoteUpdateScript(collectorOnly)
         : localUpdateScript(collectorOnly),
     ].join("\n");
   }
-  const candidates = [
-    '"$HOME/hivemindos"',
-    '"$HOME/openclaw-next"',
-    "/root/hivemindos",
-    "/opt/hivemindos",
-  ];
   return [
     "set -euo pipefail",
-    "for d in " + candidates.join(" ") + "; do",
-    '  if [ -d "$d/.git" ]; then',
-    '    cd "$d"',
-    "    break",
-    "  fi",
-    "done",
+    REMOTE_PATH_BOOTSTRAP,
+    checkoutSearchScript(),
     "[ -d .git ] || { echo 'Could not find hivemindos checkout'; exit 2; }",
     allowReclone
       ? remoteUpdateScript(collectorOnly)
@@ -756,9 +784,10 @@ async function tryDetachedTailscaleSsh(
       ];
   const updateScript = [
     "set -euo pipefail",
+    REMOTE_PATH_BOOTSTRAP,
     body.appDir?.trim()
       ? `cd ${shellSingleQuote(body.appDir.trim())}`
-      : 'for d in "$HOME/hivemindos" "$HOME/openclaw-next" /root/hivemindos /opt/hivemindos; do if [ -d "$d/.git" ]; then cd "$d"; break; fi; done',
+      : checkoutSearchScript(),
     "[ -d .git ] || { echo 'Could not find hivemindos checkout'; exit 2; }",
     "mkdir -p .next",
     "{",
@@ -901,6 +930,11 @@ export async function POST(request: Request) {
   const parsedBody = (await request.json().catch(() => ({}))) as UpdateBody;
   const body = await updateBodyWithTarget(parsedBody);
   const preUpdateHealth = await fetchCollectorHealth(body.collectorUrl);
+  const advertisedAppDir = advertisedCollectorAppDir(preUpdateHealth);
+  const remoteBody: UpdateBody =
+    body.appDir?.trim() || !advertisedAppDir
+      ? body
+      : { ...body, appDir: advertisedAppDir };
   const verificationOptions: VerificationOptions = {
     requireCollectorRestart: updateNeededBefore(body, preUpdateHealth),
     previousCollectorStartedAtMs: collectorStartedAtMs(preUpdateHealth),
@@ -957,10 +991,10 @@ export async function POST(request: Request) {
     const result = await ((await isLocalCheckout(body.appDir))
       ? tryLocalShell(body, collectorOnly)
       : body.preferRemoteShell || collectorOnly
-        ? tryPreferredRemoteUpdate(body, collectorOnly, maintenanceReservationToken)
+        ? tryPreferredRemoteUpdate(remoteBody, collectorOnly, maintenanceReservationToken)
         : body.collectorUrl
-          ? tryCollectorUpdate(body, maintenanceReservationToken)
-          : tryTailscaleSsh(body, collectorOnly));
+          ? tryCollectorUpdate(remoteBody, maintenanceReservationToken)
+          : tryTailscaleSsh(remoteBody, collectorOnly));
     if (body.simulate) {
       return Response.json({
         ...result,
@@ -985,7 +1019,7 @@ export async function POST(request: Request) {
           stdout: "stdout" in result ? result.stdout : undefined,
           stderr: "stderr" in result ? result.stderr : undefined,
           health: verification.health,
-          fallbackCommand: fallbackScript(body.appDir, false, collectorOnly),
+          fallbackCommand: fallbackScript(remoteBody.appDir, false, collectorOnly),
         },
         { status: 502 },
       );
@@ -1002,7 +1036,7 @@ export async function POST(request: Request) {
         {
           ok: false,
           error: rawError,
-          fallbackCommand: fallbackScript(body.appDir, false, collectorOnly),
+          fallbackCommand: fallbackScript(remoteBody.appDir, false, collectorOnly),
         },
         { status: 502 },
       );
@@ -1011,7 +1045,7 @@ export async function POST(request: Request) {
       {
         ok: false,
         error: rawError,
-        fallbackCommand: fallbackScript(body.appDir, false, collectorOnly),
+        fallbackCommand: fallbackScript(remoteBody.appDir, false, collectorOnly),
       },
       { status: 502 },
     );
