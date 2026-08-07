@@ -122,6 +122,30 @@
 }
 
 .zhc-root, .zhc-root * { box-sizing: border-box; }
+.zhc-root > div { min-width: 0; max-width: 100%; }
+
+@media (max-width: 700px) {
+  .zhc-root {
+    width: calc(100vw - var(--shelf-w, 56px));
+    max-width: calc(100vw - var(--shelf-w, 56px));
+  }
+  .zhc-root .zhc-cockpit {
+    width: 100%;
+    padding: 14px 12px 48px !important;
+  }
+  .zhc-root .zhc-cockpit-toolbar,
+  .zhc-root .zhc-cockpit-identity {
+    flex-wrap: wrap;
+  }
+  .zhc-root .zhc-cockpit-switcher {
+    order: 3;
+    width: 100%;
+    max-width: 100% !important;
+  }
+  .zhc-root .zhc-cockpit-identity > :last-child {
+    width: 100%;
+  }
+}
 
 /* utility mono caps — .mcap matches the design handoff; .mono-cap is the legacy alias */
 .zhc-root .mcap,

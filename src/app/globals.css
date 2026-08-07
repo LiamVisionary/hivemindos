@@ -1462,13 +1462,12 @@ h1 {
     --shelf-w: 56px;
     display: block;
     gap: 0;
-    height: 100dvh;
-    min-height: 0;
+    height: 100dvh; min-height: 0;
     padding-bottom: 0;
   }
 
   .commandMain {
-    width: 100%;
+    width: calc(100vw - var(--shelf-w, 56px)); max-width: calc(100vw - var(--shelf-w, 56px));
     height: 100dvh;
     overflow: hidden;
   }
@@ -1682,8 +1681,10 @@ h1 {
   }
 
   .tabPanel {
+    width: 100%; max-width: 100%;
     height: 100dvh;
     min-height: 0;
+    overflow-x: hidden; overflow-y: auto;
   }
 
   .tabPanel > .grid {

@@ -21,6 +21,7 @@ import { HIVEMIND_OFFICE_HIVE_ACTIONS } from "./hivemind-office";
 import { bankrCopyTradingAction } from "./bankr-copy-action";
 import { companyRevenueLedgerAction } from "./company-revenue-action";
 import { socialQueueAccountPolicyAction, socialQueueSuggestionAction } from "./social-queue-action";
+import { OPERATIONAL_SURFACE_HIVE_ACTIONS } from "./operational-surface-actions";
 import {
   WEB_RESEARCH_HIVE_ACTIONS,
   webCrawlAction,
@@ -1742,6 +1743,7 @@ export const HIVE_ACTIONS = [
   managedCloudAgentsAction,
   slackSendMessageAction,
   ...INTEGRATION_HIVE_ACTIONS,
+  ...OPERATIONAL_SURFACE_HIVE_ACTIONS,
   listHivemindMachinesAction,
   planHandoffAction,
   workBoardAction,

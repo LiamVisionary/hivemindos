@@ -10,6 +10,7 @@ import { errorJson, okJson } from "@/lib/utils/api-response";
 import { requireAuth } from "@/lib/utils/server-auth";
 
 export const runtime = "nodejs";
+// guard:allow-hive-action-route - Authenticated browser OAuth initiation only; provider mutation occurs in the signed callback.
 
 function buildLinkedInAuthorizeUrl(config: Awaited<ReturnType<typeof readLinkedInOAuthConfig>>, returnMode: OAuthReturnMode = "") {
   const state = createLinkedInOAuthState(config.clientSecret, returnMode);

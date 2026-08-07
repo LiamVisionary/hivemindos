@@ -1,4 +1,4 @@
-.stack { display: flex; flex-direction: column; gap: 16px; }
+.stack { display: flex; flex-direction: column; width: 100%; min-width: 0; max-width: 100%; gap: 16px; }
 .hero { position: relative; overflow: hidden; border: 1px solid var(--honey-line); border-radius: 18px; background: linear-gradient(135deg, color-mix(in srgb, var(--honey) 12%, var(--panel)) 0%, var(--panel) 58%, color-mix(in srgb, var(--live) 8%, var(--panel)) 100%); }
 .heroGlow { position: absolute; width: 320px; height: 320px; right: -100px; top: -160px; border-radius: 50%; background: color-mix(in srgb, var(--honey) 22%, transparent); filter: blur(55px); pointer-events: none; }
 .heroBody { position: relative; padding: 24px; }
@@ -14,11 +14,11 @@
 .switchOn span { background: var(--honey); }
 .switchOn span::after { transform: translateX(12px); background: var(--bg); }
 .trustRow { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 20px; }
-.goodBadge, .warnBadge, .neutralBadge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px; border-radius: 999px; font: 500 10px var(--f-mono); }
+.goodBadge, .warnBadge, .neutralBadge { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; padding: 5px 9px; overflow-wrap: anywhere; border-radius: 999px; font: 500 10px var(--f-mono); }
 .goodBadge { color: var(--live); border: 1px solid color-mix(in srgb, var(--live) 35%, var(--line)); background: color-mix(in srgb, var(--live) 9%, transparent); }
 .warnBadge { color: var(--honey); border: 1px solid var(--honey-line); background: var(--honey-soft); }
 .neutralBadge { color: var(--fg-3); border: 1px solid var(--line-2); background: var(--panel-2); }
-.warning, .error, .notice { display: flex; align-items: flex-start; gap: 9px; padding: 11px 13px; border-radius: 10px; font: 400 11px/1.5 var(--f-mono); }
+.warning, .error, .notice { display: flex; align-items: flex-start; gap: 9px; min-width: 0; max-width: 100%; padding: 11px 13px; overflow-wrap: anywhere; border-radius: 10px; font: 400 11px/1.5 var(--f-mono); }
 .warning { color: var(--honey); border: 1px solid var(--honey-line); background: var(--honey-soft); }
 .error { color: var(--danger); border: 1px solid var(--danger-soft); background: color-mix(in srgb, var(--danger) 8%, transparent); }
 .notice { color: var(--live); border: 1px solid color-mix(in srgb, var(--live) 35%, var(--line)); background: color-mix(in srgb, var(--live) 8%, transparent); }
@@ -80,4 +80,4 @@
 .saveButton { min-width: 150px; padding: 9px 13px; border: 1px solid var(--honey-line); background: var(--honey); color: var(--bg); }
 .saveButton:disabled, .ghostButton:disabled { cursor: not-allowed; opacity: .5; }
 @media (max-width: 960px) { .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .controlGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 700px) { .heroBody { padding: 18px; } .heroRow, .panelHeader, .saveBar { align-items: stretch; flex-direction: column; } .switch { align-self: flex-start; } .metrics, .controlGrid, .stageGrid, .modelGrid { grid-template-columns: 1fr; } .saveButton { width: 100%; } .period { align-self: flex-start; } }
+@media (max-width: 700px) { .heroBody { padding: 16px; } .heroRow, .panelHeader, .saveBar { align-items: stretch; flex-direction: column; } .heroRow h2 { font-size: 26px; } .heroRow p { overflow-wrap: anywhere; } .switch { align-self: flex-start; } .trustRow { align-items: flex-start; flex-direction: column; } .metrics, .controlGrid, .stageGrid, .modelGrid { grid-template-columns: 1fr; } .saveButton { width: 100%; min-width: 0; } .period { align-self: flex-start; } }

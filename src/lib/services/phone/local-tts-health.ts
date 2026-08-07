@@ -58,6 +58,7 @@ export function recordLocalTtsFailure(appId: string, error: string, now = Date.n
   entry.lastError = error.slice(0, 300);
   entry.trippedAt = now;
   entry.trippedUntil = now + BREAKER_TRIP_MS;
+  entry.lastHealthyAt = 0;
 }
 
 export function recordLocalTtsSuccess(appId: string, now = Date.now()) {

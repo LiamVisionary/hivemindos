@@ -937,9 +937,9 @@ export function Cockpit({
   const active = tabs.some((x) => x.key === tab) ? tab : "board";
 
   return (
-    <div style={{ padding: "22px 40px 60px", display: "flex", flexDirection: "column", gap: 20 }}>
+    <div className="zhc-cockpit" style={{ padding: "22px 40px 60px", display: "flex", flexDirection: "column", gap: 20, minWidth: 0, maxWidth: "100%" }}>
       {/* breadcrumb + switcher */}
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+      <div className="zhc-cockpit-toolbar" style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
         <CrumbPill onClick={onBack} title="Back to all companies">← all companies</CrumbPill>
         <span style={{ flex: 1 }} />
         {onToggleTheme && (
@@ -952,7 +952,7 @@ export function Cockpit({
             {refreshing ? <><Spinner size={11} /> syncing</> : "↻ refresh"}
           </CrumbPill>
         )}
-        <div style={{ display: "flex", gap: 6, overflowX: "auto", maxWidth: 420 }} className="frsc">
+        <div style={{ display: "flex", gap: 6, overflowX: "auto", minWidth: 0, maxWidth: 420 }} className="frsc zhc-cockpit-switcher">
           {colonies.map((x) => (
             <button key={x.id} onClick={() => onSwitch(x.id)} style={{ display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap", background: x.id === c.id ? "var(--panel-2)" : "transparent", border: `1px solid ${x.id === c.id ? "var(--line-2)" : "var(--line)"}`, borderRadius: 8, cursor: "pointer", padding: "6px 11px", fontFamily: "var(--f-mono)", fontSize: 10.5, color: x.id === c.id ? "var(--fg)" : "var(--fg-3)" }}>
               <span className={"dot" + (x.status === "shipping" || x.status === "review" ? " live" : "")} style={{ color: STATUS_TONE[x.status].dot }} />{x.ticker}
@@ -962,7 +962,7 @@ export function Cockpit({
       </div>
 
       {/* identity header */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 18 }}>
+      <div className="zhc-cockpit-identity" style={{ display: "flex", alignItems: "flex-start", gap: 18, minWidth: 0 }}>
         <RoleGlyph role="Queen" size={54} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>

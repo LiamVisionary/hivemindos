@@ -120,7 +120,11 @@ const legacyOversizedAllowances = new Map([
   // 2026-07-18: −59, the self-reload watcher moved to lib/collector-self-reload.mjs
   // with injectable deps; the Windows exit-75 contract that used to be pinned by
   // a source-text regex is now a behavioral unit test.
-  ["scripts/agent-telemetry-collector.mjs", 9692],
+  // 2026-08-06: integrated the fleet app-directory/PATH bootstrap, SIE remote
+  // controls, and hardened structured Hermes streaming from the registered
+  // worktrees. The behavior lives in focused helpers where available; this
+  // watermark records the merged legacy shell and restores the no-growth gate.
+  ["scripts/agent-telemetry-collector.mjs", 9936],
   // 2026-07-02: +18 for the non-string task.result/body read+write coercion fix
   // (one poisoned task was 400ing every /api/kanban read).
   // 2026-07-04: +57 for answerHumanTask — the needs-human answer mutation
@@ -141,7 +145,7 @@ const legacyOversizedAllowances = new Map([
   // untrusted-completion gates. The later done-card result-rewrite integrity
   // path is retained in this merged measurement. No slack.
   ["src/lib/services/kanban/local-kanban-store.ts", 2524],
-  ["src/features/dashboard/hooks/use-dashboard-derived-state.tsx", 2244],
+  ["src/features/dashboard/hooks/use-dashboard-derived-state.tsx", 2246],
   ["src/features/dashboard/views/chat/HiveChatView.module.css", 1802],
   ["src/lib/services/obsidian/agent-memory/core.ts", 1901],
   ["src/components/wallets-drop-in/WalletsView.tsx", 2183],
@@ -158,7 +162,10 @@ const legacyOversizedAllowances = new Map([
   // to hooks/status-chat-brain-graph.ts (same plain-factory pattern). The
   // controller's return shape is unchanged.
   ["src/features/dashboard/hooks/use-status-chat-input-controller.tsx", 1693],
-  ["src/features/dashboard/views/chat/AgentSettingsModal.tsx", 1640],
+  // 2026-08-06: SIE's first-class endpoint, lifecycle, and GPU telemetry UI
+  // arrived from the merged application worktree. Keep the merged legacy file
+  // on a strict no-growth watermark until that provider panel is extracted.
+  ["src/features/dashboard/views/chat/AgentSettingsModal.tsx", 1745],
   ["src/components/fleet/fleet-tokens.module.css", 1541],
   ["src/features/dashboard/views/chat/UsePodSetup.module.css", 1540],
   ["src/features/dashboard/hooks/use-miroshark-brain-controller.tsx", 1580],
@@ -176,6 +183,18 @@ const legacyOversizedAllowances = new Map([
   ["src/components/fleet-hive/fleet-hive.css", 1516],
   ["src/features/dashboard/dashboard-display-helpers.tsx", 1519],
   ["src/lib/services/nansen.ts", 1640],
+  // 2026-08-06: Token Edge research worktrees predate the repository-wide
+  // 1,500-line rule. These exact integration counts are intentional ratchets,
+  // not exemptions for future growth; production and test sources both fail
+  // this gate if another line is added before they are decomposed.
+  ["scripts/token-edge/onchain-geckoterminal-new-pool-activation.mjs", 7388],
+  ["scripts/test-token-edge-geckoterminal-new-pool-activation.mjs", 3216],
+  ["scripts/token-edge/onchain-geckoterminal-trending-monitoring.mjs", 2559],
+  ["scripts/test-token-edge-onchain-forward.mjs", 1740],
+  ["scripts/token-edge/onchain-forward-research.mjs", 1713],
+  ["scripts/token-edge/onchain-lunarcrush-provider.mjs", 1571],
+  ["scripts/token-edge/onchain-exit-policy-scorecard.mjs", 1544],
+  ["scripts/test-token-edge-geckoterminal-new-pool-birth-take-profit.mjs", 1507],
   // 2026-07-18: src/lib/types/agent-runtime.ts dropped off this map — the voice/
   // calls + ministry preference types moved to types/agent-call-preferences.ts,
   // taking it from 1556 to 1397. agent-runtime.ts re-exports them so none of the

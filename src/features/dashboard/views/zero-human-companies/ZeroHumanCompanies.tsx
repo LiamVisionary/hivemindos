@@ -323,7 +323,7 @@ export default function ZeroHumanCompanies({
   };
 
   return (
-    <div className="zhc-root frfade" data-theme={themeState} style={{ position: "relative", minHeight: "100%", background: "var(--bg)", color: "var(--fg)", borderRadius: 14, overflow: "hidden", border: "1px solid var(--line)" }}>
+    <div className="zhc-root frfade" data-theme={themeState} style={{ position: "relative", width: "100%", minWidth: 0, maxWidth: "100%", minHeight: "100%", background: "var(--bg)", color: "var(--fg)", borderRadius: 14, overflow: "hidden", border: "1px solid var(--line)" }}>
       {/* backdrop — subtle warm wash + hex pattern, contained to the panel */}
       <div aria-hidden style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "radial-gradient(120% 60% at 50% -10%, color-mix(in srgb, var(--honey) 6%, transparent), transparent 60%)" }} />
       <svg aria-hidden style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0.06, pointerEvents: "none" }}>

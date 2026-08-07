@@ -5,6 +5,15 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-08-06 20:24 EDT (-0400) - Reconcile the complete main-worktree integration
+  - Status: Uncommitted and not included in a desktop release.
+  - User-facing release note: The integrated app now preserves Local TTS circuit-breaker recovery, structured remote Hermes replies, every merged Trade destination, a mobile-safe Frontier Lab, and discoverable governance metadata for company budgets, X command controls, trading plans, liquidity monitoring, and prediction-market research.
+  - Root cause and scope: The full-worktree merge exposed six canonical-gate mismatches: a stale TTS healthy timestamp, an old plain-text Hermes stream fixture, an outdated three-tab Trade contract, a Next.js child-process cleanup race that had masked real mobile overflow, missing Hive action route registrations, and size ratchets that did not yet represent the integrated legacy research files. The fixes update behavior or contracts at their owning boundaries, make the company cockpit and Frontier surface shrink safely beside the mobile app rail, and keep oversized merged files on exact no-growth watermarks.
+  - Areas changed: Local TTS health, fleet stream regression fixture, Trade integration contract, Frontier Lab UI/mobile layout and teardown, operational Hive action catalog, OAuth drift annotations, size ratchets, and this changelog.
+  - Verification: The initial canonical gate completed all 273 steps with 267 passing and six red. All six focused gates pass after repair, including the authenticated 390px Frontier browser path. The final canonical gate passes 273/273 in 193.1 seconds; TypeScript, native Rust `cargo check`, whitespace checks, and the registered-worktree containment audit also pass.
+  - Recovery: Revert this integration-gate commit after the preceding merge commits. No user data, wallet state, provider credentials, remote services, or external publications are changed by these repairs.
+  - Intended commit message: `fix: reconcile full-worktree integration gates`
+
 - 2026-08-06 20:10 EDT (-0400) - Hide persisted Hermes transport dumps
   - Status: Uncommitted and not included in a desktop release.
   - User-facing release note: Previously saved Hermes provider failures now render as a short actionable error instead of exposing prompt echoes, private runtime markers, retry logs, or resume commands.

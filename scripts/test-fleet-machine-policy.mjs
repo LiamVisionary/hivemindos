@@ -233,7 +233,11 @@ if (process.env.OPENROUTER_API_KEY !== "test-shared-openrouter-key") {
   console.error("Provider resolver returned an empty API key.");
   process.exit(1);
 }
-console.log("shared-env-present");
+if (process.argv.includes("chat")) {
+  console.log('__HIVEMIND_HERMES_EVENT__{"type":"assistant.delta","delta":"shared-env-present"}');
+} else {
+  console.log("shared-env-present");
+}
 `, "utf8");
   await chmod(fakeHermes, 0o755);
   const port = await freePort();

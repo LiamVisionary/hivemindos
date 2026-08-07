@@ -164,7 +164,10 @@ try {
   await frontierRoot.evaluate((element) => element.scrollIntoView({ block: "start" }));
   await page.screenshot({ path: mobileScreenshot });
   const frontierBox = await frontierRoot.boundingBox();
-  assert(frontierBox && frontierBox.x >= 0 && frontierBox.x + frontierBox.width <= 391, "Frontier Lab panel must fit the mobile viewport");
+  assert(
+    frontierBox && frontierBox.x >= 0 && frontierBox.x + frontierBox.width <= 391,
+    `Frontier Lab panel must fit the mobile viewport: ${JSON.stringify(frontierBox)}`,
+  );
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), true, "mobile layout must not overflow horizontally");
   assert.deepEqual(browserErrors, [], `browser console/page errors:\n${browserErrors.join("\n")}`);
   await context.close();
@@ -173,16 +176,9 @@ try {
   throw error;
 } finally {
   await browser?.close();
-  if (child.exitCode == null && !child.signalCode) {
-    child.kill("SIGTERM");
-    await Promise.race([
-      new Promise((resolve) => child.once("exit", resolve)),
-      new Promise((resolve) => setTimeout(resolve, 3_000)),
-    ]);
-    if (child.exitCode == null && !child.signalCode) child.kill("SIGKILL");
-  }
-  await rm(tempHome, { recursive: true, force: true });
-  await rm(vaultPath, { recursive: true, force: true });
+  await terminateChild(child);
+  await rm(tempHome, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  await rm(vaultPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 }
 
 console.log(`Frontier Lab desktop/mobile UI end-to-end test passed (${desktopScreenshot}, ${mobileScreenshot})`);
@@ -231,4 +227,27 @@ async function freePort() {
   await new Promise((resolve) => server.close(resolve));
   assert(address && typeof address === "object");
   return address.port;
+}
+
+async function terminateChild(processHandle) {
+  if (processHandle.exitCode !== null || processHandle.signalCode) return;
+  processHandle.kill("SIGTERM");
+  if (await waitForExit(processHandle, 3_000)) return;
+  processHandle.kill("SIGKILL");
+  await waitForExit(processHandle, 3_000);
+}
+
+function waitForExit(processHandle, timeoutMs) {
+  if (processHandle.exitCode !== null || processHandle.signalCode) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const onExit = () => {
+      clearTimeout(timer);
+      resolve(true);
+    };
+    const timer = setTimeout(() => {
+      processHandle.off("exit", onExit);
+      resolve(false);
+    }, timeoutMs);
+    processHandle.once("exit", onExit);
+  });
 }

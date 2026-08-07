@@ -35,7 +35,11 @@ assert.match(route, /reviewFingerprint/, "execution must bind signing to the exa
 assert.match(route, /normalizeAction/, "the route must accept both the nested dashboard payload and flat agent-tool payload");
 
 const view = read("src/components/trade/TradeView.tsx");
-assert.match(view, /"crypto" \| "stocks" \| "options"/, "Trade desk must expose the Options segment");
+assert.match(
+  view,
+  /"crypto" \| "stocks" \| "liquidity" \| "options" \| "prediction"/,
+  "Trade desk must preserve Options alongside the merged liquidity and prediction segments",
+);
 assert.match(view, /<PlumeOptionsPanel \/>/, "Options segment must render the Plume panel");
 
 const panel = read("src/components/trade/PlumeOptionsPanel.tsx");

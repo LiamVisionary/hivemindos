@@ -11,6 +11,7 @@ import { errorJson, okJson } from "@/lib/utils/api-response";
 import { requireAuth } from "@/lib/utils/server-auth";
 
 export const runtime = "nodejs";
+// guard:allow-hive-action-route - Authenticated browser OAuth initiation only; provider mutation occurs in the signed callback.
 
 function buildGitHubAuthorizeUrl(config: Awaited<ReturnType<typeof readGitHubOAuthConfig>>, source: string, returnMode: OAuthReturnMode = "") {
   const state = createGitHubOAuthState(source, config.clientSecret, returnMode);
