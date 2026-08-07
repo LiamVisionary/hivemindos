@@ -63,6 +63,7 @@ test("paper UI leads with portfolio value and keeps live-wallet funding in detai
   assert.match(panelSource, /simulated trades/);
   assert.match(panelSource, /props\.fundable && !config\.dryRun/);
   assert.match(panelSource, /Live wallet · not used in this simulation/);
+  assert.match(panelSource, /Shared Brain sync/);
 });
 
 test("zero-review evolved cards place the waiting status below learning evidence", async () => {
@@ -866,7 +867,7 @@ test("a Shared Brain outage keeps the local retrospective and records a bounded 
     evolve: async () => { throw new Error("unexpected evolve"); },
   });
   assert.equal(result.failed, 1);
-  assert.ok(persisted >= 3);
+  assert.ok(persisted >= 2);
   assert.equal(record.retrospectives.length, 1);
   const receipt = Object.values(state.agentAnalysis.brainSync)[0];
   assert.equal(receipt.status, "failed");

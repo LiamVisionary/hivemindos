@@ -87,10 +87,6 @@ export async function syncCopyTradeRetrospectivesToBrain(
     .sort((left, right) => left.sequence - right.sequence);
   summary.eligible = eligibleRecords.length;
 
-  // This is intentionally before every external Brain write. The local paper
-  // learning remains the source of truth even if the process or vault fails.
-  await deps.persistState(state);
-
   const activeKeys = new Set<string>();
   for (const record of eligibleRecords) {
     const memory = copyTradeRetrospectiveMemory(config, record, reviewsByTxRef.get(record.targetTxRef));
@@ -122,6 +118,8 @@ export async function syncCopyTradeRetrospectivesToBrain(
       error: undefined,
     };
     analysis.brainSync[memory.memoryKey] = pending;
+    // Persist the local retrospective and retry receipt before every external
+    // Brain write. Local paper learning remains the source of truth on failure.
     await deps.persistState(state);
     summary.attempted += 1;
 
