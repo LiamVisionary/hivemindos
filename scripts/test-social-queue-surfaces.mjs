@@ -17,6 +17,7 @@ const connectModal = readFileSync("src/components/socials/ConnectAccountModal.ts
 const xSessionCard = readFileSync("src/components/socials/XSessionCard.tsx", "utf8");
 const socialsPanel = readFileSync("src/features/dashboard/views/socials/SocialsPanel.tsx", "utf8");
 const socialsContext = readFileSync("src/components/socials/socials-context.tsx", "utf8");
+const dashboardApp = readFileSync("src/features/dashboard/DashboardApp.tsx", "utf8");
 const accountsRoute = readFileSync("src/app/api/socials/accounts/route.ts", "utf8");
 const draftingGenerator = readFileSync("src/lib/services/socials/social-draft-generator.ts", "utf8");
 const draftingModel = readFileSync("src/lib/services/socials/social-draft-model.ts", "utf8");
@@ -61,6 +62,11 @@ assert.match(xSessionCard, /SOCIAL_X_.*_AUTH_TOKEN|suggestedSocialXSessionEnvKey
 assert.match(socialsContext, /setXSessionBinding/);
 assert.match(socialsPanel, /action: ["']set-x-session["']/);
 assert.match(socialsPanel, /setQueueCounts/, "queue actions keep per-account review badges current");
+assert.match(
+  dashboardApp,
+  /import\("@\/features\/dashboard\/views\/trade\/TradePanel"\),\s*\n\s*\(\) => import\("@\/features\/dashboard\/views\/socials\/SocialsPanel"\)/,
+  "Socials lazy chunk warms immediately after Trade during dashboard idle time",
+);
 assert.match(accountsRoute, /case ["']set-x-session["']/);
 assert.match(accountsRoute, /hiveEnvPresence/, "the server checks configured key names without returning cookie values");
 assert.match(accountsRoute, /withSocialXSessionBinding/);

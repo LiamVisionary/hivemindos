@@ -3,6 +3,7 @@ import { homedir } from "@/lib/home-dir";
 import { delimiter, join } from "path";
 import { HIVEMIND_OS_RUNTIME, type AgentProfile } from "@/lib/types/agent-runtime";
 import { bankrLlmModel, isBankrLlmProfile } from "@/lib/services/bankr-llm";
+import { hermesLeakedTransportFailureNotice } from "@/lib/services/chat/hermes-cli-output";
 import { isLocalCollectorUrl, remoteCollectorLocalServiceUrl } from "@/lib/services/local-collector-url";
 import { sanitizeProcessEnv } from "@/lib/utils/safe-process-env";
 
@@ -225,16 +226,10 @@ function normalizeHermesCliFailureCandidate(value: string) {
     .toLowerCase();
 }
 
-function isLeakedHermesTransportFailure(value: string) {
-  const normalized = stripTerminalControls(value).replace(/\r\n?/g, "\n").toLowerCase();
-  if (!normalized.includes("__hivemind_hermes_event__")) return false;
-  return /(?:^|\n)\s*(?:api call failed after \d+ retries|provider resolver returned|unknown provider|session not found|rate limited after \d+ retries|final error:)(?:\s|$|[^a-z0-9])/.test(normalized);
-}
-
 export function isHermesCliFailureText(value: string) {
   const normalized = normalizeHermesCliFailureCandidate(value);
   return HERMES_CLI_FAILURE_PREFIXES.some((prefix) => normalized.startsWith(prefix))
-    || isLeakedHermesTransportFailure(value);
+    || Boolean(hermesLeakedTransportFailureNotice(value));
 }
 
 export function isPotentialHermesCliFailureText(value: string) {

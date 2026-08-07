@@ -1,3 +1,8 @@
+import {
+  HERMES_CLI_STREAM_EVENT_PREFIX,
+  hermesCliFailureSummary,
+} from "../../../../scripts/lib/hermes-cli-stream-protocol.mjs";
+
 const HERMES_INLINE_DIFF_HEADER = /^┊\s*review diff$/i;
 const INTERNAL_TOOL_NARRATION_MARKERS = [
   /\bsubagent\b/i,
@@ -7,6 +12,16 @@ const INTERNAL_TOOL_NARRATION_MARKERS = [
   /\bwrit(?:e|ing|ten) (?:the )?files? directly\b/i,
   /\bChat Preview runtime\b/i,
 ];
+
+/** Replaces an already-persisted private Hermes transport dump with safe UI text. */
+export function hermesLeakedTransportFailureNotice(value: string) {
+  const text = String(value || "");
+  if (!text.includes(HERMES_CLI_STREAM_EVENT_PREFIX)) return "";
+  const summary = hermesCliFailureSummary(text);
+  return summary
+    ? `Hermes could not complete this response. ${summary}`
+    : "Hermes did not produce a usable response. Internal runtime output was hidden.";
+}
 
 function isHermesInlineDiffLine(line: string) {
   const trimmed = line.trim();

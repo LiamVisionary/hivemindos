@@ -19,6 +19,7 @@ import type { KanbanLinkedDirectory, KanbanTaskAttachment } from "@/lib/types/ka
 import type { RecentDirectory } from "@/lib/types/recent-directories";
 import { visibleChannelMarkupText } from "@/lib/services/chat/channel-markup";
 import {
+  hermesLeakedTransportFailureNotice,
   isAssistantColonSectionHeading,
   stripHermesInlineDiffPreviews,
   stripHermesInternalToolNarration,
@@ -212,6 +213,8 @@ export function structureAssistantPlainText(lines: string[]) {
 }
 
 export function normalizeAssistantChatText(value: string) {
+  const transportFailureNotice = hermesLeakedTransportFailureNotice(value);
+  if (transportFailureNotice) return transportFailureNotice;
   const text = stripHermesInternalToolNarration(
     stripHermesInlineDiffPreviews(stripAnsiSequences(value || "")),
   ).replace(/\r\n/g, "\n").trim();

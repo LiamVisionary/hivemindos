@@ -121,6 +121,12 @@ Final error: Request timed out`),
   true,
   "a raw Hermes transport dump with only a final-error summary must not count as assistant text",
 );
+assert.equal(
+  isHermesCliFailureText(`Query: output contract test
+__HIVEMIND_HERMES_EVENT__{"type":"tool.failed","name":"terminal","status":"failed"}`),
+  true,
+  "a private Hermes transport marker must never count as assistant text even without a failure summary",
+);
 assert.equal(isHermesCliFailureText("Here is the requested app."), false);
 
 let splitFailure = "";

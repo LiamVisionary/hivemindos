@@ -17,6 +17,13 @@ the engineering memory for optimization decisions and performance traps.
 - Note tradeoffs, cache freshness, fallback behavior, and when the optimization should be revisited.
 - If an optimization affects prompt injection or agent context, state what context is preserved and what is skipped, cached, compacted, or deferred.
 
+## 2026-08-06 20:07 EDT (-0400) - Warm Socials Before Its First Route Switch
+
+- Problem: Socials had hover/focus prefetching and an on-demand dynamic import, but it was missing from the dashboard's sequential idle warm-up list. A quick click, keyboard switch, or touch navigation could therefore land on the route fallback while the Socials chunk compiled or downloaded, making the route appear empty before its own content-shaped loading state mounted.
+- Change: Add the existing `SocialsPanel` chunk to the one-at-a-time dashboard idle sequence immediately after Trade, preserving the current 1.5-second start delay and idle scheduling so first paint keeps priority.
+- Evidence: The focused source contract failed before the change because the Trade-to-Socials warm-up ordering was absent. `scripts/test-social-queue-surfaces.mjs` now guards that ordering; the Socials surface contract, neighboring Trade performance contract, focused zero-error ESLint, test-script zero-warning ESLint, syntax, and scoped whitespace checks pass.
+- Tradeoffs / revisit trigger: This moves one already-lazy chunk earlier in idle time and may use a small amount of extra bandwidth when Socials is never opened. Keep it sequential; revisit only if measured startup contention increases or route-level usage data supports a different warm-up order.
+
 ## 2026-08-04 09:02 EDT (-0400) - Read An Already-Connected App Store Tailnet Without Relaunching Tailscale
 
 - Failure mode removed: after switching from the standalone macOS Tailscale variant to the App Store variant, the App Store tunnel was connected and its exact CLI returned a healthy seven-peer status, but HivemindOS only checked the standalone `/Library/Tailscale` LocalAPI. The safer macOS-default-off CLI policy therefore rendered a false “Tailscale needs attention” warning and hid Fleet behind local-only fallback data.

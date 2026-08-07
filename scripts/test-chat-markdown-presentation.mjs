@@ -40,6 +40,7 @@ const artifactMenuStyles = readFileSync(
   "utf8",
 );
 const chatComposerSource = readFileSync(join(root, "src/features/chat/chat-composer.tsx"), "utf8");
+const hermesOutputModule = await import("../src/lib/services/chat/hermes-cli-output.ts");
 const deliverableRouteSource = readFileSync(
   join(root, "src/app/api/kanban/deliverable/route.ts"),
   "utf8",
@@ -111,6 +112,27 @@ assert.match(processPanelSource, /className="cx-tl-line"/);
 assert.match(processPanelSource, /className="cx-tl-step"/);
 assert.doesNotMatch(processPanelSource, /HiveChatView\.module\.css/);
 assert.match(chatComposerSource, /stripHermesInlineDiffPreviews/);
+assert.equal(
+  typeof hermesOutputModule.hermesLeakedTransportFailureNotice,
+  "function",
+  "chat presentation needs a pure quarantine for previously persisted Hermes transport dumps",
+);
+
+const leakedHermesFailure = `Query: What's going on here?
+Initializing agent...
+__HIVEMIND_HERMES_EVENT__{"type":"tool.failed","name":"terminal","status":"failed"}
+API call failed after 3 retries: HTTP 429: Provider returned error
+Resume this session with: hermes --resume 20260806_194743_3a0d46`;
+assert.equal(
+  hermesOutputModule.hermesLeakedTransportFailureNotice(leakedHermesFailure),
+  "Hermes could not complete this response. API call failed after 3 retries: HTTP 429: Provider returned error",
+);
+assert.equal(hermesOutputModule.hermesLeakedTransportFailureNotice("A normal assistant answer."), "");
+assert.match(
+  chatComposerSource,
+  /hermesLeakedTransportFailureNotice\(value\)/,
+  "saved chat rendering must quarantine leaked private transport output before Markdown sees it",
+);
 
 const hermesDiffPreview = [
   "  ┊ review diff",

@@ -5,12 +5,20 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-08-06 20:10 EDT (-0400) - Hide persisted Hermes transport dumps
+  - Status: Uncommitted and not included in a desktop release.
+  - User-facing release note: Previously saved Hermes provider failures now render as a short actionable error instead of exposing prompt echoes, private runtime markers, retry logs, or resume commands.
+  - Areas changed: shared Hermes failure-summary typing and persisted-output quarantine, API and chat presentation checks, and this changelog.
+  - Verification: Focused adaptive Hermes stream and chat Markdown presentation tests pass, including safe replacement of a persisted retry dump and the marker-only fallback; scoped whitespace checks pass.
+  - Recovery: Revert this entry and the scoped Hermes output, API, composer, tests, and declaration. Existing saved chats, provider sessions, and runtime state are unchanged.
+  - Intended commit message: `fix(chat): quarantine leaked Hermes transport output`
+
 - 2026-08-06 20:07 EDT (-0400) - Remove the Socials cold-open gap
   - Status: Uncommitted and not included in a desktop release.
   - User-facing release note: Socials now warms in the background with the other primary dashboard routes, so its first quick click, keyboard switch, or touch open no longer waits on a cold route chunk before the Socials loading UI can appear.
   - Root cause and scope: The route already supported hover/focus prefetching and an animated in-view skeleton, but Socials was omitted from the dashboard's sequential idle warm-up list. The fix adds only the existing Socials chunk to that established sequence immediately after Trade; account, queue, publishing, and persistence behavior are unchanged.
   - Areas changed: dashboard idle route warm-up, the focused Socials surface contract, the performance log, and this changelog (`src/features/dashboard/DashboardApp.tsx`, `scripts/test-social-queue-surfaces.mjs`, `OPTIMIZATIONS.md`, and `CHANGELOG.md`).
-  - Verification: The focused idle-order contract failed at baseline because no Trade-to-Socials warm-up entry existed. Final focused checks are pending.
+  - Verification: The focused idle-order contract failed at baseline because no Trade-to-Socials warm-up entry existed. The Socials surface contract and neighboring Trade performance contract pass after the fix, along with focused zero-error ESLint, test-script zero-warning ESLint, syntax, and scoped whitespace checks. The authenticated local browser path was inspected but remained behind the dashboard token, so no credential was entered. Whole-project TypeScript remains red on unrelated concurrent Chat/Kanban errors, and zero-warning lint for the concurrently merged `DashboardApp.tsx` remains red on 135 unrelated unused-symbol warnings; neither gate reports a Socials error.
   - Recovery: Remove the single Socials import from the idle loader list, its focused assertion, the matching optimization entry, and this changelog entry. No Socials account, queue, credential, dashboard-state, or vault data is changed.
   - Intended commit message: `fix(socials): warm route before first open`
 
