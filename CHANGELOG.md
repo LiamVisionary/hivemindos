@@ -5,15 +5,6 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
-- 2026-08-08 18:30 EDT (-0400) - Restore Windows desktop release packaging
-  - Status: Pushed to `main` in `99250871`; not yet included in a desktop release.
-  - User-facing release note: Windows desktop releases can once again complete signed installer packaging instead of stopping before the Tauri build starts.
-  - Root cause and baseline: The last cross-platform release attempt reached the Windows build runner but Node rejected the direct `pnpm.cmd` child process with `spawn EINVAL`. The guarded release launcher now uses the Windows command shell only on Windows while preserving direct process spawning on macOS and Linux.
-  - Areas changed: guarded Tauri release launcher, release-mode regression contract, and this changelog.
-  - Verification: Passed `node --check scripts/run-tauri-release-build.mjs`, `pnpm test:tauri-release-mode`, and `git diff --check`. The real Windows GitHub Actions release build remains the final platform verification.
-  - Recovery: Revert this scoped launcher option, regression assertion, and entry. No user data or release artifacts are changed by the code fix itself.
-  - Intended commit message: `fix(release): launch pnpm through Windows shell`
-
 - 2026-08-06 23:29 EDT (-0400) - Align every onboarding footer action
   - Status: Pushed to `main` in `8e06cb0c`; not yet included in a desktop release.
   - User-facing release note: First-time setup actions now follow a stable grid instead of wrapping at arbitrary widths. Three-action screens place the primary choice on its own aligned row above two equal supporting controls; two-action screens use two equal columns; narrow screens use one ordered full-width stack.
