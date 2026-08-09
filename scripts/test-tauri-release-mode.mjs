@@ -150,6 +150,10 @@ if (!tauriReleaseBuild.includes("const maxAttempts = process.platform === \"darw
   fail("scripts/run-tauri-release-build.mjs must retry only macOS release bundles.");
 }
 
+if (!tauriReleaseBuild.includes('shell: process.platform === "win32"')) {
+  fail("scripts/run-tauri-release-build.mjs must launch pnpm.cmd through the Windows command shell.");
+}
+
 if (!nativeDocs.includes("Release builds enable `HIVEMINDOS_TAURI_EMBEDDED_NEXT`")) {
   fail(`${nativeDocsPath} must explain that release builds use the embedded Next server.`);
 }

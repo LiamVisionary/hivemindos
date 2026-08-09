@@ -24,6 +24,7 @@ function runBuild() {
   return new Promise((resolve, reject) => {
     const child = spawn(executable, ["tauri:build:release"], {
       env: process.env,
+      shell: process.platform === "win32",
       stdio: "inherit",
       windowsHide: true,
     });
