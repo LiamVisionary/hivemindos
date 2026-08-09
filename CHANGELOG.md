@@ -6,7 +6,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 ## Unreleased
 
 - 2026-08-08 18:30 EDT (-0400) - Restore Windows desktop release packaging
-  - Status: Uncommitted.
+  - Status: Pushed to `main` in `99250871`; not yet included in a desktop release.
   - User-facing release note: Windows desktop releases can once again complete signed installer packaging instead of stopping before the Tauri build starts.
   - Root cause and baseline: The last cross-platform release attempt reached the Windows build runner but Node rejected the direct `pnpm.cmd` child process with `spawn EINVAL`. The guarded release launcher now uses the Windows command shell only on Windows while preserving direct process spawning on macOS and Linux.
   - Areas changed: guarded Tauri release launcher, release-mode regression contract, and this changelog.
