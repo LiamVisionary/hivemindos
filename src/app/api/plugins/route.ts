@@ -1,3 +1,4 @@
+// guard:allow-hive-action-route - dashboard-only, operator-reviewed local Agent Plugin activation; agents may use approved loaded components but cannot inspect, load, or unload arbitrary plugin packages.
 import { NextRequest } from "next/server";
 import {
   listLoadedAgentPlugins,
