@@ -47,6 +47,8 @@ export function createSelfReloadHandler(dependencies = {}) {
     log = console.log,
     now = Date.now,
     graceMs = RELOAD_GRACE_MS,
+    canReload = () => true,
+    onDeferred = () => undefined,
   } = dependencies;
   let reloading = false;
 
@@ -56,6 +58,11 @@ export function createSelfReloadHandler(dependencies = {}) {
     if (now() - startedAt < graceMs) return false;
     const nextHash = await hashSource();
     if (!nextHash || nextHash === baselineHash) return false; // content unchanged
+    if (!canReload()) {
+      log("[collector] source changed — deferring reload until active chat runs finish");
+      onDeferred();
+      return false;
+    }
     reloading = true;
     const reloadExitCode = selfReloadExitCode(platform);
     log(
@@ -86,22 +93,25 @@ export async function startSelfReloadWatcher(dependencies = {}) {
   const baselineHash = await hashSource();
   if (!baselineHash) return false;
 
+  let pending = null;
+  const schedule = (delayMs) => {
+    if (pending) clearTimeout(pending);
+    pending = setTimeout(() => {
+      pending = null;
+      void handleChange();
+    }, delayMs);
+  };
   const handleChange = createSelfReloadHandler({
     ...handlerDependencies,
     baselineHash,
     hashSource,
     now,
     startedAt: now(),
+    onDeferred: () => schedule(debounceMs),
   });
-
-  let pending = null;
   try {
     watchSource(selfPath, { persistent: false }, () => {
-      if (pending) clearTimeout(pending);
-      pending = setTimeout(() => {
-        pending = null;
-        void handleChange();
-      }, debounceMs);
+      schedule(debounceMs);
     });
   } catch {
     // Auto-reload is a convenience; never block startup on it.

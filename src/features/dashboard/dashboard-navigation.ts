@@ -265,9 +265,8 @@ export const DEFAULT_REMOVED_RAIL_VIEWS: DashboardView[] = [...REMOVABLE_RAIL_VI
 /**
  * Sentinel for "the user explicitly pinned no utilities". A cleared utilities
  * list must serialize to a non-empty, non-view token so it (a) is
- * distinguishable from "never set" (which seeds the defaults) and (b) survives
- * the dashboard-state client, which treats an empty string as absent and would
- * otherwise re-seed the defaults. Not a valid DashboardView, so parse yields [].
+ * distinguishable from "never set" (which seeds the defaults) even if the
+ * default set changes later. It is not a valid DashboardView, so parse yields [].
  */
 export const PINNED_UTILITIES_NONE = "__none__";
 
@@ -304,7 +303,7 @@ export function parseRemovedRailViews(raw: string | null | undefined): Dashboard
   return dedupeViews(raw, REMOVABLE_RAIL_SET);
 }
 
-/** Serialize the removed-rail-views set (empty -> "" = nothing removed = default). */
+/** Serialize the removed-rail-views set (empty -> "" = show every removable route). */
 export function serializeRemovedRailViews(views: readonly DashboardView[]): string {
   return views.filter((id) => REMOVABLE_RAIL_SET.has(id)).join(",");
 }

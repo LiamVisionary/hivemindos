@@ -1,11 +1,54 @@
+import { mergeChatProcessEvents, type ChatProcessEvent } from "./chat-process-events";
+
 type CapabilityApprovalMessage = {
   createdAt?: number;
   role?: string;
+  content?: string;
+  sourceSessionId?: string;
+  sourceIndex?: number;
+  processEvents?: ChatProcessEvent[];
   capabilityApproval?: {
     id?: string;
   };
   appArtifact?: unknown;
 };
+
+function normalizedMessageContent(message: CapabilityApprovalMessage) {
+  return String(message.content ?? "").replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function sourceMessageKey(message: CapabilityApprovalMessage) {
+  const sessionId = message.sourceSessionId?.trim() ?? "";
+  return sessionId && Number.isFinite(message.sourceIndex)
+    ? `${sessionId}:${message.sourceIndex}:${message.role ?? "message"}`
+    : "";
+}
+
+function withPreservedProcessTimelines<T extends CapabilityApprovalMessage>(
+  hydrated: readonly T[],
+  existing: readonly T[],
+): T[] {
+  const usedExistingIndexes = new Set<number>();
+  return hydrated.map((message) => {
+    if (message.role !== "assistant") return message;
+    const sourceKey = sourceMessageKey(message);
+    let existingIndex = sourceKey
+      ? existing.findIndex((candidate, index) => !usedExistingIndexes.has(index) && sourceMessageKey(candidate) === sourceKey)
+      : -1;
+    if (existingIndex < 0) {
+      const content = normalizedMessageContent(message);
+      existingIndex = existing.findIndex((candidate, index) => (
+        !usedExistingIndexes.has(index)
+        && candidate.role === "assistant"
+        && normalizedMessageContent(candidate) === content
+      ));
+    }
+    if (existingIndex < 0) return message;
+    usedExistingIndexes.add(existingIndex);
+    const processEvents = mergeChatProcessEvents(existing[existingIndex].processEvents ?? [], message.processEvents ?? []);
+    return processEvents.length ? { ...message, processEvents } : message;
+  });
+}
 
 function capabilityApprovalId(message: CapabilityApprovalMessage) {
   return message.capabilityApproval?.id?.trim() ?? "";
@@ -41,6 +84,7 @@ export function mergeRuntimeHydratedChatMessages<T extends CapabilityApprovalMes
   existing: readonly T[],
   hydratedMessages: readonly T[],
 ): T[] {
+  const hydratedWithProcesses = withPreservedProcessTimelines(hydratedMessages, existing);
   const hydratedApprovalIds = new Set(hydratedMessages.map(capabilityApprovalId).filter(Boolean));
   const localApprovalIndexes = new Set<number>();
   existing.forEach((message, index) => {
@@ -50,9 +94,9 @@ export function mergeRuntimeHydratedChatMessages<T extends CapabilityApprovalMes
     if (index > 0 && existing[index - 1].role === "user") localApprovalIndexes.add(index - 1);
   });
   const localApprovalExchange = existing.filter((_message, index) => localApprovalIndexes.has(index));
-  if (!localApprovalExchange.length) return withPreservedAppArtifact([...hydratedMessages], existing);
+  if (!localApprovalExchange.length) return withPreservedAppArtifact(hydratedWithProcesses, existing);
 
-  const merged = [...hydratedMessages, ...localApprovalExchange]
+  const merged = [...hydratedWithProcesses, ...localApprovalExchange]
     .map((message, index) => ({ message, index }))
     .sort((left, right) => {
       const leftCreatedAt = Number(left.message.createdAt || 0);

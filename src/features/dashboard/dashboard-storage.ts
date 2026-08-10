@@ -17,6 +17,7 @@ import type { CapabilityApprovalPlan, CapabilityCandidate, CapabilityDecision } 
 import { normalizeEvaluationHumanFeedback } from "@/lib/types/evaluation";
 import { queenBeeNameOrDefault } from "@/lib/config/queen-bee-personality";
 import { normalizeChatAppArtifact } from "@/lib/services/chat/chat-app-artifact";
+import { mergeChatProcessEvents } from "@/lib/services/chat/chat-process-events";
 
 const STORAGE_KEY = "hivemindos.agentProfiles.v1";
 const VAULT_STORAGE_KEY = "hivemindos.sharedVault.v1";
@@ -448,9 +449,11 @@ function dedupeChatTranscript(messages: ChatMessage[]) {
     const message = messages[index];
     if (sameVisibleChatMessage(output.at(-1), message)) {
       const previous = output.at(-1);
-      if (previous && ((message.billing && !previous.billing) || message.feedback || message.appArtifact)) {
+      const processEvents = mergeChatProcessEvents(previous?.processEvents ?? [], message.processEvents ?? []);
+      if (previous && (processEvents.length || (message.billing && !previous.billing) || message.feedback || message.appArtifact)) {
         output[output.length - 1] = {
           ...previous,
+          processEvents: processEvents.length ? processEvents : previous.processEvents,
           billing: message.billing ?? previous.billing,
           feedback: message.feedback ?? previous.feedback,
           appArtifact: message.appArtifact ?? previous.appArtifact,
@@ -477,9 +480,11 @@ function dedupeChatTranscript(messages: ChatMessage[]) {
       const previousUser = [...output.slice(0, previousAssistantIndex)].reverse().find((item) => item.role === "user");
       const currentUser = [...output].reverse().find((item) => item.role === "user");
       if (previousAssistantIndex >= 0 && sameVisibleChatMessage(previousUser, currentUser)) {
-        if ((message.billing && !output[previousAssistantIndex]?.billing) || message.feedback || message.appArtifact) {
+        const processEvents = mergeChatProcessEvents(output[previousAssistantIndex]?.processEvents ?? [], message.processEvents ?? []);
+        if (processEvents.length || (message.billing && !output[previousAssistantIndex]?.billing) || message.feedback || message.appArtifact) {
           output[previousAssistantIndex] = {
             ...output[previousAssistantIndex],
+            processEvents: processEvents.length ? processEvents : output[previousAssistantIndex]?.processEvents,
             billing: message.billing ?? output[previousAssistantIndex]?.billing,
             feedback: message.feedback ?? output[previousAssistantIndex]?.feedback,
             appArtifact: message.appArtifact ?? output[previousAssistantIndex]?.appArtifact,
@@ -733,6 +738,7 @@ function parseChatMessagesValue(raw: string | null): Record<string, ChatMessage[
                 label: event.label.trim(),
                 detail: typeof event.detail === "string" ? event.detail : undefined,
                 status: typeof event.status === "string" ? event.status : undefined,
+                runId: typeof event.runId === "string" ? event.runId : undefined,
               }))
             : undefined,
           attachments: Array.isArray(message.attachments) ? message.attachments : undefined,

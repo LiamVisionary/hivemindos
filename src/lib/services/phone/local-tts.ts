@@ -8,8 +8,10 @@ import {
   evictCachedApp,
   hydratePersistedApps,
   persistedAppHint,
+  persistedAppValidation,
   probeAppHealthy,
   rememberAppById,
+  rememberAppValidation,
   touchCachedApp,
 } from "@/lib/services/phone/local-tts-app-cache";
 import {
@@ -1190,6 +1192,75 @@ function findCandidateByAppId(candidates: LocalTtsCandidate[], selectedAppId: st
     });
 }
 
+function rememberCandidateValidation(selectedAppId: string, candidate: LocalTtsCandidate) {
+  rememberAppValidation(selectedAppId, {
+    appId: candidate.appId,
+    appName: candidate.name,
+    machineName: candidate.machineName,
+    model: candidate.model,
+    voice: candidate.voice,
+    availableModels: candidate.availableModels,
+    availableVoices: candidate.availableVoices,
+    sampleRate: candidate.sampleRate,
+    channels: candidate.channels,
+    sampleFormat: candidate.sampleFormat,
+    streamingKind: candidate.streamingKind,
+    streamingImplementation: candidate.streamingImplementation,
+    validatedAt: Date.now(),
+  });
+}
+
+async function persistedSelectedCandidate(origin: string, selectedAppId: string) {
+  await hydratePersistedApps(origin).catch(() => undefined);
+  const validation = persistedAppValidation(selectedAppId);
+  if (!validation) return undefined;
+  return {
+    id: providerId(validation.appId),
+    appId: validation.appId,
+    name: validation.appName,
+    machineName: validation.machineName,
+    score: 100,
+    ok: true,
+    model: validation.model,
+    voice: validation.voice,
+    models: validation.availableModels,
+    availableModels: validation.availableModels,
+    availableModelDetails: [],
+    availableVoices: validation.availableVoices,
+    voiceCount: validation.availableVoices.length,
+    supportsStreamingApi: true,
+    supportsTrueStreaming: true,
+    streamingKind: validation.streamingKind,
+    streamingImplementation: validation.streamingImplementation,
+    sampleRate: validation.sampleRate,
+    channels: validation.channels,
+    sampleFormat: validation.sampleFormat,
+    routeHints: [],
+  } satisfies LocalTtsCandidate;
+}
+
+/** Validate a pinned voice server from its durable last-known-good app route.
+ * This is the cold-session fast path: checking one known `/health` endpoint
+ * plus that server's capabilities/voices is normally sub-second, while a full
+ * fleet + Hivemind Link discovery sweep has measured 4–10 seconds. The live
+ * validation still rejects foreign/orphaned voice ids; only route discovery
+ * is skipped. */
+async function validatePersistedSelectedCandidate(origin: string, selectedAppId: string) {
+  await hydratePersistedApps(origin).catch(() => undefined);
+  const app = cachedApp(origin, selectedAppId) ?? persistedAppHint(selectedAppId);
+  if (!app?.apiBaseUrl || !(await probeAppHealthy(app))) return undefined;
+  const candidate = await validateCandidate(app);
+  if (!candidate.ok) return undefined;
+  touchCachedApp(origin, selectedAppId, app);
+  rememberCandidateValidation(selectedAppId, candidate);
+  const current = cachedCandidates(origin) ?? [];
+  rememberCandidates(origin, [
+    candidate,
+    ...current.filter((item) => item.appId !== candidate.appId),
+  ]);
+  return candidate;
+}
+
 // Single-flight background candidates-cache warm so the audible speak paths
 // (which must not pay discovery latency) validate stored ids from the NEXT resolve.
 const candidateWarmsInFlight = new Set<string>();
@@ -1217,11 +1288,24 @@ export async function resolveLocalTtsCallConfig(input: {
     let candidate = cachedMatch?.ok ? cachedMatch : undefined;
     if (!candidate) {
       if (input.awaitDiscoveryForValidation) {
-        const discoveredMatch = findCandidateByAppId(
-          await discoverLocalTtsCandidates(input.origin).catch(() => []),
-          selectedAppId,
-        );
-        candidate = discoveredMatch?.ok ? discoveredMatch : undefined;
+        candidate = await persistedSelectedCandidate(input.origin, selectedAppId);
+        if (candidate) {
+          // The last successfully advertised voice/model snapshot is safe for
+          // this call immediately. Refresh the ONE persisted server in the
+          // background so future sessions track server-side changes without
+          // adding any network wait to answer → call-screen handoff.
+          void validatePersistedSelectedCandidate(input.origin, selectedAppId);
+        } else {
+          candidate = await validatePersistedSelectedCandidate(input.origin, selectedAppId);
+        }
+        if (!candidate) {
+          const discoveredMatch = findCandidateByAppId(
+            await discoverLocalTtsCandidates(input.origin).catch(() => []),
+            selectedAppId,
+          );
+          candidate = discoveredMatch?.ok ? discoveredMatch : undefined;
+          if (candidate) rememberCandidateValidation(selectedAppId, candidate);
+        }
       } else {
         warmCandidatesForValidation(input.origin);
       }

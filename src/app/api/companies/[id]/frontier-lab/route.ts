@@ -8,8 +8,10 @@ import {
   evaluateFrontierLabStageTransition,
   normalizeFrontierLabPolicy,
 } from "@/lib/frontier-lab";
+import { earnedScaleStageTransitionBlock } from "@/lib/earned-scale";
 import { readCompanyIntelligenceSnapshot } from "@/lib/services/company-intelligence-usage";
 import { getCompany, setCompanyFrontierLabPolicy } from "@/lib/services/companies-store";
+import { readEarnedScaleInsights } from "@/lib/services/earned-scale-insights";
 import { openAiOAuthConfigured } from "@/lib/services/openai-oauth";
 import { errorJson, okJson } from "@/lib/utils/api-response";
 import { requireAuth } from "@/lib/utils/server-auth";
@@ -31,12 +33,13 @@ async function frontierLabPayload(company: NonNullable<Awaited<ReturnType<typeof
     reservedTokens: snapshot.reservedTokens,
   });
   const oauthConfigured = await openAiOAuthConfigured().catch(() => false);
+  const earnedScale = await readEarnedScaleInsights({ companyId: company.id, policy, snapshot });
   const stages = Object.values(FRONTIER_LAB_STAGE_PROFILES).map((profile) => ({
     ...profile,
-    transition: evaluateFrontierLabStageTransition(policy.stage, profile.stage, {
+    transition: governedStageTransition(policy.stage, profile.stage, {
       settledTasks: snapshot.settledTasks,
       completedTasks: snapshot.completedTasks,
-    }),
+    }, earnedScale.scaleCurve),
   }));
   return {
     policy,
@@ -44,6 +47,7 @@ async function frontierLabPayload(company: NonNullable<Awaited<ReturnType<typeof
     snapshot,
     capacity,
     stages,
+    earnedScale,
     readiness: {
       openAiOAuthConfigured: oauthConfigured,
       nativeHierarchicalExecution: company.execution?.engine !== "aeon" && company.process !== "sequential" && company.process !== "graph",
@@ -85,6 +89,9 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
       completedTasks: snapshot.completedTasks,
     });
     if (!transition.allowed) return errorJson(transition.reason ?? "The requested scale stage is not yet earned.", 409);
+    const earnedScale = await readEarnedScaleInsights({ companyId: company.id, policy: current, snapshot });
+    const earnedScaleBlock = earnedScaleStageTransitionBlock(current.stage, next.stage, earnedScale.scaleCurve);
+    if (earnedScaleBlock) return errorJson(earnedScaleBlock, 409);
     if (next.enabled && (company.execution?.engine === "aeon" || company.process === "sequential" || company.process === "graph")) {
       return errorJson("Frontier Lab currently requires the native hierarchical Hivemind execution process so every task can be attributed and budgeted.", 409);
     }
@@ -100,4 +107,16 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
   } catch (error) {
     return errorJson(error instanceof Error ? error.message : "Could not update Frontier Lab.", 400);
   }
+}
+
+function governedStageTransition(
+  current: "pilot" | "team" | "frontier",
+  target: "pilot" | "team" | "frontier",
+  evidence: { settledTasks: number; completedTasks: number },
+  scaleCurve: Awaited<ReturnType<typeof readEarnedScaleInsights>>["scaleCurve"],
+) {
+  const completionGate = evaluateFrontierLabStageTransition(current, target, evidence);
+  if (!completionGate.allowed) return completionGate;
+  const earnedScaleBlock = earnedScaleStageTransitionBlock(current, target, scaleCurve);
+  return earnedScaleBlock ? { ...completionGate, allowed: false, reason: earnedScaleBlock } : completionGate;
 }

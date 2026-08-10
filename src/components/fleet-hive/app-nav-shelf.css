@@ -49,6 +49,36 @@ html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .fr
   grid-template-columns: repeat(2, 44px);
 }
 
+.fr-nav-hydration {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.fr-nav-skeleton {
+  display: block;
+  width: 42px;
+  height: 38px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--fg) 9%, transparent);
+  animation: fr-nav-skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+.fr-nav-skeleton:nth-child(2n) {
+  animation-delay: 120ms;
+}
+
+@keyframes fr-nav-skeleton-pulse {
+  0%, 100% { opacity: 0.42; }
+  50% { opacity: 0.82; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fr-nav-skeleton { animation: none; }
+}
+
 /* Tear-off ghost: follows the pointer while a rail tab is dragged toward the
    content area. "Armed" (pointer outside the rail) means releasing pops the
    view out into its own window; the honey accent signals the live drop. */

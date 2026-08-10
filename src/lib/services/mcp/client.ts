@@ -11,8 +11,8 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 // only cataloging them. Enabled by default; togglable and persisted under ~/.hivemindos/.
 
 export type McpServerConfig =
-  | { id: string; transport: "stdio"; command: string; args?: string[]; env?: Record<string, string> }
-  | { id: string; transport: "http"; url: string; headers?: Record<string, string> };
+  | { id: string; transport: "stdio"; command: string; args?: string[]; env?: Record<string, string>; cwd?: string; inheritEnv?: boolean }
+  | { id: string; transport: "http"; url: string; headers?: Record<string, string>; preventRedirects?: boolean };
 
 export interface McpToolInfo {
   name: string;
@@ -71,11 +71,20 @@ function makeTransport(config: McpServerConfig) {
     return new StdioClientTransport({
       command: config.command,
       args: config.args ?? [],
-      env: { ...(getStringEnv()), ...(config.env ?? {}) },
+      env: { ...(config.inheritEnv === false ? {} : getStringEnv()), ...(config.env ?? {}) },
+      cwd: config.cwd,
     });
   }
   return new StreamableHTTPClientTransport(new URL(config.url), {
-    requestInit: config.headers ? { headers: config.headers } : undefined,
+    fetch: config.preventRedirects
+      ? (input, init) => fetch(input, { ...init, redirect: "manual" })
+      : undefined,
+    requestInit: config.headers || config.preventRedirects
+      ? {
+          headers: config.headers,
+          redirect: config.preventRedirects ? "manual" : undefined,
+        }
+      : undefined,
   });
 }
 

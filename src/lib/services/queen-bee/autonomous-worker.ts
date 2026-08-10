@@ -24,6 +24,7 @@ import {
   normalizeFrontierLabPolicy,
   openAiOAuthAgentForFrontierLabTier,
 } from "@/lib/frontier-lab";
+import { earnedScaleSettlementEvidence } from "@/lib/earned-scale";
 import {
   addCompanyIntelligenceUsage,
   companyIntelligenceUsageFromResponse,
@@ -396,6 +397,7 @@ export async function runQueenBeeAutonomousPickup(
     let intelligenceEstimated = false;
     let intelligenceOutcome: CompanyIntelligenceOutcome = "failed";
     let intelligenceReason: string | undefined;
+    let intelligenceStartedAt: number | undefined;
 
     try {
       if (frontierPolicy && frontierTier && company) {
@@ -450,6 +452,7 @@ export async function runQueenBeeAutonomousPickup(
         if (!intelligenceReservationId) return;
         intelligenceAttempted = true;
         intelligenceUnobservedAttempt = true;
+        intelligenceStartedAt ??= Date.now();
       };
       const runWorkerChat = async (message: string) => {
         beginIntelligenceAttempt();
@@ -622,6 +625,13 @@ export async function runQueenBeeAutonomousPickup(
                 : intelligenceUsage,
               estimated,
               reason: intelligenceReason,
+              scaleEvidence: earnedScaleSettlementEvidence({
+                outcome: intelligenceOutcome,
+                startedAt: intelligenceStartedAt,
+                completedAt: Date.now(),
+                reason: intelligenceReason,
+                evaluation: currentTask.evaluation,
+              }),
             }, deps.intelligenceLedgerOptions);
           } else {
             await releaseCompanyIntelligenceReservation(companyId, intelligenceReservationId, {

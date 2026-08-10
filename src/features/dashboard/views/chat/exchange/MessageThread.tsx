@@ -12,6 +12,7 @@ import { ChatAttachmentView } from "@/features/chat/chat-attachment-view";
 import { parseUserSlashCommandDisplay } from "@/features/queen-voice/queen-command-display";
 import { chatProcessTimerIsActive, isHiddenChatProcessEvent, markdownText, messageKey, messageText, promptUiFromMessage } from "@/features/dashboard/views/chat/chat-panel-helpers";
 import { AgentProcessPanel, normalizeProcessEvents, processEventsAreActive, type ProcessEvent } from "@/features/dashboard/views/chat/AgentProcessPanel";
+import { BrowserLivePreview, latestBrowserPreview } from "@/features/dashboard/views/chat/BrowserLivePreview";
 import { ApplicationGenerationCard } from "@/features/dashboard/views/chat/ApplicationGenerationCard";
 import { extractMiroSharkSimulationCard, MiroSharkSimulationCard } from "@/features/dashboard/views/chat/MiroSharkSimulationCard";
 import { extractTranscriptCard } from "@/features/dashboard/chat-transcript-card";
@@ -603,13 +604,15 @@ function WorkedForDivider({ active, events }: { active: boolean; events: Process
   );
 }
 
-function ProcessPanel({ iconProps, active, events }: { iconProps: ThreadIconProps; active: boolean; events: ProcessEvent[] }) {
+function ProcessPanel({ iconProps, active, browserActive, events }: { iconProps: ThreadIconProps; active: boolean; browserActive: boolean; events: ProcessEvent[] }) {
   const visibleEvents = events.filter((event) => !isHiddenChatProcessEvent(event));
+  const browserPreview = latestBrowserPreview(events);
   if (!visibleEvents.length) return null;
   return (
     <>
       <WorkedForDivider active={active} events={visibleEvents} />
       <AgentProcessPanel {...iconProps} active={active} events={visibleEvents} />
+      {browserPreview ? <BrowserLivePreview active={browserActive} preview={browserPreview} /> : null}
     </>
   );
 }
@@ -938,6 +941,7 @@ function MessageThreadBase({
             {events.length ? (
               <ProcessPanel
                 iconProps={iconProps}
+                browserActive={Boolean(busy && index === messages.length - 1)}
                 active={chatProcessTimerIsActive(
                   Boolean(busy && index === messages.length - 1),
                   processEventsAreActive(events),

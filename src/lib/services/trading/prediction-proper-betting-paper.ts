@@ -472,6 +472,8 @@ function fillPosition(input: {
   let feeUsd = 0;
   for (const level of book.asks) {
     const feePerShare = predictionTakerFeeUsd({ shares: 1, price: level.price, feeSchedule: schedule });
+    const levelNetForecastEdge = input.signal.sideProbability - level.price - feePerShare;
+    if (levelNetForecastEdge < input.policy.minimumNetForecastEdge) continue;
     const capitalPerShare = level.price + feePerShare;
     const displayedShares = level.size * input.policy.maxDepthFraction;
     let levelShares = Math.min(displayedShares, remainingCapital / capitalPerShare);

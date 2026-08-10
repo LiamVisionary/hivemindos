@@ -24,6 +24,8 @@ import {
   createGeckoTerminalNewPoolBirthEntryRegistrationEvent,
   createGeckoTerminalNewPoolBirthMarketCapFloorRemovedRegistrationEvent,
   createGeckoTerminalNewPoolBirthPathRegistrationEvent,
+  chronologicalHalfValidation,
+  missingAsLossForecastSensitivity,
   validatedGeckoTerminalNewPoolBirthEntryRows,
   validatedGeckoTerminalNewPoolBirthMarketCapFloorRemovedRows,
 } from "./onchain-geckoterminal-new-pool-activation.mjs";
@@ -40,10 +42,12 @@ import {
   createGeckoTerminalNewPoolStandardMidPathRegistrationEvent,
   providerDiagnosticRejectionReason,
 } from "./onchain-geckoterminal-new-pool-fast-path.mjs";
+import { latestLedgerOccurrenceAt } from "./onchain-geckoterminal-new-pool-delayed-shadow.mjs";
 import { defaultTokenEdgeLedgerPath } from "./onchain-forward-research.mjs";
 
 const HOUR_MS = 60 * 60_000;
 const PATH_CADENCE_MS = 5 * 60_000;
+const MINIMUM_ELIGIBLE_PATH_OUTCOME_COVERAGE_RATE = 0.95;
 
 export const GECKOTERMINAL_NEW_POOL_BIRTH_TAKE_PROFIT_RULE = Object.freeze({
   version: "geckoterminal-new-pool-birth-plus-ten-take-profit-v1",
@@ -747,6 +751,22 @@ function buildGeckoTerminalNewPoolBirthTakeProfitScorecardForRule(events, {
       && !(rule.derivation?.excludedTokenAddresses ?? []).includes(forecast.tokenAddress)
   ));
   const candidateIds = new Set(candidateForecasts.map((forecast) => forecast.id));
+  const candidateById = new Map(candidateForecasts.map((forecast) => (
+    [forecast.id, forecast]
+  )));
+  const scorecardAsOf = latestLedgerOccurrenceAt(events);
+  const scorecardAsOfMs = scorecardAsOf?.getTime() ?? null;
+  const maturedForecasts = Number.isFinite(scorecardAsOfMs)
+    ? candidateForecasts.filter((forecast) => {
+      const dueAt = Date.parse(forecast.dueAt);
+      return Number.isFinite(dueAt) && dueAt <= scorecardAsOfMs;
+    })
+    : [];
+  const maturedForecastIds = new Set(maturedForecasts.map((forecast) => forecast.id));
+  const recordedResolutionForecastIds = new Set(events.filter((event) => (
+    event.type === "geckoterminal-new-pool-resolution"
+      && maturedForecastIds.has(event.forecastId)
+  )).map((event) => event.forecastId));
   const pathsByForecast = new Map();
   const cadenceEvidenceByForecast = new Map();
   for (const event of events) {
@@ -874,9 +894,31 @@ function buildGeckoTerminalNewPoolBirthTakeProfitScorecardForRule(events, {
   const policyReturns = frameRows.map((row) => row.policyBaseReturnPct);
   const stressReturns = frameRows.map((row) => row.policyStressReturnPct);
   const pairedDeltas = frameRows.map((row) => row.pairedDeltaPct);
+  const missingAsLoss = missingAsLossForecastSensitivity({
+    maturedForecasts,
+    rows: observations.map((observation) => ({
+      forecast: candidateById.get(observation.forecastId),
+      baseCapacityReturnPct: observation.policyBaseReturnPct,
+      stressCapacityReturnPct: observation.policyStressReturnPct,
+    })),
+  });
+  const chronological = chronologicalHalfValidation(
+    policyReturns,
+    stressReturns,
+    TOKEN_EDGE_EXECUTION_POLICY,
+  );
   const takeProfits = weighted.filter((row) => row.exitSource === "live-path-take-profit");
   const stopLosses = weighted.filter((row) => row.exitSource === "live-path-stop-loss");
   const uniqueTokens = new Set(weighted.map(tokenEdgeAssetKey)).size;
+  const maturedForecastCount = maturedForecasts.length;
+  const unrecordedMaturedForecasts = maturedForecasts.filter((forecast) => (
+    !recordedResolutionForecastIds.has(forecast.id)
+  )).length;
+  const eligiblePathOutcomeCoverageRate = maturedForecastCount > 0
+    ? round6(observations.length / maturedForecastCount) : null;
+  const eligiblePathOutcomeCoverageGate = Number.isFinite(
+    eligiblePathOutcomeCoverageRate,
+  ) && eligiblePathOutcomeCoverageRate >= MINIMUM_ELIGIBLE_PATH_OUTCOME_COVERAGE_RATE;
   const evidenceReady = Boolean(
     registration
       && sourceRegistration
@@ -889,6 +931,7 @@ function buildGeckoTerminalNewPoolBirthTakeProfitScorecardForRule(events, {
       && frames.length >= rule.minimumIndependentTradedFrames
       && takeProfits.length >= rule.minimumTakeProfitExits
       && stopLosses.length >= (rule.minimumStopLossExits ?? 0)
+      && eligiblePathOutcomeCoverageGate
   );
   const deltaCi95 = frames.length >= 2
     ? bootstrapMeanInterval(pairedDeltas, rule.bootstrapIterations) : [null, null];
@@ -899,17 +942,18 @@ function buildGeckoTerminalNewPoolBirthTakeProfitScorecardForRule(events, {
     evidenceReady
       && mean(policyReturns) > 0
       && mean(stressReturns) > 0
+      && missingAsLoss.gate
+      && chronological.gate
       && deltaCi95[0] > 0
       && profitFactorValue >= rule.minimumProfitFactor
       && drawdown <= rule.maximumDrawdownPct
       && concentration <= rule.maximumLargestWinningFrameShare
   );
-  const openIds = new Set(candidateForecasts.map((forecast) => forecast.id));
-  for (const row of cohort.rows) openIds.delete(row.forecast.id);
   return {
     type,
     ruleVersion: rule.version,
     evidenceBoundary: rule.evidenceBoundary,
+    scorecardAsOf: scorecardAsOf?.toISOString() ?? null,
     registrationId: registration?.id ?? null,
     registeredAt: registration?.registeredAt ?? null,
     sourceRegistrationId: sourceRegistration?.id ?? null,
@@ -919,8 +963,15 @@ function buildGeckoTerminalNewPoolBirthTakeProfitScorecardForRule(events, {
     researchOnly: true,
     mutationAllowed: false,
     candidateForecasts: candidateForecasts.length,
-    openForecasts: openIds.size,
+    openForecasts: candidateForecasts.length - maturedForecastCount,
+    maturedForecastCount,
+    recordedMaturedResolutions: recordedResolutionForecastIds.size,
+    unrecordedMaturedForecasts,
     eligibleCompletePathObservations: observations.length,
+    eligiblePathOutcomeCoverageRate,
+    minimumEligiblePathOutcomeCoverageRate:
+      MINIMUM_ELIGIBLE_PATH_OUTCOME_COVERAGE_RATE,
+    eligiblePathOutcomeCoverageGate,
     portfolioWeightedObservations: weighted.length,
     sameAssetOverlappingObservations: overlappingAssetSignalCount(observations, frames),
     independentHourlyFrames: frames.length,
@@ -939,6 +990,9 @@ function buildGeckoTerminalNewPoolBirthTakeProfitScorecardForRule(events, {
     )),
     policyFrameMeanNetReturnPct: nullableRound(mean(policyReturns)),
     stressedPolicyFrameMeanNetReturnPct: nullableRound(mean(stressReturns)),
+    ...missingAsLoss.summary,
+    chronologicalHalfValidation: chronological.validation,
+    chronologicalHalfValidationGate: chronological.gate,
     pairedFrameMeanDeltaPct: nullableRound(mean(pairedDeltas)),
     pairedBootstrapMeanDeltaCi95Pct: deltaCi95.map(nullableRound),
     profitFactor: nullableRound(profitFactorValue),
@@ -955,6 +1009,12 @@ function buildGeckoTerminalNewPoolBirthTakeProfitScorecardForRule(events, {
       ),
       takeProfitExits: Math.max(0, rule.minimumTakeProfitExits - takeProfits.length),
       stopLossExits: Math.max(0, (rule.minimumStopLossExits ?? 0) - stopLosses.length),
+      eligiblePathOutcomeCoverageRate: round6(Math.max(
+        0,
+        MINIMUM_ELIGIBLE_PATH_OUTCOME_COVERAGE_RATE
+          - (eligiblePathOutcomeCoverageRate ?? 0),
+      )),
+      ...chronological.evidenceShortfall,
     },
     provisionalGate,
     observationsDetail: weighted,

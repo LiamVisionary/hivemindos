@@ -14,8 +14,10 @@ import {
   resolveGeckoTerminalNewPoolDelayedShadows,
 } from "./token-edge/onchain-geckoterminal-new-pool-delayed-shadow.mjs";
 import {
+  armScore,
   buildGeckoTerminalNewPoolForecastAbScorecard,
   captureGeckoTerminalNewPoolForecastAb,
+  forecastScoreRow,
   registerGeckoTerminalNewPoolForecastAb,
 } from "./token-edge/onchain-geckoterminal-new-pool-forecast-ab.mjs";
 import {
@@ -250,6 +252,76 @@ try {
   assert.equal(repeated.status, "no-unsealed-future-discovery");
   assert.equal(repeated.requestsAttempted, 0);
 
+  const liveFirstLedgerPath = path.join(root, "live-first-ledger.jsonl");
+  await registerGeckoTerminalNewPoolActivation(
+    { ledgerPath: liveFirstLedgerPath },
+    { now: new Date("2026-08-04T05:58:00.000Z") },
+  );
+  await registerGeckoTerminalNewPoolForecastAb(
+    {
+      ledgerPath: liveFirstLedgerPath,
+      evidenceBoundary: "2026-08-04T06:00:00.000Z",
+    },
+    { now: new Date("2026-08-04T06:00:01.000Z") },
+  );
+  const expiredDiscovery = await watchGeckoTerminalNewPools(
+    { ledgerPath: liveFirstLedgerPath },
+    {
+      now: new Date("2026-08-04T06:01:00.000Z"),
+      clock: () => new Date("2026-08-04T06:01:00.000Z"),
+      fetcher: newPoolFetcher([poolRow({
+        tokenAddress: "ExpiredBacklog1111111111111111111111111111",
+        pairAddress: "ExpiredBacklogPool111111111111111111111111",
+        poolCreatedAt: "2026-08-04T06:00:30.000Z",
+        priceUsd: 0.0001,
+        liquidityUsd: 8_000,
+      })]),
+    },
+  );
+  const liveDiscovery = await watchGeckoTerminalNewPools(
+    { ledgerPath: liveFirstLedgerPath },
+    {
+      now: new Date("2026-08-04T06:10:00.000Z"),
+      clock: () => new Date("2026-08-04T06:10:00.000Z"),
+      fetcher: newPoolFetcher([]),
+    },
+  );
+  const liveFirstCapture = await captureGeckoTerminalNewPoolForecastAb(
+    {
+      ledgerPath: liveFirstLedgerPath,
+      lunarcrushApiKey: "test-lunar",
+      geminiApiKey: "test-gemini",
+    },
+    {
+      now: new Date("2026-08-04T06:10:02.000Z"),
+      fetcher: async () => {
+        throw new Error("empty live discovery must not use a provider");
+      },
+    },
+  );
+  assert.equal(liveFirstCapture.status, "sealed-no-watchable-candidates");
+  assert.equal(liveFirstCapture.discoveryEventId, liveDiscovery.discoveryEventId);
+  assert.equal(liveFirstCapture.requestsAttempted, 0);
+  const expiredFallbackCapture = await captureGeckoTerminalNewPoolForecastAb(
+    {
+      ledgerPath: liveFirstLedgerPath,
+      lunarcrushApiKey: "test-lunar",
+      geminiApiKey: "test-gemini",
+    },
+    {
+      now: new Date("2026-08-04T06:10:03.000Z"),
+      fetcher: async () => {
+        throw new Error("expired fallback must not use a provider");
+      },
+    },
+  );
+  assert.equal(expiredFallbackCapture.status, "sealed-capture-window-expired");
+  assert.equal(
+    expiredFallbackCapture.discoveryEventId,
+    expiredDiscovery.discoveryEventId,
+  );
+  assert.equal(expiredFallbackCapture.requestsAttempted, 0);
+
   const openScore = buildGeckoTerminalNewPoolForecastAbScorecard(await readLedger(ledgerPath));
   assert.equal(openScore.candidateForecasts, 4);
   assert.equal(openScore.arms["market-only"].openOutcomes, 2);
@@ -285,14 +357,37 @@ try {
   const events = await readLedger(ledgerPath);
   assert.deepEqual(verifyLedger(events), { ok: true, errors: [], eventCount: events.length });
   const score = buildGeckoTerminalNewPoolForecastAbScorecard(events);
+  const identityForecast = marketOnly[0];
+  const identityDiscovery = events.find((event) => (
+    event.id === identityForecast.discoveryEventId
+  ));
+  const identityOutcome = events.find((event) => (
+    event.type === "geckoterminal-new-pool-delayed-shadow-outcome"
+      && event.discoveryEventId === identityForecast.discoveryEventId
+      && event.pairAddress === identityForecast.pairAddress
+      && event.horizon === "1h"
+  ));
+  assert.ok(forecastScoreRow({
+    forecast: identityForecast,
+    discovery: identityDiscovery,
+    outcome: identityOutcome,
+  }));
+  assert.equal(forecastScoreRow({
+    forecast: identityForecast,
+    discovery: identityDiscovery,
+    outcome: { ...identityOutcome, tokenAddress: "WrongExactMint111111111111111111111111111" },
+  }), null);
   assert.equal(score.arms["market-only"].observedOutcomes, 2);
+  assert.equal(score.arms["market-only"].resolvedOutcomes, 2);
   assert.equal(score.arms["market-only"].paperObservedOutcomes, 2);
   assert.equal(score.arms["market-only"].forecastAvailabilityCoverage, 1);
   assert.equal(score.arms["market-only"].directionAccuracy, 0);
   assert.equal(score.arms["market-only"].meanAbsoluteErrorPct, 85);
   assert.equal(score.arms["market-only"].paperLongForecasts, 0);
   assert.equal(score.arms["market-only"].averageBaseReturnPct, 0);
+  assert.equal(score.arms["market-only"].chronologicalHalfValidationGate, false);
   assert.equal(score.arms["market-plus-lunar"].observedOutcomes, 1);
+  assert.equal(score.arms["market-plus-lunar"].resolvedOutcomes, 2);
   assert.equal(score.arms["market-plus-lunar"].paperObservedOutcomes, 2);
   assert.equal(score.arms["market-plus-lunar"].forecastAvailabilityCoverage, 0.5);
   assert.equal(score.arms["market-plus-lunar"].directionAccuracy, 1);
@@ -461,11 +556,220 @@ try {
   assert.equal(postsScore.arms["market-plus-lunar-posts-rescue"].observedOutcomes, 1);
   assert.equal(postsScore.arms["market-plus-lunar-posts-rescue"].paperObservedOutcomes, 2);
   assert.equal(postsScore.arms["market-plus-lunar-posts-rescue"].forecastAvailabilityCoverage, 0.5);
+  assert.equal(
+    postsScore.arms["market-plus-lunar-posts-rescue"].chronologicalHalfValidationGate,
+    false,
+  );
   assert.equal(postsScore.pairedComparison.observedPairs, 1);
   assert.equal(postsScore.pairedComparison.postsDirectionAccuracyDelta, 1);
   assert.equal(postsScore.statisticalCandidateGate, false);
   assert.equal(postsScore.promotionAuthority, false);
   assert.equal(postsScore.tradingAuthority, false);
+
+  const chronologicalForecasts = [];
+  const chronologicalRows = [];
+  const chronologicalOutcomes = new Map();
+  for (let index = 0; index < 252; index += 1) {
+    const createdAt = new Date(Date.parse("2026-01-01T00:00:00.000Z")
+      + (index * 60 * 60_000)).toISOString();
+    const discoveryEventId = `chronological-discovery-${index}`;
+    const pairAddress = `chronological-pair-${index}`;
+    const forecastId = `chronological-forecast-${index}`;
+    const tokenAddress = `chronological-token-${index}`;
+    const poolCreatedAt = createdAt;
+    const dueAt = new Date(Date.parse(createdAt) + 60 * 60_000).toISOString();
+    const birthQuoteDigest = `chronological-birth-${index}`;
+    const returnPct = index < 126 ? -0.01 : 1;
+    chronologicalForecasts.push({
+      id: forecastId,
+      status: "ready",
+      paperDecision: "paper-long",
+      prediction: { predictedRise: true },
+      discoveryEventId,
+      pairAddress,
+      chain: "solana",
+      tokenAddress,
+      poolCreatedAt,
+      createdAt,
+      sourceDiscoveryObservedAt: createdAt,
+      dueAt,
+      birthQuoteDigest,
+    });
+    chronologicalOutcomes.set(`${discoveryEventId}:${pairAddress}`, {
+      discoveryEventId,
+      chain: "solana",
+      tokenAddress,
+      pairAddress,
+      poolCreatedAt,
+      sourceDiscoveryObservedAt: createdAt,
+      dueAt,
+      birthQuoteDigest,
+      horizon: "1h",
+      status: "observed",
+    });
+    chronologicalRows.push({
+      forecastId,
+      chain: "solana",
+      tokenAddress,
+      createdAt,
+      outcomeStatus: "observed",
+      predictedReturnPct: 1,
+      grossReturnPct: returnPct,
+      directionCorrect: returnPct > 0,
+      brierScore: 0,
+      absoluteErrorPct: 0,
+      squaredErrorPct: 0,
+      predictedExplosion25: false,
+      actualExplosion25: false,
+      paperLong: true,
+      baseReturnPct: returnPct,
+      stressReturnPct: returnPct,
+    });
+  }
+  const chronologicalScore = armScore(
+    chronologicalForecasts,
+    chronologicalRows,
+    chronologicalOutcomes,
+    { asOfMs: Date.parse("2027-01-01T00:00:00.000Z") },
+  );
+  assert.ok(chronologicalScore.bootstrapMeanBaseReturn95Pct[0] > 0);
+  assert.ok(chronologicalScore.averageStressReturnPct > 0);
+  assert.ok(chronologicalScore.profitFactor >= 1.2);
+  assert.ok(chronologicalScore.maximumDrawdownPct <= 25);
+  assert.ok(chronologicalScore.largestWinningFrameShare <= 0.35);
+  assert.equal(
+    chronologicalScore.chronologicalHalfValidation.firstHalf.portfolioAverageStressReturnPct,
+    -0.01,
+  );
+  assert.equal(
+    chronologicalScore.chronologicalHalfValidation.secondHalf.portfolioAverageStressReturnPct,
+    1,
+  );
+  assert.equal(chronologicalScore.chronologicalHalfValidationGate, false);
+  assert.equal(chronologicalScore.missingAsLossSensitivityGate, true);
+  assert.equal(chronologicalScore.statisticalCandidateGate, false);
+
+  const coveredForecasts = [];
+  const coveredRows = [];
+  const coveredOutcomes = new Map();
+  for (let index = 0; index < 264; index += 1) {
+    const createdAt = new Date(Date.parse("2025-01-01T00:00:00.000Z")
+      + (index * 60 * 60_000)).toISOString();
+    const discoveryEventId = `covered-discovery-${index}`;
+    const pairAddress = `covered-pair-${index}`;
+    const forecastId = `covered-forecast-${index}`;
+    const tokenAddress = `covered-token-${index}`;
+    const poolCreatedAt = createdAt;
+    const dueAt = new Date(Date.parse(createdAt) + 60 * 60_000).toISOString();
+    const birthQuoteDigest = `covered-birth-${index}`;
+    const outcome = {
+      discoveryEventId,
+      chain: "solana",
+      tokenAddress,
+      pairAddress,
+      poolCreatedAt,
+      sourceDiscoveryObservedAt: createdAt,
+      dueAt,
+      birthQuoteDigest,
+      horizon: "1h",
+      status: index < 252 ? "observed" : "missed",
+    };
+    coveredForecasts.push({
+      id: forecastId,
+      status: "ready",
+      paperDecision: "paper-long",
+      prediction: { predictedRise: true },
+      discoveryEventId,
+      pairAddress,
+      chain: "solana",
+      tokenAddress,
+      poolCreatedAt,
+      createdAt,
+      sourceDiscoveryObservedAt: createdAt,
+      dueAt,
+      birthQuoteDigest,
+    });
+    coveredOutcomes.set(`${discoveryEventId}:${pairAddress}`, outcome);
+    if (outcome.status === "observed") {
+      coveredRows.push({
+        forecastId,
+        chain: "solana",
+        tokenAddress,
+        createdAt,
+        outcomeStatus: "observed",
+        predictedReturnPct: 1,
+        grossReturnPct: 1,
+        directionCorrect: true,
+        brierScore: 0,
+        absoluteErrorPct: 0,
+        squaredErrorPct: 0,
+        predictedExplosion25: false,
+        actualExplosion25: false,
+        paperLong: true,
+        baseReturnPct: 1,
+        stressReturnPct: 1,
+      });
+    }
+  }
+  const coveredScore = armScore(
+    coveredForecasts,
+    coveredRows,
+    coveredOutcomes,
+    { asOfMs: Date.parse("2026-01-01T00:00:00.000Z") },
+  );
+  assert.equal(coveredScore.resolvedCoverage, 0.954545);
+  assert.ok(coveredScore.bootstrapMeanBaseReturn95Pct[0] > 0);
+  assert.equal(coveredScore.chronologicalHalfValidationGate, true);
+  assert.ok(coveredScore.missingAsLossAverageStressReturnPct < 0);
+  assert.equal(coveredScore.missingAsLossSensitivityGate, false);
+  assert.equal(coveredScore.statisticalCandidateGate, false);
+
+  const mismatchedForecast = coveredForecasts[0];
+  const mismatchedKey = `${mismatchedForecast.discoveryEventId}:${mismatchedForecast.pairAddress}`;
+  const mismatchedScore = armScore(
+    [mismatchedForecast],
+    [],
+    new Map([[
+      mismatchedKey,
+      {
+        ...coveredOutcomes.get(mismatchedKey),
+        tokenAddress: "WrongExactMint222222222222222222222222222",
+      },
+    ]]),
+    { asOfMs: Date.parse("2026-01-01T00:00:00.000Z") },
+  );
+  assert.equal(mismatchedScore.maturedForecastCount, 1);
+  assert.equal(mismatchedScore.resolvedOutcomes, 0);
+  assert.equal(mismatchedScore.outcomeIdentityMismatches, 1);
+  assert.equal(mismatchedScore.unrecordedMaturedOutcomes, 1);
+  assert.equal(mismatchedScore.resolvedCoverage, 0);
+  assert.equal(mismatchedScore.missingAsLossAverageStressReturnPct, -100);
+  assert.equal(mismatchedScore.statisticalCandidateGate, false);
+
+  const lateBlockedForecast = {
+    ...coveredForecasts[0],
+    id: "late-blocked-forecast",
+    status: "blocked",
+    paperDecision: "unavailable",
+    prediction: null,
+    createdAt: new Date(Date.parse(coveredForecasts[0].dueAt) + 30 * 60_000).toISOString(),
+  };
+  const lateBlockedScore = armScore(
+    [lateBlockedForecast],
+    [],
+    new Map(),
+    { asOfMs: Date.parse("2026-01-01T00:00:00.000Z") },
+  );
+  assert.equal(lateBlockedScore.maturedForecastCount, 1);
+  assert.equal(lateBlockedScore.resolvedOutcomes, 0);
+  assert.equal(lateBlockedScore.openOutcomes, 0);
+  assert.equal(lateBlockedScore.unrecordedMaturedOutcomes, 1);
+  assert.equal(lateBlockedScore.resolvedCoverage, 0);
+  assert.equal(lateBlockedScore.paperObservedOutcomes, 1);
+  assert.equal(lateBlockedScore.averageBaseReturnPct, 0);
+  assert.equal(lateBlockedScore.averageStressReturnPct, 0);
+  assert.equal(lateBlockedScore.missingAsLossAverageStressReturnPct, 0);
+  assert.equal(lateBlockedScore.statisticalCandidateGate, false);
 } finally {
   await rm(root, { recursive: true, force: true });
 }

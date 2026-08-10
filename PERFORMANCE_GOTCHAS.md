@@ -478,3 +478,64 @@ that neither a missing VPN profile nor a configured-but-different macOS variant
 launches Tailscale automatically. Live LaunchAgent verification confirmed the
 guarded pause and zero Tailscale children; the permission dialog remained
 absent. Fixed 2026-07-27.
+
+## G10 - A background installer can wait forever on work the user cannot see
+
+### Symptom
+
+Native onboarding remains on a plausible progress screen even though its log
+already says the collector was installed. A rerun can also take more than a
+minute on a machine whose source, skills, and services are already current.
+
+### Why it fools you
+
+- The setup subprocess is alive, so the UI correctly continues to say it is
+  working; a healthy process is not proof that its current command can finish.
+- `sudo` can be launched from a background process even though no usable
+  password prompt reaches the native window.
+- `launchctl kickstart`, package managers, downloads, and recursive runtime
+  scans normally finish, which makes an unbounded call look harmless.
+- Recopying managed projections and restarting healthy services are
+  individually reasonable but multiply across hundreds of skills and several
+  runtimes on every retry.
+- An optional package can look small in source while its package-manager
+  resolution dominates the entire first-run critical path.
+
+### Root cause and fix
+
+Trace the live process tree beneath the exact native setup run, including the
+current leaf command. Every external operation in background setup must be
+either noninteractive and bounded or excluded from the critical path. Reuse a
+pinned source only after validating its commit marker and setup entrypoint;
+checksum managed skill projections and preserve unmanaged collisions; avoid
+broad runtime imports unless the user explicitly requests them; compare
+LaunchAgent configuration and health before restarting it; and keep optional
+dependencies out of noninteractive first-run. A failed optional Shared Brain
+projection should produce actionable guidance without preventing the local
+bridge from completing.
+
+### Diagnosis recipe
+
+1. Start from the same native button and record the setup run ID and wall time.
+2. Inspect the descendant process tree. A leaf on `sudo`, `launchctl`, `npm`,
+   archive download/extraction, or repeated file copies identifies the real
+   phase even when the UI headline has not changed.
+3. Run the warm shell setup and time its major phases separately: source
+   bootstrap, skill projection, runtime import, collector, and watchdog.
+4. Test with optional dependencies absent and stdin unavailable. The core
+   bridge must still finish without a prompt.
+5. Rerun immediately. Matching source, projections, and healthy services should
+   be no-ops rather than reinstalls.
+6. Verify through the real native wizard and require the collector health check
+   plus the final success screen; compile or script success alone is not the
+   user path.
+
+### Fixed evidence
+
+On the reported Mac, the hidden setup process spent about 25 minutes at the
+firewall `sudo` command and then blocked on watchdog `launchctl kickstart`.
+After the bounded/idempotent repair, warm full setup fell from 74.14 seconds to
+14.85 seconds; warm six-runtime skill projection fell from 79.97 seconds to
+4.95 seconds; and the real native wizard reached **This Mac is ready** in at
+most 18.109 seconds with the optional Bonjour package unavailable, no package
+install, and no privilege prompt. Fixed 2026-08-07.

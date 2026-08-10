@@ -62,8 +62,15 @@ After the configured report hour (20:00 by default), the daily report runs
 once and then stays quiet until tomorrow. If the vault has no capture folders,
 it does nothing at all.
 
+When a daily report completes, HivemindOS also creates one Alert with the
+number of items reviewed, the number that are new, and the number that need
+manual review. On macOS, the same useful summary appears in Notification
+Center. This notification describes the completed analysis; it does not mean
+the report moved or deleted captured notes.
+
 Configuration is stored in the vault itself
 (`Operations/Brain Services/Inbox Triage.md`), so the toggle and report hour
 travel with the vault across synced machines. To force the service off on one
 machine regardless of the vault setting, set the environment variable
-`HIVEMINDOS_INBOX_TRIAGE=0`.
+`HIVEMINDOS_INBOX_TRIAGE=0`. To keep the daily report but suppress its Alerts
+and macOS banners on one machine, set `HIVEMINDOS_INBOX_TRIAGE_NOTIFY=0`.

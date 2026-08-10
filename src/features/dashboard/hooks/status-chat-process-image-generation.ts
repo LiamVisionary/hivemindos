@@ -46,8 +46,8 @@ export function findLatestAssistantIndexAfterLastUser(items: Array<{ role?: stri
   return -1;
 }
 
-export function processEventSignature(events: Array<{ at?: number; label?: string; detail?: string; status?: string; runId?: string }> = []) {
-  return events.map((event) => [event.at, event.label, event.detail ?? "", event.status ?? "", event.runId ?? ""].join("\u001f")).join("\u001e");
+export function processEventSignature(events: Array<{ at?: number; label?: string; detail?: string; status?: string; runId?: string; browserPreview?: { url?: string } }> = []) {
+  return events.map((event) => [event.at, event.label, event.detail ?? "", event.status ?? "", event.runId ?? "", event.browserPreview?.url ?? ""].join("\u001f")).join("\u001e");
 }
 
 export function applicationGenerationSignature(card: any) {

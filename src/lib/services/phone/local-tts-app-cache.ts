@@ -11,12 +11,32 @@ import { homedir } from "@/lib/home-dir";
 import type { ConnectedHostedApp } from "@/lib/services/fleet/connected-apps";
 
 export const APP_CACHE_MS = 5 * 60_000;
-const PERSISTED_APPS_VERSION = 1;
+const PERSISTED_APPS_VERSION = 2;
 const PERSISTED_APPS_MAX_AGE_MS = 7 * 24 * 3_600_000;
 const PERSIST_APPS_DEBOUNCE_MS = 1_500;
 
 type CacheEntry = { expiresAt: number; app: ConnectedHostedApp };
-type PersistedAppEntry = { appId: string; app: ConnectedHostedApp; savedAt: number };
+export type PersistedLocalTtsValidation = {
+  appId: string;
+  appName: string;
+  machineName?: string;
+  model: string;
+  voice: string;
+  availableModels: string[];
+  availableVoices: string[];
+  sampleRate: number;
+  channels: number;
+  sampleFormat: string;
+  streamingKind?: string;
+  streamingImplementation?: string;
+  validatedAt: number;
+};
+type PersistedAppEntry = {
+  appId: string;
+  app: ConnectedHostedApp;
+  savedAt: number;
+  validation?: PersistedLocalTtsValidation;
+};
 
 const appById = new Map<string, CacheEntry>();
 const persistedApps = new Map<string, PersistedAppEntry>();
@@ -58,6 +78,30 @@ export function touchCachedApp(origin: string, selectedAppId: string, app: Conne
     appId: selectedAppId || app.id,
     app,
     savedAt: Date.now(),
+    validation: persistedApps.get(selectedAppId || app.id)?.validation,
+  });
+  schedulePersistApps();
+}
+
+/** Last successfully advertised model/voice set for this selected server.
+ * Session setup may trust this snapshot immediately and refresh it in the
+ * background; that keeps cold answer latency independent of fleet probes. */
+export function persistedAppValidation(selectedAppId: string): PersistedLocalTtsValidation | null {
+  const validation = persistedApps.get(selectedAppId)?.validation;
+  if (!validation || Date.now() - validation.validatedAt > PERSISTED_APPS_MAX_AGE_MS) return null;
+  return validation;
+}
+
+export function rememberAppValidation(
+  selectedAppId: string,
+  validation: PersistedLocalTtsValidation,
+) {
+  const existing = persistedApps.get(selectedAppId);
+  if (!existing) return;
+  persistedApps.set(selectedAppId, {
+    ...existing,
+    savedAt: Date.now(),
+    validation: { ...validation, validatedAt: Date.now() },
   });
   schedulePersistApps();
 }
@@ -108,7 +152,7 @@ export async function hydratePersistedApps(origin: string) {
         const { readFile } = await import("node:fs/promises");
         const raw = await readFile(persistedAppsPath(), "utf8");
         const data = JSON.parse(raw) as { version?: unknown; entries?: unknown };
-        if (data.version !== PERSISTED_APPS_VERSION || !Array.isArray(data.entries)) return;
+        if ((data.version !== 1 && data.version !== PERSISTED_APPS_VERSION) || !Array.isArray(data.entries)) return;
         const now = Date.now();
         for (const item of data.entries) {
           const entry = item && typeof item === "object" ? item as Record<string, unknown> : null;
@@ -117,7 +161,38 @@ export async function hydratePersistedApps(origin: string) {
           const savedAt = Number(entry?.savedAt) || 0;
           if (!appId || !app?.apiBaseUrl || !savedAt) continue;
           if (now - savedAt > PERSISTED_APPS_MAX_AGE_MS) continue;
-          persistedApps.set(appId, { appId, app, savedAt });
+          const rawValidation = entry?.validation && typeof entry.validation === "object"
+            ? entry.validation as Record<string, unknown>
+            : null;
+          const validatedAt = Number(rawValidation?.validatedAt) || 0;
+          const validation = rawValidation
+            && typeof rawValidation.appId === "string"
+            && typeof rawValidation.appName === "string"
+            && typeof rawValidation.model === "string"
+            && typeof rawValidation.voice === "string"
+            && Array.isArray(rawValidation.availableModels)
+            && Array.isArray(rawValidation.availableVoices)
+            && validatedAt
+            && now - validatedAt <= PERSISTED_APPS_MAX_AGE_MS
+            ? {
+                appId: rawValidation.appId,
+                appName: rawValidation.appName,
+                machineName: typeof rawValidation.machineName === "string" ? rawValidation.machineName : undefined,
+                model: rawValidation.model,
+                voice: rawValidation.voice,
+                availableModels: rawValidation.availableModels.filter((item): item is string => typeof item === "string"),
+                availableVoices: rawValidation.availableVoices.filter((item): item is string => typeof item === "string"),
+                sampleRate: Number(rawValidation.sampleRate) || 24_000,
+                channels: Number(rawValidation.channels) || 1,
+                sampleFormat: typeof rawValidation.sampleFormat === "string" ? rawValidation.sampleFormat : "pcm16",
+                streamingKind: typeof rawValidation.streamingKind === "string" ? rawValidation.streamingKind : undefined,
+                streamingImplementation: typeof rawValidation.streamingImplementation === "string"
+                  ? rawValidation.streamingImplementation
+                  : undefined,
+                validatedAt,
+              }
+            : undefined;
+          persistedApps.set(appId, { appId, app, savedAt, validation });
         }
       } catch {
         // First run or unreadable cache; discovery rebuilds it.

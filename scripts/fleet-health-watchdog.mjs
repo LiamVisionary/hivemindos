@@ -81,6 +81,8 @@
 //                                     of restarting — a restart can't fix a missing voice
 //   FLEET_WATCHDOG_SEVERE_RECHECK_MS  delay before confirming a severe failure (default 10000)
 //   FLEET_WATCHDOG_APP_PORTS          local dashboard ports to try for discovery (default 5020,5021,5111,5121,3000)
+//   FLEET_WATCHDOG_MACHINE_CACHE_TTL_MS maximum age of a fleet discovery snapshot before it
+//                                     is ignored (default max of 5 poll cycles or 5 minutes)
 //   FLEET_WATCHDOG_SELF=0             disable self collector/linkd monitoring
 //   FLEET_WATCHDOG_TELEGRAM_CHAT_ID   Telegram chat id for alerts (enables push alerts)
 //   FLEET_WATCHDOG_TELEGRAM_BOT_TOKEN bot token override (default: HIVE_TELEGRAM_BOT_TOKEN
@@ -99,6 +101,15 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 import { createEscalationTracker, formatEscalationAlert } from "./lib/fleet-watchdog-escalation.mjs";
+import {
+  localCollectorPortCandidates,
+  selectHealthyLocalCollector,
+} from "./lib/fleet-watchdog-local-collector.mjs";
+import {
+  createMachineCacheSnapshot,
+  readFreshMachineCache,
+  shouldAttemptRemediation,
+} from "./lib/fleet-watchdog-discovery.mjs";
 import { linkdSourcesChangedBetween } from "./lib/linkd-staleness.mjs";
 import { shouldUseTailscaleCliFallback } from "./lib/tailscale-optional.mjs";
 
@@ -152,6 +163,11 @@ const ALERT_REPEAT_MS = 30 * 60_000;
 const STALE_BUILD_ALERT_MS = 24 * 60 * 60_000;
 const ESCALATE_AFTER = Math.max(1, Number(process.env.FLEET_WATCHDOG_ESCALATE_AFTER || 3));
 const ESCALATE_REPEAT_MS = Number(process.env.FLEET_WATCHDOG_ESCALATE_REPEAT_MS || 30 * 60_000);
+const configuredMachineCacheTtlMs = Number(process.env.FLEET_WATCHDOG_MACHINE_CACHE_TTL_MS);
+const MACHINE_CACHE_TTL_MS = Number.isFinite(configuredMachineCacheTtlMs) && configuredMachineCacheTtlMs > 0
+  ? configuredMachineCacheTtlMs
+  : Math.max(5 * 60_000, POLL_MS * 5);
+const UNREACHABLE_ALERT_REPEAT_MS = 7 * 24 * 60 * 60_000;
 
 const STATE_DIR = join(homedir(), ".hivemindos");
 const MACHINES_CACHE = join(STATE_DIR, "fleet-health-watchdog-machines.json");
@@ -161,6 +177,9 @@ const LOG_PATH = join(STATE_DIR, "fleet-health-watchdog.log");
 const ALERT_STATE_PATH = join(STATE_DIR, "fleet-health-watchdog-alerts.json");
 const SHELL_SESSION = "fleet-health-watchdog";
 const WATCHDOG_SOURCE = (process.env.FLEET_WATCHDOG_SOURCE || hostname() || "unknown-host").trim();
+const WATCHDOG_REPO_ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const COLLECTOR_LAUNCH_AGENT = join(homedir(), "Library", "LaunchAgents", "com.agent-control-room.telemetry.plist");
+const COLLECTOR_SYSTEMD_UNIT = join(homedir(), ".config", "systemd", "user", "agent-telemetry.service");
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -224,6 +243,7 @@ const TELEGRAM_BOT_TOKEN = (
 
 const lastAlertAt = new Map();
 const ALERT_STATE_TTL_MS = 7 * 24 * 60 * 60_000;
+let persistedAlertState = null;
 
 async function readAlertState() {
   try {
@@ -247,20 +267,36 @@ function pruneAlertState(state, now) {
   }
 }
 
+async function getAlertState() {
+  if (!persistedAlertState) persistedAlertState = await readAlertState();
+  return persistedAlertState;
+}
+
+async function clearAlert(key) {
+  const sourceKey = `${WATCHDOG_SOURCE}:${key}`;
+  const state = await getAlertState();
+  const existed = Object.hasOwn(state, sourceKey) || lastAlertAt.has(sourceKey);
+  if (!existed) return false;
+  delete state[sourceKey];
+  lastAlertAt.delete(sourceKey);
+  await writeAlertState(state).catch((error) => log(`  alert state write failed: ${error.message}`));
+  return true;
+}
+
 // Push watchdog events somewhere a human actually sees. Telegram when
 // configured; always the log. Never throws, rate-limits repeats per key.
-async function alert(key, message) {
+async function alert(key, message, { repeatMs = ALERT_REPEAT_MS } = {}) {
   const now = Date.now();
   const sourceKey = `${WATCHDOG_SOURCE}:${key}`;
-  const state = await readAlertState();
+  const state = await getAlertState();
+  pruneAlertState(state, now);
   const lastSentAt = Math.max(Number(lastAlertAt.get(sourceKey) || 0), Number(state[sourceKey] || 0));
-  if (lastSentAt + ALERT_REPEAT_MS > now) return;
+  if (lastSentAt + repeatMs > now) return false;
   lastAlertAt.set(sourceKey, now);
   state[sourceKey] = now;
-  pruneAlertState(state, now);
   await writeAlertState(state).catch((error) => log(`  alert state write failed: ${error.message}`));
   await log(`ALERT ${message}`);
-  if (!TELEGRAM_CHAT_ID || !TELEGRAM_BOT_TOKEN) return;
+  if (!TELEGRAM_CHAT_ID || !TELEGRAM_BOT_TOKEN) return true;
   try {
     await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: "POST",
@@ -271,6 +307,7 @@ async function alert(key, message) {
   } catch (error) {
     await log(`  alert delivery failed: ${error.message}`);
   }
+  return true;
 }
 
 async function fetchJson(url, init, timeoutMs) {
@@ -515,6 +552,19 @@ function localMachineId() {
   }
 }
 
+let lastMachineDiscoverySource = "";
+async function logMachineDiscoverySourceChange(source, detail = "") {
+  const key = `${source}:${detail}`;
+  if (lastMachineDiscoverySource === key) return;
+  lastMachineDiscoverySource = key;
+  await log(`fleet discovery via ${source}${detail ? ` — ${detail}` : ""}`);
+}
+
+async function writeMachinesCache(machines) {
+  await mkdir(dirname(MACHINES_CACHE), { recursive: true });
+  await writeFile(MACHINES_CACHE, JSON.stringify(createMachineCacheSnapshot(machines))).catch(() => {});
+}
+
 // Dashboard-less discovery: enumerate online tailnet peers and find each one's
 // collector by probing the shared port range (cached port first). Lets the
 // watchdog run on collector-only machines and keeps working when the local
@@ -562,7 +612,9 @@ async function discoverViaTailscale() {
 }
 
 // Rediscover the fleet each cycle: local dashboard first (richest view), then
-// tailscale CLI + port probing, then the last good cached list.
+// tailscale CLI + port probing, then a short-lived snapshot. A legacy raw-array
+// cache has no observation time, so it cannot prove that a peer is still online
+// and is deliberately ignored instead of resurrecting retired/offline targets.
 async function discoverMachines() {
   for (const port of APP_PORTS) {
     try {
@@ -578,24 +630,43 @@ async function discoverMachines() {
           collectorUrl: String(m.device?.collectorUrl || m.collectorUrl || "").trim().replace(/\/+$/, ""),
         }))
         .filter((m) => m.collectorUrl && !m.self && !/^https?:\/\/(127\.0\.0\.1|localhost)/i.test(m.collectorUrl));
-      if (machines.length) {
-        await writeFile(MACHINES_CACHE, JSON.stringify(machines)).catch(() => {});
-        return machines;
-      }
+      // A reachable dashboard returning zero remote machines is authoritative:
+      // cache the empty result so an older non-empty list cannot reappear.
+      await writeMachinesCache(machines);
+      await logMachineDiscoverySourceChange("dashboard", `:${port}; ${machines.length} remote targets`);
+      return machines;
     } catch {
       // try the next port
     }
   }
   const viaTailscale = await discoverViaTailscale().catch(() => []);
   if (viaTailscale.length) {
-    await writeFile(MACHINES_CACHE, JSON.stringify(viaTailscale)).catch(() => {});
+    await writeMachinesCache(viaTailscale);
+    await logMachineDiscoverySourceChange("tailscale", `${viaTailscale.length} remote targets`);
     return viaTailscale;
   }
   try {
-    return JSON.parse(await readFile(MACHINES_CACHE, "utf8"));
-  } catch {
-    return [];
+    const cached = readFreshMachineCache(await readFile(MACHINES_CACHE, "utf8"), {
+      ttlMs: MACHINE_CACHE_TTL_MS,
+    });
+    if (cached.fresh) {
+      await logMachineDiscoverySourceChange(
+        "fresh cache",
+        `${cached.machines.length} remote targets; ${Math.round(cached.ageMs / 1000)}s old`,
+      );
+      return cached.machines;
+    }
+    await logMachineDiscoverySourceChange(
+      "none",
+      `fleet discovery cache ${cached.reason} ignored; no remote targets without fresh online proof`,
+    );
+  } catch (error) {
+    await logMachineDiscoverySourceChange(
+      "none",
+      `fleet discovery cache unavailable ignored; no remote targets without fresh online proof (${error?.code || "read error"})`,
+    );
   }
+  return [];
 }
 
 // TTS apps live behind each machine's linkd at /app-proxy/8799. Discover the
@@ -681,7 +752,7 @@ async function discoverTtsApps(machines) {
       }
       if (apps.length) {
         await logTtsSourceChange("dashboard");
-        await writeFile(TTS_CACHE, JSON.stringify(apps)).catch(() => {});
+        await writeFile(TTS_CACHE, JSON.stringify(createMachineCacheSnapshot(apps))).catch(() => {});
         return apps;
       }
     } catch {
@@ -707,16 +778,22 @@ async function discoverTtsApps(machines) {
   }
   if (probed.length) {
     await logTtsSourceChange("linkd app-proxy probe", `dashboard unreachable; found ${probed.length}`);
-    await writeFile(TTS_CACHE, JSON.stringify(probed)).catch(() => {});
+    await writeFile(TTS_CACHE, JSON.stringify(createMachineCacheSnapshot(probed))).catch(() => {});
     return probed;
   }
   try {
-    const cached = JSON.parse(await readFile(TTS_CACHE, "utf8"));
-    await logTtsSourceChange("stale cache", `${Array.isArray(cached) ? cached.length : 0} cached targets, unverified`);
-    return cached;
+    const cached = readFreshMachineCache(await readFile(TTS_CACHE, "utf8"), {
+      ttlMs: MACHINE_CACHE_TTL_MS,
+    });
+    if (cached.fresh) {
+      await logTtsSourceChange("fresh cache", `${cached.machines.length} cached targets; ${Math.round(cached.ageMs / 1000)}s old`);
+      return cached.machines;
+    }
+    await logTtsSourceChange("none", `TTS discovery cache ${cached.reason} ignored`);
   } catch {
-    return [];
+    await logTtsSourceChange("none", "TTS discovery cache unavailable");
   }
+  return [];
 }
 
 // TTS health. Cheap (every cycle): /v1/models reachable + populated — it fails
@@ -748,7 +825,7 @@ async function probeTts(apiBaseUrl, deep) {
       .map((m) => ({ id: String(m?.id ?? m ?? ""), loaded: m?.loaded === true }))
       .filter((m) => m.id);
   } catch (error) {
-    return { healthy: false, reason: `models unreachable: ${error.message}` };
+    return { healthy: false, unreachable: true, reason: `models unreachable: ${error.message}` };
   }
   if (!deep) return { healthy: true };
   const servedIds = new Set(catalog.map((m) => m.id));
@@ -824,7 +901,7 @@ async function probeCollector(collectorUrl, deep) {
       return { healthy: false, reason: `health HTTP ${health.status} ${String(health.text).slice(0, 60)}` };
     }
   } catch (error) {
-    return { healthy: false, reason: `health unreachable: ${error.message}` };
+    return { healthy: false, unreachable: true, reason: `health unreachable: ${error.message}` };
   }
   if (!deep) return { healthy: true };
   try {
@@ -850,6 +927,61 @@ async function probeCollector(collectorUrl, deep) {
     return { healthy: false, severe: true, reason: `chat dispatch failed: ${error.message}` };
   }
   return { healthy: true };
+}
+
+function optionalFileText(path) {
+  try {
+    return readFileSync(path, "utf8");
+  } catch {
+    return "";
+  }
+}
+
+const loggedSelfCollectorPortMismatches = new Set();
+async function probeSelfCollector(deep) {
+  const candidates = localCollectorPortCandidates({
+    configuredPort: collectorEnv.AGENT_TELEMETRY_PORT,
+    launchAgentText: platform() === "darwin" ? optionalFileText(COLLECTOR_LAUNCH_AGENT) : "",
+    systemdUnitText: platform() === "linux" ? optionalFileText(COLLECTOR_SYSTEMD_UNIT) : "",
+    scanPorts: COLLECTOR_PORTS,
+  });
+  const probeCandidates = (items) => Promise.all(items.map(async (candidate) => {
+    try {
+      const response = await fetchJson(`http://127.0.0.1:${candidate.port}/health`, {}, 1_500);
+      return { candidate, health: response.ok ? response.data : null };
+    } catch (error) {
+      return { candidate, health: null, error: error instanceof Error ? error.message : "fetch failed" };
+    }
+  }));
+  const primaryCandidates = candidates.filter((candidate) => candidate.source !== "scan");
+  let checks = await probeCandidates(primaryCandidates);
+  let selected = selectHealthyLocalCollector(checks, WATCHDOG_REPO_ROOT);
+  if (!selected) {
+    const fallbackChecks = await probeCandidates(candidates.filter((candidate) => candidate.source === "scan"));
+    checks = [...checks, ...fallbackChecks];
+    selected = selectHealthyLocalCollector(checks, WATCHDOG_REPO_ROOT);
+  }
+  if (!selected) {
+    const configured = collectorEnv.AGENT_TELEMETRY_PORT || "unset";
+    return {
+      healthy: false,
+      reason: `no owned local collector answered /health (collector.env=${configured}; checked ${candidates.length} candidate ports)`,
+    };
+  }
+
+  const configuredPort = Number.parseInt(String(collectorEnv.AGENT_TELEMETRY_PORT || ""), 10);
+  if (Number.isInteger(configuredPort) && configuredPort !== selected.candidate.port) {
+    const mismatchKey = `${configuredPort}->${selected.candidate.port}`;
+    if (!loggedSelfCollectorPortMismatches.has(mismatchKey)) {
+      loggedSelfCollectorPortMismatches.add(mismatchKey);
+      await log(
+        `self collector metadata stale (collector.env=${configuredPort}, live ${selected.candidate.source}=${selected.candidate.port}); using the owned live collector and refusing a false restart`,
+      );
+    }
+  }
+
+  if (!deep) return { healthy: true };
+  return probeCollector(`http://127.0.0.1:${selected.candidate.port}`, true);
 }
 
 // This machine's own linkd daemon, via its loopback control API. The honest
@@ -902,9 +1034,12 @@ function remediationCommand(os, kind) {
       "echo 'watchdog recycled linkd and cleared stale daemon processes'",
     ].join("; ");
   }
-  const pattern = kind === "tts" ? "universal.?tts|mlx.?audio" : "telemetry|collector";
+  const pattern = "universal.?tts|mlx.?audio";
   const label = kind === "tts" ? "TTS" : "collector";
   if (os.includes("linux")) {
+    if (kind === "collector") {
+      return "systemctl --user restart agent-telemetry.service 2>/dev/null && echo 'watchdog restarted collector' || { echo 'collector unit missing'; exit 1; }";
+    }
     // --all: a STOPPED (inactive/dead) unit is invisible to plain list-units,
     // and a deliberate `systemctl stop` also disarms Restart=always — exactly
     // the case that needs the watchdog. Restart covers dead units too.
@@ -915,7 +1050,14 @@ function remediationCommand(os, kind) {
       `echo "watchdog restarted $kicked ${label} service(s)"`,
     ].join("; ");
   }
-  // macOS: kickstart any loaded matching LaunchAgent (machine-agnostic label match).
+  if (kind === "collector") {
+    return [
+      "U=$(id -u)",
+      'launchctl kickstart -k "gui/$U/com.agent-control-room.telemetry" 2>/dev/null || { echo "collector LaunchAgent missing"; exit 1; }',
+      "echo 'watchdog restarted collector'",
+    ].join("; ");
+  }
+  // macOS TTS: kickstart only loaded TTS LaunchAgents.
   return [
     "U=$(id -u); kicked=0",
     `for L in $(launchctl list 2>/dev/null | awk 'NR>1 && tolower($3) ~ /${pattern}/ {print $3}'); do launchctl kickstart -k "gui/$U/$L" 2>/dev/null && kicked=$((kicked+1)); done`,
@@ -961,14 +1103,13 @@ async function remediateLocal(kind) {
 function selfTargets() {
   if (!SELF_ENABLED) return [];
   const targets = [];
-  const port = collectorEnv.AGENT_TELEMETRY_PORT || "8787";
   targets.push({
     key: "self:collector",
     name: "self collector",
     os: platform() === "darwin" ? "macos" : platform(),
     kind: "collector",
     local: true,
-    probe: (deep) => probeCollector(`http://127.0.0.1:${port}`, deep),
+    probe: (deep) => probeSelfCollector(deep),
   });
   if (collectorEnv.HIVE_LINK_LABEL) {
     const control = collectorEnv.HIVE_LINK_CONTROL || "127.0.0.1:8788";
@@ -986,7 +1127,7 @@ function selfTargets() {
 
 const staleBuildAlertAt = new Map();
 const linkdCurrentLogged = new Set();
-const LINKD_REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
+const LINKD_REPO_ROOT = WATCHDOG_REPO_ROOT;
 
 // Deep-cycle check: does the remote linkd daemon report a build commit, and
 // did the linkd SOURCES change between that commit and the checkout its
@@ -1085,7 +1226,7 @@ async function runCycle(cycle) {
     })),
   ];
   if (!targets.length) {
-    await log("no targets discovered (dashboard + tailscale unreachable and no cache)");
+    await log("no watchdog targets discovered (no self targets and no fresh fleet discovery)");
     return;
   }
   let healthy = 0;
@@ -1109,6 +1250,10 @@ async function runCycle(cycle) {
     }
     if (result.healthy) {
       healthy += 1;
+      const unreachableAlertCleared = await clearAlert(`unreachable:${target.key}`);
+      if (unreachableAlertCleared) {
+        await alert(`reachable:${target.key}`, `${target.name}: reachable again after an unreachable peer outage`);
+      }
       if (consecutiveFailures.get(target.key)) await log(`${target.name}: recovered`);
       consecutiveFailures.set(target.key, 0);
       // Only a passing DEEP probe proves a wedge cleared — cheap probes stay
@@ -1133,8 +1278,44 @@ async function runCycle(cycle) {
       await alert(`${result.authNeeded ? "auth" : "humanfix"}:${target.key}`, `${target.name} ${result.reason}`);
       continue;
     }
+    if (!shouldAttemptRemediation(target, result)) {
+      // The collector/linkd control path is the same network path that just
+      // timed out. A remote restart POST therefore cannot succeed; treating
+      // the failed POST as a second incident created the Telegram storm this
+      // guard prevents. Alert once per sustained outage and wait for fresh
+      // discovery/a passing probe to clear the incident.
+      if (fails >= threshold) {
+        if (target.kind === "collector") {
+          const finalProbe = await target.probe(false);
+          if (finalProbe.healthy) {
+            unhealthy -= 1;
+            healthy += 1;
+            consecutiveFailures.set(target.key, 0);
+            await log(`${target.name}: recovered before unreachable alert (final safety probe passed)`);
+            continue;
+          }
+        }
+        await alert(
+          `unreachable:${target.key}`,
+          `${target.name} is unreachable (${result.reason}) — restart not attempted because the control path is also unreachable`,
+          { repeatMs: UNREACHABLE_ALERT_REPEAT_MS },
+        );
+      }
+      continue;
+    }
     if (result.severe) escalations.recordSevereFailure(target.key, result.reason);
     if (fails >= threshold && (cooldownUntil.get(target.key) || 0) < Date.now()) {
+      if (target.kind === "collector") {
+        const finalProbe = await target.probe(result.severe ? deep : false);
+        if (finalProbe.healthy) {
+          unhealthy -= 1;
+          healthy += 1;
+          consecutiveFailures.set(target.key, 0);
+          if (deep && result.severe) escalations.recordDeepRecovery(target.key);
+          await log(`${target.name}: recovered before remediation (final safety probe passed; no restart)`);
+          continue;
+        }
+      }
       await log(`${target.name}: REMEDIATING — restart ${target.kind} via ${target.local ? "local shell" : "linkd shell"}`);
       const ok = target.local
         ? await remediateLocal(target.kind)

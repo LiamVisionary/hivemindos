@@ -9,6 +9,7 @@ import type { SkillBrowserAttachmentTarget, SkillBrowserSkill, SkillBrowserView 
 import { BBtn, Badge, BIcon, type BIconName, Toggle } from "./skill-browser/primitives";
 import { Fusion } from "./skill-browser/Fusion";
 import { BankrSkillsCatalog } from "./skill-browser/BankrSkillsCatalog";
+import { AgentPluginsPanel } from "./skill-browser/AgentPluginsPanel";
 import "./skill-browser/skill-browser.css";
 
 type SkillBrowserModalProps = {
@@ -68,6 +69,7 @@ const SB_TABS: { id: SkillBrowserView; label: string; icon: BIconName }[] = [
   { id: "catalog", label: "Catalog", icon: "sparkles" },
   { id: "bankr", label: "Bankr", icon: "trade" },
   { id: "installed", label: "Installed", icon: "check" },
+  { id: "plugins", label: "Plugins", icon: "plug" },
   { id: "packs", label: "Packs", icon: "hex" },
   { id: "audit", label: "Audit", icon: "shield" },
   { id: "write", label: "Write", icon: "doc" },
@@ -472,7 +474,7 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
   const attachTarget = skillBrowserMode === "attach" ? skillBrowserAttachTarget ?? null : null;
   const attachMode = Boolean(attachTarget);
   const selectionMode = agentMode || attachMode;
-  const visibleTabs = selectionMode ? SB_TABS.filter((tab) => tab.id !== "bankr") : SB_TABS;
+  const visibleTabs = selectionMode ? SB_TABS.filter((tab) => tab.id !== "bankr" && tab.id !== "plugins") : SB_TABS;
   const bankrView = skillBrowserView === "bankr" && !selectionMode;
   const query = skillBrowserSearch.trim().toLowerCase();
   const browserRecords = React.useMemo(() => {
@@ -677,6 +679,8 @@ export function SkillBrowserModal(props: SkillBrowserModalProps) {
                 search={skillBrowserSearch}
               />
             )
+          ) : skillBrowserView === "plugins" && !selectionMode ? (
+            <AgentPluginsPanel vaultPath={sharedVaultPath} onStatus={setLocalStatus} />
           ) : skillBrowserView === "packs" ? (
             (skillBrowserLoading || skillBrowserEnriching) && !packSkills.length ? (
               <PackSkeletonGrid />

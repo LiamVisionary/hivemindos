@@ -1,3 +1,5 @@
+import { mergeChatProcessEvents } from "@/lib/services/chat/chat-process-events";
+
 export function findChatRunAssistantIndex(
   messages: Array<{ role?: string; sourceSessionId?: string }>,
   runId: string,
@@ -182,20 +184,16 @@ export function reconcilePolledChatProcessState(
   }
   const cutoff = input.startedAt ? input.startedAt - 2_000 : 0;
   const otherRuns = input.runId ? previous.filter((entry) => entry.runId && entry.runId !== input.runId) : [];
-  const target = previous.filter((entry) => (
+  const existingTarget = previous.filter((entry) => (
     (!input.runId || !entry.runId || entry.runId === input.runId)
     && (!cutoff || entry.at >= cutoff)
     && entry.label !== "Runtime session active"
   ));
-  const seen = new Set(target.map((entry) => `${entry.label}:${entry.detail ?? ""}`));
-  for (const entry of input.entries) {
-    if (input.runId && entry.runId !== input.runId) continue;
-    if (cutoff && entry.at < cutoff) continue;
-    const key = `${entry.label}:${entry.detail ?? ""}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    target.push(entry);
-  }
+  const incomingTarget = input.entries.filter((entry) => (
+    (!input.runId || entry.runId === input.runId)
+    && (!cutoff || entry.at >= cutoff)
+  ));
+  const target = mergeChatProcessEvents(existingTarget, incomingTarget);
   const nextEntries = [...otherRuns, ...target].sort((left, right) => left.at - right.at).slice(-80);
   const unchanged = previous.length === nextEntries.length && previous.every((entry, index) => {
     const other = nextEntries[index];
@@ -222,6 +220,7 @@ export function finishChatStreamState(
 }
 
 export function appendChatProcessState(input: {
+  browserPreview?: { url?: string; source?: string };
   detail?: string;
   label: string;
   runId?: string;
@@ -237,12 +236,25 @@ export function appendChatProcessState(input: {
     if (last?.label === cleanLabel && last?.detail === input.detail && (!input.runId || !last.runId || last.runId === input.runId)) {
       return {
         ...current,
-        [input.storageKey]: [...existing.slice(0, -1), { ...last, at: Date.now(), status: input.status, runId: input.runId ?? last.runId }],
+        [input.storageKey]: [...existing.slice(0, -1), {
+          ...last,
+          at: Date.now(),
+          status: input.status,
+          runId: input.runId ?? last.runId,
+          ...(input.browserPreview ? { browserPreview: input.browserPreview } : {}),
+        }],
       };
     }
     return {
       ...current,
-      [input.storageKey]: [...existing, { at: Date.now(), label: cleanLabel, detail: input.detail, status: input.status, runId: input.runId }].slice(-80),
+      [input.storageKey]: [...existing, {
+        at: Date.now(),
+        label: cleanLabel,
+        detail: input.detail,
+        status: input.status,
+        runId: input.runId,
+        ...(input.browserPreview ? { browserPreview: input.browserPreview } : {}),
+      }].slice(-80),
     };
   });
 }

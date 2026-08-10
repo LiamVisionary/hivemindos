@@ -19,6 +19,32 @@ SCRIPT="$REPO_DIR/scripts/fleet-health-watchdog.mjs"
 NODE_BIN="$(command -v node || true)"
 PROBE_PROFILE="$HOME/.hermes/profiles/runtime-capability-probe"
 
+run_with_timeout() {
+  local seconds="$1"
+  shift
+  "$@" &
+  local pid="$!"
+  local elapsed=0
+  while kill -0 "$pid" >/dev/null 2>&1; do
+    if (( elapsed >= seconds )); then
+      kill "$pid" >/dev/null 2>&1 || true
+      sleep 1
+      kill -9 "$pid" >/dev/null 2>&1 || true
+      wait "$pid" >/dev/null 2>&1 || true
+      return 124
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+  wait "$pid"
+}
+
+launchctl_bounded() {
+  local seconds="$1"
+  shift
+  run_with_timeout "$seconds" launchctl "$@"
+}
+
 # The deep /chat liveness probe runs under this RESERVED hermes profile so its
 # turns never land in a real agent's history / the dashboard chat tree (the
 # collector hides the slug via RESERVED_HERMES_PROFILE_SLUGS). hermes reads
@@ -38,7 +64,7 @@ uninstall() {
   unseed_probe_profile
   if [[ "$(uname -s)" == "Darwin" ]]; then
     local plist="$HOME/Library/LaunchAgents/$LABEL.plist"
-    launchctl bootout "gui/$(id -u)/$LABEL" >/dev/null 2>&1 || launchctl unload "$plist" >/dev/null 2>&1 || true
+    launchctl_bounded 5 bootout "gui/$(id -u)/$LABEL" >/dev/null 2>&1 || launchctl_bounded 5 unload "$plist" >/dev/null 2>&1 || true
     rm -f "$plist"
     echo "Removed LaunchAgent $LABEL."
   elif command -v systemctl >/dev/null 2>&1; then
@@ -61,8 +87,9 @@ seed_probe_profile
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
   PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+  PLIST_NEXT="$PLIST.next.$$"
   mkdir -p "$(dirname "$PLIST")" "$HOME/Library/Logs"
-  cat > "$PLIST" <<PLIST
+  cat > "$PLIST_NEXT" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -82,10 +109,17 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
 </dict>
 </plist>
 PLIST
-  launchctl bootout "gui/$(id -u)/$LABEL" >/dev/null 2>&1 || launchctl unload "$PLIST" >/dev/null 2>&1 || true
-  launchctl bootstrap "gui/$(id -u)" "$PLIST" >/dev/null 2>&1 || launchctl load "$PLIST" >/dev/null 2>&1 || true
-  launchctl kickstart -k "gui/$(id -u)/$LABEL" >/dev/null 2>&1 || true
-  echo "Installed + started LaunchAgent $LABEL. Logs: ~/Library/Logs/fleet-health-watchdog.log + ~/.hivemindos/fleet-health-watchdog.log"
+  if [[ -f "$PLIST" ]] && cmp -s "$PLIST_NEXT" "$PLIST" \
+    && launchctl_bounded 2 print "gui/$(id -u)/$LABEL" >/dev/null 2>&1; then
+    rm -f "$PLIST_NEXT"
+    echo "Fleet health watchdog LaunchAgent is already current and running."
+  else
+    mv -f "$PLIST_NEXT" "$PLIST"
+    launchctl_bounded 5 bootout "gui/$(id -u)/$LABEL" >/dev/null 2>&1 || launchctl_bounded 5 unload "$PLIST" >/dev/null 2>&1 || true
+    launchctl_bounded 5 bootstrap "gui/$(id -u)" "$PLIST" >/dev/null 2>&1 || launchctl_bounded 5 load "$PLIST" >/dev/null 2>&1 || true
+    launchctl_bounded 5 kickstart -k "gui/$(id -u)/$LABEL" >/dev/null 2>&1 || true
+    echo "Installed + started LaunchAgent $LABEL. Logs: ~/Library/Logs/fleet-health-watchdog.log + ~/.hivemindos/fleet-health-watchdog.log"
+  fi
 elif command -v systemctl >/dev/null 2>&1; then
   UNIT_DIR="$HOME/.config/systemd/user"
   mkdir -p "$UNIT_DIR"

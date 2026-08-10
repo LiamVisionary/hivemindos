@@ -175,7 +175,7 @@ has("src/lib/services/chat/hivemind-system-prompt.ts", "Operating Discipline");
 has("src/lib/services/chat/hivemind-system-prompt.ts", "Autonomy And Scope");
 has("src/lib/services/chat/hivemind-system-prompt.ts", "audit each claim against tool results");
 has("src/lib/services/chat/hivemind-system-prompt.ts", "Do not stop, summarize, or suggest a new session solely because the context is long");
-has("scripts/seed-shared-skills.sh", "primary-overlay", "Unix shared-skill primary projection metadata");
+has("scripts/sync-shared-skill-projections.mjs", "primary-overlay", "Unix shared-skill primary projection metadata");
 has("setup.ps1", "primary-overlay", "Windows shared-skill primary projection metadata");
 has("scripts/seed-shared-skills.sh", "skipped $skipped unmanaged local skill collision", "Unix unmanaged runtime skill collision skip");
 has("setup.ps1", "unmanaged local skill collision", "Windows unmanaged runtime skill collision skip");

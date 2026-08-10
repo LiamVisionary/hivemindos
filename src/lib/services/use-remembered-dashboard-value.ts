@@ -8,8 +8,8 @@ import { loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/servi
  * A string value remembered across reloads and app surfaces through the shared
  * dashboard state service (AGENTS.md: browser storage must not hold durable
  * HivemindOS state). Hydrates asynchronously: callers see `initialValue` on
- * the first render(s), then the stored value unless the user already changed
- * it locally this session.
+ * the first render(s), then the exact stored string (including an intentional
+ * empty string) unless the user already changed it locally this session.
  * The third tuple value reports when hydration has settled; existing callers
  * that only consume the value and setter remain unchanged.
  */
@@ -23,7 +23,7 @@ export function useRememberedDashboardValue(stateKey: string, initialValue = "")
     loadDashboardStateSnapshot()
       .then((snapshot) => {
         const stored = snapshot[stateKey];
-        if (!cancelled && !touchedRef.current && typeof stored === "string" && stored) {
+        if (!cancelled && !touchedRef.current && typeof stored === "string") {
           setValue(stored);
         }
       })

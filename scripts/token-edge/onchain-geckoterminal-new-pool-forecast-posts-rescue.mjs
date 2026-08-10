@@ -14,6 +14,7 @@ import {
   forecastScoreRow,
   requestGeminiForecast,
 } from "./onchain-geckoterminal-new-pool-forecast-ab.mjs";
+import { latestLedgerOccurrenceAt } from "./onchain-geckoterminal-new-pool-delayed-shadow.mjs";
 import {
   collectExactMintLunarCrushPostsEvidence,
 } from "./onchain-lunarcrush-provider.mjs";
@@ -325,6 +326,7 @@ export function buildGeckoTerminalNewPoolForecastPostsRescueScorecard(events) {
     event.type === "geckoterminal-new-pool-delayed-shadow-outcome"
       && event.horizon === "1h"
   )).map((event) => [`${event.discoveryEventId}:${event.pairAddress}`, event]));
+  const asOfMs = latestLedgerOccurrenceAt(events)?.getTime() ?? null;
   const treatments = events.filter((event) => (
     event.type === "geckoterminal-new-pool-forecast-posts-rescue"
       && event.registrationId === registration?.id
@@ -357,8 +359,8 @@ export function buildGeckoTerminalNewPoolForecastPostsRescueScorecard(events) {
       treatments.length,
     ),
     arms: {
-      "market-only": armScore(controls, controlRows, outcomes),
-      [FEATURE_ARM]: armScore(treatments, treatmentRows, outcomes),
+      "market-only": armScore(controls, controlRows, outcomes, { asOfMs }),
+      [FEATURE_ARM]: armScore(treatments, treatmentRows, outcomes, { asOfMs }),
     },
     pairedComparison: {
       observedPairs: pairs.length,

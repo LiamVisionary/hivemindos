@@ -124,7 +124,10 @@ const legacyOversizedAllowances = new Map([
   // controls, and hardened structured Hermes streaming from the registered
   // worktrees. The behavior lives in focused helpers where available; this
   // watermark records the merged legacy shell and restores the no-growth gate.
-  ["scripts/agent-telemetry-collector.mjs", 9936],
+  // 2026-08-10: +10 for the integrated browser-preview and chat-recovery
+  // entrypoint wiring. The mechanisms remain in focused helpers; this keeps
+  // the merged collector on a strict no-growth watermark.
+  ["scripts/agent-telemetry-collector.mjs", 9946],
   // 2026-07-02: +18 for the non-string task.result/body read+write coercion fix
   // (one poisoned task was 400ing every /api/kanban read).
   // 2026-07-04: +57 for answerHumanTask — the needs-human answer mutation
@@ -179,7 +182,11 @@ const legacyOversizedAllowances = new Map([
   // the capability-tool health tracker to invoke-hive-capability-tool.ts,
   // holding the file under its watermark after the capability-rail hardening.
   ["src/app/api/chat/agent-runtime/stream-openai-compatible.ts", 1506],
-  ["src/app/api/phone/route.ts", 1544],
+  // 2026-08-10: phone/TTS recovery and fleet-aware app selection crossed the
+  // prior watermarks in the integrated worktree. Preserve exact no-growth
+  // measurements until those legacy request paths are decomposed.
+  ["src/app/api/phone/route.ts", 1589],
+  ["src/lib/services/phone/local-tts.ts", 1584],
   ["src/components/fleet-hive/fleet-hive.css", 1516],
   ["src/features/dashboard/dashboard-display-helpers.tsx", 1519],
   ["src/lib/services/nansen.ts", 1640],
@@ -187,14 +194,20 @@ const legacyOversizedAllowances = new Map([
   // 1,500-line rule. These exact integration counts are intentional ratchets,
   // not exemptions for future growth; production and test sources both fail
   // this gate if another line is added before they are decomposed.
-  ["scripts/token-edge/onchain-geckoterminal-new-pool-activation.mjs", 7388],
-  ["scripts/test-token-edge-geckoterminal-new-pool-activation.mjs", 3216],
+  // 2026-08-10: the complete delayed-shadow, heartbeat, activation, forecast,
+  // and take-profit research integration is intentionally retained as one
+  // publishable batch. These exact counts are debt ratchets, not permission
+  // for another line of growth.
+  ["scripts/token-edge/onchain-geckoterminal-new-pool-activation.mjs", 7740],
+  ["scripts/test-token-edge-geckoterminal-new-pool-activation.mjs", 3475],
+  ["scripts/token-edge/onchain-geckoterminal-new-pool-delayed-shadow.mjs", 3283],
+  ["scripts/test-token-edge-geckoterminal-new-pool-delayed-shadow.mjs", 1799],
   ["scripts/token-edge/onchain-geckoterminal-trending-monitoring.mjs", 2559],
   ["scripts/test-token-edge-onchain-forward.mjs", 1740],
   ["scripts/token-edge/onchain-forward-research.mjs", 1713],
   ["scripts/token-edge/onchain-lunarcrush-provider.mjs", 1571],
   ["scripts/token-edge/onchain-exit-policy-scorecard.mjs", 1544],
-  ["scripts/test-token-edge-geckoterminal-new-pool-birth-take-profit.mjs", 1507],
+  ["scripts/test-token-edge-geckoterminal-new-pool-birth-take-profit.mjs", 1609],
   // 2026-07-18: src/lib/types/agent-runtime.ts dropped off this map — the voice/
   // calls + ministry preference types moved to types/agent-call-preferences.ts,
   // taking it from 1556 to 1397. agent-runtime.ts re-exports them so none of the

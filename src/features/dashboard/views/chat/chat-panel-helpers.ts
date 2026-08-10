@@ -78,7 +78,7 @@ export function isHiddenChatProcessEvent(event: ProcessEventLike = {}) {
   if (/^Runtime event$/i.test(label) || /^Runtime event$/i.test(detail)) return true;
   // Raw runtime lifecycle markers with no payload duplicate the real tool
   // steps rendered around them, and the stream keepalive is plumbing.
-  if (/^(?:chat\.)?tool\.(?:generating|pending|started?|progress|running|completed|done)$/i.test(label) && !detail) return true;
+  if (/^(?:chat\.)?tool\.(?:generating|pending|started?|progress|running|completed|done|failed|error)$/i.test(label) && !detail) return true;
   if (/stream still working$/i.test(label)) return true;
   return false;
 }

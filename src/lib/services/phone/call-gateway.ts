@@ -543,6 +543,10 @@ async function startAgentByokCall(input: AgentCallInput, hubUrl: string, idPrefi
       voiceModelId: payload.voiceModelId,
       voiceId: payload.voiceId,
       openingLine: openingLineForBriefing(payload.briefing || ""),
+      // This is session setup, not the audible speech path. Pay discovery on
+      // a cold cache so a stale/foreign saved voice id is resolved to the
+      // selected TTS server's advertised Queen voice before the call starts.
+      awaitDiscoveryForValidation: true,
     });
     if (!localTts) {
       return {

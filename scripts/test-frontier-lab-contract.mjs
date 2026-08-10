@@ -18,12 +18,17 @@ const workerSource = await readFile(join(repo, "src/lib/services/queen-bee/auton
 assert.equal((routeSource.match(/requireAuth\(request\)/g) ?? []).length, 2, "GET and PATCH must both authenticate");
 assert.match(routeSource, /evaluateFrontierLabStageTransition/);
 assert.match(routeSource, /setCompanyFrontierLabPolicy/);
+assert.match(routeSource, /readEarnedScaleInsights/, "Frontier payload must compose the measured Scale Curve and existing learning surfaces");
 assert.match(routeSource, /Connect OpenAI OAuth before enabling Frontier Lab/);
 assert.match(routeSource, /native hierarchical Hivemind execution/);
 assert.match(routeSource, /Staff at least two distinct company agent identities/);
 assert.match(panelSource, /No OpenRouter fallback/);
 assert.match(panelSource, /draft\.models\[tier\]/);
 assert.match(panelSource, /role="switch"/);
+assert.match(panelSource, /Scale this goal/);
+assert.match(panelSource, /Outcome-aware allocator/);
+assert.match(panelSource, /Live swarm blackboard/);
+assert.match(panelSource, /Delight Miner/);
 assert.match(panelCss, /@media \(max-width: 700px\)/);
 assert.match(cockpitSource, /key: "frontier", label: "Frontier Lab"/);
 assert.match(cockpitSource, /<FrontierLabPanel companyId=\{c\.id\}/);
@@ -34,8 +39,10 @@ assert.match(orchestrationSource, /requireIndependentJudge: company\.frontierLab
 assert.match(workerSource, /openAiOAuthAgentForFrontierLabTier\(frontierTier\)/);
 assert.match(workerSource, /reserveCompanyIntelligence\(/);
 assert.match(workerSource, /settleCompanyIntelligenceReservation\(/);
+assert.match(workerSource, /earnedScaleSettlementEvidence/, "observed Frontier settlements must emit Scale Curve evidence");
 assert.match(workerSource, /revision-\$\{currentTask\.updatedAt\}/, "reservation identity must dedupe concurrent pickups but permit a later task revision");
 assert.match(workerSource, /taggedFrontierTier && \(!companyId \|\| !company \|\| !company\.frontierLab\)/, "tier-tagged tasks must fail closed without a resolvable policy");
+assert.match(orchestrationSource, /Earned Scale checkpoints:/, "Frontier workers must receive plan, mid-run, and final-review judgment checkpoints");
 
 const tempHome = await mkdtemp(join(tmpdir(), "hivemindos-frontier-contract-home-"));
 const vaultPath = await mkdtemp(join(tmpdir(), "hivemindos-frontier-contract-vault-"));

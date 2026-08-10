@@ -184,6 +184,11 @@ The shared brain is a normal Obsidian vault, not a proprietary database. Hivemin
     <a href="hive-fusion.html">Open fusion docs</a>
   </section>
   <section class="docCard">
+    <h3>Agent Plugins</h3>
+    <p>Inspect and load portable Agent Plugins 1.0.0 packages containing Agent Skills and MCP servers, with fixed discovery, isolated failures, managed plugin data, and path-containment controls.</p>
+    <a href="agent-plugins.html">Open Agent Plugins docs</a>
+  </section>
+  <section class="docCard">
     <h3>Packaged Skills</h3>
     <p>HivemindOS-owned Hive skills, third-party packaged skills, auto-install policy, optional catalog rules, and skill maintenance contracts.</p>
     <a href="../packaged-skills/">Open packaged skills</a>

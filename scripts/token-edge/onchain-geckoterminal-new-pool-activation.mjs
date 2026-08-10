@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import {
   appendLedgerEvent,
   digestValue,
+  latestLedgerOccurrenceAt,
   readLedger,
   verifyLedger,
 } from "./onchain-forward-core.mjs";
@@ -1486,17 +1487,34 @@ export async function watchGeckoTerminalNewPools(options = {}, dependencies = {}
     ))
     .flatMap((event) => (event.candidates ?? []).map((candidate) => candidate.pairAddress)));
   const firstPoolByToken = new Map();
+  const selectionReasons = [];
   for (const candidate of evaluated) {
-    if (candidate.status !== "watchable"
-      || watchedPairs.has(candidate.pairAddress)
-      || !(Date.parse(candidate.poolCreatedAt) > Date.parse(registration.registeredAt))
-      || !(Date.parse(candidate.poolCreatedAt)
-        > Date.parse(GECKOTERMINAL_NEW_POOL_ACTIVATION_RULE.evidenceBoundary))) continue;
-    if (!firstPoolByToken.has(candidate.tokenAddress)) {
-      firstPoolByToken.set(candidate.tokenAddress, candidate);
+    if (candidate.status !== "watchable") {
+      selectionReasons.push("blocked");
+      continue;
     }
+    if (watchedPairs.has(candidate.pairAddress)) {
+      selectionReasons.push("duplicate-pool");
+      continue;
+    }
+    if (!(Date.parse(candidate.poolCreatedAt) > Date.parse(registration.registeredAt))) {
+      selectionReasons.push("pool-not-strictly-after-registration");
+      continue;
+    }
+    if (!(Date.parse(candidate.poolCreatedAt)
+      > Date.parse(GECKOTERMINAL_NEW_POOL_ACTIVATION_RULE.evidenceBoundary))) {
+      selectionReasons.push("pool-not-strictly-after-evidence-boundary");
+      continue;
+    }
+    if (firstPoolByToken.has(candidate.tokenAddress)) {
+      selectionReasons.push("duplicate-token-secondary-pool");
+      continue;
+    }
+    firstPoolByToken.set(candidate.tokenAddress, candidate);
+    selectionReasons.push("selected");
   }
   const candidates = [...firstPoolByToken.values()];
+  const selectionCounts = countValues(selectionReasons);
   const discovery = {
     type: "geckoterminal-new-pool-discovery",
     id: `geckoterminal_new_pool_discovery_${digestValue({
@@ -1520,6 +1538,10 @@ export async function watchGeckoTerminalNewPools(options = {}, dependencies = {}
     evaluatedRows: evaluated.length,
     duplicatePoolCount: evaluated.filter((candidate) => watchedPairs.has(candidate.pairAddress)).length,
     rejectionCounts: countValues(evaluated.flatMap((candidate) => candidate.blockers)),
+    selectionCounts,
+    selectionReconciliationGate:
+      Object.values(selectionCounts).reduce((sum, count) => sum + count, 0)
+        === evaluated.length,
     candidates,
     researchOnly: true,
     mutationAllowed: false,
@@ -3504,87 +3526,83 @@ export async function markOpenGeckoTerminalNewPoolBirthPaths(
 
 export function buildGeckoTerminalNewPoolScorecard(events) {
   const cohort = validatedGeckoTerminalNewPoolRows(events);
-  return buildGeckoTerminalScorecard(cohort, GECKOTERMINAL_NEW_POOL_ACTIVATION_RULE, {
-    type: "geckoterminal-new-pool-activation-monitoring-scorecard",
-    note: "This future-only paper cohort changes candidate discovery timing from a five-minute trending rank to a page-one new-pool birth watch. It waits until the unchanged minimum pair age, then applies the unchanged tradability and anti-chase screens plus exact-pool/direct-pair quote consensus. All inspected pre-registration pools are excluded; blocked activations are cash and cannot be repaired, backfilled, promoted, mutated, or traded.",
-  });
+  return withChronologicalHalfValidation(
+    buildGeckoTerminalScorecard(cohort, GECKOTERMINAL_NEW_POOL_ACTIVATION_RULE, {
+      type: "geckoterminal-new-pool-activation-monitoring-scorecard",
+      note: "This future-only paper cohort changes candidate discovery timing from a five-minute trending rank to a page-one new-pool birth watch. It waits until the unchanged minimum pair age, then applies the unchanged tradability and anti-chase screens plus exact-pool/direct-pair quote consensus. All inspected pre-registration pools are excluded; blocked activations are cash and cannot be repaired, backfilled, promoted, mutated, or traded.",
+    }),
+    cohort,
+  );
 }
 
 export function buildGeckoTerminalNewPoolMarketCapFloorRemovedScorecard(events) {
   const cohort = validatedGeckoTerminalNewPoolMarketCapFloorRemovedRows(events);
-  return buildGeckoTerminalScorecard(
+  return withChronologicalHalfValidation(
+    buildGeckoTerminalScorecard(
+      cohort,
+      GECKOTERMINAL_NEW_POOL_MARKET_CAP_FLOOR_REMOVED_RULE,
+      {
+        type: "geckoterminal-new-pool-market-cap-floor-removed-scorecard",
+        note: "This future-only paper challenger removes only the inherited $50,000 minimum market-cap screen from the newborn-pool activation parent. The $5 million ceiling and every age, liquidity, volume, anti-chase, quote-integrity, capacity, cost, outcome, and promotion contract remain unchanged. WALDO and all inspected activations are excluded.",
+      },
+    ),
     cohort,
-    GECKOTERMINAL_NEW_POOL_MARKET_CAP_FLOOR_REMOVED_RULE,
-    {
-      type: "geckoterminal-new-pool-market-cap-floor-removed-scorecard",
-      note: "This future-only paper challenger removes only the inherited $50,000 minimum market-cap screen from the newborn-pool activation parent. The $5 million ceiling and every age, liquidity, volume, anti-chase, quote-integrity, capacity, cost, outcome, and promotion contract remain unchanged. WALDO and all inspected activations are excluded.",
-    },
   );
 }
 
 export function buildGeckoTerminalNewPoolBirthEntryScorecard(events) {
   const cohort = validatedGeckoTerminalNewPoolBirthEntryRows(events);
-  return buildGeckoTerminalScorecard(
+  return withChronologicalHalfValidation(
+    buildGeckoTerminalScorecard(
+      cohort,
+      GECKOTERMINAL_NEW_POOL_BIRTH_ENTRY_RULE,
+      {
+        type: "geckoterminal-new-pool-birth-entry-scorecard",
+        note: "This future-only paper cohort changes only source-entry timing: it evaluates the inherited liquidity, market-cap, volume, and anti-chase screens on the first retained newborn quote at no more than five minutes of age instead of waiting until minute fifteen. Exact-pair cross-provider entry and exit integrity, one-hour outcomes, capacity, costs, independent frames, and promotion gates remain unchanged. All discoveries available when the rule was frozen are excluded.",
+      },
+    ),
     cohort,
-    GECKOTERMINAL_NEW_POOL_BIRTH_ENTRY_RULE,
-    {
-      type: "geckoterminal-new-pool-birth-entry-scorecard",
-      note: "This future-only paper cohort changes only source-entry timing: it evaluates the inherited liquidity, market-cap, volume, and anti-chase screens on the first retained newborn quote at no more than five minutes of age instead of waiting until minute fifteen. Exact-pair cross-provider entry and exit integrity, one-hour outcomes, capacity, costs, independent frames, and promotion gates remain unchanged. All discoveries available when the rule was frozen are excluded.",
-    },
   );
 }
 
 export function buildGeckoTerminalNewPoolBirthMarketCapFloorRemovedScorecard(events) {
   const cohort = validatedGeckoTerminalNewPoolBirthMarketCapFloorRemovedRows(events);
-  return buildGeckoTerminalScorecard(
+  return withChronologicalHalfValidation(
+    buildGeckoTerminalScorecard(
+      cohort,
+      GECKOTERMINAL_NEW_POOL_BIRTH_MARKET_CAP_FLOOR_REMOVED_RULE,
+      {
+        type: "geckoterminal-new-pool-birth-market-cap-floor-removed-scorecard",
+        note: "This future-only paper child removes only the inherited $50,000 minimum market-cap screen from the at-most-five-minute newborn birth-entry parent. Every source-age, liquidity, volume, anti-chase, quote-integrity, capacity, cost, exact one-hour outcome, independent-frame, and promotion contract remains unchanged. DREAM, both inspected future birth samples, and every earlier quote are excluded.",
+      },
+    ),
     cohort,
-    GECKOTERMINAL_NEW_POOL_BIRTH_MARKET_CAP_FLOOR_REMOVED_RULE,
-    {
-      type: "geckoterminal-new-pool-birth-market-cap-floor-removed-scorecard",
-      note: "This future-only paper child removes only the inherited $50,000 minimum market-cap screen from the at-most-five-minute newborn birth-entry parent. Every source-age, liquidity, volume, anti-chase, quote-integrity, capacity, cost, exact one-hour outcome, independent-frame, and promotion contract remains unchanged. DREAM, both inspected future birth samples, and every earlier quote are excluded.",
-    },
   );
 }
 
 export function buildGeckoTerminalNewPoolBirthUpperMomentumScorecard(events) {
   const cohort = validatedGeckoTerminalNewPoolBirthUpperMomentumRows(events);
-  const scorecard = buildGeckoTerminalScorecard(
+  const scorecard = withChronologicalHalfValidation(
+    buildGeckoTerminalScorecard(
+      cohort,
+      GECKOTERMINAL_NEW_POOL_BIRTH_UPPER_MOMENTUM_RULE,
+      {
+        type: "geckoterminal-new-pool-birth-upper-momentum-incremental-scorecard",
+        note: "This strictly future incremental paper cohort admits only newborns that pass every low-cap v4 screen except the inherited hourly upper anti-chase ceiling and have decision-time hourly price change above 25% through 100%. The exploratory 15-minute derivation family is excluded and explicitly failed its bootstrap, drawdown, and concentration checks. Exact one-hour capacity-adjusted outcomes must clear the frozen event floors and a separate independent quant audit before review; no result grants promotion or trading authority.",
+      },
+    ),
     cohort,
-    GECKOTERMINAL_NEW_POOL_BIRTH_UPPER_MOMENTUM_RULE,
-    {
-      type: "geckoterminal-new-pool-birth-upper-momentum-incremental-scorecard",
-      note: "This strictly future incremental paper cohort admits only newborns that pass every low-cap v4 screen except the inherited hourly upper anti-chase ceiling and have decision-time hourly price change above 25% through 100%. The exploratory 15-minute derivation family is excluded and explicitly failed its bootstrap, drawdown, and concentration checks. Exact one-hour capacity-adjusted outcomes must clear the frozen event floors and a separate independent quant audit before review; no result grants promotion or trading authority.",
-    },
   );
-  const maturedForecastCount = Math.max(
-    0,
-    scorecard.candidateForecasts - scorecard.openForecasts,
-  );
-  const resolvedForecastCoverageRate = roundRatio(
-    scorecard.eligibleLiveObservations,
-    maturedForecastCount,
-  );
-  const resolvedCoverageGate = Number.isFinite(resolvedForecastCoverageRate)
-    && resolvedForecastCoverageRate
-      >= MINIMUM_PROMOTION_RESOLVED_FORECAST_COVERAGE_RATE;
-  const statisticalCandidateGate = scorecard.provisionalGate
-    && resolvedCoverageGate;
+  const coverage = forecastOutcomeCoverageValidation(cohort);
+  const statisticalCandidateGate = scorecard.provisionalGate && coverage.gate;
   return {
     ...scorecard,
-    maturedForecastCount,
-    resolvedForecastCoverageRate,
-    minimumResolvedForecastCoverageRate:
-      MINIMUM_PROMOTION_RESOLVED_FORECAST_COVERAGE_RATE,
-    resolvedCoverageGate,
-    evidenceStatus: scorecard.evidenceStatus === "reviewable" && resolvedCoverageGate
+    ...coverage.summary,
+    evidenceStatus: scorecard.evidenceStatus === "reviewable" && coverage.gate
       ? "reviewable" : "collecting",
     evidenceShortfall: {
       ...scorecard.evidenceShortfall,
-      resolvedForecastCoverageRate: round6(Math.max(
-        0,
-        MINIMUM_PROMOTION_RESOLVED_FORECAST_COVERAGE_RATE
-          - (resolvedForecastCoverageRate ?? 0),
-      )),
+      ...coverage.evidenceShortfall,
     },
     promotionAuthority: false,
     statisticalCandidateGate,
@@ -3758,6 +3776,11 @@ export function buildGeckoTerminalNewPoolBirthJupiterExecutableScorecard(events)
   const baseCi = frameBaseReturns.length >= 2
     ? circularBlockBootstrapMeanInterval(frameBaseReturns, rule.bootstrapIterations)
     : [null, null];
+  const chronological = chronologicalHalfValidation(
+    frameBaseReturns,
+    frameStressReturns,
+    rule,
+  );
   const uniqueTokens = new Set(weightedRows.map(tokenEdgeAssetKey)).size;
   const uniqueSelectedTokens = new Set(selectedRows.map(tokenEdgeAssetKey)).size;
   const independentTradedFrames = frames.filter((frame) => (
@@ -3768,16 +3791,48 @@ export function buildGeckoTerminalNewPoolBirthJupiterExecutableScorecard(events)
   const factor = profitFactor(frameBaseReturns);
   const drawdown = maxDrawdownPct(frameBaseReturns);
   const largestWinnerShare = largestWinningShare(frameBaseReturns);
-  const maturedDecisionCount = weightedRows.length
-    + cohort.missedResolutions
-    + cohort.unavailableResolutions;
+  const rowsByDecisionId = new Map(weightedRows.map((row) => [row.decisionId, row]));
+  const missingAsLossRows = cohort.maturedDecisions.map((decision) => {
+    const row = rowsByDecisionId.get(decision.id) ?? null;
+    const selected = decision.decision === "paper-long";
+    return {
+      decisionId: decision.id,
+      createdAt: decision.createdAt,
+      chain: decision.chain,
+      tokenAddress: decision.tokenAddress,
+      selected,
+      validOutcome: Boolean(row),
+      baseReturnPct: selected ? (row?.baseReturnPct ?? -100) : 0,
+      stressReturnPct: selected ? (row?.stressReturnPct ?? -100) : 0,
+    };
+  });
+  const missingAsLossFrames = independentAssetFrames(missingAsLossRows, {
+    durationMs: HOUR_MS,
+    timestamp: (row) => Date.parse(row.createdAt),
+    assetKey: tokenEdgeAssetKey,
+  });
+  const missingAsLossBaseFrames = missingAsLossFrames.map((frame) => mean(
+    frame.map((row) => row.baseReturnPct),
+  ));
+  const missingAsLossStressFrames = missingAsLossFrames.map((frame) => mean(
+    frame.map((row) => row.stressReturnPct),
+  ));
+  const missingAsLossAverageBase = mean(missingAsLossBaseFrames);
+  const missingAsLossAverageStress = mean(missingAsLossStressFrames);
+  const missingAsLossSensitivityGate = Number.isFinite(missingAsLossAverageBase)
+    && Number.isFinite(missingAsLossAverageStress)
+    && missingAsLossAverageBase > 0
+    && missingAsLossAverageStress > 0;
+  const maturedDecisionCount = cohort.maturedDecisionCount;
   const resolvedDecisionCoverageRate = roundRatio(weightedRows.length, maturedDecisionCount);
+  const resolvedCoverageGate = Number.isFinite(resolvedDecisionCoverageRate)
+    && resolvedDecisionCoverageRate >= rule.minimumResolvedDecisionCoverageRate;
   const evidenceStatus = weightedRows.length >= rule.minimumMaturedForecasts
     && frames.length >= rule.minimumIndependentSignalFrames
     && uniqueTokens >= rule.minimumUniqueTokens
     && selectedRows.length >= rule.minimumRiseCalls
     && independentTradedFrames >= rule.minimumIndependentTradedFrames
-    && resolvedDecisionCoverageRate >= rule.minimumResolvedDecisionCoverageRate
+    && resolvedCoverageGate
     ? "reviewable" : "collecting";
   const statisticalCandidateGate = evidenceStatus === "reviewable"
     && baseCi[0] > rule.bootstrapLower95MustExceedPct
@@ -3785,7 +3840,9 @@ export function buildGeckoTerminalNewPoolBirthJupiterExecutableScorecard(events)
     && factor >= rule.minimumProfitFactor
     && drawdown <= rule.maximumDrawdownPct
     && Number.isFinite(largestWinnerShare)
-    && largestWinnerShare <= rule.maximumLargestWinningFrameShare;
+    && largestWinnerShare <= rule.maximumLargestWinningFrameShare
+    && missingAsLossSensitivityGate
+    && chronological.gate;
   const independentQuantValidationStatus = "not-run";
   const provisionalGate = statisticalCandidateGate
     && independentQuantValidationStatus === "passed";
@@ -3802,8 +3859,11 @@ export function buildGeckoTerminalNewPoolBirthJupiterExecutableScorecard(events)
     researchOnly: true,
     mutationAllowed: false,
     promotionAuthority: false,
+    scorecardAsOf: cohort.scorecardAsOf,
     candidateDecisions: cohort.decisions.length,
     openDecisions: cohort.openDecisions,
+    recordedMaturedResolutions: cohort.recordedMaturedResolutions,
+    unrecordedMaturedDecisions: cohort.unrecordedMaturedDecisions,
     eligibleLiveObservations: cohort.rows.length,
     unavailableDecisions: cohort.decisions.filter((decision) => (
       decision.decision === "unavailable"
@@ -3818,6 +3878,8 @@ export function buildGeckoTerminalNewPoolBirthJupiterExecutableScorecard(events)
     unavailableResolutions: cohort.unavailableResolutions,
     maturedDecisionCount,
     resolvedDecisionCoverageRate,
+    minimumResolvedDecisionCoverageRate: rule.minimumResolvedDecisionCoverageRate,
+    resolvedCoverageGate,
     liquidityCollapseCount: weightedRows.filter((row) => (
       row.resolution.status === "liquidity-collapse"
     )).length,
@@ -3842,6 +3904,19 @@ export function buildGeckoTerminalNewPoolBirthJupiterExecutableScorecard(events)
     portfolioAverageBaseReturnPct: nullableRound(averageBase),
     portfolioAverageStressReturnPct: nullableRound(averageStress),
     portfolioBootstrapMeanReturnCi95Pct: baseCi.map(nullableRound),
+    missingAsLossMaturedDecisions: cohort.maturedDecisions.length,
+    missingAsLossUnscoredDecisions: missingAsLossRows.filter((row) => (
+      !row.validOutcome
+    )).length,
+    missingAsLossSelectedDecisions: missingAsLossRows.filter((row) => (
+      row.selected
+    )).length,
+    missingAsLossIndependentHourlyFrames: missingAsLossFrames.length,
+    missingAsLossAverageBaseReturnPct: nullableRound(missingAsLossAverageBase),
+    missingAsLossAverageStressReturnPct: nullableRound(missingAsLossAverageStress),
+    missingAsLossSensitivityGate,
+    chronologicalHalfValidation: chronological.validation,
+    chronologicalHalfValidationGate: chronological.gate,
     profitFactor: nullableRound(factor),
     maxDrawdownPct: nullableRound(drawdown),
     largestWinningFrameShare: nullableRound(largestWinnerShare),
@@ -3861,13 +3936,14 @@ export function buildGeckoTerminalNewPoolBirthJupiterExecutableScorecard(events)
         rule.minimumResolvedDecisionCoverageRate
           - (resolvedDecisionCoverageRate ?? 0),
       ),
+      ...chronological.evidenceShortfall,
     },
     statisticalCandidateGate,
     independentQuantValidationRequired: true,
     independentQuantValidationStatus,
     independentQuantValidationRequirements: INDEPENDENT_QUANT_VALIDATION_REQUIREMENTS,
     provisionalGate,
-    note: "This frozen future-only paper cohort changes one provider dimension: the low-cap newborn source is entered and exited with exact-in public Jupiter quotes rather than requiring GeckoTerminal/DexScreener price consensus. A $100 decision is paper-long only when both the buy and immediate reverse routes quote; definitive no-routes are cash, provider outages receive no PnL credit, and held tokens with no exact one-hour exit route score -100%. Quote results already reflect route fees and price impact; the score still deducts the conservative 4% base and 12% stress cost haircuts. The statistical candidate gate cannot promote the rule: independent Newey-West, multiple-testing, placebo, overfit, deflated-Sharpe, factor, regime, and reconciliation audits remain mandatory and not run. All derivation tokens and pre-registration pools are excluded. No result grants live-trading authority.",
+    note: "This frozen future-only paper cohort changes one provider dimension: the low-cap newborn source is entered and exited with exact-in public Jupiter quotes rather than requiring GeckoTerminal/DexScreener price consensus. A $100 decision is paper-long only when both the buy and immediate reverse routes quote; definitive no-routes are cash, provider outages receive no PnL credit, and held tokens with no exact one-hour exit route score -100%. Maturity is derived from immutable dueAt values against the latest ledger occurrence, so an overdue unresolved paper-long remains in coverage and scores -100% in missing-as-loss sensitivity while paper-cash and unavailable entry decisions remain zero. Quote results already reflect route fees and price impact; the score still deducts the conservative 4% base and 12% stress cost haircuts. The statistical candidate gate cannot promote the rule: independent Newey-West, multiple-testing, placebo, overfit, deflated-Sharpe, factor, regime, and reconciliation audits remain mandatory and not run. All derivation tokens and pre-registration pools are excluded. No result grants live-trading authority.",
   };
 }
 
@@ -3926,6 +4002,10 @@ export function buildGeckoTerminalNewPoolBirthDangerCountScorecard(events) {
   const pairedCi = pairedBaseDeltas.length >= 2
     ? circularBlockBootstrapMeanInterval(pairedBaseDeltas, rule.bootstrapIterations)
     : [null, null];
+  const chronological = chronologicalHalfValidation(childBase, childStress, rule);
+  const coverage = forecastOutcomeCoverageValidation(cohort, {
+    selectionField: "dangerCountChallengerPredictedRise",
+  });
   const uniqueSelectedTokens = new Set(selectedRows.map(tokenEdgeAssetKey)).size;
   const independentTradedFrames = frames.filter((frame) => (
     frame.some((row) => row.dangerCountSelected)
@@ -3940,6 +4020,7 @@ export function buildGeckoTerminalNewPoolBirthDangerCountScorecard(events) {
     && uniqueSelectedTokens >= rule.minimumUniqueTokens
     && selectedRows.length >= rule.minimumRiseCalls
     && independentTradedFrames >= rule.minimumIndependentTradedFrames
+    && coverage.gate
     ? "reviewable" : "collecting";
   const provisionalGate = evidenceStatus === "reviewable"
     && childCi[0] > rule.bootstrapLower95MustExceedPct
@@ -3948,7 +4029,9 @@ export function buildGeckoTerminalNewPoolBirthDangerCountScorecard(events) {
     && factor >= rule.minimumProfitFactor
     && drawdown <= rule.maximumDrawdownPct
     && Number.isFinite(largestWinnerShare)
-    && largestWinnerShare <= rule.maximumLargestWinningFrameShare;
+    && largestWinnerShare <= rule.maximumLargestWinningFrameShare
+    && coverage.missingAsLossGate
+    && chronological.gate;
   return {
     type: "geckoterminal-new-pool-birth-danger-count-scorecard",
     ruleVersion: rule.version,
@@ -3968,6 +4051,7 @@ export function buildGeckoTerminalNewPoolBirthDangerCountScorecard(events) {
     candidateForecasts: cohort.forecasts.length,
     openForecasts: cohort.openForecasts,
     eligibleLiveObservations: cohort.rows.length,
+    ...coverage.summary,
     portfolioWeightedObservations: weightedRows.length,
     sameAssetOverlappingObservations: overlappingAssetSignalCount(cohort.rows, frames),
     independentHourlyFrames: frames.length,
@@ -4002,6 +4086,8 @@ export function buildGeckoTerminalNewPoolBirthDangerCountScorecard(events) {
     pairedStressCapacityDeltaPct: nullableRound(mean(pairedStressDeltas)),
     portfolioBootstrapMeanReturnCi95Pct: childCi.map(nullableRound),
     pairedDeltaBootstrapMeanCi95Pct: pairedCi.map(nullableRound),
+    chronologicalHalfValidation: chronological.validation,
+    chronologicalHalfValidationGate: chronological.gate,
     profitFactor: nullableRound(factor),
     maxDrawdownPct: nullableRound(drawdown),
     largestWinningFrameShare: nullableRound(largestWinnerShare),
@@ -4017,6 +4103,8 @@ export function buildGeckoTerminalNewPoolBirthDangerCountScorecard(events) {
         0,
         rule.minimumIndependentTradedFrames - independentTradedFrames,
       ),
+      ...coverage.evidenceShortfall,
+      ...chronological.evidenceShortfall,
     },
     provisionalGate,
     note: "This strictly future paper child keeps the low-cap newborn source, entry quote, exact one-hour outcome, capacity, costs, and promotion gates unchanged. It changes only whether a complete pre-entry immutable RugCheck aggregate has one or two danger risks; every other count and unavailable evidence is paper cash. All 11 tokens visible during derivation are excluded, including KIO, Shiro, and Doom. The tiny post-selected derivation has no evidentiary or trading authority.",
@@ -4053,6 +4141,10 @@ export function buildGeckoTerminalNewPoolBirthTurnoverScorecard(events) {
   const pairedCi = pairedBaseDeltas.length >= 2
     ? circularBlockBootstrapMeanInterval(pairedBaseDeltas, rule.bootstrapIterations)
     : [null, null];
+  const chronological = chronologicalHalfValidation(childBase, childStress, rule);
+  const coverage = forecastOutcomeCoverageValidation(cohort, {
+    selectionField: "turnoverChallengerPredictedRise",
+  });
   const uniqueSelectedTokens = new Set(selectedRows.map(tokenEdgeAssetKey)).size;
   const independentTradedFrames = frames.filter((frame) => (
     frame.some((row) => row.turnoverSelected)
@@ -4067,6 +4159,7 @@ export function buildGeckoTerminalNewPoolBirthTurnoverScorecard(events) {
     && uniqueSelectedTokens >= rule.minimumUniqueTokens
     && selectedRows.length >= rule.minimumRiseCalls
     && independentTradedFrames >= rule.minimumIndependentTradedFrames
+    && coverage.gate
     ? "reviewable" : "collecting";
   const provisionalGate = evidenceStatus === "reviewable"
     && childCi[0] > rule.bootstrapLower95MustExceedPct
@@ -4075,7 +4168,9 @@ export function buildGeckoTerminalNewPoolBirthTurnoverScorecard(events) {
     && factor >= rule.minimumProfitFactor
     && drawdown <= rule.maximumDrawdownPct
     && Number.isFinite(largestWinnerShare)
-    && largestWinnerShare <= rule.maximumLargestWinningFrameShare;
+    && largestWinnerShare <= rule.maximumLargestWinningFrameShare
+    && coverage.missingAsLossGate
+    && chronological.gate;
   return {
     type: "geckoterminal-new-pool-birth-turnover-scorecard",
     ruleVersion: rule.version,
@@ -4092,6 +4187,7 @@ export function buildGeckoTerminalNewPoolBirthTurnoverScorecard(events) {
     candidateForecasts: cohort.forecasts.length,
     openForecasts: cohort.openForecasts,
     eligibleLiveObservations: cohort.rows.length,
+    ...coverage.summary,
     portfolioWeightedObservations: weightedRows.length,
     sameAssetOverlappingObservations: overlappingAssetSignalCount(cohort.rows, frames),
     independentHourlyFrames: frames.length,
@@ -4120,6 +4216,8 @@ export function buildGeckoTerminalNewPoolBirthTurnoverScorecard(events) {
     pairedStressCapacityDeltaPct: nullableRound(mean(pairedStressDeltas)),
     portfolioBootstrapMeanReturnCi95Pct: childCi.map(nullableRound),
     pairedDeltaBootstrapMeanCi95Pct: pairedCi.map(nullableRound),
+    chronologicalHalfValidation: chronological.validation,
+    chronologicalHalfValidationGate: chronological.gate,
     profitFactor: nullableRound(factor),
     maxDrawdownPct: nullableRound(drawdown),
     largestWinningFrameShare: nullableRound(largestWinnerShare),
@@ -4135,6 +4233,8 @@ export function buildGeckoTerminalNewPoolBirthTurnoverScorecard(events) {
         0,
         rule.minimumIndependentTradedFrames - independentTradedFrames,
       ),
+      ...coverage.evidenceShortfall,
+      ...chronological.evidenceShortfall,
     },
     provisionalGate,
     note: "This strictly future paper child keeps the low-cap newborn source, entry quote, exact one-hour outcome, capacity, costs, and every promotion gate unchanged. It changes only whether decision-time five-minute volume/liquidity turnover is at most 10%; higher-turnover eligible parents are paper cash. All nine inspected parent forecasts are excluded, and the multiple-tested derivation has no evidentiary authority.",
@@ -4173,6 +4273,11 @@ export function buildGeckoTerminalNewPoolBirthLowMomentumScorecard(events) {
   const pairedCi = pairedBaseDeltas.length >= 2
     ? circularBlockBootstrapMeanInterval(pairedBaseDeltas, promotionPolicy.bootstrapIterations)
     : [null, null];
+  const chronological = chronologicalHalfValidation(
+    childBase,
+    childStress,
+    promotionPolicy,
+  );
   const uniqueSelectedTokens = new Set(selectedRows.map(tokenEdgeAssetKey)).size;
   const independentTradedFrames = frames.filter((frame) => (
     frame.some((row) => row.lowMomentumSelected)
@@ -4182,20 +4287,15 @@ export function buildGeckoTerminalNewPoolBirthLowMomentumScorecard(events) {
   const factor = profitFactor(childBase);
   const drawdown = maxDrawdownPct(childBase);
   const largestWinnerShare = largestWinningShare(childBase);
-  const maturedForecastCount = Math.max(0, cohort.forecasts.length - cohort.openForecasts);
-  const resolvedForecastCoverageRate = roundRatio(
-    cohort.rows.length,
-    maturedForecastCount,
-  );
-  const resolvedCoverageGate = Number.isFinite(resolvedForecastCoverageRate)
-    && resolvedForecastCoverageRate
-      >= MINIMUM_PROMOTION_RESOLVED_FORECAST_COVERAGE_RATE;
+  const coverage = forecastOutcomeCoverageValidation(cohort, {
+    selectionField: "lowMomentumChallengerPredictedRise",
+  });
   const evidenceStatus = weightedRows.length >= promotionPolicy.minimumMaturedForecasts
     && frames.length >= promotionPolicy.minimumIndependentSignalFrames
     && uniqueSelectedTokens >= promotionPolicy.minimumUniqueTokens
     && selectedRows.length >= minimumRiseCalls
     && independentTradedFrames >= promotionPolicy.minimumIndependentTradedFrames
-    && resolvedCoverageGate
+    && coverage.gate
     ? "reviewable" : "collecting";
   const internalProvisionalGate = evidenceStatus === "reviewable"
     && childCi[0] > promotionPolicy.bootstrapLower95MustExceedPct
@@ -4204,7 +4304,9 @@ export function buildGeckoTerminalNewPoolBirthLowMomentumScorecard(events) {
     && factor >= promotionPolicy.minimumProfitFactor
     && drawdown <= promotionPolicy.maximumDrawdownPct
     && Number.isFinite(largestWinnerShare)
-    && largestWinnerShare <= promotionPolicy.maximumLargestWinningFrameShare;
+    && largestWinnerShare <= promotionPolicy.maximumLargestWinningFrameShare
+    && coverage.missingAsLossGate
+    && chronological.gate;
   return {
     type: "geckoterminal-new-pool-birth-low-momentum-scorecard",
     ruleVersion: rule.version,
@@ -4221,12 +4323,8 @@ export function buildGeckoTerminalNewPoolBirthLowMomentumScorecard(events) {
     futureParentForecasts: cohort.futureParentForecasts.length,
     candidateForecasts: cohort.forecasts.length,
     openForecasts: cohort.openForecasts,
-    maturedForecastCount,
     eligibleLiveObservations: cohort.rows.length,
-    resolvedForecastCoverageRate,
-    minimumResolvedForecastCoverageRate:
-      MINIMUM_PROMOTION_RESOLVED_FORECAST_COVERAGE_RATE,
-    resolvedCoverageGate,
+    ...coverage.summary,
     portfolioWeightedObservations: weightedRows.length,
     sameAssetOverlappingObservations: overlappingAssetSignalCount(cohort.rows, frames),
     independentHourlyFrames: frames.length,
@@ -4255,6 +4353,8 @@ export function buildGeckoTerminalNewPoolBirthLowMomentumScorecard(events) {
     pairedStressCapacityDeltaPct: nullableRound(mean(pairedStressDeltas)),
     portfolioBootstrapMeanReturnCi95Pct: childCi.map(nullableRound),
     pairedDeltaBootstrapMeanCi95Pct: pairedCi.map(nullableRound),
+    chronologicalHalfValidation: chronological.validation,
+    chronologicalHalfValidationGate: chronological.gate,
     profitFactor: nullableRound(factor),
     maxDrawdownPct: nullableRound(drawdown),
     largestWinningFrameShare: nullableRound(largestWinnerShare),
@@ -4279,11 +4379,8 @@ export function buildGeckoTerminalNewPoolBirthLowMomentumScorecard(events) {
         0,
         promotionPolicy.minimumIndependentTradedFrames - independentTradedFrames,
       ),
-      resolvedForecastCoverageRate: round6(Math.max(
-        0,
-        MINIMUM_PROMOTION_RESOLVED_FORECAST_COVERAGE_RATE
-          - (resolvedForecastCoverageRate ?? 0),
-      )),
+      ...coverage.evidenceShortfall,
+      ...chronological.evidenceShortfall,
     },
     promotionAuthority: false,
     statisticalCandidateGate: internalProvisionalGate,
@@ -4325,6 +4422,10 @@ export function buildGeckoTerminalNewPoolBirthPairAgeScorecard(events) {
   const pairedCi = pairedBaseDeltas.length >= 2
     ? circularBlockBootstrapMeanInterval(pairedBaseDeltas, rule.bootstrapIterations)
     : [null, null];
+  const chronological = chronologicalHalfValidation(childBase, childStress, rule);
+  const coverage = forecastOutcomeCoverageValidation(cohort, {
+    selectionField: "pairAgeChallengerPredictedRise",
+  });
   const uniqueSelectedTokens = new Set(selectedRows.map(tokenEdgeAssetKey)).size;
   const independentTradedFrames = frames.filter((frame) => (
     frame.some((row) => row.pairAgeSelected)
@@ -4339,6 +4440,7 @@ export function buildGeckoTerminalNewPoolBirthPairAgeScorecard(events) {
     && uniqueSelectedTokens >= rule.minimumUniqueTokens
     && selectedRows.length >= rule.minimumRiseCalls
     && independentTradedFrames >= rule.minimumIndependentTradedFrames
+    && coverage.gate
     ? "reviewable" : "collecting";
   const provisionalGate = evidenceStatus === "reviewable"
     && childCi[0] > rule.bootstrapLower95MustExceedPct
@@ -4347,7 +4449,9 @@ export function buildGeckoTerminalNewPoolBirthPairAgeScorecard(events) {
     && factor >= rule.minimumProfitFactor
     && drawdown <= rule.maximumDrawdownPct
     && Number.isFinite(largestWinnerShare)
-    && largestWinnerShare <= rule.maximumLargestWinningFrameShare;
+    && largestWinnerShare <= rule.maximumLargestWinningFrameShare
+    && coverage.missingAsLossGate
+    && chronological.gate;
   return {
     type: "geckoterminal-new-pool-birth-pair-age-scorecard",
     ruleVersion: rule.version,
@@ -4364,6 +4468,7 @@ export function buildGeckoTerminalNewPoolBirthPairAgeScorecard(events) {
     candidateForecasts: cohort.forecasts.length,
     openForecasts: cohort.openForecasts,
     eligibleLiveObservations: cohort.rows.length,
+    ...coverage.summary,
     portfolioWeightedObservations: weightedRows.length,
     sameAssetOverlappingObservations: overlappingAssetSignalCount(cohort.rows, frames),
     independentHourlyFrames: frames.length,
@@ -4392,6 +4497,8 @@ export function buildGeckoTerminalNewPoolBirthPairAgeScorecard(events) {
     pairedStressCapacityDeltaPct: nullableRound(mean(pairedStressDeltas)),
     portfolioBootstrapMeanReturnCi95Pct: childCi.map(nullableRound),
     pairedDeltaBootstrapMeanCi95Pct: pairedCi.map(nullableRound),
+    chronologicalHalfValidation: chronological.validation,
+    chronologicalHalfValidationGate: chronological.gate,
     profitFactor: nullableRound(factor),
     maxDrawdownPct: nullableRound(drawdown),
     largestWinningFrameShare: nullableRound(largestWinnerShare),
@@ -4407,6 +4514,8 @@ export function buildGeckoTerminalNewPoolBirthPairAgeScorecard(events) {
         0,
         rule.minimumIndependentTradedFrames - independentTradedFrames,
       ),
+      ...coverage.evidenceShortfall,
+      ...chronological.evidenceShortfall,
     },
     provisionalGate,
     note: "This future-only paper child keeps the low-cap newborn source, entry quote, exact one-hour outcome, capacity, costs, and every promotion gate unchanged. It changes only whether decision-time pool age is at least two minutes; younger eligible parent forecasts are paper cash. All nine inspected parent forecasts and outcomes are excluded derivation provenance.",
@@ -4443,6 +4552,10 @@ export function buildGeckoTerminalNewPoolBirthCreatorBalanceScorecard(events) {
   const pairedCi = pairedBaseDeltas.length >= 2
     ? circularBlockBootstrapMeanInterval(pairedBaseDeltas, rule.bootstrapIterations)
     : [null, null];
+  const chronological = chronologicalHalfValidation(childBase, childStress, rule);
+  const coverage = forecastOutcomeCoverageValidation(cohort, {
+    selectionField: "creatorBalanceChallengerPredictedRise",
+  });
   const uniqueSelectedTokens = new Set(selectedRows.map(tokenEdgeAssetKey)).size;
   const independentTradedFrames = frames.filter((frame) => (
     frame.some((row) => row.creatorBalanceSelected)
@@ -4457,6 +4570,7 @@ export function buildGeckoTerminalNewPoolBirthCreatorBalanceScorecard(events) {
     && uniqueSelectedTokens >= rule.minimumUniqueTokens
     && selectedRows.length >= rule.minimumRiseCalls
     && independentTradedFrames >= rule.minimumIndependentTradedFrames
+    && coverage.gate
     ? "reviewable" : "collecting";
   const provisionalGate = evidenceStatus === "reviewable"
     && childCi[0] > rule.bootstrapLower95MustExceedPct
@@ -4465,7 +4579,9 @@ export function buildGeckoTerminalNewPoolBirthCreatorBalanceScorecard(events) {
     && factor >= rule.minimumProfitFactor
     && drawdown <= rule.maximumDrawdownPct
     && Number.isFinite(largestWinnerShare)
-    && largestWinnerShare <= rule.maximumLargestWinningFrameShare;
+    && largestWinnerShare <= rule.maximumLargestWinningFrameShare
+    && coverage.missingAsLossGate
+    && chronological.gate;
   return {
     type: "geckoterminal-new-pool-birth-creator-balance-scorecard",
     ruleVersion: rule.version,
@@ -4481,6 +4597,7 @@ export function buildGeckoTerminalNewPoolBirthCreatorBalanceScorecard(events) {
     candidateForecasts: cohort.forecasts.length,
     openForecasts: cohort.openForecasts,
     eligibleLiveObservations: cohort.rows.length,
+    ...coverage.summary,
     portfolioWeightedObservations: weightedRows.length,
     sameAssetOverlappingObservations: overlappingAssetSignalCount(cohort.rows, frames),
     independentHourlyFrames: frames.length,
@@ -4515,6 +4632,8 @@ export function buildGeckoTerminalNewPoolBirthCreatorBalanceScorecard(events) {
     pairedStressCapacityDeltaPct: nullableRound(mean(pairedStressDeltas)),
     portfolioBootstrapMeanReturnCi95Pct: childCi.map(nullableRound),
     pairedDeltaBootstrapMeanCi95Pct: pairedCi.map(nullableRound),
+    chronologicalHalfValidation: chronological.validation,
+    chronologicalHalfValidationGate: chronological.gate,
     profitFactor: nullableRound(factor),
     maxDrawdownPct: nullableRound(drawdown),
     largestWinningFrameShare: nullableRound(largestWinnerShare),
@@ -4530,6 +4649,8 @@ export function buildGeckoTerminalNewPoolBirthCreatorBalanceScorecard(events) {
         0,
         rule.minimumIndependentTradedFrames - independentTradedFrames,
       ),
+      ...coverage.evidenceShortfall,
+      ...chronological.evidenceShortfall,
     },
     provisionalGate,
     note: "This future-only paper child keeps the low-cap newborn entry and exact outcome unchanged, and changes only whether complete pre-entry exact-mint RugCheck evidence reports creator balance at or below 10%. Missing or invalid evidence is paper cash. TikTok, MarsCoin, WIZARD, their reports, paths, and outcomes are excluded hypothesis provenance and cannot enter this scorecard.",
@@ -4566,6 +4687,10 @@ export function buildGeckoTerminalNewPoolBirthLpProviderScorecard(events) {
   const pairedCi = pairedBaseDeltas.length >= 2
     ? circularBlockBootstrapMeanInterval(pairedBaseDeltas, rule.bootstrapIterations)
     : [null, null];
+  const chronological = chronologicalHalfValidation(childBase, childStress, rule);
+  const coverage = forecastOutcomeCoverageValidation(cohort, {
+    selectionField: "lpProviderChallengerPredictedRise",
+  });
   const uniqueSelectedTokens = new Set(selectedRows.map(tokenEdgeAssetKey)).size;
   const independentTradedFrames = frames.filter((frame) => (
     frame.some((row) => row.lpProviderSelected)
@@ -4580,6 +4705,7 @@ export function buildGeckoTerminalNewPoolBirthLpProviderScorecard(events) {
     && uniqueSelectedTokens >= rule.minimumUniqueTokens
     && selectedRows.length >= rule.minimumRiseCalls
     && independentTradedFrames >= rule.minimumIndependentTradedFrames
+    && coverage.gate
     ? "reviewable" : "collecting";
   const provisionalGate = evidenceStatus === "reviewable"
     && childCi[0] > rule.bootstrapLower95MustExceedPct
@@ -4588,7 +4714,9 @@ export function buildGeckoTerminalNewPoolBirthLpProviderScorecard(events) {
     && factor >= rule.minimumProfitFactor
     && drawdown <= rule.maximumDrawdownPct
     && Number.isFinite(largestWinnerShare)
-    && largestWinnerShare <= rule.maximumLargestWinningFrameShare;
+    && largestWinnerShare <= rule.maximumLargestWinningFrameShare
+    && coverage.missingAsLossGate
+    && chronological.gate;
   return {
     type: "geckoterminal-new-pool-birth-lp-provider-scorecard",
     ruleVersion: rule.version,
@@ -4604,6 +4732,7 @@ export function buildGeckoTerminalNewPoolBirthLpProviderScorecard(events) {
     candidateForecasts: cohort.forecasts.length,
     openForecasts: cohort.openForecasts,
     eligibleLiveObservations: cohort.rows.length,
+    ...coverage.summary,
     portfolioWeightedObservations: weightedRows.length,
     sameAssetOverlappingObservations: overlappingAssetSignalCount(cohort.rows, frames),
     independentHourlyFrames: frames.length,
@@ -4638,6 +4767,8 @@ export function buildGeckoTerminalNewPoolBirthLpProviderScorecard(events) {
     pairedStressCapacityDeltaPct: nullableRound(mean(pairedStressDeltas)),
     portfolioBootstrapMeanReturnCi95Pct: childCi.map(nullableRound),
     pairedDeltaBootstrapMeanCi95Pct: pairedCi.map(nullableRound),
+    chronologicalHalfValidation: chronological.validation,
+    chronologicalHalfValidationGate: chronological.gate,
     profitFactor: nullableRound(factor),
     maxDrawdownPct: nullableRound(drawdown),
     largestWinningFrameShare: nullableRound(largestWinnerShare),
@@ -4653,6 +4784,8 @@ export function buildGeckoTerminalNewPoolBirthLpProviderScorecard(events) {
         0,
         rule.minimumIndependentTradedFrames - independentTradedFrames,
       ),
+      ...coverage.evidenceShortfall,
+      ...chronological.evidenceShortfall,
     },
     provisionalGate,
     note: "This future-only paper child keeps the low-cap newborn entry and exact outcome unchanged, and changes only whether complete pre-entry exact-mint RugCheck evidence reports at least one LP provider. Missing or invalid evidence is paper cash. TikTok, MarsCoin, WIZARD, PEPHEAD, Hthcity, their reports, paths, and outcomes are excluded hypothesis provenance and cannot enter this scorecard.",
@@ -4785,9 +4918,6 @@ export function validatedGeckoTerminalNewPoolBirthDangerCountRows(events) {
   const evidenceById = new Map(events
     .filter((event) => event.type === "geckoterminal-new-pool-rugcheck-risk-snapshot")
     .map((event) => [event.id, event]));
-  const resolvedIds = new Set(events
-    .filter((event) => event.type === "geckoterminal-new-pool-resolution")
-    .map((event) => event.forecastId));
   const rule = GECKOTERMINAL_NEW_POOL_BIRTH_DANGER_COUNT_RULE;
   const futureParentForecasts = parent.forecasts.filter((forecast) => (
     Date.parse(forecast.createdAt) > Date.parse(registration?.registeredAt ?? "")
@@ -4838,7 +4968,7 @@ export function validatedGeckoTerminalNewPoolBirthDangerCountRows(events) {
     parent,
     futureParentForecasts,
     forecasts,
-    openForecasts: forecasts.filter((forecast) => !resolvedIds.has(forecast.id)).length,
+    ...forecastMaturityAtLedgerAsOf(events, forecasts),
     rejectionCounts,
     rows,
   };
@@ -4853,9 +4983,6 @@ export function validatedGeckoTerminalNewPoolBirthJupiterRoundTripRows(events) {
   const evidenceByKey = new Map(events
     .filter((event) => event.type === "geckoterminal-new-pool-jupiter-roundtrip-snapshot")
     .map((event) => [`${event.discoveryEventId}:${event.tokenAddress}`, event]));
-  const resolvedIds = new Set(events
-    .filter((event) => event.type === "geckoterminal-new-pool-resolution")
-    .map((event) => event.forecastId));
   const rule = GECKOTERMINAL_NEW_POOL_BIRTH_JUPITER_ROUND_TRIP_RULE;
   const futureParentForecasts = parent.forecasts.filter((forecast) => (
     Date.parse(forecast.createdAt) > Date.parse(registration?.registeredAt ?? "")
@@ -4902,7 +5029,7 @@ export function validatedGeckoTerminalNewPoolBirthJupiterRoundTripRows(events) {
     parent,
     futureParentForecasts,
     forecasts,
-    openForecasts: forecasts.filter((forecast) => !resolvedIds.has(forecast.id)).length,
+    ...forecastMaturityAtLedgerAsOf(events, forecasts),
     rejectionCounts,
     rows,
   };
@@ -4931,7 +5058,7 @@ export function validatedGeckoTerminalNewPoolBirthJupiterExecutableRows(events) 
   const rejectionCounts = {};
   const decisions = [];
   const rows = [];
-  let openDecisions = 0;
+  const validResolutionDecisionIds = new Set();
   let missedResolutions = 0;
   let unavailableResolutions = 0;
   for (const decision of candidateDecisions) {
@@ -4948,7 +5075,6 @@ export function validatedGeckoTerminalNewPoolBirthJupiterExecutableRows(events) 
     decisions.push(decision);
     const resolutions = resolutionGroups.get(decision.id) ?? [];
     if (!resolutions.length) {
-      openDecisions += 1;
       continue;
     }
     if (resolutions.length !== 1
@@ -4960,6 +5086,7 @@ export function validatedGeckoTerminalNewPoolBirthJupiterExecutableRows(events) 
       continue;
     }
     const resolution = resolutions[0];
+    validResolutionDecisionIds.add(decision.id);
     if (resolution.status === "missed") {
       missedResolutions += 1;
       continue;
@@ -4981,10 +5108,29 @@ export function validatedGeckoTerminalNewPoolBirthJupiterExecutableRows(events) 
       ...decision.metrics,
     });
   }
+  const scorecardAsOf = latestLedgerOccurrenceAt(events);
+  const scorecardAsOfMs = scorecardAsOf?.getTime() ?? null;
+  const maturedDecisions = Number.isFinite(scorecardAsOfMs)
+    ? decisions.filter((decision) => {
+      const dueAt = Date.parse(decision.dueAt);
+      return Number.isFinite(dueAt) && dueAt <= scorecardAsOfMs;
+    })
+    : [];
+  const maturedDecisionIds = new Set(maturedDecisions.map((decision) => decision.id));
+  const recordedMaturedResolutions = [...validResolutionDecisionIds].filter((decisionId) => (
+    maturedDecisionIds.has(decisionId)
+  )).length;
   return {
     registration,
     decisions,
-    openDecisions,
+    scorecardAsOf: scorecardAsOf?.toISOString() ?? null,
+    maturedDecisions,
+    maturedDecisionCount: maturedDecisions.length,
+    recordedMaturedResolutions,
+    unrecordedMaturedDecisions: maturedDecisions.filter((decision) => (
+      !validResolutionDecisionIds.has(decision.id)
+    )).length,
+    openDecisions: decisions.length - maturedDecisions.length,
     missedResolutions,
     unavailableResolutions,
     rejectionCounts,
@@ -4995,9 +5141,6 @@ export function validatedGeckoTerminalNewPoolBirthJupiterExecutableRows(events) 
 export function validatedGeckoTerminalNewPoolBirthPairAgeRows(events) {
   const registration = events.find(matchesBirthPairAgeRegistration) ?? null;
   const parent = validatedGeckoTerminalNewPoolBirthMarketCapFloorRemovedRows(events);
-  const resolvedIds = new Set(events
-    .filter((event) => event.type === "geckoterminal-new-pool-resolution")
-    .map((event) => event.forecastId));
   const futureParentForecasts = parent.forecasts.filter((forecast) => (
     Date.parse(forecast.createdAt) > Date.parse(registration?.registeredAt ?? "")
       && Date.parse(forecast.createdAt)
@@ -5034,7 +5177,7 @@ export function validatedGeckoTerminalNewPoolBirthPairAgeRows(events) {
     parent,
     futureParentForecasts,
     forecasts,
-    openForecasts: forecasts.filter((forecast) => !resolvedIds.has(forecast.id)).length,
+    ...forecastMaturityAtLedgerAsOf(events, forecasts),
     rejectionCounts,
     rows,
   };
@@ -5043,9 +5186,6 @@ export function validatedGeckoTerminalNewPoolBirthPairAgeRows(events) {
 export function validatedGeckoTerminalNewPoolBirthTurnoverRows(events) {
   const registration = events.find(matchesBirthTurnoverRegistration) ?? null;
   const parent = validatedGeckoTerminalNewPoolBirthMarketCapFloorRemovedRows(events);
-  const resolvedIds = new Set(events
-    .filter((event) => event.type === "geckoterminal-new-pool-resolution")
-    .map((event) => event.forecastId));
   const futureParentForecasts = parent.forecasts.filter((forecast) => (
     Date.parse(forecast.createdAt) > Date.parse(registration?.registeredAt ?? "")
       && Date.parse(forecast.createdAt)
@@ -5082,7 +5222,7 @@ export function validatedGeckoTerminalNewPoolBirthTurnoverRows(events) {
     parent,
     futureParentForecasts,
     forecasts,
-    openForecasts: forecasts.filter((forecast) => !resolvedIds.has(forecast.id)).length,
+    ...forecastMaturityAtLedgerAsOf(events, forecasts),
     rejectionCounts,
     rows,
   };
@@ -5091,9 +5231,6 @@ export function validatedGeckoTerminalNewPoolBirthTurnoverRows(events) {
 export function validatedGeckoTerminalNewPoolBirthLowMomentumRows(events) {
   const registration = events.find(matchesBirthLowMomentumRegistration) ?? null;
   const parent = validatedGeckoTerminalNewPoolBirthMarketCapFloorRemovedRows(events);
-  const resolvedIds = new Set(events
-    .filter((event) => event.type === "geckoterminal-new-pool-resolution")
-    .map((event) => event.forecastId));
   const rule = GECKOTERMINAL_NEW_POOL_BIRTH_LOW_MOMENTUM_RULE;
   const futureParentForecasts = parent.forecasts.filter((forecast) => (
     Date.parse(forecast.createdAt) > Date.parse(registration?.registeredAt ?? "")
@@ -5128,7 +5265,7 @@ export function validatedGeckoTerminalNewPoolBirthLowMomentumRows(events) {
     parent,
     futureParentForecasts,
     forecasts,
-    openForecasts: forecasts.filter((forecast) => !resolvedIds.has(forecast.id)).length,
+    ...forecastMaturityAtLedgerAsOf(events, forecasts),
     rejectionCounts,
     rows,
   };
@@ -5137,9 +5274,6 @@ export function validatedGeckoTerminalNewPoolBirthLowMomentumRows(events) {
 export function validatedGeckoTerminalNewPoolBirthSocialPresenceRows(events) {
   const registration = events.find(matchesBirthSocialPresenceRegistration) ?? null;
   const parent = validatedGeckoTerminalNewPoolBirthMarketCapFloorRemovedRows(events);
-  const resolvedIds = new Set(events
-    .filter((event) => event.type === "geckoterminal-new-pool-resolution")
-    .map((event) => event.forecastId));
   const rule = GECKOTERMINAL_NEW_POOL_BIRTH_SOCIAL_PRESENCE_RULE;
   const futureParentForecasts = parent.forecasts.filter((forecast) => (
     Date.parse(forecast.createdAt) > Date.parse(registration?.registeredAt ?? "")
@@ -5174,7 +5308,7 @@ export function validatedGeckoTerminalNewPoolBirthSocialPresenceRows(events) {
     parent,
     futureParentForecasts,
     forecasts,
-    openForecasts: forecasts.filter((forecast) => !resolvedIds.has(forecast.id)).length,
+    ...forecastMaturityAtLedgerAsOf(events, forecasts),
     rejectionCounts,
     rows,
   };
@@ -5189,9 +5323,6 @@ export function validatedGeckoTerminalNewPoolBirthCreatorBalanceRows(events) {
   const evidenceById = new Map(events
     .filter((event) => event.type === "geckoterminal-new-pool-creator-balance-snapshot")
     .map((event) => [event.id, event]));
-  const resolvedIds = new Set(events
-    .filter((event) => event.type === "geckoterminal-new-pool-resolution")
-    .map((event) => event.forecastId));
   const futureParentForecasts = parent.forecasts.filter((forecast) => (
     Date.parse(forecast.createdAt) > Date.parse(registration?.registeredAt ?? "")
   ));
@@ -5233,7 +5364,7 @@ export function validatedGeckoTerminalNewPoolBirthCreatorBalanceRows(events) {
     parent,
     futureParentForecasts,
     forecasts,
-    openForecasts: forecasts.filter((forecast) => !resolvedIds.has(forecast.id)).length,
+    ...forecastMaturityAtLedgerAsOf(events, forecasts),
     rejectionCounts,
     rows,
   };
@@ -5248,9 +5379,6 @@ export function validatedGeckoTerminalNewPoolBirthLpProviderRows(events) {
   const evidenceById = new Map(events
     .filter((event) => event.type === "geckoterminal-new-pool-lp-provider-snapshot")
     .map((event) => [event.id, event]));
-  const resolvedIds = new Set(events
-    .filter((event) => event.type === "geckoterminal-new-pool-resolution")
-    .map((event) => event.forecastId));
   const futureParentForecasts = parent.forecasts.filter((forecast) => (
     Date.parse(forecast.createdAt) > Date.parse(registration?.registeredAt ?? "")
   ));
@@ -5292,7 +5420,7 @@ export function validatedGeckoTerminalNewPoolBirthLpProviderRows(events) {
     parent,
     futureParentForecasts,
     forecasts,
-    openForecasts: forecasts.filter((forecast) => !resolvedIds.has(forecast.id)).length,
+    ...forecastMaturityAtLedgerAsOf(events, forecasts),
     rejectionCounts,
     rows,
   };
@@ -5307,9 +5435,6 @@ export function validatedGeckoTerminalNewPoolBirthRugCheckPanelRows(events) {
   const evidenceByKey = new Map(events
     .filter((event) => event.type === "geckoterminal-new-pool-rugcheck-risk-snapshot")
     .map((event) => [`${event.discoveryEventId}:${event.tokenAddress}`, event]));
-  const resolvedIds = new Set(events
-    .filter((event) => event.type === "geckoterminal-new-pool-resolution")
-    .map((event) => event.forecastId));
   const futureParentForecasts = parent.forecasts.filter((forecast) => (
     Date.parse(forecast.createdAt) > Date.parse(registration?.registeredAt ?? "")
       && !GECKOTERMINAL_NEW_POOL_BIRTH_RUGCHECK_PANEL_RULE.derivation
@@ -5355,9 +5480,35 @@ export function validatedGeckoTerminalNewPoolBirthRugCheckPanelRows(events) {
     parent,
     futureParentForecasts,
     forecasts,
-    openForecasts: forecasts.filter((forecast) => !resolvedIds.has(forecast.id)).length,
+    ...forecastMaturityAtLedgerAsOf(events, forecasts),
     rejectionCounts,
     rows,
+  };
+}
+
+function forecastMaturityAtLedgerAsOf(events, forecasts) {
+  const scorecardAsOf = latestLedgerOccurrenceAt(events);
+  const scorecardAsOfMs = scorecardAsOf?.getTime() ?? null;
+  const maturedForecasts = Number.isFinite(scorecardAsOfMs)
+    ? forecasts.filter((forecast) => {
+      const dueAt = Date.parse(forecast.dueAt);
+      return Number.isFinite(dueAt) && dueAt <= scorecardAsOfMs;
+    })
+    : [];
+  const maturedForecastIds = new Set(maturedForecasts.map((forecast) => forecast.id));
+  const recordedMaturedResolutionIds = new Set(events.filter((event) => (
+    event.type === "geckoterminal-new-pool-resolution"
+      && maturedForecastIds.has(event.forecastId)
+  )).map((event) => event.forecastId));
+  return {
+    scorecardAsOf: scorecardAsOf?.toISOString() ?? null,
+    maturedForecasts,
+    openForecasts: forecasts.length - maturedForecasts.length,
+    maturedForecastCount: maturedForecasts.length,
+    recordedMaturedResolutions: recordedMaturedResolutionIds.size,
+    unrecordedMaturedForecasts: maturedForecasts.filter((forecast) => (
+      !recordedMaturedResolutionIds.has(forecast.id)
+    )).length,
   };
 }
 
@@ -5381,7 +5532,6 @@ function validatedBirthEntryRows(events, {
   ));
   const rejectionCounts = {};
   const rows = [];
-  let openForecasts = 0;
   for (const forecast of forecasts) {
     const liquidityEligibilityReason = geckoLiquidityScoringEligibilityReason(
       forecast,
@@ -5393,10 +5543,7 @@ function validatedBirthEntryRows(events, {
     }
     const discovery = discoveries.get(forecast.discoveryEventId);
     const resolution = resolutions.get(forecast.id);
-    if (!resolution) {
-      openForecasts += 1;
-      continue;
-    }
+    if (!resolution) continue;
     const reason = newPoolBirthEntryRowRejectionReason({
       rule,
       registrationMatcher,
@@ -5444,7 +5591,7 @@ function validatedBirthEntryRows(events, {
     registration,
     liquidityScoringRegistration,
     forecasts,
-    openForecasts,
+    ...forecastMaturityAtLedgerAsOf(events, forecasts),
     rejectionCounts,
     rows,
   };
@@ -5997,7 +6144,6 @@ function validatedNewPoolRows(events, {
   ));
   const rejectionCounts = {};
   const rows = [];
-  let openForecasts = 0;
   for (const forecast of forecasts) {
     const liquidityEligibilityReason = geckoLiquidityScoringEligibilityReason(
       forecast,
@@ -6010,10 +6156,7 @@ function validatedNewPoolRows(events, {
     const discovery = discoveries.get(forecast.discoveryEventId);
     const activation = activations.get(forecast.activationEventId);
     const resolution = resolutions.get(forecast.id);
-    if (!resolution) {
-      openForecasts += 1;
-      continue;
-    }
+    if (!resolution) continue;
     const reason = newPoolRowRejectionReason({
       registration,
       registrationMatcher,
@@ -6062,7 +6205,7 @@ function validatedNewPoolRows(events, {
     registration,
     liquidityScoringRegistration,
     forecasts,
-    openForecasts,
+    ...forecastMaturityAtLedgerAsOf(events, forecasts),
     rejectionCounts,
     rows,
   };
@@ -6936,7 +7079,12 @@ function watchResult(ledgerPath, observedAt, status, discovery) {
     status,
     discoveryEventId: discovery.id,
     returnedRows: discovery.returnedRows,
+    evaluatedRows: discovery.evaluatedRows ?? null,
     watchedCandidates: discovery.candidates?.length ?? 0,
+    duplicatePoolCount: discovery.duplicatePoolCount ?? 0,
+    rejectionCounts: discovery.rejectionCounts ?? {},
+    selectionCounts: discovery.selectionCounts ?? {},
+    selectionReconciliationGate: discovery.selectionReconciliationGate ?? null,
     activationDueAtRange: [dueTimes[0] ?? null, dueTimes.at(-1) ?? null],
   };
 }
@@ -6950,14 +7098,13 @@ function activationResult(
   forecasts,
   failures,
 ) {
+  const activationSummary = summarizeGeckoTerminalNewPoolActivations(activations);
   return {
     ledgerPath,
     observedAt: observedAt.toISOString(),
     dueCandidates,
     requestsAttempted,
-    recordedActivations: activations.length,
-    observedActivations: activations.filter((event) => event.status === "observed").length,
-    missedActivations: activations.filter((event) => event.status === "missed").length,
+    ...activationSummary,
     recordedForecasts: forecasts.length,
     failures,
     forecasts: forecasts.map((forecast) => ({
@@ -6967,6 +7114,39 @@ function activationResult(
       dueAt: forecast.dueAt,
     })),
   };
+}
+
+export function summarizeGeckoTerminalNewPoolActivations(activations) {
+  const observed = activations.filter((event) => event.status === "observed");
+  const missed = activations.filter((event) => event.status === "missed");
+  return {
+    recordedActivations: activations.length,
+    observedActivations: observed.length,
+    missedActivations: missed.length,
+    missedActivationReasonCounts: countActivationValues(
+      missed.map((event) => event.reason),
+    ),
+    observedCandidateStatusCounts: countActivationValues(
+      observed.map((event) => event.candidate?.status),
+    ),
+    observedActivationBlockerCounts: countActivationValues(
+      observed.flatMap((event) => event.candidate?.blockers ?? []),
+    ),
+    observedActivationBlockerCardinalityCounts: countActivationValues(
+      observed.map((event) => String(event.candidate?.blockers?.length ?? 0)),
+    ),
+  };
+}
+
+function countActivationValues(values) {
+  const counts = new Map();
+  for (const value of values) {
+    if (typeof value !== "string" || !value) continue;
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+  return Object.fromEntries([...counts.entries()].sort(([left], [right]) => (
+    left.localeCompare(right)
+  )));
 }
 
 function birthCaptureResult(
@@ -7122,6 +7302,178 @@ function nonnegativeInteger(value) {
 function mean(values) {
   const finite = values.filter(Number.isFinite);
   return finite.length ? finite.reduce((sum, value) => sum + value, 0) / finite.length : null;
+}
+
+export function chronologicalHalfValidation(baseReturns, stressReturns, policy) {
+  const splitIndex = Math.ceil(baseReturns.length / 2);
+  const firstHalfBaseReturns = baseReturns.slice(0, splitIndex);
+  const secondHalfBaseReturns = baseReturns.slice(splitIndex);
+  const firstHalfStressReturns = stressReturns.slice(0, splitIndex);
+  const secondHalfStressReturns = stressReturns.slice(splitIndex);
+  const firstHalfBaseCi = firstHalfBaseReturns.length >= 2
+    ? circularBlockBootstrapMeanInterval(firstHalfBaseReturns, policy.bootstrapIterations)
+    : [null, null];
+  const secondHalfBaseCi = secondHalfBaseReturns.length >= 2
+    ? circularBlockBootstrapMeanInterval(secondHalfBaseReturns, policy.bootstrapIterations)
+    : [null, null];
+  const minimumFramesPerHalf = Math.ceil(policy.minimumIndependentSignalFrames / 2);
+  const gate = Boolean(
+    firstHalfBaseReturns.length >= minimumFramesPerHalf
+      && secondHalfBaseReturns.length >= minimumFramesPerHalf
+      && mean(firstHalfStressReturns) > 0
+      && mean(secondHalfStressReturns) > 0
+      && firstHalfBaseCi[0] > policy.bootstrapLower95MustExceedPct
+      && secondHalfBaseCi[0] > policy.bootstrapLower95MustExceedPct
+  );
+  return {
+    validation: {
+      minimumFramesPerHalf,
+      firstHalf: {
+        independentFrames: firstHalfBaseReturns.length,
+        portfolioAverageBaseReturnPct: nullableRound(mean(firstHalfBaseReturns)),
+        portfolioAverageStressReturnPct: nullableRound(mean(firstHalfStressReturns)),
+        portfolioBootstrapMeanReturnCi95Pct: firstHalfBaseCi.map(nullableRound),
+      },
+      secondHalf: {
+        independentFrames: secondHalfBaseReturns.length,
+        portfolioAverageBaseReturnPct: nullableRound(mean(secondHalfBaseReturns)),
+        portfolioAverageStressReturnPct: nullableRound(mean(secondHalfStressReturns)),
+        portfolioBootstrapMeanReturnCi95Pct: secondHalfBaseCi.map(nullableRound),
+      },
+    },
+    gate,
+    evidenceShortfall: {
+      chronologicalFirstHalfFrames: Math.max(
+        0,
+        minimumFramesPerHalf - firstHalfBaseReturns.length,
+      ),
+      chronologicalSecondHalfFrames: Math.max(
+        0,
+        minimumFramesPerHalf - secondHalfBaseReturns.length,
+      ),
+    },
+  };
+}
+
+function withChronologicalHalfValidation(scorecard, cohort) {
+  const frames = independentAssetFrames(cohort.rows, {
+    durationMs: HOUR_MS,
+    timestamp: (row) => Date.parse(row.createdAt),
+    assetKey: tokenEdgeAssetKey,
+  });
+  const result = chronologicalHalfValidation(
+    frames.map((frame) => mean(frame.map((row) => row.baseCapacityReturnPct))),
+    frames.map((frame) => mean(frame.map((row) => row.stressCapacityReturnPct))),
+    TOKEN_EDGE_EXECUTION_POLICY,
+  );
+  const coverage = forecastOutcomeCoverageValidation(cohort);
+  return {
+    ...scorecard,
+    ...coverage.summary,
+    chronologicalHalfValidation: result.validation,
+    chronologicalHalfValidationGate: result.gate,
+    evidenceStatus: scorecard.evidenceStatus === "reviewable" && coverage.gate
+      ? "reviewable" : "collecting",
+    evidenceShortfall: {
+      ...scorecard.evidenceShortfall,
+      ...coverage.evidenceShortfall,
+      ...result.evidenceShortfall,
+    },
+    provisionalGate: scorecard.provisionalGate
+      && coverage.gate
+      && coverage.missingAsLossGate
+      && result.gate,
+  };
+}
+
+function forecastOutcomeCoverageValidation(cohort, options = {}) {
+  const maturedForecastCount = cohort.maturedForecastCount ?? Math.max(
+    0, cohort.forecasts.length - cohort.openForecasts,
+  );
+  const resolvedForecastCoverageRate = roundRatio(
+    cohort.rows.length,
+    maturedForecastCount,
+  );
+  const gate = Number.isFinite(resolvedForecastCoverageRate)
+    && resolvedForecastCoverageRate
+      >= MINIMUM_PROMOTION_RESOLVED_FORECAST_COVERAGE_RATE;
+  const missingAsLoss = missingAsLossForecastSensitivity(cohort, options);
+  return {
+    gate,
+    missingAsLossGate: missingAsLoss.gate,
+    summary: {
+      scorecardAsOf: cohort.scorecardAsOf ?? null,
+      maturedForecastCount,
+      recordedMaturedResolutions: cohort.recordedMaturedResolutions ?? null,
+      unrecordedMaturedForecasts: cohort.unrecordedMaturedForecasts ?? null,
+      resolvedForecastCoverageRate,
+      minimumResolvedForecastCoverageRate:
+        MINIMUM_PROMOTION_RESOLVED_FORECAST_COVERAGE_RATE,
+      resolvedCoverageGate: gate,
+      ...missingAsLoss.summary,
+    },
+    evidenceShortfall: {
+      resolvedForecastCoverageRate: round6(Math.max(
+        0,
+        MINIMUM_PROMOTION_RESOLVED_FORECAST_COVERAGE_RATE
+          - (resolvedForecastCoverageRate ?? 0),
+      )),
+    },
+  };
+}
+
+export function missingAsLossForecastSensitivity(cohort, {
+  selectionField = null,
+} = {}) {
+  const maturedForecasts = cohort.maturedForecasts ?? [];
+  const rowsByForecastId = new Map(cohort.rows.map((row) => [row.forecast.id, row]));
+  const sensitivityRows = maturedForecasts.map((forecast) => {
+    const row = rowsByForecastId.get(forecast.id) ?? null;
+    const selected = selectionField ? forecast[selectionField] === true : true;
+    return {
+      forecastId: forecast.id,
+      createdAt: forecast.createdAt,
+      chain: forecast.chain,
+      tokenAddress: forecast.tokenAddress,
+      selected,
+      validOutcome: Boolean(row),
+      baseCapacityReturnPct: selected
+        ? (row?.baseCapacityReturnPct ?? -100) : 0,
+      stressCapacityReturnPct: selected
+        ? (row?.stressCapacityReturnPct ?? -100) : 0,
+    };
+  });
+  const frames = independentAssetFrames(sensitivityRows, {
+    durationMs: HOUR_MS,
+    timestamp: (row) => Date.parse(row.createdAt),
+    assetKey: tokenEdgeAssetKey,
+  });
+  const baseReturns = frames.map((frame) => mean(
+    frame.map((row) => row.baseCapacityReturnPct),
+  ));
+  const stressReturns = frames.map((frame) => mean(
+    frame.map((row) => row.stressCapacityReturnPct),
+  ));
+  const averageBase = mean(baseReturns);
+  const averageStress = mean(stressReturns);
+  const gate = Number.isFinite(averageBase)
+    && Number.isFinite(averageStress)
+    && averageBase > 0
+    && averageStress > 0;
+  return {
+    gate,
+    summary: {
+      missingAsLossMaturedForecasts: maturedForecasts.length,
+      missingAsLossUnscoredForecasts: sensitivityRows.filter((row) => (
+        !row.validOutcome
+      )).length,
+      missingAsLossSelectedForecasts: sensitivityRows.filter((row) => row.selected).length,
+      missingAsLossIndependentHourlyFrames: frames.length,
+      missingAsLossAverageBaseReturnPct: nullableRound(averageBase),
+      missingAsLossAverageStressReturnPct: nullableRound(averageStress),
+      missingAsLossSensitivityGate: gate,
+    },
+  };
 }
 
 function roundRatio(numerator, denominator) {

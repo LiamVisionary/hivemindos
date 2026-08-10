@@ -8,11 +8,16 @@ import {
   FRONTIER_LAB_MODEL_LADDER,
   normalizeFrontierLabPolicy,
 } from "@/lib/frontier-lab";
+import {
+  EARNED_SCALE_POLICY_VERSION,
+  type EarnedScaleSettlementEvidence,
+} from "@/lib/earned-scale";
 import { homedir } from "@/lib/home-dir";
 import type {
   Company,
   CompanyFrontierLabModel,
   CompanyFrontierLabPolicy,
+  CompanyFrontierLabStage,
   CompanyFrontierLabTaskTier,
 } from "@/lib/types/company";
 
@@ -37,6 +42,7 @@ export interface CompanyIntelligenceUsageEvent {
   reservationId: string;
   companyId: string;
   taskId: string;
+  stage?: CompanyFrontierLabStage;
   tier: CompanyFrontierLabTaskTier;
   provider: "openai-oauth";
   model: CompanyFrontierLabModel;
@@ -45,6 +51,7 @@ export interface CompanyIntelligenceUsageEvent {
   usage?: CompanyIntelligenceUsage;
   estimated?: boolean;
   outcome?: CompanyIntelligenceOutcome;
+  scaleEvidence?: EarnedScaleSettlementEvidence;
   reason?: string;
   createdAt: string;
   createdAtMs: number;
@@ -115,6 +122,24 @@ function normalizeUsage(input: Partial<CompanyIntelligenceUsage> | undefined): C
   };
 }
 
+function normalizeScaleEvidence(input: unknown): EarnedScaleSettlementEvidence | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const value = input as Partial<EarnedScaleSettlementEvidence>;
+  if (value.policyVersion !== EARNED_SCALE_POLICY_VERSION) return undefined;
+  const finite = (candidate: unknown) => typeof candidate === "number" && Number.isFinite(candidate) ? candidate : undefined;
+  const bool = (candidate: unknown) => typeof candidate === "boolean" ? candidate : undefined;
+  return {
+    policyVersion: EARNED_SCALE_POLICY_VERSION,
+    outcomeScore: finite(value.outcomeScore) === undefined ? undefined : Math.max(0, Math.min(1, finite(value.outcomeScore)!)),
+    proofSatisfied: bool(value.proofSatisfied),
+    latencyMs: finite(value.latencyMs) === undefined ? undefined : Math.max(0, finite(value.latencyMs)!),
+    uniqueContribution: bool(value.uniqueContribution),
+    duplicationConflict: bool(value.duplicationConflict),
+    humanIntervention: bool(value.humanIntervention),
+    reviewerDisagreement: bool(value.reviewerDisagreement),
+  };
+}
+
 function normalizeEvent(raw: unknown): CompanyIntelligenceUsageEvent | null {
   if (!raw || typeof raw !== "object") return null;
   const event = raw as Partial<CompanyIntelligenceUsageEvent>;
@@ -123,11 +148,13 @@ function normalizeEvent(raw: unknown): CompanyIntelligenceUsageEvent | null {
   const createdAtMs = typeof event.createdAtMs === "number" && Number.isFinite(event.createdAtMs) ? event.createdAtMs : null;
   if (!event.id || !event.reservationId || !event.companyId || !event.taskId || !tier || !status || createdAtMs === null) return null;
   const model = FRONTIER_LAB_MODEL_LADDER[tier];
+  const stage = event.stage === "pilot" || event.stage === "team" || event.stage === "frontier" ? event.stage : undefined;
   return {
     id: event.id,
     reservationId: event.reservationId,
     companyId: event.companyId,
     taskId: event.taskId,
+    stage,
     tier,
     provider: "openai-oauth",
     model,
@@ -136,6 +163,7 @@ function normalizeEvent(raw: unknown): CompanyIntelligenceUsageEvent | null {
     usage: status === "settled" ? normalizeUsage(event.usage) : undefined,
     estimated: event.estimated === true,
     outcome: event.outcome === "completed" || event.outcome === "blocked" || event.outcome === "failed" ? event.outcome : undefined,
+    scaleEvidence: status === "settled" ? normalizeScaleEvidence(event.scaleEvidence) : undefined,
     reason: typeof event.reason === "string" && event.reason.trim() ? event.reason.trim() : undefined,
     createdAt: typeof event.createdAt === "string" ? event.createdAt : new Date(createdAtMs).toISOString(),
     createdAtMs,
@@ -347,6 +375,7 @@ export async function reserveCompanyIntelligence(
       reservationId,
       companyId: company.id,
       taskId,
+      stage: policy.stage,
       tier: input.tier,
       provider: "openai-oauth",
       model: FRONTIER_LAB_MODEL_LADDER[input.tier],
@@ -364,7 +393,7 @@ export async function reserveCompanyIntelligence(
 export async function settleCompanyIntelligenceReservation(
   companyId: string,
   reservationId: string,
-  input: { outcome: CompanyIntelligenceOutcome; usage?: Partial<CompanyIntelligenceUsage>; estimated?: boolean; reason?: string },
+  input: { outcome: CompanyIntelligenceOutcome; usage?: Partial<CompanyIntelligenceUsage>; estimated?: boolean; reason?: string; scaleEvidence?: EarnedScaleSettlementEvidence },
   options: CompanyIntelligenceLedgerOptions = {},
 ): Promise<{ duplicate: boolean; record: CompanyIntelligenceUsageEvent }> {
   const filePath = ledgerPath(options);
@@ -388,6 +417,7 @@ export async function settleCompanyIntelligenceReservation(
       usage: finalUsage,
       estimated,
       outcome: input.outcome,
+      scaleEvidence: normalizeScaleEvidence(input.scaleEvidence),
       reason: input.reason?.trim() || undefined,
       createdAt: new Date(now).toISOString(),
       createdAtMs: now,

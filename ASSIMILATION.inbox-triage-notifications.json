@@ -1,0 +1,28 @@
+{
+  "created_at": "2026-08-10T05:27:40.762218+00:00",
+  "request": "Retire the legacy Inbox Triage pilot and add notifications to the built-in HivemindOS Inbox Triage service.",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/obsidian/agent-notifications.ts",
+      "target_path": "src/lib/services/brain/inbox-triage-notifications.ts",
+      "reuse_type": "adapted_code",
+      "note": "Canonical deterministic Obsidian-backed Alert creation."
+    },
+    {
+      "source_repo": "installed-inbox-triage-pilot",
+      "source_path": "~/.hivemindos/automations/inbox_triage.py",
+      "target_path": "src/lib/services/brain/inbox-triage-notifications.ts",
+      "reuse_type": "adapted_code",
+      "note": "Proven best-effort macOS Notification Center delivery through osascript."
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/messaging/escalation-notify.ts",
+      "target_path": "src/lib/services/brain/inbox-triage-notifications.ts",
+      "reuse_type": "adapted_code",
+      "note": "Persisted-plus-external notification delivery with nonfatal errors."
+    }
+  ]
+}

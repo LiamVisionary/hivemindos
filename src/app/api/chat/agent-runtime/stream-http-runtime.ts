@@ -61,9 +61,11 @@ import {
 import { streamAdaptiveHermesOpenRouterRuntime } from "./stream-adaptive-hermes";
 import { streamOpenAICompatibleRuntime } from "./stream-openai-compatible";
 import { runtimeProcessEventsSsePayload } from "./process-events";
+import { withRuntimeBrowserPreviewUrl } from "./browser-preview";
 import { isXaiOAuthProvider } from "@/lib/services/xai-oauth-inference-contract";
 import { resolveXaiOAuthRuntimeProfile } from "@/lib/services/xai-oauth-inference";
 import { runtimeSessionErrorResponse } from "./runtime-session-response";
+import { recoverCollectorChatAfterFetchFailure } from "./collector-chat-recovery";
 
 export async function streamHttpRuntime(
   profile: AgentProfile,
@@ -186,6 +188,38 @@ export async function streamHttpRuntime(
   const workspaceBefore = await readWorkspaceSnapshot(workingDirectory);
   let upstream: Response;
   const fetchStartedAt = Date.now();
+  const runtimeRequestBody = JSON.stringify({
+    agent: runtimeProfile,
+    agentId: runtimeProfile.agentId || runtimeProfile.id,
+    sessionKey: runtimeSessionKey,
+    provider: runtimeProfile.provider || undefined,
+    model: runtimeProfile.model || undefined,
+    agentEnv: safeAgentEnv(runtimeProfile.agentEnv),
+    rawUserMessage: inputCheck.text,
+    agentMode,
+    mode: agentMode,
+    runtimeSessionId: runtimeSessionId || undefined,
+    message: runtimeMessage,
+    messages: runtimeMessages,
+    stream: true,
+    sharedVault,
+    obsidianVault: sharedVault,
+    workingDirectory,
+    controlRoomPath: sharedVault?.controlRoomPath,
+    wallet,
+    walletTools: buildWalletTools(wallet),
+    context: hermesSlashCommand ? undefined : promptEnvelope.systemContext || undefined,
+    lmStudioBaseUrl: lmStudioFleetHost?.baseUrl || undefined,
+  });
+  const fetchRuntime = () => fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(profile.token ? { Authorization: `Bearer ${profile.token}` } : {}),
+    },
+    body: runtimeRequestBody,
+    signal: AbortSignal.timeout(RUNTIME_FETCH_TIMEOUT_MS),
+  });
   let fetchSettled = false;
   const slowTimers = [10_000, 30_000, 60_000].map((waitMs) => setTimeout(() => {
     if (fetchSettled) return;
@@ -221,37 +255,7 @@ export async function streamHttpRuntime(
         { type: AGENT_COLD_START_EVENT_TYPE },
       ).catch(() => undefined);
     }
-    upstream = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(profile.token ? { Authorization: `Bearer ${profile.token}` } : {}),
-      },
-      body: JSON.stringify({
-        agent: runtimeProfile,
-        agentId: runtimeProfile.agentId || runtimeProfile.id,
-        sessionKey: runtimeSessionKey,
-        provider: runtimeProfile.provider || undefined,
-        model: runtimeProfile.model || undefined,
-        agentEnv: safeAgentEnv(runtimeProfile.agentEnv),
-        rawUserMessage: inputCheck.text,
-        agentMode,
-        mode: agentMode,
-        runtimeSessionId: runtimeSessionId || undefined,
-        message: runtimeMessage,
-        messages: runtimeMessages,
-        stream: true,
-        sharedVault,
-        obsidianVault: sharedVault,
-        workingDirectory,
-        controlRoomPath: sharedVault?.controlRoomPath,
-        wallet,
-        walletTools: buildWalletTools(wallet),
-        context: hermesSlashCommand ? undefined : promptEnvelope.systemContext || undefined,
-        lmStudioBaseUrl: lmStudioFleetHost?.baseUrl || undefined,
-      }),
-      signal: AbortSignal.timeout(RUNTIME_FETCH_TIMEOUT_MS),
-    });
+    upstream = await fetchRuntime();
     recordRuntimeTelemetry(telemetry, "agent_runtime.http.fetch.response", {
       ...telemetryPayloadForProfile(runtimeProfile),
       url,
@@ -273,14 +277,65 @@ export async function streamHttpRuntime(
       errorMessage: error instanceof Error ? error.message : String(error),
       fetchElapsedMs: Date.now() - fetchStartedAt,
     });
-    await appendRuntimeChatSessionEvent(runtimeSessionId, "Runtime fetch failed", runtimeFetchError(profile, url, error)).catch(() => undefined);
-    await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
-    return Response.json(
-      {
-        error: runtimeFetchError(profile, url, error),
-      },
-      { status: 502 },
-    );
+    const recovery = await recoverCollectorChatAfterFetchFailure({
+      profile: runtimeProfile,
+      chatUrl: url,
+      runtimeSessionId,
+      rawUserMessage: inputCheck.text,
+      fetchStartedAt,
+    });
+    if (recovery.kind === "recovered") {
+      recordRuntimeTelemetry(telemetry, "agent_runtime.http.fetch.recovered_session", {
+        ...telemetryPayloadForProfile(runtimeProfile),
+        url,
+        sessionId: recovery.sessionId,
+        fetchElapsedMs: Date.now() - fetchStartedAt,
+      });
+      await appendRuntimeChatSessionEvent(
+        runtimeSessionId,
+        "Agent bridge reconnected",
+        `Reattached to Hermes session ${recovery.sessionId}.`,
+      ).catch(() => undefined);
+      return recovery.response;
+    }
+    if (recovery.kind === "retry") {
+      recordRuntimeTelemetry(telemetry, "agent_runtime.http.fetch.retry", {
+        ...telemetryPayloadForProfile(runtimeProfile),
+        url,
+        fetchElapsedMs: Date.now() - fetchStartedAt,
+      });
+      await appendRuntimeChatSessionEvent(
+        runtimeSessionId,
+        "Agent bridge reconnected",
+        "The interrupted request had not started a Hermes session, so HivemindOS retried it once.",
+      ).catch(() => undefined);
+      try {
+        upstream = await fetchRuntime();
+        recordRuntimeTelemetry(telemetry, "agent_runtime.http.fetch.retry_response", {
+          ...telemetryPayloadForProfile(runtimeProfile),
+          url,
+          status: upstream.status,
+          ok: upstream.ok,
+          fetchElapsedMs: Date.now() - fetchStartedAt,
+        });
+        if (upstream.ok) recordAgentRuntimeWarm(runtimeProfile);
+      } catch (retryError) {
+        recordRuntimeTelemetry(telemetry, "agent_runtime.http.fetch.retry_failed", {
+          ...telemetryPayloadForProfile(runtimeProfile),
+          url,
+          errorName: retryError instanceof Error ? retryError.name : null,
+          errorMessage: retryError instanceof Error ? retryError.message : String(retryError),
+          fetchElapsedMs: Date.now() - fetchStartedAt,
+        });
+        await appendRuntimeChatSessionEvent(runtimeSessionId, "Runtime fetch failed", runtimeFetchError(profile, url, retryError)).catch(() => undefined);
+        await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
+        return Response.json({ error: runtimeFetchError(profile, url, retryError) }, { status: 502 });
+      }
+    } else {
+      await appendRuntimeChatSessionEvent(runtimeSessionId, "Runtime fetch failed", runtimeFetchError(profile, url, error)).catch(() => undefined);
+      await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
+      return Response.json({ error: runtimeFetchError(profile, url, error) }, { status: 502 });
+    }
   } finally {
     fetchSettled = true;
     slowTimers.forEach(clearTimeout);
@@ -546,7 +601,7 @@ export async function streamHttpRuntime(
               if (chunk) {
                 safeEnqueue(ssePayload({ choices: [{ delta: { content: chunk } }] }));
               } else if (!thinking) {
-                safeEnqueue(ssePayload(parsed));
+                safeEnqueue(ssePayload(withRuntimeBrowserPreviewUrl(parsed, url)));
               }
             } catch {
               const outputCheck = proxyOutput(raw);

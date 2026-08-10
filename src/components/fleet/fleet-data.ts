@@ -168,6 +168,9 @@ export interface FleetMachine {
    *  Derived from the collector-reported capability (falling back to the
    *  machine OS) in the dashboard mapper; undefined means "assume available". */
   remoteShell?: boolean;
+  /** Whether setup has prepared the machine to receive Hive Drop files.
+   *  Undefined keeps older collectors compatible; false disables the action. */
+  fileTransfers?: boolean;
   system?: FleetMachineSystem;
   networkIssue?: FleetMachineNetworkIssue;
   syncIssue?: FleetMachineSyncIssue;

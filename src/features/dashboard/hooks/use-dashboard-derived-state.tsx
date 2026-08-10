@@ -19,6 +19,7 @@ import type {
 } from "@/components/fleet/fleet-data";
 import { simpleStableHash } from "@/features/dashboard/dashboard-light-helpers";
 import { compactCapabilityContinuation } from "@/features/dashboard/chat-transcript-helpers";
+import { mergeChatProcessEvents as mergeProcessEventLists } from "@/lib/services/chat/chat-process-events";
 import { machineNeedsAppBuilderRepair } from "@/features/fleet/app-builder-collector-capability";
 import {
   filterSuppressedAgents,
@@ -640,31 +641,7 @@ export function useDashboardDerivedState(props: any) {
     const mergeChatProcessEvents = (
       first: ChatMessage["processEvents"] = [],
       second: ChatMessage["processEvents"] = [],
-    ) => {
-      const output: NonNullable<ChatMessage["processEvents"]> = [];
-      const indexByKey = new Map<string, number>();
-      for (const event of [...(first ?? []), ...(second ?? [])]) {
-        if (!event) continue;
-        const key = [
-          event.runId ?? "",
-          event.label ?? "",
-          event.detail ?? "",
-          event.status ?? "",
-        ].join("\u001f");
-        const existingIndex = indexByKey.get(key);
-        if (existingIndex === undefined) {
-          indexByKey.set(key, output.length);
-          output.push(event);
-        } else if (
-          Number(event.at ?? 0) >= Number(output[existingIndex]?.at ?? 0)
-        ) {
-          output[existingIndex] = event;
-        }
-      }
-      return output
-        .sort((left, right) => Number(left.at ?? 0) - Number(right.at ?? 0))
-        .slice(-80);
-    };
+    ) => mergeProcessEventLists(first ?? [], second ?? []);
     const withPreservedProcessEvents = (
       nextMessage: ChatMessage,
       previousMessage?: ChatMessage,
@@ -1203,6 +1180,7 @@ export function useDashboardDerivedState(props: any) {
             machine.os || machine.system?.platform,
             machine.capabilities?.remoteShell,
           ),
+          fileTransfers: machine.capabilities?.fileTransfers,
           ping: machine.online ? fleetMetric(machine.key, 4, 68) : 0,
           cpu:
             machine.system?.cpuPct ??

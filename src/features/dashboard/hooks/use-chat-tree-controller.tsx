@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { stripJsonRenderPayload } from "@/components/json-render/JsonRenderSurface";
 import { compactCapabilityContinuation } from "@/features/dashboard/chat-transcript-helpers";
+import { runtimeSessionMessages } from "@/features/dashboard/chat-run-transcripts";
 import { createNativeLocalFolder } from "@/lib/native/filesystem";
 import { runtimeSettingsFeature } from "@/lib/types/agent-runtime";
 import { visibleChannelMarkupText } from "@/lib/services/chat/channel-markup";
@@ -14,7 +15,6 @@ import { mergeRuntimeHydratedChatMessages } from "@/lib/services/chat/runtime-se
 import { chatTelemetryMessages, chatTelemetrySession } from "@/lib/services/telemetry/chat-dev-telemetry";
 import { isUnsortedChatLeafKey } from "./status-chat-input-helpers";
 import { confirmUserAction } from "@/lib/utils/confirm-user-action";
-import { normalizeEvaluationHumanFeedback } from "@/lib/types/evaluation";
 
 function isAutomationHydratedTranscript(messages: Array<{ content?: string }> = []) {
   const transcript = messages.slice(0, 8).map((message) => message.content ?? "").join("\n");
@@ -178,20 +178,16 @@ export function useChatTreeController(props: any) {
         messages?: Array<{ role?: string; content?: string; createdAt?: number; index?: number; feedback?: unknown }>;
       };
     } | null;
-    const messages = (data?.session?.messages ?? [])
+    const messages = runtimeSessionMessages(data?.session)
       .filter((message) => (
         (message.role === "user" || message.role === "assistant")
-        && typeof message.content === "string"
-        && message.content.trim()
-      ))
-      .map((message): ChatMessage => ({
-        role: message.role as "user" | "assistant",
-        content: message.content!.trim(),
-        createdAt: Number(message.createdAt || 0) || undefined,
-        sourceSessionId: data?.session?.sessionId ?? sessionId,
-        sourceIndex: Number.isFinite(Number(message.index)) ? Number(message.index) : undefined,
-        feedback: normalizeEvaluationHumanFeedback(message.feedback),
-      }));
+        && (
+          message.content.trim()
+          || (message.processEvents?.length ?? 0) > 0
+          || message.agentPrompt
+          || message.applicationGeneration
+        )
+      ));
     logClientTelemetry("chat.runtime_session.fetch.response", {
       agentId: agent.id,
       sessionId,

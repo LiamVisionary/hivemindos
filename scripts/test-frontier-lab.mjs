@@ -163,6 +163,7 @@ try {
   assert.equal(first.decision, "allow");
   assert.equal(first.duplicate, false);
   assert.equal(first.record?.model, "gpt-5.6-terra");
+  assert.equal(first.record?.stage, "pilot", "reservations must retain the operating stage for smaller-stage versus treatment comparisons");
 
   const duplicate = await reserveCompanyIntelligence(company, {
     reservationId: "task-a:attempt-1",
@@ -183,6 +184,16 @@ try {
   await settleCompanyIntelligenceReservation(company.id, "task-a:attempt-1", {
     outcome: "completed",
     usage: { inputTokens: 80_000, outputTokens: 20_000, cachedTokens: 10_000, reasoningTokens: 5_000, totalTokens: 105_000 },
+    scaleEvidence: {
+      policyVersion: "earned-scale-v1",
+      outcomeScore: 0.9,
+      proofSatisfied: true,
+      latencyMs: 1_250,
+      uniqueContribution: true,
+      duplicationConflict: false,
+      humanIntervention: false,
+      reviewerDisagreement: false,
+    },
   }, { filePath: ledgerPath, now: () => now + 20 });
 
   const second = await reserveCompanyIntelligence(company, {
@@ -217,6 +228,8 @@ try {
   assert.equal(snapshot.failedTasks, 0, "released pre-inference work is not scale evidence");
   assert.equal(snapshot.settledTasks, 1);
   assert.equal(snapshot.activeReservations, 0);
+  assert.equal(snapshot.recent.find((event) => event.status === "settled")?.scaleEvidence?.proofSatisfied, true, "settlements must preserve Scale Curve proof telemetry");
+  assert.equal(snapshot.recent.find((event) => event.status === "settled")?.stage, "pilot");
 
   const rolloverLedgerPath = join(tempRoot, "rollover-intelligence.json");
   const rolloverCompany = { ...company, id: "company-frontier-rollover" };

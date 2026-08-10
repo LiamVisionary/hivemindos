@@ -9,9 +9,9 @@
   <p><b>HIVE Token:</b> 0xa382c83e2a3b79368f372c2eb9b6925ffaf45ba3</p>
 </div>
 
-> **A virtual private network for your agents.**
+> **Give HivemindOS a goal. It assembles, budgets, runs, and verifies the agent team.**
 >
-> HivemindOS lets agents collaborate across all of your machines through one private control room. Connect agents over trusted machine links, give them a shared Obsidian brain, move env and handoff files with Hivemind Sync, assign work, monitor progress, and manage the whole fleet from one simple dashboard.
+> HivemindOS is a virtual private network and local-first control room for agents across all of your machines. Connect agents over trusted machine links, give them a shared Obsidian brain, move env and handoff files with Hivemind Sync, assign work, monitor progress, and manage the whole fleet from one simple dashboard.
 >
 > It supports modern agent runtimes like Hermes, OpenClaw, OpenCode, Codex, Claude Code, and Aeon, includes full MiroShark simulation integration, and can provision agent wallets on Base and Solana so agents can hold funds, pay for tools, and operate with their own controlled budgets.
 
@@ -41,6 +41,7 @@ Clone it, run one setup command, and get a local-first dashboard for the agents 
 - **Send handoff files to a machine, runtime, or agent** with `hive-transfer` envelopes in the shared vault.
 - **Assign work to agents** through a shared Kanban board with retries, stale-work recovery, and human handoff.
 - **Evaluate completed agent work** across chat, the Work Board, companies, schedules, and managed runtime tasks, with trusted evidence and separate reviewers for consequential results.
+- **Earn more multi-agent scale** only when a measured Scale Curve preserves outcomes and proof while tracking latency, tokens, unique contribution, coordination debt, human intervention, and reviewer disagreement.
 - **Attach signed code provenance** with GitLawb Code Proof for project-linked work.
 - **Create and import schedules** so supported runtimes can keep working in the background.
 - **Run MiroShark simulations** from the same control room.

@@ -134,6 +134,20 @@ export async function readLedger(ledgerPath) {
     });
 }
 
+export function latestLedgerOccurrenceAt(events) {
+  const scheduledTimestampFields = new Set(["dueAt", "activationDueAt", "expiresAt"]);
+  let latest = null;
+  for (const event of events) {
+    for (const [field, value] of Object.entries(event)) {
+      if (!field.endsWith("At") || scheduledTimestampFields.has(field)) continue;
+      const timestamp = Date.parse(value);
+      if (!Number.isFinite(timestamp)) continue;
+      if (!latest || timestamp > latest.getTime()) latest = new Date(timestamp);
+    }
+  }
+  return latest;
+}
+
 export function verifyLedger(events) {
   const errors = [];
   const ids = new Set();

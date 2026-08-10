@@ -23,7 +23,7 @@ import {
   stat,
   writeFile,
 } from "node:fs/promises";
-import { constants, readFileSync, watch } from "node:fs";
+import { constants, existsSync, readFileSync, watch } from "node:fs";
 import { connect } from "node:net";
 import {
   arch,
@@ -75,6 +75,7 @@ import { APP_BUILDER_CONTRACT_VERSION, runLocalAppBuilderAction } from "./lib/ap
 import { reconcileAppBuilderRuntimesAtBoot } from "./lib/app-builder-boot-reconcile.mjs";
 import { createAsyncTtlCache } from "./lib/async-ttl-cache.mjs";
 import { createCollectorMaintenance } from "./lib/collector-maintenance.mjs";
+import { collectorChatRecovery } from "./lib/collector-chat-recovery.mjs";
 import { collectorUpdateCommand } from "./lib/collector-update-command.mjs";
 import { readCollectorAppVersion } from "./lib/collector-source-version.mjs";
 import { startSelfReloadWatcher } from "./lib/collector-self-reload.mjs";
@@ -90,6 +91,7 @@ import {
   createHermesCliStreamProtocol,
   hermesCliFailureSummary,
 } from "./lib/hermes-cli-stream-protocol.mjs";
+import { createHermesBrowserPreviewEventWriter } from "./lib/hermes-browser-preview.mjs";
 import {
   hermesApiMessages,
   hermesApiSelectionMatchesAgent,
@@ -7065,7 +7067,7 @@ async function collectorHealthPayload() {
         hostedApps: true, appBuilder: true, appBuilderContractVersion: APP_BUILDER_CONTRACT_VERSION,
         skillInventory: true,
         skillAutoSync: true,
-        fileTransfers: true,
+        fileTransfers: process.platform !== "darwin" || existsSync(process.env.HIVE_LINK_DOWNLOADS_READY_MARKER || join(homedir(), ".hivemindos", "link", "downloads-ready")),
         workReceipts: true,
         machinePolicy: true,
         remoteShell: process.platform !== "win32", // mirrors linkd's GOOS shell gate; flip when Windows linkd ships shell support
@@ -7871,9 +7873,10 @@ async function proxyHermesApiChat(body, response, text, hermesHome, fleetPolicy 
     let processToolCallCount = 0;
     let firstByteElapsedMs = null;
     let firstContentElapsedMs = null;
-    let firstProcessElapsedMs = null;
-    let doneSignalElapsedMs = null;
-    const processToolNames = new Set();
+  let firstProcessElapsedMs = null;
+  let doneSignalElapsedMs = null;
+  const processToolNames = new Set();
+  const apiBrowserPreviewEvents = createHermesBrowserPreviewEventWriter({ ownerPid: async () => Number(hermesApiProcess?.pid || (await localTcpListeners()).find((listener) => listener.port === hermesApiPort)?.pid), hermesAgentProjectDir, canWrite: () => !response.writableEnded && !response.destroyed, write: (event) => response.write(ssePayload(event)) });
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
@@ -7978,7 +7981,7 @@ async function proxyHermesApiChat(body, response, text, hermesHome, fleetPolicy 
           } else {
             if (processPayload) {
               ensureHeaders();
-              response.write(ssePayload(processPayload));
+              apiBrowserPreviewEvents.push(processPayload);
             }
           }
         } catch {
@@ -8005,7 +8008,7 @@ async function proxyHermesApiChat(body, response, text, hermesHome, fleetPolicy 
       );
       wroteDone = true;
     }
-    await emitSession();
+    await Promise.all([emitSession(), apiBrowserPreviewEvents.drain()]);
     if (!wroteContent && !emittedSession && !response.headersSent) {
       await emitTelemetry("model_stream.empty_fallback", {
         upstreamChunkCount,
@@ -8211,6 +8214,7 @@ async function streamHermesChat(body, response, options = {}) {
     connection: "keep-alive",
     "x-hermes-stream-source": "cli-chat",
   });
+  const browserPreviewEvents = createHermesBrowserPreviewEventWriter({ ownerPid: child.pid, hermesAgentProjectDir, canWrite: () => !settled && !response.writableEnded && !response.destroyed, write: (event) => response.write(ssePayload(event)) });
   const streamProtocol = createHermesCliStreamProtocol({
     onAssistantDelta: (content) => {
       if (!settled && !response.writableEnded && !response.destroyed) {
@@ -8222,11 +8226,7 @@ async function streamHermesChat(body, response, options = {}) {
         response.write(ssePayload({ type: "assistant.reset", content }));
       }
     },
-    onProcessEvent: (event) => {
-      if (!settled && !response.writableEnded && !response.destroyed) {
-        response.write(ssePayload(event));
-      }
-    },
+    onProcessEvent: (event) => browserPreviewEvents.push(event),
   });
 
   const finish = (payload = null) => {
@@ -8333,6 +8333,7 @@ async function streamHermesChat(body, response, options = {}) {
     if (settled) return;
     streamProtocol.flush();
     void (async () => {
+      await browserPreviewEvents.drain();
       const content = stripHermesCliMetadata(stdout);
       const errorText = stripHermesCliMetadata(stderr);
       const terminalFailure = hermesCliFailureSummary(`${errorText}\n${content}`);
@@ -9765,6 +9766,12 @@ async function handleCollectorRequest(request, response) {
     );
     return;
   }
+  if (pathname === "/chat/recover" && request.method === "POST") {
+    const rawBody = await readBody(request);
+    const body = rawBody ? JSON.parse(rawBody) : {};
+    jsonResponse(response, 200, await collectorChatRecovery(body, { activeChatRunCount: () => activeCollectorChatRuns.size, defaultHermesDir, expandHome, hermesSessionRoots, listRecentHermesApiSessions, listRecentHermesDbSessions, now: Date.now, sanitizeLocalDataDir }));
+    return;
+  }
   if (pathname === "/chat" && request.method === "POST") {
     const maintenance = collectorMaintenanceState();
     if (maintenance.updateStarting) {
@@ -9931,5 +9938,8 @@ telemetryServer.listen(port, host, () => {
   startEnvSyncMaintenance();
   startReliabilitySync();
   void initializeRuntimeStateSync();
-  void startSelfReloadWatcher({ selfPath: collectorSourcePath });
+  void startSelfReloadWatcher({
+    selfPath: collectorSourcePath,
+    canReload: () => activeCollectorChatRuns.size === 0,
+  });
 });

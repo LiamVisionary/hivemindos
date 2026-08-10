@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { mkdir, readdir, readFile, unlink, writeFile } from "fs/promises";
 import { join, resolve, sep } from "path";
 import type { AgentProfile } from "@/lib/types/agent-runtime";
+import { readStoredAgentProfilesStrict } from "@/lib/services/agent-profile-store";
 import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
@@ -13,6 +14,7 @@ import {
   ringStoredPrompt,
   startAgentDashboardCall,
   startAgentMobileCall,
+  type AgentCallIdentity,
 } from "@/lib/services/phone/call-gateway";
 import { streamLocalTtsSpeech } from "@/lib/services/phone/local-tts";
 import {
@@ -99,6 +101,8 @@ type MobileAgentTarget = Pick<
   | "a2aUrl"
   | "localDataDir"
 >;
+
+type ResolvedVoiceCallAgent = AgentProfile & Partial<AgentCallIdentity>;
 
 function safeVoiceConfigPayload(
   result: Awaited<ReturnType<typeof readGatewayVoiceConfig>>,
@@ -286,6 +290,25 @@ function mobileSafeAgentTarget(agent: AgentProfile): MobileAgentTarget {
     a2aUrl: agent.a2aUrl,
     localDataDir: agent.localDataDir,
   };
+}
+
+function withAgentCallPreferences(
+  agent: ResolvedVoiceCallAgent,
+): ResolvedVoiceCallAgent {
+  const calls = agent.calls;
+  return {
+    ...agent,
+    voiceRuntime: agent.voiceRuntime ?? calls?.voiceRuntime,
+    voiceProviderId: agent.voiceProviderId ?? calls?.voiceProviderId,
+    voiceModelId: agent.voiceModelId ?? calls?.voiceModelId,
+    voiceId: agent.voiceId ?? calls?.voiceId,
+    voiceKeyEnv: agent.voiceKeyEnv ?? calls?.voiceKeyEnv,
+  };
+}
+
+function crownedQueenProfile(profiles: readonly AgentProfile[]) {
+  return profiles.find((profile) => profile.beeRole === "queen")
+    ?? profiles.find((profile) => /queen/i.test(profile.name ?? ""));
 }
 
 function hubUrlFromRequest(request: NextRequest, explicit?: unknown) {
@@ -893,15 +916,31 @@ async function streamLocalTtsAudioTurnFromForm(
 }
 
 async function resolveVoiceCallAgent(
-  agent: AgentProfile,
-): Promise<AgentProfile> {
-  const profiles = await readVaultAgentProfiles().catch(() => []);
-  const match = profiles.find(
+  agent: ResolvedVoiceCallAgent,
+): Promise<ResolvedVoiceCallAgent> {
+  const [storedProfiles, vaultProfiles] = await Promise.all([
+    readStoredAgentProfilesStrict().catch(() => []),
+    readVaultAgentProfiles().catch(() => []),
+  ]);
+  const match = [...storedProfiles, ...vaultProfiles].find(
     (profile) =>
       profile.id === agent.id ||
       (agent.agentId && profile.agentId === agent.agentId),
   );
-  return match ? { ...match, ...agent } : agent;
+  return withAgentCallPreferences(match ? { ...match, ...agent } : agent);
+}
+
+async function resolveDefaultVoiceCallAgent(): Promise<ResolvedVoiceCallAgent> {
+  const [storedProfiles, vaultProfiles] = await Promise.all([
+    readStoredAgentProfilesStrict().catch(() => []),
+    readVaultAgentProfiles().catch(() => []),
+  ]);
+  const agent = crownedQueenProfile(storedProfiles)
+    ?? crownedQueenProfile(vaultProfiles)
+    ?? storedProfiles[0]
+    ?? vaultProfiles[0];
+  if (!agent) throw new Error("No HivemindOS agents are available for calls on this hub.");
+  return withAgentCallPreferences(agent);
 }
 
 // title.toLowerCase(), strip quotes, non-alnum -> "-", trim leading/trailing "-".
@@ -1252,9 +1291,15 @@ export async function GET(request: NextRequest) {
     );
 
     if (action === "agent-targets") {
-      const agents = (await readVaultAgentProfiles(vaultPath)).map(
-        mobileSafeAgentTarget,
-      );
+      const [vaultProfiles, storedProfiles] = await Promise.all([
+        readVaultAgentProfiles(vaultPath),
+        readStoredAgentProfilesStrict().catch(() => []),
+      ]);
+      const queen = crownedQueenProfile(storedProfiles);
+      const agents = [
+        ...(queen ? [queen] : []),
+        ...vaultProfiles.filter((profile) => profile.id !== queen?.id),
+      ].map(mobileSafeAgentTarget);
       return NextResponse.json({ ok: true, agents, vaultPath });
     }
 
@@ -1411,11 +1456,11 @@ export async function POST(request: NextRequest) {
     if (body.action === "mobile-agent-call") {
       const rawAgent =
         body.agent && typeof body.agent === "object"
-          ? (body.agent as AgentProfile)
-          : ({} as AgentProfile);
+          ? (body.agent as ResolvedVoiceCallAgent)
+          : ({} as ResolvedVoiceCallAgent);
       const agent = rawAgent.id
         ? await resolveVoiceCallAgent(rawAgent)
-        : rawAgent;
+        : await resolveDefaultVoiceCallAgent();
       const machine =
         body.machine && typeof body.machine === "object"
           ? body.machine

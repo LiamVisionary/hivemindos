@@ -8,6 +8,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const { collapseProcessEvents, mergeProcessEvents } = await import("../src/features/dashboard/views/chat/process-event-collapse.ts");
+const { runtimeSessionMessages } = await import("../src/features/dashboard/chat-run-transcripts.ts");
+const { mergeRuntimeHydratedChatMessages } = await import("../src/lib/services/chat/runtime-session-message-merge.ts");
+const { compactChatMessagesForStorage, parseStoredChatMessages } = await import("../src/features/dashboard/dashboard-storage.ts");
 const { isHiddenChatProcessEvent } = await import("../src/features/dashboard/views/chat/chat-panel-helpers.ts");
 const {
   compactCapabilityContinuation,
@@ -86,6 +89,7 @@ assert.equal(narrationTwins[1].status, "completed");
 assert.equal(isHiddenChatProcessEvent({ label: "tool.generating" }), true);
 assert.equal(isHiddenChatProcessEvent({ label: "tool.started" }), true);
 assert.equal(isHiddenChatProcessEvent({ label: "chat.tool.done" }), true);
+assert.equal(isHiddenChatProcessEvent({ label: "tool.failed" }), true, "an unnamed failure marker never replaces the named failed tool row");
 assert.equal(isHiddenChatProcessEvent({ label: "Hermes Adaptive stream still working" }), true);
 assert.equal(isHiddenChatProcessEvent({ label: "tool.generating", detail: "building manifest" }), false, "a marker carrying a payload stays visible");
 assert.equal(isHiddenChatProcessEvent({ label: "Hive capability search", detail: "22 retrieval hits" }), false);
@@ -98,6 +102,55 @@ const merged = mergeProcessEvents(
 );
 assert.equal(merged.length, 1, "running→completed updates the row instead of adding a twin");
 assert.equal(merged[0].status, "completed");
+
+// A cumulative runtime-session snapshot can contain several invocations of
+// the same tool. They are separate steps, not duplicate copies of one step.
+// Repro: the 2026-08-08 X transcript run retained every terminal/process
+// lifecycle in its session file, but hydration collapsed each repeated label
+// to the newest occurrence and the visible panel shrank after the live run.
+const repeatedToolInvocations = mergeProcessEvents([], [
+  { at: 1, label: "Starting terminal", detail: "terminal", status: "running", runId: "run-1" },
+  { at: 2, label: "terminal finished", detail: "terminal", status: "completed", runId: "run-1" },
+  { at: 3, label: "Starting terminal", detail: "terminal", status: "running", runId: "run-1" },
+  { at: 4, label: "terminal finished", detail: "terminal", status: "completed", runId: "run-1" },
+]);
+assert.equal(repeatedToolInvocations.length, 4, "reconciliation preserves every repeated tool lifecycle event");
+assert.equal(collapseProcessEvents(repeatedToolInvocations).length, 2, "two terminal invocations remain two visible steps after hydration");
+
+const affectedRuntimeSession = runtimeSessionMessages({
+  sessionId: "run-1",
+  messages: [
+    { index: 0, role: "user", content: "get the transcript", createdAt: 1 },
+    { index: 1, role: "tool", type: "process", content: "tool.started", createdAt: 2, raw: { type: "tool.started", name: "skill_view", status: "running" } },
+    { index: 2, role: "tool", type: "process", content: "tool.completed", createdAt: 3, raw: { type: "tool.completed", name: "skill_view", status: "completed" } },
+    { index: 3, role: "tool", type: "process", content: "tool.started", createdAt: 4, raw: { type: "tool.started", name: "skill_view", status: "running" } },
+    { index: 4, role: "tool", type: "process", content: "tool.completed", createdAt: 5, raw: { type: "tool.completed", name: "skill_view", status: "completed" } },
+  ],
+});
+const affectedProcessEvents = affectedRuntimeSession.at(-1).processEvents;
+assert.equal(affectedProcessEvents.length, 4, "session hydration retains every raw lifecycle record");
+assert.deepEqual(
+  affectedProcessEvents.map((event) => event.label),
+  ["Starting skill_view", "skill_view finished", "Starting skill_view", "skill_view finished"],
+  "session hydration restores tool names from the persisted raw payload",
+);
+assert.ok(affectedProcessEvents.every((event) => event.runId === "run-1"), "hydrated events retain their run identity across reload");
+assert.equal(collapseProcessEvents(affectedProcessEvents).length, 2, "two repeated stored calls render as two visible steps");
+
+const monotonicHydration = mergeRuntimeHydratedChatMessages(
+  [{ role: "assistant", content: "", sourceSessionId: "run-1", processEvents: affectedProcessEvents }],
+  [{ role: "assistant", content: "", sourceSessionId: "run-1", processEvents: affectedProcessEvents.slice(0, 2) }],
+);
+assert.equal(monotonicHydration[0].processEvents.length, 4, "a sparse later hydration cannot erase process events already shown");
+
+const compactTimeline = compactChatMessagesForStorage({
+  thread: [{ role: "assistant", content: "", processEvents: repeatedToolInvocations }],
+});
+const reloadedTimeline = parseStoredChatMessages({
+  "hivemindos.chatMessages.v1": JSON.stringify(compactTimeline),
+});
+assert.equal(reloadedTimeline.thread[0].processEvents.length, 4, "dashboard storage keeps repeated invocations through compaction and reload");
+assert.ok(reloadedTimeline.thread[0].processEvents.every((event) => event.runId === "run-1"), "dashboard storage preserves process run identity");
 
 // --- capability continuation shares identity with the original message ------
 

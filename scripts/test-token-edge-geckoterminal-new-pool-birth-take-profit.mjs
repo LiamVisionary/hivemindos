@@ -7,6 +7,7 @@ import path from "node:path";
 import { readLedger, verifyLedger } from "./token-edge/onchain-forward-core.mjs";
 import {
   captureGeckoTerminalNewPoolBirthEntries,
+  chronologicalHalfValidation,
   markOpenGeckoTerminalNewPoolBirthPaths,
   registerGeckoTerminalNewPoolActivation,
   registerGeckoTerminalNewPoolBirthEntry,
@@ -52,6 +53,30 @@ import {
   registerGeckoTerminalNewPoolFastPathDisagreement,
   registerGeckoTerminalNewPoolStandardMidPath,
 } from "./token-edge/onchain-geckoterminal-new-pool-fast-path.mjs";
+
+const aggregatePositiveChronologicalFailure = chronologicalHalfValidation(
+  [-10, -10, 100, 100],
+  [-10, -10, 90, 90],
+  {
+    minimumIndependentSignalFrames: 4,
+    bootstrapIterations: 1_000,
+    bootstrapLower95MustExceedPct: 0,
+  },
+);
+assert.equal(aggregatePositiveChronologicalFailure.validation.firstHalf
+  .portfolioAverageBaseReturnPct, -10);
+assert.equal(aggregatePositiveChronologicalFailure.validation.secondHalf
+  .portfolioAverageBaseReturnPct, 100);
+assert.equal(aggregatePositiveChronologicalFailure.gate, false);
+assert.equal(chronologicalHalfValidation(
+  [10, 10, 10, 10],
+  [5, 5, 5, 5],
+  {
+    minimumIndependentSignalFrames: 4,
+    bootstrapIterations: 1_000,
+    bootstrapLower95MustExceedPct: 0,
+  },
+).gate, true);
 
 const root = await mkdtemp(path.join(os.tmpdir(), "token-edge-newborn-tp-"));
 try {
@@ -169,7 +194,22 @@ try {
   assert.equal(verifyLedger(events).ok, true);
   const score = buildGeckoTerminalNewPoolBirthTakeProfitScorecard(events);
   assert.equal(score.candidateForecasts, 1);
+  assert.equal(score.openForecasts, 0);
+  assert.equal(score.maturedForecastCount, 1);
+  assert.equal(score.recordedMaturedResolutions, 1);
+  assert.equal(score.unrecordedMaturedForecasts, 0);
   assert.equal(score.eligibleCompletePathObservations, 1);
+  assert.equal(score.eligiblePathOutcomeCoverageRate, 1);
+  assert.equal(score.minimumEligiblePathOutcomeCoverageRate, 0.95);
+  assert.equal(score.eligiblePathOutcomeCoverageGate, true);
+  assert.equal(score.missingAsLossMaturedForecasts, 1);
+  assert.equal(score.missingAsLossUnscoredForecasts, 0);
+  assert.equal(score.missingAsLossSelectedForecasts, 1);
+  assert.equal(score.missingAsLossSensitivityGate, false);
+  assert.equal(score.chronologicalHalfValidation.firstHalf.independentFrames, 1);
+  assert.equal(score.chronologicalHalfValidation.secondHalf.independentFrames, 0);
+  assert.equal(score.chronologicalHalfValidationGate, false);
+  assert.equal(score.evidenceShortfall.eligiblePathOutcomeCoverageRate, 0);
   assert.equal(score.takeProfitExits, 1);
   assert.equal(score.observationsDetail[0].exitGrossReturnPct, 12);
   assert.equal(score.observationsDetail[0].exactOneHourGrossReturnPct, -20);
@@ -806,17 +846,76 @@ try {
     },
   );
   assert.equal(standardResolution.observed, 1);
+  const standardBracketEvents = await readLedger(ledgerPath);
   const standardBracketScore = buildGeckoTerminalNewPoolBirthStandardBracketScorecard(
-    await readLedger(ledgerPath),
+    standardBracketEvents,
   );
   assert.equal(standardBracketScore.candidateForecasts, 1);
+  assert.equal(standardBracketScore.openForecasts, 0);
+  assert.equal(standardBracketScore.maturedForecastCount, 1);
   assert.equal(standardBracketScore.eligibleCompletePathObservations, 1);
+  assert.equal(standardBracketScore.eligiblePathOutcomeCoverageRate, 1);
+  assert.equal(standardBracketScore.eligiblePathOutcomeCoverageGate, true);
   assert.equal(standardBracketScore.takeProfitExits, 1);
   assert.equal(standardBracketScore.stopLossExits, 0);
   assert.equal(standardBracketScore.observationsDetail[0].exitGrossReturnPct, 12);
   assert.equal(standardBracketScore.observationsDetail[0].exactOneHourGrossReturnPct, -50);
   assert.ok(standardBracketScore.policyFrameMeanNetReturnPct > 0);
   assert.equal(standardBracketScore.provisionalGate, false);
+
+  const missedStandardEvents = structuredClone(standardBracketEvents);
+  missedStandardEvents.find((event) => (
+    event.type === "geckoterminal-new-pool-resolution"
+      && event.forecastId === standardCapture.forecasts[0].id
+  )).status = "missed";
+  const missedStandardScore = buildGeckoTerminalNewPoolBirthStandardBracketScorecard(
+    missedStandardEvents,
+  );
+  assert.equal(missedStandardScore.candidateForecasts, 1);
+  assert.equal(missedStandardScore.openForecasts, 0);
+  assert.equal(missedStandardScore.maturedForecastCount, 1);
+  assert.equal(missedStandardScore.recordedMaturedResolutions, 1);
+  assert.equal(missedStandardScore.unrecordedMaturedForecasts, 0);
+  assert.equal(missedStandardScore.eligibleCompletePathObservations, 0);
+  assert.equal(missedStandardScore.eligiblePathOutcomeCoverageRate, 0);
+  assert.equal(missedStandardScore.eligiblePathOutcomeCoverageGate, false);
+  assert.equal(missedStandardScore.missingAsLossMaturedForecasts, 1);
+  assert.equal(missedStandardScore.missingAsLossUnscoredForecasts, 1);
+  assert.equal(missedStandardScore.missingAsLossAverageBaseReturnPct, -100);
+  assert.equal(missedStandardScore.missingAsLossAverageStressReturnPct, -100);
+  assert.equal(missedStandardScore.missingAsLossSensitivityGate, false);
+  assert.equal(missedStandardScore.evidenceShortfall.eligiblePathOutcomeCoverageRate, 0.95);
+  assert.equal(missedStandardScore.provisionalGate, false);
+
+  const unrecordedMaturedStandardEvents = structuredClone(standardBracketEvents)
+    .filter((event) => !(
+      event.type === "geckoterminal-new-pool-resolution"
+        && event.forecastId === standardCapture.forecasts[0].id
+    ));
+  unrecordedMaturedStandardEvents.push({
+    type: "test-ledger-clock",
+    observedAt: new Date(
+      Date.parse(standardCapture.forecasts[0].dueAt) + 1_000,
+    ).toISOString(),
+  });
+  const unrecordedMaturedStandardScore =
+    buildGeckoTerminalNewPoolBirthStandardBracketScorecard(
+      unrecordedMaturedStandardEvents,
+    );
+  assert.equal(unrecordedMaturedStandardScore.candidateForecasts, 1);
+  assert.equal(unrecordedMaturedStandardScore.openForecasts, 0);
+  assert.equal(unrecordedMaturedStandardScore.maturedForecastCount, 1);
+  assert.equal(unrecordedMaturedStandardScore.recordedMaturedResolutions, 0);
+  assert.equal(unrecordedMaturedStandardScore.unrecordedMaturedForecasts, 1);
+  assert.equal(unrecordedMaturedStandardScore.eligibleCompletePathObservations, 0);
+  assert.equal(unrecordedMaturedStandardScore.eligiblePathOutcomeCoverageRate, 0);
+  assert.equal(unrecordedMaturedStandardScore.eligiblePathOutcomeCoverageGate, false);
+  assert.equal(unrecordedMaturedStandardScore.missingAsLossMaturedForecasts, 1);
+  assert.equal(unrecordedMaturedStandardScore.missingAsLossUnscoredForecasts, 1);
+  assert.equal(unrecordedMaturedStandardScore.missingAsLossAverageBaseReturnPct, -100);
+  assert.equal(unrecordedMaturedStandardScore.missingAsLossAverageStressReturnPct, -100);
+  assert.equal(unrecordedMaturedStandardScore.missingAsLossSensitivityGate, false);
+  assert.equal(unrecordedMaturedStandardScore.provisionalGate, false);
 
   await assert.rejects(
     registerGeckoTerminalNewPoolStandardMidPath(
@@ -1420,6 +1519,9 @@ try {
   const tamperedAttemptScore =
     buildGeckoTerminalNewPoolBirthAttemptCoveredBracketScorecard(tamperedAttemptEvents);
   assert.equal(tamperedAttemptScore.eligibleCompletePathObservations, 0);
+  assert.equal(tamperedAttemptScore.maturedForecastCount, 1);
+  assert.equal(tamperedAttemptScore.eligiblePathOutcomeCoverageRate, 0);
+  assert.equal(tamperedAttemptScore.eligiblePathOutcomeCoverageGate, false);
   assert.equal(
     tamperedAttemptScore.pathExclusionCounts["cadence-diagnostic-value-mismatch"],
     1,

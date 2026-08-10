@@ -2,6 +2,8 @@
 // React, no CSS — kept out of AgentProcessPanel so the hermetic suites can
 // import them directly under Node.
 
+import { mergeChatProcessEvents } from "../../../../lib/services/chat/chat-process-events";
+
 export type ProcessEvent = {
   at?: number;
   label?: string;
@@ -20,22 +22,7 @@ export function normalizeProcessEvents(value: unknown): ProcessEvent[] {
 }
 
 export function mergeProcessEvents(first: ProcessEvent[] = [], second: ProcessEvent[] = []) {
-  const output: ProcessEvent[] = [];
-  const indexByKey = new Map<string, number>();
-  for (const event of [...first, ...second]) {
-    if (!event) continue;
-    // Status is deliberately NOT part of the identity: the same step arriving
-    // again as running→completed must update the existing row, not add a twin.
-    const key = [event.runId ?? "", event.label ?? "", event.detail ?? ""].join("\u001f");
-    const existingIndex = indexByKey.get(key);
-    if (existingIndex === undefined) {
-      indexByKey.set(key, output.length);
-      output.push(event);
-    } else if (Number(event.at ?? 0) >= Number(output[existingIndex]?.at ?? 0)) {
-      output[existingIndex] = event;
-    }
-  }
-  return output.sort((left, right) => Number(left.at ?? 0) - Number(right.at ?? 0)).slice(-80);
+  return mergeChatProcessEvents(first, second);
 }
 
 // Runtime tool lifecycles stream as separate "Starting X" / "X running" /

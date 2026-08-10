@@ -10,6 +10,8 @@ const dashboardSecurityControl = readFileSync(new URL("../src/features/dashboard
 const appNavShelfCss = readFileSync(new URL("../src/components/fleet-hive/app-nav-shelf.css", import.meta.url), "utf8");
 const morePanel = readFileSync(new URL("../src/features/dashboard/MorePanel.tsx", import.meta.url), "utf8");
 const kanbanBoardUtils = readFileSync(new URL("../src/lib/utils/kanban-board.ts", import.meta.url), "utf8");
+const pinnedUtilitiesHook = readFileSync(new URL("../src/features/dashboard/hooks/use-pinned-utilities.ts", import.meta.url), "utf8");
+const rememberedDashboardValueHook = readFileSync(new URL("../src/lib/services/use-remembered-dashboard-value.ts", import.meta.url), "utf8");
 
 assert.doesNotMatch(derivedState, /type DashboardView = [^;]*"new"/, "DashboardView should not include the removed test New tab id");
 assert.doesNotMatch(derivedState, /id: "new" as const,[\s\S]*?label: "New"/, "Dashboard nav items should not include the removed test New tab");
@@ -45,6 +47,36 @@ assert.equal(navigation.DASHBOARD_ROUTE_LABELS.history, "Work History", "Route l
 assert.ok(navigation.DASHBOARD_UTILITY_VIEWS.includes("env"), "Utilities set includes env (the More grid renders every utility view)");
 assert.ok(navigation.DASHBOARD_UTILITY_VIEWS.includes("cloud"), "Utilities set includes managed Cloud Agents");
 assert.ok(navigation.DASHBOARD_UTILITY_VIEWS.includes("mini-apps"), "Utilities set includes HivemindOS Mini Apps");
+assert.match(
+  rememberedDashboardValueHook,
+  /typeof stored === "string"\) \{\s*setValue\(stored\)/,
+  "Remembered dashboard values must hydrate a persisted empty string instead of replacing it with the initial default",
+);
+assert.match(
+  pinnedUtilitiesHook,
+  /const \[pinnedCsv, rememberPinnedCsv, pinnedHydrated\][\s\S]*?const \[removedCsv, rememberRemovedCsv, removedHydrated\]/,
+  "Pinned-route state should expose when both durable values have finished hydrating",
+);
+assert.match(
+  pinnedUtilitiesHook,
+  /pinnedUtilitiesHydrated:\s*pinnedHydrated\s*&&\s*removedHydrated/,
+  "Pinned-route readiness should require both durable values",
+);
+assert.match(
+  dashboardApp,
+  /pinnedUtilitiesReady=\{pinnedUtilitiesHydrated\}/,
+  "DashboardApp should keep the rail in a loading state until persisted pins hydrate",
+);
+assert.match(
+  appNavShelf,
+  /aria-busy=\{!pinnedUtilitiesReady\}[\s\S]*?fr-nav-hydration[\s\S]*?fr-nav-skeleton/,
+  "The rail should render an explicit skeleton instead of flashing the default-only route set during hydration",
+);
+assert.match(
+  appNavShelfCss,
+  /@keyframes fr-nav-skeleton-pulse[\s\S]*?prefers-reduced-motion: reduce[\s\S]*?\.fr-nav-skeleton/,
+  "The saved-navigation skeleton should animate while respecting reduced-motion preferences",
+);
 assert.equal(
   navigation.dashboardTargetFromSearch("?view=integrations&tab=xbot")?.integrationsTab,
   "xbot",

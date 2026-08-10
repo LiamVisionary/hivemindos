@@ -40,7 +40,9 @@ import {
   buildGeckoTerminalNewPoolBirthTakeProfitScorecard,
 } from "./onchain-geckoterminal-new-pool-birth-take-profit.mjs";
 import {
+  buildGeckoTerminalNewPoolDelayedShadowFullCohortAuditRegistry,
   buildGeckoTerminalNewPoolDelayedShadowScorecard,
+  inspectGeckoTerminalNewPoolDelayedShadowDue,
   resolveGeckoTerminalNewPoolDelayedShadows,
 } from "./onchain-geckoterminal-new-pool-delayed-shadow.mjs";
 import {
@@ -134,7 +136,7 @@ export async function runGeckoTerminalHeartbeatPhase(options = {}, dependencies 
 
   const actionOrder = [];
   const actionResults = {};
-  for (const actionName of ["resolveGeneric", "resolveJupiter"]) {
+  for (const actionName of dueExactActionOrder(dueState)) {
     const result = await actions[actionName](options);
     const label = actionLabel(actionName);
     actionOrder.push(label);
@@ -152,7 +154,8 @@ export async function runGeckoTerminalHeartbeatPhase(options = {}, dependencies 
   }
 
   for (const actionName of phase.lowerActions) {
-    if (!insidePhaseWindow(validDate(clock()), phase, scheduledMinuteStartedAtMs)) {
+    const actionNow = validDate(clock());
+    if (!insidePhaseWindow(actionNow, phase, scheduledMinuteStartedAtMs)) {
       return heartbeatResult({
         status: "phase-ended-lower-priority-skipped",
         phase,
@@ -162,10 +165,57 @@ export async function runGeckoTerminalHeartbeatPhase(options = {}, dependencies 
         actionResults,
       });
     }
+    const refreshedDueState = await inspectDue(options, actionNow);
+    const refreshedEmergencyOrder = exactEmergencyOrder(refreshedDueState, actionNow);
+    if (refreshedEmergencyOrder.length) {
+      const emergency = await executeEmergencyActions(
+        actions,
+        refreshedEmergencyOrder,
+        options,
+      );
+      return heartbeatResult({
+        status: "due-window-became-imminent-lower-priority-skipped",
+        phase,
+        startedAt,
+        dueState: refreshedDueState,
+        actionOrder: [...actionOrder, ...emergency.actionOrder],
+        actionResults: { ...actionResults, ...emergency.actionResults },
+      });
+    }
+    if ((refreshedDueState.genericDue ?? 0) > 0
+      || (refreshedDueState.jupiterDue ?? 0) > 0) {
+      for (const exactActionName of dueExactActionOrder(refreshedDueState)) {
+        const result = await actions[exactActionName](options);
+        const label = actionLabel(exactActionName);
+        actionOrder.push(label);
+        actionResults[label] = result;
+      }
+      return heartbeatResult({
+        status: "exact-became-due-lower-priority-skipped",
+        phase,
+        startedAt,
+        dueState: refreshedDueState,
+        actionOrder,
+        actionResults,
+      });
+    }
     const result = await actions[actionName](options);
     const label = actionLabel(actionName);
     actionOrder.push(label);
     actionResults[label] = result;
+    if (actionUsedProviderOrRecordedOutcome(result)) {
+      return heartbeatResult({
+        status: (result?.recordedResolutions ?? 0) > 0
+          || (result?.recordedOutcomes ?? 0) > 0
+          ? "exact-outcome-recorded-lower-priority-skipped"
+          : "provider-request-lower-priority-skipped",
+        phase,
+        startedAt,
+        dueState,
+        actionOrder,
+        actionResults,
+      });
+    }
   }
   return heartbeatResult({
     status: "completed",
@@ -209,13 +259,24 @@ export async function inspectGeckoTerminalHeartbeatDue(options = {}, now = new D
       && !resolvedDecisionIds.has(event.id)
       && Date.parse(event.dueAt) <= nowMs
   ));
+  const delayedShadowDue = inspectGeckoTerminalNewPoolDelayedShadowDue(events, {
+    asOf: now,
+  });
   return {
     ledgerPath,
     genericDue: genericDue.length,
     jupiterDue: jupiterDue.length,
     genericWindowClosesAt: earliestWindowClose(genericDue),
     jupiterWindowClosesAt: earliestWindowClose(jupiterDue),
+    delayedShadowDue,
   };
+}
+
+function dueExactActionOrder(dueState) {
+  const order = [];
+  if ((dueState.genericDue ?? 0) > 0) order.push("resolveGeneric");
+  if ((dueState.jupiterDue ?? 0) > 0) order.push("resolveJupiter");
+  return order;
 }
 
 function exactEmergencyOrder(dueState, now) {
@@ -234,6 +295,19 @@ function exactEmergencyOrder(dueState, now) {
       tiePriority: 1,
     });
   }
+  for (const [horizon, actionName, tiePriority] of [
+    ["1h", "resolveDelayedShadow1h", 2],
+    ["24h", "resolveDelayedShadow24h", 3],
+  ]) {
+    const delayedHorizon = dueState.delayedShadowDue?.horizons?.[horizon];
+    if ((delayedHorizon?.liveDueCandidates ?? 0) <= 0
+      || !delayedHorizon?.earliestLiveWindowClosesAt) continue;
+    due.push({
+      actionName,
+      closesAt: Date.parse(delayedHorizon.earliestLiveWindowClosesAt),
+      tiePriority,
+    });
+  }
   if (!due.length) return [];
   const remainingMs = Math.min(...due.map(({ closesAt }) => closesAt)) - now.getTime();
   if (remainingMs > EMERGENCY_EXACT_WINDOW_REMAINING_MS) return [];
@@ -244,10 +318,14 @@ function exactEmergencyOrder(dueState, now) {
 
 function exactResolverUsedProviderOrRecordedOutcome(actionResults) {
   return ["resolve-generic", "resolve-jupiter"].some((label) => {
-    const result = actionResults[label];
-    return (result?.requestsAttempted ?? 0) > 0
-      || (result?.recordedResolutions ?? 0) > 0;
+    return actionUsedProviderOrRecordedOutcome(actionResults[label]);
   });
+}
+
+function actionUsedProviderOrRecordedOutcome(result) {
+  return (result?.requestsAttempted ?? 0) > 0
+    || (result?.recordedResolutions ?? 0) > 0
+    || (result?.recordedOutcomes ?? 0) > 0;
 }
 
 function insidePhaseWindow(now, phase, scheduledMinuteStartedAtMs) {
@@ -302,7 +380,7 @@ export function normalizeGeckoTerminalHeartbeatWatchResult(result) {
   };
 }
 
-async function buildHeartbeatScoreSummary(options) {
+export async function buildHeartbeatScoreSummary(options) {
   const ledgerPath = path.resolve(options.ledgerPath ?? defaultTokenEdgeLedgerPath());
   const events = await verifiedEvents(ledgerPath);
   const scorecards = [
@@ -327,36 +405,375 @@ async function buildHeartbeatScoreSummary(options) {
     buildGeckoTerminalNewPoolBirthStandardMidBracketScorecard(events),
     buildGeckoTerminalNewPoolBirthAttemptCoveredBracketScorecard(events),
     buildGeckoTerminalNewPoolDelayedShadowScorecard(events),
+    buildGeckoTerminalNewPoolDelayedShadowFullCohortAuditRegistry(events),
     buildGeckoTerminalNewPoolForecastAbScorecard(events),
     buildGeckoTerminalNewPoolForecastPostsRescueScorecard(events),
   ];
+  const summarizedScorecards = scorecards.map(
+    summarizeGeckoTerminalHeartbeatScorecard,
+  );
   return {
     ledgerPath,
     requestsAttempted: 0,
     verification: verifyLedger(events),
-    scorecards: scorecards.map(scorecardSummary),
+    gateAudit: buildGeckoTerminalHeartbeatGateAudit(scorecards),
+    scorecards: summarizedScorecards,
   };
 }
 
-function scorecardSummary(scorecard) {
+export function buildGeckoTerminalHeartbeatGateAudit(scorecards) {
+  const prospectiveStressCandidates = scorecards.filter((scorecard) => (
+    scorecard.evidenceStatus !== "descriptive-only"
+      && Number.isFinite(scorecard.missingAsLossAverageStressReturnPct)
+  )).map((scorecard) => ({
+    type: scorecard.type,
+    evidenceStatus: scorecard.evidenceStatus ?? null,
+    maturedForecastCount: scorecard.maturedForecastCount ?? null,
+    maturedDecisionCount: scorecard.maturedDecisionCount ?? null,
+    maturedCandidateOutcomes: scorecard.maturedCandidateOutcomes ?? null,
+    independentHourlyFrames: scorecard.independentHourlyFrames ?? null,
+    missingAsLossAverageBaseReturnPct:
+      scorecard.missingAsLossAverageBaseReturnPct ?? null,
+    missingAsLossAverageStressReturnPct:
+      scorecard.missingAsLossAverageStressReturnPct,
+    resolvedCoverageGate: scorecard.resolvedCoverageGate ?? null,
+    validCapacityOutcomeCoverageGate:
+      scorecard.validCapacityOutcomeCoverageGate ?? null,
+    outcomeKeyReconciliationGate:
+      scorecard.outcomeKeyReconciliationGate ?? null,
+    eligiblePathOutcomeCoverageGate:
+      scorecard.eligiblePathOutcomeCoverageGate ?? null,
+    chronologicalHalfValidationGate:
+      scorecard.chronologicalHalfValidationGate ?? null,
+    statisticalCandidateGate: scorecard.statisticalCandidateGate ?? null,
+    provisionalGate: scorecard.provisionalGate ?? null,
+  })).sort((left, right) => (
+    right.missingAsLossAverageStressReturnPct
+      - left.missingAsLossAverageStressReturnPct
+      || left.type.localeCompare(right.type)
+  ));
+  const retrospectiveFamilies = scorecards.flatMap((scorecard) => (
+    Array.isArray(scorecard.families) ? scorecard.families : []
+  )).filter((family) => Number.isFinite(family.bestStressReturnPct))
+    .map((family) => ({
+      auditVersion: family.auditVersion,
+      bestStressReturnPct: family.bestStressReturnPct,
+      familyCorrectionStatus: family.familyCorrectionStatus ?? null,
+      nominationGate: family.nominationGate ?? null,
+    })).sort((left, right) => (
+      right.bestStressReturnPct - left.bestStressReturnPct
+        || left.auditVersion.localeCompare(right.auditVersion)
+    ));
+  const provisionalGatePassCount = scorecards.filter((scorecard) => (
+    scorecard.provisionalGate === true
+  )).length;
+  const outcomeKeyReconciliationFailureCount = scorecards.filter((scorecard) => (
+    scorecard.outcomeKeyReconciliationGate === false
+  )).length;
+  return {
+    scorecardCount: scorecards.length,
+    prospectiveStressCandidateCount: prospectiveStressCandidates.length,
+    positiveProspectiveStressCandidateCount:
+      prospectiveStressCandidates.filter((candidate) => (
+        candidate.missingAsLossAverageStressReturnPct > 0
+      )).length,
+    prospectiveStressLeader: prospectiveStressCandidates[0] ?? null,
+    retrospectiveFamilyCount: retrospectiveFamilies.length,
+    positiveRetrospectiveFamilyCount: retrospectiveFamilies.filter((family) => (
+      family.bestStressReturnPct > 0
+    )).length,
+    retrospectiveStressLeader: retrospectiveFamilies[0] ?? null,
+    statisticalCandidateGatePassCount: scorecards.filter((scorecard) => (
+      scorecard.statisticalCandidateGate === true
+    )).length,
+    nominationGatePassCount: scorecards.filter((scorecard) => (
+      scorecard.nominationGate === true
+    )).length,
+    familyExpansionPrerequisiteGatePassCount: scorecards.filter((scorecard) => (
+      scorecard.familyExpansionPrerequisiteGate === true
+    )).length,
+    familyExpansionAuthorityPassCount: scorecards.filter((scorecard) => (
+      scorecard.familyExpansionAuthority === true
+    )).length,
+    outcomeKeyReconciliationFailureCount,
+    provisionalGatePassCount,
+    decisionAuthorityPassCount: scorecards.filter((scorecard) => (
+      scorecard.decisionAuthority === true
+    )).length,
+    promotionAuthorityPassCount: scorecards.filter((scorecard) => (
+      scorecard.promotionAuthority === true
+    )).length,
+    tradingAuthorityPassCount: scorecards.filter((scorecard) => (
+      scorecard.tradingAuthority === true
+    )).length,
+    allScorecardsResearchOnly: scorecards.every((scorecard) => (
+      scorecard.researchOnly === true
+    )),
+    anyScorecardMutationAllowed: scorecards.some((scorecard) => (
+      scorecard.mutationAllowed === true
+    )),
+    evidenceDisposition: outcomeKeyReconciliationFailureCount > 0
+      ? "failed-delayed-outcome-key-reconciliation"
+      : (provisionalGatePassCount > 0
+        ? "candidate-cleared-frozen-gates-requires-independent-review"
+        : "no-candidate-cleared-frozen-gates"),
+  };
+}
+
+export function summarizeGeckoTerminalHeartbeatScorecard(scorecard) {
   return {
     type: scorecard.type,
+    scorecardAsOf: scorecard.scorecardAsOf ?? null,
     candidateForecasts: scorecard.candidateForecasts ?? null,
     candidateDecisions: scorecard.candidateDecisions ?? null,
     candidateOutcomes: scorecard.candidateOutcomes ?? null,
+    recordedOutcomes: scorecard.recordedOutcomes ?? null,
+    recordedOutcomeEvents: scorecard.recordedOutcomeEvents ?? null,
+    uniqueOutcomeKeys: scorecard.uniqueOutcomeKeys ?? null,
+    matchedOutcomeKeyCount: scorecard.matchedOutcomeKeyCount ?? null,
+    invalidOutcomeKeyEventCount:
+      scorecard.invalidOutcomeKeyEventCount ?? null,
+    unexpectedOutcomeKeyCount: scorecard.unexpectedOutcomeKeyCount ?? null,
+    unexpectedOutcomeEventCount:
+      scorecard.unexpectedOutcomeEventCount ?? null,
+    duplicateOutcomeKeyCount: scorecard.duplicateOutcomeKeyCount ?? null,
+    duplicateOutcomeEventCount: scorecard.duplicateOutcomeEventCount ?? null,
+    outcomeKeyReconciliationGate:
+      scorecard.outcomeKeyReconciliationGate ?? null,
+    openForecasts: scorecard.openForecasts ?? null,
+    openDecisions: scorecard.openDecisions ?? null,
+    openOutcomes: scorecard.openOutcomes ?? null,
+    maturedForecastCount: scorecard.maturedForecastCount ?? null,
+    recordedMaturedResolutions: scorecard.recordedMaturedResolutions ?? null,
+    unrecordedMaturedForecasts: scorecard.unrecordedMaturedForecasts ?? null,
+    maturedDecisionCount: scorecard.maturedDecisionCount ?? null,
+    unrecordedMaturedDecisions: scorecard.unrecordedMaturedDecisions ?? null,
+    maturedCandidateOutcomes: scorecard.maturedCandidateOutcomes ?? null,
+    unrecordedMaturedOutcomes: scorecard.unrecordedMaturedOutcomes ?? null,
     observedOutcomes: scorecard.observedOutcomes ?? null,
     missedOutcomes: scorecard.missedOutcomes ?? null,
     eligibleLiveObservations: scorecard.eligibleLiveObservations ?? null,
     independentHourlyFrames: scorecard.independentHourlyFrames ?? null,
+    resolvedForecastCoverageRate: scorecard.resolvedForecastCoverageRate ?? null,
+    resolvedDecisionCoverageRate: scorecard.resolvedDecisionCoverageRate ?? null,
+    recordedOutcomeCoverageRate: scorecard.recordedOutcomeCoverageRate ?? null,
+    validCapacityOutcomeCoverageRate:
+      scorecard.validCapacityOutcomeCoverageRate ?? null,
+    minimumValidCapacityOutcomeCoverageRate:
+      scorecard.minimumValidCapacityOutcomeCoverageRate ?? null,
+    baselineMaturedCandidates: scorecard.baselineMaturedCandidates ?? null,
+    baselineValidCapacityOutcomes:
+      scorecard.baselineValidCapacityOutcomes ?? null,
+    invalidCapacityOutcomes: scorecard.invalidCapacityOutcomes ?? null,
+    minimumAdditionalPerfectValidOutcomesToReachCoverageGate:
+      scorecard.minimumAdditionalPerfectValidOutcomesToReachCoverageGate ?? null,
+    eligiblePathOutcomeCoverageRate:
+      scorecard.eligiblePathOutcomeCoverageRate ?? null,
+    cashInclusiveAverageBaseReturnPct:
+      scorecard.cashInclusiveAverageBaseReturnPct ?? null,
+    cashInclusiveAverageStressReturnPct:
+      scorecard.cashInclusiveAverageStressReturnPct ?? null,
+    missingAsLossAverageBaseReturnPct:
+      scorecard.missingAsLossAverageBaseReturnPct ?? null,
+    missingAsLossAverageStressReturnPct:
+      scorecard.missingAsLossAverageStressReturnPct ?? null,
+    missingAsLossMaturedForecasts:
+      scorecard.missingAsLossMaturedForecasts ?? null,
+    missingAsLossUnscoredForecasts:
+      scorecard.missingAsLossUnscoredForecasts ?? null,
+    missingAsLossSelectedForecasts:
+      scorecard.missingAsLossSelectedForecasts ?? null,
+    missingAsLossMaturedDecisions:
+      scorecard.missingAsLossMaturedDecisions ?? null,
+    missingAsLossUnscoredDecisions:
+      scorecard.missingAsLossUnscoredDecisions ?? null,
+    missingAsLossSelectedDecisions:
+      scorecard.missingAsLossSelectedDecisions ?? null,
+    missingAsLossIndependentHourlyFrames:
+      scorecard.missingAsLossIndependentHourlyFrames ?? null,
+    missingAsLossSensitivityGate:
+      scorecard.missingAsLossSensitivityGate ?? null,
     portfolioAverageCapacityReturnPct:
       scorecard.portfolioAverageCapacityReturnPct ?? null,
     stressPortfolioAverageCapacityReturnPct:
       scorecard.stressPortfolioAverageCapacityReturnPct ?? null,
     evidenceStatus: scorecard.evidenceStatus ?? null,
-    statisticalCandidateGate: scorecard.statisticalCandidateGate ?? false,
-    promotionAuthority: scorecard.promotionAuthority ?? false,
-    provisionalGate: scorecard.provisionalGate ?? false,
+    resolvedCoverageGate: scorecard.resolvedCoverageGate ?? null,
+    validCapacityOutcomeCoverageGate:
+      scorecard.validCapacityOutcomeCoverageGate ?? null,
+    eligiblePathOutcomeCoverageGate:
+      scorecard.eligiblePathOutcomeCoverageGate ?? null,
+    chronologicalHalfValidationGate:
+      scorecard.chronologicalHalfValidationGate ?? null,
+    statisticalCandidateGate: scorecard.statisticalCandidateGate ?? null,
+    totalFamilyCount: scorecard.totalFamilyCount ?? null,
+    totalVariantCount: scorecard.totalVariantCount ?? null,
+    screeningCandidateCount: scorecard.screeningCandidateCount ?? null,
+    allFamiliesPrerequisiteRejected:
+      scorecard.allFamiliesPrerequisiteRejected ?? null,
+    familyCorrectionStatus: scorecard.familyCorrectionStatus ?? null,
+    familyExpansionPolicy: scorecard.familyExpansionPolicy ?? null,
+    maximumAdditionalFamiliesPerReviewedExpansion:
+      scorecard.maximumAdditionalFamiliesPerReviewedExpansion ?? null,
+    familyExpansionPrerequisiteGate:
+      scorecard.familyExpansionPrerequisiteGate ?? null,
+    familyExpansionStatus: scorecard.familyExpansionStatus ?? null,
+    familyExpansionAuthority: scorecard.familyExpansionAuthority ?? null,
+    lineageIntegrityGate: scorecard.lineageIntegrityGate ?? null,
+    evidenceReadinessGate: scorecard.evidenceReadinessGate ?? null,
+    independentQuantValidationStatus:
+      scorecard.independentQuantValidationStatus ?? null,
+    nominationGate: scorecard.nominationGate ?? null,
+    researchOnly: scorecard.researchOnly ?? null,
+    mutationAllowed: scorecard.mutationAllowed ?? null,
+    decisionAuthority: scorecard.decisionAuthority ?? null,
+    promotionAuthority: scorecard.promotionAuthority ?? null,
+    tradingAuthority: scorecard.tradingAuthority ?? null,
+    provisionalGate: scorecard.provisionalGate ?? null,
+    families: scorecard.families ?? null,
+    horizons: scorecard.horizons
+      ? Object.fromEntries(Object.entries(scorecard.horizons).map(
+        ([horizon, metrics]) => [horizon, summarizeGeckoTerminalHeartbeatHorizon(metrics)],
+      ))
+      : null,
+    arms: scorecard.arms
+      ? Object.fromEntries(Object.entries(scorecard.arms).map(([name, arm]) => (
+        [name, summarizeGeckoTerminalHeartbeatArm(arm)]
+      )))
+      : null,
   };
+}
+
+export function summarizeGeckoTerminalHeartbeatHorizon(metrics) {
+  return {
+    prospectiveCandidates: metrics.prospectiveCandidates ?? null,
+    maturedCandidateOutcomes: metrics.maturedCandidateOutcomes ?? null,
+    recordedOutcomes: metrics.recordedOutcomes ?? null,
+    recordedOutcomeEvents: metrics.recordedOutcomeEvents ?? null,
+    uniqueOutcomeKeys: metrics.uniqueOutcomeKeys ?? null,
+    matchedOutcomeKeyCount: metrics.matchedOutcomeKeyCount ?? null,
+    invalidOutcomeKeyEventCount:
+      metrics.invalidOutcomeKeyEventCount ?? null,
+    unexpectedOutcomeKeyCount: metrics.unexpectedOutcomeKeyCount ?? null,
+    unexpectedOutcomeEventCount:
+      metrics.unexpectedOutcomeEventCount ?? null,
+    duplicateOutcomeKeyCount: metrics.duplicateOutcomeKeyCount ?? null,
+    duplicateOutcomeEventCount: metrics.duplicateOutcomeEventCount ?? null,
+    outcomeKeyReconciliationGate:
+      metrics.outcomeKeyReconciliationGate ?? null,
+    openOutcomes: metrics.openOutcomes ?? null,
+    unrecordedMaturedOutcomes: metrics.unrecordedMaturedOutcomes ?? null,
+    recordedOutcomeCoverageRate: metrics.recordedOutcomeCoverageRate ?? null,
+    observedOutcomes: metrics.observedOutcomes ?? null,
+    missedOutcomes: metrics.missedOutcomes ?? null,
+    validCapacityOutcomes: metrics.validCapacityOutcomes ?? null,
+    validCapacityOutcomeCoverageRate:
+      metrics.validCapacityOutcomeCoverageRate ?? null,
+    minimumValidCapacityOutcomeCoverageRate:
+      metrics.minimumValidCapacityOutcomeCoverageRate ?? null,
+    validCapacityOutcomeCoverageGate:
+      metrics.validCapacityOutcomeCoverageGate ?? null,
+    invalidCapacityOutcomes:
+      metrics.coverageDiagnostics?.invalidCapacityOutcomes ?? null,
+    invalidCapacityOutcomeCounts:
+      metrics.coverageDiagnostics?.invalidCapacityOutcomeCounts ?? null,
+    invalidCapacityOutcomeReconciliationGate:
+      metrics.coverageDiagnostics?.invalidCapacityOutcomeReconciliationGate ?? null,
+    dominantInvalidCapacityOutcomeReason:
+      metrics.coverageDiagnostics?.dominantInvalidCapacityOutcomeReason ?? null,
+    dominantInvalidCapacityOutcomeCount:
+      metrics.coverageDiagnostics?.dominantInvalidCapacityOutcomeCount ?? null,
+    minimumAdditionalPerfectValidOutcomesToReachCoverageGate:
+      metrics.coverageDiagnostics
+        ?.minimumAdditionalPerfectValidOutcomesToReachCoverageGate ?? null,
+    discoveryUtcDayCoverageDiagnostics:
+      metrics.discoveryUtcDayCoverageDiagnostics ?? null,
+    validCapacityRows: metrics.validCapacityRows ?? null,
+    independentHourlyFrames: metrics.independentHourlyFrames ?? null,
+    cashInclusiveIndependentHourlyFrames:
+      metrics.cashInclusiveIndependentHourlyFrames ?? null,
+    uniqueTokens: metrics.uniqueTokens ?? null,
+    grossRiseRate: metrics.grossRiseRate ?? null,
+    explosion25Rate: metrics.explosion25Rate ?? null,
+    averageBaseReturnPct: metrics.averageBaseReturnPct ?? null,
+    averageStressReturnPct: metrics.averageStressReturnPct ?? null,
+    cashInclusiveAverageBaseReturnPct:
+      metrics.cashInclusiveAverageBaseReturnPct ?? null,
+    cashInclusiveAverageStressReturnPct:
+      metrics.cashInclusiveAverageStressReturnPct ?? null,
+    missingAsLossAverageBaseReturnPct:
+      metrics.missingAsLossAverageBaseReturnPct ?? null,
+    missingAsLossAverageStressReturnPct:
+      metrics.missingAsLossAverageStressReturnPct ?? null,
+    largestWinningFrameShare: metrics.largestWinningFrameShare ?? null,
+  };
+}
+
+export function summarizeGeckoTerminalHeartbeatArm(arm) {
+  return {
+    candidateForecasts: arm.candidateForecasts ?? null,
+    readyForecasts: arm.readyForecasts ?? null,
+    blockedForecasts: arm.blockedForecasts ?? null,
+    openOutcomes: arm.openOutcomes ?? null,
+    maturedForecastCount: arm.maturedForecastCount ?? null,
+    resolvedOutcomes: arm.resolvedOutcomes ?? null,
+    unrecordedMaturedOutcomes: arm.unrecordedMaturedOutcomes ?? null,
+    outcomeIdentityMismatches: arm.outcomeIdentityMismatches ?? null,
+    evaluatedObservedOutcomes: arm.evaluatedObservedOutcomes ?? null,
+    paperObservedOutcomes: arm.paperObservedOutcomes ?? null,
+    missedOutcomes: arm.missedOutcomes ?? null,
+    resolvedCoverage: arm.resolvedCoverage ?? null,
+    forecastAvailabilityCoverage: arm.forecastAvailabilityCoverage ?? null,
+    independentHourlyFrames: arm.independentHourlyFrames ?? null,
+    independentEvaluatedFrames: arm.independentEvaluatedFrames ?? null,
+    independentTradedFrames: arm.independentTradedFrames ?? null,
+    averageBaseReturnPct: arm.averageBaseReturnPct ?? null,
+    averageStressReturnPct: arm.averageStressReturnPct ?? null,
+    missingAsLossAverageBaseReturnPct:
+      arm.missingAsLossAverageBaseReturnPct ?? null,
+    missingAsLossAverageStressReturnPct:
+      arm.missingAsLossAverageStressReturnPct ?? null,
+    missingAsLossSensitivityGate: arm.missingAsLossSensitivityGate ?? null,
+    chronologicalHalfValidationGate:
+      arm.chronologicalHalfValidationGate ?? null,
+    statisticalCandidateGate: arm.statisticalCandidateGate ?? null,
+  };
+}
+
+export function summarizeGeckoTerminalHeartbeatCliResult(result) {
+  return {
+    ...result,
+    actionResults: Object.fromEntries(Object.entries(result.actionResults ?? {}).map(
+      ([action, actionResult]) => [action, compactHeartbeatActionResult(actionResult)],
+    )),
+  };
+}
+
+function compactHeartbeatActionResult(result) {
+  if (!result || typeof result !== "object") return result;
+  const compact = { ...result };
+  const emittedEventArrays = {};
+  for (const [field, values] of Object.entries(result)) {
+    if (!Array.isArray(values)
+      || !values.length
+      || !values.every((value) => value && typeof value === "object" && value.id)) continue;
+    emittedEventArrays[field] = {
+      count: values.length,
+      firstId: values[0].id,
+      lastId: values.at(-1).id,
+    };
+    delete compact[field];
+  }
+  if (Object.keys(emittedEventArrays).length) compact.emittedEventArrays = emittedEventArrays;
+  return pruneNullishCliFields(compact);
+}
+
+function pruneNullishCliFields(value) {
+  if (Array.isArray(value)) return value.map(pruneNullishCliFields);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value)
+    .filter(([, fieldValue]) => fieldValue !== null && fieldValue !== undefined)
+    .map(([field, fieldValue]) => [field, pruneNullishCliFields(fieldValue)]));
 }
 
 function heartbeatResult({
@@ -418,7 +835,9 @@ const isMain = process.argv[1]
 if (isMain) {
   try {
     console.log(JSON.stringify(
-      await runGeckoTerminalHeartbeatPhase(parseArgs(process.argv)),
+      summarizeGeckoTerminalHeartbeatCliResult(
+        await runGeckoTerminalHeartbeatPhase(parseArgs(process.argv)),
+      ),
       null,
       2,
     ));

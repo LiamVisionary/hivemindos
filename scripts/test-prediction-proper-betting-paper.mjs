@@ -196,6 +196,35 @@ const controlTotal = run.positions
   .reduce((sum, position) => sum + position.capitalUsd, 0);
 assert.ok(Math.abs(treatmentTotal - controlTotal) < 0.02, "treatment and control need capital parity");
 
+const edgePreservingStrongBooks = books(strong, 0.40, 0.42, 0.57, 0.59);
+edgePreservingStrongBooks[0].asks = [
+  { price: 0.42, size: 24 },
+  { price: 0.90, size: 100 },
+];
+const edgePreservingRun = proper.simulateProperBettingCohort({
+  snapshot,
+  forecasts,
+  fillObservedAt: "2026-07-29T20:10:01.000Z",
+  fillMarkets: [
+    { market: strong, books: edgePreservingStrongBooks },
+    { market: smaller, books: books(smaller, 0.50, 0.52, 0.47, 0.49) },
+  ],
+  policy,
+});
+const edgePreservingPosition = edgePreservingRun.positions.find((position) => (
+  position.arm === "brier-treatment" && position.marketId === strong.id
+));
+assert.ok(edgePreservingPosition, "the valid best-ask depth should still satisfy minimum size");
+const edgePreservingAllInPrice = edgePreservingPosition.capitalUsd / edgePreservingPosition.shares;
+assert.ok(
+  forecasts.forecasts[0].yesProbability - edgePreservingAllInPrice >= policy.minimumNetForecastEdge - 1e-6,
+  "paper fills must not sweep price levels that erase the preregistered net edge",
+);
+assert.ok(
+  edgePreservingPosition.capitalUsd < policy.startingCapitalUsd * policy.maxMarketFraction,
+  "unavailable edge-preserving depth must remain undeployed",
+);
+
 const settlement = proper.settleProperBettingCohort(run, new Map([
   [strong.id, "yes"],
   [smaller.id, "no"],

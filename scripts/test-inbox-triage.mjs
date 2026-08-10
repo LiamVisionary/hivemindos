@@ -20,6 +20,11 @@ const {
   writeInboxTriageNoteConfig,
   INBOX_TRIAGE_RAIL_LABELS,
 } = await import("../src/lib/services/brain/inbox-triage.ts");
+const {
+  inboxTriageNotificationCopy,
+  publishInboxTriageNotification,
+} = await import("../src/lib/services/brain/inbox-triage-notifications.ts");
+const { listAgentNotifications } = await import("../src/lib/services/obsidian/agent-notifications.ts");
 
 // --- classifier -------------------------------------------------------------
 
@@ -93,6 +98,30 @@ try {
   assert.equal(note.enabled, true);
   assert.equal(note.lastReportDate, first.reportDate);
   console.log("PASS force run writes report + audit + service note");
+
+  // completed daily reports produce one useful HivemindOS alert; desktop
+  // delivery is disabled in the hermetic suite and smoke-tested separately.
+  const notificationCopy = inboxTriageNotificationCopy(first);
+  assert.match(notificationCopy.body, /4 items reviewed/);
+  assert.match(notificationCopy.body, /4 new/);
+  assert.match(notificationCopy.body, /report is ready/i);
+  const notificationResult = await publishInboxTriageNotification(first, { vaultPath: vault, desktop: false });
+  assert.equal(notificationResult.persisted, true);
+  assert.equal(notificationResult.desktop, false);
+  const notificationList = await listAgentNotifications({ vaultPath: vault });
+  assert.equal(notificationList.notifications.length, 1);
+  assert.equal(notificationList.notifications[0].id, `inbox-triage-report-${first.reportDate}`);
+  assert.equal(notificationList.notifications[0].source, "Inbox Triage");
+  const priorNotifySetting = process.env.HIVEMINDOS_INBOX_TRIAGE_NOTIFY;
+  try {
+    process.env.HIVEMINDOS_INBOX_TRIAGE_NOTIFY = "0";
+    const suppressed = await publishInboxTriageNotification(first, { vaultPath: vault, desktop: false });
+    assert.equal(suppressed.skipped, "disabled");
+  } finally {
+    if (priorNotifySetting === undefined) delete process.env.HIVEMINDOS_INBOX_TRIAGE_NOTIFY;
+    else process.env.HIVEMINDOS_INBOX_TRIAGE_NOTIFY = priorNotifySetting;
+  }
+  console.log("PASS completed report creates one useful HivemindOS notification");
 
   // guarantees: captures untouched, Synthesis untouched
   assert.equal(await readFile(join(vault, "Inbox", "hive to do.md"), "utf8"), inboxBefore, "captured notes must never be modified");

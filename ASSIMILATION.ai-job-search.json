@@ -1,0 +1,49 @@
+{
+  "created_at": "2026-08-10T01:56:42.548630+00:00",
+  "request": "Add the complete MadsLorentzen/ai-job-search workflow to HivemindOS as an installed optional shared skill.",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "MadsLorentzen/ai-job-search",
+      "source_path": ".claude/commands/*.md",
+      "target_path": "packaged-skills/optional/productivity/madslorentzen/ai-job-search/references/workflows",
+      "reuse_type": "config_adapted",
+      "note": "Complete upstream command workflows adapted to HivemindOS workspace paths, capability discovery, and approval boundaries."
+    },
+    {
+      "source_repo": "MadsLorentzen/ai-job-search",
+      "source_path": ".claude/skills/job-application-assistant",
+      "target_path": "packaged-skills/optional/productivity/madslorentzen/ai-job-search/references/application",
+      "reuse_type": "config_adapted",
+      "note": "Candidate profile, evaluation, drafting, interview, form, and web-research methodology retained with provider-neutral paths."
+    },
+    {
+      "source_repo": "MadsLorentzen/ai-job-search",
+      "source_path": ".agents/skills/*/cli",
+      "target_path": "packaged-skills/optional/productivity/madslorentzen/ai-job-search/scripts/portals",
+      "reuse_type": "copied_code",
+      "note": "All six upstream portal CLI source trees and tests vendored at the pinned commit."
+    },
+    {
+      "source_repo": "MadsLorentzen/ai-job-search",
+      "source_path": "tools/verify_pdf.py",
+      "target_path": "packaged-skills/optional/productivity/madslorentzen/ai-job-search/scripts/verify_pdf.py",
+      "reuse_type": "copied_code",
+      "note": "Upstream PDF page-count and ATS text-layer verifier retained."
+    },
+    {
+      "source_repo": "MadsLorentzen/ai-job-search",
+      "source_path": "tools/robots_check.py",
+      "target_path": "packaged-skills/optional/productivity/madslorentzen/ai-job-search/scripts/robots_check.py",
+      "reuse_type": "adapted_code",
+      "note": "Robots checker retained and adapted to accept the active runtime agent token."
+    },
+    {
+      "source_repo": "MadsLorentzen/ai-job-search",
+      "source_path": "cv,cover_letters,templates",
+      "target_path": "packaged-skills/optional/productivity/madslorentzen/ai-job-search/templates",
+      "reuse_type": "asset_copied",
+      "note": "Upstream TeX CV and cover-letter templates plus OFL-licensed font assets vendored."
+    }
+  ]
+}

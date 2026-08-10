@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Activity, AlertTriangle, CheckCircle2, Gauge, RefreshCw, Save, ShieldCheck, Sparkles } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, Gauge, GitBranch, Lightbulb, Network, RefreshCw, Route, Save, ShieldCheck, Sparkles, TrendingUp } from "lucide-react";
 
 import type {
   CompanyFrontierLabPolicy,
@@ -70,6 +70,49 @@ type Payload = {
   };
   stages: Stage[];
   readiness: { openAiOAuthConfigured: boolean; nativeHierarchicalExecution: boolean; independentReviewerStaffed: boolean };
+  earnedScale: {
+    scaleCurve: {
+      recommendation: "scale" | "hold" | "reduce" | "collect-evidence";
+      confidence: "insufficient" | "directional" | "comparative";
+      score: number;
+      baselineRuns: number;
+      treatmentRuns: number;
+      baselineStage?: CompanyFrontierLabStage;
+      treatmentStage: CompanyFrontierLabStage;
+      reasons: string[];
+      evidenceGaps: string[];
+      automaticAction: false;
+      dimensions: Array<{
+        key: "outcome" | "proof" | "latency" | "tokens" | "uniqueContribution" | "duplicationConflict" | "humanIntervention" | "reviewerDisagreement";
+        label: string;
+        baseline?: number;
+        treatment?: number;
+        delta?: number;
+        direction: "increase" | "decrease";
+        status: "improved" | "steady" | "regressed" | "missing";
+      }>;
+    };
+    allocator: {
+      mode: "adaptive-local-first" | "frontier-oauth";
+      evidenceSamples: number;
+      lanes: Array<{ tier: CompanyFrontierLabTaskTier; route: string; intent: string }>;
+      checkpoints: Array<{ id: "plan" | "mid-run" | "final-review"; trigger: string; action: string }>;
+      escalationTriggers: string[];
+    };
+    blackboard: {
+      activeChallenges: number;
+      boardEntries: number;
+      lineageNodes: number;
+      integrityAlerts: number;
+      contributors: number;
+      challenges: Array<{ id: string; title: string; objective: string; bestScore?: number; metricName?: string; frontierResults: number; boardEntries: number; contributors: number }>;
+    };
+    delight: {
+      proposals: Array<{ id: string; skillSlug: string; kind: "skill" | "schedule" | "company"; title: string; reason: string; successCount: number; successRate: number; averageScore?: number; scope: "company" | "workspace"; reviewRequired: true }>;
+      analyzedEvents: number;
+      autoApply: false;
+    };
+  };
 };
 
 const MONTHLY_PRESETS = [1_000_000, 5_000_000, 10_000_000, 25_000_000, 50_000_000];
@@ -88,6 +131,17 @@ function tokens(value: number): string {
 
 function dateTime(value: string): string {
   return new Date(value).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function scaleValue(key: Payload["earnedScale"]["scaleCurve"]["dimensions"][number]["key"], value: number | undefined): string {
+  if (value === undefined) return "—";
+  if (key === "latency") return value >= 1_000 ? `${(value / 1_000).toFixed(1)}s` : `${Math.round(value)}ms`;
+  if (key === "tokens") return tokens(value);
+  return `${Math.round(value * 100)}%`;
+}
+
+function recommendationLabel(value: Payload["earnedScale"]["scaleCurve"]["recommendation"]): string {
+  return value === "collect-evidence" ? "Collect evidence" : `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
 }
 
 async function responsePayload(response: Response): Promise<Payload> {
@@ -209,7 +263,7 @@ export function FrontierLabPanel({ companyId, companyName }: { companyId: string
           <div className={styles.heroRow}>
             <div>
               <h2>Frontier Lab</h2>
-              <p>Turn {companyName}&apos;s existing crew into budgeted elastic capacity. Luna scouts, Terra builds, and Sol independently reviews—through OpenAI OAuth only.</p>
+              <p>Give HivemindOS a goal. It assembles, budgets, runs, and verifies {companyName}&apos;s team—then earns more scale only when the measured outcome improves.</p>
             </div>
             <button
               type="button"
@@ -255,6 +309,98 @@ export function FrontierLabPanel({ companyId, companyName }: { companyId: string
         <Metric icon={<Sparkles size={16} />} label="Budgeted slots" value={`${payload.capacity.availableSlots}`} detail="online routing is rechecked at dispatch" />
         <Metric icon={<ShieldCheck size={16} />} label="Settled success" value={`${Math.round(payload.snapshot.successRate * 100)}%`} detail={`${payload.snapshot.completedTasks} complete · ${payload.snapshot.blockedTasks + payload.snapshot.failedTasks} blocked/failed`} />
       </div>
+
+      <Panel>
+        <div className={styles.panelHeader}>
+          <div>
+            <h3>Scale this goal</h3>
+            <p>The Scale Curve compares the smaller operating condition with the treatment across outcome, proof, speed, token use, unique contribution, coordination debt, human intervention, and reviewer disagreement.</p>
+          </div>
+          <span className={`${styles.recommendation} ${styles[`recommendation_${payload.earnedScale.scaleCurve.recommendation.replace("-", "_")}`]}`}>
+            <TrendingUp size={13} /> {recommendationLabel(payload.earnedScale.scaleCurve.recommendation)}
+          </span>
+        </div>
+        <div className={styles.scaleSummary}>
+          <div><small>Baseline{payload.earnedScale.scaleCurve.baselineStage ? ` · ${payload.earnedScale.scaleCurve.baselineStage}` : " · prior stage"}</small><strong>{payload.earnedScale.scaleCurve.baselineRuns}/3</strong></div>
+          <GitBranch size={18} />
+          <div><small>Treatment · {payload.earnedScale.scaleCurve.treatmentStage}</small><strong>{payload.earnedScale.scaleCurve.treatmentRuns}/3</strong></div>
+          <div><small>Weighted curve</small><strong>{payload.earnedScale.scaleCurve.score >= 0 ? "+" : ""}{Math.round(payload.earnedScale.scaleCurve.score * 100)} pts</strong></div>
+          <div><small>Confidence</small><strong>{payload.earnedScale.scaleCurve.confidence}</strong></div>
+        </div>
+        <div className={styles.curveGrid}>
+          {payload.earnedScale.scaleCurve.dimensions.map((dimension) => (
+            <div className={`${styles.curveCard} ${styles[`curve_${dimension.status}`]}`} key={dimension.key}>
+              <span>{dimension.label}</span>
+              <div><small>before</small><strong>{scaleValue(dimension.key, dimension.baseline)}</strong></div>
+              <div><small>after</small><strong>{scaleValue(dimension.key, dimension.treatment)}</strong></div>
+              <em>{dimension.status === "missing" ? "needs measurement" : dimension.status}</em>
+            </div>
+          ))}
+        </div>
+        <div className={styles.scaleReason}>
+          <ShieldCheck size={15} />
+          <div>
+            {payload.earnedScale.scaleCurve.reasons.map((reason) => <p key={reason}>{reason}</p>)}
+            {payload.earnedScale.scaleCurve.evidenceGaps.length ? <small>Still needed: {payload.earnedScale.scaleCurve.evidenceGaps.join(" · ")}.</small> : <small>A positive Team curve is required before Frontier expansion; policy and spend never change automatically, and every existing OAuth, token, capacity, and independent-review gate still applies.</small>}
+          </div>
+        </div>
+      </Panel>
+
+      <div className={styles.insightGrid}>
+        <Panel>
+          <div className={styles.panelHeader}>
+            <div><h3>Outcome-aware allocator</h3><p>Spend intelligence where it changes the result, with explicit judgment checkpoints before more work or scale.</p></div>
+            <Route size={17} className={styles.headerIcon} />
+          </div>
+          <div className={styles.laneList}>
+            {payload.earnedScale.allocator.lanes.map((lane) => (
+              <div className={styles.lane} key={lane.tier}>
+                <span>{TIER_COPY[lane.tier].label}</span><strong>{lane.route}</strong><p>{lane.intent}</p>
+              </div>
+            ))}
+          </div>
+          <div className={styles.checkpointList}>
+            {payload.earnedScale.allocator.checkpoints.map((checkpoint, index) => (
+              <div className={styles.checkpoint} key={checkpoint.id}><i>{index + 1}</i><div><strong>{checkpoint.id.replace("-", " ")}</strong><span>{checkpoint.trigger}</span><p>{checkpoint.action}</p></div></div>
+            ))}
+          </div>
+          <small className={styles.sourceNote}>{payload.earnedScale.allocator.evidenceSamples} local outcome-routing sample{payload.earnedScale.allocator.evidenceSamples === 1 ? "" : "s"}; Frontier Lab never substitutes its fixed OAuth ladder.</small>
+        </Panel>
+
+        <Panel>
+          <div className={styles.panelHeader}>
+            <div><h3>Live swarm blackboard</h3><p>Agent Challenges is the shared surface for candidates, findings, runs, results, rulings, integrity alerts, and reusable playbooks.</p></div>
+            <Network size={17} className={styles.headerIcon} />
+          </div>
+          <div className={styles.blackboardStats}>
+            <div><strong>{payload.earnedScale.blackboard.activeChallenges}</strong><small>active</small></div>
+            <div><strong>{payload.earnedScale.blackboard.boardEntries}</strong><small>entries</small></div>
+            <div><strong>{payload.earnedScale.blackboard.lineageNodes}</strong><small>results</small></div>
+            <div><strong>{payload.earnedScale.blackboard.contributors}</strong><small>contributors</small></div>
+          </div>
+          {payload.earnedScale.blackboard.challenges.length ? <div className={styles.challengeList}>{payload.earnedScale.blackboard.challenges.map((challenge) => (
+            <div className={styles.challenge} key={challenge.id}>
+              <div><strong>{challenge.title}</strong><span>{challenge.objective}</span></div>
+              <small>{challenge.frontierResults} frontier · {challenge.boardEntries} entries{challenge.bestScore === undefined ? "" : ` · best ${challenge.bestScore}${challenge.metricName ? ` ${challenge.metricName}` : ""}`}</small>
+            </div>
+          ))}</div> : <div className={styles.compactEmpty}>No active Agent Challenge yet. Hivemind Labs creates the shared board without opening a second coordination system.</div>}
+        </Panel>
+      </div>
+
+      <Panel>
+        <div className={styles.panelHeader}>
+          <div><h3>Delight Miner</h3><p>Repeated, evidence-backed successes become review-gated proposals for a stronger skill, a schedule, or a standing company capability. Nothing auto-applies.</p></div>
+          <span className={styles.neutralBadge}><Lightbulb size={13} /> {payload.earnedScale.delight.analyzedEvents} events analyzed</span>
+        </div>
+        {payload.earnedScale.delight.proposals.length ? <div className={styles.delightGrid}>{payload.earnedScale.delight.proposals.map((proposal) => (
+          <div className={styles.delightCard} key={proposal.id}>
+            <span>{proposal.kind} proposal · {proposal.scope}</span>
+            <strong>{proposal.title}</strong>
+            <p>{proposal.reason}</p>
+            <small>{proposal.successCount} successes · {Math.round(proposal.successRate * 100)}% accepted{proposal.averageScore === undefined ? "" : ` · ${Math.round(proposal.averageScore * 100)}% avg score`} · review required</small>
+          </div>
+        ))}</div> : <div className={styles.compactEmpty}>No delight proposal has cleared the three-run, 80%-success evidence floor yet.</div>}
+      </Panel>
 
       <Panel>
         <div className={styles.panelHeader}>

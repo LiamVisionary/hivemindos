@@ -531,7 +531,7 @@ fn bundled_link_setup_command_for_roots(
             ))
         }
         SetupPlatform::Unix => Ok(format!(
-            "echo 'Preparing bundled collector runtime...'\nmkdir -p {parent}\ncp -R {source} {target}\nchmod 700 {target}/node {target}/hivemind-linkd {target}/scripts/install-telemetry-collector.sh\nPATH={target}:\"$PATH\" HIVEMINDOS_NODE_BIN={target}/node HIVEMINDOS_APP_DIR={target} HIVEMINDOS_COLLECTOR_BUNDLED=true HIVE_LINK_PREBUILT=true HIVE_LINK_ENABLED=true HIVE_LINK_BIN={target}/hivemind-linkd HIVE_COLLECTOR_ONLY=true bash {target}/scripts/install-telemetry-collector.sh",
+            "echo 'Preparing bundled collector runtime...'\nmkdir -p {parent}\ncp -R {source} {target}\nchmod 700 {target}/node {target}/hivemind-linkd {target}/scripts/install-telemetry-collector.sh\nPATH={target}:\"$PATH\" HIVEMINDOS_NODE_BIN={target}/node HIVEMINDOS_APP_DIR={target} HIVEMINDOS_COLLECTOR_BUNDLED=true HIVEMINDOS_PREPARE_DOWNLOADS_ACCESS=required HIVE_LINK_PREBUILT=true HIVE_LINK_ENABLED=true HIVE_LINK_BIN={target}/hivemind-linkd HIVE_COLLECTOR_ONLY=true bash {target}/scripts/install-telemetry-collector.sh",
             parent = shell_quote(&runtime_parent.display().to_string()),
             source = shell_quote(&resource_root.display().to_string()),
             target = shell_quote(&runtime_root.display().to_string()),
@@ -555,8 +555,8 @@ fn setup_source_ref() -> String {
 /// Download + extract the HivemindOS app source into `root` with no `git`
 /// dependency, using tools always present on a stock OS: PowerShell's
 /// Invoke-WebRequest/Expand-Archive on Windows, curl + tar on Unix. Replaces
-/// `root` wholesale each run (the previous git path re-cloned on any
-/// divergence anyway). The archive expands to a single top-level folder;
+/// `root` only when its pinned source marker is absent or stale. The archive
+/// expands to a single top-level folder;
 /// both variants move that one extracted dir into place rather than hardcoding
 /// the prefix, so it stays correct if the default ref is ever renamed.
 fn bootstrap_app_source_command(platform: SetupPlatform, root: &Path) -> String {
@@ -568,7 +568,7 @@ fn bootstrap_app_source_command(platform: SetupPlatform, root: &Path) -> String 
     );
     match platform {
         SetupPlatform::Unix => format!(
-            "mkdir -p {parent} && _hm_tmp=\"$(mktemp -d)\" && curl -fsSL {url} -o \"$_hm_tmp/src.tar.gz\" && rm -rf {root} && mkdir -p {root} && tar -xzf \"$_hm_tmp/src.tar.gz\" -C {root} --strip-components=1 && printf '%s\\n' {source_ref} > {root}/.hivemindos-source-commit && rm -rf \"$_hm_tmp\"",
+            "mkdir -p {parent} && if [ -f {root}/.hivemindos-source-commit ] && [ \"$(cat {root}/.hivemindos-source-commit 2>/dev/null)\" = {source_ref} ] && [ -f {root}/setup.sh ]; then echo 'Using cached HivemindOS setup files.'; else _hm_tmp=\"$(mktemp -d)\" && curl -fsSL {url} -o \"$_hm_tmp/src.tar.gz\" && rm -rf {root} && mkdir -p {root} && tar -xzf \"$_hm_tmp/src.tar.gz\" -C {root} --strip-components=1 && printf '%s\\n' {source_ref} > {root}/.hivemindos-source-commit && rm -rf \"$_hm_tmp\"; fi",
             parent = shell_quote(&parent.display().to_string()),
             root = shell_quote(&root.display().to_string()),
             url = shell_quote(&archive_url),
@@ -581,7 +581,7 @@ fn bootstrap_app_source_command(platform: SetupPlatform, root: &Path) -> String 
             // 'Stop' makes any failure exit powershell non-zero for the caller's
             // `if errorlevel 1`. Tls12 keeps the download working on older boxes.
             format!(
-                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; Write-Host 'Downloading HivemindOS setup files...'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $root='{root}'; $tmp=Join-Path $env:TEMP ('hm-src-'+[guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Force -Path $tmp | Out-Null; $zip=Join-Path $tmp 'src.zip'; Invoke-WebRequest -UseBasicParsing -Uri '{url}' -OutFile $zip; Write-Host 'Unpacking setup files...'; Expand-Archive -Path $zip -DestinationPath $tmp -Force; $inner=Get-ChildItem -Directory $tmp | Select-Object -First 1; if (-not $inner) {{ throw 'app-source archive had no top-level folder' }}; $parent=Split-Path $root -Parent; if ($parent) {{ New-Item -ItemType Directory -Force -Path $parent | Out-Null }}; if (Test-Path $root) {{ Remove-Item -Recurse -Force $root }}; Move-Item $inner.FullName $root; Set-Content -Path (Join-Path $root '.hivemindos-source-commit') -Value '{source_ref}' -Encoding ASCII; Remove-Item -Recurse -Force $tmp\"",
+                "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; $root='{root}'; $marker=Join-Path $root '.hivemindos-source-commit'; if ((Test-Path (Join-Path $root 'setup.ps1')) -and (Test-Path $marker) -and ((Get-Content $marker -Raw).Trim() -eq '{source_ref}')) {{ Write-Host 'Using cached HivemindOS setup files.' }} else {{ Write-Host 'Downloading HivemindOS setup files...'; [Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; $tmp=Join-Path $env:TEMP ('hm-src-'+[guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Force -Path $tmp | Out-Null; $zip=Join-Path $tmp 'src.zip'; Invoke-WebRequest -UseBasicParsing -Uri '{url}' -OutFile $zip; Write-Host 'Unpacking setup files...'; Expand-Archive -Path $zip -DestinationPath $tmp -Force; $inner=Get-ChildItem -Directory $tmp | Select-Object -First 1; if (-not $inner) {{ throw 'app-source archive had no top-level folder' }}; $parent=Split-Path $root -Parent; if ($parent) {{ New-Item -ItemType Directory -Force -Path $parent | Out-Null }}; if (Test-Path $root) {{ Remove-Item -Recurse -Force $root }}; Move-Item $inner.FullName $root; Set-Content -Path (Join-Path $root '.hivemindos-source-commit') -Value '{source_ref}' -Encoding ASCII; Remove-Item -Recurse -Force $tmp }}\"",
                 root = powershell_quote(&windows_shell_path(root)),
                 url = powershell_quote(&archive_url),
                 source_ref = powershell_quote(&source_ref),
@@ -883,7 +883,12 @@ fn build_setup_invocation(request: NativeSetupRunRequest, platform: SetupPlatfor
         args.push("--force".to_string());
     }
     if import_skills {
-        args.push(format!("--import-skills={skill_list}"));
+        // Native first-run connects the selected runtimes to HivemindOS's
+        // shared shelf. It must not recursively scan and ingest every local
+        // plugin/skill cache: that surprised users and added ~17 seconds even
+        // when nothing new existed. Explicit CLI setup can still opt into an
+        // import with --import-skills.
+        args.push("--import-skills=none".to_string());
         args.push(format!("--share-skills={skill_list}"));
     } else {
         args.push("--no-shared-skills".to_string());
@@ -893,7 +898,7 @@ fn build_setup_invocation(request: NativeSetupRunRequest, platform: SetupPlatfor
     let web_research = if install_web_research { "true" } else { "false" };
     let code_proof = if enable_code_proof { "true" } else { "false" };
     let command = format!(
-        "{root}\nHIVE_INSTALL_WEB_RESEARCH={web_research} HIVE_GITLAWB_SETUP={code_proof} HIVE_GITLAWB_IDENTITY={code_proof} HIVE_GITLAWB_REGISTER={code_proof} HIVE_MEMORY_IMPORTS={memory_list} ./setup.sh {args}\nif [ {memory_list} != 'none' ] && [ -x ./scripts/import-agent-memory.sh ]; then if ! ./scripts/import-agent-memory.sh --sources {memory_list}; then echo 'HIVEMINDOS_SETUP_WARNING: Memory import could not finish. Core setup is ready; re-run Setup later to try again.'; fi; fi",
+        "{root}\nHIVEMINDOS_PREPARE_DOWNLOADS_ACCESS=required HIVE_INSTALL_WEB_RESEARCH={web_research} HIVE_GITLAWB_SETUP={code_proof} HIVE_GITLAWB_IDENTITY={code_proof} HIVE_GITLAWB_REGISTER={code_proof} HIVE_MEMORY_IMPORTS={memory_list} ./setup.sh {args}\nif [ {memory_list} != 'none' ] && [ -x ./scripts/import-agent-memory.sh ]; then if ! ./scripts/import-agent-memory.sh --sources {memory_list}; then echo 'HIVEMINDOS_SETUP_WARNING: Memory import could not finish. Core setup is ready; re-run Setup later to try again.'; fi; fi",
         root = setup_root_command(platform),
         memory_list = shell_quote(&memory_list),
         args = quoted_args,
@@ -1085,9 +1090,11 @@ mod tests {
         assert!(command.contains("'--non-interactive'"));
         assert!(command.contains("'--skip-deps'"));
         assert!(command.contains("'--skip-dashboard'"));
-        assert!(command.contains("'--import-skills=claude,codex'"));
+        assert!(command.contains("'--import-skills=none'"));
+        assert!(command.contains("'--share-skills=claude,codex'"));
         assert!(command.contains("HIVE_MEMORY_IMPORTS='none'"));
         assert!(command.contains("HIVE_INSTALL_WEB_RESEARCH=false"));
+        assert!(command.contains("HIVEMINDOS_PREPARE_DOWNLOADS_ACCESS=required"));
         assert!(command.contains("HIVE_GITLAWB_SETUP=false"));
         assert!(!command.contains("'--force'"));
     }
@@ -1259,6 +1266,8 @@ mod tests {
         assert!(unix.contains(&format!("archive/{}.tar.gz", setup_source_ref())));
         assert!(!unix.contains("refs/heads/main"));
         assert!(unix.contains(".hivemindos-source-commit"));
+        assert!(unix.contains("Using cached HivemindOS setup files"));
+        assert!(unix.contains("else _hm_tmp="));
         assert!(!unix.contains("api.github.com/repos/LiamVisionary/hivemindos/commits/main"));
     }
 
@@ -1321,6 +1330,7 @@ mod tests {
         )
         .unwrap();
         assert!(unix.contains("HIVEMINDOS_COLLECTOR_BUNDLED=true"));
+        assert!(unix.contains("HIVEMINDOS_PREPARE_DOWNLOADS_ACCESS=required"));
         assert!(unix.contains("HIVE_LINK_PREBUILT=true"));
         assert!(!unix.contains("curl -fsSL"));
         assert!(!unix.contains("setup.sh"));

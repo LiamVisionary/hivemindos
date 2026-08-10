@@ -1,5 +1,6 @@
 import { runInboxTriage } from "@/lib/services/brain/inbox-triage";
 import { processPendingBrainDropInbox } from "@/lib/services/brain/brain-drop-intake";
+import { publishInboxTriageNotification } from "@/lib/services/brain/inbox-triage-notifications";
 
 // Perpetual driver for immediate Brain Drop intake plus the report-only daily
 // Inbox Triage audit. Mirrors the
@@ -15,6 +16,8 @@ export type InboxTriageDriverStatus = {
   lastTickAt?: string;
   lastRunReason?: string;
   lastReportDate?: string;
+  lastNotificationAt?: string;
+  lastNotificationError?: string;
   lastProcessedCount?: number;
   lastProcessingError?: string;
   lastError?: string;
@@ -62,6 +65,11 @@ async function loop(runner: Runner): Promise<void> {
       runner.tickCount = (runner.tickCount ?? 0) + 1;
       runner.lastTickAt = new Date().toISOString();
       runner.lastRunReason = result.ran ? "reported" : result.reason;
+      if (result.ran) {
+        const notification = await publishInboxTriageNotification(result);
+        if (notification.persisted || notification.desktop) runner.lastNotificationAt = new Date().toISOString();
+        runner.lastNotificationError = notification.errors.length ? notification.errors.join("; ") : undefined;
+      }
       if (processing) {
         runner.lastProcessedCount = processing.processed;
         runner.lastProcessingError = undefined;
@@ -121,6 +129,8 @@ export function getInboxTriageDriverStatus(): InboxTriageDriverStatus {
     lastTickAt: runner.lastTickAt,
     lastRunReason: runner.lastRunReason,
     lastReportDate: runner.lastReportDate,
+    lastNotificationAt: runner.lastNotificationAt,
+    lastNotificationError: runner.lastNotificationError,
     lastProcessedCount: runner.lastProcessedCount,
     lastProcessingError: runner.lastProcessingError,
     lastError: runner.lastError,

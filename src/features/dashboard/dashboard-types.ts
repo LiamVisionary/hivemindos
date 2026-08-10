@@ -460,7 +460,7 @@ export type SkillBrowserSkill = {
   audience?: string;
 };
 
-export type SkillBrowserView = "catalog" | "bankr" | "installed" | "packs" | "audit" | "write" | "fusion";
+export type SkillBrowserView = "catalog" | "bankr" | "installed" | "plugins" | "packs" | "audit" | "write" | "fusion";
 
 export type SkillBrowserAttachmentTarget = {
   selectedSlugs: string[];

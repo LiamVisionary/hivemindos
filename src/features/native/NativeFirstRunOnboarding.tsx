@@ -383,7 +383,7 @@ export function NativeFirstRunOnboarding({
   const unixExtras = `HIVE_INSTALL_WEB_RESEARCH=${installWebResearch ? "true" : "false"} HIVE_GITLAWB_SETUP=${enableCodeProof ? "true" : "false"} HIVE_GITLAWB_IDENTITY=${enableCodeProof ? "true" : "false"} HIVE_GITLAWB_REGISTER=${enableCodeProof ? "true" : "false"}`;
   const commandPreview = isWindows
     ? `powershell -ExecutionPolicy Bypass -File setup.ps1 -NonInteractive -NetworkMode ${mode} -RuntimeTargets ${runtimeTargets} -SkipDeps -SkipDashboard -SkipBuild${extras}`
-    : `${unixExtras} ./setup.sh --non-interactive ${modeCommand(mode)} --skip-deps --skip-dashboard ${selectedAgentIds.length ? `--import-skills=${runtimeTargets} --share-skills=${runtimeTargets}` : "--no-shared-skills"}${selectedAgentIds.length ? `\n./scripts/import-agent-memory.sh --sources ${runtimeTargets}` : ""}`;
+    : `${unixExtras} ./setup.sh --non-interactive ${modeCommand(mode)} --skip-deps --skip-dashboard ${selectedAgentIds.length ? `--import-skills=none --share-skills=${runtimeTargets}` : "--no-shared-skills"}${selectedAgentIds.length ? `\n./scripts/import-agent-memory.sh --sources ${runtimeTargets}` : ""}`;
   const filled = setupSettled ? EMBLEM_CELLS : setupMilestoneCells(setupLines);
   const meterPct = Math.round((filled / EMBLEM_CELLS) * 100);
   const phaseLabel = setupExitError ? "Setup needs attention." : setupPhaseLabel(setupLines, setupSettled);

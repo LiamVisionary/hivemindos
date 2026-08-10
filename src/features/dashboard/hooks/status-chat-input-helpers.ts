@@ -1,4 +1,5 @@
 import { AGENT_COLD_START_EVENT_LABEL, AGENT_COLD_START_EVENT_TYPE } from "@/lib/services/chat/agent-cold-start";
+import { namedToolProcessEventFromRaw } from "@/lib/services/chat/chat-process-events";
 
 // Chats on a machine-level leaf ("Unsorted chats") are general chats with no
 // working directory; they must never inherit the machine's appDir or the
@@ -72,6 +73,18 @@ export function processLabelFromComment(eventText: string) {
     .join(" ");
 }
 
+function browserPreviewFromRuntimeEvent(parsed: any, event: any) {
+  const source = event?.browserPreview ?? parsed?.browserPreview;
+  if (!source || typeof source !== "object") return undefined;
+  const url = String(source.url ?? "").trim();
+  const port = Number(url.match(/^https?:\/\/[^/]+\/app-proxy\/(\d{1,5})\/?$/i)?.[1]);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return undefined;
+  return {
+    url,
+    source: String(source.source ?? "agent-browser").trim().slice(0, 64) || "agent-browser",
+  };
+}
+
 export function processLabelFromRuntimeEvent(parsed: any) {
   if (Array.isArray(parsed?.choices) && parsed.choices.length > 0 && parsed.choices.every((choice: any) => {
     if (!choice || typeof choice !== "object") return false;
@@ -88,6 +101,10 @@ export function processLabelFromRuntimeEvent(parsed: any) {
   const event = parsed?.event && typeof parsed.event === "object" ? parsed.event : null;
   const type = String(event?.type ?? parsed?.type ?? "").trim();
   const source = event ?? parsed;
+  const browserPreview = browserPreviewFromRuntimeEvent(parsed, event);
+  const withBrowserPreview = (value: Record<string, unknown>) => browserPreview
+    ? { ...value, browserPreview }
+    : value;
   const message = String(source?.message ?? source?.label ?? source?.title ?? source?.name ?? source?.content ?? source?.delta ?? "").trim();
   const toolName = String(source?.tool ?? source?.toolName ?? source?.name ?? source?.command ?? "").trim();
   if (/^chat\.(text|session|done)$/.test(type)) return null;
@@ -106,13 +123,13 @@ export function processLabelFromRuntimeEvent(parsed: any) {
   const rawStatus = String(source?.status ?? "").trim().toLowerCase();
   const status = rawStatus === "completed" || rawStatus === "failed" || rawStatus === "running" ? rawStatus : undefined;
   if (/tool\.(generating|start|started|pending)/i.test(type)) {
-    return { label: toolName ? `Starting ${toolName}` : "Starting tool", detail: message || undefined, status: status ?? "running" };
+    return withBrowserPreview({ label: toolName ? `Starting ${toolName}` : "Starting tool", detail: message || undefined, status: status ?? "running" });
   }
   if (/tool\.(progress|running)/i.test(type)) {
-    return { label: toolName ? `${toolName} running` : "Tool running", detail: message || undefined, status: status ?? "running" };
+    return withBrowserPreview({ label: toolName ? `${toolName} running` : "Tool running", detail: message || undefined, status: status ?? "running" });
   }
   if (/tool\.(done|completed|failed|error)/i.test(type)) {
-    return { label: toolName ? `${toolName} finished` : "Tool finished", detail: message || undefined, status: status ?? (/failed|error/i.test(type) ? "failed" : "completed") };
+    return withBrowserPreview({ label: toolName ? `${toolName} finished` : "Tool finished", detail: message || undefined, status: status ?? (/failed|error/i.test(type) ? "failed" : "completed") });
   }
   if (parsed?.tool_call && typeof parsed.tool_call === "object") {
     const tool = parsed.tool_call;
@@ -147,6 +164,8 @@ export function processLabelFromSessionMessage(message: any) {
   if (role === "user" || role === "assistant") return null;
   if (role === "tool") {
     if (message?.type === "process") {
+      const namedToolEvent = namedToolProcessEventFromRaw(message?.raw);
+      if (namedToolEvent) return namedToolEvent;
       const [labelLine, ...detailLines] = content.split("\n");
       const label = labelLine?.trim() || "Runtime event";
       const detail = detailLines.join(" ").replace(/\s+/g, " ").trim().slice(0, 180);

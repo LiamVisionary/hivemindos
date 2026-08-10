@@ -425,7 +425,15 @@ export function HivePanel({
               )
             ) : null}
             {handlers.onSendFile ? (
-              <button type="button" className="fr-chip" onClick={() => handlers.onSendFile?.(m)}>
+              <button
+                type="button"
+                className="fr-chip"
+                disabled={m.source.fileTransfers === false}
+                title={m.source.fileTransfers === false
+                  ? `HiveDrop needs file access prepared by Setup on ${m.name}.`
+                  : undefined}
+                onClick={() => handlers.onSendFile?.(m)}
+              >
                 <ActionIcon icon={FileUp} />
                 HiveDrop
               </button>

@@ -45,6 +45,7 @@ import {
   profileWithResolvedModel,
   providerErrorMessage,
 } from "./openai-compat";
+import { withRuntimeBrowserPreviewUrl } from "./browser-preview";
 
 const ADAPTIVE_HERMES_OPENROUTER_FREE_ATTEMPTS = 5;
 // Time allowed for an attempt to produce its first stream byte. Once the
@@ -480,7 +481,7 @@ export async function streamAdaptiveHermesOpenRouterRuntime(
                       keys: parsed && typeof parsed === "object" ? Object.keys(parsed).slice(0, 12) : [],
                       streamElapsedMs: Date.now() - fetchStartedAt,
                     });
-                    safeEnqueue(ssePayload(parsed));
+                    safeEnqueue(ssePayload(withRuntimeBrowserPreviewUrl(parsed, url)));
                   }
                 } catch {
                   const outputCheck = proxyOutput(raw);

@@ -128,6 +128,7 @@ try {
   const welcomeDismiss = page.getByRole("button", { name: "Maybe later" });
   await welcomeDismiss.waitFor({ timeout: 15_000 }).then(() => welcomeDismiss.click()).catch(() => undefined);
   await page.getByText("Frontier Visual Lab", { exact: true }).first().waitFor({ timeout: 60_000 });
+  await dismissWelcome(page);
   const companyNavigation = page.waitForNavigation({ waitUntil: "domcontentloaded", timeout: 20_000 }).catch(() => null);
   await page.getByText("Frontier Visual Lab", { exact: true }).first().click();
   await companyNavigation;
@@ -156,6 +157,8 @@ try {
   assert.equal(savedPolicy?.provider, "openai-oauth");
   assert.deepEqual(savedPolicy?.models, { scout: "gpt-5.6-luna", builder: "gpt-5.6-terra", reviewer: "gpt-5.6-sol" });
   await dismissWelcome(page);
+  const tailscaleDismiss = page.getByRole("button", { name: "Dismiss Tailscale warning" });
+  if (await tailscaleDismiss.isVisible().catch(() => false)) await tailscaleDismiss.click();
   const frontierRoot = page.getByRole("heading", { name: "Frontier Lab", exact: true }).locator("xpath=ancestor::section[1]/parent::div");
   await frontierRoot.evaluate((element) => element.scrollIntoView({ block: "start" }));
   await page.screenshot({ path: desktopScreenshot, fullPage: true });
@@ -163,7 +166,7 @@ try {
 
   await page.setViewportSize({ width: 390, height: 844 });
   await frontierRoot.evaluate((element) => element.scrollIntoView({ block: "start" }));
-  await page.screenshot({ path: mobileScreenshot });
+  await page.screenshot({ path: mobileScreenshot, fullPage: true });
   const frontierBox = await frontierRoot.boundingBox();
   assert(
     frontierBox && frontierBox.x >= 0 && frontierBox.x + frontierBox.width <= 391,
@@ -191,6 +194,10 @@ async function assertFrontierSurface(page) {
   await page.getByText("gpt-5.6-luna", { exact: true }).waitFor();
   await page.getByText("gpt-5.6-terra", { exact: true }).waitFor();
   await page.getByText("gpt-5.6-sol", { exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Scale this goal", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Outcome-aware allocator", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Live swarm blackboard", exact: true }).waitFor();
+  await page.getByRole("heading", { name: "Delight Miner", exact: true }).waitFor();
   await page.getByRole("button", { name: /^Pilot 4 parallel/ }).waitFor();
   await page.getByRole("button", { name: /^Team 12 parallel/ }).waitFor();
   await page.getByRole("button", { name: /^Frontier 24 parallel/ }).waitFor();

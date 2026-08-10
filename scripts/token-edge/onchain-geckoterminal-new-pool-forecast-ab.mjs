@@ -18,7 +18,9 @@ import {
 } from "./onchain-independent-frames.mjs";
 import {
   GECKOTERMINAL_NEW_POOL_ACTIVATION_RULE,
+  chronologicalHalfValidation,
 } from "./onchain-geckoterminal-new-pool-activation.mjs";
+import { latestLedgerOccurrenceAt } from "./onchain-geckoterminal-new-pool-delayed-shadow.mjs";
 import {
   collectExactMintLunarCrushTopicEvidence,
 } from "./onchain-lunarcrush-provider.mjs";
@@ -176,7 +178,10 @@ export async function captureGeckoTerminalNewPoolForecastAb(
   if (!discoveries.length) {
     return captureResult(ledgerPath, now, "no-strictly-future-discovery", null, [], 0, null);
   }
-  const discovery = discoveries.find((event) => !receipts.has(event.id));
+  const unsealedDiscoveries = discoveries.filter((event) => !receipts.has(event.id));
+  const discovery = unsealedDiscoveries.find((event) => (
+    now.getTime() - Date.parse(event.observedAt) <= MAX_CAPTURE_LAG_MS
+  )) ?? unsealedDiscoveries[0];
   if (!discovery) {
     return captureResult(ledgerPath, now, "no-unsealed-future-discovery", null, [], 0, null);
   }
@@ -357,6 +362,7 @@ export function buildGeckoTerminalNewPoolForecastAbScorecard(events) {
     event.type === "geckoterminal-new-pool-delayed-shadow-outcome"
       && event.horizon === "1h"
   )).map((event) => [`${event.discoveryEventId}:${event.pairAddress}`, event]));
+  const asOfMs = latestLedgerOccurrenceAt(events)?.getTime() ?? null;
   const arms = Object.fromEntries(FEATURE_ARMS.map((featureArm) => {
     const armForecasts = forecasts.filter((forecast) => forecast.featureArm === featureArm);
     const rows = armForecasts.map((forecast) => forecastScoreRow({
@@ -364,7 +370,7 @@ export function buildGeckoTerminalNewPoolForecastAbScorecard(events) {
       discovery: discoveries.get(forecast.discoveryEventId),
       outcome: outcomes.get(`${forecast.discoveryEventId}:${forecast.pairAddress}`),
     })).filter(Boolean);
-    return [featureArm, armScore(armForecasts, rows, outcomes)];
+    return [featureArm, armScore(armForecasts, rows, outcomes, { asOfMs })];
   }));
   const pairedComparison = pairedScore({ forecasts, discoveries, outcomes });
   return {
@@ -667,16 +673,35 @@ function captureReceipt({
   };
 }
 
-export function armScore(armForecasts, rows, outcomes) {
+export function armScore(armForecasts, rows, outcomes, options = {}) {
   const ready = armForecasts.filter((forecast) => forecast.status === "ready");
+  const derivedAsOfMs = latestLedgerOccurrenceAt([
+    ...armForecasts,
+    ...outcomes.values(),
+  ])?.getTime() ?? null;
+  const asOfMs = Number.isFinite(options.asOfMs) ? options.asOfMs : derivedAsOfMs;
+  const rawOutcomeByForecastId = new Map(armForecasts.map((forecast) => [
+    forecast.id,
+    outcomes.get(`${forecast.discoveryEventId}:${forecast.pairAddress}`) ?? null,
+  ]));
+  const outcomeByForecastId = new Map(armForecasts.map((forecast) => {
+    const outcome = rawOutcomeByForecastId.get(forecast.id);
+    return [forecast.id, forecastOutcomeIdentityMatches(forecast, outcome) ? outcome : null];
+  }));
+  const matured = armForecasts.filter((forecast) => (
+    Number.isFinite(asOfMs) && Date.parse(forecast.dueAt) <= asOfMs
+  ));
   const observed = rows.filter((row) => row.outcomeStatus === "observed");
   const observedByForecastId = new Map(observed.map((row) => [row.forecastId, row]));
-  const paperObserved = armForecasts.map((forecast) => (
+  const paperObserved = matured.map((forecast) => (
     forecast.status === "ready"
-      ? observedByForecastId.get(forecast.id) ?? null
-      : blockedCashScoreRow({
+      ? observedByForecastId.get(forecast.id) ?? maturedCashScoreRow({
         forecast,
-        outcome: outcomes.get(`${forecast.discoveryEventId}:${forecast.pairAddress}`),
+        outcome: outcomeByForecastId.get(forecast.id),
+      })
+      : maturedCashScoreRow({
+        forecast,
+        outcome: outcomeByForecastId.get(forecast.id),
       })
   )).filter(Boolean);
   const frames = independentAssetFrames(paperObserved, {
@@ -689,25 +714,53 @@ export function armScore(armForecasts, rows, outcomes) {
     timestamp: (row) => Date.parse(row.createdAt),
     assetKey: tokenEdgeAssetKey,
   });
+  const missingAsLossObserved = matured.map((forecast) => (
+    missingAsLossScoreRow({
+      forecast,
+      outcome: outcomeByForecastId.get(forecast.id),
+      observedRow: observedByForecastId.get(forecast.id) ?? null,
+    })
+  )).filter(Boolean);
+  const missingAsLossFrames = independentAssetFrames(missingAsLossObserved, {
+    durationMs: HOUR_MS,
+    timestamp: (row) => Date.parse(row.createdAt),
+    assetKey: tokenEdgeAssetKey,
+  });
   const weighted = frames.flat();
   const baseFrames = frames.map((frame) => mean(frame.map((row) => row.baseReturnPct)));
   const stressFrames = frames.map((frame) => mean(frame.map((row) => row.stressReturnPct)));
+  const missingAsLossBaseFrames = missingAsLossFrames.map((frame) => mean(
+    frame.map((row) => row.baseReturnPct),
+  ));
+  const missingAsLossStressFrames = missingAsLossFrames.map((frame) => mean(
+    frame.map((row) => row.stressReturnPct),
+  ));
   const tradedFrames = frames.filter((frame) => frame.some((row) => row.paperLong));
   const baseCi = baseFrames.length >= 2
     ? circularBlockBootstrapMeanInterval(
       baseFrames,
       GECKOTERMINAL_NEW_POOL_FORECAST_AB_RULE.bootstrapIterations,
     ) : [null, null];
-  const matured = armForecasts.filter((forecast) => outcomes.has(
-    `${forecast.discoveryEventId}:${forecast.pairAddress}`,
+  const chronological = chronologicalHalfValidation(
+    baseFrames,
+    stressFrames,
+    GECKOTERMINAL_NEW_POOL_FORECAST_AB_RULE,
+  );
+  const resolved = matured.filter((forecast) => (
+    outcomeByForecastId.get(forecast.id)?.status === "observed"
   ));
-  const resolved = matured.filter((forecast) => outcomes.get(
-    `${forecast.discoveryEventId}:${forecast.pairAddress}`,
-  )?.status === "observed");
+  const outcomeIdentityMismatches = armForecasts.filter((forecast) => (
+    rawOutcomeByForecastId.get(forecast.id)
+      && !outcomeByForecastId.get(forecast.id)
+  )).length;
+  const unrecordedMaturedOutcomes = matured.filter((forecast) => (
+    !outcomeByForecastId.get(forecast.id)
+  )).length;
   const observedCoverage = matured.length
     ? resolved.length / matured.length : null;
   const forecastAvailabilityCoverage = armForecasts.length
     ? ready.length / armForecasts.length : null;
+  const missingAsLossSensitivityGate = mean(missingAsLossStressFrames) > 0;
   const statisticalCandidateGate = observed.length
       >= GECKOTERMINAL_NEW_POOL_FORECAST_AB_RULE.minimumMaturedForecasts
     && evaluatedFrames.length
@@ -726,16 +779,21 @@ export function armScore(armForecasts, rows, outcomes) {
     && profitFactor(baseFrames) >= GECKOTERMINAL_NEW_POOL_FORECAST_AB_RULE.minimumProfitFactor
     && maxDrawdownPct(baseFrames) <= GECKOTERMINAL_NEW_POOL_FORECAST_AB_RULE.maximumDrawdownPct
     && largestWinningShare(baseFrames)
-      <= GECKOTERMINAL_NEW_POOL_FORECAST_AB_RULE.maximumLargestWinningFrameShare;
+      <= GECKOTERMINAL_NEW_POOL_FORECAST_AB_RULE.maximumLargestWinningFrameShare
+    && chronological.gate
+    && missingAsLossSensitivityGate;
   return {
     candidateForecasts: armForecasts.length,
     readyForecasts: ready.length,
     blockedForecasts: armForecasts.length - ready.length,
     paperLongForecasts: ready.filter((forecast) => forecast.paperDecision === "paper-long").length,
-    openOutcomes: armForecasts.filter((forecast) => !outcomes.has(
-      `${forecast.discoveryEventId}:${forecast.pairAddress}`,
-    )).length,
+    openOutcomes: armForecasts.length - matured.length,
+    maturedForecastCount: matured.length,
+    resolvedOutcomes: resolved.length,
+    unrecordedMaturedOutcomes,
+    outcomeIdentityMismatches,
     observedOutcomes: observed.length,
+    evaluatedObservedOutcomes: observed.length,
     paperObservedOutcomes: paperObserved.length,
     missedOutcomes: matured.length - resolved.length,
     resolvedCoverage: nullableRound(observedCoverage),
@@ -765,10 +823,17 @@ export function armScore(armForecasts, rows, outcomes) {
     ),
     averageBaseReturnPct: nullableRound(mean(baseFrames)),
     averageStressReturnPct: nullableRound(mean(stressFrames)),
+    missingAsLossIndependentHourlyFrames: missingAsLossFrames.length,
+    missingAsLossAverageBaseReturnPct: nullableRound(mean(missingAsLossBaseFrames)),
+    missingAsLossAverageStressReturnPct: nullableRound(mean(missingAsLossStressFrames)),
+    missingAsLossSensitivityGate,
     bootstrapMeanBaseReturn95Pct: baseCi.map(nullableRound),
     profitFactor: nullableRound(profitFactor(baseFrames)),
     maximumDrawdownPct: nullableRound(maxDrawdownPct(baseFrames)),
     largestWinningFrameShare: nullableRound(largestWinningShare(baseFrames)),
+    chronologicalHalfValidation: chronological.validation,
+    chronologicalHalfValidationGate: chronological.gate,
+    evidenceShortfall: chronological.evidenceShortfall,
     statisticalCandidateGate,
     promotionAuthority: false,
     tradingAuthority: false,
@@ -819,7 +884,10 @@ function pairedScore({ forecasts, discoveries, outcomes }) {
 }
 
 export function forecastScoreRow({ forecast, discovery, outcome }) {
-  if (forecast?.status !== "ready" || outcome?.status !== "observed" || !discovery) return null;
+  if (forecast?.status !== "ready"
+    || outcome?.status !== "observed"
+    || !forecastOutcomeIdentityMatches(forecast, outcome)
+    || !discovery) return null;
   const candidate = (discovery.candidates ?? []).find((item) => (
     item.pairAddress === forecast.pairAddress
       && item.tokenAddress === forecast.tokenAddress
@@ -873,25 +941,59 @@ export function forecastScoreRow({ forecast, discovery, outcome }) {
   };
 }
 
-function blockedCashScoreRow({ forecast, outcome }) {
-  if (forecast?.status !== "blocked"
-    || forecast.paperDecision !== "unavailable"
-    || forecast.prediction !== null
-    || outcome?.status !== "observed"
-    || forecast.discoveryEventId !== outcome.discoveryEventId
-    || forecast.pairAddress !== outcome.pairAddress
-    || Date.parse(forecast.createdAt) > Date.parse(outcome.dueAt)
-    || !Number.isFinite(finiteNumber(outcome.grossReturnPct))) return null;
+function maturedCashScoreRow({ forecast, outcome }) {
+  const unavailableCash = forecast?.status === "blocked"
+    && forecast.paperDecision === "unavailable"
+    && forecast.prediction === null;
+  const readyCash = forecast?.status === "ready" && forecast.paperDecision === "paper-cash";
+  if (!unavailableCash && !readyCash) return null;
   return {
     forecastId: forecast.id,
     chain: forecast.chain,
     tokenAddress: forecast.tokenAddress,
     createdAt: forecast.sourceDiscoveryObservedAt,
-    outcomeStatus: outcome.status,
+    outcomeStatus: outcome?.status ?? "unrecorded",
     paperLong: false,
     baseReturnPct: 0,
     stressReturnPct: 0,
   };
+}
+
+function missingAsLossScoreRow({ forecast, outcome, observedRow }) {
+  if (observedRow) return observedRow;
+  const unavailableCash = forecast.status === "blocked"
+    && forecast.paperDecision === "unavailable"
+    && forecast.prediction === null;
+  const readyCash = forecast.status === "ready" && forecast.paperDecision === "paper-cash";
+  const missedLong = forecast.status === "ready" && forecast.paperDecision === "paper-long";
+  if (!unavailableCash && !readyCash && !missedLong) return null;
+  const returnPct = missedLong ? -100 : 0;
+  return {
+    forecastId: forecast.id,
+    chain: forecast.chain,
+    tokenAddress: forecast.tokenAddress,
+    createdAt: forecast.sourceDiscoveryObservedAt,
+    outcomeStatus: outcome?.status ?? "unrecorded",
+    paperLong: missedLong,
+    baseReturnPct: returnPct,
+    stressReturnPct: returnPct,
+  };
+}
+
+function forecastOutcomeIdentityMatches(forecast, outcome) {
+  return Boolean(
+    forecast
+      && outcome
+      && outcome.horizon === "1h"
+      && forecast.chain === outcome.chain
+      && forecast.tokenAddress === outcome.tokenAddress
+      && forecast.pairAddress === outcome.pairAddress
+      && forecast.poolCreatedAt === outcome.poolCreatedAt
+      && forecast.discoveryEventId === outcome.discoveryEventId
+      && forecast.sourceDiscoveryObservedAt === outcome.sourceDiscoveryObservedAt
+      && forecast.dueAt === outcome.dueAt
+      && forecast.birthQuoteDigest === outcome.birthQuoteDigest,
+  );
 }
 
 function deterministicCandidates(registration, discovery) {

@@ -232,6 +232,7 @@ export function companyWorkerContext(company: Company, memoryDigest: string, sal
       `Frontier Lab is active at the ${policy.stage} stage with a ${policy.monthlyTokenLimit.toLocaleString("en-US")}-token monthly control budget and ${policy.perTaskTokenLimit.toLocaleString("en-US")} tokens reserved per task attempt.`,
       `Model routing is fixed to OpenAI OAuth: scout ${policy.models.scout}, builder ${policy.models.builder}, reviewer ${policy.models.reviewer}. Do not switch to OpenRouter, Claude, or an API-key provider.`,
       `Capacity guardrails: ${policy.maxParallelTasks} parallel task(s), ${policy.maxTasksPerCycle} task(s) per planning cycle, ${policy.perMachineConcurrency} model turn(s) per machine.`,
+      "Earned Scale checkpoints: before the first costly or mutating action, state the outcome metric, proof, task split, budget, and rollback path. Mid-run, pause and re-plan when evidence contradicts the plan, reviewers disagree, or half the task reservation is consumed. Before completion, require independent proof; task completion alone never earns more scale.",
     );
   }
   const directives = company.directives ?? [];

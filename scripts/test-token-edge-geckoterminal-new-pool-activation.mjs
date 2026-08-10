@@ -41,6 +41,7 @@ import {
   captureGeckoTerminalNewPoolBirthEntries,
   geckoNewbornCandidate,
   markOpenGeckoTerminalNewPoolBirthPaths,
+  missingAsLossForecastSensitivity,
   registerGeckoTerminalNewPoolActivation,
   registerGeckoTerminalNewPoolBirthEntry,
   registerGeckoTerminalNewPoolBirthCreatorBalance,
@@ -65,6 +66,46 @@ import {
 import {
   registerGeckoTerminalLiquidityCollapseScoring,
 } from "./token-edge/onchain-geckoterminal-trending-monitoring.mjs";
+
+const sensitivityForecasts = [
+  {
+    id: "resolved-selected",
+    createdAt: "2026-08-04T00:00:00.000Z",
+    chain: "solana",
+    tokenAddress: "ResolvedSelected111111111111111111111111111",
+    selected: true,
+  },
+  {
+    id: "unresolved-cash-or-long",
+    createdAt: "2026-08-04T00:00:01.000Z",
+    chain: "solana",
+    tokenAddress: "UnresolvedCash1111111111111111111111111111",
+    selected: false,
+  },
+];
+const sensitivityCohort = {
+  maturedForecasts: sensitivityForecasts,
+  rows: [{
+    forecast: sensitivityForecasts[0],
+    baseCapacityReturnPct: 50,
+    stressCapacityReturnPct: 40,
+  }],
+};
+const unresolvedPaperLongSensitivity = missingAsLossForecastSensitivity(
+  sensitivityCohort,
+);
+assert.equal(unresolvedPaperLongSensitivity.summary.missingAsLossUnscoredForecasts, 1);
+assert.equal(unresolvedPaperLongSensitivity.summary.missingAsLossAverageBaseReturnPct, -25);
+assert.equal(unresolvedPaperLongSensitivity.summary.missingAsLossAverageStressReturnPct, -30);
+assert.equal(unresolvedPaperLongSensitivity.gate, false);
+const unresolvedPaperCashSensitivity = missingAsLossForecastSensitivity(
+  sensitivityCohort,
+  { selectionField: "selected" },
+);
+assert.equal(unresolvedPaperCashSensitivity.summary.missingAsLossSelectedForecasts, 1);
+assert.equal(unresolvedPaperCashSensitivity.summary.missingAsLossAverageBaseReturnPct, 25);
+assert.equal(unresolvedPaperCashSensitivity.summary.missingAsLossAverageStressReturnPct, 20);
+assert.equal(unresolvedPaperCashSensitivity.gate, true);
 
 const root = await mkdtemp(path.join(os.tmpdir(), "token-edge-gecko-new-pool-"));
 try {
@@ -109,6 +150,11 @@ try {
     pairAddress: "PoolOld1111111111111111111111111111111111",
     poolCreatedAt: "2026-08-04T03:58:00.000Z",
   });
+  const duplicateTokenBirth = poolRow({
+    tokenAddress: "TokenNewborn111111111111111111111111111111",
+    pairAddress: "PoolNewbornSecondary111111111111111111111111",
+    poolCreatedAt: "2026-08-04T03:59:30.000Z",
+  });
   assert.equal(geckoNewbornCandidate(eligibleBirth, 1, watchAt).status, "watchable");
   assert.equal(geckoNewbornCandidate(preRegistrationBirth, 3, watchAt).status, "watchable");
   const unsafeSymbol = structuredClone(eligibleBirth);
@@ -120,12 +166,28 @@ try {
     {
       now: watchAt,
       clock: () => watchAt,
-      fetcher: fakeProvider({ newPoolRows: [eligibleBirth, blockedBirth, preRegistrationBirth] }),
+      fetcher: fakeProvider({
+        newPoolRows: [
+          eligibleBirth,
+          blockedBirth,
+          preRegistrationBirth,
+          duplicateTokenBirth,
+        ],
+      }),
     },
   );
   assert.equal(watch.status, "recorded");
-  assert.equal(watch.returnedRows, 3);
+  assert.equal(watch.returnedRows, 4);
+  assert.equal(watch.evaluatedRows, 4);
   assert.equal(watch.watchedCandidates, 2);
+  assert.equal(watch.duplicatePoolCount, 0);
+  assert.deepEqual(watch.rejectionCounts, {});
+  assert.deepEqual(watch.selectionCounts, {
+    "duplicate-token-secondary-pool": 1,
+    "pool-not-strictly-after-registration": 1,
+    selected: 2,
+  });
+  assert.equal(watch.selectionReconciliationGate, true);
   assert.deepEqual(watch.activationDueAtRange, [
     "2026-08-04T04:14:00.000Z",
     "2026-08-04T04:14:15.000Z",
@@ -147,6 +209,8 @@ try {
     },
   );
   assert.equal(repeatedWatch.status, "skipped-existing-cadence");
+  assert.deepEqual(repeatedWatch.selectionCounts, watch.selectionCounts);
+  assert.equal(repeatedWatch.selectionReconciliationGate, true);
   const duplicateLaterWatch = await watchGeckoTerminalNewPools(
     { ledgerPath },
     {
@@ -156,6 +220,9 @@ try {
     },
   );
   assert.equal(duplicateLaterWatch.watchedCandidates, 0);
+  assert.equal(duplicateLaterWatch.duplicatePoolCount, 2);
+  assert.deepEqual(duplicateLaterWatch.selectionCounts, { blocked: 2 });
+  assert.equal(duplicateLaterWatch.selectionReconciliationGate, true);
 
   const earlyActivation = await activateGeckoTerminalNewPools(
     { ledgerPath },
@@ -184,12 +251,26 @@ try {
   assert.equal(activation.dueCandidates, 2);
   assert.equal(activation.recordedActivations, 2);
   assert.equal(activation.observedActivations, 2);
+  assert.equal(activation.missedActivations, 0);
+  assert.deepEqual(activation.missedActivationReasonCounts, {});
+  assert.deepEqual(activation.observedCandidateStatusCounts, {
+    blocked: 1,
+    eligible: 1,
+  });
+  assert.deepEqual(activation.observedActivationBlockerCounts, {
+    "liquidity-below-10000": 1,
+  });
+  assert.deepEqual(activation.observedActivationBlockerCardinalityCounts, {
+    0: 1,
+    1: 1,
+  });
   assert.equal(activation.recordedForecasts, 1);
   assert.equal(activation.forecasts[0].dueAt, "2026-08-04T05:15:00.000Z");
   const openScore = buildGeckoTerminalNewPoolScorecard(await readLedger(ledgerPath));
   assert.equal(openScore.candidateForecasts, 1);
   assert.equal(openScore.openForecasts, 1);
   assert.equal(openScore.eligibleLiveObservations, 0);
+  assertFailClosedResolvedCoverage(openScore, 0, null, false, 0.95);
   assert.equal(openScore.provisionalGate, false);
 
   const exitRow = poolRow({
@@ -225,13 +306,46 @@ try {
   const score = buildGeckoTerminalNewPoolScorecard(events);
   assert.equal(score.candidateForecasts, 1);
   assert.equal(score.openForecasts, 0);
+  assert.equal(score.recordedMaturedResolutions, 1);
+  assert.equal(score.unrecordedMaturedForecasts, 0);
+  assert.equal(score.missingAsLossMaturedForecasts, 1);
+  assert.equal(score.missingAsLossUnscoredForecasts, 0);
+  assert.equal(score.missingAsLossSensitivityGate, true);
   assert.equal(score.eligibleLiveObservations, 1);
   assert.equal(score.portfolioWeightedObservations, 1);
   assert.equal(score.uniqueTokens, 1);
   assert.equal(score.netWinRate, 1);
   assert.ok(score.portfolioAverageCapacityReturnPct > 0);
   assert.ok(score.stressPortfolioAverageCapacityReturnPct > 0);
+  assertFailClosedResolvedCoverage(score, 1, 1, true, 0);
   assert.equal(score.provisionalGate, false);
+
+  const unrecordedMaturedEvents = structuredClone(events).filter((event) => !(
+    event.type === "geckoterminal-new-pool-resolution"
+      && event.forecastId === activation.forecasts[0].id
+  ));
+  unrecordedMaturedEvents.push({
+    type: "test-ledger-clock",
+    observedAt: new Date(
+      Date.parse(activation.forecasts[0].dueAt) + 1_000,
+    ).toISOString(),
+  });
+  const unrecordedMaturedScore = buildGeckoTerminalNewPoolScorecard(
+    unrecordedMaturedEvents,
+  );
+  assert.equal(unrecordedMaturedScore.candidateForecasts, 1);
+  assert.equal(unrecordedMaturedScore.openForecasts, 0);
+  assert.equal(unrecordedMaturedScore.maturedForecastCount, 1);
+  assert.equal(unrecordedMaturedScore.recordedMaturedResolutions, 0);
+  assert.equal(unrecordedMaturedScore.unrecordedMaturedForecasts, 1);
+  assert.equal(unrecordedMaturedScore.missingAsLossUnscoredForecasts, 1);
+  assert.equal(unrecordedMaturedScore.missingAsLossAverageBaseReturnPct, -100);
+  assert.equal(unrecordedMaturedScore.missingAsLossAverageStressReturnPct, -100);
+  assert.equal(unrecordedMaturedScore.missingAsLossSensitivityGate, false);
+  assert.equal(unrecordedMaturedScore.eligibleLiveObservations, 0);
+  assert.equal(unrecordedMaturedScore.resolvedForecastCoverageRate, 0);
+  assert.equal(unrecordedMaturedScore.resolvedCoverageGate, false);
+  assert.equal(unrecordedMaturedScore.provisionalGate, false);
 
   const tampered = structuredClone(events);
   const readyActivation = tampered.find((event) => (
@@ -241,6 +355,7 @@ try {
   const rejected = buildGeckoTerminalNewPoolScorecard(tampered);
   assert.equal(rejected.eligibleLiveObservations, 0);
   assert.deepEqual(rejected.rejectionCounts, { "activation-mismatch": 1 });
+  assertFailClosedResolvedCoverage(rejected, 1, 0, false, 0.95);
 
   const collapseWatchAt = new Date("2026-08-04T05:20:00.000Z");
   const collapseBirth = poolRow({
@@ -311,6 +426,7 @@ try {
   assert.equal(collapseScore.liquidityCollapseCount, 1);
   assert.equal(collapseScore.netWinRate, 0.5);
   assert.ok(collapseScore.portfolioAverageCapacityReturnPct < 0);
+  assertFailClosedChronologicalHalves(collapseScore, 1, 1);
 
   await assert.rejects(
     registerGeckoTerminalNewPoolMarketCapFloorRemoved(
@@ -410,7 +526,9 @@ try {
   assert.equal(lowCapScore.eligibleLiveObservations, 1);
   assert.ok(lowCapScore.portfolioAverageCapacityReturnPct > 0);
   assert.ok(lowCapScore.stressPortfolioAverageCapacityReturnPct > 0);
+  assertFailClosedResolvedCoverage(lowCapScore, 1, 1, true, 0);
   assert.equal(lowCapScore.provisionalGate, false);
+  assertFailClosedChronologicalHalves(lowCapScore, 1, 0);
 
   const retryableProviderBirth = poolRow({
     tokenAddress: "TokenRetryableProvider11111111111111111111111",
@@ -443,6 +561,9 @@ try {
   assert.equal(providerFailure.requestsAttempted, 1);
   assert.equal(providerFailure.recordedActivations, 0);
   assert.equal(providerFailure.missedActivations, 0);
+  assert.deepEqual(providerFailure.missedActivationReasonCounts, {});
+  assert.deepEqual(providerFailure.observedCandidateStatusCounts, {});
+  assert.deepEqual(providerFailure.observedActivationBlockerCounts, {});
   assert.match(providerFailure.failures[0], /HTTP 429/);
   assert.equal((await readLedger(ledgerPath)).some((event) => (
     event.type === "geckoterminal-new-pool-activation"
@@ -497,6 +618,11 @@ try {
   assert.equal(mismatchActivation.dueCandidates, 1);
   assert.equal(mismatchActivation.recordedActivations, 1);
   assert.equal(mismatchActivation.missedActivations, 1);
+  assert.deepEqual(mismatchActivation.missedActivationReasonCounts, {
+    "activation-identity-mismatch": 1,
+  });
+  assert.deepEqual(mismatchActivation.observedCandidateStatusCounts, {});
+  assert.deepEqual(mismatchActivation.observedActivationBlockerCounts, {});
   assert.equal(mismatchActivation.recordedForecasts, 0);
   const sealedMismatch = (await readLedger(ledgerPath)).find((event) => (
     event.type === "geckoterminal-new-pool-activation"
@@ -654,6 +780,8 @@ try {
   assert.equal(birthScore.netWinRate, 1);
   assert.ok(birthScore.portfolioAverageCapacityReturnPct > 0);
   assert.ok(birthScore.stressPortfolioAverageCapacityReturnPct > 0);
+  assertFailClosedResolvedCoverage(birthScore, 1, 1, true, 0);
+  assertFailClosedChronologicalHalves(birthScore, 1, 0);
   const tamperedBirth = structuredClone(birthEvents);
   const birthDiscoveryToTamper = tamperedBirth.find((event) => (
     event.id === birthEntryWatch.discoveryEventId
@@ -790,6 +918,8 @@ try {
   assert.equal(birthLowCapScore.netWinRate, 1);
   assert.ok(birthLowCapScore.portfolioAverageCapacityReturnPct > 0);
   assert.ok(birthLowCapScore.stressPortfolioAverageCapacityReturnPct > 0);
+  assertFailClosedResolvedCoverage(birthLowCapScore, 1, 1, true, 0);
+  assertFailClosedChronologicalHalves(birthLowCapScore, 1, 0);
   const tamperedBirthLowCap = structuredClone(birthLowCapEvents);
   const birthLowCapDiscoveryToTamper = tamperedBirthLowCap.find((event) => (
     event.id === birthLowCapWatch.discoveryEventId
@@ -949,16 +1079,22 @@ try {
   assert.equal(creatorScore.selectedNetWinRate, 1);
   assert.ok(creatorScore.portfolioAverageCapacityReturnPct > 0);
   assert.ok(creatorScore.pairedCapacityDeltaPct > 0);
+  assertFailClosedResolvedCoverage(creatorScore, 2, 1, true, 0);
   assert.equal(creatorScore.provisionalGate, false);
+  assertFailClosedChronologicalHalves(creatorScore, 1, 0);
   const tamperedCreator = structuredClone(creatorEvents);
   const evidenceToTamper = tamperedCreator.find((event) => (
     event.type === "geckoterminal-new-pool-creator-balance-snapshot"
   ));
   evidenceToTamper.aggregate.creatorBalancePct = 99;
+  const tamperedCreatorScore = buildGeckoTerminalNewPoolBirthCreatorBalanceScorecard(
+    tamperedCreator,
+  );
   assert.deepEqual(
-    buildGeckoTerminalNewPoolBirthCreatorBalanceScorecard(tamperedCreator).rejectionCounts,
+    tamperedCreatorScore.rejectionCounts,
     { "missing-or-invalid-exact-mint-evidence": 1 },
   );
+  assertFailClosedResolvedCoverage(tamperedCreatorScore, 2, 0.5, false, 0.45);
 
   const creatorOnlyBeforeLpPool = poolRow({
     tokenAddress: "TokenCreatorOnlyBeforeLp111111111111111111111",
@@ -1192,7 +1328,9 @@ try {
   assert.equal(lpScore.selectedNetWinRate, 1);
   assert.ok(lpScore.portfolioAverageCapacityReturnPct > 0);
   assert.ok(lpScore.pairedCapacityDeltaPct > 0);
+  assertFailClosedResolvedCoverage(lpScore, 2, 1, true, 0);
   assert.equal(lpScore.provisionalGate, false);
+  assertFailClosedChronologicalHalves(lpScore, 1, 0);
   const riskPanelScore = buildGeckoTerminalNewPoolBirthRugCheckPanelScorecard(lpEvents);
   assert.equal(riskPanelScore.candidateForecasts, 2);
   assert.equal(riskPanelScore.openForecasts, 0);
@@ -1388,7 +1526,9 @@ try {
   assert.equal(pairAgeScore.selectedNetWinRate, 1);
   assert.ok(pairAgeScore.portfolioAverageCapacityReturnPct > 0);
   assert.ok(pairAgeScore.pairedCapacityDeltaPct > 0);
+  assertFailClosedResolvedCoverage(pairAgeScore, 2, 1, true, 0);
   assert.equal(pairAgeScore.provisionalGate, false);
+  assertFailClosedChronologicalHalves(pairAgeScore, 1, 0);
   const tamperedPairAge = structuredClone(pairAgeEvents);
   const pairAgeForecastToTamper = tamperedPairAge.find((event) => (
     event.pairAgeChallengerRegistrationId === pairAgeRegistration.registrationId
@@ -1547,7 +1687,9 @@ try {
   assert.equal(turnoverScore.selectedNetWinRate, 1);
   assert.ok(turnoverScore.portfolioAverageCapacityReturnPct > 0);
   assert.ok(turnoverScore.pairedCapacityDeltaPct > 0);
+  assertFailClosedResolvedCoverage(turnoverScore, 2, 1, true, 0);
   assert.equal(turnoverScore.provisionalGate, false);
+  assertFailClosedChronologicalHalves(turnoverScore, 1, 0);
   const tamperedTurnover = structuredClone(turnoverEvents);
   const turnoverForecastToTamper = tamperedTurnover.find((event) => (
     event.turnoverChallengerRegistrationId === turnoverRegistration.registrationId
@@ -1994,7 +2136,9 @@ try {
   assert.deepEqual(dangerScore.rejectionCounts, { "not-captured-under-policy": 1 });
   assert.ok(dangerScore.portfolioAverageCapacityReturnPct > 0);
   assert.ok(dangerScore.pairedCapacityDeltaPct > 0);
+  assertFailClosedResolvedCoverage(dangerScore, 2, 1, true, 0);
   assert.equal(dangerScore.provisionalGate, false);
+  assertFailClosedChronologicalHalves(dangerScore, 1, 0);
   const tamperedDanger = structuredClone(dangerEvents);
   const dangerForecastToTamper = tamperedDanger.find((event) => (
     event.dangerCountChallengerRegistrationId === dangerCountRegistration.registrationId
@@ -2003,13 +2147,17 @@ try {
     event.id === dangerForecastToTamper.dangerCountEvidenceId
   ));
   dangerEvidenceToTamper.aggregate.dangerRiskCount = 99;
+  const tamperedDangerScore = buildGeckoTerminalNewPoolBirthDangerCountScorecard(
+    tamperedDanger,
+  );
   assert.deepEqual(
-    buildGeckoTerminalNewPoolBirthDangerCountScorecard(tamperedDanger).rejectionCounts,
+    tamperedDangerScore.rejectionCounts,
     {
       "not-captured-under-policy": 1,
       "missing-or-invalid-panel-evidence": 1,
     },
   );
+  assertFailClosedResolvedCoverage(tamperedDangerScore, 2, 0.5, false, 0.45);
 
   await assert.rejects(
     registerGeckoTerminalNewPoolBirthJupiterRoundTrip(
@@ -2488,6 +2636,10 @@ try {
     event.type === "geckoterminal-new-pool-jupiter-executable-decision"
       && event.registrationId === jupiterExecutableRegistration.registrationId
   ));
+  const executableLongDecision = executableDecisions.find((event) => (
+    event.decision === "paper-long"
+  ));
+  assert.ok(executableLongDecision);
   assert.deepEqual(executableDecisions.map((event) => ({
     tokenAddress: event.tokenAddress,
     decision: event.decision,
@@ -2543,6 +2695,13 @@ try {
   );
   assert.equal(executableScore.candidateDecisions, 2);
   assert.equal(executableScore.eligibleLiveObservations, 2);
+  assert.equal(executableScore.scorecardAsOf, "2026-08-05T00:05:21.000Z");
+  assert.equal(executableScore.maturedDecisionCount, 2);
+  assert.equal(executableScore.recordedMaturedResolutions, 2);
+  assert.equal(executableScore.unrecordedMaturedDecisions, 0);
+  assert.equal(executableScore.resolvedDecisionCoverageRate, 1);
+  assert.equal(executableScore.minimumResolvedDecisionCoverageRate, 0.95);
+  assert.equal(executableScore.resolvedCoverageGate, true);
   assert.equal(executableScore.paperLongDecisions, 1);
   assert.equal(executableScore.paperCashDecisions, 1);
   assert.equal(executableScore.unavailableDecisions, 0);
@@ -2551,6 +2710,31 @@ try {
   assert.equal(executableScore.selectedNetWinRate, 1);
   assert.equal(executableScore.portfolioAverageBaseReturnPct, 8);
   assert.equal(executableScore.portfolioAverageStressReturnPct, 4);
+  assert.equal(executableScore.missingAsLossMaturedDecisions, 2);
+  assert.equal(executableScore.missingAsLossUnscoredDecisions, 0);
+  assert.equal(executableScore.missingAsLossSelectedDecisions, 1);
+  assert.equal(executableScore.missingAsLossIndependentHourlyFrames, 1);
+  assert.equal(executableScore.missingAsLossAverageBaseReturnPct, 8);
+  assert.equal(executableScore.missingAsLossAverageStressReturnPct, 4);
+  assert.equal(executableScore.missingAsLossSensitivityGate, true);
+  assert.deepEqual(executableScore.chronologicalHalfValidation, {
+    minimumFramesPerHalf: 126,
+    firstHalf: {
+      independentFrames: 1,
+      portfolioAverageBaseReturnPct: 8,
+      portfolioAverageStressReturnPct: 4,
+      portfolioBootstrapMeanReturnCi95Pct: [null, null],
+    },
+    secondHalf: {
+      independentFrames: 0,
+      portfolioAverageBaseReturnPct: null,
+      portfolioAverageStressReturnPct: null,
+      portfolioBootstrapMeanReturnCi95Pct: [null, null],
+    },
+  });
+  assert.equal(executableScore.chronologicalHalfValidationGate, false);
+  assert.equal(executableScore.evidenceShortfall.chronologicalFirstHalfFrames, 125);
+  assert.equal(executableScore.evidenceShortfall.chronologicalSecondHalfFrames, 126);
   assert.equal(executableScore.statisticalCandidateGate, false);
   assert.equal(executableScore.independentQuantValidationRequired, true);
   assert.equal(executableScore.independentQuantValidationStatus, "not-run");
@@ -2677,7 +2861,37 @@ try {
   assert.equal(executableFailureScore.unavailableDecisions, 1);
   assert.equal(executableFailureScore.liquidityCollapseCount, 1);
   assert.equal(executableFailureScore.openDecisions, 0);
+  assert.equal(executableFailureScore.recordedMaturedResolutions, 4);
+  assert.equal(executableFailureScore.unrecordedMaturedDecisions, 0);
   assert.equal(executableFailureScore.resolvedDecisionCoverageRate, 0.75);
+  assert.equal(executableFailureScore.missingAsLossMaturedDecisions, 4);
+  assert.equal(executableFailureScore.missingAsLossUnscoredDecisions, 1);
+  assert.equal(executableFailureScore.missingAsLossSelectedDecisions, 2);
+  assert.equal(executableFailureScore.missingAsLossAverageBaseReturnPct, -21);
+  assert.equal(executableFailureScore.missingAsLossAverageStressReturnPct, -23);
+  assert.equal(executableFailureScore.missingAsLossSensitivityGate, false);
+
+  const overdueUnrecordedExecutable = executableFailureEvents.filter((event) => !(
+    event.type === "geckoterminal-new-pool-jupiter-executable-resolution"
+      && event.decisionId === executableLongDecision.id
+  ));
+  const overdueUnrecordedExecutableScore =
+    buildGeckoTerminalNewPoolBirthJupiterExecutableScorecard(
+      overdueUnrecordedExecutable,
+    );
+  assert.equal(overdueUnrecordedExecutableScore.candidateDecisions, 4);
+  assert.equal(overdueUnrecordedExecutableScore.openDecisions, 0);
+  assert.equal(overdueUnrecordedExecutableScore.maturedDecisionCount, 4);
+  assert.equal(overdueUnrecordedExecutableScore.recordedMaturedResolutions, 3);
+  assert.equal(overdueUnrecordedExecutableScore.unrecordedMaturedDecisions, 1);
+  assert.equal(overdueUnrecordedExecutableScore.eligibleLiveObservations, 2);
+  assert.equal(overdueUnrecordedExecutableScore.resolvedDecisionCoverageRate, 0.5);
+  assert.equal(overdueUnrecordedExecutableScore.resolvedCoverageGate, false);
+  assert.equal(overdueUnrecordedExecutableScore.missingAsLossUnscoredDecisions, 2);
+  assert.equal(overdueUnrecordedExecutableScore.missingAsLossAverageBaseReturnPct, -50);
+  assert.equal(overdueUnrecordedExecutableScore.missingAsLossAverageStressReturnPct, -50);
+  assert.equal(overdueUnrecordedExecutableScore.missingAsLossSensitivityGate, false);
+  assert.equal(overdueUnrecordedExecutableScore.statisticalCandidateGate, false);
 
   const tamperedExecutable = structuredClone(executableFailureEvents);
   const executableDecisionToTamper = tamperedExecutable.find((event) => (
@@ -2859,6 +3073,7 @@ try {
   assert.equal(upperMomentumScore.independentQuantValidationStatus, "not-run");
   assert.equal(upperMomentumScore.promotionAuthority, false);
   assert.equal(upperMomentumScore.provisionalGate, false);
+  assertFailClosedChronologicalHalves(upperMomentumScore, 1, 0);
   const tamperedUpperMomentum = structuredClone(upperMomentumEvents);
   const upperMomentumDiscovery = tamperedUpperMomentum.find((event) => (
     event.id === upperMomentumWatch.discoveryEventId
@@ -3092,10 +3307,13 @@ try {
     selectedRiseCalls: 49,
     independentTradedFrames: 63,
     resolvedForecastCoverageRate: 0,
+    chronologicalFirstHalfFrames: 125,
+    chronologicalSecondHalfFrames: 126,
   });
   assert.equal(lowMomentumScore.independentQuantValidationStatus, "not-run");
   assert.equal(lowMomentumScore.promotionAuthority, false);
   assert.equal(lowMomentumScore.provisionalGate, false);
+  assertFailClosedChronologicalHalves(lowMomentumScore, 1, 0);
   const tamperedLowMomentum = structuredClone(lowMomentumEvents);
   const lowMomentumForecastToTamper = tamperedLowMomentum.find((event) => (
     event.type === "geckoterminal-new-pool-forecast"
@@ -3112,6 +3330,47 @@ try {
   console.log("token-edge GeckoTerminal new-pool activation checks passed.");
 } finally {
   await rm(root, { recursive: true, force: true });
+}
+
+function assertFailClosedChronologicalHalves(scorecard, firstFrames, secondFrames) {
+  assert.equal(scorecard.chronologicalHalfValidation.minimumFramesPerHalf, 126);
+  assert.equal(
+    scorecard.chronologicalHalfValidation.firstHalf.independentFrames,
+    firstFrames,
+  );
+  assert.equal(
+    scorecard.chronologicalHalfValidation.secondHalf.independentFrames,
+    secondFrames,
+  );
+  assert.equal(scorecard.chronologicalHalfValidationGate, false);
+  assert.equal(
+    scorecard.evidenceShortfall.chronologicalFirstHalfFrames,
+    126 - firstFrames,
+  );
+  assert.equal(
+    scorecard.evidenceShortfall.chronologicalSecondHalfFrames,
+    126 - secondFrames,
+  );
+}
+
+function assertFailClosedResolvedCoverage(
+  scorecard,
+  maturedForecastCount,
+  resolvedForecastCoverageRate,
+  resolvedCoverageGate,
+  coverageShortfall,
+) {
+  assert.equal(scorecard.maturedForecastCount, maturedForecastCount);
+  assert.equal(
+    scorecard.resolvedForecastCoverageRate,
+    resolvedForecastCoverageRate,
+  );
+  assert.equal(scorecard.minimumResolvedForecastCoverageRate, 0.95);
+  assert.equal(scorecard.resolvedCoverageGate, resolvedCoverageGate);
+  assert.equal(
+    scorecard.evidenceShortfall.resolvedForecastCoverageRate,
+    coverageShortfall,
+  );
 }
 
 function poolRow({

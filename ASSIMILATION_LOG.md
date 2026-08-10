@@ -18419,3 +18419,480 @@ also can we add long actions in telegram? like in the menu that appears when i h
 - Assimilated: Pinned HermesOffice file associations and build metadata plus native HivemindOS installable-service, local-path, Hive-action, MCP, and open-in patterns
 - Not assimilated: mutable-main updater, editor-owned credentials, automatic build/install, unsigned binary release, and enterprise-licensed code
 - Verification: Feature domain and spawned-stdio MCP tests, existing document/open-in/MCP/provider regressions, focused TypeScript and ESLint, cargo check, UI typography, docs YAML, provenance hash, whitespace, and 7-entry manifest passed. Whole-project TypeScript and repository size gates remain red only in concurrent/unrelated files.
+## 2026-08-07T14:46:05.626579+00:00 - retrieval
+
+- Request: got stuck here. also installation takes forever. we need to drastically improve installation time.
+- Source: shared-brain
+- Query: `HivemindOS native first-time setup installer performance hang after collector installed onboarding Mac prior decisions and known artifacts`
+- Decision: reuse
+- Reason: Shared memory confirmed the established cross-platform installer discipline and prior Windows onboarding fixes; no prior memory described this Mac hang.
+- Selected backbone: Current native onboarding, setup.rs launcher, and repository setup scripts remain authoritative.
+- Assimilated: Existing repository setup and platform-test patterns.
+## 2026-08-07T14:46:05.767142+00:00 - retrieval
+
+- Request: got stuck here. also installation takes forever. we need to drastically improve installation time.
+- Source: local-search
+- Query: `NativeFirstRunOnboarding -> native_start_setup -> generated setup command -> setup.sh -> install-telemetry-collector.sh -> install-fleet-health-watchdog.sh`
+- Decision: reuse
+- Reason: The live process tree reproduced two unbounded post-install macOS operations in the established setup chain.
+- Selected backbone: src-tauri/src/setup.rs; setup.sh; scripts/install-telemetry-collector.sh; scripts/install-fleet-health-watchdog.sh; existing script contract tests
+- Assimilated: Bounded launchctl helpers, collector-only dependency path, native setup status/event pipeline, and hermetic Node test conventions.
+## 2026-08-07T15:31:59.958204+00:00 - implementation
+
+- Request: got stuck here. also installation takes forever. we need to drastically improve installation time.
+- Source: local-implementation
+- Decision: reuse
+- Reason: The confirmed bottlenecks were inside the existing native setup call chain, so the repair reused and tightened project-owned source bootstrap, setup option, LaunchAgent, optional-integration, and hermetic regression patterns.
+- Selected backbone: src-tauri/src/setup.rs; setup.sh; scripts/install-telemetry-collector.sh; scripts/install-fleet-health-watchdog.sh; scripts/seed-shared-skills.sh
+- Assimilated: Existing pinned-source marker, background setup options, local-only optional-integration policy, managed skill provenance, and Node/Rust contract-test conventions.
+- Not assimilated: No third-party installer framework, package manager wrapper, or external source code; those would expand the trust and maintenance boundary without addressing the observed leaf commands.
+- Verification: Red-to-green focused contracts cover every confirmed hang and repeated-work path; real native timing evidence is recorded separately.
+## 2026-08-07T15:32:00.018510+00:00 - verification
+
+- Request: got stuck here. also installation takes forever. we need to drastically improve installation time.
+- Source: assimilation-manifest
+- Decision: below-threshold
+- Reason: The implementation is project-owned and reuses fewer than three concrete external code/config entries, so a GitHub code assimilation manifest would be misleading.
+- Selected backbone: Current HivemindOS native setup and installer architecture
+- Assimilated: Local project patterns only
+- Not assimilated: No copied, adapted, translated, style-adapted, test-adapted, config-adapted, or asset-copied third-party entries
+- Verification: Manifest threshold reviewed; final source and real-app gates continue independently.
+## 2026-08-07T15:43:16.209722+00:00 - final
+
+- Request: got stuck here. also installation takes forever. we need to drastically improve installation time.
+- Source: final-gates
+- Decision: verified
+- Reason: The project-owned setup architecture was retained and its unbounded/repeated work was removed without importing third-party installer code.
+- Selected backbone: Native setup launcher, Unix setup orchestrator, collector/watchdog installers, shared skill shelf, and canonical hermetic gate
+- Assimilated: Pinned-source validation, optional-integration degradation, managed projection metadata, LaunchAgent health/config comparison, and existing Node/Rust regression conventions
+- Not assimilated: External installer frameworks and package-manager wrappers; Windows live execution remained externally blocked at Vultr API authorization
+- Verification: Real Mac native E2E completed in <=18.109s; warm shell setup 14.85s; focused regressions, 17 Rust tests, TypeScript, ESLint, size, and whitespace pass. Vultr created no instance because API preflight was denied by the key allowlist.
+## 2026-08-10T01:22:52.569350+00:00 - local-search
+
+- Request: Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.
+- Source: local-index
+- Query: `Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.`
+- Decision: retrieved
+- Reason: Retrieved local/private-visible index hits.
+
+### Candidates
+- LiamVisionary/hivemindos
+  - URL: https://github.com/LiamVisionary/hivemindos/blob/HEAD/package.json
+  - Path: `package.json`
+  - Description: { "name": "hivemindos", "version": "0.4.1", "private": false, "license": "MIT", "type": "module", "packageManager": "pnpm@8.6.12", "scripts": { "test": "node scripts/test-gate.mjs", "dev": "node scripts/dev-server.mjs", "dev:ui": "node scri
+## 2026-08-10T01:22:57.099337+00:00 - public-search
+
+- Request: Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.
+- Source: public-github
+- Query: `Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.`
+- Decision: retrieved
+- Reason: Retrieved 6 public candidates from GitHub search.
+
+### Candidates
+- danderfer/Comp_Sci_Sem_2 (199 stars, Python)
+  - URL: https://github.com/danderfer/Comp_Sci_Sem_2
+  - Description: According to all known laws of aviation, there is no way that a bee should be able to fly. Its wings are too small to get its fat little body off the ground. The bee, of course, flies anyway. Because bees don’t care what humans think is imp
+- MarkipTheMudkip/in-class-project-2 (89 stars, HTML)
+  - URL: https://github.com/MarkipTheMudkip/in-class-project-2
+  - Description: According to all known laws of aviation, there is no way a bee should be able to fly. Its wings are too small to get its fat little body off the ground. The bee, of course, flies anyway because bees don't care what humans think is impossibl
+- S4ltster/Beemovie (48 stars, CSS)
+  - URL: https://github.com/S4ltster/Beemovie
+  - Description: Bee Movie script for educational purposes only, anyways According to all known laws of aviation, there is no way a bee should be able to fly. Its wings are too small to get its fat little body off the ground. The bee, of course, flies anywa
+- landonasato/Function (34 stars, HTML)
+  - URL: https://github.com/landonasato/Function
+  - Description: According to all known laws of aviation, there is no way a bee should be able to fly. Its wings are too small to get its fat little body off the ground. The bee, of course, flies anyway because bees don't care what humans think is impossibl
+- HimangshuCyber/Math-Quiz (28 stars, JavaScript)
+  - URL: https://github.com/HimangshuCyber/Math-Quiz
+  - Description: According to all known laws of aviation, there is no way a bee should be able to fly. Its wings are too small to get its fat little body off the ground. The bee, of course, flies anyway because bees don't care what humans think is impossibl
+- qwerfunch/cladding (14 stars, TypeScript, MIT License)
+  - URL: https://github.com/qwerfunch/cladding
+  - Description: For an organization to trust AI with its code, three things must hold — trust, traceability, and stability at scale. cladding wraps your AI coding agent: your intent goes in before it writes, and the result is verified against your spec aft
+## 2026-08-10T01:22:57.187613+00:00 - prebuild-gate
+
+- Request: Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.
+- Source: public-github
+- Query: `Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.`
+- Decision: passed
+- Reason: Public search returned candidates; choose and audit backbone/donors before implementation.
+## 2026-08-10T01:26:05.523678+00:00 - retrieval
+
+- Request: Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.
+- Source: shared-brain
+- Query: `Current HivemindOS decisions and reusable architecture for earned scaling, agent evaluation, routing, challenges, and delight learning`
+- Decision: reuse
+- Reason: The shared brain confirmed HivemindOS already owns Frontier Lab, evaluation receipts, harness experiments, Agent Challenges, adaptive routing, and skill autoresearch; no typed memory overrode current repository truth.
+- Selected backbone: local HivemindOS repository
+## 2026-08-10T01:26:05.645179+00:00 - retrieval
+
+- Request: Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.
+- Source: capability-search
+- Query: `Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.`
+- Decision: reuse
+- Reason: Capability search returned the existing /swarm-goal and HivemindOS dashboard/workflow capability as the closest operating path; no connector setup is required.
+- Selected backbone: HivemindOS /swarm-goal, Frontier Lab, and dashboard capability
+## 2026-08-10T01:26:05.759199+00:00 - retrieval
+
+- Request: Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.
+- Source: private-repository-index
+- Query: `earned scale multi-agent benchmark outcome routing swarm blackboard`
+- Decision: reuse
+- Reason: The private index identified the current HivemindOS repository as the only relevant implementation backbone.
+- Selected backbone: local-project:hivemind-os
+## 2026-08-10T01:26:27.084665+00:00 - shared-brain
+
+- Request: Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.
+- Source: shared-brain
+- Query: `Current HivemindOS decisions and reusable architecture for earned scaling, agent evaluation, routing, challenges, and delight learning`
+- Decision: reuse
+- Reason: Shared brain recall found no typed memory overriding current repository truth and confirmed relevant whole-brain product context.
+- Selected backbone: local HivemindOS repository
+- Note: Canonical replacement for the earlier retrieval-phase entry.
+## 2026-08-10T01:26:27.231032+00:00 - local-search
+
+- Request: Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.
+- Source: capability-search
+- Query: `Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.`
+- Decision: reuse
+- Reason: Capability search returned the existing /swarm-goal and HivemindOS dashboard/workflow capability as the closest operating path; no connector setup is required.
+- Selected backbone: HivemindOS /swarm-goal, Frontier Lab, and dashboard capability
+- Note: Canonical replacement for the earlier retrieval-phase entry.
+## 2026-08-10T01:26:27.348166+00:00 - local-search
+
+- Request: Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.
+- Source: private-repository-index
+- Query: `earned scale multi-agent benchmark outcome routing swarm blackboard`
+- Decision: reuse
+- Reason: The private index identified the current HivemindOS repository as the only relevant implementation backbone.
+- Selected backbone: local-project:hivemind-os
+- Note: Canonical replacement for the earlier retrieval-phase entry.
+## 2026-08-10T01:26:27.460286+00:00 - public-search
+
+- Request: Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.
+- Source: public-github-search
+- Query: `earned scale multi-agent benchmark outcome routing swarm blackboard`
+- Decision: reject
+- Reason: Public pre-build search returned unrelated Bee Movie repositories and a directionally related cladding experiment; none matched the product architecture or trust boundaries closely enough to assimilate.
+- Not assimilated: Unrelated Bee Movie repositories; qwerfunch/cladding
+## 2026-08-10T01:26:27.576529+00:00 - triage
+
+- Request: Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.
+- Source: current-repository
+- Query: `Frontier Lab, Agent Challenges, harness experiments, adaptive routing, skill autoresearch`
+- Decision: reuse
+- Reason: The current repository supplies the safest integrated backbone and existing tests for every major boundary; adapt those owners instead of introducing a parallel subsystem.
+- Selected backbone: src/lib/frontier-lab.ts; src/lib/services/evaluation/harness-experiments.ts; src/lib/services/agent-challenges.ts; src/lib/services/skills/skill-autoresearch.ts
+## 2026-08-10T01:40:54.057192+00:00 - shared-brain
+
+- Request: Add the complete MadsLorentzen/ai-job-search workflow to HivemindOS as an installed optional shared skill.
+- Source: shared-brain
+- Query: `AI job search resume tailoring cover letters interview tracking`
+- Decision: not-assimilated
+- Reason: Typed memory and shared skill search found no existing end-to-end job-search capability.
+
+### Candidates
+- Skills/hive-capability-search
+  - Decision: selected
+  - Reason: Confirmed generic research, document, PDF, Gmail, and Notion support but no native job-search workflow
+  - Path: `Skills/hive-capability-search/SKILL.md`
+## 2026-08-10T01:40:54.122692+00:00 - local-search
+
+- Request: Add the complete MadsLorentzen/ai-job-search workflow to HivemindOS as an installed optional shared skill.
+- Source: workspace
+- Query: `job search job application cover letter resume interview tracker`
+- Decision: not-assimilated
+- Reason: Bounded workspace and shared-skill searches found only unrelated examples and GTM references.
+- Selected backbone: github:MadsLorentzen/ai-job-search@fab1e78fa293d0255d739162a4f8f82db4144876
+## 2026-08-10T01:40:54.167361+00:00 - public-search
+
+- Request: Add the complete MadsLorentzen/ai-job-search workflow to HivemindOS as an installed optional shared skill.
+- Source: github
+- Query: `user-pinned https://github.com/MadsLorentzen/ai-job-search`
+- Decision: selected
+- Reason: User-pinned MIT repository directly provides the requested profile, search, rank, application, PDF/ATS, interview, outcome, Gmail, Notion, and portal workflows.
+- Selected backbone: github:MadsLorentzen/ai-job-search@fab1e78fa293d0255d739162a4f8f82db4144876
+
+### Candidates
+- MadsLorentzen/ai-job-search
+  - Decision: selected
+  - Reason: Pinned backbone; MIT; current inspected commit; agent-portable declarative workflows plus bounded CLIs
+  - Path: `.claude/commands,.claude/skills,.agents/skills,cv,cover_letters,tools`
+## 2026-08-10T01:40:54.209332+00:00 - audit
+
+- Request: Add the complete MadsLorentzen/ai-job-search workflow to HivemindOS as an installed optional shared skill.
+- Source: github
+- Decision: inspected
+- Reason: Whole-repo audit found no high-severity findings. The curl-to-shell setup instruction will not be vendored; the dynamic-eval warning was a false positive on a Markdown heading containing the word Function.
+- Verification: audit_candidate_repo.py whole repo and selected workflow/source paths: high=0; curl-to-shell excluded; Function finding manually confirmed false positive.
+
+### Candidates
+- MadsLorentzen/ai-job-search
+  - Decision: inspected
+  - Reason: Source and selected-path audit completed; package manifests contain no lifecycle scripts and portal network calls are explicit user-run reads
+  - Path: `SECURITY.md,.claude/settings.json,.agents/skills/*/cli/package.json`
+## 2026-08-10T01:42:05.763734+00:00 - assimilation-manifest
+
+- Request: Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemindos@working-tree:src/lib/frontier-lab.ts => src/lib/earned-scale.ts, LiamVisionary/hivemindos@working-tree:src/lib/services/evaluation/harness-experiments.ts => scripts/benchmark-earned-scale.mjs, LiamVisionary/hivemindos@working-tree:src/lib/services/agent-challenges.ts => src/lib/services/earned-scale-insights.ts, LiamVisionary/hivemindos@working-tree:src/lib/services/outcome-router.ts => src/lib/earned-scale.ts, LiamVisionary/hivemindos@working-tree:src/lib/services/skills/skill-autoresearch.ts => src/lib/earned-scale.ts
+- Verification: Wrote ASSIMILATION.earned-scale.json with 5 entries and custom_code_assessment=balanced.
+## 2026-08-10T01:42:23.243923+00:00 - verification
+
+- Request: Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.earned-scale.json: 5 concrete reuse entries, 4 substantive
+## 2026-08-10T01:56:42.596474+00:00 - assimilation-manifest
+
+- Request: Add the complete MadsLorentzen/ai-job-search workflow to HivemindOS as an installed optional shared skill.
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: MadsLorentzen/ai-job-search:.claude/commands/*.md => packaged-skills/optional/productivity/madslorentzen/ai-job-search/references/workflows, MadsLorentzen/ai-job-search:.claude/skills/job-application-assistant => packaged-skills/optional/productivity/madslorentzen/ai-job-search/references/application, MadsLorentzen/ai-job-search:.agents/skills/*/cli => packaged-skills/optional/productivity/madslorentzen/ai-job-search/scripts/portals, MadsLorentzen/ai-job-search:tools/verify_pdf.py => packaged-skills/optional/productivity/madslorentzen/ai-job-search/scripts/verify_pdf.py, MadsLorentzen/ai-job-search:tools/robots_check.py => packaged-skills/optional/productivity/madslorentzen/ai-job-search/scripts/robots_check.py, MadsLorentzen/ai-job-search:cv,cover_letters,templates => packaged-skills/optional/productivity/madslorentzen/ai-job-search/templates
+- Verification: Wrote ASSIMILATION.ai-job-search.json with 6 entries and custom_code_assessment=mostly_assimilated.
+## 2026-08-10T01:56:47.908809+00:00 - verification
+
+- Request: Add the complete MadsLorentzen/ai-job-search workflow to HivemindOS as an installed optional shared skill.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.ai-job-search.json: 6 concrete reuse entries, 5 substantive
+## 2026-08-10T01:57:54.387519+00:00 - implementation
+
+- Request: Add the complete MadsLorentzen/ai-job-search workflow to HivemindOS as an installed optional shared skill.
+- Source: github:MadsLorentzen/ai-job-search@fab1e78fa293d0255d739162a4f8f82db4144876
+- Decision: selected
+- Reason: Complete capability reuse with private-workspace storage, capability discovery, untrusted-input handling, recoverable reset, and explicit outward-action approvals.
+- Selected backbone: Pinned MIT upstream workflow, six portal clients, helpers, and templates wrapped by a HivemindOS control skill.
+- Assimilated: All command workflows; candidate/application methodology; six portal contracts and CLI/test trees; PDF, robots, and salary helpers; TeX templates and OFL fonts.
+- Not assimilated: Remote-shell SETUP.md, provider-specific permissions, repository-maintenance files, mutable personal state, and automatic dependency installation.
+## 2026-08-10T01:57:54.454937+00:00 - verification
+
+- Request: Add the complete MadsLorentzen/ai-job-search workflow to HivemindOS as an installed optional shared skill.
+- Source: packaged-skills/optional/productivity/madslorentzen/ai-job-search
+- Decision: verified
+- Verification: Focused package/import test passed; 122 packaged skills verified with 0 drift/missing; package audit is restricted with no high findings and approvals executable-helper, external-action, network-access; actual Shared Brain install preserves pinned provenance and ranks first for job-search capability search; assimilation manifest valid with 6 mappings and 5 substantive. Bun/TeX/Poppler text extraction unavailable, so portal tests and PDF template rendering were skipped. Vault structure contract has the same pre-existing concurrent seed-shared-skills projection assertion failure captured at baseline.
+- Note: No live portal crawl, mailbox mutation, Notion write, application submission, message send, or employer-facing action was executed.
+## 2026-08-10T01:59:54.890419+00:00 - implementation
+
+- Request: Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.
+- Source: current-repository
+- Query: `Frontier Lab, harness experiments, outcome router, Agent Challenges, skill analytics`
+- Decision: reuse
+- Reason: Adapted the existing local owners into one integrated Earned Scale path: stage-tagged settlement evidence, eight-dimensional scale decisions, outcome-aware allocation, the Agent Challenge blackboard, and review-gated Delight proposals.
+- Selected backbone: src/lib/earned-scale.ts; src/lib/services/earned-scale-insights.ts; existing Frontier Lab API and cockpit
+- Assimilated: Five mappings recorded in ASSIMILATION.earned-scale.json.
+## 2026-08-10T01:59:55.007696+00:00 - verification
+
+- Request: Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.
+- Source: fixed-worker-ab-and-product-gates
+- Query: `baseline versus earned-scale-v1 treatment`
+- Decision: retain
+- Reason: Three fresh baseline runs accepted 0/3 scenario sets and made 3/9 correct decisions; three treatment runs accepted 3/3 and made 9/9 correct decisions with proof and architecture rates unchanged at 100%. Every functional canonical-gate suite passed.
+- Verification: ASSIMILATION manifest valid (5 entries, 4 substantive); A/B meaningful=true; focused tests/lint/types/browser passed; canonical gate 277/279 with two unrelated concurrent-worktree reds.
+## 2026-08-10T01:59:55.112069+00:00 - final
+
+- Request: Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.
+- Source: earned-scale-v1
+- Query: `Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.`
+- Decision: retain
+- Reason: The smallest intervention materially improves scale-decision correctness, preserves proof and commercial/execution authority boundaries, and has a tested rollback path. No regression was observed in owned surfaces.
+- Selected backbone: HivemindOS Frontier Lab with existing evaluation, routing, Agent Challenges, and skill analytics
+- Verification: Retain earned-scale-v1; retest when stage policy, evaluator semantics, model ladder, or Scale Curve dimensions change materially.
+## 2026-08-10T02:00:36.216070+00:00 - verification
+
+- Request: Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.earned-scale.json: 5 concrete reuse entries, 4 substantive
+## 2026-08-10T02:43:00.000000+00:00 - correction
+
+- Request: Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.
+- Source: live HivemindOS collector A/B
+- Query: `baseline versus Earned Scale worker checkpoint through real Hermes runtime`
+- Decision: revise
+- Reason: The earlier deterministic fixture established policy behavior only and did not measure agent work. In the final clean live run, the fixed Hermes gpt-5.6-sol worker accepted 3/3 sessions and 9/9 incidents in both conditions with proof and authority boundaries preserved. Treatment won 3/3 blinded pairwise reviews for more complete coordination receipts, but p=0.25, average latency increased 4.931 seconds, and responses grew by 59 words; no meaningful outcome improvement or outcome regression is established.
+- Verification: Primary benchmark replaced with scripts/benchmark-earned-scale-live.mjs; raw final artifact .outputs/benchmarks/earned-scale-live-2026-08-10T02-38-45-876Z.json; canonical Harness Experiment earned-scale-live-2026-08-10T02-38-45-876Z recorded decision revise. Two preliminary revise receipts preserve evaluator schema/scale defects and are excluded from the final comparison.
+- Note: This entry corrects and supersedes the earlier retain claim in this log; the historical entries remain append-only evidence.
+## 2026-08-10T02:44:34.603313+00:00 - verification
+
+- Request: Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.earned-scale.json: 5 concrete reuse entries, 4 substantive
+## 2026-08-10T05:20:33.718809+00:00 - local-search
+
+- Request: Retire the legacy Inbox Triage pilot and add notifications to the built-in HivemindOS Inbox Triage service.
+- Source: current-workspace-and-installed-pilot
+- Query: `Inbox Triage createAgentNotification macOS display notification test`
+- Decision: selected
+- Reason: The current repo and installed predecessor contain every required primitive, so public GitHub discovery would add no useful donor.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/lib/services/obsidian/agent-notifications.ts
+  - Decision: selected-donor
+  - Reason: Reuse the canonical persisted Alerts notification writer
+  - Path: `src/lib/services/obsidian/agent-notifications.ts`
+- installed-pilot:~/.hivemindos/automations/inbox_triage.py
+  - Decision: selected-donor
+  - Reason: Adapt the proven best-effort macOS osascript banner delivery
+  - Path: `~/.hivemindos/automations/inbox_triage.py`
+- scripts/test-inbox-triage.mjs
+  - Decision: selected-donor
+  - Reason: Extend the existing hermetic Inbox Triage contract suite
+  - Path: `scripts/test-inbox-triage.mjs`
+- public-github
+  - Decision: rejected
+  - Reason: No gap remained after the pinned local product and predecessor supplied storage, delivery, and test donors
+## 2026-08-10T05:20:33.738001+00:00 - shared-brain
+
+- Request: Retire the legacy Inbox Triage pilot and add notifications to the built-in HivemindOS Inbox Triage service.
+- Source: hive-brain:full-vault
+- Query: `HivemindOS Inbox Triage built-in macOS notification existing native notification helper`
+- Decision: selected
+- Reason: Recovered the current Inbox Triage product contract and the Obsidian-backed notification service.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- HivemindOS Docs/for-users/features/inbox-triage.md
+  - Decision: selected
+  - Reason: Current product behavior and daily report contract
+  - Path: `docs/for-users/features/inbox-triage.md`
+- HivemindOS Docs/for-users/features/env-files-notifications-maintenance.md
+  - Decision: selected-donor
+  - Reason: Canonical persisted HivemindOS notification rail
+  - Path: `docs/for-users/features/env-files-notifications-maintenance.md`
+## 2026-08-10T05:25:38.798732+00:00 - shared-brain
+
+- Request: make the changes then commit and push EVERYTHING to main
+- Source: shared-brain
+- Selected backbone: local-project:hivemind-os
+- Note: Full-vault search found existing fleet identity and discovery guidance; the pinned hivemind-os checkout remains authoritative.
+
+### Candidates
+- Skills/local-control-panel-webapps/references/fleet-machine-identity-dedupe.md
+  - Decision: selected-donor
+  - Reason: confirmed fleet identity rules prefer fresh healthy collectors over stale or offline identities
+  - Path: `reference`
+- Skills/macos-network-troubleshooting/references/hivemind-link-fleet-discovery.md
+  - Decision: selected-donor
+  - Reason: confirmed Hivemind Link discovery lessons require health-backed identity and stale-state rejection
+  - Path: `reference`
+## 2026-08-10T05:25:55.053941+00:00 - local-search
+
+- Request: make the changes then commit and push EVERYTHING to main
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+- Note: Workspace search found the exact watchdog implementation and hermetic test pattern; no external backbone is needed.
+
+### Candidates
+- scripts/fleet-health-watchdog.mjs
+  - Decision: selected
+  - Reason: authoritative discovery, cache fallback, remediation, and alert loop to modify
+  - Path: `adapted_code`
+- scripts/lib/fleet-watchdog-local-collector.mjs
+  - Decision: selected-donor
+  - Reason: existing pure-helper module pattern for watchdog behavior that is independently testable
+  - Path: `adapted_code`
+- scripts/test-fleet-watchdog-escalation.mjs
+  - Decision: selected-donor
+  - Reason: existing hermetic watchdog regression suite and source-contract assertions
+  - Path: `test_adapted`
+- scripts/lib/async-ttl-cache.mjs
+  - Decision: inspected
+  - Reason: existing TTL semantics confirmed but generic async value cache does not encode fleet discovery provenance
+  - Path: `reference-only`
+## 2026-08-10T05:26:06.503139+00:00 - local-search
+
+- Request: make the changes then commit and push EVERYTHING to main
+- Source: assimilation-index
+- Selected backbone: local-project:hivemind-os
+- Note: Primary index exists but was last refreshed July 13; result still points to the current pinned checkout, which is fresher and authoritative. Legacy index is older and was not trusted.
+
+### Candidates
+- LiamVisionary/hivemindos
+  - Decision: selected
+  - Reason: private/local index ranked the pinned repository as the only relevant candidate for fleet stale-cache behavior
+  - Path: `config_adapted`
+## 2026-08-10T05:27:40.827182+00:00 - assimilation-manifest
+
+- Request: Retire the legacy Inbox Triage pilot and add notifications to the built-in HivemindOS Inbox Triage service.
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: hivemind-os:src/lib/services/obsidian/agent-notifications.ts => src/lib/services/brain/inbox-triage-notifications.ts, installed-inbox-triage-pilot:~/.hivemindos/automations/inbox_triage.py => src/lib/services/brain/inbox-triage-notifications.ts, hivemind-os:src/lib/services/messaging/escalation-notify.ts => src/lib/services/brain/inbox-triage-notifications.ts
+- Verification: Wrote ASSIMILATION.inbox-triage-notifications.json with 3 entries and custom_code_assessment=balanced.
+## 2026-08-10T05:27:41.068753+00:00 - verification
+
+- Request: Retire the legacy Inbox Triage pilot and add notifications to the built-in HivemindOS Inbox Triage service.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.inbox-triage-notifications.json: 3 concrete reuse entries, 3 substantive
+## 2026-08-10T05:27:59.955998+00:00 - verification
+
+- Request: Retire the legacy Inbox Triage pilot and add notifications to the built-in HivemindOS Inbox Triage service.
+- Source: local-project-and-live-runtime
+- Decision: selected
+- Reason: Focused suite, TypeScript, ESLint, scoped whitespace, live persisted Alert, live macOS banner, driver restart/status, legacy LaunchAgent retirement, and manifest verification all passed.
+- Verification: node scripts/test-inbox-triage.mjs=pass; pnpm exec tsc --noEmit --pretty false --skipLibCheck=pass; focused eslint=pass; live notification persisted+desktop with zero errors; driver running after authenticated restart; legacy LaunchAgent unloaded; assimilation manifest valid
+## 2026-08-10T05:28:17.207605+00:00 - public-search
+
+- Request: make the changes then commit and push EVERYTHING to main
+- Source: public-github
+- Selected backbone: local-project:hivemind-os
+- Note: Pinned-source rule applied: no implementation gap remained after shared-brain, workspace, and local-index search.
+
+### Candidates
+- public GitHub search
+  - Decision: rejected
+  - Reason: not needed because the pinned repository contains the exact production call chain, pure-helper convention, and regression suite; external code would add provenance and compatibility risk
+## 2026-08-10T05:28:17.278089+00:00 - prebuild-gate
+
+- Request: make the changes then commit and push EVERYTHING to main
+- Source: local-project:hivemind-os
+- Decision: selected
+- Reason: Exact root cause reproduced; fresh-cache gating and unreachable-control-path classification can be implemented with existing local patterns.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- scripts/fleet-health-watchdog.mjs
+  - Decision: selected
+  - Reason: adapt authoritative watchdog in place
+- scripts/lib/fleet-watchdog-local-collector.mjs
+  - Decision: selected-donor
+  - Reason: reuse pure helper module convention
+- scripts/test-fleet-watchdog-escalation.mjs
+  - Decision: selected-donor
+  - Reason: reuse hermetic behavior plus source wiring tests
+## 2026-08-10T05:40:14.084539+00:00 - assimilation-manifest
+
+- Request: make the changes then commit and push EVERYTHING to main
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemindos:scripts/lib/fleet-watchdog-local-collector.mjs => scripts/lib/fleet-watchdog-discovery.mjs, LiamVisionary/hivemindos:scripts/lib/async-ttl-cache.mjs => scripts/lib/fleet-watchdog-discovery.mjs, LiamVisionary/hivemindos:scripts/test-fleet-watchdog-escalation.mjs => scripts/test-fleet-watchdog-escalation.mjs, LiamVisionary/hivemindos:scripts/fleet-health-watchdog.mjs => scripts/fleet-health-watchdog.mjs
+- Verification: Wrote ASSIMILATION.fleet-watchdog-stale-cache.json with 4 entries and custom_code_assessment=balanced.
+## 2026-08-10T05:40:14.217387+00:00 - verification
+
+- Request: make the changes then commit and push EVERYTHING to main
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.fleet-watchdog-stale-cache.json: 4 concrete reuse entries, 3 substantive
+## 2026-08-10T05:40:14.272441+00:00 - verification
+
+- Request: make the changes then commit and push EVERYTHING to main
+- Source: ASSIMILATION.fleet-watchdog-stale-cache.json
+- Decision: passed
+- Reason: The concrete four-entry manifest passed the required verifier.
+- Assimilated: Fresh TTL cache snapshots, fail-closed remote remediation, persisted outage throttling, and regression coverage
+- Not assimilated: Public GitHub donors; the pinned user project already provided the exact production backbone
+- Verification: 4 substantive adapted code/test entries verified
+## 2026-08-10T05:47:48.511415+00:00 - verification
+
+- Request: Retire the legacy Inbox Triage pilot and add notifications to the built-in HivemindOS Inbox Triage service.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.inbox-triage-notifications.json: 3 concrete reuse entries, 3 substantive
+## 2026-08-10T05:47:48.624605+00:00 - verification
+
+- Request: make the changes then commit and push EVERYTHING to main
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.fleet-watchdog-stale-cache.json: 4 concrete reuse entries, 3 substantive

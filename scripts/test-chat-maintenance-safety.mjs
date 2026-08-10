@@ -10,6 +10,7 @@ const [
   collectorSource,
   collectorMaintenanceSource,
   collectorUpdateLauncherSource,
+  collectorInstallerSource,
   fleetUpdateSource,
   autoUpdateSource,
   dashboardSource,
@@ -19,6 +20,7 @@ const [
   readFile(new URL("./agent-telemetry-collector.mjs", import.meta.url), "utf8"),
   readFile(new URL("./lib/collector-maintenance.mjs", import.meta.url), "utf8"),
   readFile(new URL("./lib/collector-update-launcher.mjs", import.meta.url), "utf8"),
+  readFile(new URL("./install-telemetry-collector.sh", import.meta.url), "utf8"),
   readFile(new URL("../src/app/api/fleet/update/route.ts", import.meta.url), "utf8"),
   readFile(new URL("../src/features/dashboard/hooks/use-fleet-auto-update.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/features/dashboard/DashboardApp.tsx", import.meta.url), "utf8"),
@@ -37,6 +39,13 @@ assert.match(collectorUpdateLauncherSource, /systemd-run/, "Linux updates leave 
 assert.match(collectorUpdateLauncherSource, /--no-block/, "the collector does not hold the update request open");
 assert.match(collectorSource, /\.hivemindos["), ]+["']logs/, "update logs live outside the disposable Next build directory");
 assert.doesNotMatch(collectorSource, /\.next\/agent-update\.log/, "the build cannot delete its own update log");
+assert.match(collectorInstallerSource, /reserve_collector_restart_window/, "direct setup reserves a safe collector restart window");
+assert.match(collectorInstallerSource, /activeChatRunCount/, "direct setup waits for active chats to drain before restarting the collector");
+assert.ok(
+  collectorInstallerSource.indexOf("reserve_collector_restart_window")
+    < collectorInstallerSource.indexOf('bootout "gui/$(id -u)/com.agent-control-room.telemetry"'),
+  "the installer must reserve maintenance before stopping the collector",
+);
 
 assert.match(fleetUpdateSource, /reserveCollectorUpdate/, "fleet updates reserve collector maintenance before mutating a machine");
 assert.match(fleetUpdateSource, /releaseCollectorUpdateReservation/, "failed update starts release their reservation");

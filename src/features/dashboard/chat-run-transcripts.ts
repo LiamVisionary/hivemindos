@@ -12,6 +12,10 @@ import {
   userMessagesLikelySameTurn,
 } from "@/features/dashboard/chat-transcript-helpers";
 import { runtimePromptFromSessionMessage } from "@/features/dashboard/hooks/status-chat-input-helpers";
+import {
+  mergeChatProcessEvents as mergeProcessEventLists,
+  namedToolProcessEventFromRaw,
+} from "@/lib/services/chat/chat-process-events";
 import type { ChatMessage } from "@/features/dashboard/dashboard-types";
 
 export const ACTIVE_CHAT_RUNS_STORAGE_KEY = "hivemindos.activeChatRuns.v1";
@@ -111,7 +115,7 @@ export function chatProcessEventsFromSessionMessages(messages: unknown[], run?: 
     .filter(Boolean) as Array<{ at: number; label: string; detail?: string; status?: string; runId?: string }>;
 }
 
-function chatProcessFromSessionMessage(message: { role?: string; content?: string; type?: string }) {
+function chatProcessFromSessionMessage(message: { role?: string; content?: string; type?: string; raw?: unknown }) {
   const role = String(message?.role ?? "").trim().toLowerCase();
   const content = String(message?.content ?? "").trim();
   if (!content || role === "user" || role === "assistant") return null;
@@ -119,6 +123,8 @@ function chatProcessFromSessionMessage(message: { role?: string; content?: strin
   const detail = content.replace(/\s+/g, " ").slice(0, 180);
   if (role === "tool") {
     if (message?.type === "process") {
+      const namedToolEvent = namedToolProcessEventFromRaw(message.raw);
+      if (namedToolEvent) return namedToolEvent;
       const [labelLine, ...detailLines] = content.split("\n");
       const label = labelLine?.trim() || "Runtime event";
       const processDetail = detailLines.join(" ").replace(/\s+/g, " ").trim().slice(0, 180);
@@ -142,7 +148,7 @@ export function runtimeSessionMessages(session: unknown): ChatMessage[] {
     : [];
   const sessionId = String((session as { sessionId?: string; id?: string } | null)?.sessionId ?? (session as { id?: string } | null)?.id ?? "");
   const output: ChatMessage[] = [];
-  let pendingProcessEvents: Array<{ at: number; label: string; detail?: string; status?: string }> = [];
+  let pendingProcessEvents: Array<{ at: number; label: string; detail?: string; status?: string; runId?: string }> = [];
   for (const message of rawMessages.filter((item): item is { role?: string; content?: string; createdAt?: number; index?: number; billing?: unknown; feedback?: unknown; type?: string; applicationGeneration?: unknown; raw?: unknown } => (
       typeof item === "object"
       && item !== null
@@ -150,7 +156,11 @@ export function runtimeSessionMessages(session: unknown): ChatMessage[] {
     ))) {
     const processEvent = chatProcessFromSessionMessage(message);
     if (processEvent) {
-      pendingProcessEvents.push({ at: Number(message.createdAt || Date.now()), ...processEvent });
+      pendingProcessEvents.push({
+        at: Number(message.createdAt || Date.now()),
+        runId: sessionId || undefined,
+        ...processEvent,
+      });
       continue;
     }
     const role = message.role === "assistant" || message.role === "system" || message.role === "user" ? message.role : "system";
@@ -210,22 +220,7 @@ function mergeChatProcessEvents(
   first: ChatMessage["processEvents"] = [],
   second: ChatMessage["processEvents"] = [],
 ) {
-  const output: NonNullable<ChatMessage["processEvents"]> = [];
-  const indexByKey = new Map<string, number>();
-  for (const event of [...(first ?? []), ...(second ?? [])]) {
-    if (!event) continue;
-    // Status is deliberately NOT part of the identity: the same step arriving
-    // again as running→completed must update the existing row, not add a twin.
-    const key = [event.runId ?? "", event.label ?? "", event.detail ?? ""].join("\u001f");
-    const existingIndex = indexByKey.get(key);
-    if (existingIndex === undefined) {
-      indexByKey.set(key, output.length);
-      output.push(event);
-    } else if (Number(event.at ?? 0) >= Number(output[existingIndex]?.at ?? 0)) {
-      output[existingIndex] = event;
-    }
-  }
-  return output.sort((left, right) => Number(left.at ?? 0) - Number(right.at ?? 0)).slice(-80);
+  return mergeProcessEventLists(first ?? [], second ?? []);
 }
 
 function chatMessageHasActiveSurface(message?: ChatMessage) {

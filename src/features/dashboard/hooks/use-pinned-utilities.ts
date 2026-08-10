@@ -30,11 +30,11 @@ const REMOVED_RAIL_STATE_KEY = "hivemindos.nav.removedRailViews";
  *    right key per view.
  */
 export function usePinnedUtilities() {
-  const [pinnedCsv, rememberPinnedCsv] = useRememberedDashboardValue(
+  const [pinnedCsv, rememberPinnedCsv, pinnedHydrated] = useRememberedDashboardValue(
     PINNED_UTILITIES_STATE_KEY,
     serializePinnedUtilities(DEFAULT_PINNED_VIEWS),
   );
-  const [removedCsv, rememberRemovedCsv] = useRememberedDashboardValue(
+  const [removedCsv, rememberRemovedCsv, removedHydrated] = useRememberedDashboardValue(
     REMOVED_RAIL_STATE_KEY,
     serializeRemovedRailViews(DEFAULT_REMOVED_RAIL_VIEWS),
   );
@@ -49,5 +49,9 @@ export function usePinnedUtilities() {
     },
     [pinnedCsv, removedCsv, rememberPinnedCsv, rememberRemovedCsv],
   );
-  return { pinnedUtilities, togglePinnedUtility };
+  return {
+    pinnedUtilities,
+    pinnedUtilitiesHydrated: pinnedHydrated && removedHydrated,
+    togglePinnedUtility,
+  };
 }

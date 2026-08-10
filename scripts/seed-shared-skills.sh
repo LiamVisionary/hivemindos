@@ -176,90 +176,31 @@ copy_skill_dir() {
   cp -R "$from_dir/." "$to_dir/"
 }
 
-is_hivemind_managed_skill_dir() {
-  local dir="$1"
-  local metadata="$dir/.hivemind-skill-source.json"
-  [[ -f "$metadata" ]] || return 1
-  grep -Eq '"managedBy"[[:space:]]*:[[:space:]]*"hivemindos"|"provider"[[:space:]]*:[[:space:]]*"(shared-brain|bundled|packaged-auto-install)"|"providerLabel"[[:space:]]*:[[:space:]]*"HivemindOS' "$metadata"
-}
-
-write_shared_projection_metadata() {
-  local destination="$1"
-  local skill_md="$2"
-  local agent="$3"
-  cat > "$destination/.hivemind-skill-source.json" <<JSON
-{
-  "managedBy": "hivemindos",
-  "provider": "shared-brain",
-  "providerLabel": "Shared brain",
-  "sourcePath": "$skill_md",
-  "targetRuntime": "$agent",
-  "projection": "primary-overlay",
-  "syncedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-}
-JSON
-}
-
 sync_shared_skills_to_runtime() {
   local agent="$1"
   local synced=0
+  local unchanged=0
   local skipped=0
   local pruned=0
-  local root_dir skill_md skill_dir slug destination
-  local existing_dir existing_slug existing_metadata existing_source shelf_has_skills
-
-  # Safety gate for the prune pass below: only prune when the vault shelf is a
-  # real, non-empty skills folder. An empty/unset/misconfigured vault path must
-  # never cause the prune to delete every managed projection.
-  shelf_has_skills=0
-  if [[ -n "$vault_path" && -n "$skills_folder" && -d "$skills_folder" ]] \
-    && [[ -n "$(find "$skills_folder" -mindepth 2 -maxdepth 2 -name SKILL.md -type f -print -quit 2>/dev/null)" ]]; then
-    shelf_has_skills=1
-  fi
+  local root_dir result root_synced root_unchanged root_skipped root_pruned
 
   while IFS= read -r root_dir; do
     [[ -n "$root_dir" ]] || continue
-    mkdir -p "$root_dir"
-    while IFS= read -r skill_md; do
-      skill_dir="$(dirname "$skill_md")"
-      slug="$(basename "$skill_dir")"
-      destination="$root_dir/$slug"
-      if [[ -d "$destination" ]] && ! is_hivemind_managed_skill_dir "$destination"; then
-        skipped=$((skipped + 1))
-        continue
-      fi
-      rm -rf "$destination"
-      mkdir -p "$destination"
-      cp -R "$skill_dir/." "$destination/"
-      write_shared_projection_metadata "$destination" "$skill_md" "$agent"
-      synced=$((synced + 1))
-    done < <(find "$skills_folder" -mindepth 2 -maxdepth 2 -name SKILL.md -type f 2>/dev/null | sort)
-
-    # Prune stale managed projections: a dir we projected from the vault shelf
-    # (marker file present, sourcePath under the shelf) whose vault source was
-    # deleted. Unmanaged dirs (no marker) are the user's own skills — never touched.
-    if (( shelf_has_skills )); then
-      while IFS= read -r existing_dir; do
-        [[ -d "$existing_dir" ]] || continue
-        is_hivemind_managed_skill_dir "$existing_dir" || continue
-        existing_metadata="$existing_dir/.hivemind-skill-source.json"
-        existing_source="$(sed -n 's/.*"sourcePath"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$existing_metadata" 2>/dev/null | head -n 1)"
-        [[ -n "$existing_source" && "$existing_source" == "$skills_folder/"* ]] || continue
-        existing_slug="$(basename "$existing_dir")"
-        [[ -n "$existing_slug" ]] || continue
-        if [[ ! -f "$skills_folder/$existing_slug/SKILL.md" ]]; then
-          rm -rf "$existing_dir"
-          pruned=$((pruned + 1))
-          warn "Pruned stale managed skill projection $existing_dir (vault source removed)"
-        fi
-      done < <(find "$root_dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort)
-    fi
+    result="$(node "$ROOT/scripts/sync-shared-skill-projections.mjs" --source "$skills_folder" --target "$root_dir" --agent "$agent")"
+    IFS=$'\t' read -r root_synced root_unchanged root_skipped root_pruned <<< "$result"
+    synced=$((synced + root_synced))
+    unchanged=$((unchanged + root_unchanged))
+    skipped=$((skipped + root_skipped))
+    pruned=$((pruned + root_pruned))
   done < <(agent_primary_skill_roots "$agent")
 
   if (( skipped > 0 )); then
-    warn "Synced $synced shared skill projection(s) to $(agent_label "$agent"); skipped $skipped unmanaged local skill collision(s)"
+    warn "Synced $synced shared skill projection(s) to $(agent_label "$agent"); $unchanged unchanged; skipped $skipped unmanaged local skill collision(s)"
   else
-    ok "Synced $synced shared skill projection(s) to $(agent_label "$agent")"
+    ok "Synced $synced shared skill projection(s) to $(agent_label "$agent"); $unchanged unchanged"
+  fi
+  if (( pruned > 0 )); then
+    warn "Pruned $pruned stale managed skill projection(s) from $(agent_label "$agent")"
   fi
 }
 
@@ -546,9 +487,9 @@ seed_bundled_skills() {
     destination="$skills_folder/$slug"
     if [[ -f "$destination/SKILL.md" ]]; then
       refreshed=$((refreshed + 1))
-      # Keep user edits intact, but refresh source metadata so the shelf records
-      # that this skill is available from the HivemindOS app bundle.
-      write_source_metadata "$destination" "$slug" "$bundled_dir"
+      # Existing shelf entries may be user-reviewed or protected by macOS file
+      # access. Preserve them byte-for-byte; hive-brain-sync owns checksum-aware
+      # updates and can distinguish app content from user edits.
       continue
     fi
     mkdir -p "$destination"

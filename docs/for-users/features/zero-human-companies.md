@@ -173,9 +173,46 @@ Scale is operator-selected and evidence-gated:
 
 Scaling down is always available. Scaling up is never automatic: the cockpit enables a larger stage only after the company's settled outcomes meet its gate. These are safe capacity ceilings, not a literal “100 employees” equivalence or a claim that task count alone produces frontier-quality research.
 
+### Earned Scale And The Scale Curve
+
+Frontier Lab now places an **Earned Scale** recommendation beside those hard capacity gates. Every observed Frontier settlement records the task's evaluated outcome score, proof eligibility, elapsed time, token use, uniqueness check, duplication or conflict signal, human-intervention signal, and independent-review disagreement when those measurements exist. Older settlements remain valid accounting records; missing telemetry stays visibly missing instead of being guessed.
+
+The Scale Curve compares a fixed baseline with a treatment across eight dimensions:
+
+- outcome or evaluator-rubric score
+- proof satisfied
+- latency
+- tokens
+- unique contribution
+- duplication or coordination conflict
+- human intervention
+- reviewer disagreement
+
+Every new settlement retains the Frontier stage that produced it. The current stage is the treatment; its immediately smaller stage is the baseline. Comparative recommendations require at least three baseline and three treatment runs with every dimension observed. Pilot therefore collects treatment telemetry but has no smaller-stage comparison; after the operator enters Team, Pilot becomes the baseline, and after entering Frontier, Team becomes the baseline. A proof rate below 90%, any proof regression, material outcome regression, or severe coordination/reviewer debt produces **Reduce** even when the treatment completed more tasks or ran faster. A safe but negligible change produces **Hold**. Only a safe positive weighted curve produces **Scale**. Until the evidence is complete, the cockpit says **Collect evidence**.
+
+The Scale Curve is a local experiment receipt and one additional stage guard, not a commercial authority. Pilot-to-Team expansion establishes the first comparison, but Team-to-Frontier expansion is blocked unless the measured Team treatment earns **Scale** against Pilot; stages cannot be skipped. The curve never auto-increases the monthly ceiling, changes the immutable OAuth ladder, bypasses the existing completion, budget, capacity, or independent-review gates, or spends tokens. The operator still chooses and saves every policy change.
+
+### Outcome-Aware Allocation And Judgment Checkpoints
+
+The cockpit shows the route HivemindOS uses for each kind of intelligence work. Outside Frontier Lab, scouts prefer adaptive free or local candidates when privacy and quality permit, builders are ranked by accepted outcome, quality, budget, latency, and privacy evidence, and consequential results use the strongest independently staffed reviewer. Inside Frontier Lab, the same roles stay on the immutable Luna, Terra, and Sol OAuth ladder.
+
+Frontier company tasks also carry three explicit judgment checkpoints:
+
+1. Before the first costly or mutating action, state the outcome metric, proof, task split, budget, and rollback path.
+2. Mid-run, pause and re-plan when evidence contradicts the plan, reviewers disagree, or half the task reservation is consumed.
+3. Before completion or stage expansion, require independent proof and score the full Scale Curve.
+
+### Swarm Blackboard And Delight Miner
+
+Frontier Lab reuses **Agent Challenges** as its live swarm blackboard instead of creating another coordination store. The cockpit summarizes active challenges, public-within-the-hive entries, experiment lineage, frontier results, contributors, and integrity alerts. Detailed candidates, findings, run requests, results, rulings, and playbooks still live in Hivemind Labs and the normal Agent Challenge path.
+
+The **Delight Miner** looks at existing skill analytics from reviewed chat, Work Board, Company, and scheduled outcomes. Three distinct successful runs at an 80% success floor can propose a stronger reusable skill. Repeated success across days can also propose a schedule, and five strong Company uses can propose a standing company capability. These are review-gated suggestions only: the miner never installs a skill, creates a schedule, launches a company, or spends on its own.
+
 ### Cockpit Operation
 
-Open a company and choose **Frontier Lab**. The cockpit shows settled, reserved, and remaining tokens; budget-affordable configured slots (with online routing rechecked at dispatch); success evidence; stage locks; the model assigned to each tier; and recent task-scoped reservation events. Choose preset ceilings and concurrency limits, enable elastic slots if desired, select an earned stage, then save. Frontier planning itself is deterministic so no unreserved planner call can escape the ledger; metered inference starts only after a task reservation. New native hierarchical dispatches immediately use the saved policy. Existing non-Frontier tasks are not retroactively reclassified.
+Open a company and choose **Frontier Lab**. The cockpit leads with **Scale this goal**, the Scale Curve recommendation, outcome-aware allocation and checkpoints, the Agent Challenge blackboard, and review-gated Delight Miner proposals. It also shows settled, reserved, and remaining tokens; budget-affordable configured slots (with online routing rechecked at dispatch); stage locks; the model assigned to each tier; and recent task-scoped reservation events. Choose preset ceilings and concurrency limits, enable elastic slots if desired, select an earned stage, then save. Frontier planning itself is deterministic so no unreserved planner call can escape the ledger; metered inference starts only after a task reservation. New native hierarchical dispatches immediately use the saved policy. Existing non-Frontier tasks are not retroactively reclassified.
+
+To compare agent behavior through a real local collector and model, run `hive-env-run -- pnpm benchmark:earned-scale`. It holds one Hermes worker fixed, counterbalances three baseline and three treatment sessions, preserves raw outputs, uses a condition-blind independent judge, and records an append-only Harness Experiment receipt. This live benchmark is explicit because it spends inference. `pnpm benchmark:earned-scale:policy` is the separate deterministic policy regression; it validates Scale Curve decisions but is not evidence that agents produce better work.
 
 ## Deliverables
 

@@ -150,7 +150,7 @@ async function abortedChat(base, fakeBin, abortAfterMs) {
   const request = fetch(`${base}/chat`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ stream: false, message: "abort wiring test" }),
+    body: JSON.stringify({ stream: false, forceHermesCli: true, message: "abort wiring test" }),
     signal: AbortSignal.timeout(abortAfterMs),
   }).then(
     () => {

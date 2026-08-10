@@ -136,6 +136,8 @@ powershell -ExecutionPolicy Bypass -File setup.ps1 -CollectorOnly
 
 Collector-only setup selects Hivemind Link by default, installs its build prerequisite when necessary, and prints a one-time Tailscale authorization URL. Open that URL on the main HivemindOS hub—or any device signed into the same Tailscale account as the hub—approve the collector, and return to Fleet Hive. Discovery is automatic after Link connects.
 
+On macOS, logged-in setup also performs Hive Drop's one-time Downloads access check while the user is present. A remote transfer never opens that privacy prompt: if setup did not complete the check, the Mac reports file delivery as unavailable and the sender stops before uploading. For an unattended Mac, first deploy a Privacy Preferences Policy Control (PPPC) profile through device management, then rerun setup with `HIVEMINDOS_PREPARE_DOWNLOADS_ACCESS=required`. An unmanaged headless installer cannot grant protected-folder access silently.
+
 This builds and starts `hivemind-linkd`, an embedded `tsnet` reverse proxy. The
 collector binds to `127.0.0.1`, and the sidecar exposes port `8787` only through
 the user's own Tailscale account. The sidecar also serves local status at:

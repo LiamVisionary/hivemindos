@@ -1,24 +1,12 @@
 import { imageGenerationToApplicationGeneration, type ChatApplicationGenerationCard } from "@/features/dashboard/chat-application-generation";
 import { generatedImageCardFromAssistantText } from "@/features/dashboard/chat-generated-media";
+import { mergeChatProcessEvents } from "@/lib/services/chat/chat-process-events";
 
 function cardFromMessage(message: any): ChatApplicationGenerationCard | null {
   if (message?.applicationGeneration) return message.applicationGeneration;
   if (message?.imageGeneration) return imageGenerationToApplicationGeneration(message.imageGeneration);
   const content = typeof message?.content === "string" ? message.content : "";
   return content ? generatedImageCardFromAssistantText(content, message?.createdAt) : null;
-}
-
-function mergeProcessEvents(first: any[] = [], second: any[] = []) {
-  const output: any[] = [];
-  const seen = new Set<string>();
-  for (const event of [...first, ...second]) {
-    if (!event) continue;
-    const key = [event.runId ?? "", event.label ?? "", event.detail ?? "", event.status ?? ""].join("\u001f");
-    if (seen.has(key)) continue;
-    seen.add(key);
-    output.push(event);
-  }
-  return output;
 }
 
 export function collapseSameTurnGenerationMessages(messages: any[] = []) {
@@ -45,7 +33,7 @@ export function collapseSameTurnGenerationMessages(messages: any[] = []) {
         ...previous,
         ...message,
         content: message.content || previous.content || "",
-        processEvents: mergeProcessEvents(previous.processEvents ?? previous.events, message.processEvents ?? message.events),
+        processEvents: mergeChatProcessEvents(previous.processEvents ?? previous.events, message.processEvents ?? message.events),
         applicationGeneration: nextCard,
         imageGeneration: undefined,
       };

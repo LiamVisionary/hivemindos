@@ -45,6 +45,7 @@ const PROVIDER_ID = `local-tts:${APP_ID}`;
 let speechMode = "ok"; // "ok" | "http-500" | "network" | "slow-ok"
 let speechCalls = 0;
 let lastSpeechPayload = null;
+let broadDiscoveryCalls = 0;
 
 function pcmBytes(sampleCount) {
   const bytes = new Uint8Array(sampleCount * 2);
@@ -69,15 +70,19 @@ function speechResponse() {
 globalThis.fetch = async (input, init) => {
   const url = String(input instanceof Request ? input.url : input);
   if (url.startsWith("http://link.test/status")) {
+    broadDiscoveryCalls += 1;
     return Response.json({ ok: true, peer: {} });
   }
   if (url.includes("/api/fleet/discover")) {
+    broadDiscoveryCalls += 1;
     return Response.json({ machines: [] });
   }
   if (url.includes("/api/fleet/apps")) {
+    broadDiscoveryCalls += 1;
     return Response.json({ apps: [] });
   }
   if (url.startsWith("http://127.0.0.1:8787/apps")) {
+    broadDiscoveryCalls += 1;
     return Response.json({
       apps: [
         {
@@ -408,6 +413,25 @@ globalThis.fetch = async (input, init) => {
   assert.equal(prewarmForeign.ok, true, "foreign-voice prewarm succeeds");
   assert.equal(prewarmForeign.voice, "voice01", "prewarm resolved the served voice");
   assert.equal(lastSpeechPayload?.voice, "voice01", "upstream prewarm synthesis used the served voice");
+
+  // A later cold session uses the durable app route written by the successful
+  // prewarm and validates that ONE server directly. It must not put the full
+  // fleet/link discovery sweep back on the answer-to-call-screen path.
+  const discoveryBeforeHintedResolve = broadDiscoveryCalls;
+  const hinted = await resolveLocalTtsCallConfig({
+    origin: "http://voice-persisted-route.test",
+    voiceProviderId: candidate.id,
+    voiceModelId: "qwen3-tts-0.6b-custom",
+    voiceId: "bMxLr8fP6hzNRRi9nJxU",
+    openingLine: "",
+    awaitDiscoveryForValidation: true,
+  });
+  assert.equal(hinted?.voice, "voice01", "durable route still validates the served voice");
+  assert.equal(
+    broadDiscoveryCalls,
+    discoveryBeforeHintedResolve,
+    "durable route avoids broad fleet/link discovery on cold session setup",
+  );
 
   // The audible fast path never awaits discovery: a cold cache passes the
   // stored id through (upstream now rejects unknown voices loudly) and warms

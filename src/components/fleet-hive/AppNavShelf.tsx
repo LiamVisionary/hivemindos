@@ -363,6 +363,7 @@ function AppNavShelfBase({
   appVersion,
   navBadges = {},
   pinnedUtilities,
+  pinnedUtilitiesReady = true,
   onOpenCompanionSetup,
 }: {
   activeView: DashboardView;
@@ -380,12 +381,16 @@ function AppNavShelfBase({
   navBadges?: Partial<Record<DashboardView, number>>;
   /** User-pinned utility views for the rail's third section (see MorePanel). */
   pinnedUtilities?: DashboardView[];
+  /** False until durable pin state has hydrated; prevents a default-only flash. */
+  pinnedUtilitiesReady?: boolean;
   /** Opens the hologram-companion setup/download modal (see CompanionSetupModal). */
   onOpenCompanionSetup?: () => void;
 }) {
   // Empty groups (e.g. the user unpinned every utility) are dropped so no
   // dangling divider is left behind the fixed sections.
-  const shelfGroups = buildAppNavShelfGroups(pinnedUtilities).filter((group) => group.length > 0);
+  const shelfGroups = pinnedUtilitiesReady
+    ? buildAppNavShelfGroups(pinnedUtilities).filter((group) => group.length > 0)
+    : [];
   const renderedShelfIds = new Set<DashboardView>(shelfGroups.flatMap((group) => group.map((item) => item.id)));
   const active = resolveActiveShelfSlot(activeView, renderedShelfIds);
   const shelfNavRef = useRef<HTMLElement | null>(null);
@@ -465,6 +470,7 @@ function AppNavShelfBase({
         ref={shelfNavRef}
         className="fr-shelf fr-shelf-app"
         aria-label="Primary"
+        aria-busy={!pinnedUtilitiesReady}
         data-keyboard-focus={shelfKeyboardFocus ? "true" : undefined}
         data-footer-tooltip-open={footerTooltipOpen ? "true" : undefined}
         onFocusCapture={() => {
@@ -493,14 +499,20 @@ function AppNavShelfBase({
           <img src={brandSrc} alt="HivemindOS" />
           <span className="fr-brand-name">HivemindOS</span>
         </button>
-        {shelfGroups.map((g, i) => (
+        {pinnedUtilitiesReady ? shelfGroups.map((g, i) => (
           <Fragment key={i}>
             {g.map((it) => (
               <NavShelfItem key={it.id} id={it.id} label={it.label} active={active === it.id} onNavigate={onNavigate} onPrefetch={onPrefetch} badge={navBadges[it.id]} tearOff={tearOff} />
             ))}
             {i < shelfGroups.length - 1 ? <div className="fr-nav-div" /> : null}
           </Fragment>
-        ))}
+        )) : (
+          <div className="fr-nav-hydration" aria-label="Loading saved navigation">
+            {Array.from({ length: 6 }, (_, index) => (
+              <span key={index} className="fr-nav-skeleton" aria-hidden="true" />
+            ))}
+          </div>
+        )}
         <div className="fr-shelf-foot">
           {showUpdateAction ? (
             <button

@@ -1367,7 +1367,15 @@ configure_shared_skills() {
   targets="$(normalize_agent_list "${targets:-none}")"
   if [[ "${shared_vault_ready:-true}" == "true" ]]; then
     info "→ Syncing the shared skill shelf and installing agent hooks… (this can take a moment)"
-    ./scripts/seed-shared-skills.sh --import-sources "$imports" --share-targets "$targets"
+    if ! ./scripts/seed-shared-skills.sh --import-sources "$imports" --share-targets "$targets"; then
+      if [[ "$(uname -s)" == "Darwin" ]]; then
+        shared_skills_issue="Shared skills: macOS blocked updates to some existing workspace files. Core setup continued. In System Settings > Privacy & Security > Files & Folders, allow Documents for HivemindOS, then choose HivemindOS > Re-run Setup."
+      else
+        shared_skills_issue="Shared skills: some existing workspace files could not be updated. Core setup continued. Fix that folder's permissions, then re-run Setup from HivemindOS."
+      fi
+      warn "$shared_skills_issue"
+      optional_setup_issue "$shared_skills_issue"
+    fi
     # Push the full bundled brain (skills, packaged skills, and the For Users /
     # For Investors docs) into the vault through the same checksum-managed engine
     # that the update path uses, so setup and update stay consistent.
@@ -2431,7 +2439,7 @@ if (( ${#optional_setup_issues[@]} > 0 )); then
   warn "Optional features need attention:"
   for item in "${optional_setup_issues[@]}"; do
     echo "  - $item"
-    echo "HIVEMINDOS_SETUP_WARNING: $item"
+    echo "HIVEMINDOS_SETUP_WARNING: $item" >&2
   done
 else
   ok "Ready"

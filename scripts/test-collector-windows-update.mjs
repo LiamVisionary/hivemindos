@@ -432,6 +432,24 @@ const {
     assert.deepEqual(exits, []);
   }
 
+  // A real source change must wait for live chat work instead of severing the
+  // request. The watcher retries after the chat run releases.
+  {
+    let activeChatRuns = 1;
+    let deferred = 0;
+    const { exits, handle, logs } = reloadHandler({
+      canReload: () => activeChatRuns === 0,
+      onDeferred: () => { deferred += 1; },
+    });
+    assert.equal(await handle(), false);
+    assert.equal(deferred, 1);
+    assert.deepEqual(exits, []);
+    assert.match(logs.join("\n"), /deferring reload until active chat runs finish/);
+    activeChatRuns = 0;
+    assert.equal(await handle(), true);
+    assert.deepEqual(exits, [0]);
+  }
+
   // Once reloading, further events are latched off — exit fires exactly once.
   {
     const { exits, handle } = reloadHandler({ platform: "win32" });
@@ -516,7 +534,7 @@ const {
   );
   assert.match(
     collectorSource,
-    /startSelfReloadWatcher\(\{ selfPath: collectorSourcePath \}\)/,
+    /startSelfReloadWatcher\(\{[\s\S]*?selfPath: collectorSourcePath,[\s\S]*?canReload: \(\) => activeCollectorChatRuns\.size === 0/,
     "the collector must hand its OWN source path to the extracted watcher — import.meta.url inside scripts/lib would watch the wrong file",
   );
 

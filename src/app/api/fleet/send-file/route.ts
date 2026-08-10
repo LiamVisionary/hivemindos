@@ -324,11 +324,10 @@ export async function POST(request: NextRequest) {
     return badRequest("this machine has no collector URL to reach it by");
   }
 
-  const trackedStream = createProgressStream(input);
-
   // Local / self machine: write straight to disk, no link hop.
   if (isLocalCollectorUrl(normalized)) {
     try {
+      const trackedStream = createProgressStream(input);
       const expanded = expandHomePath(input.destDir);
       const absolute = normalize(isAbsolute(expanded) ? expanded : resolve(process.cwd(), expanded));
       await mkdir(absolute, { recursive: true });
@@ -354,6 +353,44 @@ export async function POST(request: NextRequest) {
     failProgress(input, "could not resolve a link path to this machine");
     return badRequest("could not resolve a link path to this machine");
   }
+
+  // A peer must prove setup already prepared its destination before we start
+  // consuming the upload stream. In particular, this keeps macOS's Downloads
+  // permission prompt inside setup instead of surfacing on a remote transfer.
+  const readinessUrl = `${base}/_hivemind/file/readiness?dir=${encodeURIComponent(input.destDir)}`;
+  let readinessResponse: Response;
+  try {
+    readinessResponse = await fetch(readinessUrl, {
+      method: "GET",
+      cache: "no-store",
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch (error) {
+    const message = `couldn't verify file access on ${input.machineLabel} — it may be offline (${error instanceof Error ? error.message : "network error"}). No file was sent.`;
+    failProgress(input, message);
+    return Response.json({ ok: false, transferId: input.transferId, error: message }, { status: 502 });
+  }
+
+  const readiness = (await readinessResponse.json().catch(() => null)) as {
+    ok?: boolean;
+    ready?: boolean;
+    code?: string;
+    error?: string;
+  } | null;
+  if (readinessResponse.status === 404 || !readiness) {
+    const error = `${input.machineLabel} must update HivemindOS Link before Hive Drop can verify destination access. No file was sent.`;
+    failProgress(input, error);
+    return Response.json({ ok: false, transferId: input.transferId, error }, { status: 409 });
+  }
+  if (!readinessResponse.ok || !readiness.ok || readiness.ready !== true) {
+    const error = readiness.code === "downloads_access_not_prepared"
+      ? `Hive Drop needs Downloads access on ${input.machineLabel}. Re-run Setup on that Mac before sending; no file was sent.`
+      : readiness.error || `Hive Drop could not verify destination access on ${input.machineLabel}. No file was sent.`;
+    failProgress(input, error);
+    return Response.json({ ok: false, transferId: input.transferId, error }, { status: 409 });
+  }
+
+  const trackedStream = createProgressStream(input);
   const url = `${base}/_hivemind/file?dir=${encodeURIComponent(input.destDir)}&name=${encodeURIComponent(input.fileName)}`;
   const headers: HeadersInit = { "content-type": "application/octet-stream" };
   if (input.totalBytes !== null) headers["content-length"] = String(input.totalBytes);
@@ -379,7 +416,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const data = (await upstream.json().catch(() => null)) as { ok?: boolean; path?: string; error?: string } | null;
+  const data = (await upstream.json().catch(() => null)) as {
+    ok?: boolean;
+    path?: string;
+    bytes?: number;
+    sha256?: string;
+    error?: string;
+  } | null;
   if (!upstream.ok || !data?.ok) {
     // An older linkd has no /_hivemind/file route, so the request falls through
     // to its collector proxy and 404s.
@@ -392,5 +435,12 @@ export async function POST(request: NextRequest) {
 
   const path = data.path ?? `${input.destDir.replace(/\/+$/, "")}/${input.fileName}`;
   finishProgress(input, path);
-  return Response.json({ ok: true, transferId: input.transferId, path, host: input.machineLabel });
+  return Response.json({
+    ok: true,
+    transferId: input.transferId,
+    path,
+    host: input.machineLabel,
+    bytes: data.bytes,
+    sha256: data.sha256,
+  });
 }

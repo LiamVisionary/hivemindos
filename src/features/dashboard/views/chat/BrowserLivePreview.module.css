@@ -1,0 +1,212 @@
+.preview {
+  --preview-bg: rgba(16, 18, 23, 0.96);
+  --preview-bar: rgba(22, 24, 30, 0.98);
+  --preview-line: rgba(255, 255, 255, 0.12);
+  --preview-shadow: 0 24px 72px rgba(0, 0, 0, 0.46), 0 3px 14px rgba(0, 0, 0, 0.34);
+  position: fixed;
+  z-index: 150;
+  width: min(360px, calc(100vw - 24px));
+  overflow: hidden;
+  border: 1px solid var(--preview-line);
+  border-radius: 14px;
+  background: var(--preview-bg);
+  box-shadow: var(--preview-shadow);
+  color: var(--fg);
+  backdrop-filter: blur(18px) saturate(120%);
+}
+
+:global([data-theme="hive-light"]) .preview {
+  --preview-bg: rgba(250, 246, 236, 0.96);
+  --preview-bar: rgba(244, 239, 226, 0.98);
+  --preview-line: rgba(73, 61, 39, 0.2);
+  --preview-shadow: 0 24px 64px rgba(74, 61, 33, 0.2), 0 3px 12px rgba(74, 61, 33, 0.13);
+}
+
+.preview[data-collapsed="true"] {
+  width: 174px;
+  border-radius: 999px;
+}
+
+.titleBar {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 11px;
+  background: var(--preview-bar);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.titleBar:active {
+  cursor: grabbing;
+}
+
+.browserMark {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.browserMark span {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fg-4) 72%, transparent);
+}
+
+.browserMark span:first-child {
+  background: var(--honey);
+}
+
+.title {
+  font-family: var(--f-body);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--fg-2);
+}
+
+.status {
+  display: inline-flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  font-family: var(--f-body);
+  font-size: 10.5px;
+  color: var(--fg-4);
+}
+
+.statusDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.status[data-live="true"] {
+  color: var(--live);
+}
+
+.status[data-live="true"] .statusDot {
+  animation: browser-preview-pulse 1.8s ease-in-out infinite;
+}
+
+.collapseButton {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg-3);
+  font-family: var(--f-body);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.collapseButton:hover,
+.collapseButton:focus-visible {
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  color: var(--fg);
+  outline: none;
+}
+
+.viewport {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border-top: 1px solid var(--preview-line);
+  background:
+    radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--live) 9%, transparent), transparent 46%),
+    var(--bg);
+}
+
+.frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #0c0d11;
+}
+
+.placeholder {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  color: var(--fg-4);
+  font-family: var(--f-body);
+  font-size: 11.5px;
+  transition: opacity 160ms ease;
+}
+
+.placeholder[data-hidden="true"] {
+  pointer-events: none;
+  opacity: 0;
+}
+
+.placeholderGlow {
+  position: absolute;
+  inset: -30%;
+  background: linear-gradient(110deg, transparent 35%, color-mix(in srgb, var(--live) 11%, transparent) 49%, transparent 63%);
+  animation: browser-preview-scan 1.8s ease-in-out infinite;
+}
+
+.liveBadge {
+  position: absolute;
+  z-index: 2;
+  right: 8px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(12, 13, 17, 0.72);
+  color: rgba(255, 255, 255, 0.82);
+  font-family: var(--f-body);
+  font-size: 9.5px;
+  font-weight: 500;
+  padding: 4px 7px;
+  backdrop-filter: blur(10px);
+}
+
+.liveBadge > span {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--live);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 14%, transparent);
+}
+
+@keyframes browser-preview-pulse {
+  0%, 100% { opacity: 0.45; transform: scale(0.88); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes browser-preview-scan {
+  0% { transform: translateX(-42%); }
+  100% { transform: translateX(42%); }
+}
+
+@media (max-width: 640px) {
+  .preview {
+    width: min(320px, calc(100vw - 24px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status[data-live="true"] .statusDot,
+  .placeholderGlow {
+    animation: none;
+  }
+}

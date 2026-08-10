@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-08-10T01:42:05.721965+00:00",
+  "request": "Add Earned Scale, Scale Curve, swarm blackboard, outcome-aware routing, Delight Miner, outcome-first positioning, and A/B evaluation to HivemindOS.",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos@working-tree",
+      "source_path": "src/lib/frontier-lab.ts",
+      "target_path": "src/lib/earned-scale.ts",
+      "reuse_type": "adapted_code",
+      "note": "Extended the existing reversible stage decision with an eight-dimensional Scale Curve that guards Team-to-Frontier expansion while preserving every existing OAuth, budget, capacity, completion, and review gate."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos@working-tree",
+      "source_path": "src/lib/services/evaluation/harness-experiments.ts",
+      "target_path": "scripts/benchmark-earned-scale-live.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Reused fixed-worker parity, three-run conditions, proof-first grading, append-only experiment receipts, and retain/revise/remove discipline for a real collector-backed worker A/B; the deterministic policy fixture remains separate."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos@working-tree",
+      "source_path": "src/lib/services/agent-challenges.ts",
+      "target_path": "src/lib/services/earned-scale-insights.ts",
+      "reuse_type": "adapted_code",
+      "note": "Reused Agent Challenges summaries as the live swarm blackboard instead of adding a second coordination store."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos@working-tree",
+      "source_path": "src/lib/services/outcome-router.ts",
+      "target_path": "src/lib/earned-scale.ts",
+      "reuse_type": "adapted_code",
+      "note": "Reused local outcome-routing evidence and local/free preference as the allocator evidence backbone without changing Frontier OAuth authority."
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos@working-tree",
+      "source_path": "src/lib/services/skills/skill-autoresearch.ts",
+      "target_path": "src/lib/earned-scale.ts",
+      "reuse_type": "adapted_code",
+      "note": "Reused reviewed skill analytics and review-gated learning semantics for success-side Delight Miner proposals."
+    }
+  ]
+}

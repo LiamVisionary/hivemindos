@@ -258,7 +258,7 @@ import {
   type FleetSyncRepairTarget,
   type FleetSyncthingDevice,
 } from "@/features/dashboard/fleet-sync-auto-repair";
-import type { DashboardGBrainStatus, DashboardNeo4jBrainStatus, DashboardQmdStatus, DashboardSyntoStatus, DashboardTradingBrainStatus, DashboardView, RuntimeSessionSearchResult, SkillBrowserAttachmentTarget, WorkView } from "@/features/dashboard/dashboard-types";
+import type { DashboardGBrainStatus, DashboardNeo4jBrainStatus, DashboardQmdStatus, DashboardSyntoStatus, DashboardTradingBrainStatus, DashboardView, RuntimeSessionSearchResult, SkillBrowserAttachmentTarget, SkillBrowserView, WorkView } from "@/features/dashboard/dashboard-types";
 import type { MemoryTelemetryPayload } from "@/lib/types/memory-telemetry";
 import type { WorkHistoryPayload } from "@/lib/types/work-history";
 import {
@@ -744,7 +744,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
   const [skillBrowserGithubOpen, setSkillBrowserGithubOpen] = useState(false);
   const [skillBrowserGithubUrl, setSkillBrowserGithubUrl] = useState("");
   const [skillBrowserGithubInstalling, setSkillBrowserGithubInstalling] = useState(false);
-  const [skillBrowserView, setSkillBrowserView] = useState<"catalog" | "installed" | "packs" | "audit" | "write" | "fusion">("catalog");
+  const [skillBrowserView, setSkillBrowserView] = useState<SkillBrowserView>("catalog");
   const [skillBrowserWrittenContent, setSkillBrowserWrittenContent] = useState("");
   const [skillBrowserWriting, setSkillBrowserWriting] = useState(false);
   const [skillBrowserMode, setSkillBrowserMode] = useState<"brain" | "agent-class" | "attach">("brain");
@@ -4205,7 +4205,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
     : undefined;
   const queenChatOpenSpaceRightInset = activeView === "agents" ? fleetChatOpenSpaceRightInset : 0;
   // Keep the always-mounted rail stable across fast-changing view state.
-  const hasKanbanBoard = Boolean(kanbanBoard); const { pinnedUtilities, togglePinnedUtility } = usePinnedUtilities();
+  const hasKanbanBoard = Boolean(kanbanBoard); const { pinnedUtilities, pinnedUtilitiesHydrated, togglePinnedUtility } = usePinnedUtilities();
   const appNavBadges = useMemo<Partial<Record<DashboardView, number>>>(() => ({
     kanban: kanbanNavBadgeCount ?? (kanbanBoard ? needsHumanKanbanTaskCount(kanbanBoard.tasks) : 0),
     notifications: notificationSummary?.unread ?? 0,
@@ -4247,7 +4247,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
           theme={dashboardTheme === "hive-light" ? "light" : "dark"}
           onToggleTheme={handleNavShelfToggleTheme}
           appVersion={appVersion?.version ?? null}
-          navBadges={appNavBadges} pinnedUtilities={pinnedUtilities}
+          navBadges={appNavBadges} pinnedUtilities={pinnedUtilities} pinnedUtilitiesReady={pinnedUtilitiesHydrated}
           onOpenCompanionSetup={handleOpenCompanionSetup}
         />
       ) : null}

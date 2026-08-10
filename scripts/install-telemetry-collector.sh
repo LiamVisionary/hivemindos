@@ -42,6 +42,8 @@ LINK_DISABLE_PORTLIST="${HIVE_LINK_DISABLE_PORTLIST:-true}"
 LINK_RUN_WEB_CLIENT="${HIVE_LINK_RUN_WEB_CLIENT:-false}"
 LINK_EPHEMERAL="${HIVE_LINK_EPHEMERAL:-false}"
 LINK_STATUS_TIMEOUT="${HIVE_LINK_STATUS_TIMEOUT:-3s}"
+LINK_DOWNLOADS_READY_MARKER="${HIVE_LINK_DOWNLOADS_READY_MARKER:-$HOME/.hivemindos/link/downloads-ready}"
+HIVEDROP_DOWNLOADS_ACCESS_MODE="${HIVEMINDOS_PREPARE_DOWNLOADS_ACCESS:-auto}"
 LINK_CONTROL_STATUS_URL="http://$LINK_CONTROL/status"
 LINK_CONTROL_HEALTH_URL="http://$LINK_CONTROL/health"
 SYSTEM_TAILNET_SERVE_ACTIVE="false"
@@ -88,10 +90,25 @@ if [[ -z "$NODE_BIN" || ! -x "$NODE_BIN" ]]; then
   exit 1
 fi
 
-# The collector imports bonjour-service; make sure it resolves even when the full
-# workspace install never ran (collector-only machines). No-op otherwise.
-if [[ "${HIVEMINDOS_COLLECTOR_BUNDLED:-false}" != "true" ]]; then
-  "$APP_DIR/scripts/ensure-collector-deps.sh"
+# Bonjour/mDNS is a best-effort phone-discovery enhancement. The collector lazy-
+# loads it and keeps running when absent, so a hidden first-run wizard must not
+# block on npm/network access for this optional feature. An interactive manual
+# installer still includes it by default; automation can force either choice.
+if [[ "${HIVEMINDOS_COLLECTOR_BUNDLED:-false}" != "true" \
+  && ! -f "$APP_DIR/node_modules/bonjour-service/package.json" ]]; then
+  install_optional_collector_deps="${HIVEMINDOS_COLLECTOR_OPTIONAL_DEPS:-auto}"
+  case "$install_optional_collector_deps" in
+    install|true|1|yes) install_optional_collector_deps="true" ;;
+    skip|false|0|no) install_optional_collector_deps="false" ;;
+    *)
+      if [[ -t 0 && -t 1 ]]; then install_optional_collector_deps="true"; else install_optional_collector_deps="false"; fi
+      ;;
+  esac
+  if [[ "$install_optional_collector_deps" == "false" ]]; then
+    echo "Skipping optional Bonjour/mDNS dependency in background setup; local agent bridging is unaffected."
+  else
+    "$APP_DIR/scripts/ensure-collector-deps.sh"
+  fi
 fi
 
 resolve_macos_collector_program_arguments() {
@@ -927,6 +944,59 @@ wait_for_hivemind_link_status() {
   return 1
 }
 
+macos_hivedrop_downloads_ready() {
+  curl -fsS --max-time 3 \
+    "http://$LINK_CONTROL/_hivemind/file/readiness?dir=~/Downloads" 2>/dev/null | "$NODE_BIN" -e '
+let raw = "";
+process.stdin.on("data", (chunk) => { raw += chunk; });
+process.stdin.on("end", () => {
+  try { process.exit(JSON.parse(raw)?.ready === true ? 0 : 1); }
+  catch { process.exit(1); }
+});
+'
+}
+
+prepare_macos_hivedrop_downloads_access() {
+  [[ "$(uname -s)" == "Darwin" && "$LINK_ACTIVE" == "true" ]] || return 0
+  if macos_hivedrop_downloads_ready; then
+    echo "Hive Drop Downloads access is already ready."
+    return 0
+  fi
+
+  local mode="$HIVEDROP_DOWNLOADS_ACCESS_MODE"
+  case "$mode" in
+    required|prompt|true|1|yes) mode="required" ;;
+    skip|false|0|no|off) mode="skip" ;;
+    *)
+      if [[ -t 0 && -t 1 ]]; then mode="required"; else mode="skip"; fi
+      ;;
+  esac
+  if [[ "$mode" == "skip" ]]; then
+    echo "HIVEMINDOS_SETUP_WARNING: Hive Drop to the macOS Downloads folder is disabled until setup can prepare that folder. Re-run setup from a logged-in desktop session, or deploy a managed PPPC profile and rerun headless setup with HIVEMINDOS_PREPARE_DOWNLOADS_ACCESS=required." >&2
+    return 0
+  fi
+
+  echo "Preparing Hive Drop access to Downloads. macOS may ask once; approve it now so future remote transfers never pause."
+  local response
+  response="$(curl -fsS --max-time 120 -X POST \
+    "http://$LINK_CONTROL/_hivemind/file/readiness?dir=~/Downloads" 2>/dev/null || true)"
+  if printf '%s' "$response" | "$NODE_BIN" -e '
+let raw = "";
+process.stdin.on("data", (chunk) => { raw += chunk; });
+process.stdin.on("end", () => {
+  try { process.exit(JSON.parse(raw)?.ready === true ? 0 : 1); }
+  catch { process.exit(1); }
+});
+'; then
+    echo "Hive Drop Downloads access prepared."
+    return 0
+  fi
+
+  echo "Hive Drop could not prepare Downloads access. Setup will not mark this Mac ready for remote file delivery." >&2
+  echo "Open HivemindOS in the logged-in desktop session, re-run Setup, and approve the Downloads prompt. Headless Macs must receive a PPPC profile from device management, then rerun setup with HIVEMINDOS_PREPARE_DOWNLOADS_ACCESS=required." >&2
+  return 1
+}
+
 stop_hivemind_link_service() {
   if [[ "$(uname -s)" == "Darwin" ]]; then
     local plist="${LINK_PLIST:-$HOME/Library/LaunchAgents/$LINK_LABEL.plist}"
@@ -1054,6 +1124,10 @@ wait_for_local_collector() {
 # collector binds 0.0.0.0 (a --system-tailscale install without tailscale serve).
 maybe_allow_node_through_macos_firewall() {
   if [[ "$(uname -s)" != "Darwin" || ! -x /usr/libexec/ApplicationFirewall/socketfilterfw ]]; then
+    return
+  fi
+  if [[ ! -t 0 || ! -t 1 ]]; then
+    echo "Skipping the optional macOS firewall allow-list in background setup. Fleet can request it later if this Mac needs inbound Tailnet access." >&2
     return
   fi
   if ! prompt_yes_no "Allow this collector's Node binary through the macOS firewall for Tailnet dashboards?" "yes"; then
@@ -1239,6 +1313,7 @@ configure_hermes_api_server() {
       fi
     else
       echo "Hermes API server still unhealthy but already configured with a key and restarted once; not restarting again to avoid a restart loop. Check 'hermes gateway' logs." >&2
+      return
     fi
   fi
 
@@ -1287,12 +1362,120 @@ fi
 choose_system_tailnet_collector_port
 choose_link_local_collector_port
 
+collector_health_matches_app_dir() {
+  local port="$1"
+  curl -fsS --max-time 2 "http://127.0.0.1:$port/health" 2>/dev/null | "$NODE_BIN" -e '
+let raw = "";
+process.stdin.on("data", (chunk) => { raw += chunk; });
+process.stdin.on("end", () => {
+  try {
+    const health = JSON.parse(raw);
+    process.exit(health?.ok === true && health?.version?.appDir === process.argv[1] ? 0 : 1);
+  } catch { process.exit(1); }
+});
+' "$APP_DIR"
+}
+
+reserve_collector_restart_window() {
+  local request_id="installer-$$-$(date +%s)"
+  local payload
+  local attempt
+  payload="$(curl -fsS --max-time 3 -X POST \
+    -H "x-hivemind-maintenance-request-id: $request_id" \
+    "http://127.0.0.1:$PORT/maintenance/reserve-update" 2>/dev/null || true)"
+  if [[ -z "$payload" ]]; then
+    echo "The running collector could not reserve a safe restart window; leaving it online instead of interrupting a chat." >&2
+    return 1
+  fi
+  if ! printf '%s' "$payload" | "$NODE_BIN" -e '
+let raw = "";
+process.stdin.on("data", (chunk) => { raw += chunk; });
+process.stdin.on("end", () => {
+  try { process.exit(JSON.parse(raw)?.ok === true ? 0 : 1); }
+  catch { process.exit(1); }
+});
+'; then
+    echo "The running collector declined maintenance; leaving it online instead of interrupting a chat." >&2
+    return 1
+  fi
+  for ((attempt = 1; attempt <= 2520; attempt += 1)); do
+    if curl -fsS --max-time 2 "http://127.0.0.1:$PORT/maintenance/readiness" 2>/dev/null | "$NODE_BIN" -e '
+let raw = "";
+process.stdin.on("data", (chunk) => { raw += chunk; });
+process.stdin.on("end", () => {
+  try {
+    const state = JSON.parse(raw);
+    process.exit(state?.updateStarting === true && Number(state?.activeChatRunCount || 0) === 0 ? 0 : 1);
+  } catch { process.exit(1); }
+});
+'; then
+      return 0
+    fi
+    sleep 0.5
+  done
+  echo "Timed out waiting for active agent chats to finish; leaving the collector online and canceling this restart." >&2
+  return 1
+}
+
+wait_for_installed_collector() {
+  local attempt
+  for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+    if collector_health_matches_app_dir "$PORT"; then
+      return 0
+    fi
+    sleep 0.5
+  done
+  return 1
+}
+
+write_collector_env() {
+  local COLLECTOR_ENV="$HOME/.hivemindos/collector.env"
+  local COLLECTOR_ENV_NEXT="$HOME/.hivemindos/collector.env.next.$$"
+  local PREVIOUS_UMASK
+  PREVIOUS_UMASK="$(umask)"
+  mkdir -p "$HOME/.hivemindos"
+  umask 077
+  if ! {
+    printf "AGENT_TELEMETRY_PORT=%q\n" "$PORT"
+    printf "HIVE_TAILNET_COLLECTOR_PORT=%q\n" "$TAILNET_COLLECTOR_PORT"
+    printf "HIVE_LINK_TAILNET_PORT=%q\n" "$LINK_TAILNET_PORT"
+    printf "HIVE_LINK_CONTROL=%q\n" "$LINK_CONTROL"
+    printf "HIVE_LINK_STATE_DIR=%q\n" "$LINK_STATE_DIR"
+    printf "HIVE_LINK_LABEL=%q\n" "$LINK_LABEL"
+    printf "HIVE_LINK_CONTROL_URL=%q\n" "http://$LINK_CONTROL"
+    printf "HIVE_LINK_LOG_FILE=%q\n" "$LINK_LOG_FILE"
+    printf "HIVE_LINK_LOG_MAX_BYTES=%q\n" "$LINK_LOG_MAX_BYTES"
+    printf "HIVE_LINK_TAILSCALE_DEBUG_LOGS=%q\n" "$LINK_TAILSCALE_DEBUG_LOGS"
+    printf "HIVE_LINK_DISABLE_PORTLIST=%q\n" "$LINK_DISABLE_PORTLIST"
+    printf "HIVE_LINK_RUN_WEB_CLIENT=%q\n" "$LINK_RUN_WEB_CLIENT"
+    printf "HIVE_LINK_EPHEMERAL=%q\n" "$LINK_EPHEMERAL"
+    printf "HIVE_LINK_STATUS_TIMEOUT=%q\n" "$LINK_STATUS_TIMEOUT"
+    printf "HIVE_LINK_DOWNLOADS_READY_MARKER=%q\n" "$LINK_DOWNLOADS_READY_MARKER"
+    printf "HIVE_COLLECTOR_ONLY=%q\n" "$COLLECTOR_ONLY"
+    if [[ -n "$HERMES_API_KEY_VALUE" && "$HERMES_API_KEY_VALUE" =~ ^[A-Za-z0-9._~+/=-]+$ ]]; then
+      printf "AGENT_TELEMETRY_HERMES_API_KEY=%q\n" "$HERMES_API_KEY_VALUE"
+    fi
+  } > "$COLLECTOR_ENV_NEXT"; then
+    umask "$PREVIOUS_UMASK"
+    rm -f "$COLLECTOR_ENV_NEXT"
+    return 1
+  fi
+  chmod 600 "$COLLECTOR_ENV_NEXT" 2>/dev/null || true
+  mv -f "$COLLECTOR_ENV_NEXT" "$COLLECTOR_ENV"
+  umask "$PREVIOUS_UMASK"
+}
+
 if [[ "$(uname -s)" == "Darwin" ]]; then
   SYNCTHING_PLIST="$HOME/Library/LaunchAgents/com.hivemindos.syncthing.plist"
   LEGACY_SYNCTHING_PLIST="$HOME/Library/LaunchAgents/com.omni-agent-hivemind.syncthing.plist"
-  launchctl_bounded 5 bootout "gui/$(id -u)/com.omni-agent-hivemind.syncthing" >/dev/null 2>&1 || launchctl_bounded 5 unload "$LEGACY_SYNCTHING_PLIST" >/dev/null 2>&1 || true
-  rm -f "$LEGACY_SYNCTHING_PLIST"
-  if [[ "$TAILNET_SYNC_ENABLED" == "true" || -f "$SYNCTHING_PLIST" ]]; then
+  if [[ -f "$LEGACY_SYNCTHING_PLIST" ]]; then
+    launchctl_bounded 5 bootout "gui/$(id -u)/com.omni-agent-hivemind.syncthing" >/dev/null 2>&1 || launchctl_bounded 5 unload "$LEGACY_SYNCTHING_PLIST" >/dev/null 2>&1 || true
+    rm -f "$LEGACY_SYNCTHING_PLIST"
+  fi
+  if [[ "$TAILNET_SYNC_ENABLED" != "true" && -f "$SYNCTHING_PLIST" ]]; then
+    cache_syncthing_api_key_for_collector
+    echo "Syncthing macOS LaunchAgent already running; local-only setup left it unchanged."
+  elif [[ "$TAILNET_SYNC_ENABLED" == "true" ]]; then
     install_syncthing_if_missing
     if command -v syncthing >/dev/null 2>&1; then
       SYNCTHING_BIN="$(command -v syncthing)"
@@ -1347,9 +1530,10 @@ PLIST
   fi
 
   PLIST="$HOME/Library/LaunchAgents/com.agent-control-room.telemetry.plist"
+  PLIST_NEXT="$PLIST.next.$$"
   mkdir -p "$(dirname "$PLIST")"
   COLLECTOR_PROGRAM_ARGUMENTS="$(resolve_macos_collector_program_arguments)"
-  cat > "$PLIST" <<PLIST
+  cat > "$PLIST_NEXT" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -1367,6 +1551,7 @@ PLIST
     <key>AGENT_TELEMETRY_HERMES_API_PORT</key><string>$HERMES_API_PORT</string>
 $HERMES_API_KEY_PLIST_ENTRY
     <key>HIVE_COLLECTOR_ONLY</key><string>$COLLECTOR_ONLY</string>
+    <key>HIVE_LINK_DOWNLOADS_READY_MARKER</key><string>$LINK_DOWNLOADS_READY_MARKER</string>
     <key>HIVEMINDOS_APP_DIR</key><string>$APP_DIR</string>
   </dict>
   <key>RunAtLoad</key><true/>
@@ -1379,9 +1564,25 @@ $HERMES_API_KEY_PLIST_ENTRY
 </dict>
 </plist>
 PLIST
-  launchctl_quiet 5 bootout "gui/$(id -u)/com.agent-control-room.telemetry" || launchctl_quiet 5 unload "$PLIST" || true
-  launchctl_quiet 5 bootstrap "gui/$(id -u)" "$PLIST" || launchctl_quiet 5 load "$PLIST" || true
-  launchctl_quiet 5 kickstart -k "gui/$(id -u)/com.agent-control-room.telemetry" || true
+  collector_plist_unchanged() {
+    [[ -f "$PLIST" ]] && cmp -s "$PLIST_NEXT" "$PLIST"
+  }
+  collector_service_healthy() {
+    collector_health_matches_app_dir "$PORT"
+  }
+  if collector_plist_unchanged && collector_service_healthy; then
+    rm -f "$PLIST_NEXT"
+    echo "HivemindOS collector LaunchAgent is already current and healthy."
+  else
+    if collector_service_healthy && ! reserve_collector_restart_window; then
+      rm -f "$PLIST_NEXT"
+      exit 1
+    fi
+    mv -f "$PLIST_NEXT" "$PLIST"
+    launchctl_quiet 5 bootout "gui/$(id -u)/com.agent-control-room.telemetry" || launchctl_quiet 5 unload "$PLIST" || true
+    launchctl_quiet 5 bootstrap "gui/$(id -u)" "$PLIST" || launchctl_quiet 5 load "$PLIST" || true
+    launchctl_quiet 5 kickstart -k "gui/$(id -u)/com.agent-control-room.telemetry" || true
+  fi
   if [[ "$LINK_ACTIVE" == "true" ]]; then
     prepare_hivemind_link_state_dir
     LINK_PLIST="$HOME/Library/LaunchAgents/$LINK_LABEL.plist"
@@ -1411,6 +1612,7 @@ PLIST
     <key>HIVE_LINK_RUN_WEB_CLIENT</key><string>$LINK_RUN_WEB_CLIENT</string>
     <key>HIVE_LINK_EPHEMERAL</key><string>$LINK_EPHEMERAL</string>
     <key>HIVE_LINK_STATUS_TIMEOUT</key><string>$LINK_STATUS_TIMEOUT</string>
+    <key>HIVE_LINK_DOWNLOADS_READY_MARKER</key><string>$LINK_DOWNLOADS_READY_MARKER</string>
     <key>TS_DEBUG_DISABLE_PORTLIST</key><string>$LINK_DISABLE_PORTLIST</string>
   </dict>
   <key>RunAtLoad</key><true/>
@@ -1491,6 +1693,7 @@ Environment=AGENT_TELEMETRY_HERMES_API_HOST=$HERMES_API_HOST
 Environment=AGENT_TELEMETRY_HERMES_API_PORT=$HERMES_API_PORT
 $HERMES_API_KEY_SYSTEMD_ENTRY
 Environment=HIVE_COLLECTOR_ONLY=$COLLECTOR_ONLY
+Environment=HIVE_LINK_DOWNLOADS_READY_MARKER=$LINK_DOWNLOADS_READY_MARKER
 Environment=HIVEMINDOS_APP_DIR=$APP_DIR
 ExecStart=$NODE_BIN $COLLECTOR
 Restart=always
@@ -1561,6 +1764,7 @@ Environment=HIVE_LINK_DISABLE_PORTLIST=$LINK_DISABLE_PORTLIST
 Environment=HIVE_LINK_RUN_WEB_CLIENT=$LINK_RUN_WEB_CLIENT
 Environment=HIVE_LINK_EPHEMERAL=$LINK_EPHEMERAL
 Environment=HIVE_LINK_STATUS_TIMEOUT=$LINK_STATUS_TIMEOUT
+Environment=HIVE_LINK_DOWNLOADS_READY_MARKER=$LINK_DOWNLOADS_READY_MARKER
 Environment=TS_DEBUG_DISABLE_PORTLIST=$LINK_DISABLE_PORTLIST
 ExecStart=$LINK_BIN
 Restart=always
@@ -1576,27 +1780,11 @@ fi
 
 cache_syncthing_api_key_for_collector
 
-mkdir -p "$HOME/.hivemindos"
-{
-  printf "AGENT_TELEMETRY_PORT=%q\n" "$PORT"
-  printf "HIVE_TAILNET_COLLECTOR_PORT=%q\n" "$TAILNET_COLLECTOR_PORT"
-  printf "HIVE_LINK_TAILNET_PORT=%q\n" "$LINK_TAILNET_PORT"
-  printf "HIVE_LINK_CONTROL=%q\n" "$LINK_CONTROL"
-  printf "HIVE_LINK_STATE_DIR=%q\n" "$LINK_STATE_DIR"
-  printf "HIVE_LINK_LABEL=%q\n" "$LINK_LABEL"
-  printf "HIVE_LINK_CONTROL_URL=%q\n" "http://$LINK_CONTROL"
-  printf "HIVE_LINK_LOG_FILE=%q\n" "$LINK_LOG_FILE"
-  printf "HIVE_LINK_LOG_MAX_BYTES=%q\n" "$LINK_LOG_MAX_BYTES"
-  printf "HIVE_LINK_TAILSCALE_DEBUG_LOGS=%q\n" "$LINK_TAILSCALE_DEBUG_LOGS"
-  printf "HIVE_LINK_DISABLE_PORTLIST=%q\n" "$LINK_DISABLE_PORTLIST"
-  printf "HIVE_LINK_RUN_WEB_CLIENT=%q\n" "$LINK_RUN_WEB_CLIENT"
-  printf "HIVE_LINK_EPHEMERAL=%q\n" "$LINK_EPHEMERAL"
-  printf "HIVE_LINK_STATUS_TIMEOUT=%q\n" "$LINK_STATUS_TIMEOUT"
-  printf "HIVE_COLLECTOR_ONLY=%q\n" "$COLLECTOR_ONLY"
-  if [[ -n "$HERMES_API_KEY_VALUE" && "$HERMES_API_KEY_VALUE" =~ ^[A-Za-z0-9._~+/=-]+$ ]]; then
-    printf "AGENT_TELEMETRY_HERMES_API_KEY=%q\n" "$HERMES_API_KEY_VALUE"
-  fi
-} > "$HOME/.hivemindos/collector.env"
+if ! wait_for_installed_collector; then
+  echo "Collector installation did not produce a healthy owned service on 127.0.0.1:$PORT; preserving the previous collector.env instead of publishing stale metadata." >&2
+  exit 1
+fi
+write_collector_env
 
 if [[ "$TAILNET_SYNC_ENABLED" == "true" && "$NETWORK_MANAGED_BY_SETUP" != "true" ]]; then
   install_rsync_if_missing
@@ -1674,6 +1862,7 @@ if [[ "$LINK_ACTIVE" == "true" ]]; then
     fi
     break
   done
+  prepare_macos_hivedrop_downloads_access
 fi
 if wait_for_local_collector 10; then
   if [[ "$LINK_ACTIVE" != "true" ]]; then

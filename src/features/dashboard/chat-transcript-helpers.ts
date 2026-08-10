@@ -1,5 +1,6 @@
 import type { ChatMessage } from "@/features/dashboard/dashboard-types";
 import { latestChatAppArtifact } from "@/lib/services/chat/chat-app-artifact";
+import { mergeChatProcessEvents as mergeProcessEventLists } from "@/lib/services/chat/chat-process-events";
 import { CAPABILITY_APPROVAL_CONTINUATION_MARKER } from "@/lib/types/capability-approval";
 
 // Pure transcript helpers: message identity/equality, turn matching, and the
@@ -125,22 +126,7 @@ export function mergeChatProcessEvents(
   first: ChatMessage["processEvents"] = [],
   second: ChatMessage["processEvents"] = [],
 ) {
-  const output: NonNullable<ChatMessage["processEvents"]> = [];
-  const indexByKey = new Map<string, number>();
-  for (const event of [...(first ?? []), ...(second ?? [])]) {
-    if (!event) continue;
-    // Status is deliberately NOT part of the identity: the same step arriving
-    // again as running→completed must update the existing row, not add a twin.
-    const key = [event.runId ?? "", event.label ?? "", event.detail ?? ""].join("");
-    const existingIndex = indexByKey.get(key);
-    if (existingIndex === undefined) {
-      indexByKey.set(key, output.length);
-      output.push(event);
-    } else if (Number(event.at ?? 0) >= Number(output[existingIndex]?.at ?? 0)) {
-      output[existingIndex] = event;
-    }
-  }
-  return output.sort((left, right) => Number(left.at ?? 0) - Number(right.at ?? 0)).slice(-80);
+  return mergeProcessEventLists(first ?? [], second ?? []);
 }
 
 export function preserveLocalTurnProcessEvents(sessionTurn: ChatMessage[], localTurn: ChatMessage[]) {

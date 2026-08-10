@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import fs from "node:fs";
 import { readFile } from "node:fs/promises";
 import { register } from "node:module";
+import os from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
@@ -69,6 +74,37 @@ assert.doesNotMatch(
 const collectorInstaller = await readFile(new URL("./install-telemetry-collector.sh", import.meta.url), "utf8");
 assert.match(collectorInstaller, /loginctl enable-linger/, "Linux background services should survive SSH logout");
 assert.match(collectorInstaller, /Environment=AGENT_TELEMETRY_HOST=127\.0\.0\.1/, "collector should bind to loopback behind Hivemind Link or Tailscale Serve");
+
+const codexHome = fs.mkdtempSync(path.join(os.tmpdir(), "hivemind-codex-registration-"));
+const codexConfigPath = path.join(codexHome, ".codex", "config.toml");
+const registrarPath = fileURLToPath(new URL("./register-mcp-clients.mjs", import.meta.url));
+try {
+  fs.mkdirSync(path.dirname(codexConfigPath), { recursive: true });
+  fs.writeFileSync(codexConfigPath, [
+    "[mcp_servers.hivemind]",
+    'command = "old-node"',
+    'args = ["old-server"]',
+    "",
+    "[mcp_servers.hivemind.env]",
+    'HIVE_ENV_PROJECT_ROOT = "/old/root"',
+    "",
+    "[desktop]",
+    'appearanceTheme = "dark"',
+    "",
+  ].join("\n"));
+  const registrarEnv = { ...process.env, HOME: codexHome, USERPROFILE: codexHome };
+  const registrarArgs = [registrarPath, "--server", "hivemind", "--targets", "codex", "--force"];
+  execFileSync(process.execPath, registrarArgs, { env: registrarEnv });
+  const once = fs.readFileSync(codexConfigPath, "utf8");
+  assert.equal((once.match(/^\[mcp_servers\.hivemind\]$/gm) || []).length, 1, "Codex should contain one Hivemind MCP table");
+  assert.doesNotMatch(once, /^\[mcp_servers\.hivemind\.env\]$/m, "registration should remove stale nested env tables");
+  assert.match(once, /^env = \{ HIVE_ENV_PROJECT_ROOT = ".+" \}$/m, "registration should keep one inline environment table");
+  assert.match(once, /^\[desktop\]$/m, "registration should preserve unrelated Codex settings");
+  execFileSync(process.execPath, registrarArgs, { env: registrarEnv });
+  assert.equal(fs.readFileSync(codexConfigPath, "utf8"), once, "Codex registration should remain idempotent");
+} finally {
+  fs.rmSync(codexHome, { recursive: true, force: true });
+}
 
 const uninstaller = await readFile(new URL("../uninstall.sh", import.meta.url), "utf8");
 assert.match(uninstaller, /systemd-linger-enabled-by-hivemindos/, "uninstall should mirror HivemindOS-managed lingering");

@@ -115,7 +115,7 @@ Choose **Engineering discipline** from a Work Board quick-add template when cons
 
 ### Built-In Skill Autoresearch
 
-HivemindOS watches reviewed outcomes from regular chat, Work Board tasks, Company tasks, scheduled skill actions, and the shared skill-analytics intake. Three failed or blocked executions of the same installed skill across three distinct chat turns, tasks, or runs create one pending Brain Review proposal. A later cycle needs three fresh failures after the previous suggestion. Successes remain useful analytics but do not create optimizer work.
+HivemindOS watches reviewed outcomes from regular chat, Work Board tasks, Company tasks, scheduled skill actions, and the shared skill-analytics intake. Three failed or blocked executions of the same installed skill across three distinct chat turns, tasks, or runs create one pending Brain Review proposal. A later cycle needs three fresh failures after the previous suggestion. Repeated successes do not create optimizer work; Frontier Lab's review-gated Delight Miner can surface them separately as proposals for a reusable skill, schedule, or standing company capability.
 
 Regular chat uses conservative per-turn attribution across typed chat, low-latency voice, Hive Fusion, phone-hosted agents, and HTTP/OpenAI-compatible runtimes. A skill counts only when the user explicitly names it, the agent profile selects it as a preferred skill, or a runtime tool receipt shows the skill's `SKILL.md` was loaded. A skill that merely appeared in capability-search results does not count as used. The completed response is evaluated, and a thumbs-down records a corrected failure for that same turn; clearing feedback restores the automatic outcome. Repeated identical prompts still remain distinct turns.
 

@@ -43,8 +43,8 @@ export function useStatusChatInputController(props: any) {
   function finishChatStream(storageKey: string, runId: string) {
     finishChatStreamState(setChatStreamingByKey, storageKey, runId);
   }
-  function appendChatProcess(storageKey: string, label: string, detail?: string, status?: string, runId?: string) {
-    appendChatProcessState({ detail, label, runId, setChatProcessByKey, status, storageKey });
+  function appendChatProcess(storageKey: string, label: string, detail?: string, status?: string, runId?: string, browserPreview?: { url?: string; source?: string }) {
+    appendChatProcessState({ browserPreview, detail, label, runId, setChatProcessByKey, status, storageKey });
   }
 
   function chatMessageLabel(prompt: string, attachments: any[], directories: any[]) {
@@ -1058,22 +1058,22 @@ export function useStatusChatInputController(props: any) {
     });
     // The anchor assistant message was created at turn start (or carried in by
     // the capability continuation) — no second pending message here.
-    const appendRunChatProcess = (label: string, detail?: string, status?: string) => {
+    const appendRunChatProcess = (label: string, detail?: string, status?: string, browserPreview?: { url?: string; source?: string }) => {
       const cleanLabel = label.trim();
       if (!cleanLabel) return;
       const last = activeRunProcessEvents[activeRunProcessEvents.length - 1];
       if (last?.label === cleanLabel && last?.detail === detail) {
         activeRunProcessEvents = [
           ...activeRunProcessEvents.slice(0, -1),
-          { ...last, at: Date.now(), status, runId: taskId },
+          { ...last, at: Date.now(), status, runId: taskId, ...(browserPreview ? { browserPreview } : {}) },
         ];
       } else {
         activeRunProcessEvents = [
           ...activeRunProcessEvents,
-          { at: Date.now(), label: cleanLabel, detail, status, runId: taskId },
+          { at: Date.now(), label: cleanLabel, detail, status, runId: taskId, ...(browserPreview ? { browserPreview } : {}) },
         ].slice(-80);
       }
-      appendChatProcess(selectedStorageKey, cleanLabel, detail, status, taskId);
+      appendChatProcess(selectedStorageKey, cleanLabel, detail, status, taskId, browserPreview);
       persistActiveProcessEventsToAssistant();
     };
     const updateActiveImageGenerationCard = (patch: Record<string, unknown> = {}) => {
@@ -1392,12 +1392,12 @@ export function useStatusChatInputController(props: any) {
           }
           const processEvent = processLabelFromRuntimeEvent(parsed);
           if (processEvent) {
-            appendRunChatProcess(processEvent.label, processEvent.detail, processEvent.status);
+            appendRunChatProcess(processEvent.label, processEvent.detail, processEvent.status, processEvent.browserPreview);
             maybeStartImageGenerationCard(processEvent.label, processEvent.detail);
           }
           if (parsed.session?.id) {
             const sessionId = parsed.session.id;
-            if (!currentRuntimeSessionId || sessionId === localRuntimeSessionId) currentRuntimeSessionId = sessionId;
+            if (!currentRuntimeSessionId || sessionId === localRuntimeSessionId || parsed.session.source === "hermes-recovery") currentRuntimeSessionId = sessionId;
             const activeSessionId = currentRuntimeSessionId || localRuntimeSessionId;
             setChatRuntimeSessionIdsByKey((current) => ({ ...current, [selectedStorageKey]: activeSessionId }));
             if (requestStillSelected()) setSelectedChatRuntimeSessionId(activeSessionId);

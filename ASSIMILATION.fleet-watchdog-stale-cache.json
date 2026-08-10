@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-08-10T05:40:14.040029+00:00",
+  "request": "make the changes then commit and push EVERYTHING to main",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/lib/fleet-watchdog-local-collector.mjs",
+      "target_path": "scripts/lib/fleet-watchdog-discovery.mjs",
+      "reuse_type": "adapted_code",
+      "note": "pure watchdog policy helper pattern for independently testable discovery and remediation decisions"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/lib/async-ttl-cache.mjs",
+      "target_path": "scripts/lib/fleet-watchdog-discovery.mjs",
+      "reuse_type": "adapted_code",
+      "note": "TTL freshness semantics adapted for persisted fleet discovery snapshots"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-fleet-watchdog-escalation.mjs",
+      "target_path": "scripts/test-fleet-watchdog-escalation.mjs",
+      "reuse_type": "test_adapted",
+      "note": "hermetic helper behavior and source-wiring regression coverage"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/fleet-health-watchdog.mjs",
+      "target_path": "scripts/fleet-health-watchdog.mjs",
+      "reuse_type": "adapted_code",
+      "note": "authoritative watchdog discovery probe remediation and alert call chain"
+    }
+  ]
+}

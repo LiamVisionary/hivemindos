@@ -9,6 +9,16 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import { createEscalationTracker, formatEscalationAlert } from "./lib/fleet-watchdog-escalation.mjs";
+import {
+  collectorHealthBelongsToApp,
+  localCollectorPortCandidates,
+  selectHealthyLocalCollector,
+} from "./lib/fleet-watchdog-local-collector.mjs";
+import {
+  createMachineCacheSnapshot,
+  readFreshMachineCache,
+  shouldAttemptRemediation,
+} from "./lib/fleet-watchdog-discovery.mjs";
 
 let passed = 0;
 function check(label, fn) {
@@ -102,6 +112,101 @@ check("alert text names the machine, service, counts, and probe error", () => {
   assert.match(formatEscalationAlert({ name: "m", kind: "tts", streak: 3, remediations: 1, reason: "r" }), /1 restart attempt[^s]/);
 });
 
+check("the active service port outranks stale collector.env metadata", () => {
+  const candidates = localCollectorPortCandidates({
+    configuredPort: "8797",
+    launchAgentText: `
+      <key>EnvironmentVariables</key><dict>
+        <key>AGENT_TELEMETRY_PORT</key><string>8792</string>
+      </dict>
+    `,
+    scanPorts: [8787, 8792, 8797],
+  });
+  assert.deepEqual(candidates.slice(0, 3), [
+    { port: 8792, source: "launchd", authoritative: true },
+    { port: 8797, source: "collector.env", authoritative: false },
+    { port: 8787, source: "scan", authoritative: false },
+  ]);
+});
+
+check("systemd service metadata is authoritative too", () => {
+  const candidates = localCollectorPortCandidates({
+    configuredPort: "8787",
+    systemdUnitText: "Environment=AGENT_TELEMETRY_PORT=9123\n",
+    scanPorts: [8787],
+  });
+  assert.deepEqual(candidates.slice(0, 2), [
+    { port: 9123, source: "systemd", authoritative: true },
+    { port: 8787, source: "collector.env", authoritative: false },
+  ]);
+});
+
+check("a scanned collector must prove it belongs to this checkout", () => {
+  const matching = { ok: true, version: { appDir: "/opt/hivemindos" } };
+  const unrelated = { ok: true, version: { appDir: "/opt/other-checkout" } };
+  assert.equal(collectorHealthBelongsToApp(matching, "/opt/hivemindos", false), true);
+  assert.equal(collectorHealthBelongsToApp(unrelated, "/opt/hivemindos", false), false);
+  assert.equal(collectorHealthBelongsToApp({ ok: true }, "/opt/hivemindos", false), false);
+  assert.equal(collectorHealthBelongsToApp({ ok: true }, "/opt/hivemindos", true), true);
+});
+
+check("stale metadata cannot hide the healthy owned collector", () => {
+  const candidates = localCollectorPortCandidates({
+    configuredPort: "8797",
+    launchAgentText: "<key>AGENT_TELEMETRY_PORT</key><string>8792</string>",
+    scanPorts: [8787, 8792, 8797],
+  });
+  const selected = selectHealthyLocalCollector(
+    candidates.map((candidate) => ({
+      candidate,
+      health: candidate.port === 8792
+        ? { ok: true, version: { appDir: "/opt/hivemindos" } }
+        : null,
+    })),
+    "/opt/hivemindos",
+  );
+  assert.deepEqual(selected?.candidate, { port: 8792, source: "launchd", authoritative: true });
+});
+
+check("fleet cache snapshots preserve only recently confirmed machine state", () => {
+  const now = Date.parse("2026-08-10T05:00:00.000Z");
+  const machines = [{ name: "worker", online: true, collectorUrl: "http://worker:8787" }];
+  const snapshot = createMachineCacheSnapshot(machines, now - 60_000);
+  const cached = readFreshMachineCache(JSON.stringify(snapshot), { now, ttlMs: 5 * 60_000 });
+  assert.equal(cached.fresh, true);
+  assert.equal(cached.ageMs, 60_000);
+  assert.deepEqual(cached.machines, machines);
+});
+
+check("legacy, stale, and future-dated fleet caches cannot create live watchdog targets", () => {
+  const now = Date.parse("2026-08-10T05:00:00.000Z");
+  const machines = [{ name: "offline-ghost", online: true, collectorUrl: "http://ghost:8787" }];
+  assert.deepEqual(
+    readFreshMachineCache(JSON.stringify(machines), { now, ttlMs: 5 * 60_000 }),
+    { fresh: false, machines: [], reason: "legacy-cache" },
+  );
+  assert.equal(
+    readFreshMachineCache(
+      JSON.stringify(createMachineCacheSnapshot(machines, now - 5 * 60_000 - 1)),
+      { now, ttlMs: 5 * 60_000 },
+    ).reason,
+    "stale-cache",
+  );
+  assert.equal(
+    readFreshMachineCache(
+      JSON.stringify(createMachineCacheSnapshot(machines, now + 61_000)),
+      { now, ttlMs: 5 * 60_000 },
+    ).reason,
+    "future-cache",
+  );
+});
+
+check("an unreachable remote control path is never classified as restartable", () => {
+  assert.equal(shouldAttemptRemediation({ local: false }, { unreachable: true }), false);
+  assert.equal(shouldAttemptRemediation({ local: false }, { unreachable: false }), true);
+  assert.equal(shouldAttemptRemediation({ local: true }, { unreachable: true }), true);
+});
+
 // --- Watchdog wiring contract (source-anchored; the script cannot be imported
 // without starting its probe loop) ---
 const watchdog = readFileSync(new URL("./fleet-health-watchdog.mjs", import.meta.url), "utf8");
@@ -115,6 +220,45 @@ check("watchdog wires the tracker through failure, remediation, recovery, and es
 
 check("deep recovery is only recorded on deep cycles (cheap probes lie through a wedge)", () => {
   assert.match(watchdog, /if \(deep\) \{\s*\n\s*const recovery = escalations\.recordDeepRecovery\(target\.key\)/);
+});
+
+check("the watchdog discovers the owned local collector and rechecks before remediation", () => {
+  assert.match(watchdog, /localCollectorPortCandidates/);
+  assert.match(watchdog, /selectHealthyLocalCollector/);
+  assert.match(watchdog, /async function probeSelfCollector/);
+  assert.match(watchdog, /recovered before remediation \(final safety probe passed; no restart\)/);
+  const remediationBranch = watchdog.indexOf("if (fails >= threshold");
+  const safetyProbe = watchdog.indexOf("const finalProbe =", remediationBranch);
+  const remediation = watchdog.indexOf("REMEDIATING — restart", remediationBranch);
+  assert.ok(safetyProbe > remediationBranch, "the final safety probe should run inside the remediation branch");
+  assert.ok(remediation > safetyProbe, "the watchdog must pass the final safety probe before it can restart a collector");
+});
+
+check("stale discovery caches and unreachable peers fail closed without restart spam", () => {
+  assert.match(watchdog, /createMachineCacheSnapshot/);
+  assert.match(watchdog, /readFreshMachineCache/);
+  assert.match(watchdog, /fleet discovery cache .*ignored/i);
+  assert.match(watchdog, /shouldAttemptRemediation\(target, result\)/);
+  assert.match(watchdog, /restart not attempted because the control path is also unreachable/);
+  assert.match(watchdog, /clearAlert\(`unreachable:\$\{target\.key\}`\)/);
+  assert.match(watchdog, /unreachable: true, reason: `health unreachable:/);
+  assert.match(watchdog, /unreachable: true, reason: `models unreachable:/);
+
+  const unreachableBranch = watchdog.indexOf("if (!shouldAttemptRemediation(target, result))");
+  const normalRemediation = watchdog.indexOf("REMEDIATING — restart", unreachableBranch);
+  assert.ok(unreachableBranch >= 0, "watchdog classifies unreachable targets before remediation");
+  assert.ok(normalRemediation > unreachableBranch, "normal remediation remains after the unreachable-target guard");
+});
+
+check("collector metadata is published atomically only after live service verification", () => {
+  const installer = readFileSync(new URL("./install-telemetry-collector.sh", import.meta.url), "utf8");
+  assert.match(installer, /wait_for_installed_collector/);
+  assert.match(installer, /collector\.env\.next\.\$\$/);
+  assert.match(installer, /mv -f "\$COLLECTOR_ENV_NEXT" "\$COLLECTOR_ENV"/);
+  assert.ok(
+    installer.indexOf("wait_for_installed_collector") < installer.indexOf("write_collector_env"),
+    "the installed collector must be verified before metadata is published",
+  );
 });
 
 check("macOS linkd repair clears stale daemon processes before rebootstrap", () => {
@@ -172,7 +316,8 @@ check("alert throttling is persisted across watchdog restarts", () => {
   assert.match(watchdog, /readAlertState/);
   assert.match(watchdog, /writeAlertState/);
   assert.match(watchdog, /const sourceKey = `\$\{WATCHDOG_SOURCE\}:\$\{key\}`/);
-  assert.match(watchdog, /lastSentAt \+ ALERT_REPEAT_MS > now/);
+  assert.match(watchdog, /lastSentAt \+ repeatMs > now/);
+  assert.match(watchdog, /async function clearAlert\(key\)/);
 });
 
 check("company-driver alerts are suppressed when disk state has nothing local to drive", () => {

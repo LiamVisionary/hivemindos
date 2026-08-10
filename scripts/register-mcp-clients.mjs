@@ -215,19 +215,27 @@ function codexBlock() {
     "",
   ].join("\n");
 }
+function codexSectionPattern(flags = "g") {
+  const escapedName = NAME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|\\n)\\[mcp_servers\\.${escapedName}(?:\\.[^\\]]+)?\\][\\s\\S]*?(?=\\n\\[|$)`, flags);
+}
 function mergeCodex(file) {
   if (!fs.existsSync(file) && REMOVE) return { skipped: "no config" };
   let toml = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
-  const header = `[mcp_servers.${NAME}]`;
-  const has = toml.includes(header);
+  const has = codexSectionPattern("").test(toml);
   if (REMOVE) {
     if (!has) return { skipped: "no entry" };
-    toml = toml.replace(new RegExp(`(^|\\n)\\[mcp_servers\\.${NAME}\\][\\s\\S]*?(?=\\n\\[|$)`), "");
+    toml = toml.replace(codexSectionPattern(), "");
     writeFile(file, `${toml.replace(/\n{3,}/g, "\n\n").replace(/^\n+/, "")}`);
     return { ok: file };
   }
   if (has) {
-    toml = toml.replace(new RegExp(`(^|\\n)\\[mcp_servers\\.${NAME}\\][\\s\\S]*?(?=\\n\\[|$)`), (_m, p1) => (p1 || "") + codexBlock().replace(/\n$/, ""));
+    let replaced = false;
+    toml = toml.replace(codexSectionPattern(), (_match, prefix) => {
+      if (replaced) return "";
+      replaced = true;
+      return (prefix || "") + codexBlock().replace(/\n$/, "");
+    });
   } else {
     toml = toml.replace(/\s*$/, "");
     toml = toml ? `${toml}\n\n${codexBlock()}` : codexBlock();

@@ -59,6 +59,7 @@ type config struct {
 	ephemeral       bool
 	statusTimeout   time.Duration
 	shellEnabled    bool
+	downloadsMarker string
 }
 
 func defaultHostname() string {
@@ -115,6 +116,7 @@ func parseConfig() config {
 	flag.BoolVar(&cfg.ephemeral, "ephemeral", defaultBoolFromEnv("HIVE_LINK_EPHEMERAL", false), "register as an ephemeral Tailscale node so stale registrations self-delete when offline")
 	flag.DurationVar(&cfg.statusTimeout, "status-timeout", defaultStatusTimeoutFromEnv(), "maximum time spent waiting for embedded Tailscale status")
 	flag.BoolVar(&cfg.shellEnabled, "shell", defaultBoolFromEnv("HIVE_LINK_SHELL_ENABLED", true), "serve the remote shell API to this node's tailnet owner")
+	flag.StringVar(&cfg.downloadsMarker, "downloads-ready-marker", env("HIVE_LINK_DOWNLOADS_READY_MARKER", defaultDownloadsReadyMarker()), "setup readiness marker required before writing into macOS Downloads")
 	showVersion := flag.Bool("version", false, "print build version info as JSON and exit")
 	flag.Parse()
 	if *showVersion {
@@ -156,6 +158,14 @@ func defaultLogFile() string {
 		return ""
 	}
 	return filepath.Join(home, "Library", "Logs", "hivemindos-linkd.err.log")
+}
+
+func defaultDownloadsReadyMarker() string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return filepath.Join(".hivemindos", "link", "downloads-ready")
+	}
+	return filepath.Join(home, ".hivemindos", "link", "downloads-ready")
 }
 
 func defaultLogMaxBytesFromEnv() int64 {
@@ -963,7 +973,7 @@ func appPortalScript(hostPort string, appProxyPrefix string) string {
 ` + `</script>`
 }
 
-func serveControl(ctx context.Context, ln net.Listener, lc *local.Client, ts *tsnet.Server, statusTimeout time.Duration, shell *shellManager) *http.Server {
+func serveControl(ctx context.Context, ln net.Listener, lc *local.Client, ts *tsnet.Server, statusTimeout time.Duration, shell *shellManager, fileConfig fileReceiveConfig) *http.Server {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
@@ -977,6 +987,10 @@ func serveControl(ctx context.Context, ln net.Listener, lc *local.Client, ts *ts
 		w.Header().Set("content-type", "application/json")
 		_ = json.NewEncoder(w).Encode(statusPayload(ctx, lc, statusTimeout))
 	})
+	// This loopback-only preparation route is the single place setup may trigger
+	// macOS's Downloads consent prompt. Peer requests can inspect readiness but
+	// can never trigger a privacy prompt on an unattended receiver.
+	mux.Handle(fileReceiveReadinessPath, serveFileReceiveReadiness(fileConfig, true))
 	if shell != nil {
 		// Local-only access for the dashboard's own machine; the listener is
 		// bound to loopback so no extra auth applies here.
@@ -1040,7 +1054,15 @@ func main() {
 		shell = newShellManager()
 		defer shell.shutdownAll()
 	}
-	controlServer := serveControl(ctx, controlListener, lc, ts, cfg.statusTimeout, shell)
+	fileConfig := fileReceiveConfig{
+		platform:             runtime.GOOS,
+		homeDir:              env("HOME", ""),
+		downloadsReadyMarker: cfg.downloadsMarker,
+	}
+	if fileConfig.homeDir == "" {
+		fileConfig.homeDir, _ = os.UserHomeDir()
+	}
+	controlServer := serveControl(ctx, controlListener, lc, ts, cfg.statusTimeout, shell, fileConfig)
 	defer controlServer.Shutdown(context.Background()) //nolint:errcheck
 
 	ln, err := ts.Listen("tcp", cfg.listenAddr)
@@ -1057,7 +1079,8 @@ func main() {
 	collectorProxy := newProxy(target, lc)
 	// File receive rides the same self-user gate as the shell, but does not
 	// depend on the shell manager, so it works on shell-disabled hosts too.
-	fileHandler := requireTailnetSelfUser(lc, cfg.statusTimeout, serveFileReceive())
+	fileHandler := requireTailnetSelfUser(lc, cfg.statusTimeout, serveFileReceive(fileConfig))
+	fileReadinessHandler := requireTailnetSelfUser(lc, cfg.statusTimeout, serveFileReceiveReadiness(fileConfig, false))
 	var shellHandler http.Handler
 	if shell != nil {
 		shellHandler = requireTailnetSelfUser(lc, cfg.statusTimeout, shell.handler())
@@ -1079,6 +1102,10 @@ func main() {
 		}
 		if r.URL.Path == fileReceivePath {
 			fileHandler.ServeHTTP(w, r)
+			return
+		}
+		if r.URL.Path == fileReceiveReadinessPath {
+			fileReadinessHandler.ServeHTTP(w, r)
 			return
 		}
 		if strings.HasPrefix(r.URL.Path, shellPathPrefix) {
