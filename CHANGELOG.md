@@ -6,7 +6,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 ## Unreleased
 
 - 2026-08-10 01:40 EDT (-0400) - Stop stale fleet targets from causing watchdog restart-alert storms
-  - Status: Committed in `d519620b` and integrated with upstream `main` by `0928ff5e`; not yet pushed or included in a desktop release.
+  - Status: Pushed to `main` in `d519620b` via `c2a24f3f`; not yet included in a desktop release.
   - User-facing release note: Fleet Watchdog now expires cached machine and TTS discovery, refuses to restart a remote service through a control path that is itself unreachable, and collapses a sustained unreachable-peer incident into one weekly reminder until a passing probe clears it. Retired or offline machines can no longer be resurrected indefinitely from an undated cache and produce repeated “restart FAILED” Telegram messages.
   - Root cause and baseline: The NYC watchdog had no reachable local dashboard and macOS Tailscale CLI fallback was disabled, so it repeatedly loaded a raw fleet cache last written on August 7 that still marked `hivemindos-desktop-p9op59u` and `hivemindos-liams-macbook-pro` online. Their health requests timed out, then the watchdog posted the restart through the same unreachable Link control URL; persisted throttling allowed the identical alert again every 30 minutes. Before this change the focused watchdog suite passed 25 checks, and a test-first run failed because no freshness/remediation policy helper existed.
   - Areas changed: versioned TTL-bound fleet and TTS discovery snapshots, legacy/stale/future cache rejection, authoritative empty-dashboard discovery, unreachable probe classification, fail-closed remote remediation, persisted outage alert clearing and recovery notification, focused regression coverage, integration-gate contracts and exact no-growth ratchets for the accumulated worktree, assimilation receipts, and this changelog.
@@ -15,7 +15,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(fleet): stop stale-cache watchdog alert storms`
 
 - 2026-08-10 01:23 EDT (-0400) - Replace the Inbox Triage pilot banner with product notifications
-  - Status: Committed in `d519620b` and integrated with upstream `main` by `0928ff5e`; not yet pushed or included in a desktop release. The obsolete personal pilot LaunchAgent is retired on this Mac with its plist archived for recovery.
+  - Status: Pushed to `main` in `d519620b` via `c2a24f3f`; not yet included in a desktop release. The obsolete personal pilot LaunchAgent is retired on this Mac with its plist archived for recovery.
   - User-facing release note: Each completed daily Inbox Triage report now creates one HivemindOS Alert and, on macOS, one Notification Center banner summarizing how many items were reviewed, how many are new, and how many need manual review. The message makes the completed analysis visible without implying that captured notes were moved or deleted; notifications can be suppressed independently with `HIVEMINDOS_INBOX_TRIAGE_NOTIFY=0`.
   - Root cause and baseline: The built-in report service passed its focused suite and wrote a current 22-item report, but it emitted no notification. A separate legacy LaunchAgent still posted the confusing “report only, nothing moved” banner five minutes earlier and duplicated the daily scan. The legacy job was loaded as `com.hivemindos.inbox-triage`, ran at 20:00, and had a successful last exit before retirement.
   - Areas changed: Inbox Triage notification copy and delivery, canonical Obsidian-backed Alerts integration, best-effort macOS banner delivery, driver delivery status, focused hermetic coverage, user documentation, recoverable retirement of the legacy LaunchAgent, assimilation receipts, and this changelog.
@@ -24,7 +24,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `feat(brain): notify when Inbox Triage reports are ready`
 
 - 2026-08-09 21:56 EDT (-0400) - Add the complete AI Job Search workflow
-  - Status: Committed in `d519620b` and integrated with upstream `main` by `0928ff5e`; not yet pushed or included in a desktop release. Installed into the configured Shared Brain for local use.
+  - Status: Pushed to `main` in `d519620b` via `c2a24f3f`; not yet included in a desktop release. Installed into the configured Shared Brain for local use.
   - User-facing release note: HivemindOS can now run a private, local-first job search from profile onboarding and bounded job discovery through ranking, factual CV and cover-letter drafting, PDF/ATS verification, application tracking, interview preparation, outcomes, follow-ups, skill-gap planning, read-only Gmail status review, and approval-gated Notion reporting. The optional skill includes all six upstream portal clients and never submits applications, sends messages, or publishes private documents automatically.
   - Source and baseline: The repository and Shared Brain had no equivalent end-to-end job-search skill. The MIT-licensed `MadsLorentzen/ai-job-search` source is pinned to commit `fab1e78fa293d0255d739162a4f8f82db4144876` and archive SHA-256 `3e10d2bdd790937264a88231c5d8fe416c6fb247821178c2b7d3f9e44d6d7d03`. Candidate review found no high-severity source issue; an unsafe remote-shell setup instruction was excluded and the destructive reset workflow was replaced with a recoverable archive flow.
   - Areas changed: optional Productivity package, HivemindOS control skill, full upstream workflow/application/portal references, six portal CLI source-and-test trees, PDF/salary/robots helpers, TeX templates and OFL font notices, provenance and security notes, full-resource hash lock, catalog and Shared Brain documentation, focused install regression, assimilation manifest/logs, configured Shared Brain install, and this changelog.
@@ -33,7 +33,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `feat(skills): add complete AI job search workflow`
 
 - 2026-08-09 21:39 EDT (-0400) - Add experimental Earned Scale to Frontier Lab
-  - Status: Committed in `d519620b` and integrated with upstream `main` by `0928ff5e`; not yet pushed or included in a desktop release.
+  - Status: Pushed to `main` in `d519620b` via `c2a24f3f`; not yet included in a desktop release.
   - User-facing release note: Frontier Lab now answers “should this goal scale?” with a measured Scale Curve instead of treating task completion as the whole story. The cockpit compares outcome quality, proof, latency, tokens, unique contribution, coordination debt, human intervention, and reviewer disagreement; shows an outcome-aware scout/builder/reviewer allocation with plan, mid-run, and final-review checkpoints; reuses Agent Challenges as a live swarm blackboard; and turns repeated strong skill outcomes into review-gated Delight Miner proposals for a skill, schedule, or standing company capability.
   - Root cause and baseline: The existing stage gate used settled-task count and completion rate only. A deterministic policy fixture confirmed that completion-only policy scales proof and coordination regressions, but that fixture does not measure agent performance and is now explicitly the policy-only benchmark rather than the product A/B.
   - Areas changed: pure Earned Scale policy and eight-dimensional Scale Curve, Frontier settlement telemetry, existing outcome-routing/Agent Challenge/skill-analytics composition, company worker judgment checkpoints, authenticated Frontier Lab payload, responsive cockpit surfaces and outcome-first positioning, a real collector-backed A/B harness plus a separate policy-only benchmark, public user documentation, repository introduction, assimilation receipts, and this changelog.
@@ -43,7 +43,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `feat(frontier-lab): add measured earned scale`
 
 - 2026-08-09 20:37 EDT (-0400) - Prepare Hive Drop permissions during Mac setup
-  - Status: Committed in `d519620b` and integrated with upstream `main` by `0928ff5e`; not yet pushed or included in a desktop release.
+  - Status: Pushed to `main` in `d519620b` via `c2a24f3f`; not yet included in a desktop release.
   - User-facing release note: Hive Drop no longer discovers macOS Downloads access during a remote transfer. The logged-in native setup performs the one-time protected-folder check while the user is present; an unattended Mac without managed approval advertises file delivery as unavailable, and every sender verifies readiness before forwarding any bytes. Successful transfers now include the receiver's byte count and SHA-256 receipt, so verification does not need a second remote app or shell process.
   - Root cause and baseline: The collector advertised `fileTransfers: true` on every Mac, while `hivemind-linkd` first touched `~/Downloads` only after a peer began a transfer. That made the first real delivery the macOS privacy test and stranded headless receivers behind an approval dialog. The receive response also omitted a digest, encouraging a separate receiver-side verification process; that is the likely source of the reported additional app-data prompt, but the exact macOS attribution was not independently reproduced. Before implementation, Link Go tests, macOS privacy-path checks, installer shell syntax, and native setup resilience passed; the broader Link GUI contract was already failing on its stale Windows `flags.push("-CollectorOnly")` source-text assertion.
   - Areas changed: Link destination-readiness and setup-only preparation endpoints, protected Downloads fail-closed behavior, exact receive receipts, native and shell setup contracts, managed-headless PPPC guidance and user documentation, collector capability reporting, sender-side zero-byte preflight, the shared tailnet-delivery verification workflow, focused regressions/canonical-gate registration, and this changelog.
@@ -52,7 +52,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(hivedrop): prepare macOS file access during setup`
 
 - 2026-08-08 21:45 EDT (-0400) - Recover Hermes chats across local agent bridge restarts
-  - Status: Committed in `d519620b` and integrated with upstream `main` by `0928ff5e`; not yet pushed or included in a desktop release. The recovery endpoint is also hotfixed into the installed This Mac collector for live verification.
+  - Status: Pushed to `main` in `d519620b` via `c2a24f3f`; not yet included in a desktop release. The recovery endpoint is also hotfixed into the installed This Mac collector for live verification.
   - User-facing release note: A local agent bridge restart no longer turns an otherwise valid Hermes chat into “the local agent bridge did not respond.” HivemindOS waits for the bridge to return, reattaches to an already-started Hermes session when one exists, and retries exactly once only when the bridge confirms that the original turn never started. Setup and source auto-reload also wait for active chats instead of severing them.
   - Root cause and baseline: The reported transcript turn reached `http://127.0.0.1:8787/chat` at 21:15:20.862 EDT, held the connection for 12.156 seconds, and failed 307 ms before launchd finished restarting the collector at 21:15:33.937 EDT. The dashboard immediately persisted a failed two-message session even though the bridge was already returning. Direct installer restarts and collector source reloads could bypass the existing fleet-update maintenance reservation.
   - Areas changed: collector chat-session recovery lookup, bounded dashboard bridge recovery and safe one-time retry, recovered-session handoff to existing runtime polling, installer maintenance reservation/drain behavior, active-chat-aware source reload, the canonical recovery fault-injection suite, maintenance/reload regressions, and this changelog.
@@ -61,7 +61,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(chat): recover Hermes turns across bridge restarts`
 
 - 2026-08-08 21:02 EDT (-0400) - Show a live draggable browser preview during agent work
-  - Status: Committed in `d519620b` and integrated with upstream `main` by `0928ff5e`; not yet pushed or included in a desktop release.
+  - Status: Pushed to `main` in `d519620b` via `c2a24f3f`; not yet included in a desktop release.
   - User-facing release note: When an agent starts using its browser, Chat now opens a compact live browser viewport above the conversation. The preview can be dragged anywhere in the window, collapsed to a small pill, and reconnects automatically while the turn is still running.
   - Root cause and baseline: The reported chat received named `browser_navigate`, `browser_type`, and `browser_click` lifecycle events but no browser imagery or stream address, so the Agent worked timeline was the only visible evidence of browser activity. Hermes already owned an exact per-process `agent-browser` session with a local JPEG WebSocket stream; HivemindOS did not resolve that session, relay its private port through the collector, or render its frames.
   - Areas changed: exact Hermes browser-session discovery for CLI and gateway-backed turns, collector WebSocket proxy metadata, runtime-origin URL rewriting and validation, process-event preservation, the draggable/collapsible live preview, focused contracts, performance documentation, and this changelog.
@@ -70,7 +70,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `feat(chat): show draggable live browser preview`
 
 - 2026-08-08 20:24 EDT (-0400) - Keep every agent process step visible after chat hydration
-  - Status: Committed in `d519620b` and integrated with upstream `main` by `0928ff5e`; not yet pushed or included in a desktop release.
+  - Status: Pushed to `main` in `d519620b` via `c2a24f3f`; not yet included in a desktop release.
   - User-facing release note: A chat's Agent worked timeline no longer shrinks from the full live tool history to a generic failure row after the runtime session refreshes or the app reloads. Named tools, repeated invocations, statuses, order, and run identity now survive persistence and reconciliation.
   - Root cause and baseline: The affected X transcript session retained more than 37 tool-event records, including named skill, browser, terminal, and process calls, while the saved/displayed chat fell to generic `tool.started`, `tool.completed`, and `tool.failed` rows. Generic successful rows are intentionally hidden, so the panel visibly collapsed to one `tool.failed` step. Runtime-history hydration also ignored tool messages, and semantic-key deduplication treated repeated invocations of the same tool as duplicate deliveries. The focused regression failed before the fix by retaining only two of four repeated lifecycle records.
   - Areas changed: named runtime-event recovery from stored raw payloads, occurrence-aware monotonic process reconciliation, runtime-history hydration, persisted run identity, dashboard transcript compaction, focused timeline/reload regressions, and this changelog.
@@ -79,7 +79,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(chat): preserve full process timelines after hydration`
 
 - 2026-08-08 19:04 EDT (-0400) - Prevent the fleet watchdog from interrupting healthy agent work
-  - Status: Committed in `d519620b` and integrated with upstream `main` by `0928ff5e`; not yet pushed or included in a desktop release.
+  - Status: Pushed to `main` in `d519620b` via `c2a24f3f`; not yet included in a desktop release.
   - User-facing release note: The fleet watchdog no longer restarts a healthy agent bridge because an old local port remains in its metadata. It now follows the installed service, verifies ownership before accepting fallback ports, and performs one final health check immediately before any collector restart.
   - Root cause and baseline: On the NYC Mac, the collector LaunchAgent was healthy on port 8792 while `collector.env` still named port 8797. The watchdog probed only the stale port, declared five consecutive failures, and sent SIGTERM every roughly five minutes. One forced restart landed 20.7 seconds into a live Hermes transcript request, severing its SSE stream with `unexpected EOF`; a second observed restart reproduced the same failure pattern.
   - Areas changed: authoritative local collector discovery for launchd and systemd, owned-checkout fallback scanning, final pre-remediation confirmation, exact collector service targeting, atomic verified collector metadata publication, focused watchdog regressions, and this changelog.
@@ -88,7 +88,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(fleet): never restart a healthy collector from stale metadata`
 
 - 2026-08-07 11:29 EDT (-0400) - Make first-time installation fast and unable to hang silently
-  - Status: Committed in `d519620b` and integrated with upstream `main` by `0928ff5e`; not yet pushed or included in a desktop release.
+  - Status: Pushed to `main` in `d519620b` via `c2a24f3f`; not yet included in a desktop release.
   - User-facing release note: First-time setup now avoids invisible password prompts, skips optional downloads on the critical path, reuses setup files already on the computer, and avoids reinstalling healthy services or unchanged shared skills. If macOS blocks the optional Shared Brain folder, the local bridge can still finish with plain-language repair guidance.
   - Root cause and baseline: The reported Mac was confirmed stuck for about 25 minutes in a hidden firewall `sudo` prompt and would next block on an unbounded watchdog restart. Healthy reruns also redownloaded source, recopied roughly 350 skills into every selected runtime, recursively scanned those runtimes, restarted healthy LaunchAgents, and ran an optional `npm install`. Before the repair, warm shared-skill projection took 79.97 seconds and warm full setup took 74.14 seconds after the indefinite waits were manually released.
   - Areas changed: native pinned-source bootstrap and setup arguments, checksum-based shared-skill projection, collector and watchdog installation policy, bounded service control, optional Shared Brain failure handling, onboarding command copy, canonical-gate registration, focused regressions, performance documentation, and this changelog.
@@ -97,7 +97,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(onboarding): make native setup fast and bounded`
 
 - 2026-08-07 11:19 EDT (-0400) - Add Agent Plugins 1.0.0 support
-  - Status: Committed in `d519620b` and integrated with upstream `main` by `0928ff5e`; not yet pushed or included in a desktop release.
+  - Status: Pushed to `main` in `d519620b` via `c2a24f3f`; not yet included in a desktop release.
   - User-facing release note: HivemindOS can now inspect and load local Agent Plugins 1.0.0 packages from the Skills browser, import valid Agent Skills into the Shared Brain, and connect valid stdio or Streamable HTTP MCP servers without letting one broken component disable the rest of the package.
   - Standard and baseline: The implementation targets the published Agent Plugins 1.0.0 specification and bundled official schemas. Before this change, HivemindOS had separate shared-skill and MCP services but no `plugin.json` package loader, fixed component discovery, portable plugin data directory, placeholder expansion, or component-level conformance diagnostics.
   - Areas changed: strict manifest and MCP parsing, Agent Skills validation and managed imports, package path containment, persistent plugin data, sanitized stdio subprocess environments and working-directory support, Streamable HTTP redirect/header controls, authenticated plugin API actions, the Skills browser Plugins panel, focused conformance coverage, user documentation, dependencies, and this changelog.
@@ -106,7 +106,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `feat(plugins): support Agent Plugins 1.0.0`
 
 - 2026-08-07 10:34 EDT (-0400) - Keep Codex MCP registration valid across updates
-  - Status: Committed in `d519620b` and integrated with upstream `main` by `0928ff5e`; not yet pushed or included in a desktop release.
+  - Status: Pushed to `main` in `d519620b` via `c2a24f3f`; not yet included in a desktop release.
   - User-facing release note: HivemindOS updates no longer leave ChatGPT/Codex unable to reopen threads when an existing MCP server uses a nested environment table.
   - Root cause and baseline: The Codex registrar replaced only `[mcp_servers.hivemind]` and stopped at `[mcp_servers.hivemind.env]`. A later registration added the current inline `env` value while preserving that stale nested table, producing a TOML duplicate-key error. The live config reproduced the exact conflict after the first manual repair.
   - Areas changed: Codex MCP section replacement, runtime-onboarding regression coverage, the installed local registrar hotfix, and this changelog.
@@ -160,7 +160,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(brand): retire legacy onboarding logo`
 
 - 2026-08-06 21:30 EDT (-0400) - Keep pinned routes stable across app reloads
-  - Status: Committed in `d519620b` and integrated with upstream `main` by `0928ff5e`; not yet pushed or included in a desktop release.
+  - Status: Pushed to `main` in `d519620b` via `c2a24f3f`; not yet included in a desktop release.
   - User-facing release note: Reloading HivemindOS no longer makes saved left-rail routes look reset to the defaults while durable navigation state hydrates. The rail shows a restrained animated placeholder until both saved pin values are ready, then renders the user's exact routes. Pinning every removable route also survives reload correctly.
   - Root cause and baseline: The saved pin write was healthy and the live native app eventually rendered the persisted routes. The August 6 focused-rail redesign introduced a second persisted removal list but kept rendering its default-only initial values before the two asynchronous reads settled, producing a convincing reset flash. It also assigned an explicit empty string a real meaning (no routes removed) while the shared remembered-value hook still discarded empty strings as absent.
   - Areas changed: durable dashboard-value hydration, pinned-route readiness, left-rail pending UI, dashboard navigation regression coverage, and this changelog.
