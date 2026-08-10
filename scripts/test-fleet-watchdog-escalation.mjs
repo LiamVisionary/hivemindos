@@ -15,6 +15,8 @@ import {
   selectHealthyLocalCollector,
 } from "./lib/fleet-watchdog-local-collector.mjs";
 import {
+  collectorChatFailureResult,
+  collectorChatProbeDecision,
   createMachineCacheSnapshot,
   readFreshMachineCache,
   shouldAttemptRemediation,
@@ -205,6 +207,37 @@ check("an unreachable remote control path is never classified as restartable", (
   assert.equal(shouldAttemptRemediation({ local: false }, { unreachable: true }), false);
   assert.equal(shouldAttemptRemediation({ local: false }, { unreachable: false }), true);
   assert.equal(shouldAttemptRemediation({ local: true }, { unreachable: true }), true);
+  assert.equal(shouldAttemptRemediation({ local: true }, { remediationProof: true }), false);
+});
+
+check("collector deep chat probes honor advertised runtime capabilities", () => {
+  assert.deepEqual(
+    collectorChatProbeDecision({ capabilities: { chat: false, runtimes: ["openclaw"] } }),
+    { supported: false, reason: "collector advertises chat=false" },
+  );
+  assert.deepEqual(
+    collectorChatProbeDecision({ capabilities: { chat: true, runtimes: ["openclaw"] } }),
+    { supported: false, reason: "collector does not advertise the hermes runtime" },
+  );
+  assert.deepEqual(
+    collectorChatProbeDecision({ capabilities: { chat: true, runtimes: ["hermes", "openclaw"] } }),
+    { supported: true },
+  );
+  assert.deepEqual(collectorChatProbeDecision({ ok: true }), { supported: true }, "legacy collectors retain deep probes");
+});
+
+check("missing Hermes is remediation-proof while other chat failures stay severe", () => {
+  const missing = collectorChatFailureResult(502, "spawn hermes ENOENT");
+  assert.equal(missing.healthy, false);
+  assert.equal(missing.remediationProof, true);
+  assert.equal(missing.severe, undefined);
+  assert.match(missing.reason, /restarting the collector cannot fix it/);
+  assert.equal(shouldAttemptRemediation({ local: false }, missing), false);
+
+  assert.deepEqual(
+    collectorChatFailureResult(502, "backend wedged"),
+    { healthy: false, severe: true, reason: "chat HTTP 502 backend wedged" },
+  );
 });
 
 // --- Watchdog wiring contract (source-anchored; the script cannot be imported
@@ -248,6 +281,19 @@ check("stale discovery caches and unreachable peers fail closed without restart 
   const normalRemediation = watchdog.indexOf("REMEDIATING — restart", unreachableBranch);
   assert.ok(unreachableBranch >= 0, "watchdog classifies unreachable targets before remediation");
   assert.ok(normalRemediation > unreachableBranch, "normal remediation remains after the unreachable-target guard");
+});
+
+check("unsupported or missing collector runtimes never enter the restart-escalation loop", () => {
+  assert.match(watchdog, /collectorChatProbeDecision\(healthData, "hermes"\)/);
+  assert.match(watchdog, /healthy: true, deepProbeSkipped: true/);
+  assert.match(watchdog, /collectorChatFailureResult\(chat\.status/);
+  assert.match(watchdog, /!result\.deepProbeSkipped && recovery\.wasEscalated/);
+  assert.match(watchdog, /result\.remediationProof \? UNREACHABLE_ALERT_REPEAT_MS : ALERT_REPEAT_MS/);
+
+  const capabilityDecision = watchdog.indexOf("collectorChatProbeDecision(healthData");
+  const chatDispatch = watchdog.indexOf("const chat = await fetchJson", capabilityDecision);
+  assert.ok(capabilityDecision >= 0, "collector capability decision is wired");
+  assert.ok(chatDispatch > capabilityDecision, "capability decision runs before chat dispatch");
 });
 
 check("collector metadata is published atomically only after live service verification", () => {

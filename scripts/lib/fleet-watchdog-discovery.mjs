@@ -52,5 +52,37 @@ export function readFreshMachineCache(raw, {
 }
 
 export function shouldAttemptRemediation(target, result) {
-  return Boolean(target?.local || !result?.unreachable);
+  return Boolean(!result?.remediationProof && (target?.local || !result?.unreachable));
+}
+
+export function collectorChatProbeDecision(health, runtime = "hermes") {
+  const capabilities = health?.capabilities;
+  if (!capabilities || typeof capabilities !== "object" || Array.isArray(capabilities)) {
+    // Legacy collectors did not publish a capability contract. Preserve their
+    // existing deep-probe behavior until they update.
+    return { supported: true };
+  }
+  if (capabilities.chat === false) {
+    return { supported: false, reason: "collector advertises chat=false" };
+  }
+  if (Array.isArray(capabilities.runtimes)) {
+    const advertised = capabilities.runtimes.map((value) => String(value).trim().toLowerCase());
+    if (!advertised.includes(String(runtime).trim().toLowerCase())) {
+      return { supported: false, reason: `collector does not advertise the ${runtime} runtime` };
+    }
+  }
+  return { supported: true };
+}
+
+export function collectorChatFailureResult(status, detail) {
+  const summary = String(detail || "unknown error").replace(/\s+/g, " ").trim().slice(0, 80);
+  const reason = `chat HTTP ${status} ${summary}`;
+  if (/\bspawn\s+(?:[^\s]*[\\/])?hermes(?:\.exe)?\s+ENOENT\b/i.test(summary)) {
+    return {
+      healthy: false,
+      remediationProof: true,
+      reason: `${reason} — Hermes is missing from the collector service runtime; restarting the collector cannot fix it`,
+    };
+  }
+  return { healthy: false, severe: true, reason };
 }

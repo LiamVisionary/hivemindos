@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-08-10T20:07:16.718565+00:00",
+  "request": "Stop fleet-watchdog restart and Telegram escalation spam for collector chat HTTP 502 spawn hermes ENOENT",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:scripts/fleet-health-watchdog.mjs",
+      "target_path": "scripts/fleet-health-watchdog.mjs",
+      "reuse_type": "adapted_code",
+      "note": "adapted the existing remediation-proof and sustained-incident branches for missing runtimes"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:scripts/lib/fleet-watchdog-escalation.mjs",
+      "target_path": "scripts/fleet-health-watchdog.mjs",
+      "reuse_type": "adapted_code",
+      "note": "reused deep-recovery state clearing while suppressing a false recovery alert for unsupported probes"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:scripts/lib/fleet-watchdog-discovery.mjs",
+      "target_path": "scripts/lib/fleet-watchdog-discovery.mjs",
+      "reuse_type": "adapted_code",
+      "note": "extended the existing fail-closed remediation policy to cover deterministic missing-runtime failures"
+    },
+    {
+      "source_repo": "local-project",
+      "source_path": "hivemind-os:scripts/test-fleet-watchdog-escalation.mjs",
+      "target_path": "scripts/test-fleet-watchdog-escalation.mjs",
+      "reuse_type": "test_adapted",
+      "note": "extended the existing hermetic policy and source-wiring contracts for capability-aware probing"
+    }
+  ]
+}

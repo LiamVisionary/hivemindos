@@ -47,10 +47,11 @@
 //     discovery and notification POSTs need it.
 //
 // Liveness uses the collector's /health; a DEEP probe (an actual /chat dispatch)
-// runs every Nth cycle to catch the alive-but-can't-spawn case. After
-// FAIL_THRESHOLD consecutive failures it kickstarts the collector service on the
-// target (launchctl on macOS, systemctl on Linux), then cools down to avoid
-// restart storms.
+// runs every Nth cycle to catch the alive-but-can't-spawn case, but only when
+// /health advertises chat plus the Hermes runtime. After FAIL_THRESHOLD
+// consecutive failures it kickstarts the collector service on the target
+// (launchctl on macOS, systemctl on Linux), then cools down to avoid restart
+// storms.
 //
 // Env knobs (all optional):
 //   FLEET_WATCHDOG_POLL_MS            cycle interval (default 60000)
@@ -106,6 +107,8 @@ import {
   selectHealthyLocalCollector,
 } from "./lib/fleet-watchdog-local-collector.mjs";
 import {
+  collectorChatFailureResult,
+  collectorChatProbeDecision,
   createMachineCacheSnapshot,
   readFreshMachineCache,
   shouldAttemptRemediation,
@@ -895,15 +898,21 @@ async function logTtsSkippedModels(apiBaseUrl, skipped) {
 }
 
 async function probeCollector(collectorUrl, deep) {
+  let healthData;
   try {
     const health = await fetchJson(`${collectorUrl}/health`, {}, 8_000);
     if (!health.ok || health.data?.ok === false) {
       return { healthy: false, reason: `health HTTP ${health.status} ${String(health.text).slice(0, 60)}` };
     }
+    healthData = health.data;
   } catch (error) {
     return { healthy: false, unreachable: true, reason: `health unreachable: ${error.message}` };
   }
   if (!deep) return { healthy: true };
+  const probeDecision = collectorChatProbeDecision(healthData, "hermes");
+  if (!probeDecision.supported) {
+    return { healthy: true, deepProbeSkipped: true, reason: probeDecision.reason };
+  }
   try {
     const chat = await fetchJson(`${collectorUrl}/chat`, {
       method: "POST",
@@ -921,7 +930,7 @@ async function probeCollector(collectorUrl, deep) {
       }),
     }, 30_000);
     if (!chat.ok || chat.data?.ok === false) {
-      return { healthy: false, severe: true, reason: `chat HTTP ${chat.status} ${String(chat.data?.error || chat.text).slice(0, 80)}` };
+      return collectorChatFailureResult(chat.status, chat.data?.error || chat.text);
     }
   } catch (error) {
     return { healthy: false, severe: true, reason: `chat dispatch failed: ${error.message}` };
@@ -1179,6 +1188,7 @@ async function checkLinkdBuild(machine) {
 
 const consecutiveFailures = new Map();
 const cooldownUntil = new Map();
+const deepProbeSkipLogged = new Set();
 
 // Deep functional probes dispatch a REAL agent chat (and a real TTS synth) —
 // they cost the user tokens/compute every cycle they run, so they are opt-in:
@@ -1250,6 +1260,15 @@ async function runCycle(cycle) {
     }
     if (result.healthy) {
       healthy += 1;
+      if (result.deepProbeSkipped) {
+        if (!deepProbeSkipLogged.has(target.key)) {
+          deepProbeSkipLogged.add(target.key);
+          await log(`${target.name}: collector deep chat probe skipped — ${result.reason}`);
+        }
+      } else if (deep) {
+        deepProbeSkipLogged.delete(target.key);
+        await clearAlert(`humanfix:${target.key}`);
+      }
       const unreachableAlertCleared = await clearAlert(`unreachable:${target.key}`);
       if (unreachableAlertCleared) {
         await alert(`reachable:${target.key}`, `${target.name}: reachable again after an unreachable peer outage`);
@@ -1260,7 +1279,7 @@ async function runCycle(cycle) {
       // green through a wedged backend (the whole NYC incident).
       if (deep) {
         const recovery = escalations.recordDeepRecovery(target.key);
-        if (recovery.wasEscalated) {
+        if (!result.deepProbeSkipped && recovery.wasEscalated) {
           await alert(`recovered:${target.key}`, `${target.name}: ${target.kind} deep probe healthy again after escalation (${recovery.streak} failed checks)`);
         }
       }
@@ -1273,9 +1292,14 @@ async function runCycle(cycle) {
     await log(`${target.name}: unhealthy ${fails}/${threshold}${result.severe ? " (severe)" : ""} — ${result.reason}`);
     if (result.authNeeded || result.remediationProof) {
       // Remediation-proof failures: restarting cannot re-authenticate a
-      // logged-out tsnet node or restore a missing TTS voice ref — a human
-      // must act (auth URL / HIVE_LINK_AUTH_KEY / FLEET_WATCHDOG_TTS_VOICE).
-      await alert(`${result.authNeeded ? "auth" : "humanfix"}:${target.key}`, `${target.name} ${result.reason}`);
+      // logged-out tsnet node, install a missing runtime executable, or restore
+      // a missing TTS voice ref — a human must act (auth URL /
+      // HIVE_LINK_AUTH_KEY / runtime install / FLEET_WATCHDOG_TTS_VOICE).
+      await alert(
+        `${result.authNeeded ? "auth" : "humanfix"}:${target.key}`,
+        `${target.name} ${result.reason}`,
+        { repeatMs: result.remediationProof ? UNREACHABLE_ALERT_REPEAT_MS : ALERT_REPEAT_MS },
+      );
       continue;
     }
     if (!shouldAttemptRemediation(target, result)) {
