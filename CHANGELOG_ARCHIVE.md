@@ -2,6 +2,17 @@
 
 Released changelog entries are moved here after a Tauri release is tagged or published.
 
+## v0.6.0 (2026-08-08)
+
+- 2026-08-08 18:30 EDT (-0400) - Restore Windows desktop release packaging
+  - Status: Pushed to `main` in `99250871`; RELEASED in stable `v0.6.0` from source `2c43dba89140ea9c49227a569906dc8d364e6f14` by workflow run `31288527260`.
+  - User-facing release note: Windows desktop releases can once again complete signed installer packaging instead of stopping before the Tauri build starts.
+  - Root cause and baseline: The previous cross-platform release attempt reached the Windows build runner but Node rejected the direct `pnpm.cmd` child process with `spawn EINVAL`. The guarded release launcher now uses the Windows command shell only on Windows while preserving direct process spawning on macOS and Linux.
+  - Areas changed: guarded Tauri release launcher, release-mode regression contract, and this changelog.
+  - Verification: Passed `node --check scripts/run-tauri-release-build.mjs`, `pnpm test:tauri-release-mode`, and `git diff --check`. The release workflow then built and uploaded macOS Apple Silicon, Windows x64, and Linux x64 Complete Hub and HivemindOS Link assets. Azure Artifact Signing signed all four Windows EXE/MSI installers, the workflow verified every Authenticode signature, and both macOS apps completed Apple notarization with Accepted status and stapling. The stable release is GitHub Latest with the exact 17 expected nonzero assets; its public `latest.json` reports `0.6.0` with signed updater entries for `darwin-aarch64`, `windows-x86_64`, and `linux-x86_64`.
+  - Recovery: Mark `v0.4.5` as Latest and delete the `v0.6.0` release/tag if the published rollout must be withdrawn; revert `99250871` for later Windows builds. Existing installed app data is unchanged.
+  - Intended commit message: `fix(release): launch pnpm through Windows shell`
+
 ## v0.4.5 (2026-07-13)
 
 - 2026-07-13 16:46:36 PST+0800 - Show verified HIVE staking bonuses in Swarm Scout
