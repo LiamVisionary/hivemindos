@@ -9,6 +9,7 @@ import type {
   CompanyRevenue,
   CompanyStatus,
 } from "@/lib/types/company";
+import { connectorManifest } from "@/lib/services/integrations/connector-manifests";
 import type {
   CompanyImportedOperations,
   ImportedSchedule,
@@ -25,6 +26,25 @@ export function normalizeAgentIds(value: unknown): string[] {
     if (id) seen.add(id);
   }
   return [...seen];
+}
+
+export function normalizeIntegrationBindings(value: unknown): Company["integrationBindings"] {
+  if (!Array.isArray(value)) return undefined;
+  const byProvider = new Map<string, NonNullable<Company["integrationBindings"]>[number]>();
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") continue;
+    const raw = entry as Record<string, unknown>;
+    const providerKey = typeof raw.providerKey === "string" ? raw.providerKey.trim() : "";
+    const connectionId = typeof raw.connectionId === "string" ? raw.connectionId.trim() : "";
+    if (!connectorManifest(providerKey) || !connectionId) continue;
+    const parsedAt = typeof raw.updatedAt === "string" ? Date.parse(raw.updatedAt) : NaN;
+    byProvider.set(providerKey, {
+      providerKey: providerKey as NonNullable<Company["integrationBindings"]>[number]["providerKey"],
+      connectionId,
+      updatedAt: Number.isFinite(parsedAt) ? new Date(parsedAt).toISOString() : new Date(0).toISOString(),
+    });
+  }
+  return byProvider.size ? [...byProvider.values()] : undefined;
 }
 
 const VALID_STATUSES: CompanyStatus[] = ["shipping", "drift", "review", "setup", "paused"];

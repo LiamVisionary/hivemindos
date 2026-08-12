@@ -19,9 +19,10 @@ Every connector in `src/lib/services/integrations/connector-manifests.ts` declar
 
 - **`api-token`** — the user pastes a token/key. One password field; validated live, then stored.
 - **`oauth-refresh-token`** — a browser OAuth sign-in that yields a **refresh token**. Google / Google Cloud.
-- **`oauth-user-token`** — a browser OAuth sign-in that yields a single long-lived token. **Slack**
+- **`oauth-user-token`** — a browser OAuth sign-in that yields one or more long-lived provider tokens. **Slack**
   (`user_scope=chat:write` → an `xoxp-` user token, stored in the existing `SLACK_BOT_TOKEN`
-  hive-env key so the send path and verifier are unchanged).
+  hive-env key so the send path and verifier are unchanged) and **Meta Messaging** (Page access
+  tokens stored per named Facebook Page / Instagram professional account).
 
 The rest of this doc is about the **OAuth models** — the "Connect with …" button.
 
@@ -35,7 +36,7 @@ HivemindOS is distributed and installed on machines we don't control, so:
 2. **A per-user `localhost:<random-port>` callback usually can't be pre-registered** with the
    provider. Whether you can avoid a hosted redirect depends entirely on the provider:
 
-| | **Loopback-wildcard providers** (Google desktop client) | **Exact-match / HTTPS providers** (Slack) |
+| | **Loopback-wildcard providers** (Google desktop client) | **Exact-match / HTTPS providers** (Slack, Meta) |
 |---|---|---|
 | Redirect lands on | the app's own `http://127.0.0.1:<port>` callback (provider wildcards the port) | the **Worker's** stable HTTPS `/…/callback` (one URL registered once) |
 | Worker's job | token **exchange only** (adds the secret) | **receive the redirect + exchange + rendezvous** the token back to the app |
@@ -63,6 +64,23 @@ The token never appears in any URL and is released only to the caller holding `p
 (which never traversed the browser or Slack). `poll_secret` is kept server-side in a small
 file-backed store (`~/.hivemindos/slack-oauth-pending.json`); the UI only ever holds the public
 `sid`. See gotcha 6 for why that store must NOT be a module-level `Map`.
+
+### Meta Messaging account-directory variant
+
+Meta uses the same exact-match Worker rendezvous at `/meta/start`, `/meta/callback`, and
+`/meta/result`, but one authorization can return several assets: each granted Facebook Page and
+each linked Instagram professional account. The app saves a non-secret account directory in
+`META_MESSAGING_CONNECTIONS_JSON` and stores every Page access token under its own derived shared-env
+key. A Zero Human Company stores only `{ providerKey: "meta-messaging", connectionId }`, so two
+companies can deliberately share one inbox or select different ones without copying credentials.
+
+The open-source/BYOK path accepts a Page access token plus the numeric Page or Instagram business
+account id, verifies the identity live, and enters it into the same directory. It stays available
+when the official Meta app id/secret has not been configured. Meta's messaging APIs are not a cold
+outreach rail: the recipient must have initiated the conversation (and provider messaging-window
+rules still apply). The current HivemindOS connector only verifies, stores, and assigns credentials;
+it does not yet sync conversations or send replies, so product copy and agent context must describe
+it as setup-only until those execution adapters ship.
 
 ---
 
@@ -110,6 +128,11 @@ Slack does exact-match (no loopback-port wildcard) and requires **HTTPS**. Regis
 `https://hivemindos-google-oauth-exchange.hivemindos.workers.dev/slack/callback`. The old symptom of
 getting this wrong: `redirect_uri did not match any configured URIs. Passed URI: http://127.0.0.1:5121/…`
 — that was the abandoned localhost approach; a downloaded user's port is never registrable.
+
+Meta likewise registers exactly
+`https://hivemindos-google-oauth-exchange.hivemindos.workers.dev/meta/callback`. The public
+`META_MESSAGING_OAUTH_CLIENT_ID` in the app must equal the Worker's `META_CLIENT_ID`; only
+`META_CLIENT_SECRET` belongs in the Worker's secret store.
 
 ### 3. `bad_client_secret` = confidential client with no secret reaching Slack
 Slack's `oauth.v2.access` needs a `client_secret` unless the app is a **public/PKCE** client. We keep

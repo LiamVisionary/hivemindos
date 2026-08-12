@@ -19,6 +19,12 @@ Use repository docs for domain-specific work: `INTEGRATIONS.md`, `LANDING_PAGE.m
 - Include local timestamp with timezone, title, status (`Uncommitted`, `Committed`, or `Pushed`), changed areas, verification, and intended commit summary. Write user-visible changes in release-note language.
 - Consult the newest relevant entries for the commit message and update status after commit/push. When a Tauri release is published, archive released entries in `CHANGELOG_ARCHIVE.md`; do not erase history.
 
+## In-Context Setup UX
+
+- Never tell a user to leave the current view and navigate elsewhere to complete setup. A missing dependency must surface an action in place that opens the relevant setup modal, drawer, or inline section without discarding the user's current context.
+- Setup logic must have one source of truth. Build provider/setup flows as reusable components backed by the canonical service and API, then mount the same component wherever the requirement is discovered; do not duplicate setup forms or validation in route-specific UI.
+- After setup succeeds, refresh the current surface in place, preserve the user's work, and select or apply the newly available resource when that is unambiguous.
+
 ## Safety
 
 - Never run `git checkout`, `git restore`, `git reset --hard`, `git clean`, stash-without-pop, or another command that can discard uncommitted work without Liam's explicit permission for that exact command. This is a shared dirty worktree.

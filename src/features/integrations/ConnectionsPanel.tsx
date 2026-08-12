@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Image from "next/image";
+import { createPortal } from "react-dom";
 import type { ConnectionProviderKey, ConnectionProviderStatus, ConnectionsPayload } from "@/lib/types/integrations";
 import { CLAWBANK_OPEN_EVENT, CLAWBANK_UPDATED_EVENT } from "@/features/dashboard/ClawBankOnboardingModal";
 import { DASHBOARD_TARGET_APPLIED_EVENT, dashboardTargetFromSearch, type DashboardRouteTarget } from "@/features/dashboard/dashboard-navigation";
@@ -14,7 +15,7 @@ import { BrowserExtensionInstallCard } from "./BrowserExtensionInstallCard";
 import { HiveResearchSyncCard } from "./HiveResearchSyncCard";
 import { NotebookLmIntegrationCard } from "./NotebookLmIntegrationCard";
 import { BBtn, BIcon, ServiceGlyph } from "./integrations-primitives";
-import { integrationModalTargetFromDashboardTarget, type IntegrationModalActionId, type IntegrationModalTarget } from "./integration-modal-actions";
+import { integrationModalActionsForProvider, integrationModalTargetFromDashboardTarget, type IntegrationModalActionId, type IntegrationModalTarget } from "./integration-modal-actions";
 import { readJson } from "./integrations-view-helpers";
 import "./integrations-redesign.css";
 
@@ -41,6 +42,7 @@ const PROVIDER_STYLE: Record<ConnectionProviderKey, { mono: string; accent: stri
   farcaster: { mono: "Fc", accent: "#8a63d2" },
   linkedin: { mono: "In", accent: "#4c86c9" },
   reddit: { mono: "Re", accent: "#e0703a" },
+  "meta-messaging": { mono: "Me", accent: "#5b7ce2" },
 };
 
 /** Provider tile: the real logo when we ship one (ClawBank), else the mono glyph. */
@@ -66,6 +68,20 @@ function ProviderGlyph({ providerKey, size = 38, radius = 11 }: { providerKey: C
   );
 }
 
+function ConnectionModalPortal({ children, onBackdropMouseDown }: {
+  children: React.ReactNode;
+  onBackdropMouseDown?: React.MouseEventHandler<HTMLDivElement>;
+}) {
+  const portalTarget = typeof document === "undefined" ? null : document.body;
+  if (!portalTarget) return null;
+  return createPortal(
+    <div className="fr-root fm-overlay" role="presentation" onMouseDown={onBackdropMouseDown}>
+      {children}
+    </div>,
+    portalTarget,
+  );
+}
+
 const OAUTH_START_URL: Partial<Record<ConnectionProviderKey, string>> = {
   github: "/api/integrations/github/oauth/start?source=integrations",
   google: "/api/integrations/google/oauth/start",
@@ -73,6 +89,7 @@ const OAUTH_START_URL: Partial<Record<ConnectionProviderKey, string>> = {
   slack: "/api/integrations/slack/oauth/start",
   azure: "/api/integrations/azure/oauth/start",
   linkedin: "/api/integrations/linkedin/oauth/start",
+  "meta-messaging": "/api/integrations/meta-messaging/oauth/start",
 };
 
 /** One screen: connect apps in place. Credentials are validated live, then
@@ -177,15 +194,15 @@ export function ConnectionsPanel({
   if (setupProviderKey) {
     if (loading || !open) {
       return (
-        <div className="fm-overlay">
+        <ConnectionModalPortal>
           <div className="fm-modal" role="dialog" aria-modal="true" aria-label="Loading connection setup">
             <div className="fm-mbody"><span className="ni-tspin" aria-label="Checking connection status" /></div>
           </div>
-        </div>
+        </ConnectionModalPortal>
       );
     }
     return (
-      <ConnectModal
+      <ConnectionSetupModal
         provider={open}
         initialTab="connect"
         onClose={() => onSetupClose?.()}
@@ -272,7 +289,7 @@ export function ConnectionsPanel({
       )}
 
       {open ? (
-        <ConnectModal
+        <ConnectionSetupModal
           key={`${open.key}:${modalTarget?.tab ?? "connect"}:${modalTarget?.actionId ?? "grid"}`}
           provider={open}
           initialTab={modalTarget?.providerKey === open.key ? modalTarget.tab : "connect"}
@@ -309,7 +326,8 @@ function StatusPill({ provider }: { provider: ConnectionProviderStatus }) {
   );
 }
 
-function ConnectModal({
+/** Reusable provider setup surface. Mount this wherever a missing connection is discovered. */
+export function ConnectionSetupModal({
   provider,
   initialTab,
   initialActionId,
@@ -322,6 +340,7 @@ function ConnectModal({
   onClose: () => void;
   onUpdated: (payload: ConnectionsPayload, note?: string) => void;
 }) {
+  const hasActions = integrationModalActionsForProvider(provider.key).length > 0;
   const [token, setToken] = React.useState("");
   const [setupFields, setSetupFields] = React.useState<Record<string, string>>({});
   const [clientId, setClientId] = React.useState("");
@@ -330,7 +349,8 @@ function ConnectModal({
   const [show, setShow] = React.useState(false);
   const [busy, setBusy] = React.useState("");
   const [note, setNote] = React.useState("");
-  const [modalTab, setModalTab] = React.useState<ModalTab>(initialTab);
+  const [modalTab, setModalTab] = React.useState<ModalTab>(initialTab === "actions" && hasActions ? "actions" : "connect");
+  const [manualMetaSetupOpen, setManualMetaSetupOpen] = React.useState(false);
   const modalRef = React.useRef<HTMLDivElement>(null);
   // After the sign-in tab opens in the external browser, poll the connections
   // endpoint so the modal flips to Connected on its own — the user never has to
@@ -350,6 +370,7 @@ function ConnectModal({
   const isSlack = provider.key === "slack";
   const isAzure = provider.key === "azure";
   const isClawBank = provider.key === "clawbank";
+  const isMetaMessaging = provider.key === "meta-messaging";
   // OAuth-only providers connect purely through the browser sign-in button — no
   // pasted-token fallback (the token comes from the OAuth round-trip). `google`
   // uses a one-time pasted OAuth client (web-app model), then browser sign-in;
@@ -370,6 +391,8 @@ function ConnectModal({
 
   React.useEffect(() => {
     const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const focusableSelector = "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])";
     const focusFirst = window.requestAnimationFrame(() => {
       modalRef.current?.querySelector<HTMLElement>(focusableSelector)?.focus();
@@ -401,6 +424,7 @@ function ConnectModal({
     return () => {
       window.cancelAnimationFrame(focusFirst);
       document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = previousBodyOverflow;
       previouslyFocused?.focus();
     };
   }, []);
@@ -418,7 +442,9 @@ function ConnectModal({
           ? "slack"
           : liveRef.current.provider.key === "azure"
             ? "azure"
-            : "";
+            : liveRef.current.provider.key === "meta-messaging"
+              ? "meta-messaging"
+              : "";
         const brokerFlow = brokerProvider ? brokerFlowRef.current : "";
         if (brokerProvider && brokerFlow) {
           const pollRes = await fetch(`/api/integrations/${brokerProvider}/oauth/poll`, {
@@ -588,7 +614,7 @@ function ConnectModal({
     : new URL(`/api/integrations/${isGoogleCloud ? "google-cloud" : "google"}/oauth/callback`, window.location.origin.replace("//localhost", "//127.0.0.1")).toString();
 
   return (
-    <div className="fm-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
+    <ConnectionModalPortal onBackdropMouseDown={(event) => { if (event.target === event.currentTarget && !busy) onClose(); }}>
       <div ref={modalRef} className="fm-modal" role="dialog" aria-modal="true" aria-label={`Connect ${provider.label}`} tabIndex={-1}>
         <div className="fm-mhead">
           <div style={{ display: "flex", gap: 13, alignItems: "flex-start", minWidth: 0 }}>
@@ -602,7 +628,7 @@ function ConnectModal({
         </div>
 
         <div className="fm-mbody">
-          <div className="fb-seg fm-modal-tabs" role="tablist" aria-label={`${provider.label} integration sections`}>
+          {hasActions ? <div className="fb-seg fm-modal-tabs" role="tablist" aria-label={`${provider.label} integration sections`}>
             <button
               type="button"
               role="tab"
@@ -617,7 +643,7 @@ function ConnectModal({
               data-active={modalTab === "actions" ? "" : undefined}
               onClick={() => setModalTab("actions")}
             >Actions</button>
-          </div>
+          </div> : null}
 
           {modalTab === "connect" ? (
             <>
@@ -629,6 +655,30 @@ function ConnectModal({
                   ? `Connected${provider.account ? ` as ${provider.account}` : ""}. Reconnect below to switch accounts.`
                   : `A credential is saved but the live check failed: ${provider.error ?? "unknown error"}. Reconnect below to replace it.`}
               </span>
+            </div>
+          ) : null}
+
+          {isMetaMessaging ? (
+            <div className="fm-note" style={{ alignItems: "flex-start" }}>
+              <BIcon name="network" size={15} />
+              <span style={{ lineHeight: 1.6 }}>
+                This saves and assigns a Facebook Page or Instagram professional inbox. HivemindOS does not yet sync or send its messages, and Meta does not allow arbitrary cold DMs through this API. It is not currently a WEBS prospecting channel.
+              </span>
+            </div>
+          ) : null}
+
+          {isMetaMessaging && provider.connectionOptions?.length ? (
+            <div style={{ display: "grid", gap: 7 }}>
+              <div className="fm-sec" style={{ margin: 0 }}>Connected business inboxes</div>
+              {provider.connectionOptions.map((connection) => (
+                <div key={connection.id} className="fm-note" style={{ alignItems: "flex-start" }}>
+                  <BIcon name={connection.verified ? "check" : "alert"} size={15} />
+                  <span style={{ lineHeight: 1.5 }}>
+                    <strong>{connection.label}</strong>{connection.detail ? ` · ${connection.detail}` : ""}
+                    {!connection.verified && connection.error ? <><br />{connection.error}</> : null}
+                  </span>
+                </div>
+              ))}
             </div>
           ) : null}
 
@@ -689,7 +739,7 @@ function ConnectModal({
             </details>
           ) : null}
 
-          {oauthUrl && !googleNeedsClient ? (
+          {oauthUrl && !googleNeedsClient && (!isMetaMessaging || provider.oauthReady) ? (
             // Segmented external sign-in: the main segment opens the sign-in in
             // the DEFAULT browser, the caret picks an installed one. Every
             // provider resolves the absolute authorization URL through the
@@ -707,6 +757,12 @@ function ConnectModal({
                 onError={(message) => setNote(message)}
               />
             </div>
+          ) : null}
+
+          {isMetaMessaging && !provider.oauthReady ? (
+            <p className="ni-note" style={{ margin: 0 }}>
+              One-click Meta sign-in is not available in this build. Manual Page-token setup is available below if you still want to save an inbox for future reply support.
+            </p>
           ) : null}
 
           {isClawBank ? (
@@ -744,9 +800,48 @@ function ConnectModal({
           ) : null}
 
           {!oauthOnly ? (
-            <div style={{ display: "grid", gap: 9 }}>
-              <div className="fm-sec" style={{ margin: "2px 0 0" }}>{isClawBank || (oauthUrl && provider.oauthReady) ? "Or paste a token" : "Paste a token"}</div>
+            <details
+              className={isMetaMessaging ? "fm-advanced" : "fm-token-setup"}
+              open={isMetaMessaging ? manualMetaSetupOpen : true}
+              onToggle={isMetaMessaging ? (event) => setManualMetaSetupOpen(event.currentTarget.open) : undefined}
+            >
+              <summary>{isMetaMessaging ? "Manual Page-token setup" : "Token setup"}</summary>
+              <div style={{ display: "grid", gap: 9, marginTop: isMetaMessaging ? 12 : 0 }}>
+              {!isMetaMessaging ? <div className="fm-sec" style={{ margin: "2px 0 0" }}>{isClawBank || (oauthUrl && provider.oauthReady) ? "Or paste a token" : "Paste a token"}</div> : null}
               <div className="fm-note"><BIcon name="shield" size={15} /><span>{provider.tokenHint} The token is checked live, then stored in the shared hive env.</span></div>
+              {isMetaMessaging ? (
+                <>
+                  <label className="fb-label">Inbox type
+                    <select
+                      className="fb-field"
+                      value={setupFields.surface ?? "instagram"}
+                      onChange={(event) => setSetupFields((current) => ({ ...current, surface: event.target.value }))}
+                    >
+                      <option value="instagram">Instagram professional account</option>
+                      <option value="facebook">Facebook Page Messenger</option>
+                    </select>
+                  </label>
+                  <label className="fb-label">Business account ID
+                    <input
+                      className="fb-field fb-mono"
+                      value={setupFields.businessAccountId ?? ""}
+                      onChange={(event) => setSetupFields((current) => ({ ...current, businessAccountId: event.target.value }))}
+                      placeholder="Numeric Instagram business account or Facebook Page ID"
+                      inputMode="numeric"
+                      autoComplete="off"
+                    />
+                  </label>
+                  <label className="fb-label">Account label <span className="ni-note">optional</span>
+                    <input
+                      className="fb-field"
+                      value={setupFields.label ?? ""}
+                      onChange={(event) => setSetupFields((current) => ({ ...current, label: event.target.value }))}
+                      placeholder="The live Meta account name will be used when available"
+                      autoComplete="off"
+                    />
+                  </label>
+                </>
+              ) : null}
               {provider.setupFields?.map((field) => (
                 <label className="fb-label" key={field.id}>{field.label}
                   <input
@@ -766,7 +861,8 @@ function ConnectModal({
                   <button type="button" className="fm-x" style={{ width: 38, height: 38 }} onClick={() => setShow((value) => !value)} title={show ? "Hide" : "Show"}><BIcon name={show ? "eye-off" : "eye"} size={15} /></button>
                 </div>
               </label>
-            </div>
+              </div>
+            </details>
           ) : null}
 
           {note ? <p className="ni-note">{note}</p> : null}
@@ -781,7 +877,7 @@ function ConnectModal({
           <div className="fm-mfoot">
           {provider.connected ? (
             <BBtn onClick={() => void disconnect()} disabled={Boolean(busy)}>
-              {busy === "disconnect" ? <span className="ni-spin" /> : <BIcon name="trash" size={14} />} {busy === "disconnect" ? "Removing…" : "Disconnect"}
+              {busy === "disconnect" ? <span className="ni-spin" /> : <BIcon name="trash" size={14} />} {busy === "disconnect" ? "Removing…" : isMetaMessaging ? "Disconnect all" : "Disconnect"}
             </BBtn>
           ) : (
             <BBtn onClick={onClose} disabled={Boolean(busy)}>Cancel</BBtn>
@@ -791,11 +887,11 @@ function ConnectModal({
               {busy === "client" ? <span className="ni-spin" /> : <BIcon name="key" size={14} />} Save &amp; sign in
             </BBtn>
           ) : null}
-          {!oauthOnly ? (
+          {!oauthOnly && (!isMetaMessaging || manualMetaSetupOpen) ? (
             <BBtn
               variant="primary"
               onClick={() => void saveToken()}
-              disabled={Boolean(busy) || token.trim().length < 8 || Boolean(provider.setupFields?.some((field) => field.required && !setupFields[field.id]?.trim()))}
+              disabled={Boolean(busy) || token.trim().length < 8 || (isMetaMessaging && !setupFields.businessAccountId?.trim()) || Boolean(provider.setupFields?.some((field) => field.required && !setupFields[field.id]?.trim()))}
             >
               {busy === "token" ? <span className="ni-spin" /> : <BIcon name="plug" size={14} />} {busy === "token" ? "Checking..." : "Validate & save"}
             </BBtn>
@@ -803,6 +899,6 @@ function ConnectModal({
           </div>
         ) : null}
       </div>
-    </div>
+    </ConnectionModalPortal>
   );
 }

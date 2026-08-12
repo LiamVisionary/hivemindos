@@ -530,6 +530,7 @@ export function buildColony({ company, rollup, revenueShare, revenueRail, approv
     execution: company.execution,
     directives: company.directives,
     approvalPolicies: company.approvalPolicies,
+    integrationBindings: company.integrationBindings,
     importedOperations: company.importedOperations,
     importedKnowledge: company.importedKnowledge,
     products: company.products,

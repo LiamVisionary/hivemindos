@@ -22,4 +22,11 @@ export const AZURE_TENANT_ID_ENV = "AZURE_OAUTH_TENANT_ID";
 export const SLACK_OAUTH_CLIENT_ID_ENV = "SLACK_OAUTH_CLIENT_ID";
 export const SLACK_TOKEN_ENV = "SLACK_BOT_TOKEN";
 
+// Meta Messaging supports multiple reusable business accounts. The directory is
+// durable non-secret metadata; each account's token is stored under the
+// generated env key referenced by that directory entry.
+export const META_MESSAGING_DIRECTORY_ENV = "META_MESSAGING_CONNECTIONS_JSON";
+export const META_MESSAGING_LEGACY_TOKEN_ENV = "META_MESSAGING_ACCESS_TOKEN";
+export const META_MESSAGING_OAUTH_CLIENT_ID_ENV = "META_MESSAGING_OAUTH_CLIENT_ID";
+
 export const MONID_API_KEY_ENV = "MONID_API_KEY";

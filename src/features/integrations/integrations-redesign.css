@@ -390,13 +390,13 @@
 .fm-repo { font-family: var(--f-mono); font-size: 10px; color: var(--fg-4); overflow-wrap: anywhere; min-width: 0; flex: 1 1 auto; }
 .fm-secrets { font-family: var(--f-mono); font-size: 10px; letter-spacing: .04em; color: var(--fg-4); white-space: nowrap; flex: 0 0 auto; }
 
-.fm-overlay { position: absolute; inset: 0; z-index: 80; display: grid; place-items: center; padding: 28px; background: color-mix(in srgb, #05060a 60%, transparent); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); animation: fm-ov .18s ease both; }
+.fm-overlay { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; overflow: hidden; padding: 28px; background: color-mix(in srgb, #05060a 60%, transparent); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); animation: fm-ov .18s ease both; }
 @keyframes fm-ov { from { opacity: 0; } to { opacity: 1; } }
-.fm-modal { width: 100%; max-width: 500px; max-height: 100%; background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--radius-lg); box-shadow: 0 44px 100px -42px rgba(0,0,0,0.82); display: flex; flex-direction: column; overflow: hidden; animation: fr-fade-up .24s ease both; }
-.fm-mhead { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 20px 20px 6px; }
+.fm-modal { width: min(500px, 100%); max-height: min(760px, calc(100dvh - 56px)); min-height: 0; background: var(--panel); color: var(--fg); border: 1px solid var(--line-2); border-radius: var(--radius-lg); box-shadow: 0 44px 100px -42px rgba(0,0,0,0.82); display: flex; flex-direction: column; overflow: hidden; animation: fr-fade-up .24s ease both; }
+.fm-mhead { display: flex; flex: 0 0 auto; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 20px 20px 6px; }
 .fm-mhead h3 { font-family: var(--f-display); font-weight: 600; font-size: 18px; letter-spacing: -0.02em; margin: 0; }
-.fm-mbody { padding: 14px 20px 20px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
-.fm-mfoot { display: flex; align-items: center; justify-content: flex-end; gap: 9px; padding: 14px 20px; border-top: 1px solid var(--line); background: var(--panel-2); }
+.fm-mbody { min-height: 0; padding: 14px 20px 20px; display: flex; flex: 1 1 auto; flex-direction: column; gap: 14px; overflow-y: auto; overscroll-behavior: contain; }
+.fm-mfoot { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 9px; padding: 14px 20px; border-top: 1px solid var(--line); background: var(--panel-2); }
 .fm-modal-tabs { align-self: flex-start; margin-bottom: 2px; }
 .fm-action-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
 .fm-action-card { min-height: 188px; padding: 16px; border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--panel-2); color: var(--fg); cursor: pointer; display: flex; flex-direction: column; align-items: flex-start; gap: 9px; text-align: left; transition: transform .16s, border-color .16s, background .16s, box-shadow .16s; }
@@ -421,6 +421,8 @@
 .fm-note[data-danger] { border-color: color-mix(in srgb, var(--danger) 28%, transparent); background: var(--danger-soft); color: var(--danger); }
 .fm-advanced { border: 1px solid var(--line-2); border-radius: var(--radius-sm); background: var(--panel-2); padding: 10px 12px; }
 .fm-advanced summary { cursor: pointer; font-family: var(--f-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--fg-3); }
+.fm-token-setup { display: contents; }
+.fm-token-setup > summary { display: none; }
 .fm-keyrow { display: flex; align-items: center; gap: 8px; }
 .fm-center { display: flex; flex-direction: column; align-items: center; gap: 13px; text-align: center; padding: 16px 8px; }
 .fm-spin { width: 44px; height: 44px; border-radius: 99px; border: 3px solid var(--line-2); border-top-color: var(--honey); animation: fm-rot .8s linear infinite; }
@@ -466,4 +468,6 @@
   .ni-pad { padding: 18px; }
   .ni-acard { min-height: 158px; }
   .fm-master { padding: 14px; }
+  .fm-overlay { padding: 12px; }
+  .fm-modal { max-height: calc(100dvh - 24px); border-radius: var(--radius); }
 }

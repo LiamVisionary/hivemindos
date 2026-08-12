@@ -1,4 +1,4 @@
-export type ConnectionProviderKey = "github" | "linear" | "slack" | "notion" | "google" | "google-cloud" | "azure" | "posthog" | "plausible" | "calcom" | "shopify" | "medusa" | "monid" | "clawbank" | "telegram-social" | "farcaster" | "linkedin" | "reddit";
+export type ConnectionProviderKey = "github" | "linear" | "slack" | "notion" | "google" | "google-cloud" | "azure" | "posthog" | "plausible" | "calcom" | "shopify" | "medusa" | "monid" | "clawbank" | "telegram-social" | "farcaster" | "linkedin" | "reddit" | "meta-messaging";
 
 export type ConnectionSetupField = {
   id: string;
@@ -20,6 +20,14 @@ export type ConnectionProviderStatus = {
   account?: string;
   /** Live-check failure, when connected but not verified. */
   error?: string;
+  /** Named reusable accounts exposed by providers that support more than one connection. */
+  connectionOptions?: Array<{
+    id: string;
+    label: string;
+    detail?: string;
+    verified: boolean;
+    error?: string;
+  }>;
   tokenHint: string;
   tokenPlaceholder: string;
   authMode?: "api-token" | "oauth-refresh-token" | "oauth-user-token";

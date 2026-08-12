@@ -18,6 +18,7 @@ import {
   setCompanyAutonomy,
   setCompanyFrozen,
   setCompanyIntegrationLimit,
+  setCompanyIntegrationBinding,
   updateCompanyMetric,
   upsertCompany,
 } from "@/lib/services/companies-store";
@@ -54,6 +55,7 @@ import {
 } from "@/lib/services/company-aeon-binding";
 import { errorJson, okJson } from "@/lib/utils/api-response";
 import { connectorManifest } from "@/lib/services/integrations/connector-manifests";
+import { metaMessagingConnectionStatuses } from "@/lib/services/integrations/meta-messaging";
 import {
   CompanyMembershipConflictError,
   findDuplicateCompanyMemberships,
@@ -183,6 +185,7 @@ type CompanyBody = {
   integrationLimit?: unknown;
   limitId?: string;
   providerKey?: string;
+  connectionId?: string;
   operationId?: string;
   requestCount?: number;
   idempotencyKey?: string;
@@ -281,6 +284,21 @@ export async function POST(request: NextRequest) {
       const company = await removeCompanyIntegrationLimit(body.id.trim(), body.limitId.trim());
       if (!company) return errorJson("Company not found.", 404);
       return okJson({ company, integrationLimits: company.integrationLimits ?? [] });
+    }
+    if (action === "set-integration-binding") {
+      if (!body.id?.trim()) return errorJson("id is required", 400);
+      const manifest = connectorManifest(body.providerKey?.trim() ?? "");
+      if (!manifest) return errorJson("Choose a supported integration provider.", 400);
+      if (manifest.key !== "meta-messaging") return errorJson("Named company account selection is not available for this provider yet.", 400);
+      const connectionId = body.connectionId?.trim() || "";
+      if (connectionId) {
+        const connection = (await metaMessagingConnectionStatuses()).find((entry) => entry.id === connectionId);
+        if (!connection) return errorJson("That Meta messaging account is not connected.", 400);
+        if (!connection.verified) return errorJson(connection.error || "That Meta messaging account did not pass its live check.", 400);
+      }
+      const company = await setCompanyIntegrationBinding(body.id.trim(), manifest.key, connectionId || undefined);
+      if (!company) return errorJson("Company not found.", 404);
+      return okJson({ company, integrationBindings: company.integrationBindings ?? [] });
     }
     if (action === "record-engine-api-budget") {
       // A company's own deterministic engine (e.g. maps-agency's bridge)

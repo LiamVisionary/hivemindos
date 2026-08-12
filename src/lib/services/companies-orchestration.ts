@@ -203,6 +203,14 @@ export function companyWorkerContext(company: Company, memoryDigest: string, sal
       }
     }
   }
+  const integrationBindings = company.integrationBindings ?? [];
+  if (integrationBindings.length) {
+    lines.push("", "Named integration accounts selected for this company — use these exact connection ids, never another company's account:");
+    for (const binding of integrationBindings) lines.push(`- ${binding.providerKey}: ${binding.connectionId}`);
+    if (integrationBindings.some((binding) => binding.providerKey === "meta-messaging")) {
+      lines.push("- Meta Messaging is setup-only in this build: no message sync or send adapter is implemented. Never claim a Meta message was read or sent, and never treat it as a way to cold-DM arbitrary Instagram handles or Facebook users.");
+    }
+  }
   const integrationLimits = company.integrationLimits ?? [];
   const apiBudgets = company.apiBudgets ?? [];
   if (integrationLimits.length || apiBudgets.length) {

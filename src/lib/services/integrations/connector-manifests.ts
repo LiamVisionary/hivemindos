@@ -7,6 +7,8 @@ import {
   GOOGLE_CLOUD_CLIENT_SECRET_ENV,
   AZURE_OAUTH_CLIENT_ID_ENV,
   MONID_API_KEY_ENV,
+  META_MESSAGING_DIRECTORY_ENV,
+  META_MESSAGING_OAUTH_CLIENT_ID_ENV,
   SLACK_OAUTH_CLIENT_ID_ENV,
 } from "@/lib/services/integrations/provider-connection-env";
 import { CLAWBANK_TOKEN_ENV_NAMES } from "@/lib/services/clawbank/constants";
@@ -504,6 +506,20 @@ export const CONNECTOR_MANIFESTS: ConnectorManifest[] = [
         requiredClaims: ["messages:publish"],
       },
     ],
+  },
+  {
+    key: "meta-messaging",
+    label: "Meta Messaging",
+    detail: "Store and assign Instagram professional or Facebook Page inbox credentials per company. Message sync and replies are not implemented yet.",
+    tags: ["messaging", "instagram", "facebook", "inbox", "oauth"],
+    auth: {
+      mode: "oauth-user-token",
+      tokenEnvKey: META_MESSAGING_DIRECTORY_ENV,
+      tokenHint: "Sign in with Meta, or use a Page access token for self-hosted/BYOK setup.",
+      tokenPlaceholder: "Meta Page access token",
+      oauthClientEnvKeys: [META_MESSAGING_OAUTH_CLIENT_ID_ENV],
+    },
+    operations: [READ_CONNECTION_OPERATION],
   },
   {
     key: "clawbank",

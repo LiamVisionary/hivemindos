@@ -3,7 +3,7 @@
 // PoolAgent so the live view can persist real agent membership.
 import type { CompanyRevenueEventSource, CompanyRevenueRailStatus, CompanyRevenueRollup } from "@/lib/types/company-revenue";
 import type { AnalyticsProviderKey } from "@/lib/services/company-analytics/types";
-import type { CompanyApprovalPolicy, CompanyAutonomyPauseMode, CompanyDirective, CompanyExecutionConfig, CompanyPricingProposal, CompanyProductCatalog } from "@/lib/types/company";
+import type { CompanyApprovalPolicy, CompanyAutonomyPauseMode, CompanyDirective, CompanyExecutionConfig, CompanyIntegrationBinding, CompanyPricingProposal, CompanyProductCatalog } from "@/lib/types/company";
 import type { CompanyExecutionSelection } from "@/lib/services/company-execution-capabilities";
 import type { KanbanDeliverableKind } from "@/lib/types/kanban";
 import type { CompanyDataRoomImportRequest, CompanyImportRequest, CompanyImportedKnowledge, CompanyImportedOperations } from "@/lib/types/company-import";
@@ -212,6 +212,8 @@ export interface Colony {
   pricingProposals?: CompanyPricingProposal[];
   /** Explicitly saved approval policies; learned/default rows are derived at render time. */
   approvalPolicies?: CompanyApprovalPolicy[];
+  /** Named hive-level integration accounts selected for this company. */
+  integrationBindings?: CompanyIntegrationBinding[];
   /** Imported legacy repo operations discovered from source. */
   importedOperations?: CompanyImportedOperations;
   /** Reviewable local data-room sources attached to this company. */

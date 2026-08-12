@@ -26,6 +26,13 @@ import {
   GOOGLE_REFRESH_TOKEN_ENV,
 } from "@/lib/services/integrations/provider-connection-env";
 import { normalizeProviderSetupFields, providerSetupFieldEnv } from "@/lib/services/integrations/provider-setup-fields";
+import {
+  disconnectMetaMessaging,
+  metaMessagingConnectionStatuses,
+  saveMetaMessagingManualConnection,
+  verifyMetaMessagingDirectory,
+} from "@/lib/services/integrations/meta-messaging";
+import { metaMessagingOAuthClientReady } from "@/lib/services/integrations/meta-messaging-oauth";
 
 export {
   GOOGLE_CLIENT_ID_ENV,
@@ -65,6 +72,7 @@ const VERIFY_BY_PROVIDER: Record<ConnectionProviderKey, ProviderSpec["verify"]> 
   farcaster: verifyFarcaster,
   linkedin: verifyLinkedIn,
   reddit: verifyReddit,
+  "meta-messaging": verifyMetaMessagingDirectory,
 };
 
 const PROVIDERS: ProviderSpec[] = CONNECTOR_MANIFESTS.map((manifest) => ({
@@ -88,6 +96,18 @@ export async function saveProviderToken(providerKey: string, token: string, rawF
   if (provider.key === "google") throw new Error("Google connects through sign-in, not a pasted token.");
   if (provider.key === "google-cloud") throw new Error("Google Cloud connects through sign-in, not a pasted token.");
   if (provider.key === "azure") throw new Error("Microsoft Azure connects through sign-in, not a pasted token.");
+  if (provider.key === "meta-messaging") {
+    const fields = rawFields && typeof rawFields === "object" ? rawFields as Record<string, unknown> : {};
+    if (fields.surface !== "facebook" && fields.surface !== "instagram") throw new Error("Choose Instagram or Facebook as the inbox type.");
+    await saveMetaMessagingManualConnection({
+      surface: fields.surface,
+      businessAccountId: typeof fields.businessAccountId === "string" ? fields.businessAccountId : "",
+      label: typeof fields.label === "string" ? fields.label : "",
+      accessToken: token,
+    });
+    const payload = await readConnectionsPayload();
+    return { account: payload.providers.find((entry) => entry.key === "meta-messaging")?.account };
+  }
   const clean = token.trim();
   if (clean.length < 8 || /\s/.test(clean)) throw new Error("That does not look like a valid token.");
   const sharedEnv = await readSharedAgentEnv();
@@ -103,6 +123,10 @@ export async function saveProviderToken(providerKey: string, token: string, rawF
 export async function disconnectProvider(providerKey: string) {
   const provider = connectionProvider(providerKey);
   if (!provider) throw new Error(`Unknown provider: ${providerKey}`);
+  if (provider.key === "meta-messaging") {
+    await disconnectMetaMessaging();
+    return;
+  }
   const sharedEnv = await readSharedAgentEnv();
   // Remove the canonical key plus any legacy alias that is actually set —
   // otherwise a provider with an old-name credential stays "connected".
@@ -154,12 +178,22 @@ async function providerStatus(provider: ProviderSpec, sharedEnv: Record<string, 
     checkedAt: new Date().toISOString(),
   };
   if (!token) return base;
+  const connectionOptions = provider.key === "meta-messaging"
+    ? (await metaMessagingConnectionStatuses(sharedEnv)).map((connection) => ({
+        id: connection.id,
+        label: connection.username ? `@${connection.username}` : connection.label,
+        detail: connection.surface === "instagram" ? "Instagram professional inbox" : "Facebook Page Messenger",
+        verified: connection.verified,
+        error: connection.error,
+      }))
+    : undefined;
   const result = await provider.verify(token, sharedEnv);
   return {
     ...base,
     verified: result.ok,
     account: result.account,
     error: result.ok ? undefined : result.error,
+    connectionOptions,
   };
 }
 
@@ -189,6 +223,7 @@ function providerOAuthReady(key: ConnectionProviderKey, sharedEnv: Record<string
   if (key === "linkedin") {
     return Boolean(sharedEnvValue("LINKEDIN_OAUTH_CLIENT_ID", sharedEnv) && sharedEnvValue("LINKEDIN_OAUTH_CLIENT_SECRET", sharedEnv));
   }
+  if (key === "meta-messaging") return metaMessagingOAuthClientReady();
   return false;
 }
 

@@ -23,6 +23,7 @@ import { CommsPanel } from "./CommsPanel";
 import { SalesContentPanel } from "./SalesContentPanel";
 import { CompanyRunsPanel } from "./CompanyRunsPanel";
 import { ApprovalPoliciesPanel } from "./ApprovalPoliciesPanel";
+import { CompanyConnectionsPanel } from "./CompanyConnectionsPanel";
 import { HivemindLabsPanel } from "./HivemindLabsPanel";
 import { collectCompanyDeliverables, partitionByOutput, dispatchedAgo } from "./company-deliverables";
 import { outputSpecForCompany, type CompanyProfile, type OutputSpec } from "./company-output-spec";
@@ -926,6 +927,7 @@ export function Cockpit({
     ...(c.importedKnowledge ? [{ key: "sources", label: "Sources", badge: c.importedKnowledge.documents.length || null }] : []),
     { key: "team", label: "Team" },
     { key: "analytics", label: "Analytics" },
+    { key: "connections", label: "Connections" },
     { key: "limits", label: "Limits" },
     { key: "frontier", label: "Frontier Lab" },
     { key: "learning", label: "Learning", badge: c.capabilityCapital.distillationQueue || null },
@@ -1104,6 +1106,8 @@ export function Cockpit({
       {active === "sources" && <ImportedKnowledgePanel colony={c} />}
 
       {active === "analytics" && <AnalyticsPanel colony={c} />}
+
+      {active === "connections" && <CompanyConnectionsPanel companyId={c.id} companyName={c.name} bindings={c.integrationBindings} onRefresh={onRefresh} />}
 
       {active === "limits" && <ApiLimitsPanel companyId={c.id} companyName={c.name} />}
 

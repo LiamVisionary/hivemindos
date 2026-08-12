@@ -47,6 +47,7 @@ import {
   normalizeApexGoal,
   normalizeAutonomyPause,
   normalizeImportedOperations,
+  normalizeIntegrationBindings,
   normalizeRevenue,
   normalizeSetupEnvKeys,
   normalizeStatus,
@@ -164,6 +165,7 @@ function normalizeCompanyRecord(raw: unknown): Company | null {
   if (!id) return null;
   const name = typeof record.name === "string" && record.name.trim() ? record.name : "Untitled company";
   const company = { ...(record as unknown as Company), id, name };
+  company.integrationBindings = normalizeIntegrationBindings(record.integrationBindings);
   if (record.frontierLab !== undefined) company.frontierLab = normalizeFrontierLabPolicy(record.frontierLab);
   if (record.pricingProposalMarkerReceipts !== undefined) {
     company.pricingProposalMarkerReceipts = Array.isArray(record.pricingProposalMarkerReceipts)
@@ -335,6 +337,7 @@ function companyDefinitionOf(record: Company): Company {
     directives: record.directives,
     apiBudgets: record.apiBudgets,
     integrationLimits: record.integrationLimits,
+    integrationBindings: record.integrationBindings,
     frontierLab: record.frontierLab,
     setupEnvKeys: record.setupEnvKeys,
   };
@@ -639,6 +642,23 @@ export async function setCompanyIntegrationLimit(
       updatedAt: now,
     };
     company.integrationLimits = [...current.filter((entry) => entry.id !== limitId), limit];
+  });
+}
+
+/** Select or clear one named hive-level provider account for a company. */
+export async function setCompanyIntegrationBinding(
+  id: string,
+  providerKey: NonNullable<Company["integrationBindings"]>[number]["providerKey"],
+  connectionId?: string,
+  source = "companies-store:set-integration-binding",
+): Promise<Company | null> {
+  const cleanConnectionId = connectionId?.trim() || "";
+  return mutateCompanyDefinition(id, source, (company) => {
+    const current = normalizeIntegrationBindings(company.integrationBindings) ?? [];
+    const remaining = current.filter((binding) => binding.providerKey !== providerKey);
+    company.integrationBindings = cleanConnectionId
+      ? [...remaining, { providerKey, connectionId: cleanConnectionId, updatedAt: new Date().toISOString() }]
+      : remaining.length ? remaining : undefined;
   });
 }
 
@@ -1141,6 +1161,7 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<Company>
     // through generic company edits, but they must survive those edits.
     apiBudgets: existing?.apiBudgets,
     integrationLimits: existing?.integrationLimits,
+    integrationBindings: existing?.integrationBindings,
     frontierLab: existing?.frontierLab,
   };
 

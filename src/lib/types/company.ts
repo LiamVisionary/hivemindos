@@ -297,6 +297,18 @@ export interface CompanyIntegrationLimit {
   updatedAt: string;
 }
 
+/**
+ * Selects one named hive-level provider connection for this company. The
+ * connection owns credentials; the company stores only its durable id, so many
+ * companies may share one account or choose separate accounts without copying
+ * secrets into company definitions.
+ */
+export interface CompanyIntegrationBinding {
+  providerKey: ConnectionProviderKey;
+  connectionId: string;
+  updatedAt: string;
+}
+
 /** Reviewed OpenAI OAuth models used by Frontier Lab's cost-conscious tier ladder. */
 export type CompanyFrontierLabModel = "gpt-5.6-luna" | "gpt-5.6-terra" | "gpt-5.6-sol";
 
@@ -439,6 +451,8 @@ export interface Company {
   apiBudgets?: CompanyApiBudget[];
   /** Local request/spend preflight limits for API and integration operations. */
   integrationLimits?: CompanyIntegrationLimit[];
+  /** Named hive-level provider accounts selected for this company. */
+  integrationBindings?: CompanyIntegrationBinding[];
   /** Company-scoped intelligence budget, elastic capacity, scale gates, and reviewed OAuth model ladder. */
   frontierLab?: CompanyFrontierLabPolicy;
   /**

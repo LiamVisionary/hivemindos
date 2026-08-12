@@ -24,6 +24,7 @@ const CONNECTION_PROVIDER_KEYS = new Set<ConnectionProviderKey>([
   "google",
   "google-cloud",
   "azure",
+  "meta-messaging",
   "posthog",
   "plausible",
   "monid",
