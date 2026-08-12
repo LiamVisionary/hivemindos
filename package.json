@@ -184,6 +184,7 @@
     "benchmark:earned-scale:policy": "node scripts/benchmark-earned-scale.mjs --condition both --repeats 3 --write",
     "test:company-needs-human-triage": "node scripts/test-company-needs-human-triage.mjs",
     "test:action-authorization": "node scripts/test-action-authorization.mjs",
+    "test:agent-authority": "node scripts/test-agent-authority.mjs",
     "test:principal-context": "node scripts/test-principal-context.mjs",
     "test:company-task-watchdog": "node scripts/test-company-task-watchdog.mjs",
     "test:company-templates": "node scripts/test-company-templates.mjs",

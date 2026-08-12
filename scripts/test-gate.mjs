@@ -35,6 +35,7 @@ const TESTS = [
   "test:action-authorization",
   "test:adaptive-hermes-stream",
   "test:agent-asset-overview",
+  "test:agent-authority",
   "test:agent-chat-readiness",
   "test:agent-flow",
   "test:agent-mailboxes",

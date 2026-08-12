@@ -51,6 +51,18 @@ export type AuthorizationMetadata = {
   confirmation?: HiveActionConfirmation;
 };
 
+/**
+ * How much authority a runtime agent carries. The claim sets and permission
+ * modes behind each preset live in src/lib/services/security/agent-authority.ts;
+ * the union lives here so the agent record can reference it without a types →
+ * services dependency.
+ */
+export const AGENT_AUTHORITY_PRESETS = ["restricted", "standard", "autonomous"] as const;
+
+export type AgentAuthorityPreset = typeof AGENT_AUTHORITY_PRESETS[number];
+
+export const DEFAULT_AGENT_AUTHORITY: AgentAuthorityPreset = "standard";
+
 export const LOCAL_ADMIN_CLAIM = "local:admin";
 
 /**

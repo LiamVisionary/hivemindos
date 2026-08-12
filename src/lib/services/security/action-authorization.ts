@@ -1,10 +1,26 @@
-import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
+import {
+  chatPermissionModeSkipsReadyCapabilityReview,
+  normalizeChatPermissionMode,
+  type ChatPermissionMode,
+} from "@/lib/types/chat-permissions";
 import type {
   HiveActionConfirmation,
   HiveActionDefinition,
   HiveActionRisk,
   HiveActionSideEffect,
 } from "@/lib/services/hive-actions/types";
+
+/**
+ * Side effects that reach beyond this machine's own state. These — not local
+ * mutation — are what make a medium-risk operation worth a human decision.
+ */
+const OUTWARD_SIDE_EFFECTS = new Set<HiveActionSideEffect>([
+  "wallet",
+  "payment",
+  "credential",
+  "public-message",
+  "remote-machine",
+]);
 import {
   LOCAL_ADMIN_CLAIM,
   missingPrincipalClaims,
@@ -97,17 +113,40 @@ export function authorizeOperation(
     return allow("Read-only low-risk operation is allowed.", operation);
   }
 
+  // `auto` and `bypass` are an operator granting standing authority — the same
+  // pair the capability-review helper already treats as "do not re-ask". Using
+  // the shared predicate keeps one definition of "the human pre-approved this".
+  const autoPolicy = chatPermissionModeSkipsReadyCapabilityReview(
+    normalizeChatPermissionMode(input.permissionMode),
+  );
+
   if (operation.confirmation) {
-    return needsApproval(operation.confirmation.reason, operation, requiredClaims, operation.confirmation);
+    // `when: "unless-auto-policy-allows"` is the action author explicitly opting
+    // into being skippable. Anything else — including an unset `when` — is a
+    // per-action product gate (money movement, publishing, computer control) and
+    // no policy mode may skip it. An agent granted full authority can still run
+    // the company; it cannot silently move money.
+    const skippable = operation.confirmation.when === "unless-auto-policy-allows";
+    if (!skippable || !autoPolicy) {
+      return needsApproval(operation.confirmation.reason, operation, requiredClaims, operation.confirmation);
+    }
   }
-  if (operation.risk === "high" || operation.risk === "critical") {
+  if (!autoPolicy && (operation.risk === "high" || operation.risk === "critical")) {
     return needsApproval("High-risk operations need a human approval decision.", operation, requiredClaims);
   }
-  if (input.permissionMode === "bypass") {
-    return allow("Permission mode allows this medium-risk operation.", operation);
-  }
-  if (operation.risk === "medium" && operation.sideEffects.some((effect) => effect !== "read" && effect !== "network")) {
-    return needsApproval("Medium-risk mutating operations need approval for non-admin principals.", operation, requiredClaims);
+  // Medium-risk approval keys on OUTWARD reach, not on mutation as such. The
+  // previous rule fired for any side effect other than read/network, which swept
+  // in ordinary internal work — updating the Work Board, pinning a dashboard
+  // card, indexing a repository — and would have flooded the Needs You lane with
+  // items no operator wants to adjudicate. Local `write`/`filesystem` mutation
+  // by a claim-holding agent is the job; money, credentials, publishing, and
+  // other machines are what deserve a human.
+  if (
+    !autoPolicy
+    && operation.risk === "medium"
+    && operation.sideEffects.some((effect) => OUTWARD_SIDE_EFFECTS.has(effect))
+  ) {
+    return needsApproval("Medium-risk outward operations need approval for non-admin principals.", operation, requiredClaims);
   }
   return allow("Required claims are present.", operation);
 }

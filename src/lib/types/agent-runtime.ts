@@ -1,3 +1,4 @@
+import type { AgentAuthorityPreset } from "@/lib/types/principal";
 import { DEFAULT_SYNTO_CONFIG, type SyntoConfig } from "@/lib/config/synto-config";
 import { buildAgentCallPreferences, type AgentCallPreferences } from "@/lib/types/agent-call-preferences";
 
@@ -440,6 +441,17 @@ export interface AgentProfile {
   agentEnv?: Record<string, string>;
   gitlawb?: AgentGitLawbStatus;
   memoryForkedFromAgentId?: string;
+  /**
+   * How much authority this agent carries when it acts as a runtime principal:
+   * "restricted" (read-only), "standard" (the default — ordinary work allowed,
+   * outward work needs approval), or "autonomous" (its own approver, for a
+   * company CEO/CTO agent). Absent means "standard".
+   *
+   * Presets and the claims behind them live in
+   * src/lib/services/security/agent-authority.ts. No preset grants local:admin,
+   * and none can skip a per-action `confirmation` gate such as sending funds.
+   */
+  authority?: AgentAuthorityPreset;
 }
 
 export interface SharedVaultConfig {
