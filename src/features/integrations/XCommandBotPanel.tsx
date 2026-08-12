@@ -23,7 +23,7 @@ import { BBtn, BIcon, NiBadge, ServiceGlyph } from "./integrations-primitives";
 import { managedXStatusUrl } from "./integrations-view-helpers";
 import type { ManagedXPanelStatus } from "./XAccountMcpPanel";
 
-type Connection = { id: string; xUserId?: string; username?: string; scopes?: string; updatedAt?: string };
+type Connection = { id: string; xUserId?: string; username?: string; scopes?: string; commandEnabled?: boolean; optedOut?: boolean; updatedAt?: string };
 type Device = { id: string; name: string; enabled: boolean; createdAt: string; lastSeenAt?: string | null };
 type Job = {
   id: string;
@@ -104,7 +104,6 @@ export function XCommandBotPanel({ onOpenXSetup, onReviewTradeDraft, displayAgen
 }) {
   const [payload, setPayload] = React.useState<Payload | null>(null);
   const [selectedAccount, setSelectedAccount] = React.useState("");
-  const [connectionId, setConnectionId] = React.useState("");
   const [enabled, setEnabled] = React.useState(false);
   const [maxSpend, setMaxSpend] = React.useState("2.50");
   const [managedStatus, setManagedStatus] = React.useState<ManagedXPanelStatus | null>(null);
@@ -143,9 +142,7 @@ export function XCommandBotPanel({ onOpenXSetup, onReviewTradeDraft, displayAgen
       setPayload(data);
       const nextAccount = data.selectedCreditAccountId || "";
       const policy = data.gateway?.policy ?? null;
-      const connections = data.gateway?.connections ?? [];
       setSelectedAccount(nextAccount);
-      setConnectionId(policy?.connectionId || connections[0]?.id || "");
       setEnabled(policy?.enabled === true);
       setMaxSpend(String(policy?.maxPaidCommandUsd ?? 2.5));
       const walletPolicy = data.local?.walletPolicy ?? null;
@@ -223,13 +220,14 @@ export function XCommandBotPanel({ onOpenXSetup, onReviewTradeDraft, displayAgen
     }
     const saved = await post({
       action: "configure",
-      connectionId,
       enabled,
       queenMode: "local",
       replyMode: "dashboard",
       maxPaidCommandUsd: cap,
     }, "save");
-    if (saved) setMessage(enabled ? "X commands enabled for this account." : "X commands are disabled.");
+    if (saved) setMessage(enabled
+      ? `X commands enabled for all ${payload?.gateway?.connections?.length ?? 0} connected identities.`
+      : "X commands are disabled for every connected identity.");
   }
 
   async function startManagedOAuth() {
@@ -407,17 +405,22 @@ export function XCommandBotPanel({ onOpenXSetup, onReviewTradeDraft, displayAgen
       {connections.length ? (
         <section className="x-method-panel" aria-label="X bot account policy">
           <div className="ni-connhead">
-            <strong>1. Connect the X identity allowed to command your hive</strong>
+            <strong>1. Connect the X identities allowed to command your hive</strong>
             <NiBadge good={gateway?.policy?.enabled === true} warn={!gateway?.policy?.enabled} label={gateway?.policy?.enabled ? "commands on" : "commands off"} />
           </div>
           <div className="x-method-detail">
-            <label className="fb-label">Connected X account
-              <select className="fb-field fb-mono" value={connectionId} onChange={(event) => setConnectionId(event.target.value)} disabled={working}>
-                {connections.map((connection) => (
-                  <option key={connection.id} value={connection.id}>{connection.username ? `@${connection.username}` : connection.xUserId || connection.id}</option>
-                ))}
-              </select>
-            </label>
+            <div className="x-connection-list" aria-label="Connected X identities">
+              {connections.map((connection) => (
+                <div className="ni-connrow" key={connection.id}>
+                  <ServiceGlyph accent={connection.commandEnabled ? "var(--live)" : "var(--honey)"} mono="X" size={30} radius={9} />
+                  <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+                    <div className="cname">{connection.username ? `@${connection.username}` : connection.xUserId || connection.id}</div>
+                    <div style={{ color: "var(--fg-4)", fontSize: 11.5 }}>Uses this hosted balance and the shared command limit.</div>
+                  </div>
+                  <span className="ckey">{connection.optedOut ? "stopped on X" : connection.commandEnabled ? "bot enabled" : "connected"}</span>
+                </div>
+              ))}
+            </div>
             <label className="fb-label">Maximum automatic paid command
               <div className="fm-keyrow">
                 <span style={{ color: "var(--fg-3)" }}>$</span>
@@ -427,10 +430,10 @@ export function XCommandBotPanel({ onOpenXSetup, onReviewTradeDraft, displayAgen
             </label>
             <label style={{ display: "flex", alignItems: "flex-start", gap: 10, color: "var(--fg-2)", fontSize: 13 }}>
               <input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />
-              <span><strong>Enable X commands for this numeric X user ID.</strong><br />Changing the handle does not change the binding. Mentioning {botName} is the per-interaction opt-in; <code>stop</code> opts out.</span>
+              <span><strong>Enable X commands for every connected identity.</strong><br />Each numeric X user ID remains a durable boundary. <code>stop</code> disables only the identity that sends it; the others keep working.</span>
             </label>
             <div className="x-actions">
-              <BBtn variant="primary" onClick={() => void savePolicy()} disabled={working || !connectionId}>
+              <BBtn variant="primary" onClick={() => void savePolicy()} disabled={working || !connections.length}>
                 {busy === "save" ? <><span className="ni-spin" /> Saving…</> : <><BIcon name="shield" size={14} /> Save command policy</>}
               </BBtn>
             </div>
@@ -483,7 +486,7 @@ export function XCommandBotPanel({ onOpenXSetup, onReviewTradeDraft, displayAgen
           </label>
           <label style={{ display: "flex", alignItems: "flex-start", gap: 10, color: "var(--fg-2)", fontSize: 13 }}>
             <input type="checkbox" checked={walletPolicyEnabled} onChange={(event) => setWalletPolicyEnabled(event.target.checked)} />
-            <span><strong>Allow bounded automatic trades requested from my connected X account.</strong><br />Unknown assets, incompatible networks, missing liquidity, changed keys, duplicate jobs, and limit violations fail closed.</span>
+            <span><strong>Allow bounded automatic trades requested from my connected X accounts.</strong><br />Unknown assets, incompatible networks, missing liquidity, changed keys, duplicate jobs, and limit violations fail closed.</span>
           </label>
           <div className="x-actions">
             <BBtn variant="primary" onClick={() => void saveWalletPolicy()} disabled={working || !selectedWalletId}>

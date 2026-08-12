@@ -34,8 +34,11 @@ assert.match(instrumentation, /action:\s*"start-driver"/, "the local Queen bridg
 
 assert.match(panel, /Maximum automatic paid command/, "the setup UI must expose a per-command spend cap");
 assert.match(panel, /Set \$0 to disable paid commands/, "the setup UI must explain the zero-spend control");
-assert.match(panel, /Enable X commands for this numeric X user ID/, "the setup UI must require an explicit enable action");
-assert.match(panel, /<code>stop<\/code> opts out/, "the setup UI must document the public opt-out command");
+assert.match(panel, /Enable X commands for every connected identity/, "the setup UI must authorize every connected identity together");
+assert.match(panel, /stop<\/code> disables only the identity/, "the setup UI must document identity-scoped opt-out");
+assert.doesNotMatch(panel, /<select[^>]*value=\{connectionId\}/, "the setup UI must not make connected identities mutually exclusive");
+assert.match(panel, /Uses this hosted balance and the shared command limit/, "each connected identity must show its shared policy");
+assert.doesNotMatch(route, /connectionId:\s*body\.connectionId/, "the desktop must not submit one selected identity as the account policy");
 assert.match(panel, /what do you think about this post\?/, "the primary examples must include reply-context post analysis");
 assert.match(panel, /buy \$5 of ETH/, "the primary examples must include an executable token order");
 assert.match(panel, /buy \$5 of AAPL/, "the primary examples must include an executable stock order");

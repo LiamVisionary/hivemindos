@@ -167,7 +167,6 @@ export async function POST(request: NextRequest) {
 
   if (body.action === "configure") {
     const response = await configureXCommandAccount(token, {
-      connectionId: body.connectionId,
       enabled: body.enabled === true,
       queenMode: body.queenMode === "disabled" ? "disabled" : "local",
       replyMode: body.replyMode === "auto-ai" ? "auto-ai" : "dashboard",
